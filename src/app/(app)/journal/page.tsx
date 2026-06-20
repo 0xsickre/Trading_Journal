@@ -1,0 +1,35 @@
+import Link from "next/link";
+import { PlusCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { getTradesWithStats } from "@/lib/journal/trades";
+import { getAccounts } from "@/lib/journal/accounts";
+import { JournalGrid } from "@/components/journal/journal-grid";
+import type { TradeRow } from "@/lib/journal/types";
+
+export default async function JournalPage() {
+  const [trades, accounts] = await Promise.all([
+    getTradesWithStats(),
+    getAccounts(),
+  ]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Journal</h1>
+          <p className="text-muted-foreground">
+            Every logged trade. Filter by any tag — archived options stay
+            filterable.
+          </p>
+        </div>
+        <Button asChild>
+          <Link href="/trades/new">
+            <PlusCircle className="size-4" /> New Trade
+          </Link>
+        </Button>
+      </div>
+
+      <JournalGrid trades={trades as TradeRow[]} accounts={accounts} />
+    </div>
+  );
+}
