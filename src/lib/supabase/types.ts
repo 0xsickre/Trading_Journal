@@ -53,6 +53,57 @@ export type Database = {
         }
         Relationships: []
       }
+      tj_bias_analyses: {
+        Row: {
+          bias: string
+          chart_url: string | null
+          closed_at: string | null
+          conviction: string | null
+          created_at: string
+          end_date: string | null
+          id: string
+          instrument: string | null
+          notes: string | null
+          period_weeks: number
+          start_date: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bias?: string
+          chart_url?: string | null
+          closed_at?: string | null
+          conviction?: string | null
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          instrument?: string | null
+          notes?: string | null
+          period_weeks?: number
+          start_date?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          bias?: string
+          chart_url?: string | null
+          closed_at?: string | null
+          conviction?: string | null
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          instrument?: string | null
+          notes?: string | null
+          period_weeks?: number
+          start_date?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tj_column_mappings: {
         Row: {
           broker_name: string

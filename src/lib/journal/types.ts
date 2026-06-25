@@ -71,3 +71,22 @@ export type TradeRow = {
   created_at: string;
   stats: PositionStat | null;
 } & Record<string, unknown>;
+
+export type BiasValue = "bullish" | "bearish" | "neutral";
+export type BiasStatus = "open" | "win" | "loss";
+
+export type BiasAnalysis = {
+  id: string;
+  instrument: string | null;
+  bias: BiasValue;
+  start_date: string;
+  period_weeks: number;
+  end_date: string | null;
+  status: BiasStatus;
+  conviction: string | null;
+  notes: string | null;
+  chart_url: string | null;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
