@@ -41,7 +41,7 @@ A professional trade journaling web application built for ICT (Inner Circle Trad
 - Raw import rows stored for audit trail
 
 ### Instruments & Accounts
-- **60 pre-seeded instruments** across Futures & Micros, Index CFDs, FX Majors/Crosses, Crypto, and Top Stocks/ETFs — seeded automatically on signup
+- **9 pre-seeded instruments** (DXY, major FX crosses, NAS100USD, SPX500USD, XAUUSD) — seeded automatically on signup
 - Per-instrument `point_value` for accurate P/L across all asset classes (editable in Settings)
 - Multiple accounts with individual currency, starting balance, and **IANA timezone** — all timestamps displayed in the account's local time regardless of the user's machine
 
