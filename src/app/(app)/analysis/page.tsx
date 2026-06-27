@@ -1,27 +1,38 @@
-import { getBiasAnalyses } from "@/lib/journal/bias";
+import {
+  getBiasAnalyses,
+  getMarketContexts,
+  getCotLegs,
+} from "@/lib/journal/bias";
 import { getInstruments } from "@/lib/journal/instruments";
 import { getOptionsMap } from "@/lib/journal/options";
 import { BiasAnalysisBoard } from "@/components/journal/bias-analysis";
 
 export default async function AnalysisPage() {
-  const [analyses, instruments, optionsMap] = await Promise.all([
-    getBiasAnalyses(),
-    getInstruments(true),
-    getOptionsMap(true),
-  ]);
+  const [analyses, contexts, legs, instruments, optionsMap] = await Promise.all(
+    [
+      getBiasAnalyses(),
+      getMarketContexts(),
+      getCotLegs(),
+      getInstruments(true),
+      getOptionsMap(true),
+    ],
+  );
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-semibold">Analysis</h1>
         <p className="text-muted-foreground">
-          Log a directional bias per instrument, set how many weeks it covers,
-          then close it Win/Loss — your bias hit-rate at a glance.
+          Set the week&apos;s global context and per-currency COT once, then log
+          a directional bias per instrument — shared data is reused, never
+          retyped.
         </p>
       </div>
 
       <BiasAnalysisBoard
         analyses={analyses}
+        contexts={contexts}
+        legs={legs}
         instruments={instruments}
         optionsMap={optionsMap}
       />

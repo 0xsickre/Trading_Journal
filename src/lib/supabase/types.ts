@@ -58,100 +58,58 @@ export type Database = {
           bias: string
           chart_url: string | null
           closed_at: string | null
-          conviction: string | null
           cot_confidence: string | null
-          cot_flow: string | null
-          cot_idx_3y: string | null
           cot_score: string | null
-          cot_timing: string | null
           cot_verdict: string | null
           created_at: string
-          dxy_1m: string | null
-          dxy_trend: string | null
           end_date: string | null
-          energy_stress: string | null
-          fx_policy_spread: string | null
-          growth_bias: string | null
           id: string
           instrument: string | null
-          move_level: string | null
           notes: string | null
           period_weeks: number
-          rates_regime: string | null
-          seasonality: string | null
-          shield_active: string | null
           start_date: string
           status: string
           updated_at: string
           user_id: string
-          vix_level: string | null
-          yield_curve: string | null
+          week_start: string | null
         }
         Insert: {
           bias?: string
           chart_url?: string | null
           closed_at?: string | null
-          conviction?: string | null
           cot_confidence?: string | null
-          cot_flow?: string | null
-          cot_idx_3y?: string | null
           cot_score?: string | null
-          cot_timing?: string | null
           cot_verdict?: string | null
           created_at?: string
-          dxy_1m?: string | null
-          dxy_trend?: string | null
           end_date?: string | null
-          energy_stress?: string | null
-          fx_policy_spread?: string | null
-          growth_bias?: string | null
           id?: string
           instrument?: string | null
-          move_level?: string | null
           notes?: string | null
           period_weeks?: number
-          rates_regime?: string | null
-          seasonality?: string | null
-          shield_active?: string | null
           start_date?: string
           status?: string
           updated_at?: string
           user_id?: string
-          vix_level?: string | null
-          yield_curve?: string | null
+          week_start?: string | null
         }
         Update: {
           bias?: string
           chart_url?: string | null
           closed_at?: string | null
-          conviction?: string | null
           cot_confidence?: string | null
-          cot_flow?: string | null
-          cot_idx_3y?: string | null
           cot_score?: string | null
-          cot_timing?: string | null
           cot_verdict?: string | null
           created_at?: string
-          dxy_1m?: string | null
-          dxy_trend?: string | null
           end_date?: string | null
-          energy_stress?: string | null
-          fx_policy_spread?: string | null
-          growth_bias?: string | null
           id?: string
           instrument?: string | null
-          move_level?: string | null
           notes?: string | null
           period_weeks?: number
-          rates_regime?: string | null
-          seasonality?: string | null
-          shield_active?: string | null
           start_date?: string
           status?: string
           updated_at?: string
           user_id?: string
-          vix_level?: string | null
-          yield_curve?: string | null
+          week_start?: string | null
         }
         Relationships: []
       }
@@ -176,6 +134,60 @@ export type Database = {
           id?: string
           mapping?: Json
           user_id?: string
+        }
+        Relationships: []
+      }
+      tj_cot_legs: {
+        Row: {
+          cot_confidence: string | null
+          cot_flow: string | null
+          cot_idx_3y: string | null
+          cot_score: string | null
+          cot_timing: string | null
+          cot_verdict: string | null
+          created_at: string
+          energy_stress: string | null
+          fx_policy_spread: string | null
+          id: string
+          seasonality: string | null
+          underlying: string
+          updated_at: string
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          cot_confidence?: string | null
+          cot_flow?: string | null
+          cot_idx_3y?: string | null
+          cot_score?: string | null
+          cot_timing?: string | null
+          cot_verdict?: string | null
+          created_at?: string
+          energy_stress?: string | null
+          fx_policy_spread?: string | null
+          id?: string
+          seasonality?: string | null
+          underlying: string
+          updated_at?: string
+          user_id?: string
+          week_start: string
+        }
+        Update: {
+          cot_confidence?: string | null
+          cot_flow?: string | null
+          cot_idx_3y?: string | null
+          cot_score?: string | null
+          cot_timing?: string | null
+          cot_verdict?: string | null
+          created_at?: string
+          energy_stress?: string | null
+          fx_policy_spread?: string | null
+          id?: string
+          seasonality?: string | null
+          underlying?: string
+          updated_at?: string
+          user_id?: string
+          week_start?: string
         }
         Relationships: []
       }
@@ -374,6 +386,54 @@ export type Database = {
           tick_size?: number | null
           tick_value?: number | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      tj_market_context: {
+        Row: {
+          created_at: string
+          dxy_1m: string | null
+          dxy_trend: string | null
+          growth_bias: string | null
+          id: string
+          move_level: string | null
+          rates_regime: string | null
+          shield_active: string | null
+          updated_at: string
+          user_id: string
+          vix_level: string | null
+          week_start: string
+          yield_curve: string | null
+        }
+        Insert: {
+          created_at?: string
+          dxy_1m?: string | null
+          dxy_trend?: string | null
+          growth_bias?: string | null
+          id?: string
+          move_level?: string | null
+          rates_regime?: string | null
+          shield_active?: string | null
+          updated_at?: string
+          user_id?: string
+          vix_level?: string | null
+          week_start: string
+          yield_curve?: string | null
+        }
+        Update: {
+          created_at?: string
+          dxy_1m?: string | null
+          dxy_trend?: string | null
+          growth_bias?: string | null
+          id?: string
+          move_level?: string | null
+          rates_regime?: string | null
+          shield_active?: string | null
+          updated_at?: string
+          user_id?: string
+          vix_level?: string | null
+          week_start?: string
+          yield_curve?: string | null
         }
         Relationships: []
       }
@@ -711,8 +771,16 @@ export type Database = {
       }
     }
     Functions: {
+      tj_seed_analysis_defaults: {
+        Args: { target: string }
+        Returns: undefined
+      }
       tj_seed_defaults: { Args: { target: string }; Returns: undefined }
-      tj_seed_my_defaults: { Args: Record<PropertyKey, never>; Returns: undefined }
+      tj_seed_instruments_defaults: {
+        Args: { target: string }
+        Returns: undefined
+      }
+      tj_seed_my_defaults: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

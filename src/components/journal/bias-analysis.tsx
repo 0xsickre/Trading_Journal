@@ -17,6 +17,8 @@ import {
   ChevronDown,
   ChevronRight,
   Sparkles,
+  CalendarDays,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,23 +46,40 @@ import { cn } from "@/lib/utils";
 import type {
   BiasAnalysis,
   BiasValue,
+  CotLeg,
   Instrument,
+  MarketContext,
   OptionsMap,
+  ResolvedAnalysis,
 } from "@/lib/journal/types";
 import {
-  ANALYSIS_FACTORS,
-  ANALYSIS_FACTOR_NAMES,
-  ANALYSIS_GROUPS,
-  factorsByGroup,
-  type AnalysisGroup,
+  GLOBAL_FACTORS,
+  LEG_FACTORS,
+  PAIR_FACTORS,
+  SINGLE_LEG_FACTORS,
+  FX_CURRENCY_LEGS,
+  SINGLE_UNDERLYINGS,
+  factorsForLeg,
+  legLabel,
+  legsForSymbol,
+  isSingleSymbol,
+  isPairSymbol,
 } from "@/lib/journal/analysis-config";
 import { bestCombos } from "@/lib/journal/combos";
+import {
+  contextByWeek,
+  legByKey,
+  resolveAnalysisFactors,
+} from "@/lib/journal/resolve";
+import { weekStart, currentWeekStart } from "@/lib/journal/week";
 import {
   createBiasAnalysis,
   updateBiasAnalysis,
   closeBiasAnalysis,
   reopenBiasAnalysis,
   deleteBiasAnalysis,
+  upsertMarketContext,
+  upsertCotLeg,
 } from "@/app/(app)/analysis/actions";
 
 const BIAS_OPTIONS: { value: BiasValue; label: string }[] = [
@@ -68,6 +87,11 @@ const BIAS_OPTIONS: { value: BiasValue; label: string }[] = [
   { value: "bearish", label: "Bearish" },
   { value: "neutral", label: "Neutral" },
 ];
+
+const GLOBAL_NAMES = GLOBAL_FACTORS.map((f) => f.name);
+const LEG_FIELD_NAMES = Array.from(
+  new Set([...LEG_FACTORS, ...SINGLE_LEG_FACTORS].map((f) => f.name)),
+);
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -89,10 +113,6 @@ function fmtDate(d: string | null): string {
   return `${m[3]}.${m[2]}.${m[1]}`;
 }
 
-function emptyFactors(): Record<string, string> {
-  return Object.fromEntries(ANALYSIS_FACTOR_NAMES.map((n) => [n, ""]));
-}
-
 type Draft = {
   instrument: string;
   bias: BiasValue;
@@ -100,8 +120,12 @@ type Draft = {
   weeks: string;
   notes: string;
   chartUrl: string;
-  factors: Record<string, string>;
+  pair: Record<string, string>; // pair-level COT
 };
+
+function emptyPair(): Record<string, string> {
+  return Object.fromEntries(PAIR_FACTORS.map((f) => [f.name, ""]));
+}
 
 function emptyDraft(): Draft {
   return {
@@ -111,24 +135,34 @@ function emptyDraft(): Draft {
     weeks: "1",
     notes: "",
     chartUrl: "",
-    factors: emptyFactors(),
+    pair: emptyPair(),
   };
 }
 
-/** Filled (non-empty) data factors on a saved analysis, for display. */
-function filledFactors(a: BiasAnalysis) {
-  return ANALYSIS_FACTORS.map((f) => ({
-    label: f.label,
-    value: (a[f.name as keyof BiasAnalysis] as string | null) ?? null,
-  })).filter((x) => x.value && x.value.trim() !== "");
+function ctxToValues(c: MarketContext | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const n of GLOBAL_NAMES)
+    out[n] = (c?.[n as keyof MarketContext] as string | null) ?? "";
+  return out;
+}
+
+function legToValues(l: CotLeg | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const n of LEG_FIELD_NAMES)
+    out[n] = (l?.[n as keyof CotLeg] as string | null) ?? "";
+  return out;
 }
 
 export function BiasAnalysisBoard({
   analyses,
+  contexts,
+  legs,
   instruments,
   optionsMap,
 }: {
   analyses: BiasAnalysis[];
+  contexts: MarketContext[];
+  legs: CotLeg[];
   instruments: Instrument[];
   optionsMap: OptionsMap;
 }) {
@@ -137,8 +171,73 @@ export function BiasAnalysisBoard({
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "open" | "win" | "loss">("all");
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // Local copies of weekly data — updated optimistically on autosave so the
+  // resolver/combos reflect edits without a server round-trip.
+  const [ctxList, setCtxList] = useState<MarketContext[]>(contexts);
+  const [legList, setLegList] = useState<CotLeg[]>(legs);
+
+  // Selected week (UTC Monday) for the week workspace.
+  const [week, setWeek] = useState<string>(currentWeekStart());
+
+  // Optimistically fold a saved context/leg into the local lists so the
+  // resolver + combos + inherited preview update without a server round-trip.
+  function persistContext(values: Record<string, string>) {
+    setCtxList((prev) => {
+      const rest = prev.filter((c) => c.week_start !== week);
+      const base =
+        prev.find((c) => c.week_start === week) ??
+        ({
+          id: `local-${week}`,
+          week_start: week,
+          created_at: "",
+          updated_at: "",
+        } as MarketContext);
+      const merged = { ...base } as MarketContext;
+      for (const n of GLOBAL_NAMES)
+        (merged as Record<string, unknown>)[n] = values[n] || null;
+      return [merged, ...rest];
+    });
+  }
+
+  function persistLeg(code: string, values: Record<string, string>) {
+    setLegList((prev) => {
+      const rest = prev.filter(
+        (l) => !(l.week_start === week && l.underlying === code),
+      );
+      const base =
+        prev.find((l) => l.week_start === week && l.underlying === code) ??
+        ({
+          id: `local-${week}-${code}`,
+          week_start: week,
+          underlying: code,
+          created_at: "",
+          updated_at: "",
+        } as CotLeg);
+      const merged = { ...base } as CotLeg;
+      for (const n of LEG_FIELD_NAMES)
+        (merged as Record<string, unknown>)[n] = values[n] || null;
+      return [merged, ...rest];
+    });
+  }
+
+  // Resolve once for combos / breakdowns / expand rows.
+  const ctxMap = useMemo(() => contextByWeek(ctxList), [ctxList]);
+  const legMap = useMemo(() => legByKey(legList), [legList]);
+  const resolved = useMemo(
+    () =>
+      analyses.map((analysis) => ({
+        analysis,
+        factors: resolveAnalysisFactors(analysis, ctxMap, legMap),
+      })),
+    [analyses, ctxMap, legMap],
+  );
+  const factorsById = useMemo(() => {
+    const m = new Map<string, { name: string; label: string; value: string }[]>();
+    for (const r of resolved) m.set(r.analysis.id, r.factors);
+    return m;
+  }, [resolved]);
 
   const stats = useMemo(() => {
     let open = 0,
@@ -167,20 +266,47 @@ export function BiasAnalysisBoard({
 
   const visible = useMemo(
     () =>
-      filter === "all"
-        ? analyses
-        : analyses.filter((a) => a.status === filter),
+      filter === "all" ? analyses : analyses.filter((a) => a.status === filter),
     [analyses, filter],
   );
 
   const endPreview = computeEndDate(draft.startDate, Number(draft.weeks));
+  const draftWeek = weekStart(draft.startDate);
+  const draftIsSingle = isSingleSymbol(draft.instrument);
+  const draftIsPair = isPairSymbol(draft.instrument);
+
+  // Inherited (global + leg) factors that will attach to the drafted analysis.
+  const inherited = useMemo(() => {
+    if (!draft.instrument) return [];
+    const synthetic: BiasAnalysis = {
+      id: "draft",
+      instrument: draft.instrument,
+      bias: draft.bias,
+      start_date: draft.startDate,
+      period_weeks: Number(draft.weeks) || 1,
+      end_date: null,
+      status: "open",
+      notes: null,
+      chart_url: null,
+      closed_at: null,
+      created_at: "",
+      updated_at: "",
+      week_start: draftWeek || null,
+      cot_score: null,
+      cot_verdict: null,
+      cot_confidence: null,
+    };
+    return resolveAnalysisFactors(synthetic, ctxMap, legMap).filter(
+      (f) => f.name !== "bias",
+    );
+  }, [draft, draftWeek, ctxMap, legMap]);
 
   function patch(p: Partial<Draft>) {
     setDraft((d) => ({ ...d, ...p }));
   }
 
-  function patchFactor(name: string, value: string) {
-    setDraft((d) => ({ ...d, factors: { ...d.factors, [name]: value } }));
+  function patchPair(name: string, value: string) {
+    setDraft((d) => ({ ...d, pair: { ...d.pair, [name]: value } }));
   }
 
   function resetForm() {
@@ -207,10 +333,6 @@ export function BiasAnalysisBoard({
       toast.error("Period must be at least 1 week.");
       return;
     }
-    const factors: Record<string, string | null> = {};
-    for (const name of ANALYSIS_FACTOR_NAMES)
-      factors[name] = draft.factors[name] || null;
-
     const payload = {
       instrument: draft.instrument,
       bias: draft.bias,
@@ -218,7 +340,9 @@ export function BiasAnalysisBoard({
       period_weeks: Math.floor(weeks),
       notes: draft.notes,
       chart_url: draft.chartUrl,
-      factors,
+      cot_score: draft.pair.cot_score || null,
+      cot_verdict: draft.pair.cot_verdict || null,
+      cot_confidence: draft.pair.cot_confidence || null,
     };
     start(async () => {
       const res = editingId
@@ -236,9 +360,9 @@ export function BiasAnalysisBoard({
 
   function edit(a: BiasAnalysis) {
     setEditingId(a.id);
-    const factors = emptyFactors();
-    for (const name of ANALYSIS_FACTOR_NAMES)
-      factors[name] = (a[name as keyof BiasAnalysis] as string | null) ?? "";
+    const pair = emptyPair();
+    for (const f of PAIR_FACTORS)
+      pair[f.name] = (a[f.name as keyof BiasAnalysis] as string | null) ?? "";
     setDraft({
       instrument: a.instrument ?? "",
       bias: a.bias,
@@ -246,14 +370,11 @@ export function BiasAnalysisBoard({
       weeks: String(a.period_weeks),
       notes: a.notes ?? "",
       chartUrl: a.chart_url ?? "",
-      factors,
+      pair,
     });
-    // Open groups that have values so the user sees them.
-    const toOpen: Record<string, boolean> = {};
-    for (const g of ANALYSIS_GROUPS) {
-      toOpen[g] = factorsByGroup(g).some((f) => factors[f.name]);
-    }
-    setOpenGroups(toOpen);
+    // Jump the workspace to that analysis's week too.
+    if (a.week_start) setWeek(a.week_start);
+    else if (a.start_date) setWeek(weekStart(a.start_date));
     if (typeof window !== "undefined")
       window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -295,9 +416,12 @@ export function BiasAnalysisBoard({
     });
   }
 
-  const filledInDraft = ANALYSIS_FACTOR_NAMES.filter(
-    (n) => draft.factors[n],
-  ).length;
+  function shiftWeek(deltaWeeks: number) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(week);
+    if (!m) return;
+    const ms = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    setWeek(new Date(ms + deltaWeeks * 7 * 86_400_000).toISOString().slice(0, 10));
+  }
 
   return (
     <div className="space-y-5">
@@ -310,12 +434,73 @@ export function BiasAnalysisBoard({
         <StatCard
           label="Win rate"
           value={`${stats.winRate.toFixed(1)}%`}
-          tone={stats.winRate >= 50 ? "win" : stats.wins + stats.losses ? "loss" : undefined}
+          tone={
+            stats.winRate >= 50
+              ? "win"
+              : stats.wins + stats.losses
+                ? "loss"
+                : undefined
+          }
           hint={`${stats.wins}/${stats.wins + stats.losses} closed`}
         />
       </div>
 
-      {/* Form */}
+      {/* Week workspace */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+            <CalendarDays className="size-4" /> Week workspace
+            <span className="text-sm font-normal text-muted-foreground">
+              shared data for the week of {fmtDate(week)} (Mon)
+            </span>
+          </CardTitle>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
+              onClick={() => shiftWeek(-1)}
+            >
+              ‹ Prev
+            </Button>
+            <Input
+              type="date"
+              className="h-8 w-40"
+              value={week}
+              onChange={(e) => setWeek(weekStart(e.target.value) || week)}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
+              onClick={() => shiftWeek(1)}
+            >
+              Next ›
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8"
+              onClick={() => setWeek(currentWeekStart())}
+            >
+              This week
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <WeekWorkspace
+            key={week}
+            week={week}
+            context={ctxList.find((c) => c.week_start === week)}
+            legList={legList}
+            optionsMap={optionsMap}
+            onPersistContext={persistContext}
+            onPersistLeg={persistLeg}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Analysis form */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
@@ -370,6 +555,9 @@ export function BiasAnalysisBoard({
                 value={draft.startDate}
                 onChange={(e) => patch({ startDate: e.target.value })}
               />
+              <p className="text-[11px] text-muted-foreground">
+                Week: {fmtDate(draftWeek)}
+              </p>
             </div>
 
             <div className="space-y-1.5">
@@ -395,10 +583,10 @@ export function BiasAnalysisBoard({
                 placeholder="https://www.tradingview.com/…"
               />
             </div>
-            <div className="space-y-1.5 sm:col-span-2">
+            <div className="space-y-1.5 sm:col-span-1">
               <Label className="text-xs">Analysis / notes (optional)</Label>
               <Textarea
-                rows={3}
+                rows={2}
                 value={draft.notes}
                 onChange={(e) => patch({ notes: e.target.value })}
                 placeholder="Why this bias? Key levels, draw on liquidity, narrative…"
@@ -406,28 +594,68 @@ export function BiasAnalysisBoard({
             </div>
           </div>
 
-          {/* Data factor groups */}
-          <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold">Data podaci (opciono)</h4>
-              {filledInDraft > 0 && (
-                <Badge variant="secondary">{filledInDraft} popunjeno</Badge>
+          {/* Pair-level COT — only for FX pairs */}
+          {draftIsPair && (
+            <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+              <h4 className="text-sm font-semibold">
+                Pair-level COT
+                <span className="ml-2 font-normal text-muted-foreground">
+                  (from the FX Parovi report)
+                </span>
+              </h4>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {PAIR_FACTORS.map((f) => (
+                  <div key={f.name} className="space-y-1.5">
+                    <Label className="text-xs">{f.label}</Label>
+                    <EditableSelect
+                      listKey={f.listKey}
+                      options={optionsMap[f.listKey] ?? []}
+                      value={draft.pair[f.name] ?? ""}
+                      onChange={(v) => patchPair(f.name, v)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {draftIsSingle && (
+            <p className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              COT for {draft.instrument} is set directly on its{" "}
+              {legsForSymbol(draft.instrument)
+                .map((c) => legLabel(c))
+                .join(", ")}{" "}
+              card in the week workspace above.
+            </p>
+          )}
+
+          {/* Inherited preview */}
+          {draft.instrument && (
+            <div className="rounded-lg border border-dashed p-3">
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                Inherited from the week of {fmtDate(draftWeek)} (auto-attached)
+              </p>
+              {inherited.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No shared data for this week yet — fill the week workspace
+                  above.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {inherited.map((f) => (
+                    <Badge
+                      key={f.name}
+                      variant="secondary"
+                      className="font-normal"
+                    >
+                      <span className="text-muted-foreground">{f.label}:</span>{" "}
+                      {f.value}
+                    </Badge>
+                  ))}
+                </div>
               )}
             </div>
-            {ANALYSIS_GROUPS.map((group) => (
-              <FactorGroup
-                key={group}
-                group={group}
-                open={!!openGroups[group]}
-                onToggle={() =>
-                  setOpenGroups((g) => ({ ...g, [group]: !g[group] }))
-                }
-                draftFactors={draft.factors}
-                optionsMap={optionsMap}
-                onFactor={patchFactor}
-              />
-            ))}
-          </div>
+          )}
 
           <div className="flex justify-end gap-2">
             {editingId && (
@@ -448,7 +676,7 @@ export function BiasAnalysisBoard({
       </Card>
 
       {/* What works best — combinations */}
-      <CombosCard analyses={analyses} />
+      <CombosCard resolved={resolved} />
 
       {/* Breakdown */}
       {analyses.length > 0 && (
@@ -496,7 +724,8 @@ export function BiasAnalysisBoard({
                 </TableHeader>
                 <TableBody>
                   {visible.map((a) => {
-                    const factors = filledFactors(a);
+                    const factors = factorsById.get(a.id) ?? [];
+                    const dataFactors = factors.filter((f) => f.name !== "bias");
                     const isOpen = expanded.has(a.id);
                     return (
                       <Fragment key={a.id}>
@@ -507,9 +736,9 @@ export function BiasAnalysisBoard({
                               variant="ghost"
                               className="size-7 text-muted-foreground"
                               onClick={() => toggleExpanded(a.id)}
-                              disabled={factors.length === 0}
+                              disabled={dataFactors.length === 0}
                               title={
-                                factors.length
+                                dataFactors.length
                                   ? "Show data factors"
                                   : "No data factors"
                               }
@@ -535,12 +764,12 @@ export function BiasAnalysisBoard({
                                   <ExternalLink className="size-3.5" />
                                 </a>
                               )}
-                              {factors.length > 0 && (
+                              {dataFactors.length > 0 && (
                                 <Badge
                                   variant="outline"
                                   className="text-[10px] text-muted-foreground"
                                 >
-                                  {factors.length} data
+                                  {dataFactors.length} data
                                 </Badge>
                               )}
                             </div>
@@ -625,14 +854,14 @@ export function BiasAnalysisBoard({
                             </div>
                           </TableCell>
                         </TableRow>
-                        {isOpen && factors.length > 0 && (
+                        {isOpen && dataFactors.length > 0 && (
                           <TableRow className="bg-muted/30">
                             <TableCell />
                             <TableCell colSpan={5}>
                               <div className="flex flex-wrap gap-1.5 py-1">
-                                {factors.map((f) => (
+                                {dataFactors.map((f) => (
                                   <Badge
-                                    key={f.label}
+                                    key={f.name}
                                     variant="secondary"
                                     className="font-normal"
                                   >
@@ -659,88 +888,231 @@ export function BiasAnalysisBoard({
   );
 }
 
-function FactorGroup({
-  group,
-  open,
-  onToggle,
-  draftFactors,
+function WeekWorkspace({
+  week,
+  context,
+  legList,
   optionsMap,
-  onFactor,
+  onPersistContext,
+  onPersistLeg,
 }: {
-  group: AnalysisGroup;
-  open: boolean;
-  onToggle: () => void;
-  draftFactors: Record<string, string>;
+  week: string;
+  context: MarketContext | undefined;
+  legList: CotLeg[];
   optionsMap: OptionsMap;
-  onFactor: (name: string, value: string) => void;
+  onPersistContext: (values: Record<string, string>) => void;
+  onPersistLeg: (code: string, values: Record<string, string>) => void;
 }) {
-  const fields = factorsByGroup(group);
-  const filled = fields.filter((f) => draftFactors[f.name]).length;
+  // Seeded once on mount; the parent remounts (key={week}) on week change.
+  const [ctxValues, setCtxValues] = useState<Record<string, string>>(() =>
+    ctxToValues(context),
+  );
+  const [legValues, setLegValues] = useState<
+    Record<string, Record<string, string>>
+  >(() => {
+    const m: Record<string, Record<string, string>> = {};
+    for (const code of [...FX_CURRENCY_LEGS, ...SINGLE_UNDERLYINGS]) {
+      m[code] = legToValues(
+        legList.find((l) => l.week_start === week && l.underlying === code),
+      );
+    }
+    return m;
+  });
+  const [saveState, setSaveState] = useState<
+    Record<string, "saving" | "saved">
+  >({});
+
+  function runSave(
+    key: string,
+    fn: () => Promise<{ ok: boolean; error?: string }>,
+  ) {
+    setSaveState((s) => ({ ...s, [key]: "saving" }));
+    fn().then((res) => {
+      if (!res.ok) {
+        toast.error(res.error ?? "Save failed");
+        setSaveState((s) => {
+          const n = { ...s };
+          delete n[key];
+          return n;
+        });
+        return;
+      }
+      setSaveState((s) => ({ ...s, [key]: "saved" }));
+      setTimeout(() => {
+        setSaveState((s) => {
+          if (s[key] !== "saved") return s;
+          const n = { ...s };
+          delete n[key];
+          return n;
+        });
+      }, 1500);
+    });
+  }
+
+  function saveContextField(name: string, value: string) {
+    const next = { ...ctxValues, [name]: value };
+    setCtxValues(next);
+    onPersistContext(next);
+    runSave("context", () =>
+      upsertMarketContext(
+        week,
+        Object.fromEntries(GLOBAL_NAMES.map((n) => [n, next[n] || null])),
+      ),
+    );
+  }
+
+  function saveLegField(code: string, name: string, value: string) {
+    const next = { ...(legValues[code] ?? {}), [name]: value };
+    setLegValues((v) => ({ ...v, [code]: next }));
+    onPersistLeg(code, next);
+    runSave(`leg:${code}`, () =>
+      upsertCotLeg(
+        week,
+        code,
+        Object.fromEntries(LEG_FIELD_NAMES.map((n) => [n, next[n] || null])),
+      ),
+    );
+  }
+
   return (
-    <div className="rounded-md border bg-background">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium"
-      >
-        <span className="flex items-center gap-2">
-          {open ? (
-            <ChevronDown className="size-4" />
-          ) : (
-            <ChevronRight className="size-4" />
-          )}
-          {group}
-        </span>
-        {filled > 0 && (
-          <Badge variant="secondary" className="text-[10px]">
-            {filled}
-          </Badge>
-        )}
-      </button>
-      {open && (
-        <div className="grid gap-3 border-t p-3 sm:grid-cols-2 lg:grid-cols-3">
-          {fields.map((f) => (
+    <div className="space-y-4">
+      {/* Global context */}
+      <div className="rounded-lg border bg-muted/30 p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <h4 className="text-sm font-semibold">
+            Global context
+            <span className="ml-2 font-normal text-muted-foreground">
+              (same for all 9 symbols this week)
+            </span>
+          </h4>
+          <SavedFlag state={saveState["context"]} />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {GLOBAL_FACTORS.map((f) => (
             <div key={f.name} className="space-y-1.5">
               <Label className="text-xs">{f.label}</Label>
               <EditableSelect
                 listKey={f.listKey}
                 options={optionsMap[f.listKey] ?? []}
-                value={draftFactors[f.name] ?? ""}
-                onChange={(v) => onFactor(f.name, v)}
+                value={ctxValues[f.name] ?? ""}
+                onChange={(v) => saveContextField(f.name, v)}
               />
             </div>
           ))}
         </div>
-      )}
+      </div>
+
+      {/* Per-currency / per-underlying COT */}
+      <div className="rounded-lg border bg-muted/30 p-3">
+        <h4 className="mb-2 text-sm font-semibold">
+          Currency / underlying COT
+          <span className="ml-2 font-normal text-muted-foreground">
+            (entered once per leg, reused by every pair)
+          </span>
+        </h4>
+        <div className="grid gap-3 lg:grid-cols-2">
+          {[...FX_CURRENCY_LEGS, ...SINGLE_UNDERLYINGS].map((code) => (
+            <LegCard
+              key={code}
+              code={code}
+              optionsMap={optionsMap}
+              values={legValues[code] ?? {}}
+              saveState={saveState[`leg:${code}`]}
+              onChange={(name, v) => saveLegField(code, name, v)}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-function CombosCard({ analyses }: { analyses: BiasAnalysis[] }) {
+function SavedFlag({ state }: { state?: "saving" | "saved" }) {
+  if (state === "saving")
+    return (
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Loader2 className="size-3 animate-spin" /> Saving…
+      </span>
+    );
+  if (state === "saved")
+    return (
+      <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+        <Check className="size-3" /> Saved
+      </span>
+    );
+  return null;
+}
+
+function LegCard({
+  code,
+  optionsMap,
+  values,
+  saveState,
+  onChange,
+}: {
+  code: string;
+  optionsMap: OptionsMap;
+  values: Record<string, string>;
+  saveState?: "saving" | "saved";
+  onChange: (name: string, value: string) => void;
+}) {
+  const fields = factorsForLeg(code);
+  const isSingle = SINGLE_UNDERLYINGS.includes(code);
+  const filled = fields.filter((f) => values[f.name]).length;
+  return (
+    <div className="rounded-md border bg-background p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="flex items-center gap-2 text-sm font-medium">
+          <Badge variant={isSingle ? "outline" : "secondary"}>{code}</Badge>
+          {legLabel(code)}
+          {filled > 0 && (
+            <span className="text-xs text-muted-foreground">{filled}</span>
+          )}
+        </span>
+        <SavedFlag state={saveState} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {fields.map((f) => (
+          <div key={f.name} className="space-y-1.5">
+            <Label className="text-xs">{f.label}</Label>
+            <EditableSelect
+              listKey={f.listKey}
+              options={optionsMap[f.listKey] ?? []}
+              value={values[f.name] ?? ""}
+              onChange={(v) => onChange(f.name, v)}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CombosCard({ resolved }: { resolved: ResolvedAnalysis[] }) {
   const [instrument, setInstrument] = useState<string>("all");
   const [size, setSize] = useState<"all" | "1" | "2" | "3">("all");
   const [minSample, setMinSample] = useState<string>("3");
 
-  // Instruments that actually have closed analyses.
   const closedInstruments = useMemo(() => {
     const s = new Set<string>();
-    for (const a of analyses) {
+    for (const r of resolved) {
+      const a = r.analysis;
       if ((a.status === "win" || a.status === "loss") && a.instrument)
         s.add(a.instrument);
     }
     return Array.from(s).sort();
-  }, [analyses]);
+  }, [resolved]);
 
   const combos = useMemo(
     () =>
-      bestCombos(analyses, {
+      bestCombos(resolved, {
         instrument: instrument === "all" ? null : instrument,
         size: size === "all" ? "all" : Number(size),
         minSample: Math.max(1, Number(minSample) || 1),
         maxSize: 3,
         limit: 25,
       }),
-    [analyses, instrument, size, minSample],
+    [resolved, instrument, size, minSample],
   );
 
   const hasClosed = closedInstruments.length > 0;
@@ -752,8 +1124,9 @@ function CombosCard({ analyses }: { analyses: BiasAnalysis[] }) {
           <Sparkles className="size-4" /> Što najbolje radi (kombinacije)
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Kombinacije faktora (bias + data podaci) rangirane po winrate-u, samo
-          iz zatvorenih analiza. Mali uzorak nije pouzdan — gledaj i W/L brojač.
+          Kombinacije faktora (bias + data podaci kroz sve nivoe) rangirane po
+          winrate-u, samo iz zatvorenih analiza. Mali uzorak nije pouzdan —
+          gledaj i W/L brojač.
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -776,10 +1149,7 @@ function CombosCard({ analyses }: { analyses: BiasAnalysis[] }) {
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Veličina kombinacije</Label>
-            <Select
-              value={size}
-              onValueChange={(v) => setSize(v as typeof size)}
-            >
+            <Select value={size} onValueChange={(v) => setSize(v as typeof size)}>
               <SelectTrigger className="h-8 w-36">
                 <SelectValue />
               </SelectTrigger>

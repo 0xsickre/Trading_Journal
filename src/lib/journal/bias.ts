@@ -1,9 +1,11 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import type { BiasAnalysis } from "./types";
+import type { BiasAnalysis, CotLeg, MarketContext } from "./types";
 
+// Relocated factor values now live in tj_market_context / tj_cot_legs; the
+// analysis row keeps only its identity, period, status and pair-level COT.
 const COLUMNS =
-  "id,instrument,bias,start_date,period_weeks,end_date,status,conviction,notes,chart_url,closed_at,created_at,updated_at,cot_score,cot_verdict,cot_idx_3y,cot_flow,cot_confidence,seasonality,cot_timing,rates_regime,yield_curve,growth_bias,dxy_1m,energy_stress,fx_policy_spread,vix_level,move_level,shield_active,dxy_trend";
+  "id,instrument,bias,start_date,period_weeks,end_date,status,notes,chart_url,closed_at,created_at,updated_at,week_start,cot_score,cot_verdict,cot_confidence";
 
 export async function getBiasAnalyses(): Promise<BiasAnalysis[]> {
   const supabase = await createClient();
@@ -12,6 +14,30 @@ export async function getBiasAnalyses(): Promise<BiasAnalysis[]> {
     .select(COLUMNS)
     .order("created_at", { ascending: false });
   return (data ?? []) as BiasAnalysis[];
+}
+
+const CONTEXT_COLUMNS =
+  "id,week_start,rates_regime,yield_curve,growth_bias,dxy_1m,vix_level,move_level,shield_active,dxy_trend,created_at,updated_at";
+
+export async function getMarketContexts(): Promise<MarketContext[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("tj_market_context")
+    .select(CONTEXT_COLUMNS)
+    .order("week_start", { ascending: false });
+  return (data ?? []) as MarketContext[];
+}
+
+const LEG_COLUMNS =
+  "id,week_start,underlying,cot_score,cot_verdict,cot_confidence,cot_idx_3y,cot_flow,seasonality,cot_timing,fx_policy_spread,energy_stress,created_at,updated_at";
+
+export async function getCotLegs(): Promise<CotLeg[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("tj_cot_legs")
+    .select(LEG_COLUMNS)
+    .order("week_start", { ascending: false });
+  return (data ?? []) as CotLeg[];
 }
 
 export type BiasStats = {

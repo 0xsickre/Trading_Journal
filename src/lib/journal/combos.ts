@@ -1,11 +1,10 @@
-// Client-safe analytics: which combinations of factors (bias + the COT / Macro
-// / Vol data fields) produced the best hit-rate. Pure functions, no server-only
-// imports, so the Analysis UI can recompute reactively as filters change.
+// Client-safe analytics: which combinations of factors (bias + the resolved
+// COT / Macro / Vol values across all scopes) produced the best hit-rate.
+// Operates on pre-resolved analyses so storage layout is irrelevant here.
 
-import type { BiasAnalysis } from "./types";
-import { ANALYSIS_FACTORS } from "./analysis-config";
+import type { ResolvedAnalysis, ResolvedFactor } from "./types";
 
-export type ComboFactor = { name: string; label: string; value: string };
+export type ComboFactor = ResolvedFactor;
 
 export type Combo = {
   factors: ComboFactor[];
@@ -22,31 +21,6 @@ export type ComboOptions = {
   maxSize?: number; // upper bound when size === "all"
   limit?: number; // cap on returned combos
 };
-
-const BIAS_LABELS: Record<string, string> = {
-  bullish: "Bullish",
-  bearish: "Bearish",
-  neutral: "Neutral",
-};
-
-/** Factor=value pairs present (non-empty) on one analysis, incl. bias. */
-function presentFactors(row: BiasAnalysis): ComboFactor[] {
-  const out: ComboFactor[] = [];
-  if (row.bias) {
-    out.push({
-      name: "bias",
-      label: "Bias",
-      value: BIAS_LABELS[row.bias] ?? row.bias,
-    });
-  }
-  for (const f of ANALYSIS_FACTORS) {
-    const raw = row[f.name as keyof BiasAnalysis];
-    if (typeof raw === "string" && raw.trim() !== "") {
-      out.push({ name: f.name, label: f.label, value: raw });
-    }
-  }
-  return out;
-}
 
 /** All index combinations of length k from [0..n). */
 function* indexCombinations(n: number, k: number): Generator<number[]> {
@@ -65,7 +39,7 @@ function* indexCombinations(n: number, k: number): Generator<number[]> {
 type Acc = { factors: ComboFactor[]; wins: number; losses: number };
 
 export function bestCombos(
-  rows: BiasAnalysis[],
+  rows: ResolvedAnalysis[],
   opts: ComboOptions = {},
 ): Combo[] {
   const {
@@ -78,8 +52,8 @@ export function bestCombos(
 
   const closed = rows.filter(
     (r) =>
-      (r.status === "win" || r.status === "loss") &&
-      (!instrument || r.instrument === instrument),
+      (r.analysis.status === "win" || r.analysis.status === "loss") &&
+      (!instrument || r.analysis.instrument === instrument),
   );
 
   const sizes =
@@ -90,12 +64,12 @@ export function bestCombos(
   const acc = new Map<string, Acc>();
 
   for (const row of closed) {
-    const pairs = presentFactors(row);
-    const won = row.status === "win";
+    const present = row.factors;
+    const won = row.analysis.status === "win";
     for (const k of sizes) {
-      if (k > pairs.length) continue;
-      for (const combo of indexCombinations(pairs.length, k)) {
-        const factors = combo.map((i) => pairs[i]);
+      if (k > present.length) continue;
+      for (const combo of indexCombinations(present.length, k)) {
+        const factors = combo.map((i) => present[i]);
         const key = factors.map((f) => `${f.name}=${f.value}`).join("|");
         let entry = acc.get(key);
         if (!entry) {

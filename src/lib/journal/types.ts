@@ -83,30 +83,64 @@ export type BiasAnalysis = {
   period_weeks: number;
   end_date: string | null;
   status: BiasStatus;
-  conviction: string | null;
   notes: string | null;
   chart_url: string | null;
   closed_at: string | null;
   created_at: string;
   updated_at: string;
-  // COT factors
+  // Week key (UTC Monday of start_date) — joins weekly context + leg cards.
+  week_start: string | null;
+  // Pair-level COT (entered on the analysis for FX pairs; null for singles).
   cot_score: string | null;
   cot_verdict: string | null;
-  cot_idx_3y: string | null;
-  cot_flow: string | null;
   cot_confidence: string | null;
-  seasonality: string | null;
-  cot_timing: string | null;
-  // Macro factors
+};
+
+/** Weekly global market context — one row per user per week. */
+export type MarketContext = {
+  id: string;
+  week_start: string;
   rates_regime: string | null;
   yield_curve: string | null;
   growth_bias: string | null;
   dxy_1m: string | null;
-  energy_stress: string | null;
-  fx_policy_spread: string | null;
-  // Vol / risk factors
   vix_level: string | null;
   move_level: string | null;
   shield_active: string | null;
   dxy_trend: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Per-currency / per-underlying COT card — one row per user per week+leg. */
+export type CotLeg = {
+  id: string;
+  week_start: string;
+  underlying: string;
+  // FX legs fill idx/flow/seasonality/timing/fx_policy_spread; single
+  // underlyings additionally fill score/verdict/confidence/energy_stress.
+  cot_score: string | null;
+  cot_verdict: string | null;
+  cot_confidence: string | null;
+  cot_idx_3y: string | null;
+  cot_flow: string | null;
+  seasonality: string | null;
+  cot_timing: string | null;
+  fx_policy_spread: string | null;
+  energy_stress: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** A single flattened factor value used by combos / display. */
+export type ResolvedFactor = {
+  name: string; // namespaced for legs, e.g. "EUR:cot_flow"
+  label: string; // e.g. "EUR · Flow"
+  value: string;
+};
+
+/** An analysis paired with its effective factors across all scopes. */
+export type ResolvedAnalysis = {
+  analysis: BiasAnalysis;
+  factors: ResolvedFactor[];
 };
