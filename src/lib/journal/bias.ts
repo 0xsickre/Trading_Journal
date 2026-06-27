@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { BiasAnalysis } from "./types";
 
 const COLUMNS =
-  "id,instrument,bias,start_date,period_weeks,end_date,status,conviction,notes,chart_url,closed_at,created_at,updated_at";
+  "id,instrument,bias,start_date,period_weeks,end_date,status,conviction,notes,chart_url,closed_at,created_at,updated_at,cot_score,cot_verdict,cot_idx_3y,cot_flow,cot_confidence,seasonality,cot_timing,rates_regime,yield_curve,growth_bias,dxy_1m,energy_stress,fx_policy_spread,vix_level,move_level,shield_active,dxy_trend";
 
 export async function getBiasAnalyses(): Promise<BiasAnalysis[]> {
   const supabase = await createClient();

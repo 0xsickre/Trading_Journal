@@ -59,48 +59,99 @@ export type Database = {
           chart_url: string | null
           closed_at: string | null
           conviction: string | null
+          cot_confidence: string | null
+          cot_flow: string | null
+          cot_idx_3y: string | null
+          cot_score: string | null
+          cot_timing: string | null
+          cot_verdict: string | null
           created_at: string
+          dxy_1m: string | null
+          dxy_trend: string | null
           end_date: string | null
+          energy_stress: string | null
+          fx_policy_spread: string | null
+          growth_bias: string | null
           id: string
           instrument: string | null
+          move_level: string | null
           notes: string | null
           period_weeks: number
+          rates_regime: string | null
+          seasonality: string | null
+          shield_active: string | null
           start_date: string
           status: string
           updated_at: string
           user_id: string
+          vix_level: string | null
+          yield_curve: string | null
         }
         Insert: {
           bias?: string
           chart_url?: string | null
           closed_at?: string | null
           conviction?: string | null
+          cot_confidence?: string | null
+          cot_flow?: string | null
+          cot_idx_3y?: string | null
+          cot_score?: string | null
+          cot_timing?: string | null
+          cot_verdict?: string | null
           created_at?: string
+          dxy_1m?: string | null
+          dxy_trend?: string | null
           end_date?: string | null
+          energy_stress?: string | null
+          fx_policy_spread?: string | null
+          growth_bias?: string | null
           id?: string
           instrument?: string | null
+          move_level?: string | null
           notes?: string | null
           period_weeks?: number
+          rates_regime?: string | null
+          seasonality?: string | null
+          shield_active?: string | null
           start_date?: string
           status?: string
           updated_at?: string
           user_id?: string
+          vix_level?: string | null
+          yield_curve?: string | null
         }
         Update: {
           bias?: string
           chart_url?: string | null
           closed_at?: string | null
           conviction?: string | null
+          cot_confidence?: string | null
+          cot_flow?: string | null
+          cot_idx_3y?: string | null
+          cot_score?: string | null
+          cot_timing?: string | null
+          cot_verdict?: string | null
           created_at?: string
+          dxy_1m?: string | null
+          dxy_trend?: string | null
           end_date?: string | null
+          energy_stress?: string | null
+          fx_policy_spread?: string | null
+          growth_bias?: string | null
           id?: string
           instrument?: string | null
+          move_level?: string | null
           notes?: string | null
           period_weeks?: number
+          rates_regime?: string | null
+          seasonality?: string | null
+          shield_active?: string | null
           start_date?: string
           status?: string
           updated_at?: string
           user_id?: string
+          vix_level?: string | null
+          yield_curve?: string | null
         }
         Relationships: []
       }

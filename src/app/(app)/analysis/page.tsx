@@ -1,11 +1,13 @@
 import { getBiasAnalyses } from "@/lib/journal/bias";
 import { getInstruments } from "@/lib/journal/instruments";
+import { getOptionsMap } from "@/lib/journal/options";
 import { BiasAnalysisBoard } from "@/components/journal/bias-analysis";
 
 export default async function AnalysisPage() {
-  const [analyses, instruments] = await Promise.all([
+  const [analyses, instruments, optionsMap] = await Promise.all([
     getBiasAnalyses(),
     getInstruments(true),
+    getOptionsMap(true),
   ]);
 
   return (
@@ -18,7 +20,11 @@ export default async function AnalysisPage() {
         </p>
       </div>
 
-      <BiasAnalysisBoard analyses={analyses} instruments={instruments} />
+      <BiasAnalysisBoard
+        analyses={analyses}
+        instruments={instruments}
+        optionsMap={optionsMap}
+      />
     </div>
   );
 }

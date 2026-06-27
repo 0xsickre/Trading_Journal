@@ -89,4 +89,24 @@ export type BiasAnalysis = {
   closed_at: string | null;
   created_at: string;
   updated_at: string;
+  // COT factors
+  cot_score: string | null;
+  cot_verdict: string | null;
+  cot_idx_3y: string | null;
+  cot_flow: string | null;
+  cot_confidence: string | null;
+  seasonality: string | null;
+  cot_timing: string | null;
+  // Macro factors
+  rates_regime: string | null;
+  yield_curve: string | null;
+  growth_bias: string | null;
+  dxy_1m: string | null;
+  energy_stress: string | null;
+  fx_policy_spread: string | null;
+  // Vol / risk factors
+  vix_level: string | null;
+  move_level: string | null;
+  shield_active: string | null;
+  dxy_trend: string | null;
 };

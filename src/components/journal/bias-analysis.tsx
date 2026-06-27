@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -14,6 +14,9 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  ChevronDown,
+  ChevronRight,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,12 +39,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EditableSelect } from "@/components/journal/editable-select";
 import { cn } from "@/lib/utils";
 import type {
   BiasAnalysis,
   BiasValue,
   Instrument,
+  OptionsMap,
 } from "@/lib/journal/types";
+import {
+  ANALYSIS_FACTORS,
+  ANALYSIS_FACTOR_NAMES,
+  ANALYSIS_GROUPS,
+  factorsByGroup,
+  type AnalysisGroup,
+} from "@/lib/journal/analysis-config";
+import { bestCombos } from "@/lib/journal/combos";
 import {
   createBiasAnalysis,
   updateBiasAnalysis,
@@ -76,6 +89,10 @@ function fmtDate(d: string | null): string {
   return `${m[3]}.${m[2]}.${m[1]}`;
 }
 
+function emptyFactors(): Record<string, string> {
+  return Object.fromEntries(ANALYSIS_FACTOR_NAMES.map((n) => [n, ""]));
+}
+
 type Draft = {
   instrument: string;
   bias: BiasValue;
@@ -84,6 +101,7 @@ type Draft = {
   conviction: string;
   notes: string;
   chartUrl: string;
+  factors: Record<string, string>;
 };
 
 function emptyDraft(): Draft {
@@ -95,21 +113,34 @@ function emptyDraft(): Draft {
     conviction: "",
     notes: "",
     chartUrl: "",
+    factors: emptyFactors(),
   };
+}
+
+/** Filled (non-empty) data factors on a saved analysis, for display. */
+function filledFactors(a: BiasAnalysis) {
+  return ANALYSIS_FACTORS.map((f) => ({
+    label: f.label,
+    value: (a[f.name as keyof BiasAnalysis] as string | null) ?? null,
+  })).filter((x) => x.value && x.value.trim() !== "");
 }
 
 export function BiasAnalysisBoard({
   analyses,
   instruments,
+  optionsMap,
 }: {
   analyses: BiasAnalysis[];
   instruments: Instrument[];
+  optionsMap: OptionsMap;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "open" | "win" | "loss">("all");
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const stats = useMemo(() => {
     let open = 0,
@@ -150,9 +181,22 @@ export function BiasAnalysisBoard({
     setDraft((d) => ({ ...d, ...p }));
   }
 
+  function patchFactor(name: string, value: string) {
+    setDraft((d) => ({ ...d, factors: { ...d.factors, [name]: value } }));
+  }
+
   function resetForm() {
     setDraft(emptyDraft());
     setEditingId(null);
+  }
+
+  function toggleExpanded(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function submit() {
@@ -165,6 +209,10 @@ export function BiasAnalysisBoard({
       toast.error("Period must be at least 1 week.");
       return;
     }
+    const factors: Record<string, string | null> = {};
+    for (const name of ANALYSIS_FACTOR_NAMES)
+      factors[name] = draft.factors[name] || null;
+
     const payload = {
       instrument: draft.instrument,
       bias: draft.bias,
@@ -173,6 +221,7 @@ export function BiasAnalysisBoard({
       conviction: draft.conviction,
       notes: draft.notes,
       chart_url: draft.chartUrl,
+      factors,
     };
     start(async () => {
       const res = editingId
@@ -190,6 +239,9 @@ export function BiasAnalysisBoard({
 
   function edit(a: BiasAnalysis) {
     setEditingId(a.id);
+    const factors = emptyFactors();
+    for (const name of ANALYSIS_FACTOR_NAMES)
+      factors[name] = (a[name as keyof BiasAnalysis] as string | null) ?? "";
     setDraft({
       instrument: a.instrument ?? "",
       bias: a.bias,
@@ -198,7 +250,14 @@ export function BiasAnalysisBoard({
       conviction: a.conviction ?? "",
       notes: a.notes ?? "",
       chartUrl: a.chart_url ?? "",
+      factors,
     });
+    // Open groups that have values so the user sees them.
+    const toOpen: Record<string, boolean> = {};
+    for (const g of ANALYSIS_GROUPS) {
+      toOpen[g] = factorsByGroup(g).some((f) => factors[f.name]);
+    }
+    setOpenGroups(toOpen);
     if (typeof window !== "undefined")
       window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -239,6 +298,10 @@ export function BiasAnalysisBoard({
       router.refresh();
     });
   }
+
+  const filledInDraft = ANALYSIS_FACTOR_NAMES.filter(
+    (n) => draft.factors[n],
+  ).length;
 
   return (
     <div className="space-y-5">
@@ -355,6 +418,29 @@ export function BiasAnalysisBoard({
             </div>
           </div>
 
+          {/* Data factor groups */}
+          <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold">Data podaci (opciono)</h4>
+              {filledInDraft > 0 && (
+                <Badge variant="secondary">{filledInDraft} popunjeno</Badge>
+              )}
+            </div>
+            {ANALYSIS_GROUPS.map((group) => (
+              <FactorGroup
+                key={group}
+                group={group}
+                open={!!openGroups[group]}
+                onToggle={() =>
+                  setOpenGroups((g) => ({ ...g, [group]: !g[group] }))
+                }
+                draftFactors={draft.factors}
+                optionsMap={optionsMap}
+                onFactor={patchFactor}
+              />
+            ))}
+          </div>
+
           <div className="flex justify-end gap-2">
             {editingId && (
               <Button variant="outline" onClick={resetForm} disabled={pending}>
@@ -373,11 +459,14 @@ export function BiasAnalysisBoard({
         </CardContent>
       </Card>
 
+      {/* What works best — combinations */}
+      <CombosCard analyses={analyses} />
+
       {/* Breakdown */}
       {analyses.length > 0 && (
         <div className="grid gap-3 lg:grid-cols-2">
           <BreakdownCard title="By instrument" rows={byInstrument} />
-          <BreakdownCard title="By bias" rows={byBias} labelize />
+          <BreakdownCard title="By bias" rows={byBias} />
         </div>
       )}
 
@@ -409,6 +498,7 @@ export function BiasAnalysisBoard({
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8" />
                     <TableHead>Instrument</TableHead>
                     <TableHead>Bias</TableHead>
                     <TableHead>Period</TableHead>
@@ -417,109 +507,165 @@ export function BiasAnalysisBoard({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {visible.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {a.instrument ?? "—"}
-                          {a.chart_url && (
-                            <a
-                              href={a.chart_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-muted-foreground hover:text-foreground"
-                              title="Open chart"
-                            >
-                              <ExternalLink className="size-3.5" />
-                            </a>
-                          )}
-                        </div>
-                        {a.notes && (
-                          <p className="mt-0.5 max-w-xs truncate text-xs text-muted-foreground">
-                            {a.notes}
-                          </p>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <BiasBadge bias={a.bias} />
-                        {a.conviction && (
-                          <span className="ml-1 text-xs text-muted-foreground">
-                            {a.conviction}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">
-                        <div>
-                          {fmtDate(a.start_date)} → {fmtDate(a.end_date)}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {a.period_weeks} week{a.period_weeks > 1 ? "s" : ""}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={a.status} />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-1">
-                          {a.status === "open" ? (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 gap-1 px-2 text-emerald-600 dark:text-emerald-400"
-                                onClick={() => close(a.id, "win")}
-                                disabled={pending}
-                                title="Bias was correct"
-                              >
-                                <Check className="size-3.5" /> Win
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 gap-1 px-2 text-destructive"
-                                onClick={() => close(a.id, "loss")}
-                                disabled={pending}
-                                title="Bias was wrong"
-                              >
-                                <X className="size-3.5" /> Loss
-                              </Button>
-                            </>
-                          ) : (
+                  {visible.map((a) => {
+                    const factors = filledFactors(a);
+                    const isOpen = expanded.has(a.id);
+                    return (
+                      <Fragment key={a.id}>
+                        <TableRow>
+                          <TableCell className="align-top">
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="size-7"
-                              onClick={() => reopen(a.id)}
-                              disabled={pending}
-                              title="Re-open"
+                              className="size-7 text-muted-foreground"
+                              onClick={() => toggleExpanded(a.id)}
+                              disabled={factors.length === 0}
+                              title={
+                                factors.length
+                                  ? "Show data factors"
+                                  : "No data factors"
+                              }
                             >
-                              <RotateCcw className="size-3.5" />
+                              {isOpen ? (
+                                <ChevronDown className="size-4" />
+                              ) : (
+                                <ChevronRight className="size-4" />
+                              )}
                             </Button>
-                          )}
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="size-7"
-                            onClick={() => edit(a)}
-                            disabled={pending}
-                            title="Edit"
-                          >
-                            <Pencil className="size-3.5" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="size-7 text-muted-foreground"
-                            onClick={() => remove(a.id)}
-                            disabled={pending}
-                            title="Delete"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              {a.instrument ?? "—"}
+                              {a.chart_url && (
+                                <a
+                                  href={a.chart_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-muted-foreground hover:text-foreground"
+                                  title="Open chart"
+                                >
+                                  <ExternalLink className="size-3.5" />
+                                </a>
+                              )}
+                              {factors.length > 0 && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] text-muted-foreground"
+                                >
+                                  {factors.length} data
+                                </Badge>
+                              )}
+                            </div>
+                            {a.notes && (
+                              <p className="mt-0.5 max-w-xs truncate text-xs text-muted-foreground">
+                                {a.notes}
+                              </p>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <BiasBadge bias={a.bias} />
+                            {a.conviction && (
+                              <span className="ml-1 text-xs text-muted-foreground">
+                                {a.conviction}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-sm">
+                            <div>
+                              {fmtDate(a.start_date)} → {fmtDate(a.end_date)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {a.period_weeks} week
+                              {a.period_weeks > 1 ? "s" : ""}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <StatusBadge status={a.status} />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center justify-end gap-1">
+                              {a.status === "open" ? (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 gap-1 px-2 text-emerald-600 dark:text-emerald-400"
+                                    onClick={() => close(a.id, "win")}
+                                    disabled={pending}
+                                    title="Bias was correct"
+                                  >
+                                    <Check className="size-3.5" /> Win
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 gap-1 px-2 text-destructive"
+                                    onClick={() => close(a.id, "loss")}
+                                    disabled={pending}
+                                    title="Bias was wrong"
+                                  >
+                                    <X className="size-3.5" /> Loss
+                                  </Button>
+                                </>
+                              ) : (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="size-7"
+                                  onClick={() => reopen(a.id)}
+                                  disabled={pending}
+                                  title="Re-open"
+                                >
+                                  <RotateCcw className="size-3.5" />
+                                </Button>
+                              )}
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="size-7"
+                                onClick={() => edit(a)}
+                                disabled={pending}
+                                title="Edit"
+                              >
+                                <Pencil className="size-3.5" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="size-7 text-muted-foreground"
+                                onClick={() => remove(a.id)}
+                                disabled={pending}
+                                title="Delete"
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        {isOpen && factors.length > 0 && (
+                          <TableRow className="bg-muted/30">
+                            <TableCell />
+                            <TableCell colSpan={5}>
+                              <div className="flex flex-wrap gap-1.5 py-1">
+                                {factors.map((f) => (
+                                  <Badge
+                                    key={f.label}
+                                    variant="secondary"
+                                    className="font-normal"
+                                  >
+                                    <span className="text-muted-foreground">
+                                      {f.label}:
+                                    </span>{" "}
+                                    {f.value}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -527,6 +673,216 @@ export function BiasAnalysisBoard({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function FactorGroup({
+  group,
+  open,
+  onToggle,
+  draftFactors,
+  optionsMap,
+  onFactor,
+}: {
+  group: AnalysisGroup;
+  open: boolean;
+  onToggle: () => void;
+  draftFactors: Record<string, string>;
+  optionsMap: OptionsMap;
+  onFactor: (name: string, value: string) => void;
+}) {
+  const fields = factorsByGroup(group);
+  const filled = fields.filter((f) => draftFactors[f.name]).length;
+  return (
+    <div className="rounded-md border bg-background">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium"
+      >
+        <span className="flex items-center gap-2">
+          {open ? (
+            <ChevronDown className="size-4" />
+          ) : (
+            <ChevronRight className="size-4" />
+          )}
+          {group}
+        </span>
+        {filled > 0 && (
+          <Badge variant="secondary" className="text-[10px]">
+            {filled}
+          </Badge>
+        )}
+      </button>
+      {open && (
+        <div className="grid gap-3 border-t p-3 sm:grid-cols-2 lg:grid-cols-3">
+          {fields.map((f) => (
+            <div key={f.name} className="space-y-1.5">
+              <Label className="text-xs">{f.label}</Label>
+              <EditableSelect
+                listKey={f.listKey}
+                options={optionsMap[f.listKey] ?? []}
+                value={draftFactors[f.name] ?? ""}
+                onChange={(v) => onFactor(f.name, v)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CombosCard({ analyses }: { analyses: BiasAnalysis[] }) {
+  const [instrument, setInstrument] = useState<string>("all");
+  const [size, setSize] = useState<"all" | "1" | "2" | "3">("all");
+  const [minSample, setMinSample] = useState<string>("3");
+
+  // Instruments that actually have closed analyses.
+  const closedInstruments = useMemo(() => {
+    const s = new Set<string>();
+    for (const a of analyses) {
+      if ((a.status === "win" || a.status === "loss") && a.instrument)
+        s.add(a.instrument);
+    }
+    return Array.from(s).sort();
+  }, [analyses]);
+
+  const combos = useMemo(
+    () =>
+      bestCombos(analyses, {
+        instrument: instrument === "all" ? null : instrument,
+        size: size === "all" ? "all" : Number(size),
+        minSample: Math.max(1, Number(minSample) || 1),
+        maxSize: 3,
+        limit: 25,
+      }),
+    [analyses, instrument, size, minSample],
+  );
+
+  const hasClosed = closedInstruments.length > 0;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Sparkles className="size-4" /> Što najbolje radi (kombinacije)
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Kombinacije faktora (bias + data podaci) rangirane po winrate-u, samo
+          iz zatvorenih analiza. Mali uzorak nije pouzdan — gledaj i W/L brojač.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Instrument</Label>
+            <Select value={instrument} onValueChange={setInstrument}>
+              <SelectTrigger className="h-8 w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Svi instrumenti</SelectItem>
+                {closedInstruments.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Veličina kombinacije</Label>
+            <Select
+              value={size}
+              onValueChange={(v) => setSize(v as typeof size)}
+            >
+              <SelectTrigger className="h-8 w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">1–3 faktora</SelectItem>
+                <SelectItem value="1">1 faktor</SelectItem>
+                <SelectItem value="2">2 faktora</SelectItem>
+                <SelectItem value="3">3 faktora</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Min uzorak</Label>
+            <Input
+              className="h-8 w-24"
+              inputMode="numeric"
+              value={minSample}
+              onChange={(e) => setMinSample(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {!hasClosed ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            Još nema zatvorenih (Win/Loss) analiza. Zatvori nekoliko da bi se
+            pojavile kombinacije.
+          </p>
+        ) : combos.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            Nema kombinacija sa min uzorkom {minSample}. Smanji prag ili dodaj
+            više analiza.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Kombinacija</TableHead>
+                  <TableHead className="text-right">W/L</TableHead>
+                  <TableHead className="text-right">Uzorak</TableHead>
+                  <TableHead className="text-right">Win rate</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {combos.map((c, i) => (
+                  <TableRow key={i}>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1.5">
+                        {c.factors.map((f) => (
+                          <Badge
+                            key={f.name}
+                            variant="secondary"
+                            className="font-normal"
+                          >
+                            <span className="text-muted-foreground">
+                              {f.label}:
+                            </span>{" "}
+                            {f.value}
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {c.wins}/{c.losses}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {c.total}
+                    </TableCell>
+                    <TableCell
+                      className={cn(
+                        "text-right font-semibold tabular-nums",
+                        c.winRate >= 50
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-destructive",
+                      )}
+                    >
+                      {c.winRate.toFixed(0)}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -607,11 +963,9 @@ function StatCard({
 function BreakdownCard({
   title,
   rows,
-  labelize,
 }: {
   title: string;
   rows: BreakdownRow[];
-  labelize?: boolean;
 }) {
   return (
     <Card>
@@ -631,9 +985,7 @@ function BreakdownCard({
           <TableBody>
             {rows.map((r) => (
               <TableRow key={r.key}>
-                <TableCell className="py-1.5 capitalize">
-                  {labelize ? r.key : r.key}
-                </TableCell>
+                <TableCell className="py-1.5 capitalize">{r.key}</TableCell>
                 <TableCell className="py-1.5 text-right tabular-nums">
                   {r.wins}/{r.losses}
                 </TableCell>

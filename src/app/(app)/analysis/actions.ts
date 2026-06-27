@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { BiasStatus, BiasValue } from "@/lib/journal/types";
+import { ANALYSIS_FACTOR_NAMES } from "@/lib/journal/analysis-config";
 
 export type BiasInput = {
   instrument: string | null;
@@ -12,6 +13,8 @@ export type BiasInput = {
   conviction: string | null;
   notes: string | null;
   chart_url: string | null;
+  // Optional data factors (COT / Macro / Vol). Keyed by column name.
+  factors?: Record<string, string | null>;
 };
 
 const BIAS_VALUES: BiasValue[] = ["bullish", "bearish", "neutral"];
@@ -41,6 +44,10 @@ function sanitize(input: BiasInput) {
     const t = (v ?? "").trim();
     return t === "" ? null : t;
   };
+  const factors: Record<string, string | null> = {};
+  for (const name of ANALYSIS_FACTOR_NAMES) {
+    factors[name] = clean(input.factors?.[name] ?? null);
+  }
   return {
     instrument: clean(input.instrument),
     bias,
@@ -50,6 +57,7 @@ function sanitize(input: BiasInput) {
     conviction: clean(input.conviction),
     notes: clean(input.notes),
     chart_url: clean(input.chart_url),
+    ...factors,
   };
 }
 

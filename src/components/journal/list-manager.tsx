@@ -284,7 +284,14 @@ function ListCard({ list }: { list: OptionList }) {
 }
 
 export function ListManager({ lists }: { lists: OptionList[] }) {
-  const categories = ["Context", "ICT Setup", "Risk", "Psychology", null];
+  const categories = [
+    "Context",
+    "ICT Setup",
+    "Risk",
+    "Psychology",
+    "Analysis",
+    null,
+  ];
   return (
     <div className="space-y-8">
       {categories.map((cat) => {
