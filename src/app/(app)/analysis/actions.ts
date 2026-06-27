@@ -10,7 +10,6 @@ export type BiasInput = {
   bias: BiasValue;
   start_date: string; // YYYY-MM-DD
   period_weeks: number;
-  conviction: string | null;
   notes: string | null;
   chart_url: string | null;
   // Optional data factors (COT / Macro / Vol). Keyed by column name.
@@ -54,7 +53,7 @@ function sanitize(input: BiasInput) {
     start_date: start,
     period_weeks: weeks,
     end_date: computeEndDate(start, weeks),
-    conviction: clean(input.conviction),
+    conviction: null,
     notes: clean(input.notes),
     chart_url: clean(input.chart_url),
     ...factors,

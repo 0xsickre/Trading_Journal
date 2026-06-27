@@ -98,7 +98,6 @@ type Draft = {
   bias: BiasValue;
   startDate: string;
   weeks: string;
-  conviction: string;
   notes: string;
   chartUrl: string;
   factors: Record<string, string>;
@@ -110,7 +109,6 @@ function emptyDraft(): Draft {
     bias: "bullish",
     startDate: today(),
     weeks: "1",
-    conviction: "",
     notes: "",
     chartUrl: "",
     factors: emptyFactors(),
@@ -218,7 +216,6 @@ export function BiasAnalysisBoard({
       bias: draft.bias,
       start_date: draft.startDate,
       period_weeks: Math.floor(weeks),
-      conviction: draft.conviction,
       notes: draft.notes,
       chart_url: draft.chartUrl,
       factors,
@@ -247,7 +244,6 @@ export function BiasAnalysisBoard({
       bias: a.bias,
       startDate: a.start_date,
       weeks: String(a.period_weeks),
-      conviction: a.conviction ?? "",
       notes: a.notes ?? "",
       chartUrl: a.chart_url ?? "",
       factors,
@@ -390,14 +386,6 @@ export function BiasAnalysisBoard({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Conviction (optional)</Label>
-              <Input
-                value={draft.conviction}
-                onChange={(e) => patch({ conviction: e.target.value })}
-                placeholder="e.g. High / Medium / Low"
-              />
-            </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Chart URL (optional)</Label>
               <Input
@@ -564,11 +552,6 @@ export function BiasAnalysisBoard({
                           </TableCell>
                           <TableCell>
                             <BiasBadge bias={a.bias} />
-                            {a.conviction && (
-                              <span className="ml-1 text-xs text-muted-foreground">
-                                {a.conviction}
-                              </span>
-                            )}
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-sm">
                             <div>
