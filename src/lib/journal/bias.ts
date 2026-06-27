@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import type { BiasAnalysis, CotLeg, MarketContext } from "./types";
+import type { BiasAnalysis, CotLeg, MarketContext, PairCot } from "./types";
 
 // Relocated factor values now live in tj_market_context / tj_cot_legs; the
 // analysis row keeps only its identity, period, status and pair-level COT.
@@ -38,6 +38,18 @@ export async function getCotLegs(): Promise<CotLeg[]> {
     .select(LEG_COLUMNS)
     .order("week_start", { ascending: false });
   return (data ?? []) as CotLeg[];
+}
+
+const PAIR_COT_COLUMNS =
+  "id,week_start,instrument,cot_score,cot_verdict,cot_confidence,created_at,updated_at";
+
+export async function getPairCots(): Promise<PairCot[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("tj_pair_cot")
+    .select(PAIR_COT_COLUMNS)
+    .order("week_start", { ascending: false });
+  return (data ?? []) as PairCot[];
 }
 
 export type BiasStats = {

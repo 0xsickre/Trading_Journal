@@ -132,6 +132,18 @@ export type CotLeg = {
   updated_at: string;
 };
 
+/** Pre-filled pair-level COT from quant-bridge — one row per user per week+instrument. */
+export type PairCot = {
+  id: string;
+  week_start: string;
+  instrument: string;
+  cot_score: string | null;
+  cot_verdict: string | null;
+  cot_confidence: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 /** A single flattened factor value used by combos / display. */
 export type ResolvedFactor = {
   name: string; // namespaced for legs, e.g. "EUR:cot_flow"

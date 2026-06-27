@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -50,6 +50,7 @@ import type {
   Instrument,
   MarketContext,
   OptionsMap,
+  PairCot,
   ResolvedAnalysis,
 } from "@/lib/journal/types";
 import {
@@ -157,12 +158,14 @@ export function BiasAnalysisBoard({
   analyses,
   contexts,
   legs,
+  pairCots,
   instruments,
   optionsMap,
 }: {
   analyses: BiasAnalysis[];
   contexts: MarketContext[];
   legs: CotLeg[];
+  pairCots: PairCot[];
   instruments: Instrument[];
   optionsMap: OptionsMap;
 }) {
@@ -225,6 +228,11 @@ export function BiasAnalysisBoard({
   // Resolve once for combos / breakdowns / expand rows.
   const ctxMap = useMemo(() => contextByWeek(ctxList), [ctxList]);
   const legMap = useMemo(() => legByKey(legList), [legList]);
+  const pairByKey = useMemo(() => {
+    const m = new Map<string, PairCot>();
+    for (const p of pairCots) m.set(`${p.week_start}|${p.instrument}`, p);
+    return m;
+  }, [pairCots]);
   const resolved = useMemo(
     () =>
       analyses.map((analysis) => ({
@@ -274,6 +282,23 @@ export function BiasAnalysisBoard({
   const draftWeek = weekStart(draft.startDate);
   const draftIsSingle = isSingleSymbol(draft.instrument);
   const draftIsPair = isPairSymbol(draft.instrument);
+
+  const bridgePair = useMemo(() => {
+    if (!draft.instrument || !draftWeek || !draftIsPair) return undefined;
+    return pairByKey.get(`${draftWeek}|${draft.instrument}`);
+  }, [draft.instrument, draftWeek, draftIsPair, pairByKey]);
+
+  useEffect(() => {
+    if (!bridgePair || editingId) return;
+    setDraft((d) => ({
+      ...d,
+      pair: {
+        cot_score: bridgePair.cot_score ?? "",
+        cot_verdict: bridgePair.cot_verdict ?? "",
+        cot_confidence: bridgePair.cot_confidence ?? "",
+      },
+    }));
+  }, [bridgePair, editingId]);
 
   // Inherited (global + leg) factors that will attach to the drafted analysis.
   const inherited = useMemo(() => {
@@ -600,19 +625,27 @@ export function BiasAnalysisBoard({
               <h4 className="text-sm font-semibold">
                 Pair-level COT
                 <span className="ml-2 font-normal text-muted-foreground">
-                  (from the FX Parovi report)
+                  {bridgePair
+                    ? "(auto-filled from quant-bridge)"
+                    : "(from the FX Parovi report)"}
                 </span>
               </h4>
               <div className="grid gap-3 sm:grid-cols-3">
                 {PAIR_FACTORS.map((f) => (
                   <div key={f.name} className="space-y-1.5">
                     <Label className="text-xs">{f.label}</Label>
-                    <EditableSelect
-                      listKey={f.listKey}
-                      options={optionsMap[f.listKey] ?? []}
-                      value={draft.pair[f.name] ?? ""}
-                      onChange={(v) => patchPair(f.name, v)}
-                    />
+                    {bridgePair ? (
+                      <div className="flex h-9 items-center rounded-md border bg-background px-3 text-sm">
+                        {draft.pair[f.name] || "—"}
+                      </div>
+                    ) : (
+                      <EditableSelect
+                        listKey={f.listKey}
+                        options={optionsMap[f.listKey] ?? []}
+                        value={draft.pair[f.name] ?? ""}
+                        onChange={(v) => patchPair(f.name, v)}
+                      />
+                    )}
                   </div>
                 ))}
               </div>

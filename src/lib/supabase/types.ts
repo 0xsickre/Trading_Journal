@@ -191,6 +191,42 @@ export type Database = {
         }
         Relationships: []
       }
+      tj_pair_cot: {
+        Row: {
+          cot_confidence: string | null
+          cot_score: string | null
+          cot_verdict: string | null
+          created_at: string
+          id: string
+          instrument: string
+          updated_at: string
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          cot_confidence?: string | null
+          cot_score?: string | null
+          cot_verdict?: string | null
+          created_at?: string
+          id?: string
+          instrument: string
+          updated_at?: string
+          user_id?: string
+          week_start: string
+        }
+        Update: {
+          cot_confidence?: string | null
+          cot_score?: string | null
+          cot_verdict?: string | null
+          created_at?: string
+          id?: string
+          instrument?: string
+          updated_at?: string
+          user_id?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
       tj_executions: {
         Row: {
           created_at: string
