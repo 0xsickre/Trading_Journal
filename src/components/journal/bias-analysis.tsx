@@ -211,6 +211,14 @@ export function BiasAnalysisBoard({
   const [ctxList, setCtxList] = useState<MarketContext[]>(contexts);
   const [legList, setLegList] = useState<CotLeg[]>(legs);
 
+  useEffect(() => {
+    setCtxList(contexts);
+  }, [contexts]);
+
+  useEffect(() => {
+    setLegList(legs);
+  }, [legs]);
+
   // Selected week (UTC Monday) for the week workspace.
   const [week, setWeek] = useState<string>(planningWeekStart());
 
