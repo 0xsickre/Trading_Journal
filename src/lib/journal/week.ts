@@ -24,7 +24,31 @@ export function weekStart(dateStr: string): string {
   return new Date(ms - backToMonday * DAY_MS).toISOString().slice(0, 10);
 }
 
-/** Today's week-start (UTC Monday), `YYYY-MM-DD`. */
+/** Add `days` to an ISO date string (UTC-safe). Returns "" if input is invalid. */
+export function addDays(dateStr: string, days: number): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr ?? "");
+  if (!m) return "";
+  const ms = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return new Date(ms + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * Default week key for analysis / week workspace.
+ * Mon–Fri: current ISO week Monday. Sat–Sun: next week's Monday (planning week).
+ */
+export function planningWeekStart(dateStr?: string): string {
+  const today = dateStr ?? new Date().toISOString().slice(0, 10);
+  const monday = weekStart(today);
+  if (!monday) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(today);
+  if (!m) return monday;
+  const ms = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const dow = new Date(ms).getUTCDay(); // 0=Sun, 6=Sat
+  if (dow === 0 || dow === 6) return addDays(monday, 7);
+  return monday;
+}
+
+/** Today's calendar week-start (UTC Monday), `YYYY-MM-DD`. */
 export function currentWeekStart(): string {
   return weekStart(new Date().toISOString().slice(0, 10));
 }

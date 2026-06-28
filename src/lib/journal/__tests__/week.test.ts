@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { weekStart } from "@/lib/journal/week";
+import { addDays, planningWeekStart, weekStart } from "@/lib/journal/week";
 
 describe("weekStart", () => {
   it("maps a mid-week date back to its Monday", () => {
@@ -34,5 +34,38 @@ describe("weekStart", () => {
     expect(weekStart("")).toBe("");
     expect(weekStart("2026-6-1")).toBe("");
     expect(weekStart("not-a-date")).toBe("");
+  });
+});
+
+describe("addDays", () => {
+  it("adds days across month boundaries", () => {
+    expect(addDays("2026-06-29", 7)).toBe("2026-07-06");
+  });
+
+  it("returns empty string for malformed input", () => {
+    expect(addDays("", 7)).toBe("");
+  });
+});
+
+describe("planningWeekStart", () => {
+  it("returns next Monday on Saturday", () => {
+    expect(planningWeekStart("2026-06-27")).toBe("2026-06-29");
+  });
+
+  it("returns next Monday on Sunday", () => {
+    expect(planningWeekStart("2026-06-28")).toBe("2026-06-29");
+  });
+
+  it("returns current Monday on weekdays", () => {
+    expect(planningWeekStart("2026-06-25")).toBe("2026-06-22"); // Wed
+    expect(planningWeekStart("2026-06-29")).toBe("2026-06-29"); // Mon
+    expect(planningWeekStart("2026-07-03")).toBe("2026-06-29"); // Fri
+  });
+
+  it("handles year boundary on weekend", () => {
+    // 2026-12-26 is a Saturday -> next Monday is 2026-12-28 (not 2027).
+    expect(planningWeekStart("2026-12-26")).toBe("2026-12-28");
+    // 2027-01-02 is a Saturday -> next Monday is 2027-01-04.
+    expect(planningWeekStart("2027-01-02")).toBe("2027-01-04");
   });
 });

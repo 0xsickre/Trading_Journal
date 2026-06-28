@@ -72,7 +72,7 @@ import {
   legByKey,
   resolveAnalysisFactors,
 } from "@/lib/journal/resolve";
-import { weekStart, currentWeekStart } from "@/lib/journal/week";
+import { weekStart, planningWeekStart } from "@/lib/journal/week";
 import {
   createBiasAnalysis,
   updateBiasAnalysis,
@@ -93,10 +93,6 @@ const GLOBAL_NAMES = GLOBAL_FACTORS.map((f) => f.name);
 const LEG_FIELD_NAMES = Array.from(
   new Set([...LEG_FACTORS, ...SINGLE_LEG_FACTORS].map((f) => f.name)),
 );
-
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function computeEndDate(startDate: string, weeks: number): string | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(startDate);
@@ -132,7 +128,7 @@ function emptyDraft(): Draft {
   return {
     instrument: "",
     bias: "bullish",
-    startDate: today(),
+    startDate: planningWeekStart(),
     weeks: "1",
     notes: "",
     chartUrl: "",
@@ -182,7 +178,7 @@ export function BiasAnalysisBoard({
   const [legList, setLegList] = useState<CotLeg[]>(legs);
 
   // Selected week (UTC Monday) for the week workspace.
-  const [week, setWeek] = useState<string>(currentWeekStart());
+  const [week, setWeek] = useState<string>(planningWeekStart());
 
   // Optimistically fold a saved context/leg into the local lists so the
   // resolver + combos + inherited preview update without a server round-trip.
@@ -506,7 +502,7 @@ export function BiasAnalysisBoard({
               size="sm"
               variant="ghost"
               className="h-8"
-              onClick={() => setWeek(currentWeekStart())}
+              onClick={() => setWeek(planningWeekStart())}
             >
               This week
             </Button>
