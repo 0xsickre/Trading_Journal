@@ -66,7 +66,25 @@ export function resolveAnalysisFactors(
   const out: ResolvedFactor[] = [];
 
   if (a.bias) {
-    out.push({ name: "bias", label: "Bias", value: BIAS_LABELS[a.bias] ?? a.bias });
+    out.push({
+      name: "final_bias",
+      label: "Final bias",
+      value: BIAS_LABELS[a.bias] ?? a.bias,
+    });
+  }
+  if (a.technical_bias) {
+    out.push({
+      name: "technical_bias",
+      label: "Technical bias",
+      value: BIAS_LABELS[a.technical_bias] ?? a.technical_bias,
+    });
+  }
+  if (a.macro_bias) {
+    out.push({
+      name: "macro_bias",
+      label: "Macro bias",
+      value: BIAS_LABELS[a.macro_bias] ?? a.macro_bias,
+    });
   }
 
   const wk = a.week_start || weekStart(a.start_date);

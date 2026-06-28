@@ -15,10 +15,16 @@ import type { TablesInsert } from "@/lib/supabase/types";
 export type BiasInput = {
   instrument: string | null;
   bias: BiasValue;
+  technical_bias: BiasValue;
+  macro_bias: BiasValue;
   start_date: string; // YYYY-MM-DD
   period_weeks: number;
   notes: string | null;
   chart_url: string | null;
+  prev_week_close: number | null;
+  period_high?: number | null;
+  period_low?: number | null;
+  period_close?: number | null;
   // Pair-level COT (FX pairs only; nulled for single instruments).
   cot_score?: string | null;
   cot_verdict?: string | null;
@@ -45,14 +51,23 @@ function computeEndDate(startDate: string, weeks: number): string | null {
   return end.toISOString().slice(0, 10);
 }
 
+function cleanBias(v: string | null | undefined): BiasValue {
+  return BIAS_VALUES.includes(v as BiasValue) ? (v as BiasValue) : "bullish";
+}
+
+function cleanPrice(v: number | null | undefined): number | null {
+  if (v == null || !Number.isFinite(v)) return null;
+  return v;
+}
+
 function sanitize(input: BiasInput) {
   const weeks =
     Number.isFinite(input.period_weeks) && input.period_weeks >= 1
       ? Math.floor(input.period_weeks)
       : 1;
-  const bias: BiasValue = BIAS_VALUES.includes(input.bias)
-    ? input.bias
-    : "bullish";
+  const bias = cleanBias(input.bias);
+  const technical_bias = cleanBias(input.technical_bias);
+  const macro_bias = cleanBias(input.macro_bias);
   const start = /^\d{4}-\d{2}-\d{2}$/.test(input.start_date)
     ? input.start_date
     : new Date().toISOString().slice(0, 10);
@@ -62,12 +77,18 @@ function sanitize(input: BiasInput) {
   return {
     instrument,
     bias,
+    technical_bias,
+    macro_bias,
     start_date: start,
     period_weeks: weeks,
     end_date: computeEndDate(start, weeks),
     week_start: weekStart(start) || null,
     notes: clean(input.notes),
     chart_url: clean(input.chart_url),
+    prev_week_close: cleanPrice(input.prev_week_close),
+    period_high: cleanPrice(input.period_high),
+    period_low: cleanPrice(input.period_low),
+    period_close: cleanPrice(input.period_close),
     cot_score: single ? null : clean(input.cot_score),
     cot_verdict: single ? null : clean(input.cot_verdict),
     cot_confidence: single ? null : clean(input.cot_confidence),

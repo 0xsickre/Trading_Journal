@@ -16,6 +16,8 @@ function ra(
       id: Math.random().toString(36),
       instrument,
       bias: "bullish",
+      technical_bias: "bullish",
+      macro_bias: "bullish",
       start_date: "2026-06-27",
       period_weeks: 1,
       end_date: null,
@@ -29,6 +31,10 @@ function ra(
       cot_score: null,
       cot_verdict: null,
       cot_confidence: null,
+      prev_week_close: null,
+      period_high: null,
+      period_low: null,
+      period_close: null,
     },
     factors,
   };
@@ -43,11 +49,11 @@ const F = (name: string, value: string): ResolvedFactor => ({
 describe("bestCombos", () => {
   it("computes win rate over closed analyses and honours minSample", () => {
     const rows: ResolvedAnalysis[] = [
-      ra("win", "EURUSD", [F("bias", "Bullish"), F("vix_level", "<15")]),
-      ra("win", "EURUSD", [F("bias", "Bullish"), F("vix_level", "<15")]),
-      ra("loss", "EURUSD", [F("bias", "Bullish"), F("vix_level", "<15")]),
+      ra("win", "EURUSD", [F("final_bias", "Bullish"), F("vix_level", "<15")]),
+      ra("win", "EURUSD", [F("final_bias", "Bullish"), F("vix_level", "<15")]),
+      ra("loss", "EURUSD", [F("final_bias", "Bullish"), F("vix_level", "<15")]),
       // open rows are ignored
-      ra("open", "EURUSD", [F("bias", "Bullish"), F("vix_level", "<15")]),
+      ra("open", "EURUSD", [F("final_bias", "Bullish"), F("vix_level", "<15")]),
     ];
 
     const combos = bestCombos(rows, { minSample: 3, size: 2 });
@@ -61,8 +67,8 @@ describe("bestCombos", () => {
 
   it("drops combos below minSample", () => {
     const rows: ResolvedAnalysis[] = [
-      ra("win", "EURUSD", [F("bias", "Bullish")]),
-      ra("loss", "EURUSD", [F("bias", "Bearish")]),
+      ra("win", "EURUSD", [F("final_bias", "Bullish")]),
+      ra("loss", "EURUSD", [F("final_bias", "Bearish")]),
     ];
     // Each distinct combo has sample 1 -> nothing passes minSample 3.
     expect(bestCombos(rows, { minSample: 3 })).toHaveLength(0);
@@ -70,13 +76,25 @@ describe("bestCombos", () => {
 
   it("filters by instrument", () => {
     const rows: ResolvedAnalysis[] = [
-      ra("win", "EURUSD", [F("bias", "Bullish")]),
-      ra("win", "EURUSD", [F("bias", "Bullish")]),
-      ra("loss", "XAUUSD", [F("bias", "Bullish")]),
+      ra("win", "EURUSD", [F("final_bias", "Bullish")]),
+      ra("win", "EURUSD", [F("final_bias", "Bullish")]),
+      ra("loss", "XAUUSD", [F("final_bias", "Bullish")]),
     ];
     const combos = bestCombos(rows, { instrument: "EURUSD", minSample: 2 });
     expect(combos).toHaveLength(1);
     expect(combos[0].wins).toBe(2);
     expect(combos[0].losses).toBe(0);
+  });
+
+  it("ranks technical bias alone at size 1", () => {
+    const rows: ResolvedAnalysis[] = [
+      ra("win", "EURUSD", [F("technical_bias", "Bullish")]),
+      ra("win", "EURUSD", [F("technical_bias", "Bullish")]),
+      ra("loss", "EURUSD", [F("technical_bias", "Bullish")]),
+    ];
+    const combos = bestCombos(rows, { minSample: 3, size: 1 });
+    expect(combos).toHaveLength(1);
+    expect(combos[0].factors[0].name).toBe("technical_bias");
+    expect(combos[0].winRate).toBeCloseTo((2 / 3) * 100);
   });
 });

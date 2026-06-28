@@ -13,6 +13,8 @@ function analysis(over: Partial<BiasAnalysis>): BiasAnalysis {
     id: "a1",
     instrument: "EURUSD",
     bias: "bullish",
+    technical_bias: "bullish",
+    macro_bias: "bullish",
     start_date: "2026-06-27",
     period_weeks: 1,
     end_date: null,
@@ -26,6 +28,10 @@ function analysis(over: Partial<BiasAnalysis>): BiasAnalysis {
     cot_score: null,
     cot_verdict: null,
     cot_confidence: null,
+    prev_week_close: null,
+    period_high: null,
+    period_low: null,
+    period_close: null,
     ...over,
   };
 }
@@ -86,8 +92,10 @@ describe("resolveAnalysisFactors — pair", () => {
   ];
   const factors = resolveAnalysisFactors(a, contextByWeek(ctx), legByKey(legs));
 
-  it("includes bias", () => {
-    expect(valueOf(factors, "bias")).toBe("Bullish");
+  it("includes final, technical and macro bias", () => {
+    expect(valueOf(factors, "final_bias")).toBe("Bullish");
+    expect(valueOf(factors, "technical_bias")).toBe("Bullish");
+    expect(valueOf(factors, "macro_bias")).toBe("Bullish");
   });
 
   it("includes global factors from the weekly context", () => {

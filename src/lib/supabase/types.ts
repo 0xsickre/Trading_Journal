@@ -65,10 +65,16 @@ export type Database = {
           end_date: string | null
           id: string
           instrument: string | null
+          macro_bias: string | null
           notes: string | null
+          period_close: number | null
+          period_high: number | null
+          period_low: number | null
           period_weeks: number
+          prev_week_close: number | null
           start_date: string
           status: string
+          technical_bias: string | null
           updated_at: string
           user_id: string
           week_start: string | null
@@ -84,10 +90,16 @@ export type Database = {
           end_date?: string | null
           id?: string
           instrument?: string | null
+          macro_bias?: string | null
           notes?: string | null
+          period_close?: number | null
+          period_high?: number | null
+          period_low?: number | null
           period_weeks?: number
+          prev_week_close?: number | null
           start_date?: string
           status?: string
+          technical_bias?: string | null
           updated_at?: string
           user_id?: string
           week_start?: string | null
@@ -103,10 +115,16 @@ export type Database = {
           end_date?: string | null
           id?: string
           instrument?: string | null
+          macro_bias?: string | null
           notes?: string | null
+          period_close?: number | null
+          period_high?: number | null
+          period_low?: number | null
           period_weeks?: number
+          prev_week_close?: number | null
           start_date?: string
           status?: string
+          technical_bias?: string | null
           updated_at?: string
           user_id?: string
           week_start?: string | null

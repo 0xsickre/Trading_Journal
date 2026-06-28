@@ -75,10 +75,19 @@ export type TradeRow = {
 export type BiasValue = "bullish" | "bearish" | "neutral";
 export type BiasStatus = "open" | "win" | "loss";
 
+export type BiasBreakdownField =
+  | "instrument"
+  | "bias"
+  | "technical_bias"
+  | "macro_bias";
+
 export type BiasAnalysis = {
   id: string;
   instrument: string | null;
+  /** Final bias — primary direction for win/loss and main breakdown. */
   bias: BiasValue;
+  technical_bias: BiasValue | null;
+  macro_bias: BiasValue | null;
   start_date: string;
   period_weeks: number;
   end_date: string | null;
@@ -94,6 +103,11 @@ export type BiasAnalysis = {
   cot_score: string | null;
   cot_verdict: string | null;
   cot_confidence: string | null;
+  /** Reference price at analysis start (last week close). */
+  prev_week_close: number | null;
+  period_high: number | null;
+  period_low: number | null;
+  period_close: number | null;
 };
 
 /** Weekly global market context — one row per user per week. */

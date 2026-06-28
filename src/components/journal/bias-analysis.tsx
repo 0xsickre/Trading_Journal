@@ -72,6 +72,10 @@ import {
   legByKey,
   resolveAnalysisFactors,
 } from "@/lib/journal/resolve";
+import {
+  computePriceExcursion,
+  formatPriceMove,
+} from "@/lib/journal/price-excursion";
 import { weekStart, planningWeekStart } from "@/lib/journal/week";
 import {
   createBiasAnalysis,
@@ -88,6 +92,12 @@ const BIAS_OPTIONS: { value: BiasValue; label: string }[] = [
   { value: "bearish", label: "Bearish" },
   { value: "neutral", label: "Neutral" },
 ];
+
+const BIAS_FACTOR_NAMES = new Set([
+  "final_bias",
+  "technical_bias",
+  "macro_bias",
+]);
 
 const GLOBAL_NAMES = GLOBAL_FACTORS.map((f) => f.name);
 const LEG_FIELD_NAMES = Array.from(
@@ -112,13 +122,31 @@ function fmtDate(d: string | null): string {
 
 type Draft = {
   instrument: string;
+  technicalBias: BiasValue;
+  macroBias: BiasValue;
   bias: BiasValue;
   startDate: string;
   weeks: string;
   notes: string;
   chartUrl: string;
-  pair: Record<string, string>; // pair-level COT
+  pair: Record<string, string>;
+  prevWeekClose: string;
+  periodHigh: string;
+  periodLow: string;
+  periodClose: string;
 };
+
+function parsePriceInput(raw: string): number | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+function priceToInput(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "";
+  return String(v);
+}
 
 function emptyPair(): Record<string, string> {
   return Object.fromEntries(PAIR_FACTORS.map((f) => [f.name, ""]));
@@ -127,12 +155,18 @@ function emptyPair(): Record<string, string> {
 function emptyDraft(): Draft {
   return {
     instrument: "",
+    technicalBias: "bullish",
+    macroBias: "bullish",
     bias: "bullish",
     startDate: planningWeekStart(),
     weeks: "1",
     notes: "",
     chartUrl: "",
     pair: emptyPair(),
+    prevWeekClose: "",
+    periodHigh: "",
+    periodLow: "",
+    periodClose: "",
   };
 }
 
@@ -266,7 +300,21 @@ export function BiasAnalysisBoard({
     () => breakdown(analyses, "instrument"),
     [analyses],
   );
-  const byBias = useMemo(() => breakdown(analyses, "bias"), [analyses]);
+  const byFinalBias = useMemo(() => breakdown(analyses, "bias"), [analyses]);
+  const byTechnicalBias = useMemo(
+    () => breakdown(analyses, "technical_bias"),
+    [analyses],
+  );
+  const byMacroBias = useMemo(
+    () => breakdown(analyses, "macro_bias"),
+    [analyses],
+  );
+
+  const instrumentBySymbol = useMemo(() => {
+    const m = new Map<string, Instrument>();
+    for (const i of instruments) m.set(i.symbol, i);
+    return m;
+  }, [instruments]);
 
   const visible = useMemo(
     () =>
@@ -303,6 +351,8 @@ export function BiasAnalysisBoard({
       id: "draft",
       instrument: draft.instrument,
       bias: draft.bias,
+      technical_bias: draft.technicalBias,
+      macro_bias: draft.macroBias,
       start_date: draft.startDate,
       period_weeks: Number(draft.weeks) || 1,
       end_date: null,
@@ -316,9 +366,13 @@ export function BiasAnalysisBoard({
       cot_score: null,
       cot_verdict: null,
       cot_confidence: null,
+      prev_week_close: parsePriceInput(draft.prevWeekClose),
+      period_high: parsePriceInput(draft.periodHigh),
+      period_low: parsePriceInput(draft.periodLow),
+      period_close: parsePriceInput(draft.periodClose),
     };
     return resolveAnalysisFactors(synthetic, ctxMap, legMap).filter(
-      (f) => f.name !== "bias",
+      (f) => !BIAS_FACTOR_NAMES.has(f.name),
     );
   }, [draft, draftWeek, ctxMap, legMap]);
 
@@ -354,13 +408,23 @@ export function BiasAnalysisBoard({
       toast.error("Period must be at least 1 week.");
       return;
     }
+    if (parsePriceInput(draft.prevWeekClose) == null) {
+      toast.error("Enter last week close price.");
+      return;
+    }
     const payload = {
       instrument: draft.instrument,
       bias: draft.bias,
+      technical_bias: draft.technicalBias,
+      macro_bias: draft.macroBias,
       start_date: draft.startDate,
       period_weeks: Math.floor(weeks),
       notes: draft.notes,
       chart_url: draft.chartUrl,
+      prev_week_close: parsePriceInput(draft.prevWeekClose),
+      period_high: parsePriceInput(draft.periodHigh),
+      period_low: parsePriceInput(draft.periodLow),
+      period_close: parsePriceInput(draft.periodClose),
       cot_score: draft.pair.cot_score || null,
       cot_verdict: draft.pair.cot_verdict || null,
       cot_confidence: draft.pair.cot_confidence || null,
@@ -386,12 +450,18 @@ export function BiasAnalysisBoard({
       pair[f.name] = (a[f.name as keyof BiasAnalysis] as string | null) ?? "";
     setDraft({
       instrument: a.instrument ?? "",
+      technicalBias: a.technical_bias ?? a.bias,
+      macroBias: a.macro_bias ?? a.bias,
       bias: a.bias,
       startDate: a.start_date,
       weeks: String(a.period_weeks),
       notes: a.notes ?? "",
       chartUrl: a.chart_url ?? "",
       pair,
+      prevWeekClose: priceToInput(a.prev_week_close),
+      periodHigh: priceToInput(a.period_high),
+      periodLow: priceToInput(a.period_low),
+      periodClose: priceToInput(a.period_close),
     });
     // Jump the workspace to that analysis's week too.
     if (a.week_start) setWeek(a.week_start);
@@ -551,7 +621,45 @@ export function BiasAnalysisBoard({
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Bias</Label>
+              <Label className="text-xs">Technical bias</Label>
+              <Select
+                value={draft.technicalBias}
+                onValueChange={(v) => patch({ technicalBias: v as BiasValue })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BIAS_OPTIONS.map((b) => (
+                    <SelectItem key={b.value} value={b.value}>
+                      {b.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Macro bias</Label>
+              <Select
+                value={draft.macroBias}
+                onValueChange={(v) => patch({ macroBias: v as BiasValue })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BIAS_OPTIONS.map((b) => (
+                    <SelectItem key={b.value} value={b.value}>
+                      {b.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Final bias</Label>
               <Select
                 value={draft.bias}
                 onValueChange={(v) => patch({ bias: v as BiasValue })}
@@ -592,6 +700,60 @@ export function BiasAnalysisBoard({
                 Ends: {fmtDate(endPreview)}
               </p>
             </div>
+          </div>
+
+          <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+            <h4 className="text-sm font-semibold">Price reference</h4>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Last week close</Label>
+                <Input
+                  inputMode="decimal"
+                  value={draft.prevWeekClose}
+                  onChange={(e) => patch({ prevWeekClose: e.target.value })}
+                  placeholder="e.g. 1.0850"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Period high</Label>
+                <Input
+                  inputMode="decimal"
+                  value={draft.periodHigh}
+                  onChange={(e) => patch({ periodHigh: e.target.value })}
+                  placeholder="Weekly high"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Period low</Label>
+                <Input
+                  inputMode="decimal"
+                  value={draft.periodLow}
+                  onChange={(e) => patch({ periodLow: e.target.value })}
+                  placeholder="Weekly low"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Period close</Label>
+                <Input
+                  inputMode="decimal"
+                  value={draft.periodClose}
+                  onChange={(e) => patch({ periodClose: e.target.value })}
+                  placeholder="Close at end"
+                />
+              </div>
+            </div>
+            {draft.instrument && parsePriceInput(draft.prevWeekClose) != null && (
+              <ExcursionPreview
+                analysis={{
+                  bias: draft.bias,
+                  prev_week_close: parsePriceInput(draft.prevWeekClose),
+                  period_high: parsePriceInput(draft.periodHigh),
+                  period_low: parsePriceInput(draft.periodLow),
+                  period_close: parsePriceInput(draft.periodClose),
+                }}
+                tickSize={instrumentBySymbol.get(draft.instrument)?.tick_size}
+              />
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -711,7 +873,9 @@ export function BiasAnalysisBoard({
       {analyses.length > 0 && (
         <div className="grid gap-3 lg:grid-cols-2">
           <BreakdownCard title="By instrument" rows={byInstrument} />
-          <BreakdownCard title="By bias" rows={byBias} />
+          <BreakdownCard title="By final bias" rows={byFinalBias} />
+          <BreakdownCard title="By technical bias" rows={byTechnicalBias} />
+          <BreakdownCard title="By macro bias" rows={byMacroBias} />
         </div>
       )}
 
@@ -745,7 +909,8 @@ export function BiasAnalysisBoard({
                   <TableRow>
                     <TableHead className="w-8" />
                     <TableHead>Instrument</TableHead>
-                    <TableHead>Bias</TableHead>
+                    <TableHead>Final bias</TableHead>
+                    <TableHead>Excursion</TableHead>
                     <TableHead>Period</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -754,8 +919,17 @@ export function BiasAnalysisBoard({
                 <TableBody>
                   {visible.map((a) => {
                     const factors = factorsById.get(a.id) ?? [];
-                    const dataFactors = factors.filter((f) => f.name !== "bias");
+                    const dataFactors = factors.filter(
+                      (f) => !BIAS_FACTOR_NAMES.has(f.name),
+                    );
+                    const tickSize = a.instrument
+                      ? instrumentBySymbol.get(a.instrument)?.tick_size
+                      : null;
                     const isOpen = expanded.has(a.id);
+                    const hasExpandable =
+                      dataFactors.length > 0 ||
+                      a.technical_bias != null ||
+                      a.macro_bias != null;
                     return (
                       <Fragment key={a.id}>
                         <TableRow>
@@ -765,11 +939,11 @@ export function BiasAnalysisBoard({
                               variant="ghost"
                               className="size-7 text-muted-foreground"
                               onClick={() => toggleExpanded(a.id)}
-                              disabled={dataFactors.length === 0}
+                              disabled={!hasExpandable}
                               title={
-                                dataFactors.length
-                                  ? "Show data factors"
-                                  : "No data factors"
+                                hasExpandable
+                                  ? "Show details"
+                                  : "No extra details"
                               }
                             >
                               {isOpen ? (
@@ -810,6 +984,13 @@ export function BiasAnalysisBoard({
                           </TableCell>
                           <TableCell>
                             <BiasBadge bias={a.bias} />
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <ExcursionPreview
+                              analysis={a}
+                              tickSize={tickSize}
+                              compact
+                            />
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-sm">
                             <div>
@@ -883,23 +1064,51 @@ export function BiasAnalysisBoard({
                             </div>
                           </TableCell>
                         </TableRow>
-                        {isOpen && dataFactors.length > 0 && (
+                        {isOpen && hasExpandable && (
                           <TableRow className="bg-muted/30">
                             <TableCell />
-                            <TableCell colSpan={5}>
-                              <div className="flex flex-wrap gap-1.5 py-1">
-                                {dataFactors.map((f) => (
-                                  <Badge
-                                    key={f.name}
-                                    variant="secondary"
-                                    className="font-normal"
-                                  >
-                                    <span className="text-muted-foreground">
-                                      {f.label}:
-                                    </span>{" "}
-                                    {f.value}
-                                  </Badge>
-                                ))}
+                            <TableCell colSpan={6}>
+                              <div className="space-y-2 py-1">
+                                {(a.technical_bias || a.macro_bias) && (
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {a.technical_bias && (
+                                      <span className="flex items-center gap-1 text-xs">
+                                        <span className="text-muted-foreground">
+                                          Technical:
+                                        </span>
+                                        <BiasBadge bias={a.technical_bias} />
+                                      </span>
+                                    )}
+                                    {a.macro_bias && (
+                                      <span className="flex items-center gap-1 text-xs">
+                                        <span className="text-muted-foreground">
+                                          Macro:
+                                        </span>
+                                        <BiasBadge bias={a.macro_bias} />
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                <ExcursionPreview
+                                  analysis={a}
+                                  tickSize={tickSize}
+                                />
+                                {dataFactors.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {dataFactors.map((f) => (
+                                      <Badge
+                                        key={f.name}
+                                        variant="secondary"
+                                        className="font-normal"
+                                      >
+                                        <span className="text-muted-foreground">
+                                          {f.label}:
+                                        </span>{" "}
+                                        {f.value}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -1279,7 +1488,7 @@ type BreakdownRow = {
 
 function breakdown(
   rows: BiasAnalysis[],
-  field: "instrument" | "bias",
+  field: "instrument" | "bias" | "technical_bias" | "macro_bias",
 ): BreakdownRow[] {
   const groups = new Map<string, BiasAnalysis[]>();
   for (const r of rows) {
@@ -1383,6 +1592,99 @@ function BreakdownCard({
         </Table>
       </CardContent>
     </Card>
+  );
+}
+
+function ExcursionPreview({
+  analysis,
+  tickSize,
+  compact = false,
+}: {
+  analysis: Pick<
+    BiasAnalysis,
+    | "bias"
+    | "prev_week_close"
+    | "period_high"
+    | "period_low"
+    | "period_close"
+  >;
+  tickSize?: number | null;
+  compact?: boolean;
+}) {
+  const ex = computePriceExcursion({
+    prevWeekClose: analysis.prev_week_close,
+    periodHigh: analysis.period_high,
+    periodLow: analysis.period_low,
+    periodClose: analysis.period_close,
+    finalBias: analysis.bias,
+  });
+
+  if (!ex) {
+    return (
+      <span className="text-muted-foreground">
+        {compact ? "—" : "Set last week close to track excursion."}
+      </span>
+    );
+  }
+
+  const mfe = formatPriceMove(ex.mfe, tickSize);
+  const mae = formatPriceMove(ex.mae, tickSize);
+  const close = formatPriceMove(ex.closeMove, tickSize);
+
+  if (compact) {
+    if (ex.mfe == null && ex.mae == null && ex.closeMove == null) {
+      return <span className="text-muted-foreground">Ref set</span>;
+    }
+    return (
+      <div className="space-y-0.5 tabular-nums">
+        {ex.mfe != null && (
+          <div className="text-emerald-600 dark:text-emerald-400">MFE {mfe}</div>
+        )}
+        {ex.mae != null && (
+          <div className="text-destructive">MAE {mae}</div>
+        )}
+        {ex.closeMove != null && (
+          <div
+            className={cn(
+              ex.closeMove >= 0
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-destructive",
+            )}
+          >
+            Close {close}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <p className="text-xs tabular-nums">
+      {ex.mfe != null && (
+        <span className="mr-3 text-emerald-600 dark:text-emerald-400">
+          MFE: {mfe}
+        </span>
+      )}
+      {ex.mae != null && (
+        <span className="mr-3 text-destructive">MAE: {mae}</span>
+      )}
+      {ex.closeMove != null && (
+        <span
+          className={cn(
+            ex.closeMove >= 0
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-destructive",
+          )}
+        >
+          Close: {close}
+        </span>
+      )}
+      {ex.mfe == null && ex.mae == null && ex.closeMove == null && (
+        <span className="text-muted-foreground">
+          Add period high/low/close to see MFE, MAE and close P&amp;L.
+        </span>
+      )}
+    </p>
   );
 }
 

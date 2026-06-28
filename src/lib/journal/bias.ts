@@ -1,11 +1,17 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import type { BiasAnalysis, CotLeg, MarketContext, PairCot } from "./types";
+import type {
+  BiasAnalysis,
+  BiasBreakdownField,
+  CotLeg,
+  MarketContext,
+  PairCot,
+} from "./types";
 
 // Relocated factor values now live in tj_market_context / tj_cot_legs; the
 // analysis row keeps only its identity, period, status and pair-level COT.
 const COLUMNS =
-  "id,instrument,bias,start_date,period_weeks,end_date,status,notes,chart_url,closed_at,created_at,updated_at,week_start,cot_score,cot_verdict,cot_confidence";
+  "id,instrument,bias,technical_bias,macro_bias,start_date,period_weeks,end_date,status,notes,chart_url,closed_at,created_at,updated_at,week_start,cot_score,cot_verdict,cot_confidence,prev_week_close,period_high,period_low,period_close";
 
 export async function getBiasAnalyses(): Promise<BiasAnalysis[]> {
   const supabase = await createClient();
@@ -93,7 +99,7 @@ export type BiasBreakdownRow = {
 /** Group analyses by a field (e.g. instrument or bias) -> hit-rate. */
 export function biasBreakdown(
   rows: BiasAnalysis[],
-  field: "instrument" | "bias",
+  field: BiasBreakdownField,
 ): BiasBreakdownRow[] {
   const groups = new Map<string, BiasAnalysis[]>();
   for (const r of rows) {
