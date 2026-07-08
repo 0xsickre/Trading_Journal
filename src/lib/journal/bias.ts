@@ -11,7 +11,7 @@ import type {
 // Relocated factor values now live in tj_market_context / tj_cot_legs; the
 // analysis row keeps only its identity, period, status and pair-level COT.
 const COLUMNS =
-  "id,instrument,bias,technical_bias,macro_bias,start_date,period_weeks,end_date,status,notes,chart_url,closed_at,created_at,updated_at,week_start,cot_score,cot_verdict,cot_confidence,prev_week_close,period_high,period_low,period_close";
+  "id,instrument,bias,technical_bias,macro_bias,bias_magnitude,alignment,event_risk,start_date,period_weeks,end_date,status,notes,chart_url,closed_at,created_at,updated_at,week_start,cot_score,cot_verdict,cot_confidence,prev_week_close,period_high,period_low,period_close";
 
 export async function getBiasAnalyses(): Promise<BiasAnalysis[]> {
   const supabase = await createClient();
@@ -23,7 +23,7 @@ export async function getBiasAnalyses(): Promise<BiasAnalysis[]> {
 }
 
 const CONTEXT_COLUMNS =
-  "id,week_start,rates_regime,yield_curve,growth_bias,dxy_1m,vix_level,move_level,shield_active,dxy_trend,created_at,updated_at";
+  "id,week_start,rates_regime,yield_curve,dxy_direction,vix_level,risk_regime,growth_bias,dxy_1m,move_level,shield_active,dxy_trend,created_at,updated_at";
 
 export async function getMarketContexts(): Promise<MarketContext[]> {
   const supabase = await createClient();
@@ -35,7 +35,7 @@ export async function getMarketContexts(): Promise<MarketContext[]> {
 }
 
 const LEG_COLUMNS =
-  "id,week_start,underlying,cot_score,cot_verdict,cot_confidence,cot_idx_3y,cot_flow,seasonality,cot_timing,fx_policy_spread,energy_stress,created_at,updated_at";
+  "id,week_start,underlying,cot_score,cot_verdict,cot_idx_3y,cot_flow,cot_crowding,oi_trend,fx_policy_spread,cot_confidence,seasonality,cot_timing,energy_stress,created_at,updated_at";
 
 export async function getCotLegs(): Promise<CotLeg[]> {
   const supabase = await createClient();

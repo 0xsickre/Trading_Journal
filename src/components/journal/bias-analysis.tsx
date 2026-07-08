@@ -93,10 +93,30 @@ const BIAS_OPTIONS: { value: BiasValue; label: string }[] = [
   { value: "neutral", label: "Neutral" },
 ];
 
+// Per-analysis judgement fields (categorical → feed combos/breakdown for edge).
+const MAGNITUDE_OPTIONS = ["-3", "-2", "-1", "0", "+1", "+2", "+3"].map((v) => ({
+  value: v,
+  label: v,
+}));
+const ALIGNMENT_OPTIONS = [
+  { value: "aligned", label: "Aligned" },
+  { value: "partial", label: "Partial" },
+  { value: "conflict", label: "Conflict" },
+];
+const EVENT_RISK_OPTIONS = [
+  { value: "quiet", label: "Quiet" },
+  { value: "data", label: "Data" },
+  { value: "central-bank", label: "Central bank" },
+  { value: "binary", label: "Binary" },
+];
+
 const BIAS_FACTOR_NAMES = new Set([
   "final_bias",
   "technical_bias",
   "macro_bias",
+  "bias_magnitude",
+  "alignment",
+  "event_risk",
 ]);
 
 const GLOBAL_NAMES = GLOBAL_FACTORS.map((f) => f.name);
@@ -125,6 +145,9 @@ type Draft = {
   technicalBias: BiasValue;
   macroBias: BiasValue;
   bias: BiasValue;
+  biasMagnitude: string;
+  alignment: string;
+  eventRisk: string;
   startDate: string;
   weeks: string;
   notes: string;
@@ -158,6 +181,9 @@ function emptyDraft(): Draft {
     technicalBias: "bullish",
     macroBias: "bullish",
     bias: "bullish",
+    biasMagnitude: "",
+    alignment: "",
+    eventRisk: "",
     startDate: planningWeekStart(),
     weeks: "1",
     notes: "",
@@ -361,6 +387,9 @@ export function BiasAnalysisBoard({
       bias: draft.bias,
       technical_bias: draft.technicalBias,
       macro_bias: draft.macroBias,
+      bias_magnitude: draft.biasMagnitude || null,
+      alignment: draft.alignment || null,
+      event_risk: draft.eventRisk || null,
       start_date: draft.startDate,
       period_weeks: Number(draft.weeks) || 1,
       end_date: null,
@@ -425,6 +454,9 @@ export function BiasAnalysisBoard({
       bias: draft.bias,
       technical_bias: draft.technicalBias,
       macro_bias: draft.macroBias,
+      bias_magnitude: draft.biasMagnitude || null,
+      alignment: draft.alignment || null,
+      event_risk: draft.eventRisk || null,
       start_date: draft.startDate,
       period_weeks: Math.floor(weeks),
       notes: draft.notes,
@@ -461,6 +493,9 @@ export function BiasAnalysisBoard({
       technicalBias: a.technical_bias ?? a.bias,
       macroBias: a.macro_bias ?? a.bias,
       bias: a.bias,
+      biasMagnitude: a.bias_magnitude ?? "",
+      alignment: a.alignment ?? "",
+      eventRisk: a.event_risk ?? "",
       startDate: a.start_date,
       weeks: String(a.period_weeks),
       notes: a.notes ?? "",
@@ -708,6 +743,63 @@ export function BiasAnalysisBoard({
                 Ends: {fmtDate(endPreview)}
               </p>
             </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Magnitude (−3..+3)</Label>
+              <Select
+                value={draft.biasMagnitude || undefined}
+                onValueChange={(v) => patch({ biasMagnitude: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Conviction…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MAGNITUDE_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Alignment (makro vs COT)</Label>
+              <Select
+                value={draft.alignment || undefined}
+                onValueChange={(v) => patch({ alignment: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Aligned / conflict…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ALIGNMENT_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Event risk</Label>
+              <Select
+                value={draft.eventRisk || undefined}
+                onValueChange={(v) => patch({ eventRisk: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Quiet / binary…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {EVENT_RISK_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
@@ -937,7 +1029,10 @@ export function BiasAnalysisBoard({
                     const hasExpandable =
                       dataFactors.length > 0 ||
                       a.technical_bias != null ||
-                      a.macro_bias != null;
+                      a.macro_bias != null ||
+                      a.bias_magnitude != null ||
+                      a.alignment != null ||
+                      a.event_risk != null;
                     return (
                       <Fragment key={a.id}>
                         <TableRow>
@@ -1077,7 +1172,11 @@ export function BiasAnalysisBoard({
                             <TableCell />
                             <TableCell colSpan={6}>
                               <div className="space-y-2 py-1">
-                                {(a.technical_bias || a.macro_bias) && (
+                                {(a.technical_bias ||
+                                  a.macro_bias ||
+                                  a.bias_magnitude ||
+                                  a.alignment ||
+                                  a.event_risk) && (
                                   <div className="flex flex-wrap items-center gap-2">
                                     {a.technical_bias && (
                                       <span className="flex items-center gap-1 text-xs">
@@ -1094,6 +1193,30 @@ export function BiasAnalysisBoard({
                                         </span>
                                         <BiasBadge bias={a.macro_bias} />
                                       </span>
+                                    )}
+                                    {a.bias_magnitude && (
+                                      <Badge variant="outline" className="font-normal">
+                                        <span className="text-muted-foreground">
+                                          Magnitude:
+                                        </span>{" "}
+                                        {a.bias_magnitude}
+                                      </Badge>
+                                    )}
+                                    {a.alignment && (
+                                      <Badge variant="outline" className="font-normal">
+                                        <span className="text-muted-foreground">
+                                          Alignment:
+                                        </span>{" "}
+                                        {a.alignment}
+                                      </Badge>
+                                    )}
+                                    {a.event_risk && (
+                                      <Badge variant="outline" className="font-normal">
+                                        <span className="text-muted-foreground">
+                                          Event:
+                                        </span>{" "}
+                                        {a.event_risk}
+                                      </Badge>
                                     )}
                                   </div>
                                 )}

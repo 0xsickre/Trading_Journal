@@ -88,6 +88,12 @@ export type BiasAnalysis = {
   bias: BiasValue;
   technical_bias: BiasValue | null;
   macro_bias: BiasValue | null;
+  /** Conviction strength of the final bias (−3..+3), as a string bucket. */
+  bias_magnitude: string | null;
+  /** Macro vs COT agreement: aligned / partial / conflict. */
+  alignment: string | null;
+  /** Weekly event risk: quiet / data / central-bank / binary. */
+  event_risk: string | null;
   start_date: string;
   period_weeks: number;
   end_date: string | null;
@@ -116,9 +122,12 @@ export type MarketContext = {
   week_start: string;
   rates_regime: string | null;
   yield_curve: string | null;
+  dxy_direction: string | null;
+  vix_level: string | null;
+  risk_regime: string | null;
+  // Deprecated columns (kept on the row, no longer surfaced in the form).
   growth_bias: string | null;
   dxy_1m: string | null;
-  vix_level: string | null;
   move_level: string | null;
   shield_active: string | null;
   dxy_trend: string | null;
@@ -131,16 +140,19 @@ export type CotLeg = {
   id: string;
   week_start: string;
   underlying: string;
-  // FX legs fill idx/flow/seasonality/timing/fx_policy_spread; single
-  // underlyings additionally fill score/verdict/confidence/energy_stress.
+  // FX legs fill idx/flow/crowding/oi_trend/fx_policy_spread; single underlyings
+  // additionally fill score/verdict.
   cot_score: string | null;
   cot_verdict: string | null;
-  cot_confidence: string | null;
   cot_idx_3y: string | null;
   cot_flow: string | null;
+  cot_crowding: string | null;
+  oi_trend: string | null;
+  fx_policy_spread: string | null;
+  // Deprecated columns (kept on the row, no longer surfaced in the form).
+  cot_confidence: string | null;
   seasonality: string | null;
   cot_timing: string | null;
-  fx_policy_spread: string | null;
   energy_stress: string | null;
   created_at: string;
   updated_at: string;

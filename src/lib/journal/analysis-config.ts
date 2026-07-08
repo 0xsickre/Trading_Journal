@@ -21,28 +21,26 @@ export type AnalysisFactor = {
 };
 
 export const ANALYSIS_FACTORS: AnalysisFactor[] = [
-  // 1) COT — smart-money positioning
+  // 1) COT — smart-money positioning. Every field is a low-cardinality bucket so
+  // it can be correlated with outcomes ("what works when"), not an exact number.
   { name: "cot_score", label: "COT Score", listKey: "cot_score", group: "COT", scope: "pair" },
   { name: "cot_verdict", label: "COT Verdict", listKey: "cot_verdict", group: "COT", scope: "pair" },
   { name: "cot_idx_3y", label: "COT idx 3Y", listKey: "cot_idx_3y", group: "COT", scope: "leg" },
   { name: "cot_flow", label: "Flow", listKey: "cot_flow", group: "COT", scope: "leg" },
-  { name: "cot_confidence", label: "Confidence", listKey: "cot_confidence", group: "COT", scope: "pair" },
-  { name: "seasonality", label: "Seasonality", listKey: "seasonality", group: "COT", scope: "leg" },
-  { name: "cot_timing", label: "COT Timing", listKey: "cot_timing", group: "COT", scope: "leg" },
+  // Spec Z-score bucketed — the key "don't chase crowded shorts" squeeze signal.
+  { name: "cot_crowding", label: "COT crowding", listKey: "cot_crowding", group: "COT", scope: "leg" },
+  { name: "oi_trend", label: "OI trend", listKey: "oi_trend", group: "COT", scope: "leg" },
 
   // 2) Macro — broader context
   { name: "rates_regime", label: "Rates regime", listKey: "rates_regime", group: "Macro", scope: "global" },
   { name: "yield_curve", label: "Yield kriva", listKey: "yield_curve", group: "Macro", scope: "global" },
-  { name: "growth_bias", label: "Growth bias (Cu/Au)", listKey: "growth_bias", group: "Macro", scope: "global" },
-  { name: "dxy_1m", label: "DXY ~1M smer", listKey: "dxy_1m", group: "Macro", scope: "global" },
-  { name: "energy_stress", label: "Energy stress", listKey: "energy_stress", group: "Macro", scope: "leg" },
+  { name: "dxy_direction", label: "DXY smer", listKey: "dxy_direction", group: "Macro", scope: "global" },
   { name: "fx_policy_spread", label: "FX policy spread vs USD", listKey: "fx_policy_spread", group: "Macro", scope: "leg" },
 
   // 3) Vol / risk — calm vs stressed
   { name: "vix_level", label: "VIX nivo", listKey: "vix_level", group: "Vol/Risk", scope: "global" },
-  { name: "move_level", label: "MOVE nivo", listKey: "move_level", group: "Vol/Risk", scope: "global" },
-  { name: "shield_active", label: "Shield Active", listKey: "shield_active", group: "Vol/Risk", scope: "global" },
-  { name: "dxy_trend", label: "DXY trend", listKey: "dxy_trend", group: "Vol/Risk", scope: "global" },
+  // Credit/liquidity gate (HY OAS + NFCI + net liquidity) for indices/gold.
+  { name: "risk_regime", label: "Risk regime", listKey: "risk_regime", group: "Vol/Risk", scope: "global" },
 ];
 
 export const ANALYSIS_FACTOR_NAMES = ANALYSIS_FACTORS.map((f) => f.name);
@@ -64,12 +62,12 @@ export const LEG_FACTORS = ANALYSIS_FACTORS.filter((f) => f.scope === "leg");
 export const PAIR_FACTORS = ANALYSIS_FACTORS.filter((f) => f.scope === "pair");
 
 /**
- * Factors shown on a single instrument's leg card: all 7 COT fields direct
- * (the per-leg COT fields + the otherwise pair-level score/verdict/confidence),
- * since a single instrument's COT is read 1:1, not split across two legs.
+ * Factors shown on a single instrument's leg card: all COT fields direct
+ * (the per-leg COT fields + the otherwise pair-level score/verdict), since a
+ * single instrument's COT is read 1:1, not split across two legs.
  */
 export const SINGLE_LEG_FACTORS = ANALYSIS_FACTORS.filter(
-  (f) => f.group === "COT" || f.name === "energy_stress",
+  (f) => f.group === "COT",
 );
 
 export const GLOBAL_FACTOR_NAMES = GLOBAL_FACTORS.map((f) => f.name);

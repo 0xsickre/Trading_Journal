@@ -15,6 +15,9 @@ function analysis(over: Partial<BiasAnalysis>): BiasAnalysis {
     bias: "bullish",
     technical_bias: "bullish",
     macro_bias: "bullish",
+    bias_magnitude: null,
+    alignment: null,
+    event_risk: null,
     start_date: "2026-06-27",
     period_weeks: 1,
     end_date: null,
@@ -42,9 +45,11 @@ function context(over: Partial<MarketContext>): MarketContext {
     week_start: WK,
     rates_regime: null,
     yield_curve: null,
+    dxy_direction: null,
+    vix_level: null,
+    risk_regime: null,
     growth_bias: null,
     dxy_1m: null,
-    vix_level: null,
     move_level: null,
     shield_active: null,
     dxy_trend: null,
@@ -61,12 +66,14 @@ function leg(over: Partial<CotLeg>): CotLeg {
     underlying: "EUR",
     cot_score: null,
     cot_verdict: null,
-    cot_confidence: null,
     cot_idx_3y: null,
     cot_flow: null,
+    cot_crowding: null,
+    oi_trend: null,
+    fx_policy_spread: null,
+    cot_confidence: null,
     seasonality: null,
     cot_timing: null,
-    fx_policy_spread: null,
     energy_stress: null,
     created_at: "",
     updated_at: "",
@@ -83,11 +90,17 @@ describe("resolveAnalysisFactors — pair", () => {
     instrument: "EURUSD",
     cot_score: "7-8",
     cot_verdict: "Bullish",
-    cot_confidence: "High",
   });
-  const ctx = [context({ vix_level: "<15", rates_regime: "Risk-on" })];
+  const ctx = [
+    context({ vix_level: "<15", rates_regime: "Risk-on", risk_regime: "Risk-on" }),
+  ];
   const legs = [
-    leg({ underlying: "EUR", cot_flow: "Healthy", cot_idx_3y: "80-100" }),
+    leg({
+      underlying: "EUR",
+      cot_flow: "Healthy",
+      cot_idx_3y: "80-100",
+      cot_crowding: "Crowded short",
+    }),
     leg({ underlying: "USD", cot_flow: "Weak" }),
   ];
   const factors = resolveAnalysisFactors(a, contextByWeek(ctx), legByKey(legs));
@@ -106,13 +119,13 @@ describe("resolveAnalysisFactors — pair", () => {
   it("includes pair-level COT from the analysis row", () => {
     expect(valueOf(factors, "cot_score")).toBe("7-8");
     expect(valueOf(factors, "cot_verdict")).toBe("Bullish");
-    expect(valueOf(factors, "cot_confidence")).toBe("High");
   });
 
   it("namespaces leg factors per currency", () => {
     expect(valueOf(factors, "EUR:cot_flow")).toBe("Healthy");
     expect(valueOf(factors, "USD:cot_flow")).toBe("Weak");
     expect(valueOf(factors, "EUR:cot_idx_3y")).toBe("80-100");
+    expect(valueOf(factors, "EUR:cot_crowding")).toBe("Crowded short");
   });
 });
 

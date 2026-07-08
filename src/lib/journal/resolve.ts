@@ -86,6 +86,20 @@ export function resolveAnalysisFactors(
       value: BIAS_LABELS[a.macro_bias] ?? a.macro_bias,
     });
   }
+  // Per-analysis judgement factors — enter combos/breakdown for edge analysis.
+  if (a.bias_magnitude) {
+    out.push({
+      name: "bias_magnitude",
+      label: "Magnitude",
+      value: a.bias_magnitude,
+    });
+  }
+  if (a.alignment) {
+    out.push({ name: "alignment", label: "Alignment", value: a.alignment });
+  }
+  if (a.event_risk) {
+    out.push({ name: "event_risk", label: "Event risk", value: a.event_risk });
+  }
 
   const wk = a.week_start || weekStart(a.start_date);
   const ctx = wk ? ctxByWeek.get(wk) : undefined;

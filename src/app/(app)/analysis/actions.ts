@@ -17,6 +17,10 @@ export type BiasInput = {
   bias: BiasValue;
   technical_bias: BiasValue;
   macro_bias: BiasValue;
+  // Per-analysis judgement factors (apply to singles and pairs alike).
+  bias_magnitude?: string | null;
+  alignment?: string | null;
+  event_risk?: string | null;
   start_date: string; // YYYY-MM-DD
   period_weeks: number;
   notes: string | null;
@@ -79,6 +83,9 @@ function sanitize(input: BiasInput) {
     bias,
     technical_bias,
     macro_bias,
+    bias_magnitude: clean(input.bias_magnitude),
+    alignment: clean(input.alignment),
+    event_risk: clean(input.event_risk),
     start_date: start,
     period_weeks: weeks,
     end_date: computeEndDate(start, weeks),
