@@ -101,6 +101,98 @@ function tradeDetail(t: TradeRow, ccy: string): string {
   return `${head}\n${lines.join("\n")}`;
 }
 
+export type Granularity =
+  | "day"
+  | "week"
+  | "month"
+  | "quarter"
+  | "year"
+  | "custom"
+  | "all";
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const ymd = (d: Date) =>
+  `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+
+export type CalendarRange = {
+  fromISO: string | null; // inclusive start, or null for "all"
+  toISO: string | null; // inclusive end, or null for "all"
+  label: string;
+  rangeText: string;
+};
+
+/**
+ * Resolve an exact calendar period (in UTC — matching the app's Monday-based
+ * week_start convention) from a granularity + an anchor date. The period is the
+ * calendar unit that CONTAINS the anchor (e.g. week → the Mon–Sun around it).
+ */
+export function resolveCalendarRange(
+  granularity: Granularity,
+  anchor: string, // "YYYY-MM-DD"
+  from?: string,
+  to?: string,
+): CalendarRange {
+  if (granularity === "all")
+    return { fromISO: null, toISO: null, label: "All", rangeText: "sve vreme" };
+
+  if (granularity === "custom") {
+    const f = from || anchor;
+    const t = to || from || anchor;
+    const [lo, hi] = f <= t ? [f, t] : [t, f];
+    return {
+      fromISO: `${lo}T00:00:00.000Z`,
+      toISO: `${hi}T23:59:59.999Z`,
+      label: "Custom",
+      rangeText: `${lo} → ${hi}`,
+    };
+  }
+
+  const base = new Date(`${anchor}T00:00:00.000Z`);
+  const y = base.getUTCFullYear();
+  const m = base.getUTCMonth();
+  const d = base.getUTCDate();
+  let start: Date;
+  let end: Date;
+  let label: string;
+
+  if (granularity === "day") {
+    start = new Date(Date.UTC(y, m, d));
+    end = start;
+    label = "Day";
+  } else if (granularity === "week") {
+    const dow = base.getUTCDay(); // 0=Sun … 6=Sat
+    const toMonday = dow === 0 ? -6 : 1 - dow;
+    start = new Date(Date.UTC(y, m, d + toMonday));
+    end = new Date(
+      Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + 6),
+    );
+    label = "Week";
+  } else if (granularity === "month") {
+    start = new Date(Date.UTC(y, m, 1));
+    end = new Date(Date.UTC(y, m + 1, 0));
+    label = "Month";
+  } else if (granularity === "quarter") {
+    const q = Math.floor(m / 3);
+    start = new Date(Date.UTC(y, q * 3, 1));
+    end = new Date(Date.UTC(y, q * 3 + 3, 0));
+    label = "Quarter";
+  } else {
+    // year
+    start = new Date(Date.UTC(y, 0, 1));
+    end = new Date(Date.UTC(y, 11, 31));
+    label = "Year";
+  }
+
+  const f = ymd(start);
+  const t = ymd(end);
+  return {
+    fromISO: `${f}T00:00:00.000Z`,
+    toISO: `${t}T23:59:59.999Z`,
+    label,
+    rangeText: `${f} → ${t}`,
+  };
+}
+
 export type MentorPackOpts = {
   currency?: string;
   /** Safety cap on trades expanded in full detail (period already bounds it). */

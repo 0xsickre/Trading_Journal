@@ -34,7 +34,12 @@ import {
   breakdownByField,
   type PnlMode,
 } from "@/lib/journal/analytics";
-import { buildMentorPack } from "@/lib/journal/mentor-export";
+import {
+  buildMentorPack,
+  resolveCalendarRange,
+  type Granularity,
+} from "@/lib/journal/mentor-export";
+import { Input } from "@/components/ui/input";
 import { fmtMoney, fmtR, fmtPct, fmtNum, pnlClass } from "@/lib/journal/format";
 
 const PERIODS = [
@@ -44,15 +49,18 @@ const PERIODS = [
   { value: "all", label: "All" },
 ];
 
-// Rolling windows for the "Export for Claude" mentor pack.
-const EXPORT_PERIODS = [
-  { value: "1", label: "Day", days: 1 },
-  { value: "7", label: "Week", days: 7 },
-  { value: "30", label: "Month", days: 30 },
-  { value: "90", label: "Quarter", days: 90 },
-  { value: "365", label: "Year", days: 365 },
-  { value: "all", label: "All", days: 0 },
+// Calendar granularities for the "Export for Claude" mentor pack.
+const GRANULARITIES: { value: Granularity; label: string }[] = [
+  { value: "day", label: "Day" },
+  { value: "week", label: "Week" },
+  { value: "month", label: "Month" },
+  { value: "quarter", label: "Quarter" },
+  { value: "year", label: "Year" },
+  { value: "custom", label: "Custom" },
+  { value: "all", label: "All" },
 ];
+
+const todayYMD = () => new Date().toISOString().slice(0, 10);
 
 const BREAKDOWN_FIELDS = [
   { value: "setup_grade", label: "Setup Grade" },
@@ -80,7 +88,10 @@ export function Dashboard({
   const [mode, setMode] = useState<PnlMode>("net");
   const [equityMetric, setEquityMetric] = useState<"money" | "r">("money");
   const [breakdownField, setBreakdownField] = useState("setup_grade");
-  const [exportPeriod, setExportPeriod] = useState("7");
+  const [granularity, setGranularity] = useState<Granularity>("week");
+  const [anchor, setAnchor] = useState(todayYMD);
+  const [customFrom, setCustomFrom] = useState(todayYMD);
+  const [customTo, setCustomTo] = useState(todayYMD);
 
   const tzOf = (t: { row: TradeRow }) => {
     const a = accounts.find((x) => x.id === t.row.account_id);
@@ -139,31 +150,32 @@ export function Dashboard({
         ? "All accounts"
         : accounts.find((a) => a.id === accountFilter)?.name ?? "Account";
 
-    const cfg = EXPORT_PERIODS.find((p) => p.value === exportPeriod);
-    let periodLabel = cfg?.label ?? "All";
-    let rangeText = "sve vreme";
-    if (cfg && cfg.days > 0) {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - cfg.days);
-      const iso = cutoff.toISOString();
-      // Reference date: when it closed, or when it was created if still open.
-      scoped = scoped.filter(
-        (t) => (t.stats?.closed_at ?? t.created_at ?? "") >= iso,
-      );
-      rangeText = `${iso.slice(0, 10)} → ${new Date().toISOString().slice(0, 10)}`;
-    }
+    const { fromISO, toISO, label, rangeText } = resolveCalendarRange(
+      granularity,
+      anchor,
+      customFrom,
+      customTo,
+    );
+    // Reference date: when it closed, or when it was created if still open.
+    scoped = scoped.filter((t) => {
+      const ref = t.stats?.closed_at ?? t.created_at ?? "";
+      if (fromISO && ref < fromISO) return false;
+      if (toISO && ref > toISO) return false;
+      return true;
+    });
 
     const md = buildMentorPack(scoped, {
       currency,
       scopeLabel,
-      periodLabel,
+      periodLabel: label,
       rangeText,
     });
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `mentor-pack-${periodLabel.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.md`;
+    const stamp = granularity === "all" ? todayYMD() : (fromISO ?? "").slice(0, 10);
+    a.download = `mentor-pack-${label.toLowerCase()}-${stamp}.md`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -217,18 +229,49 @@ export function Dashboard({
           {mode === "net" ? "Net = after fees & swap" : "Gross = price move only"}
         </span>
         <div className="ml-auto flex items-center gap-1">
-          <Select value={exportPeriod} onValueChange={setExportPeriod}>
+          <Select
+            value={granularity}
+            onValueChange={(v) => setGranularity(v as Granularity)}
+          >
             <SelectTrigger className="h-8 w-28">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {EXPORT_PERIODS.map((p) => (
-                <SelectItem key={p.value} value={p.value}>
-                  {p.label}
+              {GRANULARITIES.map((g) => (
+                <SelectItem key={g.value} value={g.value}>
+                  {g.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {granularity === "custom" ? (
+            <>
+              <Input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="h-8 w-36"
+                aria-label="From date"
+              />
+              <span className="text-xs text-muted-foreground">→</span>
+              <Input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="h-8 w-36"
+                aria-label="To date"
+              />
+            </>
+          ) : granularity !== "all" ? (
+            <Input
+              type="date"
+              value={anchor}
+              onChange={(e) => setAnchor(e.target.value)}
+              className="h-8 w-36"
+              aria-label="Anchor date"
+              title="Any date inside the period you want (e.g. a day in last month)"
+            />
+          ) : null}
           <Button
             variant="outline"
             size="sm"
