@@ -48,14 +48,13 @@ import { Badge } from "@/components/ui/badge";
 import type { Account, TradeRow } from "@/lib/journal/types";
 import { fmtInTz } from "@/lib/journal/time";
 import { fmtMoney, fmtNum, fmtR, pnlClass } from "@/lib/journal/format";
-import { FORM_SECTIONS } from "@/lib/journal/form-config";
+import { ARRAY_FIELD_NAMES, getAllFormFields } from "@/lib/journal/form-config";
 import { deleteTrade } from "@/app/(app)/trades/actions";
 
 const FILTERS: { key: string; label: string }[] = [
   { key: "instrument", label: "Instrument" },
   { key: "direction", label: "Direction" },
   { key: "setup_grade", label: "Grade" },
-  { key: "session_killzone", label: "Session" },
   { key: "ict_entry_model", label: "Model" },
   { key: "result", label: "Result" },
   { key: "status", label: "Status" },
@@ -65,9 +64,19 @@ function distinct(rows: TradeRow[], key: string): string[] {
   const set = new Set<string>();
   for (const r of rows) {
     const v = r[key];
-    if (typeof v === "string" && v) set.add(v);
+    if (ARRAY_FIELD_NAMES.has(key) && Array.isArray(v)) {
+      for (const tag of v) if (typeof tag === "string" && tag) set.add(tag);
+    } else if (typeof v === "string" && v) set.add(v);
   }
   return [...set].sort();
+}
+
+function fieldMatchesFilter(row: TradeRow, key: string, value: string): boolean {
+  const raw = row[key];
+  if (ARRAY_FIELD_NAMES.has(key)) {
+    return Array.isArray(raw) && raw.includes(value);
+  }
+  return raw === value;
 }
 
 export function JournalGrid({
@@ -98,16 +107,23 @@ export function JournalGrid({
     return trades.filter((t) => {
       if (accountFilter !== "all" && t.account_id !== accountFilter) return false;
       for (const [k, v] of Object.entries(filters)) {
-        if (v && v !== "all" && t[k] !== v) return false;
+        if (v && v !== "all" && !fieldMatchesFilter(t, k, v)) return false;
       }
       if (search.trim()) {
         const q = search.toLowerCase();
+        const tagHay = ["setup_tags", "confluences", "psychology_tags"]
+          .flatMap((k) => {
+            const v = t[k];
+            return Array.isArray(v) ? v : [];
+          })
+          .filter((x): x is string => typeof x === "string");
         const hay = [
           t.instrument,
           t.notes,
           t.lesson_learned,
           t.ict_entry_model,
           t.setup_grade,
+          ...tagHay,
         ]
           .filter((x) => typeof x === "string")
           .join(" ")
@@ -288,8 +304,15 @@ export function JournalGrid({
         "Trade #": t.trade_no ?? "",
         Date: fmtInTz(t.stats?.opened_at ?? t.created_at, tzOf(t), "yyyy-MM-dd HH:mm"),
       };
-      for (const section of FORM_SECTIONS)
-        for (const f of section.fields) o[f.label] = (t[f.name] as string) ?? "";
+      for (const f of getAllFormFields()) {
+        const val = t[f.name];
+        o[f.label] =
+          ARRAY_FIELD_NAMES.has(f.name) && Array.isArray(val)
+            ? val.join(", ")
+            : ((val as string) ?? "");
+      }
+      o["Planned R:R"] = (t.planned_rr as string) ?? "";
+      o["Planned Size"] = t.position_size ?? "";
       o["Avg Entry"] = t.stats?.avg_entry ?? "";
       o["Avg Exit"] = t.stats?.avg_exit ?? "";
       o["Size"] = t.stats?.entry_qty ?? "";

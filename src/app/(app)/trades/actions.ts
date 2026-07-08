@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { POSITION_FIELD_NAMES, NUMERIC_FIELDS } from "@/lib/journal/form-config";
+import {
+  POSITION_FIELD_NAMES,
+  NUMERIC_FIELDS,
+  ARRAY_FIELD_NAMES,
+} from "@/lib/journal/form-config";
 
 export type ExecutionInput = {
   side: "entry" | "exit";
@@ -16,7 +20,7 @@ export type ExecutionInput = {
 export type TradeInput = {
   account_id: string | null;
   trade_no: number | null;
-  fields: Record<string, string | number | null>;
+  fields: Record<string, string | number | string[] | null>;
   executions: ExecutionInput[];
 };
 
@@ -32,12 +36,17 @@ function computeStatus(execs: ExecutionInput[]): "open" | "partial" | "closed" {
   return "closed";
 }
 
-function sanitizeFields(fields: Record<string, string | number | null>) {
-  const out: Record<string, string | number | null> = {};
+function sanitizeFields(fields: Record<string, string | number | string[] | null>) {
+  const out: Record<string, string | number | string[] | null> = {};
   for (const key of POSITION_FIELD_NAMES) {
     if (!(key in fields)) continue;
     const raw = fields[key];
-    if (NUMERIC_FIELDS.has(key)) {
+    if (ARRAY_FIELD_NAMES.has(key)) {
+      const arr = Array.isArray(raw)
+        ? raw.map((s) => String(s).trim()).filter(Boolean)
+        : [];
+      out[key] = arr;
+    } else if (NUMERIC_FIELDS.has(key)) {
       const n =
         raw === "" || raw == null ? null : Number(raw);
       out[key] = n != null && Number.isFinite(n) ? n : null;

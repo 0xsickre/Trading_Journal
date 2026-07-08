@@ -1,14 +1,14 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Plus,
   Trash2,
   ArrowDownToLine,
   ArrowUpFromLine,
   ExternalLink,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,11 +21,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EditableSelect } from "@/components/journal/editable-select";
+import { TagMultiSelect } from "@/components/journal/tag-multi-select";
 import { TradeImages } from "@/components/journal/trade-images";
-import { FORM_SECTIONS, type FieldConfig } from "@/lib/journal/form-config";
+import {
+  FORM_TABS,
+  type FieldConfig,
+  type FormGroup,
+} from "@/lib/journal/form-config";
 import type { Account, Instrument, OptionsMap } from "@/lib/journal/types";
 import { fmtMoney, fmtR, pnlClass } from "@/lib/journal/format";
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/journal/time";
@@ -34,6 +39,14 @@ import {
   updateTrade,
   type ExecutionInput,
 } from "@/app/(app)/trades/actions";
+import {
+  getTradeFormPrefs,
+  setTradeFormPrefs,
+  defaultRiskPctOption,
+} from "@/lib/journal/trade-form-prefs";
+import { cn } from "@/lib/utils";
+
+type TradePhase = "planned" | "active";
 
 type ExecRow = {
   side: "entry" | "exit";
@@ -44,11 +57,14 @@ type ExecRow = {
   swap: string;
 };
 
+export type FieldValue = string | number | string[] | null;
+
 export type TradeFormInitial = {
   id: string;
   account_id: string | null;
   trade_no: number | null;
-  fields: Record<string, string | number | null>;
+  status?: string;
+  fields: Record<string, FieldValue>;
   executions: {
     side: "entry" | "exit";
     price: number;
@@ -65,6 +81,21 @@ function n(v: string): number | null {
   return Number.isFinite(x) ? x : null;
 }
 
+function initialTradePhase(initial?: TradeFormInitial): TradePhase {
+  if (!initial) return "planned";
+  if (initial.executions.length > 0 || (initial.status && initial.status !== "open")) {
+    return "active";
+  }
+  return "planned";
+}
+
+function defaultTab(initial?: TradeFormInitial): "plan" | "execution" {
+  if (!initial) return "plan";
+  const hasExit = initial.executions.some((e) => e.side === "exit");
+  if (hasExit || (initial.status && initial.status !== "open")) return "execution";
+  return "plan";
+}
+
 export function TradeForm({
   optionsMap,
   instruments,
@@ -78,6 +109,12 @@ export function TradeForm({
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [activeTab, setActiveTab] = useState<"plan" | "execution">(() =>
+    defaultTab(initial),
+  );
+  const [tradePhase, setTradePhase] = useState<TradePhase>(() =>
+    initialTradePhase(initial),
+  );
 
   const [accountId, setAccountId] = useState<string | null>(
     initial?.account_id ?? accounts.find((a) => a.is_active)?.id ?? accounts[0]?.id ?? null,
@@ -89,7 +126,7 @@ export function TradeForm({
   const [tradeNo, setTradeNo] = useState<string>(
     initial?.trade_no != null ? String(initial.trade_no) : "",
   );
-  const [fields, setFields] = useState<Record<string, string | number | null>>(
+  const [fields, setFields] = useState<Record<string, FieldValue>>(
     initial?.fields ?? {},
   );
 
@@ -99,25 +136,41 @@ export function TradeForm({
         side: e.side,
         price: String(e.price),
         qty: String(e.qty),
-        executedLocal: utcToZonedInput(e.executed_at, initial.account_id ? tz : tz),
+        executedLocal: utcToZonedInput(e.executed_at, tz),
         fee: String(e.fee ?? 0),
         swap: String(e.swap_funding ?? 0),
       }));
     }
-    const nowLocal = utcToZonedInput(new Date().toISOString(), tz);
-    return [
-      { side: "entry", price: "", qty: "1", executedLocal: nowLocal, fee: "", swap: "" },
-    ];
+    return [];
   });
 
-  function setField(name: string, value: string | number | null) {
+  function setField(name: string, value: FieldValue) {
     setFields((prev) => ({ ...prev, [name]: value }));
   }
+
+  useEffect(() => {
+    if (initial) return;
+    const prefs = getTradeFormPrefs();
+    if (prefs.accountId && accounts.some((a) => a.id === prefs.accountId)) {
+      setAccountId(prefs.accountId);
+    }
+    setFields((prev) => {
+      if (prev.risk_pct != null && prev.risk_pct !== "") return prev;
+      const riskOptions = optionsMap.risk_pct ?? [];
+      const fromPrefs =
+        prefs.riskPct && riskOptions.some((o) => o.value === prefs.riskPct)
+          ? prefs.riskPct
+          : defaultRiskPctOption(riskOptions);
+      if (!fromPrefs) return prev;
+      return { ...prev, risk_pct: fromPrefs };
+    });
+  }, [initial, accounts, optionsMap.risk_pct]);
+
+  const executionUnlocked = tradePhase === "active" || execs.length > 0;
 
   const instrument = instruments.find((i) => i.symbol === fields.instrument);
   const pointValue = instrument?.point_value ?? 1;
 
-  // ---- live metrics ----
   const metrics = useMemo(() => {
     const entries = execs.filter((e) => e.side === "entry");
     const exits = execs.filter((e) => e.side === "exit");
@@ -128,7 +181,9 @@ export function TradeForm({
     const entryNotional = sum(entries, (e) => (n(e.price) ?? 0) * (n(e.qty) ?? 0));
     const exitQty = sum(exits, (e) => n(e.qty) ?? 0);
     const exitNotional = sum(exits, (e) => (n(e.price) ?? 0) * (n(e.qty) ?? 0));
-    const fees = sum(execs, (e) => (n(e.fee) ?? 0) + (n(e.swap) ?? 0));
+    const totalFees = sum(execs, (e) => n(e.fee) ?? 0);
+    const totalSwap = sum(execs, (e) => n(e.swap) ?? 0);
+    const fees = totalFees + totalSwap;
 
     const avgEntry = entryQty > 0 ? entryNotional / entryQty : null;
     const avgExit = exitQty > 0 ? exitNotional / exitQty : null;
@@ -152,7 +207,6 @@ export function TradeForm({
       }
     }
 
-    // planned R:R
     const pe = n(String(fields.entry_price ?? ""));
     const pt = n(String(fields.target_price ?? ""));
     let plannedRR: number | null = null;
@@ -160,7 +214,6 @@ export function TradeForm({
       plannedRR = Math.abs(pt - pe) / Math.abs(pe - stop);
     }
 
-    // position size suggestion
     const riskPctStr = String(fields.risk_pct ?? "");
     const riskPct = riskPctStr ? Number(riskPctStr.replace("%", "")) : null;
     const balance = account?.starting_balance ?? 0;
@@ -170,7 +223,20 @@ export function TradeForm({
       sizeSuggestion = riskAmount / (Math.abs(pe - stop) * pointValue);
     }
 
-    return { avgEntry, avgExit, entryQty, exitQty, grossPl, netPl, r, plannedRR, sizeSuggestion, fees };
+    return {
+      avgEntry,
+      avgExit,
+      entryQty,
+      exitQty,
+      grossPl,
+      netPl,
+      r,
+      plannedRR,
+      sizeSuggestion,
+      totalFees,
+      totalSwap,
+      fees,
+    };
   }, [execs, fields, pointValue, account]);
 
   function addExec(side: "entry" | "exit") {
@@ -193,6 +259,17 @@ export function TradeForm({
     setExecs((prev) => prev.filter((_, idx) => idx !== i));
   }
 
+  function handleAddEntryFromPlan() {
+    setTradePhase("active");
+    if (execs.length === 0) addExec("entry");
+    setActiveTab("execution");
+  }
+
+  function handleTabChange(v: string) {
+    if (v === "execution" && !executionUnlocked) return;
+    setActiveTab(v as "plan" | "execution");
+  }
+
   function buildExecInputs(): ExecutionInput[] {
     return execs
       .filter((e) => n(e.price) != null && n(e.qty) != null)
@@ -210,12 +287,22 @@ export function TradeForm({
   function submit() {
     if (!fields.instrument) {
       toast.error("Pick an instrument.");
+      setActiveTab("plan");
       return;
     }
+
+    const fieldsToSave = { ...fields };
+    if (metrics.plannedRR != null) {
+      fieldsToSave.planned_rr = `1:${metrics.plannedRR.toFixed(2)}`;
+    }
+    if (metrics.sizeSuggestion != null) {
+      fieldsToSave.position_size = Number(metrics.sizeSuggestion.toFixed(4));
+    }
+
     const payload = {
       account_id: accountId,
       trade_no: tradeNo ? Number(tradeNo) : null,
-      fields,
+      fields: fieldsToSave,
       executions: buildExecInputs(),
     };
     start(async () => {
@@ -226,6 +313,10 @@ export function TradeForm({
         toast.error(res.error);
         return;
       }
+      setTradeFormPrefs({
+        accountId: accountId ?? undefined,
+        riskPct: String(fieldsToSave.risk_pct ?? ""),
+      });
       toast.success(initial ? "Trade updated" : "Trade saved");
       router.push("/journal");
       router.refresh();
@@ -234,7 +325,6 @@ export function TradeForm({
 
   return (
     <div className="space-y-6 pb-24">
-      {/* Top bar */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">
@@ -244,87 +334,170 @@ export function TradeForm({
             Times shown in {tz.replace("_", " ")} ({currency}).
           </p>
         </div>
-        <div className="flex items-end gap-3">
-          <div className="space-y-1">
-            <Label className="text-xs">Account</Label>
-            <Select
-              value={accountId ?? undefined}
-              onValueChange={(v) => setAccountId(v)}
-            >
-              <SelectTrigger className="w-44">
-                <SelectValue placeholder="Account" />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Trade #</Label>
-            <Input
-              className="w-24"
-              inputMode="numeric"
-              value={tradeNo}
-              onChange={(e) => setTradeNo(e.target.value)}
-            />
-          </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Trade #</Label>
+          <Input
+            className="w-24"
+            inputMode="numeric"
+            value={tradeNo}
+            onChange={(e) => setTradeNo(e.target.value)}
+          />
         </div>
       </div>
 
-      {FORM_SECTIONS.map((section) => (
-        <Card key={section.id}>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">{section.title}</CardTitle>
-            {section.description && (
-              <p className="text-sm text-muted-foreground">
-                {section.description}
-              </p>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              {section.fields.map((field) => (
-                <FieldRenderer
-                  key={field.name}
-                  field={field}
-                  value={fields[field.name]}
-                  onChange={(v) => setField(field.name, v)}
-                  optionsMap={optionsMap}
-                  instruments={instruments}
-                />
-              ))}
-            </div>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <TabsList className="w-full sm:w-auto">
+          {FORM_TABS.map((tab) => (
+            <TabsTrigger
+              key={tab.id}
+              value={tab.id}
+              className="flex-1 sm:flex-none"
+              disabled={tab.id === "execution" && !executionUnlocked}
+              title={
+                tab.id === "execution" && !executionUnlocked
+                  ? "Complete your plan or mark trade as Active to log fills."
+                  : undefined
+              }
+            >
+              {tab.title}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-            {section.id === "risk" && (
-              <ExecutionsEditor
-                execs={execs}
-                tz={tz}
-                onAdd={addExec}
-                onSet={setExec}
-                onRemove={removeExec}
-                metrics={metrics}
-                currency={currency}
-                pointSymbol={instrument?.symbol}
-              />
+        {FORM_TABS.map((tab) => (
+          <TabsContent key={tab.id} value={tab.id} className="mt-4">
+            {tab.id === "execution" && !executionUnlocked ? (
+              <Card>
+                <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                  Mark the trade as <b>Active</b> or use <b>Add Entry Fill</b> on the
+                  Plan tab to log executions and review.
+                </CardContent>
+              </Card>
+            ) : (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">{tab.title}</CardTitle>
+                {tab.description && (
+                  <CardDescription>{tab.description}</CardDescription>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {tab.id === "execution" && (
+                  <ExecutionsEditor
+                    execs={execs}
+                    tz={tz}
+                    onAdd={addExec}
+                    onSet={setExec}
+                    onRemove={removeExec}
+                    metrics={metrics}
+                    currency={currency}
+                  />
+                )}
+
+                {tab.groups
+                  .filter((g) => !g.advanced)
+                  .map((group) => (
+                    <FormGroupSection
+                      key={group.id}
+                      group={group}
+                      fields={fields}
+                      setField={setField}
+                      optionsMap={optionsMap}
+                      instruments={instruments}
+                      accountId={accountId}
+                      accounts={accounts}
+                      onAccountChange={setAccountId}
+                      showAccount={tab.id === "plan" && group.id === "meta"}
+                      tradePhase={tab.id === "plan" && group.id === "meta" ? tradePhase : undefined}
+                      onTradePhaseChange={
+                        tab.id === "plan" && group.id === "meta"
+                          ? setTradePhase
+                          : undefined
+                      }
+                      onAddEntryFill={
+                        tab.id === "plan" && group.id === "risk_plan"
+                          ? handleAddEntryFromPlan
+                          : undefined
+                      }
+                      riskMetrics={
+                        tab.id === "plan" && group.id === "risk_plan"
+                          ? {
+                              plannedRR: metrics.plannedRR,
+                              sizeSuggestion: metrics.sizeSuggestion,
+                              pointSymbol: instrument?.symbol,
+                            }
+                          : undefined
+                      }
+                    />
+                  ))}
+
+                {tab.groups.some((g) => g.advanced) && (
+                  <AdvancedSection>
+                    {tab.groups
+                      .filter((g) => g.advanced)
+                      .map((group) => (
+                        <FormGroupSection
+                          key={group.id}
+                          group={group}
+                          fields={fields}
+                          setField={setField}
+                          optionsMap={optionsMap}
+                          instruments={instruments}
+                          nested
+                        />
+                      ))}
+                  </AdvancedSection>
+                )}
+              </CardContent>
+            </Card>
             )}
-          </CardContent>
-        </Card>
-      ))}
+          </TabsContent>
+        ))}
+      </Tabs>
 
       {initial && <TradeImages positionId={initial.id} />}
 
-      {/* Sticky action bar */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 p-3 backdrop-blur md:left-60">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <Metric label="Net P/L" value={fmtMoney(metrics.netPl, currency, { sign: true })} cls={pnlClass(metrics.netPl)} />
-            <Metric label="R" value={fmtR(metrics.r)} cls={pnlClass(metrics.r)} />
-            {metrics.plannedRR != null && (
-              <Metric label="Planned R:R" value={`1:${metrics.plannedRR.toFixed(2)}`} />
+            {activeTab === "plan" ? (
+              <>
+                <Metric
+                  label="Planned R:R"
+                  value={
+                    metrics.plannedRR != null
+                      ? `1:${metrics.plannedRR.toFixed(2)}`
+                      : "—"
+                  }
+                />
+                <Metric
+                  label="Suggested Size"
+                  value={
+                    metrics.sizeSuggestion != null
+                      ? `${metrics.sizeSuggestion.toFixed(2)}${instrument?.symbol ? ` ${instrument.symbol}` : ""}`
+                      : "—"
+                  }
+                />
+              </>
+            ) : (
+              <>
+                <Metric
+                  label="Net P/L"
+                  value={fmtMoney(metrics.netPl, currency, { sign: true })}
+                  cls={pnlClass(metrics.netPl)}
+                />
+                <Metric label="R" value={fmtR(metrics.r)} cls={pnlClass(metrics.r)} />
+                <Metric
+                  label="Fees + Swap"
+                  value={fmtMoney(metrics.fees, currency)}
+                />
+                {metrics.fees > 0 && metrics.grossPl != null && metrics.netPl != null && (
+                  <Metric
+                    label="Gross → Net"
+                    value={fmtMoney(metrics.grossPl - metrics.netPl, currency)}
+                  />
+                )}
+              </>
             )}
           </div>
           <div className="flex gap-2">
@@ -350,6 +523,143 @@ function Metric({ label, value, cls }: { label: string; value: string; cls?: str
   );
 }
 
+function AdvancedSection({ children }: { children: ReactNode }) {
+  return (
+    <details className="group rounded-lg border bg-muted/20">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+        <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+        Advanced
+      </summary>
+      <div className="space-y-6 border-t px-4 py-4">{children}</div>
+    </details>
+  );
+}
+
+function FormGroupSection({
+  group,
+  fields,
+  setField,
+  optionsMap,
+  instruments,
+  accountId,
+  accounts,
+  onAccountChange,
+  showAccount,
+  tradePhase,
+  onTradePhaseChange,
+  onAddEntryFill,
+  riskMetrics,
+  nested,
+}: {
+  group: FormGroup;
+  fields: Record<string, FieldValue>;
+  setField: (name: string, value: FieldValue) => void;
+  optionsMap: OptionsMap;
+  instruments: Instrument[];
+  accountId?: string | null;
+  accounts?: Account[];
+  onAccountChange?: (id: string) => void;
+  showAccount?: boolean;
+  tradePhase?: TradePhase;
+  onTradePhaseChange?: (phase: TradePhase) => void;
+  onAddEntryFill?: () => void;
+  riskMetrics?: {
+    plannedRR: number | null;
+    sizeSuggestion: number | null;
+    pointSymbol?: string;
+  };
+  nested?: boolean;
+}) {
+  return (
+    <div className={nested ? "space-y-4" : "space-y-4"}>
+      {!nested && (
+        <div>
+          <h3 className="text-sm font-semibold">{group.title}</h3>
+          {group.description && (
+            <p className="text-sm text-muted-foreground">{group.description}</p>
+          )}
+        </div>
+      )}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {showAccount && accounts && onAccountChange && (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Account</Label>
+            <Select
+              value={accountId ?? undefined}
+              onValueChange={(v) => onAccountChange(v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Account" />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {tradePhase != null && onTradePhaseChange && (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Trade phase</Label>
+            <Select
+              value={tradePhase}
+              onValueChange={(v) => onTradePhaseChange(v as TradePhase)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="planned">Planned</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {group.fields.map((field) => (
+          <FieldRenderer
+            key={field.name}
+            field={field}
+            value={fields[field.name]}
+            onChange={(v) => setField(field.name, v)}
+            optionsMap={optionsMap}
+            instruments={instruments}
+          />
+        ))}
+      </div>
+      {riskMetrics && (
+        <div className="space-y-3">
+          <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-2">
+            <div>
+              <p className="text-xs text-muted-foreground">Planned R:R</p>
+              <p className="text-lg font-semibold">
+                {riskMetrics.plannedRR != null
+                  ? `1:${riskMetrics.plannedRR.toFixed(2)}`
+                  : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Suggested Size</p>
+              <p className="text-lg font-semibold">
+                {riskMetrics.sizeSuggestion != null
+                  ? `${riskMetrics.sizeSuggestion.toFixed(2)}${riskMetrics.pointSymbol ? ` ${riskMetrics.pointSymbol}` : ""}`
+                  : "—"}
+              </p>
+            </div>
+          </div>
+          {onAddEntryFill && (
+            <Button type="button" variant="outline" size="sm" onClick={onAddEntryFill}>
+              <ArrowDownToLine className="size-4" /> Add Entry Fill
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FieldRenderer({
   field,
   value,
@@ -358,8 +668,8 @@ function FieldRenderer({
   instruments,
 }: {
   field: FieldConfig;
-  value: string | number | null | undefined;
-  onChange: (v: string | number | null) => void;
+  value: FieldValue | undefined;
+  onChange: (v: FieldValue) => void;
   optionsMap: OptionsMap;
   instruments: Instrument[];
 }) {
@@ -398,6 +708,22 @@ function FieldRenderer({
           options={optionsMap[field.listKey!] ?? []}
           value={(value as string) ?? ""}
           onChange={(v) => onChange(v)}
+        />
+      </div>
+    );
+  }
+
+  if (field.type === "tags") {
+    return (
+      <div className={`space-y-1.5 ${colSpan}`}>
+        <Label className="text-xs">{field.label}</Label>
+        <TagMultiSelect
+          value={Array.isArray(value) ? value : []}
+          onChange={(v) => onChange(v)}
+          optionsMap={optionsMap}
+          listKey={field.listKey}
+          listKeys={field.listKeys}
+          placeholder={field.placeholder}
         />
       </div>
     );
@@ -458,7 +784,6 @@ function FieldRenderer({
     );
   }
 
-  // number / text
   return (
     <div className={`space-y-1.5 ${colSpan}`}>
       <Label className="text-xs">{field.label}</Label>
@@ -480,7 +805,6 @@ function ExecutionsEditor({
   onRemove,
   metrics,
   currency,
-  pointSymbol,
 }: {
   execs: ExecRow[];
   tz: string;
@@ -495,21 +819,27 @@ function ExecutionsEditor({
     grossPl: number | null;
     netPl: number | null;
     r: number | null;
-    sizeSuggestion: number | null;
+    totalFees: number;
+    totalSwap: number;
     fees: number;
   };
   currency: string;
-  pointSymbol?: string;
 }) {
   return (
     <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-sm font-semibold">
-          Executions / Fills{" "}
-          <span className="font-normal text-muted-foreground">
-            ({tz.replace("_", " ")})
-          </span>
-        </h4>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h4 className="text-sm font-semibold">
+            Fills (Executions){" "}
+            <span className="font-normal text-muted-foreground">
+              ({tz.replace("_", " ")})
+            </span>
+          </h4>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Swap and fees significantly affect Net P/L for swing positions held over
+            weekends.
+          </p>
+        </div>
         <div className="flex gap-2">
           <Button type="button" size="sm" variant="outline" onClick={() => onAdd("entry")}>
             <ArrowDownToLine className="size-4" /> Entry fill
@@ -568,25 +898,39 @@ function ExecutionsEditor({
                 onChange={(ev) => onSet(i, { executedLocal: ev.target.value })}
               />
             </div>
-            <div className="col-span-4 sm:col-span-1">
-              <Label className="text-[11px] text-muted-foreground">Fee</Label>
+            <div
+              className={cn(
+                "col-span-6 rounded-md border-l-2 border-amber-500/40 bg-amber-500/5 p-1 sm:col-span-2",
+              )}
+            >
+              <Label className="text-[11px] font-medium text-amber-800 dark:text-amber-200">
+                Fee
+              </Label>
               <Input
-                className="h-8"
+                className="h-8 border-amber-500/20"
                 inputMode="decimal"
                 value={e.fee}
                 onChange={(ev) => onSet(i, { fee: ev.target.value })}
+                placeholder="0"
               />
             </div>
-            <div className="col-span-4 sm:col-span-2">
-              <Label className="text-[11px] text-muted-foreground">Swap</Label>
+            <div
+              className={cn(
+                "col-span-6 rounded-md border-l-2 border-amber-500/40 bg-amber-500/5 p-1 sm:col-span-2",
+              )}
+            >
+              <Label className="text-[11px] font-medium text-amber-800 dark:text-amber-200">
+                Swap / Funding
+              </Label>
               <Input
-                className="h-8"
+                className="h-8 border-amber-500/20"
                 inputMode="decimal"
                 value={e.swap}
                 onChange={(ev) => onSet(i, { swap: ev.target.value })}
+                placeholder="0"
               />
             </div>
-            <div className="col-span-4 sm:col-span-1">
+            <div className="col-span-12 flex justify-end sm:col-span-1 sm:justify-start">
               <Button
                 type="button"
                 size="icon"
@@ -601,7 +945,7 @@ function ExecutionsEditor({
         ))}
         {execs.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            No fills yet — add an entry to log this trade.
+            No fills yet — add an entry when you enter, and exits when you close.
           </p>
         )}
       </div>
@@ -617,17 +961,26 @@ function ExecutionsEditor({
           Size: <b className="text-foreground">{metrics.entryQty || "—"}</b>
         </span>
         <span className="text-muted-foreground">
-          Gross: <b className={pnlClass(metrics.grossPl)}>{fmtMoney(metrics.grossPl, currency, { sign: true })}</b>
+          Gross:{" "}
+          <b className={pnlClass(metrics.grossPl)}>
+            {fmtMoney(metrics.grossPl, currency, { sign: true })}
+          </b>
         </span>
         <span className="text-muted-foreground">
-          Fees: <b className="text-foreground">{fmtMoney(metrics.fees, currency)}</b>
+          Net:{" "}
+          <b className={pnlClass(metrics.netPl)}>
+            {fmtMoney(metrics.netPl, currency, { sign: true })}
+          </b>
         </span>
-        {metrics.sizeSuggestion != null && (
-          <Badge variant="secondary">
-            Suggested size ≈ {metrics.sizeSuggestion.toFixed(2)}
-            {pointSymbol ? ` ${pointSymbol}` : ""} for your risk %
-          </Badge>
-        )}
+        <span className="text-muted-foreground">
+          Total fees: <b className="text-foreground">{fmtMoney(metrics.totalFees, currency)}</b>
+        </span>
+        <span className="text-muted-foreground">
+          Total swap: <b className="text-foreground">{fmtMoney(metrics.totalSwap, currency)}</b>
+        </span>
+        <span className="text-muted-foreground">
+          Combined costs: <b className="text-foreground">{fmtMoney(metrics.fees, currency)}</b>
+        </span>
       </div>
     </div>
   );

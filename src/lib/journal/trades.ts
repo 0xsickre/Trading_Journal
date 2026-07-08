@@ -59,16 +59,18 @@ export async function getTradeForEdit(
 
   const { id: _id, account_id, trade_no, ...rest } = pos as RawPosition;
   // Keep only the dynamic field columns (sanitize handles the rest on save).
-  const fields: Record<string, string | number | null> = {};
+  const fields: Record<string, string | number | string[] | null> = {};
   for (const [k, v] of Object.entries(rest)) {
     if (v == null) continue;
     if (typeof v === "string" || typeof v === "number") fields[k] = v;
+    if (Array.isArray(v)) fields[k] = v.filter((x) => typeof x === "string");
   }
 
   return {
     id,
     account_id: account_id ?? null,
     trade_no: trade_no ?? null,
+    status: (pos as RawPosition & { status?: string }).status ?? "open",
     fields,
     executions: (execs ?? []).map((e) => ({
       side: e.side as "entry" | "exit",

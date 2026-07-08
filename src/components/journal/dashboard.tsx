@@ -34,6 +34,7 @@ import {
   breakdownByField,
   type PnlMode,
 } from "@/lib/journal/analytics";
+import { buildMentorPack } from "@/lib/journal/mentor-export";
 import { fmtMoney, fmtR, fmtPct, fmtNum, pnlClass } from "@/lib/journal/format";
 
 const PERIODS = [
@@ -43,14 +44,24 @@ const PERIODS = [
   { value: "all", label: "All" },
 ];
 
+// Rolling windows for the "Export for Claude" mentor pack.
+const EXPORT_PERIODS = [
+  { value: "1", label: "Day", days: 1 },
+  { value: "7", label: "Week", days: 7 },
+  { value: "30", label: "Month", days: 30 },
+  { value: "90", label: "Quarter", days: 90 },
+  { value: "365", label: "Year", days: 365 },
+  { value: "all", label: "All", days: 0 },
+];
+
 const BREAKDOWN_FIELDS = [
   { value: "setup_grade", label: "Setup Grade" },
-  { value: "session_killzone", label: "Session" },
+  { value: "setup_tags", label: "Setup Tags" },
+  { value: "confluences", label: "Confluences" },
   { value: "ict_entry_model", label: "Entry Model" },
-  { value: "entry_poi", label: "Entry POI" },
   { value: "direction", label: "Direction" },
   { value: "instrument", label: "Instrument" },
-  { value: "emotion_before", label: "Emotion Before" },
+  { value: "psychology_tags", label: "Psychology Tags" },
   { value: "discipline", label: "Discipline" },
   { value: "mistake", label: "Mistake" },
   { value: "trade_type", label: "Trade Type" },
@@ -69,6 +80,7 @@ export function Dashboard({
   const [mode, setMode] = useState<PnlMode>("net");
   const [equityMetric, setEquityMetric] = useState<"money" | "r">("money");
   const [breakdownField, setBreakdownField] = useState("setup_grade");
+  const [exportPeriod, setExportPeriod] = useState("7");
 
   const tzOf = (t: { row: TradeRow }) => {
     const a = accounts.find((x) => x.id === t.row.account_id);
@@ -116,6 +128,45 @@ export function Dashboard({
     () => breakdownByField(realized, breakdownField),
     [realized, breakdownField],
   );
+
+  function handleExportMentorPack() {
+    let scoped =
+      accountFilter === "all"
+        ? trades
+        : trades.filter((t) => t.account_id === accountFilter);
+    const scopeLabel =
+      accountFilter === "all"
+        ? "All accounts"
+        : accounts.find((a) => a.id === accountFilter)?.name ?? "Account";
+
+    const cfg = EXPORT_PERIODS.find((p) => p.value === exportPeriod);
+    let periodLabel = cfg?.label ?? "All";
+    let rangeText = "sve vreme";
+    if (cfg && cfg.days > 0) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - cfg.days);
+      const iso = cutoff.toISOString();
+      // Reference date: when it closed, or when it was created if still open.
+      scoped = scoped.filter(
+        (t) => (t.stats?.closed_at ?? t.created_at ?? "") >= iso,
+      );
+      rangeText = `${iso.slice(0, 10)} → ${new Date().toISOString().slice(0, 10)}`;
+    }
+
+    const md = buildMentorPack(scoped, {
+      currency,
+      scopeLabel,
+      periodLabel,
+      rangeText,
+    });
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mentor-pack-${periodLabel.toLowerCase()}-${new Date().toISOString().slice(0, 10)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="space-y-5">
@@ -165,6 +216,29 @@ export function Dashboard({
         <span className="text-xs text-muted-foreground">
           {mode === "net" ? "Net = after fees & swap" : "Gross = price move only"}
         </span>
+        <div className="ml-auto flex items-center gap-1">
+          <Select value={exportPeriod} onValueChange={setExportPeriod}>
+            <SelectTrigger className="h-8 w-28">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {EXPORT_PERIODS.map((p) => (
+                <SelectItem key={p.value} value={p.value}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={handleExportMentorPack}
+            title="Download a Markdown pack for the selected period to upload into Claude for mentor feedback"
+          >
+            Export for Claude
+          </Button>
+        </div>
       </div>
 
       {/* Stat cards */}

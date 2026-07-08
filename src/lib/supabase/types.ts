@@ -570,18 +570,12 @@ export type Database = {
           account_id: string | null
           bias_tf: string | null
           chart_url: string | null
-          confluence_1: string | null
-          confluence_2: string | null
-          confluence_3: string | null
+          confluences: string[]
           conviction: string | null
           created_at: string
           direction: string | null
           discipline: string | null
           draw_on_liquidity: string | null
-          emotion_after: string | null
-          emotion_before: string | null
-          emotion_during: string | null
-          entry_poi: string | null
           entry_price: number | null
           entry_tf: string | null
           entry_trigger: string | null
@@ -594,20 +588,18 @@ export type Database = {
           ipda_range: string | null
           lesson_learned: string | null
           market_condition: string | null
-          market_structure: string | null
           mistake: string | null
           needs_review: boolean
           news_nearby: string | null
           notes: string | null
-          num_confluences: string | null
           planned_rr: string | null
           position_size: number | null
           premium_discount: string | null
+          psychology_tags: string[]
           result: string | null
           risk_pct: string | null
-          rules_followed: string | null
-          session_killzone: string | null
           setup_grade: string | null
+          setup_tags: string[]
           smt_divergence: string | null
           source: string
           status: string
@@ -625,18 +617,12 @@ export type Database = {
           account_id?: string | null
           bias_tf?: string | null
           chart_url?: string | null
-          confluence_1?: string | null
-          confluence_2?: string | null
-          confluence_3?: string | null
+          confluences?: string[]
           conviction?: string | null
           created_at?: string
           direction?: string | null
           discipline?: string | null
           draw_on_liquidity?: string | null
-          emotion_after?: string | null
-          emotion_before?: string | null
-          emotion_during?: string | null
-          entry_poi?: string | null
           entry_price?: number | null
           entry_tf?: string | null
           entry_trigger?: string | null
@@ -649,20 +635,18 @@ export type Database = {
           ipda_range?: string | null
           lesson_learned?: string | null
           market_condition?: string | null
-          market_structure?: string | null
           mistake?: string | null
           needs_review?: boolean
           news_nearby?: string | null
           notes?: string | null
-          num_confluences?: string | null
           planned_rr?: string | null
           position_size?: number | null
           premium_discount?: string | null
+          psychology_tags?: string[]
           result?: string | null
           risk_pct?: string | null
-          rules_followed?: string | null
-          session_killzone?: string | null
           setup_grade?: string | null
+          setup_tags?: string[]
           smt_divergence?: string | null
           source?: string
           status?: string
@@ -680,18 +664,12 @@ export type Database = {
           account_id?: string | null
           bias_tf?: string | null
           chart_url?: string | null
-          confluence_1?: string | null
-          confluence_2?: string | null
-          confluence_3?: string | null
+          confluences?: string[]
           conviction?: string | null
           created_at?: string
           direction?: string | null
           discipline?: string | null
           draw_on_liquidity?: string | null
-          emotion_after?: string | null
-          emotion_before?: string | null
-          emotion_during?: string | null
-          entry_poi?: string | null
           entry_price?: number | null
           entry_tf?: string | null
           entry_trigger?: string | null
@@ -704,20 +682,18 @@ export type Database = {
           ipda_range?: string | null
           lesson_learned?: string | null
           market_condition?: string | null
-          market_structure?: string | null
           mistake?: string | null
           needs_review?: boolean
           news_nearby?: string | null
           notes?: string | null
-          num_confluences?: string | null
           planned_rr?: string | null
           position_size?: number | null
           premium_discount?: string | null
+          psychology_tags?: string[]
           result?: string | null
           risk_pct?: string | null
-          rules_followed?: string | null
-          session_killzone?: string | null
           setup_grade?: string | null
+          setup_tags?: string[]
           smt_divergence?: string | null
           source?: string
           status?: string

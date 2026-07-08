@@ -220,6 +220,12 @@ export type BreakdownRow = {
   netSum: number;
 };
 
+const ARRAY_BREAKDOWN_FIELDS = new Set([
+  "confluences",
+  "setup_tags",
+  "psychology_tags",
+]);
+
 /** Group realized trades by a position field (tag) -> performance. */
 export function breakdownByField(
   trades: RealizedTrade[],
@@ -228,10 +234,16 @@ export function breakdownByField(
   const groups = new Map<string, RealizedTrade[]>();
   for (const t of trades) {
     const raw = t.row[field];
-    const key = typeof raw === "string" && raw ? raw : "—";
-    const arr = groups.get(key) ?? [];
-    arr.push(t);
-    groups.set(key, arr);
+    const keys: string[] =
+      ARRAY_BREAKDOWN_FIELDS.has(field) && Array.isArray(raw)
+        ? raw.filter((x): x is string => typeof x === "string" && !!x)
+        : [typeof raw === "string" && raw ? raw : "—"];
+    if (keys.length === 0) keys.push("—");
+    for (const key of keys) {
+      const arr = groups.get(key) ?? [];
+      arr.push(t);
+      groups.set(key, arr);
+    }
   }
   const rows: BreakdownRow[] = [];
   for (const [key, arr] of groups) {
