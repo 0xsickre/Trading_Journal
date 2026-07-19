@@ -18,6 +18,10 @@ import type { Account } from "@/lib/journal/types";
 import { parseImportTime, fmtInTz } from "@/lib/journal/time";
 import { fmtMoney, fmtNum } from "@/lib/journal/format";
 import {
+  instrumentsMatch,
+  normalizeInstrumentSymbol,
+} from "@/lib/journal/instrument-aliases";
+import {
   commitImport,
   type ImportExec,
   type ImportItem,
@@ -166,7 +170,8 @@ export function ImportWizard({
       }
     }
     const built: (ImportItem & { _diff?: string[] })[] = rows.map((row) => {
-      const instrument = (row[map.instrument] ?? "").trim() || null;
+      const instrument =
+        normalizeInstrumentSymbol(row[map.instrument] ?? "") ?? null;
       const direction = normDirection(row[map.direction]);
       const qty = num(row[map.qty]) ?? 0;
       const entryPrice = num(row[map.entry_price]);
@@ -196,7 +201,7 @@ export function ImportWizard({
       const entryMs = entryTime ? new Date(entryTime).getTime() : null;
       for (const c of candidates) {
         if (!c.instrument || !instrument) continue;
-        if (c.instrument.toLowerCase() !== instrument.toLowerCase()) continue;
+        if (!instrumentsMatch(c.instrument, instrument)) continue;
         if ((c.direction ?? "").toLowerCase() !== (direction ?? "").toLowerCase())
           continue;
         const timeOk =

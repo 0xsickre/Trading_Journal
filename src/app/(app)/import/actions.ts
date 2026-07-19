@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 import { computeStatus } from "@/lib/journal/trade-lifecycle";
+import { normalizeInstrumentSymbol } from "@/lib/journal/instrument-aliases";
 
 export type ImportExec = {
   side: "entry" | "exit";
@@ -59,10 +60,11 @@ export async function commitImport(input: CommitInput) {
 
     try {
       if (item.decision === "create") {
+        const instrument = normalizeInstrumentSymbol(item.instrument);
         const { data: pos, error } = await supabase
           .from("tj_positions")
           .insert({
-            instrument: item.instrument,
+            instrument,
             direction: item.direction,
             source: "import",
             import_batch_id: batch.id,

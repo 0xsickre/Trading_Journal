@@ -64,7 +64,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 - Raw import rows stored for an audit trail.
 
 ### Instruments & Accounts
-- **10-symbol watchlist** — B6 FTMO universe synced with Trading data vault: `EURUSD`, `GBPUSD`, `USDJPY`, `USDCAD`, `AUDUSD`, `SP500`, `NAS100`, `XAUUSD`, `HG`, `RTY` — seeded on signup (`tj_seed_instruments_defaults`).
+- **10-symbol watchlist** — B6 FTMO universe synced with Trading data vault: `EURUSD`, `GBPUSD`, `USDJPY`, `USDCAD`, `AUDUSD`, `SP500`, `NAS100`, `XAUUSD`, `HG`, `RTY` — seeded on signup (`tj_seed_instruments_defaults`). CSV import normalizes broker aliases (e.g. `US500.cash` → `SP500`, `US100.cash` → `NAS100`, `GOLD` → `XAUUSD`).
 - Per-instrument `point_value` for accurate P/L across asset classes (editable in Settings).
 - Multiple accounts with individual currency, starting balance, and **IANA timezone** — all timestamps display in the account's local time regardless of the user's machine.
 
