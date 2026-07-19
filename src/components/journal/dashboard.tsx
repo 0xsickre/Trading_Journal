@@ -73,7 +73,6 @@ const BREAKDOWN_FIELDS = [
   { value: "setup_grade", label: "Setup Grade" },
   { value: "technical_tags", label: "Technical Tags" },
   { value: "ict_entry_model", label: "Entry Model" },
-  { value: "session_killzone", label: "Session" },
   { value: "direction", label: "Direction" },
   { value: "instrument", label: "Instrument" },
   { value: "psychology_tags", label: "Psychology Tags" },

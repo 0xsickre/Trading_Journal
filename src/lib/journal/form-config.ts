@@ -47,7 +47,34 @@ export const FORM_TABS: FormTab[] = [
         title: "Meta",
         fields: [
           { name: "instrument", label: "Instrument", type: "instrument" },
-          { name: "direction", label: "Direction", type: "select", listKey: "direction" },
+        ],
+      },
+      {
+        id: "risk_plan",
+        title: "Risk Plan",
+        fields: [
+          { name: "entry_price", label: "Planned Entry Price", type: "number" },
+          { name: "stop_price", label: "Stop Price", type: "number" },
+          {
+            name: "direction",
+            label: "Direction",
+            type: "computed",
+            placeholder: "Auto from entry vs stop",
+          },
+          { name: "target_price", label: "Target Price", type: "number" },
+          { name: "risk_pct", label: "Risk %", type: "select", listKey: "risk_pct" },
+          {
+            name: "planned_rr",
+            label: "Planned R:R",
+            type: "computed",
+            placeholder: "Auto from entry / stop / target",
+          },
+          {
+            name: "position_size",
+            label: "Position Size",
+            type: "computed",
+            placeholder: "Auto from risk % and stop",
+          },
         ],
       },
       {
@@ -65,12 +92,6 @@ export const FORM_TABS: FormTab[] = [
         fields: [
           { name: "htf_bias", label: "HTF Bias", type: "select", listKey: "htf_bias" },
           {
-            name: "session_killzone",
-            label: "Session / Killzone",
-            type: "select",
-            listKey: "session_killzone",
-          },
-          {
             name: "ict_entry_model",
             label: "ICT Entry Model",
             type: "select",
@@ -84,28 +105,6 @@ export const FORM_TABS: FormTab[] = [
             listKey: "technical_tag",
             colSpan: 2,
             placeholder: "Sweep, MSS, FVG, OB, OTE, SMT…",
-          },
-        ],
-      },
-      {
-        id: "risk_plan",
-        title: "Risk Plan",
-        fields: [
-          { name: "entry_price", label: "Planned Entry Price", type: "number" },
-          { name: "stop_price", label: "Stop Price", type: "number" },
-          { name: "target_price", label: "Target Price", type: "number" },
-          { name: "risk_pct", label: "Risk %", type: "select", listKey: "risk_pct" },
-          {
-            name: "planned_rr",
-            label: "Planned R:R",
-            type: "computed",
-            placeholder: "Auto from entry / stop / target",
-          },
-          {
-            name: "position_size",
-            label: "Position Size",
-            type: "computed",
-            placeholder: "Auto from risk % and stop",
           },
         ],
       },

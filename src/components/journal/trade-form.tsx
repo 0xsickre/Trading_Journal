@@ -620,6 +620,10 @@ export function TradeForm({
                       computedDisplay={
                         tab.id === "plan" && group.id === "risk_plan"
                           ? {
+                              direction:
+                                inferredDirection ??
+                                (fields.direction as string) ??
+                                "—",
                               planned_rr:
                                 metrics.plannedRR != null
                                   ? formatPlannedRewardR(metrics.plannedRR)
@@ -629,11 +633,6 @@ export function TradeForm({
                                   ? `${metrics.sizeSuggestion.toFixed(2)}${instrument?.symbol ? ` ${instrument.symbol}` : ""}`
                                   : "—",
                             }
-                          : undefined
-                      }
-                      fieldHints={
-                        tab.id === "plan" && group.id === "meta" && inferredDirection != null
-                          ? { direction: "Auto from entry vs stop" }
                           : undefined
                       }
                       onAddEntryFill={
@@ -970,13 +969,19 @@ function FormGroupSection({
           <ArrowDownToLine className="size-4" /> Add Entry Fill
         </Button>
       )}
-      {onMoveToActive && group.id === "risk_plan" && (
-        <Button type="button" variant="secondary" size="sm" onClick={onMoveToActive}>
-          Move to active trade
-        </Button>
-      )}
-      {group.id === "risk_plan" && (onMarkMissed || onRestorePlanned) && (
+      {group.id === "risk_plan" &&
+        (onMoveToActive || onMarkMissed || onRestorePlanned) && (
         <div className="flex flex-wrap gap-2">
+          {onMoveToActive && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={onMoveToActive}
+            >
+              Move to active trade
+            </Button>
+          )}
           {onMarkMissed && (
             <Button
               type="button"

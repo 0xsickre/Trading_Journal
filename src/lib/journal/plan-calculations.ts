@@ -135,6 +135,8 @@ export function riskPlanFieldVisible(
       return true;
     case "stop_price":
       return hasEntry;
+    case "direction":
+      return hasEntry && hasStop;
     case "target_price":
     case "risk_pct":
       return hasEntry && hasStop;

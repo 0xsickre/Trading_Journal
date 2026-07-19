@@ -21,7 +21,6 @@ const BREAKDOWNS: { field: string; label: string }[] = [
   { field: "cot_filter", label: "COT Filter" },
   { field: "setup_grade", label: "Setup Grade" },
   { field: "ict_entry_model", label: "Entry Model" },
-  { field: "session_killzone", label: "Session" },
   { field: "instrument", label: "Instrument" },
   { field: "direction", label: "Direction" },
   { field: "technical_tags", label: "Technical Tags" },
