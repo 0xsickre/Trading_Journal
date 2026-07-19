@@ -64,8 +64,7 @@ const todayYMD = () => new Date().toISOString().slice(0, 10);
 
 const BREAKDOWN_FIELDS = [
   { value: "setup_grade", label: "Setup Grade" },
-  { value: "setup_tags", label: "Setup Tags" },
-  { value: "confluences", label: "Confluences" },
+  { value: "technical_tags", label: "Technical Tags" },
   { value: "ict_entry_model", label: "Entry Model" },
   { value: "direction", label: "Direction" },
   { value: "instrument", label: "Instrument" },
@@ -73,7 +72,6 @@ const BREAKDOWN_FIELDS = [
   { value: "discipline", label: "Discipline" },
   { value: "mistake", label: "Mistake" },
   { value: "trade_type", label: "Trade Type" },
-  { value: "conviction", label: "Conviction" },
 ];
 
 export function Dashboard({

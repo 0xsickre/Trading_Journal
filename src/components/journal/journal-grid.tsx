@@ -111,7 +111,7 @@ export function JournalGrid({
       }
       if (search.trim()) {
         const q = search.toLowerCase();
-        const tagHay = ["setup_tags", "confluences", "psychology_tags"]
+        const tagHay = ["technical_tags", "psychology_tags"]
           .flatMap((k) => {
             const v = t[k];
             return Array.isArray(v) ? v : [];
@@ -119,8 +119,7 @@ export function JournalGrid({
           .filter((x): x is string => typeof x === "string");
         const hay = [
           t.instrument,
-          t.notes,
-          t.lesson_learned,
+          t.trade_journal_notes,
           t.ict_entry_model,
           t.setup_grade,
           ...tagHay,

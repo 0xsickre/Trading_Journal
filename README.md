@@ -12,7 +12,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 |---|---|
 | Dashboard | 12 performance stat cards, equity curve, R-distribution, calendar heatmap, tag breakdowns |
 | Journal | Sortable/filterable trade grid with CSV + Excel export |
-| New Trade | 49-field ICT trade form with partial-exit fills and a position-size calculator |
+| New Trade | Streamlined ICT trade form (~24 fields) with partial-exit fills and a position-size calculator |
 | Import | CSV/Excel broker import with column mapping and per-row reconciliation |
 | Settings | In-app CRUD for dropdown lists, instruments, and accounts |
 
@@ -21,7 +21,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 ## Features
 
 ### Trade Logging
-- **49-field trade form** across four sections: Context, ICT Setup & Analysis, Risk & Execution, and Psychology & Review.
+- **Streamlined trade form** (~24 fields) across Plan & Setup and Execution & Review — `ict_entry_model`, `setup_grade`, unified `technical_tags`, and one `trade_journal_notes` field instead of overlapping tag/dropdown/text columns.
 - **Partial exit / scale-out support** — one parent position with multiple execution fills; accurate weighted R-multiple across every exit.
 - **Gross vs Net P/L** separation — raw price movement vs. P/L after fees and swap/funding.
 - **TradingView chart URL** stored per trade as a clickable link.
@@ -30,7 +30,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 - **HTF Bias / Bias TF** — per-trade ICT context fields (not a separate macro module).
 
 ### Dropdowns — Fully Editable In-App
-- **34 dropdown lists / ~296 default options** seeded per user for the trade form.
+- **~24 dropdown/tag lists** seeded per user (merged `technical_tag` list replaces separate confluence/setup/micro-ICT lists).
 - **+ Add** inline on every dropdown; **Settings → Lists** for full CRUD, reorder, and colour, organised by category (Context, ICT Setup, Risk, Psychology).
 - **Soft-delete** — archiving an option hides it from entry forms but keeps historical trades intact and filterable.
 
@@ -85,10 +85,10 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 ```
 tj_accounts          – broker accounts (currency, balance, IANA timezone)
 tj_instruments       – tradeable symbols with point_value per asset class (9-symbol watchlist)
-tj_option_lists      – 34 dropdown list definitions (Context, ICT Setup, Risk, Psychology)
-tj_option_items      – ~296 default options (soft-deleteable)
+tj_option_lists      – ~24 dropdown/tag list definitions (Context, ICT Setup, Risk, Psychology)
+tj_option_items      – default options (soft-deleteable)
 
-tj_positions         – parent trade record (49 fields: context, ICT setup, risk plan, psychology)
+tj_positions         – parent trade record (technical_tags[], trade_journal_notes, ICT setup, risk plan, psychology)
 tj_executions        – child fills (entry or exit, price, qty, fee, swap, timestamp UTC)
 tj_position_stats    – SQL view: avg_entry, avg_exit, entry_qty, gross_pl, net_pl, realized_r
 
@@ -133,7 +133,7 @@ npm run dev
 
 ### Database Setup
 
-Apply migrations via the Supabase CLI (`supabase db push`) or the SQL editor. The repo includes `supabase/migrations/` — run all files in order, including `20260719120000_drop_analysis_module.sql` if upgrading from an older schema that had Market Analysis tables.
+Apply migrations via the Supabase CLI (`supabase db push`) or the SQL editor. The repo includes `supabase/migrations/` — run all files in order (including `20260720120000_simplify_trade_fields.sql` for the streamlined form schema).
 
 New signups are seeded automatically by the auth trigger; `tj_seed_my_defaults` is also called on login as an idempotent fallback (`src/lib/journal/ensure-defaults.ts`).
 
@@ -197,7 +197,7 @@ src/
 │   └── journal/               # Business logic
 │       ├── analytics.ts       # Dashboard stats, equity curve, breakdowns
 │       ├── trades.ts          # Trade/position queries
-│       ├── form-config.ts     # Declarative 49-field trade form
+│       ├── form-config.ts     # Declarative trade form (~24 fields)
 │       ├── options.ts / accounts.ts / instruments.ts / time.ts / format.ts / nav.ts
 │       └── ensure-defaults.ts # Idempotent per-user seeding fallback
 └── proxy.ts                   # Next.js 16 session proxy (replaces middleware.ts)

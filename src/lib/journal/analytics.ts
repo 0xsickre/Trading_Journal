@@ -221,8 +221,7 @@ export type BreakdownRow = {
 };
 
 const ARRAY_BREAKDOWN_FIELDS = new Set([
-  "confluences",
-  "setup_tags",
+  "technical_tags",
   "psychology_tags",
 ]);
 

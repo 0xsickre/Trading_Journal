@@ -354,12 +354,9 @@ export type Database = {
           account_id: string | null
           bias_tf: string | null
           chart_url: string | null
-          confluences: string[]
-          conviction: string | null
           created_at: string
           direction: string | null
           discipline: string | null
-          draw_on_liquidity: string | null
           entry_price: number | null
           entry_tf: string | null
           entry_trigger: string | null
@@ -369,28 +366,22 @@ export type Database = {
           id: string
           import_batch_id: string | null
           instrument: string | null
-          ipda_range: string | null
-          lesson_learned: string | null
           market_condition: string | null
           mistake: string | null
           needs_review: boolean
           news_nearby: string | null
-          notes: string | null
           planned_rr: string | null
           position_size: number | null
-          premium_discount: string | null
           psychology_tags: string[]
           result: string | null
           risk_pct: string | null
           setup_grade: string | null
-          setup_tags: string[]
-          smt_divergence: string | null
           source: string
           status: string
-          stop_logic: string | null
           stop_price: number | null
-          target_logic: string | null
           target_price: number | null
+          technical_tags: string[]
+          trade_journal_notes: string | null
           trade_no: number | null
           trade_type: string | null
           updated_at: string
@@ -401,12 +392,9 @@ export type Database = {
           account_id?: string | null
           bias_tf?: string | null
           chart_url?: string | null
-          confluences?: string[]
-          conviction?: string | null
           created_at?: string
           direction?: string | null
           discipline?: string | null
-          draw_on_liquidity?: string | null
           entry_price?: number | null
           entry_tf?: string | null
           entry_trigger?: string | null
@@ -416,28 +404,22 @@ export type Database = {
           id?: string
           import_batch_id?: string | null
           instrument?: string | null
-          ipda_range?: string | null
-          lesson_learned?: string | null
           market_condition?: string | null
           mistake?: string | null
           needs_review?: boolean
           news_nearby?: string | null
-          notes?: string | null
           planned_rr?: string | null
           position_size?: number | null
-          premium_discount?: string | null
           psychology_tags?: string[]
           result?: string | null
           risk_pct?: string | null
           setup_grade?: string | null
-          setup_tags?: string[]
-          smt_divergence?: string | null
           source?: string
           status?: string
-          stop_logic?: string | null
           stop_price?: number | null
-          target_logic?: string | null
           target_price?: number | null
+          technical_tags?: string[]
+          trade_journal_notes?: string | null
           trade_no?: number | null
           trade_type?: string | null
           updated_at?: string
@@ -448,12 +430,9 @@ export type Database = {
           account_id?: string | null
           bias_tf?: string | null
           chart_url?: string | null
-          confluences?: string[]
-          conviction?: string | null
           created_at?: string
           direction?: string | null
           discipline?: string | null
-          draw_on_liquidity?: string | null
           entry_price?: number | null
           entry_tf?: string | null
           entry_trigger?: string | null
@@ -463,28 +442,22 @@ export type Database = {
           id?: string
           import_batch_id?: string | null
           instrument?: string | null
-          ipda_range?: string | null
-          lesson_learned?: string | null
           market_condition?: string | null
           mistake?: string | null
           needs_review?: boolean
           news_nearby?: string | null
-          notes?: string | null
           planned_rr?: string | null
           position_size?: number | null
-          premium_discount?: string | null
           psychology_tags?: string[]
           result?: string | null
           risk_pct?: string | null
           setup_grade?: string | null
-          setup_tags?: string[]
-          smt_divergence?: string | null
           source?: string
           status?: string
-          stop_logic?: string | null
           stop_price?: number | null
-          target_logic?: string | null
           target_price?: number | null
+          technical_tags?: string[]
+          trade_journal_notes?: string | null
           trade_no?: number | null
           trade_type?: string | null
           updated_at?: string
