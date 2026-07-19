@@ -23,6 +23,8 @@ export type TradeInput = {
   trade_no: number | null;
   fields: Record<string, string | number | string[] | null>;
   executions: ExecutionInput[];
+  /** User choice when no fills: planned vs active (maps to planned/open). */
+  trade_phase?: "planned" | "active" | null;
   current_status?: string | null;
 };
 
@@ -61,8 +63,20 @@ function cleanExecs(execs: ExecutionInput[]) {
     }));
 }
 
-function resolveStatus(execs: ExecutionInput[], currentStatus?: string | null) {
-  const status = computeStatus(execs, currentStatus);
+function resolveStatus(
+  execs: ExecutionInput[],
+  tradePhase?: "planned" | "active" | null,
+  currentStatus?: string | null,
+) {
+  const phase = execs.length > 0 ? "active" : tradePhase;
+  const manual =
+    currentStatus === "missed" && execs.length === 0
+      ? "missed"
+      : phase === "active"
+        ? "open"
+        : "planned";
+
+  const status = computeStatus(execs, manual);
   const patch: Record<string, string | null> = { status };
 
   if (execs.length > 0) {
@@ -80,7 +94,11 @@ export async function createTrade(input: TradeInput) {
   const supabase = await createClient();
   const fields = sanitizeFields(input.fields);
   const execs = cleanExecs(input.executions);
-  const statusPatch = resolveStatus(execs, input.current_status);
+  const statusPatch = resolveStatus(
+    execs,
+    input.trade_phase,
+    input.current_status,
+  );
 
   const { data: pos, error: posErr } = await supabase
     .from("tj_positions")
@@ -114,7 +132,11 @@ export async function updateTrade(id: string, input: TradeInput) {
   const supabase = await createClient();
   const fields = sanitizeFields(input.fields);
   const execs = cleanExecs(input.executions);
-  const statusPatch = resolveStatus(execs, input.current_status);
+  const statusPatch = resolveStatus(
+    execs,
+    input.trade_phase,
+    input.current_status,
+  );
 
   const { error: upErr } = await supabase
     .from("tj_positions")
@@ -123,6 +145,7 @@ export async function updateTrade(id: string, input: TradeInput) {
       account_id: input.account_id,
       trade_no: input.trade_no,
       ...statusPatch,
+      ...(execs.length > 0 ? { needs_review: false } : {}),
     })
     .eq("id", id);
   if (upErr) return { ok: false as const, error: upErr.message };
@@ -213,6 +236,42 @@ export async function restoreTradeToPlanned(id: string) {
       missed_at: null,
       miss_reason: null,
     })
+    .eq("id", id);
+
+  if (error) return { ok: false as const, error: error.message };
+
+  revalidatePath("/journal");
+  revalidatePath(`/trades/${id}`);
+  revalidatePath("/", "layout");
+  return { ok: true as const, id };
+}
+
+/** Planned → Active without fills (manual) or confirm after import. */
+export async function activateTrade(id: string) {
+  const supabase = await createClient();
+
+  const [{ data: pos }, { count }] = await Promise.all([
+    supabase.from("tj_positions").select("status").eq("id", id).maybeSingle(),
+    supabase
+      .from("tj_executions")
+      .select("id", { count: "exact", head: true })
+      .eq("position_id", id),
+  ]);
+
+  if (!pos) return { ok: false as const, error: "Trade not found" };
+  if (pos.status === "missed") {
+    return { ok: false as const, error: "Missed trade — restore to planned first" };
+  }
+  if (pos.status !== "planned") {
+    return { ok: true as const, id };
+  }
+  if ((count ?? 0) > 0) {
+    return { ok: false as const, error: "Trade already has fills — refresh the page" };
+  }
+
+  const { error } = await supabase
+    .from("tj_positions")
+    .update({ status: "open", needs_review: false })
     .eq("id", id);
 
   if (error) return { ok: false as const, error: error.message };

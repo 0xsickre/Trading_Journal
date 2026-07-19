@@ -55,7 +55,7 @@ import {
 } from "@/lib/journal/exit-efficiency";
 import { primaryTradeImageUrl } from "@/lib/journal/tradingview-snapshot";
 import { ARRAY_FIELD_NAMES, getAllFormFields } from "@/lib/journal/form-config";
-import { deleteTrade } from "@/app/(app)/trades/actions";
+import { deleteTrade, activateTrade } from "@/app/(app)/trades/actions";
 import {
   formatLifecycleStatusLabel,
   lifecycleStatusHint,
@@ -337,7 +337,11 @@ export function JournalGrid({
         id: "actions",
         header: "",
         cell: ({ row }) => (
-          <RowActions id={row.original.id} onDeleted={() => router.refresh()} />
+          <RowActions
+            id={row.original.id}
+            status={String(row.original.status)}
+            onDeleted={() => router.refresh()}
+          />
         ),
       },
     ],
@@ -553,7 +557,15 @@ function FilterSelect({
   );
 }
 
-function RowActions({ id, onDeleted }: { id: string; onDeleted: () => void }) {
+function RowActions({
+  id,
+  status,
+  onDeleted,
+}: {
+  id: string;
+  status: string;
+  onDeleted: () => void;
+}) {
   const router = useRouter();
   return (
     <DropdownMenu>
@@ -566,6 +578,20 @@ function RowActions({ id, onDeleted }: { id: string; onDeleted: () => void }) {
         <DropdownMenuItem onClick={() => router.push(`/trades/${id}/edit`)}>
           <Pencil className="size-4" /> Edit
         </DropdownMenuItem>
+        {status === "planned" && (
+          <DropdownMenuItem
+            onClick={async () => {
+              const res = await activateTrade(id);
+              if (!res.ok) toast.error(res.error);
+              else {
+                toast.success("Trade moved to active");
+                onDeleted();
+              }
+            }}
+          >
+            Move to active
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           className="text-destructive"
           onClick={async () => {

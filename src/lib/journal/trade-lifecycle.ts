@@ -9,6 +9,8 @@ export type ExecutionInput = {
 
 export type ExecLike = Pick<ExecutionInput, "side" | "qty">;
 
+export type TradePhase = "planned" | "active";
+
 export type PositionStatus =
   | "planned"
   | "missed"
@@ -16,13 +18,37 @@ export type PositionStatus =
   | "partial"
   | "closed";
 
-/** Derive position status from fills and optional persisted lifecycle state. */
-export function computeStatus(
-  execs: ExecLike[],
+/** UI Trade phase from stored status. */
+export function statusToTradePhase(status?: string | null): TradePhase {
+  if (
+    status === "open" ||
+    status === "partial" ||
+    status === "closed"
+  ) {
+    return "active";
+  }
+  return "planned";
+}
+
+/** Status to persist when there are no execution fills (user choice). */
+export function manualStatusFromPhase(
+  phase: TradePhase,
   currentStatus?: string | null,
 ): PositionStatus {
+  if (currentStatus === "missed") return "missed";
+  return phase === "active" ? "open" : "planned";
+}
+
+/**
+ * Status: fills drive partial/closed; without fills, user picks planned vs active (open).
+ */
+export function computeStatus(
+  execs: ExecLike[],
+  manualStatus?: string | null,
+): PositionStatus {
   if (execs.length === 0) {
-    if (currentStatus === "missed") return "missed";
+    if (manualStatus === "missed") return "missed";
+    if (manualStatus === "open") return "open";
     return "planned";
   }
 
@@ -37,11 +63,19 @@ export function computeStatus(
   return "closed";
 }
 
+/** At least one entry fill with quantity (import / execution tab). */
+export function hasEntryFill(execs: ExecLike[]): boolean {
+  return execs.some((e) => e.side === "entry" && (e.qty || 0) > 0);
+}
+
 export function canMarkMissed(
   execCount: number,
   status?: string | null,
 ): boolean {
-  return execCount === 0 && (status === "planned" || status === "open" || !status);
+  return (
+    execCount === 0 &&
+    (status === "planned" || status === "open" || !status)
+  );
 }
 
 export function canRestoreToPlanned(
@@ -55,15 +89,14 @@ export function isPlanLifecycleStatus(status?: string | null): boolean {
   return status === "planned" || status === "missed";
 }
 
-/** UI label — planned ≠ open position. */
 export function formatLifecycleStatusLabel(status: string): string {
   switch (status) {
     case "planned":
-      return "Plan";
+      return "Planned";
     case "missed":
-      return "Miss";
+      return "Missed";
     case "open":
-      return "Open";
+      return "Active";
     case "partial":
       return "Partial";
     case "closed":
@@ -73,19 +106,18 @@ export function formatLifecycleStatusLabel(status: string): string {
   }
 }
 
-/** Short hint for traders — status follows fills, not planned entry_price. */
 export function lifecycleStatusHint(status: string): string {
   switch (status) {
     case "planned":
-      return "Setup sačuvan (entry/stop/target OK) — nema broker fill-a.";
+      return "Plan trade — još nisi u poziciji.";
     case "missed":
-      return "Plan nikad nije otvoren (limit nije udario / setup propao).";
+      return "Setup propušten — nisi ušao.";
     case "open":
-      return "Bar jedan entry fill logovan — pozicija je otvorena.";
+      return "Aktivan trade.";
     case "partial":
-      return "Delimičan exit — još u poziciji.";
+      return "Delimičan exit.";
     case "closed":
-      return "Pozicija zatvorena.";
+      return "Zatvoren trade.";
     default:
       return "";
   }

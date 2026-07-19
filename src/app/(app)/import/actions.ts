@@ -66,7 +66,7 @@ export async function commitImport(input: CommitInput) {
             direction: item.direction,
             source: "import",
             import_batch_id: batch.id,
-            needs_review: true,
+            needs_review: item.executions.length === 0,
             status: statusOf(item.executions),
           })
           .select("id")
@@ -92,7 +92,10 @@ export async function commitImport(input: CommitInput) {
         }
         await supabase
           .from("tj_positions")
-          .update({ status: statusOf(item.executions), needs_review: true })
+          .update({
+            status: statusOf(item.executions),
+            needs_review: item.executions.length === 0,
+          })
           .eq("id", pid);
         merged++;
       } else {

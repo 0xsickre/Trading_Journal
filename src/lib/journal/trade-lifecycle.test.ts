@@ -3,6 +3,7 @@ import {
   canMarkMissed,
   canRestoreToPlanned,
   computeStatus,
+  hasEntryFill,
   type ExecutionInput,
 } from "./trade-lifecycle";
 
@@ -24,6 +25,10 @@ describe("computeStatus", () => {
     expect(computeStatus([], "missed")).toBe("missed");
   });
 
+  it("no fills + active (open) stays open", () => {
+    expect(computeStatus([], "open")).toBe("open");
+  });
+
   it("entry only → open", () => {
     expect(computeStatus([entry])).toBe("open");
   });
@@ -41,6 +46,14 @@ describe("computeStatus", () => {
     expect(
       computeStatus([entry, { ...entry, side: "exit" }]),
     ).toBe("closed");
+  });
+});
+
+describe("hasEntryFill", () => {
+  it("detects entry qty", () => {
+    expect(hasEntryFill([entry])).toBe(true);
+    expect(hasEntryFill([{ ...entry, side: "exit" }])).toBe(false);
+    expect(hasEntryFill([])).toBe(false);
   });
 });
 
