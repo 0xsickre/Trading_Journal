@@ -46,6 +46,8 @@ const DETAIL_FIELDS: { key: string; label: string }[] = (() => {
   // Derived / computed columns that also carry user-meaningful info.
   add("planned_rr", "Planned RR");
   add("position_size", "Position size");
+  add("miss_reason", "Miss reason");
+  add("missed_at", "Missed at");
   add("tv_htf_pre", "TV HTF Pre");
   add("tv_ltf_pre", "TV LTF Pre");
   add("tv_ltf_post", "TV LTF Post");
@@ -272,8 +274,18 @@ export function buildMentorPack(
   const truncated = sortedClosed.length - detail.length;
 
   const openReview = trades.filter(
-    (t) => t.status !== "closed" || t.needs_review,
+    (t) =>
+      t.status === "open" ||
+      t.status === "partial" ||
+      (t.status === "closed" && t.needs_review),
   );
+  const missedSetups = trades
+    .filter((t) => t.status === "missed")
+    .sort((a, b) =>
+      String(b.missed_at ?? b.created_at).localeCompare(
+        String(a.missed_at ?? a.created_at),
+      ),
+    );
 
   const out: string[] = [];
 
@@ -319,6 +331,14 @@ export function buildMentorPack(
   if (openReview.length > 0) {
     out.push(`## Otvorene / za pregled (${openReview.length})`);
     for (const t of openReview.slice(0, 20)) out.push(tradeDetail(t, ccy));
+    out.push("");
+  }
+
+  if (missedSetups.length > 0) {
+    out.push(`## Missed setup-i (${missedSetups.length})`);
+    out.push(`_Planirani trejdovi koji nikad nisu otvoreni — bez PnL._`);
+    out.push("");
+    for (const t of missedSetups.slice(0, 30)) out.push(tradeDetail(t, ccy));
     out.push("");
   }
 

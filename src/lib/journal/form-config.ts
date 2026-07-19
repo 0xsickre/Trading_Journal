@@ -110,6 +110,26 @@ export const FORM_TABS: FormTab[] = [
         ],
       },
       {
+        id: "plan_review",
+        title: "Plan review",
+        description: "Za missed setup-e — razlog i beleške.",
+        fields: [
+          {
+            name: "miss_reason",
+            label: "Miss Reason",
+            type: "select",
+            listKey: "miss_reason",
+          },
+          {
+            name: "trade_journal_notes",
+            label: "Trade Journal Notes",
+            type: "textarea",
+            colSpan: 2,
+            placeholder: "Zašto miss, šta bi drugačije…",
+          },
+        ],
+      },
+      {
         id: "plan_advanced",
         title: "Advanced",
         advanced: true,

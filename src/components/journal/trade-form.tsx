@@ -52,16 +52,25 @@ import { utcToZonedInput, zonedInputToUtc } from "@/lib/journal/time";
 import {
   createTrade,
   updateTrade,
+  markTradeMissed,
+  restoreTradeToPlanned,
   type ExecutionInput,
 } from "@/app/(app)/trades/actions";
+import {
+  canMarkMissed,
+  canRestoreToPlanned,
+  formatLifecycleStatusLabel,
+  isPlanLifecycleStatus,
+  lifecycleStatusHint,
+} from "@/lib/journal/trade-lifecycle";
+import { fmtInTz } from "@/lib/journal/time";
+import { Badge } from "@/components/ui/badge";
 import {
   getTradeFormPrefs,
   setTradeFormPrefs,
   defaultRiskPctOption,
 } from "@/lib/journal/trade-form-prefs";
 import { cn } from "@/lib/utils";
-
-type TradePhase = "planned" | "active";
 
 type ExecRow = {
   side: "entry" | "exit";
@@ -79,6 +88,7 @@ export type TradeFormInitial = {
   account_id: string | null;
   trade_no: number | null;
   status?: string;
+  missed_at?: string | null;
   fields: Record<string, FieldValue>;
   executions: {
     side: "entry" | "exit";
@@ -96,18 +106,17 @@ function n(v: string): number | null {
   return Number.isFinite(x) ? x : null;
 }
 
-function initialTradePhase(initial?: TradeFormInitial): TradePhase {
-  if (!initial) return "planned";
-  if (initial.executions.length > 0 || (initial.status && initial.status !== "open")) {
-    return "active";
-  }
-  return "planned";
-}
-
 function defaultTab(initial?: TradeFormInitial): "plan" | "execution" {
   if (!initial) return "plan";
   const hasExit = initial.executions.some((e) => e.side === "exit");
-  if (hasExit || (initial.status && initial.status !== "open")) return "execution";
+  if (hasExit || initial.executions.length > 0) return "execution";
+  if (
+    initial.status === "open" ||
+    initial.status === "partial" ||
+    initial.status === "closed"
+  ) {
+    return "execution";
+  }
   return "plan";
 }
 
@@ -127,8 +136,15 @@ export function TradeForm({
   const [activeTab, setActiveTab] = useState<"plan" | "execution">(() =>
     defaultTab(initial),
   );
-  const [tradePhase, setTradePhase] = useState<TradePhase>(() =>
-    initialTradePhase(initial),
+  const [executionDraft, setExecutionDraft] = useState(
+    () =>
+      (initial?.executions.length ?? 0) > 0 ||
+      initial?.status === "open" ||
+      initial?.status === "partial" ||
+      initial?.status === "closed",
+  );
+  const [lifecycleStatus, setLifecycleStatus] = useState<string>(
+    () => initial?.status ?? "planned",
   );
 
   const [accountId, setAccountId] = useState<string | null>(
@@ -216,7 +232,12 @@ export function TradeForm({
     [fields.entry_price, fields.stop_price],
   );
 
-  const executionUnlocked = tradePhase === "active" || execs.length > 0;
+  const executionUnlocked =
+    executionDraft ||
+    execs.length > 0 ||
+    lifecycleStatus === "open" ||
+    lifecycleStatus === "partial" ||
+    lifecycleStatus === "closed";
 
   const instrument = instruments.find((i) => i.symbol === fields.instrument);
   const pointValue = instrument?.point_value ?? 1;
@@ -368,8 +389,20 @@ export function TradeForm({
   }
 
   function handleAddEntryFromPlan() {
-    setTradePhase("active");
-    if (execs.length === 0) addExec("entry");
+    setExecutionDraft(true);
+    if (execs.length === 0) {
+      const pe = n(String(fields.entry_price ?? ""));
+      setExecs([
+        {
+          side: "entry",
+          price: pe != null ? String(pe) : "",
+          qty: "1",
+          executedLocal: utcToZonedInput(new Date().toISOString(), tz),
+          fee: "",
+          swap: "",
+        },
+      ]);
+    }
     setActiveTab("execution");
   }
 
@@ -412,6 +445,7 @@ export function TradeForm({
       trade_no: tradeNo ? Number(tradeNo) : null,
       fields: fieldsToSave,
       executions: buildExecInputs(),
+      current_status: lifecycleStatus,
     };
     start(async () => {
       const res = initial
@@ -431,15 +465,66 @@ export function TradeForm({
     });
   }
 
+  function handleMarkMissed() {
+    if (!initial?.id) {
+      toast.error("Sačuvaj plan pre označavanja miss-a.");
+      return;
+    }
+    start(async () => {
+      const res = await markTradeMissed(initial.id, {
+        miss_reason: String(fields.miss_reason ?? "") || null,
+        notes: null,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setLifecycleStatus("missed");
+      toast.success("Trade označen kao miss");
+      router.refresh();
+    });
+  }
+
+  function handleRestorePlanned() {
+    if (!initial?.id) return;
+    start(async () => {
+      const res = await restoreTradeToPlanned(initial.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setLifecycleStatus("planned");
+      toast.success("Vraćeno u planned");
+      router.refresh();
+    });
+  }
+
+  const showMarkMissed = canMarkMissed(execs.length, lifecycleStatus);
+  const showRestorePlanned = canRestoreToPlanned(execs.length, lifecycleStatus);
+  const missedAt = initial?.missed_at ?? null;
+
   return (
     <div className="space-y-6 pb-24">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">
-            {initial ? "Edit Trade" : "New Trade"}
-          </h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold">
+              {initial ? "Edit Trade" : "New Trade"}
+            </h1>
+            <LifecycleStatusBadge status={lifecycleStatus} />
+          </div>
           <p className="text-sm text-muted-foreground">
             Times shown in {tz.replace("_", " ")} ({currency}).
+            <span className="mt-1 block text-xs" title={lifecycleStatusHint(lifecycleStatus)}>
+              {lifecycleStatusHint(lifecycleStatus)}
+            </span>
+            {lifecycleStatus === "missed" && missedAt && (
+              <>
+                {" "}
+                · Missed{" "}
+                {fmtInTz(missedAt, tz, "yyyy-MM-dd HH:mm")}
+              </>
+            )}
           </p>
         </div>
         <div className="space-y-1">
@@ -463,7 +548,7 @@ export function TradeForm({
               disabled={tab.id === "execution" && !executionUnlocked}
               title={
                 tab.id === "execution" && !executionUnlocked
-                  ? "Complete your plan or mark trade as Active to log fills."
+                  ? "Dodaj Entry Fill kad broker stvarno otvori poziciju."
                   : undefined
               }
             >
@@ -477,8 +562,12 @@ export function TradeForm({
             {tab.id === "execution" && !executionUnlocked ? (
               <Card>
                 <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                  Mark the trade as <b>Active</b> or use <b>Add Entry Fill</b> on the
-                  Plan tab to log executions and review.
+                  <b>Planned Entry</b> u Risk Planu je samo nivo na chartu — to{" "}
+                  <b>ne</b> znači da si u poziciji.
+                  <br />
+                  <br />
+                  Kad limit/fill stvarno udari, klikni <b>Add Entry Fill</b> na Plan
+                  tabu i unesi stvarnu cenu/količinu.
                 </CardContent>
               </Card>
             ) : (
@@ -504,6 +593,7 @@ export function TradeForm({
 
                 {tab.groups
                   .filter((g) => !g.advanced)
+                  .filter((g) => tab.id === "plan" || g.id !== "plan_review")
                   .map((group) => (
                     <FormGroupSection
                       key={group.id}
@@ -516,12 +606,7 @@ export function TradeForm({
                       accounts={accounts}
                       onAccountChange={setAccountId}
                       showAccount={tab.id === "plan" && group.id === "meta"}
-                      tradePhase={tab.id === "plan" && group.id === "meta" ? tradePhase : undefined}
-                      onTradePhaseChange={
-                        tab.id === "plan" && group.id === "meta"
-                          ? setTradePhase
-                          : undefined
-                      }
+                      lifecycleStatus={lifecycleStatus}
                       computedDisplay={
                         tab.id === "plan" && group.id === "risk_plan"
                           ? {
@@ -546,8 +631,25 @@ export function TradeForm({
                           ? handleAddEntryFromPlan
                           : undefined
                       }
+                      onMarkMissed={
+                        tab.id === "plan" && group.id === "risk_plan" && showMarkMissed
+                          ? handleMarkMissed
+                          : undefined
+                      }
+                      onRestorePlanned={
+                        tab.id === "plan" && group.id === "risk_plan" && showRestorePlanned
+                          ? handleRestorePlanned
+                          : undefined
+                      }
+                      lifecycleActionsPending={pending}
                     />
                   ))}
+
+                {tab.id === "plan" && (showMarkMissed || showRestorePlanned) && (
+                  <p className="text-xs text-muted-foreground">
+                    Miss = plan nikad nije otvoren (limit nije udario, setup propao…).
+                  </p>
+                )}
 
                 {tab.groups.some((g) => g.advanced) && (
                   <AdvancedSection>
@@ -561,6 +663,7 @@ export function TradeForm({
                           setField={setField}
                           optionsMap={optionsMap}
                           instruments={instruments}
+                          lifecycleStatus={lifecycleStatus}
                           nested
                         />
                       ))}
@@ -685,6 +788,26 @@ function Metric({
   );
 }
 
+function LifecycleStatusBadge({ status }: { status: string }) {
+  const variant =
+    status === "missed"
+      ? "outline"
+      : status === "planned"
+        ? "secondary"
+        : "default";
+  const className =
+    status === "missed"
+      ? "border-amber-500/50 text-amber-700 dark:text-amber-400"
+      : status === "planned"
+        ? "text-muted-foreground"
+        : undefined;
+  return (
+    <Badge variant={variant} className={className} title={lifecycleStatusHint(status)}>
+      {formatLifecycleStatusLabel(status)}
+    </Badge>
+  );
+}
+
 function AdvancedSection({ children }: { children: ReactNode }) {
   return (
     <details className="group rounded-lg border bg-muted/20">
@@ -707,9 +830,11 @@ function FormGroupSection({
   accounts,
   onAccountChange,
   showAccount,
-  tradePhase,
-  onTradePhaseChange,
   onAddEntryFill,
+  onMarkMissed,
+  onRestorePlanned,
+  lifecycleActionsPending,
+  lifecycleStatus,
   computedDisplay,
   fieldHints,
   nested,
@@ -723,9 +848,11 @@ function FormGroupSection({
   accounts?: Account[];
   onAccountChange?: (id: string) => void;
   showAccount?: boolean;
-  tradePhase?: TradePhase;
-  onTradePhaseChange?: (phase: TradePhase) => void;
   onAddEntryFill?: () => void;
+  onMarkMissed?: () => void;
+  onRestorePlanned?: () => void;
+  lifecycleActionsPending?: boolean;
+  lifecycleStatus?: string;
   computedDisplay?: Record<string, string>;
   fieldHints?: Record<string, string>;
   nested?: boolean;
@@ -740,7 +867,15 @@ function FormGroupSection({
       ? group.fields.filter((field) =>
           riskPlanFieldVisible(field.name, entry, stop, target, riskPct),
         )
-      : group.fields;
+      : group.id === "plan_review"
+        ? group.fields.filter(
+            (field) =>
+              field.name === "trade_journal_notes" ||
+              lifecycleStatus === "missed",
+          )
+        : group.id === "psychology_notes" && isPlanLifecycleStatus(lifecycleStatus)
+          ? group.fields.filter((field) => field.name !== "trade_journal_notes")
+          : group.fields;
 
   return (
     <div className={nested ? "space-y-4" : "space-y-4"}>
@@ -752,7 +887,8 @@ function FormGroupSection({
           )}
           {group.id === "risk_plan" && (
             <p className="mt-1 text-xs text-muted-foreground">
-              Unesi entry, pa stop, pa target.
+              Planned Entry = nivo na chartu (limit). Status <b>Open</b> tek kad
+              loguješ stvarni <b>Entry Fill</b> — ne kad uneseš plan.
             </p>
           )}
         </div>
@@ -778,23 +914,6 @@ function FormGroupSection({
             </Select>
           </div>
         )}
-        {tradePhase != null && onTradePhaseChange && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Trade phase</Label>
-            <Select
-              value={tradePhase}
-              onValueChange={(v) => onTradePhaseChange(v as TradePhase)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="planned">Planned</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        )}
         {fieldsToRender.map((field) => (
           <FieldRenderer
             key={field.name}
@@ -810,8 +929,34 @@ function FormGroupSection({
       </div>
       {onAddEntryFill && group.id === "risk_plan" && (
         <Button type="button" variant="outline" size="sm" onClick={onAddEntryFill}>
-          <ArrowDownToLine className="size-4" /> Add Entry Fill
+          <ArrowDownToLine className="size-4" /> Add Entry Fill (broker otvorio)
         </Button>
+      )}
+      {group.id === "risk_plan" && (onMarkMissed || onRestorePlanned) && (
+        <div className="flex flex-wrap gap-2">
+          {onMarkMissed && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={lifecycleActionsPending}
+              onClick={onMarkMissed}
+            >
+              Označi kao miss
+            </Button>
+          )}
+          {onRestorePlanned && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={lifecycleActionsPending}
+              onClick={onRestorePlanned}
+            >
+              Vrati u planned
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );

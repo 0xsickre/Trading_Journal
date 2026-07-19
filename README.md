@@ -30,6 +30,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 - **Planned R:R** — auto-calculated from entry / stop / target (direction-aware); stored as reward multiple (e.g. `2.45`), not a dropdown.
 - **Direction** — auto-set from entry vs stop (`stop < entry` → Long, `stop > entry` → Short) as soon as both prices are entered; updates live when prices change.
 - **Progressive Risk Plan** — fields appear step-by-step: entry → stop → target + risk % → position size → planned R:R (reduces input errors).
+- **Trade lifecycle** — `Plan` = setup sa entry/stop/target ali **bez broker fill-a**; `Open` tek kad loguješ Entry Fill; `Miss` = plan nikad otvoren. Planned Entry polje ≠ otvorena pozicija.
 - **HTF Bias / Bias TF** — per-trade ICT context fields (not a separate macro module).
 - **MAE / MFE** — `max_drawdown_price` and `max_profit_price` at review; live MAE/MFE in R and capture % in the trade form metrics bar.
 - **Entry slippage** — computed from **Planned Entry Price** (`entry_price`) vs **avg entry** from fills. Shown in R vs planned stop distance (adverse fill = negative R display). Requires planned entry + at least one entry fill; stop needed for R. Dashboard: avg/total slip R + weekly chart. Mentor export includes per-trade and summary slippage.

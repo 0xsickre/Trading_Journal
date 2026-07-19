@@ -56,6 +56,28 @@ import {
 import { primaryTradeImageUrl } from "@/lib/journal/tradingview-snapshot";
 import { ARRAY_FIELD_NAMES, getAllFormFields } from "@/lib/journal/form-config";
 import { deleteTrade } from "@/app/(app)/trades/actions";
+import {
+  formatLifecycleStatusLabel,
+  lifecycleStatusHint,
+} from "@/lib/journal/trade-lifecycle";
+
+function statusBadgeClass(status: string): string | undefined {
+  if (status === "missed") return "border-amber-500/50 text-amber-700 dark:text-amber-400";
+  if (status === "planned") return "text-muted-foreground";
+  return undefined;
+}
+
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <Badge
+      variant={status === "missed" ? "outline" : "secondary"}
+      className={statusBadgeClass(status)}
+      title={lifecycleStatusHint(status)}
+    >
+      {formatLifecycleStatusLabel(status)}
+    </Badge>
+  );
+}
 
 const FILTERS: { key: string; label: string }[] = [
   { key: "instrument", label: "Instrument" },
@@ -281,7 +303,7 @@ export function JournalGrid({
           const t = row.original;
           return (
             <div className="flex items-center gap-1">
-              <Badge variant="secondary">{t.status}</Badge>
+              <StatusBadge status={String(t.status)} />
               {t.needs_review && (
                 <span title="Needs review">
                   <AlertTriangle className="size-3.5 text-[var(--chart-4)]" />
@@ -355,6 +377,8 @@ export function JournalGrid({
       o["Gross P/L"] = t.stats?.gross_pl ?? "";
       o["Net P/L"] = t.stats?.net_pl ?? "";
       o["Status"] = t.status;
+      o["Miss reason"] = (t.miss_reason as string) ?? "";
+      o["Missed at"] = (t.missed_at as string) ?? "";
       return o;
     });
     if (rows.length === 0) {
@@ -402,6 +426,20 @@ export function JournalGrid({
             options={distinct(trades, f.key).map((v) => ({ value: v, label: v }))}
           />
         ))}
+        <Button
+          type="button"
+          variant={filters.status === "missed" ? "default" : "outline"}
+          size="sm"
+          className="h-9"
+          onClick={() =>
+            setFilters((p) => ({
+              ...p,
+              status: p.status === "missed" ? "all" : "missed",
+            }))
+          }
+        >
+          Missed
+        </Button>
         <div className="ml-auto flex gap-2">
           <Button variant="outline" size="sm" onClick={() => exportData("csv")}>
             <Download className="size-4" /> CSV

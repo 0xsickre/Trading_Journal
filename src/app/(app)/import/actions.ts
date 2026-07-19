@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
+import { computeStatus } from "@/lib/journal/trade-lifecycle";
+
 export type ImportExec = {
   side: "entry" | "exit";
   price: number;
@@ -28,12 +30,8 @@ export type CommitInput = {
   items: ImportItem[];
 };
 
-function statusOf(execs: ImportExec[]): "open" | "partial" | "closed" {
-  const e = execs.filter((x) => x.side === "entry").reduce((s, x) => s + x.qty, 0);
-  const x = execs.filter((x) => x.side === "exit").reduce((s, x) => s + x.qty, 0);
-  if (x <= 0) return "open";
-  if (x < e) return "partial";
-  return "closed";
+function statusOf(execs: ImportExec[]) {
+  return computeStatus(execs);
 }
 
 export async function commitImport(input: CommitInput) {

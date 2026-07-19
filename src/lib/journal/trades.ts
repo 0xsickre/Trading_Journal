@@ -103,7 +103,8 @@ export async function getTradeForEdit(
     id,
     account_id: account_id ?? null,
     trade_no: trade_no ?? null,
-    status: (pos as RawPosition & { status?: string }).status ?? "open",
+    status: (pos as RawPosition & { status?: string }).status ?? "planned",
+    missed_at: (pos as RawPosition & { missed_at?: string | null }).missed_at ?? null,
     fields,
     executions: (execs ?? []).map((e) => ({
       side: e.side as "entry" | "exit",

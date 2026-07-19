@@ -367,6 +367,8 @@ export type Database = {
           max_drawdown_price: number | null
           max_profit_price: number | null
           mistake: string | null
+          miss_reason: string | null
+          missed_at: string | null
           needs_review: boolean
           planned_rr: string | null
           position_size: number | null
@@ -402,6 +404,8 @@ export type Database = {
           max_drawdown_price?: number | null
           max_profit_price?: number | null
           mistake?: string | null
+          miss_reason?: string | null
+          missed_at?: string | null
           needs_review?: boolean
           planned_rr?: string | null
           position_size?: number | null
@@ -437,6 +441,8 @@ export type Database = {
           max_drawdown_price?: number | null
           max_profit_price?: number | null
           mistake?: string | null
+          miss_reason?: string | null
+          missed_at?: string | null
           needs_review?: boolean
           planned_rr?: string | null
           position_size?: number | null
