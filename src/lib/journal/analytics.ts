@@ -1,5 +1,6 @@
 import type { TradeRow } from "./types";
-import { zonedDateKey } from "./time";
+import { zonedDateKey, zonedWeekStartKey } from "./time";
+import { slippageFromTrade } from "./entry-slippage";
 
 export type PnlMode = "net" | "gross";
 
@@ -257,4 +258,59 @@ export function breakdownByField(
     });
   }
   return rows.sort((a, b) => b.netSum - a.netSum);
+}
+
+export type SlippageStats = {
+  count: number;
+  avgAdverseR: number;
+  totalAdverseR: number;
+};
+
+/** Aggregate entry slippage in R (positive adverseR = cost). */
+export function computeSlippageStats(trades: RealizedTrade[]): SlippageStats {
+  let count = 0;
+  let totalAdverseR = 0;
+  for (const t of trades) {
+    const slip = slippageFromTrade(t.row);
+    if (slip?.slippageR == null) continue;
+    count++;
+    totalAdverseR += slip.slippageR;
+  }
+  return {
+    count,
+    avgAdverseR: count > 0 ? totalAdverseR / count : 0,
+    totalAdverseR,
+  };
+}
+
+export type WeeklySlippageRow = {
+  week: string;
+  avgSlipR: number;
+  tradeCount: number;
+};
+
+/** Average adverse entry slippage (R) per calendar week in account TZ. */
+export function weeklySlippageR(
+  trades: RealizedTrade[],
+  tzOf: (t: RealizedTrade) => string,
+): WeeklySlippageRow[] {
+  const buckets = new Map<string, number[]>();
+  for (const t of trades) {
+    const ref = t.closedAt ?? t.row.created_at;
+    if (!ref) continue;
+    const slip = slippageFromTrade(t.row);
+    if (slip?.slippageR == null) continue;
+    const week = zonedWeekStartKey(ref, tzOf(t));
+    if (!week) continue;
+    const arr = buckets.get(week) ?? [];
+    arr.push(slip.slippageR);
+    buckets.set(week, arr);
+  }
+  return [...buckets.entries()]
+    .map(([week, rs]) => ({
+      week,
+      avgSlipR: rs.reduce((a, b) => a + b, 0) / rs.length,
+      tradeCount: rs.length,
+    }))
+    .sort((a, b) => a.week.localeCompare(b.week));
 }

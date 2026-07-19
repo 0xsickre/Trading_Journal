@@ -85,3 +85,20 @@ export function zonedDateKey(
   if (!iso) return "";
   return formatInTimeZone(iso, tz, "yyyy-MM-dd");
 }
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** Monday yyyy-MM-dd of the week containing `iso` in `tz` (ISO week, Mon start). */
+export function zonedWeekStartKey(
+  iso: string | Date | null | undefined,
+  tz: string = DEFAULT_TZ,
+): string {
+  if (!iso) return "";
+  const dayKey = zonedDateKey(iso, tz);
+  if (!dayKey) return "";
+  const isoDow = Number(formatInTimeZone(iso, tz, "i")); // 1=Mon … 7=Sun
+  const offset = isoDow - 1;
+  const [y, mo, d] = dayKey.split("-").map(Number);
+  const monday = new Date(Date.UTC(y, mo - 1, d - offset));
+  return `${monday.getUTCFullYear()}-${pad2(monday.getUTCMonth() + 1)}-${pad2(monday.getUTCDate())}`;
+}

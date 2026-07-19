@@ -48,6 +48,7 @@ import { Badge } from "@/components/ui/badge";
 import type { Account, TradeRow } from "@/lib/journal/types";
 import { fmtInTz } from "@/lib/journal/time";
 import { fmtMoney, fmtNum, fmtR, pnlClass } from "@/lib/journal/format";
+import { fmtSlippageR, slippageFromTrade } from "@/lib/journal/entry-slippage";
 import { ARRAY_FIELD_NAMES, getAllFormFields } from "@/lib/journal/form-config";
 import { deleteTrade } from "@/app/(app)/trades/actions";
 
@@ -205,6 +206,20 @@ export function JournalGrid({
         cell: ({ row }) => fmtNum(row.original.stats?.avg_entry, 2),
       },
       {
+        id: "slippage_r",
+        header: ({ column }) => <SortBtn column={column} label="Slip R" />,
+        accessorFn: (r) => slippageFromTrade(r)?.slippageR ?? null,
+        cell: ({ row }) => {
+          const slip = slippageFromTrade(row.original);
+          if (slip?.slippageR == null) return "—";
+          return (
+            <span className={pnlClass(-slip.slippageR)}>
+              {fmtSlippageR(slip.slippageR)}
+            </span>
+          );
+        },
+      },
+      {
         id: "avg_exit",
         header: "Exit",
         accessorFn: (r) => r.stats?.avg_exit ?? null,
@@ -313,6 +328,7 @@ export function JournalGrid({
       o["Planned R:R"] = (t.planned_rr as string) ?? "";
       o["Planned Size"] = t.position_size ?? "";
       o["Avg Entry"] = t.stats?.avg_entry ?? "";
+      o["Slip R"] = fmtSlippageR(slippageFromTrade(t)?.slippageR);
       o["Avg Exit"] = t.stats?.avg_exit ?? "";
       o["Size"] = t.stats?.entry_qty ?? "";
       o["R"] = t.stats?.realized_r ?? "";

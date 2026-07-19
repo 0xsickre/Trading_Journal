@@ -32,6 +32,8 @@ import {
   rHistogram,
   dailyPnl,
   breakdownByField,
+  computeSlippageStats,
+  weeklySlippageR,
   type PnlMode,
 } from "@/lib/journal/analytics";
 import {
@@ -136,6 +138,14 @@ export function Dashboard({
   const breakdown = useMemo(
     () => breakdownByField(realized, breakdownField),
     [realized, breakdownField],
+  );
+  const slippageStats = useMemo(
+    () => computeSlippageStats(realized),
+    [realized],
+  );
+  const weeklySlip = useMemo(
+    () => weeklySlippageR(realized, tzOf),
+    [realized, accounts],
   );
 
   function handleExportMentorPack() {
@@ -314,6 +324,32 @@ export function Dashboard({
           value={fmtMoney(stats.maxDrawdown, currency)}
           cls="text-[var(--loss)]"
         />
+        <Stat
+          label="Avg entry slip"
+          value={
+            slippageStats.count > 0
+              ? fmtR(-slippageStats.avgAdverseR)
+              : "—"
+          }
+          cls={
+            slippageStats.count > 0
+              ? pnlClass(-slippageStats.avgAdverseR)
+              : undefined
+          }
+        />
+        <Stat
+          label="Total slip R"
+          value={
+            slippageStats.count > 0
+              ? fmtR(-slippageStats.totalAdverseR)
+              : "—"
+          }
+          cls={
+            slippageStats.count > 0
+              ? pnlClass(-slippageStats.totalAdverseR)
+              : undefined
+          }
+        />
       </div>
 
       {/* Equity curve */}
@@ -424,6 +460,78 @@ export function Dashboard({
           </CardContent>
         </Card>
       </div>
+
+      {/* Entry slippage by week */}
+      {weeklySlip.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Entry slippage by week</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart
+                data={weeklySlip.map((w) => ({
+                  week: w.week.slice(5),
+                  avgDisplayR: -w.avgSlipR,
+                  tradeCount: w.tradeCount,
+                }))}
+                margin={{ left: 4, right: 8, top: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis
+                  dataKey="week"
+                  tick={{ fontSize: 10 }}
+                  stroke="var(--muted-foreground)"
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  stroke="var(--muted-foreground)"
+                  width={40}
+                  tickFormatter={(v) => `${Number(v).toFixed(2)}R`}
+                />
+                <ReferenceLine y={0} stroke="var(--border)" />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--popover)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                  formatter={(v, _name, item) => {
+                    const payload = item.payload as {
+                      avgDisplayR: number;
+                      tradeCount: number;
+                    };
+                    return [
+                      `${Number(v).toFixed(2)}R avg (${payload.tradeCount} trades)`,
+                      "Slippage",
+                    ];
+                  }}
+                  labelFormatter={(label) => `Week ${label}`}
+                />
+                <Bar dataKey="avgDisplayR" radius={[3, 3, 0, 0]}>
+                  {weeklySlip.map((w, i) => (
+                    <Cell
+                      key={i}
+                      fill={
+                        w.avgSlipR > 0
+                          ? "var(--loss)"
+                          : w.avgSlipR < 0
+                            ? "var(--profit)"
+                            : "var(--muted-foreground)"
+                      }
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Planned entry vs avg fill, in R (vs planned stop). Includes spread
+              when planned was mid and fill was ask/bid.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Breakdown by tag */}
       <Card>

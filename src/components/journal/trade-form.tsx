@@ -32,6 +32,11 @@ import {
   type FormGroup,
 } from "@/lib/journal/form-config";
 import type { Account, Instrument, OptionsMap } from "@/lib/journal/types";
+import {
+  computeEntrySlippage,
+  fmtSlippagePts,
+  fmtSlippageR,
+} from "@/lib/journal/entry-slippage";
 import { fmtMoney, fmtR, pnlClass } from "@/lib/journal/format";
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/journal/time";
 import {
@@ -243,6 +248,15 @@ export function TradeForm({
       sizeSuggestion = riskAmount / (Math.abs(pe - stop) * pointValue);
     }
 
+    const slippage = computeEntrySlippage({
+      direction: String(fields.direction ?? ""),
+      plannedEntry: pe,
+      avgEntry,
+      stopPrice: stop,
+      entryQty: entryQty > 0 ? entryQty : null,
+      pointValue,
+    });
+
     return {
       avgEntry,
       avgExit,
@@ -259,6 +273,8 @@ export function TradeForm({
       maeR,
       mfeR,
       capturePct,
+      slippage,
+      plannedEntry: pe,
     };
   }, [execs, fields, pointValue, account]);
 
@@ -501,6 +517,13 @@ export function TradeForm({
                       : "—"
                   }
                 />
+                {metrics.slippage != null && (
+                  <Metric
+                    label="Slippage"
+                    value={fmtSlippageR(metrics.slippage.slippageR)}
+                    title={`${fmtSlippagePts(metrics.slippage.adversePts)} vs planned`}
+                  />
+                )}
               </>
             ) : (
               <>
@@ -522,6 +545,13 @@ export function TradeForm({
                   label="Capture"
                   value={metrics.capturePct != null ? `${metrics.capturePct.toFixed(0)}%` : "—"}
                 />
+                {metrics.slippage != null && (
+                  <Metric
+                    label="Slippage"
+                    value={fmtSlippageR(metrics.slippage.slippageR)}
+                    title={`${fmtSlippagePts(metrics.slippage.adversePts)} vs planned`}
+                  />
+                )}
                 <Metric
                   label="Fees + Swap"
                   value={fmtMoney(metrics.fees, currency)}
@@ -549,9 +579,19 @@ export function TradeForm({
   );
 }
 
-function Metric({ label, value, cls }: { label: string; value: string; cls?: string }) {
+function Metric({
+  label,
+  value,
+  cls,
+  title,
+}: {
+  label: string;
+  value: string;
+  cls?: string;
+  title?: string;
+}) {
   return (
-    <div className="flex items-baseline gap-1.5">
+    <div className="flex items-baseline gap-1.5" title={title}>
       <span className="text-xs text-muted-foreground">{label}</span>
       <span className={`font-semibold ${cls ?? ""}`}>{value}</span>
     </div>
@@ -857,6 +897,8 @@ function ExecutionsEditor({
     totalFees: number;
     totalSwap: number;
     fees: number;
+    plannedEntry: number | null;
+    slippage: ReturnType<typeof computeEntrySlippage>;
   };
   currency: string;
 }) {
@@ -987,8 +1029,25 @@ function ExecutionsEditor({
 
       <div className="flex flex-wrap gap-x-6 gap-y-1 border-t pt-2 text-sm">
         <span className="text-muted-foreground">
+          Planned entry:{" "}
+          <b className="text-foreground">
+            {metrics.plannedEntry?.toFixed(2) ?? "—"}
+          </b>
+        </span>
+        <span className="text-muted-foreground">
           Avg entry: <b className="text-foreground">{metrics.avgEntry?.toFixed(2) ?? "—"}</b>
         </span>
+        {metrics.slippage != null && (
+          <span className="text-muted-foreground">
+            Slippage:{" "}
+            <b className="text-foreground">
+              {fmtSlippagePts(metrics.slippage.adversePts)}
+              {metrics.slippage.slippageR != null
+                ? ` (${fmtSlippageR(metrics.slippage.slippageR)})`
+                : ""}
+            </b>
+          </span>
+        )}
         <span className="text-muted-foreground">
           Avg exit: <b className="text-foreground">{metrics.avgExit?.toFixed(2) ?? "—"}</b>
         </span>

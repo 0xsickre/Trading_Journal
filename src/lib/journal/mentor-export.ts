@@ -3,8 +3,13 @@
 // feedback without any API integration — the numbers are pre-computed here
 // so the model interprets, it never has to calculate (or hallucinate) stats.
 
-import { toRealized, computeStats, breakdownByField } from "./analytics";
+import { toRealized, computeStats, breakdownByField, computeSlippageStats } from "./analytics";
 import { getAllFormFields } from "./form-config";
+import {
+  fmtSlippagePts,
+  fmtSlippageR,
+  slippageFromTrade,
+} from "./entry-slippage";
 import type { TradeRow } from "./types";
 
 const BREAKDOWNS: { field: string; label: string }[] = [
@@ -54,6 +59,11 @@ const money = (n: number, ccy: string) =>
 
 function statsTable(trades: TradeRow[], ccy: string): string {
   const s = computeStats(toRealized(trades), "net");
+  const slip = computeSlippageStats(toRealized(trades));
+  const slipAvg =
+    slip.count > 0 ? `${(-slip.avgAdverseR).toFixed(2)}R` : "—";
+  const slipTotal =
+    slip.count > 0 ? `${(-slip.totalAdverseR).toFixed(2)}R` : "—";
   return [
     `| Metric | Value |`,
     `| --- | --- |`,
@@ -68,6 +78,8 @@ function statsTable(trades: TradeRow[], ccy: string): string {
     `| Best / Worst | ${money(s.best, ccy)} / ${money(s.worst, ccy)} |`,
     `| Max win / loss streak | ${s.maxWinStreak} / ${s.maxLossStreak} |`,
     `| Max drawdown | ${money(s.maxDrawdown, ccy)} |`,
+    `| Avg entry slippage | ${slipAvg} (${slip.count} trades) |`,
+    `| Total slippage (R) | ${slipTotal} |`,
   ].join("\n");
 }
 
@@ -97,6 +109,14 @@ function tradeDetail(t: TradeRow, ccy: string): string {
     const v = val(t, f.key);
     return v ? `- **${f.label}:** ${v}` : "";
   }).filter(Boolean);
+  const slip = slippageFromTrade(t);
+  if (slip) {
+    const rPart =
+      slip.slippageR != null ? fmtSlippageR(slip.slippageR) : "—";
+    lines.push(
+      `- **Entry slippage:** ${rPart} (${fmtSlippagePts(slip.adversePts)} adverse)`,
+    );
+  }
   return `${head}\n${lines.join("\n")}`;
 }
 
