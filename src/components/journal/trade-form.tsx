@@ -37,6 +37,7 @@ import {
   fmtSlippagePts,
   fmtSlippageR,
 } from "@/lib/journal/entry-slippage";
+import { fmtExitEfficiencyPct } from "@/lib/journal/exit-efficiency";
 import { fmtMoney, fmtR, pnlClass } from "@/lib/journal/format";
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/journal/time";
 import {
@@ -257,6 +258,26 @@ export function TradeForm({
       pointValue,
     });
 
+    let exitEfficiency: {
+      plannedRewardR: number;
+      realizedR: number;
+      pct: number;
+    } | null = null;
+    const plannedReward =
+      plannedRR ??
+      (() => {
+        const raw = String(fields.planned_rr ?? "").trim();
+        const m = raw.match(/^1\s*:\s*([\d.]+)\+?$/i);
+        return m ? Number(m[1]) : null;
+      })();
+    if (r != null && plannedReward != null && plannedReward > 0) {
+      exitEfficiency = {
+        plannedRewardR: plannedReward,
+        realizedR: r,
+        pct: (r / plannedReward) * 100,
+      };
+    }
+
     return {
       avgEntry,
       avgExit,
@@ -275,6 +296,7 @@ export function TradeForm({
       capturePct,
       slippage,
       plannedEntry: pe,
+      exitEfficiency,
     };
   }, [execs, fields, pointValue, account]);
 
@@ -545,6 +567,13 @@ export function TradeForm({
                   label="Capture"
                   value={metrics.capturePct != null ? `${metrics.capturePct.toFixed(0)}%` : "—"}
                 />
+                {metrics.exitEfficiency != null && (
+                  <Metric
+                    label="Exit eff"
+                    value={fmtExitEfficiencyPct(metrics.exitEfficiency.pct)}
+                    title={`${metrics.exitEfficiency.realizedR.toFixed(2)}R realized / ${metrics.exitEfficiency.plannedRewardR.toFixed(2)}R planned`}
+                  />
+                )}
                 {metrics.slippage != null && (
                   <Metric
                     label="Slippage"

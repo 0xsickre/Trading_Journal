@@ -3,13 +3,17 @@
 // feedback without any API integration — the numbers are pre-computed here
 // so the model interprets, it never has to calculate (or hallucinate) stats.
 
-import { toRealized, computeStats, breakdownByField, computeSlippageStats } from "./analytics";
+import { toRealized, computeStats, breakdownByField, computeSlippageStats, computeExitEfficiencyStats } from "./analytics";
 import { getAllFormFields } from "./form-config";
 import {
   fmtSlippagePts,
   fmtSlippageR,
   slippageFromTrade,
 } from "./entry-slippage";
+import {
+  exitEfficiencyFromTrade,
+  fmtExitEfficiencyPct,
+} from "./exit-efficiency";
 import type { TradeRow } from "./types";
 
 const BREAKDOWNS: { field: string; label: string }[] = [
@@ -64,6 +68,13 @@ function statsTable(trades: TradeRow[], ccy: string): string {
     slip.count > 0 ? `${(-slip.avgAdverseR).toFixed(2)}R` : "—";
   const slipTotal =
     slip.count > 0 ? `${(-slip.totalAdverseR).toFixed(2)}R` : "—";
+  const exitEff = computeExitEfficiencyStats(toRealized(trades));
+  const exitEffAvg =
+    exitEff.count > 0 ? fmtExitEfficiencyPct(exitEff.avgPct) : "—";
+  const exitEffWinner =
+    exitEff.winnerCount > 0
+      ? fmtExitEfficiencyPct(exitEff.avgWinnerPct)
+      : "—";
   return [
     `| Metric | Value |`,
     `| --- | --- |`,
@@ -80,6 +91,8 @@ function statsTable(trades: TradeRow[], ccy: string): string {
     `| Max drawdown | ${money(s.maxDrawdown, ccy)} |`,
     `| Avg entry slippage | ${slipAvg} (${slip.count} trades) |`,
     `| Total slippage (R) | ${slipTotal} |`,
+    `| Exit efficiency | ${exitEffAvg} (${exitEff.count} trades) |`,
+    `| Winner exit efficiency | ${exitEffWinner} (${exitEff.winnerCount} wins) |`,
   ].join("\n");
 }
 
@@ -115,6 +128,12 @@ function tradeDetail(t: TradeRow, ccy: string): string {
       slip.slippageR != null ? fmtSlippageR(slip.slippageR) : "—";
     lines.push(
       `- **Entry slippage:** ${rPart} (${fmtSlippagePts(slip.adversePts)} adverse)`,
+    );
+  }
+  const exitEff = exitEfficiencyFromTrade(t);
+  if (exitEff) {
+    lines.push(
+      `- **Exit efficiency:** ${fmtExitEfficiencyPct(exitEff.pct)} (${r2(exitEff.realizedR)}R / ${r2(exitEff.plannedRewardR)}R planned)`,
     );
   }
   return `${head}\n${lines.join("\n")}`;

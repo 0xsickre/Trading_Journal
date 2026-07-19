@@ -34,8 +34,11 @@ import {
   breakdownByField,
   computeSlippageStats,
   weeklySlippageR,
+  computeExitEfficiencyStats,
+  weeklyExitEfficiency,
   type PnlMode,
 } from "@/lib/journal/analytics";
+import { fmtExitEfficiencyPct } from "@/lib/journal/exit-efficiency";
 import {
   buildMentorPack,
   resolveCalendarRange,
@@ -145,6 +148,14 @@ export function Dashboard({
   );
   const weeklySlip = useMemo(
     () => weeklySlippageR(realized, tzOf),
+    [realized, accounts],
+  );
+  const exitEffStats = useMemo(
+    () => computeExitEfficiencyStats(realized),
+    [realized],
+  );
+  const weeklyExitEff = useMemo(
+    () => weeklyExitEfficiency(realized, tzOf),
     [realized, accounts],
   );
 
@@ -350,6 +361,38 @@ export function Dashboard({
               : undefined
           }
         />
+        <Stat
+          label="Exit efficiency"
+          value={
+            exitEffStats.count > 0
+              ? fmtExitEfficiencyPct(exitEffStats.avgPct)
+              : "—"
+          }
+          cls={
+            exitEffStats.count > 0
+              ? pnlClass(exitEffStats.avgPct - 50)
+              : undefined
+          }
+          title={
+            exitEffStats.count > 0
+              ? `Realized R / planned target R · ${exitEffStats.count} trades`
+              : undefined
+          }
+        />
+        <Stat
+          label="Winner exit eff"
+          value={
+            exitEffStats.winnerCount > 0
+              ? fmtExitEfficiencyPct(exitEffStats.avgWinnerPct)
+              : "—"
+          }
+          cls={
+            exitEffStats.winnerCount > 0
+              ? pnlClass(exitEffStats.avgWinnerPct - 50)
+              : undefined
+          }
+          title="Winning trades only — early exit vs plan"
+        />
       </div>
 
       {/* Equity curve */}
@@ -533,6 +576,77 @@ export function Dashboard({
         </Card>
       )}
 
+      {weeklyExitEff.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Exit efficiency by week</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart
+                data={weeklyExitEff.map((w) => ({
+                  week: w.week.slice(5),
+                  avgPct: w.avgPct,
+                  tradeCount: w.tradeCount,
+                }))}
+                margin={{ left: 4, right: 8, top: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis
+                  dataKey="week"
+                  tick={{ fontSize: 10 }}
+                  stroke="var(--muted-foreground)"
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  stroke="var(--muted-foreground)"
+                  width={44}
+                  tickFormatter={(v) => `${Number(v).toFixed(0)}%`}
+                />
+                <ReferenceLine y={50} stroke="var(--border)" strokeDasharray="4 4" />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--popover)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                  formatter={(v, _name, item) => {
+                    const payload = item.payload as {
+                      avgPct: number;
+                      tradeCount: number;
+                    };
+                    return [
+                      `${Number(v).toFixed(0)}% avg (${payload.tradeCount} trades)`,
+                      "Exit efficiency",
+                    ];
+                  }}
+                  labelFormatter={(label) => `Week ${label}`}
+                />
+                <Bar dataKey="avgPct" radius={[3, 3, 0, 0]}>
+                  {weeklyExitEff.map((w, i) => (
+                    <Cell
+                      key={i}
+                      fill={
+                        w.avgPct >= 50
+                          ? "var(--profit)"
+                          : w.avgPct >= 0
+                            ? "var(--chart-4)"
+                            : "var(--loss)"
+                      }
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Realized R vs planned target R. Not the same as Capture % (realized /
+              MFE).
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Breakdown by tag */}
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
@@ -596,13 +710,15 @@ function Stat({
   label,
   value,
   cls,
+  title,
 }: {
   label: string;
   value: string;
   cls?: string;
+  title?: string;
 }) {
   return (
-    <Card>
+    <Card title={title}>
       <CardContent className="p-3">
         <div className="text-xs text-muted-foreground">{label}</div>
         <div className={`mt-1 text-lg font-semibold ${cls ?? ""}`}>{value}</div>

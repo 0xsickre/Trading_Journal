@@ -30,6 +30,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 - **HTF Bias / Bias TF** — per-trade ICT context fields (not a separate macro module).
 - **MAE / MFE** — `max_drawdown_price` and `max_profit_price` at review; live MAE/MFE in R and capture % in the trade form metrics bar.
 - **Entry slippage** — computed from **Planned Entry Price** (`entry_price`) vs **avg entry** from fills. Shown in R vs planned stop distance (adverse fill = negative R display). Requires planned entry + at least one entry fill; stop needed for R. Dashboard: avg/total slip R + weekly chart. Mentor export includes per-trade and summary slippage.
+- **Exit efficiency** — `realized_r / planned target R` (from `planned_rr` or entry/stop/target). Measures position management vs plan (e.g. planned 3R, took 1.2R → 40%). Dashboard: avg + winner-only exit eff + weekly chart. Distinct from **Capture %** (realized / MFE). Journal grid + trade form + mentor export.
 
 ### Dropdowns — Fully Editable In-App
 - **~24 dropdown/tag lists** seeded per user (merged `technical_tag` list replaces separate confluence/setup/micro-ICT lists).
@@ -42,10 +43,11 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 - One-click CSV and Excel export of the current filtered view.
 
 ### Analytics Dashboard
-- **12 stat cards** — Total Trades, Win Rate, Total R, Avg R, Profit Factor, Expectancy (R), Best / Worst trade, Win / Loss streak, Max Drawdown.
+- **14+ stat cards** — Total Trades, Win Rate, Total R, Avg R, Profit Factor, Expectancy (R), Best / Worst trade, Win / Loss streak, Max Drawdown, entry slippage, exit efficiency (all + winners).
 - **Equity curve** — Gross ↔ Net toggle, $ or R metric, cumulative from account starting balance.
 - **R-distribution histogram** — colour-coded bars from `<−3R` to `>5R`.
 - **Calendar heatmap** — 26-week daily P/L in account timezone.
+- **Weekly charts** — entry slippage (R) and exit efficiency (%) by week.
 - **Breakdown table** — win rate, total R, avg R, net P/L grouped by any tag (setup grade, session, entry model, emotion, mistake, instrument, …).
 - Account and date-range filters throughout.
 

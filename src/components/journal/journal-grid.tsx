@@ -49,6 +49,10 @@ import type { Account, TradeRow } from "@/lib/journal/types";
 import { fmtInTz } from "@/lib/journal/time";
 import { fmtMoney, fmtNum, fmtR, pnlClass } from "@/lib/journal/format";
 import { fmtSlippageR, slippageFromTrade } from "@/lib/journal/entry-slippage";
+import {
+  exitEfficiencyFromTrade,
+  fmtExitEfficiencyPct,
+} from "@/lib/journal/exit-efficiency";
 import { ARRAY_FIELD_NAMES, getAllFormFields } from "@/lib/journal/form-config";
 import { deleteTrade } from "@/app/(app)/trades/actions";
 
@@ -236,6 +240,20 @@ export function JournalGrid({
         ),
       },
       {
+        id: "exit_eff",
+        header: ({ column }) => <SortBtn column={column} label="Exit eff" />,
+        accessorFn: (r) => exitEfficiencyFromTrade(r)?.pct ?? null,
+        cell: ({ row }) => {
+          const eff = exitEfficiencyFromTrade(row.original);
+          if (eff == null) return "—";
+          return (
+            <span className={pnlClass(eff.pct - 50)}>
+              {fmtExitEfficiencyPct(eff.pct)}
+            </span>
+          );
+        },
+      },
+      {
         id: "gross",
         header: ({ column }) => <SortBtn column={column} label="Gross" />,
         accessorFn: (r) => r.stats?.gross_pl ?? null,
@@ -332,6 +350,7 @@ export function JournalGrid({
       o["Avg Exit"] = t.stats?.avg_exit ?? "";
       o["Size"] = t.stats?.entry_qty ?? "";
       o["R"] = t.stats?.realized_r ?? "";
+      o["Exit eff"] = fmtExitEfficiencyPct(exitEfficiencyFromTrade(t)?.pct);
       o["Gross P/L"] = t.stats?.gross_pl ?? "";
       o["Net P/L"] = t.stats?.net_pl ?? "";
       o["Status"] = t.status;

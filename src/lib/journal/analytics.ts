@@ -1,6 +1,7 @@
 import type { TradeRow } from "./types";
 import { zonedDateKey, zonedWeekStartKey } from "./time";
 import { slippageFromTrade } from "./entry-slippage";
+import { exitEfficiencyFromTrade } from "./exit-efficiency";
 
 export type PnlMode = "net" | "gross";
 
@@ -311,6 +312,69 @@ export function weeklySlippageR(
       week,
       avgSlipR: rs.reduce((a, b) => a + b, 0) / rs.length,
       tradeCount: rs.length,
+    }))
+    .sort((a, b) => a.week.localeCompare(b.week));
+}
+
+export type ExitEfficiencyStats = {
+  count: number;
+  avgPct: number;
+  winnerCount: number;
+  avgWinnerPct: number;
+};
+
+export function computeExitEfficiencyStats(
+  trades: RealizedTrade[],
+): ExitEfficiencyStats {
+  let count = 0;
+  let sumPct = 0;
+  let winnerCount = 0;
+  let winnerSumPct = 0;
+  for (const t of trades) {
+    const eff = exitEfficiencyFromTrade(t.row);
+    if (eff == null) continue;
+    count++;
+    sumPct += eff.pct;
+    if (eff.realizedR > 0) {
+      winnerCount++;
+      winnerSumPct += eff.pct;
+    }
+  }
+  return {
+    count,
+    avgPct: count > 0 ? sumPct / count : 0,
+    winnerCount,
+    avgWinnerPct: winnerCount > 0 ? winnerSumPct / winnerCount : 0,
+  };
+}
+
+export type WeeklyExitEffRow = {
+  week: string;
+  avgPct: number;
+  tradeCount: number;
+};
+
+export function weeklyExitEfficiency(
+  trades: RealizedTrade[],
+  tzOf: (t: RealizedTrade) => string,
+): WeeklyExitEffRow[] {
+  const buckets = new Map<string, number[]>();
+  for (const t of trades) {
+    const ref = t.closedAt ?? t.row.created_at;
+    if (!ref) continue;
+    const eff = exitEfficiencyFromTrade(t.row);
+    if (eff == null) continue;
+    const week = zonedWeekStartKey(ref, tzOf(t));
+    if (!week) continue;
+    const arr = buckets.get(week) ?? [];
+    arr.push(eff.pct);
+    buckets.set(week, arr);
+  }
+  return [...buckets.entries()]
+    .map(([week, pcts]) => ({
+      week,
+      avgPct: pcts.reduce((a, b) => a + b, 0) / pcts.length,
+      tradeCount: pcts.length,
     }))
     .sort((a, b) => a.week.localeCompare(b.week));
 }
