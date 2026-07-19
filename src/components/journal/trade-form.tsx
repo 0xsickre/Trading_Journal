@@ -509,13 +509,12 @@ export function TradeForm({
     });
   }
 
+  const isPlannedPhase = tradePhase === "planned" && !isMissed;
+  const showMoveToActive = isPlannedPhase;
   const showMarkMissed =
-    !isMissed &&
-    canMarkMissed(
-      execs.length,
-      tradePhase === "active" ? "open" : "planned",
-    );
-  const showRestorePlanned = isMissed && canRestoreToPlanned(execs.length, "missed");
+    isPlannedPhase && canMarkMissed(execs.length, "planned");
+  const showRestorePlanned =
+    isMissed && canRestoreToPlanned(execs.length, "missed");
   const missedAt = initial?.missed_at ?? null;
 
   return (
@@ -640,34 +639,9 @@ export function TradeForm({
                           ? handleAddEntryFromPlan
                           : undefined
                       }
-                      onMarkMissed={
-                        tab.id === "plan" && group.id === "risk_plan" && showMarkMissed
-                          ? handleMarkMissed
-                          : undefined
-                      }
-                      onRestorePlanned={
-                        tab.id === "plan" && group.id === "risk_plan" && showRestorePlanned
-                          ? handleRestorePlanned
-                          : undefined
-                      }
-                      onMoveToActive={
-                        tab.id === "plan" &&
-                        group.id === "risk_plan" &&
-                        tradePhase === "planned" &&
-                        !isMissed
-                          ? handleMoveToActive
-                          : undefined
-                      }
                       hasEntryFill={hasValidEntryFill}
-                      lifecycleActionsPending={pending}
                     />
                   ))}
-
-                {tab.id === "plan" && (showMarkMissed || showRestorePlanned) && (
-                  <p className="text-xs text-muted-foreground">
-                    Miss = plan nikad nije otvoren (limit nije udario, setup propao…).
-                  </p>
-                )}
 
                 {tab.groups.some((g) => g.advanced) && (
                   <AdvancedSection>
@@ -687,6 +661,52 @@ export function TradeForm({
                         />
                       ))}
                   </AdvancedSection>
+                )}
+
+                {tab.id === "plan" &&
+                  (showMoveToActive || showMarkMissed || showRestorePlanned) && (
+                  <div className="mt-6 space-y-2 border-t pt-4">
+                    <div className="flex flex-wrap gap-2">
+                      {showMoveToActive && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleMoveToActive}
+                        >
+                          Move to active trade
+                        </Button>
+                      )}
+                      {showMarkMissed && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={pending}
+                          onClick={handleMarkMissed}
+                        >
+                          Označi kao miss
+                        </Button>
+                      )}
+                      {showRestorePlanned && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={pending}
+                          onClick={handleRestorePlanned}
+                        >
+                          Vrati u planned
+                        </Button>
+                      )}
+                    </div>
+                    {showMarkMissed && (
+                      <p className="text-xs text-muted-foreground">
+                        Miss = plan nikad nije otvoren (limit nije udario, setup
+                        propao…).
+                      </p>
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -830,10 +850,6 @@ function FormGroupSection({
   onAccountChange,
   showAccount,
   onAddEntryFill,
-  onMarkMissed,
-  onRestorePlanned,
-  onMoveToActive,
-  lifecycleActionsPending,
   tradePhase,
   onTradePhaseChange,
   isMissed,
@@ -852,10 +868,6 @@ function FormGroupSection({
   onAccountChange?: (id: string) => void;
   showAccount?: boolean;
   onAddEntryFill?: () => void;
-  onMarkMissed?: () => void;
-  onRestorePlanned?: () => void;
-  onMoveToActive?: () => void;
-  lifecycleActionsPending?: boolean;
   tradePhase?: TradePhase;
   onTradePhaseChange?: (phase: TradePhase) => void;
   isMissed?: boolean;
@@ -968,43 +980,6 @@ function FormGroupSection({
         <Button type="button" variant="outline" size="sm" onClick={onAddEntryFill}>
           <ArrowDownToLine className="size-4" /> Add Entry Fill
         </Button>
-      )}
-      {group.id === "risk_plan" &&
-        (onMoveToActive || onMarkMissed || onRestorePlanned) && (
-        <div className="flex flex-wrap gap-2">
-          {onMoveToActive && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={onMoveToActive}
-            >
-              Move to active trade
-            </Button>
-          )}
-          {onMarkMissed && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={lifecycleActionsPending}
-              onClick={onMarkMissed}
-            >
-              Označi kao miss
-            </Button>
-          )}
-          {onRestorePlanned && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={lifecycleActionsPending}
-              onClick={onRestorePlanned}
-            >
-              Vrati u planned
-            </Button>
-          )}
-        </div>
       )}
     </div>
   );
