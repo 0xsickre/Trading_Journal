@@ -209,9 +209,29 @@ export function TradeForm({
 
     const pe = n(String(fields.entry_price ?? ""));
     const pt = n(String(fields.target_price ?? ""));
+    const maePrice = n(String(fields.max_drawdown_price ?? ""));
+    const mfePrice = n(String(fields.max_profit_price ?? ""));
     let plannedRR: number | null = null;
     if (pe != null && stop != null && pt != null && Math.abs(pe - stop) > 0) {
       plannedRR = Math.abs(pt - pe) / Math.abs(pe - stop);
+    }
+
+    let maeR: number | null = null;
+    let mfeR: number | null = null;
+    let capturePct: number | null = null;
+    if (avgEntry != null && stop != null && Math.abs(avgEntry - stop) > 0) {
+      const riskPts = Math.abs(avgEntry - stop);
+      if (maePrice != null) {
+        const maePts = dir === 1 ? avgEntry - maePrice : maePrice - avgEntry;
+        if (maePts > 0) maeR = maePts / riskPts;
+      }
+      if (mfePrice != null) {
+        const mfePts = dir === 1 ? mfePrice - avgEntry : avgEntry - mfePrice;
+        if (mfePts > 0) mfeR = mfePts / riskPts;
+      }
+      if (r != null && mfeR != null && mfeR > 0) {
+        capturePct = (r / mfeR) * 100;
+      }
     }
 
     const riskPctStr = String(fields.risk_pct ?? "");
@@ -236,6 +256,9 @@ export function TradeForm({
       totalFees,
       totalSwap,
       fees,
+      maeR,
+      mfeR,
+      capturePct,
     };
   }, [execs, fields, pointValue, account]);
 
@@ -487,6 +510,18 @@ export function TradeForm({
                   cls={pnlClass(metrics.netPl)}
                 />
                 <Metric label="R" value={fmtR(metrics.r)} cls={pnlClass(metrics.r)} />
+                <Metric
+                  label="MAE"
+                  value={metrics.maeR != null ? `−${metrics.maeR.toFixed(2)}R` : "—"}
+                />
+                <Metric
+                  label="MFE"
+                  value={metrics.mfeR != null ? `+${metrics.mfeR.toFixed(2)}R` : "—"}
+                />
+                <Metric
+                  label="Capture"
+                  value={metrics.capturePct != null ? `${metrics.capturePct.toFixed(0)}%` : "—"}
+                />
                 <Metric
                   label="Fees + Swap"
                   value={fmtMoney(metrics.fees, currency)}

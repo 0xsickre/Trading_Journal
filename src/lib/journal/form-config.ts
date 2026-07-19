@@ -110,6 +110,18 @@ export const FORM_TABS: FormTab[] = [
         fields: [
           { name: "result", label: "Result", type: "select", listKey: "result" },
           { name: "exit_reason", label: "Exit Reason", type: "select", listKey: "exit_reason" },
+          {
+            name: "max_drawdown_price",
+            label: "MAE Price (max adverse)",
+            type: "number",
+            placeholder: "Najgora cena protiv pozicije",
+          },
+          {
+            name: "max_profit_price",
+            label: "MFE Price (max favorable)",
+            type: "number",
+            placeholder: "Najbolja cena u korist pozicije",
+          },
         ],
       },
       {

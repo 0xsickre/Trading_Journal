@@ -367,6 +367,8 @@ export type Database = {
           import_batch_id: string | null
           instrument: string | null
           market_condition: string | null
+          max_drawdown_price: number | null
+          max_profit_price: number | null
           mistake: string | null
           needs_review: boolean
           news_nearby: string | null
@@ -405,6 +407,8 @@ export type Database = {
           import_batch_id?: string | null
           instrument?: string | null
           market_condition?: string | null
+          max_drawdown_price?: number | null
+          max_profit_price?: number | null
           mistake?: string | null
           needs_review?: boolean
           news_nearby?: string | null
@@ -443,6 +447,8 @@ export type Database = {
           import_batch_id?: string | null
           instrument?: string | null
           market_condition?: string | null
+          max_drawdown_price?: number | null
+          max_profit_price?: number | null
           mistake?: string | null
           needs_review?: boolean
           news_nearby?: string | null

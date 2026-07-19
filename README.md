@@ -28,6 +28,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 - **Screenshot uploads** — before/after chart images via Supabase Storage.
 - **Position-size calculator** — risk % × account balance ÷ stop distance × point value.
 - **HTF Bias / Bias TF** — per-trade ICT context fields (not a separate macro module).
+- **MAE / MFE** — `max_drawdown_price` and `max_profit_price` at review; live MAE/MFE in R and capture % in the trade form metrics bar.
 
 ### Dropdowns — Fully Editable In-App
 - **~24 dropdown/tag lists** seeded per user (merged `technical_tag` list replaces separate confluence/setup/micro-ICT lists).
