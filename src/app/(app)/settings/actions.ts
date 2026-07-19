@@ -230,6 +230,16 @@ export async function updateAccount(
     default_asset_class?: string | null;
     timezone?: string;
     is_active?: boolean;
+    ftmo_mode?: boolean;
+    ftmo_daily_loss_enabled?: boolean;
+    ftmo_daily_loss_pct?: number;
+    ftmo_max_loss_enabled?: boolean;
+    ftmo_max_loss_pct?: number;
+    ftmo_profit_target_enabled?: boolean;
+    ftmo_profit_target_pct?: number;
+    ftmo_min_days_enabled?: boolean;
+    ftmo_min_days?: number;
+    ftmo_reset_at?: string | null;
   },
 ) {
   const supabase = await createClient();
@@ -237,6 +247,18 @@ export async function updateAccount(
   if (error) return { ok: false, error: error.message };
   revalidateAll();
   return { ok: true };
+}
+
+/** Restart the FTMO challenge: trades before now stop counting toward breaches. */
+export async function resetFtmoChallenge(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tj_accounts")
+    .update({ ftmo_reset_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) return { ok: false as const, error: error.message };
+  revalidateAll();
+  return { ok: true as const };
 }
 
 export async function addAccount(input: {

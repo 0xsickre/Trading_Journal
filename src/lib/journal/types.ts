@@ -44,6 +44,17 @@ export type Account = {
   default_asset_class: string | null;
   timezone: string;
   is_active: boolean;
+  // FTMO / prop-firm challenge mode (per account).
+  ftmo_mode: boolean;
+  ftmo_daily_loss_enabled: boolean;
+  ftmo_daily_loss_pct: number;
+  ftmo_max_loss_enabled: boolean;
+  ftmo_max_loss_pct: number;
+  ftmo_profit_target_enabled: boolean;
+  ftmo_profit_target_pct: number;
+  ftmo_min_days_enabled: boolean;
+  ftmo_min_days: number;
+  ftmo_reset_at: string | null;
 };
 
 export type PositionStat = {

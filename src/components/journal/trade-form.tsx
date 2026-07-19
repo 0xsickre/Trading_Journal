@@ -127,11 +127,14 @@ export function TradeForm({
   instruments,
   accounts,
   initial,
+  ftmoFailedAccountIds = [],
 }: {
   optionsMap: OptionsMap;
   instruments: Instrument[];
   accounts: Account[];
   initial?: TradeFormInitial;
+  /** Accounts whose FTMO challenge is frozen — new trades are blocked. */
+  ftmoFailedAccountIds?: string[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -149,6 +152,9 @@ export function TradeForm({
     initial?.account_id ?? accounts.find((a) => a.is_active)?.id ?? accounts[0]?.id ?? null,
   );
   const account = accounts.find((a) => a.id === accountId) ?? null;
+  // Block only NEW trades on a frozen FTMO account (editing existing is allowed).
+  const ftmoBlocked =
+    !initial && accountId != null && ftmoFailedAccountIds.includes(accountId);
   const tz = account?.timezone ?? "America/New_York";
   const currency = account?.currency ?? "USD";
 
@@ -436,6 +442,12 @@ export function TradeForm({
   }
 
   function submit() {
+    if (ftmoBlocked) {
+      toast.error(
+        "FTMO nalog je zamrznut — pravilo prekršeno. Resetuj izazov u Settings.",
+      );
+      return;
+    }
     if (!fields.instrument) {
       toast.error("Pick an instrument.");
       setActiveTab("plan");
@@ -796,13 +808,21 @@ export function TradeForm({
               </>
             )}
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => router.back()}>
-              Cancel
-            </Button>
-            <Button onClick={submit} disabled={pending}>
-              {pending ? "Saving…" : initial ? "Update trade" : "Save trade"}
-            </Button>
+          <div className="flex flex-col items-end gap-1.5">
+            {ftmoBlocked && (
+              <p className="text-xs text-[var(--loss)]">
+                FTMO nalog zamrznut — pravilo prekršeno. Resetuj izazov u Settings
+                da dodaš nove trejdove.
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => router.back()}>
+                Cancel
+              </Button>
+              <Button onClick={submit} disabled={pending || ftmoBlocked}>
+                {pending ? "Saving…" : initial ? "Update trade" : "Save trade"}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

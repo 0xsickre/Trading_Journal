@@ -39,6 +39,8 @@ import {
   type PnlMode,
 } from "@/lib/journal/analytics";
 import { fmtExitEfficiencyPct } from "@/lib/journal/exit-efficiency";
+import { evaluateFtmo, ftmoConfigFromAccount } from "@/lib/journal/ftmo";
+import { FtmoBanner } from "@/components/journal/ftmo-banner";
 import {
   buildMentorPack,
   resolveCalendarRange,
@@ -135,6 +137,23 @@ export function Dashboard({
 
   const anchorYear = Number(anchor.slice(0, 4));
   const anchorQuarter = Math.floor((Number(anchor.slice(5, 7)) - 1) / 3) + 1;
+
+  // FTMO challenge status per account with the mode enabled.
+  const ftmoStatuses = useMemo(
+    () =>
+      accounts
+        .filter((a) => a.ftmo_mode)
+        .map((account) => {
+          const rows = toRealized(
+            trades.filter((t) => t.account_id === account.id),
+          ).map((r) => ({ closedAt: r.closedAt, net: r.net }));
+          return {
+            account,
+            result: evaluateFtmo(ftmoConfigFromAccount(account), rows),
+          };
+        }),
+    [accounts, trades],
+  );
 
   // Resolved export period, for a live preview of exactly what will be exported.
   const exportRange = useMemo(
@@ -253,6 +272,14 @@ export function Dashboard({
 
   return (
     <div className="space-y-5">
+      {ftmoStatuses.length > 0 && (
+        <div className="space-y-2">
+          {ftmoStatuses.map(({ account, result }) => (
+            <FtmoBanner key={account.id} account={account} result={result} />
+          ))}
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
         {accounts.length > 1 && (

@@ -20,6 +20,16 @@ export type Database = {
           created_at: string
           currency: string
           default_asset_class: string | null
+          ftmo_daily_loss_enabled: boolean
+          ftmo_daily_loss_pct: number
+          ftmo_max_loss_enabled: boolean
+          ftmo_max_loss_pct: number
+          ftmo_min_days: number
+          ftmo_min_days_enabled: boolean
+          ftmo_mode: boolean
+          ftmo_profit_target_enabled: boolean
+          ftmo_profit_target_pct: number
+          ftmo_reset_at: string | null
           id: string
           is_active: boolean
           name: string
@@ -32,6 +42,16 @@ export type Database = {
           created_at?: string
           currency?: string
           default_asset_class?: string | null
+          ftmo_daily_loss_enabled?: boolean
+          ftmo_daily_loss_pct?: number
+          ftmo_max_loss_enabled?: boolean
+          ftmo_max_loss_pct?: number
+          ftmo_min_days?: number
+          ftmo_min_days_enabled?: boolean
+          ftmo_mode?: boolean
+          ftmo_profit_target_enabled?: boolean
+          ftmo_profit_target_pct?: number
+          ftmo_reset_at?: string | null
           id?: string
           is_active?: boolean
           name: string
@@ -44,6 +64,16 @@ export type Database = {
           created_at?: string
           currency?: string
           default_asset_class?: string | null
+          ftmo_daily_loss_enabled?: boolean
+          ftmo_daily_loss_pct?: number
+          ftmo_max_loss_enabled?: boolean
+          ftmo_max_loss_pct?: number
+          ftmo_min_days?: number
+          ftmo_min_days_enabled?: boolean
+          ftmo_mode?: boolean
+          ftmo_profit_target_enabled?: boolean
+          ftmo_profit_target_pct?: number
+          ftmo_reset_at?: string | null
           id?: string
           is_active?: boolean
           name?: string
