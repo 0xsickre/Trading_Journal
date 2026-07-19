@@ -352,20 +352,18 @@ export type Database = {
       tj_positions: {
         Row: {
           account_id: string | null
-          bias_tf: string | null
+          cot_filter: string | null
           created_at: string
           direction: string | null
-          discipline: string | null
           entry_price: number | null
           entry_tf: string | null
-          entry_trigger: string | null
           exit_reason: string | null
           htf_bias: string | null
           ict_entry_model: string | null
           id: string
           import_batch_id: string | null
           instrument: string | null
-          market_condition: string | null
+          macro_align: string | null
           max_drawdown_price: number | null
           max_profit_price: number | null
           mistake: string | null
@@ -375,6 +373,7 @@ export type Database = {
           psychology_tags: string[]
           result: string | null
           risk_pct: string | null
+          session_killzone: string | null
           setup_grade: string | null
           source: string
           status: string
@@ -383,26 +382,23 @@ export type Database = {
           technical_tags: string[]
           trade_journal_notes: string | null
           trade_no: number | null
-          trade_type: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           account_id?: string | null
-          bias_tf?: string | null
+          cot_filter?: string | null
           created_at?: string
           direction?: string | null
-          discipline?: string | null
           entry_price?: number | null
           entry_tf?: string | null
-          entry_trigger?: string | null
           exit_reason?: string | null
           htf_bias?: string | null
           ict_entry_model?: string | null
           id?: string
           import_batch_id?: string | null
           instrument?: string | null
-          market_condition?: string | null
+          macro_align?: string | null
           max_drawdown_price?: number | null
           max_profit_price?: number | null
           mistake?: string | null
@@ -412,6 +408,7 @@ export type Database = {
           psychology_tags?: string[]
           result?: string | null
           risk_pct?: string | null
+          session_killzone?: string | null
           setup_grade?: string | null
           source?: string
           status?: string
@@ -420,26 +417,23 @@ export type Database = {
           technical_tags?: string[]
           trade_journal_notes?: string | null
           trade_no?: number | null
-          trade_type?: string | null
           updated_at?: string
           user_id?: string
         }
         Update: {
           account_id?: string | null
-          bias_tf?: string | null
+          cot_filter?: string | null
           created_at?: string
           direction?: string | null
-          discipline?: string | null
           entry_price?: number | null
           entry_tf?: string | null
-          entry_trigger?: string | null
           exit_reason?: string | null
           htf_bias?: string | null
           ict_entry_model?: string | null
           id?: string
           import_batch_id?: string | null
           instrument?: string | null
-          market_condition?: string | null
+          macro_align?: string | null
           max_drawdown_price?: number | null
           max_profit_price?: number | null
           mistake?: string | null
@@ -449,6 +443,7 @@ export type Database = {
           psychology_tags?: string[]
           result?: string | null
           risk_pct?: string | null
+          session_killzone?: string | null
           setup_grade?: string | null
           source?: string
           status?: string
@@ -457,7 +452,6 @@ export type Database = {
           technical_tags?: string[]
           trade_journal_notes?: string | null
           trade_no?: number | null
-          trade_type?: string | null
           updated_at?: string
           user_id?: string
         }

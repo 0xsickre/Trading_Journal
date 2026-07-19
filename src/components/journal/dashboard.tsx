@@ -68,15 +68,16 @@ const GRANULARITIES: { value: Granularity; label: string }[] = [
 const todayYMD = () => new Date().toISOString().slice(0, 10);
 
 const BREAKDOWN_FIELDS = [
+  { value: "macro_align", label: "Macro Align" },
+  { value: "cot_filter", label: "COT Filter" },
   { value: "setup_grade", label: "Setup Grade" },
   { value: "technical_tags", label: "Technical Tags" },
   { value: "ict_entry_model", label: "Entry Model" },
+  { value: "session_killzone", label: "Session" },
   { value: "direction", label: "Direction" },
   { value: "instrument", label: "Instrument" },
   { value: "psychology_tags", label: "Psychology Tags" },
-  { value: "discipline", label: "Discipline" },
   { value: "mistake", label: "Mistake" },
-  { value: "trade_type", label: "Trade Type" },
 ];
 
 export function Dashboard({

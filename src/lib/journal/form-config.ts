@@ -51,10 +51,25 @@ export const FORM_TABS: FormTab[] = [
         ],
       },
       {
+        id: "macro",
+        title: "Macro (vault)",
+        description: "Iz dashboard readiness matrice — smer i kvalitet ulaza.",
+        fields: [
+          { name: "macro_align", label: "Macro Align", type: "select", listKey: "macro_align" },
+          { name: "cot_filter", label: "COT Filter", type: "select", listKey: "cot_filter" },
+        ],
+      },
+      {
         id: "setup",
         title: "Setup",
         fields: [
           { name: "htf_bias", label: "HTF Bias", type: "select", listKey: "htf_bias" },
+          {
+            name: "session_killzone",
+            label: "Session / Killzone",
+            type: "select",
+            listKey: "session_killzone",
+          },
           {
             name: "ict_entry_model",
             label: "ICT Entry Model",
@@ -68,7 +83,7 @@ export const FORM_TABS: FormTab[] = [
             type: "tags",
             listKey: "technical_tag",
             colSpan: 2,
-            placeholder: "Structure, POI, FVG, premium/discount, SMT…",
+            placeholder: "Sweep, MSS, FVG, OB, OTE, SMT…",
           },
         ],
       },
@@ -99,15 +114,7 @@ export const FORM_TABS: FormTab[] = [
         title: "Advanced",
         advanced: true,
         fields: [
-          { name: "trade_type", label: "Trade Type", type: "select", listKey: "trade_type" },
-          { name: "bias_tf", label: "Bias TF", type: "select", listKey: "bias_tf" },
           { name: "entry_tf", label: "Entry TF", type: "select", listKey: "entry_tf" },
-          {
-            name: "entry_trigger",
-            label: "Entry Trigger",
-            type: "select",
-            listKey: "entry_trigger",
-          },
         ],
       },
     ],
@@ -145,15 +152,9 @@ export const FORM_TABS: FormTab[] = [
             name: "psychology_tags",
             label: "Psychology tags",
             type: "tags",
-            listKeys: [
-              "emotion_before",
-              "emotion_during",
-              "emotion_after",
-              "rules_followed",
-              "discipline",
-            ],
+            listKeys: ["emotion", "discipline", "rules_followed"],
             colSpan: 2,
-            placeholder: "FOMO, Hesitation, Followed Plan…",
+            placeholder: "FOMO, Followed plan, Moved stop…",
           },
           {
             name: "trade_journal_notes",
@@ -169,14 +170,7 @@ export const FORM_TABS: FormTab[] = [
         title: "Advanced",
         advanced: true,
         fields: [
-          { name: "discipline", label: "Discipline / Behavior", type: "select", listKey: "discipline" },
           { name: "mistake", label: "Mistake", type: "select", listKey: "mistake" },
-          {
-            name: "market_condition",
-            label: "Market Condition",
-            type: "select",
-            listKey: "market_condition",
-          },
         ],
       },
     ],
