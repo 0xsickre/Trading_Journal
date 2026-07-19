@@ -64,7 +64,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 - Raw import rows stored for an audit trail.
 
 ### Instruments & Accounts
-- **9-symbol watchlist** — `DXY`, `EURUSD`, `GBPUSD`, `USDJPY`, `GBPJPY`, `EURJPY`, `NAS100USD`, `SPX500USD`, `XAUUSD` — seeded automatically on signup and enforced across the app.
+- **10-symbol watchlist** — B6 FTMO universe synced with Trading data vault: `EURUSD`, `GBPUSD`, `USDJPY`, `USDCAD`, `AUDUSD`, `SP500`, `NAS100`, `XAUUSD`, `HG`, `RTY` — seeded on signup (`tj_seed_instruments_defaults`).
 - Per-instrument `point_value` for accurate P/L across asset classes (editable in Settings).
 - Multiple accounts with individual currency, starting balance, and **IANA timezone** — all timestamps display in the account's local time regardless of the user's machine.
 
@@ -92,7 +92,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 
 ```
 tj_accounts          – broker accounts (currency, balance, IANA timezone)
-tj_instruments       – tradeable symbols with point_value per asset class (9-symbol watchlist)
+tj_instruments       – tradeable symbols with point_value per asset class (B6 10-symbol watchlist)
 tj_option_lists      – ~24 dropdown/tag list definitions (Context, ICT Setup, Risk, Psychology)
 tj_option_items      – default options (soft-deleteable)
 
