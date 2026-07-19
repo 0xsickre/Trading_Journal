@@ -289,7 +289,6 @@ export function ListManager({ lists }: { lists: OptionList[] }) {
     "ICT Setup",
     "Risk",
     "Psychology",
-    "Analysis",
     null,
   ];
   return (

@@ -53,93 +53,6 @@ export type Database = {
         }
         Relationships: []
       }
-      tj_bias_analyses: {
-        Row: {
-          alignment: string | null
-          bias: string
-          bias_magnitude: string | null
-          chart_url: string | null
-          closed_at: string | null
-          cot_confidence: string | null
-          cot_score: string | null
-          cot_verdict: string | null
-          created_at: string
-          end_date: string | null
-          event_risk: string | null
-          id: string
-          instrument: string | null
-          macro_bias: string | null
-          notes: string | null
-          period_close: number | null
-          period_high: number | null
-          period_low: number | null
-          period_weeks: number
-          prev_week_close: number | null
-          start_date: string
-          status: string
-          technical_bias: string | null
-          updated_at: string
-          user_id: string
-          week_start: string | null
-        }
-        Insert: {
-          alignment?: string | null
-          bias?: string
-          bias_magnitude?: string | null
-          chart_url?: string | null
-          closed_at?: string | null
-          cot_confidence?: string | null
-          cot_score?: string | null
-          cot_verdict?: string | null
-          created_at?: string
-          end_date?: string | null
-          event_risk?: string | null
-          id?: string
-          instrument?: string | null
-          macro_bias?: string | null
-          notes?: string | null
-          period_close?: number | null
-          period_high?: number | null
-          period_low?: number | null
-          period_weeks?: number
-          prev_week_close?: number | null
-          start_date?: string
-          status?: string
-          technical_bias?: string | null
-          updated_at?: string
-          user_id?: string
-          week_start?: string | null
-        }
-        Update: {
-          alignment?: string | null
-          bias?: string
-          bias_magnitude?: string | null
-          chart_url?: string | null
-          closed_at?: string | null
-          cot_confidence?: string | null
-          cot_score?: string | null
-          cot_verdict?: string | null
-          created_at?: string
-          end_date?: string | null
-          event_risk?: string | null
-          id?: string
-          instrument?: string | null
-          macro_bias?: string | null
-          notes?: string | null
-          period_close?: number | null
-          period_high?: number | null
-          period_low?: number | null
-          period_weeks?: number
-          prev_week_close?: number | null
-          start_date?: string
-          status?: string
-          technical_bias?: string | null
-          updated_at?: string
-          user_id?: string
-          week_start?: string | null
-        }
-        Relationships: []
-      }
       tj_column_mappings: {
         Row: {
           broker_name: string
@@ -161,66 +74,6 @@ export type Database = {
           id?: string
           mapping?: Json
           user_id?: string
-        }
-        Relationships: []
-      }
-      tj_cot_legs: {
-        Row: {
-          cot_confidence: string | null
-          cot_crowding: string | null
-          cot_flow: string | null
-          cot_idx_3y: string | null
-          cot_score: string | null
-          cot_timing: string | null
-          cot_verdict: string | null
-          created_at: string
-          energy_stress: string | null
-          fx_policy_spread: string | null
-          id: string
-          oi_trend: string | null
-          seasonality: string | null
-          underlying: string
-          updated_at: string
-          user_id: string
-          week_start: string
-        }
-        Insert: {
-          cot_confidence?: string | null
-          cot_crowding?: string | null
-          cot_flow?: string | null
-          cot_idx_3y?: string | null
-          cot_score?: string | null
-          cot_timing?: string | null
-          cot_verdict?: string | null
-          created_at?: string
-          energy_stress?: string | null
-          fx_policy_spread?: string | null
-          id?: string
-          oi_trend?: string | null
-          seasonality?: string | null
-          underlying: string
-          updated_at?: string
-          user_id?: string
-          week_start: string
-        }
-        Update: {
-          cot_confidence?: string | null
-          cot_crowding?: string | null
-          cot_flow?: string | null
-          cot_idx_3y?: string | null
-          cot_score?: string | null
-          cot_timing?: string | null
-          cot_verdict?: string | null
-          created_at?: string
-          energy_stress?: string | null
-          fx_policy_spread?: string | null
-          id?: string
-          oi_trend?: string | null
-          seasonality?: string | null
-          underlying?: string
-          updated_at?: string
-          user_id?: string
-          week_start?: string
         }
         Relationships: []
       }
@@ -422,60 +275,6 @@ export type Database = {
         }
         Relationships: []
       }
-      tj_market_context: {
-        Row: {
-          created_at: string
-          dxy_1m: string | null
-          dxy_direction: string | null
-          dxy_trend: string | null
-          growth_bias: string | null
-          id: string
-          move_level: string | null
-          rates_regime: string | null
-          risk_regime: string | null
-          shield_active: string | null
-          updated_at: string
-          user_id: string
-          vix_level: string | null
-          week_start: string
-          yield_curve: string | null
-        }
-        Insert: {
-          created_at?: string
-          dxy_1m?: string | null
-          dxy_direction?: string | null
-          dxy_trend?: string | null
-          growth_bias?: string | null
-          id?: string
-          move_level?: string | null
-          rates_regime?: string | null
-          risk_regime?: string | null
-          shield_active?: string | null
-          updated_at?: string
-          user_id?: string
-          vix_level?: string | null
-          week_start: string
-          yield_curve?: string | null
-        }
-        Update: {
-          created_at?: string
-          dxy_1m?: string | null
-          dxy_direction?: string | null
-          dxy_trend?: string | null
-          growth_bias?: string | null
-          id?: string
-          move_level?: string | null
-          rates_regime?: string | null
-          risk_regime?: string | null
-          shield_active?: string | null
-          updated_at?: string
-          user_id?: string
-          vix_level?: string | null
-          week_start?: string
-          yield_curve?: string | null
-        }
-        Relationships: []
-      }
       tj_option_items: {
         Row: {
           color: string | null
@@ -547,42 +346,6 @@ export type Database = {
           label?: string
           sort_order?: number
           user_id?: string
-        }
-        Relationships: []
-      }
-      tj_pair_cot: {
-        Row: {
-          cot_confidence: string | null
-          cot_score: string | null
-          cot_verdict: string | null
-          created_at: string
-          id: string
-          instrument: string
-          updated_at: string
-          user_id: string
-          week_start: string
-        }
-        Insert: {
-          cot_confidence?: string | null
-          cot_score?: string | null
-          cot_verdict?: string | null
-          created_at?: string
-          id?: string
-          instrument: string
-          updated_at?: string
-          user_id: string
-          week_start: string
-        }
-        Update: {
-          cot_confidence?: string | null
-          cot_score?: string | null
-          cot_verdict?: string | null
-          created_at?: string
-          id?: string
-          instrument?: string
-          updated_at?: string
-          user_id?: string
-          week_start?: string
         }
         Relationships: []
       }
@@ -822,10 +585,6 @@ export type Database = {
       }
     }
     Functions: {
-      tj_seed_analysis_defaults: {
-        Args: { target: string }
-        Returns: undefined
-      }
       tj_seed_defaults: { Args: { target: string }; Returns: undefined }
       tj_seed_instruments_defaults: {
         Args: { target: string }

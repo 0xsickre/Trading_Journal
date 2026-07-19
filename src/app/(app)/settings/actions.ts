@@ -21,7 +21,6 @@ function revalidateAll() {
   revalidatePath("/settings");
   revalidatePath("/trades/new");
   revalidatePath("/journal");
-  revalidatePath("/analysis");
   revalidatePath("/", "layout");
 }
 
