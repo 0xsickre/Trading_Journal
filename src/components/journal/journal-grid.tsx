@@ -53,6 +53,7 @@ import {
   exitEfficiencyFromTrade,
   fmtExitEfficiencyPct,
 } from "@/lib/journal/exit-efficiency";
+import { primaryTradeImageUrl } from "@/lib/journal/tradingview-snapshot";
 import { ARRAY_FIELD_NAMES, getAllFormFields } from "@/lib/journal/form-config";
 import { deleteTrade } from "@/app/(app)/trades/actions";
 
@@ -241,7 +242,7 @@ export function JournalGrid({
       },
       {
         id: "exit_eff",
-        header: ({ column }) => <SortBtn column={column} label="Exit eff" />,
+        header: ({ column }) => <SortBtn column={column} label="Target %" />,
         accessorFn: (r) => exitEfficiencyFromTrade(r)?.pct ?? null,
         cell: ({ row }) => {
           const eff = exitEfficiencyFromTrade(row.original);
@@ -294,8 +295,8 @@ export function JournalGrid({
         id: "chart",
         header: "",
         cell: ({ row }) => {
-          const url = ((row.original.chart_url as string) ?? "").trim();
-          if (!/^https?:\/\//i.test(url)) return null;
+          const url = primaryTradeImageUrl(row.original.tv_images ?? {});
+          if (!url) return null;
           return (
             <a
               href={url}
@@ -303,7 +304,7 @@ export function JournalGrid({
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
               className="inline-flex text-muted-foreground hover:text-foreground"
-              title="Open TradingView chart"
+              title="Open TradingView snapshot"
             >
               <ExternalLink className="size-4" />
             </a>
@@ -350,7 +351,7 @@ export function JournalGrid({
       o["Avg Exit"] = t.stats?.avg_exit ?? "";
       o["Size"] = t.stats?.entry_qty ?? "";
       o["R"] = t.stats?.realized_r ?? "";
-      o["Exit eff"] = fmtExitEfficiencyPct(exitEfficiencyFromTrade(t)?.pct);
+      o["Target attainment %"] = fmtExitEfficiencyPct(exitEfficiencyFromTrade(t)?.pct);
       o["Gross P/L"] = t.stats?.gross_pl ?? "";
       o["Net P/L"] = t.stats?.net_pl ?? "";
       o["Status"] = t.status;

@@ -15,10 +15,23 @@ export type RealizedTrade = {
   row: TradeRow;
 };
 
-/** Trades that have at least one exit (realized P/L) — the basis for stats. */
-export function toRealized(trades: TradeRow[]): RealizedTrade[] {
+export type ToRealizedOptions = {
+  /** Include partial exits (default: closed positions only). */
+  includePartial?: boolean;
+};
+
+/** Trades with realized P/L — default: fully closed positions only. */
+export function toRealized(
+  trades: TradeRow[],
+  options: ToRealizedOptions = {},
+): RealizedTrade[] {
+  const { includePartial = false } = options;
   return trades
-    .filter((t) => t.stats && t.stats.net_pl != null)
+    .filter((t) => {
+      if (!t.stats || t.stats.net_pl == null) return false;
+      if (includePartial) return true;
+      return t.status === "closed";
+    })
     .map((t) => ({
       id: t.id,
       closedAt: t.stats!.closed_at,
@@ -64,8 +77,10 @@ export function computeStats(
     grossSum = 0,
     netSum = 0,
     totalR = 0,
-    winSum = 0,
-    lossSum = 0,
+    winRSum = 0,
+    lossRSum = 0,
+    winRCount = 0,
+    lossRCount = 0,
     best = -Infinity,
     worst = Infinity,
     maxWin = 0,
@@ -90,13 +105,19 @@ export function computeStats(
     }
     if (p > 0) {
       wins++;
-      winSum += t.r ?? 0;
+      if (t.r != null) {
+        winRSum += t.r;
+        winRCount++;
+      }
       posProfit += p;
       curWin++;
       curLoss = 0;
     } else if (p < 0) {
       losses++;
-      lossSum += t.r ?? 0;
+      if (t.r != null) {
+        lossRSum += t.r;
+        lossRCount++;
+      }
       negProfit += Math.abs(p);
       curLoss++;
       curWin = 0;
@@ -117,8 +138,8 @@ export function computeStats(
 
   const winRate = wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
   const avgR = rCount > 0 ? totalR / rCount : 0;
-  const avgWin = wins > 0 ? winSum / wins : 0;
-  const avgLoss = losses > 0 ? lossSum / losses : 0;
+  const avgWin = winRCount > 0 ? winRSum / winRCount : 0;
+  const avgLoss = lossRCount > 0 ? lossRSum / lossRCount : 0;
   const profitFactor = negProfit > 0 ? posProfit / negProfit : posProfit > 0 ? null : 0;
   const lossRate = 100 - winRate;
   const expectancy =

@@ -1,5 +1,7 @@
 // Client-safe shared types (no server-only imports here).
 
+import type { TradeImageKind } from "./tradingview-snapshot";
+
 export type OptionItem = {
   id: string;
   value: string;
@@ -55,11 +57,14 @@ export type PositionStat = {
   total_fees: number | null;
   total_swap: number | null;
   realized_r: number | null;
+  realized_r_net: number | null;
   opened_at: string | null;
   closed_at: string | null;
   duration_seconds: number | null;
   point_value: number | null;
 };
+
+export type TradeTvImages = Partial<Record<TradeImageKind, string>>;
 
 export type TradeRow = {
   id: string;
@@ -70,4 +75,5 @@ export type TradeRow = {
   needs_review: boolean;
   created_at: string;
   stats: PositionStat | null;
+  tv_images?: TradeTvImages;
 } & Record<string, unknown>;

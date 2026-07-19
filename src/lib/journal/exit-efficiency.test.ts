@@ -8,6 +8,10 @@ import {
 import type { TradeRow } from "./types";
 
 describe("parsePlannedRewardR", () => {
+  it("parses plain reward multiple", () => {
+    expect(parsePlannedRewardR("2.45")).toBeCloseTo(2.45);
+  });
+
   it("parses 1:X formats", () => {
     expect(parsePlannedRewardR("1:3.00")).toBe(3);
     expect(parsePlannedRewardR("1:2")).toBe(2);
@@ -61,7 +65,7 @@ describe("exitEfficiencyFromTrade", () => {
   });
 });
 
-describe("fmtExitEfficiencyPct", () => {
+describe("fmtExitEfficiencyPct / target attainment label", () => {
   it("formats percent", () => {
     expect(fmtExitEfficiencyPct(40)).toBe("40%");
     expect(fmtExitEfficiencyPct(-33)).toBe("-33%");

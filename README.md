@@ -26,11 +26,14 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 - **Gross vs Net P/L** separation — raw price movement vs. P/L after fees and swap/funding.
 - **TradingView chart URL** stored per trade as a clickable link.
 - **Screenshot uploads** — before/after chart images via Supabase Storage.
-- **Position-size calculator** — risk % × account balance ÷ stop distance × point value.
+- **Position-size calculator** — auto **Position Size** from risk % × account balance ÷ (stop distance × point value); updates live in Risk Plan.
+- **Planned R:R** — auto-calculated from entry / stop / target (direction-aware); stored as reward multiple (e.g. `2.45`), not a dropdown.
+- **Direction** — auto-set from entry vs stop (`stop < entry` → Long, `stop > entry` → Short) as soon as both prices are entered; updates live when prices change.
+- **Progressive Risk Plan** — fields appear step-by-step: entry → stop → target + risk % → position size → planned R:R (reduces input errors).
 - **HTF Bias / Bias TF** — per-trade ICT context fields (not a separate macro module).
 - **MAE / MFE** — `max_drawdown_price` and `max_profit_price` at review; live MAE/MFE in R and capture % in the trade form metrics bar.
 - **Entry slippage** — computed from **Planned Entry Price** (`entry_price`) vs **avg entry** from fills. Shown in R vs planned stop distance (adverse fill = negative R display). Requires planned entry + at least one entry fill; stop needed for R. Dashboard: avg/total slip R + weekly chart. Mentor export includes per-trade and summary slippage.
-- **Exit efficiency** — `realized_r / planned target R` (from `planned_rr` or entry/stop/target). Measures position management vs plan (e.g. planned 3R, took 1.2R → 40%). Dashboard: avg + winner-only exit eff + weekly chart. Distinct from **Capture %** (realized / MFE). Journal grid + trade form + mentor export.
+- **Target attainment %** — `realized_r / planned target R` (from `planned_rr` or entry/stop/target). Measures how much of your planned reward you captured (e.g. planned 3R, took 1.2R → 40%). Dashboard: avg + winner-only + weekly chart. Distinct from **Capture %** (realized / MFE excursion). Journal grid + trade form + mentor export.
 
 ### Dropdowns — Fully Editable In-App
 - **~24 dropdown/tag lists** seeded per user (merged `technical_tag` list replaces separate confluence/setup/micro-ICT lists).
@@ -43,11 +46,11 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 - One-click CSV and Excel export of the current filtered view.
 
 ### Analytics Dashboard
-- **14+ stat cards** — Total Trades, Win Rate, Total R, Avg R, Profit Factor, Expectancy (R), Best / Worst trade, Win / Loss streak, Max Drawdown, entry slippage, exit efficiency (all + winners).
+- **14+ stat cards** — Total Trades, Win Rate, Total R, Avg R, Profit Factor, Expectancy (R), Best / Worst trade, Win / Loss streak, Max Drawdown, entry slippage, target attainment % (all + winners). Portfolio stats use **closed** positions only (partials excluded).
 - **Equity curve** — Gross ↔ Net toggle, $ or R metric, cumulative from account starting balance.
 - **R-distribution histogram** — colour-coded bars from `<−3R` to `>5R`.
 - **Calendar heatmap** — 26-week daily P/L in account timezone.
-- **Weekly charts** — entry slippage (R) and exit efficiency (%) by week.
+- **Weekly charts** — entry slippage (R) and target attainment (%) by week.
 - **Breakdown table** — win rate, total R, avg R, net P/L grouped by any tag (setup grade, session, entry model, emotion, mistake, instrument, …).
 - Account and date-range filters throughout.
 
@@ -96,7 +99,7 @@ tj_positions         – parent trade record (technical_tags[], trade_journal_no
 tj_executions        – child fills (entry or exit, price, qty, fee, swap, timestamp UTC)
 tj_position_stats    – SQL view: avg_entry, avg_exit, entry_qty, gross_pl, net_pl, realized_r
 
-tj_trade_images      – screenshot storage references
+tj_trade_images      – TradingView /x/ snapshot URLs per trade (htf_pre, ltf_pre, ltf_post)
 tj_import_batches    – import session metadata
 tj_import_rows       – per-row import audit (raw + parsed + match status)
 tj_column_mappings   – saved broker column-mapping presets
@@ -137,7 +140,9 @@ npm run dev
 
 ### Database Setup
 
-Apply migrations via the Supabase CLI (`supabase db push`) or the SQL editor. The repo includes `supabase/migrations/` — run all files in order (including `20260720120000_simplify_trade_fields.sql` for the streamlined form schema).
+Apply migrations via the Supabase CLI (`supabase db push`) or the SQL editor. The repo includes `supabase/migrations/` — run all files in order (latest: `20260720160000_supabase_optimize.sql` for RLS/index cleanup post TV snapshots).
+
+After migrations, you may delete the empty **`trade-images`** bucket manually in **Supabase Dashboard → Storage** (policies are already removed; SQL cannot delete storage rows directly).
 
 New signups are seeded automatically by the auth trigger; `tj_seed_my_defaults` is also called on login as an idempotent fallback (`src/lib/journal/ensure-defaults.ts`).
 
@@ -173,9 +178,11 @@ npm run test:watch   # watch mode
 
 ## Security
 
-- **Row Level Security** is enabled on every `tj_*` table (`user_id = auth.uid()`). Even if another user registered, they could not read or write any other user's data.
+- **Row Level Security** on every `tj_*` table (`user_id = (select auth.uid())` — initplan-safe). Even if another user registered, they could not read or write any other user's data.
+- **No Supabase Storage** for chart images — only TradingView `/x/` URL strings in `tj_trade_images` (zero file hosting cost).
 - The `service_role` key is never referenced in frontend code — only the `anon` publishable key is exposed.
-- Internal seed functions (`tj_seed_defaults`, `tj_on_auth_user_created`) are revoked from `anon` and `authenticated` roles.
+- Internal seed functions (`tj_seed_defaults`, `tj_seed_instruments_defaults`, `rls_auto_enable`) are revoked from `anon`; `tj_seed_my_defaults` remains the authenticated login fallback (`ensure-defaults.ts`).
+- `tj_trade_images.image_url` has a DB CHECK constraint (`tradingview.com/x/…` only).
 - All authentication is handled by Supabase Auth (bcrypt, JWT, optional MFA available).
 
 ---
@@ -200,12 +207,31 @@ src/
 │   ├── supabase/              # Client, server, proxy helpers + generated TS types
 │   └── journal/               # Business logic
 │       ├── analytics.ts       # Dashboard stats, equity curve, breakdowns
+│       ├── position-stats.ts  # Shared P/L + R math (paritet sa SQL view)
 │       ├── trades.ts          # Trade/position queries
 │       ├── form-config.ts     # Declarative trade form (~24 fields)
 │       ├── options.ts / accounts.ts / instruments.ts / time.ts / format.ts / nav.ts
 │       └── ensure-defaults.ts # Idempotent per-user seeding fallback
 └── proxy.ts                   # Next.js 16 session proxy (replaces middleware.ts)
 ```
+
+---
+
+## Metrics glossary
+
+| Metric | Formula | Notes |
+|--------|---------|-------|
+| **Gross P/L** | `(exitNotional − avgEntry × exitQty) × dir × point_value` | Price move before fees |
+| **Net P/L** | `gross_pl − fees − swap` | After costs |
+| **Realized R (gross)** | `gross_points / (|planned_entry − stop| × entry_qty)` | Denominator uses **planned** `entry_price` (fallback avg fill) |
+| **Realized R (net)** | `net_pl / (planned_risk_$)` | Optional column `realized_r_net` in `tj_position_stats` |
+| **Target attainment %** | `realized_r / planned_target_R × 100` | How much of your planned reward you took |
+| **MFE Capture %** | `realized_r / mfe_R × 100` | How much of max favorable excursion you kept |
+| **Entry slippage** | adverse pts / \|planned entry − stop\| in R | Separate from P/L — not double-counted |
+| **Profit factor** | sum(wins) / sum(\|losses\|) | Closed trades only |
+| **Expectancy** | winRate×avgWinR + lossRate×avgLossR | avg win/loss R only from trades with valid R |
+
+Portfolio dashboard stats (win rate, PF, expectancy) include **closed** positions only. Partial exits are excluded unless you opt in via `toRealized({ includePartial: true })`.
 
 ---
 

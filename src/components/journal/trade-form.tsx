@@ -37,8 +37,17 @@ import {
   fmtSlippagePts,
   fmtSlippageR,
 } from "@/lib/journal/entry-slippage";
-import { fmtExitEfficiencyPct } from "@/lib/journal/exit-efficiency";
+import { fmtExitEfficiencyPct, parsePlannedRewardR } from "@/lib/journal/exit-efficiency";
 import { fmtMoney, fmtR, pnlClass } from "@/lib/journal/format";
+import {
+  computePlannedRewardR,
+  computePositionSize,
+  formatPlannedRewardR,
+  inferDirectionFromPrices,
+  parseRiskPct,
+  riskPlanFieldVisible,
+} from "@/lib/journal/plan-calculations";
+import { computePositionStats } from "@/lib/journal/position-stats";
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/journal/time";
 import {
   createTrade,
@@ -151,7 +160,23 @@ export function TradeForm({
   });
 
   function setField(name: string, value: FieldValue) {
-    setFields((prev) => ({ ...prev, [name]: value }));
+    setFields((prev) => {
+      const next: Record<string, FieldValue> = { ...prev, [name]: value };
+      if (name === "entry_price") {
+        const entry = n(String(value ?? ""));
+        if (entry == null) {
+          next.stop_price = "";
+          next.target_price = "";
+        }
+      }
+      if (name === "stop_price") {
+        const stop = n(String(value ?? ""));
+        if (stop == null) {
+          next.target_price = "";
+        }
+      }
+      return next;
+    });
   }
 
   useEffect(() => {
@@ -172,82 +197,109 @@ export function TradeForm({
     });
   }, [initial, accounts, optionsMap.risk_pct]);
 
+  useEffect(() => {
+    const entry = n(String(fields.entry_price ?? ""));
+    const stop = n(String(fields.stop_price ?? ""));
+    const inferred = inferDirectionFromPrices(entry, stop);
+    if (inferred == null) return;
+    setFields((prev) =>
+      prev.direction === inferred ? prev : { ...prev, direction: inferred },
+    );
+  }, [fields.entry_price, fields.stop_price]);
+
+  const inferredDirection = useMemo(
+    () =>
+      inferDirectionFromPrices(
+        n(String(fields.entry_price ?? "")),
+        n(String(fields.stop_price ?? "")),
+      ),
+    [fields.entry_price, fields.stop_price],
+  );
+
   const executionUnlocked = tradePhase === "active" || execs.length > 0;
 
   const instrument = instruments.find((i) => i.symbol === fields.instrument);
   const pointValue = instrument?.point_value ?? 1;
 
   const metrics = useMemo(() => {
-    const entries = execs.filter((e) => e.side === "entry");
-    const exits = execs.filter((e) => e.side === "exit");
-    const sum = (rows: ExecRow[], f: (e: ExecRow) => number) =>
-      rows.reduce((s, e) => s + f(e), 0);
-
-    const entryQty = sum(entries, (e) => n(e.qty) ?? 0);
-    const entryNotional = sum(entries, (e) => (n(e.price) ?? 0) * (n(e.qty) ?? 0));
-    const exitQty = sum(exits, (e) => n(e.qty) ?? 0);
-    const exitNotional = sum(exits, (e) => (n(e.price) ?? 0) * (n(e.qty) ?? 0));
-    const totalFees = sum(execs, (e) => n(e.fee) ?? 0);
-    const totalSwap = sum(execs, (e) => n(e.swap) ?? 0);
-    const fees = totalFees + totalSwap;
-
-    const avgEntry = entryQty > 0 ? entryNotional / entryQty : null;
-    const avgExit = exitQty > 0 ? exitNotional / exitQty : null;
-    const dir = String(fields.direction ?? "")
-      .toLowerCase()
-      .startsWith("short")
-      ? -1
-      : 1;
-    const stop = n(String(fields.stop_price ?? ""));
-
-    let grossPoints: number | null = null;
-    let grossPl: number | null = null;
-    let netPl: number | null = null;
-    let r: number | null = null;
-    if (avgEntry != null && exitQty > 0) {
-      grossPoints = (exitNotional - avgEntry * exitQty) * dir;
-      grossPl = grossPoints * pointValue;
-      netPl = grossPl - fees;
-      if (stop != null && Math.abs(avgEntry - stop) > 0) {
-        r = grossPoints / (Math.abs(avgEntry - stop) * entryQty);
-      }
-    }
+    const executionFills = execs
+      .map((e) => ({
+        side: e.side,
+        price: n(e.price) ?? NaN,
+        qty: n(e.qty) ?? 0,
+        fee: n(e.fee) ?? 0,
+        swap_funding: n(e.swap) ?? 0,
+      }))
+      .filter((e) => Number.isFinite(e.price) && e.qty > 0);
 
     const pe = n(String(fields.entry_price ?? ""));
+    const stop = n(String(fields.stop_price ?? ""));
+    const dir = String(fields.direction ?? "");
+
+    const posStats = computePositionStats({
+      direction: dir,
+      entry_price: pe,
+      stop_price: stop,
+      point_value: pointValue,
+      executions: executionFills,
+    });
+
+    const {
+      avg_entry: avgEntry,
+      avg_exit: avgExit,
+      entry_qty: entryQty,
+      exit_qty: exitQty,
+      gross_pl: grossPl,
+      net_pl: netPl,
+      total_fees: totalFees,
+      total_swap: totalSwap,
+      realized_r: r,
+    } = posStats;
+    const fees = totalFees + totalSwap;
+
     const pt = n(String(fields.target_price ?? ""));
     const maePrice = n(String(fields.max_drawdown_price ?? ""));
     const mfePrice = n(String(fields.max_profit_price ?? ""));
-    let plannedRR: number | null = null;
-    if (pe != null && stop != null && pt != null && Math.abs(pe - stop) > 0) {
-      plannedRR = Math.abs(pt - pe) / Math.abs(pe - stop);
-    }
+    const plannedRR = computePlannedRewardR({
+      direction: dir || null,
+      entry: pe,
+      stop,
+      target: pt,
+    });
+
+    const dirMult = dir.toLowerCase().startsWith("short") ? -1 : 1;
+    const riskPtsForMaeMfe =
+      posStats.planned_risk_pts ??
+      (avgEntry != null && stop != null && Math.abs(avgEntry - stop) > 0
+        ? Math.abs(avgEntry - stop)
+        : null);
 
     let maeR: number | null = null;
     let mfeR: number | null = null;
     let capturePct: number | null = null;
-    if (avgEntry != null && stop != null && Math.abs(avgEntry - stop) > 0) {
-      const riskPts = Math.abs(avgEntry - stop);
+    if (avgEntry != null && riskPtsForMaeMfe != null && riskPtsForMaeMfe > 0) {
       if (maePrice != null) {
-        const maePts = dir === 1 ? avgEntry - maePrice : maePrice - avgEntry;
-        if (maePts > 0) maeR = maePts / riskPts;
+        const maePts = dirMult === 1 ? avgEntry - maePrice : maePrice - avgEntry;
+        if (maePts > 0) maeR = maePts / riskPtsForMaeMfe;
       }
       if (mfePrice != null) {
-        const mfePts = dir === 1 ? mfePrice - avgEntry : avgEntry - mfePrice;
-        if (mfePts > 0) mfeR = mfePts / riskPts;
+        const mfePts = dirMult === 1 ? mfePrice - avgEntry : avgEntry - mfePrice;
+        if (mfePts > 0) mfeR = mfePts / riskPtsForMaeMfe;
       }
       if (r != null && mfeR != null && mfeR > 0) {
         capturePct = (r / mfeR) * 100;
       }
     }
 
-    const riskPctStr = String(fields.risk_pct ?? "");
-    const riskPct = riskPctStr ? Number(riskPctStr.replace("%", "")) : null;
+    const riskPct = parseRiskPct(fields.risk_pct as string | number | null);
     const balance = account?.starting_balance ?? 0;
-    let sizeSuggestion: number | null = null;
-    if (riskPct != null && pe != null && stop != null && Math.abs(pe - stop) > 0 && balance > 0) {
-      const riskAmount = (balance * riskPct) / 100;
-      sizeSuggestion = riskAmount / (Math.abs(pe - stop) * pointValue);
-    }
+    const sizeSuggestion = computePositionSize({
+      balance,
+      riskPct,
+      entry: pe,
+      stop,
+      pointValue,
+    });
 
     const slippage = computeEntrySlippage({
       direction: String(fields.direction ?? ""),
@@ -258,20 +310,15 @@ export function TradeForm({
       pointValue,
     });
 
-    let exitEfficiency: {
+    let targetAttainment: {
       plannedRewardR: number;
       realizedR: number;
       pct: number;
     } | null = null;
     const plannedReward =
-      plannedRR ??
-      (() => {
-        const raw = String(fields.planned_rr ?? "").trim();
-        const m = raw.match(/^1\s*:\s*([\d.]+)\+?$/i);
-        return m ? Number(m[1]) : null;
-      })();
+      plannedRR ?? parsePlannedRewardR(String(fields.planned_rr ?? ""));
     if (r != null && plannedReward != null && plannedReward > 0) {
-      exitEfficiency = {
+      targetAttainment = {
         plannedRewardR: plannedReward,
         realizedR: r,
         pct: (r / plannedReward) * 100,
@@ -296,7 +343,7 @@ export function TradeForm({
       capturePct,
       slippage,
       plannedEntry: pe,
-      exitEfficiency,
+      targetAttainment,
     };
   }, [execs, fields, pointValue, account]);
 
@@ -354,7 +401,7 @@ export function TradeForm({
 
     const fieldsToSave = { ...fields };
     if (metrics.plannedRR != null) {
-      fieldsToSave.planned_rr = `1:${metrics.plannedRR.toFixed(2)}`;
+      fieldsToSave.planned_rr = formatPlannedRewardR(metrics.plannedRR);
     }
     if (metrics.sizeSuggestion != null) {
       fieldsToSave.position_size = Number(metrics.sizeSuggestion.toFixed(4));
@@ -475,18 +522,28 @@ export function TradeForm({
                           ? setTradePhase
                           : undefined
                       }
+                      computedDisplay={
+                        tab.id === "plan" && group.id === "risk_plan"
+                          ? {
+                              planned_rr:
+                                metrics.plannedRR != null
+                                  ? formatPlannedRewardR(metrics.plannedRR)
+                                  : "—",
+                              position_size:
+                                metrics.sizeSuggestion != null
+                                  ? `${metrics.sizeSuggestion.toFixed(2)}${instrument?.symbol ? ` ${instrument.symbol}` : ""}`
+                                  : "—",
+                            }
+                          : undefined
+                      }
+                      fieldHints={
+                        tab.id === "plan" && group.id === "meta" && inferredDirection != null
+                          ? { direction: "Auto from entry vs stop" }
+                          : undefined
+                      }
                       onAddEntryFill={
                         tab.id === "plan" && group.id === "risk_plan"
                           ? handleAddEntryFromPlan
-                          : undefined
-                      }
-                      riskMetrics={
-                        tab.id === "plan" && group.id === "risk_plan"
-                          ? {
-                              plannedRR: metrics.plannedRR,
-                              sizeSuggestion: metrics.sizeSuggestion,
-                              pointSymbol: instrument?.symbol,
-                            }
                           : undefined
                       }
                     />
@@ -527,12 +584,12 @@ export function TradeForm({
                   label="Planned R:R"
                   value={
                     metrics.plannedRR != null
-                      ? `1:${metrics.plannedRR.toFixed(2)}`
+                      ? formatPlannedRewardR(metrics.plannedRR)
                       : "—"
                   }
                 />
                 <Metric
-                  label="Suggested Size"
+                  label="Position Size"
                   value={
                     metrics.sizeSuggestion != null
                       ? `${metrics.sizeSuggestion.toFixed(2)}${instrument?.symbol ? ` ${instrument.symbol}` : ""}`
@@ -566,12 +623,13 @@ export function TradeForm({
                 <Metric
                   label="Capture"
                   value={metrics.capturePct != null ? `${metrics.capturePct.toFixed(0)}%` : "—"}
+                  title="MFE capture — realized R / max favorable excursion"
                 />
-                {metrics.exitEfficiency != null && (
+                {metrics.targetAttainment != null && (
                   <Metric
-                    label="Exit eff"
-                    value={fmtExitEfficiencyPct(metrics.exitEfficiency.pct)}
-                    title={`${metrics.exitEfficiency.realizedR.toFixed(2)}R realized / ${metrics.exitEfficiency.plannedRewardR.toFixed(2)}R planned`}
+                    label="Target attainment"
+                    value={fmtExitEfficiencyPct(metrics.targetAttainment.pct)}
+                    title={`${metrics.targetAttainment.realizedR.toFixed(2)}R realized / ${metrics.targetAttainment.plannedRewardR.toFixed(2)}R planned target`}
                   />
                 )}
                 {metrics.slippage != null && (
@@ -652,7 +710,8 @@ function FormGroupSection({
   tradePhase,
   onTradePhaseChange,
   onAddEntryFill,
-  riskMetrics,
+  computedDisplay,
+  fieldHints,
   nested,
 }: {
   group: FormGroup;
@@ -667,13 +726,22 @@ function FormGroupSection({
   tradePhase?: TradePhase;
   onTradePhaseChange?: (phase: TradePhase) => void;
   onAddEntryFill?: () => void;
-  riskMetrics?: {
-    plannedRR: number | null;
-    sizeSuggestion: number | null;
-    pointSymbol?: string;
-  };
+  computedDisplay?: Record<string, string>;
+  fieldHints?: Record<string, string>;
   nested?: boolean;
 }) {
+  const entry = n(String(fields.entry_price ?? ""));
+  const stop = n(String(fields.stop_price ?? ""));
+  const target = n(String(fields.target_price ?? ""));
+  const riskPct = parseRiskPct(fields.risk_pct as string | number | null);
+
+  const fieldsToRender =
+    group.id === "risk_plan"
+      ? group.fields.filter((field) =>
+          riskPlanFieldVisible(field.name, entry, stop, target, riskPct),
+        )
+      : group.fields;
+
   return (
     <div className={nested ? "space-y-4" : "space-y-4"}>
       {!nested && (
@@ -681,6 +749,11 @@ function FormGroupSection({
           <h3 className="text-sm font-semibold">{group.title}</h3>
           {group.description && (
             <p className="text-sm text-muted-foreground">{group.description}</p>
+          )}
+          {group.id === "risk_plan" && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Unesi entry, pa stop, pa target.
+            </p>
           )}
         </div>
       )}
@@ -722,7 +795,7 @@ function FormGroupSection({
             </Select>
           </div>
         )}
-        {group.fields.map((field) => (
+        {fieldsToRender.map((field) => (
           <FieldRenderer
             key={field.name}
             field={field}
@@ -730,35 +803,15 @@ function FormGroupSection({
             onChange={(v) => setField(field.name, v)}
             optionsMap={optionsMap}
             instruments={instruments}
+            computedDisplay={computedDisplay?.[field.name]}
+            fieldHint={fieldHints?.[field.name]}
           />
         ))}
       </div>
-      {riskMetrics && (
-        <div className="space-y-3">
-          <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-2">
-            <div>
-              <p className="text-xs text-muted-foreground">Planned R:R</p>
-              <p className="text-lg font-semibold">
-                {riskMetrics.plannedRR != null
-                  ? `1:${riskMetrics.plannedRR.toFixed(2)}`
-                  : "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Suggested Size</p>
-              <p className="text-lg font-semibold">
-                {riskMetrics.sizeSuggestion != null
-                  ? `${riskMetrics.sizeSuggestion.toFixed(2)}${riskMetrics.pointSymbol ? ` ${riskMetrics.pointSymbol}` : ""}`
-                  : "—"}
-              </p>
-            </div>
-          </div>
-          {onAddEntryFill && (
-            <Button type="button" variant="outline" size="sm" onClick={onAddEntryFill}>
-              <ArrowDownToLine className="size-4" /> Add Entry Fill
-            </Button>
-          )}
-        </div>
+      {onAddEntryFill && group.id === "risk_plan" && (
+        <Button type="button" variant="outline" size="sm" onClick={onAddEntryFill}>
+          <ArrowDownToLine className="size-4" /> Add Entry Fill
+        </Button>
       )}
     </div>
   );
@@ -770,14 +823,33 @@ function FieldRenderer({
   onChange,
   optionsMap,
   instruments,
+  computedDisplay,
+  fieldHint,
 }: {
   field: FieldConfig;
   value: FieldValue | undefined;
   onChange: (v: FieldValue) => void;
   optionsMap: OptionsMap;
   instruments: Instrument[];
+  computedDisplay?: string;
+  fieldHint?: string;
 }) {
   const colSpan = field.colSpan === 2 ? "sm:col-span-2" : "";
+
+  if (field.type === "computed") {
+    return (
+      <div className={`space-y-1.5 ${colSpan}`}>
+        <Label className="text-xs">{field.label}</Label>
+        <Input
+          readOnly
+          disabled
+          className="bg-muted/40 font-medium"
+          value={computedDisplay ?? "—"}
+          placeholder={field.placeholder ?? "Auto"}
+        />
+      </div>
+    );
+  }
 
   if (field.type === "instrument") {
     return (
@@ -806,7 +878,12 @@ function FieldRenderer({
   if (field.type === "select") {
     return (
       <div className={`space-y-1.5 ${colSpan}`}>
-        <Label className="text-xs">{field.label}</Label>
+        <Label className="text-xs" title={fieldHint}>
+          {field.label}
+        </Label>
+        {fieldHint && (
+          <p className="text-xs text-muted-foreground">{fieldHint}</p>
+        )}
         <EditableSelect
           listKey={field.listKey!}
           options={optionsMap[field.listKey!] ?? []}

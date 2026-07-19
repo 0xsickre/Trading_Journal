@@ -353,7 +353,6 @@ export type Database = {
         Row: {
           account_id: string | null
           bias_tf: string | null
-          chart_url: string | null
           created_at: string
           direction: string | null
           discipline: string | null
@@ -391,7 +390,6 @@ export type Database = {
         Insert: {
           account_id?: string | null
           bias_tf?: string | null
-          chart_url?: string | null
           created_at?: string
           direction?: string | null
           discipline?: string | null
@@ -429,7 +427,6 @@ export type Database = {
         Update: {
           account_id?: string | null
           bias_tf?: string | null
-          chart_url?: string | null
           created_at?: string
           direction?: string | null
           discipline?: string | null
@@ -479,27 +476,27 @@ export type Database = {
           caption: string | null
           created_at: string
           id: string
+          image_url: string
           kind: string
           position_id: string
-          storage_path: string
           user_id: string
         }
         Insert: {
           caption?: string | null
           created_at?: string
           id?: string
+          image_url: string
           kind?: string
           position_id: string
-          storage_path: string
           user_id?: string
         }
         Update: {
           caption?: string | null
           created_at?: string
           id?: string
+          image_url?: string
           kind?: string
           position_id?: string
-          storage_path?: string
           user_id?: string
         }
         Relationships: [
@@ -540,6 +537,7 @@ export type Database = {
           point_value: number | null
           position_id: string | null
           realized_r: number | null
+          realized_r_net: number | null
           result: string | null
           status: string | null
           total_fees: number | null

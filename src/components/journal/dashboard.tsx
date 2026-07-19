@@ -362,7 +362,7 @@ export function Dashboard({
           }
         />
         <Stat
-          label="Exit efficiency"
+          label="Target attainment"
           value={
             exitEffStats.count > 0
               ? fmtExitEfficiencyPct(exitEffStats.avgPct)
@@ -375,12 +375,12 @@ export function Dashboard({
           }
           title={
             exitEffStats.count > 0
-              ? `Realized R / planned target R · ${exitEffStats.count} trades`
+              ? `Realized R / planned target R · ${exitEffStats.count} closed trades`
               : undefined
           }
         />
         <Stat
-          label="Winner exit eff"
+          label="Winner target attainment"
           value={
             exitEffStats.winnerCount > 0
               ? fmtExitEfficiencyPct(exitEffStats.avgWinnerPct)
@@ -579,7 +579,7 @@ export function Dashboard({
       {weeklyExitEff.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Exit efficiency by week</CardTitle>
+            <CardTitle className="text-base">Target attainment by week</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
@@ -618,7 +618,7 @@ export function Dashboard({
                     };
                     return [
                       `${Number(v).toFixed(0)}% avg (${payload.tradeCount} trades)`,
-                      "Exit efficiency",
+                      "Target attainment",
                     ];
                   }}
                   labelFormatter={(label) => `Week ${label}`}

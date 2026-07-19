@@ -44,7 +44,9 @@ const DETAIL_FIELDS: { key: string; label: string }[] = (() => {
   // Derived / computed columns that also carry user-meaningful info.
   add("planned_rr", "Planned RR");
   add("position_size", "Position size");
-  add("chart_url", "Chart URL");
+  add("tv_htf_pre", "TV HTF Pre");
+  add("tv_ltf_pre", "TV LTF Pre");
+  add("tv_ltf_post", "TV LTF Post");
   add("result", "Result");
   return out;
 })();
@@ -91,8 +93,8 @@ function statsTable(trades: TradeRow[], ccy: string): string {
     `| Max drawdown | ${money(s.maxDrawdown, ccy)} |`,
     `| Avg entry slippage | ${slipAvg} (${slip.count} trades) |`,
     `| Total slippage (R) | ${slipTotal} |`,
-    `| Exit efficiency | ${exitEffAvg} (${exitEff.count} trades) |`,
-    `| Winner exit efficiency | ${exitEffWinner} (${exitEff.winnerCount} wins) |`,
+    `| Target attainment | ${exitEffAvg} (${exitEff.count} closed trades) |`,
+    `| Winner target attainment | ${exitEffWinner} (${exitEff.winnerCount} wins) |`,
   ].join("\n");
 }
 
@@ -118,8 +120,15 @@ function tradeDetail(t: TradeRow, ccy: string): string {
   const rr = s?.realized_r != null ? `${r2(s.realized_r)}R` : "—";
   const net = s?.net_pl != null ? money(s.net_pl, ccy) : "—";
   const head = `### Trade ${no} — ${val(t, "instrument") || "?"} ${val(t, "direction")} · ${when} · ${rr} · ${net} · ${t.status}`;
+  const tv = t.tv_images ?? {};
+  const enriched: TradeRow = {
+    ...t,
+    tv_htf_pre: tv.htf_pre ?? "",
+    tv_ltf_pre: tv.ltf_pre ?? "",
+    tv_ltf_post: tv.ltf_post ?? "",
+  };
   const lines = DETAIL_FIELDS.map((f) => {
-    const v = val(t, f.key);
+    const v = val(enriched, f.key);
     return v ? `- **${f.label}:** ${v}` : "";
   }).filter(Boolean);
   const slip = slippageFromTrade(t);
@@ -133,7 +142,7 @@ function tradeDetail(t: TradeRow, ccy: string): string {
   const exitEff = exitEfficiencyFromTrade(t);
   if (exitEff) {
     lines.push(
-      `- **Exit efficiency:** ${fmtExitEfficiencyPct(exitEff.pct)} (${r2(exitEff.realizedR)}R / ${r2(exitEff.plannedRewardR)}R planned)`,
+      `- **Target attainment:** ${fmtExitEfficiencyPct(exitEff.pct)} (${r2(exitEff.realizedR)}R / ${r2(exitEff.plannedRewardR)}R planned target)`,
     );
   }
   return `${head}\n${lines.join("\n")}`;

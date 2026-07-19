@@ -8,7 +8,8 @@ export type FieldType =
   | "text"
   | "textarea"
   | "url"
-  | "tags";
+  | "tags"
+  | "computed";
 
 export type FieldConfig = {
   name: string; // tj_positions column
@@ -79,6 +80,18 @@ export const FORM_TABS: FormTab[] = [
           { name: "stop_price", label: "Stop Price", type: "number" },
           { name: "target_price", label: "Target Price", type: "number" },
           { name: "risk_pct", label: "Risk %", type: "select", listKey: "risk_pct" },
+          {
+            name: "planned_rr",
+            label: "Planned R:R",
+            type: "computed",
+            placeholder: "Auto from entry / stop / target",
+          },
+          {
+            name: "position_size",
+            label: "Position Size",
+            type: "computed",
+            placeholder: "Auto from risk % and stop",
+          },
         ],
       },
       {
@@ -143,13 +156,6 @@ export const FORM_TABS: FormTab[] = [
             placeholder: "FOMO, Hesitation, Followed Plan…",
           },
           {
-            name: "chart_url",
-            label: "TradingView Chart URL",
-            type: "url",
-            placeholder: "https://www.tradingview.com/x/…",
-            colSpan: 2,
-          },
-          {
             name: "trade_journal_notes",
             label: "Trade Journal Notes",
             type: "textarea",
@@ -177,9 +183,6 @@ export const FORM_TABS: FormTab[] = [
   },
 ];
 
-/** Auto-computed on save — not shown as manual inputs. */
-const COMPUTED_FIELD_NAMES = ["planned_rr", "position_size"] as const;
-
 export function getAllFormFields(): FieldConfig[] {
   const seen = new Set<string>();
   const out: FieldConfig[] = [];
@@ -195,10 +198,7 @@ export function getAllFormFields(): FieldConfig[] {
   return out;
 }
 
-export const POSITION_FIELD_NAMES = [
-  ...getAllFormFields().map((f) => f.name),
-  ...COMPUTED_FIELD_NAMES,
-];
+export const POSITION_FIELD_NAMES = getAllFormFields().map((f) => f.name);
 
 export const NUMERIC_FIELDS = new Set(
   [...getAllFormFields().filter((f) => f.type === "number").map((f) => f.name), "position_size"],

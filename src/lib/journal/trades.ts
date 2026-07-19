@@ -1,7 +1,8 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { TradeFormInitial } from "@/components/journal/trade-form";
-import type { PositionStat, TradeRow } from "./types";
+import type { TradeImageKind } from "./tradingview-snapshot";
+import type { PositionStat, TradeRow, TradeTvImages } from "./types";
 
 export type { PositionStat, TradeRow } from "./types";
 
@@ -24,10 +25,41 @@ export async function getTradesWithStats(
   });
   if (accountId) posQ = posQ.eq("account_id", accountId);
 
-  const [{ data: positions }, { data: stats }] = await Promise.all([
-    posQ,
-    supabase.from("tj_position_stats").select("*"),
+  const { data: positions, error: posErr } = await posQ;
+  if (posErr) throw posErr;
+
+  const positionIds = ((positions ?? []) as RawPosition[]).map((p) => p.id);
+
+  const statsPromise =
+    positionIds.length > 0
+      ? supabase
+          .from("tj_position_stats")
+          .select("*")
+          .in("position_id", positionIds)
+      : Promise.resolve({ data: [] as PositionStat[] });
+
+  const imagesPromise =
+    positionIds.length > 0
+      ? supabase
+          .from("tj_trade_images")
+          .select("position_id, kind, image_url")
+          .in("position_id", positionIds)
+      : Promise.resolve({
+          data: [] as { position_id: string; kind: string; image_url: string }[],
+        });
+
+  const [{ data: stats }, { data: images }] = await Promise.all([
+    statsPromise,
+    imagesPromise,
   ]);
+
+  const imagesByPosition = new Map<string, TradeTvImages>();
+  for (const img of images ?? []) {
+    const kind = img.kind as TradeImageKind;
+    const bucket = imagesByPosition.get(img.position_id) ?? {};
+    bucket[kind] = img.image_url;
+    imagesByPosition.set(img.position_id, bucket);
+  }
 
   const statById = new Map<string, PositionStat>();
   for (const s of (stats ?? []) as PositionStat[]) {
@@ -39,6 +71,7 @@ export async function getTradesWithStats(
       ({
         ...p,
         stats: statById.get(p.id) ?? null,
+        tv_images: imagesByPosition.get(p.id) ?? {},
       }) as TradeRow,
   );
 }
