@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -71,9 +71,13 @@ export function TagMultiSelect({
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  // Resync local list when the server re-supplies options (adjust-during-render
+  // pattern — avoids a prop→state sync effect).
+  const [prevBase, setPrevBase] = useState(baseOptions);
+  if (baseOptions !== prevBase) {
+    setPrevBase(baseOptions);
     setItems(baseOptions);
-  }, [baseOptions]);
+  }
 
   const selected = value ?? [];
   const available = items.filter((o) => !selected.includes(o.value));

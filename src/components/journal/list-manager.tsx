@@ -49,13 +49,11 @@ const PALETTE = [
 
 function ItemRow({
   item,
-  listKey,
   canUp,
   canDown,
   onMove,
 }: {
   item: OptionItem;
-  listKey: string;
   canUp: boolean;
   canDown: boolean;
   onMove: (dir: -1 | 1) => void;
@@ -258,7 +256,6 @@ function ListCard({ list }: { list: OptionList }) {
             <ItemRow
               key={item.id}
               item={item}
-              listKey={list.key}
               canUp={i > 0}
               canDown={i < visible.length - 1}
               onMove={(dir) => move(i, dir)}

@@ -105,7 +105,10 @@ export function TradeImages({ positionId }: { positionId: string }) {
     setLoading(false);
   }, [positionId]);
 
+  // Async data fetch on mount / when the position changes (load() sets loading
+  // state internally — a legitimate data-fetching effect).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async data fetch
     load();
   }, [load]);
 

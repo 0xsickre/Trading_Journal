@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { ensureDefaults } from "@/lib/journal/ensure-defaults";
+import { getCurrentUser } from "@/lib/supabase/user";
 import { AppSidebar, MobileTopbar } from "@/components/app/app-sidebar";
 
 export default async function AppLayout({
@@ -8,14 +7,11 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  // First-login seed of dropdown lists, options, instruments and an account.
-  await ensureDefaults();
+  // Note: default seeding (ensureDefaults) runs on the home page, not here, so it
+  // doesn't add a Supabase round-trip to every sub-navigation.
 
   return (
     <div className="flex min-h-svh w-full">

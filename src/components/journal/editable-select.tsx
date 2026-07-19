@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -49,10 +49,13 @@ export function EditableSelect({
   const [draft, setDraft] = useState("");
   const [pending, startTransition] = useTransition();
 
-  // Keep local list in sync when server re-supplies options.
-  useEffect(() => {
+  // Keep local list in sync when server re-supplies options (adjust-during-render
+  // pattern — avoids a prop→state sync effect).
+  const [prevOptions, setPrevOptions] = useState(options);
+  if (options !== prevOptions) {
+    setPrevOptions(options);
     setItems(options);
-  }, [options]);
+  }
 
   // If the current value refers to a soft-deleted/archived option not present
   // in the active list, surface it so the selection stays visible.

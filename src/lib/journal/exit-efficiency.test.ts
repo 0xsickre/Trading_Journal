@@ -63,6 +63,15 @@ describe("exitEfficiencyFromTrade", () => {
   it("null without planned or realized", () => {
     expect(exitEfficiencyFromTrade({ stats: {} } as TradeRow)).toBeNull();
   });
+
+  it("null when planned reward is below the minimum floor", () => {
+    // A near-zero planned reward would otherwise make pct explode.
+    const row = {
+      planned_rr: "0.05",
+      stats: { realized_r: 1 },
+    } as unknown as TradeRow;
+    expect(exitEfficiencyFromTrade(row)).toBeNull();
+  });
 });
 
 describe("fmtExitEfficiencyPct / target attainment label", () => {

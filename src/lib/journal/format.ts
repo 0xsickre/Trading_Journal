@@ -38,15 +38,3 @@ export function pnlClass(n: number | null | undefined): string {
   if (n == null || Number.isNaN(n) || n === 0) return "text-muted-foreground";
   return n > 0 ? "text-[var(--profit)]" : "text-[var(--loss)]";
 }
-
-export function fmtDuration(seconds: number | null | undefined): string {
-  if (seconds == null || Number.isNaN(seconds)) return "—";
-  const s = Math.max(0, Math.round(seconds));
-  const d = Math.floor(s / 86400);
-  const h = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m`;
-  return `${s}s`;
-}

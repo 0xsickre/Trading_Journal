@@ -67,13 +67,14 @@ const money = (n: number, ccy: string) =>
   `${n >= 0 ? "+" : "-"}${Math.abs(n).toFixed(2)} ${ccy}`;
 
 function statsTable(trades: TradeRow[], ccy: string): string {
-  const s = computeStats(toRealized(trades), "net");
-  const slip = computeSlippageStats(toRealized(trades));
+  const realized = toRealized(trades);
+  const s = computeStats(realized, "net");
+  const slip = computeSlippageStats(realized);
   const slipAvg =
     slip.count > 0 ? `${(-slip.avgAdverseR).toFixed(2)}R` : "—";
   const slipTotal =
     slip.count > 0 ? `${(-slip.totalAdverseR).toFixed(2)}R` : "—";
-  const exitEff = computeExitEfficiencyStats(toRealized(trades));
+  const exitEff = computeExitEfficiencyStats(realized);
   const exitEffAvg =
     exitEff.count > 0 ? fmtExitEfficiencyPct(exitEff.avgPct) : "—";
   const exitEffWinner =
@@ -253,6 +254,10 @@ export type MentorPackOpts = {
   periodLabel?: string;
   /** Resolved date range for the period, e.g. "2026-07-01 → 2026-07-08". */
   rangeText?: string;
+  /** Account starting balance, shown as risk context (single-account scope only). */
+  startingBalance?: number | null;
+  /** Free-form risk note, e.g. "Rizik po trejdu: 1%". */
+  riskNote?: string;
 };
 
 export function buildMentorPack(
@@ -292,6 +297,11 @@ export function buildMentorPack(
   out.push(
     `_Generisano: ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC · Period: ${period} (${range}) · Scope: ${scope} · Valuta: ${ccy}_`,
   );
+  const context: string[] = [];
+  if (opts.startingBalance != null)
+    context.push(`Početni balans: ${opts.startingBalance.toFixed(2)} ${ccy}`);
+  if (opts.riskNote) context.push(opts.riskNote);
+  if (context.length > 0) out.push(`_${context.join(" · ")}_`);
   out.push("");
 
   // --- Instructions / persona for the model -------------------------------
@@ -305,10 +315,35 @@ export function buildMentorPack(
       "- Nađi **obrasce** u mojim rezultatima (koji setapi/tagovi/psihologija donose profit, a koji gube).",
       "- Budi **kritičan i direktan** — istakni crvene zastavice, nemoj mi laskati.",
       "- Fokus na **proces i disciplinu**, ne na predviđanje tržišta.",
-      "- Coaching stil: postavljaj mi pitanja, daj 2–3 konkretna zadatka za sledeću nedelju.",
+      "- Uzmi u obzir veličinu uzorka — ne izvlači jake zaključke iz par trejdova.",
+      "",
+      "**Strukturiraj odgovor ovako:**",
+      "1. **Kratak rezime** — stanje na 3–4 rečenice (edge, disciplina, glavni rizik).",
+      "2. **Šta radim dobro** — konkretno, uz brojeve iz fajla.",
+      "3. **Crvene zastavice** — najskuplje greške/obrasci, poređane po uticaju.",
+      "4. **Obrasci po kategorijama** — setapi/tagovi/psihologija koji nose profit vs. gubitak.",
+      "5. **2–3 konkretna zadatka** za sledeću nedelju (merljiva, procesna).",
       "",
       "Šta NE radiš: ne daješ buy/sell signale, ne predviđaš cenu, ne daješ finansijski/regulatorni savet.",
       "Odgovaraj na srpskom.",
+    ].join("\n"),
+  );
+  out.push("");
+
+  // --- Metric legend so the model reads the numbers correctly --------------
+  out.push(`## Legenda metrika (kako da čitaš brojeve)`);
+  out.push(
+    [
+      "- **R** — realizovani rezultat u jedinicama *planiranog rizika* (1R = rizik do stopa). +2R = duplo veći dobitak od rizika.",
+      "- **Win rate** — % dobitnih trejdova, računat po **novcu** (net > 0 = dobitak), breakeven se ne broji u imenilac.",
+      "- **Expectancy** — očekivani rezultat po trejdu, izražen u **R**. Pozitivno = statistički isplativ sistem.",
+      "- **Profit factor** — bruto profit ÷ bruto gubitak. > 1 profitabilno; ∞ (beskonačno) = nema gubitaka u uzorku.",
+      "- **Avg win / Avg loss** — prosečan dobitak/gubitak u **R**.",
+      "- **Max drawdown** — najveći pad kapitala od vrha, u novcu (po izabranom net/gross modu).",
+      "- **Entry slippage** — koliko je stvarni ulaz gori od planiranog, u **R** (negativno = trošak lošijeg ulaza).",
+      "- **Target attainment (exit efficiency)** — realizovani R ÷ planirani reward R (koliko sam od plana ciljanog poteza zapravo uzeo).",
+      "- **MAE / MFE** — maksimalni nepovoljni / povoljni pomak tokom trejda, u R.",
+      "- Sve vrednosti su u valuti/TZ naloga; **net** = posle provizija i swap-a, **gross** = samo kretanje cene.",
     ].join("\n"),
   );
   out.push("");

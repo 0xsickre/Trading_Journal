@@ -189,14 +189,26 @@ export function TradeForm({
           next.target_price = "";
         }
       }
+      // Direction follows planned geometry: recompute whenever entry/stop change
+      // (event-driven — avoids a setState-in-effect sync loop).
+      if (name === "entry_price" || name === "stop_price") {
+        const inferred = inferDirectionFromPrices(
+          n(String(next.entry_price ?? "")),
+          n(String(next.stop_price ?? "")),
+        );
+        if (inferred != null) next.direction = inferred;
+      }
       return next;
     });
   }
 
+  // Mount-only: hydrate defaults from localStorage (a client-only external store,
+  // so this must run in an effect, not during SSR render).
   useEffect(() => {
     if (initial) return;
     const prefs = getTradeFormPrefs();
     if (prefs.accountId && accounts.some((a) => a.id === prefs.accountId)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- external-store init
       setAccountId(prefs.accountId);
     }
     setFields((prev) => {
@@ -210,16 +222,6 @@ export function TradeForm({
       return { ...prev, risk_pct: fromPrefs };
     });
   }, [initial, accounts, optionsMap.risk_pct]);
-
-  useEffect(() => {
-    const entry = n(String(fields.entry_price ?? ""));
-    const stop = n(String(fields.stop_price ?? ""));
-    const inferred = inferDirectionFromPrices(entry, stop);
-    if (inferred == null) return;
-    setFields((prev) =>
-      prev.direction === inferred ? prev : { ...prev, direction: inferred },
-    );
-  }, [fields.entry_price, fields.stop_price]);
 
   const inferredDirection = useMemo(
     () =>
@@ -248,11 +250,11 @@ export function TradeForm({
     [execs],
   );
 
-  useEffect(() => {
-    if (hasValidEntryFill && tradePhase !== "active" && !isMissed) {
-      setTradePhase("active");
-    }
-  }, [hasValidEntryFill, isMissed, tradePhase]);
+  // Adjust phase during render (React-sanctioned, converges) rather than in an
+  // effect: a valid entry fill implies the trade is active.
+  if (hasValidEntryFill && tradePhase !== "active" && !isMissed) {
+    setTradePhase("active");
+  }
 
   const instrument = instruments.find((i) => i.symbol === fields.instrument);
   const pointValue = instrument?.point_value ?? 1;

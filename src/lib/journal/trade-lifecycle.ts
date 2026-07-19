@@ -30,15 +30,6 @@ export function statusToTradePhase(status?: string | null): TradePhase {
   return "planned";
 }
 
-/** Status to persist when there are no execution fills (user choice). */
-export function manualStatusFromPhase(
-  phase: TradePhase,
-  currentStatus?: string | null,
-): PositionStatus {
-  if (currentStatus === "missed") return "missed";
-  return phase === "active" ? "open" : "planned";
-}
-
 /**
  * Status: fills drive partial/closed; without fills, user picks planned vs active (open).
  */
@@ -60,6 +51,8 @@ export function computeStatus(
     .reduce((s, e) => s + (e.qty || 0), 0);
   if (exitQty <= 0) return "open";
   if (exitQty < entryQty) return "partial";
+  // exitQty >= entryQty → closed. An over-exit (exitQty > entryQty) is a data-entry
+  // error; we still mark it closed rather than block, and surface it via stats.
   return "closed";
 }
 
@@ -83,10 +76,6 @@ export function canRestoreToPlanned(
   status?: string | null,
 ): boolean {
   return execCount === 0 && status === "missed";
-}
-
-export function isPlanLifecycleStatus(status?: string | null): boolean {
-  return status === "planned" || status === "missed";
 }
 
 export function formatLifecycleStatusLabel(status: string): string {

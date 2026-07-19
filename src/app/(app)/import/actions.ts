@@ -66,6 +66,7 @@ export async function commitImport(input: CommitInput) {
           .insert({
             instrument,
             direction: item.direction,
+            account_id: input.account_id,
             source: "import",
             import_batch_id: batch.id,
             needs_review: item.executions.length === 0,
@@ -85,12 +86,24 @@ export async function commitImport(input: CommitInput) {
       } else if (item.decision === "merge" && matchedId) {
         const pid: string = matchedId;
         // Replace ONLY the objective fills; subjective position fields untouched.
+        // Snapshot first so a failed re-insert rolls back instead of wiping fills.
+        const { data: prevExecs } = await supabase
+          .from("tj_executions")
+          .select("side,price,qty,executed_at,fee,swap_funding,source")
+          .eq("position_id", pid);
         await supabase.from("tj_executions").delete().eq("position_id", pid);
         if (item.executions.length > 0) {
           const { error: exErr } = await supabase.from("tj_executions").insert(
             item.executions.map((e) => ({ ...e, position_id: pid, source: "import" })),
           );
-          if (exErr) throw new Error(exErr.message);
+          if (exErr) {
+            if (prevExecs && prevExecs.length > 0) {
+              await supabase
+                .from("tj_executions")
+                .insert(prevExecs.map((e) => ({ ...e, position_id: pid })));
+            }
+            throw new Error(exErr.message);
+          }
         }
         await supabase
           .from("tj_positions")

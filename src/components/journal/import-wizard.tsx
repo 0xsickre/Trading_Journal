@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import type { Account } from "@/lib/journal/types";
 import { parseImportTime, fmtInTz } from "@/lib/journal/time";
-import { fmtMoney, fmtNum } from "@/lib/journal/format";
+import { fmtNum } from "@/lib/journal/format";
 import {
   instrumentsMatch,
   normalizeInstrumentSymbol,
@@ -117,7 +117,6 @@ export function ImportWizard({
   );
   const account = accounts.find((a) => a.id === accountId) ?? null;
   const tz = account?.timezone ?? "America/New_York";
-  const currency = account?.currency ?? "USD";
 
   const [filename, setFilename] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);

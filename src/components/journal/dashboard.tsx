@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -45,6 +45,13 @@ import {
   type Granularity,
 } from "@/lib/journal/mentor-export";
 import { Input } from "@/components/ui/input";
+import {
+  format,
+  getISOWeek,
+  getISOWeekYear,
+  setISOWeek,
+  startOfISOWeek,
+} from "date-fns";
 import { fmtMoney, fmtR, fmtPct, fmtNum, pnlClass } from "@/lib/journal/format";
 
 const PERIODS = [
@@ -66,6 +73,24 @@ const GRANULARITIES: { value: Granularity; label: string }[] = [
 ];
 
 const todayYMD = () => new Date().toISOString().slice(0, 10);
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** anchor "YYYY-MM-DD" → `<input type="week">` value "YYYY-Www" (ISO week). */
+function anchorToWeekInput(anchor: string): string {
+  const d = new Date(`${anchor}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${getISOWeekYear(d)}-W${pad2(getISOWeek(d))}`;
+}
+
+/** `<input type="week">` value "YYYY-Www" → anchor of that week's Monday. */
+function weekInputToAnchor(value: string): string {
+  const m = value.match(/^(\d{4})-W(\d{2})$/);
+  if (!m) return value;
+  // Jan 4 is always in ISO week 1; move to the target week, then to its Monday.
+  const jan4 = new Date(Number(m[1]), 0, 4);
+  const monday = startOfISOWeek(setISOWeek(jan4, Number(m[2])));
+  return format(monday, "yyyy-MM-dd");
+}
 
 const BREAKDOWN_FIELDS = [
   { value: "macro_align", label: "Macro Align" },
@@ -96,10 +121,34 @@ export function Dashboard({
   const [customFrom, setCustomFrom] = useState(todayYMD);
   const [customTo, setCustomTo] = useState(todayYMD);
 
-  const tzOf = (t: { row: TradeRow }) => {
-    const a = accounts.find((x) => x.id === t.row.account_id);
-    return a?.timezone ?? "America/New_York";
-  };
+  // Years present in the data (newest first) for the Year/Quarter pickers.
+  const yearOptions = useMemo(() => {
+    const cur = new Date().getUTCFullYear();
+    let min = cur;
+    for (const t of trades) {
+      const ref = t.stats?.closed_at ?? t.created_at;
+      const y = ref ? Number(String(ref).slice(0, 4)) : NaN;
+      if (Number.isFinite(y) && y < min) min = y;
+    }
+    return Array.from({ length: cur - min + 1 }, (_, i) => cur - i);
+  }, [trades]);
+
+  const anchorYear = Number(anchor.slice(0, 4));
+  const anchorQuarter = Math.floor((Number(anchor.slice(5, 7)) - 1) / 3) + 1;
+
+  // Resolved export period, for a live preview of exactly what will be exported.
+  const exportRange = useMemo(
+    () => resolveCalendarRange(granularity, anchor, customFrom, customTo),
+    [granularity, anchor, customFrom, customTo],
+  );
+
+  const tzOf = useCallback(
+    (t: { row: TradeRow }) => {
+      const a = accounts.find((x) => x.id === t.row.account_id);
+      return a?.timezone ?? "America/New_York";
+    },
+    [accounts],
+  );
 
   const currency = useMemo(() => {
     if (accountFilter !== "all")
@@ -136,7 +185,7 @@ export function Dashboard({
   const hist = useMemo(() => rHistogram(realized), [realized]);
   const daily = useMemo(
     () => dailyPnl(realized, mode, tzOf),
-    [realized, mode, accounts],
+    [realized, mode, tzOf],
   );
   const breakdown = useMemo(
     () => breakdownByField(realized, breakdownField),
@@ -148,7 +197,7 @@ export function Dashboard({
   );
   const weeklySlip = useMemo(
     () => weeklySlippageR(realized, tzOf),
-    [realized, accounts],
+    [realized, tzOf],
   );
   const exitEffStats = useMemo(
     () => computeExitEfficiencyStats(realized),
@@ -156,7 +205,7 @@ export function Dashboard({
   );
   const weeklyExitEff = useMemo(
     () => weeklyExitEfficiency(realized, tzOf),
-    [realized, accounts],
+    [realized, tzOf],
   );
 
   function handleExportMentorPack() {
@@ -164,10 +213,12 @@ export function Dashboard({
       accountFilter === "all"
         ? trades
         : trades.filter((t) => t.account_id === accountFilter);
-    const scopeLabel =
+    const scopedAccount =
       accountFilter === "all"
-        ? "All accounts"
-        : accounts.find((a) => a.id === accountFilter)?.name ?? "Account";
+        ? null
+        : accounts.find((a) => a.id === accountFilter) ?? null;
+    const scopeLabel =
+      accountFilter === "all" ? "All accounts" : scopedAccount?.name ?? "Account";
 
     const { fromISO, toISO, label, rangeText } = resolveCalendarRange(
       granularity,
@@ -188,6 +239,7 @@ export function Dashboard({
       scopeLabel,
       periodLabel: label,
       rangeText,
+      startingBalance: scopedAccount?.starting_balance ?? null,
     });
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -281,15 +333,85 @@ export function Dashboard({
                 aria-label="To date"
               />
             </>
-          ) : granularity !== "all" ? (
+          ) : granularity === "day" ? (
             <Input
               type="date"
               value={anchor}
-              onChange={(e) => setAnchor(e.target.value)}
+              onChange={(e) => e.target.value && setAnchor(e.target.value)}
               className="h-8 w-36"
-              aria-label="Anchor date"
-              title="Any date inside the period you want (e.g. a day in last month)"
+              aria-label="Day"
             />
+          ) : granularity === "week" ? (
+            <Input
+              type="week"
+              value={anchorToWeekInput(anchor)}
+              onChange={(e) =>
+                e.target.value && setAnchor(weekInputToAnchor(e.target.value))
+              }
+              className="h-8 w-40"
+              aria-label="Week (Mon–Sun)"
+            />
+          ) : granularity === "month" ? (
+            <Input
+              type="month"
+              value={anchor.slice(0, 7)}
+              onChange={(e) =>
+                e.target.value && setAnchor(`${e.target.value}-01`)
+              }
+              className="h-8 w-36"
+              aria-label="Month"
+            />
+          ) : granularity === "quarter" ? (
+            <>
+              <Select
+                value={String(anchorQuarter)}
+                onValueChange={(v) =>
+                  setAnchor(`${anchorYear}-${pad2((Number(v) - 1) * 3 + 1)}-01`)
+                }
+              >
+                <SelectTrigger className="h-8 w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[1, 2, 3, 4].map((q) => (
+                    <SelectItem key={q} value={String(q)}>{`Q${q}`}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={String(anchorYear)}
+                onValueChange={(v) =>
+                  setAnchor(`${v}-${pad2((anchorQuarter - 1) * 3 + 1)}-01`)
+                }
+              >
+                <SelectTrigger className="h-8 w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {yearOptions.map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          ) : granularity === "year" ? (
+            <Select
+              value={String(anchorYear)}
+              onValueChange={(v) => setAnchor(`${v}-01-01`)}
+            >
+              <SelectTrigger className="h-8 w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {yearOptions.map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : null}
           <Button
             variant="outline"
@@ -302,6 +424,11 @@ export function Dashboard({
           </Button>
         </div>
       </div>
+      {granularity !== "all" && (
+        <p className="-mt-2 text-right text-xs text-muted-foreground">
+          Izvoz: {exportRange.rangeText}
+        </p>
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">

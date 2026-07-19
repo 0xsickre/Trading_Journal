@@ -10,32 +10,31 @@ function trade(
     realized_r?: number | null;
   },
 ): TradeRow {
+  const { net_pl, realized_r, ...rest } = partial;
   return {
-    id: partial.id,
     account_id: null,
     trade_no: null,
-    status: partial.status,
     source: "manual",
     needs_review: false,
     created_at: "2026-01-01T00:00:00Z",
+    ...rest,
     stats: {
       position_id: partial.id,
       avg_entry: null,
       avg_exit: null,
       entry_qty: 1,
       exit_qty: 1,
-      gross_pl: partial.net_pl,
-      net_pl: partial.net_pl,
+      gross_pl: net_pl,
+      net_pl,
       total_fees: 0,
       total_swap: 0,
-      realized_r: partial.realized_r ?? null,
+      realized_r: realized_r ?? null,
       realized_r_net: null,
       opened_at: "2026-01-01T00:00:00Z",
       closed_at: partial.status === "closed" ? "2026-01-02T00:00:00Z" : null,
       duration_seconds: null,
       point_value: 1,
     },
-    ...partial,
   };
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -161,12 +161,15 @@ export function JournalGrid({
     });
   }, [trades, accountFilter, filters, search]);
 
-  function tzOf(t: TradeRow) {
-    return (t.account_id && tzByAccount.get(t.account_id)) || "America/New_York";
-  }
-  function curOf(t: TradeRow) {
-    return (t.account_id && currencyByAccount.get(t.account_id)) || "USD";
-  }
+  const tzOf = useCallback(
+    (t: TradeRow) =>
+      (t.account_id && tzByAccount.get(t.account_id)) || "America/New_York",
+    [tzByAccount],
+  );
+  const curOf = useCallback(
+    (t: TradeRow) => (t.account_id && currencyByAccount.get(t.account_id)) || "USD",
+    [currencyByAccount],
+  );
 
   const columns = useMemo<ColumnDef<TradeRow>[]>(
     () => [
@@ -345,7 +348,7 @@ export function JournalGrid({
         ),
       },
     ],
-    [tzByAccount, currencyByAccount, router],
+    [tzOf, curOf, router],
   );
 
   const table = useReactTable({

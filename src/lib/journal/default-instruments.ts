@@ -1,5 +1,11 @@
 // Canonical watchlist — seeded for every user (DB: tj_seed_instruments_defaults).
 // Keep in sync with Trading data vault: instrument_registry.TRADE + RADAR (B6 FTMO).
+//
+// NOTE on point_value: P/L = points × point_value, expressed in the instrument's
+// QUOTE currency. For USD-quoted FX (EURUSD, GBPUSD, AUDUSD) that equals the USD
+// account P/L. For quote currencies other than the account currency (e.g. USDJPY →
+// JPY, USDCAD → CAD) the figure is in the quote currency and NOT FX-converted here.
+// If exact multi-currency P/L is required, add per-instrument tick_value/conversion.
 
 export type DefaultInstrument = {
   symbol: string;

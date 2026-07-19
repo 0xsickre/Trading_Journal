@@ -13,6 +13,13 @@ export type ExitEfficiencyResult = {
 
 export { parsePlannedRewardR } from "./plan-calculations";
 
+/**
+ * Minimum meaningful planned reward (R). A stored `planned_rr` below this is
+ * treated as a data-entry error; without the floor, dividing realized R by a
+ * near-zero planned reward makes exit-efficiency % explode.
+ */
+const MIN_PLANNED_REWARD_R = 0.1;
+
 function numField(row: TradeRow, key: string): number | null {
   const v = row[key];
   return typeof v === "number" && !Number.isNaN(v) ? v : null;
@@ -38,6 +45,7 @@ export function exitEfficiencyFromTrade(
   const realizedR = row.stats?.realized_r;
   if (
     plannedRewardR == null ||
+    plannedRewardR < MIN_PLANNED_REWARD_R ||
     realizedR == null ||
     Number.isNaN(realizedR)
   ) {
@@ -56,8 +64,3 @@ export function fmtExitEfficiencyPct(pct: number | null | undefined): string {
   if (pct == null || Number.isNaN(pct)) return "—";
   return `${pct.toFixed(0)}%`;
 }
-
-/** @deprecated Use exitEfficiencyFromTrade — kept for imports; measures target attainment. */
-export const targetAttainmentFromTrade = exitEfficiencyFromTrade;
-
-export const fmtTargetAttainmentPct = fmtExitEfficiencyPct;

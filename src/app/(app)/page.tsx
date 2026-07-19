@@ -3,10 +3,14 @@ import { PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getAccounts } from "@/lib/journal/accounts";
+import { ensureDefaults } from "@/lib/journal/ensure-defaults";
 import { Dashboard } from "@/components/journal/dashboard";
 import type { TradeRow } from "@/lib/journal/types";
 
 export default async function DashboardPage() {
+  // Fallback seed for legacy users / missed signup trigger — runs on the landing
+  // page only (must finish before we read accounts on a brand-new user).
+  await ensureDefaults();
   const [trades, accounts] = await Promise.all([
     getTradesWithStats(),
     getAccounts(),

@@ -11,7 +11,6 @@ export type RealizedTrade = {
   net: number;
   gross: number;
   r: number | null;
-  result: string | null;
   row: TradeRow;
 };
 
@@ -38,7 +37,6 @@ export function toRealized(
       net: t.stats!.net_pl ?? 0,
       gross: t.stats!.gross_pl ?? 0,
       r: t.stats!.realized_r,
-      result: (t.result as string) ?? null,
       row: t,
     }))
     .sort((a, b) => (a.closedAt ?? "").localeCompare(b.closedAt ?? ""));
@@ -136,12 +134,17 @@ export function computeStats(
     maxDd = Math.min(maxDd, cum - peak);
   }
 
+  // Win/loss is classified by realized money (p > 0 / p < 0), independent of the
+  // user-entered `result` label. Breakeven (p === 0) is excluded from winRate's
+  // denominator, so winRate + lossRate === 100 among decided trades only.
   const winRate = wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
   const avgR = rCount > 0 ? totalR / rCount : 0;
   const avgWin = winRCount > 0 ? winRSum / winRCount : 0;
   const avgLoss = lossRCount > 0 ? lossRSum / lossRCount : 0;
   const profitFactor = negProfit > 0 ? posProfit / negProfit : posProfit > 0 ? null : 0;
   const lossRate = 100 - winRate;
+  // Expectancy in R: money-based win probability × average win/loss R (avgLoss is
+  // already negative). Breakevens contribute ~0 R and are not modelled separately.
   const expectancy =
     (winRate / 100) * avgWin + (lossRate / 100) * avgLoss; // in R
 

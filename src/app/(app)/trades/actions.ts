@@ -150,12 +150,26 @@ export async function updateTrade(id: string, input: TradeInput) {
     .eq("id", id);
   if (upErr) return { ok: false as const, error: upErr.message };
 
+  // Snapshot existing fills so we can roll back if the re-insert fails —
+  // otherwise a failed insert after the delete would wipe the fills entirely.
+  const { data: prevExecs } = await supabase
+    .from("tj_executions")
+    .select("side,price,qty,executed_at,fee,swap_funding,source")
+    .eq("position_id", id);
+
   await supabase.from("tj_executions").delete().eq("position_id", id);
   if (execs.length > 0) {
     const { error: exErr } = await supabase
       .from("tj_executions")
       .insert(execs.map((e) => ({ ...e, position_id: id })));
-    if (exErr) return { ok: false as const, error: exErr.message };
+    if (exErr) {
+      if (prevExecs && prevExecs.length > 0) {
+        await supabase
+          .from("tj_executions")
+          .insert(prevExecs.map((e) => ({ ...e, position_id: id })));
+      }
+      return { ok: false as const, error: exErr.message };
+    }
   }
 
   revalidatePath("/journal");
