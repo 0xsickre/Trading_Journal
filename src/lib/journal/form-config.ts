@@ -171,8 +171,6 @@ export const FORM_TABS: FormTab[] = [
             type: "select",
             listKey: "market_condition",
           },
-          { name: "vix_regime", label: "VIX Regime", type: "select", listKey: "vix_regime" },
-          { name: "news_nearby", label: "News Nearby", type: "select", listKey: "news_nearby" },
         ],
       },
     ],

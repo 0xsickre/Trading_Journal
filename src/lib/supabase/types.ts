@@ -371,7 +371,6 @@ export type Database = {
           max_profit_price: number | null
           mistake: string | null
           needs_review: boolean
-          news_nearby: string | null
           planned_rr: string | null
           position_size: number | null
           psychology_tags: string[]
@@ -388,7 +387,6 @@ export type Database = {
           trade_type: string | null
           updated_at: string
           user_id: string
-          vix_regime: string | null
         }
         Insert: {
           account_id?: string | null
@@ -411,7 +409,6 @@ export type Database = {
           max_profit_price?: number | null
           mistake?: string | null
           needs_review?: boolean
-          news_nearby?: string | null
           planned_rr?: string | null
           position_size?: number | null
           psychology_tags?: string[]
@@ -428,7 +425,6 @@ export type Database = {
           trade_type?: string | null
           updated_at?: string
           user_id?: string
-          vix_regime?: string | null
         }
         Update: {
           account_id?: string | null
@@ -451,7 +447,6 @@ export type Database = {
           max_profit_price?: number | null
           mistake?: string | null
           needs_review?: boolean
-          news_nearby?: string | null
           planned_rr?: string | null
           position_size?: number | null
           psychology_tags?: string[]
@@ -468,7 +463,6 @@ export type Database = {
           trade_type?: string | null
           updated_at?: string
           user_id?: string
-          vix_regime?: string | null
         }
         Relationships: [
           {
