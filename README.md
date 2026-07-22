@@ -2,7 +2,7 @@
 
 A professional ICT (Inner Circle Trader) trade journal web app: log executions, review performance, import broker exports, and analyse your own trading statistics. Single user by design, multi-tenant safe by construction — every table is protected by Postgres Row Level Security.
 
-**Makro bias / COT / nedeljni plan** žive u Trading data vault-u i trading-dashboard-u (F0–F4). TA plan za F5 ide u Notion (kasnije) — ovaj repo je **samo journal + PnL**. Per-trade polja `macro_align` / `cot_filter` / `session_killzone` linkuju svaki trejd nazad na taj vault sistem.
+**Makro bias / COT / nedeljni plan** žive u Trading data vault-u i trading-dashboard-u (F0–F4). TA plan za F5 ide u Notion (kasnije) — ovaj repo je **samo journal + PnL + daily process report**. Per-trade polja `macro_align` i `cot_filter` linkuju svaki trejd nazad na taj vault sistem.
 
 ---
 
@@ -24,7 +24,8 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 ## Features
 
 ### Daily Report (process journal)
-- **Persistent focus goal** — one active goal for weeks; day grade (A–F) measures progress on that goal only, never P&amp;L (Trillium-informed).
+- **Persistent focus goal** — one active goal for weeks; day grade (A–F) measures progress on that goal only, never P&amp;L (Trillium-informed). Set, edit, or graduate a goal from the focus-goal card; completing a report requires an active goal plus day grade and rule-broken answer.
+- **Date navigation** — prev/next day controls; future dates are clamped to today in the primary account timezone.
 - **Morning pre-trade** — mental temperature, sleep quality, macro note, Tharp market type, Douglas mantra acknowledgements, risk acceptance, mental rehearsal.
 - **Impulse control** — micromanage tracking plus Douglas&apos;s four fears (FOMO, fear of loss, fear of being wrong, greed).
 - **Evening debrief** — rule broken?, learned today, tomorrow changes with solutions, easiest layup setup, day overview, celebrate a process win.
@@ -42,7 +43,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 - **Direction** — auto-set from entry vs stop (`stop < entry` → Long, `stop > entry` → Short) as soon as both prices are entered; updates live when prices change.
 - **Progressive Risk Plan** — fields appear step-by-step: entry → stop → target + risk % → position size → planned R:R (reduces input errors).
 - **Trade lifecycle** — `Plan` = setup sa entry/stop/target ali **bez broker fill-a**; `Open` tek kad loguješ Entry Fill; `Closed` kad postoji exit fill; `Missed` = plan nikad otvoren (sa `miss_reason` + `missed_at` za review). Planned Entry polje ≠ otvorena pozicija. Journal grid ima poseban **Missed** filter.
-- **Macro linkage** — per-trade `macro_align` (Uz bias / Protiv bias / Van scope), `cot_filter` (Ulaz dozvoljen / Odložen / Ne chase), `session_killzone`, and `htf_bias` tie each execution back to the Trading data vault context (not a separate macro module).
+- **Macro linkage** — per-trade `macro_align` (Uz bias / Protiv bias / Van scope), `cot_filter` (Ulaz dozvoljen / Odložen / Ne chase), and `htf_bias` tie each execution back to the Trading data vault context (not a separate macro module).
 - **MAE / MFE** — `max_drawdown_price` and `max_profit_price` at review; live MAE/MFE in R and MFE capture % in the trade form metrics bar.
 - **Entry slippage** — computed from **Planned Entry Price** (`entry_price`) vs **avg entry** from fills. Shown in R vs planned stop distance (adverse fill = negative R display). Requires planned entry + at least one entry fill; stop needed for R. Dashboard: avg/total slip R + weekly chart. Mentor export includes per-trade and summary slippage.
 - **Target attainment %** — `realized_r / planned target R` (from `planned_rr` or entry/stop/target). Measures how much of your planned reward you captured (e.g. planned 3R, took 1.2R → 40%). Dashboard: avg + winner-only + weekly chart. Distinct from **MFE Capture %** (realized / MFE excursion, shown in the trade form). Journal grid + trade form + mentor export.
@@ -59,13 +60,13 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 - Stats (win rate, profit factor, expectancy, slippage, target attainment, and tag breakdowns) are **pre-computed** in the file so an LLM interprets the numbers instead of recalculating (or hallucinating) them — no API integration required.
 
 ### Dropdowns — Fully Editable In-App
-- **17 dropdown/tag lists** seeded per user (merged `technical_tag` list replaces separate confluence/setup/micro-ICT lists), organised by category: **Context** (direction, macro align, COT filter, session/killzone, HTF bias, entry TF), **ICT Setup** (technical tags, entry model, setup grade), **Risk** (risk %, result, exit reason, miss reason), **Psychology** (emotion, discipline, rules followed, mistake).
+- **16 dropdown/tag lists** seeded per user (merged `technical_tag` list replaces separate confluence/setup/micro-ICT lists), organised by category: **Context** (direction, macro align, COT filter, HTF bias, entry TF), **ICT Setup** (technical tags, entry model, setup grade), **Risk** (risk %, result, exit reason, miss reason), **Psychology** (emotion, discipline, rules followed, mistake).
 - **+ Add** inline on every dropdown; **Settings → Lists** for full CRUD, reorder, and colour.
 - **Soft-delete** — archiving an option hides it from entry forms but keeps historical trades intact and filterable.
 
 ### Journal Grid
-- TanStack Table with sort, search, and per-column filters (instrument, direction, grade, session, model, result, status) plus a dedicated **Missed** toggle.
-- Columns: trade #, date (account timezone), instrument, direction, grade, size, avg entry, avg exit, R, Gross P/L, Net P/L, status, TradingView link.
+- TanStack Table with sort, search, and per-column filters (instrument, direction, grade, model, result, status) plus a dedicated **Missed** toggle.
+- Columns: trade #, date (account timezone), instrument, direction, grade, size, entry, slip R, exit, R, target attainment %, gross P/L, net P/L, status, TradingView link.
 - One-click CSV and Excel export of the current filtered view.
 
 ### Analytics Dashboard
@@ -75,7 +76,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 - **R-distribution histogram** — colour-coded bars from `<−3R` to `>5R`.
 - **Calendar heatmap** — 26-week daily P/L in account timezone.
 - **Weekly charts** — entry slippage (R) and target attainment (%) by week.
-- **Breakdown table** — win rate, total R, avg R, net P/L grouped by any tag (macro align, COT filter, setup grade, technical tags, entry model, direction, instrument, psychology tags, mistake, HTF bias, …).
+- **Breakdown table** — win rate, total R, avg R, net P/L grouped by macro align, COT filter, setup grade, technical tags, entry model, direction, instrument, psychology tags, or mistake. Mentor export also includes HTF bias breakdowns.
 - Account and date-range filters throughout.
 
 ### Import & Reconciliation
@@ -116,19 +117,21 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 ```
 tj_accounts          – broker accounts (currency, balance, IANA timezone, FTMO challenge config)
 tj_instruments       – tradeable symbols with point_value per asset class (B6 10-symbol watchlist)
-tj_option_lists      – 17 dropdown/tag list definitions (Context, ICT Setup, Risk, Psychology)
+tj_option_lists      – 16 dropdown/tag list definitions (Context, ICT Setup, Risk, Psychology)
 tj_option_items      – default options (soft-deleteable)
 
 tj_positions         – parent trade record: technical_tags[], psychology_tags[], trade_journal_notes,
                        ICT setup (ict_entry_model, setup_grade, htf_bias, entry_tf), risk plan
                        (entry_price, stop_price, target_price, planned_rr), macro linkage
-                       (macro_align, cot_filter, session_killzone), MAE/MFE (max_drawdown_price,
+                       (macro_align, cot_filter), MAE/MFE (max_drawdown_price,
                        max_profit_price), lifecycle (status, miss_reason, missed_at)
 tj_executions        – child fills (entry or exit, price, qty, fee, swap, timestamp UTC)
 tj_position_stats    – SQL view (security_invoker): avg_entry, avg_exit, entry_qty, gross_pl,
                        net_pl, realized_r, realized_r_net
 
 tj_trade_images      – TradingView /x/ snapshot URLs per trade (htf_pre, ltf_pre, ltf_post)
+tj_focus_goals       – one active process goal per user (goal_text, started_at, ended_at)
+tj_daily_reports     – one row per calendar day: day grade, morning/evening debrief, impulse checks
 tj_import_batches    – import session metadata
 tj_import_rows       – per-row import audit (raw + parsed + match status)
 tj_column_mappings   – saved broker column-mapping presets
@@ -170,7 +173,7 @@ npm run dev
 
 ### Database Setup
 
-Apply migrations via the Supabase CLI (`supabase db push`) or the SQL editor. The repo includes `supabase/migrations/` — run all files in order (latest: `20260721150000_ftmo_account_mode.sql` for per-account FTMO challenge mode).
+Apply migrations via the Supabase CLI (`supabase db push`) or the SQL editor. The repo includes `supabase/migrations/` — run all files in order (latest: `20260722120000_daily_reports.sql` for Daily Report + focus goals).
 
 If an old **`trade-images`** Storage bucket still exists from an earlier version, you may delete it manually in **Supabase Dashboard → Storage** — chart images are now TradingView `/x/` URL strings only, so no bucket is required.
 
@@ -187,7 +190,7 @@ npm run test         # run the Vitest suite once
 npm run test:watch   # watch mode
 ```
 
-The suite covers the pure business logic — analytics, position/plan math, entry slippage, exit efficiency, FTMO evaluation, trade lifecycle, instrument aliases, and TradingView snapshot parsing.
+The suite covers the pure business logic — analytics, position/plan math, entry slippage, exit efficiency, FTMO evaluation, trade lifecycle, instrument aliases, TradingView snapshot parsing, daily-report date/completion helpers, and focus-goal day counting.
 
 ---
 
@@ -210,7 +213,7 @@ The suite covers the pure business logic — analytics, position/plan math, entr
 
 ## Security
 
-- **Row Level Security** on every `tj_*` table (`user_id = (select auth.uid())` — initplan-safe). Even if another user registered, they could not read or write any other user's data.
+- **Row Level Security** on every `tj_*` table (`user_id = (select auth.uid())` — initplan-safe), including `tj_focus_goals` and `tj_daily_reports`. Even if another user registered, they could not read or write any other user's data.
 - **`tj_position_stats`** runs with `security_invoker = on`, so the view honours the querying user's RLS on the underlying tables instead of bypassing it.
 - **No Supabase Storage** for chart images — only TradingView `/x/` URL strings in `tj_trade_images` (zero file hosting cost).
 - The `service_role` key is never referenced in frontend code — only the `anon` publishable key is exposed.
@@ -228,6 +231,7 @@ src/
 │   ├── (app)/                 # Protected routes (auth-checked layout)
 │   │   ├── page.tsx           # Dashboard
 │   │   ├── journal/           # Journal grid
+│   │   ├── daily/             # Daily Report + focus goal (+ actions.ts)
 │   │   ├── trades/            # New / edit trade (+ actions.ts)
 │   │   ├── import/            # CSV/Excel import wizard (+ actions.ts)
 │   │   └── settings/          # Lists, instruments, accounts (+ actions.ts)
@@ -236,7 +240,8 @@ src/
 ├── components/
 │   ├── app/                   # App shell (app-sidebar)
 │   ├── journal/               # Feature components (trade form, grid, dashboard,
-│   │                          #   heatmap, import wizard, FTMO banner, settings, …)
+│   │                          #   daily report, focus goal, heatmap, import wizard,
+│   │                          #   FTMO banner, settings, …)
 │   └── ui/                    # shadcn/ui primitives
 ├── lib/
 │   ├── supabase/              # client / server / middleware / user helpers + generated TS types
@@ -251,6 +256,8 @@ src/
 │       ├── trade-lifecycle.ts # plan / open / closed / missed status logic
 │       ├── tradingview-snapshot.ts  # /x/ snapshot URL parsing + validation
 │       ├── instrument-aliases.ts / default-instruments.ts  # B6 watchlist + broker aliases
+│       ├── daily-report.ts / daily-report-queries.ts  # Process journal types + DB queries
+│       ├── focus-goal.ts / focus-goal-queries.ts  # Active focus goal + day counting
 │       ├── trades.ts          # Trade/position queries
 │       ├── form-config.ts     # Declarative trade form (~25 fields)
 │       ├── trade-form-prefs.ts   # localStorage form defaults
