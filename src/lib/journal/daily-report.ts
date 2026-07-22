@@ -23,12 +23,18 @@ export const MARKET_TYPES = [
 export type MarketType = (typeof MARKET_TYPES)[number];
 
 export const MARKET_TYPE_LABELS: Record<MarketType, string> = {
-  bull_quiet: "Bull · Quiet",
-  bull_volatile: "Bull · Volatile",
-  bear_quiet: "Bear · Quiet",
-  bear_volatile: "Bear · Volatile",
-  sideways_quiet: "Sideways · Quiet",
-  sideways_volatile: "Sideways · Volatile",
+  bull_quiet: "Bik · Mirno",
+  bull_volatile: "Bik · Volatilno",
+  bear_quiet: "Medved · Mirno",
+  bear_volatile: "Medved · Volatilno",
+  sideways_quiet: "Bočno · Mirno",
+  sideways_volatile: "Bočno · Volatilno",
+};
+
+export const MICROMANAGE_LABELS: Record<Micromanage, string> = {
+  untouched: "Nisam dirao",
+  watched: "Pratio sam",
+  violated: "Prekršio sam",
 };
 
 export type DailyReport = {
@@ -59,6 +65,7 @@ export type DailyReport = {
   day_overview: string | null;
   celebrate_win: string | null;
   friday_flat: boolean | null;
+  no_trade_day: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -125,5 +132,6 @@ export function emptyDailyReport(reportDate: string): DailyReportInput {
     day_overview: null,
     celebrate_win: null,
     friday_flat: null,
+    no_trade_day: false,
   };
 }

@@ -34,6 +34,7 @@ const dailyReportSchema = z.object({
   day_overview: z.string().nullable(),
   celebrate_win: z.string().nullable(),
   friday_flat: z.boolean().nullable(),
+  no_trade_day: z.boolean(),
 });
 
 export type SaveDailyReportInput = z.infer<typeof dailyReportSchema>;
@@ -51,14 +52,14 @@ export async function saveDailyReport(
 > {
   const parsed = dailyReportSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Neispravan unos." };
   }
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not authenticated." };
+  if (!user) return { ok: false, error: "Niste prijavljeni." };
 
   const { data: activeGoal } = await supabase
     .from("tj_focus_goals")
@@ -106,13 +107,13 @@ export async function saveFocusGoal(
   goalText: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const text = goalText.trim();
-  if (!text) return { ok: false, error: "Focus goal cannot be empty." };
+  if (!text) return { ok: false, error: "Cilj fokusa ne može biti prazan." };
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not authenticated." };
+  if (!user) return { ok: false, error: "Niste prijavljeni." };
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -158,7 +159,7 @@ export async function endFocusGoal(): Promise<
     .eq("is_active", true)
     .maybeSingle();
 
-  if (!current) return { ok: false, error: "No active focus goal." };
+  if (!current) return { ok: false, error: "Nema aktivnog cilja fokusa." };
 
   const { error } = await supabase
     .from("tj_focus_goals")

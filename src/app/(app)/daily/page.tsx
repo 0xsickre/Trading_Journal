@@ -30,10 +30,10 @@ export default async function DailyPage({
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Daily Report</h1>
+        <h1 className="text-2xl font-semibold">Dnevni izveštaj</h1>
         <p className="text-muted-foreground">
-          Process and discipline journal — grade your day on focus-goal progress,
-          not P&amp;L.
+          Dnevnik procesa i discipline — oceni dan po napretku ka cilju fokusa,
+          ne po P&amp;L-u.
         </p>
       </div>
 

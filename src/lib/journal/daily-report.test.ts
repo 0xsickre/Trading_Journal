@@ -55,6 +55,7 @@ describe("emptyDailyReport", () => {
     expect(row.report_date).toBe("2026-07-22");
     expect(row.day_grade).toBeNull();
     expect(row.impulse_fomo).toBe(false);
+    expect(row.no_trade_day).toBe(false);
     expect(row.rule_broken).toBeNull();
   });
 });

@@ -130,6 +130,7 @@ export type Database = {
           mental_rehearsal: string | null
           mental_temp: number | null
           micromanage: string | null
+          no_trade_day: boolean
           report_date: string
           risk_accepted: boolean
           rule_broken: boolean | null
@@ -161,6 +162,7 @@ export type Database = {
           mental_rehearsal?: string | null
           mental_temp?: number | null
           micromanage?: string | null
+          no_trade_day?: boolean
           report_date: string
           risk_accepted?: boolean
           rule_broken?: boolean | null
@@ -192,6 +194,7 @@ export type Database = {
           mental_rehearsal?: string | null
           mental_temp?: number | null
           micromanage?: string | null
+          no_trade_day?: boolean
           report_date?: string
           risk_accepted?: boolean
           rule_broken?: boolean | null
