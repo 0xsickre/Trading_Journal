@@ -11,7 +11,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 | Area | What it does |
 |---|---|
 | Dashboard | 16 performance stat cards, equity curve, R-distribution, calendar heatmap, tag breakdowns |
-| Daily Report | Process-only daily journal: persistent focus goal, A–F grade on discipline (not P&L), morning/evening debrief |
+| Daily Report | **Dnevni izveštaj** (Serbian UI): process-only daily journal, focus goal, A–F day grade (not P&L), no-trade day, morning/evening debrief |
 | Journal | Sortable/filterable trade grid with CSV + Excel export |
 | New Trade | Streamlined ICT trade form (~25 fields) with partial-exit fills and a position-size calculator |
 | Import | CSV/Excel broker import with column mapping and per-row reconciliation |
@@ -21,43 +21,66 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 
 ---
 
+## Localization
+
+The app is **mixed English / Serbian**:
+
+| Area | Language |
+|------|----------|
+| Daily Report (`/daily`) | **Serbian** — nav label **Dnevni izveštaj**, all form labels, toasts, Douglas mantras, market-type labels |
+| FTMO banner & Settings → Accounts FTMO block | **Serbian** (e.g. Zamrznut, Reset izazov) |
+| Mentor pack export | **Serbian** AI instructions in the Markdown file |
+| Dashboard, Journal, Trade form, Import, Settings (rest) | **English** |
+
+---
+
 ## Features
 
-### Daily Report (process journal)
-- **Persistent focus goal** — one active goal for weeks; day grade (A–F) measures progress on that goal only, never P&amp;L (Trillium-informed). Set, edit, or graduate a goal from the focus-goal card; completing a report requires an active goal plus day grade and rule-broken answer.
-- **Date navigation** — prev/next day controls; future dates are clamped to today in the primary account timezone.
-- **Morning pre-trade** — mental temperature, sleep quality, macro note, Tharp market type, Douglas mantra acknowledgements, risk acceptance, mental rehearsal.
-- **Impulse control** — micromanage tracking plus Douglas&apos;s four fears (FOMO, fear of loss, fear of being wrong, greed).
-- **Evening debrief** — rule broken?, learned today, tomorrow changes with solutions, easiest layup setup, day overview, celebrate a process win.
-- **Friday flat rule** — weekend exposure checkbox on Fridays.
-- **Manual save** — one row per calendar day (primary account timezone); isolated from trades/accounts in v1.
+### Daily Report — Dnevni izveštaj (process journal)
+
+Nav: **Dnevni izveštaj** (`/daily`). Entire module UI is in **Serbian**; dates render with `date-fns` locale `sr` (e.g. `sre, 22. jul 2026.`).
+
+- **Calendar day = primary account timezone** — one row per `(user_id, report_date)` where `report_date` is derived from `getPrimaryAccount().timezone` (not per-account daily reports in v1).
+- **Persistent focus goal** — one active goal for weeks; day grade (A–F) measures progress on that goal only, never P&amp;L (Trillium-informed). Set, edit, or **graduate** a goal from the focus-goal card; completing a report requires an active goal plus day grade and rule-broken answer.
+- **Date navigation** — prev/next day controls; future dates are clamped to today in the primary account timezone. **Danas** shortcut when viewing a past day.
+- **Ocena dana** — grades A–F; badge shows **Kompletan** vs **Nacrt** based on completion rules.
+- **No-trade day** (`no_trade_day`) — checkbox *Dan bez trejdova (no-trade day)* for days with zero entries. When checked: hides **Kontrola impulsa** card and Douglas mantra / risk-acceptance block in the morning section; clears micromanage, impulse flags, and `risk_accepted`. Evening debrief still shown. Does **not** bypass day-grade or rule-broken requirements.
+- **Jutro · pre trejda** — mental temperature (1–10), sleep quality (1–5), macro note, Tharp market type (Serbian labels: Bik/Medved/Bočno × Mirno/Volatilno), Douglas mantra acknowledgements, risk acceptance, mental rehearsal. **Low-mental alert** when temperature &lt; 5.
+- **Kontrola impulsa** — micromanage tracking (Nisam dirao / Pratio sam / Prekršio sam) plus Douglas's four fears (FOMO, fear of loss, fear of being wrong, greed). Hidden on no-trade days.
+- **Veče · debrief** — rule broken?, learned today, tomorrow changes with solutions, easiest layup setup, day overview, celebrate a process win.
+- **Petak pravilo** — weekend exposure checkbox on Fridays (`friday_flat`).
+- **Manual save** — isolated from trades/accounts in v1; server action `saveDailyReport` upserts on `(user_id, report_date)`.
 
 ### Trade Logging
 - **Streamlined trade form** (~25 fields) across Plan & Setup and Execution & Review — `ict_entry_model`, `setup_grade`, unified `technical_tags`, and one `trade_journal_notes` field instead of overlapping tag/dropdown/text columns.
 - **Partial exit / scale-out support** — one parent position with multiple execution fills; accurate weighted R-multiple across every exit.
 - **Gross vs Net P/L** separation — raw price movement vs. P/L after fees and swap/funding.
-- **TradingView chart URL** stored per trade as a clickable link.
-- **TradingView snapshot embeds** — three chart slots per trade (**HTF Pre**, **LTF Pre**, **LTF Post**) stored as `tradingview.com/x/…` snapshot URLs, not uploaded files. Zero file-hosting cost; the raw PNG is rendered from the snapshot ID. (No Supabase Storage.)
+- **TradingView snapshot embeds** — three chart slots per trade (**HTF Pre**, **LTF Pre**, **LTF Post**) in `tj_trade_images` as `tradingview.com/x/…` snapshot URLs (not uploaded files). Zero file-hosting cost; PNG rendered from the snapshot ID. Managed via browser Supabase client (RLS). Legacy `chart_url` on `tj_positions` was removed — gallery is the single source of truth. (No Supabase Storage.)
 - **Position-size calculator** — auto **Position Size** from risk % × account balance ÷ (stop distance × point value); updates live in Risk Plan.
 - **Planned R:R** — auto-calculated from entry / stop / target (direction-aware); stored as reward multiple (e.g. `2.45`), not a dropdown.
 - **Direction** — auto-set from entry vs stop (`stop < entry` → Long, `stop > entry` → Short) as soon as both prices are entered; updates live when prices change.
 - **Progressive Risk Plan** — fields appear step-by-step: entry → stop → target + risk % → position size → planned R:R (reduces input errors).
-- **Trade lifecycle** — `Plan` = setup sa entry/stop/target ali **bez broker fill-a**; `Open` tek kad loguješ Entry Fill; `Closed` kad postoji exit fill; `Missed` = plan nikad otvoren (sa `miss_reason` + `missed_at` za review). Planned Entry polje ≠ otvorena pozicija. Journal grid ima poseban **Missed** filter.
+- **Trade lifecycle** — `planned` = setup with entry/stop/target but **no broker fill**; `open` once you log an entry fill; `partial` when exit qty &lt; entry qty (scale-out in progress); `closed` when fully exited; `missed` = plan never opened (`miss_reason` + `missed_at` for review). Planned Entry ≠ open position. Journal grid has a dedicated **Missed** filter.
+- **Import review** — imported rows without fills get `needs_review: true`; journal grid offers **Activate** (`activateTrade`) to confirm and open them.
+- **Form prefs** — last-used `accountId` and `riskPct` persisted in `localStorage` (`tj:trade_form_prefs`).
 - **Macro linkage** — per-trade `macro_align` (Uz bias / Protiv bias / Van scope), `cot_filter` (Ulaz dozvoljen / Odložen / Ne chase), and `htf_bias` tie each execution back to the Trading data vault context (not a separate macro module).
 - **MAE / MFE** — `max_drawdown_price` and `max_profit_price` at review; live MAE/MFE in R and MFE capture % in the trade form metrics bar.
 - **Entry slippage** — computed from **Planned Entry Price** (`entry_price`) vs **avg entry** from fills. Shown in R vs planned stop distance (adverse fill = negative R display). Requires planned entry + at least one entry fill; stop needed for R. Dashboard: avg/total slip R + weekly chart. Mentor export includes per-trade and summary slippage.
 - **Target attainment %** — `realized_r / planned target R` (from `planned_rr` or entry/stop/target). Measures how much of your planned reward you captured (e.g. planned 3R, took 1.2R → 40%). Dashboard: avg + winner-only + weekly chart. Distinct from **MFE Capture %** (realized / MFE excursion, shown in the trade form). Journal grid + trade form + mentor export.
 
 ### FTMO / Prop-Firm Challenge Mode
-- **Per-account toggle** — enable challenge tracking on any account in **Settings → Accounts**; off by default, additive so existing accounts are unaffected.
+- **Per-account toggle** — enable challenge tracking on any account in **Settings → Accounts**; off by default, additive so existing accounts are unaffected. FTMO section labels are **Serbian**.
 - **Configurable rules** — max daily loss %, max total loss / static drawdown %, profit target %, and minimum trading days, each individually toggleable (defaults 5% / 10% / 10% / 4 days).
-- **Live evaluation** — rules are computed in-app from **realized (closed) net P/L** per account timezone; the dashboard shows a per-account **FTMO banner** with status (`active` / `passed` / `failed`), profit %, drawdown %, and the earliest breach per broken rule.
-- **Challenge reset** — a `ftmo_reset_at` marker ignores trades before a reset so you can re-run a challenge on the same account.
+- **Live evaluation** — rules are computed in-app from **realized (closed) net P/L** per account timezone; the dashboard shows a per-account **FTMO banner** with status (`active` / `passed` / `failed` — UI: Aktivan / Položen / Zamrznut), profit %, drawdown %, and the earliest breach per broken rule.
+- **Account freeze** — when status is `failed`, **new trades are blocked** on that account (`createTrade` returns a Serbian error) until you **Reset izazov** in Settings.
+- **Challenge reset** — `resetFtmoChallenge` sets `ftmo_reset_at` so trades before the reset are ignored; you can re-run a challenge on the same account.
 - **Approximation note** — a real prop firm measures intraday *equity* including open floating P/L; a journal only knows *realized* results, so this trains discipline on a demo account rather than replacing the broker's risk engine.
 
 ### Mentor Pack Export
-- **"Export for Claude"** button on the dashboard downloads a self-contained Markdown file for the selected period (Day / Week / Month / Quarter / Year / All).
+- **"Export for Claude"** button on the dashboard downloads a self-contained Markdown file for the selected period (Day / Week / Month / Quarter / Year / **Custom** / All).
 - Stats (win rate, profit factor, expectancy, slippage, target attainment, and tag breakdowns) are **pre-computed** in the file so an LLM interprets the numbers instead of recalculating (or hallucinating) them — no API integration required.
+- Export includes **Serbian AI mentor instructions** (*Uputstvo za tebe (AI mentor)*) telling Claude to respond in Serbian and not recalculate stats. Breakdowns include **HTF bias** (dashboard breakdown table does not offer `htf_bias` as a group-by option).
+- Up to **300 closed trades** expanded in full detail per export; open / needs-review and missed setups listed separately.
 
 ### Dropdowns — Fully Editable In-App
 - **16 dropdown/tag lists** seeded per user (merged `technical_tag` list replaces separate confluence/setup/micro-ICT lists), organised by category: **Context** (direction, macro align, COT filter, HTF bias, entry TF), **ICT Setup** (technical tags, entry model, setup grade), **Risk** (risk %, result, exit reason, miss reason), **Psychology** (emotion, discipline, rules followed, mistake).
@@ -66,7 +89,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 
 ### Journal Grid
 - TanStack Table with sort, search, and per-column filters (instrument, direction, grade, model, result, status) plus a dedicated **Missed** toggle.
-- Columns: trade #, date (account timezone), instrument, direction, grade, size, entry, slip R, exit, R, target attainment %, gross P/L, net P/L, status, TradingView link.
+- Columns: trade #, date (account timezone), instrument, direction, grade, size, entry, slip R, exit, R, target attainment %, gross P/L, net P/L, status, TradingView snapshot link (primary image).
 - One-click CSV and Excel export of the current filtered view.
 
 ### Analytics Dashboard
@@ -76,21 +99,23 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 - **R-distribution histogram** — colour-coded bars from `<−3R` to `>5R`.
 - **Calendar heatmap** — 26-week daily P/L in account timezone.
 - **Weekly charts** — entry slippage (R) and target attainment (%) by week.
-- **Breakdown table** — win rate, total R, avg R, net P/L grouped by macro align, COT filter, setup grade, technical tags, entry model, direction, instrument, psychology tags, or mistake. Mentor export also includes HTF bias breakdowns.
+- **Breakdown table** — win rate, total R, avg R, net P/L grouped by macro align, COT filter, setup grade, technical tags, entry model, direction, instrument, psychology tags, or mistake. Mentor export also includes **HTF bias** breakdowns (not available as a dashboard group-by).
 - Account and date-range filters throughout.
 
 ### Import & Reconciliation
 - Upload a CSV or Excel broker export.
-- Column-mapping UI with auto-detect and saveable broker presets (`tj_column_mappings`).
+- Column-mapping UI with **keyword auto-detect** (manual override per column). Table `tj_column_mappings` exists in the schema for future saveable broker presets — **not wired in the UI yet**.
 - Smart per-row reconciliation: **Create / Merge / Skip**.
-  - Merge updates only objective fields (price, qty, fee, swap) — psychology, ICT model, and notes are never overwritten.
+  - Merge updates only objective execution fields (price, qty, fee, swap) — psychology, ICT model, and notes are never overwritten.
   - Full diff highlighting of changed values.
-- Raw import rows stored for an audit trail.
+- Instrument alias normalization (e.g. `US500.cash` → `SP500`, `GOLD` → `XAUUSD`, `Copper` → `HG`).
+- Rows imported without fills are flagged `needs_review`; activate from the journal grid when ready.
+- Raw import rows stored for an audit trail (`tj_import_batches` + `tj_import_rows`).
 
 ### Instruments & Accounts
-- **10-symbol watchlist** — B6 FTMO universe synced with Trading data vault: `EURUSD`, `GBPUSD`, `USDJPY`, `USDCAD`, `AUDUSD`, `SP500`, `NAS100`, `XAUUSD`, `HG`, `RTY` — seeded on signup (`tj_seed_instruments_defaults`). CSV import normalizes broker aliases (e.g. `US500.cash` → `SP500`, `US100.cash` → `NAS100`, `GOLD` → `XAUUSD`).
-- Per-instrument `point_value` for accurate P/L across asset classes (editable in Settings).
-- Multiple accounts with individual currency, starting balance, **IANA timezone**, and optional FTMO challenge config — all timestamps display in the account's local time regardless of the user's machine.
+- **B6 FTMO watchlist** — synced with Trading data vault `instrument_registry`: **8 active trade** symbols (`EURUSD`, `GBPUSD`, `USDJPY`, `USDCAD`, `AUDUSD`, `SP500`, `NAS100`, `XAUUSD`) plus **2 radar** (`HG`, `RTY`) — seeded on signup (`tj_seed_instruments_defaults`). CSV import normalizes broker aliases (e.g. `US500.cash` → `SP500`, `US100.cash` → `NAS100`, `GOLD` → `XAUUSD`).
+- Per-instrument `point_value` for P/L math across asset classes (editable in Settings). P/L is in the instrument's **quote currency** — not FX-converted to account currency (see comment in `default-instruments.ts`).
+- Multiple accounts with individual currency, starting balance, **IANA timezone**, and optional FTMO challenge config — all timestamps display in the account's local time regardless of the user's machine. **Primary account** timezone drives Daily Report calendar days.
 
 ---
 
@@ -130,11 +155,12 @@ tj_position_stats    – SQL view (security_invoker): avg_entry, avg_exit, entry
                        net_pl, realized_r, realized_r_net
 
 tj_trade_images      – TradingView /x/ snapshot URLs per trade (htf_pre, ltf_pre, ltf_post)
-tj_focus_goals       – one active process goal per user (goal_text, started_at, ended_at)
-tj_daily_reports     – one row per calendar day: day grade, morning/evening debrief, impulse checks
+tj_focus_goals       – one active process goal per user (goal_text, started_at, ended_at, is_active)
+tj_daily_reports     – one row per calendar day: day grade, morning/evening debrief, impulse checks,
+                       friday_flat, no_trade_day
 tj_import_batches    – import session metadata
 tj_import_rows       – per-row import audit (raw + parsed + match status)
-tj_column_mappings   – saved broker column-mapping presets
+tj_column_mappings   – broker column-mapping presets (schema only — UI not implemented yet)
 ```
 
 - All timestamps are stored as `timestamptz` (UTC). Display and import parsing convert to the per-account IANA timezone via `date-fns-tz`.
@@ -173,7 +199,25 @@ npm run dev
 
 ### Database Setup
 
-Apply migrations via the Supabase CLI (`supabase db push`) or the SQL editor. The repo includes `supabase/migrations/` — run all files in order (latest: `20260722120000_daily_reports.sql` for Daily Report + focus goals).
+Apply migrations via the Supabase CLI (`supabase db push`) or the SQL editor. The repo includes `supabase/migrations/` — **incremental deltas only** (from `20260719120000` onward); a fresh Supabase project needs the full baseline schema plus all files in order. Latest: `20260722130000_daily_report_no_trade_day.sql` (`no_trade_day` on `tj_daily_reports`; prior file `20260722120000_daily_reports.sql` creates the table + focus goals).
+
+| Migration | Summary |
+|-----------|---------|
+| `20260719120000` | Drop legacy analysis module tables |
+| `20260719143000` | B6 10-symbol instrument universe |
+| `20260719150000` | Remove session_killzone from seed/UI |
+| `20260720120000` | `technical_tags` + `trade_journal_notes`; drop legacy tag columns |
+| `20260720130000` | MAE/MFE price columns |
+| `20260720140000` | Drop vix_regime, news_nearby |
+| `20260720150000` | TradingView snapshot images; drop `chart_url` |
+| `20260720160000` | RLS initplan fix, indexes, TV URL CHECK, RPC hardening |
+| `20260720170000` | `tj_position_stats` view |
+| `20260721120000` | `macro_align`, `cot_filter`; trim option lists |
+| `20260721130000` | Trade lifecycle `missed` + miss_reason list |
+| `20260721140000` | `security_invoker` on view |
+| `20260721150000` | FTMO account columns |
+| `20260722120000` | `tj_daily_reports` + `tj_focus_goals` |
+| `20260722130000` | `no_trade_day` on daily reports |
 
 If an old **`trade-images`** Storage bucket still exists from an earlier version, you may delete it manually in **Supabase Dashboard → Storage** — chart images are now TradingView `/x/` URL strings only, so no bucket is required.
 
@@ -190,7 +234,7 @@ npm run test         # run the Vitest suite once
 npm run test:watch   # watch mode
 ```
 
-The suite covers the pure business logic — analytics, position/plan math, entry slippage, exit efficiency, FTMO evaluation, trade lifecycle, instrument aliases, TradingView snapshot parsing, daily-report date/completion helpers, and focus-goal day counting.
+The suite covers pure business logic in **11 Vitest files** under `src/lib/journal/` — analytics, position/plan math, entry slippage, exit efficiency, FTMO evaluation, trade lifecycle, instrument aliases, TradingView snapshot parsing, daily-report date/completion helpers, focus-goal day counting, and default instruments.
 
 ---
 
@@ -211,7 +255,14 @@ The suite covers the pure business logic — analytics, position/plan math, entr
 
 ---
 
-## Security
+## Architecture
+
+- **No REST API routes** — all mutations go through **Next.js Server Actions** (`login/`, `daily/`, `trades/`, `import/`, `settings/actions.ts`). Reads use Supabase server client in Server Components.
+- **Session proxy** — `src/proxy.ts` (Next.js 16) refreshes Supabase auth and redirects unauthenticated users to `/login`.
+- **TradingView images** — the `TradeImages` component writes directly to `tj_trade_images` via the browser Supabase client (RLS-protected), not Server Actions.
+- **Defaults seeding** — auth trigger `tj_on_auth_user_created` (if configured in your Supabase project) plus idempotent `tj_seed_my_defaults` RPC on dashboard load (`ensure-defaults.ts`).
+
+---
 
 - **Row Level Security** on every `tj_*` table (`user_id = (select auth.uid())` — initplan-safe), including `tj_focus_goals` and `tj_daily_reports`. Even if another user registered, they could not read or write any other user's data.
 - **`tj_position_stats`** runs with `security_invoker = on`, so the view honours the querying user's RLS on the underlying tables instead of bypassing it.
@@ -260,7 +311,7 @@ src/
 │       ├── focus-goal.ts / focus-goal-queries.ts  # Active focus goal + day counting
 │       ├── trades.ts          # Trade/position queries
 │       ├── form-config.ts     # Declarative trade form (~25 fields)
-│       ├── trade-form-prefs.ts   # localStorage form defaults
+│       ├── trade-form-prefs.ts   # localStorage form defaults (account, risk %)
 │       ├── types.ts           # Client-safe shared types
 │       ├── options.ts / accounts.ts / instruments.ts / time.ts / format.ts / nav.ts
 │       └── ensure-defaults.ts # Idempotent per-user seeding fallback
