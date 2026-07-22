@@ -11,6 +11,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 | Area | What it does |
 |---|---|
 | Dashboard | 16 performance stat cards, equity curve, R-distribution, calendar heatmap, tag breakdowns |
+| Daily Report | Process-only daily journal: persistent focus goal, A–F grade on discipline (not P&L), morning/evening debrief |
 | Journal | Sortable/filterable trade grid with CSV + Excel export |
 | New Trade | Streamlined ICT trade form (~25 fields) with partial-exit fills and a position-size calculator |
 | Import | CSV/Excel broker import with column mapping and per-row reconciliation |
@@ -21,6 +22,14 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 ---
 
 ## Features
+
+### Daily Report (process journal)
+- **Persistent focus goal** — one active goal for weeks; day grade (A–F) measures progress on that goal only, never P&amp;L (Trillium-informed).
+- **Morning pre-trade** — mental temperature, sleep quality, macro note, Tharp market type, Douglas mantra acknowledgements, risk acceptance, mental rehearsal.
+- **Impulse control** — micromanage tracking plus Douglas&apos;s four fears (FOMO, fear of loss, fear of being wrong, greed).
+- **Evening debrief** — rule broken?, learned today, tomorrow changes with solutions, easiest layup setup, day overview, celebrate a process win.
+- **Friday flat rule** — weekend exposure checkbox on Fridays.
+- **Manual save** — one row per calendar day (primary account timezone); isolated from trades/accounts in v1.
 
 ### Trade Logging
 - **Streamlined trade form** (~25 fields) across Plan & Setup and Execution & Review — `ict_entry_model`, `setup_grade`, unified `technical_tags`, and one `trade_journal_notes` field instead of overlapping tag/dropdown/text columns.

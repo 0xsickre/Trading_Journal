@@ -4,6 +4,7 @@ import {
   PlusCircle,
   Upload,
   Settings,
+  ClipboardCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -16,6 +17,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/journal", label: "Journal", icon: BookOpen },
+  { href: "/daily", label: "Daily Report", icon: ClipboardCheck },
   { href: "/trades/new", label: "New Trade", icon: PlusCircle },
   { href: "/import", label: "Import", icon: Upload },
   { href: "/settings", label: "Settings", icon: Settings },

@@ -107,6 +107,102 @@ export type Database = {
         }
         Relationships: []
       }
+      tj_daily_reports: {
+        Row: {
+          celebrate_win: string | null
+          created_at: string
+          day_grade: string | null
+          day_overview: string | null
+          easiest_setup: string | null
+          friday_flat: boolean | null
+          id: string
+          impulse_fear: boolean
+          impulse_fear_wrong: boolean
+          impulse_fomo: boolean
+          impulse_greed: boolean
+          impulse_note: string | null
+          learned_today: string | null
+          macro_note: string | null
+          mantra_risk: boolean
+          mantra_rules: boolean
+          mantra_series: boolean
+          market_type: string | null
+          mental_rehearsal: string | null
+          mental_temp: number | null
+          micromanage: string | null
+          report_date: string
+          risk_accepted: boolean
+          rule_broken: boolean | null
+          rule_broken_note: string | null
+          sleep_quality: number | null
+          tomorrow_change: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          celebrate_win?: string | null
+          created_at?: string
+          day_grade?: string | null
+          day_overview?: string | null
+          easiest_setup?: string | null
+          friday_flat?: boolean | null
+          id?: string
+          impulse_fear?: boolean
+          impulse_fear_wrong?: boolean
+          impulse_fomo?: boolean
+          impulse_greed?: boolean
+          impulse_note?: string | null
+          learned_today?: string | null
+          macro_note?: string | null
+          mantra_risk?: boolean
+          mantra_rules?: boolean
+          mantra_series?: boolean
+          market_type?: string | null
+          mental_rehearsal?: string | null
+          mental_temp?: number | null
+          micromanage?: string | null
+          report_date: string
+          risk_accepted?: boolean
+          rule_broken?: boolean | null
+          rule_broken_note?: string | null
+          sleep_quality?: number | null
+          tomorrow_change?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          celebrate_win?: string | null
+          created_at?: string
+          day_grade?: string | null
+          day_overview?: string | null
+          easiest_setup?: string | null
+          friday_flat?: boolean | null
+          id?: string
+          impulse_fear?: boolean
+          impulse_fear_wrong?: boolean
+          impulse_fomo?: boolean
+          impulse_greed?: boolean
+          impulse_note?: string | null
+          learned_today?: string | null
+          macro_note?: string | null
+          mantra_risk?: boolean
+          mantra_rules?: boolean
+          mantra_series?: boolean
+          market_type?: string | null
+          mental_rehearsal?: string | null
+          mental_temp?: number | null
+          micromanage?: string | null
+          report_date?: string
+          risk_accepted?: boolean
+          rule_broken?: boolean | null
+          rule_broken_note?: string | null
+          sleep_quality?: number | null
+          tomorrow_change?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tj_executions: {
         Row: {
           created_at: string
@@ -166,6 +262,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tj_focus_goals: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          goal_text: string
+          id: string
+          is_active: boolean
+          started_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          goal_text: string
+          id?: string
+          is_active?: boolean
+          started_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          goal_text?: string
+          id?: string
+          is_active?: boolean
+          started_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       tj_import_batches: {
         Row: {
