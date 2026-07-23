@@ -13,7 +13,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 | Dashboard | 16 performance stat cards, equity curve, R-distribution, calendar heatmap, tag breakdowns |
 | Daily Report | **Dnevni izveštaj** (Serbian UI): process-only daily journal, focus goal, A–F day grade (not P&L), no-trade day, morning / mid-day / evening debrief |
 | Journal | Sortable/filterable trade grid with CSV + Excel export |
-| New Trade | Streamlined ICT trade form (~25 fields) with partial-exit fills and a position-size calculator |
+| New Trade | Streamlined ICT trade form (~25 fields) with partial-exit fills and a position-size calculator; edit existing trades at `/trades/[id]/edit` |
 | Import | CSV/Excel broker import with column mapping and per-row reconciliation |
 | Settings | In-app CRUD for dropdown lists, instruments, and accounts |
 | FTMO mode | Per-account prop-firm challenge tracking (daily loss, max drawdown, profit target, min days) |
@@ -85,7 +85,7 @@ Nav: **Dnevni izveštaj** (`/daily`). Entire module UI is in **Serbian**; dates 
 - Up to **300 closed trades** expanded in full detail per export; open / needs-review and missed setups listed separately.
 
 ### Dropdowns — Fully Editable In-App
-- **16 dropdown/tag lists** seeded per user (merged `technical_tag` list replaces separate confluence/setup/micro-ICT lists), organised by category: **Context** (direction, macro align, COT filter, HTF bias, entry TF), **ICT Setup** (technical tags, entry model, setup grade), **Risk** (risk %, result, exit reason, miss reason), **Psychology** (emotion, discipline, rules followed, mistake).
+- **17 dropdown/tag lists** seeded per user (**16** on the trade form — `session_killzone` is seeded for Settings/history but omitted from the trade entry form). Merged `technical_tag` list replaces separate confluence/setup/micro-ICT lists; organised by category: **Context** (direction, macro align, COT filter, HTF bias, entry TF), **ICT Setup** (technical tags, entry model, setup grade), **Risk** (risk %, result, exit reason, miss reason), **Psychology** (emotion, discipline, rules followed, mistake).
 - **+ Add** inline on every dropdown; **Settings → Lists** for full CRUD, reorder, and colour.
 - **Soft-delete** — archiving an option hides it from entry forms but keeps historical trades intact and filterable.
 
@@ -126,6 +126,7 @@ Nav: **Dnevni izveštaj** (`/daily`). Entire module UI is in **Serbian**; dates 
 | Layer | Technology |
 |---|---|
 | Framework | Next.js 16 (App Router, Server Actions, TypeScript) |
+| UI | React 19, dark theme by default (Geist fonts) |
 | Styling | Tailwind CSS v4 + shadcn/ui (Radix + Base UI primitives) |
 | Database | Supabase Postgres with Row Level Security |
 | Auth | Supabase Auth via `@supabase/ssr` |
@@ -144,7 +145,8 @@ Nav: **Dnevni izveštaj** (`/daily`). Entire module UI is in **Serbian**; dates 
 ```
 tj_accounts          – broker accounts (currency, balance, IANA timezone, FTMO challenge config)
 tj_instruments       – tradeable symbols with point_value per asset class (B6 10-symbol watchlist)
-tj_option_lists      – 16 dropdown/tag list definitions (Context, ICT Setup, Risk, Psychology)
+tj_option_lists      – 17 dropdown/tag list definitions (Context, ICT Setup, Risk, Psychology;
+                       session_killzone seeded but not on trade form)
 tj_option_items      – default options (soft-deleteable)
 
 tj_positions         – parent trade record: technical_tags[], psychology_tags[], trade_journal_notes,
@@ -196,8 +198,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-public-key>
 Both values are in **Supabase Dashboard → Project Settings → API**.
 
 ```bash
-npm run dev
-# http://localhost:3000
+npm run dev      # http://localhost:3000
+npm run build    # production build
+npm run lint     # ESLint (eslint-config-next)
 ```
 
 ### Database Setup
@@ -208,7 +211,7 @@ Apply migrations via the Supabase CLI (`supabase db push`) or the SQL editor. Th
 |-----------|---------|
 | `20260719120000` | Drop legacy analysis module tables |
 | `20260719143000` | B6 10-symbol instrument universe |
-| `20260719150000` | Remove session_killzone from seed/UI |
+| `20260719150000` | Remove session_killzone option list (later migrations re-seed it; still omitted from trade form) |
 | `20260720120000` | `technical_tags` + `trade_journal_notes`; drop legacy tag columns |
 | `20260720130000` | MAE/MFE price columns |
 | `20260720140000` | Drop vix_regime, news_nearby |
@@ -226,7 +229,7 @@ If an old **`trade-images`** Storage bucket still exists from an earlier version
 
 New signups are seeded automatically by the auth trigger; `tj_seed_my_defaults` is also called on login as an idempotent fallback (`src/lib/journal/ensure-defaults.ts`).
 
-After applying migrations, create your user in **Supabase Dashboard → Authentication → Users** (or via the sign-up form). For personal use, disable email confirmation under **Authentication → Providers → Email**.
+After applying migrations, create your user in **Supabase Dashboard → Authentication → Users** (or via **Sign in / Create account** tabs on `/login`). For personal use, disable email confirmation under **Authentication → Providers → Email**.
 
 ---
 
@@ -260,12 +263,15 @@ The suite covers pure business logic in **11 Vitest files** under `src/lib/journ
 
 ## Architecture
 
-- **No REST API routes** — all mutations go through **Next.js Server Actions** (`login/`, `daily/`, `trades/`, `import/`, `settings/actions.ts`). Reads use Supabase server client in Server Components.
+- **No REST API routes** — all mutations go through **Next.js Server Actions** (`login/`, `daily/` — `saveDailyReport`, `saveFocusGoal`, `endFocusGoal` — `trades/`, `import/`, `settings/actions.ts`). Reads use Supabase server client in Server Components.
 - **Session proxy** — `src/proxy.ts` (Next.js 16) refreshes Supabase auth and redirects unauthenticated users to `/login`.
 - **TradingView images** — the `TradeImages` component writes directly to `tj_trade_images` via the browser Supabase client (RLS-protected), not Server Actions.
 - **Defaults seeding** — auth trigger `tj_on_auth_user_created` (if configured in your Supabase project) plus idempotent `tj_seed_my_defaults` RPC on dashboard load (`ensure-defaults.ts`).
+- **Responsive shell** — desktop sidebar + mobile horizontal nav (`AppSidebar` / `MobileTopbar` in `app-sidebar.tsx`).
 
 ---
+
+## Security
 
 - **Row Level Security** on every `tj_*` table (`user_id = (select auth.uid())` — initplan-safe), including `tj_focus_goals` and `tj_daily_reports`. Even if another user registered, they could not read or write any other user's data.
 - **`tj_position_stats`** runs with `security_invoker = on`, so the view honours the querying user's RLS on the underlying tables instead of bypassing it.
@@ -287,12 +293,15 @@ src/
 │   │   ├── journal/           # Journal grid
 │   │   ├── daily/             # Daily Report + focus goal (+ actions.ts)
 │   │   ├── trades/            # New / edit trade (+ actions.ts)
+│   │   │   ├── new/page.tsx
+│   │   │   └── [id]/edit/page.tsx
 │   │   ├── import/            # CSV/Excel import wizard (+ actions.ts)
-│   │   └── settings/          # Lists, instruments, accounts (+ actions.ts)
-│   ├── login/                 # Auth page + actions
+│   │   ├── settings/          # Lists, instruments, accounts (+ actions.ts)
+│   │   └── loading.tsx        # Route-level loading skeleton
+│   ├── login/                 # Auth page (sign-in / sign-up tabs) + actions
 │   └── globals.css            # Tailwind v4 theme (dark by default)
 ├── components/
-│   ├── app/                   # App shell (app-sidebar)
+│   ├── app/                   # App shell (sidebar + mobile topbar)
 │   ├── journal/               # Feature components (trade form, grid, dashboard,
 │   │                          #   daily report, focus goal, heatmap, import wizard,
 │   │                          #   FTMO banner, settings, …)
