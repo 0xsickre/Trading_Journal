@@ -13,7 +13,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 | Dashboard | 16 performance stat cards, equity curve, R-distribution, calendar heatmap, tag breakdowns |
 | Daily Report | **Dnevni izveštaj** (Serbian UI): process-only daily journal, focus goal, A–F day grade (not P&L), no-trade day, morning / mid-day / evening debrief |
 | Journal | Sortable/filterable trade grid with CSV + Excel export |
-| New Trade | Streamlined ICT trade form (~25 fields) with partial-exit fills and a position-size calculator; edit existing trades at `/trades/[id]/edit` |
+| New Trade | Streamlined ICT trade form (~23 position fields) with partial-exit fills and a position-size calculator; edit existing trades at `/trades/[id]/edit` |
 | Import | CSV/Excel broker import with column mapping and per-row reconciliation |
 | Settings | In-app CRUD for dropdown lists, instruments, and accounts |
 | FTMO mode | Per-account prop-firm challenge tracking (daily loss, max drawdown, profit target, min days) |
@@ -54,7 +54,7 @@ Nav: **Dnevni izveštaj** (`/daily`). Entire module UI is in **Serbian**; dates 
 - **Manual save** — isolated from trades/accounts in v1; server action `saveDailyReport` upserts on `(user_id, report_date)`.
 
 ### Trade Logging
-- **Streamlined trade form** (~25 fields) across Plan & Setup and Execution & Review — `ict_entry_model`, `setup_grade`, unified `technical_tags`, and one `trade_journal_notes` field instead of overlapping tag/dropdown/text columns.
+- **Streamlined trade form** (~23 position fields in `form-config.ts`) across Plan & Setup and Execution & Review — `ict_entry_model`, `setup_grade`, unified `technical_tags`, and one `trade_journal_notes` field instead of overlapping tag/dropdown/text columns.
 - **Partial exit / scale-out support** — one parent position with multiple execution fills; accurate weighted R-multiple across every exit.
 - **Gross vs Net P/L** separation — raw price movement vs. P/L after fees and swap/funding.
 - **TradingView snapshot embeds** — three chart slots per trade (**HTF Pre**, **LTF Pre**, **LTF Post**) in `tj_trade_images` as `tradingview.com/x/…` snapshot URLs (not uploaded files). Zero file-hosting cost; PNG rendered from the snapshot ID. Managed via browser Supabase client (RLS). Legacy `chart_url` on `tj_positions` was removed — gallery is the single source of truth. (No Supabase Storage.)
@@ -85,7 +85,7 @@ Nav: **Dnevni izveštaj** (`/daily`). Entire module UI is in **Serbian**; dates 
 - Up to **300 closed trades** expanded in full detail per export; open / needs-review and missed setups listed separately.
 
 ### Dropdowns — Fully Editable In-App
-- **17 dropdown/tag lists** seeded per user (**16** on the trade form — `session_killzone` is seeded for Settings/history but omitted from the trade entry form). Merged `technical_tag` list replaces separate confluence/setup/micro-ICT lists; organised by category: **Context** (direction, macro align, COT filter, HTF bias, entry TF), **ICT Setup** (technical tags, entry model, setup grade), **Risk** (risk %, result, exit reason, miss reason), **Psychology** (emotion, discipline, rules followed, mistake).
+- **17 dropdown/tag lists** seeded per user. The trade form binds **15** as select/tags; **`direction`** is auto-computed from entry vs stop (not a dropdown); **`session_killzone`** is seeded for Settings/history only. Merged `technical_tag` list replaces separate confluence/setup/micro-ICT lists; organised by category: **Context** (direction, macro align, COT filter, session/killzone, HTF bias, entry TF), **ICT Setup** (technical tags, entry model, setup grade), **Risk** (risk %, result, exit reason, miss reason), **Psychology** (emotion, discipline, rules followed, mistake).
 - **+ Add** inline on every dropdown; **Settings → Lists** for full CRUD, reorder, and colour.
 - **Soft-delete** — archiving an option hides it from entry forms but keeps historical trades intact and filterable.
 
@@ -227,7 +227,7 @@ Apply migrations via the Supabase CLI (`supabase db push`) or the SQL editor. Th
 
 If an old **`trade-images`** Storage bucket still exists from an earlier version, you may delete it manually in **Supabase Dashboard → Storage** — chart images are now TradingView `/x/` URL strings only, so no bucket is required.
 
-New signups are seeded automatically by the auth trigger; `tj_seed_my_defaults` is also called on login as an idempotent fallback (`src/lib/journal/ensure-defaults.ts`).
+New signups are seeded automatically by the auth trigger; `tj_seed_my_defaults` is also called on first dashboard load (`/`) as an idempotent fallback (`src/lib/journal/ensure-defaults.ts`).
 
 After applying migrations, create your user in **Supabase Dashboard → Authentication → Users** (or via **Sign in / Create account** tabs on `/login`). For personal use, disable email confirmation under **Authentication → Providers → Email**.
 
@@ -322,7 +322,7 @@ src/
 │       ├── daily-report.ts / daily-report-queries.ts  # Process journal types + DB queries
 │       ├── focus-goal.ts / focus-goal-queries.ts  # Active focus goal + day counting
 │       ├── trades.ts          # Trade/position queries
-│       ├── form-config.ts     # Declarative trade form (~25 fields)
+│       ├── form-config.ts     # Declarative trade form (~23 position fields)
 │       ├── trade-form-prefs.ts   # localStorage form defaults (account, risk %)
 │       ├── types.ts           # Client-safe shared types
 │       ├── options.ts / accounts.ts / instruments.ts / time.ts / format.ts / nav.ts
