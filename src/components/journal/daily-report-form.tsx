@@ -30,13 +30,11 @@ import {
   MARKET_TYPE_LABELS,
   MARKET_TYPES,
   MICROMANAGE_LABELS,
-  MICROMANAGE_OPTIONS,
   nextReportDate,
   prevReportDate,
   type DailyReport,
   type DayGrade,
   type MarketType,
-  type Micromanage,
 } from "@/lib/journal/daily-report";
 import type { FocusGoal } from "@/lib/journal/focus-goal";
 import {
@@ -418,39 +416,79 @@ export function DailyReportForm({
       {!form.no_trade_day && (
         <Card>
           <CardHeader>
+            <CardTitle className="text-base">Tokom dana</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Mid-day check za intraweek swing — proveri se kad pregledaš tržište
+              (London, NY, ili između), ne samo uveče.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-start gap-2 rounded-md border border-dashed p-3">
+              <Checkbox
+                id="midday_no_touch"
+                checked={form.micromanage === "untouched"}
+                onCheckedChange={(c) =>
+                  patch("micromanage", c ? "untouched" : null)
+                }
+                className="mt-0.5"
+              />
+              <div>
+                <label
+                  htmlFor="midday_no_touch"
+                  className="cursor-pointer text-sm font-medium"
+                >
+                  Nisam dirao otvorene pozicije danas
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Nema pomeranja stopa, delimičnih izlaza, usrednjavanja ili
+                  zatvaranja van plana.
+                </p>
+              </div>
+            </div>
+
+            {form.micromanage !== "untouched" && (
+              <div className="space-y-2">
+                <Label>Ako nije tačno — šta se desilo?</Label>
+                <div className="flex flex-wrap gap-2">
+                  {(["watched", "violated"] as const).map((opt) => (
+                    <Button
+                      key={opt}
+                      type="button"
+                      size="sm"
+                      variant={
+                        form.micromanage === opt ? "default" : "outline"
+                      }
+                      onClick={() => patch("micromanage", opt)}
+                    >
+                      {MICROMANAGE_LABELS[opt]}
+                    </Button>
+                  ))}
+                  {form.micromanage && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => patch("micromanage", null)}
+                    >
+                      Obriši
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {!form.no_trade_day && (
+        <Card>
+          <CardHeader>
             <CardTitle className="text-base">Kontrola impulsa</CardTitle>
             <p className="text-sm text-muted-foreground">
               Uhvati loše navike pre nego što se nagomilaju.
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Mikromenadžiranje otvorenih pozicija?</Label>
-              <div className="flex flex-wrap gap-2">
-                {MICROMANAGE_OPTIONS.map((opt) => (
-                  <Button
-                    key={opt}
-                    type="button"
-                    size="sm"
-                    variant={form.micromanage === opt ? "default" : "outline"}
-                    onClick={() => patch("micromanage", opt as Micromanage)}
-                  >
-                    {MICROMANAGE_LABELS[opt]}
-                  </Button>
-                ))}
-                {form.micromanage && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => patch("micromanage", null)}
-                  >
-                    Obriši
-                  </Button>
-                )}
-              </div>
-            </div>
-
             <div className="space-y-2">
               <Label>Impulsi danas (Douglasovi strahovi)</Label>
               <div className="grid gap-2 sm:grid-cols-2">
