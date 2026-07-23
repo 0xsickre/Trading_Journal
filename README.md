@@ -11,7 +11,7 @@ A professional ICT (Inner Circle Trader) trade journal web app: log executions, 
 | Area | What it does |
 |---|---|
 | Dashboard | 16 performance stat cards, equity curve, R-distribution, calendar heatmap, tag breakdowns |
-| Daily Report | **Dnevni izveštaj** (Serbian UI): process-only daily journal, focus goal, A–F day grade (not P&L), no-trade day, morning/evening debrief |
+| Daily Report | **Dnevni izveštaj** (Serbian UI): process-only daily journal, focus goal, A–F day grade (not P&L), no-trade day, morning / mid-day / evening debrief |
 | Journal | Sortable/filterable trade grid with CSV + Excel export |
 | New Trade | Streamlined ICT trade form (~25 fields) with partial-exit fills and a position-size calculator |
 | Import | CSV/Excel broker import with column mapping and per-row reconciliation |
@@ -30,7 +30,8 @@ The app is **mixed English / Serbian**:
 | Daily Report (`/daily`) | **Serbian** — nav label **Dnevni izveštaj**, all form labels, toasts, Douglas mantras, market-type labels |
 | FTMO banner & Settings → Accounts FTMO block | **Serbian** (e.g. Zamrznut, Reset izazov) |
 | Mentor pack export | **Serbian** AI instructions in the Markdown file |
-| Dashboard, Journal, Trade form, Import, Settings (rest) | **English** |
+| Trade form | **Mixed** — mostly English labels; Serbian placeholders (miss notes, MAE/MFE), lifecycle actions (*Vrati u planned*), FTMO freeze toasts |
+| Dashboard, Journal, Import, Settings (rest) | **English** (dashboard export preview shows **Izvoz:**) |
 
 ---
 
@@ -44,9 +45,10 @@ Nav: **Dnevni izveštaj** (`/daily`). Entire module UI is in **Serbian**; dates 
 - **Persistent focus goal** — one active goal for weeks; day grade (A–F) measures progress on that goal only, never P&amp;L (Trillium-informed). Set, edit, or **graduate** a goal from the focus-goal card; completing a report requires an active goal plus day grade and rule-broken answer.
 - **Date navigation** — prev/next day controls; future dates are clamped to today in the primary account timezone. **Danas** shortcut when viewing a past day.
 - **Ocena dana** — grades A–F; badge shows **Kompletan** vs **Nacrt** based on completion rules.
-- **No-trade day** (`no_trade_day`) — checkbox *Dan bez trejdova (no-trade day)* for days with zero entries. When checked: hides **Kontrola impulsa** card and Douglas mantra / risk-acceptance block in the morning section; clears micromanage, impulse flags, and `risk_accepted`. Evening debrief still shown. Does **not** bypass day-grade or rule-broken requirements.
+- **No-trade day** (`no_trade_day`) — checkbox *Dan bez trejdova (no-trade day)* for days with zero entries. When checked: hides **Tokom dana** and **Kontrola impulsa** cards plus Douglas mantra / risk-acceptance block in the morning section; clears micromanage, impulse flags, and `risk_accepted`. Evening debrief still shown. Does **not** bypass day-grade or rule-broken requirements.
 - **Jutro · pre trejda** — mental temperature (1–10), sleep quality (1–5), macro note, Tharp market type (Serbian labels: Bik/Medved/Bočno × Mirno/Volatilno), Douglas mantra acknowledgements, risk acceptance, mental rehearsal. **Low-mental alert** when temperature &lt; 5.
-- **Kontrola impulsa** — micromanage tracking (Nisam dirao / Pratio sam / Prekršio sam) plus Douglas's four fears (FOMO, fear of loss, fear of being wrong, greed). Hidden on no-trade days.
+- **Tokom dana** — mid-day check for intraweek swing (London, NY, or between sessions — not only at evening debrief). **Untouched-first micromanage flow**: checkbox *Nisam dirao otvorene pozicije danas* sets `micromanage = untouched` (no stop moves, partial exits, averaging, or unplanned closes). If unchecked, follow-up buttons **Pratio sam** / **Prekršio sam** (`watched` / `violated`). Hidden on no-trade days.
+- **Kontrola impulsa** — Douglas's four fears (FOMO, fear of loss, fear of being wrong, greed) plus optional impulse note. Micromanage tracking lives in **Tokom dana**, not here. Hidden on no-trade days.
 - **Veče · debrief** — rule broken?, learned today, tomorrow changes with solutions, easiest layup setup, day overview, celebrate a process win.
 - **Petak pravilo** — weekend exposure checkbox on Fridays (`friday_flat`).
 - **Manual save** — isolated from trades/accounts in v1; server action `saveDailyReport` upserts on `(user_id, report_date)`.
@@ -156,7 +158,8 @@ tj_position_stats    – SQL view (security_invoker): avg_entry, avg_exit, entry
 
 tj_trade_images      – TradingView /x/ snapshot URLs per trade (htf_pre, ltf_pre, ltf_post)
 tj_focus_goals       – one active process goal per user (goal_text, started_at, ended_at, is_active)
-tj_daily_reports     – one row per calendar day: day grade, morning/evening debrief, impulse checks,
+tj_daily_reports     – one row per calendar day: day grade, morning/evening debrief,
+                       mid-day micromanage (untouched / watched / violated), Douglas impulse flags,
                        friday_flat, no_trade_day
 tj_import_batches    – import session metadata
 tj_import_rows       – per-row import audit (raw + parsed + match status)
