@@ -1,186 +1,216 @@
 # ICT Trading Journal
 
-A professional ICT (Inner Circle Trader) trade journal web app: log executions, review performance, import broker exports, and analyse your own trading statistics. Single user by design, multi-tenant safe by construction — every table is protected by Postgres Row Level Security.
+Next.js aplikacija za **vođenje ICT trade dnevnika i merenje sopstvene statistike**: unos izvršenja,
+proces-dnevnik po danu, uvoz broker izvoda, i analitika koja odgovara na pitanje *šta u mom procesu
+zapravo zarađuje*. Jedan korisnik po dizajnu, multi-tenant siguran po konstrukciji — svaka tabela je
+zaštićena Postgres Row Level Security politikom.
 
-**Makro bias / COT / nedeljni plan** žive u Trading data vault-u i trading-dashboard-u (F0–F4). TA plan za F5 ide u Notion (kasnije) — ovaj repo je **samo journal + PnL + daily process report**. Per-trade polja `macro_align` i `cot_filter` linkuju svaki trejd nazad na taj vault sistem.
+Ovo je **treći repo trading desk-a**. Makro bias, COT filter i nedeljni plan (F0–F4) žive u
+[`trading-fundamental-vault`](https://github.com/0xsickre/trading-fundamental-vault) i prikazuju se na
+[`trading-dashboard`](https://github.com/0xsickre/trading-dashboard). Ovaj repo je **izvršni sloj**:
+šta je stvarno odtrgovano, po kojoj ceni, sa kakvom disciplinom i sa kojim ishodom.
 
----
-
-## Feature Overview
-
-| Area | What it does |
-|---|---|
-| Dashboard | 16 performance stat cards, equity curve, R-distribution, calendar heatmap, tag breakdowns |
-| Daily Report | **Dnevni izveštaj** (Serbian UI): process-only daily journal, focus goal, A–F day grade (not P&L), no-trade day, morning / mid-day / evening debrief |
-| Journal | Sortable/filterable trade grid with CSV + Excel export |
-| New Trade | Streamlined ICT trade form (~23 position fields) with partial-exit fills and a position-size calculator; edit existing trades at `/trades/[id]/edit` |
-| Import | CSV/Excel broker import with column mapping and per-row reconciliation |
-| Settings | In-app CRUD for dropdown lists, instruments, and accounts |
-| FTMO mode | Per-account prop-firm challenge tracking (daily loss, max drawdown, profit target, min days) |
-| Mentor pack | One-click Markdown export of pre-computed stats to upload into an LLM for feedback |
+Deploy: Vercel · Baza: Supabase Postgres (odvojen projekat od dashboard-a)
 
 ---
 
-## Localization
+## Sadržaj
 
-The app is **mixed English / Serbian**:
-
-| Area | Language |
-|------|----------|
-| Daily Report (`/daily`) | **Serbian** — nav label **Dnevni izveštaj**, all form labels, toasts, Douglas mantras, market-type labels |
-| FTMO banner & Settings → Accounts FTMO block | **Serbian** (e.g. Zamrznut, Reset izazov) |
-| Mentor pack export | **Serbian** AI instructions in the Markdown file |
-| Trade form | **Mixed** — mostly English labels; Serbian placeholders (miss notes, MAE/MFE), lifecycle actions (*Vrati u planned*), FTMO freeze toasts |
-| Dashboard, Journal, Import, Settings (rest) | **English** (dashboard export preview shows **Izvoz:**) |
-
----
-
-## Features
-
-### Daily Report — Dnevni izveštaj (process journal)
-
-Nav: **Dnevni izveštaj** (`/daily`). Entire module UI is in **Serbian**; dates render with `date-fns` locale `sr` (e.g. `sre, 22. jul 2026.`).
-
-- **Calendar day = primary account timezone** — one row per `(user_id, report_date)` where `report_date` is derived from `getPrimaryAccount().timezone` (not per-account daily reports in v1).
-- **Persistent focus goal** — one active goal for weeks; day grade (A–F) measures progress on that goal only, never P&amp;L (Trillium-informed). Set, edit, or **graduate** a goal from the focus-goal card; completing a report requires an active goal plus day grade and rule-broken answer.
-- **Date navigation** — prev/next day controls; future dates are clamped to today in the primary account timezone. **Danas** shortcut when viewing a past day.
-- **Ocena dana** — grades A–F; badge shows **Kompletan** vs **Nacrt** based on completion rules.
-- **No-trade day** (`no_trade_day`) — checkbox *Dan bez trejdova (no-trade day)* for days with zero entries. When checked: hides **Tokom dana** and **Kontrola impulsa** cards plus Douglas mantra / risk-acceptance block in the morning section; clears micromanage, impulse flags, and `risk_accepted`. Evening debrief still shown. Does **not** bypass day-grade or rule-broken requirements.
-- **Jutro · pre trejda** — mental temperature (1–10), sleep quality (1–5), macro note, Tharp market type (Serbian labels: Bik/Medved/Bočno × Mirno/Volatilno), Douglas mantra acknowledgements, risk acceptance, mental rehearsal. **Low-mental alert** when temperature &lt; 5.
-- **Tokom dana** — mid-day check for intraweek swing (London, NY, or between sessions — not only at evening debrief). **Untouched-first micromanage flow**: checkbox *Nisam dirao otvorene pozicije danas* sets `micromanage = untouched` (no stop moves, partial exits, averaging, or unplanned closes). If unchecked, follow-up buttons **Pratio sam** / **Prekršio sam** (`watched` / `violated`). Hidden on no-trade days.
-- **Kontrola impulsa** — Douglas's four fears (FOMO, fear of loss, fear of being wrong, greed) plus optional impulse note. Micromanage tracking lives in **Tokom dana**, not here. Hidden on no-trade days.
-- **Veče · debrief** — rule broken?, learned today, tomorrow changes with solutions, easiest layup setup, day overview, celebrate a process win.
-- **Petak pravilo** — weekend exposure checkbox on Fridays (`friday_flat`).
-- **Manual save** — isolated from trades/accounts in v1; server action `saveDailyReport` upserts on `(user_id, report_date)`.
-
-### Trade Logging
-- **Streamlined trade form** (~23 position fields in `form-config.ts`) across Plan & Setup and Execution & Review — `ict_entry_model`, `setup_grade`, unified `technical_tags`, and one `trade_journal_notes` field instead of overlapping tag/dropdown/text columns.
-- **Partial exit / scale-out support** — one parent position with multiple execution fills; accurate weighted R-multiple across every exit.
-- **Gross vs Net P/L** separation — raw price movement vs. P/L after fees and swap/funding.
-- **TradingView snapshot embeds** — three chart slots per trade (**HTF Pre**, **LTF Pre**, **LTF Post**) in `tj_trade_images` as `tradingview.com/x/…` snapshot URLs (not uploaded files). Zero file-hosting cost; PNG rendered from the snapshot ID. Managed via browser Supabase client (RLS). Legacy `chart_url` on `tj_positions` was removed — gallery is the single source of truth. (No Supabase Storage.)
-- **Position-size calculator** — auto **Position Size** from risk % × account balance ÷ (stop distance × point value); updates live in Risk Plan.
-- **Planned R:R** — auto-calculated from entry / stop / target (direction-aware); stored as reward multiple (e.g. `2.45`), not a dropdown.
-- **Direction** — auto-set from entry vs stop (`stop < entry` → Long, `stop > entry` → Short) as soon as both prices are entered; updates live when prices change.
-- **Progressive Risk Plan** — fields appear step-by-step: entry → stop → target + risk % → position size → planned R:R (reduces input errors).
-- **Trade lifecycle** — `planned` = setup with entry/stop/target but **no broker fill**; `open` once you log an entry fill; `partial` when exit qty &lt; entry qty (scale-out in progress); `closed` when fully exited; `missed` = plan never opened (`miss_reason` + `missed_at` for review). Planned Entry ≠ open position. Journal grid has a dedicated **Missed** filter.
-- **Import review** — imported rows without fills get `needs_review: true`; journal grid offers **Activate** (`activateTrade`) to confirm and open them.
-- **Form prefs** — last-used `accountId` and `riskPct` persisted in `localStorage` (`tj:trade_form_prefs`).
-- **Macro linkage** — per-trade `macro_align` (Uz bias / Protiv bias / Van scope), `cot_filter` (Ulaz dozvoljen / Odložen / Ne chase), and `htf_bias` tie each execution back to the Trading data vault context (not a separate macro module).
-- **MAE / MFE** — `max_drawdown_price` and `max_profit_price` at review; live MAE/MFE in R and MFE capture % in the trade form metrics bar.
-- **Entry slippage** — computed from **Planned Entry Price** (`entry_price`) vs **avg entry** from fills. Shown in R vs planned stop distance (adverse fill = negative R display). Requires planned entry + at least one entry fill; stop needed for R. Dashboard: avg/total slip R + weekly chart. Mentor export includes per-trade and summary slippage.
-- **Target attainment %** — `realized_r / planned target R` (from `planned_rr` or entry/stop/target). Measures how much of your planned reward you captured (e.g. planned 3R, took 1.2R → 40%). Dashboard: avg + winner-only + weekly chart. Distinct from **MFE Capture %** (realized / MFE excursion, shown in the trade form). Journal grid + trade form + mentor export.
-
-### FTMO / Prop-Firm Challenge Mode
-- **Per-account toggle** — enable challenge tracking on any account in **Settings → Accounts**; off by default, additive so existing accounts are unaffected. FTMO section labels are **Serbian**.
-- **Configurable rules** — max daily loss %, max total loss / static drawdown %, profit target %, and minimum trading days, each individually toggleable (defaults 5% / 10% / 10% / 4 days).
-- **Live evaluation** — rules are computed in-app from **realized (closed) net P/L** per account timezone; the dashboard shows a per-account **FTMO banner** with status (`active` / `passed` / `failed` — UI: Aktivan / Položen / Zamrznut), profit %, drawdown %, and the earliest breach per broken rule.
-- **Account freeze** — when status is `failed`, **new trades are blocked** on that account (`createTrade` returns a Serbian error) until you **Reset izazov** in Settings.
-- **Challenge reset** — `resetFtmoChallenge` sets `ftmo_reset_at` so trades before the reset are ignored; you can re-run a challenge on the same account.
-- **Approximation note** — a real prop firm measures intraday *equity* including open floating P/L; a journal only knows *realized* results, so this trains discipline on a demo account rather than replacing the broker's risk engine.
-
-### Mentor Pack Export
-- **"Export for Claude"** button on the dashboard downloads a self-contained Markdown file for the selected period (Day / Week / Month / Quarter / Year / **Custom** / All).
-- Stats (win rate, profit factor, expectancy, slippage, target attainment, and tag breakdowns) are **pre-computed** in the file so an LLM interprets the numbers instead of recalculating (or hallucinating) them — no API integration required.
-- Export includes **Serbian AI mentor instructions** (*Uputstvo za tebe (AI mentor)*) telling Claude to respond in Serbian and not recalculate stats. Breakdowns include **HTF bias** (dashboard breakdown table does not offer `htf_bias` as a group-by option).
-- Up to **300 closed trades** expanded in full detail per export; open / needs-review and missed setups listed separately.
-
-### Dropdowns — Fully Editable In-App
-- **17 dropdown/tag lists** seeded per user. The trade form binds **15** as select/tags; **`direction`** is auto-computed from entry vs stop (not a dropdown); **`session_killzone`** is seeded for Settings/history only. Merged `technical_tag` list replaces separate confluence/setup/micro-ICT lists; organised by category: **Context** (direction, macro align, COT filter, session/killzone, HTF bias, entry TF), **ICT Setup** (technical tags, entry model, setup grade), **Risk** (risk %, result, exit reason, miss reason), **Psychology** (emotion, discipline, rules followed, mistake).
-- **+ Add** inline on every dropdown; **Settings → Lists** for full CRUD, reorder, and colour.
-- **Soft-delete** — archiving an option hides it from entry forms but keeps historical trades intact and filterable.
-
-### Journal Grid
-- TanStack Table with sort, search, and per-column filters (instrument, direction, grade, model, result, status) plus a dedicated **Missed** toggle.
-- Columns: trade #, date (account timezone), instrument, direction, grade, size, entry, slip R, exit, R, target attainment %, gross P/L, net P/L, status, TradingView snapshot link (primary image).
-- One-click CSV and Excel export of the current filtered view.
-
-### Analytics Dashboard
-- **16 stat cards** — Trades, Win rate, Net P/L, Gross P/L, Total R, Avg R, Profit factor, Expectancy, Best, Worst, Win/Loss streak, Max drawdown, Avg entry slip, Total slip R, Target attainment (all + winners). Portfolio stats use **closed** positions only (partials excluded).
-- **FTMO banners** — one per account with challenge mode enabled (see FTMO section).
-- **Equity curve** — Gross ↔ Net toggle, $ or R metric, cumulative from account starting balance.
-- **R-distribution histogram** — colour-coded bars from `<−3R` to `>5R`.
-- **Calendar heatmap** — 26-week daily P/L in account timezone.
-- **Weekly charts** — entry slippage (R) and target attainment (%) by week.
-- **Breakdown table** — win rate, total R, avg R, net P/L grouped by macro align, COT filter, setup grade, technical tags, entry model, direction, instrument, psychology tags, or mistake. Mentor export also includes **HTF bias** breakdowns (not available as a dashboard group-by).
-- Account and date-range filters throughout.
-
-### Import & Reconciliation
-- Upload a CSV or Excel broker export.
-- Column-mapping UI with **keyword auto-detect** (manual override per column). Table `tj_column_mappings` exists in the schema for future saveable broker presets — **not wired in the UI yet**.
-- Smart per-row reconciliation: **Create / Merge / Skip**.
-  - Merge updates only objective execution fields (price, qty, fee, swap) — psychology, ICT model, and notes are never overwritten.
-  - Full diff highlighting of changed values.
-- Instrument alias normalization (e.g. `US500.cash` → `SP500`, `GOLD` → `XAUUSD`, `Copper` → `HG`).
-- Rows imported without fills are flagged `needs_review`; activate from the journal grid when ready.
-- Raw import rows stored for an audit trail (`tj_import_batches` + `tj_import_rows`).
-
-### Instruments & Accounts
-- **B6 FTMO watchlist** — synced with Trading data vault `instrument_registry`: **8 active trade** symbols (`EURUSD`, `GBPUSD`, `USDJPY`, `USDCAD`, `AUDUSD`, `SP500`, `NAS100`, `XAUUSD`) plus **2 radar** (`HG`, `RTY`) — seeded on signup (`tj_seed_instruments_defaults`). CSV import normalizes broker aliases (e.g. `US500.cash` → `SP500`, `US100.cash` → `NAS100`, `GOLD` → `XAUUSD`).
-- Per-instrument `point_value` for P/L math across asset classes (editable in Settings). P/L is in the instrument's **quote currency** — not FX-converted to account currency (see comment in `default-instruments.ts`).
-- Multiple accounts with individual currency, starting balance, **IANA timezone**, and optional FTMO challenge config — all timestamps display in the account's local time regardless of the user's machine. **Primary account** timezone drives Daily Report calendar days.
+- [Pregled](#pregled)
+- [Ključni koncepti](#ključni-koncepti)
+- [Arhitektura](#arhitektura)
+- [Preduslovi](#preduslovi)
+- [Instalacija](#instalacija)
+- [Funkcionalnosti](#funkcionalnosti)
+- [Model podataka](#model-podataka)
+- [Metrike](#metrike)
+- [Testovi](#testovi)
+- [Deploy](#deploy)
+- [Bezbednosni model](#bezbednosni-model)
+- [Struktura projekta](#struktura-projekta)
+- [Konvencije](#konvencije)
+- [Dokumentacija](#dokumentacija)
 
 ---
 
-## Tech Stack
+## Pregled
 
-| Layer | Technology |
-|---|---|
-| Framework | Next.js 16 (App Router, Server Actions, TypeScript) |
-| UI | React 19, dark theme by default (Geist fonts) |
-| Styling | Tailwind CSS v4 + shadcn/ui (Radix + Base UI primitives) |
-| Database | Supabase Postgres with Row Level Security |
-| Auth | Supabase Auth via `@supabase/ssr` |
-| Chart images | TradingView `/x/` snapshot embeds (no file storage) |
-| Table | TanStack Table v8 |
-| Charts | Recharts v3 |
-| Forms | react-hook-form + Zod |
-| Import/Export | PapaParse (CSV) + SheetJS/xlsx (Excel) |
-| Time | date-fns / date-fns-tz |
-| Testing | Vitest |
+Journal je **izvor istine za izvršenje**. Vault odgovara na pitanje *koji smer i da li je ulaz
+kvalitetan*; journal odgovara na pitanje *šta sam od toga stvarno uradio i koliko me je to koštalo*.
+
+Dizajniran je oko jedne teze: **P&L je posledica, proces je uzrok.** Zato dnevna ocena (A–F) meri
+napredak na aktivnom procesnom cilju — nikad zaradu — a analitika razlaže rezultat po dimenzijama
+koje su pod tvojom kontrolom (setup grade, entry model, disciplina, poštovanje makro bias-a) umesto
+po tome da li je dan bio zelen.
+
+### Šta journal isporučuje
+
+- **Kompletan zapis pozicije** — plan (entry / stop / target / rizik), izvršenje kroz više fill-ova,
+  i review sa MAE/MFE, sve u jednom parent zapisu.
+- **Merenje kvaliteta izvršenja** — entry slippage (planirani ulaz vs stvarni prosečni fill) i
+  target attainment % (koliko planiranog reward-a si stvarno uzeo), odvojeno od P&L-a.
+- **Procesni dnevnik po danu** — jutro / tokom dana / veče, Douglas mantre, kontrola impulsa,
+  micromanage praćenje, ocena dana vezana za aktivni fokus cilj.
+- **Prop-firm disciplinu** — FTMO challenge pravila po nalogu sa zamrzavanjem naloga na proboj.
+- **Analitiku koja se može pripisati** — win rate, profit factor i expectancy razloženi po
+  `macro_align`, `cot_filter`, setup grade, entry model, technical tags, psihologiji i grešci.
+- **Mentor pack** — Markdown izvoz sa **pre-izračunatim** statistikama za LLM review.
+- **Vezu ka vault-u** — polja `macro_align`, `cot_filter` i `htf_bias` vezuju svaki trejd nazad na
+  nedeljni makro kontekst iz vault sistema.
+
+### Šta journal ne radi (granica scope-a)
+
+Journal **ne generiše bias i ne radi analizu**. Nema makro modula, nema COT čitača, nema signala.
+`macro_align` i `cot_filter` su *zapis odluke* koju je doneo vault, ne njena rekonstrukcija.
+
+Journal takođe **nije risk engine brokera**: FTMO evaluacija računa se iz **realizovanog (zatvorenog)
+neto P/L-a**, dok pravi prop firm meri intraday *equity* uključujući plutajući P/L. To trenira
+disciplinu na demo nalogu, ali ne zamenjuje brokerov obračun.
+
+TA plan za F5 (entry trigger, timeframe, izvršenje) ide u Notion — van ovog repoa.
 
 ---
 
-## Data Model
+## Ključni koncepti
 
-```
-tj_accounts          – broker accounts (currency, balance, IANA timezone, FTMO challenge config)
-tj_instruments       – tradeable symbols with point_value per asset class (B6 10-symbol watchlist)
-tj_option_lists      – 17 dropdown/tag list definitions (Context, ICT Setup, Risk, Psychology;
-                       session_killzone seeded but not on trade form)
-tj_option_items      – default options (soft-deleteable)
+### Tri repoa, tri uloge
 
-tj_positions         – parent trade record: technical_tags[], psychology_tags[], trade_journal_notes,
-                       ICT setup (ict_entry_model, setup_grade, htf_bias, entry_tf), risk plan
-                       (entry_price, stop_price, target_price, planned_rr), macro linkage
-                       (macro_align, cot_filter), MAE/MFE (max_drawdown_price,
-                       max_profit_price), lifecycle (status, miss_reason, missed_at)
-tj_executions        – child fills (entry or exit, price, qty, fee, swap, timestamp UTC)
-tj_position_stats    – SQL view (security_invoker): avg_entry, avg_exit, entry_qty, gross_pl,
-                       net_pl, realized_r, realized_r_net
+| Repo | Odgovara na | Smer podataka |
+|------|-------------|---------------|
+| [`trading-fundamental-vault`](https://github.com/0xsickre/trading-fundamental-vault) | Koji smer? Je li ulaz kvalitetan? | Write (agent, F1–F4) |
+| [`trading-dashboard`](https://github.com/0xsickre/trading-dashboard) | Gde je ciklus stao? Šta je spremno? | Read-only prikaz |
+| **`Trading_Journal`** (ovaj repo) | Šta sam odtrgovao i sa kakvom disciplinom? | Write (ti, posle F5) |
 
-tj_trade_images      – TradingView /x/ snapshot URLs per trade (htf_pre, ltf_pre, ltf_post)
-tj_focus_goals       – one active process goal per user (goal_text, started_at, ended_at, is_active)
-tj_daily_reports     – one row per calendar day: day grade, morning/evening debrief,
-                       mid-day micromanage (untouched / watched / violated), Douglas impulse flags,
-                       friday_flat, no_trade_day
-tj_import_batches    – import session metadata
-tj_import_rows       – per-row import audit (raw + parsed + match status)
-tj_column_mappings   – broker column-mapping presets (schema only — UI not implemented yet)
+Repoi **nisu integrisani kodom** — nema deljene baze ni API poziva između journal-a i vault-a. Veza je
+semantička: watchlist instrumenata je usklađen sa vault `instrument_registry`, a per-trade polja
+`macro_align` / `cot_filter` beleže vault odluku u trenutku ulaska.
+
+### Pozicija i fill-ovi
+
+Trejd nije jedan red. Model je **parent pozicija + child izvršenja**:
+
+- `tj_positions` — plan, ICT setup, psihologija, lifecycle. Jedan red = jedna ideja.
+- `tj_executions` — pojedinačni fill-ovi (entry ili exit, cena, količina, fee, swap).
+- `tj_position_stats` — SQL view koji iz fill-ova računa `avg_entry`, `avg_exit`, `gross_pl`,
+  `net_pl`, `realized_r`, `realized_r_net`.
+
+Zbog toga **scale-out radi tačno**: pozicija sa tri parcijalna izlaza daje jedan težinski R-multiple,
+a ne tri odvojena „trejda" koji kvare statistiku.
+
+Ista matematika postoji **dva puta** — u SQL view-u (`tj_position_stats`) i u TypeScript-u
+(`src/lib/journal/position-stats.ts`) — i to je namerno: view služi za brzo listanje, TS za live
+preračun u formi dok kucaš. Paritet čuva Vitest suite.
+
+### Trade lifecycle
+
+| Status | Značenje |
+|--------|----------|
+| `planned` | Setup sa entry/stop/target, **bez broker fill-a**. Plan ≠ otvorena pozicija. |
+| `open` | Postoji entry fill. |
+| `partial` | Exit količina < entry količina — scale-out u toku. |
+| `closed` | Potpuno izašao. |
+| `missed` | Plan koji se nikad nije otvorio (`miss_reason` + `missed_at`). |
+
+**Zašto `missed` postoji:** propušteni setup je podatak. Ako ti A-grade setup-ovi sistematski beže,
+to je problem izvršenja koji nijedna P&L statistika neće pokazati.
+
+### Proces pre P&L
+
+- **Fokus cilj** (`tj_focus_goals`) — jedan aktivan procesni cilj koji traje nedeljama.
+- **Ocena dana** (A–F) — meri **isključivo** napredak na tom cilju. Zelen dan sa prekršenim pravilom
+  je loša ocena.
+- **Kompletan vs Nacrt** — dan je kompletan tek kad postoje aktivan cilj, ocena dana i odgovor na
+  pitanje o prekršenom pravilu.
+
+### Watchlist — B6 FTMO
+
+Usklađen sa vault `instrument_registry`, seed-uje se na registraciju
+(`tj_seed_instruments_defaults`):
+
+| Grupa | Simboli |
+|-------|---------|
+| **Trade (8)** | `EURUSD`, `GBPUSD`, `USDJPY`, `USDCAD`, `AUDUSD`, `SP500`, `NAS100`, `XAUUSD` |
+| **Radar (2)** | `HG`, `RTY` |
+
+CSV import normalizuje broker aliase (`US500.cash` → `SP500`, `US100.cash` → `NAS100`,
+`GOLD` → `XAUUSD`, `Copper` → `HG`).
+
+---
+
+## Arhitektura
+
+```mermaid
+flowchart LR
+  subgraph desk [Trading desk]
+    Vault[vault F0-F4] --> Dash[dashboard]
+  end
+  Dash -.->|macro_align / cot_filter<br/>rucni prenos| TF
+  subgraph app [Trading Journal]
+    TF[Trade forma / Daily report] --> SA[Server Actions]
+    Broker[Broker CSV / Excel] --> IW[Import wizard] --> SA
+    SA --> DB[(Supabase Postgres + RLS)]
+    DB --> An[Analitika + Mentor pack]
+  end
 ```
 
-- All timestamps are stored as `timestamptz` (UTC). Display and import parsing convert to the per-account IANA timezone via `date-fns-tz`.
-- Dropdown values are stored as plain text, so archiving an option never corrupts historical data.
-- `tj_position_stats` runs with `security_invoker = on` so a direct REST query on the view respects each user's RLS instead of the view owner's.
+| Sloj | Tehnologija | Uloga |
+|------|-------------|-------|
+| Rute | Next.js 16 App Router, route group `(app)` | Auth-checked layout, sve stranice server-rendered |
+| Mutacije | **Server Actions** | Nema REST API ruta — svaki upis ide kroz server action |
+| Čitanja | Supabase server client u Server Components | Direktan SELECT pod korisnikovim RLS-om |
+| Sesija | `src/proxy.ts` (Next.js 16 proxy) | Refresh Supabase auth, redirect neulogovanih na `/login` |
+| Baza | Supabase Postgres | RLS na svakoj `tj_*` tabeli |
+| Grafikoni | TradingView `/x/` snapshot URL-ovi | Bez file hosting-a i bez Supabase Storage |
+
+**Izuzetak od „sve kroz Server Actions":** komponenta `TradeImages` piše direktno u `tj_trade_images`
+preko browser Supabase klijenta (i dalje pod RLS-om), jer je to čist URL upis bez server logike.
+
+### Rute
+
+| Ruta | Sadržaj |
+|------|---------|
+| `/` | Dashboard — 16 stat kartica, equity curve, R-distribucija, heatmap, breakdown tabela, FTMO baneri |
+| `/journal` | Sortabilan/filtrabilan grid trejdova + CSV i Excel izvoz |
+| `/daily` | **Dnevni izveštaj** — procesni dnevnik + fokus cilj |
+| `/trades/new` | Unos trejda (~23 polja pozicije) |
+| `/trades/[id]/edit` | Izmena postojećeg trejda |
+| `/import` | CSV/Excel import sa mapiranjem kolona i rekonsilijacijom |
+| `/settings` | CRUD nad dropdown listama, instrumentima i nalozima |
+| `/login` | Prijava / registracija (Supabase Auth) |
+
+### Jezik interfejsa
+
+Aplikacija je **mešano engleski / srpski** — namerno, jer je procesni deo lični, a analitički deo
+standardna trading terminologija:
+
+| Deo | Jezik |
+|-----|-------|
+| Dnevni izveštaj (`/daily`) | **Srpski** — nav labela **Dnevni izveštaj**, sve labele, toast-ovi, Douglas mantre, Tharp tipovi tržišta |
+| FTMO baner + Settings → Accounts FTMO blok | **Srpski** (npr. *Zamrznut*, *Reset izazov*) |
+| Mentor pack izvoz | **Srpski** — AI instrukcije u Markdown fajlu |
+| Trade forma | **Mešano** — labele uglavnom engleske; srpski placeholder-i, lifecycle akcije (*Vrati u planned*), FTMO toast-ovi |
+| Dashboard, Journal, Import, Settings (ostalo) | **Engleski** (dashboard export preview prikazuje **Izvoz:**) |
+
+Datumi u dnevnom izveštaju koriste `date-fns` locale `sr` (npr. `sre, 22. jul 2026.`).
 
 ---
 
-## Getting Started
+## Preduslovi
 
-### Prerequisites
-- Node.js 20+
-- A [Supabase](https://supabase.com) project (free tier is sufficient)
+| Zahtev | Verzija | Napomena |
+|--------|---------|----------|
+| **Node.js** | 20+ | Next.js 16 traži ≥ 20.9; desk repoi inače voze Node 22 |
+| **Next.js** | 16 (App Router) | React 19, TypeScript, Tailwind CSS v4 |
+| **Supabase projekat** | free tier dovoljan | **Odvojen** od dashboard projekta — `tj_*` tabele |
+| **Broker izvoz** | CSV ili Excel | Opciono; ručni unos radi bez toga |
 
-### Local Setup
+Ključne zavisnosti: `@supabase/ssr` + `@supabase/supabase-js` (auth i data), `@tanstack/react-table`
+(journal grid), `recharts` (grafikoni), `react-hook-form` + `zod` (forme i validacija),
+`papaparse` + `xlsx` (import/izvoz), `date-fns` + `date-fns-tz` (timezone po nalogu).
+
+---
+
+## Instalacija
 
 ```bash
 git clone https://github.com/0xsickre/Trading_Journal.git
@@ -188,169 +218,438 @@ cd Trading_Journal
 npm install
 ```
 
-Create `.env.local` in the project root:
+### Env
+
+`.env.local` u root-u projekta:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-public-key>
 ```
 
-Both values are in **Supabase Dashboard → Project Settings → API**.
+Obe vrednosti su u **Supabase Dashboard → Project Settings → API**. `service_role` ključ se
+**nikad** ne koristi u ovoj aplikaciji.
 
 ```bash
 npm run dev      # http://localhost:3000
-npm run build    # production build
+npm run build    # produkcioni build
 npm run lint     # ESLint (eslint-config-next)
+npm run test     # Vitest
 ```
 
-### Database Setup
+### Baza
 
-Apply migrations via the Supabase CLI (`supabase db push`) or the SQL editor. The repo includes `supabase/migrations/` — **incremental deltas only** (from `20260719120000` onward); a fresh Supabase project needs the full baseline schema plus all files in order. Latest: `20260722130000_daily_report_no_trade_day.sql` (`no_trade_day` on `tj_daily_reports`; prior file `20260722120000_daily_reports.sql` creates the table + focus goals).
+Migracije se primenjuju kroz Supabase CLI (`supabase db push`) ili SQL editor. Repo sadrži
+`supabase/migrations/` — **samo inkrementalne delte** (od `20260719120000` nadalje); svež Supabase
+projekat traži punu baseline šemu plus sve fajlove redom.
 
-| Migration | Summary |
-|-----------|---------|
-| `20260719120000` | Drop legacy analysis module tables |
-| `20260719143000` | B6 10-symbol instrument universe |
-| `20260719150000` | Remove session_killzone option list (later migrations re-seed it; still omitted from trade form) |
-| `20260720120000` | `technical_tags` + `trade_journal_notes`; drop legacy tag columns |
-| `20260720130000` | MAE/MFE price columns |
-| `20260720140000` | Drop vix_regime, news_nearby |
-| `20260720150000` | TradingView snapshot images; drop `chart_url` |
-| `20260720160000` | RLS initplan fix, indexes, TV URL CHECK, RPC hardening |
+| Migracija | Šta radi |
+|-----------|----------|
+| `20260719120000` | Brisanje legacy analysis modula |
+| `20260719143000` | B6 universe — 10 instrumenata |
+| `20260719150000` | Uklanjanje `session_killzone` liste (kasnije migracije je vraćaju; i dalje van trade forme) |
+| `20260720120000` | `technical_tags` + `trade_journal_notes`; brisanje starih tag kolona |
+| `20260720130000` | MAE/MFE cenovne kolone |
+| `20260720140000` | Brisanje `vix_regime`, `news_nearby` |
+| `20260720150000` | TradingView snapshot slike; brisanje `chart_url` |
+| `20260720160000` | RLS initplan fix, indeksi, TV URL CHECK, RPC hardening |
 | `20260720170000` | `tj_position_stats` view |
-| `20260721120000` | `macro_align`, `cot_filter`; trim option lists |
-| `20260721130000` | Trade lifecycle `missed` + miss_reason list |
-| `20260721140000` | `security_invoker` on view |
-| `20260721150000` | FTMO account columns |
+| `20260721120000` | `macro_align`, `cot_filter`; trim dropdown lista |
+| `20260721130000` | Lifecycle `missed` + `miss_reason` lista |
+| `20260721140000` | `security_invoker` na view-u |
+| `20260721150000` | FTMO kolone na nalogu |
 | `20260722120000` | `tj_daily_reports` + `tj_focus_goals` |
-| `20260722130000` | `no_trade_day` on daily reports |
+| `20260722130000` | `no_trade_day` na dnevnim izveštajima |
 
-If an old **`trade-images`** Storage bucket still exists from an earlier version, you may delete it manually in **Supabase Dashboard → Storage** — chart images are now TradingView `/x/` URL strings only, so no bucket is required.
+> Ako je iz starije verzije ostao **`trade-images`** Storage bucket, možeš ga ručno obrisati u
+> **Supabase → Storage** — slike su sada isključivo TradingView `/x/` URL string-ovi.
 
-New signups are seeded automatically by the auth trigger; `tj_seed_my_defaults` is also called on first dashboard load (`/`) as an idempotent fallback (`src/lib/journal/ensure-defaults.ts`).
+### Prvi korisnik
 
-After applying migrations, create your user in **Supabase Dashboard → Authentication → Users** (or via **Sign in / Create account** tabs on `/login`). For personal use, disable email confirmation under **Authentication → Providers → Email**.
+Kreiraj korisnika u **Supabase → Authentication → Users** ili kroz **Sign in / Create account**
+tabove na `/login`. Za ličnu upotrebu isključi email potvrdu pod
+**Authentication → Providers → Email**.
+
+Novi nalozi se seed-uju automatski auth trigger-om (`tj_on_auth_user_created`); dodatno se
+`tj_seed_my_defaults` poziva idempotentno pri prvom učitavanju dashboard-a
+(`src/lib/journal/ensure-defaults.ts`).
 
 ---
 
-## Testing
+## Funkcionalnosti
+
+### Dnevni izveštaj — procesni dnevnik
+
+Nav: **Dnevni izveštaj** (`/daily`). Ceo modul je na **srpskom**.
+
+- **Kalendarski dan = timezone primarnog naloga** — jedan red po `(user_id, report_date)`, gde se
+  `report_date` izvodi iz `getPrimaryAccount().timezone`. (Nema per-account dnevnih izveštaja u v1.)
+- **Trajni fokus cilj** — jedan aktivan cilj koji traje nedeljama; ocena dana (A–F) meri napredak
+  **samo** na njemu, nikad P&L (Trillium pristup). Cilj se postavlja, menja ili **diplomira** iz
+  kartice fokus cilja.
+- **Navigacija po datumima** — prev/next kontrole; budući datumi su ograničeni na *danas* u timezone-u
+  primarnog naloga. Prečica **Danas** kad gledaš prošli dan.
+- **Ocena dana** — A–F; badge prikazuje **Kompletan** vs **Nacrt** po pravilima kompletnosti.
+- **Dan bez trejdova** (`no_trade_day`) — checkbox za dane bez ulaza. Kad je čekiran: sakriva
+  **Tokom dana** i **Kontrola impulsa** kartice, plus Douglas mantru / prihvatanje rizika u jutarnjoj
+  sekciji; briše micromanage, impulse flagove i `risk_accepted`. Večernji debrief ostaje. **Ne**
+  zaobilazi obavezu ocene dana ni odgovora o prekršenom pravilu.
+- **Jutro · pre trejda** — mentalna temperatura (1–10), kvalitet sna (1–5), makro beleška, Tharp tip
+  tržišta (Bik/Medved/Bočno × Mirno/Volatilno), potvrde Douglas mantri, prihvatanje rizika, mentalna
+  proba. **Low-mental alert** kad je temperatura < 5.
+- **Tokom dana** — mid-day provera za intraweek swing (London, NY, ili između sesija — ne tek na
+  večernjem debrief-u). **Untouched-first micromanage tok**: checkbox *Nisam dirao otvorene pozicije
+  danas* postavlja `micromanage = untouched` (bez pomeranja stopa, parcijala, averaging-a ili
+  neplaniranih zatvaranja). Ako nije čekiran, slede dugmad **Pratio sam** / **Prekršio sam**
+  (`watched` / `violated`).
+- **Kontrola impulsa** — Douglas-ova četiri straha (FOMO, strah od gubitka, strah da grešiš, pohlepa)
+  plus opciona beleška o impulsu.
+- **Veče · debrief** — prekršeno pravilo?, šta sam naučio, šta menjam sutra i kako, najlakši layup
+  setup, pregled dana, proslavi procesnu pobedu.
+- **Petak pravilo** — checkbox za vikend izloženost petkom (`friday_flat`).
+- **Ručno čuvanje** — izolovano od trejdova i naloga u v1; server action `saveDailyReport` radi upsert
+  na `(user_id, report_date)`.
+
+### Unos trejda
+
+- **Streamlined forma** — **23 polja pozicije** (`form-config.ts`), raspoređena kroz *Plan & Setup* i
+  *Execution & Review*: `ict_entry_model`, `setup_grade`, jedinstveni `technical_tags` i jedno
+  `trade_journal_notes` polje umesto preklapajućih tag/dropdown/text kolona.
+- **Progresivni Risk Plan** — polja se otkrivaju korak po korak: entry → stop → target + risk % →
+  position size → planned R:R. Smanjuje greške pri unosu.
+- **Direction se ne bira** — izvodi se iz entry vs stop (`stop < entry` → Long, `stop > entry` →
+  Short) čim su obe cene unete, i menja se uživo.
+- **Position-size kalkulator** — automatski iz `risk % × balans naloga ÷ (stop distanca × point value)`.
+- **Planned R:R** — automatski iz entry / stop / target (svestan smera); čuva se kao reward multiple
+  (npr. `2.45`), ne kao dropdown.
+- **Parcijalni izlazi** — jedna parent pozicija sa više fill-ova; težinski R-multiple preko svih izlaza.
+- **Gross vs Net P/L** — čisto kretanje cene odvojeno od rezultata posle fee-jeva i swap-a.
+- **TradingView snapshot embed-ovi** — tri slota po trejdu (**HTF Pre**, **LTF Pre**, **LTF Post**) u
+  `tj_trade_images` kao `tradingview.com/x/…` URL-ovi. Nula troška hostinga; PNG se renderuje iz
+  snapshot ID-a. Legacy `chart_url` je uklonjen — galerija je jedini izvor istine.
+- **MAE / MFE** — `max_drawdown_price` i `max_profit_price` pri review-u; live MAE/MFE u R i MFE
+  capture % u metrics bar-u forme.
+- **Makro veza** — `macro_align` (Uz bias / Protiv bias / Van scope), `cot_filter` (Ulaz dozvoljen /
+  Odložen / Ne chase) i `htf_bias` vezuju izvršenje za vault kontekst.
+- **Form prefs** — poslednji korišćeni `accountId` i `riskPct` se pamte u `localStorage`
+  (`tj:trade_form_prefs`).
+
+### Merenje kvaliteta izvršenja
+
+Dve metrike koje odvajaju *kvalitet plana* od *kvaliteta izvršenja*:
+
+- **Entry slippage** — razlika između **Planned Entry Price** (`entry_price`) i prosečnog ulaza iz
+  fill-ova, izražena u R prema planiranoj stop distanci (nepovoljan fill = negativan R). Traži
+  planirani ulaz i bar jedan entry fill; stop je potreban za R. Dashboard prikazuje prosek, ukupan
+  slip R i nedeljni grafikon.
+- **Target attainment %** — `realized_r / planiran target R`. Koliko si planiranog reward-a stvarno
+  uzeo (plan 3R, uzeo 1.2R → 40%). Dashboard: prosek + samo dobitnici + nedeljni grafikon.
+
+Razlikuj od **MFE Capture %** (`realized_r / MFE R`) — to meri koliko si zadržao od maksimalne
+povoljne ekskurzije, i prikazuje se u trade formi.
+
+### FTMO / prop-firm mod
+
+- **Per-account toggle** — uključuje se na bilo kom nalogu u **Settings → Accounts**; podrazumevano
+  isključen i aditivan, pa postojeći nalozi ostaju netaknuti. FTMO labele su na srpskom.
+- **Konfigurabilna pravila** — max dnevni gubitak %, max ukupni gubitak / statički drawdown %, profit
+  target % i minimalan broj dana trgovanja, svako zasebno uključivo (default 5% / 10% / 10% / 4 dana).
+- **Živa evaluacija** — računa se iz **realizovanog (zatvorenog) neto P/L-a** po timezone-u naloga;
+  dashboard prikazuje **FTMO baner** po nalogu sa statusom (`active` / `passed` / `failed` — UI:
+  Aktivan / Položen / Zamrznut), profit %, drawdown % i najranijim probojem po prekršenom pravilu.
+- **Zamrzavanje naloga** — na statusu `failed` **novi trejdovi su blokirani** na tom nalogu
+  (`createTrade` vraća grešku na srpskom) dok ne uradiš **Reset izazov** u Settings.
+- **Reset izazova** — `resetFtmoChallenge` postavlja `ftmo_reset_at`, pa se trejdovi pre reset-a
+  ignorišu; isti nalog može ponovo da vozi challenge.
+
+### Journal grid
+
+- TanStack Table sa sortiranjem, pretragom i filterima po koloni (instrument, smer, grade, model,
+  rezultat, status) plus poseban **Missed** toggle.
+- Kolone: broj trejda, datum (timezone naloga), instrument, smer, grade, size, entry, slip R, exit, R,
+  target attainment %, gross P/L, net P/L, status, TradingView snapshot link.
+- Jedan klik za CSV i Excel izvoz trenutno filtriranog prikaza.
+- **Activate** akcija (`activateTrade`) za uvezene redove bez fill-ova (`needs_review: true`).
+
+### Analitika
+
+- **16 stat kartica** — Trades, Win rate, Net P/L, Gross P/L, Total R, Avg R, Profit factor,
+  Expectancy, Best, Worst, Win/Loss streak, Max drawdown, Avg entry slip, Total slip R, Target
+  attainment (sve + samo dobitnici). Portfolio statistike koriste **isključivo zatvorene** pozicije.
+- **Equity curve** — Gross ↔ Net toggle, `$` ili R metrika, kumulativno od početnog balansa naloga.
+- **R-distribucija** — histogram sa bojenim barovima od `<−3R` do `>5R`.
+- **Kalendar heatmap** — 26 nedelja dnevnog P/L-a u timezone-u naloga.
+- **Nedeljni grafikoni** — entry slippage (R) i target attainment (%) po nedelji.
+- **Breakdown tabela** — win rate, total R, avg R i net P/L grupisani po: macro align, COT filter,
+  setup grade, technical tags, entry model, direction, instrument, psychology tags ili mistake.
+- Filteri po nalogu i vremenskom rasponu kroz ceo dashboard.
+
+### Mentor pack
+
+- Dugme **„Export for Claude"** na dashboard-u preuzima samostalan Markdown fajl za izabrani period
+  (Day / Week / Month / Quarter / Year / **Custom** / All).
+- Statistike (win rate, profit factor, expectancy, slippage, target attainment, breakdown-i) su
+  **pre-izračunate u fajlu**, tako da LLM tumači brojke umesto da ih preračunava (ili halucinira).
+  Nema API integracije.
+- Izvoz sadrži **srpske instrukcije za AI mentora** (*Uputstvo za tebe (AI mentor)*) — odgovaraj na
+  srpskom, ne preračunavaj statistiku. Breakdown-i uključuju **HTF bias** (koji dashboard tabela ne
+  nudi kao group-by opciju).
+- Do **300 zatvorenih trejdova** razvijeno u punom detalju po izvozu; otvoreni / needs-review i
+  propušteni setup-i se navode odvojeno.
+
+### Dropdown liste — potpuno editabilne
+
+- **17 dropdown/tag lista** seed-uje se po korisniku. Trade forma vezuje **15** kao select ili tags;
+  **`direction`** se automatski računa iz entry vs stop (nije dropdown), a **`session_killzone`** je
+  seed-ovan samo za Settings i istoriju.
+- Organizovane po kategorijama: **Context** (direction, macro align, COT filter, session/killzone,
+  HTF bias, entry TF), **ICT Setup** (technical tags, entry model, setup grade), **Risk** (risk %,
+  result, exit reason, miss reason), **Psychology** (emotion, discipline, rules followed, mistake).
+- **+ Add** inline na svakom dropdown-u; **Settings → Lists** za pun CRUD, redosled i boju.
+- **Soft-delete** — arhiviranje opcije je sklanja iz formi, ali istorijski trejdovi ostaju netaknuti
+  i filtrabilni.
+
+### Import i rekonsilijacija
+
+- Upload CSV ili Excel broker izvoza.
+- Mapiranje kolona sa **keyword auto-detekcijom** i ručnim override-om po koloni.
+- Rekonsilijacija po redu: **Create / Merge / Skip**.
+  - Merge menja **samo objektivna izvršna polja** (cena, količina, fee, swap) — psihologija, ICT model
+    i beleške se nikad ne prepisuju.
+  - Pun diff highlight izmenjenih vrednosti.
+- Normalizacija instrument aliasa (`US500.cash` → `SP500`, `GOLD` → `XAUUSD`, `Copper` → `HG`).
+- Redovi bez fill-ova dobijaju `needs_review`; aktiviraju se iz journal grid-a.
+- Sirovi redovi se čuvaju za audit trag (`tj_import_batches` + `tj_import_rows`).
+
+> Tabela `tj_column_mappings` postoji u šemi za buduće čuvanje broker preset-a — **još nije vezana u UI**.
+
+### Instrumenti i nalozi
+
+- Per-instrument `point_value` za P/L matematiku kroz klase aktiva (editabilno u Settings). P/L je u
+  **quote valuti instrumenta** — ne konvertuje se u valutu naloga.
+- Više naloga, svaki sa svojom valutom, početnim balansom, **IANA timezone**-om i opcionom FTMO
+  konfiguracijom. Svi timestamp-ovi se prikazuju u lokalnom vremenu naloga, bez obzira na mašinu.
+- **Primarni nalog** određuje kalendarski dan u Dnevnom izveštaju.
+
+---
+
+## Model podataka
+
+```
+tj_accounts          – broker nalozi (valuta, balans, IANA timezone, FTMO challenge config)
+tj_instruments       – simboli sa point_value po klasi aktive (B6 watchlist, 10 simbola)
+tj_option_lists      – 17 dropdown/tag lista (Context, ICT Setup, Risk, Psychology;
+                       session_killzone seed-ovan ali van trade forme)
+tj_option_items      – opcije lista (soft-delete)
+
+tj_positions         – parent zapis trejda: technical_tags[], psychology_tags[], trade_journal_notes,
+                       ICT setup (ict_entry_model, setup_grade, htf_bias, entry_tf), risk plan
+                       (entry_price, stop_price, target_price, planned_rr), makro veza
+                       (macro_align, cot_filter), MAE/MFE (max_drawdown_price, max_profit_price),
+                       lifecycle (status, miss_reason, missed_at)
+tj_executions        – child fill-ovi (entry ili exit, cena, količina, fee, swap, timestamp UTC)
+tj_position_stats    – SQL view (security_invoker): avg_entry, avg_exit, entry_qty, gross_pl,
+                       net_pl, realized_r, realized_r_net
+
+tj_trade_images      – TradingView /x/ snapshot URL-ovi po trejdu (htf_pre, ltf_pre, ltf_post)
+tj_focus_goals       – jedan aktivan procesni cilj po korisniku (goal_text, started_at, ended_at,
+                       is_active)
+tj_daily_reports     – jedan red po kalendarskom danu: ocena dana, jutarnji/večernji debrief,
+                       mid-day micromanage (untouched / watched / violated), Douglas impulse flagovi,
+                       friday_flat, no_trade_day
+tj_import_batches    – metapodaci import sesije
+tj_import_rows       – audit po redu (raw + parsed + match status)
+tj_column_mappings   – broker preset-i za mapiranje kolona (samo šema — UI nije implementiran)
+```
+
+**Invarijante**
+
+- Svi timestamp-ovi se čuvaju kao `timestamptz` (UTC). Prikaz i parsiranje pri importu konvertuju u
+  IANA timezone naloga preko `date-fns-tz`.
+- Dropdown vrednosti se čuvaju kao **plain text**, pa arhiviranje opcije nikad ne kvari istorijske
+  podatke.
+- `tj_position_stats` radi sa `security_invoker = on`, pa direktan REST upit na view poštuje RLS
+  korisnika koji pita, a ne vlasnika view-a.
+
+---
+
+## Metrike
+
+| Metrika | Formula | Napomena |
+|---------|---------|----------|
+| **Gross P/L** | `(exitNotional − avgEntry × exitQty) × dir × point_value` | Kretanje cene pre troškova |
+| **Net P/L** | `gross_pl − fees − swap` | Posle troškova |
+| **Realized R (gross)** | `gross_points / (\|planned_entry − stop\| × entry_qty)` | Imenilac koristi **planirani** `entry_price` (fallback: prosečan fill) |
+| **Realized R (net)** | `net_pl / planned_risk_$` | Kolona `realized_r_net` u `tj_position_stats` |
+| **Target attainment %** | `realized_r / planned_target_R × 100` | Koliko planiranog reward-a si uzeo |
+| **MFE Capture %** | `realized_r / mfe_R × 100` | Koliko si zadržao od maksimalne povoljne ekskurzije |
+| **Entry slippage** | nepovoljni pts / \|planirani entry − stop\|, u R | Odvojeno od P/L-a — ne duplira se |
+| **Profit factor** | `sum(wins) / sum(\|losses\|)` | Samo zatvoreni trejdovi |
+| **Expectancy** | `winRate × avgWinR + lossRate × avgLossR` | Prosečan win/loss R samo iz trejdova sa validnim R |
+| **FTMO drawdown %** | `(starting_balance − min_equity) / starting_balance × 100` | Najgori realizovani pad equity-ja od starta, zatvoreni trejdovi u tz naloga |
+
+Portfolio statistike (win rate, PF, expectancy) uključuju **samo zatvorene** pozicije. Parcijali su
+isključeni osim ako eksplicitno uključiš `toRealized({ includePartial: true })`.
+
+---
+
+## Testovi
 
 ```bash
-npm run test         # run the Vitest suite once
+npm run test         # Vitest, jedan prolaz
 npm run test:watch   # watch mode
 ```
 
-The suite covers pure business logic in **11 Vitest files** under `src/lib/journal/` — analytics, position/plan math, entry slippage, exit efficiency, FTMO evaluation, trade lifecycle, instrument aliases, TradingView snapshot parsing, daily-report date/completion helpers, focus-goal day counting, and default instruments.
+Suite pokriva **čistu poslovnu logiku** u **11 Vitest fajlova** pod `src/lib/journal/`:
+
+| Fajl | Šta pokriva |
+|------|-------------|
+| `analytics.test.ts` | Dashboard statistike, equity curve, breakdown-i, nedeljne serije |
+| `position-stats.test.ts` | P/L i R matematika — paritet sa SQL view-om |
+| `plan-calculations.test.ts` | Position size, planned R:R, izvođenje smera |
+| `entry-slippage.test.ts` | Planirani ulaz vs fill (pts + R) |
+| `exit-efficiency.test.ts` | Target attainment |
+| `ftmo.test.ts` | Evaluacija prop-firm pravila |
+| `trade-lifecycle.test.ts` | planned / open / partial / closed / missed |
+| `instrument-aliases.test.ts` | Normalizacija broker simbola |
+| `tradingview-snapshot.test.ts` | Parsiranje i validacija `/x/` URL-ova |
+| `daily-report.test.ts` | Datumski i completion helper-i dnevnog izveštaja |
+| `default-instruments.test.ts` | B6 watchlist |
+
+Nema CI workflow-a u ovom repou — kvalitetni gate je lokalan:
+
+```bash
+npm run lint && npm run test && npm run build
+```
 
 ---
 
-## Deployment (Vercel)
+## Deploy
 
-1. Push to GitHub and import the repository at [vercel.com/new](https://vercel.com/new).
-2. In **Vercel → Settings → Environment Variables** add both `Production` and `Preview`:
+Vercel.
+
+1. Push na GitHub, pa import repoa na [vercel.com/new](https://vercel.com/new).
+2. U **Vercel → Settings → Environment Variables** dodaj za `Production` **i** `Preview`:
    ```
    NEXT_PUBLIC_SUPABASE_URL      = https://<ref>.supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY = <anon key>
    ```
-3. In **Supabase → Authentication → URL Configuration** set:
-   - **Site URL**: `https://<your-vercel-domain>.vercel.app`
-   - **Redirect URLs**: `https://<your-vercel-domain>.vercel.app/**`
+3. U **Supabase → Authentication → URL Configuration** postavi:
+   - **Site URL**: `https://<tvoj-vercel-domen>.vercel.app`
+   - **Redirect URLs**: `https://<tvoj-vercel-domen>.vercel.app/**`
 4. Redeploy.
 
-> **Recommended:** After creating your account, disable public sign-up — **Supabase → Authentication → Providers → Email → uncheck "Allow new users to sign up"**. This prevents anyone else from registering while keeping your account fully functional.
+> **Preporuka:** posle kreiranja naloga isključi javnu registraciju —
+> **Supabase → Authentication → Providers → Email → odčekiraj „Allow new users to sign up"**.
+> Time sprečavaš tuđe registracije, a tvoj nalog radi normalno.
 
 ---
 
-## Architecture
+## Bezbednosni model
 
-- **No REST API routes** — all mutations go through **Next.js Server Actions** (`login/`, `daily/` — `saveDailyReport`, `saveFocusGoal`, `endFocusGoal` — `trades/`, `import/`, `settings/actions.ts`). Reads use Supabase server client in Server Components.
-- **Session proxy** — `src/proxy.ts` (Next.js 16) refreshes Supabase auth and redirects unauthenticated users to `/login`.
-- **TradingView images** — the `TradeImages` component writes directly to `tj_trade_images` via the browser Supabase client (RLS-protected), not Server Actions.
-- **Defaults seeding** — auth trigger `tj_on_auth_user_created` (if configured in your Supabase project) plus idempotent `tj_seed_my_defaults` RPC on dashboard load (`ensure-defaults.ts`).
-- **Responsive shell** — desktop sidebar + mobile horizontal nav (`AppSidebar` / `MobileTopbar` in `app-sidebar.tsx`).
+Aplikacija je jednokorisnička, ali je izolacija **strukturna, ne konvencijska** — da tuđa registracija
+(ili greška u upitu) ne može da dohvati tvoje podatke.
 
----
-
-## Security
-
-- **Row Level Security** on every `tj_*` table (`user_id = (select auth.uid())` — initplan-safe), including `tj_focus_goals` and `tj_daily_reports`. Even if another user registered, they could not read or write any other user's data.
-- **`tj_position_stats`** runs with `security_invoker = on`, so the view honours the querying user's RLS on the underlying tables instead of bypassing it.
-- **No Supabase Storage** for chart images — only TradingView `/x/` URL strings in `tj_trade_images` (zero file hosting cost).
-- The `service_role` key is never referenced in frontend code — only the `anon` publishable key is exposed.
-- Internal seed functions (`tj_seed_defaults`, `tj_seed_instruments_defaults`, `rls_auto_enable`) are revoked from `anon`; `tj_seed_my_defaults` remains the authenticated login fallback (`ensure-defaults.ts`).
-- `tj_trade_images.image_url` has a DB CHECK constraint (`tradingview.com/x/…` only).
-- All authentication is handled by Supabase Auth (bcrypt, JWT, optional MFA available).
+- **Row Level Security na svakoj `tj_*` tabeli** — `user_id = (select auth.uid())` (initplan-safe),
+  uključujući `tj_focus_goals` i `tj_daily_reports`.
+- **`tj_position_stats`** radi sa `security_invoker = on`, pa view poštuje RLS onoga ko pita umesto da
+  ga zaobiđe.
+- **Bez Supabase Storage** za grafikone — samo TradingView `/x/` URL string-ovi u `tj_trade_images`.
+- **`service_role` ključ se nikad ne referencira u frontend kodu** — izložen je isključivo `anon`
+  publishable ključ.
+- **Interne seed funkcije** (`tj_seed_defaults`, `tj_seed_instruments_defaults`, `rls_auto_enable`) su
+  revoked za `anon`; `tj_seed_my_defaults` ostaje kao fallback za ulogovanog korisnika.
+- **`tj_trade_images.image_url`** ima DB CHECK constraint — dozvoljen je samo `tradingview.com/x/…`.
+- **Autentikacija** je u potpunosti na Supabase Auth (bcrypt, JWT, opciono MFA).
 
 ---
 
-## Project Structure
+## Struktura projekta
 
 ```
 src/
 ├── app/
-│   ├── (app)/                 # Protected routes (auth-checked layout)
-│   │   ├── page.tsx           # Dashboard
-│   │   ├── journal/           # Journal grid
-│   │   ├── daily/             # Daily Report + focus goal (+ actions.ts)
-│   │   ├── trades/            # New / edit trade (+ actions.ts)
+│   ├── (app)/                 Zaštićene rute (auth-checked layout)
+│   │   ├── page.tsx           Dashboard
+│   │   ├── journal/           Journal grid
+│   │   ├── daily/             Dnevni izveštaj + fokus cilj (+ actions.ts)
+│   │   ├── trades/            Novi / izmena trejda (+ actions.ts)
 │   │   │   ├── new/page.tsx
 │   │   │   └── [id]/edit/page.tsx
-│   │   ├── import/            # CSV/Excel import wizard (+ actions.ts)
-│   │   ├── settings/          # Lists, instruments, accounts (+ actions.ts)
-│   │   └── loading.tsx        # Route-level loading skeleton
-│   ├── login/                 # Auth page (sign-in / sign-up tabs) + actions
-│   └── globals.css            # Tailwind v4 theme (dark by default)
+│   │   ├── import/            CSV/Excel import wizard (+ actions.ts)
+│   │   ├── settings/          Liste, instrumenti, nalozi (+ actions.ts)
+│   │   └── loading.tsx        Skeleton na nivou rute
+│   ├── login/                 Auth stranica (sign-in / sign-up) + actions
+│   └── globals.css            Tailwind v4 tema (dark po defaultu)
 ├── components/
-│   ├── app/                   # App shell (sidebar + mobile topbar)
-│   ├── journal/               # Feature components (trade form, grid, dashboard,
-│   │                          #   daily report, focus goal, heatmap, import wizard,
-│   │                          #   FTMO banner, settings, …)
-│   └── ui/                    # shadcn/ui primitives
+│   ├── app/                   App shell (sidebar + mobilni topbar)
+│   ├── journal/               Feature komponente (trade forma, grid, dashboard,
+│   │                            dnevni izveštaj, fokus cilj, heatmap, import wizard,
+│   │                            FTMO baner, settings, …)
+│   └── ui/                    shadcn/ui primitivi
 ├── lib/
-│   ├── supabase/              # client / server / middleware / user helpers + generated TS types
-│   └── journal/               # Business logic
-│       ├── analytics.ts       # Dashboard stats, equity curve, breakdowns, weekly series
-│       ├── position-stats.ts  # Shared P/L + R math (paritet sa SQL view)
-│       ├── plan-calculations.ts  # Position size, planned R:R, direction
-│       ├── entry-slippage.ts  # Planned-vs-fill entry slippage (pts + R)
-│       ├── exit-efficiency.ts # Target attainment (realized R / planned reward R)
-│       ├── ftmo.ts / ftmo-status.ts  # Prop-firm challenge evaluation
-│       ├── mentor-export.ts   # Markdown "mentor pack" builder
-│       ├── trade-lifecycle.ts # plan / open / closed / missed status logic
-│       ├── tradingview-snapshot.ts  # /x/ snapshot URL parsing + validation
-│       ├── instrument-aliases.ts / default-instruments.ts  # B6 watchlist + broker aliases
-│       ├── daily-report.ts / daily-report-queries.ts  # Process journal types + DB queries
-│       ├── focus-goal.ts / focus-goal-queries.ts  # Active focus goal + day counting
-│       ├── trades.ts          # Trade/position queries
-│       ├── form-config.ts     # Declarative trade form (~23 position fields)
-│       ├── trade-form-prefs.ts   # localStorage form defaults (account, risk %)
-│       ├── types.ts           # Client-safe shared types
+│   ├── supabase/              client / server / middleware / user helper-i + generisani TS tipovi
+│   └── journal/               Poslovna logika
+│       ├── analytics.ts       Dashboard statistike, equity curve, breakdown-i, nedeljne serije
+│       ├── position-stats.ts  Deljena P/L + R matematika (paritet sa SQL view-om)
+│       ├── plan-calculations.ts   Position size, planned R:R, smer
+│       ├── entry-slippage.ts  Slippage planirani ulaz vs fill (pts + R)
+│       ├── exit-efficiency.ts Target attainment (realized R / planirani reward R)
+│       ├── ftmo.ts / ftmo-status.ts   Evaluacija prop-firm challenge-a
+│       ├── mentor-export.ts   Builder Markdown „mentor pack"-a
+│       ├── trade-lifecycle.ts planned / open / partial / closed / missed
+│       ├── tradingview-snapshot.ts   Parsiranje i validacija /x/ URL-ova
+│       ├── instrument-aliases.ts / default-instruments.ts   B6 watchlist + broker aliasi
+│       ├── daily-report.ts / daily-report-queries.ts   Tipovi procesnog dnevnika + upiti
+│       ├── focus-goal.ts / focus-goal-queries.ts   Aktivan cilj + brojanje dana
+│       ├── trades.ts          Upiti nad trejdovima/pozicijama
+│       ├── form-config.ts     Deklarativna trade forma (23 polja pozicije)
+│       ├── trade-form-prefs.ts    localStorage default-i forme (nalog, risk %)
+│       ├── types.ts           Deljeni tipovi bezbedni za klijent
 │       ├── options.ts / accounts.ts / instruments.ts / time.ts / format.ts / nav.ts
-│       └── ensure-defaults.ts # Idempotent per-user seeding fallback
-└── proxy.ts                   # Next.js 16 session proxy (replaces middleware.ts)
+│       └── ensure-defaults.ts Idempotentni fallback za seed po korisniku
+└── proxy.ts                   Next.js 16 session proxy (zamenjuje middleware.ts)
+
+supabase/migrations/           Inkrementalne delte (od 20260719120000)
 ```
 
 ---
 
-## Metrics glossary
+## Konvencije
 
-| Metric | Formula | Notes |
-|--------|---------|-------|
-| **Gross P/L** | `(exitNotional − avgEntry × exitQty) × dir × point_value` | Price move before fees |
-| **Net P/L** | `gross_pl − fees − swap` | After costs |
-| **Realized R (gross)** | `gross_points / (|planned_entry − stop| × entry_qty)` | Denominator uses **planned** `entry_price` (fallback avg fill) |
-| **Realized R (net)** | `net_pl / (planned_risk_$)` | `realized_r_net` column in `tj_position_stats` |
-| **Target attainment %** | `realized_r / planned_target_R × 100` | How much of your planned reward you took |
-| **MFE Capture %** | `realized_r / mfe_R × 100` | How much of max favorable excursion you kept (trade form) |
-| **Entry slippage** | adverse pts / \|planned entry − stop\| in R | Separate from P/L — not double-counted |
-| **Profit factor** | sum(wins) / sum(\|losses\|) | Closed trades only |
-| **Expectancy** | winRate×avgWinR + lossRate×avgLossR | avg win/loss R only from trades with valid R |
-| **FTMO drawdown %** | `(starting_balance − min_equity) / starting_balance × 100` | Worst realized equity dip from start, closed trades in account tz |
+**Nema REST API ruta.** Svaka mutacija ide kroz Server Action (`login/`, `daily/`, `trades/`,
+`import/`, `settings/actions.ts`). Čitanja idu Supabase server klijentom u Server Components. Jedini
+izuzetak je `TradeImages`, koji piše TradingView URL direktno preko browser klijenta pod RLS-om.
 
-Portfolio dashboard stats (win rate, PF, expectancy) include **closed** positions only. Partial exits are excluded unless you opt in via `toRealized({ includePartial: true })`.
+**Vreme je uvek per-account.** Čuvanje u `timestamptz` (UTC), prikaz u IANA timezone-u naloga.
+Kalendarski dan u Dnevnom izveštaju izvodi se iz **primarnog** naloga.
+
+**Dropdown vrednosti su tekst, ne foreign key.** Zato soft-delete opcije ne kvari istoriju.
+
+**Statistika se ne duplira.** P/L i R matematika postoje u SQL view-u i u TypeScript-u, ali su
+paritetne i pokrivene testom — nova metrika ide na oba mesta ili ni na jedno.
+
+**Watchlist prati vault.** Novi instrument se prvo dodaje u vault `instrument_registry`, pa ovde u
+`default-instruments.ts` (+ alias u `instrument-aliases.ts` ako ga broker drugačije zove).
+
+**Migracije su aditivne i vremenski označene.** Format `YYYYMMDDHHMMSS_opis.sql`, nikad izmena
+postojećeg fajla — nova delta.
 
 ---
 
-## License
+## Dokumentacija
 
-Private — personal use only.
+| Izvor | Za šta |
+|-------|--------|
+| **Ovaj README** | Pregled proizvoda, arhitektura, setup, metrike |
+| [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md) | AI ulaz (Cursor / Claude Code) |
+| [trading-fundamental-vault](https://github.com/0xsickre/trading-fundamental-vault/blob/master/README.md) | F0–F5 ciklus, makro bias, COT filter |
+| [vault `workflow.md`](https://github.com/0xsickre/trading-fundamental-vault/blob/master/workflow.md) | Sedmični runbook (13 koraka) |
+| [trading-dashboard](https://github.com/0xsickre/trading-dashboard/blob/master/README.md) | Read-only prikaz nedeljne analize |
+
+---
+
+## Napomena
+
+Privatni repo — lična upotreba. Supabase projekat journal-a je **odvojen** od dashboard projekta; ne
+pokreći dashboard migracije ovde ni obrnuto. Sadržaj je lični trading zapis, ne investicioni savet.
