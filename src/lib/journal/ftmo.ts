@@ -131,6 +131,11 @@ export function evaluateFtmo(
 
   const dayNet = new Map<string, number>();
   let cum = 0;
+  // Deliberately excludes tj_cash_events, unlike the dashboard's equity curve.
+  // A prop-firm drawdown floor is fixed to the balance the challenge started
+  // with — letting a deposit raise the floor would hand back room the rules
+  // never granted. Deposits and payouts belong to account performance, not to
+  // challenge evaluation.
   let equity = start;
   let peakEquity = start;
   let minEquity = start;

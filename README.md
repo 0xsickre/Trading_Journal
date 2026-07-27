@@ -260,6 +260,9 @@ projekat traži punu baseline šemu plus sve fajlove redom.
 | `20260721150000` | FTMO kolone na nalogu |
 | `20260722120000` | `tj_daily_reports` + `tj_focus_goals` |
 | `20260722130000` | `no_trade_day` na dnevnim izveštajima |
+| `20260727120000` | `tj_cash_events` — uplate / isplate / payout |
+| `20260727121000` | Breakeven opseg, default troškovi, `reviewed` / `rating` |
+| `20260727122000` | `prev_executions` snimak za undo import |
 
 > Ako je iz starije verzije ostao **`trade-images`** Storage bucket, možeš ga ručno obrisati u
 > **Supabase → Storage** — slike su sada isključivo TradingView `/x/` URL string-ovi.
@@ -436,7 +439,8 @@ povoljne ekskurzije, i prikazuje se u trade formi.
 ## Model podataka
 
 ```
-tj_accounts          – broker nalozi (valuta, balans, IANA timezone, FTMO challenge config)
+tj_accounts          – broker nalozi (valuta, balans, IANA timezone, FTMO challenge config,
+                       breakeven opseg, default komisije/swap, profit calc metoda)
 tj_instruments       – simboli sa point_value po klasi aktive (B6 watchlist, 10 simbola)
 tj_option_lists      – 17 dropdown/tag lista (Context, ICT Setup, Risk, Psychology;
                        session_killzone seed-ovan ali van trade forme)
@@ -446,7 +450,7 @@ tj_positions         – parent zapis trejda: technical_tags[], psychology_tags[
                        ICT setup (ict_entry_model, setup_grade, htf_bias, entry_tf), risk plan
                        (entry_price, stop_price, target_price, planned_rr), makro veza
                        (macro_align, cot_filter), MAE/MFE (max_drawdown_price, max_profit_price),
-                       lifecycle (status, miss_reason, missed_at)
+                       lifecycle (status, miss_reason, missed_at), reviewed, rating
 tj_executions        – child fill-ovi (entry ili exit, cena, količina, fee, swap, timestamp UTC)
 tj_position_stats    – SQL view (security_invoker): avg_entry, avg_exit, entry_qty, gross_pl,
                        net_pl, realized_r, realized_r_net
@@ -460,6 +464,7 @@ tj_daily_reports     – jedan red po kalendarskom danu: ocena dana, jutarnji/ve
 tj_import_batches    – metapodaci import sesije
 tj_import_rows       – audit po redu (raw + parsed + match status)
 tj_column_mappings   – broker preset-i za mapiranje kolona (samo šema — UI nije implementiran)
+tj_cash_events       – uplate, isplate, prop-firm payout-i i ručne korekcije (signed amount)
 ```
 
 **Invarijante**
@@ -487,9 +492,21 @@ tj_column_mappings   – broker preset-i za mapiranje kolona (samo šema — UI 
 | **Profit factor** | `sum(wins) / sum(\|losses\|)` | Samo zatvoreni trejdovi |
 | **Expectancy** | `winRate × avgWinR + lossRate × avgLossR` | Prosečan win/loss R samo iz trejdova sa validnim R |
 | **FTMO drawdown %** | `(starting_balance − min_equity) / starting_balance × 100` | Najgori realizovani pad equity-ja od starta, zatvoreni trejdovi u tz naloga |
+| **Max drawdown $** | najveći peak-to-trough pad kumulativnog P&L-a | Uplate i isplate **nisu** gubitak i ne pomeraju ovaj broj |
+| **Max drawdown %** | `pad / peak equity × 100` | Imenilac je equity **uključujući** uplate i isplate — zato depozit menja procenat, a ne dolare |
+| **Breakeven trade** | `breakeven_from ≤ net P&L ≤ breakeven_to` | Opseg je po nalogu i **asimetričan**. Dok je 0 do 0, znači tačno nulu |
 
 Portfolio statistike (win rate, PF, expectancy) uključuju **samo zatvorene** pozicije. Parcijali su
 isključeni osim ako eksplicitno uključiš `toRealized({ includePartial: true })`.
+
+**Breakeven opseg deli brojanje od novca.** Broj trejdova (win / loss / breakeven, pa i win rate)
+poštuje opseg, ali **sume novca prate stvarni predznak**: trejd od −12.40 broji se kao breakeven, a
+njegovih 12.40 i dalje ulazi u bruto gubitak. Da nije tako, profit factor bi bio tiho naduvan, a zbir
+delova se ne bi slagao sa neto P&L-om.
+
+**FTMO evaluacija namerno ignoriše `tj_cash_events`.** Prop-firm drawdown se meri od balansa sa kojim
+je izazov počeo; da depozit podiže pod, dobio bi prostor koji ti pravila nikad nisu dala. Uplate i
+isplate su performans naloga, ne evaluacija izazova.
 
 ---
 

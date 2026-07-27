@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { computeStatus } from "@/lib/journal/trade-lifecycle";
 import { normalizeInstrumentSymbol } from "@/lib/journal/instrument-aliases";
+import { planUndo } from "@/lib/journal/import-undo";
 
 export type ImportExec = {
   side: "entry" | "exit";
@@ -57,6 +58,8 @@ export async function commitImport(input: CommitInput) {
 
   for (const item of input.items) {
     let matchedId = item.matched_position_id;
+    // Fills this row displaced, kept so `undoImportBatch` can put them back.
+    let replacedExecs: ImportExec[] | null = null;
 
     try {
       if (item.decision === "create") {
@@ -91,6 +94,7 @@ export async function commitImport(input: CommitInput) {
           .from("tj_executions")
           .select("side,price,qty,executed_at,fee,swap_funding,source")
           .eq("position_id", pid);
+        replacedExecs = (prevExecs ?? []) as unknown as ImportExec[];
         await supabase.from("tj_executions").delete().eq("position_id", pid);
         if (item.executions.length > 0) {
           const { error: exErr } = await supabase.from("tj_executions").insert(
@@ -127,6 +131,7 @@ export async function commitImport(input: CommitInput) {
         },
         match_status: item.match_status,
         matched_position_id: matchedId,
+        prev_executions: replacedExecs,
       });
     } catch {
       failed++;
@@ -141,4 +146,100 @@ export async function commitImport(input: CommitInput) {
   revalidatePath("/journal");
   revalidatePath("/", "layout");
   return { ok: true as const, created, merged, skipped, failed };
+}
+
+export type UndoResult =
+  | {
+      ok: true;
+      deletedPositions: number;
+      restoredPositions: number;
+      /** Merges whose pre-import fills were never captured (batches predating
+       *  the snapshot column) — these could not be put back. */
+      unrestorableMerges: number;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Roll a batch back: delete the positions it created, restore the fills it
+ * replaced, then drop the batch and its audit rows.
+ *
+ * Only objective fills are touched. A position that existed before the import
+ * keeps its plan, psychology and notes — the import never owned those.
+ */
+export async function undoImportBatch(batchId: string): Promise<UndoResult> {
+  const supabase = await createClient();
+
+  const { data: batch } = await supabase
+    .from("tj_import_batches")
+    .select("id")
+    .eq("id", batchId)
+    .maybeSingle();
+  if (!batch) return { ok: false, error: "Import batch not found." };
+
+  // Positions this batch created. Deleting them cascades to their executions.
+  const { data: createdRows, error: createdErr } = await supabase
+    .from("tj_positions")
+    .select("id")
+    .eq("import_batch_id", batchId);
+  if (createdErr) return { ok: false, error: createdErr.message };
+  const createdIds = new Set((createdRows ?? []).map((p) => p.id));
+
+  const { data: rows, error: rowsErr } = await supabase
+    .from("tj_import_rows")
+    .select("matched_position_id, prev_executions")
+    .eq("batch_id", batchId);
+  if (rowsErr) return { ok: false, error: rowsErr.message };
+
+  const plan = planUndo<ImportExec>(rows ?? [], createdIds);
+
+  for (const { positionId, executions } of plan.restore) {
+    await supabase.from("tj_executions").delete().eq("position_id", positionId);
+    if (executions.length > 0) {
+      const { error: insErr } = await supabase.from("tj_executions").insert(
+        executions.map((e) => ({
+          side: e.side,
+          price: e.price,
+          qty: e.qty,
+          executed_at: e.executed_at,
+          fee: e.fee,
+          swap_funding: e.swap_funding,
+          position_id: positionId,
+        })),
+      );
+      if (insErr) return { ok: false, error: insErr.message };
+    }
+    await supabase
+      .from("tj_positions")
+      .update({
+        status: statusOf(executions),
+        needs_review: executions.length === 0,
+      })
+      .eq("id", positionId);
+  }
+
+  if (plan.deleteIds.length > 0) {
+    const { error: delErr } = await supabase
+      .from("tj_positions")
+      .delete()
+      .in("id", plan.deleteIds);
+    if (delErr) return { ok: false, error: delErr.message };
+  }
+
+  await supabase.from("tj_import_rows").delete().eq("batch_id", batchId);
+  const { error: batchDelErr } = await supabase
+    .from("tj_import_batches")
+    .delete()
+    .eq("id", batchId);
+  if (batchDelErr) return { ok: false, error: batchDelErr.message };
+
+  revalidatePath("/journal");
+  revalidatePath("/import");
+  revalidatePath("/", "layout");
+
+  return {
+    ok: true,
+    deletedPositions: plan.deleteIds.length,
+    restoredPositions: plan.restore.length,
+    unrestorableMerges: plan.unrestorableIds.length,
+  };
 }

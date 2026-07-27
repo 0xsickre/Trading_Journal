@@ -50,6 +50,12 @@ import {
 import { computePositionStats } from "@/lib/journal/position-stats";
 import { utcToZonedInput, zonedInputToUtc, fmtInTz } from "@/lib/journal/time";
 import {
+  NO_COST_DEFAULTS,
+  nightsBetween,
+  prefillFee,
+  prefillSwap,
+} from "@/lib/journal/cost-defaults";
+import {
   createTrade,
   updateTrade,
   markTradeMissed,
@@ -157,6 +163,13 @@ export function TradeForm({
     !initial && accountId != null && ftmoFailedAccountIds.includes(accountId);
   const tz = account?.timezone ?? "America/New_York";
   const currency = account?.currency ?? "USD";
+  const costDefaults = account
+    ? {
+        default_commission_per_unit: account.default_commission_per_unit,
+        default_fee_fixed: account.default_fee_fixed,
+        default_swap_per_day: account.default_swap_per_day,
+      }
+    : NO_COST_DEFAULTS;
 
   const [tradeNo, setTradeNo] = useState<string>(
     initial?.trade_no != null ? String(initial.trade_no) : "",
@@ -392,17 +405,37 @@ export function TradeForm({
   }, [execs, fields, pointValue, account]);
 
   function addExec(side: "entry" | "exit") {
-    setExecs((prev) => [
-      ...prev,
-      {
-        side,
-        price: "",
-        qty: side === "exit" ? "" : "1",
-        executedLocal: utcToZonedInput(new Date().toISOString(), tz),
-        fee: "",
-        swap: "",
-      },
-    ]);
+    setExecs((prev) => {
+      const nowIso = new Date().toISOString();
+      const qtyStr = side === "exit" ? "" : "1";
+      const qty = n(qtyStr) ?? 0;
+
+      // Swap only accrues once a position has been open overnight, so it is
+      // suggested on exits, measured from the first entry fill.
+      const firstEntry = prev.find((e) => e.side === "entry");
+      const nights =
+        side === "exit" && firstEntry
+          ? nightsBetween(
+              zonedInputToUtc(firstEntry.executedLocal, tz),
+              nowIso,
+            )
+          : 0;
+
+      const fee = prefillFee(qty, costDefaults);
+      const swap = prefillSwap(qty, nights, costDefaults);
+
+      return [
+        ...prev,
+        {
+          side,
+          price: "",
+          qty: qtyStr,
+          executedLocal: utcToZonedInput(nowIso, tz),
+          fee: fee !== 0 ? String(fee) : "",
+          swap: swap !== 0 ? String(swap) : "",
+        },
+      ];
+    });
   }
   function setExec(i: number, patch: Partial<ExecRow>) {
     setExecs((prev) => prev.map((e, idx) => (idx === i ? { ...e, ...patch } : e)));

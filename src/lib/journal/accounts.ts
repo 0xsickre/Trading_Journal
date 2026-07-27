@@ -7,7 +7,7 @@ export async function getAccounts(): Promise<Account[]> {
   const { data } = await supabase
     .from("tj_accounts")
     .select(
-      "id,name,broker,currency,starting_balance,default_asset_class,timezone,is_active,ftmo_mode,ftmo_daily_loss_enabled,ftmo_daily_loss_pct,ftmo_max_loss_enabled,ftmo_max_loss_pct,ftmo_profit_target_enabled,ftmo_profit_target_pct,ftmo_min_days_enabled,ftmo_min_days,ftmo_reset_at",
+      "id,name,broker,currency,starting_balance,default_asset_class,timezone,is_active,breakeven_from,breakeven_to,breakeven_unit,default_commission_per_unit,default_fee_fixed,default_swap_per_day,default_stop_pct,default_target_pct,profit_calc_method,ftmo_mode,ftmo_daily_loss_enabled,ftmo_daily_loss_pct,ftmo_max_loss_enabled,ftmo_max_loss_pct,ftmo_profit_target_enabled,ftmo_profit_target_pct,ftmo_min_days_enabled,ftmo_min_days,ftmo_reset_at",
     )
     .order("created_at");
   return (data ?? []) as Account[];

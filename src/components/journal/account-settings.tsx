@@ -55,6 +55,20 @@ function AccountCard({ account }: { account: Account }) {
   const [minDaysOn, setMinDaysOn] = useState(account.ftmo_min_days_enabled);
   const [minDays, setMinDays] = useState(String(account.ftmo_min_days));
 
+  // Breakeven band — asymmetric, e.g. -37.50 .. 0.
+  const [beFrom, setBeFrom] = useState(String(account.breakeven_from));
+  const [beTo, setBeTo] = useState(String(account.breakeven_to));
+  const [beUnit, setBeUnit] = useState(account.breakeven_unit);
+
+  // Cost defaults for new execution rows.
+  const [commPerUnit, setCommPerUnit] = useState(
+    String(account.default_commission_per_unit),
+  );
+  const [feeFixed, setFeeFixed] = useState(String(account.default_fee_fixed));
+  const [swapPerDay, setSwapPerDay] = useState(
+    String(account.default_swap_per_day),
+  );
+
   function save() {
     start(async () => {
       const res = await updateAccount(account.id, {
@@ -62,6 +76,12 @@ function AccountCard({ account }: { account: Account }) {
         timezone: tz,
         currency,
         starting_balance: Number(balance) || 0,
+        breakeven_from: Number(beFrom) || 0,
+        breakeven_to: Number(beTo) || 0,
+        breakeven_unit: beUnit,
+        default_commission_per_unit: Number(commPerUnit) || 0,
+        default_fee_fixed: Number(feeFixed) || 0,
+        default_swap_per_day: Number(swapPerDay) || 0,
         ftmo_mode: ftmoMode,
         ftmo_daily_loss_enabled: dailyOn,
         ftmo_daily_loss_pct: Number(dailyPct) || 0,
@@ -128,6 +148,82 @@ function AccountCard({ account }: { account: Account }) {
             onChange={(e) => setBalance(e.target.value)}
           />
         </div>
+        <div className="col-span-2 space-y-2 rounded-md border p-3">
+          <div className="text-sm font-medium">Breakeven opseg</div>
+          <p className="text-xs text-muted-foreground">
+            Trejd čiji neto P&amp;L padne u ovaj opseg broji se kao breakeven, ne
+            kao gubitak. Opseg je <strong>asimetričan</strong> — tipično
+            &minus;trošak do 0, ne &plusmn;X. Dok je 0 do 0, breakeven znači
+            tačno nulu i praktično nikad ne okine.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              inputMode="decimal"
+              value={beFrom}
+              onChange={(e) => setBeFrom(e.target.value)}
+              className="h-8 w-28"
+              aria-label="Breakeven od"
+            />
+            <span className="text-sm text-muted-foreground">do</span>
+            <Input
+              inputMode="decimal"
+              value={beTo}
+              onChange={(e) => setBeTo(e.target.value)}
+              className="h-8 w-28"
+              aria-label="Breakeven do"
+            />
+            <Select
+              value={beUnit}
+              onValueChange={(v) => setBeUnit(v as "currency" | "pct")}
+            >
+              <SelectTrigger className="h-8 w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="currency">{currency}</SelectItem>
+                <SelectItem value="pct">% balansa</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="col-span-2 space-y-2 rounded-md border p-3">
+          <div className="text-sm font-medium">Default troškovi</div>
+          <p className="text-xs text-muted-foreground">
+            Predpopunjavaju se na svaki novi fill u formi. Uvek se mogu
+            pregaziti ručno.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Komisija po jedinici</Label>
+              <Input
+                inputMode="decimal"
+                value={commPerUnit}
+                onChange={(e) => setCommPerUnit(e.target.value)}
+                className="h-8"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Fiksna taksa po fill-u</Label>
+              <Input
+                inputMode="decimal"
+                value={feeFixed}
+                onChange={(e) => setFeeFixed(e.target.value)}
+                className="h-8"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Swap po jedinici / danu</Label>
+              <Input
+                inputMode="decimal"
+                value={swapPerDay}
+                onChange={(e) => setSwapPerDay(e.target.value)}
+                className="h-8"
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="col-span-2 space-y-3 rounded-md border p-3">
           <label className="flex items-center gap-2">
             <Checkbox

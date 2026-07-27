@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/user";
 
 export type AddOptionResult =
   | {
@@ -230,6 +231,15 @@ export async function updateAccount(
     default_asset_class?: string | null;
     timezone?: string;
     is_active?: boolean;
+    breakeven_from?: number;
+    breakeven_to?: number;
+    breakeven_unit?: "currency" | "pct";
+    default_commission_per_unit?: number;
+    default_fee_fixed?: number;
+    default_swap_per_day?: number;
+    default_stop_pct?: number | null;
+    default_target_pct?: number | null;
+    profit_calc_method?: "fifo" | "lifo" | "weighted_avg";
     ftmo_mode?: boolean;
     ftmo_daily_loss_enabled?: boolean;
     ftmo_daily_loss_pct?: number;
@@ -242,6 +252,17 @@ export async function updateAccount(
     ftmo_reset_at?: string | null;
   },
 ) {
+  if (
+    patch.breakeven_from != null &&
+    patch.breakeven_to != null &&
+    patch.breakeven_from > patch.breakeven_to
+  ) {
+    return {
+      ok: false,
+      error: "Breakeven range: 'from' must be less than or equal to 'to'.",
+    };
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.from("tj_accounts").update(patch).eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -280,4 +301,67 @@ export async function addAccount(input: {
   if (error) return { ok: false, error: error.message };
   revalidateAll();
   return { ok: true };
+}
+
+// ---- Cash events (deposits / withdrawals / payouts) ----
+
+const CASH_EVENT_TYPES = [
+  "deposit",
+  "withdrawal",
+  "payout",
+  "adjustment",
+] as const;
+export type CashEventType = (typeof CASH_EVENT_TYPES)[number];
+
+/**
+ * Amounts are stored signed so the balance timeline is a plain running sum.
+ * The form asks for a magnitude and the sign is derived from the type here, in
+ * one place, rather than trusting every caller to remember.
+ */
+function signedAmount(type: CashEventType, magnitude: number): number {
+  const abs = Math.abs(magnitude);
+  if (type === "deposit") return abs;
+  if (type === "withdrawal" || type === "payout") return -abs;
+  return magnitude; // adjustment keeps whatever sign was entered
+}
+
+export async function addCashEvent(input: {
+  account_id: string;
+  event_type: CashEventType;
+  amount: number;
+  occurred_at: string;
+  note?: string | null;
+}) {
+  if (!CASH_EVENT_TYPES.includes(input.event_type))
+    return { ok: false as const, error: "Unknown event type." };
+  if (!input.account_id)
+    return { ok: false as const, error: "Account is required." };
+
+  const amount = signedAmount(input.event_type, Number(input.amount));
+  if (!Number.isFinite(amount) || amount === 0)
+    return { ok: false as const, error: "Amount must be a non-zero number." };
+
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) return { ok: false as const, error: "Not signed in." };
+
+  const { error } = await supabase.from("tj_cash_events").insert({
+    user_id: user.id,
+    account_id: input.account_id,
+    event_type: input.event_type,
+    amount,
+    occurred_at: input.occurred_at,
+    note: input.note?.trim() || null,
+  });
+  if (error) return { ok: false as const, error: error.message };
+  revalidateAll();
+  return { ok: true as const };
+}
+
+export async function deleteCashEvent(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("tj_cash_events").delete().eq("id", id);
+  if (error) return { ok: false as const, error: error.message };
+  revalidateAll();
+  return { ok: true as const };
 }

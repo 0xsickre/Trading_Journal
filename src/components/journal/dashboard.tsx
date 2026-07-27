@@ -24,6 +24,16 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CalendarHeatmap } from "@/components/journal/calendar-heatmap";
+import {
+  buildBalanceTimeline,
+  computeDrawdown,
+  type CashEvent,
+} from "@/lib/journal/balance";
+import {
+  EXACT_ZERO_RANGE,
+  hasBreakevenBand,
+  resolveBreakevenRange,
+} from "@/lib/journal/breakeven";
 import type { Account, TradeRow } from "@/lib/journal/types";
 import {
   toRealized,
@@ -109,9 +119,11 @@ const BREAKDOWN_FIELDS = [
 export function Dashboard({
   trades,
   accounts,
+  cashEvents = [],
 }: {
   trades: TradeRow[];
   accounts: Account[];
+  cashEvents?: CashEvent[];
 }) {
   const [accountFilter, setAccountFilter] = useState("all");
   const [period, setPeriod] = useState("90");
@@ -196,7 +208,58 @@ export function Dashboard({
     return r;
   }, [trades, accountFilter, period]);
 
-  const stats = useMemo(() => computeStats(realized, mode), [realized, mode]);
+  /**
+   * Breakeven band for the current scope. With "all accounts" selected the band
+   * is only meaningful when every account agrees — mixing bands would classify
+   * the same P&L differently depending on which account produced it, so we fall
+   * back to exact zero rather than pick a winner.
+   */
+  const breakevenRange = useMemo(() => {
+    const scoped =
+      accountFilter === "all"
+        ? accounts
+        : accounts.filter((a) => a.id === accountFilter);
+    if (scoped.length === 0) return EXACT_ZERO_RANGE;
+    const ranges = scoped.map((a) => resolveBreakevenRange(a));
+    const first = ranges[0];
+    const uniform = ranges.every(
+      (r) => r.from === first.from && r.to === first.to,
+    );
+    return uniform ? first : EXACT_ZERO_RANGE;
+  }, [accountFilter, accounts]);
+
+  const scopedCashEvents = useMemo(
+    () =>
+      accountFilter === "all"
+        ? cashEvents
+        : cashEvents.filter((c) => c.account_id === accountFilter),
+    [cashEvents, accountFilter],
+  );
+
+  /**
+   * Drawdown is measured on two different bases on purpose: money comes from
+   * cumulative P&L (a withdrawal is not a loss), percentage comes from equity
+   * including cash flow (a deposit really does change what a dollar loss means).
+   */
+  const drawdown = useMemo(
+    () =>
+      computeDrawdown(
+        buildBalanceTimeline(
+          startBalance,
+          realized.map((t) => ({
+            at: t.closedAt ?? "",
+            pnl: mode === "net" ? t.net : t.gross,
+          })),
+          scopedCashEvents,
+        ),
+      ),
+    [realized, mode, startBalance, scopedCashEvents],
+  );
+
+  const stats = useMemo(
+    () => computeStats(realized, mode, breakevenRange),
+    [realized, mode, breakevenRange],
+  );
   const equity = useMemo(
     () => buildEquity(realized, mode, equityMetric, startBalance),
     [realized, mode, equityMetric, startBalance],
@@ -207,8 +270,8 @@ export function Dashboard({
     [realized, mode, tzOf],
   );
   const breakdown = useMemo(
-    () => breakdownByField(realized, breakdownField),
-    [realized, breakdownField],
+    () => breakdownByField(realized, breakdownField, breakevenRange),
+    [realized, breakdownField, breakevenRange],
   );
   const slippageStats = useMemo(
     () => computeSlippageStats(realized),
@@ -488,6 +551,26 @@ export function Dashboard({
           label="Max drawdown"
           value={fmtMoney(stats.maxDrawdown, currency)}
           cls="text-[var(--loss)]"
+          title="Worst peak-to-trough drop in cumulative P&L. Deposits and withdrawals are not losses, so they do not move this number."
+        />
+        <Stat
+          label="Max drawdown %"
+          value={fmtPct(drawdown.maxPctOfEquity)}
+          cls="text-[var(--loss)]"
+          title={
+            drawdown.maxAt
+              ? `Share of peak account equity, including deposits and withdrawals. Trough on ${drawdown.maxAt.slice(0, 10)}.`
+              : "Share of peak account equity, including deposits and withdrawals."
+          }
+        />
+        <Stat
+          label="Breakeven"
+          value={String(stats.breakeven)}
+          title={
+            hasBreakevenBand(breakevenRange)
+              ? `Trades landing in ${fmtMoney(breakevenRange.from, currency)} … ${fmtMoney(breakevenRange.to, currency)}.`
+              : "No breakeven band configured — only an exact 0.00 counts, which almost never happens once fees are included. Set a range per account in Settings."
+          }
         />
         <Stat
           label="Avg entry slip"

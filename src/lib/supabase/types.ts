@@ -16,10 +16,19 @@ export type Database = {
     Tables: {
       tj_accounts: {
         Row: {
+          breakeven_from: number
+          breakeven_to: number
+          breakeven_unit: string
           broker: string | null
           created_at: string
           currency: string
           default_asset_class: string | null
+          default_commission_per_unit: number
+          default_fee_fixed: number
+          default_stop_pct: number | null
+          default_swap_per_day: number
+          default_target_pct: number | null
+          profit_calc_method: string
           ftmo_daily_loss_enabled: boolean
           ftmo_daily_loss_pct: number
           ftmo_max_loss_enabled: boolean
@@ -38,10 +47,19 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          breakeven_from?: number
+          breakeven_to?: number
+          breakeven_unit?: string
           broker?: string | null
           created_at?: string
           currency?: string
           default_asset_class?: string | null
+          default_commission_per_unit?: number
+          default_fee_fixed?: number
+          default_stop_pct?: number | null
+          default_swap_per_day?: number
+          default_target_pct?: number | null
+          profit_calc_method?: string
           ftmo_daily_loss_enabled?: boolean
           ftmo_daily_loss_pct?: number
           ftmo_max_loss_enabled?: boolean
@@ -60,10 +78,19 @@ export type Database = {
           user_id?: string
         }
         Update: {
+          breakeven_from?: number
+          breakeven_to?: number
+          breakeven_unit?: string
           broker?: string | null
           created_at?: string
           currency?: string
           default_asset_class?: string | null
+          default_commission_per_unit?: number
+          default_fee_fixed?: number
+          default_stop_pct?: number | null
+          default_swap_per_day?: number
+          default_target_pct?: number | null
+          profit_calc_method?: string
           ftmo_daily_loss_enabled?: boolean
           ftmo_daily_loss_pct?: number
           ftmo_max_loss_enabled?: boolean
@@ -82,6 +109,50 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      tj_cash_events: {
+        Row: {
+          account_id: string
+          amount: number
+          created_at: string
+          event_type: string
+          id: string
+          note: string | null
+          occurred_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          created_at?: string
+          event_type: string
+          id?: string
+          note?: string | null
+          occurred_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          created_at?: string
+          event_type?: string
+          id?: string
+          note?: string | null
+          occurred_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tj_cash_events_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "tj_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tj_column_mappings: {
         Row: {
@@ -345,6 +416,7 @@ export type Database = {
           match_status: string
           matched_position_id: string | null
           parsed: Json | null
+          prev_executions: Json | null
           raw: Json | null
           user_id: string
         }
@@ -355,6 +427,7 @@ export type Database = {
           match_status?: string
           matched_position_id?: string | null
           parsed?: Json | null
+          prev_executions?: Json | null
           raw?: Json | null
           user_id?: string
         }
@@ -365,6 +438,7 @@ export type Database = {
           match_status?: string
           matched_position_id?: string | null
           parsed?: Json | null
+          prev_executions?: Json | null
           raw?: Json | null
           user_id?: string
         }
@@ -535,7 +609,9 @@ export type Database = {
           planned_rr: string | null
           position_size: number | null
           psychology_tags: string[]
+          rating: number | null
           result: string | null
+          reviewed: boolean
           risk_pct: string | null
           session_killzone: string | null
           setup_grade: string | null
@@ -572,7 +648,9 @@ export type Database = {
           planned_rr?: string | null
           position_size?: number | null
           psychology_tags?: string[]
+          rating?: number | null
           result?: string | null
+          reviewed?: boolean
           risk_pct?: string | null
           session_killzone?: string | null
           setup_grade?: string | null
@@ -609,7 +687,9 @@ export type Database = {
           planned_rr?: string | null
           position_size?: number | null
           psychology_tags?: string[]
+          rating?: number | null
           result?: string | null
+          reviewed?: boolean
           risk_pct?: string | null
           session_killzone?: string | null
           setup_grade?: string | null

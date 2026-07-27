@@ -2,6 +2,8 @@ import type { TradeRow } from "./types";
 import { zonedDateKey, zonedWeekStartKey } from "./time";
 import { slippageFromTrade } from "./entry-slippage";
 import { exitEfficiencyFromTrade } from "./exit-efficiency";
+import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
+import { buildBalanceTimeline, computeDrawdown } from "./balance";
 
 export type PnlMode = "net" | "gross";
 
@@ -63,9 +65,20 @@ export type Stats = {
   maxDrawdown: number; // money, on chosen pnl mode
 };
 
+/**
+ * Portfolio statistics over realized trades.
+ *
+ * `range` is the account's breakeven band. Note the deliberate split: trade
+ * COUNTS (wins / losses / breakeven, and therefore win rate) respect the band,
+ * but MONEY SUMS use the actual sign of each trade. A -12.40 fee-only trade is
+ * counted as breakeven yet its 12.40 still lands in gross loss — otherwise
+ * profit factor would be quietly overstated and the parts would stop adding up
+ * to net P&L.
+ */
 export function computeStats(
   trades: RealizedTrade[],
   mode: PnlMode = "net",
+  range: BreakevenRange = EXACT_ZERO_RANGE,
 ): Stats {
   const pnl = (t: RealizedTrade) => (mode === "net" ? t.net : t.gross);
   const count = trades.length;
@@ -89,10 +102,6 @@ export function computeStats(
     posProfit = 0,
     negProfit = 0;
 
-  let cum = 0;
-  let peak = 0;
-  let maxDd = 0;
-
   for (const t of trades) {
     const p = pnl(t);
     grossSum += t.gross;
@@ -101,22 +110,26 @@ export function computeStats(
       totalR += t.r;
       rCount++;
     }
-    if (p > 0) {
+
+    // Money always follows the sign, regardless of how the band labels the trade.
+    if (p > 0) posProfit += p;
+    else if (p < 0) negProfit += Math.abs(p);
+
+    const outcome = classifyOutcome(p, range);
+    if (outcome === "win") {
       wins++;
       if (t.r != null) {
         winRSum += t.r;
         winRCount++;
       }
-      posProfit += p;
       curWin++;
       curLoss = 0;
-    } else if (p < 0) {
+    } else if (outcome === "loss") {
       losses++;
       if (t.r != null) {
         lossRSum += t.r;
         lossRCount++;
       }
-      negProfit += Math.abs(p);
       curLoss++;
       curWin = 0;
     } else {
@@ -128,11 +141,16 @@ export function computeStats(
     maxLoss = Math.max(maxLoss, curLoss);
     best = Math.max(best, p);
     worst = Math.min(worst, p);
-
-    cum += p;
-    peak = Math.max(peak, cum);
-    maxDd = Math.min(maxDd, cum - peak);
   }
+
+  // Drawdown has one implementation (balance.ts) so the $ figure here and the
+  // % figure on the dashboard can never drift apart.
+  const maxDd = computeDrawdown(
+    buildBalanceTimeline(
+      0,
+      trades.map((t) => ({ at: t.closedAt ?? "", pnl: pnl(t) })),
+    ),
+  ).maxMoney;
 
   // Win/loss is classified by realized money (p > 0 / p < 0), independent of the
   // user-entered `result` label. Breakeven (p === 0) is excluded from winRate's
@@ -255,6 +273,7 @@ const ARRAY_BREAKDOWN_FIELDS = new Set([
 export function breakdownByField(
   trades: RealizedTrade[],
   field: string,
+  range: BreakevenRange = EXACT_ZERO_RANGE,
 ): BreakdownRow[] {
   const groups = new Map<string, RealizedTrade[]>();
   for (const t of trades) {
@@ -272,7 +291,7 @@ export function breakdownByField(
   }
   const rows: BreakdownRow[] = [];
   for (const [key, arr] of groups) {
-    const s = computeStats(arr, "net");
+    const s = computeStats(arr, "net", range);
     rows.push({
       key,
       count: arr.length,

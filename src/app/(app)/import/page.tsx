@@ -1,14 +1,17 @@
 import { getAccounts } from "@/lib/journal/accounts";
 import { getTradesWithStats } from "@/lib/journal/trades";
+import { getImportBatches } from "@/lib/journal/import-batches";
 import {
   ImportWizard,
   type MatchCandidate,
 } from "@/components/journal/import-wizard";
+import { ImportHistory } from "@/components/journal/import-history";
 
 export default async function ImportPage() {
-  const [accounts, trades] = await Promise.all([
+  const [accounts, trades, batches] = await Promise.all([
     getAccounts(),
     getTradesWithStats(),
+    getImportBatches(),
   ]);
 
   const candidates: MatchCandidate[] = trades.map((t) => ({
@@ -32,6 +35,7 @@ export default async function ImportPage() {
         </p>
       </div>
       <ImportWizard accounts={accounts} candidates={candidates} />
+      <ImportHistory batches={batches} accounts={accounts} />
     </div>
   );
 }

@@ -154,7 +154,17 @@ F0 novac + integritet ──► F1 jedinice + metrike + skor ──► F2 insigh
 
 ---
 
-### Faza 0 — Novac i integritet
+### Faza 0 — Novac i integritet ✅ ZAVRŠENO
+
+> Isporučeno. Odstupanje od prvobitnog plana: **FTMO evaluacija namerno NE koristi balance
+> timeline.** Prop-firm drawdown se meri od balansa sa kojim je izazov počeo — da depozit podiže
+> pod, dobio bi prostor koji ti pravila nikad nisu dala. Uplate su performans naloga, ne evaluacija
+> izazova. Dokumentovano u `ftmo.ts` i README-u.
+>
+> Dodato van prvobitnog opsega, jer bez toga undo nije bio pošten: `tj_import_rows.prev_executions`.
+> Merge briše postojeće fill-ove, a snimak prethodnog stanja živeo je samo u promenljivoj tokom
+> request-a — na disku nije bilo čemu da se vrati.
+
 
 **Zašto prva:** svaki % pogled deli isti imenilac. Depozit ubačen posle toga tiho pokvari svaki
 procenat unazad. Breakeven range je ovde jer bez njega tri metrike Faze 1 nemaju značenje.
@@ -468,7 +478,7 @@ ovaj model ima strukturno.
 
 | Faza | Sadržaj | Migracija | Sesije |
 |:--:|---|:--:|:--:|
-| 0 | Cash events, breakeven range, default komisije, undo import, reviewed/rating | Da | 3 |
+| 0 | Cash events, breakeven range, default komisije, undo import, reviewed/rating | Da | ✅ |
 | 1 | Sloj jedinica → metrike (vreme, trošak, rizik, nedeljni sloj) → Zella Score | Ne | 5–6 |
 | 2 | Insight engine: 30 TZ obrazaca + 7 vlastitih + mentor pack | Ne | 4–5 |
 | 3 | Report engine, pivot sa `n`, dimension registry, negacija filtera | Ne | 5–6 |

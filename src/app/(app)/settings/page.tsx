@@ -2,16 +2,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getListsWithItems } from "@/lib/journal/options";
 import { getInstruments } from "@/lib/journal/instruments";
 import { getAccounts } from "@/lib/journal/accounts";
+import { getCashEvents } from "@/lib/journal/cash-events";
 import { ListManager } from "@/components/journal/list-manager";
 import { InstrumentManager } from "@/components/journal/instrument-manager";
 import { AccountSettings } from "@/components/journal/account-settings";
+import { CashEventsManager } from "@/components/journal/cash-events-manager";
 import { NewListForm } from "@/components/journal/new-list-form";
 
 export default async function SettingsPage() {
-  const [lists, instruments, accounts] = await Promise.all([
+  const [lists, instruments, accounts, cashEvents] = await Promise.all([
     getListsWithItems(false),
     getInstruments(false),
     getAccounts(),
+    getCashEvents(),
   ]);
 
   return (
@@ -29,6 +32,7 @@ export default async function SettingsPage() {
           <TabsTrigger value="lists">Dropdown Lists</TabsTrigger>
           <TabsTrigger value="instruments">Instruments</TabsTrigger>
           <TabsTrigger value="accounts">Accounts</TabsTrigger>
+          <TabsTrigger value="cash">Uplate / isplate</TabsTrigger>
         </TabsList>
 
         <TabsContent value="lists" className="space-y-4">
@@ -44,6 +48,10 @@ export default async function SettingsPage() {
 
         <TabsContent value="accounts">
           <AccountSettings accounts={accounts} />
+        </TabsContent>
+
+        <TabsContent value="cash">
+          <CashEventsManager accounts={accounts} events={cashEvents} />
         </TabsContent>
       </Tabs>
     </div>

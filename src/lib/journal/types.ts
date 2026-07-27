@@ -44,6 +44,18 @@ export type Account = {
   default_asset_class: string | null;
   timezone: string;
   is_active: boolean;
+  // Breakeven band — asymmetric on purpose (e.g. -37.50 .. 0), not a tolerance.
+  breakeven_from: number;
+  breakeven_to: number;
+  breakeven_unit: "currency" | "pct";
+  // Cost defaults applied to new execution rows in the trade form.
+  default_commission_per_unit: number;
+  default_fee_fixed: number;
+  default_swap_per_day: number;
+  // Risk plan defaults applied when stop / target are left empty.
+  default_stop_pct: number | null;
+  default_target_pct: number | null;
+  profit_calc_method: "fifo" | "lifo" | "weighted_avg";
   // FTMO / prop-firm challenge mode (per account).
   ftmo_mode: boolean;
   ftmo_daily_loss_enabled: boolean;
