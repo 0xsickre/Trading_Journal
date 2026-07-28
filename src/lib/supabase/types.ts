@@ -614,7 +614,6 @@ export type Database = {
           result: string | null
           reviewed: boolean
           risk_pct: string | null
-          session_killzone: string | null
           setup_grade: string | null
           source: string
           status: string
@@ -655,7 +654,6 @@ export type Database = {
           result?: string | null
           reviewed?: boolean
           risk_pct?: string | null
-          session_killzone?: string | null
           setup_grade?: string | null
           source?: string
           status?: string
@@ -696,7 +694,6 @@ export type Database = {
           result?: string | null
           reviewed?: boolean
           risk_pct?: string | null
-          session_killzone?: string | null
           setup_grade?: string | null
           source?: string
           status?: string

@@ -1,15 +1,27 @@
+/**
+ * Round to the displayed precision before formatting.
+ *
+ * A value that is negative but rounds to zero (-0.001 at two decimals) would
+ * otherwise render as "-0.00" — a minus sign on a zero, which reads as a loss
+ * that isn't there. `|| 0` also collapses the negative zero this produces.
+ */
+function roundForDisplay(n: number, digits: number): number {
+  return Number(n.toFixed(digits)) || 0;
+}
+
 export function fmtMoney(
   n: number | null | undefined,
   currency = "USD",
   opts: { sign?: boolean } = {},
 ): string {
   if (n == null || Number.isNaN(n)) return "—";
+  const v = roundForDisplay(n, 2);
   const s = new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
     maximumFractionDigits: 2,
-  }).format(n);
-  return opts.sign && n > 0 ? `+${s}` : s;
+  }).format(v);
+  return opts.sign && v > 0 ? `+${s}` : s;
 }
 
 export function fmtNum(
@@ -25,12 +37,13 @@ export function fmtNum(
 
 export function fmtR(n: number | null | undefined): string {
   if (n == null || Number.isNaN(n)) return "—";
-  return `${n > 0 ? "+" : ""}${n.toFixed(2)}R`;
+  const v = roundForDisplay(n, 2);
+  return `${v > 0 ? "+" : ""}${v.toFixed(2)}R`;
 }
 
 export function fmtPct(n: number | null | undefined, digits = 1): string {
   if (n == null || Number.isNaN(n)) return "—";
-  return `${n.toFixed(digits)}%`;
+  return `${roundForDisplay(n, digits).toFixed(digits)}%`;
 }
 
 /** Tailwind text color class for a signed value (profit/loss). */

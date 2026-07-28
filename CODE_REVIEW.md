@@ -470,10 +470,10 @@ also leaves an orphan position behind — unlike `createTrade` (`trades/actions.
 
 ## What was fixed in this pass
 
-**Implemented on this branch, with tests: all Critical (C1–C4), all High (H1–H6) and all Medium
-(M1–M10)**, plus the `getInstruments` bug found under C1.
+**Implemented on this branch, with tests: all Critical (C1–C4), all High (H1–H6), all Medium (M1–M10)
+and the Low / dead-code list**, plus the `getInstruments` bug found under C1.
 
-Four migrations were applied to the live project (`hjwvhzcszhjhpocfjatm`) and committed to
+Five migrations were applied to the live project (`hjwvhzcszhjhpocfjatm`) and committed to
 `supabase/migrations/`:
 
 | Migration | What it does |
@@ -482,6 +482,7 @@ Four migrations were applied to the live project (`hjwvhzcszhjhpocfjatm`) and co
 | `20260728121000_tj_replace_executions.sql` | Atomic fill-replacement RPC |
 | `20260728122000_fix_position_status_check.sql` | Widened status constraint + re-run backfill |
 | `20260728123000_atomic_option_sort_order.sql` | Atomic sort_order allocation for option items and lists |
+| `20260728124000_drop_session_killzone_column.sql` | Dropped the dead column and its resurrected seed data |
 
 Verified end to end against the live database: a trade planned → marked missed → restored → filled → closed
 prices correctly (20 pts, $20 gross, $15 net after $4 fees and $1 swap, 2.00R, 25h hold), and its net P&L
@@ -508,8 +509,42 @@ so it is not attempted again.
 Conclusion: R means *multiples of the risk I planned to take, over the move I actually got*. Defensible,
 deliberate, and now written down.
 
+### Low / dead code — done, with two corrections
+
+Cleared, in the order listed above:
+
+- **Dead exports removed** — `countTradingDays`, `tradingDayKeys`, `unloggedTradingDays`,
+  `countOpenTrades`, along with the tests that were their only callers. `tradingDayKeysFromRows` is the
+  live one and stays.
+- **The orphaned unit layer is gone.** `units.ts` carried a full seven-mode conversion system (208 lines)
+  plus 151 lines of tests, of which production called only `formatDuration`. Deleted down to that one
+  function; the rest is in git history if a mode switcher is ever built.
+- **`fmtMoney` / `fmtR` / `fmtPct`** now round to the displayed precision *before* choosing a sign, so a
+  value like -0.001 renders "0.00" instead of "-0.00" — a minus sign on a zero reads as a loss that is
+  not there.
+- **`nightsBetween` counts calendar rollovers in the account timezone**, not elapsed 24-hour blocks. That
+  is how swap is actually charged, and what the name always claimed. A hold from 23:00 Monday to 01:00
+  Wednesday crossed two rollovers and used to bill one night.
+- **`zonedWeekStartKey`** does one timezone conversion instead of two.
+- **`toRealized`** narrows `stats` once via `flatMap`, dropping two non-null assertions and a `?? 0` that
+  shadowed an already-proven value.
+- **`session_killzone`** is fully gone: the column, the option list that `20260721130000` accidentally
+  restored, and the seed-function body that recreated it for every new user.
+- **`updateAccount`** now refuses a negative `starting_balance`, and documents that changing it re-bases
+  every historical drawdown percentage, FTMO threshold and equity curve.
+- **The `parsePlannedRewardR` re-export stays** — it is not redundant, the trade form imports it through
+  `exit-efficiency`. Documented rather than removed.
+
+Two review claims were overstated and are corrected in place:
+
+- **`rHistogram` bucketing was already right.** Every bucket is inclusive-low and exclusive-high, so
+  `r = 5.0` genuinely belongs above `"4..5"`. Only the *label* was wrong: `">5"` read as strictly-greater
+  while holding exactly 5. Relabelled `"5+"`; no bucketing change.
+- **`getTradesWithStats` ordering by `created_at` is correct**, not redundant work: the journal grid
+  renders newest-first from it, and `toRealized` re-sorts by close date because money is dated
+  differently from display. Two orderings, two purposes.
+
 ### Still open
 
-**Low / dead code only.** Everything listed under LOW above remains, and is cosmetic or dead-code cleanup
-rather than a correctness risk. The two Supabase advisories that predate this work (a `SECURITY DEFINER`
-seed function and the auth leaked-password setting) are also untouched.
+Nothing from this review. The two Supabase advisories that predate the work — a `SECURITY DEFINER` seed
+function and the auth leaked-password setting — are untouched and were never part of it.

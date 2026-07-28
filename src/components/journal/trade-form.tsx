@@ -421,6 +421,7 @@ export function TradeForm({
           ? nightsBetween(
               zonedInputToUtc(firstEntry.executedLocal, tz),
               nowIso,
+              tz,
             )
           : 0;
 

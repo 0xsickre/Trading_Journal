@@ -6,6 +6,8 @@
  * ever recomputes a fill that has already been saved.
  */
 
+import { DEFAULT_TZ, toEpoch, zonedDateKey } from "./time";
+
 export type CostDefaults = {
   default_commission_per_unit: number;
   default_fee_fixed: number;
@@ -47,16 +49,38 @@ export function prefillSwap(
   return round2(units * nights * defaults.default_swap_per_day);
 }
 
-/** Whole nights between two instants. Same-day round trips pay no swap. */
+/**
+ * Nights a position was held through, in the account's timezone.
+ *
+ * Counts CALENDAR rollovers, not elapsed 24-hour blocks. That is how swap is
+ * actually charged — once per rollover the position is open across — and it is
+ * what the name has always claimed. Counting elapsed 24s undercharged a
+ * position opened late and closed early: held 23:00 Monday to 01:00 Wednesday,
+ * it crossed two rollovers but measured 26 hours and billed one night.
+ *
+ * Same-day round trips still pay nothing.
+ */
 export function nightsBetween(
   fromISO: string | null | undefined,
   toISO: string | null | undefined,
+  tz: string = DEFAULT_TZ,
 ): number {
   if (!fromISO || !toISO) return 0;
-  const from = new Date(fromISO).getTime();
-  const to = new Date(toISO).getTime();
-  if (Number.isNaN(from) || Number.isNaN(to) || to <= from) return 0;
-  return Math.floor((to - from) / 86_400_000);
+  const from = toEpoch(fromISO);
+  const to = toEpoch(toISO);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return 0;
+
+  const fromKey = zonedDateKey(fromISO, tz);
+  const toKey = zonedDateKey(toISO, tz);
+  if (!fromKey || !toKey) return 0;
+
+  return Math.max(0, Math.round((dayKeyToUtc(toKey) - dayKeyToUtc(fromKey)) / 86_400_000));
+}
+
+/** "yyyy-MM-dd" to a UTC midnight, purely so two day keys can be subtracted. */
+function dayKeyToUtc(key: string): number {
+  const [y, m, d] = key.split("-").map(Number);
+  return Date.UTC(y, m - 1, d);
 }
 
 function round2(n: number): number {

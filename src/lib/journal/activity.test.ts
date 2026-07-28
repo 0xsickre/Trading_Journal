@@ -2,16 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   computeDirectionSplit,
   countLoggedDays,
-  countOpenTrades,
-  countTradingDays,
-  tradingDayKeys,
   tradingDayKeysFromRows,
-  unloggedTradingDays,
 } from "./activity";
 import type { RealizedTrade } from "./analytics";
 import type { PositionStat, TradeRow } from "./types";
-
-const UTC = () => "UTC";
 
 function trade(
   id: string,
@@ -62,34 +56,6 @@ describe("computeDirectionSplit", () => {
   });
 });
 
-describe("countTradingDays", () => {
-  it("counts the day a position was OPENED, not closed", () => {
-    // Opened 05 Jan, closed 09 Jan — one trading day, on the 5th.
-    const days = tradingDayKeys([trade("a", "Long", 100)], UTC);
-    expect([...days]).toEqual(["2026-01-05"]);
-  });
-
-  it("deduplicates several trades opened the same day", () => {
-    expect(
-      countTradingDays(
-        [
-          trade("a", "Long", 100, "2026-01-05T09:00:00Z"),
-          trade("b", "Long", 50, "2026-01-05T15:00:00Z"),
-        ],
-        UTC,
-      ),
-    ).toBe(1);
-  });
-
-  it("falls back to the close date when there is no open timestamp", () => {
-    const days = tradingDayKeys(
-      [trade("a", "Long", 100, null, "2026-02-02T10:00:00Z")],
-      UTC,
-    );
-    expect([...days]).toEqual(["2026-02-02"]);
-  });
-});
-
 describe("countLoggedDays", () => {
   it("counts distinct journal dates", () => {
     expect(countLoggedDays(["2026-01-05", "2026-01-05", "2026-01-06"])).toBe(2);
@@ -102,34 +68,6 @@ describe("countLoggedDays", () => {
 
   it("ignores empty entries", () => {
     expect(countLoggedDays(["", "2026-01-05"])).toBe(1);
-  });
-});
-
-describe("unloggedTradingDays", () => {
-  it("lists trading days with no journal entry", () => {
-    const days = new Set(["2026-01-05", "2026-01-06", "2026-01-07"]);
-    expect(unloggedTradingDays(days, ["2026-01-06"])).toEqual([
-      "2026-01-05",
-      "2026-01-07",
-    ]);
-  });
-
-  it("returns nothing when every trading day is logged", () => {
-    const days = new Set(["2026-01-05"]);
-    expect(unloggedTradingDays(days, ["2026-01-05"])).toEqual([]);
-  });
-});
-
-describe("countOpenTrades", () => {
-  it("counts open and partial positions only", () => {
-    const rows = [
-      { status: "open" },
-      { status: "partial" },
-      { status: "closed" },
-      { status: "planned" },
-      { status: "missed" },
-    ] as unknown as TradeRow[];
-    expect(countOpenTrades(rows)).toBe(2);
   });
 });
 

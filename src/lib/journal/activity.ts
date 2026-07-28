@@ -69,33 +69,6 @@ export function computeDirectionSplit(
 }
 
 /**
- * Distinct days on which a position was opened.
- *
- * Falls back to the close date only when a trade has no recorded open — better
- * a slightly late day than a silently dropped one.
- */
-export function countTradingDays(
-  trades: RealizedTrade[],
-  tzOf: (t: RealizedTrade) => string,
-): number {
-  return tradingDayKeys(trades, tzOf).size;
-}
-
-export function tradingDayKeys(
-  trades: RealizedTrade[],
-  tzOf: (t: RealizedTrade) => string,
-): Set<string> {
-  const days = new Set<string>();
-  for (const t of trades) {
-    const ref = t.row.stats?.opened_at ?? t.closedAt;
-    if (!ref) continue;
-    const key = zonedDateKey(ref, tzOf(t));
-    if (key) days.add(key);
-  }
-  return days;
-}
-
-/**
  * Days with a journal entry — the join between the "soft" journaling side and
  * the metrics engine, and the one number that proves the process was followed
  * on days that produced no trades at all.
@@ -114,15 +87,6 @@ export function countLoggedDays(
     seen.add(day);
   }
   return seen.size;
-}
-
-/** Trading days that have no journal entry — the gap worth closing. */
-export function unloggedTradingDays(
-  tradingDays: Set<string>,
-  reportDates: string[],
-): string[] {
-  const logged = new Set(reportDates.map((d) => d.slice(0, 10)));
-  return [...tradingDays].filter((d) => !logged.has(d)).sort();
 }
 
 /**
@@ -144,9 +108,4 @@ export function tradingDayKeysFromRows(
     if (key) days.add(key);
   }
   return days;
-}
-
-/** Positions still open — counted from all trades, not just realized ones. */
-export function countOpenTrades(rows: TradeRow[]): number {
-  return rows.filter((r) => r.status === "open" || r.status === "partial").length;
 }

@@ -120,11 +120,13 @@ export function zonedWeekStartKey(
   tz: string = DEFAULT_TZ,
 ): string {
   if (!iso) return "";
-  const dayKey = zonedDateKey(iso, tz);
+  // One pass through the timezone conversion for both the date and the weekday
+  // ("i" is the ISO day, 1=Mon … 7=Sun); this used to call it twice.
+  const [dayKey, isoDow] = formatInTimeZone(iso, tz, "yyyy-MM-dd|i").split("|");
   if (!dayKey) return "";
-  const isoDow = Number(formatInTimeZone(iso, tz, "i")); // 1=Mon … 7=Sun
-  const offset = isoDow - 1;
+  const offset = Number(isoDow) - 1;
   const [y, mo, d] = dayKey.split("-").map(Number);
+  // Date.UTC normalises a day-of-month that underflows into the previous month.
   const monday = new Date(Date.UTC(y, mo - 1, d - offset));
   return `${monday.getUTCFullYear()}-${pad2(monday.getUTCMonth() + 1)}-${pad2(monday.getUTCDate())}`;
 }

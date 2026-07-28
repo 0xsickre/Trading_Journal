@@ -259,6 +259,16 @@ export async function updateAccount(
     };
   }
 
+  // starting_balance is a historical fact, not a setting: it is the denominator
+  // behind every drawdown percentage, the base of every FTMO threshold and the
+  // opening point of the equity curve. Changing it silently re-bases all of
+  // them. A negative one would invert them, so that much is refused outright;
+  // an honest correction is still allowed, but it is worth knowing it rewrites
+  // how every past trade reads.
+  if (patch.starting_balance != null && patch.starting_balance < 0) {
+    return { ok: false, error: "Starting balance cannot be negative." };
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.from("tj_accounts").update(patch).eq("id", id);
   if (error) return { ok: false, error: error.message };

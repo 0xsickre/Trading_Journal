@@ -27,20 +27,26 @@ export function toRealized(
   options: ToRealizedOptions = {},
 ): RealizedTrade[] {
   const { includePartial = false } = options;
+  // flatMap rather than filter+map: it narrows `stats` once, which drops the
+  // non-null assertions and the `?? 0` that shadowed an already-proven value.
   return trades
-    .filter((t) => {
-      if (!t.stats || t.stats.net_pl == null) return false;
-      if (includePartial) return true;
-      return t.status === "closed";
+    .flatMap((t) => {
+      const stats = t.stats;
+      if (!stats || stats.net_pl == null) return [];
+      if (!includePartial && t.status !== "closed") return [];
+      return [
+        {
+          id: t.id,
+          closedAt: stats.closed_at,
+          net: stats.net_pl,
+          // Null only when the trade cannot be priced at all, which nulls
+          // net_pl too and is already excluded above.
+          gross: stats.gross_pl ?? 0,
+          r: stats.realized_r,
+          row: t,
+        },
+      ];
     })
-    .map((t) => ({
-      id: t.id,
-      closedAt: t.stats!.closed_at,
-      net: t.stats!.net_pl ?? 0,
-      gross: t.stats!.gross_pl ?? 0,
-      r: t.stats!.realized_r,
-      row: t,
-    }))
     .sort((a, b) => compareInstants(a.closedAt, b.closedAt));
 }
 
@@ -249,6 +255,14 @@ export function buildEquity(
 
 export type RBucket = { bucket: string; count: number };
 
+/**
+ * R-multiple distribution.
+ *
+ * Every bucket is inclusive-low and exclusive-high, so exactly -3.00 lands in
+ * "-3..-2" and exactly 5.00 lands in the top bucket rather than "4..5". The top
+ * label says "5+" for that reason: ">5" read as strictly-greater and was the
+ * one label that misdescribed its own contents.
+ */
 export function rHistogram(trades: RealizedTrade[]): RBucket[] {
   const edges = [-3, -2, -1, 0, 1, 2, 3, 4, 5];
   const labels = [
@@ -261,7 +275,7 @@ export function rHistogram(trades: RealizedTrade[]): RBucket[] {
     "2..3",
     "3..4",
     "4..5",
-    ">5",
+    "5+",
   ];
   const counts = new Array(labels.length).fill(0);
   for (const t of trades) {
