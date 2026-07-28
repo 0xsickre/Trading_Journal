@@ -24,10 +24,14 @@ The defects cluster at the **boundaries**:
 
 | Severity | Count | Theme |
 | --- | --- | --- |
-| Critical | 3 | Historical P&L is mutable; silent data truncation; non-transactional writes |
+| Critical | 4 | Historical P&L is mutable; silent data truncation; non-transactional writes; a lifecycle the database rejects |
 | High | 6 | Wrong denominators, overwritten records, mixed populations |
 | Medium | 10 | Cross-surface inconsistency, duplicated work, swallowed errors |
-| Low | 11 | Dead code, boundary conventions, formatting |
+| Low | 12 | Dead code, boundary conventions, formatting |
+
+Two of these were found only by exercising the live database rather than reading the code — **C4**,
+where the whole plan/miss lifecycle is rejected by a check constraint, and the `getInstruments` filter
+noted under C1.
 
 ---
 
@@ -59,6 +63,17 @@ Three consequences, all silent:
 
 *(Verified against the live DB: `tj_instruments_user_id_symbol_key` UNIQUE `(user_id, symbol)` does exist,
 so the join cannot fan out and double-count. That specific risk is not present.)*
+
+**Compounding bug, same root.** `getInstruments` (`src/lib/journal/instruments.ts`) — the only read path
+for instruments anywhere in the app — hard-filtered results to `DEFAULT_INSTRUMENT_SYMBOLS`:
+
+```ts
+.in("symbol", DEFAULT_INSTRUMENT_SYMBOLS)
+```
+
+So an instrument added through Settings (`addInstrument`) was invisible everywhere, *including the
+Settings list that had just created it*, and a trade on that symbol had nothing to price it with. The
+feature appeared to do nothing and quietly produced unpriced trades.
 
 **Fix — snapshot the contract spec onto the trade at write time.** A journal records what happened; the
 instrument table is current configuration, not history. They must not be the same number.
@@ -200,6 +215,43 @@ $$;
 
 The function body is a single implicit transaction: either the new fills land or the old ones were never
 deleted. All three call sites collapse to one `supabase.rpc("tj_replace_executions", ...)`.
+
+---
+
+### C4 — The database rejects the entire plan / missed lifecycle
+
+Found by exercising the live schema, not by reading the code. `tj_positions_status_check` was:
+
+```sql
+CHECK (status = ANY (ARRAY['open', 'partial', 'closed']))
+```
+
+but `20260721130000_trade_lifecycle_missed.sql` introduced `'planned'` and `'missed'` and **never widened
+it**. Every one of these raises a `23514` constraint violation, surfaced to the user as a generic
+"Insert failed":
+
+- `createTrade` on a plan with no fills — `computeStatus([])` returns `'planned'`
+  (`src/lib/journal/trade-lifecycle.ts:40-44`)
+- `markTradeMissed` (`src/app/(app)/trades/actions.ts:194`)
+- `restoreTradeToPlanned` (`src/app/(app)/trades/actions.ts:240`)
+- `commitImport` on any row with no executions (`src/app/(app)/import/actions.ts`)
+
+The plan → missed → restore flow, the `miss_reason` option list, the "Missed setup-i" section of the
+mentor pack and the `canMarkMissed` / `canRestoreToPlanned` guards were all built on a status the
+database would not accept.
+
+That migration's own backfill was affected too:
+
+```sql
+UPDATE public.tj_positions SET status = 'planned' WHERE p.status = 'open' AND NOT EXISTS (...)
+```
+
+It could only ever have failed — it passed silently because no row matched at the time it ran.
+
+**Fix:** widen the constraint to the five statuses `computeStatus` can actually return, and re-run the
+backfill that could not previously apply. The constraint is kept rather than dropped: it is what stops a
+typo'd status reaching the table, and its list should mirror the `PositionStatus` union that
+`trade-lifecycle.ts` defines.
 
 ---
 
@@ -410,10 +462,38 @@ also leaves an orphan position behind — unlike `createTrade` (`trades/actions.
   historical drawdown %, FTMO evaluation and position-size suggestion with no warning.
 - `getTradesWithStats` orders by `created_at` while every metric dates trades by `closed_at`; the ordering is
   re-done in `toRealized` anyway.
+- `session_killzone` still exists as a column on `tj_positions` and in the `tj_seed_defaults` function body
+  restored by `20260721130000`, although `20260719150000_drop_session_killzone.sql` removed it from the UI and
+  the option lists. Dead column, dead seed data.
 
 ---
 
 ## What was fixed in this pass
 
-Critical and High findings are implemented on this branch, with tests. Medium and Low remain documented here
-and are not addressed — see the branch summary for the final state.
+**Implemented on this branch, with tests: all Critical (C1–C4) and all High (H1–H6)**, plus the
+`getInstruments` bug found under C1 and the `toEpoch` / `compareInstants` helpers that M1 needs.
+
+Two migrations were applied to the live project (`hjwvhzcszhjhpocfjatm`) and committed to
+`supabase/migrations/`:
+
+| Migration | What it does |
+| --- | --- |
+| `20260728120000_snapshot_instrument_spec.sql` | Snapshot columns, backfill, rebuilt `tj_position_stats` |
+| `20260728121000_tj_replace_executions.sql` | Atomic fill-replacement RPC |
+| `20260728122000_fix_position_status_check.sql` | Widened status constraint + re-run backfill |
+
+Verified end to end against the live database: a trade planned → marked missed → restored → filled → closed
+prices correctly (20 pts, $20 gross, $15 net after $4 fees and $1 swap, 2.00R, 25h hold), and its net P&L
+stayed at **$15** both after the instrument's `point_value` was edited to 12345 and after the instrument row
+was deleted outright. Before C1 those two actions rewrote it silently.
+
+`security_invoker = on` survived the view rebuild — confirmed directly and via the Supabase security
+advisor, which reports no new findings (the two it does report, a pre-existing `SECURITY DEFINER` seed
+function and an auth password-protection setting, are unrelated to this work).
+
+### Still open
+
+Medium (M1–M10) and Low are documented above and **not** addressed, with one partial exception: M1's root
+cause now has a fix available — `toEpoch` / `compareInstants` in `src/lib/journal/time.ts` — and the
+dashboard's period filter uses it, but `toRealized`'s sort, `evaluateFtmo`'s `resetAt` comparison,
+`buildBalanceTimeline`'s sort and the mentor-pack range filter still compare ISO strings as text.
