@@ -97,26 +97,19 @@ export async function commitImport(input: CommitInput) {
       } else if (item.decision === "merge" && matchedId) {
         const pid: string = matchedId;
         // Replace ONLY the objective fills; subjective position fields untouched.
-        // Snapshot first so a failed re-insert rolls back instead of wiping fills.
+        // The snapshot is still taken, but for undo (see undoImportBatch) — the
+        // replacement itself is atomic now, so it needs no rollback of its own.
         const { data: prevExecs } = await supabase
           .from("tj_executions")
           .select("side,price,qty,executed_at,fee,swap_funding,source")
           .eq("position_id", pid);
         replacedExecs = (prevExecs ?? []) as unknown as ImportExec[];
-        await supabase.from("tj_executions").delete().eq("position_id", pid);
-        if (item.executions.length > 0) {
-          const { error: exErr } = await supabase.from("tj_executions").insert(
-            item.executions.map((e) => ({ ...e, position_id: pid, source: "import" })),
-          );
-          if (exErr) {
-            if (prevExecs && prevExecs.length > 0) {
-              await supabase
-                .from("tj_executions")
-                .insert(prevExecs.map((e) => ({ ...e, position_id: pid })));
-            }
-            throw new Error(exErr.message);
-          }
-        }
+
+        const { error: exErr } = await supabase.rpc("tj_replace_executions", {
+          p_position_id: pid,
+          p_executions: item.executions.map((e) => ({ ...e, source: "import" })),
+        });
+        if (exErr) throw new Error(exErr.message);
         await supabase
           .from("tj_positions")
           .update({
@@ -201,21 +194,21 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
   const plan = planUndo<ImportExec>(rows ?? [], createdIds);
 
   for (const { positionId, executions } of plan.restore) {
-    await supabase.from("tj_executions").delete().eq("position_id", positionId);
-    if (executions.length > 0) {
-      const { error: insErr } = await supabase.from("tj_executions").insert(
-        executions.map((e) => ({
-          side: e.side,
-          price: e.price,
-          qty: e.qty,
-          executed_at: e.executed_at,
-          fee: e.fee,
-          swap_funding: e.swap_funding,
-          position_id: positionId,
-        })),
-      );
-      if (insErr) return { ok: false, error: insErr.message };
-    }
+    // Atomic: an undo that half-applied would leave the position with neither
+    // the imported fills nor the ones it displaced.
+    const { error: insErr } = await supabase.rpc("tj_replace_executions", {
+      p_position_id: positionId,
+      p_executions: executions.map((e) => ({
+        side: e.side,
+        price: e.price,
+        qty: e.qty,
+        executed_at: e.executed_at,
+        fee: e.fee,
+        swap_funding: e.swap_funding,
+      })),
+    });
+    if (insErr) return { ok: false, error: insErr.message };
+
     await supabase
       .from("tj_positions")
       .update({

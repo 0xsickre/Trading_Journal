@@ -806,6 +806,10 @@ export type Database = {
       }
     }
     Functions: {
+      tj_replace_executions: {
+        Args: { p_position_id: string; p_executions: Json }
+        Returns: number
+      }
       tj_seed_defaults: { Args: { target: string }; Returns: undefined }
       tj_seed_instruments_defaults: {
         Args: { target: string }
