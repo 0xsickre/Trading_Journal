@@ -54,6 +54,8 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     duration_seconds:
       spec.durationSeconds === undefined ? 4 * DAY : spec.durationSeconds,
     point_value: 1,
+    tick_size: null,
+    point_value_source: "snapshot",
   };
 
   const row = {

@@ -84,7 +84,15 @@ export type PositionStat = {
   opened_at: string | null;
   closed_at: string | null;
   duration_seconds: number | null;
+  /**
+   * Point value actually used to price this trade. Null when neither a snapshot
+   * nor an instrument row could supply one — in that case every money column is
+   * null too, rather than silently pricing the trade in raw points.
+   */
   point_value: number | null;
+  tick_size: number | null;
+  /** Where `point_value` came from. `missing` means the money columns are null. */
+  point_value_source: "snapshot" | "instrument" | "missing";
 };
 
 export type TradeTvImages = Partial<Record<TradeImageKind, string>>;

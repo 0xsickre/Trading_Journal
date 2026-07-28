@@ -197,9 +197,28 @@ export function JournalGrid({
       {
         accessorKey: "instrument",
         header: "Instrument",
-        cell: ({ row }) => (
-          <span className="font-mono">{(row.original.instrument as string) ?? "—"}</span>
-        ),
+        cell: ({ row }) => {
+          // A trade whose instrument can no longer be resolved has no point value,
+          // so the view returns null money rather than pricing it in raw points.
+          // Say so here instead of letting the P/L column render a bare dash.
+          const unpriced = row.original.stats?.point_value_source === "missing";
+          return (
+            <span className="flex items-center gap-1.5">
+              <span className="font-mono">
+                {(row.original.instrument as string) ?? "—"}
+              </span>
+              {unpriced && (
+                <Badge
+                  variant="outline"
+                  className="text-[var(--loss)]"
+                  title="No instrument definition for this symbol, so its point value is unknown and P/L cannot be calculated. Add the instrument in Settings."
+                >
+                  unpriced
+                </Badge>
+              )}
+            </span>
+          );
+        },
       },
       {
         accessorKey: "direction",

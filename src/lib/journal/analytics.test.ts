@@ -34,6 +34,8 @@ function trade(
       closed_at: partial.status === "closed" ? "2026-01-02T00:00:00Z" : null,
       duration_seconds: null,
       point_value: 1,
+      tick_size: null,
+      point_value_source: "snapshot",
     },
   };
 }

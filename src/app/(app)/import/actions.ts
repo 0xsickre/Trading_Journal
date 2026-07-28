@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { computeStatus } from "@/lib/journal/trade-lifecycle";
 import { normalizeInstrumentSymbol } from "@/lib/journal/instrument-aliases";
 import { planUndo } from "@/lib/journal/import-undo";
+import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
 
 export type ImportExec = {
   side: "entry" | "exit";
@@ -51,6 +52,12 @@ export async function commitImport(input: CommitInput) {
   if (batchErr || !batch)
     return { ok: false as const, error: batchErr?.message ?? "Batch failed" };
 
+  // One lookup for the whole batch — the snapshot is per-position but the specs
+  // are shared, and a per-row query would be a round trip per imported trade.
+  const specs = await getInstrumentSpecs(
+    input.items.map((i) => normalizeInstrumentSymbol(i.instrument)),
+  );
+
   let created = 0,
     merged = 0,
     skipped = 0,
@@ -74,6 +81,7 @@ export async function commitImport(input: CommitInput) {
             import_batch_id: batch.id,
             needs_review: item.executions.length === 0,
             status: statusOf(item.executions),
+            ...instrumentSnapshot(instrument, specs),
           })
           .select("id")
           .single();

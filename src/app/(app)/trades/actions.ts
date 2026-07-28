@@ -9,6 +9,7 @@ import {
 } from "@/lib/journal/form-config";
 import { computeStatus } from "@/lib/journal/trade-lifecycle";
 import { getFailedFtmoAccountIds } from "@/lib/journal/ftmo-status";
+import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
 
 export type ExecutionInput = {
   side: "entry" | "exit";
@@ -113,6 +114,14 @@ export async function createTrade(input: TradeInput) {
     input.current_status,
   );
 
+  // Freeze the contract spec onto the trade. Without this, later edits to the
+  // instrument would retroactively rewrite this trade's P&L.
+  const symbol = typeof fields.instrument === "string" ? fields.instrument : null;
+  const snapshot = instrumentSnapshot(
+    symbol,
+    await getInstrumentSpecs([symbol]),
+  );
+
   const { data: pos, error: posErr } = await supabase
     .from("tj_positions")
     .insert({
@@ -120,6 +129,7 @@ export async function createTrade(input: TradeInput) {
       account_id: input.account_id,
       trade_no: input.trade_no,
       ...statusPatch,
+      ...snapshot,
       source: "manual",
     })
     .select("id")
@@ -151,6 +161,22 @@ export async function updateTrade(id: string, input: TradeInput) {
     input.current_status,
   );
 
+  // Re-snapshot the contract spec ONLY when the trade moves to a different
+  // symbol, or when it predates the snapshot column. Re-stamping on every save
+  // would pull in an edited point value and undo the whole point of freezing it.
+  const { data: prevPos } = await supabase
+    .from("tj_positions")
+    .select("instrument, point_value_at_trade")
+    .eq("id", id)
+    .maybeSingle();
+
+  const symbol = typeof fields.instrument === "string" ? fields.instrument : null;
+  const symbolChanged = prevPos != null && prevPos.instrument !== symbol;
+  const snapshot =
+    symbolChanged || prevPos?.point_value_at_trade == null
+      ? instrumentSnapshot(symbol, await getInstrumentSpecs([symbol]))
+      : {};
+
   const { error: upErr } = await supabase
     .from("tj_positions")
     .update({
@@ -158,6 +184,7 @@ export async function updateTrade(id: string, input: TradeInput) {
       account_id: input.account_id,
       trade_no: input.trade_no,
       ...statusPatch,
+      ...snapshot,
       ...(execs.length > 0 ? { needs_review: false } : {}),
     })
     .eq("id", id);

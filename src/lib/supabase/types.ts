@@ -607,6 +607,7 @@ export type Database = {
           missed_at: string | null
           needs_review: boolean
           planned_rr: string | null
+          point_value_at_trade: number | null
           position_size: number | null
           psychology_tags: string[]
           rating: number | null
@@ -620,6 +621,7 @@ export type Database = {
           stop_price: number | null
           target_price: number | null
           technical_tags: string[]
+          tick_size_at_trade: number | null
           trade_journal_notes: string | null
           trade_no: number | null
           updated_at: string
@@ -646,6 +648,7 @@ export type Database = {
           missed_at?: string | null
           needs_review?: boolean
           planned_rr?: string | null
+          point_value_at_trade?: number | null
           position_size?: number | null
           psychology_tags?: string[]
           rating?: number | null
@@ -659,6 +662,7 @@ export type Database = {
           stop_price?: number | null
           target_price?: number | null
           technical_tags?: string[]
+          tick_size_at_trade?: number | null
           trade_journal_notes?: string | null
           trade_no?: number | null
           updated_at?: string
@@ -685,6 +689,7 @@ export type Database = {
           missed_at?: string | null
           needs_review?: boolean
           planned_rr?: string | null
+          point_value_at_trade?: number | null
           position_size?: number | null
           psychology_tags?: string[]
           rating?: number | null
@@ -698,6 +703,7 @@ export type Database = {
           stop_price?: number | null
           target_price?: number | null
           technical_tags?: string[]
+          tick_size_at_trade?: number | null
           trade_journal_notes?: string | null
           trade_no?: number | null
           updated_at?: string
@@ -777,11 +783,13 @@ export type Database = {
           net_pl: number | null
           opened_at: string | null
           point_value: number | null
+          point_value_source: string | null
           position_id: string | null
           realized_r: number | null
           realized_r_net: number | null
           result: string | null
           status: string | null
+          tick_size: number | null
           total_fees: number | null
           total_swap: number | null
           user_id: string | null
