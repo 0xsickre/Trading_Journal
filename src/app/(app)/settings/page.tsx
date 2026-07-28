@@ -28,11 +28,21 @@ export default async function SettingsPage() {
       </div>
 
       <Tabs defaultValue="lists">
-        <TabsList>
-          <TabsTrigger value="lists">Dropdown Lists</TabsTrigger>
-          <TabsTrigger value="instruments">Instruments</TabsTrigger>
-          <TabsTrigger value="accounts">Accounts</TabsTrigger>
-          <TabsTrigger value="cash">Uplate / isplate</TabsTrigger>
+        {/* The four labels are wider than a phone screen, and the triggers are
+            whitespace-nowrap — scroll the strip instead of overflowing the page. */}
+        <TabsList className="flex w-full max-w-full justify-start overflow-x-auto sm:w-fit">
+          <TabsTrigger value="lists" className="flex-none">
+            Dropdown Lists
+          </TabsTrigger>
+          <TabsTrigger value="instruments" className="flex-none">
+            Instruments
+          </TabsTrigger>
+          <TabsTrigger value="accounts" className="flex-none">
+            Accounts
+          </TabsTrigger>
+          <TabsTrigger value="cash" className="flex-none">
+            Uplate / isplate
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="lists" className="space-y-4">

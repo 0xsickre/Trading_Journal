@@ -25,8 +25,8 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold">Dashboard</h1>
           <p className="text-muted-foreground">
             Your edge at a glance — filter by account, period and any tag.
