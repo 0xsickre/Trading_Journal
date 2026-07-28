@@ -75,13 +75,19 @@ CREATE POLICY tj_daily_reports_owner ON public.tj_daily_reports
   USING (user_id = (SELECT auth.uid()))
   WITH CHECK (user_id = (SELECT auth.uid()));
 
+-- Keep the hardening from 20260620102516_tj_harden_updated_at_fn: without an
+-- explicit `SET search_path`, this CREATE OR REPLACE silently reverts the
+-- function to a mutable search_path (advisor 0011_function_search_path_mutable).
 CREATE OR REPLACE FUNCTION public.tj_set_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
 BEGIN
   NEW.updated_at = now();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 CREATE TRIGGER tj_focus_goals_updated_at
   BEFORE UPDATE ON public.tj_focus_goals
