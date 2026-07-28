@@ -3,6 +3,7 @@ import {
   buildBalanceTimeline,
   computeDrawdown,
   currentEquity,
+  drawdownSeries,
   netCashFlow,
   type CashEvent,
 } from "./balance";
@@ -152,6 +153,43 @@ describe("computeDrawdown", () => {
     expect(dd.maxMoney).toBe(0);
     expect(dd.currentMoney).toBe(0);
     expect(dd.avgMoney).toBe(0);
+  });
+});
+
+describe("drawdownSeries", () => {
+  it("stays at zero while making new highs and goes underwater after", () => {
+    const series = drawdownSeries(
+      buildBalanceTimeline(10_000, [
+        trade("2026-01-01T00:00:00Z", 1_000),
+        trade("2026-01-02T00:00:00Z", -400),
+        trade("2026-01-03T00:00:00Z", -300),
+        trade("2026-01-04T00:00:00Z", 900),
+      ]),
+    );
+    expect(series.map((p) => p.ddMoney)).toEqual([0, 0, -400, -700, 0]);
+  });
+
+  it("agrees with computeDrawdown about the trough", () => {
+    const tl = buildBalanceTimeline(10_000, [
+      trade("2026-01-01T00:00:00Z", 1_000),
+      trade("2026-01-02T00:00:00Z", -400),
+      trade("2026-01-03T00:00:00Z", -300),
+    ]);
+    const series = drawdownSeries(tl);
+    const worst = series.reduce((a, b) => (b.ddMoney < a.ddMoney ? b : a));
+    expect(worst.ddMoney).toBe(computeDrawdown(tl).maxMoney);
+    expect(worst.at).toBe(computeDrawdown(tl).maxAt);
+  });
+
+  it("keeps the percentage series negative-or-zero", () => {
+    const series = drawdownSeries(
+      buildBalanceTimeline(
+        10_000,
+        [trade("2026-01-03T00:00:00Z", -500)],
+        [cash("2026-01-02T00:00:00Z", 5_000)],
+      ),
+    );
+    expect(series.every((p) => p.ddPct <= 0)).toBe(true);
   });
 });
 

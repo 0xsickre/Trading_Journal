@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getCashEvents } from "@/lib/journal/cash-events";
+import { getDailyReportDates } from "@/lib/journal/daily-report-queries";
 import { ensureDefaults } from "@/lib/journal/ensure-defaults";
 import { Dashboard } from "@/components/journal/dashboard";
 import type { TradeRow } from "@/lib/journal/types";
@@ -12,10 +13,11 @@ export default async function DashboardPage() {
   // Fallback seed for legacy users / missed signup trigger — runs on the landing
   // page only (must finish before we read accounts on a brand-new user).
   await ensureDefaults();
-  const [trades, accounts, cashEvents] = await Promise.all([
+  const [trades, accounts, cashEvents, loggedDates] = await Promise.all([
     getTradesWithStats(),
     getAccounts(),
     getCashEvents(),
+    getDailyReportDates(),
   ]);
 
   return (
@@ -38,6 +40,7 @@ export default async function DashboardPage() {
         trades={trades as TradeRow[]}
         accounts={accounts}
         cashEvents={cashEvents}
+        loggedDates={loggedDates}
       />
     </div>
   );

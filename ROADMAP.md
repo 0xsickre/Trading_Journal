@@ -203,7 +203,22 @@ procenat unazad. Breakeven range je ovde jer bez njega tri metrike Faze 1 nemaju
 
 ---
 
-### Faza 1 — Jedinice, metrike, kompozitni skor
+### Faza 1 — Jedinice, metrike, kompozitni skor ✅ ZAVRŠENO
+
+> Isporučeno. Dva odstupanja od plana, oba svesna:
+>
+> **1.** Plan je rekao da `fmtMoney` / `fmtR` postanu tanki omotači nad `units.ts`. Urađeno je
+> obrnuto: `format.ts` drži primitivne formatere, `units.ts` semantički sloj iznad njih. Suprotan
+> smer bi napravio kružnu zavisnost bez ikakve dobiti.
+>
+> **2.** Globalni prekidač 7 view modova **nije zakačen na dashboard**. Sloj postoji, testiran je, i
+> sve nove metrike vraćaju bazne vrednosti — što je bila arhitektonska poenta i ono što sprečava
+> prepisivanje kasnije. Sam prekidač ide uz filtere i `pnlBasis` u Fazi 3, jer tamo i pripada;
+> zakačiti ga sad značilo bi dirati svaki widget dvaput.
+>
+> Dodato van plana: `drawdownSeries()` (kriva je tražila seriju, ne skalar) i izdvajanje MAE/MFE
+> geometrije iz trade forme u `excursion.ts` — postojala je kao druga kopija koju nijedan agregat
+> nije mogao da koristi.
 
 **Prvi korak je infrastrukturni i mora prethoditi svemu ostalom u fazi.**
 
@@ -479,7 +494,7 @@ ovaj model ima strukturno.
 | Faza | Sadržaj | Migracija | Sesije |
 |:--:|---|:--:|:--:|
 | 0 | Cash events, breakeven range, default komisije, undo import, reviewed/rating | Da | ✅ |
-| 1 | Sloj jedinica → metrike (vreme, trošak, rizik, nedeljni sloj) → Zella Score | Ne | 5–6 |
+| 1 | Sloj jedinica → metrike (vreme, trošak, rizik, nedeljni sloj) → Zella Score | Ne | ✅ |
 | 2 | Insight engine: 30 TZ obrazaca + 7 vlastitih + mentor pack | Ne | 4–5 |
 | 3 | Report engine, pivot sa `n`, dimension registry, negacija filtera | Ne | 5–6 |
 | 4a | Custom fields + backfill metodoloških kolona | Da | 3 |

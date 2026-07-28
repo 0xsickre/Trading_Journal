@@ -31,13 +31,14 @@ import {
   type FieldConfig,
   type FormGroup,
 } from "@/lib/journal/form-config";
-import type { Account, Instrument, OptionsMap } from "@/lib/journal/types";
+import type { Account, Instrument, OptionsMap, TradeRow } from "@/lib/journal/types";
 import {
   computeEntrySlippage,
   fmtSlippagePts,
   fmtSlippageR,
 } from "@/lib/journal/entry-slippage";
 import { fmtExitEfficiencyPct, parsePlannedRewardR } from "@/lib/journal/exit-efficiency";
+import { excursionFromTrade } from "@/lib/journal/excursion";
 import { fmtMoney, fmtR, pnlClass } from "@/lib/journal/format";
 import {
   computePlannedRewardR,
@@ -324,29 +325,16 @@ export function TradeForm({
       target: pt,
     });
 
-    const dirMult = dir.toLowerCase().startsWith("short") ? -1 : 1;
-    const riskPtsForMaeMfe =
-      posStats.planned_risk_pts ??
-      (avgEntry != null && stop != null && Math.abs(avgEntry - stop) > 0
-        ? Math.abs(avgEntry - stop)
-        : null);
-
-    let maeR: number | null = null;
-    let mfeR: number | null = null;
-    let capturePct: number | null = null;
-    if (avgEntry != null && riskPtsForMaeMfe != null && riskPtsForMaeMfe > 0) {
-      if (maePrice != null) {
-        const maePts = dirMult === 1 ? avgEntry - maePrice : maePrice - avgEntry;
-        if (maePts > 0) maeR = maePts / riskPtsForMaeMfe;
-      }
-      if (mfePrice != null) {
-        const mfePts = dirMult === 1 ? mfePrice - avgEntry : avgEntry - mfePrice;
-        if (mfePts > 0) mfeR = mfePts / riskPtsForMaeMfe;
-      }
-      if (r != null && mfeR != null && mfeR > 0) {
-        capturePct = (r / mfeR) * 100;
-      }
-    }
+    // Same implementation the dashboard aggregates over — this used to be a
+    // second copy of the geometry living only in the form.
+    const { maeR, mfeR, capturePct } = excursionFromTrade({
+      direction: dir || null,
+      entry_price: pe,
+      stop_price: stop,
+      max_drawdown_price: maePrice,
+      max_profit_price: mfePrice,
+      stats: { avg_entry: avgEntry, realized_r: r },
+    } as unknown as TradeRow);
 
     const riskPct = parseRiskPct(fields.risk_pct as string | number | null);
     const balance = account?.starting_balance ?? 0;

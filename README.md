@@ -495,6 +495,13 @@ tj_cash_events       – uplate, isplate, prop-firm payout-i i ručne korekcije 
 | **Max drawdown $** | najveći peak-to-trough pad kumulativnog P&L-a | Uplate i isplate **nisu** gubitak i ne pomeraju ovaj broj |
 | **Max drawdown %** | `pad / peak equity × 100` | Imenilac je equity **uključujući** uplate i isplate — zato depozit menja procenat, a ne dolare |
 | **Breakeven trade** | `breakeven_from ≤ net P&L ≤ breakeven_to` | Opseg je po nalogu i **asimetričan**. Dok je 0 do 0, znači tačno nulu |
+| **Recovery factor** | `net profit / max drawdown` | `null` kad drawdown-a nema — nedefinisano, ne beskonačno |
+| **Consistency** | `100 − (stdev P&L-a po trejdu / ukupan profit) × 100` | 0 dok je knjiga u minusu. Skala je iz spec-a i označena kao podložna kalibraciji |
+| **Avg planned R** | prosek planiranog R | Računa se **nad istim trejdovima** kao avg realized R, da razlika nešto znači |
+| **Avg MAE u R** | `nepovoljni pts / planirani rizik pts` | Uzorak se prijavljuje — MAE se unosi ručno pa nije na svakom trejdu |
+| **Trošak kao % bruto profita** | `|trošak| / bruto profit dobitnika × 100` | Imenilac su samo dobitnici — trošak se meri prema onome što je edge proizveo |
+| **Week Win %** | dobitne nedelje / (dobitne + gubitne) | Swing zamena za Day Win %. Ravne nedelje su van imenioca |
+| **Composite score** | 6 komponenti, ponderi iz TZ spec-a | Max DD komponenta koristi **Zella osnovu**, ne equity procenat iz UI-ja |
 
 Portfolio statistike (win rate, PF, expectancy) uključuju **samo zatvorene** pozicije. Parcijali su
 isključeni osim ako eksplicitno uključiš `toRealized({ includePartial: true })`.
@@ -503,6 +510,11 @@ isključeni osim ako eksplicitno uključiš `toRealized({ includePartial: true }
 poštuje opseg, ali **sume novca prate stvarni predznak**: trejd od −12.40 broji se kao breakeven, a
 njegovih 12.40 i dalje ulazi u bruto gubitak. Da nije tako, profit factor bi bio tiho naduvan, a zbir
 delova se ne bi slagao sa neto P&L-om.
+
+**Dva različita pojma dana.** *Trading day* je dan **otvaranja** pozicije — meri koliko često
+uopšte ulaziš u tržište. Novac se, nasuprot tome, datira po **zatvaranju**, jer je tad realizovan.
+TradeZella koristi datum otvaranja za oboje, što je bezopasno intraday, ali bi swing trejd držan tri
+nedelje smestilo profit u nedelju kad je ideja nastala umesto kad je novac stigao.
 
 **FTMO evaluacija namerno ignoriše `tj_cash_events`.** Prop-firm drawdown se meri od balansa sa kojim
 je izazov počeo; da depozit podiže pod, dobio bi prostor koji ti pravila nikad nisu dala. Uplate i
@@ -645,6 +657,13 @@ Kalendarski dan u Dnevnom izveštaju izvodi se iz **primarnog** naloga.
 
 **Statistika se ne duplira.** P/L i R matematika postoje u SQL view-u i u TypeScript-u, ali su
 paritetne i pokrivene testom — nova metrika ide na oba mesta ili ni na jedno.
+
+**Metrika vraća broj, ne tekst.** Agregatne funkcije vraćaju baznu vrednost i kontekst
+(`lib/journal/units.ts`), a formatiranje je poseban sloj. Sedam view modova puta dve P&L osnove je
+14 načina da se ista metrika prikaže; da svaki widget formatira sam, ta kombinatorika bi bila
+prekopirana svuda. View mod je **zahtev, ne garancija** — broj trejdova nema dolarski prikaz, a
+portfolio agregat preko više instrumenata nema pip prikaz, pa `formatMetric` pada nazad na prirodnu
+jedinicu umesto da izmisli broj.
 
 **Watchlist prati vault.** Novi instrument se prvo dodaje u vault `instrument_registry`, pa ovde u
 `default-instruments.ts` (+ alias u `instrument-aliases.ts` ako ga broker drugačije zove).

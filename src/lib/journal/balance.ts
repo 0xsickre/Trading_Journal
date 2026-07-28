@@ -183,6 +183,37 @@ export function computeDrawdown(timeline: BalancePoint[]): DrawdownStats {
   };
 }
 
+export type DrawdownPoint = {
+  at: string;
+  /** Distance below the running P&L peak, in money. Zero or negative. */
+  ddMoney: number;
+  /** Distance below the running equity peak, as a percentage. Zero or negative. */
+  ddPct: number;
+  equity: number;
+};
+
+/**
+ * Underwater curve. Both series are emitted from one pass so the money view and
+ * the percentage view can never disagree about where the trough was.
+ */
+export function drawdownSeries(timeline: BalancePoint[]): DrawdownPoint[] {
+  let peakPnl = timeline[0]?.realizedPnl ?? 0;
+  let peakEquity = timeline[0]?.equity ?? 0;
+
+  return timeline.map((p) => {
+    if (p.realizedPnl > peakPnl) peakPnl = p.realizedPnl;
+    if (p.equity > peakEquity) peakEquity = p.equity;
+    const ddMoney = p.realizedPnl - peakPnl;
+    return {
+      at: p.at,
+      ddMoney,
+      ddPct:
+        peakEquity > 0 ? ((p.equity - peakEquity) / peakEquity) * 100 : 0,
+      equity: p.equity,
+    };
+  });
+}
+
 /** Balance at the end of the timeline — starting balance + P&L + cash flow. */
 export function currentEquity(timeline: BalancePoint[]): number {
   return timeline[timeline.length - 1]?.equity ?? 0;

@@ -27,8 +27,29 @@ import { CalendarHeatmap } from "@/components/journal/calendar-heatmap";
 import {
   buildBalanceTimeline,
   computeDrawdown,
+  drawdownSeries,
   type CashEvent,
 } from "@/lib/journal/balance";
+import { computeHoldTime } from "@/lib/journal/hold-time";
+import { computeCostStats } from "@/lib/journal/costs";
+import { computeExcursionStats } from "@/lib/journal/excursion";
+import { computeDirectionSplit, countLoggedDays, countTradingDays } from "@/lib/journal/activity";
+import { bucketByPeriod, summarizePeriods } from "@/lib/journal/period-stats";
+import {
+  avgWinLossRatio,
+  computePlannedRStats,
+  consistencyScore,
+  recoveryFactor,
+} from "@/lib/journal/risk-metrics";
+import { computeZellaScore } from "@/lib/journal/zella-score";
+import { DrawdownChart } from "@/components/journal/drawdown-chart";
+import { ZellaScoreCard } from "@/components/journal/zella-score-card";
+import {
+  CostReportCard,
+  HoldTimeCard,
+  PeriodPerformanceCard,
+  PlanVsRealityCard,
+} from "@/components/journal/metrics-panel";
 import {
   EXACT_ZERO_RANGE,
   hasBreakevenBand,
@@ -65,6 +86,7 @@ import {
   startOfISOWeek,
 } from "date-fns";
 import { fmtMoney, fmtR, fmtPct, fmtNum, pnlClass } from "@/lib/journal/format";
+import { formatDuration } from "@/lib/journal/units";
 
 const PERIODS = [
   { value: "30", label: "30d" },
@@ -120,10 +142,12 @@ export function Dashboard({
   trades,
   accounts,
   cashEvents = [],
+  loggedDates = [],
 }: {
   trades: TradeRow[];
   accounts: Account[];
   cashEvents?: CashEvent[];
+  loggedDates?: string[];
 }) {
   const [accountFilter, setAccountFilter] = useState("all");
   const [period, setPeriod] = useState("90");
@@ -259,6 +283,92 @@ export function Dashboard({
   const stats = useMemo(
     () => computeStats(realized, mode, breakevenRange),
     [realized, mode, breakevenRange],
+  );
+
+  const balanceTimeline = useMemo(
+    () =>
+      buildBalanceTimeline(
+        startBalance,
+        realized.map((t) => ({
+          at: t.closedAt ?? "",
+          pnl: mode === "net" ? t.net : t.gross,
+        })),
+        scopedCashEvents,
+      ),
+    [realized, mode, startBalance, scopedCashEvents],
+  );
+  const ddSeries = useMemo(
+    () => drawdownSeries(balanceTimeline),
+    [balanceTimeline],
+  );
+
+  const pnlOf = useCallback(
+    (t: { net: number; gross: number }) => (mode === "net" ? t.net : t.gross),
+    [mode],
+  );
+
+  const holdTime = useMemo(
+    () => computeHoldTime(realized, breakevenRange, pnlOf),
+    [realized, breakevenRange, pnlOf],
+  );
+  const costs = useMemo(() => computeCostStats(realized), [realized]);
+  const plannedR = useMemo(() => computePlannedRStats(realized), [realized]);
+  const excursion = useMemo(() => computeExcursionStats(realized), [realized]);
+  const directionSplit = useMemo(
+    () => computeDirectionSplit(realized, breakevenRange, pnlOf),
+    [realized, breakevenRange, pnlOf],
+  );
+
+  const weekly = useMemo(
+    () =>
+      summarizePeriods(
+        bucketByPeriod(realized, "week", tzOf, breakevenRange, pnlOf),
+      ),
+    [realized, tzOf, breakevenRange, pnlOf],
+  );
+  const monthly = useMemo(
+    () =>
+      summarizePeriods(
+        bucketByPeriod(realized, "month", tzOf, breakevenRange, pnlOf),
+      ),
+    [realized, tzOf, breakevenRange, pnlOf],
+  );
+
+  const tradingDays = useMemo(
+    () => countTradingDays(realized, tzOf),
+    [realized, tzOf],
+  );
+  const loggedDays = useMemo(
+    () => countLoggedDays(loggedDates),
+    [loggedDates],
+  );
+
+  const winLossRatio = useMemo(
+    () => avgWinLossRatio(stats.avgWin, stats.avgLoss),
+    [stats.avgWin, stats.avgLoss],
+  );
+  const recovery = useMemo(
+    () => recoveryFactor(stats.netSum, drawdown.maxMoney),
+    [stats.netSum, drawdown.maxMoney],
+  );
+  const consistency = useMemo(
+    () => consistencyScore(realized.map(pnlOf)),
+    [realized, pnlOf],
+  );
+
+  const zellaScore = useMemo(
+    () =>
+      computeZellaScore({
+        profitFactor: stats.profitFactor,
+        avgWinLossRatio: winLossRatio,
+        // Zella base, not the equity percentage shown in the KPI row — the two
+        // have different denominators and only this one is comparable to TZ.
+        maxDrawdownPctZella: drawdown.maxPctZella,
+        winPct: stats.winRate,
+        recoveryFactor: recovery,
+        consistencyScore: consistency.score,
+      }),
+    [stats.profitFactor, stats.winRate, winLossRatio, drawdown.maxPctZella, recovery, consistency.score],
   );
   const equity = useMemo(
     () => buildEquity(realized, mode, equityMetric, startBalance),
@@ -573,6 +683,51 @@ export function Dashboard({
           }
         />
         <Stat
+          label="Avg win/loss"
+          value={winLossRatio != null ? fmtNum(winLossRatio, 2) : "—"}
+          title="Average winning R divided by average losing R."
+        />
+        <Stat
+          label="Recovery factor"
+          value={recovery != null ? fmtNum(recovery, 2) : "—"}
+          title="Net profit divided by max drawdown. Undefined — not infinite — while the curve has never fallen."
+        />
+        <Stat
+          label="Consistency"
+          value={fmtNum(consistency.score, 0)}
+          title="100 − (stdev of trade P&L / total profit). Zero while the book is losing."
+        />
+        <Stat
+          label="Avg hold"
+          value={formatDuration(holdTime.avgSeconds)}
+          title={`Across ${holdTime.count} trades with a known duration.`}
+        />
+        <Stat
+          label="Total swap"
+          value={fmtMoney(costs.totalSwap, currency)}
+          cls={costs.totalSwap !== 0 ? "text-[var(--loss)]" : undefined}
+          title={
+            costs.withCostData === 0
+              ? "No trade in scope carries a cost — this zero means 'no data', not 'free'."
+              : `${costs.withCostData} of ${costs.count} trades carry cost data.`
+          }
+        />
+        <Stat
+          label="Week win %"
+          value={fmtPct(weekly.winPct)}
+          title={`${weekly.winning} winning of ${weekly.periods} weeks. The swing replacement for Day Win %.`}
+        />
+        <Stat
+          label="Trading days"
+          value={String(tradingDays)}
+          title="Days a position was OPENED. Money is dated by close; activity by open."
+        />
+        <Stat
+          label="Logged days"
+          value={String(loggedDays)}
+          title="Days with a journal entry — including days you deliberately did not trade."
+        />
+        <Stat
           label="Avg entry slip"
           value={
             slippageStats.count > 0
@@ -690,6 +845,35 @@ export function Dashboard({
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
+        <DrawdownChart
+          series={ddSeries}
+          stats={drawdown}
+          currency={currency}
+        />
+        <ZellaScoreCard score={zellaScore} />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <HoldTimeCard stats={holdTime} />
+        <CostReportCard costs={costs} currency={currency} />
+        <PlanVsRealityCard
+          plannedR={plannedR}
+          excursion={excursion}
+          direction={directionSplit}
+        />
+        <PeriodPerformanceCard
+          summary={weekly}
+          label="Nedeljni učinak"
+          currency={currency}
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <PeriodPerformanceCard
+          summary={monthly}
+          label="Mesečni učinak"
+          currency={currency}
+        />
         {/* R distribution */}
         <Card>
           <CardHeader className="pb-2">
