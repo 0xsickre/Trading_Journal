@@ -604,7 +604,14 @@ export function Dashboard({
         <span className="text-xs text-muted-foreground">
           {mode === "net" ? "Net = after fees & swap" : "Gross = price move only"}
         </span>
-        <div className="ml-auto flex items-center gap-1">
+        {/* This group used to be `ml-auto flex items-center` with no wrap: on a
+            phone the granularity select + quarter/year pickers + export button
+            never fit on one line, so the row overflowed past the viewport edge
+            and forced the WHOLE page to scroll sideways just to reach the
+            button. It now wraps onto its own lines below `sm`, matching the
+            wrap behaviour the rest of this filter bar already has; at `sm` and
+            up it's byte-for-byte the old single-row, right-aligned layout. */}
+        <div className="flex w-full flex-wrap items-center gap-1 sm:ml-auto sm:w-auto sm:flex-nowrap">
           <Select
             value={granularity}
             onValueChange={(v) => setGranularity(v as Granularity)}
