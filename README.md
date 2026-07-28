@@ -501,7 +501,7 @@ tj_cash_events       – uplate, isplate, prop-firm payout-i i ručne korekcije 
 | **Avg MAE u R** | `nepovoljni pts / planirani rizik pts` | Uzorak se prijavljuje — MAE se unosi ručno pa nije na svakom trejdu |
 | **Trošak kao % bruto profita** | `|trošak| / bruto profit dobitnika × 100` | Imenilac su samo dobitnici — trošak se meri prema onome što je edge proizveo |
 | **Week Win %** | dobitne nedelje / (dobitne + gubitne) | Swing zamena za Day Win %. Ravne nedelje su van imenioca |
-| **Composite score** | 6 komponenti, ponderi iz TZ spec-a | Max DD komponenta koristi **Zella osnovu**, ne equity procenat iz UI-ja |
+| **Sickre Score** | 6 komponenti, ponderi iz TZ spec-a | Max DD komponenta deli pad **vrhom kumulativnog P&L-a**, ne equity-jem iz UI-ja — da skor ostane uporediv |
 
 Portfolio statistike (win rate, PF, expectancy) uključuju **samo zatvorene** pozicije. Parcijali su
 isključeni osim ako eksplicitno uključiš `toRealized({ includePartial: true })`.

@@ -88,7 +88,7 @@ se menjaju, a persistirani insight bi zaostajao za promenjenim pragom.*
 Time H2 („insight kao filter dimenzija") **ne traži tabelu** — filtrira se nad izračunatim
 vrednostima. Ispada jedna migracija iz plana.
 
-### 2.4 Kompozitni skor postaje jeftin odmah posle Faze 1
+### 2.4 Sickre Score postaje jeftin odmah posle Faze 1
 
 Spec §2.6 daje tačne pondere i skale. Svih šest ulaza (Profit Factor, Avg Win/Loss, Max Drawdown,
 Win %, Recovery Factor, Consistency) su metrike **Faze 1**. Skor se isporučuje na kraju Faze 1, a
@@ -118,8 +118,8 @@ To su dva različita imenioca i daju različite brojeve.
 **Rešenje:** implementiraju se oba, imenovana i odvojena.
 
 - `maxDrawdownPctOfEquity` — imenilac je peak equity uključujući cash flow. Finansijski tačan, ide u UI.
-- `maxDrawdownPctZella` — imenilac je peak kumulativnog P&L-a. Ide **isključivo** u Zella Score, da
-  skor bude uporediv sa TZ brojem.
+- `maxDrawdownPctOfPeakPnl` — imenilac je peak kumulativnog P&L-a. Ide **isključivo** u Sickre
+  Score, da skor ostane uporediv sa istom metrikom kod TZ-a.
 
 Bez ovog razdvajanja skor ne bi bio uporediv, ili bi UI lagao — biraju se oba, ne kompromis.
 
@@ -241,13 +241,13 @@ procenat unazad. Breakeven range je ovde jer bez njega tri metrike Faze 1 nemaju
 | **Aktivnost (C4)** | Breakeven trades (sad stvarno radi), Longs/Shorts broj + win %, **Logged days** (join `tj_daily_reports`), Total trading days po **datumu otvaranja** (§2.2 gore) |
 | **Nedeljni sloj (C5)** | Week Win %, avg weekly/monthly P&L, najveća profitabilna/gubitnička nedelja i mesec, max uzastopnih nedelja — preko postojećeg `zonedWeekStartKey` |
 
-#### 1c — Zella Score (spec §2.6, tačni ponderi)
+#### 1c — Sickre Score (ponderi po spec §2.6, ime naše)
 
 `PF 25 % · Avg Win/Loss 20 % · Max DD 20 % · Win % 15 % · Recovery 10 % · Consistency 10 %`
 
 Skale iz spec-a implementirane doslovno, sa **linearnom interpolacijom unutar opsega** — spec to
 označava kao nepotvrđenu pretpostavku, pa ide iza konstante koja se može kalibrisati, ne kao
-magičan broj u formuli. Max DD komponenta koristi `maxDrawdownPctZella` (§3 gore).
+magičan broj u formuli. Max DD komponenta koristi `maxDrawdownPctOfPeakPnl` (§3 gore).
 
 **Prihvatanje**
 
@@ -383,7 +383,7 @@ tj_position_rules   position_id, rule_id, followed
   registry-ju iz F3, ne poseban ekran.
 - Playbook-level: expectancy, win rate, PF, # izvršenih, # propuštenih (`status = missed`).
 - Playbook bira koja custom polja forma traži.
-- **Zella Score dobija sedmu komponentu — Process Adherence** iz follow rate-a i `tj_daily_reports`.
+- **Sickre Score dobija sedmu komponentu — Process Adherence** iz follow rate-a i `tj_daily_reports`.
   Ponderi se renormalizuju; TZ ovu komponentu nema.
 
 **Prihvatanje**
@@ -445,7 +445,7 @@ tj_note_tags     odvojeni od tj_option_items — namerno, ne sinhronizuju se
 | **Kalendar (D12/D13)** | Mesečni pogled: mesečni total, **P&L po nedelji**, broj dana, ikonica journal zapisa, izbor metrike po ćeliji. Sivo = breakeven po opsegu iz F0 |
 | **Journaling (F5/F6)** | Dnevni stat blok (Net P&L · trades · WR · winners · losers · volume · PF · komisije · Gross), expandable dan sa listom trejdova, mini kalendar |
 | **Auto recap (H5)** | Vercel cron → mentor pack za protekli period → `tj_recaps` → notifikacija. Prag ≥ 3 zatvorena trejda nedeljno, ≥ 4 mesečno |
-| **Grid (I4/I5)** | Konfigurabilne kolone sa per-user persistencijom, Zella Scale kolona (target attainment + MFE capture — logika **već postoji**, fali prikaz) |
+| **Grid (I4/I5)** | Konfigurabilne kolone sa per-user persistencijom, kolona „potencijal vs stvarno" (target attainment + MFE capture — logika **već postoji**, fali prikaz; TZ to zove Zella Scale) |
 | **Dashboard (I1/I2)** | Widget layout JSON, imenovani template-i |
 | **Trade Log akcije** | Merge / split trejdova, transfer između naloga |
 | **Import (J5)** | Broker preset UI — `tj_column_mappings` konačno dobija kod |
@@ -494,7 +494,7 @@ ovaj model ima strukturno.
 | Faza | Sadržaj | Migracija | Sesije |
 |:--:|---|:--:|:--:|
 | 0 | Cash events, breakeven range, default komisije, undo import, reviewed/rating | Da | ✅ |
-| 1 | Sloj jedinica → metrike (vreme, trošak, rizik, nedeljni sloj) → Zella Score | Ne | ✅ |
+| 1 | Sloj jedinica → metrike (vreme, trošak, rizik, nedeljni sloj) → Sickre Score | Ne | ✅ |
 | 2 | Insight engine: 30 TZ obrazaca + 7 vlastitih + mentor pack | Ne | 4–5 |
 | 3 | Report engine, pivot sa `n`, dimension registry, negacija filtera | Ne | 5–6 |
 | 4a | Custom fields + backfill metodoloških kolona | Da | 3 |

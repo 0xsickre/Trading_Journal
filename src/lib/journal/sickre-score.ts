@@ -1,16 +1,21 @@
 /**
- * Composite score, 0–100.
+ * Sickre Score — composite, 0–100.
  *
- * Weights and scales are transcribed from the clone spec §2.6. Two things the
- * spec flags about itself are handled explicitly rather than silently:
+ * Weights and band scales are transcribed from the TradeZella clone spec §2.6
+ * so the number stays comparable with the tool it is measured against, but the
+ * score is this journal's own: it carries a seventh component (process
+ * adherence) that TradeZella has no equivalent for.
+ *
+ * Two things the source spec flags about itself are handled explicitly rather
+ * than silently:
  *
  *   1. Interpolation inside a band (2.40–2.59 → 90–99) is not documented. We
  *      interpolate linearly and keep the bands as data, so recalibrating means
  *      editing a table rather than rewriting a formula.
- *   2. The Max Drawdown component uses `maxPctZella` — drawdown over peak
+ *   2. The Max Drawdown component uses `maxPctOfPeakPnl` — drawdown over peak
  *      cumulative P&L — NOT the equity-based percentage shown in the UI. The
- *      two have different denominators; feeding the honest one in here would
- *      produce a score that cannot be compared with TradeZella's.
+ *      two have different denominators; feeding the equity one in here would
+ *      produce a score that cannot be compared across tools.
  *
  * A component with no data (no drawdown yet, no losses yet) is dropped and the
  * remaining weights are renormalized, so an young track record is not punished
@@ -72,8 +77,8 @@ export function scoreFromBands(
 export type ScoreInputs = {
   profitFactor: number | null;
   avgWinLossRatio: number | null;
-  /** Zella-base drawdown percentage — NOT the equity-based one. */
-  maxDrawdownPctZella: number | null;
+  /** Drawdown over peak cumulative P&L — NOT the equity-based percentage. */
+  maxDrawdownPctOfPeakPnl: number | null;
   winPct: number | null;
   recoveryFactor: number | null;
   /** Already 0–100 from `consistencyScore`. */
@@ -92,7 +97,7 @@ export type ScoreComponent = {
   counted: boolean;
 };
 
-export type ZellaScore = {
+export type SickreScore = {
   score: number | null;
   components: ScoreComponent[];
   /** Sum of weights that actually contributed. */
@@ -111,11 +116,11 @@ const BASE_WEIGHTS = {
 /** Weight for the process component when it is supplied. */
 export const PROCESS_ADHERENCE_WEIGHT = 15;
 
-export function computeZellaScore(inputs: ScoreInputs): ZellaScore {
+export function computeSickreScore(inputs: ScoreInputs): SickreScore {
   const drawdownScore =
-    inputs.maxDrawdownPctZella == null
+    inputs.maxDrawdownPctOfPeakPnl == null
       ? null
-      : Math.max(0, Math.min(100, 100 - inputs.maxDrawdownPctZella));
+      : Math.max(0, Math.min(100, 100 - inputs.maxDrawdownPctOfPeakPnl));
 
   const winScore =
     inputs.winPct == null
@@ -143,7 +148,7 @@ export function computeZellaScore(inputs: ScoreInputs): ZellaScore {
       key: "maxDrawdown",
       label: "Max drawdown",
       weight: BASE_WEIGHTS.maxDrawdown,
-      value: inputs.maxDrawdownPctZella,
+      value: inputs.maxDrawdownPctOfPeakPnl,
       score: drawdownScore,
       counted: false,
     },

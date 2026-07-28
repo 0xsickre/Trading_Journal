@@ -41,9 +41,9 @@ import {
   consistencyScore,
   recoveryFactor,
 } from "@/lib/journal/risk-metrics";
-import { computeZellaScore } from "@/lib/journal/zella-score";
+import { computeSickreScore } from "@/lib/journal/sickre-score";
 import { DrawdownChart } from "@/components/journal/drawdown-chart";
-import { ZellaScoreCard } from "@/components/journal/zella-score-card";
+import { SickreScoreCard } from "@/components/journal/sickre-score-card";
 import {
   CostReportCard,
   HoldTimeCard,
@@ -356,19 +356,20 @@ export function Dashboard({
     [realized, pnlOf],
   );
 
-  const zellaScore = useMemo(
+  const sickreScore = useMemo(
     () =>
-      computeZellaScore({
+      computeSickreScore({
         profitFactor: stats.profitFactor,
         avgWinLossRatio: winLossRatio,
-        // Zella base, not the equity percentage shown in the KPI row — the two
-        // have different denominators and only this one is comparable to TZ.
-        maxDrawdownPctZella: drawdown.maxPctZella,
+        // Peak-P&L base, not the equity percentage shown in the KPI row — the
+        // two have different denominators and only this one matches how
+        // TradeZella computes it, which is what keeps the score comparable.
+        maxDrawdownPctOfPeakPnl: drawdown.maxPctOfPeakPnl,
         winPct: stats.winRate,
         recoveryFactor: recovery,
         consistencyScore: consistency.score,
       }),
-    [stats.profitFactor, stats.winRate, winLossRatio, drawdown.maxPctZella, recovery, consistency.score],
+    [stats.profitFactor, stats.winRate, winLossRatio, drawdown.maxPctOfPeakPnl, recovery, consistency.score],
   );
   const equity = useMemo(
     () => buildEquity(realized, mode, equityMetric, startBalance),
@@ -850,7 +851,7 @@ export function Dashboard({
           stats={drawdown}
           currency={currency}
         />
-        <ZellaScoreCard score={zellaScore} />
+        <SickreScoreCard score={sickreScore} />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

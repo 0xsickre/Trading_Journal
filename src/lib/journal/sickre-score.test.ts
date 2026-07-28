@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   RATIO_BANDS,
   RECOVERY_BANDS,
-  computeZellaScore,
+  computeSickreScore,
   scoreFromBands,
-} from "./zella-score";
+} from "./sickre-score";
 
 describe("scoreFromBands", () => {
   it("caps at 100 above the top band", () => {
@@ -35,18 +35,18 @@ describe("scoreFromBands", () => {
   });
 });
 
-describe("computeZellaScore", () => {
+describe("computeSickreScore", () => {
   const full = {
     profitFactor: 2.6,
     avgWinLossRatio: 2.6,
-    maxDrawdownPctZella: 0,
+    maxDrawdownPctOfPeakPnl: 0,
     winPct: 60,
     recoveryFactor: 3.5,
     consistencyScore: 100,
   };
 
   it("scores a perfect book at 100 with full weight coverage", () => {
-    const r = computeZellaScore(full);
+    const r = computeSickreScore(full);
     expect(r.score).toBe(100);
     expect(r.coverage).toBe(100);
     expect(r.components.every((c) => c.counted)).toBe(true);
@@ -54,25 +54,25 @@ describe("computeZellaScore", () => {
 
   it("uses the documented win % threshold", () => {
     // The spec's worked example: 25 % → 41.67.
-    const r = computeZellaScore({ ...full, winPct: 25 });
+    const r = computeSickreScore({ ...full, winPct: 25 });
     const win = r.components.find((c) => c.key === "winPct")!;
     expect(win.score).toBeCloseTo(41.67, 2);
   });
 
   it("subtracts drawdown percent from 100", () => {
-    const r = computeZellaScore({ ...full, maxDrawdownPctZella: 30 });
+    const r = computeSickreScore({ ...full, maxDrawdownPctOfPeakPnl: 30 });
     const dd = r.components.find((c) => c.key === "maxDrawdown")!;
     expect(dd.score).toBe(70);
   });
 
   it("clamps an extreme drawdown at zero instead of going negative", () => {
-    const r = computeZellaScore({ ...full, maxDrawdownPctZella: 250 });
+    const r = computeSickreScore({ ...full, maxDrawdownPctOfPeakPnl: 250 });
     expect(r.components.find((c) => c.key === "maxDrawdown")!.score).toBe(0);
   });
 
   it("drops a component with no data and renormalizes the rest", () => {
     // No drawdown yet → recovery factor is undefined, worth 10 of the 100.
-    const r = computeZellaScore({ ...full, recoveryFactor: null });
+    const r = computeSickreScore({ ...full, recoveryFactor: null });
     expect(r.coverage).toBe(90);
     expect(r.components.find((c) => c.key === "recovery")!.counted).toBe(false);
     // Everything else is perfect, so the score stays 100 rather than dropping
@@ -82,10 +82,10 @@ describe("computeZellaScore", () => {
 
   it("weights components as the spec specifies", () => {
     // Only profit factor is perfect; everything else scores zero.
-    const r = computeZellaScore({
+    const r = computeSickreScore({
       profitFactor: 2.6,
       avgWinLossRatio: null,
-      maxDrawdownPctZella: 100,
+      maxDrawdownPctOfPeakPnl: 100,
       winPct: 0,
       recoveryFactor: 0.5,
       consistencyScore: 0,
@@ -97,8 +97,8 @@ describe("computeZellaScore", () => {
   });
 
   it("adds the process component only when supplied", () => {
-    expect(computeZellaScore(full).components).toHaveLength(6);
-    const withProcess = computeZellaScore({
+    expect(computeSickreScore(full).components).toHaveLength(6);
+    const withProcess = computeSickreScore({
       ...full,
       processAdherencePct: 80,
     });
@@ -108,10 +108,10 @@ describe("computeZellaScore", () => {
   });
 
   it("returns null when nothing can be computed", () => {
-    const r = computeZellaScore({
+    const r = computeSickreScore({
       profitFactor: null,
       avgWinLossRatio: null,
-      maxDrawdownPctZella: null,
+      maxDrawdownPctOfPeakPnl: null,
       winPct: null,
       recoveryFactor: null,
       consistencyScore: null,

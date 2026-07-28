@@ -1,5 +1,5 @@
 /**
- * Recovery factor, consistency, planned R — the risk half of the Zella Score
+ * Recovery factor, consistency, planned R — the risk half of the Sickre Score
  * inputs, plus the planned-vs-realized comparison the spec calls for.
  */
 

@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fmtNum } from "@/lib/journal/format";
-import type { ZellaScore } from "@/lib/journal/zella-score";
+import type { SickreScore } from "@/lib/journal/sickre-score";
 
 /**
  * Composite score with its components exposed.
@@ -13,13 +13,13 @@ import type { ZellaScore } from "@/lib/journal/zella-score";
  * computed are shown as dropped, not as zero — a book with no drawdown yet
  * should not be scored as if it had a terrible one.
  */
-export function ZellaScoreCard({ score }: { score: ZellaScore }) {
+export function SickreScoreCard({ score }: { score: SickreScore }) {
   const value = score.score;
 
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Composite score</CardTitle>
+        <CardTitle className="text-base">Sickre Score</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-baseline gap-3">
@@ -69,9 +69,9 @@ export function ZellaScoreCard({ score }: { score: ZellaScore }) {
         )}
 
         <p className="text-xs text-muted-foreground">
-          Max drawdown komponenta koristi TZ osnovu (pad / vrh kumulativnog
-          P&amp;L-a), ne procenat iz equity-ja koji je prikazan gore — inače skor
-          ne bi bio uporediv sa TradeZella brojem.
+          Max drawdown komponenta deli pad vrhom <strong>kumulativnog P&amp;L-a</strong>,
+          ne equity-jem prikazanim gore. Dva različita imenioca — ovaj je izabran
+          da skor ostane uporediv sa istom metrikom kod drugih alata.
         </p>
       </CardContent>
     </Card>

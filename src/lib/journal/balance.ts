@@ -110,7 +110,7 @@ export type DrawdownStats = {
    * TradeZella formula. Exists so the composite score stays comparable with
    * theirs — not for display.
    */
-  maxPctZella: number;
+  maxPctOfPeakPnl: number;
   /** Mean depth across every drawdown episode, in money. Negative or 0. */
   avgMoney: number;
   /** How far below the running peak the account sits at the end of the period. */
@@ -122,7 +122,7 @@ const EMPTY_DRAWDOWN: DrawdownStats = {
   maxMoney: 0,
   maxAt: null,
   maxPctOfEquity: 0,
-  maxPctZella: 0,
+  maxPctOfPeakPnl: 0,
   avgMoney: 0,
   currentMoney: 0,
   currentPctOfEquity: 0,
@@ -137,7 +137,7 @@ export function computeDrawdown(timeline: BalancePoint[]): DrawdownStats {
   let maxMoney = 0;
   let maxAt: string | null = null;
   let maxPctOfEquity = 0;
-  let maxPctZella = 0;
+  let maxPctOfPeakPnl = 0;
 
   // One "episode" runs from a new peak until the series recovers to that peak.
   const episodeDepths: number[] = [];
@@ -159,7 +159,7 @@ export function computeDrawdown(timeline: BalancePoint[]): DrawdownStats {
       maxAt = p.at || null;
       maxPctOfEquity =
         peakEquity > 0 ? (Math.abs(dropMoney) / peakEquity) * 100 : 0;
-      maxPctZella = peakPnl > 0 ? (Math.abs(dropMoney) / peakPnl) * 100 : 0;
+      maxPctOfPeakPnl = peakPnl > 0 ? (Math.abs(dropMoney) / peakPnl) * 100 : 0;
     }
   }
   if (episodeDepth < 0) episodeDepths.push(episodeDepth);
@@ -173,7 +173,7 @@ export function computeDrawdown(timeline: BalancePoint[]): DrawdownStats {
     maxMoney,
     maxAt,
     maxPctOfEquity,
-    maxPctZella,
+    maxPctOfPeakPnl,
     avgMoney:
       episodeDepths.length > 0
         ? episodeDepths.reduce((a, b) => a + b, 0) / episodeDepths.length

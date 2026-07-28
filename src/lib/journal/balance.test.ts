@@ -106,7 +106,7 @@ describe("computeDrawdown", () => {
     expect(withDeposit.maxPctOfEquity).toBeCloseTo(0.693, 3);
   });
 
-  it("computes the Zella base off peak cumulative P&L, not equity", () => {
+  it("computes the peak-P&L base off cumulative P&L, not equity", () => {
     const dd = computeDrawdown(
       buildBalanceTimeline(10_000, [
         trade("2026-01-01T00:00:00Z", 1_000),
@@ -114,7 +114,7 @@ describe("computeDrawdown", () => {
       ]),
     );
     // 500 / 1000 = 50 %, independent of the 10k starting balance.
-    expect(dd.maxPctZella).toBe(50);
+    expect(dd.maxPctOfPeakPnl).toBe(50);
     expect(dd.maxPctOfEquity).toBeCloseTo(4.545, 3);
   });
 
