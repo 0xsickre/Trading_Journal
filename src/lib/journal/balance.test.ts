@@ -339,3 +339,50 @@ describe("timeline ordering across timestamp formats", () => {
     expect(tl[tl.length - 1].equity).toBe(1_400);
   });
 });
+
+describe("computeDrawdown and drawdownSeries agree", () => {
+  // Both now walk one shared peak-tracking helper. This pins the invariant that
+  // made sharing safe: the deepest point of the plotted curve is the same
+  // number the KPI reports, so the chart can never contradict the headline.
+  const timeline = buildBalanceTimeline(
+    10_000,
+    [
+      { at: "2026-01-01T00:00:00Z", pnl: 500 },
+      { at: "2026-01-02T00:00:00Z", pnl: -300 },
+      { at: "2026-01-03T00:00:00Z", pnl: -400 },
+      { at: "2026-01-04T00:00:00Z", pnl: 900 },
+      { at: "2026-01-05T00:00:00Z", pnl: -250 },
+    ],
+    [
+      {
+        id: "d",
+        account_id: "a",
+        event_type: "deposit",
+        amount: 2_000,
+        occurred_at: "2026-01-02T12:00:00Z",
+        note: null,
+      },
+    ],
+  );
+
+  it("reports the same worst drop in money", () => {
+    const stats = computeDrawdown(timeline);
+    const series = drawdownSeries(timeline);
+    const worstPlotted = Math.min(...series.map((p) => p.ddMoney));
+    expect(stats.maxMoney).toBe(worstPlotted);
+    expect(stats.maxMoney).toBe(-700);
+  });
+
+  it("puts the trough at the same point in time", () => {
+    const stats = computeDrawdown(timeline);
+    const series = drawdownSeries(timeline);
+    const trough = series.reduce((a, b) => (b.ddMoney < a.ddMoney ? b : a));
+    expect(stats.maxAt).toBe(trough.at);
+  });
+
+  it("ends at the same current drawdown", () => {
+    const stats = computeDrawdown(timeline);
+    const series = drawdownSeries(timeline);
+    expect(stats.currentMoney).toBe(series[series.length - 1].ddMoney);
+  });
+});

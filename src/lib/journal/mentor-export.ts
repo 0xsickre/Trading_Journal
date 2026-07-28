@@ -3,7 +3,15 @@
 // feedback without any API integration — the numbers are pre-computed here
 // so the model interprets, it never has to calculate (or hallucinate) stats.
 
-import { toRealized, computeStats, breakdownByField, computeSlippageStats, computeExitEfficiencyStats } from "./analytics";
+import {
+  toRealized,
+  computeStats,
+  breakdownByField,
+  computeSlippageStats,
+  computeExitEfficiencyStats,
+  type RealizedTrade,
+} from "./analytics";
+import { EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
 import { getAllFormFields } from "./form-config";
 import {
   fmtSlippagePts,
@@ -69,9 +77,12 @@ const pct = (n: number) => `${n.toFixed(1)}%`;
 const money = (n: number, ccy: string) =>
   `${n >= 0 ? "+" : "-"}${Math.abs(n).toFixed(2)} ${ccy}`;
 
-function statsTable(trades: TradeRow[], ccy: string): string {
-  const realized = toRealized(trades);
-  const s = computeStats(realized, "net");
+function statsTable(
+  realized: RealizedTrade[],
+  ccy: string,
+  range: BreakevenRange,
+): string {
+  const s = computeStats(realized, "net", range);
   const slip = computeSlippageStats(realized);
   const slipAvg =
     slip.count > 0 ? `${(-slip.avgAdverseR).toFixed(2)}R` : "—";
@@ -113,8 +124,12 @@ function statsTable(trades: TradeRow[], ccy: string): string {
   ].join("\n");
 }
 
-function breakdownTable(trades: TradeRow[], field: string): string {
-  const rows = breakdownByField(toRealized(trades), field).filter(
+function breakdownTable(
+  realized: RealizedTrade[],
+  field: string,
+  range: BreakevenRange,
+): string {
+  const rows = breakdownByField(realized, field, range).filter(
     (r) => r.key !== "—" && r.count > 0,
   );
   if (rows.length === 0) return "_no data_";
@@ -267,6 +282,13 @@ export type MentorPackOpts = {
   rangeText?: string;
   /** Account starting balance, shown as risk context (single-account scope only). */
   startingBalance?: number | null;
+  /**
+   * The account's breakeven band, so the export classifies wins and losses the
+   * same way the dashboard does. Without it the pack fell back to exact-zero
+   * and reported a different win rate for the same trades — in the copy that
+   * goes to a mentor.
+   */
+  breakevenRange?: BreakevenRange;
   /** Insights already evaluated for this scope — see lib/journal/insights. */
   insights?: RunResult | null;
   /** Free-form risk note, e.g. "Rizik po trejdu: 1%". */
@@ -281,8 +303,12 @@ export function buildMentorPack(
   const detailCap = opts.detailCap ?? 300;
   const scope = opts.scopeLabel ?? "All accounts";
   const period = opts.periodLabel ?? "All";
-  const range = opts.rangeText ?? "sve vreme";
+  const rangeText = opts.rangeText ?? "sve vreme";
+  const range = opts.breakevenRange ?? EXACT_ZERO_RANGE;
 
+  // Derived once. statsTable and each of the ten breakdown tables used to call
+  // toRealized(trades) themselves — twelve passes over the same trade list to
+  // produce one document.
   const realized = toRealized(trades);
   const sortedClosed = [...realized]
     .sort((a, b) => compareInstants(b.closedAt, a.closedAt))
@@ -309,7 +335,7 @@ export function buildMentorPack(
 
   out.push(`# Trading Journal — Mentor Pack`);
   out.push(
-    `_Generisano: ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC · Period: ${period} (${range}) · Scope: ${scope} · Valuta: ${ccy}_`,
+    `_Generisano: ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC · Period: ${period} (${rangeText}) · Scope: ${scope} · Valuta: ${ccy}_`,
   );
   const context: string[] = [];
   if (opts.startingBalance != null)
@@ -364,7 +390,7 @@ export function buildMentorPack(
 
   // --- Overall stats ------------------------------------------------------
   out.push(`## Ukupna statistika`);
-  out.push(statsTable(trades, ccy));
+  out.push(statsTable(realized, ccy, range));
   out.push("");
 
   // --- Insights -----------------------------------------------------------
@@ -408,7 +434,7 @@ export function buildMentorPack(
   out.push(`## Performanse po kategorijama`);
   for (const b of BREAKDOWNS) {
     out.push(`### ${b.label}`);
-    out.push(breakdownTable(trades, b.field));
+    out.push(breakdownTable(realized, b.field, range));
     out.push("");
   }
 

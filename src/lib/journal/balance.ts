@@ -172,6 +172,44 @@ export type DrawdownStats = {
   currentPctOfEquity: number;
 };
 
+type PeakWalkPoint = {
+  point: BalancePoint;
+  /** Running high-water mark of cumulative P&L, including this point. */
+  peakPnl: number;
+  /** Running high-water mark of equity, including this point. */
+  peakEquity: number;
+  /** How far below the P&L peak this point sits. Always <= 0. */
+  dropMoney: number;
+  /** True when this point set a new P&L high — i.e. closed a drawdown episode. */
+  isNewPeak: boolean;
+};
+
+/**
+ * Walk the timeline carrying the running peaks.
+ *
+ * The stats and the plotted series both need exactly this, and each used to
+ * track its own peaks. One walk means the KPI and the chart cannot disagree
+ * about where a peak was.
+ */
+function* walkPeaks(timeline: BalancePoint[]): Generator<PeakWalkPoint> {
+  let peakPnl = timeline[0]?.realizedPnl ?? 0;
+  let peakEquity = timeline[0]?.equity ?? 0;
+
+  for (const point of timeline) {
+    const isNewPeak = point.realizedPnl >= peakPnl;
+    if (isNewPeak) peakPnl = point.realizedPnl;
+    if (point.equity >= peakEquity) peakEquity = point.equity;
+
+    yield {
+      point,
+      peakPnl,
+      peakEquity,
+      dropMoney: point.realizedPnl - peakPnl,
+      isNewPeak,
+    };
+  }
+}
+
 const EMPTY_DRAWDOWN: DrawdownStats = {
   maxMoney: 0,
   maxAt: null,
@@ -185,9 +223,6 @@ const EMPTY_DRAWDOWN: DrawdownStats = {
 export function computeDrawdown(timeline: BalancePoint[]): DrawdownStats {
   if (timeline.length <= 1) return EMPTY_DRAWDOWN;
 
-  let peakPnl = timeline[0].realizedPnl;
-  let peakEquity = timeline[0].equity;
-
   let maxMoney = 0;
   let maxAt: string | null = null;
   let maxPctOfEquity = 0;
@@ -196,30 +231,31 @@ export function computeDrawdown(timeline: BalancePoint[]): DrawdownStats {
   // One "episode" runs from a new peak until the series recovers to that peak.
   const episodeDepths: number[] = [];
   let episodeDepth = 0;
+  let lastDrop = 0;
+  let peakEquity = 0;
 
-  for (const p of timeline) {
-    if (p.realizedPnl >= peakPnl) {
+  for (const w of walkPeaks(timeline)) {
+    if (w.isNewPeak) {
       if (episodeDepth < 0) episodeDepths.push(episodeDepth);
       episodeDepth = 0;
-      peakPnl = p.realizedPnl;
     }
-    if (p.equity >= peakEquity) peakEquity = p.equity;
+    if (w.dropMoney < episodeDepth) episodeDepth = w.dropMoney;
 
-    const dropMoney = p.realizedPnl - peakPnl; // <= 0
-    if (dropMoney < episodeDepth) episodeDepth = dropMoney;
-
-    if (dropMoney < maxMoney) {
-      maxMoney = dropMoney;
-      maxAt = p.at || null;
+    if (w.dropMoney < maxMoney) {
+      maxMoney = w.dropMoney;
+      maxAt = w.point.at || null;
       maxPctOfEquity =
-        peakEquity > 0 ? (Math.abs(dropMoney) / peakEquity) * 100 : 0;
-      maxPctOfPeakPnl = peakPnl > 0 ? (Math.abs(dropMoney) / peakPnl) * 100 : 0;
+        w.peakEquity > 0 ? (Math.abs(w.dropMoney) / w.peakEquity) * 100 : 0;
+      maxPctOfPeakPnl =
+        w.peakPnl > 0 ? (Math.abs(w.dropMoney) / w.peakPnl) * 100 : 0;
     }
+
+    lastDrop = w.dropMoney;
+    peakEquity = w.peakEquity;
   }
   if (episodeDepth < 0) episodeDepths.push(episodeDepth);
 
-  const last = timeline[timeline.length - 1];
-  const currentMoney = Math.min(0, last.realizedPnl - peakPnl);
+  const currentMoney = Math.min(0, lastDrop);
   const currentPctOfEquity =
     peakEquity > 0 ? (Math.abs(currentMoney) / peakEquity) * 100 : 0;
 
@@ -259,20 +295,12 @@ export type DrawdownPoint = {
  * correctly reported none, so the chart and the KPI would contradict each other.
  */
 export function drawdownSeries(timeline: BalancePoint[]): DrawdownPoint[] {
-  let peakPnl = timeline[0]?.realizedPnl ?? 0;
-  let peakEquity = timeline[0]?.equity ?? 0;
-
-  return timeline.map((p) => {
-    if (p.realizedPnl > peakPnl) peakPnl = p.realizedPnl;
-    if (p.equity > peakEquity) peakEquity = p.equity;
-    const ddMoney = p.realizedPnl - peakPnl;
-    return {
-      at: p.at,
-      ddMoney,
-      ddPct: peakEquity > 0 ? (ddMoney / peakEquity) * 100 : 0,
-      equity: p.equity,
-    };
-  });
+  return [...walkPeaks(timeline)].map((w) => ({
+    at: w.point.at,
+    ddMoney: w.dropMoney,
+    ddPct: w.peakEquity > 0 ? (w.dropMoney / w.peakEquity) * 100 : 0,
+    equity: w.point.equity,
+  }));
 }
 
 /** Balance at the end of the timeline — starting balance + P&L + cash flow. */

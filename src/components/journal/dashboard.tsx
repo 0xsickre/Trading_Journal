@@ -542,6 +542,9 @@ export function Dashboard({
       scopeLabel,
       periodLabel: label,
       rangeText,
+      // Same band the dashboard classifies with, so the exported win rate
+      // matches the one on screen.
+      breakevenRange,
       startingBalance: scopedAccount?.starting_balance ?? null,
     });
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
