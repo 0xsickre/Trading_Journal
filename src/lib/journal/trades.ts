@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { selectAllByIds, selectAllPages } from "@/lib/supabase/paginate";
 import type { TradeFormInitial } from "@/components/journal/trade-form";
 import type { TradeImageKind } from "./tradingview-snapshot";
 import type { PositionStat, TradeRow, TradeTvImages } from "./types";
@@ -20,41 +21,44 @@ export async function getTradesWithStats(
 ): Promise<TradeWithStats[]> {
   const supabase = await createClient();
 
-  let posQ = supabase.from("tj_positions").select("*").order("created_at", {
-    ascending: false,
+  // Every figure on the dashboard is derived from this set, so it must be the
+  // WHOLE set: an unbounded select silently stops at PostgREST's row cap.
+  // `id` breaks ties so paging cannot repeat or skip a row when two positions
+  // share a created_at.
+  const positions = await selectAllPages<RawPosition>((from, to) => {
+    let q = supabase
+      .from("tj_positions")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(from, to);
+    if (accountId) q = q.eq("account_id", accountId);
+    return q;
   });
-  if (accountId) posQ = posQ.eq("account_id", accountId);
 
-  const { data: positions, error: posErr } = await posQ;
-  if (posErr) throw posErr;
+  const positionIds = positions.map((p) => p.id);
 
-  const positionIds = ((positions ?? []) as RawPosition[]).map((p) => p.id);
-
-  const statsPromise =
-    positionIds.length > 0
-      ? supabase
-          .from("tj_position_stats")
-          .select("*")
-          .in("position_id", positionIds)
-      : Promise.resolve({ data: [] as PositionStat[] });
-
-  const imagesPromise =
-    positionIds.length > 0
-      ? supabase
-          .from("tj_trade_images")
-          .select("position_id, kind, image_url")
-          .in("position_id", positionIds)
-      : Promise.resolve({
-          data: [] as { position_id: string; kind: string; image_url: string }[],
-        });
-
-  const [{ data: stats }, { data: images }] = await Promise.all([
-    statsPromise,
-    imagesPromise,
+  const [statRows, images] = await Promise.all([
+    selectAllByIds(positionIds, (chunk, from, to) =>
+      supabase
+        .from("tj_position_stats")
+        .select("*")
+        .in("position_id", chunk)
+        .order("position_id")
+        .range(from, to),
+    ),
+    selectAllByIds(positionIds, (chunk, from, to) =>
+      supabase
+        .from("tj_trade_images")
+        .select("position_id, kind, image_url")
+        .in("position_id", chunk)
+        .order("position_id")
+        .range(from, to),
+    ),
   ]);
 
   const imagesByPosition = new Map<string, TradeTvImages>();
-  for (const img of images ?? []) {
+  for (const img of images) {
     const kind = img.kind as TradeImageKind;
     const bucket = imagesByPosition.get(img.position_id) ?? {};
     bucket[kind] = img.image_url;
@@ -62,11 +66,11 @@ export async function getTradesWithStats(
   }
 
   const statById = new Map<string, PositionStat>();
-  for (const s of (stats ?? []) as PositionStat[]) {
+  for (const s of statRows as PositionStat[]) {
     if (s.position_id) statById.set(s.position_id, s);
   }
 
-  return ((positions ?? []) as RawPosition[]).map(
+  return positions.map(
     (p) =>
       ({
         ...p,
@@ -128,29 +132,25 @@ export async function getFillCounts(): Promise<
   Map<string, { entries: number; exits: number }>
 > {
   const supabase = await createClient();
+
+  // A silently short page here would under-count fills and make scale-in /
+  // scale-out detection quietly wrong — see the note in supabase/paginate.ts.
+  const rows = await selectAllPages<{ position_id: string; side: string }>(
+    (from, to) =>
+      supabase
+        .from("tj_executions")
+        .select("position_id, side")
+        .order("position_id")
+        .order("id")
+        .range(from, to),
+  );
+
   const map = new Map<string, { entries: number; exits: number }>();
-
-  // PostgREST caps an unbounded select at its configured max rows and returns
-  // the truncated set without an error. A silently short page here would
-  // under-count fills and make scale-in / scale-out detection quietly wrong,
-  // so pages are requested explicitly until one comes back short.
-  const PAGE = 1000;
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from("tj_executions")
-      .select("position_id, side")
-      .order("position_id")
-      .range(from, from + PAGE - 1);
-    if (error) throw error;
-
-    for (const row of data ?? []) {
-      const bucket = map.get(row.position_id) ?? { entries: 0, exits: 0 };
-      if (row.side === "entry") bucket.entries++;
-      else bucket.exits++;
-      map.set(row.position_id, bucket);
-    }
-
-    if (!data || data.length < PAGE) break;
+  for (const row of rows) {
+    const bucket = map.get(row.position_id) ?? { entries: 0, exits: 0 };
+    if (row.side === "entry") bucket.entries++;
+    else bucket.exits++;
+    map.set(row.position_id, bucket);
   }
 
   return map;

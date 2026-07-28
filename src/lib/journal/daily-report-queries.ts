@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { selectAllPages } from "@/lib/supabase/paginate";
 import type { DailyReport } from "./daily-report";
 import type { DailyReportLite } from "./insights/context";
 
@@ -22,11 +23,14 @@ export async function getDailyReport(
  */
 export async function getDailyReportDates(): Promise<string[]> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("tj_daily_reports")
-    .select("report_date")
-    .order("report_date", { ascending: false });
-  return (data ?? []).map((r) => r.report_date as string);
+  const data = await selectAllPages((from, to) =>
+    supabase
+      .from("tj_daily_reports")
+      .select("report_date")
+      .order("report_date", { ascending: false })
+      .range(from, to),
+  );
+  return data.map((r) => r.report_date);
 }
 
 /**
@@ -35,9 +39,12 @@ export async function getDailyReportDates(): Promise<string[]> {
  */
 export async function getDailyReportsLite(): Promise<DailyReportLite[]> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("tj_daily_reports")
-    .select("report_date, micromanage, mental_temp, day_grade, rule_broken, no_trade_day")
-    .order("report_date", { ascending: false });
-  return (data ?? []) as DailyReportLite[];
+  const data = await selectAllPages((from, to) =>
+    supabase
+      .from("tj_daily_reports")
+      .select("report_date, micromanage, mental_temp, day_grade, rule_broken, no_trade_day")
+      .order("report_date", { ascending: false })
+      .range(from, to),
+  );
+  return data as DailyReportLite[];
 }

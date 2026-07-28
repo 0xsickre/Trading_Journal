@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { selectAllPages } from "@/lib/supabase/paginate";
 import { getAccounts } from "./accounts";
 import {
   evaluateFtmo,
@@ -17,13 +18,19 @@ export async function getFtmoStatuses(): Promise<AccountFtmo[]> {
   if (ftmoAccounts.length === 0) return [];
 
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("tj_position_stats")
-    .select("account_id, net_pl, closed_at")
-    .eq("status", "closed");
+  // Must be the complete set: a truncated page could omit the very trade that
+  // broke a rule, leaving a blown challenge reading as still active.
+  const data = await selectAllPages((from, to) =>
+    supabase
+      .from("tj_position_stats")
+      .select("account_id, net_pl, closed_at")
+      .eq("status", "closed")
+      .order("position_id")
+      .range(from, to),
+  );
 
   const byAccount = new Map<string, { closedAt: string | null; net: number }[]>();
-  for (const r of data ?? []) {
+  for (const r of data) {
     if (!r.account_id || r.net_pl == null) continue;
     const arr = byAccount.get(r.account_id) ?? [];
     arr.push({ closedAt: r.closed_at, net: r.net_pl });
