@@ -95,6 +95,65 @@ export function buildBalanceTimeline(
   return out;
 }
 
+export type PeriodWindow = {
+  /** Equity the account actually held at the start of the window. */
+  openingEquity: number;
+  /** Cash events inside the window. Earlier ones are folded into the opening. */
+  events: CashEvent[];
+  /** Realized P&L that happened before the window. */
+  priorPnl: number;
+};
+
+/**
+ * Resolve a time-boxed view of an account.
+ *
+ * A period filter that narrows the TRADES but not the cash events, and then
+ * starts the curve at the full starting balance, produces
+ * `starting_balance + 90d of P&L + all-time deposits` — an equity figure for an
+ * account that never existed. Peak equity is the denominator of every drawdown
+ * percentage, so that error surfaced directly in the headline "Max drawdown %".
+ *
+ * Both sides are cut at the same instant here, and everything before it is
+ * collapsed into the opening equity so the window starts where reality did.
+ *
+ * `cutoffMs` of null means "all time" and passes everything through.
+ */
+export function resolvePeriodWindow(
+  startingBalance: number,
+  trades: PnlPoint[],
+  cashEvents: CashEvent[],
+  cutoffMs: number | null,
+): PeriodWindow {
+  if (cutoffMs == null) {
+    return { openingEquity: startingBalance, events: cashEvents, priorPnl: 0 };
+  }
+
+  let priorPnl = 0;
+  for (const t of trades) {
+    if (instantOf(t.at) < cutoffMs) priorPnl += t.pnl;
+  }
+
+  let priorCash = 0;
+  const events: CashEvent[] = [];
+  for (const c of cashEvents) {
+    if (instantOf(c.occurred_at) < cutoffMs) priorCash += c.amount;
+    else events.push(c);
+  }
+
+  return {
+    openingEquity: startingBalance + priorPnl + priorCash,
+    events,
+    priorPnl,
+  };
+}
+
+/** Epoch ms, or -Infinity when absent — never compare ISO strings as text. */
+function instantOf(iso: string | null | undefined): number {
+  if (!iso) return -Infinity;
+  const ms = new Date(iso).getTime();
+  return Number.isNaN(ms) ? -Infinity : ms;
+}
+
 export type DrawdownStats = {
   /** Worst peak-to-trough drop in cumulative P&L. Negative, or 0 when never down. */
   maxMoney: number;

@@ -9,6 +9,33 @@ export type ExecutionInput = {
 
 export type ExecLike = Pick<ExecutionInput, "side" | "qty">;
 
+/** The shape a fill must have to be worth storing. */
+export type FillLike = {
+  side: string;
+  price: number | null;
+  qty: number | null;
+};
+
+/**
+ * Whether a fill is complete enough to save.
+ *
+ * The single definition, shared by the form's live preview, the form's submit
+ * payload and the server's sanitizer. They previously used three different
+ * predicates: the form accepted `qty = 0` while the server silently dropped
+ * such rows — taking the fee and swap typed on them with it, so a user could
+ * watch a commission disappear with no error.
+ */
+export function isValidFill(e: FillLike): boolean {
+  return (
+    (e.side === "entry" || e.side === "exit") &&
+    e.price != null &&
+    Number.isFinite(e.price) &&
+    e.qty != null &&
+    Number.isFinite(e.qty) &&
+    e.qty > 0
+  );
+}
+
 export type TradePhase = "planned" | "active";
 
 export type PositionStatus =

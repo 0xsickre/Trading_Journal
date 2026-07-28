@@ -77,6 +77,32 @@ export function parseImportTime(
   return Number.isNaN(fallback.getTime()) ? null : fallback.toISOString();
 }
 
+/**
+ * Instant as epoch milliseconds, for comparing and sorting timestamps.
+ *
+ * ISO strings must never be compared as text. PostgREST returns
+ * "2026-07-28T10:00:00+00:00" while the app generates
+ * "2026-07-28T10:00:00.000Z"; those order correctly only by luck, because at an
+ * identical whole second the comparison reaches '+' (0x2B) against '.' (0x2E)
+ * and inverts. A trade closed exactly on a range boundary then lands on the
+ * wrong side of it.
+ *
+ * Missing or unparseable values sort first, matching how `?? ""` behaved.
+ */
+export function toEpoch(iso: string | Date | null | undefined): number {
+  if (!iso) return -Infinity;
+  const ms = iso instanceof Date ? iso.getTime() : new Date(iso).getTime();
+  return Number.isNaN(ms) ? -Infinity : ms;
+}
+
+/** Chronological comparator for ISO timestamps. */
+export function compareInstants(
+  a: string | Date | null | undefined,
+  b: string | Date | null | undefined,
+): number {
+  return toEpoch(a) - toEpoch(b);
+}
+
 /** "yyyy-MM-dd" calendar day in tz — used for daily P/L grouping. */
 export function zonedDateKey(
   iso: string | Date | null | undefined,

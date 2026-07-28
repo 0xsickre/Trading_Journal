@@ -78,10 +78,14 @@ describe("computeStats", () => {
     ]);
     const s = computeStats(trades, "net");
     expect(s.wins).toBe(2);
-    expect(s.avgWin).toBe(2);
-    expect(s.avgLoss).toBe(-1);
-    // 2W / 1L → winRate 66.7%; expectancy uses R averages only where present
-    expect(s.expectancy).toBeCloseTo(1);
+    expect(s.avgWinR).toBe(2);
+    expect(s.avgLossR).toBe(-1);
+    // 2W / 1L by money, but only w1 and l1 carry an R. Expectancy is in R, so
+    // it is computed over that population alone: 0.5 × 2R + 0.5 × -1R.
+    // Weighting by the money win rate (66.7%) would blend two samples and
+    // credit w2's win probability against an average it never contributed to.
+    expect(s.expectancySample).toBe(2);
+    expect(s.expectancy).toBeCloseTo(0.5);
   });
 
   it("max drawdown on cumulative net", () => {
@@ -92,5 +96,40 @@ describe("computeStats", () => {
     ]);
     const s = computeStats(trades, "net");
     expect(s.maxDrawdown).toBe(-150);
+  });
+});
+
+describe("profit factor and the money/R split", () => {
+  it("reports Infinity — not null — when there are no losses", () => {
+    const trades = toRealized([
+      trade({ id: "w1", status: "closed", net_pl: 100, realized_r: 1 }),
+      trade({ id: "w2", status: "closed", net_pl: 200, realized_r: 2 }),
+    ]);
+    const s = computeStats(trades, "net");
+    expect(s.profitFactor).toBe(Infinity);
+  });
+
+  it("reports null only when there is nothing to divide", () => {
+    expect(computeStats([], "net").profitFactor).toBeNull();
+  });
+
+  it("separates average win in R from average win in money", () => {
+    // w2 has no stop, so no R. Money averages cover both winners; R averages
+    // cover only the one that has an R.
+    const trades = toRealized([
+      trade({ id: "w1", status: "closed", net_pl: 100, realized_r: 2 }),
+      trade({ id: "w2", status: "closed", net_pl: 300, realized_r: null }),
+      trade({ id: "l1", status: "closed", net_pl: -100, realized_r: -1 }),
+    ]);
+    const s = computeStats(trades, "net");
+
+    expect(s.avgWinMoney).toBe(200);
+    expect(s.avgLossMoney).toBe(-100);
+    expect(s.avgWinR).toBe(2);
+    expect(s.avgLossR).toBe(-1);
+    // The two ratios genuinely differ; the score's band table wants the money one.
+    expect(s.avgWinMoney / Math.abs(s.avgLossMoney)).toBe(2);
+    expect(s.avgWinR / Math.abs(s.avgLossR)).toBe(2);
+    expect(s.expectancySample).toBe(2);
   });
 });

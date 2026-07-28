@@ -28,6 +28,7 @@ import {
   buildBalanceTimeline,
   computeDrawdown,
   drawdownSeries,
+  resolvePeriodWindow,
   type CashEvent,
 } from "@/lib/journal/balance";
 import { computeHoldTime } from "@/lib/journal/hold-time";
@@ -94,6 +95,7 @@ import {
 } from "date-fns";
 import { fmtMoney, fmtR, fmtPct, fmtNum, pnlClass } from "@/lib/journal/format";
 import { formatDuration } from "@/lib/journal/units";
+import { toEpoch } from "@/lib/journal/time";
 
 const PERIODS = [
   { value: "30", label: "30d" },
@@ -229,19 +231,30 @@ export function Dashboard({
     return accounts.reduce((s, a) => s + (a.starting_balance ?? 0), 0);
   }, [accountFilter, accounts]);
 
-  const realized = useMemo(() => {
-    let rows = trades;
-    if (accountFilter !== "all")
-      rows = rows.filter((t) => t.account_id === accountFilter);
-    let r = toRealized(rows);
-    if (period !== "all") {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - Number(period));
-      const iso = cutoff.toISOString();
-      r = r.filter((t) => (t.closedAt ?? "") >= iso);
-    }
-    return r;
-  }, [trades, accountFilter, period]);
+  /** Start of the selected window as epoch ms, or null for "all time". */
+  const cutoffMs = useMemo(() => {
+    if (period === "all") return null;
+    const d = new Date();
+    d.setDate(d.getDate() - Number(period));
+    return d.getTime();
+  }, [period]);
+
+  /** Every realized trade in account scope, ignoring the period filter. */
+  const realizedAll = useMemo(() => {
+    const rows =
+      accountFilter === "all"
+        ? trades
+        : trades.filter((t) => t.account_id === accountFilter);
+    return toRealized(rows);
+  }, [trades, accountFilter]);
+
+  const realized = useMemo(
+    () =>
+      cutoffMs == null
+        ? realizedAll
+        : realizedAll.filter((t) => toEpoch(t.closedAt) >= cutoffMs),
+    [realizedAll, cutoffMs],
+  );
 
   /**
    * Breakeven band for the current scope. With "all accounts" selected the band
@@ -272,41 +285,59 @@ export function Dashboard({
   );
 
   /**
+   * The window's opening equity, and the cash events inside it.
+   *
+   * The period filter used to narrow the TRADES but not the cash events, then
+   * seed the curve with the full starting balance — producing
+   * `starting_balance + 90d of P&L + all-time deposits`, an equity figure that
+   * describes no account that ever existed. Since peak equity is the
+   * denominator for every drawdown percentage, the headline "Max drawdown %"
+   * was wrong for every period except "All".
+   *
+   * Both sides are now cut at the same instant, and the curve opens at the
+   * equity the account actually held on day one of the window.
+   */
+  const windowed = useMemo(
+    () =>
+      resolvePeriodWindow(
+        startBalance,
+        realizedAll.map((t) => ({
+          at: t.closedAt ?? "",
+          pnl: mode === "net" ? t.net : t.gross,
+        })),
+        scopedCashEvents,
+        cutoffMs,
+      ),
+    [cutoffMs, startBalance, realizedAll, scopedCashEvents, mode],
+  );
+
+  /**
    * Drawdown is measured on two different bases on purpose: money comes from
    * cumulative P&L (a withdrawal is not a loss), percentage comes from equity
    * including cash flow (a deposit really does change what a dollar loss means).
    */
-  const drawdown = useMemo(
-    () =>
-      computeDrawdown(
-        buildBalanceTimeline(
-          startBalance,
-          realized.map((t) => ({
-            at: t.closedAt ?? "",
-            pnl: mode === "net" ? t.net : t.gross,
-          })),
-          scopedCashEvents,
-        ),
-      ),
-    [realized, mode, startBalance, scopedCashEvents],
-  );
-
   const stats = useMemo(
     () => computeStats(realized, mode, breakevenRange),
     [realized, mode, breakevenRange],
   );
 
+  // One timeline, three consumers. This was previously built twice from
+  // identical arguments — once for the drawdown stats and once for the chart.
   const balanceTimeline = useMemo(
     () =>
       buildBalanceTimeline(
-        startBalance,
+        windowed.openingEquity,
         realized.map((t) => ({
           at: t.closedAt ?? "",
           pnl: mode === "net" ? t.net : t.gross,
         })),
-        scopedCashEvents,
+        windowed.events,
       ),
-    [realized, mode, startBalance, scopedCashEvents],
+    [realized, mode, windowed],
+  );
+  const drawdown = useMemo(
+    () => computeDrawdown(balanceTimeline),
+    [balanceTimeline],
   );
   const ddSeries = useMemo(
     () => drawdownSeries(balanceTimeline),
@@ -372,8 +403,8 @@ export function Dashboard({
   );
 
   const winLossRatio = useMemo(
-    () => avgWinLossRatio(stats.avgWin, stats.avgLoss),
-    [stats.avgWin, stats.avgLoss],
+    () => avgWinLossRatio(stats.avgWinMoney, stats.avgLossMoney),
+    [stats.avgWinMoney, stats.avgLossMoney],
   );
   const recovery = useMemo(
     () => recoveryFactor(stats.netSum, drawdown.maxMoney),
@@ -429,8 +460,8 @@ export function Dashboard({
     [stats.profitFactor, stats.winRate, winLossRatio, drawdown.maxPctOfPeakPnl, recovery, consistency.score],
   );
   const equity = useMemo(
-    () => buildEquity(realized, mode, equityMetric, startBalance),
-    [realized, mode, equityMetric, startBalance],
+    () => buildEquity(realized, mode, equityMetric, windowed.openingEquity),
+    [realized, mode, equityMetric, windowed],
   );
   const hist = useMemo(() => rHistogram(realized), [realized]);
   const daily = useMemo(
@@ -722,7 +753,14 @@ export function Dashboard({
         <Stat label="Avg R" value={fmtR(stats.avgR)} cls={pnlClass(stats.avgR)} />
         <Stat
           label="Profit factor"
-          value={stats.profitFactor == null ? "∞" : fmtNum(stats.profitFactor, 2)}
+          value={
+            stats.profitFactor == null
+              ? "—"
+              : Number.isFinite(stats.profitFactor)
+                ? fmtNum(stats.profitFactor, 2)
+                : "∞"
+          }
+          title="Gross profit / gross loss. ∞ means no losing trades in range."
         />
         <Stat label="Expectancy" value={fmtR(stats.expectancy)} cls={pnlClass(stats.expectancy)} />
         <Stat label="Best" value={fmtMoney(stats.best, currency, { sign: true })} cls={pnlClass(stats.best)} />

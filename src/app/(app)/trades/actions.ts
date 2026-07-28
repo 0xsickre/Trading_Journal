@@ -7,7 +7,7 @@ import {
   NUMERIC_FIELDS,
   ARRAY_FIELD_NAMES,
 } from "@/lib/journal/form-config";
-import { computeStatus } from "@/lib/journal/trade-lifecycle";
+import { computeStatus, isValidFill } from "@/lib/journal/trade-lifecycle";
 import { getFailedFtmoAccountIds } from "@/lib/journal/ftmo-status";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
 
@@ -53,7 +53,7 @@ function sanitizeFields(fields: Record<string, string | number | string[] | null
 
 function cleanExecs(execs: ExecutionInput[]) {
   return execs
-    .filter((e) => Number.isFinite(e.price) && Number.isFinite(e.qty) && e.qty > 0)
+    .filter(isValidFill)
     .map((e) => ({
       side: e.side,
       price: Number(e.price),

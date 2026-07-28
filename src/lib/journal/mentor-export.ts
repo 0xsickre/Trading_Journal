@@ -92,8 +92,16 @@ function statsTable(trades: TradeRow[], ccy: string): string {
     `| Total R | ${r2(s.totalR)}R |`,
     `| Avg R / trade | ${r2(s.avgR)}R |`,
     `| Expectancy | ${r2(s.expectancy)}R |`,
-    `| Profit factor | ${s.profitFactor == null ? "∞" : s.profitFactor.toFixed(2)} |`,
-    `| Avg win / Avg loss | ${r2(s.avgWin)}R / ${r2(s.avgLoss)}R |`,
+    `| Profit factor | ${
+      s.profitFactor == null
+        ? "—"
+        : Number.isFinite(s.profitFactor)
+          ? s.profitFactor.toFixed(2)
+          : "∞"
+    } |`,
+    `| Avg win / Avg loss (R) | ${r2(s.avgWinR)}R / ${r2(s.avgLossR)}R |`,
+    `| Avg win / Avg loss (${ccy}) | ${money(s.avgWinMoney, ccy)} / ${money(s.avgLossMoney, ccy)} |`,
+    `| Expectancy sample | ${s.expectancySample} of ${s.count} trades carry an R |`,
     `| Best / Worst | ${money(s.best, ccy)} / ${money(s.worst, ccy)} |`,
     `| Max win / loss streak | ${s.maxWinStreak} / ${s.maxLossStreak} |`,
     `| Max drawdown | ${money(s.maxDrawdown, ccy)} |`,

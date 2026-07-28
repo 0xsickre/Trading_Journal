@@ -66,6 +66,7 @@ import {
 import {
   canMarkMissed,
   canRestoreToPlanned,
+  isValidFill,
   statusToTradePhase,
   type TradePhase,
 } from "@/lib/journal/trade-lifecycle";
@@ -135,6 +136,7 @@ export function TradeForm({
   accounts,
   initial,
   ftmoFailedAccountIds = [],
+  accountEquity = {},
 }: {
   optionsMap: OptionsMap;
   instruments: Instrument[];
@@ -142,6 +144,12 @@ export function TradeForm({
   initial?: TradeFormInitial;
   /** Accounts whose FTMO challenge is frozen — new trades are blocked. */
   ftmoFailedAccountIds?: string[];
+  /**
+   * Current equity per account id — starting balance + realized P&L + cash
+   * flow. Risk % is a share of what the account is worth NOW, not of what it
+   * opened with.
+   */
+  accountEquity?: Record<string, number>;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -283,12 +291,13 @@ export function TradeForm({
     const executionFills = execs
       .map((e) => ({
         side: e.side,
-        price: n(e.price) ?? NaN,
-        qty: n(e.qty) ?? 0,
+        price: n(e.price),
+        qty: n(e.qty),
         fee: n(e.fee) ?? 0,
         swap_funding: n(e.swap) ?? 0,
       }))
-      .filter((e) => Number.isFinite(e.price) && e.qty > 0);
+      .filter(isValidFill)
+      .map((e) => ({ ...e, price: e.price!, qty: e.qty! }));
 
     const pe = n(String(fields.entry_price ?? ""));
     const stop = n(String(fields.stop_price ?? ""));
@@ -337,7 +346,13 @@ export function TradeForm({
     } as unknown as TradeRow);
 
     const riskPct = parseRiskPct(fields.risk_pct as string | number | null);
-    const balance = account?.starting_balance ?? 0;
+    // Current equity, falling back to the opening balance only when the
+    // account has no history yet. Sizing off starting_balance forever meant
+    // "risk 1%" drifted further from 1% with every trade.
+    const balance =
+      (account ? accountEquity[account.id] : undefined) ??
+      account?.starting_balance ??
+      0;
     const sizeSuggestion = computePositionSize({
       balance,
       riskPct,
@@ -390,7 +405,7 @@ export function TradeForm({
       plannedEntry: pe,
       targetAttainment,
     };
-  }, [execs, fields, pointValue, account]);
+  }, [execs, fields, pointValue, account, accountEquity]);
 
   function addExec(side: "entry" | "exit") {
     setExecs((prev) => {
@@ -448,9 +463,16 @@ export function TradeForm({
     setActiveTab(v as "plan" | "execution");
   }
 
+  /** Rows the user started but left unusable — never silently dropped. */
+  function incompleteExecRows(): number[] {
+    return execs
+      .map((e, i) => (isValidFill({ side: e.side, price: n(e.price), qty: n(e.qty) }) ? -1 : i))
+      .filter((i) => i >= 0);
+  }
+
   function buildExecInputs(): ExecutionInput[] {
     return execs
-      .filter((e) => n(e.price) != null && n(e.qty) != null)
+      .filter((e) => isValidFill({ side: e.side, price: n(e.price), qty: n(e.qty) }))
       .map((e) => ({
         side: e.side,
         price: n(e.price)!,
@@ -475,11 +497,38 @@ export function TradeForm({
       return;
     }
 
+    // The server drops fills without a price and a positive quantity — along
+    // with any fee typed on them. Say so rather than let them vanish.
+    const incomplete = incompleteExecRows();
+    if (incomplete.length > 0) {
+      toast.error(
+        `Fill ${incomplete.map((i) => i + 1).join(", ")} needs a price and a quantity above zero — remove it or complete it.`,
+      );
+      setActiveTab("execution");
+      return;
+    }
+
     const fieldsToSave = { ...fields };
-    if (metrics.plannedRR != null) {
+
+    // planned_rr is the PLAN. Once the trade is live it is what "Target
+    // attainment" measures against, so recomputing it from edited prices would
+    // let a trader quietly move the goalposts and improve their own score.
+    const planIsStillEditable = tradePhase === "planned" && execs.length === 0;
+    if (
+      metrics.plannedRR != null &&
+      (planIsStillEditable || !fields.planned_rr)
+    ) {
       fieldsToSave.planned_rr = formatPlannedRewardR(metrics.plannedRR);
     }
-    if (metrics.sizeSuggestion != null) {
+
+    // position_size is a record of what was traded. Only offer the suggestion
+    // while it is still a plan and the field is empty — never overwrite a size
+    // once real fills exist, where entry_qty is the truth.
+    if (
+      metrics.sizeSuggestion != null &&
+      planIsStillEditable &&
+      (fields.position_size == null || fields.position_size === "")
+    ) {
       fieldsToSave.position_size = Number(metrics.sizeSuggestion.toFixed(4));
     }
 

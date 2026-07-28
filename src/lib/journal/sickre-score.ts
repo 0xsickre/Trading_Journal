@@ -58,6 +58,12 @@ export function scoreFromBands(
 ): number | null {
   if (value == null || Number.isNaN(value)) return null;
 
+  // A book with winners and no losses has an infinite profit factor. That is a
+  // maximal result, not missing data: it belongs in the top band. Treating it
+  // as null dropped the component and scored perfection BELOW mediocrity.
+  if (value === Infinity) return bands[0]?.scoreMax ?? 100;
+  if (value === -Infinity) return bands[bands.length - 1]?.scoreMin ?? 0;
+
   for (let i = 0; i < bands.length; i++) {
     const band = bands[i];
     if (value < band.min) continue;
@@ -75,7 +81,13 @@ export function scoreFromBands(
 }
 
 export type ScoreInputs = {
+  /** `Infinity` (no losses) scores the top band; `null` drops the component. */
   profitFactor: number | null;
+  /**
+   * Average winning MONEY over average losing money. `RATIO_BANDS` is
+   * transcribed from a spec that defines this ratio in currency, so feeding it
+   * an R-multiple ratio would score two different quantities against one table.
+   */
   avgWinLossRatio: number | null;
   /** Drawdown over peak cumulative P&L — NOT the equity-based percentage. */
   maxDrawdownPctOfPeakPnl: number | null;

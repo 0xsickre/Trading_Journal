@@ -5,6 +5,7 @@ import {
   currentEquity,
   drawdownSeries,
   netCashFlow,
+  resolvePeriodWindow,
   type CashEvent,
 } from "./balance";
 
@@ -231,5 +232,79 @@ describe("netCashFlow", () => {
         cash("2026-02-01T00:00:00Z", -1_500),
       ]),
     ).toBe(3_500);
+  });
+});
+
+describe("resolvePeriodWindow", () => {
+  const events: CashEvent[] = [
+    {
+      id: "c1",
+      account_id: "a",
+      event_type: "deposit",
+      amount: 5_000,
+      occurred_at: "2026-01-10T00:00:00Z",
+      note: null,
+    },
+    {
+      id: "c2",
+      account_id: "a",
+      event_type: "withdrawal",
+      amount: -1_000,
+      occurred_at: "2026-03-10T00:00:00Z",
+      note: null,
+    },
+  ];
+  const trades = [
+    { at: "2026-01-15T00:00:00Z", pnl: 2_000 },
+    { at: "2026-03-15T00:00:00Z", pnl: -500 },
+  ];
+  const cutoff = new Date("2026-02-01T00:00:00Z").getTime();
+
+  it("passes everything through for an all-time window", () => {
+    const w = resolvePeriodWindow(10_000, trades, events, null);
+    expect(w.openingEquity).toBe(10_000);
+    expect(w.events).toHaveLength(2);
+    expect(w.priorPnl).toBe(0);
+  });
+
+  it("opens at the equity the account actually held at the cutoff", () => {
+    const w = resolvePeriodWindow(10_000, trades, events, cutoff);
+    // 10,000 start + 5,000 deposit + 2,000 P&L, all before February.
+    expect(w.openingEquity).toBe(17_000);
+    expect(w.priorPnl).toBe(2_000);
+  });
+
+  it("keeps only cash events inside the window", () => {
+    const w = resolvePeriodWindow(10_000, trades, events, cutoff);
+    expect(w.events.map((e) => e.id)).toEqual(["c2"]);
+  });
+
+  it("does not let an out-of-window deposit inflate peak equity", () => {
+    // The bug: trades were windowed but cash events were not, so the January
+    // deposit landed in a February-onward curve that started at the raw opening
+    // balance — inflating peak equity and shrinking every drawdown percentage.
+    const w = resolvePeriodWindow(10_000, trades, events, cutoff);
+    const windowed = computeDrawdown(
+      buildBalanceTimeline(
+        w.openingEquity,
+        trades.filter((t) => new Date(t.at).getTime() >= cutoff),
+        w.events,
+      ),
+    );
+
+    const broken = computeDrawdown(
+      buildBalanceTimeline(
+        10_000,
+        trades.filter((t) => new Date(t.at).getTime() >= cutoff),
+        events,
+      ),
+    );
+
+    expect(windowed.maxMoney).toBe(-500);
+    expect(broken.maxMoney).toBe(-500);
+    // Same dollar drawdown, different denominator: 500/17,000 vs 500/15,000.
+    expect(windowed.maxPctOfEquity).toBeCloseTo((500 / 17_000) * 100, 6);
+    expect(broken.maxPctOfEquity).toBeCloseTo((500 / 15_000) * 100, 6);
+    expect(windowed.maxPctOfEquity).not.toBeCloseTo(broken.maxPctOfEquity, 6);
   });
 });

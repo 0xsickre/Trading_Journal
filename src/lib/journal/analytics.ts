@@ -54,10 +54,26 @@ export type Stats = {
   netSum: number;
   totalR: number;
   avgR: number;
-  avgWin: number;
-  avgLoss: number;
+  /**
+   * Average R of winners / losers. Named for their unit: these are R-multiples,
+   * not money, and they only cover trades that HAVE an R (which requires a stop
+   * price). `avgLossR` is negative.
+   */
+  avgWinR: number;
+  avgLossR: number;
+  /** Average money of winners / losers, over every decided trade. */
+  avgWinMoney: number;
+  avgLossMoney: number;
+  /**
+   * Gross profit / gross loss. `Infinity` when there were winners and no
+   * losses — a real, maximal value — and `null` only when there is nothing to
+   * divide, so a consumer can tell "perfect" from "no data".
+   */
   profitFactor: number | null;
-  expectancy: number; // in R
+  /** Expected R per trade, over the trades that carry an R. */
+  expectancy: number;
+  /** How many trades the expectancy is based on. */
+  expectancySample: number;
   best: number;
   worst: number;
   maxWinStreak: number;
@@ -92,6 +108,8 @@ export function computeStats(
     lossRSum = 0,
     winRCount = 0,
     lossRCount = 0,
+    winMoneySum = 0,
+    lossMoneySum = 0,
     best = -Infinity,
     worst = Infinity,
     maxWin = 0,
@@ -118,6 +136,7 @@ export function computeStats(
     const outcome = classifyOutcome(p, range);
     if (outcome === "win") {
       wins++;
+      winMoneySum += p;
       if (t.r != null) {
         winRSum += t.r;
         winRCount++;
@@ -126,6 +145,7 @@ export function computeStats(
       curLoss = 0;
     } else if (outcome === "loss") {
       losses++;
+      lossMoneySum += p;
       if (t.r != null) {
         lossRSum += t.r;
         lossRCount++;
@@ -157,14 +177,25 @@ export function computeStats(
   // denominator, so winRate + lossRate === 100 among decided trades only.
   const winRate = wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
   const avgR = rCount > 0 ? totalR / rCount : 0;
-  const avgWin = winRCount > 0 ? winRSum / winRCount : 0;
-  const avgLoss = lossRCount > 0 ? lossRSum / lossRCount : 0;
-  const profitFactor = negProfit > 0 ? posProfit / negProfit : posProfit > 0 ? null : 0;
-  const lossRate = 100 - winRate;
-  // Expectancy in R: money-based win probability × average win/loss R (avgLoss is
-  // already negative). Breakevens contribute ~0 R and are not modelled separately.
+  const avgWinR = winRCount > 0 ? winRSum / winRCount : 0;
+  const avgLossR = lossRCount > 0 ? lossRSum / lossRCount : 0;
+  const avgWinMoney = wins > 0 ? winMoneySum / wins : 0;
+  const avgLossMoney = losses > 0 ? lossMoneySum / losses : 0;
+
+  // Infinity, not null, when a book has winners and no losses: that is a real
+  // maximal profit factor, and collapsing it into "no data" made the composite
+  // score DROP its heaviest component for the one book that maxed it.
+  const profitFactor =
+    negProfit > 0 ? posProfit / negProfit : posProfit > 0 ? Infinity : null;
+
+  // Expectancy is in R, so every term must come from the R population — only
+  // trades with a stop price have an R. Weighting R averages by a win rate
+  // drawn from ALL decided trades mixed two different samples, and a trader
+  // who records stops on half their trades got a number describing neither.
+  const rDecided = winRCount + lossRCount;
+  const rWinRate = rDecided > 0 ? winRCount / rDecided : 0;
   const expectancy =
-    (winRate / 100) * avgWin + (lossRate / 100) * avgLoss; // in R
+    rDecided > 0 ? rWinRate * avgWinR + (1 - rWinRate) * avgLossR : 0;
 
   return {
     count,
@@ -176,10 +207,13 @@ export function computeStats(
     netSum,
     totalR,
     avgR,
-    avgWin,
-    avgLoss,
+    avgWinR,
+    avgLossR,
+    avgWinMoney,
+    avgLossMoney,
     profitFactor,
     expectancy,
+    expectancySample: rDecided,
     best: count ? best : 0,
     worst: count ? worst : 0,
     maxWinStreak: maxWin,

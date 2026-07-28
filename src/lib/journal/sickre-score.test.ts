@@ -120,3 +120,44 @@ describe("computeSickreScore", () => {
     expect(r.coverage).toBe(0);
   });
 });
+
+describe("infinite profit factor", () => {
+  it("scores the top band instead of being dropped as missing data", () => {
+    // A book with winners and no losses has an infinite profit factor. Treating
+    // that as null dropped the heaviest component (weight 25) and renormalized,
+    // so flawless trading scored BELOW mediocre trading.
+    expect(scoreFromBands(Infinity, RATIO_BANDS)).toBe(100);
+  });
+
+  it("keeps the component counted, unlike a null input", () => {
+    const base = {
+      avgWinLossRatio: 2.5,
+      maxDrawdownPctOfPeakPnl: 10,
+      winPct: 60,
+      recoveryFactor: 3,
+      consistencyScore: 80,
+    };
+    const perfect = computeSickreScore({ ...base, profitFactor: Infinity });
+    const noData = computeSickreScore({ ...base, profitFactor: null });
+
+    const pf = perfect.components.find((c) => c.key === "profitFactor")!;
+    expect(pf.counted).toBe(true);
+    expect(pf.score).toBe(100);
+    expect(perfect.coverage).toBe(noData.coverage + 25);
+    // The point of the fix: perfection must not score below incomplete data.
+    expect(perfect.score!).toBeGreaterThan(noData.score!);
+  });
+
+  it("still drops a component that genuinely has no data", () => {
+    const r = computeSickreScore({
+      profitFactor: null,
+      avgWinLossRatio: null,
+      maxDrawdownPctOfPeakPnl: null,
+      winPct: null,
+      recoveryFactor: null,
+      consistencyScore: null,
+    });
+    expect(r.score).toBeNull();
+    expect(r.coverage).toBe(0);
+  });
+});
