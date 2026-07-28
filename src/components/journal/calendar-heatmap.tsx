@@ -52,8 +52,8 @@ export function CalendarHeatmap({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <div className="flex gap-1">
+    <div className="min-w-0 max-w-full overflow-x-auto">
+      <div className="flex w-max gap-1">
         {columns.map((week, wi) => (
           <div key={wi} className="flex flex-col gap-1">
             {week.map((day) => (

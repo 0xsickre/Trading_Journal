@@ -44,8 +44,10 @@ export function FtmoBanner({
 
   return (
     <div className={cn("space-y-2 rounded-lg border p-3", tone)}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm font-semibold">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* basis-full on phones: the account name keeps its own line instead of
+            being truncated away next to the badge and the reset button. */}
+        <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center gap-2 text-sm font-semibold sm:basis-auto">
           {result.status === "failed" && (
             <AlertTriangle className="size-4 text-[var(--loss)]" />
           )}
@@ -53,10 +55,10 @@ export function FtmoBanner({
             <CheckCircle2 className="size-4 text-[var(--profit)]" />
           )}
           {result.status === "active" && <Target className="size-4" />}
-          <span>FTMO · {account.name}</span>
+          <span className="min-w-0">FTMO · {account.name}</span>
           <span
             className={cn(
-              "rounded px-1.5 py-0.5 text-xs uppercase tracking-wide",
+              "shrink-0 rounded px-1.5 py-0.5 text-xs whitespace-nowrap uppercase tracking-wide",
               result.status === "failed" &&
                 "bg-[var(--loss)]/20 text-[var(--loss)]",
               result.status === "passed" &&
@@ -75,7 +77,7 @@ export function FtmoBanner({
           <Button
             variant="outline"
             size="sm"
-            className="h-7"
+            className="h-7 shrink-0"
             disabled={pending}
             onClick={reset}
           >

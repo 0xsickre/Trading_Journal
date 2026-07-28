@@ -187,7 +187,7 @@ export function CashEventsManager({
       </Card>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-3">
           <CardTitle className="text-base">Istorija</CardTitle>
           <span className="text-sm text-muted-foreground">
             Neto tok: {fmtMoney(netCashFlow(events), currency, { sign: true })}

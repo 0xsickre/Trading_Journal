@@ -923,7 +923,9 @@ export function Dashboard({
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* min-w-0 on the items: grid tracks default to min-width:auto, which lets
+          the heatmap's intrinsic width push the card past the viewport. */}
+      <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-2">
         <PeriodPerformanceCard
           summary={monthly}
           label="Mesečni učinak"

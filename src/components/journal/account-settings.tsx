@@ -308,23 +308,27 @@ function FtmoRule({
   step?: string;
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <Checkbox
         checked={enabled}
         onCheckedChange={(v) => onEnabled(v === true)}
       />
-      <span className="w-40 text-sm">{label}</span>
-      <Input
-        type="number"
-        inputMode="decimal"
-        step={step}
-        min="0"
-        value={value}
-        disabled={!enabled}
-        onChange={(e) => onValue(e.target.value)}
-        className="h-8 w-24"
-      />
-      <span className="text-xs text-muted-foreground">{suffix}</span>
+      <span className="shrink-0 text-sm sm:w-40">{label}</span>
+      {/* Label + input don't fit on one line inside the card on a phone, so the
+          input drops to its own row rather than squeezing the label to nothing. */}
+      <div className="flex basis-full items-center gap-2 pl-6 sm:basis-auto sm:pl-0">
+        <Input
+          type="number"
+          inputMode="decimal"
+          step={step}
+          min="0"
+          value={value}
+          disabled={!enabled}
+          onChange={(e) => onValue(e.target.value)}
+          className="h-8 w-24"
+        />
+        <span className="text-xs text-muted-foreground">{suffix}</span>
+      </div>
     </div>
   );
 }

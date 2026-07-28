@@ -399,7 +399,7 @@ export function ImportWizard({
       {/* Step 2: review */}
       {step === 2 && (
         <Card>
-          <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
             <CardTitle className="text-base">2 — Review & reconcile</CardTitle>
             <div className="flex gap-2 text-xs">
               <Badge variant="secondary">{counts.create} create</Badge>

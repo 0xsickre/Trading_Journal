@@ -14,8 +14,8 @@ export default async function JournalPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold">Journal</h1>
           <p className="text-muted-foreground">
             Every logged trade. Filter by any tag — archived options stay
