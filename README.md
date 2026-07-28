@@ -514,8 +514,9 @@ tj_cash_events       – uplate, isplate, prop-firm payout-i i ručne korekcije 
 | **Expectancy** | `winRate × avgWinR + lossRate × avgLossR` | Prosečan win/loss R samo iz trejdova sa validnim R |
 | **FTMO drawdown %** | `(starting_balance − min_equity) / starting_balance × 100` | Najgori realizovani pad equity-ja od starta, zatvoreni trejdovi u tz naloga |
 | **Max drawdown $** | najveći peak-to-trough pad kumulativnog P&L-a | Uplate i isplate **nisu** gubitak i ne pomeraju ovaj broj |
-| **Max drawdown %** | `pad / peak equity × 100` | Imenilac je equity **uključujući** uplate i isplate — zato depozit menja procenat, a ne dolare |
+| **Max drawdown %** | `pad kumulativnog P&L-a / peak equity × 100` | **Brojilac je isti kao kod `$` verzije**; menja se samo imenilac. Merenje equity-do-equity bi isplatu prikazalo kao drawdown |
 | **Breakeven trade** | `breakeven_from ≤ net P&L ≤ breakeven_to` | Opseg je po nalogu i **asimetričan**. Dok je 0 do 0, znači tačno nulu |
+| **Swap** | `net_pl = gross − fees − swap` | **Pozitivan swap je trošak**, negativan je zarađen carry. Isto važi za `default_swap_per_day` |
 | **Recovery factor** | `net profit / max drawdown` | `null` kad drawdown-a nema — nedefinisano, ne beskonačno |
 | **Consistency** | `100 − (stdev P&L-a po trejdu / ukupan profit) × 100` | 0 dok je knjiga u minusu. Skala je iz spec-a i označena kao podložna kalibraciji |
 | **Avg planned R** | prosek planiranog R | Računa se **nad istim trejdovima** kao avg realized R, da razlika nešto znači |

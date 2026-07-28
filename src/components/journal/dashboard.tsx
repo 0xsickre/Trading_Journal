@@ -33,7 +33,11 @@ import {
 import { computeHoldTime } from "@/lib/journal/hold-time";
 import { computeCostStats } from "@/lib/journal/costs";
 import { computeExcursionStats } from "@/lib/journal/excursion";
-import { computeDirectionSplit, countLoggedDays, countTradingDays } from "@/lib/journal/activity";
+import {
+  computeDirectionSplit,
+  countLoggedDays,
+  tradingDayKeysFromRows,
+} from "@/lib/journal/activity";
 import { bucketByPeriod, summarizePeriods } from "@/lib/journal/period-stats";
 import {
   avgWinLossRatio,
@@ -326,25 +330,42 @@ export function Dashboard({
     [realized, breakevenRange, pnlOf],
   );
 
+  // The period rows carry both bases; the summary must be told which one the
+  // dashboard is currently showing, or Week Win % would stay on net while
+  // every other number switched to gross.
+  const periodPnlOf = useCallback(
+    (r: { net: number; gross: number }) => (mode === "net" ? r.net : r.gross),
+    [mode],
+  );
   const weekly = useMemo(
     () =>
       summarizePeriods(
         bucketByPeriod(realized, "week", tzOf, breakevenRange, pnlOf),
+        periodPnlOf,
       ),
-    [realized, tzOf, breakevenRange, pnlOf],
+    [realized, tzOf, breakevenRange, pnlOf, periodPnlOf],
   );
   const monthly = useMemo(
     () =>
       summarizePeriods(
         bucketByPeriod(realized, "month", tzOf, breakevenRange, pnlOf),
+        periodPnlOf,
       ),
-    [realized, tzOf, breakevenRange, pnlOf],
+    [realized, tzOf, breakevenRange, pnlOf, periodPnlOf],
   );
 
-  const tradingDays = useMemo(
-    () => countTradingDays(realized, tzOf),
-    [realized, tzOf],
-  );
+  // Counted from raw rows, not realized trades: a position opened this week and
+  // still running is a day the market was engaged.
+  const tradingDays = useMemo(() => {
+    const scoped =
+      accountFilter === "all"
+        ? trades
+        : trades.filter((t) => t.account_id === accountFilter);
+    return tradingDayKeysFromRows(scoped, (row) => {
+      const a = accounts.find((x) => x.id === row.account_id);
+      return a?.timezone ?? "America/New_York";
+    }).size;
+  }, [trades, accountFilter, accounts]);
   const loggedDays = useMemo(
     () => countLoggedDays(loggedDates),
     [loggedDates],

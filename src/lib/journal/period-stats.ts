@@ -35,6 +35,14 @@ export type PeriodSummary = {
   avgLosingPnl: number | null;
   largest: PeriodRow | null;
   smallest: PeriodRow | null;
+  /**
+   * P&L of the best / worst period ON THE SELECTED BASIS. Carried explicitly so
+   * a caller rendering the summary never has to know whether gross or net was
+   * summarized — reading `largest.net` directly would silently show net figures
+   * while the rest of the dashboard was in gross.
+   */
+  largestPnl: number | null;
+  smallestPnl: number | null;
   maxConsecutiveWinning: number;
   maxConsecutiveLosing: number;
 };
@@ -50,6 +58,8 @@ export const EMPTY_PERIOD_SUMMARY: PeriodSummary = {
   avgLosingPnl: null,
   largest: null,
   smallest: null,
+  largestPnl: null,
+  smallestPnl: null,
   maxConsecutiveWinning: 0,
   maxConsecutiveLosing: 0,
 };
@@ -164,6 +174,8 @@ export function summarizePeriods(
     avgLosingPnl: losing > 0 ? lossSum / losing : null,
     largest,
     smallest,
+    largestPnl: largest ? pnlOf(largest) : null,
+    smallestPnl: smallest ? pnlOf(smallest) : null,
     maxConsecutiveWinning: maxWin,
     maxConsecutiveLosing: maxLoss,
   };

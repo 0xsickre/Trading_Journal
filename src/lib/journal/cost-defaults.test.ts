@@ -6,10 +6,11 @@ import {
   prefillSwap,
 } from "./cost-defaults";
 
+// Positive swap is a cost: net_pl is gross − fees − swap.
 const defaults = {
   default_commission_per_unit: 2.5,
   default_fee_fixed: 1,
-  default_swap_per_day: -0.8,
+  default_swap_per_day: 0.8,
 };
 
 describe("prefillFee", () => {
@@ -29,8 +30,14 @@ describe("prefillFee", () => {
 });
 
 describe("prefillSwap", () => {
-  it("accrues per unit per night and stays negative as a cost", () => {
-    expect(prefillSwap(2, 5, defaults)).toBe(-8); // 2 * 5 * -0.8
+  it("accrues per unit per night as a positive cost", () => {
+    expect(prefillSwap(2, 5, defaults)).toBe(8); // 2 * 5 * 0.8
+  });
+
+  it("keeps a negative rate as a carry credit", () => {
+    expect(
+      prefillSwap(2, 5, { ...defaults, default_swap_per_day: -0.8 }),
+    ).toBe(-8);
   });
 
   it("is zero for a same-day trade", () => {

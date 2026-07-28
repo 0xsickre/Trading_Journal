@@ -5,6 +5,7 @@ import {
   countOpenTrades,
   countTradingDays,
   tradingDayKeys,
+  tradingDayKeysFromRows,
   unloggedTradingDays,
 } from "./activity";
 import type { RealizedTrade } from "./analytics";
@@ -129,5 +130,31 @@ describe("countOpenTrades", () => {
       { status: "missed" },
     ] as unknown as TradeRow[];
     expect(countOpenTrades(rows)).toBe(2);
+  });
+});
+
+describe("tradingDayKeysFromRows", () => {
+  it("counts open positions, not just closed ones", () => {
+    // A position opened this week and still running is a day the market was
+    // engaged; counting only realized trades would omit it.
+    const rows = [
+      { account_id: "a", stats: { opened_at: "2026-01-05T09:00:00Z" } },
+      { account_id: "a", stats: { opened_at: "2026-01-06T09:00:00Z" } },
+    ] as unknown as TradeRow[];
+    expect([...tradingDayKeysFromRows(rows, () => "UTC")]).toEqual([
+      "2026-01-05",
+      "2026-01-06",
+    ]);
+  });
+
+  it("falls back to the close date and skips rows with neither", () => {
+    const rows = [
+      { stats: { opened_at: null, closed_at: "2026-02-02T09:00:00Z" } },
+      { stats: { opened_at: null, closed_at: null } },
+      { stats: null },
+    ] as unknown as TradeRow[];
+    expect([...tradingDayKeysFromRows(rows, () => "UTC")]).toEqual([
+      "2026-02-02",
+    ]);
   });
 });

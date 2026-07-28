@@ -18,6 +18,16 @@ export function recoveryFactor(
   return netProfit / dd;
 }
 
+/**
+ * Scaling applied to the raw ratio before subtracting it from 100.
+ *
+ * The source spec gives the formula but not the unit, and flags in its own
+ * margin that the result "reads like a coefficient of variation × 100". This
+ * constant is the single place to recalibrate once there is enough live data to
+ * judge — the call sites never need to change.
+ */
+export const CONSISTENCY_SCALE = 100;
+
 export type ConsistencyResult = {
   count: number;
   mean: number | null;
@@ -25,7 +35,13 @@ export type ConsistencyResult = {
   total: number;
   /** stdev / total profit, per the spec's wording. */
   raw: number | null;
-  /** 100 − raw × 100, clamped to 0..100. */
+  /**
+   * stdev / mean — the coefficient of variation. Not used by the score, but
+   * carried so the alternative reading of the spec can be compared against the
+   * implemented one without recomputing anything.
+   */
+  cv: number | null;
+  /** 100 − raw × CONSISTENCY_SCALE, clamped to 0..100. */
   score: number;
 };
 
@@ -40,7 +56,15 @@ export type ConsistencyResult = {
 export function consistencyScore(profits: number[]): ConsistencyResult {
   const count = profits.length;
   if (count === 0) {
-    return { count: 0, mean: null, stdev: null, total: 0, raw: null, score: 0 };
+    return {
+      count: 0,
+      mean: null,
+      stdev: null,
+      total: 0,
+      raw: null,
+      cv: null,
+      score: 0,
+    };
   }
 
   const total = profits.reduce((a, b) => a + b, 0);
@@ -51,15 +75,19 @@ export function consistencyScore(profits: number[]): ConsistencyResult {
   const variance =
     profits.reduce((acc, p) => acc + (p - mean) ** 2, 0) / count;
   const stdev = Math.sqrt(variance);
+  const cv = mean !== 0 ? stdev / Math.abs(mean) : null;
 
   // A losing book has no consistency to speak of.
   if (mean < 0 || total <= 0) {
-    return { count, mean, stdev, total, raw: null, score: 0 };
+    return { count, mean, stdev, total, raw: null, cv, score: 0 };
   }
 
   const raw = stdev / total;
-  const score = Math.max(0, Math.min(100, 100 - raw * 100));
-  return { count, mean, stdev, total, raw, score };
+  const score = Math.max(
+    0,
+    Math.min(100, 100 - raw * CONSISTENCY_SCALE),
+  );
+  return { count, mean, stdev, total, raw, cv, score };
 }
 
 export type PlannedRStats = {

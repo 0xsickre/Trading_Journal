@@ -31,20 +31,41 @@ function strField(row: Record<string, unknown>, key: string): string {
 
 const norm = (s: string) => s.trim().toLowerCase();
 
+/** Calendar days from `from` to `to` inclusive, as yyyy-MM-dd keys. */
+export function dayKeysBetween(from: string, to: string): string[] {
+  if (!from || !to || from > to) return from ? [from] : [];
+  const out: string[] = [];
+  const cursor = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${to}T00:00:00Z`);
+  if (Number.isNaN(cursor.getTime()) || Number.isNaN(end.getTime())) return [];
+  // Guard against a pathological range producing an unbounded loop.
+  for (let i = 0; cursor <= end && i < 3_650; i++) {
+    out.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return out;
+}
+
 /** Micromanaging an A-setup, priced in R. */
 export const micromanagedASetup: Rule = {
   id: "micromanaged_a_setup",
   level: "trade",
   minSample: 0,
   description:
-    "Dan sa prekršenim micromanage pravilom, a u igri je bio A-setup.",
+    "A-setup koji je bio otvoren nekog dana kad si upisao da si dirao poziciju.",
   evaluate: (ctx) => {
     const out: Insight[] = [];
     for (const e of ctx.trades) {
       const grade = norm(strField(e.trade.row, "setup_grade"));
       if (!grade.startsWith("a")) continue;
-      const report = ctx.reportByDate.get(e.closeDay);
-      if (report?.micromanage !== "violated") continue;
+
+      // Micromanaging happens while the position is OPEN, so the whole holding
+      // window is checked. Looking only at the close day would miss every swing
+      // trade that was interfered with mid-hold — which is most of them.
+      const violatedOn = dayKeysBetween(e.openDay, e.closeDay).find(
+        (day) => ctx.reportByDate.get(day)?.micromanage === "violated",
+      );
+      if (!violatedOn) continue;
 
       const rPart = e.r != null ? `${e.r.toFixed(2)}R` : fmtMoney(e.pnl, ctx.currency);
       out.push({
@@ -52,7 +73,7 @@ export const micromanagedASetup: Rule = {
         level: "trade",
         severity: "critical",
         title: "Micromanage na A-setup-u",
-        detail: `A-setup zatvoren na dan kad si sam upisao da si dirao otvorenu poziciju. Ishod: ${rPart}.`,
+        detail: `A-setup je bio otvoren ${violatedOn}, na dan kad si sam upisao da si dirao poziciju. Ishod: ${rPart}.`,
         subjectId: e.id,
         subjectLabel: e.label,
       });
@@ -188,7 +209,9 @@ export const swapAteTheTrade: Rule = {
   evaluate: (ctx) =>
     ctx.trades
       .filter((e) => {
-        const swap = Math.abs(e.trade.row.stats?.total_swap ?? 0);
+        // Only a positive swap is a cost — `net_pl` is gross − fees − swap, so a
+        // negative value is carry you EARNED and must never read as damage.
+        const swap = e.trade.row.stats?.total_swap ?? 0;
         const gross = Math.abs(e.trade.gross);
         return swap > 0 && gross > 0 && swap / gross >= P.SWAP_SHARE_OF_GROSS;
       })

@@ -128,16 +128,30 @@ export async function getFillCounts(): Promise<
   Map<string, { entries: number; exits: number }>
 > {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("tj_executions")
-    .select("position_id, side");
-
   const map = new Map<string, { entries: number; exits: number }>();
-  for (const row of data ?? []) {
-    const bucket = map.get(row.position_id) ?? { entries: 0, exits: 0 };
-    if (row.side === "entry") bucket.entries++;
-    else bucket.exits++;
-    map.set(row.position_id, bucket);
+
+  // PostgREST caps an unbounded select at its configured max rows and returns
+  // the truncated set without an error. A silently short page here would
+  // under-count fills and make scale-in / scale-out detection quietly wrong,
+  // so pages are requested explicitly until one comes back short.
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("tj_executions")
+      .select("position_id, side")
+      .order("position_id")
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+
+    for (const row of data ?? []) {
+      const bucket = map.get(row.position_id) ?? { entries: 0, exits: 0 };
+      if (row.side === "entry") bucket.entries++;
+      else bucket.exits++;
+      map.set(row.position_id, bucket);
+    }
+
+    if (!data || data.length < PAGE) break;
   }
+
   return map;
 }

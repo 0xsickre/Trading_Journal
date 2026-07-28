@@ -30,9 +30,12 @@ export function prefillFee(
 }
 
 /**
- * Swap accrues per unit per night held. Charged as a cost, so the result is
- * negative when a rate is configured — matching how brokers report it and how
- * `net_pl` subtracts it.
+ * Swap accrues per unit per night held.
+ *
+ * Sign follows the schema, not the broker statement: `net_pl` is
+ * `gross − fees − swap`, so a POSITIVE value is a cost and a negative one is a
+ * credit you earned on the carry. The configured rate is entered the same way,
+ * and the result is simply rate × units × nights with no sign flip.
  */
 export function prefillSwap(
   qty: number,

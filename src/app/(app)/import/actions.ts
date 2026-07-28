@@ -217,7 +217,29 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
       .eq("id", positionId);
   }
 
+  // Delete children before parents, explicitly, rather than relying on the FK
+  // delete rules being cascades. Audit rows reference the positions and the
+  // positions reference the batch, so removing them in any other order fails
+  // on a restrictive constraint — and the base schema is not versioned in this
+  // repo, so that is not something to assume.
+  const { error: rowsDelErr } = await supabase
+    .from("tj_import_rows")
+    .delete()
+    .eq("batch_id", batchId);
+  if (rowsDelErr) return { ok: false, error: rowsDelErr.message };
+
   if (plan.deleteIds.length > 0) {
+    const { error: execDelErr } = await supabase
+      .from("tj_executions")
+      .delete()
+      .in("position_id", plan.deleteIds);
+    if (execDelErr) return { ok: false, error: execDelErr.message };
+
+    await supabase
+      .from("tj_trade_images")
+      .delete()
+      .in("position_id", plan.deleteIds);
+
     const { error: delErr } = await supabase
       .from("tj_positions")
       .delete()
@@ -225,7 +247,6 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
     if (delErr) return { ok: false, error: delErr.message };
   }
 
-  await supabase.from("tj_import_rows").delete().eq("batch_id", batchId);
   const { error: batchDelErr } = await supabase
     .from("tj_import_batches")
     .delete()

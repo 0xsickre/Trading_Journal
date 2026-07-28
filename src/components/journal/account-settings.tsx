@@ -191,7 +191,8 @@ function AccountCard({ account }: { account: Account }) {
           <div className="text-sm font-medium">Default troškovi</div>
           <p className="text-xs text-muted-foreground">
             Predpopunjavaju se na svaki novi fill u formi. Uvek se mogu
-            pregaziti ručno.
+            pregaziti ručno. <strong>Pozitivan swap je trošak</strong> — unesi
+            negativan broj samo ako na toj poziciji zarađuješ carry.
           </p>
           <div className="grid gap-2 sm:grid-cols-3">
             <div className="space-y-1">
@@ -213,7 +214,7 @@ function AccountCard({ account }: { account: Account }) {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Swap po jedinici / danu</Label>
+              <Label className="text-xs">Swap po jedinici / noći</Label>
               <Input
                 inputMode="decimal"
                 value={swapPerDay}

@@ -211,7 +211,7 @@ export function PeriodPerformanceCard({
           label="Najbolji"
           value={
             summary.largest
-              ? `${summary.largest.key} · ${fmtMoney(summary.largest.net, currency)}`
+              ? `${summary.largest.key} · ${fmtMoney(summary.largestPnl, currency)}`
               : "—"
           }
           cls="text-[var(--profit)]"
@@ -220,7 +220,7 @@ export function PeriodPerformanceCard({
           label="Najgori"
           value={
             summary.smallest
-              ? `${summary.smallest.key} · ${fmtMoney(summary.smallest.net, currency)}`
+              ? `${summary.smallest.key} · ${fmtMoney(summary.smallestPnl, currency)}`
               : "—"
           }
           cls="text-[var(--loss)]"

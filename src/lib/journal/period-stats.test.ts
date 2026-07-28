@@ -126,4 +126,27 @@ describe("summarizePeriods", () => {
   it("returns an empty summary for no periods", () => {
     expect(summarizePeriods([]).periods).toBe(0);
   });
+
+  it("summarizes on whichever basis it is given", () => {
+    // Same rows, different basis: net is negative, gross is positive.
+    const mixed = [
+      { key: "w1", net: -50, gross: 200, trades: 2, wins: 1, losses: 1, breakeven: 0 },
+    ];
+    expect(summarizePeriods(mixed).winPct).toBe(0);
+    expect(summarizePeriods(mixed, (r) => r.gross).winPct).toBe(100);
+  });
+
+  it("reports best and worst P&L on the selected basis", () => {
+    const mixed = [
+      { key: "w1", net: 10, gross: 500, trades: 1, wins: 1, losses: 0, breakeven: 0 },
+      { key: "w2", net: 400, gross: 50, trades: 1, wins: 1, losses: 0, breakeven: 0 },
+    ];
+    const net = summarizePeriods(mixed);
+    expect(net.largest?.key).toBe("w2");
+    expect(net.largestPnl).toBe(400);
+
+    const gross = summarizePeriods(mixed, (r) => r.gross);
+    expect(gross.largest?.key).toBe("w1");
+    expect(gross.largestPnl).toBe(500);
+  });
 });

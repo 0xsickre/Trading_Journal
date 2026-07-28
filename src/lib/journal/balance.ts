@@ -187,14 +187,22 @@ export type DrawdownPoint = {
   at: string;
   /** Distance below the running P&L peak, in money. Zero or negative. */
   ddMoney: number;
-  /** Distance below the running equity peak, as a percentage. Zero or negative. */
+  /**
+   * The same loss as a share of peak equity. Zero or negative (underwater).
+   * Note `DrawdownStats` reports its percentages as positive magnitudes; this
+   * series is signed because it is plotted.
+   */
   ddPct: number;
   equity: number;
 };
 
 /**
- * Underwater curve. Both series are emitted from one pass so the money view and
- * the percentage view can never disagree about where the trough was.
+ * Underwater curve.
+ *
+ * Both series share a numerator — the drop in cumulative P&L — and differ only
+ * in denominator. Measuring the percentage as equity-to-equity instead would
+ * make a withdrawal look like a drawdown on the chart while `computeDrawdown`
+ * correctly reported none, so the chart and the KPI would contradict each other.
  */
 export function drawdownSeries(timeline: BalancePoint[]): DrawdownPoint[] {
   let peakPnl = timeline[0]?.realizedPnl ?? 0;
@@ -207,8 +215,7 @@ export function drawdownSeries(timeline: BalancePoint[]): DrawdownPoint[] {
     return {
       at: p.at,
       ddMoney,
-      ddPct:
-        peakEquity > 0 ? ((p.equity - peakEquity) / peakEquity) * 100 : 0,
+      ddPct: peakEquity > 0 ? (ddMoney / peakEquity) * 100 : 0,
       equity: p.equity,
     };
   });

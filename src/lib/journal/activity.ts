@@ -52,7 +52,8 @@ export function computeDirectionSplit(
       ? shorts
       : longs;
     bucket.count++;
-    bucket.net += t.net;
+    // Follows the selected basis, so a gross/net switch moves this number too.
+    bucket.net += pnlOf(t);
     const outcome = classifyOutcome(pnlOf(t), range);
     if (outcome === "win") bucket.wins++;
     else if (outcome === "loss") bucket.losses++;
@@ -122,6 +123,27 @@ export function unloggedTradingDays(
 ): string[] {
   const logged = new Set(reportDates.map((d) => d.slice(0, 10)));
   return [...tradingDays].filter((d) => !logged.has(d)).sort();
+}
+
+/**
+ * Trading days taken from raw position rows rather than realized trades.
+ *
+ * A position opened this week and still running is a day you engaged the
+ * market; counting only closed trades would omit it and under-report activity
+ * exactly when the book is most active.
+ */
+export function tradingDayKeysFromRows(
+  rows: TradeRow[],
+  tzOf: (row: TradeRow) => string,
+): Set<string> {
+  const days = new Set<string>();
+  for (const row of rows) {
+    const ref = row.stats?.opened_at ?? row.stats?.closed_at ?? null;
+    if (!ref) continue;
+    const key = zonedDateKey(ref, tzOf(row));
+    if (key) days.add(key);
+  }
+  return days;
 }
 
 /** Positions still open — counted from all trades, not just realized ones. */

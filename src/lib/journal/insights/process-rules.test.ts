@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   againstMacroBias,
+  dayKeysBetween,
   cotChase,
   lowMentalTempEntry,
   micromanagedASetup,
@@ -26,6 +27,40 @@ describe("micromanagedASetup", () => {
       { reports: [mkReport("2026-01-05", { micromanage: "violated" })] },
     );
     expect(fired(micromanagedASetup, ctx)).toEqual(["a"]);
+  });
+
+  it("fires when the violation happened mid-hold, not on the close day", () => {
+    // The behaviour being caught happens while the position is open; a swing
+    // trade is almost never interfered with on the exact day it closes.
+    const ctx = ctxOf(
+      [
+        mkTrade({
+          id: "a",
+          setupGrade: "A",
+          net: -100,
+          r: -1,
+          openedAt: "2026-01-05T09:00:00Z",
+          closedAt: "2026-01-12T09:00:00Z",
+        }),
+      ],
+      { reports: [mkReport("2026-01-08", { micromanage: "violated" })] },
+    );
+    expect(fired(micromanagedASetup, ctx)).toEqual(["a"]);
+  });
+
+  it("does not fire when the violation fell outside the holding window", () => {
+    const ctx = ctxOf(
+      [
+        mkTrade({
+          id: "a",
+          setupGrade: "A",
+          openedAt: "2026-01-05T09:00:00Z",
+          closedAt: "2026-01-08T09:00:00Z",
+        }),
+      ],
+      { reports: [mkReport("2026-01-20", { micromanage: "violated" })] },
+    );
+    expect(fired(micromanagedASetup, ctx)).toEqual([]);
   });
 
   it("does not fire when the day was logged as untouched", () => {
@@ -158,6 +193,12 @@ describe("swapAteTheTrade", () => {
     expect(fired(swapAteTheTrade, ctx)).toEqual(["a"]);
   });
 
+  it("does not treat earned carry as damage", () => {
+    // Negative swap is a credit; an absolute value here would read it as a cost.
+    const ctx = ctxOf([mkTrade({ id: "a", gross: 100, net: 120, swap: -20 })]);
+    expect(fired(swapAteTheTrade, ctx)).toEqual([]);
+  });
+
   it("does not fire for a negligible swap", () => {
     const ctx = ctxOf([mkTrade({ id: "a", gross: 1000, net: 995, swap: 5 })]);
     expect(fired(swapAteTheTrade, ctx)).toEqual([]);
@@ -187,5 +228,33 @@ describe("stalePlan", () => {
       { status: "planned", created_at: new Date().toISOString() },
     ] as unknown as TradeRow[];
     expect(stalePlan.evaluate(ctxOf([], { allRows: rows }))).toEqual([]);
+  });
+});
+
+describe("dayKeysBetween", () => {
+  it("is inclusive on both ends", () => {
+    expect(dayKeysBetween("2026-01-05", "2026-01-08")).toEqual([
+      "2026-01-05",
+      "2026-01-06",
+      "2026-01-07",
+      "2026-01-08",
+    ]);
+  });
+
+  it("handles a same-day trade", () => {
+    expect(dayKeysBetween("2026-01-05", "2026-01-05")).toEqual(["2026-01-05"]);
+  });
+
+  it("crosses month and year boundaries", () => {
+    expect(dayKeysBetween("2025-12-31", "2026-01-02")).toEqual([
+      "2025-12-31",
+      "2026-01-01",
+      "2026-01-02",
+    ]);
+  });
+
+  it("degrades safely on reversed or missing input", () => {
+    expect(dayKeysBetween("2026-01-08", "2026-01-05")).toEqual(["2026-01-08"]);
+    expect(dayKeysBetween("", "2026-01-05")).toEqual([]);
   });
 });

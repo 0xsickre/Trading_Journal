@@ -77,8 +77,9 @@ export function computeCostStats(trades: RealizedTrade[]): CostStats {
     count: trades.length,
     withCostData,
     grossProfit,
-    costPctOfGross:
-      grossProfit > 0 ? (Math.abs(totalCosts) / grossProfit) * 100 : null,
+    // Signed on purpose: a net carry CREDIT must read as a negative share, not
+    // get flipped into a cost by an absolute value.
+    costPctOfGross: grossProfit > 0 ? (totalCosts / grossProfit) * 100 : null,
     avgSwapPerHoldingDay: holdingDays > 0 ? totalSwap / holdingDays : null,
     holdingDays,
   };

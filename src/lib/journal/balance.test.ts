@@ -191,6 +191,36 @@ describe("drawdownSeries", () => {
     );
     expect(series.every((p) => p.ddPct <= 0)).toBe(true);
   });
+
+  it("does not report a withdrawal as a drawdown", () => {
+    // Money left the account; nothing was lost. The chart must agree with the
+    // KPI, which measures the drop in cumulative P&L, not in equity.
+    const tl = buildBalanceTimeline(
+      10_000,
+      [trade("2026-01-01T00:00:00Z", 500)],
+      [cash("2026-01-05T00:00:00Z", -5_000, "withdrawal")],
+    );
+    const series = drawdownSeries(tl);
+    expect(series.every((p) => p.ddMoney === 0)).toBe(true);
+    expect(series.every((p) => p.ddPct === 0)).toBe(true);
+    expect(computeDrawdown(tl).maxPctOfEquity).toBe(0);
+  });
+
+  it("uses the same numerator and denominator as computeDrawdown", () => {
+    const tl = buildBalanceTimeline(
+      10_000,
+      [
+        trade("2026-01-01T00:00:00Z", 1_000),
+        trade("2026-01-03T00:00:00Z", -700),
+      ],
+      [cash("2026-01-02T00:00:00Z", 5_000)],
+    );
+    const stats = computeDrawdown(tl);
+    const worst = drawdownSeries(tl).reduce((a, b) =>
+      b.ddMoney < a.ddMoney ? b : a,
+    );
+    expect(Math.abs(worst.ddPct)).toBeCloseTo(stats.maxPctOfEquity, 10);
+  });
 });
 
 describe("netCashFlow", () => {

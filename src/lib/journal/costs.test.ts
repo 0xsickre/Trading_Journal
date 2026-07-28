@@ -48,6 +48,14 @@ describe("computeCostStats", () => {
     expect(c.costPctOfGross).toBe(10);
   });
 
+  it("reports a net carry credit as a negative share, not a cost", () => {
+    // Negative swap is money earned on the carry; an absolute value here would
+    // flip it into an apparent expense.
+    const c = computeCostStats([trade("win", 1_000, 0, -50)]);
+    expect(c.totalCosts).toBe(-50);
+    expect(c.costPctOfGross).toBe(-5);
+  });
+
   it("reports no cost ratio when there was no gross profit", () => {
     const c = computeCostStats([trade("lose", -400, 10, 5)]);
     expect(c.grossProfit).toBe(0);

@@ -49,7 +49,9 @@ export const noDrawdown: Rule = {
   id: "no_drawdown",
   level: "trade",
   minSample: 0,
-  description: "Trejd nikad nije bio u minusu.",
+  // Restricted to winners on purpose: a trade that never moved against you yet
+  // still closed red is a fee-only loss, and calling that "good" would be wrong.
+  description: "Dobitnik koji nijednom nije bio u minusu.",
   evaluate: (ctx) =>
     ctx.trades
       .filter((e) => e.excursion.maeR === 0 && e.outcome === "win")
@@ -341,17 +343,19 @@ export const revengeTrade: Rule = {
   description:
     "Ulaz istog ili sledećeg dana posle gubitka, koji je i sam završio gubitkom.",
   evaluate: (ctx) => {
-    // Swing translation of TradeZella's 30-second window.
-    const byClose = [...ctx.trades]
-      .filter((e) => e.closedAt)
-      .sort((a, b) => (a.closedAt ?? "").localeCompare(b.closedAt ?? ""));
+    // Swing translation of TradeZella's 30-second window. Sorted newest-first
+    // so the loss reported is the one actually being reacted to, rather than
+    // whichever qualifying loss happens to be oldest.
+    const lossesNewestFirst = [...ctx.trades]
+      .filter((e) => e.outcome === "loss" && e.closedAt)
+      .sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? ""));
 
     const out: Insight[] = [];
     for (const e of ctx.trades) {
       if (e.outcome !== "loss" || !e.openedAt) continue;
       const opened = new Date(e.openedAt).getTime();
-      const priorLoss = byClose.find((p) => {
-        if (p.id === e.id || p.outcome !== "loss" || !p.closedAt) return false;
+      const priorLoss = lossesNewestFirst.find((p) => {
+        if (p.id === e.id || !p.closedAt) return false;
         const closed = new Date(p.closedAt).getTime();
         const gapDays = (opened - closed) / 86_400_000;
         return gapDays >= 0 && gapDays <= T.REVENGE_WINDOW_DAYS;
