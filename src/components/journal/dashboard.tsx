@@ -42,6 +42,9 @@ import {
   recoveryFactor,
 } from "@/lib/journal/risk-metrics";
 import { computeSickreScore } from "@/lib/journal/sickre-score";
+import { buildInsightContext, type DailyReportLite } from "@/lib/journal/insights/context";
+import { runInsights } from "@/lib/journal/insights/registry";
+import { InsightsPanel } from "@/components/journal/insights-panel";
 import { DrawdownChart } from "@/components/journal/drawdown-chart";
 import { SickreScoreCard } from "@/components/journal/sickre-score-card";
 import {
@@ -143,11 +146,15 @@ export function Dashboard({
   accounts,
   cashEvents = [],
   loggedDates = [],
+  dailyReports = [],
+  fillCounts,
 }: {
   trades: TradeRow[];
   accounts: Account[];
   cashEvents?: CashEvent[];
   loggedDates?: string[];
+  dailyReports?: DailyReportLite[];
+  fillCounts?: Map<string, { entries: number; exits: number }>;
 }) {
   const [accountFilter, setAccountFilter] = useState("all");
   const [period, setPeriod] = useState("90");
@@ -356,6 +363,35 @@ export function Dashboard({
     [realized, pnlOf],
   );
 
+  const insightResult = useMemo(
+    () =>
+      runInsights(
+        buildInsightContext({
+          trades: realized,
+          allRows: accountFilter === "all"
+            ? trades
+            : trades.filter((t) => t.account_id === accountFilter),
+          reports: dailyReports,
+          tzOf,
+          range: breakevenRange,
+          pnlOf,
+          currency,
+          fillCounts,
+        }),
+      ),
+    [
+      realized,
+      trades,
+      accountFilter,
+      dailyReports,
+      tzOf,
+      breakevenRange,
+      pnlOf,
+      currency,
+      fillCounts,
+    ],
+  );
+
   const sickreScore = useMemo(
     () =>
       computeSickreScore({
@@ -427,7 +463,23 @@ export function Dashboard({
       return true;
     });
 
+    // The pack must describe the scope being exported, not whatever the
+    // dashboard filter happens to show, so insights are re-evaluated for it.
+    const scopedInsights = runInsights(
+      buildInsightContext({
+        trades: toRealized(scoped),
+        allRows: scoped,
+        reports: dailyReports,
+        tzOf,
+        range: breakevenRange,
+        pnlOf,
+        currency,
+        fillCounts,
+      }),
+    );
+
     const md = buildMentorPack(scoped, {
+      insights: scopedInsights,
       currency,
       scopeLabel,
       periodLabel: label,
@@ -844,6 +896,8 @@ export function Dashboard({
           </ResponsiveContainer>
         </CardContent>
       </Card>
+
+      <InsightsPanel result={insightResult} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <DrawdownChart

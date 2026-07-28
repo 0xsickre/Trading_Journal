@@ -387,6 +387,27 @@ povoljne ekskurzije, i prikazuje se u trade formi.
   setup grade, technical tags, entry model, direction, instrument, psychology tags ili mistake.
 - Filteri po nalogu i vremenskom rasponu kroz ceo dashboard.
 
+### Automatska zapažanja
+
+Deterministička pravila nad postojećim podacima — nema modela, nema API poziva, nema nagađanja.
+`src/lib/journal/insights/` drži 24 pravila: 17 prevedenih iz TradeZella kataloga i 7 koje TZ
+strukturno ne može da ima, jer spajaju ishod trejda sa procesnim dnevnikom (micromanage na A-setup-u,
+ulaz na mentalnu temperaturu ispod 5, chase uprkos COT filteru, swap koji je pojeo R…).
+
+**Tri pravila koja drže ceo modul poštenim:**
+
+- **Insights se ne persistiraju.** Računaju se pri čitanju. Pragovi se menjaju, a sačuvan insight bi
+  zaostajao za promenjenim pragom dok izgleda merodavno.
+- **Svako pravilo ima `minSample`.** Pravilo koje poredi trejd sa tvojom istorijom ne pokreće se dok
+  te istorije nema dovoljno. Preskočena pravila se prikazuju — da panel ne izgleda čist kad je samo
+  neinformisan.
+- **Četiri TZ obrasca su svesno neimplementirana**, ne aproksimirana. Traže running P&L krivu po
+  trejdu, dakle intraday cenovni feed. Popisani su u `OMITTED_RULES` sa razlogom i vidljivi u UI-ju.
+  Izmišljen procenat bio bi gori od nedostajućeg.
+
+Swing prevod pragova je bitan: TZ traži revenge ulaz u roku od 30 sekundi, ovde je to isti ili
+sledeći dan; „overtrading dan" postaje **overtrading nedelja**; „tilt sesija" postaje **tilt nedelja**.
+
 ### Mentor pack
 
 - Dugme **„Export for Claude"** na dashboard-u preuzima samostalan Markdown fajl za izabrani period

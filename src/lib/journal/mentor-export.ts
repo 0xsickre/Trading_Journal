@@ -15,6 +15,8 @@ import {
   fmtExitEfficiencyPct,
 } from "./exit-efficiency";
 import type { TradeRow } from "./types";
+import { groupInsights } from "./insights/types";
+import { OMITTED_RULES, type RunResult } from "./insights/registry";
 
 const BREAKDOWNS: { field: string; label: string }[] = [
   { field: "macro_align", label: "Macro Align" },
@@ -256,6 +258,8 @@ export type MentorPackOpts = {
   rangeText?: string;
   /** Account starting balance, shown as risk context (single-account scope only). */
   startingBalance?: number | null;
+  /** Insights already evaluated for this scope — see lib/journal/insights. */
+  insights?: RunResult | null;
   /** Free-form risk note, e.g. "Rizik po trejdu: 1%". */
   riskNote?: string;
 };
@@ -352,6 +356,43 @@ export function buildMentorPack(
   out.push(`## Ukupna statistika`);
   out.push(statsTable(trades, ccy));
   out.push("");
+
+  // --- Insights -----------------------------------------------------------
+  // Named patterns beat raw numbers for an LLM reader: "green to red, 4 times"
+  // is a hypothesis it can work with, where a table of R-multiples is not.
+  if (opts.insights) {
+    out.push(`## Automatska zapažanja`);
+    const groups = groupInsights(opts.insights.insights);
+    if (groups.length === 0) {
+      out.push("_Nijedan obrazac nije okinuo u ovom periodu._");
+    } else {
+      out.push(`| Obrazac | Ozbiljnost | Puta | Primer |`);
+      out.push(`| --- | --- | --- | --- |`);
+      for (const g of groups) {
+        const sample = g.insights[0];
+        out.push(
+          `| ${g.title} | ${g.severity} | ${g.count} | ${sample.detail.replace(/\|/g, "\\|")} |`,
+        );
+      }
+    }
+    if (opts.insights.skipped.length > 0) {
+      out.push("");
+      out.push(
+        `_Nije procenjeno zbog malog uzorka: ${opts.insights.skipped
+          .map((s) => `${s.id} (traži ${s.minSample}, ima ${s.sample})`)
+          .join(", ")}._`,
+      );
+    }
+    if (OMITTED_RULES.length > 0) {
+      out.push("");
+      out.push(
+        `_Svesno neimplementirano (traži intraday cenovni feed): ${OMITTED_RULES.map(
+          (o) => o.id,
+        ).join(", ")}._`,
+      );
+    }
+    out.push("");
+  }
 
   // --- Breakdowns ---------------------------------------------------------
   out.push(`## Performanse po kategorijama`);

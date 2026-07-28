@@ -260,7 +260,18 @@ magičan broj u formuli. Max DD komponenta koristi `maxDrawdownPctOfPeakPnl` (§
 
 ---
 
-### Faza 2 — Insight engine ⭐
+### Faza 2 — Insight engine ⭐ ✅ ZAVRŠENO
+
+> Isporučeno: **24 pravila** — 17 iz TradeZella kataloga i 7 vlastitih.
+>
+> **Korekcija moje ranije procene.** Rekao sam „30 od 31 izvodljivo, jedan otpada". Kad sam prošao
+> kroz svaki obrazac pri implementaciji, ispalo je **četiri** koja otpadaju, ne jedan — tri od njih
+> traže running P&L krivu ili intraday tajming koje nemamo, a četvrti je duplikat trade-level
+> pravila. Popisani su u `OMITTED_RULES` sa razlogom, vide se u UI-ju i idu u mentor pack.
+>
+> Ostatak razlike do 31: nekoliko TZ obrazaca se prirodno spojilo u jedno pravilo
+> (`flip_flop_day` pokriva i pozitivnu i negativnu varijantu, `overtrading` i
+> `unusual_number_of_trades` mere istu stvar), pa je 17 pravila pokrilo ~20 njihovih stavki.
 
 Nula migracija. Deterministička pravila nad onim što F1 već računa.
 
@@ -495,7 +506,7 @@ ovaj model ima strukturno.
 |:--:|---|:--:|:--:|
 | 0 | Cash events, breakeven range, default komisije, undo import, reviewed/rating | Da | ✅ |
 | 1 | Sloj jedinica → metrike (vreme, trošak, rizik, nedeljni sloj) → Sickre Score | Ne | ✅ |
-| 2 | Insight engine: 30 TZ obrazaca + 7 vlastitih + mentor pack | Ne | 4–5 |
+| 2 | Insight engine: 17 TZ pravila + 7 vlastitih + mentor pack | Ne | ✅ |
 | 3 | Report engine, pivot sa `n`, dimension registry, negacija filtera | Ne | 5–6 |
 | 4a | Custom fields + backfill metodoloških kolona | Da | 3 |
 | 4b | Playbook, pravila, per-rule stats, forma iz playbook-a, 7. komponenta skora | Da | 5 |

@@ -116,3 +116,28 @@ export async function getTradeForEdit(
     })),
   };
 }
+
+/**
+ * Number of entry and exit fills per position.
+ *
+ * `entry_qty` in the stats view is a quantity, not a count — a single 3-lot
+ * fill and three 1-lot fills look identical there. Scale-in / scale-out
+ * detection needs the row count, so it is fetched separately.
+ */
+export async function getFillCounts(): Promise<
+  Map<string, { entries: number; exits: number }>
+> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("tj_executions")
+    .select("position_id, side");
+
+  const map = new Map<string, { entries: number; exits: number }>();
+  for (const row of data ?? []) {
+    const bucket = map.get(row.position_id) ?? { entries: 0, exits: 0 };
+    if (row.side === "entry") bucket.entries++;
+    else bucket.exits++;
+    map.set(row.position_id, bucket);
+  }
+  return map;
+}
