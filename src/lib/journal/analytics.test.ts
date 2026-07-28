@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeStats, toRealized } from "./analytics";
+import { breakdownByField, computeStats, toRealized } from "./analytics";
 import type { TradeRow } from "./types";
 
 function trade(
@@ -131,5 +131,89 @@ describe("profit factor and the money/R split", () => {
     expect(s.avgWinMoney / Math.abs(s.avgLossMoney)).toBe(2);
     expect(s.avgWinR / Math.abs(s.avgLossR)).toBe(2);
     expect(s.expectancySample).toBe(2);
+  });
+});
+
+describe("breakdownByField", () => {
+  // Pins the behaviour that existed before this function became a wrapper over
+  // the report engine. Nothing on screen may move as a result of that swap.
+  const book = () =>
+    toRealized([
+      trade({
+        id: "a",
+        status: "closed",
+        net_pl: 200,
+        realized_r: 2,
+        setup_grade: "A",
+        technical_tags: ["Sweep", "FVG"],
+      } as never),
+      trade({
+        id: "b",
+        status: "closed",
+        net_pl: -100,
+        realized_r: -1,
+        setup_grade: "B",
+        technical_tags: ["FVG"],
+      } as never),
+      trade({
+        id: "c",
+        status: "closed",
+        net_pl: 50,
+        realized_r: 0.5,
+        setup_grade: "A",
+        technical_tags: [],
+      } as never),
+    ]);
+
+  it("groups a scalar column and sorts by net, descending", () => {
+    const rows = breakdownByField(book(), "setup_grade");
+    expect(rows.map((r) => [r.key, r.count, r.netSum])).toEqual([
+      ["A", 2, 250],
+      ["B", 1, -100],
+    ]);
+  });
+
+  it("computes win rate, total R and average R per group", () => {
+    const rows = breakdownByField(book(), "setup_grade");
+    const a = rows.find((r) => r.key === "A")!;
+    expect(a.winRate).toBe(100);
+    expect(a.totalR).toBe(2.5);
+    expect(a.avgR).toBe(1.25);
+  });
+
+  it("puts a tagged trade in every tag it carries", () => {
+    const rows = breakdownByField(book(), "technical_tags");
+    const byKey = Object.fromEntries(rows.map((r) => [r.key, r.count]));
+    expect(byKey).toEqual({ Sweep: 1, FVG: 2, "—": 1 });
+  });
+
+  it("buckets a missing value under the em dash", () => {
+    const rows = breakdownByField(
+      toRealized([
+        trade({ id: "x", status: "closed", net_pl: 10, realized_r: 0.1 } as never),
+      ]),
+      "setup_grade",
+    );
+    expect(rows.map((r) => r.key)).toEqual(["—"]);
+  });
+
+  it("does NOT normalize direction — that is the registry's behaviour, opted into", () => {
+    const rows = breakdownByField(
+      toRealized([
+        trade({
+          id: "x",
+          status: "closed",
+          net_pl: 10,
+          realized_r: 0.1,
+          direction: "Short (sell)",
+        } as never),
+      ]),
+      "direction",
+    );
+    expect(rows.map((r) => r.key)).toEqual(["Short (sell)"]);
+  });
+
+  it("returns nothing for an empty book", () => {
+    expect(breakdownByField([], "setup_grade")).toEqual([]);
   });
 });

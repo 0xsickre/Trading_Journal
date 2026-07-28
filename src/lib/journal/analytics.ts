@@ -4,6 +4,9 @@ import { slippageFromTrade } from "./entry-slippage";
 import { exitEfficiencyFromTrade } from "./exit-efficiency";
 import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
 import { buildBalanceTimeline, computeDrawdown } from "./balance";
+import { enrichTrades } from "./enriched-trade";
+import { runReport } from "./reports/engine";
+import { rawFieldDimension } from "./reports/dimensions";
 
 export type PnlMode = "net" | "gross";
 
@@ -312,44 +315,41 @@ export type BreakdownRow = {
   netSum: number;
 };
 
-const ARRAY_BREAKDOWN_FIELDS = new Set([
-  "technical_tags",
-  "psychology_tags",
-]);
-
-/** Group realized trades by a position field (tag) -> performance. */
+/**
+ * Group realized trades by a position field -> performance.
+ *
+ * Now a thin wrapper over the report engine, so there is exactly one grouping
+ * and aggregation implementation in the codebase. Behaviour is unchanged: it
+ * still reads the raw column rather than a registered dimension, so callers
+ * that adopt the registry's normalization do so deliberately.
+ */
 export function breakdownByField(
   trades: RealizedTrade[],
   field: string,
   range: BreakevenRange = EXACT_ZERO_RANGE,
 ): BreakdownRow[] {
-  const groups = new Map<string, RealizedTrade[]>();
-  for (const t of trades) {
-    const raw = t.row[field];
-    const keys: string[] =
-      ARRAY_BREAKDOWN_FIELDS.has(field) && Array.isArray(raw)
-        ? raw.filter((x): x is string => typeof x === "string" && !!x)
-        : [typeof raw === "string" && raw ? raw : "—"];
-    if (keys.length === 0) keys.push("—");
-    for (const key of keys) {
-      const arr = groups.get(key) ?? [];
-      arr.push(t);
-      groups.set(key, arr);
-    }
-  }
-  const rows: BreakdownRow[] = [];
-  for (const [key, arr] of groups) {
-    const s = computeStats(arr, "net", range);
-    rows.push({
-      key,
-      count: arr.length,
-      winRate: s.winRate,
-      totalR: s.totalR,
-      avgR: s.avgR,
-      netSum: s.netSum,
-    });
-  }
-  return rows.sort((a, b) => b.netSum - a.netSum);
+  // Timezone is irrelevant here: this function only ever groups by trade
+  // columns, never by a day- or process-based dimension.
+  const enriched = enrichTrades(trades, { tzOf: () => "UTC", range });
+
+  const result = runReport({
+    trades: enriched,
+    dimension: rawFieldDimension(field),
+    metricKeys: ["net_pnl", "win_rate", "total_r", "avg_r"],
+    dimensionContext: { reportByDate: new Map() },
+    metricContext: { pnlBasis: "net", range, currency: "USD" },
+    sortBy: "net_pnl",
+  });
+  if (!result) return [];
+
+  return result.rows.map((r) => ({
+    key: r.bucket,
+    count: r.n,
+    winRate: r.values.win_rate ?? 0,
+    totalR: r.values.total_r ?? 0,
+    avgR: r.values.avg_r ?? 0,
+    netSum: r.values.net_pnl ?? 0,
+  }));
 }
 
 export type SlippageStats = {

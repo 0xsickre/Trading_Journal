@@ -8,44 +8,22 @@
  */
 
 import type { RealizedTrade } from "../analytics";
-import { classifyOutcome, type BreakevenRange, EXACT_ZERO_RANGE } from "../breakeven";
-import { excursionFromTrade, type Excursion } from "../excursion";
-import { zonedDateKey, zonedWeekStartKey } from "../time";
+import { type BreakevenRange, EXACT_ZERO_RANGE } from "../breakeven";
+import {
+  enrichTrades,
+  mean,
+  median,
+  percentile,
+  type DailyReportLite,
+  type EnrichedTrade,
+  type FillCounts,
+} from "../enriched-trade";
 import type { TradeRow } from "../types";
-import type { Micromanage } from "../daily-report";
 
-export type DailyReportLite = {
-  report_date: string;
-  micromanage: Micromanage | null;
-  mental_temp: number | null;
-  day_grade: string | null;
-  rule_broken: boolean | null;
-  no_trade_day: boolean;
-};
-
-/** A realized trade with the derived values rules keep asking for. */
-export type EnrichedTrade = {
-  trade: RealizedTrade;
-  id: string;
-  label: string;
-  pnl: number;
-  r: number | null;
-  outcome: "win" | "loss" | "breakeven";
-  excursion: Excursion;
-  durationSeconds: number | null;
-  durationDays: number | null;
-  openedAt: string | null;
-  closedAt: string | null;
-  /** Day key of the OPEN, in account tz — the trading day. */
-  openDay: string;
-  /** Day key of the CLOSE — where the money lands. */
-  closeDay: string;
-  closeWeek: string;
-  entryFills: number;
-  exitFills: number;
-  size: number | null;
-  instrument: string | null;
-};
+// Re-exported so existing importers keep working; the definitions now live in
+// `enriched-trade.ts` because the report engine needs them too.
+export type { DailyReportLite, EnrichedTrade };
+export { percentile, median };
 
 export type DayBucket = {
   key: string;
@@ -96,29 +74,6 @@ export type InsightContext = {
   currency: string;
 };
 
-export function percentile(values: number[], p: number): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  if (sorted.length === 1) return sorted[0];
-  const idx = (sorted.length - 1) * p;
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo];
-  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
-}
-
-export function median(values: number[]): number | null {
-  return percentile(values, 0.5);
-}
-
-const mean = (xs: number[]): number | null =>
-  xs.length > 0 ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
-
-function numField(row: TradeRow, key: string): number | null {
-  const v = row[key];
-  return typeof v === "number" && !Number.isNaN(v) ? v : null;
-}
-
 export type BuildContextInput = {
   trades: RealizedTrade[];
   allRows?: TradeRow[];
@@ -128,7 +83,7 @@ export type BuildContextInput = {
   pnlOf?: (t: RealizedTrade) => number;
   currency?: string;
   /** Fill counts per position id, when execution detail is available. */
-  fillCounts?: Map<string, { entries: number; exits: number }>;
+  fillCounts?: FillCounts;
 };
 
 export function buildInsightContext(input: BuildContextInput): InsightContext {
@@ -143,37 +98,7 @@ export function buildInsightContext(input: BuildContextInput): InsightContext {
     fillCounts,
   } = input;
 
-  const enriched: EnrichedTrade[] = trades.map((t) => {
-    const tz = tzOf(t);
-    const pnl = pnlOf(t);
-    const secs = t.row.stats?.duration_seconds ?? null;
-    const fills = fillCounts?.get(t.id);
-    const tradeNo = t.row.trade_no;
-    const instrument = (t.row.instrument as string) ?? null;
-
-    return {
-      trade: t,
-      id: t.id,
-      label: `${tradeNo != null ? `#${tradeNo}` : t.id.slice(0, 8)}${
-        instrument ? ` ${instrument}` : ""
-      }`,
-      pnl,
-      r: t.r,
-      outcome: classifyOutcome(pnl, range),
-      excursion: excursionFromTrade(t.row),
-      durationSeconds: secs,
-      durationDays: secs != null ? secs / 86_400 : null,
-      openedAt: t.row.stats?.opened_at ?? null,
-      closedAt: t.closedAt,
-      openDay: zonedDateKey(t.row.stats?.opened_at ?? t.closedAt, tz),
-      closeDay: zonedDateKey(t.closedAt, tz),
-      closeWeek: zonedWeekStartKey(t.closedAt, tz),
-      entryFills: fills?.entries ?? 0,
-      exitFills: fills?.exits ?? 0,
-      size: numField(t.row, "position_size"),
-      instrument,
-    };
-  });
+  const enriched = enrichTrades(trades, { tzOf, range, pnlOf, fillCounts });
 
   const reportByDate = new Map(reports.map((r) => [r.report_date, r]));
 
