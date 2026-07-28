@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { dimensionsByGroup } from "@/lib/journal/reports/dimensions";
 import { Badge } from "@/components/ui/badge";
 import type { Account, TradeRow } from "@/lib/journal/types";
 import { fmtInTz } from "@/lib/journal/time";
@@ -79,14 +80,23 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-const FILTERS: { key: string; label: string }[] = [
-  { key: "instrument", label: "Instrument" },
-  { key: "direction", label: "Direction" },
-  { key: "setup_grade", label: "Grade" },
-  { key: "ict_entry_model", label: "Model" },
-  { key: "result", label: "Result" },
-  { key: "status", label: "Status" },
-];
+/**
+ * Grid filters come from the dimension registry. The grid filters on the RAW
+ * column value (see `fieldMatchesFilter` below), so only trade-column
+ * dimensions are eligible — a derived bucket like "1–3d" is not a value any
+ * row actually stores.
+ */
+const FILTER_KEYS = new Set([
+  "instrument",
+  "direction",
+  "setup_grade",
+  "ict_entry_model",
+  "result",
+  "status",
+]);
+const FILTERS: { key: string; label: string }[] = dimensionsByGroup("trade")
+  .filter((d) => FILTER_KEYS.has(d.key))
+  .map((d) => ({ key: d.key, label: d.label }));
 
 function distinct(rows: TradeRow[], key: string): string[] {
   const set = new Set<string>();

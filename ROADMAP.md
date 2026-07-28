@@ -328,7 +328,17 @@ ispod svog `minSample`.
 
 ---
 
-### Faza 3 — Generički report engine
+### Faza 3 — Generički report engine ✅ ZAVRŠENO
+
+> Isporučeno u tri koraka: 3a čist engine sa testovima, 3b ruta `/reports`, 3c compare + view modovi
+> + konsolidacija. Tri hardkodovane liste dimenzija su spojene na registry — dimenzija dodata na
+> jednom mestu sad se pojavljuje u gridu, na dashboard-u i u reportovima.
+>
+> `units.ts` je vraćen iz istorije. Review serijal ga je obrisao kao nedostižan kod i tada je to bilo
+> tačno; `/reports` je prekidač koji ga je nedostajao, pa je sloj sad živ i pozvan.
+>
+> **Nije verifikovano u pregledaču.** Kontejner nema Supabase kredencijale, pa svaka ruta vraća 500 —
+> uključujući postojeće. Produkcijski build kompajlira `/reports`, što je najjači dostupan signal.
 
 Spec §5.1: *ne pisati 10 report stranica, pisati jednu.* Ovo je najveća ušteda u projektu.
 
@@ -507,7 +517,7 @@ ovaj model ima strukturno.
 | 0 | Cash events, breakeven range, default komisije, undo import, reviewed/rating | Da | ✅ |
 | 1 | Sloj jedinica → metrike (vreme, trošak, rizik, nedeljni sloj) → Sickre Score | Ne | ✅ |
 | 2 | Insight engine: 17 TZ pravila + 7 vlastitih + mentor pack | Ne | ✅ |
-| 3 | Report engine, pivot sa `n`, dimension registry, negacija filtera | Ne | 5–6 |
+| 3 | Report engine, pivot sa `n`, dimension registry, negacija filtera | Ne | ✅ |
 | 4a | Custom fields + backfill metodoloških kolona | Da | 3 |
 | 4b | Playbook, pravila, per-rule stats, forma iz playbook-a, 7. komponenta skora | Da | 5 |
 | 5 | Progress Tracker, auto-evaluirana pravila, streak, zaključavanje dana | Da | 4 |

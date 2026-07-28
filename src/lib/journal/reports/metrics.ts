@@ -25,23 +25,7 @@ import {
 } from "../risk-metrics";
 import type { BreakevenRange } from "../breakeven";
 import type { EnrichedTrade } from "../enriched-trade";
-
-/**
- * Unit vocabulary for a metric.
- *
- * Declared here rather than imported from `units.ts`: that module's seven-mode
- * conversion layer was removed as unreachable, and step 3a renders nothing, so
- * resurrecting it now would only re-add dead code. The layer comes back in 3b
- * with the view-mode switcher that actually calls it — this type is the seam it
- * will plug into.
- */
-export type MetricUnit =
-  | "money"
-  | "r"
-  | "pct"
-  | "count"
-  | "seconds"
-  | "ratio";
+import type { MetricUnit } from "../units";
 
 export type MetricContext = {
   pnlBasis: PnlMode;

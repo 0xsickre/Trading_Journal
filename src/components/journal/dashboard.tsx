@@ -63,6 +63,7 @@ import {
   hasBreakevenBand,
   resolveBreakevenRange,
 } from "@/lib/journal/breakeven";
+import { dimensionsByGroup } from "@/lib/journal/reports/dimensions";
 import type { Account, TradeRow } from "@/lib/journal/types";
 import {
   toRealized,
@@ -135,17 +136,15 @@ function weekInputToAnchor(value: string): string {
   return format(monday, "yyyy-MM-dd");
 }
 
-const BREAKDOWN_FIELDS = [
-  { value: "macro_align", label: "Macro Align" },
-  { value: "cot_filter", label: "COT Filter" },
-  { value: "setup_grade", label: "Setup Grade" },
-  { value: "technical_tags", label: "Technical Tags" },
-  { value: "ict_entry_model", label: "Entry Model" },
-  { value: "direction", label: "Direction" },
-  { value: "instrument", label: "Instrument" },
-  { value: "psychology_tags", label: "Psychology Tags" },
-  { value: "mistake", label: "Mistake" },
-];
+/**
+ * Breakdown options come from the dimension registry now, so a dimension added
+ * there appears here without a second edit. Narrowed to trade columns: the
+ * derived and process dimensions belong on /reports, where the sample size sits
+ * next to every number.
+ */
+const BREAKDOWN_FIELDS = dimensionsByGroup("trade")
+  .filter((d) => d.key !== "account")
+  .map((d) => ({ value: d.key, label: d.label }));
 
 export function Dashboard({
   trades,

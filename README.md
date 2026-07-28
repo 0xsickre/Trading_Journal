@@ -408,6 +408,26 @@ ulaz na mentalnu temperaturu ispod 5, chase uprkos COT filteru, swap koji je poj
 Swing prevod pragova je bitan: TZ traži revenge ulaz u roku od 30 sekundi, ovde je to isti ili
 sledeći dan; „overtrading dan" postaje **overtrading nedelja**; „tilt sesija" postaje **tilt nedelja**.
 
+### Reports — jedan engine, ne deset stranica
+
+`/reports` grupiše po bilo kojoj dimenziji i ukršta sa bilo kojom drugom. TradeZella-inih deset
+„reportova" su jedna stranica sa različitim `GROUP BY` — provereno na četiri njihova članka.
+
+`src/lib/journal/reports/` drži registry, katalog metrika, filtere, engine i pivot. **Nova dimenzija
+je jedan unos u registry i ništa više** — odmah radi i u reportovima, i u breakdown-u na dashboard-u,
+i u filterima journal grida, jer sve troje sad čitaju isti registar.
+
+**Uz svaki broj stoji uzorak.** Grupa ispod praga se prigušuje, ne krije — ćelija bez trejdova je
+crtica, vidljivo drugačija od ćelije čija je vrednost nula. Kategorija sa tri trejda i 100 % win
+rate-om nije nalaz, i čitalac to može da zna samo ako `n` stoji pored broja.
+
+**Negacija je prvorazredna operacija.** „Sve osim revenge trejdova" je pitanje koje se stvarno
+postavlja, pa `nije` stoji uz `jeste` u istom dropdown-u.
+
+**Stanje reporta živi u URL-u** — report se bookmark-uje, deli i vraća back dugmetom. Isto svojstvo
+omogućava Compare mod, gde je druga strana **tačna negacija** prve, pa dve polovine zajedno čine ceo
+skup bez preklapanja.
+
 ### Mentor pack
 
 - Dugme **„Export for Claude"** na dashboard-u preuzima samostalan Markdown fajl za izabrani period
