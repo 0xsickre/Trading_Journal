@@ -26,7 +26,7 @@ The defects cluster at the **boundaries**:
 | --- | --- | --- |
 | Critical | 4 | Historical P&L is mutable; silent data truncation; non-transactional writes; a lifecycle the database rejects |
 | High | 6 | Wrong denominators, overwritten records, mixed populations |
-| Medium | 10 | Cross-surface inconsistency, duplicated work, swallowed errors |
+| Medium | 10 | Cross-surface inconsistency, duplicated work, swallowed errors (one later withdrawn — see M4) |
 | Low | 12 | Dead code, boundary conventions, formatting |
 
 Two of these were found only by exercising the live database rather than reading the code — **C4**,
@@ -470,10 +470,10 @@ also leaves an orphan position behind — unlike `createTrade` (`trades/actions.
 
 ## What was fixed in this pass
 
-**Implemented on this branch, with tests: all Critical (C1–C4) and all High (H1–H6)**, plus the
-`getInstruments` bug found under C1 and the `toEpoch` / `compareInstants` helpers that M1 needs.
+**Implemented on this branch, with tests: all Critical (C1–C4), all High (H1–H6) and all Medium
+(M1–M10)**, plus the `getInstruments` bug found under C1.
 
-Two migrations were applied to the live project (`hjwvhzcszhjhpocfjatm`) and committed to
+Four migrations were applied to the live project (`hjwvhzcszhjhpocfjatm`) and committed to
 `supabase/migrations/`:
 
 | Migration | What it does |
@@ -481,6 +481,7 @@ Two migrations were applied to the live project (`hjwvhzcszhjhpocfjatm`) and com
 | `20260728120000_snapshot_instrument_spec.sql` | Snapshot columns, backfill, rebuilt `tj_position_stats` |
 | `20260728121000_tj_replace_executions.sql` | Atomic fill-replacement RPC |
 | `20260728122000_fix_position_status_check.sql` | Widened status constraint + re-run backfill |
+| `20260728123000_atomic_option_sort_order.sql` | Atomic sort_order allocation for option items and lists |
 
 Verified end to end against the live database: a trade planned → marked missed → restored → filled → closed
 prices correctly (20 pts, $20 gross, $15 net after $4 fees and $1 swap, 2.00R, 25h hold), and its net P&L
@@ -491,9 +492,24 @@ was deleted outright. Before C1 those two actions rewrote it silently.
 advisor, which reports no new findings (the two it does report, a pre-existing `SECURITY DEFINER` seed
 function and an auth password-protection setting, are unrelated to this work).
 
+### One finding withdrawn on closer inspection: M4
+
+M4 claimed `excursionFromTrade` was inconsistent for measuring movement from `avg_entry` while dividing by
+risk derived from the *planned* entry. Checking `tj_position_stats` settles it: `realized_r` is built the
+same way — its numerator `gross_points` comes off `avg_entry`, its denominator off
+`COALESCE(entry_price, avg_entry)`. The pairing is the journal's R convention, not an oversight, and
+excursion already matches it.
+
+That agreement is load-bearing: `capturePct` is `realizedR / mfeR`, so re-basing MAE/MFE onto a single
+reference would have put the two on different footings and silently corrupted capture — the "fix" would
+have introduced the bug. The convention is now documented at the function, and a test pins the agreement
+so it is not attempted again.
+
+Conclusion: R means *multiples of the risk I planned to take, over the move I actually got*. Defensible,
+deliberate, and now written down.
+
 ### Still open
 
-Medium (M1–M10) and Low are documented above and **not** addressed, with one partial exception: M1's root
-cause now has a fix available — `toEpoch` / `compareInstants` in `src/lib/journal/time.ts` — and the
-dashboard's period filter uses it, but `toRealized`'s sort, `evaluateFtmo`'s `resetAt` comparison,
-`buildBalanceTimeline`'s sort and the mentor-pack range filter still compare ISO strings as text.
+**Low / dead code only.** Everything listed under LOW above remains, and is cosmetic or dead-code cleanup
+rather than a correctness risk. The two Supabase advisories that predate this work (a `SECURITY DEFINER`
+seed function and the auth leaked-password setting) are also untouched.
