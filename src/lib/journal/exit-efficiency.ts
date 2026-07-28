@@ -11,6 +11,8 @@ export type ExitEfficiencyResult = {
   pct: number;
 };
 
+// Re-exported so callers reading exit efficiency can parse a stored planned_rr
+// without also importing plan-calculations. Same function, one definition.
 export { parsePlannedRewardR } from "./plan-calculations";
 
 /**
@@ -25,7 +27,22 @@ function numField(row: TradeRow, key: string): number | null {
   return typeof v === "number" && !Number.isNaN(v) ? v : null;
 }
 
-/** Planned reward R from stored planned_rr or entry/stop/target prices. */
+/**
+ * Planned reward R: the stored `planned_rr` when there is one, otherwise
+ * derived from the entry / stop / target prices.
+ *
+ * Stored wins ON PURPOSE, and the reason matters. This is the baseline "Target
+ * attainment" grades the exit against, so it has to be the plan as it stood
+ * when the trade was taken. The trade form stops rewriting `planned_rr` once a
+ * position leaves `planned` (see its submit handler), which makes the stored
+ * value a genuine record rather than a mirror of whatever the price fields say
+ * today. Preferring live prices here would undo that: editing a closed trade's
+ * target would move its own grading baseline, and a trader could flatter their
+ * discipline score by lowering a target after the fact.
+ *
+ * The price fallback covers rows that never captured a plan — imports, and
+ * trades saved before the target was filled in.
+ */
 export function plannedRewardFromTrade(row: TradeRow): number | null {
   const parsed = parsePlannedRewardR(row.planned_rr as string | null);
   if (parsed != null) return parsed;

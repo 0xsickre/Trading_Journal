@@ -13,6 +13,8 @@
  * in or out of the account.
  */
 
+import { compareInstants, toEpoch } from "./time";
+
 export type CashEventType = "deposit" | "withdrawal" | "payout" | "adjustment";
 
 export type CashEvent = {
@@ -62,7 +64,7 @@ export function buildBalanceTimeline(
       kind: "cash" as const,
     })),
   ].sort((a, b) => {
-    const byTime = a.at.localeCompare(b.at);
+    const byTime = compareInstants(a.at, b.at);
     if (byTime !== 0) return byTime;
     return a.kind === b.kind ? 0 : a.kind === "cash" ? -1 : 1;
   });
@@ -130,13 +132,13 @@ export function resolvePeriodWindow(
 
   let priorPnl = 0;
   for (const t of trades) {
-    if (instantOf(t.at) < cutoffMs) priorPnl += t.pnl;
+    if (toEpoch(t.at) < cutoffMs) priorPnl += t.pnl;
   }
 
   let priorCash = 0;
   const events: CashEvent[] = [];
   for (const c of cashEvents) {
-    if (instantOf(c.occurred_at) < cutoffMs) priorCash += c.amount;
+    if (toEpoch(c.occurred_at) < cutoffMs) priorCash += c.amount;
     else events.push(c);
   }
 
@@ -145,13 +147,6 @@ export function resolvePeriodWindow(
     events,
     priorPnl,
   };
-}
-
-/** Epoch ms, or -Infinity when absent — never compare ISO strings as text. */
-function instantOf(iso: string | null | undefined): number {
-  if (!iso) return -Infinity;
-  const ms = new Date(iso).getTime();
-  return Number.isNaN(ms) ? -Infinity : ms;
 }
 
 export type DrawdownStats = {

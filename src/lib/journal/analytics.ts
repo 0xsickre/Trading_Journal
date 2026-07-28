@@ -1,5 +1,5 @@
 import type { TradeRow } from "./types";
-import { zonedDateKey, zonedWeekStartKey } from "./time";
+import { compareInstants, zonedDateKey, zonedWeekStartKey } from "./time";
 import { slippageFromTrade } from "./entry-slippage";
 import { exitEfficiencyFromTrade } from "./exit-efficiency";
 import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
@@ -41,7 +41,7 @@ export function toRealized(
       r: t.stats!.realized_r,
       row: t,
     }))
-    .sort((a, b) => (a.closedAt ?? "").localeCompare(b.closedAt ?? ""));
+    .sort((a, b) => compareInstants(a.closedAt, b.closedAt));
 }
 
 export type Stats = {

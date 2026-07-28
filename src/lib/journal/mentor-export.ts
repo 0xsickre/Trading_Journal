@@ -14,6 +14,7 @@ import {
   exitEfficiencyFromTrade,
   fmtExitEfficiencyPct,
 } from "./exit-efficiency";
+import { compareInstants } from "./time";
 import type { TradeRow } from "./types";
 import { groupInsights } from "./insights/types";
 import { OMITTED_RULES, type RunResult } from "./insights/registry";
@@ -284,7 +285,7 @@ export function buildMentorPack(
 
   const realized = toRealized(trades);
   const sortedClosed = [...realized]
-    .sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? ""))
+    .sort((a, b) => compareInstants(b.closedAt, a.closedAt))
     .map((r) => r.row);
   const detail = sortedClosed.slice(0, detailCap);
   const truncated = sortedClosed.length - detail.length;
@@ -298,7 +299,8 @@ export function buildMentorPack(
   const missedSetups = trades
     .filter((t) => t.status === "missed")
     .sort((a, b) =>
-      String(b.missed_at ?? b.created_at).localeCompare(
+      compareInstants(
+        String(b.missed_at ?? b.created_at),
         String(a.missed_at ?? a.created_at),
       ),
     );

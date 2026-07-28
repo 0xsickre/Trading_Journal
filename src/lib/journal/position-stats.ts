@@ -69,9 +69,14 @@ export function computePositionStats(
   for (const e of input.executions) {
     const qty = e.qty;
     const price = e.price;
-    if (!Number.isFinite(qty) || !Number.isFinite(price) || qty <= 0) continue;
+    // Costs accrue before the quantity guard, matching the SQL view's
+    // `sum(COALESCE(e.fee, 0))` over EVERY row of the position. Skipping the
+    // fee along with the row made this function's net P&L disagree with the
+    // stored figure for any fee-only or malformed fill — in a module whose
+    // first line promises the two stay in sync.
     totalFees += e.fee ?? 0;
     totalSwap += e.swap_funding ?? 0;
+    if (!Number.isFinite(qty) || !Number.isFinite(price) || qty <= 0) continue;
     if (e.side === "entry") {
       entryQty += qty;
       entryNotional += price * qty;
@@ -90,16 +95,15 @@ export function computePositionStats(
   let realizedR: number | null = null;
   let realizedRNet: number | null = null;
 
+  // Computed once and reused below — this used to be evaluated a second time
+  // in the return object, so the two could drift apart under any future edit.
+  const riskPts = plannedRiskPts(input.entry_price, input.stop_price, avgEntry);
+
   if (avgEntry != null && exitQty > 0) {
     grossPoints = (exitNotional - avgEntry * exitQty) * dir;
     grossPl = grossPoints * pointValue;
     netPl = grossPl - totalFees - totalSwap;
 
-    const riskPts = plannedRiskPts(
-      input.entry_price,
-      input.stop_price,
-      avgEntry,
-    );
     if (riskPts != null && entryQty > 0) {
       const riskDenom = riskPts * entryQty;
       realizedR = grossPoints / riskDenom;
@@ -120,11 +124,7 @@ export function computePositionStats(
     gross_points: grossPoints,
     gross_pl: grossPl,
     net_pl: netPl,
-    planned_risk_pts: plannedRiskPts(
-      input.entry_price,
-      input.stop_price,
-      avgEntry,
-    ),
+    planned_risk_pts: riskPts,
     realized_r: realizedR,
     realized_r_net: realizedRNet,
   };

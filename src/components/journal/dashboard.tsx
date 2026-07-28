@@ -508,10 +508,16 @@ export function Dashboard({
       customTo,
     );
     // Reference date: when it closed, or when it was created if still open.
+    // Compared as instants: the bounds are generated as "...T00:00:00.000Z"
+    // while closed_at arrives as "...+00:00", and a text compare of the two
+    // inverts exactly at a midnight boundary — the one moment a range edge
+    // actually falls on.
+    const fromMs = fromISO ? toEpoch(fromISO) : null;
+    const toMs = toISO ? toEpoch(toISO) : null;
     scoped = scoped.filter((t) => {
-      const ref = t.stats?.closed_at ?? t.created_at ?? "";
-      if (fromISO && ref < fromISO) return false;
-      if (toISO && ref > toISO) return false;
+      const ref = toEpoch(t.stats?.closed_at ?? t.created_at ?? null);
+      if (fromMs != null && ref < fromMs) return false;
+      if (toMs != null && ref > toMs) return false;
       return true;
     });
 

@@ -27,6 +27,23 @@ function num(row: TradeRow, key: string): number | null {
   return typeof v === "number" && !Number.isNaN(v) ? v : null;
 }
 
+/**
+ * Excursion in R, on the journal's R convention.
+ *
+ * That convention deliberately pairs two different price references, and this
+ * is the place it most looks like a mistake, so: **price movement is measured
+ * from the ACTUAL average fill, while one R is the PLANNED risk distance**
+ * (plan entry to stop, falling back to the fill when no plan entry was
+ * recorded). R therefore reads as "multiples of the risk I set out to take",
+ * measured over the move I actually got.
+ *
+ * `realized_r` in `tj_position_stats` is built the same way — its numerator
+ * `gross_points` comes off `avg_entry`, its denominator off
+ * `COALESCE(entry_price, avg_entry)`. Aligning MAE/MFE to a single reference
+ * would therefore NOT make this more consistent; it would put `mfeR` on a
+ * different basis from `realizedR` and quietly corrupt `capturePct`, which
+ * divides one by the other. Change both or neither.
+ */
 export function excursionFromTrade(row: TradeRow): Excursion {
   const empty: Excursion = { maeR: null, mfeR: null, capturePct: null };
 

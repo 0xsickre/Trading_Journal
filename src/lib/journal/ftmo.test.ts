@@ -86,3 +86,55 @@ describe("evaluateFtmo", () => {
     expect(r.netPnl).toBe(200);
   });
 });
+
+describe("instant comparison at the reset boundary", () => {
+  // PostgREST hands back "+00:00"; resetFtmoChallenge writes ".000Z". Compared
+  // as text these invert at an identical whole second, because '+' (0x2B) sorts
+  // before '.' (0x2E) — so a trade closed AFTER the reset was read as before it
+  // and silently excluded from the challenge window.
+  const postgrest = "2026-07-28T10:00:00+00:00"; // the instant of the reset
+  const appWritten = "2026-07-28T10:00:00.000Z"; // the same instant, app format
+
+  it("demonstrates the text comparison these formats used to rely on", () => {
+    expect(postgrest >= appWritten).toBe(false); // the bug: same instant, reads as earlier
+  });
+
+  const cfg = {
+    enabled: true,
+    startingBalance: 100_000,
+    timezone: "America/New_York",
+    dailyLoss: { enabled: false, pct: 5 },
+    maxLoss: { enabled: false, pct: 10 },
+    profitTarget: { enabled: false, pct: 10 },
+    minDays: { enabled: false, days: 4 },
+    resetAt: appWritten,
+  };
+
+  it("counts a trade closed exactly at the reset instant", () => {
+    const r = evaluateFtmo(cfg, [{ closedAt: postgrest, net: 250 }]);
+    expect(r.netPnl).toBe(250);
+    expect(r.daysTraded).toBe(1);
+  });
+
+  it("still excludes a trade closed a second before the reset", () => {
+    const r = evaluateFtmo(cfg, [
+      { closedAt: "2026-07-28T09:59:59+00:00", net: 250 },
+    ]);
+    expect(r.netPnl).toBe(0);
+    expect(r.daysTraded).toBe(0);
+  });
+
+  it("orders mixed-format timestamps chronologically", () => {
+    // Wrong ordering would misattribute which day breached first.
+    const r = evaluateFtmo(
+      { ...cfg, resetAt: null, dailyLoss: { enabled: true, pct: 1 } },
+      [
+        { closedAt: "2026-07-28T20:00:00.000Z", net: -600 },
+        { closedAt: "2026-07-28T14:00:00+00:00", net: -600 },
+      ],
+    );
+    // Both land on the same NY day: -1200 breaches the -1000 daily limit.
+    expect(r.status).toBe("failed");
+    expect(r.breaches[0].amount).toBe(-1200);
+  });
+});

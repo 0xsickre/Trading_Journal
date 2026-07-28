@@ -308,3 +308,34 @@ describe("resolvePeriodWindow", () => {
     expect(windowed.maxPctOfEquity).not.toBeCloseTo(broken.maxPctOfEquity, 6);
   });
 });
+
+describe("timeline ordering across timestamp formats", () => {
+  it("orders mixed +00:00 and .000Z timestamps by instant", () => {
+    // A text sort puts "+00:00" before ".000Z" at an equal whole second, and
+    // more importantly cannot order these two correctly at all.
+    const tl = buildBalanceTimeline(0, [
+      { at: "2026-01-02T10:00:00.000Z", pnl: 50 },
+      { at: "2026-01-01T10:00:00+00:00", pnl: 100 },
+    ]);
+    expect(tl.map((p) => p.realizedPnl)).toEqual([0, 100, 150]);
+  });
+
+  it("keeps a same-instant cash event ahead of the trade regardless of format", () => {
+    const tl = buildBalanceTimeline(
+      1_000,
+      [{ at: "2026-01-01T10:00:00+00:00", pnl: -100 }],
+      [
+        {
+          id: "c",
+          account_id: "a",
+          event_type: "deposit",
+          amount: 500,
+          occurred_at: "2026-01-01T10:00:00.000Z",
+          note: null,
+        },
+      ],
+    );
+    expect(tl.map((p) => p.kind)).toEqual(["start", "cash", "trade"]);
+    expect(tl[tl.length - 1].equity).toBe(1_400);
+  });
+});

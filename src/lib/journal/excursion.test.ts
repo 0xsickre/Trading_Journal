@@ -115,3 +115,40 @@ describe("computeExcursionStats", () => {
     expect(stats.worstMaeR).toBeNull();
   });
 });
+
+describe("R convention: fill-based numerator, plan-based denominator", () => {
+  // A slipped entry is the case that separates the two references: planned
+  // entry 100, actual fill 101, stop 90.
+  const slipped = {
+    direction: "Long",
+    entry_price: 100,
+    stop_price: 90,
+    max_profit_price: 120,
+    max_drawdown_price: 95,
+    stats: { avg_entry: 101, realized_r: null },
+  } as unknown as TradeRow;
+
+  it("measures movement from the actual fill, not the planned entry", () => {
+    const e = excursionFromTrade(slipped);
+    // MFE points = 120 - 101 (fill), NOT 120 - 100 (plan). Risk = |100-90| = 10.
+    expect(e.mfeR).toBeCloseTo(19 / 10, 10);
+    // MAE points = 101 - 95 = 6, over the same planned 10-point risk.
+    expect(e.maeR).toBeCloseTo(6 / 10, 10);
+  });
+
+  it("keeps capturePct consistent with how realized_r is computed", () => {
+    // realized_r is (exit - avg_entry) / (|plan entry - stop|) — fill-based
+    // numerator, plan-based denominator. Reproduce it for an exit at 120 and
+    // confirm capture reads as a full 100%: the trade captured the entire
+    // favourable move. If mfeR were re-based onto the planned entry while
+    // realized_r stayed as it is, this would silently drift off 100%.
+    const realizedR = (120 - 101) / Math.abs(100 - 90);
+    const withExit = {
+      ...slipped,
+      stats: { avg_entry: 101, realized_r: realizedR },
+    } as unknown as TradeRow;
+
+    const e = excursionFromTrade(withExit);
+    expect(e.capturePct).toBeCloseTo(100, 10);
+  });
+});

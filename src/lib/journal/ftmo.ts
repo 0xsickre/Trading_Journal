@@ -8,7 +8,7 @@
  * engine.
  */
 import type { Account } from "./types";
-import { zonedDateKey } from "./time";
+import { compareInstants, toEpoch, zonedDateKey } from "./time";
 
 export type FtmoConfig = {
   enabled: boolean;
@@ -120,14 +120,18 @@ export function evaluateFtmo(
       ? (start * config.profitTarget.pct) / 100
       : null;
 
-  // Window: closed trades on/after resetAt, chronological.
+  // Window: closed trades on/after resetAt, chronological. Compared as instants,
+  // not as text: resetAt is written by the app as "...T10:00:00.000Z" while
+  // closedAt comes back from PostgREST as "...T10:00:00+00:00", and a string
+  // compare of those inverts at an identical whole second — which is exactly
+  // when a reset and a close can coincide.
+  const resetMs = config.resetAt == null ? null : toEpoch(config.resetAt);
   const window = trades
     .filter(
       (t) =>
-        t.closedAt != null &&
-        (config.resetAt == null || t.closedAt >= config.resetAt),
+        t.closedAt != null && (resetMs == null || toEpoch(t.closedAt) >= resetMs),
     )
-    .sort((a, b) => (a.closedAt ?? "").localeCompare(b.closedAt ?? ""));
+    .sort((a, b) => compareInstants(a.closedAt, b.closedAt));
 
   const dayNet = new Map<string, number>();
   let cum = 0;
