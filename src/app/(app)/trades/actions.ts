@@ -8,7 +8,7 @@ import {
   ARRAY_FIELD_NAMES,
 } from "@/lib/journal/form-config";
 import { computeStatus, isValidFill } from "@/lib/journal/trade-lifecycle";
-import { getFailedFtmoAccountIds } from "@/lib/journal/ftmo-status";
+import { isFtmoAccountFrozen } from "@/lib/journal/ftmo-status";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
 
 export type ExecutionInput = {
@@ -93,16 +93,14 @@ function resolveStatus(
 }
 
 export async function createTrade(input: TradeInput) {
-  // Freeze: block new trades on an FTMO account that broke a rule.
-  if (input.account_id) {
-    const failed = await getFailedFtmoAccountIds();
-    if (failed.has(input.account_id)) {
-      return {
-        ok: false as const,
-        error:
-          "FTMO nalog je zamrznut — pravilo je prekršeno. Resetuj izazov u Settings da nastaviš.",
-      };
-    }
+  // Freeze: block new trades on an FTMO account that broke a rule. Scoped to
+  // the one account being written to — this used to evaluate every account.
+  if (await isFtmoAccountFrozen(input.account_id)) {
+    return {
+      ok: false as const,
+      error:
+        "FTMO nalog je zamrznut — pravilo je prekršeno. Resetuj izazov u Settings da nastaviš.",
+    };
   }
 
   const supabase = await createClient();

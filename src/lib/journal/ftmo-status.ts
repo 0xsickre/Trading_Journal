@@ -11,20 +11,37 @@ import type { Account } from "./types";
 
 export type AccountFtmo = { account: Account; result: FtmoResult };
 
-/** Evaluate FTMO status for every account that has the mode enabled. */
-export async function getFtmoStatuses(): Promise<AccountFtmo[]> {
+/**
+ * Evaluate FTMO status for accounts that have the mode enabled.
+ *
+ * `accountIds` narrows the evaluation — and, importantly, the query behind it.
+ * Without it this reads every closed trade the user owns, which is what the
+ * whole-portfolio dashboard banner needs but is far more than a single-account
+ * check requires.
+ */
+export async function getFtmoStatuses(
+  accountIds?: string[],
+): Promise<AccountFtmo[]> {
   const accounts = await getAccounts();
-  const ftmoAccounts = accounts.filter((a) => a.ftmo_mode);
+  const wanted = accountIds == null ? null : new Set(accountIds);
+  const ftmoAccounts = accounts.filter(
+    (a) => a.ftmo_mode && (wanted == null || wanted.has(a.id)),
+  );
   if (ftmoAccounts.length === 0) return [];
 
   const supabase = await createClient();
-  // Must be the complete set: a truncated page could omit the very trade that
-  // broke a rule, leaving a blown challenge reading as still active.
+  // Scoped to the FTMO accounts in play: trades on a non-challenge account
+  // never affect a verdict, so fetching them was pure cost.
+  const scopedIds = ftmoAccounts.map((a) => a.id);
+  // Must be the complete set for those accounts: a truncated page could omit
+  // the very trade that broke a rule, leaving a blown challenge reading as
+  // still active.
   const data = await selectAllPages((from, to) =>
     supabase
       .from("tj_position_stats")
       .select("account_id, net_pl, closed_at")
       .eq("status", "closed")
+      .in("account_id", scopedIds)
       .order("position_id")
       .range(from, to),
   );
@@ -54,4 +71,20 @@ export async function getFailedFtmoAccountIds(): Promise<Set<string>> {
       .filter((s) => s.result.status === "failed")
       .map((s) => s.account.id),
   );
+}
+
+/**
+ * Whether one account's challenge is currently blown.
+ *
+ * The write path checks a single account, so it evaluates a single account.
+ * Calling `getFailedFtmoAccountIds()` here meant every trade insert pulled the
+ * full account list and every closed trade in the journal to resolve one
+ * boolean — work that grew with the user's history on the hot path.
+ */
+export async function isFtmoAccountFrozen(
+  accountId: string | null | undefined,
+): Promise<boolean> {
+  if (!accountId) return false;
+  const [status] = await getFtmoStatuses([accountId]);
+  return status?.result.status === "failed";
 }

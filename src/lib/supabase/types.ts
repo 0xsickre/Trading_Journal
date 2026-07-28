@@ -806,6 +806,14 @@ export type Database = {
       }
     }
     Functions: {
+      tj_add_option_item: {
+        Args: { p_list_id: string; p_label: string }
+        Returns: Database["public"]["Tables"]["tj_option_items"]["Row"]
+      }
+      tj_add_option_list: {
+        Args: { p_key: string; p_label: string; p_category?: string | null }
+        Returns: Database["public"]["Tables"]["tj_option_lists"]["Row"]
+      }
       tj_replace_executions: {
         Args: { p_position_id: string; p_executions: Json }
         Returns: number

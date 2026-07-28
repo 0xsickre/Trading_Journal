@@ -41,24 +41,28 @@ export async function addOption(
     .maybeSingle();
   if (!list) return { ok: false, error: "List not found." };
 
-  const { data: maxRow } = await supabase
-    .from("tj_option_items")
-    .select("sort_order")
-    .eq("list_id", list.id)
-    .order("sort_order", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const sort_order = (maxRow?.sort_order ?? -1) + 1;
-
-  const { data, error } = await supabase
-    .from("tj_option_items")
-    .insert({ list_id: list.id, value: label, label, sort_order })
-    .select("id,value,label,color,is_active,sort_order")
-    .single();
+  // The next ordinal is computed inside the INSERT. Reading MAX(sort_order)
+  // here and inserting in a second request let two near-simultaneous adds read
+  // the same maximum and claim the same position.
+  // Returns a composite row, not a set — PostgREST sends the object directly.
+  const { data, error } = await supabase.rpc("tj_add_option_item", {
+    p_list_id: list.id,
+    p_label: label,
+  });
   if (error) return { ok: false, error: error.message };
 
   revalidateAll();
-  return { ok: true, item: data };
+  return {
+    ok: true,
+    item: {
+      id: data.id,
+      value: data.value,
+      label: data.label,
+      color: data.color,
+      is_active: data.is_active,
+      sort_order: data.sort_order,
+    },
+  };
 }
 
 export async function renameOption(id: string, label: string) {
@@ -122,19 +126,11 @@ export async function addList(
   if (!cleanKey || !label.trim())
     return { ok: false, error: "Key and label are required." };
 
-  const { data: maxRow } = await supabase
-    .from("tj_option_lists")
-    .select("sort_order")
-    .order("sort_order", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const sort_order = (maxRow?.sort_order ?? -1) + 1;
-
-  const { error } = await supabase.from("tj_option_lists").insert({
-    key: cleanKey,
-    label: label.trim(),
-    category,
-    sort_order,
+  // Same atomic-ordinal reasoning as addOption above.
+  const { error } = await supabase.rpc("tj_add_option_list", {
+    p_key: cleanKey,
+    p_label: label.trim(),
+    p_category: category,
   });
   if (error) return { ok: false, error: error.message };
   revalidateAll();

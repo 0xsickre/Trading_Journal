@@ -62,9 +62,15 @@ export async function commitImport(input: CommitInput) {
     merged = 0,
     skipped = 0,
     failed = 0;
+  // Why each row failed. Swallowing the message left the user staring at
+  // "3 failed" with nothing to act on.
+  const errors: { row: number; instrument: string | null; error: string }[] = [];
 
-  for (const item of input.items) {
+  for (const [index, item] of input.items.entries()) {
     let matchedId = item.matched_position_id;
+    // Set once a position exists, so a later failure can take it back out
+    // instead of leaving an empty shell behind.
+    let createdPositionId: string | null = null;
     // Fills this row displaced, kept so `undoImportBatch` can put them back.
     let replacedExecs: ImportExec[] | null = null;
 
@@ -85,12 +91,16 @@ export async function commitImport(input: CommitInput) {
           })
           .select("id")
           .single();
-        if (error || !pos) throw new Error(error?.message);
+        if (error || !pos) {
+          throw new Error(error?.message ?? "Could not create the position.");
+        }
         matchedId = pos.id;
+        createdPositionId = pos.id;
         if (item.executions.length > 0) {
-          const { error: exErr } = await supabase.from("tj_executions").insert(
-            item.executions.map((e) => ({ ...e, position_id: pos.id, source: "import" })),
-          );
+          const { error: exErr } = await supabase.rpc("tj_replace_executions", {
+            p_position_id: pos.id,
+            p_executions: item.executions.map((e) => ({ ...e, source: "import" })),
+          });
           if (exErr) throw new Error(exErr.message);
         }
         created++;
@@ -134,19 +144,40 @@ export async function commitImport(input: CommitInput) {
         matched_position_id: matchedId,
         prev_executions: replacedExecs,
       });
-    } catch {
+    } catch (e) {
       failed++;
+      // A position inserted moments ago whose fills then failed is not a trade,
+      // it is debris. createTrade already rolls this back; this path did not,
+      // and the orphan would survive as a phantom row in the journal.
+      if (createdPositionId) {
+        await supabase.from("tj_positions").delete().eq("id", createdPositionId);
+      }
+      errors.push({
+        row: index + 1,
+        instrument: item.instrument,
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
   await supabase
     .from("tj_import_batches")
-    .update({ summary: { total: input.items.length, created, merged, skipped, failed } })
+    .update({
+      summary: {
+        total: input.items.length,
+        created,
+        merged,
+        skipped,
+        failed,
+        // Kept on the batch so a failure stays diagnosable after the toast.
+        errors: errors.slice(0, 50),
+      },
+    })
     .eq("id", batch.id);
 
   revalidatePath("/journal");
   revalidatePath("/", "layout");
-  return { ok: true as const, created, merged, skipped, failed };
+  return { ok: true as const, created, merged, skipped, failed, errors };
 }
 
 export type UndoResult =

@@ -10,14 +10,20 @@ export async function getListsWithItems(
 ): Promise<OptionList[]> {
   const supabase = await createClient();
   const [{ data: lists }, { data: items }] = await Promise.all([
+    // `id` breaks ties: sort_order is not unique, and rows written before the
+    // ordinal was allocated atomically can share one. Without a tiebreak those
+    // rows come back in whatever order the planner picks, so a list could
+    // reshuffle between two identical page loads.
     supabase
       .from("tj_option_lists")
       .select("id,key,label,category,sort_order")
-      .order("sort_order"),
+      .order("sort_order")
+      .order("id"),
     supabase
       .from("tj_option_items")
       .select("id,list_id,value,label,color,is_active,sort_order")
-      .order("sort_order"),
+      .order("sort_order")
+      .order("id"),
   ]);
 
   const byList = new Map<string, OptionItem[]>();

@@ -275,6 +275,19 @@ export function ImportWizard({
       toast.success(
         `Imported: ${res.created} created, ${res.merged} merged, ${res.skipped} skipped`,
       );
+      // A silent "N failed" is not actionable. Name the rows and the reason.
+      if (res.failed > 0) {
+        const detail = res.errors
+          .slice(0, 3)
+          .map((e) => `row ${e.row}${e.instrument ? ` (${e.instrument})` : ""}: ${e.error}`)
+          .join("\n");
+        const more =
+          res.errors.length > 3 ? `\n…and ${res.errors.length - 3} more` : "";
+        toast.error(`${res.failed} row(s) failed`, {
+          description: `${detail}${more}`,
+          duration: 15_000,
+        });
+      }
       setStep(3);
       router.refresh();
     });

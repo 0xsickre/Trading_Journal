@@ -553,8 +553,16 @@ export function Dashboard({
     a.href = url;
     const stamp = granularity === "all" ? todayYMD() : (fromISO ?? "").slice(0, 10);
     a.download = `mentor-pack-${label.toLowerCase()}-${stamp}.md`;
+
+    // Firefox only dispatches a click on an anchor that is in the document, and
+    // both Firefox and Safari read the blob asynchronously — revoking the URL
+    // on the same tick cancelled the download outright. Attach, click, then
+    // clean up once the browser has had the chance to start reading.
+    a.style.display = "none";
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   return (
