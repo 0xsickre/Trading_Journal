@@ -612,7 +612,7 @@ export type Database = {
           show_when?: string
           sort_order?: number
           updated_at?: string
-          user_id?: string
+          user_id: string
         }
         Update: {
           created_at?: string
@@ -647,7 +647,7 @@ export type Database = {
           playbook_id: string
           sort_order?: number
           updated_at?: string
-          user_id?: string
+          user_id: string
         }
         Update: {
           created_at?: string
@@ -689,7 +689,7 @@ export type Database = {
           sort_order?: number
           text: string
           updated_at?: string
-          user_id?: string
+          user_id: string
         }
         Update: {
           created_at?: string
@@ -735,7 +735,7 @@ export type Database = {
           name: string
           sort_order?: number
           updated_at?: string
-          user_id?: string
+          user_id: string
         }
         Update: {
           color?: string | null
@@ -768,7 +768,7 @@ export type Database = {
           position_id: string
           rule_id: string
           updated_at?: string
-          user_id?: string
+          user_id: string
         }
         Update: {
           created_at?: string
@@ -919,6 +919,13 @@ export type Database = {
             referencedRelation: "tj_accounts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "tj_positions_playbook_id_fkey"
+            columns: ["playbook_id"]
+            isOneToOne: false
+            referencedRelation: "tj_playbooks"
+            referencedColumns: ["id"]
+          },
         ]
       }
       tj_trade_images: {
@@ -1026,6 +1033,7 @@ export type Database = {
         Returns: undefined
       }
       tj_seed_my_defaults: { Args: never; Returns: undefined }
+      tj_seed_playbooks: { Args: { target: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
