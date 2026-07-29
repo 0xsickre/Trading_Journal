@@ -72,6 +72,11 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.tj_replace_position_rules(uuid, jsonb) FROM public;
+-- `anon` named explicitly alongside PUBLIC. Revoking PUBLIC alone is enough for a
+-- function created here and now, but four sibling functions were found with anon
+-- EXECUTE because a later rebuild handed the PUBLIC grant back (see
+-- 20260730130000_harden_invoker_function_grants.sql) — so the intent is stated
+-- rather than left to be inferred from the default.
+REVOKE ALL ON FUNCTION public.tj_replace_position_rules(uuid, jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.tj_replace_position_rules(uuid, jsonb)
   TO authenticated, service_role;
