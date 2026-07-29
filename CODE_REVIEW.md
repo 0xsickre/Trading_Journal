@@ -619,6 +619,80 @@ it. Use `selectAllByIds`, which already chunks and drains.
   been applied. The previous round found two defects only by exercising the live DB, so
   treat the SQL-adjacent findings here as reviewed but not executed.
 
+---
+
+## Round 2b — audit of the live database
+
+The findings above were read from the repo. This section is what turned up by inspecting
+the deployed project (`hjwvhzcszhjhpocfjatm`) directly, while applying the H2 migration.
+All four are **fixed and applied**; the guards were exercised against real rows and the
+test data cleaned up afterwards.
+
+### D1 (High) — a fill could be attached to another user's position
+
+RLS on `tj_executions` is `user_id = auth.uid()` and nothing more. Nothing tied the fill to
+the owner of the position it points at, and the foreign key only requires that the position
+*exists*. A direct PostgREST insert could therefore attach a fill to someone else's
+position while passing RLS with the attacker's own `user_id` — and `tj_position_stats`
+aggregates executions by `position_id`, so the row would land in the victim's average
+entry, P&L, R and drawdown.
+
+The application never does this — `tj_replace_executions` takes `user_id` from the parent
+position — which is exactly why nothing caught it. Closed by a `BEFORE INSERT OR UPDATE`
+trigger on `tj_executions` that compares `new.user_id` against the parent's owner.
+
+### D2 (Medium) — M5's race, closed at the database instead of narrowed
+
+M5 above notes that `markTradeMissed` / `activateTrade` / `restoreTradeToPlanned` check the
+fill count and then update, non-atomically. This cannot be a `CHECK` constraint because it
+spans two tables, so it is now a pair of triggers — one refusing `status = 'missed'` on a
+position that has fills, one refusing a fill on a position that is missed.
+
+The `SELECT … FOR UPDATE` in the execution guard is what closes the race rather than
+narrowing it: it takes the same row lock the position `UPDATE` already holds, so the two
+statements serialise on the position row and whichever commits second sees the other's
+work. Without it, both could pass their checks against a pre-change snapshot under READ
+COMMITTED.
+
+M5's application-level fix is still worth doing for the error message, but the corruption
+is no longer reachable.
+
+### D3 (Medium) — four foreign keys with no covering index
+
+`tj_position_rules.user_id`, `tj_playbook_rules.user_id`, `tj_playbook_groups.user_id`,
+`tj_cash_events.account_id`. Worse than "unindexed FK" suggests: every RLS policy in this
+schema is `user_id = auth.uid()`, so `user_id` is in the `WHERE` clause of *every* query
+against these tables, and `tj_position_rules` is the fastest-growing table in the schema.
+`tj_position_rules` got a composite `(user_id, position_id)` that also serves the ordering
+`getPositionRules()` uses. The performance advisor's four warnings are gone.
+
+### D4 (Low) — no floor on `starting_balance`
+
+`updateAccount` refuses a negative value in application code only. It is the denominator of
+every drawdown percentage, every FTMO threshold and the percentage breakeven band, so the
+rule now lives in a `CHECK` where it cannot be bypassed.
+
+### Checked and deliberately left alone
+
+- **`trade-images` storage bucket has zero policies.** Harmless: the app does not use
+  Supabase Storage at all. Trade images are TradingView snapshot URLs
+  (`tradingview.com/x/…`) stored as `tj_trade_images.image_url` and rendered from
+  TradingView's own S3. The bucket is a vestige of the initial migration.
+- **`tj_seed_my_defaults` flagged as a `SECURITY DEFINER` function callable by signed-in
+  users.** A false positive for this design: the body raises unless `auth.uid()` is
+  present and passes `auth.uid()` — not a caller-supplied argument — into the seed
+  functions, so a user can only ever seed themselves.
+- **Nine "unused index" advisories.** Noise on a database with no trades yet. Revisit once
+  there is real query traffic; the four indexes added in D3 join the same list for now.
+
+### Requires the Supabase dashboard — cannot be done over MCP
+
+- **Leaked-password protection is disabled** (HaveIBeenPwned check). Security advisor WARN.
+- **Backups**: free tier is daily snapshots with no point-in-time recovery.
+- **MFA** on the Supabase account itself.
+- **Redirect URLs** for the production domain when the app is deployed.
+
 ### Still open
 
-Everything under Medium and Low. Nothing under Critical or High.
+Everything under Medium and Low in round 2, minus M5's corruption path (closed by D2).
+Nothing under Critical or High. Plus the four dashboard items listed above.
