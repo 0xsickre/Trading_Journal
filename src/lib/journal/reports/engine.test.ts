@@ -261,3 +261,39 @@ describe("summarizeReport", () => {
     expect(s.qualifying).toBe(0);
   });
 });
+
+describe("summarizeReport respects the metric's direction", () => {
+  // Six catalogue metrics declare `higherIsBetter: false`, and the metric here
+  // is whichever one the user picked in the workbench. Sorting descending
+  // unconditionally named the highest-fee bucket "best".
+  const fees = () =>
+    enrich([
+      ...Array.from({ length: 5 }, () => ({ instrument: "CHEAP", fees: 1 })),
+      ...Array.from({ length: 5 }, () => ({ instrument: "PRICEY", fees: 40 })),
+    ]);
+
+  it("names the LOWEST bucket best on a lower-is-better metric", () => {
+    const r = run(fees(), "instrument", { metricKeys: ["total_fees"] })!;
+    const s = summarizeReport(r, "total_fees");
+    expect(s.best?.bucket).toBe("CHEAP");
+    expect(s.worst?.bucket).toBe("PRICEY");
+  });
+
+  it("still names the highest bucket best on a higher-is-better metric", () => {
+    const trades = enrich([
+      ...Array.from({ length: 5 }, () => ({ instrument: "GOOD", net: 100 })),
+      ...Array.from({ length: 5 }, () => ({ instrument: "BAD", net: -100 })),
+    ]);
+    const s = summarizeReport(run(trades, "instrument")!, "net_pnl");
+    expect(s.best?.bucket).toBe("GOOD");
+    expect(s.worst?.bucket).toBe("BAD");
+  });
+
+  it("reads the direction from the catalogue when the column is not requested", () => {
+    // `metricKeys` here does NOT include total_fees, so the flag has to come
+    // from the global catalogue rather than from result.metrics.
+    const r = run(fees(), "instrument", { metricKeys: ["total_fees"] })!;
+    r.metrics = [];
+    expect(summarizeReport(r, "total_fees").best?.bucket).toBe("CHEAP");
+  });
+});

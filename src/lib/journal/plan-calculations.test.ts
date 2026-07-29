@@ -153,3 +153,29 @@ describe("parsePlannedRewardR", () => {
     expect(parsePlannedRewardR("1:3.00")).toBe(3);
   });
 });
+
+describe("computePositionSize refuses to size without a contract spec", () => {
+  const plan = { balance: 10_000, riskPct: 1, entry: 5000, stop: 4990 };
+
+  it("returns null when the point value is unknown", () => {
+    // The runtime guard always handled this (`null <= 0` coerces to true); what
+    // it could not do was let a caller SAY "unknown", because the parameter was
+    // a non-nullable `number`. That signature is what pushed `?? 1` into the
+    // trade form, where 1 instead of 50 suggests an ES position 50x too large
+    // and the submit handler writes it into position_size. Widening the type is
+    // the fix; this pins the contract so the fallback cannot come back.
+    expect(computePositionSize({ ...plan, pointValue: null })).toBeNull();
+  });
+
+  it("sizes correctly once the instrument is priced", () => {
+    // risk 100 / (10 points * 50) = 0.2 contracts
+    expect(computePositionSize({ ...plan, pointValue: 50 })).toBeCloseTo(0.2);
+    // What the null case would have silently returned instead.
+    expect(computePositionSize({ ...plan, pointValue: 1 })).toBeCloseTo(10);
+  });
+
+  it("still rejects a zero or negative point value", () => {
+    expect(computePositionSize({ ...plan, pointValue: 0 })).toBeNull();
+    expect(computePositionSize({ ...plan, pointValue: -50 })).toBeNull();
+  });
+});

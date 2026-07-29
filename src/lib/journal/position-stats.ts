@@ -12,7 +12,13 @@ export type PositionStatsInput = {
   direction: string | null;
   entry_price: number | null;
   stop_price: number | null;
-  point_value?: number;
+  /**
+   * Contract point value. Null / absent means the trade cannot be priced, and
+   * every money column comes back null — matching the view, which dropped its
+   * `COALESCE(point_value, 1)` for exactly this reason. Pricing an unknown
+   * instrument at 1 renders a 500-point ES win as $500.
+   */
+  point_value?: number | null;
   executions: ExecutionFill[];
 };
 
@@ -56,7 +62,7 @@ export function plannedRiskPts(
 export function computePositionStats(
   input: PositionStatsInput,
 ): ComputedPositionStats {
-  const pointValue = input.point_value ?? 1;
+  const pointValue = input.point_value ?? null;
   const dir = tradeDirectionMultiplier(input.direction);
 
   let entryQty = 0;
@@ -101,15 +107,21 @@ export function computePositionStats(
 
   if (avgEntry != null && exitQty > 0) {
     grossPoints = (exitNotional - avgEntry * exitQty) * dir;
-    grossPl = grossPoints * pointValue;
-    netPl = grossPl - totalFees - totalSwap;
+    // Money is null without a point value; points and R are price-space
+    // quantities and survive one, exactly as the SQL view has them.
+    if (pointValue != null) {
+      grossPl = grossPoints * pointValue;
+      netPl = grossPl - totalFees - totalSwap;
+    }
 
     if (riskPts != null && entryQty > 0) {
       const riskDenom = riskPts * entryQty;
       realizedR = grossPoints / riskDenom;
-      const riskMoney = riskDenom * pointValue;
-      if (riskMoney > 0 && netPl != null) {
-        realizedRNet = netPl / riskMoney;
+      if (pointValue != null) {
+        const riskMoney = riskDenom * pointValue;
+        if (riskMoney > 0 && netPl != null) {
+          realizedRNet = netPl / riskMoney;
+        }
       }
     }
   }

@@ -73,13 +73,23 @@ export function computePlannedRewardR(params: {
   return reward > 0 ? reward / risk : null;
 }
 
-/** Lots/units: (balance × risk%) / (stop distance × point value). */
+/**
+ * Lots/units: (balance × risk%) / (stop distance × point value).
+ *
+ * `pointValue` is nullable and a null REFUSES to size, rather than standing in
+ * a 1. A missing contract spec used to arrive here as a literal 1 — the same
+ * fallback `tj_position_stats` deliberately dropped — and because 1 passes the
+ * `> 0` guard the function returned a confident number instead of nothing. On
+ * an ES trade that is a suggestion 50× too large, and the trade form writes the
+ * suggestion into `position_size`. A sizing calculator has to be the last place
+ * in the system that guesses.
+ */
 export function computePositionSize(params: {
   balance: number;
   riskPct: number | null;
   entry: number | null;
   stop: number | null;
-  pointValue: number;
+  pointValue: number | null;
 }): number | null {
   const { balance, riskPct, entry, stop, pointValue } = params;
   if (
@@ -87,6 +97,7 @@ export function computePositionSize(params: {
     entry == null ||
     stop == null ||
     balance <= 0 ||
+    pointValue == null ||
     pointValue <= 0
   ) {
     return null;

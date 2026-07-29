@@ -6,7 +6,12 @@ export type SlippageInput = {
   avgEntry: number | null;
   stopPrice: number | null;
   entryQty?: number | null;
-  pointValue?: number;
+  /**
+   * Null / absent means the trade has no contract spec, and `slippageMoney`
+   * comes back null rather than being priced in raw points. `slippageR` is a
+   * ratio in price space and is unaffected.
+   */
+  pointValue?: number | null;
 };
 
 export type SlippageResult = {
@@ -26,7 +31,7 @@ function tradeDirection(dir: string | null): 1 | -1 {
 
 /** Entry slippage: planned vs avg fill. Positive adversePts = worse fill (cost). */
 export function computeEntrySlippage(input: SlippageInput): SlippageResult | null {
-  const { plannedEntry, avgEntry, stopPrice, direction, entryQty, pointValue = 1 } =
+  const { plannedEntry, avgEntry, stopPrice, direction, entryQty, pointValue = null } =
     input;
 
   if (
@@ -51,7 +56,7 @@ export function computeEntrySlippage(input: SlippageInput): SlippageResult | nul
   }
 
   let slippageMoney: number | null = null;
-  if (entryQty != null && entryQty > 0) {
+  if (entryQty != null && entryQty > 0 && pointValue != null) {
     slippageMoney = adversePts * pointValue * entryQty;
   }
 
@@ -71,7 +76,10 @@ export function slippageFromTrade(row: TradeRow): SlippageResult | null {
   const direction = typeof row.direction === "string" ? row.direction : null;
   const avgEntry = row.stats?.avg_entry ?? null;
   const entryQty = row.stats?.entry_qty ?? null;
-  const pointValue = row.stats?.point_value ?? 1;
+  // No `?? 1`: the view reports a null point value for a trade it cannot price,
+  // and turning that into a 1 here would quote a dollar slippage figure for a
+  // trade whose P&L the database itself refused to state.
+  const pointValue = row.stats?.point_value ?? null;
 
   return computeEntrySlippage({
     direction,

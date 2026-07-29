@@ -133,3 +133,38 @@ describe("cost accrual matches the SQL view", () => {
     expect(s.avg_entry).toBe(100);
   });
 });
+
+describe("an unpriceable trade yields no money, matching the view", () => {
+  const fills = [
+    { side: "entry" as const, price: 5000, qty: 2 },
+    { side: "exit" as const, price: 5010, qty: 2 },
+  ];
+
+  it("nulls gross_pl and net_pl when no point value is known", () => {
+    const s = computePositionStats({
+      direction: "Long",
+      entry_price: 5000,
+      stop_price: 4990,
+      executions: fills,
+    });
+    expect(s.gross_pl).toBeNull();
+    expect(s.net_pl).toBeNull();
+    expect(s.realized_r_net).toBeNull();
+    // Points and R live in price space and survive a missing spec, exactly as
+    // tj_position_stats has them.
+    expect(s.gross_points).toBeCloseTo(20);
+    expect(s.realized_r).toBeCloseTo(1);
+  });
+
+  it("prices normally once the spec is present", () => {
+    const s = computePositionStats({
+      direction: "Long",
+      entry_price: 5000,
+      stop_price: 4990,
+      point_value: 50,
+      executions: fills,
+    });
+    expect(s.gross_pl).toBeCloseTo(1000);
+    expect(s.net_pl).toBeCloseTo(1000);
+  });
+});

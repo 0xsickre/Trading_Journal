@@ -178,12 +178,23 @@ export type PerformanceSummary = {
  * Only rows at or above the sample threshold are eligible: naming a
  * three-trade category "best" is exactly the mistake this whole engine is
  * built to avoid.
+ *
+ * "Best" follows the metric's OWN direction. Sorting descending unconditionally
+ * made the summary name the highest-fee instrument as best on `total_fees`, and
+ * the slowest book as best on `avg_hold` — six catalogue metrics declare
+ * `higherIsBetter: false`, and the metric here is whichever one the user picked.
+ * `sortRows` above already reads the flag; this now reads the same one.
  */
 export function summarizeReport(
   result: ReportResult,
   metricKey = "net_pnl",
 ): PerformanceSummary {
   const eligible = result.rows.filter((r) => !r.belowSample);
+  // The result's own metric list first — a pivot or a caller-built metric may
+  // not be in the global catalogue — then the catalogue as a fallback.
+  const metric =
+    result.metrics.find((m) => m.key === metricKey) ?? getMetric(metricKey);
+  const dir = metric?.higherIsBetter === false ? 1 : -1;
   const empty: PerformanceSummary = {
     best: null,
     worst: null,
@@ -194,8 +205,10 @@ export function summarizeReport(
   if (eligible.length === 0) return empty;
 
   const withValue = eligible.filter((r) => r.values[metricKey] != null);
+  // Best first, worst last, whichever way "better" runs for this metric.
   const byMetric = [...withValue].sort(
-    (a, b) => (b.values[metricKey] as number) - (a.values[metricKey] as number),
+    (a, b) =>
+      ((a.values[metricKey] as number) - (b.values[metricKey] as number)) * dir,
   );
   const byWinRate = eligible
     .filter((r) => r.values.win_rate != null)

@@ -325,7 +325,21 @@ export function TradeForm({
   }
 
   const instrument = instruments.find((i) => i.symbol === fields.instrument);
-  const pointValue = instrument?.point_value ?? 1;
+  /**
+   * Contract point value, or null when the symbol resolves to no instrument —
+   * an imported symbol (`normalizeInstrumentSymbol` passes unknown broker
+   * symbols straight through), a deactivated one, or one typed before it was
+   * added in Settings.
+   *
+   * This used to fall back to 1, and that fallback reached the position-size
+   * calculator: `riskAmount / (stopDist × 1)` instead of `× 50` suggests an ES
+   * position FIFTY TIMES too large, and the submit handler writes the suggestion
+   * into `position_size`. Because 1 passes every `> 0` guard, nothing anywhere
+   * signalled the miss. `tj_position_stats` dropped exactly this `COALESCE(…, 1)`
+   * so an unpriceable trade reads as missing rather than as a confident wrong
+   * number; a sizing calculator is the last place that may guess.
+   */
+  const pointValue = instrument?.point_value ?? null;
 
   const metrics = useMemo(() => {
     const executionFills = execs
@@ -816,6 +830,20 @@ export function TradeForm({
                                 metrics.sizeSuggestion != null
                                   ? `${metrics.sizeSuggestion.toFixed(2)}${instrument?.symbol ? ` ${instrument.symbol}` : ""}`
                                   : "—",
+                            }
+                          : undefined
+                      }
+                      fieldHints={
+                        tab.id === "plan" &&
+                        group.id === "risk_plan" &&
+                        pointValue == null
+                          ? {
+                              // Why the suggestion is blank. Without this the
+                              // field just reads "—" and looks like the form
+                              // failed, rather than saying what is missing.
+                              position_size: fields.instrument
+                                ? `Nema point value za ${String(fields.instrument)} — dodaj instrument u Settings da bi se veličina pozicije računala.`
+                                : "Izaberi instrument da bi se veličina pozicije računala.",
                             }
                           : undefined
                       }

@@ -106,3 +106,31 @@ describe("fmtSlippageR", () => {
     expect(fmtSlippageR(-0.03)).toBe("+0.03R");
   });
 });
+
+describe("slippage money needs a contract spec", () => {
+  it("returns null money, but a real R, when point value is unknown", () => {
+    const r = computeEntrySlippage({
+      direction: "long",
+      plannedEntry: 5000,
+      avgEntry: 5001,
+      stopPrice: 4990,
+      entryQty: 2,
+      pointValue: null,
+    });
+    expect(r!.slippageMoney).toBeNull();
+    expect(r!.slippageR).toBeCloseTo(0.1);
+  });
+
+  it("slippageFromTrade does not price a trade the view refused to price", () => {
+    const row = {
+      id: "1",
+      entry_price: 5000,
+      stop_price: 4990,
+      direction: "long",
+      stats: { avg_entry: 5001, entry_qty: 2, point_value: null },
+    } as unknown as TradeRow;
+    const r = slippageFromTrade(row);
+    expect(r!.slippageMoney).toBeNull();
+    expect(r!.adversePts).toBeCloseTo(1);
+  });
+});

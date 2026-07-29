@@ -101,8 +101,13 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
   };
 }
 
-export function enrich(specs: TradeSpec[]) {
-  return enrichTrades(specs.map(mkTrade), { tzOf: () => "UTC" });
+/**
+ * `tz` defaults to UTC so day keys equal the ISO prefix and fixtures stay
+ * readable. Pass a real zone to exercise the boundary cases — a close instant
+ * that falls on a different calendar day in the account's timezone than in UTC.
+ */
+export function enrich(specs: TradeSpec[], tz = "UTC") {
+  return enrichTrades(specs.map(mkTrade), { tzOf: () => tz });
 }
 
 export function mkReport(

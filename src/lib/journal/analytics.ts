@@ -174,10 +174,18 @@ export function computeStats(
 
   // Drawdown has one implementation (balance.ts) so the $ figure here and the
   // % figure on the dashboard can never drift apart.
+  //
+  // `toRealized` has already sorted these chronologically, and a trade with no
+  // close instant sorts first. `buildBalanceTimeline` drops any point with a
+  // falsy `at`, which silently removed such trades from the drawdown while they
+  // still counted toward netSum, winRate and profitFactor — the parts stopped
+  // adding up, in the direction that flatters the book. Carrying the sequence
+  // position as the key keeps one population behind every figure here; the
+  // timeline only ever uses `at` for ordering and labelling.
   const maxDd = computeDrawdown(
     buildBalanceTimeline(
       0,
-      trades.map((t) => ({ at: t.closedAt ?? "", pnl: pnl(t) })),
+      trades.map((t, i) => ({ at: t.closedAt || `#${i}`, pnl: pnl(t) })),
     ),
   ).maxMoney;
 

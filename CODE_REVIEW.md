@@ -1,550 +1,624 @@
 # Code review — Trading Journal
 
-Deep-dive review of the calculation layer, server actions, `tj_position_stats` SQL view, and the
-dashboard / trade-form clients. Reviewed at commit `cb9c51e`, against the live Supabase project
-(`Trading Journal`, `hjwvhzcszhjhpocfjatm`) — the deployed view definition was confirmed byte-identical
-to `supabase/migrations/20260720170000_tj_position_stats_view.sql`, so the repo is the source of truth.
+Deep-dive review of the calculation layer, the report engine, the playbook layer, the
+server actions and the `tj_position_stats` view. Reviewed at commit `f5270b2`.
+
+This is the **second** review round. The first (at commit `cb9c51e`) covered the Phase
+1–2 calculation core and closed with nothing open; its findings and their fixes are in
+git history, and are visible in the tree as the explanatory comments now sitting at each
+decision point. This document does not repeat them.
+
+Since that round, four phases landed: the report engine (3a), the `/reports` route with
+compare mode (3b/3c), user-defined trade fields (4a), and the playbook as an entity with
+per-rule statistics (4b). That new code — plus the boundaries where the previous round's
+fixes did not propagate into it — is where this round concentrates.
+
+Baseline before any change: `npm test` → **488 tests / 37 files, all passing**;
+`npx tsc --noEmit` clean. After the fixes below: **503 passing**, typecheck clean,
+`npm run build` clean.
 
 ## Summary
 
-The pure-math layer is in good shape. 325 vitest cases cover it, the reasoning behind non-obvious
-choices is written down at the point of decision — close-date vs open-date attribution
-(`period-stats.ts:67-75`, `activity.ts:1-14`), the two drawdown bases (`balance.ts:1-14`), breakeven
-excluded from the win-rate denominator but not from money sums (`analytics.ts:68-77`). That is unusually
-disciplined for a solo project and most of it is correct.
+The pure-math layer remains in good shape, and the discipline of writing the reasoning
+down at the point of decision has held — the breakeven-band split in `analytics.ts:93-102`,
+the two drawdown bases in `balance.ts:1-14`, close-date attribution in
+`period-stats.ts:67-75`, the plan-vs-fill R convention in `excursion.ts:30-46`. Those
+comments made this review much faster, and several are the reason a finding below is an
+*inconsistency* rather than a *mistake*.
 
-The defects cluster at the **boundaries**:
+This round's defects cluster around **one principle that was established and then not
+propagated.** Migration `20260728120000` deliberately removed `COALESCE(point_value, 1)`
+from the stats view, so a trade whose instrument cannot be resolved returns
+`point_value_source = 'missing'` and null money — the honest answer — instead of a
+500-point ES win rendered as `$500`. Two TypeScript call sites still did exactly what the
+SQL stopped doing. One of them is the **position-size calculator**, whose output is
+written into the trade on save.
 
-- where Postgres meets TypeScript (an unbounded `select` that silently truncates; a view that recomputes
-  history from a live join),
-- where a windowed dataset meets an unwindowed one (period filter vs cash events),
-- where one `null` carries two meanings ("infinite" and "no data"),
-- where two code paths implement the same rule differently (form vs server fill validation; TS vs SQL fee
-  accrual).
+The rest divide into: a transactional guarantee granted to fills but never extended to
+the data Phase 4b added; two places where the report engine reads a value without the
+qualifier that gives it meaning (a metric's direction; a trade's timezone); and a set of
+unvalidated URL parameters on `/reports`, one of which silently disables the entire
+small-sample guard the engine was built around.
 
-| Severity | Count | Theme |
-| --- | --- | --- |
-| Critical | 4 | Historical P&L is mutable; silent data truncation; non-transactional writes; a lifecycle the database rejects |
-| High | 6 | Wrong denominators, overwritten records, mixed populations |
-| Medium | 10 | Cross-surface inconsistency, duplicated work, swallowed errors (one later withdrawn — see M4) |
-| Low | 12 | Dead code, boundary conventions, formatting |
+| Severity | Count | Theme | Status |
+| --- | --- | --- | --- |
+| Critical | 1 | Position sizing suggests a size wrong by a factor of the point value | **Fixed** |
+| High | 5 | An unpriced trade quoted in dollars; a non-atomic write that destroys data; a summary that inverts; a filter on the wrong clock; two populations behind one figure | **Fixed** |
+| Medium | 8 | Unvalidated URL input, missing guards, swallowed errors, duplicated reads | Documented |
+| Low | 6 | Dead exports, an unwired component, three copies of one accessor | Documented |
 
-Two of these were found only by exercising the live database rather than reading the code — **C4**,
-where the whole plan/miss lifecycle is rejected by a check constraint, and the `getInstruments` filter
-noted under C1.
+Critical and High are fixed in this commit, each with a regression test confirmed to fail
+before the change. Medium and Low are documented with corrected snippets and left for
+triage.
 
 ---
 
 ## CRITICAL
 
-### C1 — Historical P&L is mutable, and a missing instrument silently prices trades in raw points
+### C1 — Position sizing silently suggests a size wrong by a factor of `point_value`
 
-`supabase/migrations/20260720170000_tj_position_stats_view.sql`
-
-Every past trade's money is recomputed on read, from a live join against the instrument table:
-
-```sql
-LEFT JOIN tj_instruments i ON i.user_id = p.user_id AND i.symbol = p.instrument
--- ...
-COALESCE(i.point_value, 1::numeric) AS point_value
-```
-
-Three consequences, all silent:
-
-1. **Editing an instrument rewrites history.** `updateInstrument` (`src/app/(app)/settings/actions.ts:192`)
-   accepts a new `point_value`. The moment it is saved, the P&L, R-multiple, drawdown, profit factor and
-   Sickre Score of *every trade ever taken on that symbol* change. Nothing warns, nothing is versioned.
-2. **Deleting or renaming an instrument prices the trade at 1.** `deleteInstrument`
-   (`src/app/(app)/settings/actions.ts:214`) drops the join, `COALESCE(..., 1)` takes over, and a 500-point
-   ES win becomes `$500` instead of `$25,000`. The trade still renders, confidently, with a wrong number.
-3. **Import makes this routine, not hypothetical.** `normalizeInstrumentSymbol`
-   (`src/lib/journal/instrument-aliases.ts`) returns the cleaned-uppercase key for anything not in its alias
-   table, so a broker export of `EUR/USD.pro` becomes `EURUSDPRO` — matching no instrument row, priced at 1.
-
-*(Verified against the live DB: `tj_instruments_user_id_symbol_key` UNIQUE `(user_id, symbol)` does exist,
-so the join cannot fan out and double-count. That specific risk is not present.)*
-
-**Compounding bug, same root.** `getInstruments` (`src/lib/journal/instruments.ts`) — the only read path
-for instruments anywhere in the app — hard-filtered results to `DEFAULT_INSTRUMENT_SYMBOLS`:
+`src/components/journal/trade-form.tsx:328`
 
 ```ts
-.in("symbol", DEFAULT_INSTRUMENT_SYMBOLS)
+const instrument = instruments.find((i) => i.symbol === fields.instrument);
+const pointValue = instrument?.point_value ?? 1;
 ```
 
-So an instrument added through Settings (`addInstrument`) was invisible everywhere, *including the
-Settings list that had just created it*, and a trade on that symbol had nothing to price it with. The
-feature appeared to do nothing and quietly produced unpriced trades.
+The symbol resolves to nothing more often than it looks. `normalizeInstrumentSymbol`
+passes any unrecognised broker symbol straight through (`EUR/USD.pro` → `EURUSDPRO`), so
+every imported trade on an unmapped symbol lands here; so does a deactivated instrument,
+and so does a symbol typed before it was added in Settings. In all three cases
+`pointValue` became `1`, feeding three consumers:
 
-**Fix — snapshot the contract spec onto the trade at write time.** A journal records what happened; the
-instrument table is current configuration, not history. They must not be the same number.
+**1. The position-size calculator.** `computePositionSize` is
+`riskAmount / (stopDist × pointValue)`. At `1` instead of `50` (ES), the suggestion is
+**fifty times too large**. Nothing flags it, because `1` passes every `> 0` guard in the
+function — it returns a plausible number rather than nothing.
 
-```sql
-ALTER TABLE public.tj_positions
-  ADD COLUMN IF NOT EXISTS point_value_at_trade numeric,
-  ADD COLUMN IF NOT EXISTS tick_size_at_trade  numeric;
-
--- Backfill from today's instrument table: the best information available for
--- existing rows, and from here on it stops moving.
-UPDATE public.tj_positions p
-   SET point_value_at_trade = i.point_value,
-       tick_size_at_trade   = i.tick_size
-  FROM public.tj_instruments i
- WHERE i.user_id = p.user_id
-   AND i.symbol  = p.instrument
-   AND p.point_value_at_trade IS NULL;
-```
-
-and in the view, prefer the snapshot and *refuse to guess* when there is nothing to use:
-
-```sql
-COALESCE(p.point_value_at_trade, i.point_value) AS point_value,
-CASE
-  WHEN p.point_value_at_trade IS NOT NULL THEN 'snapshot'
-  WHEN i.point_value          IS NOT NULL THEN 'instrument'
-  ELSE 'missing'
-END AS point_value_source,
-```
-
-Every money expression then multiplies by `COALESCE(p.point_value_at_trade, i.point_value)` with no
-`, 1` fallback, so an unresolvable instrument yields `NULL` P&L — which the UI can flag — rather than a
-plausible-looking wrong number. `point_value_source = 'missing'` drives a warning badge in the journal grid.
-
-**Why this is the most important finding:** it is the only defect that can corrupt data the user has already
-reviewed and trusted, retroactively, with no action on their part.
-
----
-
-### C2 — Every dashboard number silently truncates past ~1000 trades
-
-`src/lib/journal/trades.ts:23-39`, `src/lib/journal/ftmo-status.ts:20-23`, `src/lib/journal/cash-events.ts:12-17`
+**2. That suggestion is then persisted** (`trade-form.tsx:605`):
 
 ```ts
-let posQ = supabase.from("tj_positions").select("*").order("created_at", { ascending: false });
+fieldsToSave.position_size = Number(metrics.sizeSuggestion.toFixed(4));
 ```
 
-PostgREST caps responses at `db-max-rows` (1000 by default) and returns the short page **with HTTP 200 and
-no error**. Past that many trades the dashboard keeps rendering — win rate, net P&L, drawdown, equity curve,
-Sickre Score — computed on a truncated set, with no visible symptom.
+So the wrong number does not merely render — it becomes the trade's recorded size, and
+from there feeds `size_bucket` reports and the `size` filter.
 
-The codebase already knows this. `trades.ts:132-136` documents the failure mode precisely and paginates
-around it — but only for fill *counts*, a diagnostic. The query feeding every financial figure does not.
+**3. The form's live P&L preview.** `computePositionStats({ point_value: pointValue })`
+priced the trade in raw points while `tj_position_stats`, correctly, returned `NULL` for
+the same trade. The form and the database disagreed, and the form was the one that looked
+confident.
 
-`ftmo-status.ts:20-23` is the sharpest edge: a truncated set can hide a rule breach, so the freeze that is
-supposed to stop trading on a blown challenge never fires.
+**Root cause worth naming.** `computePositionSize` declared `pointValue: number`,
+non-nullable. A caller with no point value had no way to *say* so, and `?? 1` is what that
+pressure produces. The runtime guard was in fact already correct for an explicit null
+(`null <= 0` coerces to `true` in JS) — it was the *type* that made the honest call
+impossible. Widening it is the fix; the fallback was the symptom.
 
-Secondary: `trades.ts:36-38` puts every position id into a single `.in("position_id", positionIds)` filter.
-Past a few thousand ids this exceeds the request URL limit and fails outright.
-
-**Fix — one shared pagination helper, generalised from the loop that already exists:**
+**Fix — applied.** Carry "unpriceable" as `null` all the way through, and let each
+consumer decline.
 
 ```ts
-// src/lib/supabase/paginate.ts
-const PAGE = 1000;
+// src/lib/journal/plan-calculations.ts
+export function computePositionSize(params: {
+  balance: number;
+  riskPct: number | null;
+  entry: number | null;
+  stop: number | null;
+  pointValue: number | null;   // was: number
+}): number | null {
+  const { balance, riskPct, entry, stop, pointValue } = params;
+  if (
+    riskPct == null || entry == null || stop == null ||
+    balance <= 0 || pointValue == null || pointValue <= 0
+  ) {
+    return null;
+  }
+  // …
+}
+```
 
-/** Drain a PostgREST query page by page. An unbounded select silently stops at
- *  `db-max-rows`; this keeps asking until a page comes back short. */
-export async function selectAllPages<T>(
-  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await build(from, from + PAGE - 1);
-    if (error) throw new Error(error.message);
-    if (data?.length) out.push(...data);
-    if (!data || data.length < PAGE) return out;
+```ts
+// src/lib/journal/position-stats.ts — money is null without a spec; points and R, which
+// live in price space, survive one. Exactly as the SQL view has it.
+const pointValue = input.point_value ?? null;
+// …
+grossPoints = (exitNotional - avgEntry * exitQty) * dir;
+if (pointValue != null) {
+  grossPl = grossPoints * pointValue;
+  netPl = grossPl - totalFees - totalSwap;
+}
+if (riskPts != null && entryQty > 0) {
+  const riskDenom = riskPts * entryQty;
+  realizedR = grossPoints / riskDenom;          // unaffected
+  if (pointValue != null) {
+    const riskMoney = riskDenom * pointValue;
+    if (riskMoney > 0 && netPl != null) realizedRNet = netPl / riskMoney;
   }
 }
 ```
 
-with `.in()` filters chunked at 500 ids per request.
-
----
-
-### C3 — Fill replacement is delete-then-insert with no transaction
-
-`src/app/(app)/trades/actions.ts:168-186`, duplicated at `src/app/(app)/import/actions.ts:93-110`
-(`commitImport` merge) and `src/app/(app)/import/actions.ts:195-217` (`undoImportBatch`)
-
 ```ts
-const { data: prevExecs } = await supabase.from("tj_executions").select(...).eq("position_id", id);
-await supabase.from("tj_executions").delete().eq("position_id", id);
-if (execs.length > 0) {
-  const { error: exErr } = await supabase.from("tj_executions").insert(...);
-  if (exErr) {
-    if (prevExecs && prevExecs.length > 0) {
-      await supabase.from("tj_executions").insert(prevExecs.map(...)); // ← can also fail
-    }
-    return { ok: false as const, error: exErr.message };
-  }
-}
+// src/components/journal/trade-form.tsx
+const pointValue = instrument?.point_value ?? null;
 ```
 
-The comment above it is right about the danger and the mitigation is still not sufficient:
+Both render sites already fall back to `"—"` when `sizeSuggestion` is null, so the number
+simply disappears. A blank field is not self-explanatory, though, so the risk-plan group
+now carries a hint naming the instrument that has no point value and where to fix it,
+rather than leaving the user to interpret a dash.
 
-- The rollback is application-level. Its own `insert` result is never checked; if it fails the fills are gone
-  permanently and the function reports only the *original* error.
-- Between the delete and the insert — two round trips to a remote database — any concurrent reader sees the
-  position with zero fills. `status` reads as `planned`, `net_pl` as `null`. That includes another browser
-  tab, a `revalidatePath` re-render, and the FTMO freeze check.
-- The restore loses each execution's `id`, so the rows come back as new records.
-
-**Fix — do it in one statement, under the caller's RLS:**
-
-```sql
-CREATE OR REPLACE FUNCTION public.tj_replace_executions(
-  p_position_id uuid,
-  p_executions  jsonb
-) RETURNS void
-LANGUAGE plpgsql
-SECURITY INVOKER          -- RLS on tj_executions still applies to the caller
-SET search_path = ''
-AS $$
-BEGIN
-  DELETE FROM public.tj_executions WHERE position_id = p_position_id;
-
-  INSERT INTO public.tj_executions (position_id, side, price, qty, executed_at, fee, swap_funding, source)
-  SELECT p_position_id, e.side, e.price, e.qty, e.executed_at,
-         COALESCE(e.fee, 0), COALESCE(e.swap_funding, 0), COALESCE(e.source, 'manual')
-    FROM jsonb_to_recordset(p_executions) AS e(
-      side text, price numeric, qty numeric, executed_at timestamptz,
-      fee numeric, swap_funding numeric, source text
-    );
-END;
-$$;
-```
-
-The function body is a single implicit transaction: either the new fills land or the old ones were never
-deleted. All three call sites collapse to one `supabase.rpc("tj_replace_executions", ...)`.
-
----
-
-### C4 — The database rejects the entire plan / missed lifecycle
-
-Found by exercising the live schema, not by reading the code. `tj_positions_status_check` was:
-
-```sql
-CHECK (status = ANY (ARRAY['open', 'partial', 'closed']))
-```
-
-but `20260721130000_trade_lifecycle_missed.sql` introduced `'planned'` and `'missed'` and **never widened
-it**. Every one of these raises a `23514` constraint violation, surfaced to the user as a generic
-"Insert failed":
-
-- `createTrade` on a plan with no fills — `computeStatus([])` returns `'planned'`
-  (`src/lib/journal/trade-lifecycle.ts:40-44`)
-- `markTradeMissed` (`src/app/(app)/trades/actions.ts:194`)
-- `restoreTradeToPlanned` (`src/app/(app)/trades/actions.ts:240`)
-- `commitImport` on any row with no executions (`src/app/(app)/import/actions.ts`)
-
-The plan → missed → restore flow, the `miss_reason` option list, the "Missed setup-i" section of the
-mentor pack and the `canMarkMissed` / `canRestoreToPlanned` guards were all built on a status the
-database would not accept.
-
-That migration's own backfill was affected too:
-
-```sql
-UPDATE public.tj_positions SET status = 'planned' WHERE p.status = 'open' AND NOT EXISTS (...)
-```
-
-It could only ever have failed — it passed silently because no row matched at the time it ran.
-
-**Fix:** widen the constraint to the five statuses `computeStatus` can actually return, and re-run the
-backfill that could not previously apply. The constraint is kept rather than dropped: it is what stops a
-typo'd status reaching the table, and its list should mirror the `PositionStatus` union that
-`trade-lifecycle.ts` defines.
+*Regression test:* `position-stats.test.ts` — "an unpriceable trade yields no money,
+matching the view" (fails before the change). `plan-calculations.test.ts` pins the
+nullable contract so the fallback cannot return.
 
 ---
 
 ## HIGH
 
-### H1 — The period filter breaks drawdown %, mixing windowed trades with all-time cash flow
+### H1 — The same `?? 1` in the aggregate slippage path
 
-`src/components/journal/dashboard.tsx:232-244` windows the trades:
+`src/lib/journal/entry-slippage.ts:190`
 
 ```ts
-if (period !== "all") {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - Number(period));
-  r = r.filter((t) => (t.closedAt ?? "") >= cutoff.toISOString());
+const pointValue = row.stats?.point_value ?? 1;
+```
+
+`slippageMoney = adversePts × pointValue × entryQty` then quotes a currency figure for a
+trade whose P&L the database itself declined to state. Same class as C1, in the path
+feeding `computeSlippageStats` and the mentor export.
+
+**Fix — applied.** `slippageMoney` is null without a spec; `slippageR` is a ratio in price
+space, is unaffected, and is the more useful half anyway.
+
+```ts
+const pointValue = row.stats?.point_value ?? null;
+// …
+let slippageMoney: number | null = null;
+if (entryQty != null && entryQty > 0 && pointValue != null) {
+  slippageMoney = adversePts * pointValue * entryQty;
 }
 ```
 
-`dashboard.tsx:266-272` does **not** window the cash events. `dashboard.tsx:299-310` then seeds the timeline
-with the full `startBalance`. On any period except "All", the equity series is:
+`computeEntrySlippage`'s `pointValue` default also moved from `1` to `null`, so an omitted
+spec and an unknown spec now mean the same thing.
 
-```
-starting_balance  +  (last 90 days of P&L)  +  (all-time deposits and withdrawals)
-```
-
-which describes no account that has ever existed. Peak equity is the denominator for `maxPctOfEquity` and
-`currentPctOfEquity` (`balance.ts:160-170`), so the headline **"Max drawdown %"** KPI and the whole underwater
-chart are wrong for the default view — the dashboard opens on 90d.
-
-**Fix:** window the cash events to the same cutoff, and seed the timeline with the equity the account actually
-had on day one of the window — pre-window realized P&L plus pre-window cash flow — instead of the raw starting
-balance.
-
-### H2 — `position_size` and `planned_rr` are overwritten with theory on every save
-
-`src/components/journal/trade-form.tsx:480-485`
-
-```ts
-if (metrics.plannedRR != null)     fieldsToSave.planned_rr    = formatPlannedRewardR(metrics.plannedRR);
-if (metrics.sizeSuggestion != null) fieldsToSave.position_size = Number(metrics.sizeSuggestion.toFixed(4));
-```
-
-`position_size` is the *suggestion* — `(balance × risk%) / (stopDist × pointValue)` — written over the field
-even when real fills exist and the actual size is known from `entry_qty`. The journal ends up recording what
-you should have done rather than what you did.
-
-`planned_rr` is worse because a metric depends on it. Editing a closed trade's prices rewrites the plan, and
-`plannedRewardFromTrade` (`src/lib/journal/exit-efficiency.ts:29-39`) *prefers* the stored `planned_rr` over
-live prices. So "Target attainment" re-baselines against the edit: a trader who quietly lowers a target after
-the fact improves their own discipline score.
-
-**Fix:** write the size suggestion only when the field is empty *and* the trade has no fills; freeze
-`planned_rr` once `status` leaves `planned`.
-
-### H3 — Position sizing risks a percentage of the starting balance, forever
-
-`src/components/journal/trade-form.tsx` passes `balance = account?.starting_balance ?? 0` into
-`computePositionSize` (`src/lib/journal/plan-calculations.ts:77-98`).
-
-After +40%, or after a withdrawal, "risk 1%" is no longer 1% of anything real. This is the one calculation the
-trader acts on *before* entering a position, and it never updates.
-
-**Fix:** pass current equity. `currentEquity(buildBalanceTimeline(...))` already exists at `balance.ts:225` —
-reuse it rather than introducing a second definition of equity.
-
-### H4 — The form saves fills that the server silently discards
-
-`buildExecInputs` (`trade-form.tsx`) filters on `n(e.price) != null && n(e.qty) != null` — no `qty > 0` check.
-`cleanExecs` (`src/app/(app)/trades/actions.ts:53-65`) requires `e.qty > 0` and drops the row **including its
-fee and swap**. The live preview uses a third predicate (`qty > 0`, `trade-form.tsx` `metrics`).
-
-So a user can type a fill with `qty = 0` and a real commission, watch the preview ignore it, hit save, and have
-the row silently vanish — with no error and no indication that the commission went with it.
-
-**Fix:** one shared `isValidFill()` predicate used by preview, submit and server; reject invalid rows in the UI
-with a toast rather than dropping them server-side.
-
-### H5 — `avgWin` / `avgLoss` are R-multiples wearing money's name, averaged over the wrong population
-
-`src/lib/journal/analytics.ts:120-132` accumulates `t.r` into `winRSum` / `lossRSum`, so `Stats.avgWin` is an
-average **R**, not an average dollar win. Two things follow:
-
-1. `dashboard.tsx:374-377` feeds those into `avgWinLossRatio` → `computeSickreScore`'s `RATIO_BANDS`
-   (`sickre-score.ts:28-36`) — a band table transcribed from a spec that defines the ratio in **money**.
-   An R ratio scored against money bands is a category error.
-2. `winRate` counts every decided trade. `avgWin` / `avgLoss` count only trades that *have* an R, which
-   requires a stop price. Expectancy (`analytics.ts:166`) then multiplies a probability drawn from one
-   population by an average drawn from a smaller one:
-
-   ```ts
-   const expectancy = (winRate / 100) * avgWin + (lossRate / 100) * avgLoss;
-   ```
-
-   A trader who records stops on half their trades gets an expectancy that describes neither half.
-
-Expectancy is the number that answers "is this system worth trading". It cannot be a blend of two samples.
-
-**Fix:** rename to `avgWinR` / `avgLossR`, add `avgWinMoney` / `avgLossMoney`, feed the *money* ratio to the
-score, and compute expectancy from the R-subset's own win rate:
-
-```ts
-const rDecided  = winRCount + lossRCount;
-const rWinRate  = rDecided > 0 ? winRCount / rDecided : 0;
-const expectancy = rWinRate * avgWinR + (1 - rWinRate) * avgLossR;
-```
-
-### H6 — A flawless track record scores *lower* than a mediocre one
-
-`analytics.ts:162` returns `null` for profit factor when there are no losses, meaning "infinite".
-`dashboard.tsx:725` renders that as `∞`. But `computeSickreScore` (`sickre-score.ts:194-199`) drops any
-component whose score is `null` and renormalizes the remaining weights — so the **25-weight Profit Factor
-component, the heaviest in the table, is discarded for the one book that maxed it.**
-
-`null` is doing double duty: "infinite" at `analytics.ts:162`, but genuinely "not computable" at
-`risk-metrics.ts:17` (recovery factor, no drawdown yet) and `risk-metrics.ts:145` (win/loss ratio, no losses
-yet). Only the latter should drop a component.
-
-**Fix:** return `Infinity` for the no-losses case and keep `null` strictly for "no data"; `scoreFromBands`
-clamps non-finite input to the top band; the dashboard's `∞` render keys off `!Number.isFinite` instead of
-`== null`.
+*Regression test:* `entry-slippage.test.ts` — "slippage money needs a contract spec".
 
 ---
 
-## MEDIUM
+### H2 — A failed rule-answer write permanently destroys the trade's recorded answers
 
-**M1 — ISO timestamps are compared and sorted as strings.**
-`analytics.ts:44` (`toRealized` sort), `ftmo.ts:126-130` (`t.closedAt >= config.resetAt`),
-`dashboard.tsx:240-241` (period cutoff), `dashboard.tsx:480-485` (mentor-pack range), `balance.ts:64-68`
-(timeline sort).
-
-PostgREST returns `2026-07-28T10:00:00+00:00`. The app generates `2026-07-28T10:00:00.000Z`
-(`resetFtmoChallenge`, `resolveCalendarRange`, `cutoff.toISOString()`). These compare correctly only by
-accident: at identical whole seconds the comparison reaches `'+'` (0x2B) vs `'.'` (0x2E) and inverts, so a
-trade closed exactly at the reset instant or exactly on a range boundary falls on the wrong side. A
-non-UTC offset would break it completely.
-*Fix:* one `toEpoch(iso): number` helper; compare and sort numerically.
-
-**M2 — The mentor pack and the dashboard report different win rates.**
-`mentor-export.ts:73` and `:108` call `computeStats` / `breakdownByField` with the default
-`EXACT_ZERO_RANGE`, ignoring the account's configured breakeven band that the dashboard applies. The same
-trades yield two different win rates — and the export is the copy that goes to a mentor.
-*Fix:* thread `BreakevenRange` through `MentorPackOpts`.
-
-**M3 — TypeScript and SQL disagree on fees.**
-`position-stats.ts:69-82` `continue`s past a fill *before* `totalFees += e.fee ?? 0`; the view sums
-`COALESCE(e.fee, 0)` over every row regardless of qty. A malformed or fee-only row makes the form's live net
-P&L differ from the stored figure — in a file whose first line promises the two stay in sync.
-*Fix:* accumulate fees and swap before the qty guard.
-
-**M4 — MAE/MFE mixes two entry references.**
-`excursion.ts:34-58` measures excursion points from `avg_entry` (the actual fill) but divides by `riskPts`,
-which `plannedRiskPts` derives from the *planned* entry. On a slipped entry, numerator and denominator use
-different origins, so MAE in R is systematically off by the slippage. Either reference is defensible;
-mixing them is not.
-
-**M5 — Stored `planned_rr` shadows live prices.** `exit-efficiency.ts:29-39` prefers the stored string.
-Combined with H2, "Target attainment" depends on the order in which the trade was saved.
-
-**M6 — Redundant work and duplicated logic.**
-- `dashboard.tsx:279-292` and `:299-310` build **identical** balance timelines from identical arguments;
-  `computeStats` builds a third internally (`analytics.ts:148-153`). Three full passes to produce one
-  drawdown figure — and `stats.maxDrawdown` and `drawdown.maxMoney` are the same number reached two ways.
-- `computeDrawdown` (`balance.ts:146-164`) and `drawdownSeries` (`balance.ts:211-221`) each reimplement peak
-  tracking.
-- `plannedRiskPts` is computed twice per call in `computePositionStats` (`position-stats.ts:98` and `:123`).
-- `mentor-export.ts` calls `toRealized(trades)` twelve times — once in `statsTable`, once per
-  `breakdownTable`, once in `buildMentorPack`.
-
-**M7 — `getFailedFtmoAccountIds()` runs on every trade insert** (`trades/actions.ts:97`), pulling all accounts
-plus the entire stats view to resolve one boolean.
-
-**M8 — Mentor-pack download breaks in Firefox and Safari.** `dashboard.tsx:510-517` calls
-`URL.revokeObjectURL(url)` synchronously after `a.click()`, and never attaches the anchor to the DOM.
-
-**M9 — `addOption` / `addList` race on `sort_order`** (`settings/actions.ts:44-55`, `:125-138`): read `max`,
-then insert. Two concurrent adds produce duplicate ordinals.
-
-**M10 — Import errors are swallowed.** `import/actions.ts:136`:
+`src/app/(app)/trades/actions.ts:62-87`
 
 ```ts
-} catch { failed++; }
+const { error: delErr } = await supabase
+  .from("tj_position_rules").delete().eq("position_id", positionId);
+if (delErr) return delErr.message;
+// … separate round trip …
+const { error } = await supabase.from("tj_position_rules").insert(/* … */);
 ```
 
-The message is discarded, so the user sees "3 failed" with no cause. A `create` whose execution insert fails
-also leaves an orphan position behind — unlike `createTrade` (`trades/actions.ts:133-136`), which rolls back.
+Delete-then-insert as two round trips, with no rollback of any kind. If the insert fails —
+a retired rule id, a transient network error, an RLS refusal — the delete has already
+committed and **every recorded answer for that trade is gone**. In `updateTrade` the
+position write has committed too, so returning the error undoes nothing.
+
+This is precisely the failure `tj_replace_executions` (migration `20260728121000`) was
+written to eliminate for fills; its header says so at length. Rule answers arrived in
+Phase 4b and never got the same treatment, though they carry the follow rate that feeds
+every process report.
+
+**Fix — applied.** A new `tj_replace_position_rules(uuid, jsonb)`, modelled directly on
+its sibling — same `SECURITY INVOKER`, same `SET search_path = ''`, same
+ownership-from-parent-position rule, same revoke/grant shape. A function body is one
+implicit transaction, so either the new answers land or the old ones were never removed.
+
+```sql
+-- supabase/migrations/20260730120000_tj_replace_position_rules.sql
+CREATE OR REPLACE FUNCTION public.tj_replace_position_rules(
+  p_position_id uuid,
+  p_rules       jsonb DEFAULT '[]'::jsonb
+) RETURNS integer
+LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
+AS $$
+DECLARE v_user_id uuid; v_inserted integer;
+BEGIN
+  SELECT user_id INTO v_user_id FROM public.tj_positions WHERE id = p_position_id;
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Position % not found', p_position_id USING ERRCODE = 'no_data_found';
+  END IF;
+
+  DELETE FROM public.tj_position_rules WHERE position_id = p_position_id;
+
+  INSERT INTO public.tj_position_rules (user_id, position_id, rule_id, followed)
+  SELECT v_user_id, p_position_id, r.rule_id, r.followed
+  FROM jsonb_to_recordset(COALESCE(p_rules, '[]'::jsonb))
+    AS r(rule_id uuid, followed boolean)
+  WHERE r.rule_id IS NOT NULL AND r.followed IS NOT NULL;
+
+  GET DIAGNOSTICS v_inserted = ROW_COUNT;
+  RETURN v_inserted;
+END; $$;
+```
+
+Delete-then-insert is kept rather than switched to an upsert, deliberately and for the
+reason the original comment gives: a rule the trader *un*-answered has no key in the
+payload at all, and an upsert would leave the withdrawn judgement standing.
+
+The `WHERE r.followed IS NOT NULL` guard enforces at the boundary what the payload already
+implies — the three-state `followed` column uses `NULL` for "not answered", and a
+malformed submission must not be able to write that state as though it were an answer.
+
+`saveRuleAnswers` collapses to the RPC call, and `getCurrentUser` is no longer needed there
+(the function takes ownership from the parent position, which is stricter than `auth.uid()`
+and works outside a request context).
+
+> **Not applied to the live database.** The migration ships as a file. Running it is your
+> call — `saveRuleAnswers` will fail until it exists.
 
 ---
 
-## LOW / dead code
+### H3 — "Best" and "worst" are inverted for every lower-is-better metric
 
-- **Unused exports** (no non-test reference): `countTradingDays`, `unloggedTradingDays`, `countOpenTrades`
-  (`activity.ts`), `secondsToDays` (`units.ts`), `tradingDayKeys` (only `tradingDayKeysFromRows` is used).
-- **The unit layer is orphaned.** `units.ts` implements seven view modes × two P&L bases — `formatMetric`,
-  `canRender`, `VIEW_MODES`, `pipSize`, `metric` — and only `formatDuration` is ever called. Either wire the
-  mode switcher into the dashboard or delete ~150 lines.
-- `exit-efficiency.ts:14` re-exports `parsePlannedRewardR`, which it also imports from `plan-calculations` —
-  two import paths for one function.
-- `units.ts:185` passes `{ sign: false }`, already the default (`format.ts:4`).
-- `analytics.ts:40-41` applies `?? 0` after a filter that already proved the value non-null.
-- `rHistogram` (`analytics.ts:218-240`) boundaries are inclusive-low everywhere except the top: `r = 5.0`
-  lands in `">5"` rather than `"4..5"`.
-- `fmtR(-0.001)` renders `"-0.00R"`; `fmtR(0)` renders `"0.00R"` with no sign, inconsistent with `fmtMoney`'s
-  `sign` option.
-- `nightsBetween` (`cost-defaults.ts:51-60`) counts elapsed 24-hour periods, not calendar nights in the
-  account timezone — a Mon 23:00 → Wed 01:00 hold accrues 1 night instead of 2, while the doc comment says
-  "whole nights".
-- `zonedWeekStartKey` (`time.ts:92-104`) calls `formatInTimeZone` twice for one date.
-- `updateAccount` (`settings/actions.ts:224`) lets `starting_balance` change retroactively, re-basing every
-  historical drawdown %, FTMO evaluation and position-size suggestion with no warning.
-- `getTradesWithStats` orders by `created_at` while every metric dates trades by `closed_at`; the ordering is
-  re-done in `toRealized` anyway.
-- `session_killzone` still exists as a column on `tj_positions` and in the `tj_seed_defaults` function body
-  restored by `20260721130000`, although `20260719150000_drop_session_killzone.sql` removed it from the UI and
-  the option lists. Dead column, dead seed data.
+`src/lib/journal/reports/engine.ts:196-199`
+
+```ts
+const byMetric = [...withValue].sort(
+  (a, b) => (b.values[metricKey] as number) - (a.values[metricKey] as number),
+);
+// best: byMetric[0]   worst: byMetric[byMetric.length - 1]
+```
+
+Always descending, ignoring `ReportMetric.higherIsBetter`. `summarizeReport(result,
+metricKey)` is called with whichever metric the user selected
+(`reports-workbench.tsx:477`), and six catalogue entries declare `higherIsBetter: false`
+— `avg_hold`, `total_fees`, `total_swap`, `cost_pct_of_gross`, `avg_mae_r`,
+`breakeven_count`.
+
+Group by instrument, select "Komisije", and the performance panel names the
+**highest-fee** instrument as your best. Select "Avg MAE u R" and it celebrates the setup
+that went furthest offside. `sortRows`, thirty lines above in the same file, already reads
+the flag correctly — the summary was the one place that did not.
+
+**Fix — applied.**
+
+```ts
+const eligible = result.rows.filter((r) => !r.belowSample);
+// The result's own metric list first — a pivot or a caller-built metric may not be in the
+// global catalogue — then the catalogue as a fallback.
+const metric =
+  result.metrics.find((m) => m.key === metricKey) ?? getMetric(metricKey);
+const dir = metric?.higherIsBetter === false ? 1 : -1;
+// …
+const byMetric = [...withValue].sort(
+  (a, b) =>
+    ((a.values[metricKey] as number) - (b.values[metricKey] as number)) * dir,
+);
+```
+
+*Regression test:* `engine.test.ts` — "summarizeReport respects the metric's direction",
+three cases including the catalogue-fallback path. Two of the three failed before the
+change.
 
 ---
 
-## What was fixed in this pass
+### H4 — The report date filter runs on a different clock from every bucket
 
-**Implemented on this branch, with tests: all Critical (C1–C4), all High (H1–H6), all Medium (M1–M10)
-and the Low / dead-code list**, plus the `getInstruments` bug found under C1.
+`src/lib/journal/reports/filters.ts:102-104`
 
-Five migrations were applied to the live project (`hjwvhzcszhjhpocfjatm`) and committed to
-`supabase/migrations/`:
+```ts
+const closed = t.closedAt ?? "";
+if (filters.dateFrom && closed.slice(0, 10) < filters.dateFrom) return false;
+if (filters.dateTo   && closed.slice(0, 10) > filters.dateTo)   return false;
+```
 
-| Migration | What it does |
+Slicing the ISO string reads the **UTC** date. Every bucket in this engine is keyed on
+`EnrichedTrade.closeDay`, which `enrichTrades` resolves through `zonedDateKey` in the
+account's timezone — the month dimension, the exit-weekday dimension, the calendar
+heatmap, the weekly period rows.
+
+A trade closed `2026-01-06T02:00:00Z` has `closeDay = 2026-01-05` in New York. It appears
+in the January-5 row of the table, and a `to=2026-01-05` filter excludes it. At a month
+boundary the same instant sits in January by one clock and February by the other, so a
+"January" filter drops a trade the January bucket contains.
+
+A second, quieter bug lived in the same three lines: a trade with no close instant became
+`""`, which is unconditionally `< dateFrom` (excluded) but never `> dateTo` (kept). The
+same trade was in or out depending on which end of the range you specified.
+
+**Fix — applied.** One clock for the whole engine, one answer for the missing case.
+
+```ts
+const closeDay = t.closeDay;
+if (filters.dateFrom && (!closeDay || closeDay < filters.dateFrom)) return false;
+if (filters.dateTo   && (!closeDay || closeDay > filters.dateTo))   return false;
+```
+
+A trade with no close instant has no close *day* either, so a date-bounded question cannot
+be answered for it — it drops out of either bound rather than being kept by one and cut by
+the other.
+
+*Regression test:* `filters.test.ts` — "date bounds use the account timezone, not UTC",
+three cases including one asserting the filter and the month dimension agree. All three
+failed before the change. `test-helpers.ts`'s `enrich()` gained an optional `tz` argument
+(defaulting to `"UTC"`, so no existing fixture moved).
+
+---
+
+### H5 — Drawdown was computed over a smaller population than the money sums
+
+`src/lib/journal/analytics.ts:177-182`
+
+```ts
+const maxDd = computeDrawdown(
+  buildBalanceTimeline(0, trades.map((t) => ({ at: t.closedAt ?? "", pnl: pnl(t) }))),
+).maxMoney;
+```
+
+`buildBalanceTimeline` filters `!!t.at` (`balance.ts:58`). A realized trade with a null
+`closed_at` — which happens whenever the exit fills carry no `executed_at`, and
+`toRealized` admits such trades because it keys on `net_pl`, not on the timestamp —
+contributed to `netSum`, `winRate`, `profitFactor`, `best` and `worst`, but was invisible
+to `maxDrawdown`.
+
+The parts stopped adding up, in the one direction that flatters the book: a large loss
+with a missing close timestamp raised nothing and deepened no drawdown. It propagated into
+the score too, since `maxPctOfPeakPnl` is the heaviest-weighted component after profit
+factor.
+
+**Fix — applied.** `toRealized` has already sorted these chronologically and puts a
+null-instant trade first; carrying the sequence position as the timeline key keeps one
+population behind every figure, and the timeline only uses `at` for ordering and
+labelling.
+
+```ts
+const maxDd = computeDrawdown(
+  buildBalanceTimeline(
+    0,
+    trades.map((t, i) => ({ at: t.closedAt || `#${i}`, pnl: pnl(t) })),
+  ),
+).maxMoney;
+```
+
+`toEpoch("#3")` is `NaN` → `-Infinity`, so these sort first and, because `Array.sort` is
+stable, keep the order `toRealized` gave them. Only `.maxMoney` is read here, so the
+synthetic key never reaches a display.
+
+*Regression test:* `analytics.test.ts` — "drawdown covers the same trades as the money
+sums". Failed before the change.
+
+---
+
+## MEDIUM — documented, not applied
+
+### M1 — Unvalidated URL parameters, one of which disables the small-sample guard
+
+`src/components/journal/reports/reports-workbench.tsx:139-146`
+
+```ts
+const viewMode  = (params.get("view")  as ViewMode) ?? "dollars";
+const pnlBasis  = (params.get("basis") as PnlMode)  ?? "net";
+const minSample = Number(params.get("min") ?? DEFAULT_MIN_SAMPLE);
+```
+
+`?min=abc` yields `NaN`. `trades.length < NaN` is `false`, so **no row is ever flagged
+`belowSample`**, and `summarizeReport`'s eligibility filter — the entire mechanism that
+stops a three-trade bucket being named "best" — passes everything through. The engine's own
+header calls that "exactly the mistake this whole engine is built to avoid", and a typo in
+a bookmarked URL turns it off silently.
+
+`basis` is cast unchecked and anything that is not `"net"` means gross, so `?basis=Net`
+quietly reports gross P&L under a UI toggle still reading "Net". `view` is cast to
+`ViewMode` with no membership check.
+
+```ts
+const VIEW_SET = new Set<ViewMode>(VIEW_MODES.map((m) => m.value));
+const asViewMode = (v: string | null): ViewMode =>
+  v && VIEW_SET.has(v as ViewMode) ? (v as ViewMode) : "dollars";
+
+const viewMode = asViewMode(params.get("view"));
+const pnlBasis: PnlMode = params.get("basis") === "gross" ? "gross" : "net";
+
+const rawMin = Number(params.get("min"));
+const minSample = Number.isFinite(rawMin)
+  ? Math.max(1, Math.floor(rawMin))
+  : DEFAULT_MIN_SAMPLE;
+```
+
+Note the `basis` inversion: defaulting to `"net"` unless the param explicitly says
+`"gross"` is the safe direction, since net is what the UI shows by default.
+
+### M2 — Percentage view mode divides by a base that is not equity
+
+`src/components/journal/reports/reports-workbench.tsx:217-227`
+
+`equityBase` is `Σ starting_balance + Σ cash flow`. `units.ts:58` documents the field as
+*"Denominator for percentage mode — account equity, not starting balance"*, and
+`balance.ts` defines equity as `starting balance + realized P&L + cash flow`. The realized
+P&L term is missing, so on a book that has doubled, every "% of equity" figure is roughly
+twice what it should be. Add the realized sum over the same account scope, reusing
+`currentEquity(buildBalanceTimeline(...))` rather than a fourth hand-rolled total.
+
+### M3 — `updateTrade` has no FTMO freeze check
+
+`src/app/(app)/trades/actions.ts:211`
+
+`createTrade` refuses on a frozen account (`:146`); `updateTrade` does not. Editing a
+planned trade into an active one is a new position by any measure the freeze cares about,
+so the same guard belongs on the update path — scoped, as `createTrade` does it, to the one
+account being written.
+
+### M4 — `updateTrade` reports success for a trade that does not exist
+
+`src/app/(app)/trades/actions.ts:227-253`
+
+When `prevPos` is null the code proceeds: `symbolChanged` is `false`,
+`prevPos?.point_value_at_trade == null` is `true` so it re-snapshots, the `UPDATE` matches
+zero rows, PostgREST returns no error, and the action returns `{ ok: true }`. Return
+`{ ok: false, error: "Trade not found" }` when `prevPos` is null, as the sibling actions
+already do.
+
+### M5 — Check-then-update races in the lifecycle actions
+
+`src/app/(app)/trades/actions.ts:275-391`
+
+`markTradeMissed`, `restoreTradeToPlanned` and `activateTrade` each read the status and the
+fill count, then update in a separate round trip. Two tabs, or a concurrent import merge,
+can insert fills between the two — producing a trade with fills and status `missed`, which
+is the state `20260728122000_fix_position_status_check.sql` exists to prevent. Fold the
+predicate into the write and check the affected-row count:
+
+```ts
+const { data, error } = await supabase
+  .from("tj_positions")
+  .update({ status: "missed", missed_at: new Date().toISOString(), /* … */ })
+  .eq("id", id)
+  .eq("status", "planned")
+  .select("id");
+if (!error && data?.length === 0) {
+  return { ok: false as const, error: "Trade changed — refresh the page" };
+}
+```
+
+The fill-count half needs a `NOT EXISTS` and is cleanest as a small SQL function, in the
+same shape as the two `tj_replace_*` functions.
+
+### M6 — `commitImport` discards two error results, one of which makes undo impossible
+
+`src/app/(app)/import/actions.ts:123-146`
+
+The merge-path `tj_positions` status update and the `tj_import_rows` insert are both
+awaited without checking `error`. The audit-row insert is the serious one: it carries
+`prev_executions`, the only record of the fills the merge displaced. If it fails, the fills
+are already replaced and `undoImportBatch` can never restore them — it reports the row
+under `unrestorableMerges`, with no indication the cause was a swallowed write rather than
+an old batch. Both should `throw` into the surrounding `try`, which already collects a
+per-row reason and rolls back a created position.
+
+A smaller point in the same block: the comment at `:110-112` says "The snapshot is still
+taken, but for undo" on the merge path, and no snapshot is taken there. Merging into a
+position that predates the snapshot column leaves it unpriced.
+
+### M7 — `tj_position_rules` is drained twice per `/reports` load
+
+`getPlaybooks` calls `ruleAnswerCounts()` internally (`playbooks.ts:64`), and
+`reports/page.tsx:34` separately calls `getPositionRules()`. Both `selectAllPages` the whole
+table — one row per rule per trade, the fastest-growing table in the schema — and both run
+on every render of the route. One read, two projections: `getPositionRules` already returns
+every row `ruleAnswerCounts` needs.
+
+### M8 — Partial exits report a diluted R with no marker
+
+`src/lib/journal/position-stats.ts:107-113`, and the same expression in the view
+(`20260728120000_…:151`)
+
+`realized_r = gross_points / (risk_pts × entry_qty)`, while `gross_points` covers only
+`exit_qty`. For a fully closed trade the two quantities are equal and this is exact. For a
+partially closed one the numerator is the realized half and the denominator is the whole
+planned risk, so a position half-closed at +2R reports +1R.
+
+That is a defensible convention — R against the risk actually taken — and the TS and SQL
+implementations agree, so nothing is inconsistent. But it is undocumented, and the same
+`realized_r` flows into `rHistogram`, `expectancy` and the R filter alongside closed-trade
+values on the other convention. It should be a written decision at the point of
+calculation, in the style of the other convention notes in this codebase, and the
+partial-exit R arguably needs a marker in the UI.
+
+---
+
+## LOW — documented, not applied
+
+### L1 — Dead exports
+
+Exported, and referenced from nowhere outside their own module or its test:
+
+| Symbol | File |
 | --- | --- |
-| `20260728120000_snapshot_instrument_spec.sql` | Snapshot columns, backfill, rebuilt `tj_position_stats` |
-| `20260728121000_tj_replace_executions.sql` | Atomic fill-replacement RPC |
-| `20260728122000_fix_position_status_check.sql` | Widened status constraint + re-run backfill |
-| `20260728123000_atomic_option_sort_order.sql` | Atomic sort_order allocation for option items and lists |
-| `20260728124000_drop_session_killzone_column.sql` | Dropped the dead column and its resurrected seed data |
+| `secondsToDays` | `units.ts:208` |
+| `canRender` | `units.ts:97` |
+| `pipSize` | `units.ts:87` — used internally by `formatMetric`; the export is unused |
+| `durationBucketOfTrade` | `hold-time.ts:112` — dimensions use `durationBucket(t.durationSeconds)` |
+| `getDimension` | `dimensions.ts:373` — superseded by `resolveDimension` |
+| `isEmptyFilterSet` | `filters.ts:201` |
+| `matchesFilterSet` | `filters.ts:97` — used internally by `applyFilters` |
+| `chunkIds` | `paginate.ts:48` — used internally by `selectAllByIds` |
+| `EMPTY_RULE_LOOKUP` | `playbook-dimensions.ts:168` |
 
-Verified end to end against the live database: a trade planned → marked missed → restored → filled → closed
-prices correctly (20 pts, $20 gross, $15 net after $4 fees and $1 swap, 2.00R, 25h hold), and its net P&L
-stayed at **$15** both after the instrument's `point_value` was edited to 12345 and after the instrument row
-was deleted outright. Before C1 those two actions rewrote it silently.
+The last group (`pipSize`, `matchesFilterSet`, `chunkIds`) are live code with a dead
+`export` keyword — drop the keyword, not the function.
 
-`security_invoker = on` survived the view rebuild — confirmed directly and via the Supabase security
-advisor, which reports no new findings (the two it does report, a pre-existing `SECURITY DEFINER` seed
-function and an auth password-protection setting, are unrelated to this work).
+### L2 — The Sickre Score's seventh component is wired to nothing
 
-### One finding withdrawn on closer inspection: M4
+`sickre-score.ts:99`, `:193-202`
 
-M4 claimed `excursionFromTrade` was inconsistent for measuring movement from `avg_entry` while dividing by
-risk derived from the *planned* entry. Checking `tj_position_stats` settles it: `realized_r` is built the
-same way — its numerator `gross_points` comes off `avg_entry`, its denominator off
-`COALESCE(entry_price, avg_entry)`. The pairing is the journal's R convention, not an oversight, and
-excursion already matches it.
+`processAdherencePct` is supplied by **no caller** — the only reference outside the module
+is `sickre-score.test.ts:103`. The dashboard's `computeSickreScore` call omits it, so
+`PROCESS_ADHERENCE_WEIGHT` never applies, and the component the module header advertises
+as "a seventh component TradeZella has no equivalent for" does not exist in the product.
 
-That agreement is load-bearing: `capturePct` is `realizedR / mfeR`, so re-basing MAE/MFE onto a single
-reference would have put the two on different footings and silently corrupted capture — the "fix" would
-have introduced the bug. The convention is now documented at the function, and a test pins the agreement
-so it is not attempted again.
+Phase 4b shipped `computeFollowRate`, which is exactly its input. Either wire it —
 
-Conclusion: R means *multiples of the risk I planned to take, over the move I actually got*. Defensible,
-deliberate, and now written down.
+```ts
+computeSickreScore({
+  // …
+  processAdherencePct: computeFollowRate(enrichedInScope, playbookLookup.rules),
+});
+```
 
-### Low / dead code — done, with two corrections
+— or delete the branch. Leaving it is the worse option: a reader of `sickre-score.ts`
+reasonably concludes the score already includes process adherence.
 
-Cleared, in the order listed above:
+### L3 — `canRender` is dead, and its absence is visible
 
-- **Dead exports removed** — `countTradingDays`, `tradingDayKeys`, `unloggedTradingDays`,
-  `countOpenTrades`, along with the tests that were their only callers. `tradingDayKeysFromRows` is the
-  live one and stays.
-- **The orphaned unit layer is gone.** `units.ts` carried a full seven-mode conversion system (208 lines)
-  plus 151 lines of tests, of which production called only `formatDuration`. Deleted down to that one
-  function; the rest is in git history if a mode switcher is ever built.
-- **`fmtMoney` / `fmtR` / `fmtPct`** now round to the displayed precision *before* choosing a sign, so a
-  value like -0.001 renders "0.00" instead of "-0.00" — a minus sign on a zero reads as a loss that is
-  not there.
-- **`nightsBetween` counts calendar rollovers in the account timezone**, not elapsed 24-hour blocks. That
-  is how swap is actually charged, and what the name always claimed. A hold from 23:00 Monday to 01:00
-  Wednesday crossed two rollovers and used to bill one night.
-- **`zonedWeekStartKey`** does one timezone conversion instead of two.
-- **`toRealized`** narrows `stats` once via `flatMap`, dropping two non-null assertions and a `?? 0` that
-  shadowed an already-proven value.
-- **`session_killzone`** is fully gone: the column, the option list that `20260721130000` accidentally
-  restored, and the seed-function body that recreated it for every new user.
-- **`updateAccount`** now refuses a negative `starting_balance`, and documents that changing it re-bases
-  every historical drawdown percentage, FTMO threshold and equity curve.
-- **The `parsePlannedRewardR` re-export stays** — it is not redundant, the trade form imports it through
-  `exit-efficiency`. Documented rather than removed.
+`units.ts:96-121` computes whether a view mode can actually be rendered, and the module
+header says it exists "so a UI can grey out a mode instead of silently showing something
+else". `reports-workbench.tsx:~395` renders all seven `VIEW_MODES` unconditionally. Select
+"Pips" on a futures book and `formatMetric` falls through to `fmtMoney` — the button
+appears active and the numbers do not change. Wiring this removes L1's `canRender` entry.
 
-Two review claims were overstated and are corrected in place:
+### L4 — Three private copies of one accessor
 
-- **`rHistogram` bucketing was already right.** Every bucket is inclusive-low and exclusive-high, so
-  `r = 5.0` genuinely belongs above `"4..5"`. Only the *label* was wrong: `">5"` read as strictly-greater
-  while holding exactly 5. Relabelled `"5+"`; no bucketing change.
-- **`getTradesWithStats` ordering by `created_at` is correct**, not redundant work: the journal grid
-  renders newest-first from it, and `toRealized` re-sorts by close date because money is dated
-  differently from display. Two orderings, two purposes.
+`enriched-trade.ts:63` (`numField`), `excursion.ts:25` (`num`) and `exit-efficiency.ts:25`
+(`numField`) each do `row[key]` with a typeof check, duplicating `numberFieldValue` from
+`field-values.ts:56`. That module's header (`field-values.ts:9-14`) names this exact
+pattern as the thing that must not happen, because a field that moves into the `custom`
+jsonb bag returns `undefined` with no error. Harmless today — `entry_price`, `stop_price`
+and `position_size` are still real columns — and a silent blank the day one is not.
+
+### L5 — `formatMetric`'s money fallbacks disagree on the sign
+
+`units.ts:163,167` call `fmtMoney(v.base, currency)` while the direct dollars path at
+`:188` uses `fmtMoney(v.base, currency, { sign: false })`. A percentage- or R-mode value
+that falls back to money therefore renders `+$250.00` where dollars mode renders
+`$250.00`, for the same number in the same column.
+
+### L6 — `getInstrumentSpecs` does not chunk its `.in()` filter
+
+`instruments.ts:414`. `paginate.ts` defines `IN_FILTER_CHUNK = 500` for exactly this — a
+PostgREST `.in()` filter goes into the URL and the URL has a length cap. `commitImport`
+passes one symbol per imported row, so a wide multi-symbol import is the case that reaches
+it. Use `selectAllByIds`, which already chunks and drains.
+
+---
+
+## What was verified, and how
+
+- `npm test` — 488 → **503 passing**, 37 files. Every Critical/High fix landed with a
+  regression test, and each was run against the unfixed module first to confirm it failed
+  for the stated reason. One did not: the `computePositionSize` null case already passed,
+  because `null <= 0` coerces to `true`. That is recorded in C1 above rather than presented
+  as a caught bug, and the test remains as a contract pin.
+- `npx tsc --noEmit` — clean. This is the real check on C1, which widened a shared
+  signature used by the form, the stats module and the slippage module.
+- `npm run build` — clean, all 11 routes generated.
+- `npm run lint` — clean apart from one pre-existing TanStack Table warning at
+  `journal-grid.tsx:392`, untouched by this work.
+- **Not verified against the live database.** This round was read-only with respect to
+  Supabase: no query was run against the deployed project, and the H2 migration has not
+  been applied. The previous round found two defects only by exercising the live DB, so
+  treat the SQL-adjacent findings here as reviewed but not executed.
 
 ### Still open
 
-Nothing from this review. The two Supabase advisories that predate the work — a `SECURITY DEFINER` seed
-function and the auth leaked-password setting — are untouched and were never part of it.
+Everything under Medium and Low. Nothing under Critical or High.

@@ -1027,6 +1027,10 @@ export type Database = {
         Args: { p_position_id: string; p_executions: Json }
         Returns: number
       }
+      tj_replace_position_rules: {
+        Args: { p_position_id: string; p_rules: Json }
+        Returns: number
+      }
       tj_seed_defaults: { Args: { target: string }; Returns: undefined }
       tj_seed_instruments_defaults: {
         Args: { target: string }

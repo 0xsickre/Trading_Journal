@@ -209,3 +209,44 @@ describe("helpers", () => {
     ).toBe(3);
   });
 });
+
+describe("date bounds use the account timezone, not UTC", () => {
+  // 02:00Z on Jan 6 is still Jan 5 in New York. Every bucket in the engine is
+  // keyed on the account-tz day (`closeDay`), so slicing the UTC date here put
+  // a trade in the Jan-5 row of a table that a `to=2026-01-05` filter had just
+  // excluded it from.
+  const nyBook = () =>
+    enrich(
+      [
+        { id: "late", closedAt: "2026-01-06T02:00:00Z" },
+        { id: "midday", closedAt: "2026-01-05T17:00:00Z" },
+      ],
+      "America/New_York",
+    );
+
+  it("keeps a trade whose NY close day is inside the bound", () => {
+    expect(nyBook().map((t) => t.closeDay)).toEqual(["2026-01-05", "2026-01-05"]);
+    const f: FilterSet = { clauses: [], dateTo: "2026-01-05" };
+    expect(ids(applyFilters(nyBook(), f, dimCtx())).sort()).toEqual([
+      "late",
+      "midday",
+    ]);
+  });
+
+  it("excludes it from the following UTC day, which it never belonged to", () => {
+    const f: FilterSet = { clauses: [], dateFrom: "2026-01-06" };
+    expect(ids(applyFilters(nyBook(), f, dimCtx()))).toEqual([]);
+  });
+
+  it("agrees with the bucket the month dimension puts the trade in", () => {
+    // Same instant, different month in each clock: 2026-02-01T02:00Z is January
+    // in New York. The filter and the dimension must not disagree.
+    const b = enrich(
+      [{ id: "x", closedAt: "2026-02-01T02:00:00Z" }],
+      "America/New_York",
+    );
+    expect(b[0].closeDay.slice(0, 7)).toBe("2026-01");
+    const f: FilterSet = { clauses: [], dateFrom: "2026-01-01", dateTo: "2026-01-31" };
+    expect(ids(applyFilters(b, f, dimCtx()))).toEqual(["x"]);
+  });
+});

@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/supabase/user";
 import type { Json } from "@/lib/supabase/types";
 import { getFieldDefs } from "@/lib/journal/field-defs";
 import { buildPositionPatch, mergeCustom } from "@/lib/journal/trade-fields";
@@ -58,31 +57,28 @@ function playbookPatch(input: TradeInput) {
  * Delete-then-insert rather than upsert: a rule the trader UN-answered has no
  * key in the payload at all, so an upsert would leave the old answer standing
  * and the follow rate would keep counting a judgement that was withdrawn.
+ *
+ * Both halves run inside `tj_replace_position_rules`, for the same reason fills
+ * got `tj_replace_executions`. As two round trips, a DELETE that committed and
+ * an INSERT that then failed destroyed every recorded answer for the trade — and
+ * in `updateTrade` the position write has already landed by then, so returning
+ * the error undoes nothing. A function body is one transaction: either the new
+ * answers land or the old ones were never removed.
  */
 async function saveRuleAnswers(
   supabase: Awaited<ReturnType<typeof createClient>>,
   positionId: string,
   answers: Record<string, boolean> | undefined,
 ) {
-  const { error: delErr } = await supabase
-    .from("tj_position_rules")
-    .delete()
-    .eq("position_id", positionId);
-  if (delErr) return delErr.message;
-
-  const rows = Object.entries(answers ?? {}).map(([rule_id, followed]) => ({
-    position_id: positionId,
+  const rules = Object.entries(answers ?? {}).map(([rule_id, followed]) => ({
     rule_id,
     followed,
   }));
-  if (rows.length === 0) return null;
 
-  const user = await getCurrentUser();
-  if (!user) return "Not signed in.";
-
-  const { error } = await supabase
-    .from("tj_position_rules")
-    .insert(rows.map((r) => ({ ...r, user_id: user.id })));
+  const { error } = await supabase.rpc("tj_replace_position_rules", {
+    p_position_id: positionId,
+    p_rules: rules,
+  });
   return error?.message ?? null;
 }
 

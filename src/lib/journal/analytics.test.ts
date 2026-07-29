@@ -217,3 +217,39 @@ describe("breakdownByField", () => {
     expect(breakdownByField([], "setup_grade")).toEqual([]);
   });
 });
+
+describe("drawdown covers the same trades as the money sums", () => {
+  // buildBalanceTimeline drops any point with a falsy `at`, so a realized trade
+  // with no close instant counted toward netSum and profitFactor but was
+  // invisible to maxDrawdown — the parts stopped adding up, in the direction
+  // that flatters the book.
+  const orphan = (id: string, net: number) => {
+    const row = trade({ id, status: "closed", net_pl: net });
+    row.stats!.closed_at = null;
+    return row;
+  };
+
+  it("counts a loss with no close timestamp in the drawdown", () => {
+    const realized = toRealized([
+      trade({ id: "win", status: "closed", net_pl: 500 }),
+      orphan("no-close", -300),
+    ]);
+    const s = computeStats(realized);
+    expect(s.count).toBe(2);
+    expect(s.netSum).toBe(200);
+    // The orphan sorts first (no instant), so the curve runs -300 then +200:
+    // peak 0, trough -300.
+    expect(s.maxDrawdown).toBe(-300);
+  });
+
+  it("keeps drawdown at zero for a book that only ever went up", () => {
+    const s = computeStats(
+      toRealized([
+        orphan("a", 100),
+        trade({ id: "b", status: "closed", net_pl: 50 }),
+      ]),
+    );
+    expect(s.netSum).toBe(150);
+    expect(s.maxDrawdown).toBe(0);
+  });
+});

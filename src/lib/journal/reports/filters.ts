@@ -99,9 +99,19 @@ export function matchesFilterSet(
   filters: FilterSet,
   ctx: DimensionContext,
 ): boolean {
-  const closed = t.closedAt ?? "";
-  if (filters.dateFrom && closed.slice(0, 10) < filters.dateFrom) return false;
-  if (filters.dateTo && closed.slice(0, 10) > filters.dateTo) return false;
+  // `closeDay`, not `closedAt.slice(0, 10)`. Slicing the ISO string reads the
+  // UTC date, while every bucket in this engine — the month dimension, the
+  // exit-weekday dimension, the calendar — is keyed on the account timezone.
+  // A trade closed 02:00Z sits in the previous NY day, so it appeared in the
+  // Jan-4 row of a table that a `to=2026-01-04` filter had just excluded it
+  // from. One clock for the whole engine.
+  //
+  // A trade with no close instant has no close DAY either, and a date-bounded
+  // question cannot be answered for it — so it drops out of either bound
+  // rather than being silently kept by one and cut by the other.
+  const closeDay = t.closeDay;
+  if (filters.dateFrom && (!closeDay || closeDay < filters.dateFrom)) return false;
+  if (filters.dateTo && (!closeDay || closeDay > filters.dateTo)) return false;
   if (
     filters.accountIds &&
     filters.accountIds.length > 0 &&
