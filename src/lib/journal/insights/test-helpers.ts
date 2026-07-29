@@ -73,7 +73,9 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     max_profit_price: spec.mfe ?? null,
     position_size: spec.size ?? null,
     setup_grade: spec.setupGrade ?? null,
-    macro_align: spec.macroAlign ?? null,
+    // macro_align became a user-defined field in Phase 4a — the fixture stores
+    // it in the custom bag, the way a real row does.
+    custom: spec.macroAlign ? { macro_align: spec.macroAlign } : {},
     cot_filter: spec.cotFilter ?? null,
     instrument: spec.instrument ?? "EURUSD",
     stats,

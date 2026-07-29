@@ -8,13 +8,17 @@ import { InstrumentManager } from "@/components/journal/instrument-manager";
 import { AccountSettings } from "@/components/journal/account-settings";
 import { CashEventsManager } from "@/components/journal/cash-events-manager";
 import { NewListForm } from "@/components/journal/new-list-form";
+import { FieldDefManager } from "@/components/journal/field-def-manager";
+import { getFieldDefs } from "@/lib/journal/field-defs";
 
 export default async function SettingsPage() {
-  const [lists, instruments, accounts, cashEvents] = await Promise.all([
+  const [lists, instruments, accounts, cashEvents, fieldDefs] = await Promise.all([
     getListsWithItems(false),
     getInstruments(false),
     getAccounts(),
     getCashEvents(),
+    // Archived defs included — this screen is where you un-archive them.
+    getFieldDefs(false),
   ]);
 
   return (
@@ -28,11 +32,14 @@ export default async function SettingsPage() {
       </div>
 
       <Tabs defaultValue="lists">
-        {/* The four labels are wider than a phone screen, and the triggers are
+        {/* The labels are wider than a phone screen, and the triggers are
             whitespace-nowrap — scroll the strip instead of overflowing the page. */}
         <TabsList className="flex w-full max-w-full justify-start overflow-x-auto sm:w-fit">
           <TabsTrigger value="lists" className="flex-none">
             Dropdown Lists
+          </TabsTrigger>
+          <TabsTrigger value="fields" className="flex-none">
+            Moja polja
           </TabsTrigger>
           <TabsTrigger value="instruments" className="flex-none">
             Instruments
@@ -50,6 +57,10 @@ export default async function SettingsPage() {
             <NewListForm />
           </div>
           <ListManager lists={lists} />
+        </TabsContent>
+
+        <TabsContent value="fields">
+          <FieldDefManager defs={fieldDefs} lists={lists} />
         </TabsContent>
 
         <TabsContent value="instruments">

@@ -585,21 +585,63 @@ export type Database = {
         }
         Relationships: []
       }
+      tj_field_defs: {
+        Row: {
+          created_at: string
+          field_type: string
+          group_id: string
+          id: string
+          is_active: boolean
+          key: string
+          label: string
+          list_key: string | null
+          show_when: string
+          sort_order: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          field_type?: string
+          group_id?: string
+          id?: string
+          is_active?: boolean
+          key: string
+          label: string
+          list_key?: string | null
+          show_when?: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          field_type?: string
+          group_id?: string
+          id?: string
+          is_active?: boolean
+          key?: string
+          label?: string
+          list_key?: string | null
+          show_when?: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tj_positions: {
         Row: {
           account_id: string | null
-          cot_filter: string | null
+          conviction: number | null
           created_at: string
+          custom: Json
           direction: string | null
           entry_price: number | null
-          entry_tf: string | null
           exit_reason: string | null
-          htf_bias: string | null
-          ict_entry_model: string | null
           id: string
           import_batch_id: string | null
           instrument: string | null
-          macro_align: string | null
           max_drawdown_price: number | null
           max_profit_price: number | null
           mistake: string | null
@@ -607,6 +649,7 @@ export type Database = {
           missed_at: string | null
           needs_review: boolean
           planned_rr: string | null
+          playbook_id: string | null
           point_value_at_trade: number | null
           position_size: number | null
           psychology_tags: string[]
@@ -628,18 +671,15 @@ export type Database = {
         }
         Insert: {
           account_id?: string | null
-          cot_filter?: string | null
+          conviction?: number | null
           created_at?: string
+          custom?: Json
           direction?: string | null
           entry_price?: number | null
-          entry_tf?: string | null
           exit_reason?: string | null
-          htf_bias?: string | null
-          ict_entry_model?: string | null
           id?: string
           import_batch_id?: string | null
           instrument?: string | null
-          macro_align?: string | null
           max_drawdown_price?: number | null
           max_profit_price?: number | null
           mistake?: string | null
@@ -647,6 +687,7 @@ export type Database = {
           missed_at?: string | null
           needs_review?: boolean
           planned_rr?: string | null
+          playbook_id?: string | null
           point_value_at_trade?: number | null
           position_size?: number | null
           psychology_tags?: string[]
@@ -668,18 +709,15 @@ export type Database = {
         }
         Update: {
           account_id?: string | null
-          cot_filter?: string | null
+          conviction?: number | null
           created_at?: string
+          custom?: Json
           direction?: string | null
           entry_price?: number | null
-          entry_tf?: string | null
           exit_reason?: string | null
-          htf_bias?: string | null
-          ict_entry_model?: string | null
           id?: string
           import_batch_id?: string | null
           instrument?: string | null
-          macro_align?: string | null
           max_drawdown_price?: number | null
           max_profit_price?: number | null
           mistake?: string | null
@@ -687,6 +725,7 @@ export type Database = {
           missed_at?: string | null
           needs_review?: boolean
           planned_rr?: string | null
+          playbook_id?: string | null
           point_value_at_trade?: number | null
           position_size?: number | null
           psychology_tags?: string[]

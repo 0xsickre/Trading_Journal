@@ -4,7 +4,9 @@ import {
   EMPTY_BUCKET,
   bucketByEdges,
   bucketsOf,
+  customFieldDimensions,
   getDimension,
+  resolveDimension,
   R_MULTIPLE_EDGES,
 } from "./dimensions";
 import { DAY, dimCtx, enrich, mkReport } from "./test-helpers";
@@ -177,5 +179,68 @@ describe("insight dimension", () => {
   it("excludes a trade that fired nothing", () => {
     const t = one([{ id: "x1" }]);
     expect(bucketsOf(getDimension("insight")!, t, dimCtx())).toEqual([]);
+  });
+});
+
+describe("user-defined fields as dimensions", () => {
+  const DEFS = [
+    { key: "session", label: "Sesija", field_type: "select", list_key: "session" },
+    { key: "confluences", label: "Konfluencije", field_type: "tags", list_key: null },
+  ];
+
+  it("registers one dimension per definition", () => {
+    const dims = customFieldDimensions(DEFS);
+    expect(dims.map((d) => d.key)).toEqual(["session", "confluences"]);
+    expect(dims.every((d) => d.group === "custom")).toBe(true);
+  });
+
+  it("buckets a value stored in the custom bag", () => {
+    const [session] = customFieldDimensions(DEFS);
+    const t = enrich([{ custom: { session: "London" } }])[0];
+    expect(bucketsOf(session, t, dimCtx())).toEqual(["London"]);
+  });
+
+  it("gives an empty bucket when the field was never filled in", () => {
+    const [session] = customFieldDimensions(DEFS);
+    const t = enrich([{}])[0];
+    expect(bucketsOf(session, t, dimCtx())).toEqual([EMPTY_BUCKET]);
+  });
+
+  it("treats a tags field as multi-value, so one trade lands in every tag", () => {
+    const [, confluences] = customFieldDimensions(DEFS);
+    expect(confluences.multiValue).toBe(true);
+    const t = enrich([{ custom: { confluences: ["FVG", "OTE"] } }])[0];
+    expect(bucketsOf(confluences, t, dimCtx())).toEqual(["FVG", "OTE"]);
+  });
+
+  it("resolves a custom key by name, the same way a built-in resolves", () => {
+    const ctx = dimCtx([], { customDimensions: customFieldDimensions(DEFS) });
+    expect(resolveDimension("session", ctx)?.label).toBe("Sesija");
+    expect(resolveDimension("instrument", ctx)?.label).toBe("Instrument");
+    // Without the context it is not a global — one trader's fields must never
+    // leak into another's report.
+    expect(resolveDimension("session")).toBeUndefined();
+  });
+
+  it("does not shadow a built-in dimension", () => {
+    const ctx = dimCtx([], {
+      customDimensions: customFieldDimensions([
+        { key: "instrument", label: "Hijacked", field_type: "select", list_key: null },
+      ]),
+    });
+    expect(resolveDimension("instrument", ctx)?.label).toBe("Instrument");
+  });
+
+  it("no longer carries the columns Phase 4a retired", () => {
+    const keys = DIMENSIONS.map((d) => d.key);
+    for (const gone of [
+      "macro_align",
+      "cot_filter",
+      "htf_bias",
+      "entry_tf",
+      "ict_entry_model",
+    ]) {
+      expect(keys).not.toContain(gone);
+    }
   });
 });

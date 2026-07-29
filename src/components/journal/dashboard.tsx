@@ -63,8 +63,12 @@ import {
   hasBreakevenBand,
   resolveBreakevenRange,
 } from "@/lib/journal/breakeven";
-import { dimensionsByGroup } from "@/lib/journal/reports/dimensions";
+import {
+  customFieldDimensions,
+  dimensionsByGroup,
+} from "@/lib/journal/reports/dimensions";
 import type { Account, TradeRow } from "@/lib/journal/types";
+import type { FieldDef } from "@/lib/journal/field-def-types";
 import {
   toRealized,
   computeStats,
@@ -138,13 +142,16 @@ function weekInputToAnchor(value: string): string {
 
 /**
  * Breakdown options come from the dimension registry now, so a dimension added
- * there appears here without a second edit. Narrowed to trade columns: the
- * derived and process dimensions belong on /reports, where the sample size sits
- * next to every number.
+ * there appears here without a second edit. Narrowed to trade columns plus the
+ * user's own fields: the derived and process dimensions belong on /reports,
+ * where the sample size sits next to every number.
  */
-const BREAKDOWN_FIELDS = dimensionsByGroup("trade")
-  .filter((d) => d.key !== "account")
-  .map((d) => ({ value: d.key, label: d.label }));
+function breakdownFields(custom: readonly { key: string; label: string }[]) {
+  return [
+    ...dimensionsByGroup("trade").filter((d) => d.key !== "account"),
+    ...custom,
+  ].map((d) => ({ value: d.key, label: d.label }));
+}
 
 export function Dashboard({
   trades,
@@ -153,6 +160,7 @@ export function Dashboard({
   loggedDates = [],
   dailyReports = [],
   fillCounts,
+  fieldDefs = [],
 }: {
   trades: TradeRow[];
   accounts: Account[];
@@ -160,12 +168,19 @@ export function Dashboard({
   loggedDates?: string[];
   dailyReports?: DailyReportLite[];
   fillCounts?: Map<string, { entries: number; exits: number }>;
+  /** User-defined fields, so the mentor pack carries them too. */
+  fieldDefs?: FieldDef[];
 }) {
   const [accountFilter, setAccountFilter] = useState("all");
   const [period, setPeriod] = useState("90");
   const [mode, setMode] = useState<PnlMode>("net");
   const [equityMetric, setEquityMetric] = useState<"money" | "r">("money");
   const [breakdownField, setBreakdownField] = useState("setup_grade");
+  // The user's own fields are groupable here exactly like a built-in column.
+  const breakdownOptions = useMemo(
+    () => breakdownFields(customFieldDimensions(fieldDefs)),
+    [fieldDefs],
+  );
   const [granularity, setGranularity] = useState<Granularity>("week");
   const [anchor, setAnchor] = useState(todayYMD);
   const [customFrom, setCustomFrom] = useState(todayYMD);
@@ -545,6 +560,7 @@ export function Dashboard({
       // matches the one on screen.
       breakevenRange,
       startingBalance: scopedAccount?.starting_balance ?? null,
+      fieldDefs,
     });
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -1216,7 +1232,7 @@ export function Dashboard({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {BREAKDOWN_FIELDS.map((f) => (
+              {breakdownOptions.map((f) => (
                 <SelectItem key={f.value} value={f.value}>
                   {f.label}
                 </SelectItem>

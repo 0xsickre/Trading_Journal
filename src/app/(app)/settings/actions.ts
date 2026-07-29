@@ -3,6 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
+import {
+  FIELD_DEF_GROUPS,
+  FIELD_DEF_TYPES,
+  slugifyFieldKey,
+  type FieldDefGroup,
+  type FieldDefType,
+} from "@/lib/journal/field-def-types";
 
 export type AddOptionResult =
   | {
@@ -368,6 +375,225 @@ export async function deleteCashEvent(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("tj_cash_events").delete().eq("id", id);
   if (error) return { ok: false as const, error: error.message };
+  revalidateAll();
+  return { ok: true as const };
+}
+
+// --- User-defined trade fields ---------------------------------------------
+
+
+/**
+ * Storage key rules, mirroring the CHECK constraint on tj_field_defs.
+ *
+ * Kept strict deliberately: the key becomes a jsonb path and appears in report
+ * URLs, so anything with a dot, a colon or a space would eventually be split in
+ * the wrong place by something downstream.
+ */
+const KEY_RE = /^[a-z][a-z0-9_]{0,48}$/;
+
+/**
+ * Column names on tj_positions. A custom field may never take one of these:
+ * `fieldValue` reads columns first, so a colliding key would be written to the
+ * bag and then read from the column — permanently invisible.
+ */
+const RESERVED_KEYS = new Set([
+  "id",
+  "user_id",
+  "account_id",
+  "trade_no",
+  "status",
+  "source",
+  "custom",
+  "created_at",
+  "updated_at",
+  "instrument",
+  "direction",
+  "entry_price",
+  "stop_price",
+  "target_price",
+  "risk_pct",
+  "planned_rr",
+  "position_size",
+  "setup_grade",
+  "technical_tags",
+  "psychology_tags",
+  "result",
+  "exit_reason",
+  "mistake",
+  "miss_reason",
+  "missed_at",
+  "max_drawdown_price",
+  "max_profit_price",
+  "trade_journal_notes",
+  "needs_review",
+  "reviewed",
+  "rating",
+  "playbook_id",
+  "conviction",
+  "import_batch_id",
+  "point_value_at_trade",
+  "tick_size_at_trade",
+]);
+
+export async function addFieldDef(input: {
+  label: string;
+  field_type: FieldDefType;
+  group_id: FieldDefGroup;
+  list_key?: string | null;
+  key?: string;
+}) {
+  const label = input.label.trim();
+  if (!label) return { ok: false as const, error: "Naziv ne može biti prazan." };
+  if (!FIELD_DEF_TYPES.includes(input.field_type))
+    return { ok: false as const, error: "Nepoznat tip polja." };
+  if (!FIELD_DEF_GROUPS.includes(input.group_id))
+    return { ok: false as const, error: "Nepoznata grupa." };
+
+  const key = (input.key?.trim() || slugifyFieldKey(label)).toLowerCase();
+  if (!KEY_RE.test(key))
+    return {
+      ok: false as const,
+      error: "Ključ mora početi slovom i sadržati samo mala slova, brojeve i _.",
+    };
+  if (RESERVED_KEYS.has(key))
+    return {
+      ok: false as const,
+      error: `„${key}" je rezervisano ime kolone — izaberi drugo.`,
+    };
+
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) return { ok: false as const, error: "Not signed in." };
+
+  // Append to the end of its group.
+  const { data: last } = await supabase
+    .from("tj_field_defs")
+    .select("sort_order")
+    .eq("group_id", input.group_id)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { error } = await supabase.from("tj_field_defs").insert({
+    user_id: user.id,
+    key,
+    label,
+    field_type: input.field_type,
+    // Only select / tags read an option list; storing one on a text field would
+    // be a promise the form does not keep.
+    list_key:
+      input.field_type === "select" || input.field_type === "tags"
+        ? (input.list_key?.trim() || key)
+        : null,
+    group_id: input.group_id,
+    sort_order: (last?.sort_order ?? -1) + 1,
+  });
+  if (error) {
+    return {
+      ok: false as const,
+      error: error.code === "23505" ? "Polje sa tim ključem već postoji." : error.message,
+    };
+  }
+  revalidateAll();
+  return { ok: true as const };
+}
+
+/**
+ * Rename / regroup / retype a field.
+ *
+ * `key` is deliberately absent: it is where the values are stored, so changing
+ * it would orphan every value already written under the old one.
+ */
+export async function updateFieldDef(
+  id: string,
+  patch: {
+    label?: string;
+    field_type?: FieldDefType;
+    group_id?: FieldDefGroup;
+    list_key?: string | null;
+  },
+) {
+  const next: {
+    label?: string;
+    field_type?: string;
+    group_id?: string;
+    list_key?: string | null;
+  } = {};
+  if (patch.label != null) {
+    const label = patch.label.trim();
+    if (!label) return { ok: false as const, error: "Naziv ne može biti prazan." };
+    next.label = label;
+  }
+  if (patch.field_type != null) {
+    if (!FIELD_DEF_TYPES.includes(patch.field_type))
+      return { ok: false as const, error: "Nepoznat tip polja." };
+    next.field_type = patch.field_type;
+  }
+  if (patch.group_id != null) {
+    if (!FIELD_DEF_GROUPS.includes(patch.group_id))
+      return { ok: false as const, error: "Nepoznata grupa." };
+    next.group_id = patch.group_id;
+  }
+  if (patch.list_key !== undefined) next.list_key = patch.list_key?.trim() || null;
+  if (Object.keys(next).length === 0) return { ok: true as const };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("tj_field_defs").update(next).eq("id", id);
+  if (error) return { ok: false as const, error: error.message };
+  revalidateAll();
+  return { ok: true as const };
+}
+
+/**
+ * Archive / restore a field.
+ *
+ * Deactivating never deletes: history keeps the values, and every reader that
+ * looks at past trades asks for inactive definitions too. Hard deletion is not
+ * offered at all — it would turn recorded data into unlabelled jsonb keys.
+ */
+export async function toggleFieldDefActive(id: string, isActive: boolean) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tj_field_defs")
+    .update({ is_active: isActive })
+    .eq("id", id);
+  if (error) return { ok: false as const, error: error.message };
+  revalidateAll();
+  return { ok: true as const };
+}
+
+export async function moveFieldDef(id: string, direction: -1 | 1) {
+  const supabase = await createClient();
+  const { data: self } = await supabase
+    .from("tj_field_defs")
+    .select("id, group_id, sort_order")
+    .eq("id", id)
+    .maybeSingle();
+  if (!self) return { ok: false as const, error: "Polje nije nađeno." };
+
+  const { data: siblings } = await supabase
+    .from("tj_field_defs")
+    .select("id, sort_order")
+    .eq("group_id", self.group_id)
+    .order("sort_order")
+    .order("id");
+  if (!siblings) return { ok: false as const, error: "Greška pri čitanju." };
+
+  const i = siblings.findIndex((s) => s.id === id);
+  const j = i + direction;
+  if (i < 0 || j < 0 || j >= siblings.length) return { ok: true as const };
+
+  // Rewrite the whole group's ordinals from the reordered array. Swapping two
+  // sort_order values instead would deadlock whenever rows already share one.
+  const reordered = [...siblings];
+  [reordered[i], reordered[j]] = [reordered[j], reordered[i]];
+  for (const [ord, row] of reordered.entries()) {
+    const { error } = await supabase
+      .from("tj_field_defs")
+      .update({ sort_order: ord })
+      .eq("id", row.id);
+    if (error) return { ok: false as const, error: error.message };
+  }
   revalidateAll();
   return { ok: true as const };
 }

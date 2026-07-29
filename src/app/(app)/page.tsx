@@ -6,6 +6,7 @@ import { getAccounts } from "@/lib/journal/accounts";
 import { getCashEvents } from "@/lib/journal/cash-events";
 import { getDailyReportDates, getDailyReportsLite } from "@/lib/journal/daily-report-queries";
 import { ensureDefaults } from "@/lib/journal/ensure-defaults";
+import { getFieldDefs } from "@/lib/journal/field-defs";
 import { Dashboard } from "@/components/journal/dashboard";
 import type { TradeRow } from "@/lib/journal/types";
 
@@ -13,15 +14,24 @@ export default async function DashboardPage() {
   // Fallback seed for legacy users / missed signup trigger — runs on the landing
   // page only (must finish before we read accounts on a brand-new user).
   await ensureDefaults();
-  const [trades, accounts, cashEvents, loggedDates, dailyReports, fillCounts] =
-    await Promise.all([
-      getTradesWithStats(),
-      getAccounts(),
-      getCashEvents(),
-      getDailyReportDates(),
-      getDailyReportsLite(),
-      getFillCounts(),
-    ]);
+  const [
+    trades,
+    accounts,
+    cashEvents,
+    loggedDates,
+    dailyReports,
+    fillCounts,
+    fieldDefs,
+  ] = await Promise.all([
+    getTradesWithStats(),
+    getAccounts(),
+    getCashEvents(),
+    getDailyReportDates(),
+    getDailyReportsLite(),
+    getFillCounts(),
+    // All defs: the dashboard reads history, where a retired field still counts.
+    getFieldDefs(false),
+  ]);
 
   return (
     <div className="space-y-5">
@@ -46,6 +56,7 @@ export default async function DashboardPage() {
         loggedDates={loggedDates}
         dailyReports={dailyReports}
         fillCounts={fillCounts}
+        fieldDefs={fieldDefs}
       />
     </div>
   );

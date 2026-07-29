@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { selectAllByIds, selectAllPages } from "@/lib/supabase/paginate";
+import { CUSTOM_FIELD_COLUMN, flattenCustom } from "./field-values";
 import type { TradeFormInitial } from "@/components/journal/trade-form";
 import type { TradeImageKind } from "./tradingview-snapshot";
 import type { PositionStat, TradeRow, TradeTvImages } from "./types";
@@ -96,8 +97,20 @@ export async function getTradeForEdit(
 
   const { id: _id, account_id, trade_no, ...rest } = pos as RawPosition;
   // Keep only the dynamic field columns (sanitize handles the rest on save).
+  //
+  // The loop accepts strings, numbers and string arrays — an OBJECT falls
+  // through it. `custom` is an object, so without the flatten below every
+  // user-defined field would be dropped on the way into the form and then
+  // written back empty on the next save. Flattening first puts those values on
+  // the same flat record the form reads, and the column loop still wins for any
+  // key that is both (see field-values.ts).
+  // Custom keys first, columns spread over them, so a column keeps winning —
+  // the same precedence `fieldValue` applies everywhere else.
+  const flat: Record<string, unknown> = { ...flattenCustom(rest), ...rest };
+  delete flat[CUSTOM_FIELD_COLUMN];
+
   const fields: Record<string, string | number | string[] | null> = {};
-  for (const [k, v] of Object.entries(rest)) {
+  for (const [k, v] of Object.entries(flat)) {
     if (v == null) continue;
     if (typeof v === "string" || typeof v === "number") fields[k] = v;
     if (Array.isArray(v)) fields[k] = v.filter((x) => typeof x === "string");

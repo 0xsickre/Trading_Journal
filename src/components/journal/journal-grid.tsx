@@ -55,7 +55,13 @@ import {
   fmtExitEfficiencyPct,
 } from "@/lib/journal/exit-efficiency";
 import { primaryTradeImageUrl } from "@/lib/journal/tradingview-snapshot";
-import { ARRAY_FIELD_NAMES, getAllFormFields } from "@/lib/journal/form-config";
+import { getAllFormFields } from "@/lib/journal/form-config";
+import type { FieldDef } from "@/lib/journal/field-def-types";
+import {
+  arrayFieldValue,
+  displayFieldValue,
+  stringFieldValue,
+} from "@/lib/journal/field-values";
 import { deleteTrade, activateTrade } from "@/app/(app)/trades/actions";
 import {
   formatLifecycleStatusLabel,
@@ -101,28 +107,31 @@ const FILTERS: { key: string; label: string }[] = dimensionsByGroup("trade")
 function distinct(rows: TradeRow[], key: string): string[] {
   const set = new Set<string>();
   for (const r of rows) {
-    const v = r[key];
-    if (ARRAY_FIELD_NAMES.has(key) && Array.isArray(v)) {
-      for (const tag of v) if (typeof tag === "string" && tag) set.add(tag);
-    } else if (typeof v === "string" && v) set.add(v);
+    const tags = arrayFieldValue(r, key);
+    if (tags) for (const tag of tags) set.add(tag);
+    else {
+      const v = stringFieldValue(r, key);
+      if (v) set.add(v);
+    }
   }
   return [...set].sort();
 }
 
 function fieldMatchesFilter(row: TradeRow, key: string, value: string): boolean {
-  const raw = row[key];
-  if (ARRAY_FIELD_NAMES.has(key)) {
-    return Array.isArray(raw) && raw.includes(value);
-  }
-  return raw === value;
+  const tags = arrayFieldValue(row, key);
+  if (tags) return tags.includes(value);
+  return stringFieldValue(row, key) === value;
 }
 
 export function JournalGrid({
   trades,
   accounts,
+  fieldDefs = [],
 }: {
   trades: TradeRow[];
   accounts: Account[];
+  /** User-defined fields, so the export carries them like any other column. */
+  fieldDefs?: FieldDef[];
 }) {
   const router = useRouter();
   const tzByAccount = useMemo(() => {
@@ -395,13 +404,8 @@ export function JournalGrid({
         "Trade #": t.trade_no ?? "",
         Date: fmtInTz(t.stats?.opened_at ?? t.created_at, tzOf(t), "yyyy-MM-dd HH:mm"),
       };
-      for (const f of getAllFormFields()) {
-        const val = t[f.name];
-        o[f.label] =
-          ARRAY_FIELD_NAMES.has(f.name) && Array.isArray(val)
-            ? val.join(", ")
-            : ((val as string) ?? "");
-      }
+      for (const f of getAllFormFields(fieldDefs))
+        o[f.label] = displayFieldValue(t, f.name);
       o["Planned R:R"] = (t.planned_rr as string) ?? "";
       o["Planned Size"] = t.position_size ?? "";
       o["Avg Entry"] = t.stats?.avg_entry ?? "";

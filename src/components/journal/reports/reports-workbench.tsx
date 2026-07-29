@@ -19,8 +19,10 @@ import {
 import { buildInsightContext } from "@/lib/journal/insights/context";
 import { runInsights } from "@/lib/journal/insights/registry";
 import {
-  DIMENSIONS,
   DIMENSION_GROUP_LABELS,
+  DIMENSION_GROUP_ORDER,
+  allDimensions,
+  customFieldDimensions,
   type DimensionContext,
 } from "@/lib/journal/reports/dimensions";
 import {
@@ -43,6 +45,7 @@ import { ReportTable } from "@/components/journal/reports/report-table";
 import { CrossAnalysis } from "@/components/journal/reports/cross-analysis";
 import { CompareView } from "@/components/journal/reports/compare-view";
 import type { Account, TradeRow } from "@/lib/journal/types";
+import type { FieldDef } from "@/lib/journal/field-def-types";
 import type { CashEvent } from "@/lib/journal/balance";
 
 const DEFAULT_COLUMNS = [
@@ -60,15 +63,29 @@ export function ReportsWorkbench({
   dailyReports = [],
   fillCounts,
   cashEvents = [],
+  fieldDefs = [],
 }: {
   trades: TradeRow[];
   accounts: Account[];
   dailyReports?: DailyReportLite[];
   fillCounts?: FillCounts;
   cashEvents?: CashEvent[];
+  /** User-defined fields — each becomes a groupable dimension on its own. */
+  fieldDefs?: FieldDef[];
 }) {
   const router = useRouter();
   const params = useSearchParams();
+
+  // A custom field is a dimension like any other: built here, carried on the
+  // dimension context, and resolvable by key. The engine knows nothing about it.
+  const customDimensions = useMemo(
+    () => customFieldDimensions(fieldDefs),
+    [fieldDefs],
+  );
+  const dimensions = useMemo(
+    () => allDimensions(customDimensions),
+    [customDimensions],
+  );
 
   // Report state lives in the URL: a report you cannot bookmark or send to
   // yourself is a report you re-derive by hand every time.
@@ -198,8 +215,9 @@ export function ReportsWorkbench({
       reportByDate: new Map(dailyReports.map((r) => [r.report_date, r])),
       insightsByTrade,
       accountNames: new Map(accounts.map((a) => [a.id, a.name])),
+      customDimensions,
     }),
-    [dailyReports, insightsByTrade, accounts],
+    [dailyReports, insightsByTrade, accounts, customDimensions],
   );
 
   const metricContext = useMemo(
@@ -266,8 +284,8 @@ export function ReportsWorkbench({
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {(["trade", "derived", "process", "insight"] as const).map((g) => {
-          const inGroup = DIMENSIONS.filter((d) => d.group === g);
+        {DIMENSION_GROUP_ORDER.map((g) => {
+          const inGroup = dimensions.filter((d) => d.group === g);
           if (inGroup.length === 0) return null;
           return (
             <div key={g}>
@@ -302,7 +320,7 @@ export function ReportsWorkbench({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Bez cross-analize</SelectItem>
-            {DIMENSIONS.filter((d) => d.key !== dimensionKey).map((d) => (
+            {dimensions.filter((d) => d.key !== dimensionKey).map((d) => (
               <SelectItem key={d.key} value={d.key}>
                 {d.label}
               </SelectItem>
@@ -387,12 +405,14 @@ export function ReportsWorkbench({
         onChange={setFilters}
         trades={enriched}
         dimensionContext={dimensionContext}
+        dimensions={dimensions}
         accounts={accounts}
       />
 
       {mode === "compare" ? (
         <CompareView
           trades={enriched}
+          dimensions={dimensions}
           baseFilters={filters}
           dimensionContext={dimensionContext}
           metricContext={metricContext}

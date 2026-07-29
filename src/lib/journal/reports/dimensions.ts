@@ -12,6 +12,7 @@
  */
 
 import { durationBucket } from "../hold-time";
+import { arrayFieldValue, stringFieldValue } from "../field-values";
 import { isShortDirection } from "../plan-calculations";
 import type { EnrichedTrade } from "../enriched-trade";
 import type { DailyReportLite } from "../enriched-trade";
@@ -19,7 +20,7 @@ import type { DailyReportLite } from "../enriched-trade";
 /** Bucket shown when a trade has no value for the dimension. */
 export const EMPTY_BUCKET = "—";
 
-export type DimensionGroup = "trade" | "derived" | "process" | "insight";
+export type DimensionGroup = "trade" | "derived" | "process" | "insight" | "custom";
 
 export type DimensionContext = {
   reportByDate: Map<string, DailyReportLite>;
@@ -29,6 +30,18 @@ export type DimensionContext = {
   accountNames?: Map<string, string>;
   /** Option value → human label, per option-list key. */
   labelsByList?: Map<string, Map<string, string>>;
+  /**
+   * Dimensions over user-defined fields, built per request from
+   * `tj_field_defs`.
+   *
+   * They ride on the context rather than being appended to the module-level
+   * registry because the registry is process-wide and the defs are per user —
+   * mutating it on a request would leak one trader's field names into another's
+   * report. Everything that resolves a dimension key goes through
+   * `resolveDimension`, so a custom field is addressable exactly like a built-in
+   * one and the engine needs no change to support it.
+   */
+  customDimensions?: Dimension[];
 };
 
 export type Dimension = {
@@ -56,17 +69,13 @@ export type Dimension = {
 
 // --- helpers ---------------------------------------------------------------
 
-const str = (t: EnrichedTrade, key: string): string | null => {
-  const v = t.trade.row[key];
-  return typeof v === "string" && v.trim() !== "" ? v : null;
-};
+// Read through the accessor, never `row[key]`: a field may live in a column or
+// in the `custom` jsonb bag, and a dimension must not care which.
+const str = (t: EnrichedTrade, key: string): string | null =>
+  stringFieldValue(t.trade.row, key);
 
-const arr = (t: EnrichedTrade, key: string): string[] | null => {
-  const v = t.trade.row[key];
-  if (!Array.isArray(v)) return null;
-  const out = v.filter((x): x is string => typeof x === "string" && !!x);
-  return out.length > 0 ? out : null;
-};
+const arr = (t: EnrichedTrade, key: string): string[] | null =>
+  arrayFieldValue(t.trade.row, key);
 
 /** A plain column dimension: one string value, empty bucket when unset. */
 function column(
@@ -152,17 +161,12 @@ const tradeDimensions: Dimension[] = [
     label: "Smer",
     group: "trade",
     order: ["Long", "Short"],
-    valueOf: (t) =>
-      isShortDirection((t.trade.row.direction as string) ?? null)
-        ? "Short"
-        : "Long",
+    valueOf: (t) => (isShortDirection(str(t, "direction")) ? "Short" : "Long"),
   },
   column("setup_grade", "Setup Grade", "setup_grade"),
-  column("ict_entry_model", "Entry Model", "ict_entry_model"),
-  column("macro_align", "Macro Align", "macro_align"),
-  column("cot_filter", "COT Filter", "cot_filter"),
-  column("htf_bias", "HTF Bias", "htf_bias"),
-  column("entry_tf", "Entry TF", "entry_tf"),
+  // macro_align / cot_filter / htf_bias / entry_tf are no longer listed here:
+  // they became user-defined fields in Phase 4a and arrive through
+  // `customFieldDimensions`. ict_entry_model became the playbook.
   column("result", "Result", "result"),
   column("exit_reason", "Exit Reason", "exit_reason"),
   column("mistake", "Greška", "mistake"),
@@ -370,6 +374,46 @@ export function getDimension(key: string): Dimension | undefined {
   return byKey.get(key);
 }
 
+/**
+ * Dimensions for the user's own fields.
+ *
+ * Every def becomes one — including free-text ones. A text field grouped by
+ * value is usually one row per trade, which is useless as a report but harmless,
+ * and refusing to register it would make "add a field, group by it" a promise
+ * with an asterisk.
+ */
+export function customFieldDimensions(
+  defs: readonly { key: string; label: string; field_type: string; list_key: string | null }[],
+): Dimension[] {
+  return defs.map((def) => ({
+    key: def.key,
+    label: def.label,
+    group: "custom" as const,
+    listKey: def.list_key ?? undefined,
+    multiValue: def.field_type === "tags",
+    valueOf: (t: EnrichedTrade) =>
+      def.field_type === "tags"
+        ? (arr(t, def.key) ?? EMPTY_BUCKET)
+        : (str(t, def.key) ?? EMPTY_BUCKET),
+  }));
+}
+
+/**
+ * Resolve a dimension key against the built-in registry and the request's
+ * custom fields. The single lookup every consumer must use.
+ */
+export function resolveDimension(
+  key: string,
+  ctx?: Pick<DimensionContext, "customDimensions">,
+): Dimension | undefined {
+  return byKey.get(key) ?? ctx?.customDimensions?.find((d) => d.key === key);
+}
+
+/** Built-ins plus the user's own fields, for a dimension picker. */
+export function allDimensions(custom: readonly Dimension[] = []): Dimension[] {
+  return [...DIMENSIONS, ...custom];
+}
+
 export function dimensionsByGroup(group: DimensionGroup): Dimension[] {
   return DIMENSIONS.filter((d) => d.group === group);
 }
@@ -379,7 +423,16 @@ export const DIMENSION_GROUP_LABELS: Record<DimensionGroup, string> = {
   derived: "Izvedeno",
   process: "Proces",
   insight: "Insight",
+  custom: "Moja polja",
 };
+
+export const DIMENSION_GROUP_ORDER: DimensionGroup[] = [
+  "trade",
+  "custom",
+  "derived",
+  "process",
+  "insight",
+];
 
 /**
  * An ad-hoc dimension over a raw column name.

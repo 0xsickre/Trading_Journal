@@ -12,6 +12,8 @@ import {
   type RealizedTrade,
 } from "./analytics";
 import { EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
+import type { FieldDef } from "./field-def-types";
+import { displayFieldValue } from "./field-values";
 import { getAllFormFields } from "./form-config";
 import {
   fmtSlippagePts,
@@ -27,24 +29,33 @@ import type { TradeRow } from "./types";
 import { groupInsights } from "./insights/types";
 import { OMITTED_RULES, type RunResult } from "./insights/registry";
 
-const BREAKDOWNS: { field: string; label: string }[] = [
-  { field: "macro_align", label: "Macro Align" },
-  { field: "cot_filter", label: "COT Filter" },
+// Fixed breakdowns. The user-defined fields are appended by `breakdownsFor`,
+// so a field added in Settings shows up in the mentor pack without an edit here.
+const FIXED_BREAKDOWNS: { field: string; label: string }[] = [
   { field: "setup_grade", label: "Setup Grade" },
-  { field: "ict_entry_model", label: "Entry Model" },
   { field: "instrument", label: "Instrument" },
   { field: "direction", label: "Direction" },
   { field: "technical_tags", label: "Technical Tags" },
   { field: "psychology_tags", label: "Psychology Tags" },
   { field: "mistake", label: "Mistake" },
-  { field: "htf_bias", label: "HTF Bias" },
 ];
+
+function breakdownsFor(defs: readonly FieldDef[]) {
+  return [
+    ...FIXED_BREAKDOWNS,
+    // Free-text fields make useless breakdown tables — one row per trade.
+    ...defs
+      .filter((d) => d.field_type === "select" || d.field_type === "tags")
+      .map((d) => ({ field: d.key, label: d.label })),
+  ];
+}
 
 // Every user-entered field, in form order, plus the auto-computed ones and the
 // planned price levels — so the export contains EVERYTHING typed on a trade.
 // instrument/direction are shown in the header, so they're skipped in the body.
 const HEADER_KEYS = new Set(["instrument", "direction"]);
-const DETAIL_FIELDS: { key: string; label: string }[] = (() => {
+
+function detailFieldsFor(defs: readonly FieldDef[]) {
   const seen = new Set<string>();
   const out: { key: string; label: string }[] = [];
   const add = (key: string, label: string) => {
@@ -52,7 +63,7 @@ const DETAIL_FIELDS: { key: string; label: string }[] = (() => {
     seen.add(key);
     out.push({ key, label });
   };
-  for (const f of getAllFormFields()) add(f.name, f.label);
+  for (const f of getAllFormFields(defs)) add(f.name, f.label);
   // Derived / computed columns that also carry user-meaningful info.
   add("planned_rr", "Planned RR");
   add("position_size", "Position size");
@@ -63,14 +74,10 @@ const DETAIL_FIELDS: { key: string; label: string }[] = (() => {
   add("tv_ltf_post", "TV LTF Post");
   add("result", "Result");
   return out;
-})();
-
-function val(row: TradeRow, key: string): string {
-  const v = row[key];
-  if (v == null || v === "") return "";
-  if (Array.isArray(v)) return v.filter(Boolean).join(", ");
-  return String(v);
 }
+
+const val = (row: TradeRow, key: string): string =>
+  displayFieldValue(row, key);
 
 const r2 = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(2));
 const pct = (n: number) => `${n.toFixed(1)}%`;
@@ -143,7 +150,11 @@ function breakdownTable(
   return `${head}\n${body}`;
 }
 
-function tradeDetail(t: TradeRow, ccy: string): string {
+function tradeDetail(
+  t: TradeRow,
+  ccy: string,
+  detailFields: { key: string; label: string }[],
+): string {
   const s = t.stats;
   const when = s?.closed_at ? s.closed_at.slice(0, 16).replace("T", " ") : "open";
   const no = t.trade_no != null ? `#${t.trade_no}` : t.id.slice(0, 8);
@@ -157,7 +168,7 @@ function tradeDetail(t: TradeRow, ccy: string): string {
     tv_ltf_pre: tv.ltf_pre ?? "",
     tv_ltf_post: tv.ltf_post ?? "",
   };
-  const lines = DETAIL_FIELDS.map((f) => {
+  const lines = detailFields.map((f) => {
     const v = val(enriched, f.key);
     return v ? `- **${f.label}:** ${v}` : "";
   }).filter(Boolean);
@@ -293,6 +304,11 @@ export type MentorPackOpts = {
   insights?: RunResult | null;
   /** Free-form risk note, e.g. "Rizik po trejdu: 1%". */
   riskNote?: string;
+  /**
+   * User-defined fields. Without them the pack still builds, but every custom
+   * field is silently absent — so callers that have them must pass them.
+   */
+  fieldDefs?: FieldDef[];
 };
 
 export function buildMentorPack(
@@ -305,6 +321,8 @@ export function buildMentorPack(
   const period = opts.periodLabel ?? "All";
   const rangeText = opts.rangeText ?? "sve vreme";
   const range = opts.breakevenRange ?? EXACT_ZERO_RANGE;
+  const defs = opts.fieldDefs ?? [];
+  const detailFields = detailFieldsFor(defs);
 
   // Derived once. statsTable and each of the ten breakdown tables used to call
   // toRealized(trades) themselves — twelve passes over the same trade list to
@@ -432,7 +450,7 @@ export function buildMentorPack(
 
   // --- Breakdowns ---------------------------------------------------------
   out.push(`## Performanse po kategorijama`);
-  for (const b of BREAKDOWNS) {
+  for (const b of breakdownsFor(defs)) {
     out.push(`### ${b.label}`);
     out.push(breakdownTable(realized, b.field, range));
     out.push("");
@@ -441,7 +459,8 @@ export function buildMentorPack(
   // --- Open / needs-review ------------------------------------------------
   if (openReview.length > 0) {
     out.push(`## Otvorene / za pregled (${openReview.length})`);
-    for (const t of openReview.slice(0, 20)) out.push(tradeDetail(t, ccy));
+    for (const t of openReview.slice(0, 20))
+      out.push(tradeDetail(t, ccy, detailFields));
     out.push("");
   }
 
@@ -449,7 +468,8 @@ export function buildMentorPack(
     out.push(`## Missed setup-i (${missedSetups.length})`);
     out.push(`_Planirani trejdovi koji nikad nisu otvoreni — bez PnL._`);
     out.push("");
-    for (const t of missedSetups.slice(0, 30)) out.push(tradeDetail(t, ccy));
+    for (const t of missedSetups.slice(0, 30))
+      out.push(tradeDetail(t, ccy, detailFields));
     out.push("");
   }
 
@@ -459,7 +479,7 @@ export function buildMentorPack(
     `_Svako polje koje si uneo je ispod. Prazna polja su izostavljena._`,
   );
   out.push("");
-  for (const t of detail) out.push(tradeDetail(t, ccy));
+  for (const t of detail) out.push(tradeDetail(t, ccy, detailFields));
   if (truncated > 0)
     out.push(`\n_(+${truncated} starijih trejdova nije prošireno — suzi period za pun detalj.)_`);
   out.push("");

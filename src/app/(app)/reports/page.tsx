@@ -3,17 +3,21 @@ import { getAccounts } from "@/lib/journal/accounts";
 import { getCashEvents } from "@/lib/journal/cash-events";
 import { getDailyReportsLite } from "@/lib/journal/daily-report-queries";
 import { getFillCounts, getTradesWithStats } from "@/lib/journal/trades";
+import { getFieldDefs } from "@/lib/journal/field-defs";
 import { ReportsWorkbench } from "@/components/journal/reports/reports-workbench";
 import type { TradeRow } from "@/lib/journal/types";
 
 export default async function ReportsPage() {
-  const [trades, accounts, dailyReports, fillCounts, cashEvents] =
+  const [trades, accounts, dailyReports, fillCounts, cashEvents, fieldDefs] =
     await Promise.all([
       getTradesWithStats(),
       getAccounts(),
       getDailyReportsLite(),
       getFillCounts(),
       getCashEvents(),
+      // All defs: reports read history, and a retired field's trades still
+      // carry its values.
+      getFieldDefs(false),
     ]);
 
   return (
@@ -35,6 +39,7 @@ export default async function ReportsPage() {
           dailyReports={dailyReports}
           fillCounts={fillCounts}
           cashEvents={cashEvents}
+          fieldDefs={fieldDefs}
         />
       </Suspense>
     </div>

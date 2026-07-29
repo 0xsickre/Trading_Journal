@@ -11,7 +11,12 @@
  * know that is if `n` sits next to the number.
  */
 
-import { bucketsOf, getDimension, type Dimension, type DimensionContext } from "./dimensions";
+import {
+  bucketsOf,
+  resolveDimension,
+  type Dimension,
+  type DimensionContext,
+} from "./dimensions";
 import { applyFilters, EMPTY_FILTER_SET, type FilterSet } from "./filters";
 import { getMetric, type MetricContext, type ReportMetric } from "./metrics";
 import type { EnrichedTrade } from "../enriched-trade";
@@ -57,12 +62,15 @@ export type RunReportInput = {
   sortBy?: string;
 };
 
-function resolveDimension(d: string | Dimension): Dimension | undefined {
-  return typeof d === "string" ? getDimension(d) : d;
+function toDimension(
+  d: string | Dimension,
+  ctx: DimensionContext,
+): Dimension | undefined {
+  return typeof d === "string" ? resolveDimension(d, ctx) : d;
 }
 
 export function runReport(input: RunReportInput): ReportResult | null {
-  const dimension = resolveDimension(input.dimension);
+  const dimension = toDimension(input.dimension, input.dimensionContext);
   if (!dimension) return null;
 
   const metrics = (input.metricKeys ?? [])

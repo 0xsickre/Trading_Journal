@@ -14,7 +14,9 @@ import {
 import {
   DIMENSIONS,
   DIMENSION_GROUP_LABELS,
+  DIMENSION_GROUP_ORDER,
   bucketsOf,
+  type Dimension,
   type DimensionContext,
 } from "@/lib/journal/reports/dimensions";
 import {
@@ -46,21 +48,24 @@ export function FilterBar({
   onChange,
   trades,
   dimensionContext,
+  dimensions = DIMENSIONS,
   accounts,
 }: {
   filters: FilterSet;
   onChange: (next: FilterSet) => void;
   trades: EnrichedTrade[];
   dimensionContext: DimensionContext;
+  /** Built-ins plus the user's own fields — a custom field filters like any other. */
+  dimensions?: Dimension[];
   accounts: { id: string; name: string }[];
 }) {
-  const [draftField, setDraftField] = useState<string>(DIMENSIONS[0].key);
+  const [draftField, setDraftField] = useState<string>(dimensions[0].key);
   const [draftOp, setDraftOp] = useState<FilterClause["op"]>("in");
 
   /** Values actually present in the book — never a list of what could exist. */
   const valuesFor = useMemo(() => {
     const map = new Map<string, string[]>();
-    for (const dim of DIMENSIONS) {
+    for (const dim of dimensions) {
       const seen = new Set<string>();
       for (const t of trades) {
         for (const b of bucketsOf(dim, t, dimensionContext)) seen.add(b);
@@ -68,7 +73,7 @@ export function FilterBar({
       map.set(dim.key, [...seen].sort());
     }
     return map;
-  }, [trades, dimensionContext]);
+  }, [trades, dimensionContext, dimensions]);
 
   const isNumeric = draftField in NUMERIC_FIELD_LABELS;
 
@@ -107,7 +112,7 @@ export function FilterBar({
   }
 
   const labelOf = (field: string) =>
-    DIMENSIONS.find((d) => d.key === field)?.label ??
+    dimensions.find((d) => d.key === field)?.label ??
     NUMERIC_FIELD_LABELS[field] ??
     field;
 
@@ -267,8 +272,8 @@ export function FilterBar({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {(["trade", "derived", "process", "insight"] as const).map((g) => {
-              const inGroup = DIMENSIONS.filter((d) => d.group === g);
+            {DIMENSION_GROUP_ORDER.map((g) => {
+              const inGroup = dimensions.filter((d) => d.group === g);
               if (inGroup.length === 0) return null;
               return (
                 <div key={g}>

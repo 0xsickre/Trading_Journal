@@ -27,10 +27,11 @@ import { EditableSelect } from "@/components/journal/editable-select";
 import { TagMultiSelect } from "@/components/journal/tag-multi-select";
 import { TradeImages } from "@/components/journal/trade-images";
 import {
-  FORM_TABS,
+  buildFormTabs,
   type FieldConfig,
   type FormGroup,
 } from "@/lib/journal/form-config";
+import type { FieldDef } from "@/lib/journal/field-def-types";
 import type { Account, Instrument, OptionsMap, TradeRow } from "@/lib/journal/types";
 import {
   computeEntrySlippage,
@@ -134,6 +135,7 @@ export function TradeForm({
   optionsMap,
   instruments,
   accounts,
+  fieldDefs = [],
   initial,
   ftmoFailedAccountIds = [],
   accountEquity = {},
@@ -141,6 +143,8 @@ export function TradeForm({
   optionsMap: OptionsMap;
   instruments: Instrument[];
   accounts: Account[];
+  /** User-defined fields, appended to their methodology group. */
+  fieldDefs?: FieldDef[];
   initial?: TradeFormInitial;
   /** Accounts whose FTMO challenge is frozen — new trades are blocked. */
   ftmoFailedAccountIds?: string[];
@@ -162,6 +166,9 @@ export function TradeForm({
   const [isMissed, setIsMissed] = useState(
     () => initial?.status === "missed",
   );
+
+  // Structure is fixed; the methodology groups are filled from the DB.
+  const formTabs = useMemo(() => buildFormTabs(fieldDefs), [fieldDefs]);
 
   const [accountId, setAccountId] = useState<string | null>(
     initial?.account_id ?? accounts.find((a) => a.is_active)?.id ?? accounts[0]?.id ?? null,
@@ -632,7 +639,7 @@ export function TradeForm({
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="w-full sm:w-auto">
-          {FORM_TABS.map((tab) => (
+          {formTabs.map((tab) => (
             <TabsTrigger
               key={tab.id}
               value={tab.id}
@@ -649,7 +656,7 @@ export function TradeForm({
           ))}
         </TabsList>
 
-        {FORM_TABS.map((tab) => (
+        {formTabs.map((tab) => (
           <TabsContent key={tab.id} value={tab.id} className="mt-4">
             {tab.id === "execution" && !executionUnlocked ? (
               <Card>

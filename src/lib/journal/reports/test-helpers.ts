@@ -1,7 +1,7 @@
 import type { RealizedTrade } from "../analytics";
 import { enrichTrades, type DailyReportLite } from "../enriched-trade";
 import type { PositionStat, TradeRow } from "../types";
-import type { DimensionContext } from "./dimensions";
+import { customFieldDimensions, type DimensionContext } from "./dimensions";
 import type { MetricContext } from "./metrics";
 import { EXACT_ZERO_RANGE } from "../breakeven";
 
@@ -29,6 +29,8 @@ export type TradeSpec = {
   plannedRr?: string | null;
   mae?: number | null;
   mfe?: number | null;
+  /** Values for user-defined fields, as they are actually stored. */
+  custom?: Record<string, unknown>;
 };
 
 let seq = 0;
@@ -75,7 +77,13 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     max_profit_price: spec.mfe ?? null,
     position_size: spec.size ?? null,
     setup_grade: spec.setupGrade ?? null,
-    macro_align: spec.macroAlign ?? null,
+    // macro_align is a USER-DEFINED field since Phase 4a, so the fixture stores
+    // it where the real row does. Every test that groups by it therefore
+    // exercises the custom-field path, not a column that no longer exists.
+    custom: {
+      ...(spec.macroAlign ? { macro_align: spec.macroAlign } : {}),
+      ...spec.custom,
+    },
     instrument: spec.instrument ?? "EURUSD",
     technical_tags: spec.technicalTags ?? [],
     psychology_tags: spec.psychologyTags ?? [],
@@ -112,12 +120,23 @@ export function mkReport(
   };
 }
 
+/** The user-defined fields the fixtures use. */
+export const TEST_FIELD_DEFS = [
+  {
+    key: "macro_align",
+    label: "Macro Align",
+    field_type: "select",
+    list_key: "macro_align",
+  },
+];
+
 export function dimCtx(
   reports: DailyReportLite[] = [],
   extra: Partial<DimensionContext> = {},
 ): DimensionContext {
   return {
     reportByDate: new Map(reports.map((r) => [r.report_date, r])),
+    customDimensions: customFieldDimensions(TEST_FIELD_DEFS),
     ...extra,
   };
 }

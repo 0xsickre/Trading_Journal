@@ -7,6 +7,7 @@
  * discipline in R instead of describing it in prose.
  */
 
+import { stringFieldValue } from "../field-values";
 import { fmtMoney } from "../format";
 import type { InsightContext } from "./context";
 import type { Insight, InsightRule } from "./types";
@@ -24,9 +25,9 @@ export const P = {
 
 type Rule = InsightRule<InsightContext>;
 
+/** Reads through the field accessor: the value may be a column or a custom one. */
 function strField(row: Record<string, unknown>, key: string): string {
-  const v = row[key];
-  return typeof v === "string" ? v : "";
+  return stringFieldValue(row, key) ?? "";
 }
 
 const norm = (s: string) => s.trim().toLowerCase();
@@ -181,9 +182,7 @@ export const missedASetup: Rule = {
   description: "A-setup-i označeni kao propušteni.",
   evaluate: (ctx) => {
     const missed = ctx.allRows.filter(
-      (r) =>
-        r.status === "missed" &&
-        norm(String(r.setup_grade ?? "")).startsWith("a"),
+      (r) => r.status === "missed" && norm(strField(r, "setup_grade")).startsWith("a"),
     );
     if (missed.length === 0) return [];
     return [

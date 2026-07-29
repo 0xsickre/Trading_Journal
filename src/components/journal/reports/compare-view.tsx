@@ -15,6 +15,7 @@ import { getMetric } from "@/lib/journal/reports/metrics";
 import type { MetricContext } from "@/lib/journal/reports/metrics";
 import {
   DIMENSIONS,
+  type Dimension,
   bucketsOf,
   type DimensionContext,
 } from "@/lib/journal/reports/dimensions";
@@ -42,6 +43,7 @@ export function CompareView({
   viewMode,
   currency,
   equityBase,
+  dimensions = DIMENSIONS,
 }: {
   trades: EnrichedTrade[];
   baseFilters: FilterSet;
@@ -53,19 +55,23 @@ export function CompareView({
   viewMode: ViewMode;
   currency: string;
   equityBase: number | null;
+  /** Built-ins plus the user's own fields. */
+  dimensions?: Dimension[];
 }) {
-  const [splitField, setSplitField] = useState("macro_align");
+  // Setup grade is the default split because every trade has one; a custom
+  // field might not exist at all on a fresh account.
+  const [splitField, setSplitField] = useState("setup_grade");
   const [splitValue, setSplitValue] = useState<string>("");
 
   const options = useMemo(() => {
-    const dim = DIMENSIONS.find((d) => d.key === splitField);
+    const dim = dimensions.find((d) => d.key === splitField);
     if (!dim) return [];
     const seen = new Set<string>();
     for (const t of trades) {
       for (const b of bucketsOf(dim, t, dimensionContext)) seen.add(b);
     }
     return [...seen].sort();
-  }, [splitField, trades, dimensionContext]);
+  }, [splitField, trades, dimensionContext, dimensions]);
 
   const value = splitValue || options[0] || "";
 
@@ -128,7 +134,7 @@ export function CompareView({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {DIMENSIONS.map((d) => (
+            {dimensions.map((d) => (
               <SelectItem key={d.key} value={d.key}>
                 {d.label}
               </SelectItem>

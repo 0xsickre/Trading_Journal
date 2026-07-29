@@ -1,5 +1,22 @@
-// Declarative config for the trade entry form. Keeps the form data-driven and
-// consistent with the DB columns and the option lists.
+// Declarative config for the trade entry form.
+//
+// Two halves, and the split is deliberate:
+//
+//   STRUCTURE lives here, in code. Tabs, the progressive risk plan, the
+//   missed-setup review, the outcome block — those are BEHAVIOUR. `trade-form`
+//   branches on `risk_plan`, `plan_review` and `psychology_notes` by name, and
+//   the metrics panel reads `entry_price` / `stop_price` / `risk_pct` literally.
+//   Making those data would not make the form configurable, it would only move
+//   the hardcoding somewhere the type checker cannot see it.
+//
+//   CONTENT of the methodology groups comes from `tj_field_defs`. Adding "Was
+//   this an A+ session?" is a form action in Settings, not a migration, and the
+//   new field shows up as a report dimension on its own.
+//
+// Values for def-driven fields are stored in `tj_positions.custom` — see
+// lib/journal/field-values.ts, which is the only place that knows that.
+
+import { FIELD_DEF_GROUPS, type FieldDef, type FieldDefGroup } from "./field-def-types";
 
 export type FieldType =
   | "select"
@@ -12,13 +29,15 @@ export type FieldType =
   | "computed";
 
 export type FieldConfig = {
-  name: string; // tj_positions column
+  name: string; // tj_positions column, or a key inside `custom`
   label: string;
   type: FieldType;
   listKey?: string; // for select / tags -> primary option list
   listKeys?: string[]; // for tags -> merge suggestions from multiple lists
   placeholder?: string;
   colSpan?: 1 | 2; // grid span (of 2)
+  /** True when the value lives in `custom` rather than in its own column. */
+  custom?: boolean;
 };
 
 export type FormGroup = {
@@ -36,7 +55,11 @@ export type FormTab = {
   groups: FormGroup[];
 };
 
-export const FORM_TABS: FormTab[] = [
+/**
+ * The form skeleton. Methodology groups start empty and are filled from the
+ * field defs by `buildFormTabs`; every other group is fixed.
+ */
+const BASE_TABS: FormTab[] = [
   {
     id: "plan",
     title: "Plan & Setup",
@@ -81,22 +104,12 @@ export const FORM_TABS: FormTab[] = [
         id: "macro",
         title: "Macro (vault)",
         description: "Iz dashboard readiness matrice — smer i kvalitet ulaza.",
-        fields: [
-          { name: "macro_align", label: "Macro Align", type: "select", listKey: "macro_align" },
-          { name: "cot_filter", label: "COT Filter", type: "select", listKey: "cot_filter" },
-        ],
+        fields: [],
       },
       {
         id: "setup",
         title: "Setup",
         fields: [
-          { name: "htf_bias", label: "HTF Bias", type: "select", listKey: "htf_bias" },
-          {
-            name: "ict_entry_model",
-            label: "ICT Entry Model",
-            type: "select",
-            listKey: "ict_entry_model",
-          },
           { name: "setup_grade", label: "Setup Grade", type: "select", listKey: "setup_grade" },
           {
             name: "technical_tags",
@@ -132,9 +145,7 @@ export const FORM_TABS: FormTab[] = [
         id: "plan_advanced",
         title: "Advanced",
         advanced: true,
-        fields: [
-          { name: "entry_tf", label: "Entry TF", type: "select", listKey: "entry_tf" },
-        ],
+        fields: [],
       },
     ],
   },
@@ -171,7 +182,7 @@ export const FORM_TABS: FormTab[] = [
             name: "psychology_tags",
             label: "Psychology tags",
             type: "tags",
-            listKeys: ["emotion", "discipline", "rules_followed"],
+            listKeys: ["emotion", "discipline"],
             colSpan: 2,
             placeholder: "FOMO, Followed plan, Moved stop…",
           },
@@ -196,10 +207,56 @@ export const FORM_TABS: FormTab[] = [
   },
 ];
 
-export function getAllFormFields(): FieldConfig[] {
+/** Structural groups a field def may be placed in — mirrors the DB CHECK. */
+const DEF_GROUP_IDS: ReadonlySet<string> = new Set<string>(FIELD_DEF_GROUPS);
+
+function toFieldConfig(def: FieldDef): FieldConfig {
+  return {
+    name: def.key,
+    label: def.label,
+    type: def.field_type,
+    listKey: def.list_key ?? undefined,
+    colSpan: def.field_type === "textarea" || def.field_type === "tags" ? 2 : 1,
+    custom: true,
+  };
+}
+
+/**
+ * The form config for a given set of user-defined fields.
+ *
+ * Definitions are appended to their group in `sort_order`, after that group's
+ * fixed fields. A def naming a group that does not exist is skipped rather than
+ * creating one: the group set is closed on purpose (see FIELD_DEF_GROUPS).
+ */
+export function buildFormTabs(defs: readonly FieldDef[] = []): FormTab[] {
+  const byGroup = new Map<FieldDefGroup, FieldConfig[]>();
+  for (const def of defs) {
+    if (!DEF_GROUP_IDS.has(def.group_id)) continue;
+    const bucket = byGroup.get(def.group_id) ?? [];
+    bucket.push(toFieldConfig(def));
+    byGroup.set(def.group_id, bucket);
+  }
+
+  return BASE_TABS.map((tab) => ({
+    ...tab,
+    groups: tab.groups
+      .map((group) => {
+        const extra = byGroup.get(group.id as FieldDefGroup) ?? [];
+        return extra.length > 0
+          ? { ...group, fields: [...group.fields, ...extra] }
+          : group;
+      })
+      // An advanced group with nothing in it is a disclosure triangle that
+      // opens onto nothing — drop it rather than render an empty box.
+      .filter((group) => group.fields.length > 0),
+  }));
+}
+
+/** Every distinct field in the form, in render order. */
+export function getAllFormFields(defs: readonly FieldDef[] = []): FieldConfig[] {
   const seen = new Set<string>();
   const out: FieldConfig[] = [];
-  for (const tab of FORM_TABS) {
+  for (const tab of buildFormTabs(defs)) {
     for (const group of tab.groups) {
       for (const field of group.fields) {
         if (seen.has(field.name)) continue;
@@ -211,12 +268,33 @@ export function getAllFormFields(): FieldConfig[] {
   return out;
 }
 
-export const POSITION_FIELD_NAMES = getAllFormFields().map((f) => f.name);
+/** Field names the save path accepts. Anything else is dropped. */
+export function positionFieldNames(defs: readonly FieldDef[] = []): string[] {
+  return getAllFormFields(defs).map((f) => f.name);
+}
 
-export const NUMERIC_FIELDS = new Set(
-  [...getAllFormFields().filter((f) => f.type === "number").map((f) => f.name), "position_size"],
-);
+export function numericFieldNames(defs: readonly FieldDef[] = []): Set<string> {
+  return new Set([
+    ...getAllFormFields(defs)
+      .filter((f) => f.type === "number")
+      .map((f) => f.name),
+    "position_size",
+  ]);
+}
 
-export const ARRAY_FIELD_NAMES = new Set(
-  getAllFormFields().filter((f) => f.type === "tags").map((f) => f.name),
-);
+export function arrayFieldNames(defs: readonly FieldDef[] = []): Set<string> {
+  return new Set(
+    getAllFormFields(defs)
+      .filter((f) => f.type === "tags")
+      .map((f) => f.name),
+  );
+}
+
+/** Keys whose values are stored in `custom` rather than in a column. */
+export function customFieldNames(defs: readonly FieldDef[] = []): Set<string> {
+  return new Set(
+    getAllFormFields(defs)
+      .filter((f) => f.custom)
+      .map((f) => f.name),
+  );
+}

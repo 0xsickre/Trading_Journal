@@ -2,11 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import {
-  POSITION_FIELD_NAMES,
-  NUMERIC_FIELDS,
-  ARRAY_FIELD_NAMES,
-} from "@/lib/journal/form-config";
+import type { Json } from "@/lib/supabase/types";
+import { getFieldDefs } from "@/lib/journal/field-defs";
+import { buildPositionPatch, mergeCustom } from "@/lib/journal/trade-fields";
 import { computeStatus, isValidFill } from "@/lib/journal/trade-lifecycle";
 import { isFtmoAccountFrozen } from "@/lib/journal/ftmo-status";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
@@ -30,25 +28,17 @@ export type TradeInput = {
   current_status?: string | null;
 };
 
-function sanitizeFields(fields: Record<string, string | number | string[] | null>) {
-  const out: Record<string, string | number | string[] | null> = {};
-  for (const key of POSITION_FIELD_NAMES) {
-    if (!(key in fields)) continue;
-    const raw = fields[key];
-    if (ARRAY_FIELD_NAMES.has(key)) {
-      const arr = Array.isArray(raw)
-        ? raw.map((s) => String(s).trim()).filter(Boolean)
-        : [];
-      out[key] = arr;
-    } else if (NUMERIC_FIELDS.has(key)) {
-      const n =
-        raw === "" || raw == null ? null : Number(raw);
-      out[key] = n != null && Number.isFinite(n) ? n : null;
-    } else {
-      out[key] = raw === "" ? null : (raw as string | null);
-    }
-  }
-  return out;
+/**
+ * Sanitize a submission into a row patch.
+ *
+ * Definitions are read with `activeOnly = false`: a field the user deactivated
+ * yesterday must still be writable today, or editing an old trade would silently
+ * strip the value it was recorded with.
+ */
+async function sanitizeFields(
+  fields: Record<string, string | number | string[] | null>,
+) {
+  return buildPositionPatch(fields, await getFieldDefs(false));
 }
 
 function cleanExecs(execs: ExecutionInput[]) {
@@ -104,7 +94,7 @@ export async function createTrade(input: TradeInput) {
   }
 
   const supabase = await createClient();
-  const fields = sanitizeFields(input.fields);
+  const patch = await sanitizeFields(input.fields);
   const execs = cleanExecs(input.executions);
   const statusPatch = resolveStatus(
     execs,
@@ -114,7 +104,8 @@ export async function createTrade(input: TradeInput) {
 
   // Freeze the contract spec onto the trade. Without this, later edits to the
   // instrument would retroactively rewrite this trade's P&L.
-  const symbol = typeof fields.instrument === "string" ? fields.instrument : null;
+  const symbol =
+    typeof patch.columns.instrument === "string" ? patch.columns.instrument : null;
   const snapshot = instrumentSnapshot(
     symbol,
     await getInstrumentSpecs([symbol]),
@@ -123,7 +114,10 @@ export async function createTrade(input: TradeInput) {
   const { data: pos, error: posErr } = await supabase
     .from("tj_positions")
     .insert({
-      ...fields,
+      ...patch.columns,
+      // Cast: the bag is `unknown`-valued by design (a def can declare any
+      // field type); PostgREST serializes it as jsonb either way.
+      custom: mergeCustom({}, patch.custom) as Json,
       account_id: input.account_id,
       trade_no: input.trade_no,
       ...statusPatch,
@@ -151,7 +145,7 @@ export async function createTrade(input: TradeInput) {
 
 export async function updateTrade(id: string, input: TradeInput) {
   const supabase = await createClient();
-  const fields = sanitizeFields(input.fields);
+  const patch = await sanitizeFields(input.fields);
   const execs = cleanExecs(input.executions);
   const statusPatch = resolveStatus(
     execs,
@@ -162,13 +156,17 @@ export async function updateTrade(id: string, input: TradeInput) {
   // Re-snapshot the contract spec ONLY when the trade moves to a different
   // symbol, or when it predates the snapshot column. Re-stamping on every save
   // would pull in an edited point value and undo the whole point of freezing it.
+  // `custom` is read in the same round trip: a jsonb write replaces the whole
+  // document, so the previous bag has to be the base or every key this form did
+  // not render would be erased.
   const { data: prevPos } = await supabase
     .from("tj_positions")
-    .select("instrument, point_value_at_trade")
+    .select("instrument, point_value_at_trade, custom")
     .eq("id", id)
     .maybeSingle();
 
-  const symbol = typeof fields.instrument === "string" ? fields.instrument : null;
+  const symbol =
+    typeof patch.columns.instrument === "string" ? patch.columns.instrument : null;
   const symbolChanged = prevPos != null && prevPos.instrument !== symbol;
   const snapshot =
     symbolChanged || prevPos?.point_value_at_trade == null
@@ -178,7 +176,8 @@ export async function updateTrade(id: string, input: TradeInput) {
   const { error: upErr } = await supabase
     .from("tj_positions")
     .update({
-      ...fields,
+      ...patch.columns,
+      custom: mergeCustom(prevPos?.custom, patch.custom) as Json,
       account_id: input.account_id,
       trade_no: input.trade_no,
       ...statusPatch,

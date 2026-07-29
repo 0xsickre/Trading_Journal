@@ -3,13 +3,17 @@ import { PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getAccounts } from "@/lib/journal/accounts";
+import { getFieldDefs } from "@/lib/journal/field-defs";
 import { JournalGrid } from "@/components/journal/journal-grid";
 import type { TradeRow } from "@/lib/journal/types";
 
 export default async function JournalPage() {
-  const [trades, accounts] = await Promise.all([
+  const [trades, accounts, fieldDefs] = await Promise.all([
     getTradesWithStats(),
     getAccounts(),
+    // All defs: the grid READS history, and a retired field's values are still
+    // on the trades that recorded them.
+    getFieldDefs(false),
   ]);
 
   return (
@@ -29,7 +33,11 @@ export default async function JournalPage() {
         </Button>
       </div>
 
-      <JournalGrid trades={trades as TradeRow[]} accounts={accounts} />
+      <JournalGrid
+        trades={trades as TradeRow[]}
+        accounts={accounts}
+        fieldDefs={fieldDefs}
+      />
     </div>
   );
 }

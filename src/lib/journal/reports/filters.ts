@@ -16,7 +16,7 @@
 import {
   bucketsOf,
   EMPTY_BUCKET,
-  getDimension,
+  resolveDimension,
   type DimensionContext,
 } from "./dimensions";
 import type { EnrichedTrade } from "../enriched-trade";
@@ -72,7 +72,7 @@ function matchesClause(
 
   // Non-numeric clauses address a dimension, so "what counts as a value" is
   // defined in exactly one place — the registry.
-  const dim = getDimension(clause.field);
+  const dim = resolveDimension(clause.field, ctx);
   const buckets = dim ? bucketsOf(dim, t, ctx) : [];
 
   // `EMPTY_BUCKET` is a legitimate ROW in a table — "12 trades with no grade"

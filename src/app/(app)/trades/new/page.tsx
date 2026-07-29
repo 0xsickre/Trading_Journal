@@ -3,16 +3,19 @@ import { getInstruments } from "@/lib/journal/instruments";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getFailedFtmoAccountIds } from "@/lib/journal/ftmo-status";
 import { getAccountEquities } from "@/lib/journal/equity";
+import { getFieldDefs } from "@/lib/journal/field-defs";
 import { TradeForm } from "@/components/journal/trade-form";
 
 export default async function NewTradePage() {
-  const [optionsMap, instruments, accounts, failedFtmo, accountEquity] =
+  const [optionsMap, instruments, accounts, failedFtmo, accountEquity, fieldDefs] =
     await Promise.all([
       getOptionsMap(true),
       getInstruments(true),
       getAccounts(),
       getFailedFtmoAccountIds(),
       getAccountEquities(),
+      // Active only: a deactivated field must not be offered for NEW input.
+      getFieldDefs(true),
     ]);
 
   return (
@@ -20,6 +23,7 @@ export default async function NewTradePage() {
       optionsMap={optionsMap}
       instruments={instruments}
       accounts={accounts}
+      fieldDefs={fieldDefs}
       ftmoFailedAccountIds={[...failedFtmo]}
       accountEquity={accountEquity}
     />

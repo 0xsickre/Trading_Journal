@@ -12,7 +12,12 @@
  * from two trades.
  */
 
-import { bucketsOf, getDimension, type Dimension, type DimensionContext } from "./dimensions";
+import {
+  bucketsOf,
+  resolveDimension,
+  type Dimension,
+  type DimensionContext,
+} from "./dimensions";
 import { applyFilters, EMPTY_FILTER_SET, type FilterSet } from "./filters";
 import { getMetric, type MetricContext, type ReportMetric } from "./metrics";
 import { DEFAULT_MIN_SAMPLE } from "./engine";
@@ -64,12 +69,12 @@ export type RunPivotInput = {
   minSample?: number;
 };
 
-const resolve = (d: string | Dimension) =>
-  typeof d === "string" ? getDimension(d) : d;
+const resolve = (d: string | Dimension, ctx: DimensionContext) =>
+  typeof d === "string" ? resolveDimension(d, ctx) : d;
 
 export function runPivot(input: RunPivotInput): PivotResult | null {
-  const rowDimension = resolve(input.rowDimension);
-  const colDimension = resolve(input.colDimension);
+  const rowDimension = resolve(input.rowDimension, input.dimensionContext);
+  const colDimension = resolve(input.colDimension, input.dimensionContext);
   const metric = getMetric(input.metricKey);
   if (!rowDimension || !colDimension || !metric) return null;
 
