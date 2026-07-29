@@ -26,12 +26,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EditableSelect } from "@/components/journal/editable-select";
 import { TagMultiSelect } from "@/components/journal/tag-multi-select";
 import { TradeImages } from "@/components/journal/trade-images";
+import { PlaybookChecklist } from "@/components/journal/playbook-checklist";
 import {
   buildFormTabs,
   type FieldConfig,
   type FormGroup,
 } from "@/lib/journal/form-config";
 import type { FieldDef } from "@/lib/journal/field-def-types";
+import { ruleAppliesTo, type Playbook } from "@/lib/journal/playbook-types";
 import type { Account, Instrument, OptionsMap, TradeRow } from "@/lib/journal/types";
 import {
   computeEntrySlippage,
@@ -95,6 +97,10 @@ export type TradeFormInitial = {
   trade_no: number | null;
   status?: string;
   missed_at?: string | null;
+  playbook_id?: string | null;
+  conviction?: number | null;
+  /** Rule id → followed, for rules answered on this trade. */
+  rule_answers?: Record<string, boolean>;
   fields: Record<string, FieldValue>;
   executions: {
     side: "entry" | "exit";
@@ -136,6 +142,7 @@ export function TradeForm({
   instruments,
   accounts,
   fieldDefs = [],
+  playbooks = [],
   initial,
   ftmoFailedAccountIds = [],
   accountEquity = {},
@@ -145,6 +152,8 @@ export function TradeForm({
   accounts: Account[];
   /** User-defined fields, appended to their methodology group. */
   fieldDefs?: FieldDef[];
+  /** Playbooks with their rule checklists. */
+  playbooks?: Playbook[];
   initial?: TradeFormInitial;
   /** Accounts whose FTMO challenge is frozen — new trades are blocked. */
   ftmoFailedAccountIds?: string[];
@@ -169,6 +178,30 @@ export function TradeForm({
 
   // Structure is fixed; the methodology groups are filled from the DB.
   const formTabs = useMemo(() => buildFormTabs(fieldDefs), [fieldDefs]);
+
+  // Playbook state. Its own group rather than a field def: the checklist has
+  // behaviour (outcome-scoped rules, three-state answers) that a field
+  // definition cannot express.
+  const [playbookId, setPlaybookId] = useState<string | null>(
+    initial?.playbook_id ?? null,
+  );
+  const [conviction, setConviction] = useState<number | null>(
+    initial?.conviction ?? null,
+  );
+  const [ruleAnswers, setRuleAnswers] = useState<Record<string, boolean>>(
+    initial?.rule_answers ?? {},
+  );
+
+  function setRuleAnswer(ruleId: string, followed: boolean | null) {
+    setRuleAnswers((prev) => {
+      const next = { ...prev };
+      // Deleting rather than storing null: absent IS "not answered", and one
+      // representation of it means the save path cannot disagree with the form.
+      if (followed == null) delete next[ruleId];
+      else next[ruleId] = followed;
+      return next;
+    });
+  }
 
   const [accountId, setAccountId] = useState<string | null>(
     initial?.account_id ?? accounts.find((a) => a.is_active)?.id ?? accounts[0]?.id ?? null,
@@ -414,6 +447,38 @@ export function TradeForm({
     };
   }, [execs, fields, pointValue, account, accountEquity]);
 
+  /**
+   * Answers to rules the checklist is currently OFFERING.
+   *
+   * The save path writes only these, so an answer recorded while the trade was
+   * green cannot survive into a red trade's statistics. It is the same rule
+   * `ruleAppliesTo` enforces on the reporting side — if the two could disagree,
+   * a rule's follow rate would be measured against a population the trader was
+   * never asked about.
+   */
+  const visibleRuleAnswers = useMemo(() => {
+    const book = playbooks.find((p) => p.id === playbookId);
+    if (!book) return {};
+    const outcome =
+      metrics.netPl == null
+        ? null
+        : metrics.netPl > 0
+          ? ("win" as const)
+          : metrics.netPl < 0
+            ? ("loss" as const)
+            : ("breakeven" as const);
+
+    const out: Record<string, boolean> = {};
+    for (const group of book.groups) {
+      for (const rule of group.rules) {
+        if (!ruleAppliesTo(rule.show_when, outcome)) continue;
+        const v = ruleAnswers[rule.id];
+        if (v !== undefined) out[rule.id] = v;
+      }
+    }
+    return out;
+  }, [playbooks, playbookId, ruleAnswers, metrics.netPl]);
+
   function addExec(side: "entry" | "exit") {
     setExecs((prev) => {
       const nowIso = new Date().toISOString();
@@ -547,6 +612,12 @@ export function TradeForm({
       executions: buildExecInputs(),
       trade_phase: hasValidEntryFill ? "active" : tradePhase,
       current_status: isMissed ? "missed" : null,
+      playbook_id: playbookId,
+      conviction,
+      // Only answers to rules the checklist actually offered. An answer to a
+      // rule hidden by the current outcome would be recorded against a
+      // population the trader was never shown.
+      rule_answers: visibleRuleAnswers,
     };
     start(async () => {
       const res = initial
@@ -674,6 +745,28 @@ export function TradeForm({
                 )}
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Playbook is a fixed group, not a field def: the checklist
+                    scopes itself by outcome and answers are three-state, which
+                    no field definition can express.
+
+                    On BOTH tabs deliberately. Plan is where you commit to a
+                    strategy, but a 'winner' rule — "did you let it run?" — only
+                    becomes answerable once the trade is closed, and by then the
+                    trader is on Execution. Offering it in one place only would
+                    make those rules unanswerable in practice. */}
+                {!isMissed && (
+                  <PlaybookChecklist
+                    playbooks={playbooks}
+                    playbookId={playbookId}
+                    onPlaybookChange={setPlaybookId}
+                    conviction={conviction}
+                    onConvictionChange={setConviction}
+                    answers={ruleAnswers}
+                    onAnswerChange={setRuleAnswer}
+                    netPl={metrics.netPl}
+                  />
+                )}
+
                 {tab.id === "execution" && (
                   <ExecutionsEditor
                     execs={execs}

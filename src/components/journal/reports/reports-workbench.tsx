@@ -46,6 +46,15 @@ import { CrossAnalysis } from "@/components/journal/reports/cross-analysis";
 import { CompareView } from "@/components/journal/reports/compare-view";
 import type { Account, TradeRow } from "@/lib/journal/types";
 import type { FieldDef } from "@/lib/journal/field-def-types";
+import {
+  playbookDimensions,
+  type PlaybookLookup,
+} from "@/lib/journal/reports/playbook-dimensions";
+import type {
+  Playbook,
+  PositionRule,
+  ShowWhen,
+} from "@/lib/journal/playbook-types";
 import type { CashEvent } from "@/lib/journal/balance";
 
 const DEFAULT_COLUMNS = [
@@ -64,6 +73,8 @@ export function ReportsWorkbench({
   fillCounts,
   cashEvents = [],
   fieldDefs = [],
+  playbooks = [],
+  positionRules,
 }: {
   trades: TradeRow[];
   accounts: Account[];
@@ -72,6 +83,10 @@ export function ReportsWorkbench({
   cashEvents?: CashEvent[];
   /** User-defined fields — each becomes a groupable dimension on its own. */
   fieldDefs?: FieldDef[];
+  /** Playbooks including retired rules, so history keeps its buckets. */
+  playbooks?: Playbook[];
+  /** Trade id → recorded rule answers. */
+  positionRules?: Map<string, PositionRule[]>;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -82,9 +97,37 @@ export function ReportsWorkbench({
     () => customFieldDimensions(fieldDefs),
     [fieldDefs],
   );
+  /**
+   * Playbook lookups.
+   *
+   * Rule text is indexed across ALL rules, retired ones included: a retired
+   * rule's historical answers are real observations, and losing its name would
+   * turn them into rows labelled by a uuid.
+   */
+  const playbookLookup = useMemo<PlaybookLookup>(() => {
+    const text = new Map<string, string>();
+    const showWhen = new Map<string, ShowWhen>();
+    for (const book of playbooks) {
+      for (const group of book.groups) {
+        for (const rule of group.rules) {
+          text.set(rule.id, rule.text);
+          showWhen.set(rule.id, rule.show_when);
+        }
+      }
+    }
+    return {
+      names: new Map(playbooks.map((p) => [p.id, p.name])),
+      rules: {
+        text,
+        showWhen,
+        answersByTrade: positionRules ?? new Map(),
+      },
+    };
+  }, [playbooks, positionRules]);
+
   const dimensions = useMemo(
-    () => allDimensions(customDimensions),
-    [customDimensions],
+    () => allDimensions([...customDimensions, ...playbookDimensions(playbookLookup)]),
+    [customDimensions, playbookLookup],
   );
 
   // Report state lives in the URL: a report you cannot bookmark or send to
@@ -215,14 +258,18 @@ export function ReportsWorkbench({
       reportByDate: new Map(dailyReports.map((r) => [r.report_date, r])),
       insightsByTrade,
       accountNames: new Map(accounts.map((a) => [a.id, a.name])),
-      customDimensions,
+      // Both custom fields and playbook rules resolve by key through here.
+      customDimensions: [
+        ...customDimensions,
+        ...playbookDimensions(playbookLookup),
+      ],
     }),
-    [dailyReports, insightsByTrade, accounts, customDimensions],
+    [dailyReports, insightsByTrade, accounts, customDimensions, playbookLookup],
   );
 
   const metricContext = useMemo(
-    () => ({ pnlBasis, range, currency }),
-    [pnlBasis, range, currency],
+    () => ({ pnlBasis, range, currency, rules: playbookLookup.rules }),
+    [pnlBasis, range, currency, playbookLookup],
   );
 
   const result = useMemo(

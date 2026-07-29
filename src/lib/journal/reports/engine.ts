@@ -103,7 +103,8 @@ export function runReport(input: RunReportInput): ReportResult | null {
 
   const rows: ReportRow[] = [...groups.entries()].map(([bucket, trades]) => {
     const values: Record<string, number | null> = {};
-    for (const m of metrics) values[m.key] = m.compute(trades, input.metricContext);
+    for (const m of metrics)
+      values[m.key] = m.compute(trades, input.metricContext, [bucket]);
     return {
       bucket,
       n: trades.length,

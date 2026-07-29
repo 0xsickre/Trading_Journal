@@ -26,11 +26,18 @@ import {
 import type { BreakevenRange } from "../breakeven";
 import type { EnrichedTrade } from "../enriched-trade";
 import type { MetricUnit } from "../units";
+import { computeFollowRate, type RuleLookup } from "./playbook-dimensions";
 
 export type MetricContext = {
   pnlBasis: PnlMode;
   range: BreakevenRange;
   currency: string;
+  /**
+   * Playbook rule answers, when loaded. Rides on the context for the same
+   * reason the custom dimensions do: the catalogue is process-wide and this
+   * data is per user and per request.
+   */
+  rules?: RuleLookup;
 };
 
 export type ReportMetric = {
@@ -41,7 +48,21 @@ export type ReportMetric = {
   hint?: string;
   /** Higher is better — drives the "best category" summary and bar colouring. */
   higherIsBetter: boolean;
-  compute(group: EnrichedTrade[], ctx: MetricContext): number | null;
+  /**
+   * `scope` is the bucket (or buckets, in a pivot cell) that define this group.
+   *
+   * Almost every metric ignores it: net P&L over a group of trades is net P&L
+   * whatever the group was named. It exists for metrics whose meaning depends
+   * on WHICH bucket this is — `follow_rate` on a per-rule report must count
+   * answers to THAT rule, not every answer the same trades happen to carry.
+   * Passing the buckets keeps that generic: the engine never checks a
+   * dimension key.
+   */
+  compute(
+    group: EnrichedTrade[],
+    ctx: MetricContext,
+    scope?: readonly string[],
+  ): number | null;
 };
 
 const realized = (group: EnrichedTrade[]): RealizedTrade[] =>
@@ -256,6 +277,17 @@ export const METRICS: ReportMetric[] = [
     unit: "count",
     higherIsBetter: false,
     compute: (g, ctx) => statsOf(g, ctx).breakeven,
+  },
+  {
+    key: "follow_rate",
+    label: "Follow rate",
+    unit: "pct",
+    hint: "Udeo odgovorenih pravila koja su ispoštovana. Neodgovoreno se ne broji ni u brojilac ni u imenilac.",
+    higherIsBetter: true,
+    // Null rather than 0 when no playbook data is loaded: a zero here would read
+    // as "no rule was ever followed", which is a finding, not a missing input.
+    compute: (group, ctx, scope) =>
+      ctx.rules ? computeFollowRate(group, ctx.rules, scope) : null,
   },
 ];
 

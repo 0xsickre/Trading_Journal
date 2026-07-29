@@ -630,6 +630,172 @@ export type Database = {
         }
         Relationships: []
       }
+      tj_playbook_groups: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          playbook_id: string
+          sort_order: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          playbook_id: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          playbook_id?: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tj_playbook_groups_playbook_id_fkey"
+            columns: ["playbook_id"]
+            isOneToOne: false
+            referencedRelation: "tj_playbooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tj_playbook_rules: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          group_id: string
+          id: string
+          show_when: string
+          sort_order: number
+          text: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          group_id: string
+          id?: string
+          show_when?: string
+          sort_order?: number
+          text: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          group_id?: string
+          id?: string
+          show_when?: string
+          sort_order?: number
+          text?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tj_playbook_rules_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "tj_playbook_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tj_playbooks: {
+        Row: {
+          color: string | null
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tj_position_rules: {
+        Row: {
+          created_at: string
+          followed: boolean | null
+          id: string
+          position_id: string
+          rule_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          followed?: boolean | null
+          id?: string
+          position_id: string
+          rule_id: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          followed?: boolean | null
+          id?: string
+          position_id?: string
+          rule_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tj_position_rules_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "tj_positions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tj_position_rules_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "tj_playbook_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tj_positions: {
         Row: {
           account_id: string | null

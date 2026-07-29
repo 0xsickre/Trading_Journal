@@ -368,52 +368,80 @@ Spec §5.1: *ne pisati 10 report stranica, pisati jednu.* Ovo je najveća ušted
 
 ---
 
-### Faza 4 — Custom fields i Playbook
+### Faza 4 — Custom fields i Playbook ✅ ZAVRŠENO
 
-Jedina faza sa strukturnom migracijom podataka. Dva nezavisno isporučiva koraka.
+Jedina faza sa strukturnom migracijom podataka. Dva koraka, oba isporučena.
 
-#### 4a — Custom fields
+#### 4a — Custom fields ✅
 
-- `tj_field_defs` — `key`, `label`, `field_type`, `list_key`, `group`, `sort_order`, `is_active`, `show_when`.
-- `tj_positions.custom jsonb NOT NULL DEFAULT '{}'` + GIN indeks.
-- **Backfill:** `macro_align`, `cot_filter`, `htf_bias`, `ict_entry_model`, `entry_tf`,
-  `session_killzone` → `custom` + odgovarajući `tj_field_defs` redovi.
-  **Kolone se ne brišu u istoj migraciji** — dupli upis, pa čišćenje posle verifikacije.
-- `FORM_TABS` se gradi iz `tj_field_defs`; `form-config.ts` ostaje fallback. Forma se ne prepisuje.
-- Dimension registry automatski pokupi svako custom polje.
+- `tj_field_defs` — `key`, `label`, `field_type`, `list_key`, `group_id`, `sort_order`, `is_active`,
+  `show_when`. RLS owner policy, `updated_at` triger, `UNIQUE (user_id, key)`.
+- `tj_positions.custom jsonb NOT NULL DEFAULT '{}'` + GIN (`jsonb_path_ops`).
+- `lib/journal/field-values.ts` — jedan accessor, kolona pa `custom`. Svih pet generičkih čitalaca
+  (`reports/dimensions`, `mentor-export`, `journal-grid` filteri i CSV izvoz, `insights/process-rules`)
+  prešlo na njega **pre** migracije, jer bi inače tiho vraćali `undefined`.
+- `buildFormTabs(defs)` — struktura u kodu, lista polja unutar metodoloških grupa iz baze.
+- `customFieldDimensions(defs)` — novo polje je odmah dimenzija na `/reports`, nula izmena engine-a.
+- Settings → **Moja polja**: CRUD, arhiviranje (nikad brisanje), pregled ključa.
 
-#### 4b — Playbook
+**Odstupanja od originalnog plana** (svesna, jer je baza bila prazna):
 
-Nazivi tabela po moduli §1:
+- **Nema dupolog upisa i nema perioda dvostruke istine.** Kolone `macro_align`, `cot_filter`,
+  `htf_bias`, `entry_tf` obrisane su u istoj migraciji koja uvodi `custom`. Plan je predviđao
+  backfill pa čišćenje posle verifikacije; sa nula trejdova to je bila cena bez koristi. **Ovaj
+  oblik se ne sme kopirati u kasniju migraciju** — čim postoje pravi trejdovi, dva skladišta moraju
+  da se preklapaju dok se podaci prepisuju.
+- `session_killzone` nije backfill-ovan — kolona je već obrisana u `20260728124000`.
+- `ict_entry_model` nije postao custom polje nego **playbook** (4b); `rules_followed` je obrisan.
+- Slabo mesto koje plan nije predvideo: `getTradeForEdit` filtrira vrednosti na string / broj /
+  niz stringova, pa **objekat tiho ispada** — `custom` bi nestajao pri svakom otvaranju forme i
+  bio upisan prazan pri sledećem čuvanju. Rešeno `flattenCustom`-om, uz regresioni test.
+- `updateTrade` **spaja** `custom` umesto da ga zameni: jsonb upis briše ceo dokument, pa bi polje
+  koje je u međuvremenu arhivirano izgubilo istoriju pri nevezanoj izmeni trejda.
+
+#### 4b — Playbook ✅
 
 ```
-tj_playbooks        naziv, opis, boja, ikona, is_active
-tj_playbook_groups  playbook_id, naziv, redosled
-tj_playbook_rules   group_id, tekst, show_when, redosled, is_active, deleted_at
-tj_position_rules   position_id, rule_id, followed
+tj_playbooks        name, description, color, icon, is_active, sort_order
+tj_playbook_groups  playbook_id, name, sort_order
+tj_playbook_rules   group_id, text, show_when, sort_order, deleted_at
+tj_position_rules   position_id, rule_id, followed   UNIQUE (position_id, rule_id)
 ```
 
 `tj_positions` +: `playbook_id`, `conviction smallint CHECK (1..5)`.
 
-- Soft-delete pravila je obavezan — istorija čekiranja mora da preživi brisanje.
-- `show_when` (`always` / `winner` / `loser` / `breakeven`) se **zaključava** čim je pravilo vezano
-  za trejd, inače statistika retroaktivno puca (moduli §1).
-- **Seed:** postojeće `ict_entry_model` vrednosti postaju početni playbook-ovi.
-  `rules_followed` istorija se **ne razlaže retroaktivno** — čist rez, dokumentovan u UI-ju.
-- **Per-rule statistika:** follow rate %, net P&L, profit factor, win rate. To je dimenzija u
-  registry-ju iz F3, ne poseban ekran.
-- Playbook-level: expectancy, win rate, PF, # izvršenih, # propuštenih (`status = missed`).
-- Playbook bira koja custom polja forma traži.
-- **Sickre Score dobija sedmu komponentu — Process Adherence** iz follow rate-a i `tj_daily_reports`.
-  Ponderi se renormalizuju; TZ ovu komponentu nema.
+- Soft-delete pravila: brisanje odgovorenog pravila ga arhivira, statistika ostaje netaknuta.
+  Neodgovoreno pravilo se briše stvarno.
+- `show_when` se zaključava čim pravilo ima ijedan `tj_position_rules` red — **i u UI-ju i DB
+  trigerom** (`tj_playbook_rule_freeze_show_when`), jer forma nije jedini put do upisa.
+- `followed` je **tri stanja**, ne dva. `NULL` = neodgovoreno, što nije isto što i prekršeno;
+  spajanje to dvoje bi od nedovršene forme napravilo problem discipline u statistici.
+- Seed: šest playbook-ova iz starih `ict_entry_model` vrednosti, sa praznim grupama.
+  Pravila se **ne** seed-uju — pravilo koje nisi napisao je pravilo koje ćeš čekirati bez čitanja.
+- Per-rule statistika: dimenzija `playbook_rule` + metrika `follow_rate`, plus `playbook` i
+  `conviction`. Sve kroz engine iz F3 — nijedan poseban ekran.
+- `ruleAppliesTo` je **jedna** funkcija koju koriste i forma i statistika, pa ne mogu da se raziđu
+  oko toga koja je populacija merena.
+
+**Odstupanja**
+
+- `ReportMetric.compute` dobio treći argument (`scope`: bucket-i koji definišu grupu). Bez toga je
+  red „Čekaj sweep" računao i odgovore na *ostala* pravila istih trejdova — broj je tvrdio nešto o
+  jednom pravilu opisujući nekoliko. Test je to uhvatio; skoro svaka metrika `scope` ignoriše.
+- `is_active` na `tj_playbook_rules` nije uveden — `deleted_at` sam nosi to značenje, a dva polja za
+  isto stanje su dva izvora istine.
+- **Sickre Score još nema Process Adherence komponentu** — ostaje za F5, kad Progress Tracker
+  donese drugu polovinu tog broja. Ponderi su nepromenjeni.
+- „Playbook bira koja custom polja forma traži" **nije** implementirano: veza playbook → field defs
+  bi značila da forma menja strukturu po izboru u padajućem meniju, što je prepisivanje forme, a ne
+  konfiguracija. Ostaje kao otvoreno pitanje za kasnije.
 
 **Prihvatanje**
 
-- „Koje pravilo nosi edge, a koje je ritual?" — odgovor sa uzorkom.
-- Brisanje pravila ne menja nijednu istorijsku statistiku.
-- Dupli upis dokazan testom pre uklanjanja starih kolona.
-
-**Procena:** 4a — 3 sesije · 4b — 5 sesija.
+- „Koje pravilo nosi edge, a koje je ritual?" — `/reports` → grupiši po *Pravilo iz playbook-a*,
+  kolona *Follow rate* uz `n`. ✅
+- Brisanje pravila ne menja nijednu istorijsku statistiku. ✅ (soft delete + test)
+- Dupli upis dokazan testom pre uklanjanja starih kolona — **neprimenjivo**, vidi odstupanja u 4a.
 
 ---
 

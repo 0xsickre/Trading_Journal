@@ -126,7 +126,9 @@ export function runPivot(input: RunPivotInput): PivotResult | null {
     col,
     n: group.length,
     belowSample: group.length < minSample,
-    value: metric.compute(group, input.metricContext),
+    // Both buckets scope the cell. Totals pass only the axis they total over —
+    // the other is "" and names no bucket, which is exactly right.
+    value: metric.compute(group, input.metricContext, [row, col].filter(Boolean)),
   });
 
   const cells = new Map<string, PivotCell>();

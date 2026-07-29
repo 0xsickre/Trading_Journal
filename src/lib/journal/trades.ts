@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { selectAllByIds, selectAllPages } from "@/lib/supabase/paginate";
 import { CUSTOM_FIELD_COLUMN, flattenCustom } from "./field-values";
+import { getTradeRuleAnswers } from "./playbooks";
 import type { TradeFormInitial } from "@/components/journal/trade-form";
 import type { TradeImageKind } from "./tradingview-snapshot";
 import type { PositionStat, TradeRow, TradeTvImages } from "./types";
@@ -85,25 +86,25 @@ export async function getTradeForEdit(
   id: string,
 ): Promise<TradeFormInitial | null> {
   const supabase = await createClient();
-  const [{ data: pos }, { data: execs }] = await Promise.all([
+  const [{ data: pos }, { data: execs }, ruleAnswers] = await Promise.all([
     supabase.from("tj_positions").select("*").eq("id", id).maybeSingle(),
     supabase
       .from("tj_executions")
       .select("side,price,qty,executed_at,fee,swap_funding")
       .eq("position_id", id)
       .order("executed_at"),
+    getTradeRuleAnswers(id),
   ]);
   if (!pos) return null;
 
   const { id: _id, account_id, trade_no, ...rest } = pos as RawPosition;
   // Keep only the dynamic field columns (sanitize handles the rest on save).
   //
-  // The loop accepts strings, numbers and string arrays — an OBJECT falls
-  // through it. `custom` is an object, so without the flatten below every
+  // The loop below accepts strings, numbers and string arrays — an OBJECT falls
+  // through it. `custom` is an object, so without this flatten every
   // user-defined field would be dropped on the way into the form and then
-  // written back empty on the next save. Flattening first puts those values on
-  // the same flat record the form reads, and the column loop still wins for any
-  // key that is both (see field-values.ts).
+  // written back empty on the next save.
+  //
   // Custom keys first, columns spread over them, so a column keeps winning —
   // the same precedence `fieldValue` applies everywhere else.
   const flat: Record<string, unknown> = { ...flattenCustom(rest), ...rest };
@@ -122,6 +123,9 @@ export async function getTradeForEdit(
     trade_no: trade_no ?? null,
     status: (pos as RawPosition & { status?: string }).status ?? "planned",
     missed_at: (pos as RawPosition & { missed_at?: string | null }).missed_at ?? null,
+    playbook_id: (pos as RawPosition & { playbook_id?: string | null }).playbook_id ?? null,
+    conviction: (pos as RawPosition & { conviction?: number | null }).conviction ?? null,
+    rule_answers: ruleAnswers,
     fields,
     executions: (execs ?? []).map((e) => ({
       side: e.side as "entry" | "exit",

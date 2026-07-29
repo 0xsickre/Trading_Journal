@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/user";
 import type { Json } from "@/lib/supabase/types";
 import { getFieldDefs } from "@/lib/journal/field-defs";
 import { buildPositionPatch, mergeCustom } from "@/lib/journal/trade-fields";
@@ -26,7 +27,64 @@ export type TradeInput = {
   /** User choice when no fills: planned vs active (maps to planned/open). */
   trade_phase?: "planned" | "active" | null;
   current_status?: string | null;
+  playbook_id?: string | null;
+  conviction?: number | null;
+  /** Rule id → followed. Absent key means the rule was not answered. */
+  rule_answers?: Record<string, boolean>;
 };
+
+/**
+ * Coerce the playbook columns.
+ *
+ * Kept out of `sanitizeFields` because they are not form-config fields: the
+ * checklist is its own component with its own behaviour, and routing it through
+ * the field whitelist would mean declaring definitions for values that are
+ * real columns.
+ */
+function playbookPatch(input: TradeInput) {
+  const conviction =
+    input.conviction != null &&
+    Number.isInteger(input.conviction) &&
+    input.conviction >= 1 &&
+    input.conviction <= 5
+      ? input.conviction
+      : null;
+  return { playbook_id: input.playbook_id || null, conviction };
+}
+
+/**
+ * Replace a trade's rule answers.
+ *
+ * Delete-then-insert rather than upsert: a rule the trader UN-answered has no
+ * key in the payload at all, so an upsert would leave the old answer standing
+ * and the follow rate would keep counting a judgement that was withdrawn.
+ */
+async function saveRuleAnswers(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  positionId: string,
+  answers: Record<string, boolean> | undefined,
+) {
+  const { error: delErr } = await supabase
+    .from("tj_position_rules")
+    .delete()
+    .eq("position_id", positionId);
+  if (delErr) return delErr.message;
+
+  const rows = Object.entries(answers ?? {}).map(([rule_id, followed]) => ({
+    position_id: positionId,
+    rule_id,
+    followed,
+  }));
+  if (rows.length === 0) return null;
+
+  const user = await getCurrentUser();
+  if (!user) return "Not signed in.";
+
+  const { error } = await supabase
+    .from("tj_position_rules")
+    .insert(rows.map((r) => ({ ...r, user_id: user.id })));
+  return error?.message ?? null;
+}
 
 /**
  * Sanitize a submission into a row patch.
@@ -122,6 +180,7 @@ export async function createTrade(input: TradeInput) {
       trade_no: input.trade_no,
       ...statusPatch,
       ...snapshot,
+      ...playbookPatch(input),
       source: "manual",
     })
     .select("id")
@@ -136,6 +195,12 @@ export async function createTrade(input: TradeInput) {
       await supabase.from("tj_positions").delete().eq("id", pos.id);
       return { ok: false as const, error: exErr.message };
     }
+  }
+
+  const ruleErr = await saveRuleAnswers(supabase, pos.id, input.rule_answers);
+  if (ruleErr) {
+    await supabase.from("tj_positions").delete().eq("id", pos.id);
+    return { ok: false as const, error: ruleErr };
   }
 
   revalidatePath("/journal");
@@ -182,6 +247,7 @@ export async function updateTrade(id: string, input: TradeInput) {
       trade_no: input.trade_no,
       ...statusPatch,
       ...snapshot,
+      ...playbookPatch(input),
       ...(execs.length > 0 ? { needs_review: false } : {}),
     })
     .eq("id", id);
@@ -196,6 +262,9 @@ export async function updateTrade(id: string, input: TradeInput) {
     p_executions: execs,
   });
   if (exErr) return { ok: false as const, error: exErr.message };
+
+  const ruleErr = await saveRuleAnswers(supabase, id, input.rule_answers);
+  if (ruleErr) return { ok: false as const, error: ruleErr };
 
   revalidatePath("/journal");
   revalidatePath(`/trades/${id}`);
