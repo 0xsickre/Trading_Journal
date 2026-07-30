@@ -114,6 +114,15 @@ export type SickreScore = {
   components: ScoreComponent[];
   /** Sum of weights that actually contributed. */
   coverage: number;
+  /**
+   * Sum of ALL weights in play, contributing or not.
+   *
+   * Needed because the total is not a constant: it is 100 without the process
+   * component and 115 with it. A display that assumes 100 reads a partial
+   * 100-of-115 score as fully covered — which is exactly what the card did
+   * before the seventh component existed.
+   */
+  maxCoverage: number;
 };
 
 const BASE_WEIGHTS = {
@@ -203,7 +212,9 @@ export function computeSickreScore(inputs: ScoreInputs): SickreScore {
 
   let weighted = 0;
   let coverage = 0;
+  let maxCoverage = 0;
   for (const c of components) {
+    maxCoverage += c.weight;
     if (c.score == null) continue;
     c.counted = true;
     weighted += c.score * c.weight;
@@ -214,5 +225,6 @@ export function computeSickreScore(inputs: ScoreInputs): SickreScore {
     score: coverage > 0 ? weighted / coverage : null,
     components,
     coverage,
+    maxCoverage,
   };
 }

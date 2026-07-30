@@ -130,3 +130,28 @@ export function zonedWeekStartKey(
   const monday = new Date(Date.UTC(y, mo - 1, d - offset));
   return `${monday.getUTCFullYear()}-${pad2(monday.getUTCMonth() + 1)}-${pad2(monday.getUTCDate())}`;
 }
+
+/**
+ * ISO weekday of a plain yyyy-MM-dd key: 1=Mon … 7=Sun.
+ *
+ * The day key is already resolved to a timezone, so this must NOT resolve one
+ * again — it is pure calendar arithmetic on the string.
+ *
+ * `getUTCDay`, never `getDay`: the date is built with `Date.UTC`, so reading it
+ * back in local time shifts the weekday for every user west of UTC. (Note that
+ * `isFriday` in daily-report.ts uses `parseISO(...).getDay()` — correct there
+ * only because `parseISO` of a date-only string yields LOCAL midnight. The two
+ * are not interchangeable; do not copy that pattern here.)
+ *
+ * Returns 0 for an unparseable key, which no `active_days` array can contain,
+ * so a bad key makes a rule inapplicable rather than silently applying it on
+ * the wrong day.
+ */
+export function isoWeekdayOfDayKey(day: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return 0;
+  const [y, mo, d] = day.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (Number.isNaN(dt.getTime())) return 0;
+  const dow = dt.getUTCDay(); // 0=Sun … 6=Sat
+  return dow === 0 ? 7 : dow;
+}

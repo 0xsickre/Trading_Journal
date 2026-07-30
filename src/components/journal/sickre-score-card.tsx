@@ -29,9 +29,12 @@ export function SickreScoreCard({ score }: { score: SickreScore }) {
             {value == null ? "—" : Math.round(value)}
           </span>
           <span className="text-sm text-muted-foreground">/ 100</span>
-          {score.coverage < 100 && score.coverage > 0 && (
+          {/* Against maxCoverage, not 100: the total is 115 once the process
+              component is supplied, so a hardcoded 100 would render a partial
+              score as fully covered. */}
+          {score.coverage > 0 && score.coverage < score.maxCoverage && (
             <span className="ml-auto text-xs text-muted-foreground">
-              {score.coverage}% pondera pokriveno
+              {Math.round((score.coverage / score.maxCoverage) * 100)}% pondera pokriveno
             </span>
           )}
         </div>
