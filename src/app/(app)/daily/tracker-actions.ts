@@ -88,7 +88,6 @@ export async function setCheckin(
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/tracker");
   revalidatePath("/daily");
   revalidatePath("/");
   return { ok: true };

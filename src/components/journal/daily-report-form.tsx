@@ -41,6 +41,11 @@ import {
   saveDailyReport,
   type SaveDailyReportInput,
 } from "@/app/(app)/daily/actions";
+import {
+  TrackerDayBadge,
+  TrackerStageSection,
+  type TrackerDayData,
+} from "@/components/journal/tracker-checklist";
 
 const MANTRA_COPY = [
   {
@@ -103,12 +108,23 @@ export function DailyReportForm({
   today,
   timezone,
   activeGoal,
+  tracker,
 }: {
   report: DailyReport | null;
   reportDate: string;
   today: string;
   timezone: string;
   activeGoal: FocusGoal | null;
+  /**
+   * The tracker checklist for this same day.
+   *
+   * It rides along inside this form rather than on a page of its own because
+   * both describe one day, and `tj_lock_day` seals them together in a single
+   * call — something sealed by one action should not be split across two
+   * screens. The two still write to separate tables and save independently: a
+   * ticked rule is stored the moment you tick it, the report only on Save.
+   */
+  tracker: TrackerDayData;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -208,9 +224,15 @@ export function DailyReportForm({
             </Button>
           )}
         </div>
-        <Badge variant={complete ? "default" : "secondary"}>
-          {complete ? "Kompletan" : "Nacrt"}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <TrackerDayBadge
+            compliance={tracker.compliance}
+            locked={tracker.locked}
+          />
+          <Badge variant={complete ? "default" : "secondary"}>
+            {complete ? "Kompletan" : "Nacrt"}
+          </Badge>
+        </div>
       </div>
 
       <Card>
@@ -410,8 +432,21 @@ export function DailyReportForm({
               rows={2}
             />
           </div>
+
+          <TrackerStageSection stage="prepare" data={tracker} />
         </CardContent>
       </Card>
+
+      {/* The trade-stage rules stand in their own card instead of inside "Tokom
+          dana", which is hidden on a no-trade day. Those rules still apply then —
+          "I only trade in my defined hours" is answerable, and answerable well,
+          on a day you did not trade — so hiding them would quietly drop rules
+          from the denominator on exactly the days discipline matters most. */}
+      <TrackerStageSection
+        stage="trade"
+        data={tracker}
+        title="Trgovanje · čeklista"
+      />
 
       {!form.no_trade_day && (
         <Card>
@@ -602,6 +637,8 @@ export function DailyReportForm({
             onChange={(v) => patch("celebrate_win", v)}
             hint="Pobeda u procesu, disciplina ili samosvest — ne dolar P&amp;L."
           />
+
+          <TrackerStageSection stage="reflect" data={tracker} />
         </CardContent>
       </Card>
 

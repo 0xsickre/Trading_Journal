@@ -10,18 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { fmtMoney } from "@/lib/journal/format";
-import {
-  STAGE_LABELS,
-  TRACKER_STAGES,
-  type TrackerRule,
-} from "@/lib/journal/tracker-types";
+import type { TrackerRule, TrackerStage } from "@/lib/journal/tracker-types";
 import type { AutoRuleResult } from "@/lib/journal/tracker/auto-rules";
 import type {
   AutoResults,
   DayCompliance,
   DayStatus,
 } from "@/lib/journal/tracker/compliance";
-import { setCheckin } from "@/app/(app)/tracker/actions";
+import { setCheckin } from "@/app/(app)/daily/tracker-actions";
 
 const STATUS_LABELS: Record<DayStatus, string> = {
   compliant: "Dan ispunjen",
@@ -240,26 +236,10 @@ function AutoRow({
   );
 }
 
-/**
- * The day's process checklist.
- *
- * Rows come in pre-filtered to rules that were LIVE on this day — created by
- * then, not yet retired, and running on this weekday. Auto rules whose evaluator
- * could not reach a verdict are deliberately still here: an unscored money rule
- * has to be visible saying it has no limit, or the one thing standing between the
- * user and a working rule would be invisible.
- */
-export function TrackerChecklist({
-  reportDate,
-  rules,
-  auto,
-  answers,
-  compliance,
-  currency,
-  tradeLabels,
-  locked,
-}: {
+/** Everything a stage section needs, threaded through unchanged. */
+export type TrackerDayData = {
   reportDate: string;
+  /** Rules LIVE on this day — created by then, not yet retired, right weekday. */
   rules: TrackerRule[];
   auto: AutoResults;
   answers: Record<string, boolean>;
@@ -267,97 +247,114 @@ export function TrackerChecklist({
   currency: string;
   tradeLabels: Record<string, string>;
   locked: boolean;
+};
+
+/**
+ * The rules of one stage, for embedding inside the matching daily-report card.
+ *
+ * Renders nothing when the stage is empty, so a card the user has no rules for
+ * looks exactly as it did before the tracker existed.
+ *
+ * Auto rules whose evaluator reached no verdict are deliberately still shown: an
+ * unscored money rule has to be visible saying it has no limit, or the one thing
+ * standing between the user and a working rule would be invisible.
+ */
+export function TrackerStageSection({
+  stage,
+  data,
+  title,
+}: {
+  stage: TrackerStage;
+  data: TrackerDayData;
+  /** Set when the section stands alone rather than inside a card of its own. */
+  title?: string;
+}) {
+  const inStage = data.rules.filter((r) => r.stage === stage);
+  if (inStage.length === 0) return null;
+
+  const rows = (
+    <div className="space-y-2">
+      {inStage.map((rule) =>
+        rule.auto_key ? (
+          <AutoRow
+            key={rule.id}
+            rule={rule}
+            res={data.auto[rule.auto_key]}
+            currency={data.currency}
+            tradeLabels={data.tradeLabels}
+          />
+        ) : (
+          // The date is in the key on purpose: the row holds an optimistic
+          // answer in local state, and navigating to another day would
+          // otherwise carry yesterday's tick over.
+          <ManualRow
+            key={`${data.reportDate}:${rule.id}`}
+            rule={rule}
+            reportDate={data.reportDate}
+            answer={data.answers[rule.id]}
+            locked={data.locked}
+          />
+        ),
+      )}
+    </div>
+  );
+
+  if (title) {
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">{title}</CardTitle>
+        </CardHeader>
+        <CardContent>{rows}</CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-2 border-t pt-4">
+      <p className="text-sm font-medium">Čeklista procesa</p>
+      {rows}
+    </div>
+  );
+}
+
+/** The day's compliance, for the report header. */
+export function TrackerDayBadge({
+  compliance,
+  locked,
+}: {
+  compliance: DayCompliance;
+  locked: boolean;
 }) {
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-            <span>
-              {compliance.pct == null
-                ? "—"
-                : `${Math.round(compliance.pct)}% doslednosti`}
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
-                {compliance.satisfied} / {compliance.applicable} pravila
-              </span>
-            </span>
-            <span className="flex items-center gap-2">
-              {locked && (
-                <Badge variant="outline" className="gap-1">
-                  <Lock className="size-3" /> zaključan
-                </Badge>
-              )}
-              <Badge
-                variant={
-                  compliance.status === "compliant"
-                    ? "default"
-                    : compliance.status === "broken"
-                      ? "destructive"
-                      : "secondary"
-                }
-              >
-                {STATUS_LABELS[compliance.status]}
-              </Badge>
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Dan se računa kao ispunjen samo na 100%. Pravila koja se ne ocenjuju
-            ne ulaze ni u brojilac ni u imenilac — dan bez trejdova zato može biti
-            ispunjen bez ijednog trejda, ali ne dobija kredit za pravila o novcu
-            koja nije testirao.
-          </p>
-        </CardContent>
-      </Card>
-
-      {rules.length === 0 && (
-        <Card>
-          <CardContent className="py-6 text-center text-sm text-muted-foreground">
-            Ni jedno pravilo ne važi za ovaj dan. Proveri dane u{" "}
-            <Link href="/settings" className="underline underline-offset-2">
-              Settings › Tracker
-            </Link>
-            .
-          </CardContent>
-        </Card>
+    <span className="flex items-center gap-2">
+      {locked && (
+        <Badge variant="outline" className="gap-1">
+          <Lock className="size-3" /> zaključan
+        </Badge>
       )}
-
-      {TRACKER_STAGES.map((stage) => {
-        const inStage = rules.filter((r) => r.stage === stage);
-        if (inStage.length === 0) return null;
-        return (
-          <Card key={stage}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">{STAGE_LABELS[stage]}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {inStage.map((rule) =>
-                rule.auto_key ? (
-                  <AutoRow
-                    key={rule.id}
-                    rule={rule}
-                    res={auto[rule.auto_key]}
-                    currency={currency}
-                    tradeLabels={tradeLabels}
-                  />
-                ) : (
-                  // The date is in the key on purpose: the row holds an
-                  // optimistic answer in local state, and navigating to another
-                  // day would otherwise carry yesterday's tick over.
-                  <ManualRow
-                    key={`${reportDate}:${rule.id}`}
-                    rule={rule}
-                    reportDate={reportDate}
-                    answer={answers[rule.id]}
-                    locked={locked}
-                  />
-                ),
-              )}
-            </CardContent>
-          </Card>
-        );
-      })}
-    </div>
+      <Badge
+        variant={
+          compliance.status === "compliant"
+            ? "default"
+            : compliance.status === "broken"
+              ? "destructive"
+              : "secondary"
+        }
+        title={
+          compliance.applicable === 0
+            ? "Ni jedno pravilo ne važi za ovaj dan."
+            : "Dan se računa kao ispunjen samo na 100%. Pravila koja se ne ocenjuju ne ulaze ni u brojilac ni u imenilac."
+        }
+      >
+        {STATUS_LABELS[compliance.status]}
+        {compliance.pct != null && (
+          <span className="ml-1 font-normal opacity-80">
+            {Math.round(compliance.pct)}% · {compliance.satisfied}/
+            {compliance.applicable}
+          </span>
+        )}
+      </Badge>
+    </span>
   );
 }
