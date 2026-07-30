@@ -29,7 +29,9 @@ export type AutoReason =
   /** Nothing happened on this day that the rule could judge. */
   | "no_trades"
   /** A contributing trade has no price, so the answer is unknown. */
-  | "unpriced";
+  | "unpriced"
+  /** The day is locked; the verdict is the one frozen at lock time. */
+  | "frozen";
 
 export type AutoRuleResult = {
   key: AutoRuleKey;

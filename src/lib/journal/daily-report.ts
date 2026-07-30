@@ -66,13 +66,22 @@ export type DailyReport = {
   celebrate_win: string | null;
   friday_flat: boolean | null;
   no_trade_day: boolean;
+  /**
+   * When the day's process journal was sealed. Null while it is still editable.
+   *
+   * Not part of `DailyReportInput`: the lock is set by `tj_lock_day` and by
+   * nothing else. Letting it through the form's input type would put it in
+   * `emptyDailyReport` and in the save payload, where the zod schema would reject
+   * it — and if it ever got through, saving the form would clear the seal.
+   */
+  locked_at: string | null;
   created_at: string;
   updated_at: string;
 };
 
 export type DailyReportInput = Omit<
   DailyReport,
-  "id" | "user_id" | "created_at" | "updated_at"
+  "id" | "user_id" | "created_at" | "updated_at" | "locked_at"
 >;
 
 export function todayInTz(timezone: string): string {

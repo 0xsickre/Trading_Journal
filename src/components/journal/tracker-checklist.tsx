@@ -1,0 +1,363 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { toast } from "sonner";
+import { Check, Lock, Minus, X, Zap } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { fmtMoney } from "@/lib/journal/format";
+import {
+  STAGE_LABELS,
+  TRACKER_STAGES,
+  type TrackerRule,
+} from "@/lib/journal/tracker-types";
+import type { AutoRuleResult } from "@/lib/journal/tracker/auto-rules";
+import type {
+  AutoResults,
+  DayCompliance,
+  DayStatus,
+} from "@/lib/journal/tracker/compliance";
+import { setCheckin } from "@/app/(app)/tracker/actions";
+
+const STATUS_LABELS: Record<DayStatus, string> = {
+  compliant: "Dan ispunjen",
+  broken: "Dan prekršen",
+  skipped: "Nema pravila za ovaj dan",
+  pending: "Dan u toku",
+};
+
+/**
+ * Why an auto rule reached its verdict.
+ *
+ * Every branch says what to DO about it, because the two most common states are
+ * both actionable and neither is a failure: `unconfigured` means you never set a
+ * limit, `no_trades` means the rule had nothing to judge.
+ */
+function autoReasonText(
+  res: AutoRuleResult,
+  currency: string,
+  limit: number | undefined,
+): string {
+  switch (res.reason) {
+    case "unconfigured":
+      return "Nema postavljen limit — postavi ga u Settings › Tracker da pravilo počne da se ocenjuje.";
+    case "no_trades":
+      return "Nema trejdova koje bi ovo pravilo ocenilo na ovaj dan.";
+    case "unpriced":
+      return "Trejd bez cene poena — rezultat je nepoznat, pa se dan ne ocenjuje po ovom pravilu.";
+    case "frozen":
+      return "Zamrznuto pri zaključavanju dana. Ispravka trejda menja P&L, ali ne i ocenu ovog dana.";
+    case "violated":
+      return res.observed != null && limit != null
+        ? `Probijeno: ${fmtMoney(res.observed, currency)} od dozvoljenih ${fmtMoney(-Math.abs(limit), currency)}.`
+        : "Prekršeno.";
+    case "ok":
+      return res.observed != null
+        ? `U granicama — najgore ${fmtMoney(res.observed, currency)}.`
+        : "Ispunjeno na svim trejdovima ovog dana.";
+  }
+}
+
+function VerdictBadge({ res }: { res: AutoRuleResult }) {
+  if (res.verdict === "pass")
+    return (
+      <Badge className="gap-1 shrink-0">
+        <Check className="size-3" /> ispunjeno
+      </Badge>
+    );
+  if (res.verdict === "fail")
+    return (
+      <Badge variant="destructive" className="gap-1 shrink-0">
+        <X className="size-3" /> prekršeno
+      </Badge>
+    );
+  return (
+    <Badge variant="outline" className="gap-1 shrink-0 text-muted-foreground">
+      <Minus className="size-3" /> ne ocenjuje se
+    </Badge>
+  );
+}
+
+/**
+ * The three-state control for a manual rule.
+ *
+ * Clicking the active button clears the answer rather than doing nothing. An
+ * unanswered box and an explicit "no" are different facts: on today only the
+ * explicit no breaks the day, so the user needs a way back out of an answer they
+ * gave by accident.
+ */
+function AnswerButtons({
+  value,
+  disabled,
+  onSet,
+}: {
+  value: boolean | undefined;
+  disabled: boolean;
+  onSet: (next: boolean | null) => void;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      <Button
+        type="button"
+        size="icon"
+        variant={value === true ? "default" : "outline"}
+        className="size-8"
+        disabled={disabled}
+        aria-pressed={value === true}
+        aria-label="Ispunjeno"
+        title={value === true ? "Klikni ponovo da obrišeš odgovor" : "Ispunjeno"}
+        onClick={() => onSet(value === true ? null : true)}
+      >
+        <Check className="size-4" />
+      </Button>
+      <Button
+        type="button"
+        size="icon"
+        variant={value === false ? "destructive" : "outline"}
+        className="size-8"
+        disabled={disabled}
+        aria-pressed={value === false}
+        aria-label="Nije ispunjeno"
+        title={
+          value === false ? "Klikni ponovo da obrišeš odgovor" : "Nije ispunjeno"
+        }
+        onClick={() => onSet(value === false ? null : false)}
+      >
+        <X className="size-4" />
+      </Button>
+    </div>
+  );
+}
+
+function ManualRow({
+  rule,
+  reportDate,
+  answer,
+  locked,
+}: {
+  rule: TrackerRule;
+  reportDate: string;
+  answer: boolean | undefined;
+  locked: boolean;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  // Optimistic, because the round trip is a server action plus a refresh and the
+  // control would otherwise sit unchanged long enough to be clicked twice.
+  const [local, setLocal] = useState<boolean | undefined>(answer);
+
+  function set(next: boolean | null) {
+    const previous = local;
+    setLocal(next ?? undefined);
+    start(async () => {
+      const res = await setCheckin(rule.id, reportDate, next);
+      if (!res.ok) {
+        setLocal(previous);
+        toast.error(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-md border px-3 py-2",
+        local === true && "border-primary/40 bg-primary/5",
+        local === false && "border-destructive/40 bg-destructive/5",
+      )}
+    >
+      <p className="min-w-0 flex-1 text-sm">{rule.text}</p>
+      {locked ? (
+        <Badge variant="outline" className="gap-1 shrink-0">
+          <Lock className="size-3" />
+          {local === true ? "ispunjeno" : local === false ? "prekršeno" : "bez odgovora"}
+        </Badge>
+      ) : (
+        <AnswerButtons value={local} disabled={pending} onSet={set} />
+      )}
+    </div>
+  );
+}
+
+function AutoRow({
+  rule,
+  res,
+  currency,
+  tradeLabels,
+}: {
+  rule: TrackerRule;
+  res: AutoRuleResult | undefined;
+  currency: string;
+  tradeLabels: Record<string, string>;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-md border px-3 py-2",
+        res?.verdict === "pass" && "border-primary/40 bg-primary/5",
+        res?.verdict === "fail" && "border-destructive/40 bg-destructive/5",
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 text-sm">
+            {rule.text}
+            <Zap
+              className="size-3 shrink-0 text-muted-foreground"
+              aria-label="Automatsko pravilo"
+            />
+          </p>
+          {res && (
+            <p className="text-xs text-muted-foreground">
+              {autoReasonText(res, currency, rule.config.amount)}
+            </p>
+          )}
+        </div>
+        {res && <VerdictBadge res={res} />}
+      </div>
+
+      {res && res.offenders.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Trejdovi:</span>
+          {res.offenders.map((id) => (
+            <Link
+              key={id}
+              href={`/trades/${id}/edit`}
+              className="text-xs underline underline-offset-2 hover:no-underline"
+            >
+              {tradeLabels[id] ?? id.slice(0, 8)}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The day's process checklist.
+ *
+ * Rows come in pre-filtered to rules that were LIVE on this day — created by
+ * then, not yet retired, and running on this weekday. Auto rules whose evaluator
+ * could not reach a verdict are deliberately still here: an unscored money rule
+ * has to be visible saying it has no limit, or the one thing standing between the
+ * user and a working rule would be invisible.
+ */
+export function TrackerChecklist({
+  reportDate,
+  rules,
+  auto,
+  answers,
+  compliance,
+  currency,
+  tradeLabels,
+  locked,
+}: {
+  reportDate: string;
+  rules: TrackerRule[];
+  auto: AutoResults;
+  answers: Record<string, boolean>;
+  compliance: DayCompliance;
+  currency: string;
+  tradeLabels: Record<string, string>;
+  locked: boolean;
+}) {
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+            <span>
+              {compliance.pct == null
+                ? "—"
+                : `${Math.round(compliance.pct)}% doslednosti`}
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                {compliance.satisfied} / {compliance.applicable} pravila
+              </span>
+            </span>
+            <span className="flex items-center gap-2">
+              {locked && (
+                <Badge variant="outline" className="gap-1">
+                  <Lock className="size-3" /> zaključan
+                </Badge>
+              )}
+              <Badge
+                variant={
+                  compliance.status === "compliant"
+                    ? "default"
+                    : compliance.status === "broken"
+                      ? "destructive"
+                      : "secondary"
+                }
+              >
+                {STATUS_LABELS[compliance.status]}
+              </Badge>
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Dan se računa kao ispunjen samo na 100%. Pravila koja se ne ocenjuju
+            ne ulaze ni u brojilac ni u imenilac — dan bez trejdova zato može biti
+            ispunjen bez ijednog trejda, ali ne dobija kredit za pravila o novcu
+            koja nije testirao.
+          </p>
+        </CardContent>
+      </Card>
+
+      {rules.length === 0 && (
+        <Card>
+          <CardContent className="py-6 text-center text-sm text-muted-foreground">
+            Ni jedno pravilo ne važi za ovaj dan. Proveri dane u{" "}
+            <Link href="/settings" className="underline underline-offset-2">
+              Settings › Tracker
+            </Link>
+            .
+          </CardContent>
+        </Card>
+      )}
+
+      {TRACKER_STAGES.map((stage) => {
+        const inStage = rules.filter((r) => r.stage === stage);
+        if (inStage.length === 0) return null;
+        return (
+          <Card key={stage}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">{STAGE_LABELS[stage]}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {inStage.map((rule) =>
+                rule.auto_key ? (
+                  <AutoRow
+                    key={rule.id}
+                    rule={rule}
+                    res={auto[rule.auto_key]}
+                    currency={currency}
+                    tradeLabels={tradeLabels}
+                  />
+                ) : (
+                  // The date is in the key on purpose: the row holds an
+                  // optimistic answer in local state, and navigating to another
+                  // day would otherwise carry yesterday's tick over.
+                  <ManualRow
+                    key={`${reportDate}:${rule.id}`}
+                    rule={rule}
+                    reportDate={reportDate}
+                    answer={answers[rule.id]}
+                    locked={locked}
+                  />
+                ),
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}

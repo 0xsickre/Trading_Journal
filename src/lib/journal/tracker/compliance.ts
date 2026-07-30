@@ -42,23 +42,35 @@ export type AutoResults = Partial<Record<AutoRuleKey, AutoRuleResult>>;
 const dayOf = (iso: string | null): string => (iso ? iso.slice(0, 10) : "");
 
 /**
- * Whether rule R is applicable to day D.
- *
- * Four conditions, and each exists because its absence is a silent bug:
+ * Whether the rule was LIVE on day D — the three conditions that do not depend
+ * on any trade:
  *   1. the weekday is one the rule runs on
  *   2. the day is not before the rule existed
  *   3. the day is not after the rule was retired
- *   4. for an auto rule, the evaluator actually reached a verdict
+ *
+ * Separate from `ruleAppliesOn` because the checklist needs exactly this: an
+ * auto rule with an `na` verdict is not scored, but it must still be SHOWN, or a
+ * money rule with no limit set would silently vanish from the page instead of
+ * saying why it cannot answer.
+ */
+export function ruleIsLiveOn(rule: TrackerRule, day: string): boolean {
+  const dow = isoWeekdayOfDayKey(day);
+  if (!rule.active_days.includes(dow)) return false;
+  if (day < dayOf(rule.created_at)) return false;
+  if (rule.deleted_at && day >= dayOf(rule.deleted_at)) return false;
+  return true;
+}
+
+/**
+ * Whether rule R is applicable to day D — live, and for an auto rule also
+ * actually answerable: condition 4 is that the evaluator reached a verdict.
  */
 export function ruleAppliesOn(
   rule: TrackerRule,
   day: string,
   auto: AutoResults,
 ): boolean {
-  const dow = isoWeekdayOfDayKey(day);
-  if (!rule.active_days.includes(dow)) return false;
-  if (day < dayOf(rule.created_at)) return false;
-  if (rule.deleted_at && day >= dayOf(rule.deleted_at)) return false;
+  if (!ruleIsLiveOn(rule, day)) return false;
   if (rule.auto_key) {
     const verdict = auto[rule.auto_key]?.verdict;
     // `na` drops out of BOTH numerator and denominator. That is what lets a
@@ -66,6 +78,44 @@ export function ruleAppliesOn(
     return verdict === "pass" || verdict === "fail";
   }
   return true;
+}
+
+/**
+ * Overlay the verdicts frozen at lock time on top of the freshly computed ones.
+ *
+ * This is the second half of the hybrid the schema was built around, and without
+ * it the lock is decoration. Auto verdicts are derived on read, so a locked day
+ * would silently re-score itself the moment a trade from that day was corrected —
+ * and correcting trades on a locked day is explicitly allowed, because P&L is a
+ * fact that must stay fixable.
+ *
+ * A frozen row wins outright, including `checked: null`, which means "evaluated,
+ * not applicable" and must keep the rule out of the denominator forever.
+ *
+ * Offenders are dropped rather than carried over from the live evaluation: the
+ * stored row holds the verdict, not the trade list, and pairing a sealed verdict
+ * with a list of trades as they look today would show a contradiction.
+ */
+export function resolveAutoResults(
+  rules: readonly TrackerRule[],
+  live: AutoResults,
+  checkins: Map<string, TrackerCheckin>,
+): AutoResults {
+  let out: AutoResults | null = null;
+  for (const rule of rules) {
+    if (!rule.auto_key) continue;
+    const row = checkins.get(rule.id);
+    if (!row?.auto_evaluated) continue;
+    out ??= { ...live };
+    out[rule.auto_key] = {
+      key: rule.auto_key,
+      verdict: row.checked === true ? "pass" : row.checked === false ? "fail" : "na",
+      reason: "frozen",
+      offenders: [],
+      observed: null,
+    };
+  }
+  return out ?? live;
 }
 
 export function computeDayCompliance(

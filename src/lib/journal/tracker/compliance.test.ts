@@ -6,7 +6,9 @@ import {
   computeStreak,
   freezeAutoCheckins,
   meanCompliance,
+  resolveAutoResults,
   ruleAppliesOn,
+  ruleIsLiveOn,
   type AutoResults,
 } from "./compliance";
 import { isoWeekdayOfDayKey } from "../time";
@@ -89,6 +91,27 @@ describe("applicability", () => {
     expect(ruleAppliesOn(r, "2026-07-29", autoOf({ max_loss_per_day: "na" }))).toBe(false);
     expect(ruleAppliesOn(r, "2026-07-29", autoOf({ max_loss_per_day: "pass" }))).toBe(true);
     expect(ruleAppliesOn(r, "2026-07-29", autoOf({ max_loss_per_day: "fail" }))).toBe(true);
+  });
+
+  it("keeps an unscorable auto rule LIVE, so the checklist can still show it", () => {
+    // The difference the checklist depends on: a money rule with no limit is not
+    // scored, but it has to appear on the page saying why. Filtering the page by
+    // ruleAppliesOn would delete the only place you can find out.
+    const r = rule({ id: "auto", auto_key: "max_loss_per_day" });
+    expect(ruleAppliesOn(r, "2026-07-29", autoOf({ max_loss_per_day: "na" }))).toBe(false);
+    expect(ruleIsLiveOn(r, "2026-07-29")).toBe(true);
+  });
+
+  it("ruleIsLiveOn still enforces the three date and weekday conditions", () => {
+    expect(
+      ruleIsLiveOn(rule({ id: "a", created_at: "2026-07-20T00:00:00Z" }), "2026-07-15"),
+    ).toBe(false);
+    expect(
+      ruleIsLiveOn(rule({ id: "b", deleted_at: "2026-07-22T00:00:00Z" }), "2026-07-23"),
+    ).toBe(false);
+    expect(
+      ruleIsLiveOn(rule({ id: "c", active_days: [1, 2, 3, 4, 5] }), "2026-08-01"),
+    ).toBe(false);
   });
 });
 
@@ -290,6 +313,62 @@ describe("freezing at lock time", () => {
       autoOf({ stop_loss_set: "pass" }),
     );
     expect(rows).toEqual([]);
+  });
+});
+
+describe("reading a sealed day back", () => {
+  const frozen = (
+    entries: [string, boolean | null][],
+  ): Map<string, TrackerCheckin> =>
+    new Map(
+      entries.map(([rule_id, checked]) => [
+        rule_id,
+        { rule_id, report_date: "2026-07-20", checked, auto_evaluated: true },
+      ]),
+    );
+
+  const r = rule({ id: "a", auto_key: "stop_loss_set" });
+
+  it("lets the frozen verdict beat the live one", () => {
+    // The whole point of the lock. Without this the sealed day re-scores itself
+    // the moment a trade from it is corrected — and correcting trades on a locked
+    // day is deliberately allowed.
+    const out = resolveAutoResults([r], autoOf({ stop_loss_set: "pass" }), frozen([["a", false]]));
+    expect(out.stop_loss_set?.verdict).toBe("fail");
+    expect(out.stop_loss_set?.reason).toBe("frozen");
+  });
+
+  it("keeps a frozen not-applicable out of the denominator", () => {
+    // A null row is an ANSWER — "evaluated, does not apply" — so a backfilled
+    // trade must not be able to revive the rule on a sealed day.
+    const live = autoOf({ stop_loss_set: "fail" });
+    const out = resolveAutoResults([r], live, frozen([["a", null]]));
+    expect(out.stop_loss_set?.verdict).toBe("na");
+    expect(ruleAppliesOn(r, "2026-07-20", out)).toBe(false);
+    expect(day("2026-07-20", [r], new Map(), out).applicable).toBe(0);
+  });
+
+  it("drops offenders rather than pairing a sealed verdict with today's trades", () => {
+    const live: AutoResults = {
+      stop_loss_set: {
+        key: "stop_loss_set",
+        verdict: "fail",
+        reason: "violated",
+        offenders: ["t1", "t2"],
+        observed: null,
+      },
+    };
+    expect(resolveAutoResults([r], live, frozen([["a", true]])).stop_loss_set)
+      .toMatchObject({ verdict: "pass", offenders: [] });
+  });
+
+  it("leaves an unlocked day untouched, and returns the very same object", () => {
+    // Identity, not just equality: every unlocked day goes through here, so the
+    // no-freeze path must not allocate a copy per day of the series.
+    const live = autoOf({ stop_loss_set: "pass" });
+    expect(resolveAutoResults([r], live, new Map())).toBe(live);
+    // A manual answer on the same day is not a freeze and must not overlay.
+    expect(resolveAutoResults([r], live, checkins([["a", false]]))).toBe(live);
   });
 });
 
