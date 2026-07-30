@@ -193,6 +193,7 @@ export type Database = {
           impulse_greed: boolean
           impulse_note: string | null
           learned_today: string | null
+          locked_at: string | null
           macro_note: string | null
           mantra_risk: boolean
           mantra_rules: boolean
@@ -225,6 +226,7 @@ export type Database = {
           impulse_greed?: boolean
           impulse_note?: string | null
           learned_today?: string | null
+          locked_at?: string | null
           macro_note?: string | null
           mantra_risk?: boolean
           mantra_rules?: boolean
@@ -257,6 +259,7 @@ export type Database = {
           impulse_greed?: boolean
           impulse_note?: string | null
           learned_today?: string | null
+          locked_at?: string | null
           macro_note?: string | null
           mantra_risk?: boolean
           mantra_rules?: boolean
@@ -972,6 +975,92 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tj_tracker_checkins: {
+        Row: {
+          auto_evaluated: boolean
+          checked: boolean | null
+          created_at: string
+          id: string
+          report_date: string
+          rule_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_evaluated?: boolean
+          checked?: boolean | null
+          created_at?: string
+          id?: string
+          report_date: string
+          rule_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auto_evaluated?: boolean
+          checked?: boolean | null
+          created_at?: string
+          id?: string
+          report_date?: string
+          rule_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tj_tracker_checkins_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "tj_tracker_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tj_tracker_rules: {
+        Row: {
+          active_days: number[]
+          auto_key: string | null
+          config: Json
+          created_at: string
+          deleted_at: string | null
+          id: string
+          is_mandatory: boolean
+          sort_order: number
+          stage: string
+          text: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active_days?: number[]
+          auto_key?: string | null
+          config?: Json
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          is_mandatory?: boolean
+          sort_order?: number
+          stage?: string
+          text: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active_days?: number[]
+          auto_key?: string | null
+          config?: Json
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          is_mandatory?: boolean
+          sort_order?: number
+          stage?: string
+          text?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {

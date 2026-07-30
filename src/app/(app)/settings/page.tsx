@@ -12,9 +12,11 @@ import { FieldDefManager } from "@/components/journal/field-def-manager";
 import { getFieldDefs } from "@/lib/journal/field-defs";
 import { PlaybookManager } from "@/components/journal/playbook-manager";
 import { getPlaybooks } from "@/lib/journal/playbooks";
+import { TrackerRuleManager } from "@/components/journal/tracker-rule-manager";
+import { getTrackerRules } from "@/lib/journal/tracker/queries";
 
 export default async function SettingsPage() {
-  const [lists, instruments, accounts, cashEvents, fieldDefs, playbooks] =
+  const [lists, instruments, accounts, cashEvents, fieldDefs, playbooks, trackerRules] =
     await Promise.all([
       getListsWithItems(false),
       getInstruments(false),
@@ -24,7 +26,12 @@ export default async function SettingsPage() {
       getFieldDefs(false),
       // Retired rules included, for the same reason.
       getPlaybooks({ includeDeleted: true }),
+      getTrackerRules({ includeRetired: true }),
     ]);
+
+  // Same choice as getPrimaryAccount, made from the list already in hand rather
+  // than with a second round trip. Only the currency label needs it.
+  const primaryAccount = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
 
   return (
     <div className="space-y-6">
@@ -48,6 +55,9 @@ export default async function SettingsPage() {
           </TabsTrigger>
           <TabsTrigger value="fields" className="flex-none">
             Moja polja
+          </TabsTrigger>
+          <TabsTrigger value="tracker" className="flex-none">
+            Tracker
           </TabsTrigger>
           <TabsTrigger value="instruments" className="flex-none">
             Instruments
@@ -73,6 +83,13 @@ export default async function SettingsPage() {
 
         <TabsContent value="fields">
           <FieldDefManager defs={fieldDefs} lists={lists} />
+        </TabsContent>
+
+        <TabsContent value="tracker">
+          <TrackerRuleManager
+            rules={trackerRules}
+            currency={primaryAccount?.currency ?? "USD"}
+          />
         </TabsContent>
 
         <TabsContent value="instruments">
