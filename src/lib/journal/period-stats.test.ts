@@ -81,10 +81,10 @@ describe("bucketByPeriod — month", () => {
 
 describe("summarizePeriods", () => {
   const rows = [
-    { key: "w1", net: 500, gross: 500, trades: 3, wins: 2, losses: 1, breakeven: 0, fees: 0, volume: 0 },
-    { key: "w2", net: -200, gross: -200, trades: 2, wins: 0, losses: 2, breakeven: 0, fees: 0, volume: 0 },
-    { key: "w3", net: -100, gross: -100, trades: 1, wins: 0, losses: 1, breakeven: 0, fees: 0, volume: 0 },
-    { key: "w4", net: 300, gross: 300, trades: 2, wins: 2, losses: 0, breakeven: 0, fees: 0, volume: 0 },
+    { key: "w1", net: 500, gross: 500, trades: 3, wins: 2, losses: 1, breakeven: 0, r: 0, rTrades: 0, fees: 0, volume: 0 },
+    { key: "w2", net: -200, gross: -200, trades: 2, wins: 0, losses: 2, breakeven: 0, r: 0, rTrades: 0, fees: 0, volume: 0 },
+    { key: "w3", net: -100, gross: -100, trades: 1, wins: 0, losses: 1, breakeven: 0, r: 0, rTrades: 0, fees: 0, volume: 0 },
+    { key: "w4", net: 300, gross: 300, trades: 2, wins: 2, losses: 0, breakeven: 0, r: 0, rTrades: 0, fees: 0, volume: 0 },
   ];
 
   it("computes the period win rate on total P&L", () => {
@@ -116,8 +116,8 @@ describe("summarizePeriods", () => {
 
   it("excludes flat periods from the win rate denominator", () => {
     const s = summarizePeriods([
-      { key: "a", net: 100, gross: 100, trades: 1, wins: 1, losses: 0, breakeven: 0, fees: 0, volume: 0 },
-      { key: "b", net: 0, gross: 0, trades: 1, wins: 0, losses: 0, breakeven: 1, fees: 0, volume: 0 },
+      { key: "a", net: 100, gross: 100, trades: 1, wins: 1, losses: 0, breakeven: 0, r: 0, rTrades: 0, fees: 0, volume: 0 },
+      { key: "b", net: 0, gross: 0, trades: 1, wins: 0, losses: 0, breakeven: 1, r: 0, rTrades: 0, fees: 0, volume: 0 },
     ]);
     expect(s.flat).toBe(1);
     expect(s.winPct).toBe(100);
@@ -130,7 +130,7 @@ describe("summarizePeriods", () => {
   it("summarizes on whichever basis it is given", () => {
     // Same rows, different basis: net is negative, gross is positive.
     const mixed = [
-      { key: "w1", net: -50, gross: 200, trades: 2, wins: 1, losses: 1, breakeven: 0, fees: 0, volume: 0 },
+      { key: "w1", net: -50, gross: 200, trades: 2, wins: 1, losses: 1, breakeven: 0, r: 0, rTrades: 0, fees: 0, volume: 0 },
     ];
     expect(summarizePeriods(mixed).winPct).toBe(0);
     expect(summarizePeriods(mixed, (r) => r.gross).winPct).toBe(100);
@@ -138,8 +138,8 @@ describe("summarizePeriods", () => {
 
   it("reports best and worst P&L on the selected basis", () => {
     const mixed = [
-      { key: "w1", net: 10, gross: 500, trades: 1, wins: 1, losses: 0, breakeven: 0, fees: 0, volume: 0 },
-      { key: "w2", net: 400, gross: 50, trades: 1, wins: 1, losses: 0, breakeven: 0, fees: 0, volume: 0 },
+      { key: "w1", net: 10, gross: 500, trades: 1, wins: 1, losses: 0, breakeven: 0, r: 0, rTrades: 0, fees: 0, volume: 0 },
+      { key: "w2", net: 400, gross: 50, trades: 1, wins: 1, losses: 0, breakeven: 0, r: 0, rTrades: 0, fees: 0, volume: 0 },
     ];
     const net = summarizePeriods(mixed);
     expect(net.largest?.key).toBe("w2");
@@ -234,5 +234,45 @@ describe("bucketByPeriod — day", () => {
   it("keeps a day the trader closed nothing out of the result entirely", () => {
     const rows = bucketByPeriod([], "day", UTC);
     expect(rows).toEqual([]);
+  });
+});
+
+describe("bucketByPeriod — R", () => {
+  const withR = (id: string, closedAt: string, net: number, r: number | null) =>
+    ({
+      id,
+      closedAt,
+      net,
+      gross: net,
+      r,
+      row: { id, stats: {} as PositionStat } as unknown as TradeRow,
+    }) as RealizedTrade;
+
+  it("sums R only over trades that have one", () => {
+    // A trade logged without a stop has no risk unit. Counting it as 0 R would
+    // be the same as claiming it broke even in R terms, which it did not — it
+    // simply cannot be expressed in R at all.
+    const rows = bucketByPeriod(
+      [
+        withR("a", "2026-01-08T12:00:00Z", 100, 2),
+        withR("b", "2026-01-08T13:00:00Z", -50, -1),
+        withR("nostop", "2026-01-08T14:00:00Z", 300, null),
+      ],
+      "day",
+      UTC,
+    );
+    expect(rows[0].r).toBe(1);
+    expect(rows[0].rTrades).toBe(2);
+    expect(rows[0].trades).toBe(3);
+  });
+
+  it("reports zero coverage rather than a fake zero when no trade has R", () => {
+    const rows = bucketByPeriod(
+      [withR("a", "2026-01-08T12:00:00Z", 100, null)],
+      "day",
+      UTC,
+    );
+    expect(rows[0].r).toBe(0);
+    expect(rows[0].rTrades).toBe(0);
   });
 });

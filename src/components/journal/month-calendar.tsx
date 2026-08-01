@@ -1,13 +1,64 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, NotebookPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { fmtMoney, pnlClass } from "@/lib/journal/format";
+import { fmtMoney, fmtNum, fmtR, pnlClass } from "@/lib/journal/format";
 import { addMonthsToMonthKey, monthGridDays } from "@/lib/journal/time";
+import {
+  classifyOutcome,
+  hasBreakevenBand,
+  type BreakevenRange,
+} from "@/lib/journal/breakeven";
 import type { PeriodRow } from "@/lib/journal/period-stats";
+
+const METRICS = [
+  { key: "net", label: "Net P&L" },
+  { key: "r", label: "R" },
+  { key: "trades", label: "Broj trejdova" },
+  { key: "winrate", label: "Win rate" },
+] as const;
+
+type MetricKey = (typeof METRICS)[number]["key"];
+
+/**
+ * The figure a cell shows.
+ *
+ * Colour always follows **money**, never the selected metric. A day that made
+ * three trades is not "green because three"; keeping the hue tied to P&L means
+ * switching the metric changes what you read, not what the month feels like.
+ */
+function cellValue(
+  row: PeriodRow,
+  metric: MetricKey,
+  currency: string,
+): string {
+  switch (metric) {
+    case "net":
+      return fmtMoney(row.net, currency, { sign: true });
+    case "r":
+      // No trade with a stop means R is not zero, it is unmeasured.
+      return row.rTrades === 0 ? "—" : fmtR(row.r);
+    case "trades":
+      return String(row.trades);
+    case "winrate": {
+      // Breakeven days drop out of the denominator, matching how win rate is
+      // computed everywhere else in the app.
+      const decided = row.wins + row.losses;
+      return decided === 0 ? "—" : `${fmtNum((row.wins / decided) * 100, 0)}%`;
+    }
+  }
+}
 
 const WEEKDAYS = ["Pon", "Uto", "Sre", "Čet", "Pet", "Sub", "Ned"];
 
@@ -46,19 +97,28 @@ function monthLabel(monthKey: string): string {
 export function MonthCalendar({
   monthKey,
   currentMonth,
+  todayKey,
   byDay,
   byWeek,
   byMonth,
+  loggedDays,
+  breakevenRange,
   currency,
 }: {
   monthKey: string;
   /** The month "today" falls in, so navigation cannot run into the future. */
   currentMonth: string;
+  /** Today in the account's timezone, for the ring on today's cell. */
+  todayKey: string;
   byDay: Map<string, PeriodRow>;
   byWeek: Map<string, PeriodRow>;
   byMonth: PeriodRow | null;
+  /** Days that carry a daily report. */
+  loggedDays: Set<string>;
+  breakevenRange: BreakevenRange;
   currency: string;
 }) {
+  const [metric, setMetric] = useState<MetricKey>("net");
   const days = monthGridDays(monthKey);
   const weeks: string[][] = [];
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
@@ -103,7 +163,7 @@ export function MonthCalendar({
             </Button>
           )}
 
-          <div className="ml-auto flex items-center gap-4 text-sm">
+          <div className="ml-auto flex flex-wrap items-center gap-3 text-sm">
             <span className={cn("font-semibold tabular-nums", pnlClass(monthNet))}>
               {fmtMoney(monthNet, currency, { sign: true })}
             </span>
@@ -112,6 +172,21 @@ export function MonthCalendar({
               {byMonth?.trades === 1 ? "trejd" : "trejdova"} · {tradingDays}{" "}
               {tradingDays === 1 ? "dan" : "dana"}
             </span>
+            <Select
+              value={metric}
+              onValueChange={(v) => setMetric(v as MetricKey)}
+            >
+              <SelectTrigger className="h-8 w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {METRICS.map((m) => (
+                  <SelectItem key={m.key} value={m.key}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </CardHeader>
@@ -141,16 +216,32 @@ export function MonthCalendar({
                   key={week[0]}
                   week={week}
                   monthKey={monthKey}
+                  todayKey={todayKey}
                   byDay={byDay}
                   // The row's first cell IS the ISO Monday, which is exactly the
                   // key `bucketByPeriod("week")` produces.
                   weekRow={byWeek.get(week[0]) ?? null}
+                  loggedDays={loggedDays}
+                  breakevenRange={breakevenRange}
+                  metric={metric}
                   currency={currency}
                 />
               ))}
             </div>
           </div>
         </div>
+
+        {/* Grey is only worth explaining once it can actually appear. Without a
+            configured band it lands on exactly-zero days, which practically
+            never happen on a float that already carries fees. */}
+        {hasBreakevenBand(breakevenRange) && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Sivo = dan unutar breakeven opsega naloga (
+            {fmtMoney(breakevenRange.from, currency)} do{" "}
+            {fmtMoney(breakevenRange.to, currency)}), pa se ne broji ni kao
+            dobitak ni kao gubitak.
+          </p>
+        )}
       </CardContent>
     </Card>
   );
@@ -159,14 +250,22 @@ export function MonthCalendar({
 function WeekRow({
   week,
   monthKey,
+  todayKey,
   byDay,
   weekRow,
+  loggedDays,
+  breakevenRange,
+  metric,
   currency,
 }: {
   week: string[];
   monthKey: string;
+  todayKey: string;
   byDay: Map<string, PeriodRow>;
   weekRow: PeriodRow | null;
+  loggedDays: Set<string>;
+  breakevenRange: BreakevenRange;
+  metric: MetricKey;
   currency: string;
 }) {
   return (
@@ -174,35 +273,56 @@ function WeekRow({
       {week.map((day) => {
         const row = byDay.get(day) ?? null;
         const inMonth = day.startsWith(monthKey);
+        const logged = loggedDays.has(day);
+        const outcome = row ? classifyOutcome(row.net, breakevenRange) : null;
         return (
-          <div
+          <Link
             key={day}
+            href={`/daily?date=${day}`}
             className={cn(
-              "min-h-[4.5rem] rounded-md border p-1.5",
+              "block min-h-[4.5rem] rounded-md border p-1.5 transition-colors hover:border-primary",
               !inMonth && "opacity-40",
-              row && row.net > 0 && "border-[var(--profit)]/40 bg-[var(--profit)]/5",
-              row && row.net < 0 && "border-[var(--loss)]/40 bg-[var(--loss)]/5",
+              // Colour follows the OUTCOME, not the raw sign: with a band
+              // configured, a day inside it is flat and must not read as a win
+              // just because it ended a few cents up.
+              outcome === "win" && "border-[var(--profit)]/40 bg-[var(--profit)]/5",
+              outcome === "loss" && "border-[var(--loss)]/40 bg-[var(--loss)]/5",
+              outcome === "breakeven" && "bg-muted",
+              day === todayKey && "ring-1 ring-primary",
             )}
           >
-            <div className="text-xs text-muted-foreground">
-              {Number(day.slice(8, 10))}
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground">
+                {Number(day.slice(8, 10))}
+              </span>
+              {logged && (
+                <NotebookPen
+                  className="size-3 text-muted-foreground"
+                  aria-label="Dan ima dnevni izveštaj"
+                />
+              )}
             </div>
             {row && (
               <>
                 <div
                   className={cn(
                     "text-sm font-medium tabular-nums",
-                    pnlClass(row.net),
+                    // Money drives the hue in every metric — see cellValue.
+                    outcome === "breakeven"
+                      ? "text-muted-foreground"
+                      : pnlClass(row.net),
                   )}
                 >
-                  {fmtMoney(row.net, currency, { sign: true })}
+                  {cellValue(row, metric, currency)}
                 </div>
                 <div className="text-[11px] text-muted-foreground">
-                  {row.trades} {row.trades === 1 ? "trejd" : "trejdova"}
+                  {metric === "trades"
+                    ? fmtMoney(row.net, currency, { sign: true })
+                    : `${row.trades} ${row.trades === 1 ? "trejd" : "trejdova"}`}
                 </div>
               </>
             )}
-          </div>
+          </Link>
         );
       })}
 
@@ -219,7 +339,7 @@ function WeekRow({
                 pnlClass(weekRow.net),
               )}
             >
-              {fmtMoney(weekRow.net, currency, { sign: true })}
+              {cellValue(weekRow, metric, currency)}
             </div>
             <div className="text-[11px] text-muted-foreground">
               {weekRow.trades} {weekRow.trades === 1 ? "trejd" : "trejdova"}

@@ -21,6 +21,16 @@ export type PeriodRow = {
   wins: number;
   losses: number;
   breakeven: number;
+  /**
+   * Sum of realized R over the trades that HAVE an R.
+   *
+   * A trade logged without a stop has no risk unit, so it contributes nothing —
+   * not because it earned nothing, but because it cannot be expressed in R.
+   * `rTrades` is carried alongside so a caller can say how much of the period the
+   * figure actually covers instead of implying it covers all of it.
+   */
+  r: number;
+  rTrades: number;
   /** Commissions. Separate from `net`, which already has them deducted. */
   fees: number;
   /**
@@ -116,6 +126,8 @@ export function bucketByPeriod(
         wins: 0,
         losses: 0,
         breakeven: 0,
+        r: 0,
+        rTrades: 0,
         fees: 0,
         volume: 0,
       };
@@ -126,6 +138,10 @@ export function bucketByPeriod(
     row.trades++;
     row.fees += t.row.stats?.total_fees ?? 0;
     row.volume += t.row.stats?.entry_qty ?? 0;
+    if (t.r != null) {
+      row.r += t.r;
+      row.rTrades++;
+    }
     const outcome = classifyOutcome(p, range);
     if (outcome === "win") row.wins++;
     else if (outcome === "loss") row.losses++;
