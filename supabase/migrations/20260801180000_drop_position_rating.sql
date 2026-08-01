@@ -1,0 +1,23 @@
+-- Brisanje tj_positions.rating.
+--
+-- Kolona je bila mrtva od početka: stoji u allowlist-i za CSV/XLSX izvoz i u
+-- generisanim tipovima, ali je **nijedan deo forme nikad nije upisao i nijedna
+-- metrika nikad pročitala**. Svaki red je držao NULL — provereno pre pisanja
+-- ove migracije.
+--
+-- Nije implementirana nego obrisana, na izričitu odluku vlasnika. Ideja iza nje
+-- (TradeZella ima ocenu izvršenja 1–5) je legitimna i odgovara na pitanje koje
+-- postojeća polja ne pokrivaju: `conviction` je koliko si verovao PRE ulaza,
+-- `setup_grade` je koliko je setup bio dobar, a ocena izvršenja bi bila koliko
+-- si dobro odigrao — sudi se POSLE trejda i nezavisno od toga da li je bio
+-- profitabilan. Ali polje koje niko ne popunjava nije funkcija nego dug: stoji
+-- u izvozu, u tipovima i u svakom `select *`, a ne nosi nijedan podatak.
+--
+-- Ako ocena izvršenja jednog dana zatreba, vraća se jednim ALTER-om i jednim
+-- unosom u `plan_review`/`psychology_notes` grupu forme — uz UI koji je stvarno
+-- postavlja, što je deo koji je ovde nedostajao.
+--
+-- `reviewed` je u istom stanju (mrtva boolean kolona, `needs_review` je ta koja
+-- se koristi) i namerno je OSTAVLJENA — nije bila deo ovog zahteva.
+
+ALTER TABLE public.tj_positions DROP COLUMN rating;

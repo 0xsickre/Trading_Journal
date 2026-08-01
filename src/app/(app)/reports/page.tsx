@@ -4,6 +4,7 @@ import { getCashEvents } from "@/lib/journal/cash-events";
 import { getDailyReportsLite } from "@/lib/journal/daily-report-queries";
 import { getFillCounts, getTradesWithStats } from "@/lib/journal/trades";
 import { getFieldDefs } from "@/lib/journal/field-defs";
+import { getOptionsMap } from "@/lib/journal/options";
 import { getPlaybooks, getPositionRules } from "@/lib/journal/playbooks";
 import { ReportsWorkbench } from "@/components/journal/reports/reports-workbench";
 import type { TradeRow } from "@/lib/journal/types";
@@ -18,6 +19,7 @@ export default async function ReportsPage() {
     fieldDefs,
     playbooks,
     positionRules,
+    optionsMap,
   ] = await Promise.all([
     getTradesWithStats(),
     getAccounts(),
@@ -32,6 +34,11 @@ export default async function ReportsPage() {
     // long before the rule was retired.
     getPlaybooks({ includeDeleted: true }),
     getPositionRules(),
+    // Inactive options included, for the third time and the same reason: an
+    // emotion the trader has since retired is still the emotion those trades
+    // were tagged with, and dropping it would move a tag from the Emocija
+    // dimension into nothing at all.
+    getOptionsMap(false),
   ]);
 
   return (
@@ -56,6 +63,7 @@ export default async function ReportsPage() {
           fieldDefs={fieldDefs}
           playbooks={playbooks}
           positionRules={positionRules}
+          optionsMap={optionsMap}
         />
       </Suspense>
     </div>

@@ -8,6 +8,7 @@ import {
   getDimension,
   resolveDimension,
   R_MULTIPLE_EDGES,
+  tagSplitDimensions,
 } from "./dimensions";
 import { DAY, dimCtx, enrich, mkReport } from "./test-helpers";
 
@@ -242,5 +243,80 @@ describe("user-defined fields as dimensions", () => {
     ]) {
       expect(keys).not.toContain(gone);
     }
+  });
+});
+
+describe("splitting psychology_tags back into its source lists", () => {
+  // Mirrors the seeded lists, including the collision: `Revenge` is in both.
+  const OPTIONS = {
+    emotion: [
+      { value: "FOMO" },
+      { value: "Strah" },
+      { value: "Revenge" },
+    ],
+    discipline: [
+      { value: "Followed plan" },
+      { value: "Moved stop" },
+      { value: "Revenge" },
+    ],
+  };
+  const [emotion, discipline] = tagSplitDimensions(OPTIONS);
+
+  it("sends each tag to the list it came from", () => {
+    const t = one([{ psychologyTags: ["FOMO", "Moved stop"] }]);
+    expect(bucketsOf(emotion, t, dimCtx())).toEqual(["FOMO"]);
+    expect(bucketsOf(discipline, t, dimCtx())).toEqual(["Moved stop"]);
+  });
+
+  it("gives a value present in BOTH lists to the first one only", () => {
+    // `Revenge` is seeded into emotion and discipline alike, and the chip
+    // picker dedupes in listKeys order — so the tag the trader clicked came
+    // from emotion. Landing in both would count one trade twice across two
+    // tables that are meant to partition one column.
+    const t = one([{ psychologyTags: ["Revenge"] }]);
+    expect(bucketsOf(emotion, t, dimCtx())).toEqual(["Revenge"]);
+    expect(bucketsOf(discipline, t, dimCtx())).toEqual([]);
+  });
+
+  it("excludes a trade that said nothing about this half", () => {
+    // Excluded, not bucketed as "—": the trade did record its psychology, it
+    // simply made no discipline claim. An empty bucket would read as a finding
+    // about trades that never made one.
+    const t = one([{ psychologyTags: ["FOMO"] }]);
+    expect(bucketsOf(discipline, t, dimCtx())).toEqual([]);
+  });
+
+  it("drops a free-typed tag from both halves but keeps it in the combined one", () => {
+    // The picker lets you type a new tag, and an option deleted later belongs
+    // to no list. The combined dimension is kept for exactly this case.
+    const t = one([{ psychologyTags: ["Nešto svoje"] }]);
+    expect(bucketsOf(emotion, t, dimCtx())).toEqual([]);
+    expect(bucketsOf(discipline, t, dimCtx())).toEqual([]);
+    expect(bucketsOf(getDimension("psychology_tags")!, t, dimCtx())).toEqual([
+      "Nešto svoje",
+    ]);
+  });
+
+  it("marks both halves multi-value, like the column they cut", () => {
+    // One trade can carry two emotions. Consumers must keep warning that the
+    // rows no longer sum to the portfolio total.
+    expect(emotion.multiValue).toBe(true);
+    expect(discipline.multiValue).toBe(true);
+    const t = one([{ psychologyTags: ["FOMO", "Strah"] }]);
+    expect(bucketsOf(emotion, t, dimCtx())).toEqual(["FOMO", "Strah"]);
+  });
+
+  it("resolves by key once carried on the context", () => {
+    const ctx = dimCtx([], { customDimensions: tagSplitDimensions(OPTIONS) });
+    expect(resolveDimension("psych_discipline", ctx)?.label).toBe("Disciplina");
+    // Per user, never a global — same rule as the custom field dimensions.
+    expect(resolveDimension("psych_discipline")).toBeUndefined();
+  });
+
+  it("survives an option list the user has emptied", () => {
+    const [e, d] = tagSplitDimensions({ emotion: [], discipline: [] });
+    const t = one([{ psychologyTags: ["FOMO"] }]);
+    expect(bucketsOf(e, t, dimCtx())).toEqual([]);
+    expect(bucketsOf(d, t, dimCtx())).toEqual([]);
   });
 });

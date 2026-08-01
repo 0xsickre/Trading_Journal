@@ -23,6 +23,7 @@ import {
   DIMENSION_GROUP_ORDER,
   allDimensions,
   customFieldDimensions,
+  tagSplitDimensions,
   type DimensionContext,
 } from "@/lib/journal/reports/dimensions";
 import {
@@ -44,7 +45,7 @@ import { ReportChart, MAX_CHART_METRICS } from "@/components/journal/reports/rep
 import { ReportTable } from "@/components/journal/reports/report-table";
 import { CrossAnalysis } from "@/components/journal/reports/cross-analysis";
 import { CompareView } from "@/components/journal/reports/compare-view";
-import type { Account, TradeRow } from "@/lib/journal/types";
+import type { Account, OptionsMap, TradeRow } from "@/lib/journal/types";
 import type { FieldDef } from "@/lib/journal/field-def-types";
 import {
   buildPlaybookLookup,
@@ -72,6 +73,7 @@ export function ReportsWorkbench({
   fieldDefs = [],
   playbooks = [],
   positionRules,
+  optionsMap = {},
 }: {
   trades: TradeRow[];
   accounts: Account[];
@@ -84,6 +86,8 @@ export function ReportsWorkbench({
   playbooks?: Playbook[];
   /** Trade id → recorded rule answers. */
   positionRules?: Map<string, PositionRule[]>;
+  /** Option lists, used to cut `psychology_tags` back into emotion vs discipline. */
+  optionsMap?: OptionsMap;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -94,14 +98,32 @@ export function ReportsWorkbench({
     () => customFieldDimensions(fieldDefs),
     [fieldDefs],
   );
+
+  /**
+   * Emocija and Disciplina, cut out of the single `psychology_tags` column.
+   *
+   * Built here rather than registered in DIMENSIONS because the split is
+   * decided by the user's own option lists — the same reason the custom field
+   * dimensions live on the context. They carry `group: "trade"`, so the picker
+   * files them beside the column they come from.
+   */
+  const tagDimensions = useMemo(
+    () => tagSplitDimensions(optionsMap),
+    [optionsMap],
+  );
   const playbookLookup = useMemo<PlaybookLookup>(
     () => buildPlaybookLookup(playbooks, positionRules),
     [playbooks, positionRules],
   );
 
   const dimensions = useMemo(
-    () => allDimensions([...customDimensions, ...playbookDimensions(playbookLookup)]),
-    [customDimensions, playbookLookup],
+    () =>
+      allDimensions([
+        ...tagDimensions,
+        ...customDimensions,
+        ...playbookDimensions(playbookLookup),
+      ]),
+    [tagDimensions, customDimensions, playbookLookup],
   );
 
   // Report state lives in the URL: a report you cannot bookmark or send to
@@ -232,13 +254,22 @@ export function ReportsWorkbench({
       reportByDate: new Map(dailyReports.map((r) => [r.report_date, r])),
       insightsByTrade,
       accountNames: new Map(accounts.map((a) => [a.id, a.name])),
-      // Both custom fields and playbook rules resolve by key through here.
+      // Tag splits, custom fields and playbook rules all resolve by key
+      // through here.
       customDimensions: [
+        ...tagDimensions,
         ...customDimensions,
         ...playbookDimensions(playbookLookup),
       ],
     }),
-    [dailyReports, insightsByTrade, accounts, customDimensions, playbookLookup],
+    [
+      dailyReports,
+      insightsByTrade,
+      accounts,
+      tagDimensions,
+      customDimensions,
+      playbookLookup,
+    ],
   );
 
   const metricContext = useMemo(

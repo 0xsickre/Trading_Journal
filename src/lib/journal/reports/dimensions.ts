@@ -103,6 +103,90 @@ function tagColumn(key: string, label: string): Dimension {
   };
 }
 
+// --- splitting one tag column back into its source lists --------------------
+
+/**
+ * `psychology_tags` is one column fed by TWO option lists.
+ *
+ * The form offers `emotion` and `discipline` merged into a single chip picker,
+ * and everything picked lands in one array. Grouped by that array, "FOMO" (a
+ * feeling) and "Moved stop" (an act) sit in the same table, so the obvious
+ * question — which DISCIPLINE breach costs me most — cannot be asked without
+ * the emotions crowding the answer.
+ *
+ * The fix needs no migration, because the split is recoverable: the option
+ * lists say which value came from where. These specs declare the split, one
+ * dimension per source list.
+ */
+export const TAG_SPLITS = [
+  {
+    key: "psych_emotion",
+    field: "psychology_tags",
+    listKey: "emotion",
+    label: "Emocija",
+  },
+  {
+    key: "psych_discipline",
+    field: "psychology_tags",
+    listKey: "discipline",
+    label: "Disciplina",
+  },
+] as const;
+
+/**
+ * Dimensions that cut a merged tag column back into its source lists.
+ *
+ * Two rules, and both come straight from how the picker behaves rather than
+ * from a preference:
+ *
+ *   - **A value in two lists belongs to the first one.** `Revenge` is seeded
+ *     into both `emotion` and `discipline`, and the picker dedupes by value in
+ *     `listKeys` order — so the chip the trader clicked came from `emotion`.
+ *     Claiming it for `emotion` here reproduces the choice they actually made;
+ *     putting it in both would count the same trade twice across two tables
+ *     that are supposed to partition one column.
+ *
+ *   - **A value in neither list is dropped from both.** The picker also lets
+ *     you type a new tag, and an old free-typed value whose option was later
+ *     deleted belongs to no list. It stays visible under the combined
+ *     `psychology_tags` dimension, which is kept for exactly this reason —
+ *     these two are a lens on that column, not a replacement for it.
+ *
+ * Built per request rather than registered at module level: option lists are
+ * per user, and the registry is process-wide. Same reason `customDimensions`
+ * rides on the context.
+ */
+export function tagSplitDimensions(
+  optionsMap: Record<string, readonly { value: string }[]>,
+): Dimension[] {
+  const claimed = new Set<string>();
+  return TAG_SPLITS.map((spec) => {
+    const own = new Set<string>();
+    for (const item of optionsMap[spec.listKey] ?? []) {
+      if (claimed.has(item.value)) continue;
+      claimed.add(item.value);
+      own.add(item.value);
+    }
+    return {
+      key: spec.key,
+      label: spec.label,
+      group: "trade" as const,
+      multiValue: true,
+      listKey: spec.listKey,
+      valueOf: (t: EnrichedTrade) => {
+        const tags = arr(t, spec.field);
+        if (!tags) return null;
+        const mine = tags.filter((v) => own.has(v));
+        // No tag from THIS list is not the same as no tag at all: the trade
+        // recorded its psychology and simply said nothing about this half of
+        // it. Excluded rather than bucketed as "—", which would read as a
+        // finding about trades that never made the claim.
+        return mine.length > 0 ? mine : null;
+      },
+    };
+  });
+}
+
 /** Numeric bucketing from an ascending list of lower bounds. */
 export function bucketByEdges(
   value: number | null | undefined,
@@ -173,7 +257,10 @@ const tradeDimensions: Dimension[] = [
   column("miss_reason", "Razlog propuštanja", "miss_reason"),
   column("status", "Status"),
   tagColumn("technical_tags", "Technical Tags"),
-  tagColumn("psychology_tags", "Psychology Tags"),
+  // Kept alongside the `emotion` / `discipline` split (see `tagSplitDimensions`)
+  // rather than replaced by it: this is the only dimension that still shows a
+  // free-typed tag belonging to no option list.
+  tagColumn("psychology_tags", "Psychology Tags (sve)"),
   {
     key: "account",
     label: "Nalog",

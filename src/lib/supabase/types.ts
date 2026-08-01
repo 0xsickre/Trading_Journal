@@ -939,7 +939,6 @@ export type Database = {
           point_value_at_trade: number | null
           position_size: number | null
           psychology_tags: string[]
-          rating: number | null
           result: string | null
           reviewed: boolean
           risk_pct: string | null
@@ -977,7 +976,6 @@ export type Database = {
           point_value_at_trade?: number | null
           position_size?: number | null
           psychology_tags?: string[]
-          rating?: number | null
           result?: string | null
           reviewed?: boolean
           risk_pct?: string | null
@@ -1015,7 +1013,6 @@ export type Database = {
           point_value_at_trade?: number | null
           position_size?: number | null
           psychology_tags?: string[]
-          rating?: number | null
           result?: string | null
           reviewed?: boolean
           risk_pct?: string | null
