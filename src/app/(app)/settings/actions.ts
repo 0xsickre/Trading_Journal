@@ -242,7 +242,6 @@ export async function updateAccount(
     default_swap_per_day?: number;
     default_stop_pct?: number | null;
     default_target_pct?: number | null;
-    profit_calc_method?: "fifo" | "lifo" | "weighted_avg";
     ftmo_mode?: boolean;
     ftmo_daily_loss_enabled?: boolean;
     ftmo_daily_loss_pct?: number;

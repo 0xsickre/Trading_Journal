@@ -106,7 +106,7 @@ sedma komponenta — Process Adherence, koju TZ nema — dodaje se kad playbook 
 | Breakeven | Konfigurabilan asimetričan opseg po nalogu, u `$` ili `%` | spec §5.5, čeklist B11 |
 | Playbook migracija | `ict_entry_model` vrednosti sede početne playbook-ove; `rules_followed` istorija se **ne** razlaže retroaktivno — čist rez | moduli §1 |
 | Redosled playbook / tracker | Playbook prvi. Pravilo „svaki trejd ima playbook" nema smisla pre toga | moduli §4 |
-| Profit calc metoda | FIFO/LIFO/WAvg ostaje P3 — nerelevantno bez preklapajućih pozicija na istom simbolu | čeklist A14 |
+| Profit calc metoda | ~~ostaje P3~~ → **odbijeno u F7 i kolona obrisana.** Nerelevantno bez preklapajućih pozicija na istom simbolu, a model ima jedan red po trejdu | čeklist A14 |
 | MAE/MFE | Ostaje ručni unos sa charta. Intraday feed se ne uvodi | moduli §11 |
 
 ### Nerazrešena kontradikcija između tvoja dva dokumenta
@@ -597,20 +597,90 @@ tj_note_tags     name — zaseban rečnik                       UNIQUE (user_id,
 
 ---
 
-### Faza 7 — Parity i automatizacija
+### Faza 7 — Parity i automatizacija · **prvi rez isporučen**
 
-| Blok | Isporuka |
+Faza 7 nije jedna faza nego **osam nezavisnih blokova**, i razlikuju se po vrednosti za red
+veličine. Isporučena su tri, dva su odbijena sa obrazloženjem, četiri stoje neurađena.
+
+| Blok | Status |
 |---|---|
-| **Kalendar (D12/D13)** | Mesečni pogled: mesečni total, **P&L po nedelji**, broj dana, ikonica journal zapisa, izbor metrike po ćeliji. Sivo = breakeven po opsegu iz F0 |
-| **Journaling (F5/F6)** | Dnevni stat blok (Net P&L · trades · WR · winners · losers · volume · PF · komisije · Gross), expandable dan sa listom trejdova, mini kalendar |
-| **Auto recap (H5)** | Vercel cron → mentor pack za protekli period → `tj_recaps` → notifikacija. Prag ≥ 3 zatvorena trejda nedeljno, ≥ 4 mesečno |
-| **Grid (I4/I5)** | Konfigurabilne kolone sa per-user persistencijom, kolona „potencijal vs stvarno" (target attainment + MFE capture — logika **već postoji**, fali prikaz; TZ to zove Zella Scale) |
-| **Dashboard (I1/I2)** | Widget layout JSON, imenovani template-i |
-| **Trade Log akcije** | Merge / split trejdova, transfer između naloga |
-| **Import (J5)** | Broker preset UI — `tj_column_mappings` konačno dobija kod |
-| **Ostalo** | Profit calc metoda po nalogu (FIFO/LIFO/WAvg) sa punom rekalkulacijom, deljenje trejda javnim linkom |
+| **Kalendar (D12/D13)** | ✅ |
+| **Journaling (F5/F6)** | ✅ |
+| **Grid (I4/I5)** | ✅ |
+| **Dashboard (I1/I2)** | ⬜ Widget layout JSON, imenovani template-i |
+| **Auto recap (H5)** | ⬜ Cron → mentor pack → `tj_recaps` → notifikacija. Prag ≥ 3 zatvorena trejda nedeljno, ≥ 4 mesečno |
+| **Import (J5)** | ⬜ Broker preset UI — `tj_column_mappings` konačno dobija kod |
+| **Trade Log akcije** | ⬜ Merge / split trejdova. *Transfer između naloga zapravo već radi* — `updateTrade` piše `account_id` bez ijednog ograničenja; fali samo akcija nad redom |
+| **Profit calc metoda** | ❌ odbijeno |
+| **Javni link za trejd** | ❌ odbijeno |
 
-**Procena:** 8–10 sesija, deljivo po bloku.
+#### Isporučeno
+
+```
+tj_user_prefs  user_id (PK), journal_hidden_columns text[]
+```
+
+- **`/calendar`** — mesečna mreža sa Net P&L po danu, kolona nedeljnog zbira, izbor metrike po ćeliji
+  (Net P&L · R · broj trejdova · win rate), ikonica na danima sa dnevnikom, sivi breakeven dani po
+  opsegu iz F0, klik na dan vodi na `/daily?date=…`.
+- **Dnevni stat blok** na `/daily` — devet figura plus proširiva lista trejdova zatvorenih tog dana.
+- **Kolone u gridu** — MFE capture kolona (logika je postojala, samo se nije videla), izbor kolona sa
+  pamćenjem po korisniku.
+
+**Odstupanja i nalazi**
+
+- **Roadmap je potcenio grid: target attainment je već bio kolona.** Fali je bio samo MFE capture.
+- **`bucketByPeriod` je dobio `"day"`**, pa dan, nedelja i mesec idu kroz jednu funkciju. Tri mesta
+  koja sama izvode ključ dana su tri prilike da se ne slože oko toga kom danu pripada zatvaranje u
+  petak uveče. Test pribija da dnevna ćelija kalendara i dnevni blok daju isti broj.
+- **`HeatmapGrid` nije proširen** — nedelje-kao-kolone sa ćelijama od 3px su pravi oblik za godinu na
+  jedan pogled i pogrešan za mesec sa kog se čitaju cifre. Ni `ui/calendar.tsx` (react-day-picker,
+  stoji neiskorišćen u repou) — radi nad `Date` u zoni **browsera**, a ovde je svaki ključ dan
+  **naloga**; to je bug popravljen u Fazi 5.
+- **Mesečna mreža ima promenljiv broj redova** (28/35/42), ne fiksnih šest: red sastavljen isključivo
+  od dana sledećeg meseca je šum u svakom mesecu kome ne treba.
+- **`tj_user_prefs` čuva SAKRIVENE kolone, ne vidljive.** Čuvanje vidljivih bi zamrzlo svakom
+  korisniku listu na dan kad ju je poslednji put dirao, pa bi svaka buduća kolona stigla nevidljiva
+  baš onima koji su se potrudili da grid podese. Niz je uz to inertan: id iza preimenovane kolone ne
+  odgovara ničemu i tiho prestaje da važi. Uska tipizovana tabela, ne `prefs jsonb` vreća.
+- **Mini kalendar na `/daily` nije napravljen** — `/calendar` je taj pogled, a druga mreža u dnevnoj
+  stranici je drugo mesto koje se raziđe.
+- **Izvoz iz grida ostaje pun**, ne prati sakrivene kolone: on ionako nosi i polja kojih u gridu nema.
+
+#### Odbijeno
+
+- **Profit calc metoda (FIFO/LIFO/WAvg).** `profit_calc_method` je bio **mrtva kolona** od uvođenja —
+  fetch-ovan i tipizovan, ali nikad pročitan da bi nešto granao, i nikad postavljiv iz UI-ja. Da
+  proradi, i `tj_position_stats` view i njegov TS blizanac `position-stats.ts` morali bi da dobiju
+  praćenje lotova; oba rade jedan objedinjen prosek ulaza. A metode se razlikuju samo kad pozicija ima
+  više ulaznih fillova po različitim cenama sa izlazima između njih — a model ima **jedan
+  `tj_positions` red po trejdu**, pa se to ne može ni predstaviti (isti argument kao linija 109).
+  Kolona ne bi mogla da promeni nijedan broj šta god da nosi, a podešavanje koje ne može ništa da
+  uradi je gore od nepostojećeg: poziva da ga neko postavi i poveruje rezultatu. **Obrisana**
+  migracijom `20260801160000`; vraća se jednim `ALTER`-om onog dana kad postoji model sa lotovima.
+- **Javni link za deljenje trejda.** Isti oblik odbijen u Fazi 6. Tražio bi probijanje tri kapije
+  (`isPublic` lista u `lib/supabase/middleware.ts`, redirect u `(app)/layout.tsx`, i
+  `authenticated`-only RLS na svakoj tabeli), `SECURITY DEFINER` sa tokenom, i **stranicu trejda koja
+  ne postoji** — pod `/trades/[id]` postoji samo `edit`. Mentor pack izvoz već pokriva deljenje.
+
+#### Beleške za preostala četiri bloka
+
+- **Widget layout (I1/I2)** je najskuplji i najmanje vredan: `dashboard.tsx` je 1450 linija sa ~35
+  ulančanih `useMemo`-a i ~450 linija još neizdvojenog inline Recharts JSX-a. Devet od dvadesetak
+  kartica **jesu** već zasebne komponente, pa je pola posla urađeno; ostatak je izdvajanje i model
+  podataka za 26 stat pločica, ne sam renderer rasporeda. Filteri su globalno stanje dashboarda i ne
+  mogu biti „samo još jedan widget" bez konteksta.
+- **Auto recap (H5)** bi bio **prvi izuzetak od pravila „nema REST ruta"** (§4). `buildMentorPack` i
+  `resolveCalendarRange` su čisti i spremni; fali sve ostalo — `tj_recaps`, route handler, izuzetak u
+  `proxy.ts` matcher-u, service-role klijent i kanal za notifikaciju.
+- **Broker preseti (J5)** su najčistiji od četiri: `tj_column_mappings` i RLS policy postoje, a stanje
+  čarobnjaka (`Record<Canonical, string>`) je već tačno oblik koji `mapping jsonb` treba. Šav je
+  `import-wizard.tsx` na mestu gde `autoMap(headers)` popunjava mapu.
+- **Merge / split** mora da poštuje `tj_executions_guard` (okida se i na `UPDATE OF position_id`, pa
+  je re-parentovanje fillova dozvoljeno i provereno), `tj_positions_missed_guard`, status CHECK i
+  `tj_trade_images (position_id, kind)` UNIQUE. Grid nema selekciju redova, pa merge traži i to.
+
+**Procena:** 8–10 sesija za svih osam. **Stvarno za prva tri bloka:** 1, u osam koraka.
 
 ---
 
@@ -660,7 +730,8 @@ ovaj model ima strukturno.
 | 4b | Playbook, pravila, per-rule stats, forma iz playbook-a | Da | ✅ |
 | 5 | Progress Tracker, auto-evaluirana pravila, streak, zaključavanje dana, 7. komponenta skora | Da | ✅ |
 | 6 | Notebook: folderi, šabloni, note tagovi, nedeljni pregled | Da | ✅ |
-| 7 | Kalendar, dnevni blok, cron recap, grid kolone, widget layout, merge/split | Delom | 8–10 |
+| 7 | Kalendar, dnevni blok, grid kolone | Da | ✅ |
+| 7 | *ostatak:* widget layout, cron recap, broker preseti, merge/split | Delom | 5–7 |
 
 **Ukupno: 41–46 sesija.** Posle F4 journal odgovara na svih šest pitanja iz sanity provere.
 F5–F7 su disciplina, udobnost i parity.

@@ -55,7 +55,6 @@ export type Account = {
   // Risk plan defaults applied when stop / target are left empty.
   default_stop_pct: number | null;
   default_target_pct: number | null;
-  profit_calc_method: "fifo" | "lifo" | "weighted_avg";
   // FTMO / prop-firm challenge mode (per account).
   ftmo_mode: boolean;
   ftmo_daily_loss_enabled: boolean;

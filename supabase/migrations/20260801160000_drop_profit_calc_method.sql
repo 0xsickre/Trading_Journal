@@ -1,0 +1,28 @@
+-- Drop tj_accounts.profit_calc_method.
+--
+-- The column has been dead since it was added in
+-- 20260727121000_account_defaults_and_trade_review: it is fetched by
+-- getAccounts() and accepted by updateAccount()'s patch type, but **nothing has
+-- ever read it to branch a calculation, and no UI has ever set it**. Every row
+-- therefore holds the default 'fifo' — verified before writing this.
+--
+-- It is dropped rather than implemented, and that is the substantive call:
+--
+--   1. Making it work means a per-lot matching engine in BOTH the
+--      `tj_position_stats` view and its TypeScript twin `position-stats.ts`.
+--      Both compute one pooled weighted-average entry today, with no lot
+--      tracking anywhere, and the file header on the TS side says in as many
+--      words that the two must stay in sync.
+--   2. FIFO, LIFO and weighted average only ever differ when a position has
+--      several entry fills at different prices with exits interleaved between
+--      them — and this model stores **one tj_positions row per trade**, so
+--      cross-position netting on the same symbol cannot even be represented.
+--      The roadmap said as much when it deferred the feature (line 109).
+--
+-- So the column could not change a single number no matter what it held. A
+-- setting that cannot affect anything is worse than a missing one: it invites
+-- someone to set it and trust the result.
+--
+-- Re-adding it is a one-line ALTER on the day a lot-tracking model exists.
+
+ALTER TABLE public.tj_accounts DROP COLUMN profit_calc_method;
