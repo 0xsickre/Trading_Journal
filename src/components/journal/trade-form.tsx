@@ -687,9 +687,23 @@ export function TradeForm({
   }
 
   const isPlannedPhase = tradePhase === "planned" && !isMissed;
-  const showMoveToActive = isPlannedPhase;
+
+  /**
+   * Lifecycle actions belong to a plan that EXISTS.
+   *
+   * On a new trade they were noise at best and broken at worst: the phase select
+   * at the top already says planned or active, "Move to active" only repeated it,
+   * and "Označi kao miss" was offered but refused on click — `markTradeMissed`
+   * needs a row to mark, so it answered with an error toast. A button that is
+   * shown and cannot work is worse than no button.
+   *
+   * So: nothing while the trade is unsaved, and nothing once it is active —
+   * a trade you are already in cannot be missed, and it is already active.
+   */
+  const isSaved = initial != null;
+  const showMoveToActive = isSaved && isPlannedPhase;
   const showMarkMissed =
-    isPlannedPhase && canMarkMissed(execs.length, "planned");
+    isSaved && isPlannedPhase && canMarkMissed(execs.length, "planned");
   const showRestorePlanned =
     isMissed && canRestoreToPlanned(execs.length, "missed");
   const missedAt = initial?.missed_at ?? null;
