@@ -17,11 +17,20 @@ export const FIELD_DEF_GROUPS = [
 
 export type FieldDefGroup = (typeof FIELD_DEF_GROUPS)[number];
 
+/**
+ * Names shown in Settings when picking where a field goes.
+ *
+ * Must read the same as the group headings in the form — the picker and the
+ * form are two views of one placement, and calling it "Macro (vault)" in one
+ * place and "Kontekst" in the other makes the user guess whether they are the
+ * same group. The tab is named too, because "Setup" alone does not say which of
+ * the two tabs it lands on.
+ */
 export const FIELD_DEF_GROUP_LABELS: Record<FieldDefGroup, string> = {
-  macro: "Macro (vault)",
-  setup: "Setup",
+  macro: "Plan — Kontekst",
+  setup: "Plan — Setup",
   plan_advanced: "Plan — Advanced",
-  execution_advanced: "Execution — Advanced",
+  execution_advanced: "Izvršenje — Advanced",
 };
 
 export const FIELD_DEF_TYPES = [
