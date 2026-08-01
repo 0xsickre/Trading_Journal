@@ -8,8 +8,18 @@
 
 ## Metod, i šta ovaj dokument NE tvrdi
 
-**Stranice tradezella.com nisu mogle biti povučene** — `/features` i `/trading-journal` vraćaju
-HTTP 403 na automatsko čitanje. Provera se zato oslanja na:
+**Stranice tradezella.com nisu mogle biti povučene, ali ne zato što ih TradeZella brani.** Sesija u
+kojoj je ovaj dokument nastao nema opšti izlaz na web: egress politika okruženja odbija CONNECT za
+sve hostove van uske dozvoljene liste, pa i `example.com` vraća 403. Status endpoint proxy-ja to
+zapisuje doslovno — `gateway answered 403 to CONNECT (policy denial)`. Scraping njihovih stranica —
+`/features`, `/changelog`, `/pricing`, help centar — **nije bio moguć ni za jednu**, i to se ne može
+zaobići iz sesije.
+
+Ni dva spec dokumenta iz kojih je ROADMAP izveden (`tz-moduli-kompletno.md`,
+`tradezella-clone-spec.md`) **ne postoje ni u jednom GitHub repou** — pretraga po nalogu ih ne nalazi.
+Bili su lokalni fajlovi u trenutku pisanja roadmap-a.
+
+Provera se zato oslanja na:
 
 1. **master čeklist** i dva spec dokumenta (`tz-moduli-kompletno.md`, `tradezella-clone-spec.md`) iz
    kojih je `ROADMAP.md` izveden — to je bio parity izvor od početka projekta i njegove oznake
@@ -19,6 +29,12 @@ HTTP 403 na automatsko čitanje. Provera se zato oslanja na:
 
 Zbog toga: sve pod „imamo" je provereno **u kodu**. Sve pod „TZ ima" je izvedeno iz čeklista i
 sitemap-a, i **nije potvrđeno na njihovom sajtu**. Gde nisam siguran, tako i piše.
+
+**Kako ovaj dokument dobiti na čvrst temelj**, ako to zatreba: dozvoliti `tradezella.com` u mrežnoj
+politici okruženja (podešava se pri kreiranju okruženja —
+[dokumentacija](https://code.claude.com/docs/en/claude-code-on-the-web)), ili gurnuti ona dva spec
+dokumenta u repo, ili nalepiti sadržaj njihove `/features` stranice ručno. Bez jednog od toga,
+odeljak §8 ostaje najbolja procena a ne provereno stanje.
 
 ---
 
