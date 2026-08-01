@@ -546,6 +546,117 @@ export type Database = {
           },
         ]
       }
+      tj_note_folders: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+          template_text: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          sort_order?: number
+          template_text?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          template_text?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tj_note_tags: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tj_notes: {
+        Row: {
+          content: string
+          created_at: string
+          deleted_at: string | null
+          folder_id: string | null
+          id: string
+          pinned: boolean
+          position_id: string | null
+          report_date: string | null
+          tags: string[]
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          deleted_at?: string | null
+          folder_id?: string | null
+          id?: string
+          pinned?: boolean
+          position_id?: string | null
+          report_date?: string | null
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          deleted_at?: string | null
+          folder_id?: string | null
+          id?: string
+          pinned?: boolean
+          position_id?: string | null
+          report_date?: string | null
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tj_notes_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "tj_note_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tj_notes_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "tj_positions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tj_option_lists: {
         Row: {
           category: string | null

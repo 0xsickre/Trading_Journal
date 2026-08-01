@@ -542,24 +542,58 @@ tj_tracker_checkins  rule_id, report_date, checked boolean NULL, auto_evaluated
 
 ---
 
-### Faza 6 — Notebook
+### Faza 6 — Notebook ✅
 
-Potvrđeno da se gradi. Ne dira `/daily` — tvoj procesni dnevnik je strukturisaniji od TZ dnevne
-beleške i ostaje kakav jeste (moduli §2).
+Ne dira `/daily` — procesni dnevnik je forma sa fiksnim pitanjima i ostaje kakav jeste (moduli §2).
+Notebook je za ono što u formu ne staje: nedeljni pregled, zapažanje o tržištu, pasus o jednom trejdu.
 
 ```
-tj_note_folders  naziv, template_text, redosled
-tj_notes         naslov, sadržaj, folder_id, position_id?, report_date?, deleted_at
-tj_note_tags     odvojeni od tj_option_items — namerno, ne sinhronizuju se
+tj_note_folders  name, template_text, sort_order            UNIQUE (user_id, name)
+tj_notes         title, content, folder_id?, position_id?, report_date?,
+                 tags text[], pinned, deleted_at
+tj_note_tags     name — zaseban rečnik                       UNIQUE (user_id, name)
 ```
 
-- Podrazumevani folderi: Weekly Review · Trade Notes · Market Observations · Recently Deleted.
-- **Šablon po folderu**, auto-popuna pri kreiranju beleške.
-- Auto-sync: beleška sa trejda ide u Trade Notes preko `position_id`.
-- Soft-delete („Recently Deleted"), izvoz u PDF, javni link po belešci.
-- **Nedeljni pregled** (čeklist F7) živi ovde kao folder sa šablonom — swing ekvivalent dnevnog.
+- Seed folderi sa šablonima: **Weekly Review · Trade Notes · Market Observations**. Šablon se upisuje
+  u telo nove beleške — poenta nedeljnog pregleda je da pitanja već stoje tu kad sedneš.
+- **Sadržaj je markdown, čuvan kao čist tekst.** Renderuje se u TypeScript-u u React elemente, nikad u
+  HTML string, pa `dangerouslySetInnerHTML` ne postoji nigde i beleška ne može da ubaci markup šta god
+  da se u nju otkuca. Tekst usput ostaje pretraživ i izvozljiv, što HTML blob iz WYSIWYG-a ne bi bio.
+- Autosnimanje, bez dugmeta Sačuvaj. Tekst se piše u naletima kroz duže sedenje, a jedina stvar koja
+  ne sme da se desi pisanju je da nestane pri navigaciji — što ručno čuvanje upravo poziva.
+- Tagovi se kucaju slobodno i skupljaju u rečnik u hodu. Rečnik koji moraš da urediš pre nego što
+  počneš da pišeš je rečnik koji prestaneš da koristiš.
+- Beleška se kači na trejd preko `position_id`, i sa nje se otvara trejd.
 
-**Procena:** 4 sesije.
+**Odstupanja od originalnog plana**
+
+- **„Recently Deleted" je filter, ne folder.** Da je pravi folder, brisanje bi premeštalo belešku u
+  njega i time zaboravilo iz kog je foldera došla, pa vraćanje ne bi imalo gde da je vrati.
+  `deleted_at` nosi isto značenje i pamti poreklo.
+- **Folderi se brišu tvrdo, beleške preživljavaju.** `folder_id` je `ON DELETE SET NULL`, pa beleške
+  padnu u „Bez foldera". Meko brisanje foldera bi ih sakrilo iza nevidljivog roditelja, a odbijanje
+  brisanja punog foldera bi teralo korisnika da ga prazni ručno.
+- **PDF izvoz je print stylesheet**, ne biblioteka. „Sačuvaj kao PDF" u dijalogu za štampu JESTE izvoz;
+  projekat ne dobija zavisnost radi jednog dugmeta. Cena je `@media print` blok koji skida hrom
+  aplikacije — bez njega bi svaki list nosio navigaciju sa strane.
+- **Javni link po belešci nije izgrađen** (odluka vlasnika). To je jedina stavka faze koja otvara
+  podatke van prijave, tražila bi `SECURITY DEFINER` sa argumentom — tačno oblik koji je dvaput
+  zatvaran — a mentor pack izvoz već pokriva deljenje.
+- **`trade_journal_notes` ostaje kolona na trejdu** (odluka vlasnika). Kratka beleška uz unos i duži
+  zapis u Notebook-u su dva različita posla; veza ide preko `position_id`.
+- **Nema „auto-sync" u smislu kopiranja.** Beleška vezana za trejd se vidi u Trade Notes zato što je
+  tamo, ne zato što se negde duplira. Dva mesta sa istim tekstom su dva mesta koja se raziđu.
+- `tj_note_tags` je **rečnik**, a tagovi stoje kao `text[]` na belešci sa GIN indeksom — isti oblik
+  koji `psychology_tags` već koristi na poziciji, umesto join tabele za jednog korisnika.
+
+**Prihvatanje**
+
+- „Šta sam naučio ove nedelje?" — `/notebook` → Weekly Review → nova beleška dolazi sa pitanjima. ✅
+- Obrisana beleška se vraća; folder obrisan sa beleškama ne gubi nijednu. ✅ (provereno nad živom
+  bazom, kao prijavljen korisnik)
+- Ručno testiranje u pregledaču **nije obavljeno** — kontejner nema Supabase env promenljive.
+
+**Procena:** 4 sesije. **Stvarno:** 1.
 
 ---
 
@@ -625,7 +659,7 @@ ovaj model ima strukturno.
 | 4a | Custom fields + backfill metodoloških kolona | Da | ✅ |
 | 4b | Playbook, pravila, per-rule stats, forma iz playbook-a | Da | ✅ |
 | 5 | Progress Tracker, auto-evaluirana pravila, streak, zaključavanje dana, 7. komponenta skora | Da | ✅ |
-| 6 | Notebook: folderi, šabloni, note tagovi, nedeljni pregled | Da | 4 |
+| 6 | Notebook: folderi, šabloni, note tagovi, nedeljni pregled | Da | ✅ |
 | 7 | Kalendar, dnevni blok, cron recap, grid kolone, widget layout, merge/split | Delom | 8–10 |
 
 **Ukupno: 41–46 sesija.** Posle F4 journal odgovara na svih šest pitanja iz sanity provere.

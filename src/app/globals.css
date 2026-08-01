@@ -134,3 +134,58 @@
     @apply font-sans;
   }
 }
+/**
+ * Print — the PDF export.
+ *
+ * "Save as PDF" in the browser's print dialog IS the export, so no PDF library
+ * is added for one button. What that costs is this stylesheet: the app chrome
+ * has to be stripped, or the printed page carries a navigation sidebar and a
+ * toolbar down the side of every sheet.
+ *
+ * Components opt in with Tailwind's `print:` variants; this only handles what is
+ * global — the chrome, the colours, and link targets.
+ */
+@media print {
+  /* The app frame. Nothing in it belongs on paper. */
+  nav,
+  aside,
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Backgrounds and borders drawn in oklch print as muddy grey on most drivers;
+     paper wants ink on white. */
+  * {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
+
+  /* A heading stranded at the foot of a page reads as a missing section. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    break-after: avoid-page;
+  }
+
+  blockquote,
+  pre,
+  li {
+    break-inside: avoid;
+  }
+
+  @page {
+    margin: 18mm;
+  }
+}
