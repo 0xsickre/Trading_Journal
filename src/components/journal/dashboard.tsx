@@ -123,7 +123,30 @@ import {
 } from "date-fns";
 import { fmtMoney, fmtR, fmtPct, fmtNum, pnlClass } from "@/lib/journal/format";
 import { formatDuration } from "@/lib/journal/units";
-import { toEpoch } from "@/lib/journal/time";
+import { toEpoch, zonedDateKey } from "@/lib/journal/time";
+import {
+  MIN_RATIO_DAYS,
+  computeDailyDrawdown,
+  computeRiskRatios,
+  type DayPnlPoint,
+  type RiskRatios,
+} from "@/lib/journal/risk-ratios";
+
+/**
+ * Shared tooltip tail for the three risk ratios.
+ *
+ * Every one of them is annualized by the number of days actually traded rather
+ * than by a fixed 252, so the scale factor is spelled out. Without it the
+ * figure is not comparable to a Sharpe quoted anywhere else, and the reader has
+ * no way to know that.
+ */
+function ratioTitle(base: string, r: RiskRatios): string {
+  if (r.days < MIN_RATIO_DAYS) {
+    return `${base} Needs at least ${MIN_RATIO_DAYS} days with a closed trade — there are ${r.days}.`;
+  }
+  const scale = Math.round(r.periodsPerYear ?? 0);
+  return `${base} ${r.days} trading days across ${r.spanDays} calendar days, so the annual scale is √${scale}.`;
+}
 
 const PERIODS = [
   { value: "30", label: "30d" },
@@ -476,6 +499,30 @@ export function Dashboard({
     () => consistencyScore(realized.map(pnlOf)),
     [realized, pnlOf],
   );
+
+  /**
+   * Daily P&L points behind Sharpe, Sortino, Calmar and the daily drawdown.
+   *
+   * Dated by CLOSE and in the account's own zone, matching every other money
+   * figure on this page. A trade closed at 01:00 UTC belongs to the previous
+   * New York day, and reading the calendar in the browser's zone would move it.
+   */
+  const dayPoints = useMemo<DayPnlPoint[]>(
+    () =>
+      realized.map((t) => ({
+        day: zonedDateKey(t.closedAt, tzOf(t)),
+        at: t.closedAt,
+        pnl: pnlOf(t),
+      })),
+    [realized, tzOf, pnlOf],
+  );
+  const ratios = useMemo(
+    // The same drawdown the KPI row shows, so Calmar and Recovery factor cannot
+    // disagree about the denominator they share.
+    () => computeRiskRatios(dayPoints, drawdown.maxMoney),
+    [dayPoints, drawdown.maxMoney],
+  );
+  const dailyDd = useMemo(() => computeDailyDrawdown(dayPoints), [dayPoints]);
 
   const insightResult = useMemo(
     () =>
@@ -961,6 +1008,40 @@ export function Dashboard({
               ? `Share of peak account equity, including deposits and withdrawals. Trough on ${drawdown.maxAt.slice(0, 10)}.`
               : "Share of peak account equity, including deposits and withdrawals."
           }
+        />
+        <Stat
+          label="Avg daily DD"
+          value={fmtMoney(dailyDd.avgMoney, currency)}
+          cls={dailyDd.avgMoney < 0 ? "text-[var(--loss)]" : undefined}
+          title={
+            dailyDd.worstDay
+              ? `Average drop below the day's own high-water mark, across ${dailyDd.days} days with a trade. A day that never went underwater counts as 0. Worst: ${fmtMoney(dailyDd.worstMoney, currency)} on ${dailyDd.worstDay}.`
+              : `Average drop below the day's own high-water mark, across ${dailyDd.days} days with a trade.`
+          }
+        />
+        <Stat
+          label="Sharpe"
+          value={ratios.sharpe != null ? fmtNum(ratios.sharpe, 2) : "—"}
+          title={ratioTitle(
+            "Mean daily P&L divided by its standard deviation.",
+            ratios,
+          )}
+        />
+        <Stat
+          label="Sortino"
+          value={ratios.sortino != null ? fmtNum(ratios.sortino, 2) : "—"}
+          title={ratioTitle(
+            "Like Sharpe, but the denominator counts losing days only — upside is not risk. Empty while no day has lost money.",
+            ratios,
+          )}
+        />
+        <Stat
+          label="Calmar"
+          value={ratios.calmar != null ? fmtNum(ratios.calmar, 2) : "—"}
+          title={ratioTitle(
+            "Annualized profit divided by max drawdown — the recovery factor divided by how long it took to earn.",
+            ratios,
+          )}
         />
         <Stat
           label="Breakeven"

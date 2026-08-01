@@ -14,6 +14,7 @@ import {
 import {
   addDaysToDayKey,
   addMonthsToMonthKey,
+  daysBetweenDayKeys,
   heatmapWindow,
   isoWeekdayOfDayKey,
   monthGridDays,
@@ -440,6 +441,36 @@ describe("addDaysToDayKey", () => {
   it("walks a 26-week window back to the expected first day", () => {
     // What the heatmap does: 182 days ending today, inclusive.
     expect(addDaysToDayKey("2026-08-01", -(26 * 7 - 1))).toBe("2026-02-01");
+  });
+});
+
+describe("daysBetweenDayKeys", () => {
+  it("counts whole days, signed, with the same day at zero", () => {
+    expect(daysBetweenDayKeys("2026-08-01", "2026-08-01")).toBe(0);
+    expect(daysBetweenDayKeys("2026-08-01", "2026-08-02")).toBe(1);
+    expect(daysBetweenDayKeys("2026-08-02", "2026-08-01")).toBe(-1);
+  });
+
+  it("crosses month, year and leap boundaries", () => {
+    expect(daysBetweenDayKeys("2026-07-31", "2026-08-01")).toBe(1);
+    expect(daysBetweenDayKeys("2026-12-31", "2027-01-01")).toBe(1);
+    // 2028 is a leap year: February carries 29 days.
+    expect(daysBetweenDayKeys("2028-02-01", "2028-03-01")).toBe(29);
+    expect(daysBetweenDayKeys("2026-02-01", "2026-03-01")).toBe(28);
+    expect(daysBetweenDayKeys("2026-01-01", "2026-12-31")).toBe(364);
+  });
+
+  it("returns a whole number across a DST switch", () => {
+    // The reason this is UTC string arithmetic: a 23-hour day divided by 86.4M
+    // ms is 0.958, and a naive floor would report 0 days between two different
+    // dates. These are the US and EU switch weekends.
+    expect(daysBetweenDayKeys("2026-03-07", "2026-03-09")).toBe(2);
+    expect(daysBetweenDayKeys("2026-10-24", "2026-11-02")).toBe(9);
+  });
+
+  it("returns 0 for a malformed key instead of NaN", () => {
+    expect(daysBetweenDayKeys("nope", "2026-08-01")).toBe(0);
+    expect(daysBetweenDayKeys("2026-08-01", "")).toBe(0);
   });
 });
 

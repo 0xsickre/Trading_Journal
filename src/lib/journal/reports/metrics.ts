@@ -23,6 +23,11 @@ import {
   consistencyScore,
   recoveryFactor,
 } from "../risk-metrics";
+import {
+  computeDailyDrawdown,
+  computeRiskRatios,
+  type DayPnlPoint,
+} from "../risk-ratios";
 import type { BreakevenRange } from "../breakeven";
 import type { EnrichedTrade } from "../enriched-trade";
 import type { MetricUnit } from "../units";
@@ -71,6 +76,27 @@ const realized = (group: EnrichedTrade[]): RealizedTrade[] =>
 /** computeStats is the workhorse; memoized per group to avoid recomputation. */
 function statsOf(group: EnrichedTrade[], ctx: MetricContext) {
   return computeStats(realized(group), ctx.pnlBasis, ctx.range);
+}
+
+/** Peak-to-trough of cumulative P&L inside the group, in money. Negative or 0. */
+function maxDrawdownOf(group: EnrichedTrade[]): number {
+  return computeDrawdown(
+    buildBalanceTimeline(
+      0,
+      group.map((e) => ({ at: e.closedAt ?? "", pnl: e.pnl })),
+    ),
+  ).maxMoney;
+}
+
+/**
+ * Daily P&L points for the risk ratios.
+ *
+ * `closeDay` is already resolved in the ACCOUNT's zone by `enrichTrades`, so
+ * nothing here has to know about timezones — which is the only reason these
+ * ratios can live in a registry that has no account on hand.
+ */
+function dayPointsOf(group: EnrichedTrade[]): DayPnlPoint[] {
+  return group.map((e) => ({ day: e.closeDay, at: e.closedAt, pnl: e.pnl }));
 }
 
 export const METRICS: ReportMetric[] = [
@@ -177,13 +203,15 @@ export const METRICS: ReportMetric[] = [
     unit: "money",
     hint: "Pad kumulativnog P&L-a unutar grupe.",
     higherIsBetter: true,
-    compute: (g) =>
-      computeDrawdown(
-        buildBalanceTimeline(
-          0,
-          g.map((e) => ({ at: e.closedAt ?? "", pnl: e.pnl })),
-        ),
-      ).maxMoney,
+    compute: (g) => maxDrawdownOf(g),
+  },
+  {
+    key: "avg_daily_dd",
+    label: "Avg daily DD",
+    unit: "money",
+    hint: "Prosečan pad unutar dana, mereno od dnevnog vrha. Dan bez pada ulazi kao 0.",
+    higherIsBetter: true,
+    compute: (g) => computeDailyDrawdown(dayPointsOf(g)).avgMoney,
   },
   {
     key: "recovery_factor",
@@ -191,15 +219,32 @@ export const METRICS: ReportMetric[] = [
     unit: "ratio",
     hint: "Neto profit / max drawdown. Prazno kad drawdown-a nema.",
     higherIsBetter: true,
-    compute: (g, ctx) => {
-      const dd = computeDrawdown(
-        buildBalanceTimeline(
-          0,
-          g.map((e) => ({ at: e.closedAt ?? "", pnl: e.pnl })),
-        ),
-      ).maxMoney;
-      return recoveryFactor(statsOf(g, ctx).netSum, dd);
-    },
+    compute: (g, ctx) =>
+      recoveryFactor(statsOf(g, ctx).netSum, maxDrawdownOf(g)),
+  },
+  {
+    key: "sharpe",
+    label: "Sharpe",
+    unit: "ratio",
+    hint: "Prosečan dnevni P&L / njegova standardna devijacija, godišnje skalirano brojem dana kojima si stvarno trgovao. Traži bar 5 dana.",
+    higherIsBetter: true,
+    compute: (g) => computeRiskRatios(dayPointsOf(g), maxDrawdownOf(g)).sharpe,
+  },
+  {
+    key: "sortino",
+    label: "Sortino",
+    unit: "ratio",
+    hint: "Kao Sharpe, ali imenilac broji samo gubitaške dane — rast nije rizik. Prazno kad nijedan dan nije bio u minusu.",
+    higherIsBetter: true,
+    compute: (g) => computeRiskRatios(dayPointsOf(g), maxDrawdownOf(g)).sortino,
+  },
+  {
+    key: "calmar",
+    label: "Calmar",
+    unit: "ratio",
+    hint: "Godišnji prinos / max drawdown. Recovery factor podeljen vremenom koje mu je trebalo.",
+    higherIsBetter: true,
+    compute: (g) => computeRiskRatios(dayPointsOf(g), maxDrawdownOf(g)).calmar,
   },
   {
     key: "consistency",

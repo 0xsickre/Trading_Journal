@@ -180,6 +180,28 @@ export function addDaysToDayKey(day: string, delta: number): string {
 }
 
 /**
+ * Whole days from `from` to `to`, signed. Same day gives 0.
+ *
+ * Both keys are parsed as UTC midnight, so the difference is always an exact
+ * multiple of 86 400 000 ms — no DST hour can round it to 0.99 of a day. That
+ * is the whole reason this is string arithmetic and not `Date` subtraction on
+ * zoned instants.
+ *
+ * Returns 0 for anything that is not a day key, matching `addDaysToDayKey`'s
+ * habit of degrading visibly rather than producing NaN downstream.
+ */
+export function daysBetweenDayKeys(from: string, to: string): number {
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  if (!re.test(from) || !re.test(to)) return 0;
+  const ms = (k: string) => {
+    const [y, mo, d] = k.split("-").map(Number);
+    return Date.UTC(y, mo - 1, d);
+  };
+  const diff = ms(to) - ms(from);
+  return Number.isNaN(diff) ? 0 : Math.round(diff / 86_400_000);
+}
+
+/**
  * First and last day of a heatmap window of `weeks` columns ending on `endDay`.
  *
  * The end is padded forward to Saturday so the final column is full and every
