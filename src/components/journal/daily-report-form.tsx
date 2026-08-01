@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { sr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Save } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, Save } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -12,6 +12,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -41,6 +50,8 @@ import {
   saveDailyReport,
   type SaveDailyReportInput,
 } from "@/app/(app)/daily/actions";
+import { lockDay } from "@/app/(app)/daily/tracker-actions";
+import type { DayCompliance } from "@/lib/journal/tracker/compliance";
 import {
   TrackerDayBadge,
   TrackerStageSection,
@@ -145,6 +156,9 @@ export function DailyReportForm({
   const isToday = reportDate === today;
   const showFriday = isFriday(reportDate);
   const lowMental = form.mental_temp != null && form.mental_temp < 5;
+  const lockedAt = report?.locked_at
+    ? format(new Date(report.locked_at), "d. MMM yyyy. HH:mm", { locale: sr })
+    : null;
 
   function patch<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -167,18 +181,24 @@ export function DailyReportForm({
     }));
   }
 
+  /** Split out so locking can persist first — see LockDayButton. */
+  async function persist(): Promise<boolean> {
+    const res = await saveDailyReport(reportDate, form);
+    if (!res.ok) {
+      toast.error(res.error);
+      return false;
+    }
+    if (res.warnNoFocusGoal) {
+      toast.warning("Postavi cilj fokusa da ocena dana ima smisla.");
+    }
+    setLastSaved(res.updated_at);
+    return true;
+  }
+
   function save() {
     start(async () => {
-      const res = await saveDailyReport(reportDate, form);
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      if (res.warnNoFocusGoal) {
-        toast.warning("Postavi cilj fokusa da ocena dana ima smisla.");
-      }
+      if (!(await persist())) return;
       toast.success("Dnevni izveštaj sačuvan");
-      setLastSaved(res.updated_at);
       router.refresh();
     });
   }
@@ -234,6 +254,25 @@ export function DailyReportForm({
           </Badge>
         </div>
       </div>
+
+      {/* One `disabled` on the wrapper instead of threading it through forty
+          controls. The tracker rows inside go read-only the same way — the answer
+          buttons are form controls, so the browser disables them too, and the
+          database trigger refuses the write regardless. Links stay clickable,
+          which is what you want: a sealed day is still readable. */}
+      <fieldset
+        disabled={tracker.locked}
+        className="m-0 min-w-0 space-y-6 border-0 p-0 disabled:opacity-100"
+      >
+        {tracker.locked && (
+          <Alert>
+            <AlertDescription>
+              Dan je zaključan {lockedAt && `(${lockedAt})`} i njegov dnevnik se
+              više ne menja. Trejdovi ostaju izmenjivi — ispravka P&amp;L-a je i
+              dalje ispravka činjenice, ali ne pomera ocenu ovog dana.
+            </AlertDescription>
+          </Alert>
+        )}
 
       <Card>
         <CardHeader>
@@ -661,6 +700,7 @@ export function DailyReportForm({
           </CardContent>
         </Card>
       )}
+      </fieldset>
 
       <div
         className={cn(
@@ -670,17 +710,122 @@ export function DailyReportForm({
       >
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
-            {lastSaved
-              ? `Poslednje sačuvano ${format(new Date(lastSaved), "HH:mm")}`
-              : "Još nije sačuvano"}
+            {tracker.locked
+              ? "Dan je zaključan"
+              : lastSaved
+                ? `Poslednje sačuvano ${format(new Date(lastSaved), "HH:mm")}`
+                : "Još nije sačuvano"}
           </p>
-          <Button onClick={save} disabled={pending}>
-            <Save className="mr-2 size-4" />
-            Sačuvaj izveštaj
-          </Button>
+          {!tracker.locked && (
+            <div className="flex items-center gap-2">
+              <LockDayButton
+                reportDate={reportDate}
+                isToday={isToday}
+                compliance={tracker.compliance}
+                disabled={pending}
+                persist={persist}
+              />
+              <Button onClick={save} disabled={pending}>
+                <Save className="mr-2 size-4" />
+                Sačuvaj izveštaj
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Locking is irreversible, so it asks first — and the dialog says what will and
+ * will not be frozen, because "lock" alone reads like it freezes the trades too.
+ *
+ * Saving the report first is deliberate: locking seals what is STORED, and text
+ * sitting unsaved in the form is not stored. Without this the obvious sequence —
+ * write the debrief, hit lock — would seal an empty day.
+ */
+function LockDayButton({
+  reportDate,
+  isToday,
+  compliance,
+  disabled,
+  persist,
+}: {
+  reportDate: string;
+  isToday: boolean;
+  compliance: DayCompliance;
+  disabled: boolean;
+  /** Saves the report; locking aborts if it fails. */
+  persist: () => Promise<boolean>;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [pending, start] = useTransition();
+
+  function confirm() {
+    start(async () => {
+      // Save before sealing. Locking freezes what is STORED, and text still
+      // sitting in the form is not stored — without this, the obvious sequence
+      // (write the debrief, hit lock) would seal an empty day, irreversibly.
+      if (!(await persist())) return;
+
+      const res = await lockDay(reportDate);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setOpen(false);
+      toast.success("Dan je zaključan.");
+      router.refresh();
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" disabled={disabled}>
+          <Lock className="mr-2 size-4" />
+          Zaključaj dan
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Zaključati {reportDate}?</DialogTitle>
+          <DialogDescription asChild>
+            <div className="space-y-3 text-sm">
+              <p>
+                Ovo se <b>ne može poništiti</b>. Dnevni izveštaj i čeklista za ovaj
+                dan se zamrzavaju takvi kakvi su sada
+                {compliance.pct != null &&
+                  ` — ${Math.round(compliance.pct)}%, ${compliance.satisfied} od ${compliance.applicable} pravila`}
+                .
+              </p>
+              <p>
+                Trejdovi <b>ostaju izmenjivi</b>. Pogrešno unetu cenu i dalje
+                možeš ispraviti i P&amp;L će se pomeriti — ali ocena ovog dana
+                neće, jer se automatska pravila zamrzavaju sada.
+              </p>
+              {isToday && (
+                <p className="text-amber-600 dark:text-amber-500">
+                  Dan još traje. Neodgovorena pravila se zamrzavaju kao
+                  neispunjena.
+                </p>
+              )}
+            </div>
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
+            Odustani
+          </Button>
+          <Button onClick={confirm} disabled={pending}>
+            <Lock className="mr-2 size-4" />
+            Zaključaj
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

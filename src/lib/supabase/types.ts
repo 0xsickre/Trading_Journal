@@ -1112,6 +1112,10 @@ export type Database = {
         Args: { p_key: string; p_label: string; p_category?: string | null }
         Returns: Database["public"]["Tables"]["tj_option_lists"]["Row"]
       }
+      tj_lock_day: {
+        Args: { p_date: string; p_auto?: Json }
+        Returns: undefined
+      }
       tj_replace_executions: {
         Args: { p_position_id: string; p_executions: Json }
         Returns: number

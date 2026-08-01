@@ -70,6 +70,17 @@ export async function saveDailyReport(
   const warnNoFocusGoal =
     parsed.data.day_grade != null && !activeGoal ? true : undefined;
 
+  // Checked so the user sees this sentence rather than the trigger's. The trigger
+  // stays the real guard — PostgREST with the user's JWT is a live write path, so
+  // a check here alone is a lock you can walk around.
+  const { data: existing } = await supabase
+    .from("tj_daily_reports")
+    .select("locked_at")
+    .eq("report_date", reportDate)
+    .maybeSingle();
+  if (existing?.locked_at != null)
+    return { ok: false, error: "Dan je zaključan i više se ne menja." };
+
   const row = {
     user_id: user.id,
     report_date: reportDate,
