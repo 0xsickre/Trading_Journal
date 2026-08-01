@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { bucketByPeriod, summarizePeriods } from "./period-stats";
-import type { RealizedTrade } from "./analytics";
+import { computeStats, type RealizedTrade } from "./analytics";
+import { zonedDateKey } from "./time";
 import type { PositionStat, TradeRow } from "./types";
 
 const UTC = () => "UTC";
@@ -274,5 +275,30 @@ describe("bucketByPeriod — R", () => {
     );
     expect(rows[0].r).toBe(0);
     expect(rows[0].rTrades).toBe(0);
+  });
+});
+
+describe("the day block and the calendar cell agree", () => {
+  it("gives the same net whether a day is bucketed or filtered then summed", () => {
+    // /calendar buckets every trade by day; /daily filters to one day and runs
+    // computeStats. Two code paths, one number the user compares across two
+    // screens — if these ever drift, one of the pages is lying and neither says
+    // which. Pinned here rather than trusted to stay in step.
+    const all = [
+      trade("a", "2026-01-08T09:00:00Z", 100),
+      trade("b", "2026-01-08T21:00:00Z", -40),
+      trade("other", "2026-01-09T12:00:00Z", 900),
+    ];
+    const day = "2026-01-08";
+
+    const cell = bucketByPeriod(all, "day", UTC).find((r) => r.key === day)!;
+    const block = computeStats(
+      all.filter((t) => zonedDateKey(t.closedAt, "UTC") === day),
+      "net",
+    );
+
+    expect(cell.net).toBe(block.netSum);
+    expect(cell.trades).toBe(block.count);
+    expect(cell.gross).toBe(block.grossSum);
   });
 });

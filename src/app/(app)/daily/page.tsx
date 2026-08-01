@@ -17,9 +17,20 @@ import {
   resolveAutoResults,
   ruleIsLiveOn,
 } from "@/lib/journal/tracker/compliance";
-import { DEFAULT_TZ } from "@/lib/journal/time";
+import { computeStats, toRealized } from "@/lib/journal/analytics";
+import { computeCostStats } from "@/lib/journal/costs";
+import { tradeVolume } from "@/lib/journal/period-stats";
+import {
+  EXACT_ZERO_RANGE,
+  resolveBreakevenRange,
+} from "@/lib/journal/breakeven";
+import { DEFAULT_TZ, zonedDateKey } from "@/lib/journal/time";
 import { FocusGoalCard } from "@/components/journal/focus-goal-card";
 import { DailyReportForm } from "@/components/journal/daily-report-form";
+import {
+  DayStatsCard,
+  type DayTradeRow,
+} from "@/components/journal/day-stats-card";
 import type { TrackerDayData } from "@/components/journal/tracker-checklist";
 import type { TradeRow } from "@/lib/journal/types";
 
@@ -91,6 +102,35 @@ export default async function DailyPage({
     tradeLabels[t.id] = t.label;
   }
 
+  /**
+   * The day's numbers.
+   *
+   * Scoped to trades CLOSED on this day — the same rule the calendar cell and
+   * `dailyPnl` use, so the two screens can never print different figures for the
+   * same date. `toRealized` already drops anything not fully closed.
+   */
+  const ranges = accounts.map((a) => resolveBreakevenRange(a));
+  const breakevenRange =
+    ranges.length > 0 &&
+    ranges.every((r) => r.from === ranges[0].from && r.to === ranges[0].to)
+      ? ranges[0]
+      : EXACT_ZERO_RANGE;
+
+  const dayTrades = toRealized(trades).filter(
+    (t) => t.closedAt && zonedDateKey(t.closedAt, tzOf(t.row)) === reportDate,
+  );
+  const dayStats = computeStats(dayTrades, "net", breakevenRange);
+  const dayCosts = computeCostStats(dayTrades);
+  const dayVolume = dayTrades.reduce((s, t) => s + tradeVolume(t), 0);
+  const dayTradeRows: DayTradeRow[] = dayTrades.map((t) => ({
+    id: t.id,
+    label: t.row.trade_no != null ? `#${t.row.trade_no}` : t.id.slice(0, 8),
+    symbol: typeof t.row.symbol === "string" ? t.row.symbol : null,
+    net: t.net,
+    r: t.r,
+    qty: tradeVolume(t),
+  }));
+
   const tracker: TrackerDayData = {
     reportDate,
     rules: dayRules,
@@ -113,6 +153,15 @@ export default async function DailyPage({
       </div>
 
       <FocusGoalCard goal={activeGoal} reportDate={reportDate} />
+
+      <DayStatsCard
+        key={reportDate}
+        stats={dayStats}
+        costs={dayCosts}
+        volume={dayVolume}
+        trades={dayTradeRows}
+        currency={currency}
+      />
 
       <DailyReportForm
         key={reportDate}

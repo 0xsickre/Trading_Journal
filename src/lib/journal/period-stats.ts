@@ -82,6 +82,20 @@ export const EMPTY_PERIOD_SUMMARY: PeriodSummary = {
 };
 
 /**
+ * Contracts or shares entered on one trade.
+ *
+ * Exported so the period buckets and any single-period caller share one
+ * definition of "volume" — two reduces over `entry_qty` in different files is
+ * two places for it to drift into meaning a trade count.
+ *
+ * A missing quantity is 0, not NaN: an unpriced instrument nulls the stats
+ * columns, and one such trade must not erase the whole period's volume.
+ */
+export function tradeVolume(t: RealizedTrade): number {
+  return t.row.stats?.entry_qty ?? 0;
+}
+
+/**
  * Bucket realized trades by period.
  *
  * Attribution is by CLOSE date, deliberately diverging from TradeZella, which
@@ -137,7 +151,7 @@ export function bucketByPeriod(
     row.gross += t.gross;
     row.trades++;
     row.fees += t.row.stats?.total_fees ?? 0;
-    row.volume += t.row.stats?.entry_qty ?? 0;
+    row.volume += tradeVolume(t);
     if (t.r != null) {
       row.r += t.r;
       row.rTrades++;
