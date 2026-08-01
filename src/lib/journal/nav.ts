@@ -6,6 +6,7 @@ import {
   Settings,
   ClipboardCheck,
   BarChart3,
+  CalendarDays,
   NotebookPen,
   type LucideIcon,
 } from "lucide-react";
@@ -20,6 +21,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/journal", label: "Journal", icon: BookOpen },
   { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/calendar", label: "Kalendar", icon: CalendarDays },
   { href: "/daily", label: "Dnevni izveštaj", icon: ClipboardCheck },
   { href: "/notebook", label: "Notebook", icon: NotebookPen },
   { href: "/trades/new", label: "New Trade", icon: PlusCircle },
