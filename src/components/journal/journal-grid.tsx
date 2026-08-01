@@ -13,6 +13,7 @@ import {
 } from "@tanstack/react-table";
 import {
   ArrowUpDown,
+  Columns3,
   Download,
   MoreHorizontal,
   Pencil,
@@ -38,6 +39,7 @@ import {
 } from "@/components/ui/select";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
@@ -64,6 +66,12 @@ import {
   stringFieldValue,
 } from "@/lib/journal/field-values";
 import { deleteTrade, activateTrade } from "@/app/(app)/trades/actions";
+import { setJournalHiddenColumns } from "@/app/(app)/journal/actions";
+import {
+  hiddenToVisibility,
+  toggleHidden,
+  visibleCount,
+} from "@/lib/journal/column-prefs";
 import {
   formatLifecycleStatusLabel,
   lifecycleStatusHint,
@@ -124,15 +132,50 @@ function fieldMatchesFilter(row: TradeRow, key: string, value: string): boolean 
   return stringFieldValue(row, key) === value;
 }
 
+/**
+ * Every column the user may switch off, and its name.
+ *
+ * This map does three jobs at once, which is the point: it labels the headers
+ * below, it labels the picker, and **membership in it is what makes a column
+ * hideable**. A column absent from here — `actions`, the row menu — simply
+ * cannot be turned off, with no separate flag to keep in step.
+ *
+ * Labels live here rather than inline in each header so the name is written
+ * once; the picker and the column heading cannot drift apart.
+ */
+const COLUMN_LABELS: Record<string, string> = {
+  trade_no: "#",
+  date: "Date (NY)",
+  instrument: "Instrument",
+  direction: "Dir",
+  setup_grade: "Grade",
+  size: "Size",
+  avg_entry: "Entry",
+  slippage_r: "Slip R",
+  avg_exit: "Exit",
+  r: "R",
+  exit_eff: "Target %",
+  capture: "Capture %",
+  gross: "Gross",
+  net: "Net",
+  status: "Status",
+  chart: "Grafikon",
+};
+
+const HIDEABLE_COLUMNS = Object.keys(COLUMN_LABELS);
+
 export function JournalGrid({
   trades,
   accounts,
   fieldDefs = [],
+  hiddenColumns = [],
 }: {
   trades: TradeRow[];
   accounts: Account[];
   /** User-defined fields, so the export carries them like any other column. */
   fieldDefs?: FieldDef[];
+  /** Columns the user switched off, from tj_user_prefs. */
+  hiddenColumns?: string[];
 }) {
   const router = useRouter();
   const tzByAccount = useMemo(() => {
@@ -150,6 +193,31 @@ export function JournalGrid({
   const [accountFilter, setAccountFilter] = useState<string>("all");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [sorting, setSorting] = useState<SortingState>([]);
+
+  // Optimistic: the column disappears on click and the save follows. A round
+  // trip before the grid reacts would read as a dead checkbox.
+  const [hidden, setHidden] = useState<string[]>(hiddenColumns);
+  const columnVisibility = useMemo(
+    // Only the hideable ids are listed; TanStack treats every column it does
+    // not hear about as visible, which is exactly right for `actions`.
+    () => hiddenToVisibility(hidden, HIDEABLE_COLUMNS),
+    [hidden],
+  );
+
+  function toggleColumn(id: string) {
+    const next = toggleHidden(hidden, HIDEABLE_COLUMNS, id);
+    // `toggleHidden` returns the input unchanged when it refuses — hiding the
+    // last visible column — so there is nothing to save and nothing to redraw.
+    if (next.length === hidden.length && next.every((x, i) => x === hidden[i]))
+      return;
+    setHidden(next);
+    void setJournalHiddenColumns(next).then((res) => {
+      if (!res.ok) {
+        setHidden(hidden);
+        toast.error(res.error);
+      }
+    });
+  }
 
   const filtered = useMemo(() => {
     return trades.filter((t) => {
@@ -195,13 +263,13 @@ export function JournalGrid({
     () => [
       {
         accessorKey: "trade_no",
-        header: "#",
+        header: COLUMN_LABELS.trade_no,
         cell: ({ row }) => row.original.trade_no ?? "—",
       },
       {
         id: "date",
         header: ({ column }) => (
-          <SortBtn column={column} label="Date (NY)" />
+          <SortBtn column={column} label={COLUMN_LABELS.date} />
         ),
         accessorFn: (r) => r.stats?.opened_at ?? r.created_at,
         cell: ({ row }) => {
@@ -216,7 +284,7 @@ export function JournalGrid({
       },
       {
         accessorKey: "instrument",
-        header: "Instrument",
+        header: COLUMN_LABELS.instrument,
         cell: ({ row }) => {
           // A trade whose instrument can no longer be resolved has no point value,
           // so the view returns null money rather than pricing it in raw points.
@@ -242,7 +310,7 @@ export function JournalGrid({
       },
       {
         accessorKey: "direction",
-        header: "Dir",
+        header: COLUMN_LABELS.direction,
         cell: ({ row }) => {
           const d = row.original.direction as string;
           if (!d) return "—";
@@ -259,24 +327,24 @@ export function JournalGrid({
       },
       {
         accessorKey: "setup_grade",
-        header: "Grade",
+        header: COLUMN_LABELS.setup_grade,
         cell: ({ row }) => (row.original.setup_grade as string) ?? "—",
       },
       {
         id: "size",
-        header: "Size",
+        header: COLUMN_LABELS.size,
         accessorFn: (r) => r.stats?.entry_qty ?? null,
         cell: ({ row }) => fmtNum(row.original.stats?.entry_qty, 2),
       },
       {
         id: "avg_entry",
-        header: "Entry",
+        header: COLUMN_LABELS.avg_entry,
         accessorFn: (r) => r.stats?.avg_entry ?? null,
         cell: ({ row }) => fmtNum(row.original.stats?.avg_entry, 2),
       },
       {
         id: "slippage_r",
-        header: ({ column }) => <SortBtn column={column} label="Slip R" />,
+        header: ({ column }) => <SortBtn column={column} label={COLUMN_LABELS.slippage_r} />,
         accessorFn: (r) => slippageFromTrade(r)?.slippageR ?? null,
         cell: ({ row }) => {
           const slip = slippageFromTrade(row.original);
@@ -290,13 +358,13 @@ export function JournalGrid({
       },
       {
         id: "avg_exit",
-        header: "Exit",
+        header: COLUMN_LABELS.avg_exit,
         accessorFn: (r) => r.stats?.avg_exit ?? null,
         cell: ({ row }) => fmtNum(row.original.stats?.avg_exit, 2),
       },
       {
         id: "r",
-        header: ({ column }) => <SortBtn column={column} label="R" />,
+        header: ({ column }) => <SortBtn column={column} label={COLUMN_LABELS.r} />,
         accessorFn: (r) => r.stats?.realized_r ?? null,
         cell: ({ row }) => (
           <span className={pnlClass(row.original.stats?.realized_r)}>
@@ -306,7 +374,7 @@ export function JournalGrid({
       },
       {
         id: "exit_eff",
-        header: ({ column }) => <SortBtn column={column} label="Target %" />,
+        header: ({ column }) => <SortBtn column={column} label={COLUMN_LABELS.exit_eff} />,
         accessorFn: (r) => exitEfficiencyFromTrade(r)?.pct ?? null,
         cell: ({ row }) => {
           const eff = exitEfficiencyFromTrade(row.original);
@@ -320,7 +388,7 @@ export function JournalGrid({
       },
       {
         id: "capture",
-        header: ({ column }) => <SortBtn column={column} label="Capture %" />,
+        header: ({ column }) => <SortBtn column={column} label={COLUMN_LABELS.capture} />,
         accessorFn: (r) => excursionFromTrade(r).capturePct,
         cell: ({ row }) => {
           // Null means the trade carries no MFE price, or never went in favour
@@ -337,7 +405,7 @@ export function JournalGrid({
       },
       {
         id: "gross",
-        header: ({ column }) => <SortBtn column={column} label="Gross" />,
+        header: ({ column }) => <SortBtn column={column} label={COLUMN_LABELS.gross} />,
         accessorFn: (r) => r.stats?.gross_pl ?? null,
         cell: ({ row }) => (
           <span className={pnlClass(row.original.stats?.gross_pl)}>
@@ -347,7 +415,7 @@ export function JournalGrid({
       },
       {
         id: "net",
-        header: ({ column }) => <SortBtn column={column} label="Net" />,
+        header: ({ column }) => <SortBtn column={column} label={COLUMN_LABELS.net} />,
         accessorFn: (r) => r.stats?.net_pl ?? null,
         cell: ({ row }) => (
           <span className={`font-medium ${pnlClass(row.original.stats?.net_pl)}`}>
@@ -357,7 +425,7 @@ export function JournalGrid({
       },
       {
         accessorKey: "status",
-        header: "Status",
+        header: COLUMN_LABELS.status,
         cell: ({ row }) => {
           const t = row.original;
           return (
@@ -410,7 +478,10 @@ export function JournalGrid({
   const table = useReactTable({
     data: filtered,
     columns,
-    state: { sorting },
+    // Visibility is controlled from `hidden` and never from the table's own API,
+    // so there is deliberately no onColumnVisibilityChange: the picker is the
+    // only writer, and it saves as it goes.
+    state: { sorting, columnVisibility },
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -506,6 +577,43 @@ export function JournalGrid({
           Missed
         </Button>
         <div className="ml-auto flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Columns3 className="size-4" /> Kolone
+                {hidden.length > 0 && (
+                  <Badge variant="secondary" className="ml-1">
+                    {visibleCount(hidden, HIDEABLE_COLUMNS)}/
+                    {HIDEABLE_COLUMNS.length}
+                  </Badge>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto">
+              {HIDEABLE_COLUMNS.map((id) => {
+                const on = !hidden.includes(id);
+                // The last one on cannot be switched off; `toggleHidden` refuses
+                // it too, but a checkbox that silently does nothing is worse than
+                // one that is visibly unavailable.
+                const isLast = on && visibleCount(hidden, HIDEABLE_COLUMNS) === 1;
+                return (
+                  <DropdownMenuCheckboxItem
+                    key={id}
+                    checked={on}
+                    disabled={isLast}
+                    onSelect={(e) => {
+                      // Keep the menu open — hiding several columns in a row is
+                      // the normal way this gets used.
+                      e.preventDefault();
+                      toggleColumn(id);
+                    }}
+                  >
+                    {COLUMN_LABELS[id]}
+                  </DropdownMenuCheckboxItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="outline" size="sm" onClick={() => exportData("csv")}>
             <Download className="size-4" /> CSV
           </Button>
