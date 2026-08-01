@@ -195,16 +195,12 @@ export type Database = {
           learned_today: string | null
           locked_at: string | null
           macro_note: string | null
-          mantra_risk: boolean
-          mantra_rules: boolean
-          mantra_series: boolean
           market_type: string | null
           mental_rehearsal: string | null
           mental_temp: number | null
           micromanage: string | null
           no_trade_day: boolean
           report_date: string
-          risk_accepted: boolean
           rule_broken: boolean | null
           rule_broken_note: string | null
           sleep_quality: number | null
@@ -228,16 +224,12 @@ export type Database = {
           learned_today?: string | null
           locked_at?: string | null
           macro_note?: string | null
-          mantra_risk?: boolean
-          mantra_rules?: boolean
-          mantra_series?: boolean
           market_type?: string | null
           mental_rehearsal?: string | null
           mental_temp?: number | null
           micromanage?: string | null
           no_trade_day?: boolean
           report_date: string
-          risk_accepted?: boolean
           rule_broken?: boolean | null
           rule_broken_note?: string | null
           sleep_quality?: number | null
@@ -261,16 +253,12 @@ export type Database = {
           learned_today?: string | null
           locked_at?: string | null
           macro_note?: string | null
-          mantra_risk?: boolean
-          mantra_rules?: boolean
-          mantra_series?: boolean
           market_type?: string | null
           mental_rehearsal?: string | null
           mental_temp?: number | null
           micromanage?: string | null
           no_trade_day?: boolean
           report_date?: string
-          risk_accepted?: boolean
           rule_broken?: boolean | null
           rule_broken_note?: string | null
           sleep_quality?: number | null

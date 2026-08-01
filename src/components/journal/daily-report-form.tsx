@@ -58,21 +58,6 @@ import {
   type TrackerDayData,
 } from "@/components/journal/tracker-checklist";
 
-const MANTRA_COPY = [
-  {
-    key: "mantra_series" as const,
-    text: "Razmišljam u verovatnoćama — edge se ispoljava kroz seriju, ne kroz jedan trejd.",
-  },
-  {
-    key: "mantra_rules" as const,
-    text: "Sve može da se desi; svaki trenutak na grafikonu je jedinstven.",
-  },
-  {
-    key: "mantra_risk" as const,
-    text: "Definišem i u potpunosti prihvatam rizik pre nego što delujem.",
-  },
-];
-
 type FormState = SaveDailyReportInput;
 
 function toFormState(
@@ -89,10 +74,6 @@ function toFormState(
     mental_temp: report.mental_temp,
     sleep_quality: report.sleep_quality,
     macro_note: report.macro_note,
-    mantra_series: report.mantra_series,
-    mantra_rules: report.mantra_rules,
-    mantra_risk: report.mantra_risk,
-    risk_accepted: report.risk_accepted,
     mental_rehearsal: report.mental_rehearsal,
     market_type: report.market_type,
     micromanage: report.micromanage,
@@ -175,7 +156,6 @@ export function DailyReportForm({
             impulse_fear: false,
             impulse_greed: false,
             impulse_fear_wrong: false,
-            risk_accepted: false,
           }
         : {}),
     }));
@@ -417,48 +397,6 @@ export function DailyReportForm({
               </SelectContent>
             </Select>
           </div>
-
-          {!form.no_trade_day && (
-            <>
-              <div className="space-y-3 rounded-md border p-3">
-                <p className="text-sm font-medium">Potvrdi (Douglas)</p>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  {MANTRA_COPY.map(({ key, text }) => (
-                    <li key={key} className="flex items-start gap-2">
-                      <Checkbox
-                        id={key}
-                        checked={form[key]}
-                        onCheckedChange={(c) => patch(key, c === true)}
-                        className="mt-0.5"
-                      />
-                      <label
-                        htmlFor={key}
-                        className="cursor-pointer leading-snug"
-                      >
-                        {text}
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  id="risk_accepted"
-                  checked={form.risk_accepted}
-                  onCheckedChange={(c) => patch("risk_accepted", c === true)}
-                  className="mt-0.5"
-                />
-                <label
-                  htmlFor="risk_accepted"
-                  className="cursor-pointer text-sm"
-                >
-                  Prihvatam rizik na svaki trejd koji danas uzmem (gubitak je
-                  već mentalno plaćen).
-                </label>
-              </div>
-            </>
-          )}
 
           <div className="space-y-2">
             <Label>Mentalna proba (opciono)</Label>

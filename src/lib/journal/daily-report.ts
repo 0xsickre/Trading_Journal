@@ -45,10 +45,6 @@ export type DailyReport = {
   mental_temp: number | null;
   sleep_quality: number | null;
   macro_note: string | null;
-  mantra_series: boolean;
-  mantra_rules: boolean;
-  mantra_risk: boolean;
-  risk_accepted: boolean;
   mental_rehearsal: string | null;
   market_type: MarketType | null;
   micromanage: Micromanage | null;
@@ -121,10 +117,6 @@ export function emptyDailyReport(reportDate: string): DailyReportInput {
     mental_temp: null,
     sleep_quality: null,
     macro_note: null,
-    mantra_series: false,
-    mantra_rules: false,
-    mantra_risk: false,
-    risk_accepted: false,
     mental_rehearsal: null,
     market_type: null,
     micromanage: null,
