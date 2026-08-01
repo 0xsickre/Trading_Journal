@@ -199,3 +199,53 @@ export function heatmapWindow(
   const end = addDaysToDayKey(endDay, iso === 7 ? 6 : 6 - iso);
   return { start: addDaysToDayKey(end, -(weeks * 7 - 1)), end };
 }
+
+/**
+ * Shift a `yyyy-MM` month key by whole months.
+ *
+ * `Date.UTC` normalizes an out-of-range month index, so December + 1 rolls the
+ * year without a special case. Day 1 is used because it exists in every month —
+ * anchoring on the current day would turn 31 January + 1 into 2 March.
+ */
+export function addMonthsToMonthKey(key: string, delta: number): string {
+  if (!/^\d{4}-\d{2}$/.test(key)) return key;
+  const [y, m] = key.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1 + delta, 1));
+  if (Number.isNaN(dt.getTime())) return key;
+  return dt.toISOString().slice(0, 7);
+}
+
+/**
+ * Every day key a month's calendar grid must render, Monday-aligned.
+ *
+ * Runs from the Monday of the week holding the 1st to the Sunday of the week
+ * holding the last day, so the grid is always whole weeks and the leading and
+ * trailing cells belong to the neighbouring months. Length is therefore 28, 35
+ * or 42 — deliberately variable rather than a fixed six rows, because a row made
+ * entirely of next month's days is noise in every month that does not need it.
+ *
+ * String and UTC arithmetic only, like `heatmapWindow`: these are day keys in the
+ * ACCOUNT's timezone, and `new Date()` read in local time would shift the whole
+ * grid by a day for anyone whose browser zone differs from their account's.
+ *
+ * Returns an empty array for a malformed key, which renders as an empty month
+ * rather than as a grid of `NaN` cells.
+ */
+export function monthGridDays(monthKey: string): string[] {
+  if (!/^\d{4}-\d{2}$/.test(monthKey)) return [];
+  const [y, m] = monthKey.split("-").map(Number);
+
+  const first = `${monthKey}-01`;
+  // Day 0 of the NEXT month is the last day of this one — no month-length table.
+  const lastDate = new Date(Date.UTC(y, m, 0));
+  if (Number.isNaN(lastDate.getTime())) return [];
+  const last = lastDate.toISOString().slice(0, 10);
+
+  // ISO weekday: 1 = Mon … 7 = Sun.
+  const start = addDaysToDayKey(first, -(isoWeekdayOfDayKey(first) - 1));
+  const end = addDaysToDayKey(last, 7 - isoWeekdayOfDayKey(last));
+
+  const out: string[] = [];
+  for (let d = start; d <= end; d = addDaysToDayKey(d, 1)) out.push(d);
+  return out;
+}

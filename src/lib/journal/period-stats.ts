@@ -10,10 +10,10 @@ import type { RealizedTrade } from "./analytics";
 import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
 import { zonedDateKey, zonedWeekStartKey } from "./time";
 
-export type PeriodGranularity = "week" | "month";
+export type PeriodGranularity = "day" | "week" | "month";
 
 export type PeriodRow = {
-  /** ISO week Monday ("2026-01-05") or month ("2026-01"). */
+  /** Day ("2026-01-07"), ISO week Monday ("2026-01-05") or month ("2026-01"). */
   key: string;
   net: number;
   gross: number;
@@ -21,6 +21,13 @@ export type PeriodRow = {
   wins: number;
   losses: number;
   breakeven: number;
+  /** Commissions. Separate from `net`, which already has them deducted. */
+  fees: number;
+  /**
+   * Contracts or shares entered, NOT a trade count — `entry_qty` in the stats
+   * view is a quantity. Two lots of 5 is a volume of 10 across one trade.
+   */
+  volume: number;
 };
 
 export type PeriodSummary = {
@@ -72,6 +79,11 @@ export const EMPTY_PERIOD_SUMMARY: PeriodSummary = {
  * but would put a three-week swing's profit in the week the idea started rather
  * than the week the money arrived, which makes weekly P&L unusable. Activity
  * metrics use the open date instead — see `activity.ts`.
+ *
+ * All three granularities go through this one function on purpose: the calendar
+ * reads days for its cells, weeks for its side column and months for its header,
+ * and three call sites deriving the day key separately is three chances to
+ * disagree about which day a Friday-night close belongs to.
  */
 export function bucketByPeriod(
   trades: RealizedTrade[],
@@ -85,20 +97,35 @@ export function bucketByPeriod(
   for (const t of trades) {
     if (!t.closedAt) continue;
     const tz = tzOf(t);
+    const day = zonedDateKey(t.closedAt, tz);
     const key =
       granularity === "week"
         ? zonedWeekStartKey(t.closedAt, tz)
-        : zonedDateKey(t.closedAt, tz).slice(0, 7);
+        : granularity === "day"
+          ? day
+          : day.slice(0, 7);
     if (!key) continue;
 
     const row =
       map.get(key) ??
-      { key, net: 0, gross: 0, trades: 0, wins: 0, losses: 0, breakeven: 0 };
+      {
+        key,
+        net: 0,
+        gross: 0,
+        trades: 0,
+        wins: 0,
+        losses: 0,
+        breakeven: 0,
+        fees: 0,
+        volume: 0,
+      };
 
     const p = pnlOf(t);
     row.net += t.net;
     row.gross += t.gross;
     row.trades++;
+    row.fees += t.row.stats?.total_fees ?? 0;
+    row.volume += t.row.stats?.entry_qty ?? 0;
     const outcome = classifyOutcome(p, range);
     if (outcome === "win") row.wins++;
     else if (outcome === "loss") row.losses++;

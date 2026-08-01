@@ -13,8 +13,10 @@ import {
 } from "./compliance";
 import {
   addDaysToDayKey,
+  addMonthsToMonthKey,
   heatmapWindow,
   isoWeekdayOfDayKey,
+  monthGridDays,
 } from "../time";
 import { canEditDay, type TrackerCheckin, type TrackerRule } from "../tracker-types";
 import type { AutoRuleKey, AutoVerdict } from "./auto-rules";
@@ -481,5 +483,92 @@ describe("heatmapWindow", () => {
   it("leaves a Saturday anchor as the end", () => {
     const { end } = heatmapWindow("2026-08-01", WEEKS); // a Saturday
     expect(end).toBe("2026-08-01");
+  });
+});
+
+describe("addMonthsToMonthKey", () => {
+  it("rolls the year in both directions", () => {
+    expect(addMonthsToMonthKey("2026-12", 1)).toBe("2027-01");
+    expect(addMonthsToMonthKey("2027-01", -1)).toBe("2026-12");
+    expect(addMonthsToMonthKey("2026-01", -1)).toBe("2025-12");
+  });
+
+  it("steps whole months without landing on a day that does not exist", () => {
+    // Anchored on the 1st on purpose: anchoring on the current day would turn
+    // 31 January + 1 month into 2 March.
+    expect(addMonthsToMonthKey("2026-01", 1)).toBe("2026-02");
+    expect(addMonthsToMonthKey("2026-03", -1)).toBe("2026-02");
+    expect(addMonthsToMonthKey("2026-08", 0)).toBe("2026-08");
+    expect(addMonthsToMonthKey("2026-08", 12)).toBe("2027-08");
+  });
+
+  it("returns a malformed key unchanged", () => {
+    expect(addMonthsToMonthKey("2026-8", 1)).toBe("2026-8");
+    expect(addMonthsToMonthKey("nope", 1)).toBe("nope");
+  });
+});
+
+describe("monthGridDays", () => {
+  const first = (m: string) => monthGridDays(m)[0];
+  const last = (m: string) => monthGridDays(m).at(-1)!;
+
+  it("always starts on a Monday and ends on a Sunday", () => {
+    for (const m of ["2026-01", "2026-02", "2026-08", "2026-11", "2027-05"]) {
+      expect(isoWeekdayOfDayKey(first(m))).toBe(1);
+      expect(isoWeekdayOfDayKey(last(m))).toBe(7);
+    }
+  });
+
+  it("spans whole weeks — 28, 35 or 42 days, never a partial row", () => {
+    for (const m of ["2026-01", "2026-02", "2026-08", "2027-02", "2028-02"]) {
+      expect(monthGridDays(m).length % 7).toBe(0);
+      expect([28, 35, 42]).toContain(monthGridDays(m).length);
+    }
+  });
+
+  it("contains every day of the month it is asked about", () => {
+    const days = monthGridDays("2026-08"); // 31 days
+    for (let d = 1; d <= 31; d++) {
+      expect(days).toContain(`2026-08-${String(d).padStart(2, "0")}`);
+    }
+  });
+
+  it("pads with the neighbouring months, not with blanks", () => {
+    // 2026-08-01 is a Saturday, so the grid opens on Monday 27 July.
+    const days = monthGridDays("2026-08");
+    expect(days[0]).toBe("2026-07-27");
+    expect(days.at(-1)).toBe("2026-09-06");
+  });
+
+  it("handles February in a leap and a non-leap year", () => {
+    // 2028 is a leap year, 2027 is not — the 29th must appear only in 2028.
+    expect(monthGridDays("2028-02")).toContain("2028-02-29");
+    expect(monthGridDays("2027-02")).not.toContain("2027-02-29");
+    expect(monthGridDays("2027-02")).toContain("2027-02-28");
+  });
+
+  it("needs only four rows for a February that starts on a Monday", () => {
+    // 2027-02-01 is a Monday and February has 28 days — a perfect 4×7 grid, and
+    // the case a fixed six-row grid would pad with two foreign weeks.
+    expect(isoWeekdayOfDayKey("2027-02-01")).toBe(1);
+    expect(monthGridDays("2027-02")).toHaveLength(28);
+    expect(monthGridDays("2027-02")[0]).toBe("2027-02-01");
+  });
+
+  it("needs six rows for a 31-day month starting on a Sunday", () => {
+    // 2026-03-01 is a Sunday: the grid opens on 23 February and cannot fit in 35.
+    expect(isoWeekdayOfDayKey("2026-03-01")).toBe(7);
+    expect(monthGridDays("2026-03")).toHaveLength(42);
+  });
+
+  it("returns nothing for a malformed key rather than a grid of NaN", () => {
+    expect(monthGridDays("2026-8")).toEqual([]);
+    expect(monthGridDays("2026-08-01")).toEqual([]);
+    expect(monthGridDays("")).toEqual([]);
+  });
+
+  it("crosses a year boundary in both directions", () => {
+    expect(monthGridDays("2026-01")).toContain("2025-12-29");
+    expect(monthGridDays("2026-12")).toContain("2027-01-03");
   });
 });
