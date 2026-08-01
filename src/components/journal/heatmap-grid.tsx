@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { addDaysToDayKey, isoWeekdayOfDayKey } from "@/lib/journal/time";
+import { addDaysToDayKey, heatmapWindow } from "@/lib/journal/time";
 
 export type HeatmapCell = { key: string; value: number | null };
 
@@ -40,13 +40,8 @@ export function HeatmapGrid({
   title: (cell: HeatmapCell) => string;
 }) {
   const { columns, max } = useMemo(() => {
-    // Pad to the end of the week so the last column is full and every row is the
-    // same weekday. ISO 7 = Sunday, and rows read Sun→Sat top to bottom.
-    const endsOn = isoWeekdayOfDayKey(endDay);
-    const end = addDaysToDayKey(endDay, endsOn === 7 ? 6 : 6 - endsOn);
-
+    const { start } = heatmapWindow(endDay, weeks);
     const total = weeks * 7;
-    const start = addDaysToDayKey(end, -(total - 1));
 
     const days: HeatmapCell[] = [];
     let maxAbs = 0;

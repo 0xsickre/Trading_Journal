@@ -11,7 +11,11 @@ import {
   ruleIsLiveOn,
   type AutoResults,
 } from "./compliance";
-import { addDaysToDayKey, isoWeekdayOfDayKey } from "../time";
+import {
+  addDaysToDayKey,
+  heatmapWindow,
+  isoWeekdayOfDayKey,
+} from "../time";
 import { canEditDay, type TrackerCheckin, type TrackerRule } from "../tracker-types";
 import type { AutoRuleKey, AutoVerdict } from "./auto-rules";
 
@@ -434,5 +438,48 @@ describe("addDaysToDayKey", () => {
   it("walks a 26-week window back to the expected first day", () => {
     // What the heatmap does: 182 days ending today, inclusive.
     expect(addDaysToDayKey("2026-08-01", -(26 * 7 - 1))).toBe("2026-02-01");
+  });
+});
+
+describe("heatmapWindow", () => {
+  const WEEKS = 26;
+
+  it("always ends on a Saturday and starts on a Sunday", () => {
+    // Rows read Sun→Sat, so a start that is not Sunday shifts every cell one row
+    // — a silent failure, which is why this is pinned for all seven weekdays.
+    for (let i = 0; i < 7; i++) {
+      const endDay = addDaysToDayKey("2026-07-26", i); // Sun 26 Jul → Sat 1 Aug
+      const { start, end } = heatmapWindow(endDay, WEEKS);
+      expect(isoWeekdayOfDayKey(end)).toBe(6); // Saturday
+      expect(isoWeekdayOfDayKey(start)).toBe(7); // Sunday
+    }
+  });
+
+  it("keeps the anchor day inside the window", () => {
+    // The bug this replaces put "today" outside the grid entirely for anyone
+    // whose browser zone ran ahead of their account zone.
+    for (let i = 0; i < 7; i++) {
+      const endDay = addDaysToDayKey("2026-07-26", i);
+      const { start, end } = heatmapWindow(endDay, WEEKS);
+      expect(start <= endDay).toBe(true);
+      expect(endDay <= end).toBe(true);
+    }
+  });
+
+  it("spans exactly weeks × 7 days", () => {
+    const { start, end } = heatmapWindow("2026-07-29", WEEKS);
+    expect(addDaysToDayKey(start, WEEKS * 7 - 1)).toBe(end);
+  });
+
+  it("pads a Sunday forward by six days, not back by one", () => {
+    // ISO numbers Sunday 7, but it STARTS the display week. Treating it as the
+    // last day would cut the current week off the grid.
+    const { end } = heatmapWindow("2026-08-02", WEEKS); // a Sunday
+    expect(end).toBe("2026-08-08");
+  });
+
+  it("leaves a Saturday anchor as the end", () => {
+    const { end } = heatmapWindow("2026-08-01", WEEKS); // a Saturday
+    expect(end).toBe("2026-08-01");
   });
 });

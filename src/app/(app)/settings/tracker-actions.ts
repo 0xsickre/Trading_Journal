@@ -14,7 +14,6 @@ import {
 
 function revalidateAll() {
   revalidatePath("/settings");
-  revalidatePath("/tracker");
   revalidatePath("/daily");
   revalidatePath("/", "layout");
 }

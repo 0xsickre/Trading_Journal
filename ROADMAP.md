@@ -430,8 +430,8 @@ tj_position_rules   position_id, rule_id, followed   UNIQUE (position_id, rule_i
   jednom pravilu opisujući nekoliko. Test je to uhvatio; skoro svaka metrika `scope` ignoriše.
 - `is_active` na `tj_playbook_rules` nije uveden — `deleted_at` sam nosi to značenje, a dva polja za
   isto stanje su dva izvora istine.
-- **Sickre Score još nema Process Adherence komponentu** — ostaje za F5, kad Progress Tracker
-  donese drugu polovinu tog broja. Ponderi su nepromenjeni.
+- ~~**Sickre Score još nema Process Adherence komponentu**~~ — isporučeno u F5. Ponderi su
+  nepromenjeni; komponenta se dodaje samo kad postoji podatak, i maksimum raste sa 100 na 115.
 - „Playbook bira koja custom polja forma traži" **nije** implementirano: veza playbook → field defs
   bi značila da forma menja strukturu po izboru u padajućem meniju, što je prepisivanje forme, a ne
   konfiguracija. Ostaje kao otvoreno pitanje za kasnije.
@@ -445,24 +445,100 @@ tj_position_rules   position_id, rule_id, followed   UNIQUE (position_id, rule_i
 
 ---
 
-### Faza 5 — Progress Tracker
+### Faza 5 — Progress Tracker ✅
 
 Posle playbook-a, jer pravilo „svaki trejd ima playbook" nema smisla ranije (moduli §4).
 
 ```
-tj_tracker_rules     tekst, stage (prepare|trade|reflect), active_days[], is_mandatory, config jsonb
-tj_tracker_checkins  rule_id, report_date, checked, auto_evaluated
+tj_tracker_rules     text, stage (prepare|trade|reflect), active_days smallint[] (ISO 1-7),
+                     auto_key, config jsonb, is_mandatory, sort_order, deleted_at
+                     UNIQUE (user_id, auto_key) WHERE auto_key IS NOT NULL AND deleted_at IS NULL
+tj_tracker_checkins  rule_id, report_date, checked boolean NULL, auto_evaluated
+                     CHECK (checked IS NOT NULL OR auto_evaluated)   UNIQUE (rule_id, report_date)
 ```
 
-- Obavezna pravila iz moduli §4: Start My Day By · Trading Hours · Link Trades to Playbook ·
-  Input Stop Loss to All Trades · Net Max Loss/Trade · Net Max Loss/Day.
-- **Poslednja dva se auto-odčekiraju iz podataka** — nadovezuje se na postojeći FTMO modul.
-- Korisnička pravila po fazi, sa izborom aktivnih dana.
-- Streak doslednosti + heatmap poštovanja pravila, odvojen od P&L heatmapa.
-- **Zaključavanje dana** — nepovratno. Tvoj „Kompletan vs Nacrt" je blizu; TZ zaključava zauvek i za
-  disciplinu je to jače: ne možeš sutra „popraviti" jučerašnji zapis.
+`tj_daily_reports` +: `locked_at timestamptz`.
 
-**Procena:** 4 sesije.
+- Deset seed-ovanih pravila: ritual · mantre (3) · prihvatanje rizika · satnica · playbook · stop ·
+  max gubitak po trejdu · max gubitak po danu. Korisnička pravila po fazi, sa izborom dana.
+- **Četiri se auto-ocenjuju iz podataka**, ne dva. Atribucija dana se razlikuje po pravilu i to je
+  jedina stvar u fazi koja se lako pogreši: novac se pripisuje danu **zatvaranja**, odluka danu
+  **otvaranja**. Otvoren trejd bez playbook-a mora da padne na dan ulaska — na atribuciji po
+  zatvaranju bio bi nevidljiv, pa bi deset nevezanih otvorenih trejdova dalo savršen dan.
+- **Dan bez trejdova je `na`, ne `pass`.** „Nisam probio limit" je tačno na dan kad nisi trgovao, ali
+  kao prolaz bi značilo da se niz farmi **ne trgujući** — tačna inverzija metrike. `na` ispada iz
+  brojioca **i imenioca**, pa discipliniran dan bez trejdova i dalje ima 100 % i ne prekida niz.
+- **Zaključavanje dana** — nepovratno, i to DB trigerom: svaka izmena zaključanog reda puca, a
+  otključavanje je izmena. Obuhvata samo procesni dnevnik; **na `tj_positions` nema trigera i ne sme
+  ga biti** — P&L je činjenica koja mora da se može ispraviti.
+- Streak + heatmap doslednosti na dashboardu, **fiksna skala 0–100** i jedna nijansa, namerno ne
+  profit/loss par.
+- Sickre Score dobija sedmu komponentu (15 %), spoj doslednosti trackera (60) i follow rate-a (40).
+
+**Odstupanja od originalnog plana**
+
+- **Tracker nije dobio svoju stranicu.** Prvo je napravljen kao `/tracker`, pa spojen u `/daily`:
+  `tj_lock_day` pečati oba jednim pozivom, a nešto što se pečati zajedno nije dve stranice. `/tracker`
+  ostaje redirect. Spojena je površina, ne skladište — i dalje dve tabele i dva nezavisna upisa.
+- **„Nadovezuje se na postojeći FTMO modul" nije izvodljivo.** `evaluateFtmo` vraća `OFF_RESULT` bez
+  `ftmo_mode`, pragovi su mu procenti početnog balansa a ne apsolutan novac koji pravilo navodi, i
+  izlaže `worstDay` ali ne mapu po danima. Auto-evaluacija je zasebna, čista.
+- **`auto_key` kao kolona** — roadmap-ova šema nema način da kaže *koji* red je „Net Max Loss/Day".
+  Diskriminanta koja bira granu koda ne sme da živi u slobodnom blobu.
+- **`checked` mora biti nullable.** `NULL` znači „ocenjeno, nije primenjivo" — potrebno i za dan bez
+  trejdova i da zamrznut dan ne bi „vaskrsnuo" auto pravila kad kasniji import doda trejd unazad.
+- **`auto_evaluated` je hibrid**, što roadmap ne definiše: auto verdikti se izvode pri čitanju za
+  otključan dan, a **zamrzavaju u redove pri zaključavanju**. Bez druge polovine brava je dekor —
+  zaključan dan bi promenio ocenu čim ispraviš stop na trejdu sa tog dana.
+- **Process Adherence ne dolazi iz `tj_daily_reports`** nego iz čekiranja. Dnevni izveštaj nema meru
+  doslednosti, samo `rule_broken`, koji insight engine već troši; uzimanje 15 % skora odatle bi
+  dvostruko brojalo jedan signal. `rule_broken` zato i **ostaje** u dnevnom izveštaju.
+- **Config se seed-uje prazan.** Neподешeno novčano pravilo je `na` dok ne postaviš limit. Isti
+  razlog zbog kog playbook ne seed-uje pravila: seed-ovan limit od 200 je limit koji ćeš prolaziti a
+  da ga nikad nisi izabrao.
+- **`is_active` nije uveden** — neoznačen boolean bi tiho prepisao imenilac svakog prošlog dana.
+  `deleted_at` je jedini prekidač, i primenjivost se računa poređenjem dana sa `created_at` /
+  `deleted_at`.
+- **Mantre i `risk_accepted` prebačeni iz `tj_daily_reports` u tracker pravila.** Bile su iste vrste
+  stvari, ali ih niko nikad nije čitao: nisu ulazile ni u doslednost, ni u niz, ni u skor. Migracija
+  odbija da se izvrši ako ijedan izveštaj ima čekiranu mantru.
+- **Peto auto pravilo („napisati dnevni izveštaj") nije uvedeno** — set je namerno fiksiran na četiri.
+
+**Popravljeno usput**
+
+- `CalendarHeatmap` je gradio ključeve dana u zoni **browsera** dok su svi podaci u zoni **naloga** —
+  poslednja kolona je za Beograd/NY bila dan unapred, a sve vrednosti pomerene za kolonu. Mreža je
+  izdvojena u `heatmap-grid.tsx` sa `endDay` propom, pa je popravljeno za **oba** heatmapa.
+- `sickre-score-card` je pokrivenost poredio sa tvrdo upisanih 100; sa sedmom komponentom maksimum je
+  115, pa bi delimičan skor od 100/115 prikazao kao potpuno pokriven. `computeSickreScore` sad vraća
+  i `maxCoverage`.
+- `tj_tracker_rules_active_days_check` je propuštao **prazan** `active_days`: `array_length` prazne
+  liste vraća `NULL`, a `NULL BETWEEN` je `NULL`, što `CHECK` prihvata. Pravilo bez dana je primenjivo
+  ni na jedan dan — stoji na čeklisti kao praćeno a nigde se ne ocenjuje.
+- `tj_tracker_rules` je imao samo **parcijalne** indekse po `user_id` (`WHERE deleted_at IS NULL`),
+  pa su kaskada iz `auth.users` i najčešće čitanje (`includeRetired: true`) bili neindeksirani.
+- `tj_execution_guard()` i `tj_position_missed_guard()` iz `20260729091418` su ostali dostupni preko
+  `/rest/v1/rpc` sa korisnikovim JWT-om. Rizik je bio mali (triger funkcija pozvana direktno puca pre
+  nego što išta dodirne), ali „slučajno ne radi" je slabija garancija od „nije pozivljivo". Revoke je
+  bezbedan jer PostgreSQL proverava `EXECUTE` na triger funkciji pri **kreiranju** trigera, ne pri
+  svakom okidanju — potvrđeno nad živom bazom: RPC odbijen, oba trigera i dalje okidaju.
+
+**Otvoreno, nije kod**
+
+- Sweep i dalje prijavljuje `tj_seed_my_defaults()` — **namerno**. Ne prima argumente i sve izvodi iz
+  `auth.uid()`, pa prijavljen korisnik njime može da seed-uje samo sebe; to mu je i svrha. Opasan
+  oblik je onaj koji je `20260729140000` zatvorio: SECURITY DEFINER **plus user id kao argument**.
+- **Leaked password protection je isključen** u Supabase Auth podešavanjima. To je dugme u dashboardu,
+  ne migracija.
+
+**Prihvatanje**
+
+- „Koliko dana zaredom sam odradio proces?" — dashboard → *Doslednost procesa*. ✅
+- Zaključan dan se ne može otključati ni izmeniti; trejdovi sa tog dana se i dalje mogu ispraviti.
+  ✅ (provereno nad živom bazom, kao prijavljen korisnik)
+- Ručno testiranje u pregledaču **nije obavljeno** — kontejner nema Supabase env promenljive.
+
+**Procena:** 4 sesije. **Stvarno:** 5.
 
 ---
 
@@ -546,9 +622,9 @@ ovaj model ima strukturno.
 | 1 | Sloj jedinica → metrike (vreme, trošak, rizik, nedeljni sloj) → Sickre Score | Ne | ✅ |
 | 2 | Insight engine: 17 TZ pravila + 7 vlastitih + mentor pack | Ne | ✅ |
 | 3 | Report engine, pivot sa `n`, dimension registry, negacija filtera | Ne | ✅ |
-| 4a | Custom fields + backfill metodoloških kolona | Da | 3 |
-| 4b | Playbook, pravila, per-rule stats, forma iz playbook-a, 7. komponenta skora | Da | 5 |
-| 5 | Progress Tracker, auto-evaluirana pravila, streak, zaključavanje dana | Da | 4 |
+| 4a | Custom fields + backfill metodoloških kolona | Da | ✅ |
+| 4b | Playbook, pravila, per-rule stats, forma iz playbook-a | Da | ✅ |
+| 5 | Progress Tracker, auto-evaluirana pravila, streak, zaključavanje dana, 7. komponenta skora | Da | ✅ |
 | 6 | Notebook: folderi, šabloni, note tagovi, nedeljni pregled | Da | 4 |
 | 7 | Kalendar, dnevni blok, cron recap, grid kolone, widget layout, merge/split | Delom | 8–10 |
 

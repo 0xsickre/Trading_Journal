@@ -178,3 +178,24 @@ export function addDaysToDayKey(day: string, delta: number): string {
   if (Number.isNaN(dt.getTime())) return day;
   return dt.toISOString().slice(0, 10);
 }
+
+/**
+ * First and last day of a heatmap window of `weeks` columns ending on `endDay`.
+ *
+ * The end is padded forward to Saturday so the final column is full and every
+ * row is one weekday; the start then falls on a Sunday, which is what makes the
+ * grid read top-to-bottom Sun→Sat.
+ *
+ * Pulled out of the component because it is the one piece of that grid worth
+ * testing: it is pure day-key arithmetic, and getting the padding wrong shifts
+ * every cell by a row without throwing anything.
+ */
+export function heatmapWindow(
+  endDay: string,
+  weeks: number,
+): { start: string; end: string } {
+  const iso = isoWeekdayOfDayKey(endDay); // 1=Mon … 7=Sun
+  // ISO Sunday is 7 but starts the display week, so it needs the full 6 days.
+  const end = addDaysToDayKey(endDay, iso === 7 ? 6 : 6 - iso);
+  return { start: addDaysToDayKey(end, -(weeks * 7 - 1)), end };
+}
