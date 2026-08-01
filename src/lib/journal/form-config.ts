@@ -67,14 +67,19 @@ const BASE_TABS: FormTab[] = [
     groups: [
       {
         id: "meta",
-        title: "Meta",
+        title: "Trejd",
+        description: "Šta, na kom nalogu, u kojoj fazi.",
         fields: [
           { name: "instrument", label: "Instrument", type: "instrument" },
         ],
       },
       {
+        // Field order follows the ORDER OF CALCULATION: each computed field sits
+        // immediately after the inputs it falls out of. Entry and stop give the
+        // direction; risk % and the stop distance give the size; the target
+        // gives the R:R. Reading top to bottom is reading the arithmetic.
         id: "risk_plan",
-        title: "Risk Plan",
+        title: "Rizik i plan",
         fields: [
           { name: "entry_price", label: "Planned Entry Price", type: "number" },
           { name: "stop_price", label: "Stop Price", type: "number" },
@@ -84,27 +89,21 @@ const BASE_TABS: FormTab[] = [
             type: "computed",
             placeholder: "Auto from entry vs stop",
           },
-          { name: "target_price", label: "Target Price", type: "number" },
           { name: "risk_pct", label: "Risk %", type: "select", listKey: "risk_pct" },
-          {
-            name: "planned_rr",
-            label: "Planned R:R",
-            type: "computed",
-            placeholder: "Auto from entry / stop / target",
-          },
           {
             name: "position_size",
             label: "Position Size",
             type: "computed",
             placeholder: "Auto from risk % and stop",
           },
+          { name: "target_price", label: "Target Price", type: "number" },
+          {
+            name: "planned_rr",
+            label: "Planned R:R",
+            type: "computed",
+            placeholder: "Auto from entry / stop / target",
+          },
         ],
-      },
-      {
-        id: "macro",
-        title: "Macro (vault)",
-        description: "Iz dashboard readiness matrice — smer i kvalitet ulaza.",
-        fields: [],
       },
       {
         id: "setup",
@@ -122,22 +121,41 @@ const BASE_TABS: FormTab[] = [
         ],
       },
       {
+        id: "macro",
+        title: "Kontekst",
+        description: "Iz dashboard readiness matrice — smer i kvalitet ulaza.",
+        fields: [],
+      },
+      {
+        // One column, `trade_journal_notes`, shown here and again on Execution.
+        // Same note, not two — the label says the same thing in both places so
+        // it cannot read as "plan notes" versus "review notes". Splitting the
+        // entry thesis from the after-the-fact lesson needs its own column.
+        id: "notes",
+        title: "Beleška",
+        description: "Ista beleška se vidi i na tabu izvršenja.",
+        fields: [
+          {
+            name: "trade_journal_notes",
+            label: "Beleška o trejdu",
+            type: "textarea",
+            colSpan: 2,
+            placeholder: "Zašto ulazim, logika stopa i targeta…",
+          },
+        ],
+      },
+      {
+        // Rendered only for a missed setup, right above the lifecycle buttons
+        // that produced that state — the reason belongs next to the act.
         id: "plan_review",
-        title: "Plan review",
-        description: "Za missed setup-e — razlog i beleške.",
+        title: "Promašen setup",
+        description: "Zašto plan nikad nije otvoren.",
         fields: [
           {
             name: "miss_reason",
             label: "Miss Reason",
             type: "select",
             listKey: "miss_reason",
-          },
-          {
-            name: "trade_journal_notes",
-            label: "Trade Journal Notes",
-            type: "textarea",
-            colSpan: 2,
-            placeholder: "Zašto miss, šta bi drugačije…",
           },
         ],
       },
@@ -156,7 +174,7 @@ const BASE_TABS: FormTab[] = [
     groups: [
       {
         id: "outcome",
-        title: "Outcome",
+        title: "Kako je izašao",
         fields: [
           { name: "result", label: "Result", type: "select", listKey: "result" },
           { name: "exit_reason", label: "Exit Reason", type: "select", listKey: "exit_reason" },
@@ -175,9 +193,13 @@ const BASE_TABS: FormTab[] = [
         ],
       },
       {
+        // `mistake` moved up out of Advanced. Of everything on this tab it is
+        // among the two or three fields the journal exists to collect; behind a
+        // disclosure triangle it was the one field nobody fills.
         id: "psychology_notes",
-        title: "Psychology & Notes",
+        title: "Revizija",
         fields: [
+          { name: "mistake", label: "Mistake", type: "select", listKey: "mistake" },
           {
             name: "psychology_tags",
             label: "Psychology tags",
@@ -188,7 +210,7 @@ const BASE_TABS: FormTab[] = [
           },
           {
             name: "trade_journal_notes",
-            label: "Trade Journal Notes",
+            label: "Beleška o trejdu",
             type: "textarea",
             colSpan: 2,
             placeholder: "Zašto ulaz, stop/target logika, lekcija…",
@@ -196,12 +218,14 @@ const BASE_TABS: FormTab[] = [
         ],
       },
       {
+        // No fixed fields left, but the group stays declared: `execution_advanced`
+        // is one of FIELD_DEF_GROUPS, so removing it would make `buildFormTabs`
+        // silently drop any user field assigned to it. Empty groups are filtered
+        // out at render.
         id: "execution_advanced",
         title: "Advanced",
         advanced: true,
-        fields: [
-          { name: "mistake", label: "Mistake", type: "select", listKey: "mistake" },
-        ],
+        fields: [],
       },
     ],
   },

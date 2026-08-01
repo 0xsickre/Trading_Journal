@@ -711,15 +711,6 @@ export function TradeForm({
             )}
           </p>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Trade #</Label>
-          <Input
-            className="w-24"
-            inputMode="numeric"
-            value={tradeNo}
-            onChange={(e) => setTradeNo(e.target.value)}
-          />
-        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
@@ -759,28 +750,6 @@ export function TradeForm({
                 )}
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Playbook is a fixed group, not a field def: the checklist
-                    scopes itself by outcome and answers are three-state, which
-                    no field definition can express.
-
-                    On BOTH tabs deliberately. Plan is where you commit to a
-                    strategy, but a 'winner' rule — "did you let it run?" — only
-                    becomes answerable once the trade is closed, and by then the
-                    trader is on Execution. Offering it in one place only would
-                    make those rules unanswerable in practice. */}
-                {!isMissed && (
-                  <PlaybookChecklist
-                    playbooks={playbooks}
-                    playbookId={playbookId}
-                    onPlaybookChange={setPlaybookId}
-                    conviction={conviction}
-                    onConvictionChange={setConviction}
-                    answers={ruleAnswers}
-                    onAnswerChange={setRuleAnswer}
-                    netPl={metrics.netPl}
-                  />
-                )}
-
                 {tab.id === "execution" && (
                   <ExecutionsEditor
                     execs={execs}
@@ -795,7 +764,10 @@ export function TradeForm({
 
                 {tab.groups
                   .filter((g) => !g.advanced)
-                  .filter((g) => tab.id === "plan" || g.id !== "plan_review")
+                  // The miss reason only exists for a missed setup; on every
+                  // other trade the group would be a heading over one dead
+                  // select.
+                  .filter((g) => g.id !== "plan_review" || isMissed)
                   .map((group) => (
                     <FormGroupSection
                       key={group.id}
@@ -808,6 +780,12 @@ export function TradeForm({
                       accounts={accounts}
                       onAccountChange={setAccountId}
                       showAccount={tab.id === "plan" && group.id === "meta"}
+                      tradeNo={tradeNo}
+                      onTradeNoChange={
+                        tab.id === "plan" && group.id === "meta"
+                          ? setTradeNo
+                          : undefined
+                      }
                       tradePhase={tab.id === "plan" && group.id === "meta" ? tradePhase : undefined}
                       onTradePhaseChange={
                         tab.id === "plan" && group.id === "meta" && !isMissed
@@ -855,6 +833,34 @@ export function TradeForm({
                       hasEntryFill={hasValidEntryFill}
                     />
                   ))}
+
+                {/* Playbook is a fixed group, not a field def: the checklist
+                    scopes itself by outcome and answers are three-state, which
+                    no field definition can express.
+
+                    Placed AFTER the fields, not before them. Committing to a
+                    strategy and ticking its rules is the last thing you do
+                    before saving — asking it above the instrument put the
+                    question "did you follow the plan" before you had said what
+                    you were trading.
+
+                    On BOTH tabs deliberately. Plan is where you commit, but a
+                    'winner' rule — "did you let it run?" — only becomes
+                    answerable once the trade is closed, and by then the trader
+                    is on Execution. Offering it in one place only would make
+                    those rules unanswerable in practice. */}
+                {!isMissed && (
+                  <PlaybookChecklist
+                    playbooks={playbooks}
+                    playbookId={playbookId}
+                    onPlaybookChange={setPlaybookId}
+                    conviction={conviction}
+                    onConvictionChange={setConviction}
+                    answers={ruleAnswers}
+                    onAnswerChange={setRuleAnswer}
+                    netPl={metrics.netPl}
+                  />
+                )}
 
                 {tab.groups.some((g) => g.advanced) && (
                   <AdvancedSection>
@@ -1077,6 +1083,8 @@ function FormGroupSection({
   hasEntryFill,
   computedDisplay,
   fieldHints,
+  tradeNo,
+  onTradeNoChange,
   nested,
 }: {
   group: FormGroup;
@@ -1095,6 +1103,8 @@ function FormGroupSection({
   hasEntryFill?: boolean;
   computedDisplay?: Record<string, string>;
   fieldHints?: Record<string, string>;
+  tradeNo?: string;
+  onTradeNoChange?: (value: string) => void;
   nested?: boolean;
 }) {
   const entry = n(String(fields.entry_price ?? ""));
@@ -1107,12 +1117,7 @@ function FormGroupSection({
       ? group.fields.filter((field) =>
           riskPlanFieldVisible(field.name, entry, stop, target, riskPct),
         )
-      : group.id === "plan_review"
-        ? group.fields.filter(
-            (field) =>
-              field.name === "trade_journal_notes" || isMissed,
-          )
-        : group.id === "psychology_notes" &&
+      : group.id === "psychology_notes" &&
             (isMissed || tradePhase === "planned")
           ? group.fields.filter((field) => field.name !== "trade_journal_notes")
           : group.fields;
@@ -1152,6 +1157,16 @@ function FormGroupSection({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        )}
+        {onTradeNoChange && (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Trade #</Label>
+            <Input
+              inputMode="numeric"
+              value={tradeNo ?? ""}
+              onChange={(e) => onTradeNoChange(e.target.value)}
+            />
           </div>
         )}
         {onTradePhaseChange && tradePhase != null && (
