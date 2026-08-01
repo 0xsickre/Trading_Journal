@@ -657,6 +657,27 @@ export type Database = {
           },
         ]
       }
+      tj_user_prefs: {
+        Row: {
+          created_at: string
+          journal_hidden_columns: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          journal_hidden_columns?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          journal_hidden_columns?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tj_option_lists: {
         Row: {
           category: string | null
