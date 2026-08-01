@@ -47,14 +47,11 @@ import { CompareView } from "@/components/journal/reports/compare-view";
 import type { Account, TradeRow } from "@/lib/journal/types";
 import type { FieldDef } from "@/lib/journal/field-def-types";
 import {
+  buildPlaybookLookup,
   playbookDimensions,
   type PlaybookLookup,
 } from "@/lib/journal/reports/playbook-dimensions";
-import type {
-  Playbook,
-  PositionRule,
-  ShowWhen,
-} from "@/lib/journal/playbook-types";
+import type { Playbook, PositionRule } from "@/lib/journal/playbook-types";
 import type { CashEvent } from "@/lib/journal/balance";
 
 const DEFAULT_COLUMNS = [
@@ -97,33 +94,10 @@ export function ReportsWorkbench({
     () => customFieldDimensions(fieldDefs),
     [fieldDefs],
   );
-  /**
-   * Playbook lookups.
-   *
-   * Rule text is indexed across ALL rules, retired ones included: a retired
-   * rule's historical answers are real observations, and losing its name would
-   * turn them into rows labelled by a uuid.
-   */
-  const playbookLookup = useMemo<PlaybookLookup>(() => {
-    const text = new Map<string, string>();
-    const showWhen = new Map<string, ShowWhen>();
-    for (const book of playbooks) {
-      for (const group of book.groups) {
-        for (const rule of group.rules) {
-          text.set(rule.id, rule.text);
-          showWhen.set(rule.id, rule.show_when);
-        }
-      }
-    }
-    return {
-      names: new Map(playbooks.map((p) => [p.id, p.name])),
-      rules: {
-        text,
-        showWhen,
-        answersByTrade: positionRules ?? new Map(),
-      },
-    };
-  }, [playbooks, positionRules]);
+  const playbookLookup = useMemo<PlaybookLookup>(
+    () => buildPlaybookLookup(playbooks, positionRules),
+    [playbooks, positionRules],
+  );
 
   const dimensions = useMemo(
     () => allDimensions([...customDimensions, ...playbookDimensions(playbookLookup)]),

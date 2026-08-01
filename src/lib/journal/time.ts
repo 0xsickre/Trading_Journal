@@ -155,3 +155,26 @@ export function isoWeekdayOfDayKey(day: string): number {
   const dow = dt.getUTCDay(); // 0=Sun … 6=Sat
   return dow === 0 ? 7 : dow;
 }
+
+/**
+ * Shift a `yyyy-MM-dd` key by whole days.
+ *
+ * String in, string out, with the arithmetic done in UTC — never through
+ * `new Date()` and `setDate`, which resolve in the BROWSER's zone. A day key
+ * here means a day in the ACCOUNT's zone, and mixing the two shifts the whole
+ * calendar by one column for anyone whose browser zone differs from their
+ * account's. That was a live bug in the P&L heatmap before this existed.
+ *
+ * `Date.UTC` normalizes out-of-range components, so month and year rollover and
+ * leap days fall out for free.
+ *
+ * Returns the input unchanged when it is not a day key, so a bad value shows up
+ * as a stuck calendar rather than as `NaN-NaN-NaN` cells.
+ */
+export function addDaysToDayKey(day: string, delta: number): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return day;
+  const [y, mo, d] = day.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, mo - 1, d + delta));
+  if (Number.isNaN(dt.getTime())) return day;
+  return dt.toISOString().slice(0, 10);
+}

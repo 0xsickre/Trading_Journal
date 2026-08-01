@@ -24,6 +24,29 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CalendarHeatmap } from "@/components/journal/calendar-heatmap";
+import { TrackerStreakCard } from "@/components/journal/tracker-streak-card";
+import {
+  buildTradeDayIndex,
+  configsFromRules,
+  evaluateAutoRulesForDay,
+} from "@/lib/journal/tracker/auto-rules";
+import {
+  computeComplianceSeries,
+  meanCompliance,
+  resolveAutoResults,
+} from "@/lib/journal/tracker/compliance";
+import { processAdherence } from "@/lib/journal/tracker/process-adherence";
+import type {
+  TrackerCheckin,
+  TrackerRule,
+} from "@/lib/journal/tracker-types";
+import { addDaysToDayKey } from "@/lib/journal/time";
+import {
+  buildPlaybookLookup,
+  computeFollowRate,
+} from "@/lib/journal/reports/playbook-dimensions";
+import { enrichTrades } from "@/lib/journal/enriched-trade";
+import type { Playbook, PositionRule } from "@/lib/journal/playbook-types";
 import {
   buildBalanceTimeline,
   computeDrawdown,
@@ -153,6 +176,13 @@ function breakdownFields(custom: readonly { key: string; label: string }[]) {
   ].map((d) => ({ value: d.key, label: d.label }));
 }
 
+/**
+ * Days of compliance history held in memory: 28 weeks, matching what the
+ * dashboard page fetches, so the 26-week calendar still has data in its leading
+ * partial column.
+ */
+const TRACKER_SPAN_DAYS = 28 * 7;
+
 export function Dashboard({
   trades,
   accounts,
@@ -161,6 +191,11 @@ export function Dashboard({
   dailyReports = [],
   fillCounts,
   fieldDefs = [],
+  trackerRules = [],
+  checkins = [],
+  todayKey,
+  playbooks = [],
+  positionRules,
 }: {
   trades: TradeRow[];
   accounts: Account[];
@@ -170,6 +205,19 @@ export function Dashboard({
   fillCounts?: Map<string, { entries: number; exits: number }>;
   /** User-defined fields, so the mentor pack carries them too. */
   fieldDefs?: FieldDef[];
+  /** Including retired ones — a rule live on a past day still scored that day. */
+  trackerRules?: TrackerRule[];
+  checkins?: TrackerCheckin[];
+  /**
+   * Today in the ACCOUNT's timezone, resolved on the server.
+   *
+   * Not `new Date()` here: every tracker day key is an account-timezone day, and
+   * a browser in another zone would anchor the calendar one column off.
+   */
+  todayKey: string;
+  /** Retired rules included — their recorded answers are real observations. */
+  playbooks?: Playbook[];
+  positionRules?: Map<string, PositionRule[]>;
 }) {
   const [accountFilter, setAccountFilter] = useState("all");
   const [period, setPeriod] = useState("90");
@@ -458,6 +506,87 @@ export function Dashboard({
     ],
   );
 
+  /**
+   * Daily process compliance over the calendar's full span.
+   *
+   * Computed once over 26 weeks and then sliced, rather than recomputed per
+   * consumer: the heatmap and streak want the whole span, the score wants the
+   * period filter, and the two must never disagree about a day.
+   */
+  const trackerSeries = useMemo(() => {
+    if (trackerRules.length === 0) return [];
+
+    const scoped =
+      accountFilter === "all"
+        ? trades
+        : trades.filter((t) => t.account_id === accountFilter);
+    const index = buildTradeDayIndex(
+      scoped,
+      (row) =>
+        accounts.find((a) => a.id === row.account_id)?.timezone ??
+        "America/New_York",
+    );
+    const configs = configsFromRules(trackerRules);
+
+    const byDate = new Map<string, Map<string, TrackerCheckin>>();
+    for (const c of checkins) {
+      const day = byDate.get(c.report_date) ?? new Map<string, TrackerCheckin>();
+      day.set(c.rule_id, c);
+      byDate.set(c.report_date, day);
+    }
+
+    const days: string[] = [];
+    for (let i = TRACKER_SPAN_DAYS - 1; i >= 0; i--)
+      days.push(addDaysToDayKey(todayKey, -i));
+
+    return computeComplianceSeries(days, trackerRules, byDate, (d) =>
+      // Frozen verdicts win on a locked day, so correcting a trade from it moves
+      // the money and leaves that day's compliance where it was.
+      resolveAutoResults(
+        trackerRules,
+        evaluateAutoRulesForDay(d, index, configs),
+        byDate.get(d) ?? new Map(),
+      ),
+    todayKey);
+  }, [trackerRules, checkins, trades, accounts, accountFilter, todayKey]);
+
+  /**
+   * Process adherence for the score, over the SAME window as the other six
+   * components — otherwise the score would mix a 90-day profit factor with a
+   * six-month discipline figure and call the result one number.
+   *
+   * "All" is capped at the span actually loaded; the alternative is fetching
+   * every check-in ever to move a 15 % component by a fraction.
+   */
+  const processAdherencePct = useMemo(() => {
+    const from =
+      period === "all"
+        ? ""
+        : addDaysToDayKey(todayKey, -(Number(period) - 1));
+    const trackerPct = meanCompliance(
+      trackerSeries.filter((d) => d.date >= from),
+    );
+
+    const lookup = buildPlaybookLookup(playbooks, positionRules);
+    const followRatePct = computeFollowRate(
+      enrichTrades(realized, { tzOf, range: breakevenRange, pnlOf, fillCounts }),
+      lookup.rules,
+    );
+
+    return processAdherence({ trackerPct, followRatePct });
+  }, [
+    trackerSeries,
+    period,
+    todayKey,
+    playbooks,
+    positionRules,
+    realized,
+    tzOf,
+    breakevenRange,
+    pnlOf,
+    fillCounts,
+  ]);
+
   const sickreScore = useMemo(
     () =>
       computeSickreScore({
@@ -470,8 +599,17 @@ export function Dashboard({
         winPct: stats.winRate,
         recoveryFactor: recovery,
         consistencyScore: consistency.score,
+        processAdherencePct,
       }),
-    [stats.profitFactor, stats.winRate, winLossRatio, drawdown.maxPctOfPeakPnl, recovery, consistency.score],
+    [
+      stats.profitFactor,
+      stats.winRate,
+      winLossRatio,
+      drawdown.maxPctOfPeakPnl,
+      recovery,
+      consistency.score,
+      processAdherencePct,
+    ],
   );
   const equity = useMemo(
     () => buildEquity(realized, mode, equityMetric, windowed.openingEquity),
@@ -1072,13 +1210,23 @@ export function Dashboard({
             <CardTitle className="text-base">Daily P/L ({mode})</CardTitle>
           </CardHeader>
           <CardContent>
-            <CalendarHeatmap daily={daily} currency={currency} />
+            <CalendarHeatmap
+              daily={daily}
+              endDay={todayKey}
+              currency={currency}
+            />
             <p className="mt-2 text-xs text-muted-foreground">
-              Last 26 weeks — green = profit, red = loss (NY days).
+              Last 26 weeks — green = profit, red = loss (account days).
             </p>
           </CardContent>
         </Card>
       </div>
+
+      <TrackerStreakCard
+        series={trackerSeries}
+        endDay={todayKey}
+        hasRules={trackerRules.length > 0}
+      />
 
       {/* Entry slippage by week */}
       {weeklySlip.length > 0 && (

@@ -11,7 +11,7 @@ import {
   ruleIsLiveOn,
   type AutoResults,
 } from "./compliance";
-import { isoWeekdayOfDayKey } from "../time";
+import { addDaysToDayKey, isoWeekdayOfDayKey } from "../time";
 import { canEditDay, type TrackerCheckin, type TrackerRule } from "../tracker-types";
 import type { AutoRuleKey, AutoVerdict } from "./auto-rules";
 
@@ -391,5 +391,48 @@ describe("isoWeekdayOfDayKey", () => {
   it("returns 0 for a malformed key, which no active_days can match", () => {
     expect(isoWeekdayOfDayKey("nope")).toBe(0);
     expect(isoWeekdayOfDayKey("")).toBe(0);
+  });
+});
+
+describe("addDaysToDayKey", () => {
+  it("steps forward and back across month and year ends", () => {
+    expect(addDaysToDayKey("2026-07-31", 1)).toBe("2026-08-01");
+    expect(addDaysToDayKey("2026-08-01", -1)).toBe("2026-07-31");
+    expect(addDaysToDayKey("2026-12-31", 1)).toBe("2027-01-01");
+    expect(addDaysToDayKey("2027-01-01", -1)).toBe("2026-12-31");
+  });
+
+  it("handles a leap day", () => {
+    expect(addDaysToDayKey("2028-02-28", 1)).toBe("2028-02-29");
+    expect(addDaysToDayKey("2028-02-29", 1)).toBe("2028-03-01");
+    // 2026 is not a leap year, so the same step skips the 29th.
+    expect(addDaysToDayKey("2026-02-28", 1)).toBe("2026-03-01");
+  });
+
+  it("is a no-op for zero and stable over a round trip", () => {
+    expect(addDaysToDayKey("2026-07-29", 0)).toBe("2026-07-29");
+    expect(addDaysToDayKey(addDaysToDayKey("2026-07-29", 182), -182)).toBe(
+      "2026-07-29",
+    );
+  });
+
+  it("does not drift across a DST boundary", () => {
+    // The bug this replaces: `new Date()` + setDate resolves in the BROWSER's
+    // zone, so a 23- or 25-hour day could land the calendar on the wrong date.
+    // These are US and EU DST switch weekends; UTC arithmetic ignores both.
+    expect(addDaysToDayKey("2026-03-07", 1)).toBe("2026-03-08");
+    expect(addDaysToDayKey("2026-03-08", 1)).toBe("2026-03-09");
+    expect(addDaysToDayKey("2026-11-01", 1)).toBe("2026-11-02");
+    expect(addDaysToDayKey("2026-10-25", 1)).toBe("2026-10-26");
+  });
+
+  it("returns a malformed key unchanged rather than NaN-NaN-NaN", () => {
+    expect(addDaysToDayKey("nope", 3)).toBe("nope");
+    expect(addDaysToDayKey("", 1)).toBe("");
+  });
+
+  it("walks a 26-week window back to the expected first day", () => {
+    // What the heatmap does: 182 days ending today, inclusive.
+    expect(addDaysToDayKey("2026-08-01", -(26 * 7 - 1))).toBe("2026-02-01");
   });
 });

@@ -164,6 +164,43 @@ function ruleIdsByText(rules: RuleLookup): Map<string, Set<string>> {
   return index;
 }
 
+/**
+ * Build the lookup from loaded playbooks and recorded answers.
+ *
+ * Rule text is indexed across ALL rules, retired ones included: a retired rule's
+ * historical answers are real observations, and losing its name would turn them
+ * into rows labelled by a uuid.
+ *
+ * Lives here rather than in the reports screen because the dashboard needs the
+ * same lookup for the follow rate that feeds Process Adherence, and two copies
+ * of this walk would be two places for the retired-rule rule to be forgotten.
+ */
+export function buildPlaybookLookup(
+  playbooks: readonly {
+    id: string;
+    name: string;
+    groups: readonly {
+      rules: readonly { id: string; text: string; show_when: ShowWhen }[];
+    }[];
+  }[],
+  answersByTrade?: Map<string, PositionRule[]>,
+): PlaybookLookup {
+  const text = new Map<string, string>();
+  const showWhen = new Map<string, ShowWhen>();
+  for (const book of playbooks) {
+    for (const group of book.groups) {
+      for (const rule of group.rules) {
+        text.set(rule.id, rule.text);
+        showWhen.set(rule.id, rule.show_when);
+      }
+    }
+  }
+  return {
+    names: new Map(playbooks.map((p) => [p.id, p.name])),
+    rules: { text, showWhen, answersByTrade: answersByTrade ?? new Map() },
+  };
+}
+
 /** Empty lookup, for callers that have no playbook data loaded. */
 export const EMPTY_RULE_LOOKUP: RuleLookup = {
   text: new Map(),
