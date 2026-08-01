@@ -54,6 +54,7 @@ import {
   exitEfficiencyFromTrade,
   fmtExitEfficiencyPct,
 } from "@/lib/journal/exit-efficiency";
+import { excursionFromTrade } from "@/lib/journal/excursion";
 import { primaryTradeImageUrl } from "@/lib/journal/tradingview-snapshot";
 import { getAllFormFields } from "@/lib/journal/form-config";
 import type { FieldDef } from "@/lib/journal/field-def-types";
@@ -318,6 +319,23 @@ export function JournalGrid({
         },
       },
       {
+        id: "capture",
+        header: ({ column }) => <SortBtn column={column} label="Capture %" />,
+        accessorFn: (r) => excursionFromTrade(r).capturePct,
+        cell: ({ row }) => {
+          // Null means the trade carries no MFE price, or never went in favour
+          // at all — either way there is no peak to have captured a share of, and
+          // a 0 % would read as "gave it all back".
+          const pct = excursionFromTrade(row.original).capturePct;
+          if (pct == null) return "—";
+          return (
+            // 100 % is the whole move, so the midpoint is the natural neutral —
+            // same treatment the Target % column already gives its own scale.
+            <span className={pnlClass(pct - 50)}>{fmtNum(pct, 0)}%</span>
+          );
+        },
+      },
+      {
         id: "gross",
         header: ({ column }) => <SortBtn column={column} label="Gross" />,
         accessorFn: (r) => r.stats?.gross_pl ?? null,
@@ -414,6 +432,13 @@ export function JournalGrid({
       o["Size"] = t.stats?.entry_qty ?? "";
       o["R"] = t.stats?.realized_r ?? "";
       o["Target attainment %"] = fmtExitEfficiencyPct(exitEfficiencyFromTrade(t)?.pct);
+      // MAE and MFE ride along with the capture: the mentor reading the export
+      // cannot judge "captured 40 %" without knowing how big the peak was.
+      const excursion = excursionFromTrade(t);
+      o["MAE R"] = excursion.maeR ?? "";
+      o["MFE R"] = excursion.mfeR ?? "";
+      o["MFE capture %"] =
+        excursion.capturePct == null ? "" : fmtNum(excursion.capturePct, 0);
       o["Gross P/L"] = t.stats?.gross_pl ?? "";
       o["Net P/L"] = t.stats?.net_pl ?? "";
       o["Status"] = t.status;
