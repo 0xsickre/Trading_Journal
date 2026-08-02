@@ -1945,3 +1945,104 @@ the lifecycle actions' stale-predicate handling.
 941 tests / 55 files (933 → 941). Coverage **95.54 / 89.89 / 96.75 / 96.80**. Migrations 42.
 `get_advisors` — the same 2 known WARNs as the baseline, none new. Lint 1 warning, build green,
 `tsc` clean.
+
+---
+
+## Step 7 — routes and pages
+
+Twelve routes plus two layouts. The step's own bar: *every page fetches in parallel, and no date
+is resolved in the browser's timezone.*
+
+The first half was already true. The second was not, in the one component that decides every
+number on the home page.
+
+### P1 (High) — the browser's clock decided which trades counted
+
+`dashboard.tsx`, `cutoffMs`:
+
+```ts
+const d = new Date();
+d.setDate(d.getDate() - Number(period));
+return d.getTime();
+```
+
+That value filters `realizedAll` and feeds `resolvePeriodWindow`, so it decides which trades are
+inside "last 90 days" for **net P&L, win rate, profit factor, drawdown, the equity curve and the
+Sickre Score**. Two things were wrong with it:
+
+1. **It read the BROWSER's clock.** Trading a New York account from Belgrade, the browser has
+   already rolled into tomorrow while the account has not — so the money window and the tracker
+   window covered different days.
+2. **It kept the current time of day**, which makes the window slide continuously. A trade
+   closed at 10:00 ninety days ago was inside the period at 09:00 and outside it at 11:00. The
+   same page, the same data, two different net P&Ls depending on when it was opened. This half
+   has nothing to do with timezones and is the one a user would actually notice.
+
+The component argues against exactly this eighty lines further up, where the `todayKey` prop is
+documented: *"Not `new Date()` here: every tracker day key is an account-timezone day, and a
+browser in another zone would anchor the calendar one column off."* The rule was written down,
+and then the money window did the opposite of it.
+
+Worse, `processAdherencePct` — the seventh component of the same score — has always computed its
+window as `addDaysToDayKey(todayKey, -(period - 1))`, an account-zone day boundary. So **the two
+halves of the Sickre Score were measuring windows a day apart**, by two different definitions of
+"last 90 days", in one component.
+
+`FIXED` — the cutoff is now the instant the window's first day begins in the account's zone,
+using the same `-(period - 1)` the tracker half uses. New `dayKeyStartUtc(day, tz)` in `time.ts`
+names the concept ("the instant a day key begins in a zone", the inverse of `zonedDateKey`) and
+returns null rather than NaN for an unreadable key — NaN would compare false against every
+timestamp and silently empty the window, showing an account with trades as having none.
+
+A `timezone` prop now rides next to `todayKey`, passed from the same account on the same server
+render, so the two cannot disagree; deriving it inside the component from `accounts` would have
+been a second answer to one question.
+
+### P2 (Low) — the Year picker could omit the year you are in
+
+Same file: `yearOptions` used `new Date().getUTCFullYear()`. On 31 December in Tokyo, UTC is
+still in the old year and the picker would not offer the year the trader is actually trading in;
+on 1 January in New York, the reverse. One day a year, in both directions.
+
+`FIXED` — taken from `todayKey`, which is already the account's day.
+
+### P3 (Low) — three routes validated URL dates with a shape regex
+
+`/daily?date=`, `/calendar?month=` and `/tracker?date=` each tested `/^\d{4}-\d{2}-\d{2}$/` and
+treated a match as a date. It is a shape check, not a calendar check. `2026-00-00` passes it and
+then rolls silently backwards: `addDaysToDayKey("2026-00-00", 1)` is `2025-12-01`, and
+`monthGridDays("2026-00")` returns December 2025's grid — so `/calendar?month=2026-00` rendered
+one month's data under another month's heading, and `/daily?date=2026-00-00` opened a day that
+does not exist. Nothing threw, which is what made it worth catching. Same class as M1 from round
+2 (`?min=abc` silently disabling the sample guard), in three routes M1 did not cover.
+
+`FIXED` — `isValidDayKey` / `isValidMonthKey` in `time.ts`, built on `dayKeyStartUtc` because
+that conversion is already strict where a regex cannot be. Verified by probe before writing the
+validator: it refuses 30 February, 29 February in a non-leap year, 31 April, month 13 and day 00,
+while accepting 29 February 2028.
+
+### Reviewed, no defect found
+
+**Parallel fetching.** Every page issues its reads in one `Promise.all`. The two exceptions are
+both deliberate and both already carry their reasoning: `/` awaits `getPositionRules()` before
+the batch because putting it inside meant draining the fastest-growing table in the schema twice
+per render (M7, round 2), and `/daily` has a second batch because it genuinely depends on
+`reportDate`, which depends on the account's timezone, which comes from the first. No N+1
+anywhere — no `await` inside a `map`, `forEach` or loop in any route.
+
+**`useSearchParams` and Suspense.** Two files use it, and `reports/page.tsx` wraps its consumer
+in a `Suspense` boundary with a comment saying why. The other is the workbench inside that
+boundary.
+
+**Prop consistency.** `Dashboard` declares eight optional props with `= []` defaults — the kind
+that hides a page forgetting to pass one. It has exactly one caller and that caller passes all
+of them. Checked because a silent empty default in this component would blank the tracker or the
+playbook half of the score with no error.
+
+### Outcome
+
+`FIXED` — P1, P2, P3.
+`REVIEWED — clean` — parallel fetching, absence of N+1, Suspense boundaries, prop completeness.
+
+951 tests / 55 files (941 → 951). Coverage **95.55 / 89.92 / 96.76 / 96.81**. Lint 1 warning,
+build green with the same 12 routes, `tsc` clean.

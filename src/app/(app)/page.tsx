@@ -100,6 +100,7 @@ export default async function DashboardPage() {
         trackerRules={trackerRules}
         checkins={checkins}
         todayKey={todayKey}
+        timezone={primary?.timezone ?? DEFAULT_TZ}
         playbooks={playbooks}
         positionRules={positionRules}
       />

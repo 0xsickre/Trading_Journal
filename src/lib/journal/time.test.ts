@@ -8,6 +8,9 @@ import {
   zonedInputToUtc,
   zonedWeekStartKey,
   isValidTimeZone,
+  dayKeyStartUtc,
+  isValidDayKey,
+  isValidMonthKey,
 } from "./time";
 
 /**
@@ -208,5 +211,107 @@ describe("isValidTimeZone", () => {
     expect(isValidTimeZone("Europe/Belgrad")).toBe(false);
     expect(isValidTimeZone("Europe/Belgrade")).toBe(true);
     expect(isValidTimeZone("Europe/Belgrade")).toBe(true);
+  });
+});
+
+describe("dayKeyStartUtc", () => {
+  it("returns the instant midnight happens in that zone, not in UTC", () => {
+    // 4 May 2026 is EDT (UTC-4), so the NY day opens at 04:00Z.
+    expect(dayKeyStartUtc("2026-05-04", "America/New_York")).toBe(
+      Date.parse("2026-05-04T04:00:00Z"),
+    );
+    // Belgrade is UTC+2 in May, so its day opened two hours BEFORE UTC's.
+    expect(dayKeyStartUtc("2026-05-04", "Europe/Belgrade")).toBe(
+      Date.parse("2026-05-03T22:00:00Z"),
+    );
+    expect(dayKeyStartUtc("2026-05-04", "UTC")).toBe(
+      Date.parse("2026-05-04T00:00:00Z"),
+    );
+  });
+
+  it("follows the zone across its DST change", () => {
+    // 2026: US DST starts 8 March. The day before opens at 05:00Z (EST), the
+    // day after at 04:00Z (EDT). A fixed offset would get one of them wrong.
+    expect(dayKeyStartUtc("2026-03-07", "America/New_York")).toBe(
+      Date.parse("2026-03-07T05:00:00Z"),
+    );
+    expect(dayKeyStartUtc("2026-03-09", "America/New_York")).toBe(
+      Date.parse("2026-03-09T04:00:00Z"),
+    );
+  });
+
+  it("round-trips with zonedDateKey, which is its inverse", () => {
+    for (const tz of ["America/New_York", "Europe/Belgrade", "Asia/Tokyo"]) {
+      for (const day of ["2026-01-01", "2026-03-09", "2026-07-04", "2026-12-31"]) {
+        const ms = dayKeyStartUtc(day, tz)!;
+        expect(zonedDateKey(new Date(ms).toISOString(), tz), `${tz} ${day}`).toBe(day);
+      }
+    }
+  });
+
+  it("is a BOUNDARY, which is the whole reason it exists", () => {
+    // The defect it replaces: `new Date()` minus N days keeps the current time
+    // of day, so the window slid all day long. Two calls for the same day must
+    // give the identical instant no matter when they are made.
+    expect(dayKeyStartUtc("2026-05-04", "America/New_York")).toBe(
+      dayKeyStartUtc("2026-05-04", "America/New_York"),
+    );
+    const ms = dayKeyStartUtc("2026-05-04", "America/New_York")!;
+    expect(new Date(ms).toISOString().endsWith(":00:00.000Z")).toBe(true);
+  });
+
+  it("answers null rather than NaN for a day key it cannot read", () => {
+    // NaN would compare false against every timestamp and silently empty the
+    // period window — showing an account with trades as having none.
+    expect(dayKeyStartUtc("")).toBeNull();
+    expect(dayKeyStartUtc("not-a-day")).toBeNull();
+  });
+
+  it("falls back to the default zone for an unknown one, like the rest of the module", () => {
+    expect(dayKeyStartUtc("2026-05-04", "Europe/Belgrad")).toBe(
+      dayKeyStartUtc("2026-05-04", DEFAULT_TZ),
+    );
+  });
+});
+
+describe("day and month keys out of a URL", () => {
+  it("accepts real days, including a leap one", () => {
+    for (const d of ["2026-01-01", "2026-05-04", "2026-12-31", "2028-02-29"]) {
+      expect(isValidDayKey(d), d).toBe(true);
+    }
+  });
+
+  it("REJECTS what the shape regex let through", () => {
+    // Each of these matches /^\d{4}-\d{2}-\d{2}$/ and none of them is a day.
+    // `2026-00-00` was the live one: it rolled backwards into December 2025, so
+    // /calendar rendered December's grid under a 2026 heading and /daily opened
+    // a date that does not exist — silently, in both cases.
+    for (const d of [
+      "2026-00-00",
+      "2026-13-01",
+      "2026-05-00",
+      "2026-05-32",
+      "2026-02-30",
+      "2026-02-29", // 2026 is not a leap year
+      "2026-04-31",
+      "2026-99-99",
+    ]) {
+      expect(isValidDayKey(d), d).toBe(false);
+    }
+  });
+
+  it("rejects the wrong shape outright", () => {
+    for (const d of ["", "2026-5-4", "26-05-04", "2026/05/04", "2026-05-04T00:00", "abc"]) {
+      expect(isValidDayKey(d), d).toBe(false);
+    }
+  });
+
+  it("validates a month by its first day", () => {
+    expect(isValidMonthKey("2026-01")).toBe(true);
+    expect(isValidMonthKey("2026-12")).toBe(true);
+    expect(isValidMonthKey("2026-00")).toBe(false);
+    expect(isValidMonthKey("2026-13")).toBe(false);
+    expect(isValidMonthKey("2026-1")).toBe(false);
+    expect(isValidMonthKey("2026-05-04")).toBe(false);
   });
 });

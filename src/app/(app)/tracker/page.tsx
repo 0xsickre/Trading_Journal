@@ -1,3 +1,4 @@
+import { isValidDayKey } from "@/lib/journal/time";
 import { redirect } from "next/navigation";
 
 /**
@@ -14,5 +15,5 @@ export default async function TrackerPage({
   searchParams: Promise<{ date?: string }>;
 }) {
   const { date } = await searchParams;
-  redirect(date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? `/daily?date=${date}` : "/daily");
+  redirect(date && isValidDayKey(date) ? `/daily?date=${date}` : "/daily");
 }

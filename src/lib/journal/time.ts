@@ -73,6 +73,51 @@ export function zonedInputToUtc(
   return Number.isNaN(at.getTime()) ? null : at.toISOString();
 }
 
+/**
+ * The instant a day key BEGINS in `tz`, as epoch ms. Inverse of `zonedDateKey`.
+ *
+ * Exists so a period filter can be a day boundary instead of a rolling instant.
+ * `new Date()` minus N days keeps the current time of day, which makes "last 90
+ * days" a window that slides continuously: a trade closed at 10:00 ninety days
+ * ago is inside it at 09:00 and outside it at 11:00, so the same page shows two
+ * different net P&Ls for the same data depending on when it is opened.
+ *
+ * Null when the day key is unparseable — never NaN, which would compare false
+ * against everything and silently empty the window.
+ */
+export function dayKeyStartUtc(
+  day: string,
+  tz: string = DEFAULT_TZ,
+): number | null {
+  const at = zonedInputToUtc(`${day}T00:00`, tz);
+  if (at == null) return null;
+  const ms = Date.parse(at);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * Whether a string is a day the CALENDAR actually has.
+ *
+ * `/^\d{4}-\d{2}-\d{2}$/` is a shape check, not a date check, and three routes
+ * were using it alone on a value straight out of the URL. `2026-00-00` passes
+ * that regex and then rolls silently backwards into December 2025 — so
+ * `/calendar?month=2026-00` rendered December's grid under a 2026 heading, and
+ * `/daily?date=2026-00-00` opened a day that does not exist. Nothing crashed,
+ * which is what made it worth catching.
+ *
+ * Built on `dayKeyStartUtc` because the conversion is already strict where a
+ * regex cannot be: it refuses 30 February, 29 February in a non-leap year and
+ * 31 April, while accepting 29 February 2028.
+ */
+export function isValidDayKey(day: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) && dayKeyStartUtc(day, "UTC") != null;
+}
+
+/** Whether a string is a month the calendar actually has ("yyyy-MM"). */
+export function isValidMonthKey(month: string): boolean {
+  return /^\d{4}-\d{2}$/.test(month) && isValidDayKey(`${month}-01`);
+}
+
 /** Inverse of zonedInputToUtc — UTC ISO -> "yyyy-MM-dd'T'HH:mm" in `tz`. */
 export function utcToZonedInput(
   iso: string | Date | null | undefined,

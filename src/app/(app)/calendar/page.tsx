@@ -8,10 +8,9 @@ import {
   resolveBreakevenRange,
 } from "@/lib/journal/breakeven";
 import { todayInTz } from "@/lib/journal/daily-report";
-import { DEFAULT_TZ } from "@/lib/journal/time";
+import { DEFAULT_TZ, isValidMonthKey } from "@/lib/journal/time";
 import { MonthCalendar } from "@/components/journal/month-calendar";
 
-const MONTH_RE = /^\d{4}-\d{2}$/;
 
 function indexBy(rows: PeriodRow[]): Map<string, PeriodRow> {
   return new Map(rows.map((r) => [r.key, r]));
@@ -37,7 +36,7 @@ export default async function CalendarPage({
   // Future months hold nothing and only invite the user to wander; clamp like
   // /daily clamps its date.
   const monthKey =
-    monthParam && MONTH_RE.test(monthParam)
+    monthParam && isValidMonthKey(monthParam)
       ? monthParam > currentMonth
         ? currentMonth
         : monthParam

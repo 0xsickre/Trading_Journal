@@ -41,7 +41,7 @@ import type {
   TrackerCheckin,
   TrackerRule,
 } from "@/lib/journal/tracker-types";
-import { addDaysToDayKey } from "@/lib/journal/time";
+import { addDaysToDayKey, dayKeyStartUtc } from "@/lib/journal/time";
 import {
   buildPlaybookLookup,
   computeFollowRate,
@@ -218,6 +218,7 @@ export function Dashboard({
   trackerRules = [],
   checkins = [],
   todayKey,
+  timezone,
   playbooks = [],
   positionRules,
 }: {
@@ -239,6 +240,12 @@ export function Dashboard({
    * a browser in another zone would anchor the calendar one column off.
    */
   todayKey: string;
+  /**
+   * The zone `todayKey` was resolved in. Passed together with it, from the same
+   * account on the same server render, so the two cannot disagree — deriving it
+   * here from `accounts` would be a second answer to one question.
+   */
+  timezone: string;
   /** Retired rules included — their recorded answers are real observations. */
   playbooks?: Playbook[];
   positionRules?: Map<string, PositionRule[]>;
@@ -260,7 +267,10 @@ export function Dashboard({
 
   // Years present in the data (newest first) for the Year/Quarter pickers.
   const yearOptions = useMemo(() => {
-    const cur = new Date().getUTCFullYear();
+    // The ACCOUNT's year, not the browser's and not UTC's. On 31 December in
+    // Tokyo, UTC is still in the old year and this picker would not offer the
+    // year the trader is actually in; on 1 January in New York the reverse.
+    const cur = Number(todayKey.slice(0, 4));
     let min = cur;
     for (const t of trades) {
       const ref = t.stats?.closed_at ?? t.created_at;
@@ -268,7 +278,7 @@ export function Dashboard({
       if (Number.isFinite(y) && y < min) min = y;
     }
     return Array.from({ length: cur - min + 1 }, (_, i) => cur - i);
-  }, [trades]);
+  }, [trades, todayKey]);
 
   const anchorYear = Number(anchor.slice(0, 4));
   const anchorQuarter = Math.floor((Number(anchor.slice(5, 7)) - 1) / 3) + 1;
@@ -317,13 +327,32 @@ export function Dashboard({
     return accounts.reduce((s, a) => s + (a.starting_balance ?? 0), 0);
   }, [accountFilter, accounts]);
 
-  /** Start of the selected window as epoch ms, or null for "all time". */
+  /**
+   * Start of the selected window as epoch ms, or null for "all time".
+   *
+   * The day the window OPENS, in the account's zone — not an instant N×24h
+   * before now. Two things were wrong with the old `new Date()` version, and
+   * this component already argues against both of them eighty lines up, where
+   * `todayKey` is documented as being resolved on the server precisely because
+   * "a browser in another zone would anchor the calendar one column off":
+   *
+   *   1. It read the BROWSER's clock. Trading a New York account from Belgrade,
+   *      the browser has already rolled into tomorrow while the account has not,
+   *      so the money window and the tracker window covered different days.
+   *   2. It kept the current time of day, making the window slide continuously.
+   *      A trade closed at 10:00 ninety days ago was inside the period at 09:00
+   *      and outside it at 11:00 — the same page, the same data, two different
+   *      net P&Ls depending on when you opened it.
+   *
+   * `-(period - 1)` matches `processAdherencePct` below, which has always used
+   * `addDaysToDayKey(todayKey, -(period - 1))`. The two halves of the Sickre
+   * Score were measuring windows a day apart.
+   */
   const cutoffMs = useMemo(() => {
     if (period === "all") return null;
-    const d = new Date();
-    d.setDate(d.getDate() - Number(period));
-    return d.getTime();
-  }, [period]);
+    const from = addDaysToDayKey(todayKey, -(Number(period) - 1));
+    return dayKeyStartUtc(from, timezone);
+  }, [period, todayKey, timezone]);
 
   /** Every realized trade in account scope, ignoring the period filter. */
   const realizedAll = useMemo(() => {

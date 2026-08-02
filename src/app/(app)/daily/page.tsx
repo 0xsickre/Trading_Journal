@@ -24,7 +24,11 @@ import {
   EXACT_ZERO_RANGE,
   resolveBreakevenRange,
 } from "@/lib/journal/breakeven";
-import { DEFAULT_TZ, zonedDateKey } from "@/lib/journal/time";
+import {
+  DEFAULT_TZ,
+  isValidDayKey,
+  zonedDateKey,
+} from "@/lib/journal/time";
 import { FocusGoalCard } from "@/components/journal/focus-goal-card";
 import { DailyReportForm } from "@/components/journal/daily-report-form";
 import {
@@ -55,8 +59,11 @@ export default async function DailyPage({
   const currency = primary?.currency ?? "USD";
   const today = todayInTz(timezone);
 
+  // `isValidDayKey`, not a shape regex: `2026-00-00` matches `\d{4}-\d{2}-\d{2}`
+  // and then rolls backwards into December 2025, opening a day that does not
+  // exist under a heading that says it does.
   const reportDate =
-    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+    dateParam && isValidDayKey(dateParam)
       ? dateParam > today
         ? today
         : dateParam
