@@ -177,7 +177,10 @@ procenat unazad. Breakeven range je ovde jer bez njega tri metrike Faze 1 nemaju
 - `tj_accounts` +: `default_commission`, `default_fees`, `default_swap_per_day`,
   `breakeven_from`, `breakeven_to`, `breakeven_unit` (`$` / `%`), `default_stop_pct`,
   `default_target_pct`, `profit_calc_method` (default `fifo`, koristi se tek u F7).
-- `tj_positions` +: `reviewed boolean DEFAULT false`, `rating smallint` (spec §6).
+- ~~`tj_positions` +: `reviewed boolean DEFAULT false`, `rating smallint` (spec §6).~~
+  **Obe obrisane** (`20260801180000`, `20260801200000`), zajedno sa `profit_calc_method`
+  (`20260801160000`) iz reda iznad. Dodate su po spec-u, nikad im nije napravljena druga polovina —
+  nijedan UI ih nije postavljao i nijedna metrika čitala. Detaljno u §6.
 
 > `breakeven_from` / `breakeven_to` su **asimetrični** — npr. `−37.50` do `0`. Nije `±X`.
 
@@ -352,8 +355,8 @@ Spec §5.1: *ne pisati 10 report stranica, pisati jednu.* Ovo je najveća ušted
   `breakdownByField` postaje tanak omotač.
 - `reports/pivot.ts` — dimenzija × dimenzija, **`n` u svakoj ćeliji**, sivljenje ispod praga.
 - `reports/filters.ts` — **negacija (`Excluding`) po svakom polju od prvog dana** (spec §5.7:
-  naknadno dodavanje je bolno), R-opseg, trajanje, position size, reviewed/unreviewed, rating,
-  insight koji je okinuo.
+  naknadno dodavanje je bolno), R-opseg, trajanje, position size, ~~reviewed/unreviewed, rating~~
+  (kolone obrisane, v. Fazu 0), insight koji je okinuo.
 - Ruta `/reports` sa četiri komponente po spec §5.1: Performance Summary · Charts (do 3 metrike) ·
   Summary Table · Cross Analysis.
 - **Win vs Losses** i **Compare** su isti engine — prvi sa hardkodovanom dimenzijom `pnl > 0`, drugi
@@ -684,11 +687,118 @@ tj_user_prefs  user_id (PK), journal_hidden_columns text[]
 
 ---
 
+### Posle Faze 7 — parity čišćenje ✅
+
+Nastalo iz poređenja sa punim TradeZella izveštajem o funkcijama (v. `PARITY.md`). Sitne stavke,
+sve isporučene, bez otvorenih repova.
+
+| Šta | Zašto | Migracija |
+|---|---|:--:|
+| **Sharpe, Sortino, Calmar, Avg daily DD** (`238f94b`) | Četiri standardne metrike koje su stvarno nedostajale — `PARITY.md` je tvrdio pun parity na metrikama i **to nije bilo tačno** | Ne |
+| **`rating` obrisan** (`51fb378`) | Mrtva kolona iz F0 | Da |
+| **`psychology_tags` razdvojen** (`51fb378`) | Jedna kolona hranjena iz dve liste | Ne |
+| **`result` obrisan** (`b36c06e`) | Duplirao izvedeni `outcome` | Da |
+| **`reviewed` obrisan** (`ba72e88`) | Mrtva kolona iz F0 | Da |
+
+Tri stvari vredne pamćenja:
+
+- **Risk ratio-i se godišnje skaliraju MERENIM brojem dana, ne konstantom 252.** Konvencija
+  pretpostavlja prisustvo u svakoj sesiji; sving trejder koji zatvara 40 dana godišnje nije, i √252
+  bi naduvalo broj preko dva puta. Broj perioda izlazi iz podataka. Period je dan **sa zatvorenim
+  trejdom**, ne kalendarski — jer iste metrike rade i unutar grupa u izveštajima („ulazi
+  ponedeljkom"), gde je kalendar šest sedmina nula po konstrukciji. Ispod 5 dana → `null`.
+- **`psychology_tags` je razdvojen bez migracije** jer je podela povratna iz podataka: opcione liste
+  govore odakle je koja vrednost došla (`tagSplitDimensions`). Vrednost u obe liste pripada **prvoj**
+  — „Revenge" je seedovan i u `emotion` i u `discipline`, a chip picker deduplicira redom iz
+  `listKeys`, pa je kliknuti chip došao iz `emotion`. Nije proizvoljan prioritet nego reprodukcija
+  izbora koji je korisnik stvarno napravio. Kombinovana dimenzija ostaje kao „Psychology Tags (sve)"
+  jer je jedina koja još pokazuje slobodno ukucanu oznaku.
+- **Brisanje `result` je moralo prvo da sruši `tj_position_stats`** — view je nosio `p.result` kroz
+  sva četiri CTE-a, a `CREATE OR REPLACE` ne sme da ukloni kolonu. Nijedan potrošač je nije čitao
+  (nema je ni u `PositionStat` ni u TS blizancu). Posle `CREATE VIEW` obavezno ponovo
+  `security_invoker = on` — `CREATE VIEW` resetuje opcije, a bez toga view zaobilazi RLS.
+  Filter u gridu nije izgubljen nego zamenjen izvedenim „Ishod", sa breakeven pojasom **po nalogu**.
+
+### Faza 8 — Automatski MAE/MFE · **polovina A isporučena, B blokirana**
+
+Nastalo iz poređenja sa TradeZella izveštajem: vlasnik je odbio Backtesting i Trade Replay („to
+radim direktno u TradingView aplikaciji") i tražio umesto toga da se **MAE i MFE prestanu prepisivati
+rukom sa grafikona**.
+
+To je bio bolji izbor za red veličine. Ne zbog cene nego zato što **analiza već postoji i gladuje**:
+`excursion.ts` (`maeR`, `mfeR`, `capturePct`), metrika `avg_mae_r`, kolona **Capture %** u gridu —
+sve napisano i testirano u ranijim fazama, a zavisi od toga hoće li čovek ručno uneti dva broja po
+trejdu. Neće. Automatizacija ne dodaje funkciju, ona **pali funkciju koja već stoji**.
+
+Posao se čisto deli na determinističku polovinu i mrežnu, i to je jedini razlog zašto je pola moglo
+da se isporuči odmah.
+
+#### Isporučeno — polovina A (`69c93dc`, nula migracija, nula mreže)
+
+`src/lib/journal/excursion-scan.ts` + 22 testa. Provajder-agnostičan: `Candle` je četiri broja i
+vreme, pa se OANDA, Dukascopy ili CSV svode na isti ulaz i nijedan ne može da procuri u računicu.
+
+Dva pravila nose svaki broj, oba pinovana testom:
+
+1. **Sveća se broji samo ako cela stane u prozor držanja.** Sveća sa oznakom 14:00 na satnom feedu
+   pokriva 14:00–15:00; ulazak u 14:30 znači da njen `low` može biti iz 14:05 — cena kojoj trejd
+   nikad nije bio izložen. MAE se čita kao „koliko sam bio blizu stopa", pa precenjivanje tu nije
+   greška zaokruživanja nego lažno sećanje. Cena pravila je zapisana: trejd kraći od jedne sveće ne
+   vidi nijednu, zato interval bira pozivalac (`suggestInterval`, namerno zaustavljen na 1h).
+2. **Fillovi su takođe osmotrene cene.** `capturePct = realizedR / mfeR`, a realizovani R se gradi
+   iz prosečnog izlaza; ako pravilo 1 odbaci izlaznu sveću a izlaz je bio najbolja cena trejda, MFE
+   padne ispod realizovanog i capture pređe 100%. Isti prosečan izlaz na obe strane čini odnos
+   dokazivo ≤ 100%. **Postoji i test koji namerno pokazuje kvar bez ovog pravila** (capture 1000%),
+   da se razlog ne izgubi pri nekom budućem čišćenju.
+
+Vraća se sirovi ekstrem, nikad odsečen na ulaznu cenu — `excursionFromTrade` već svodi ne-adverzni
+MAE na 0 i broji ga kao „nikad nije bio u minusu".
+
+#### Preostalo — polovina B (blokirana, čeka token)
+
+**Blokada:** vlasnik trenutno nema OANDA praktični token. Ništa drugo ne fali.
+
+Izvor je izabran i razlog je tačnost, ne cena. Vlasnik trguje **FTMO ~99% na početku, pa OANDA**, i
+sve je CFD. OANDA v20 je zato pravi izvor **čak i dok se trguje na FTMO**:
+
+- besplatan uz nalog, radi i sa **demo** nalogom — ne mora se čekati živi
+- `/v3/instruments/{instrument}/candles` daje OHLC odvojeno za **bid, ask i mid**; za MAE je bitan
+  bid/ask, ne mid
+- instrumenti se poklapaju jedan-na-jedan sa seed listom: `EUR_USD`, `GBP_USD`, `USD_JPY`,
+  `USD_CAD`, `AUD_USD`, `XAU_USD`, `SPX500_USD`, `NAS100_USD`
+- CFD feed, dakle uporediv sa FTMO-vim — a posle prelaska postaje **isti feed na kom se trgovalo**
+
+Zašto ne alternative: **FMP otpada** — endpoint `chart` traži Starter plan ili veći, a nalog je ispod
+toga (provereno, `ACCESS DENIED` za XAUUSD i EURUSD). Dukascopy je besplatan i pokriva ceo skup ali
+traži parser za binarne `.bi5` fajlove. Yahoo je bez ključa ali nezvaničan. Twelve Data ima free tier
+sa plitkom istorijom.
+
+Ostaje da se uradi:
+
+- migracija: `tj_candles(symbol, interval, ts, o, h, l, c)` UNIQUE `(symbol, interval, ts)` +
+  `tj_positions.excursion_source ('manual'|'auto')` i `excursion_fetched_at`
+- **ručno mora da pobedi automatski** — automatika piše samo kad je `source` prazan ili `'auto'`;
+  čim čovek upiše sam, postaje `'manual'` i zaključano. Isti obrazac kao frozen verdikti u trackeru
+  (F5), iz istog razloga
+- adapter za OANDA (jedini deo koji zna za mrežu) + mapiranje simbola preko postojećeg
+  `instrument-aliases.ts`
+- server akcija (bez REST rute, §4) + dugme na trejdu i backfill nad `/journal`
+- keš je obavezan, ne optimizacija: jednom povučene sveće za trejd rade zauvek i kad plan istekne ili
+  se promeni provajder — isti razlog zbog kog se `point_value_at_trade` već snima na poziciju
+
+**Napomena o verifikaciji:** mrežna politika dev okruženja blokira sav opšti web (`403` na CONNECT,
+provereno za Yahoo i Twelve Data), pa se polovina B **ne može testirati odavde**. Zato je A napisana
+prva i potpuno pokrivena testovima — verifikacija B pada na lokalno pokretanje.
+
+**Procena:** 1–2 sesije čim token postoji.
+
+---
+
 ## 6. Svesno izostavljeno
 
 | Modul | Razlog |
 |---|---|
-| Backtesting + Trade Replay | Traži pun istorijski feed. TradingView to radi bolje |
+| Backtesting + Trade Replay | **Potvrđeno odbijeno.** Vlasnik: „to radim direktno u TradingView aplikaciji". Embed ne pomaže — Bar Replay živi u njihovoj aplikaciji, widget je crna kutija koju kod ne može da korakne. Ostalo bi da se gradi sve troje: grafikon, feed sveća i simulator naloga |
 | Broker sync | Manuelni unos je izbor i prednost |
 | Spaces / mentor / leaderboard | Jednokorisnički sistem |
 | Zella AI chat + agenti | Mentor pack + insights daju isto bez API troška |
@@ -696,7 +806,7 @@ tj_user_prefs  user_id (PK), journal_hidden_columns text[]
 | Intraday dimenzije (entry time 5–30 min) | Day-trading artefakt |
 | Ekonomski kalendar | Živi u vault-u |
 | **Running P&L kriva po trejdu** | Traži cenovni feed. Posledica: `most time in drawdown` otpada |
-| Intraday MAE/MFE preciznost | Ručni unos sa charta; kod swinga je dnevni high/low dovoljan |
+| ~~Intraday MAE/MFE preciznost~~ | **Više ne važi — v. Fazu 8.** Ručni unos je bio pretpostavka, a ispao je razlog zašto `capturePct` i `avg_mae_r` stoje prazni. `suggestInterval` bira 1m–1h prema dužini držanja; dnevni high/low je odbačen jer bi dve odbačene ivične sveće pojele dva cela dana trejda |
 
 ---
 
@@ -722,7 +832,7 @@ ovaj model ima strukturno.
 
 | Faza | Sadržaj | Migracija | Sesije |
 |:--:|---|:--:|:--:|
-| 0 | Cash events, breakeven range, default komisije, undo import, reviewed/rating | Da | ✅ |
+| 0 | Cash events, breakeven range, default komisije, undo import | Da | ✅ |
 | 1 | Sloj jedinica → metrike (vreme, trošak, rizik, nedeljni sloj) → Sickre Score | Ne | ✅ |
 | 2 | Insight engine: 17 TZ pravila + 7 vlastitih + mentor pack | Ne | ✅ |
 | 3 | Report engine, pivot sa `n`, dimension registry, negacija filtera | Ne | ✅ |
@@ -732,6 +842,10 @@ ovaj model ima strukturno.
 | 6 | Notebook: folderi, šabloni, note tagovi, nedeljni pregled | Da | ✅ |
 | 7 | Kalendar, dnevni blok, grid kolone | Da | ✅ |
 | 7 | *ostatak:* widget layout, cron recap, broker preseti, merge/split | Delom | 5–7 |
+| 8 | Automatski MAE/MFE — polovina A (čist skener sveća) | Ne | ✅ |
+| 8 | *ostatak:* polovina B — OANDA adapter, `tj_candles`, backfill | Da | 1–2 ⛔ |
+
+⛔ = blokirano. Faza 8B čeka OANDA praktični token; ništa drugo ne fali.
 
 **Ukupno: 41–46 sesija.** Posle F4 journal odgovara na svih šest pitanja iz sanity provere.
 F5–F7 su disciplina, udobnost i parity.
