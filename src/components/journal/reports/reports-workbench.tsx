@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { toRealized, type PnlMode } from "@/lib/journal/analytics";
+import { toRealized } from "@/lib/journal/analytics";
 import { enrichTrades, type DailyReportLite, type FillCounts } from "@/lib/journal/enriched-trade";
 import {
   EXACT_ZERO_RANGE,
@@ -26,11 +26,13 @@ import {
   tagSplitDimensions,
   type DimensionContext,
 } from "@/lib/journal/reports/dimensions";
+import { runReport, summarizeReport } from "@/lib/journal/reports/engine";
 import {
-  DEFAULT_MIN_SAMPLE,
-  runReport,
-  summarizeReport,
-} from "@/lib/journal/reports/engine";
+  asChartType,
+  asMinSample,
+  asPnlBasis,
+  asViewMode,
+} from "@/lib/journal/reports/url-params";
 import { runPivot } from "@/lib/journal/reports/pivot";
 import { METRICS, getMetric } from "@/lib/journal/reports/metrics";
 import {
@@ -38,7 +40,12 @@ import {
   toSearchParams,
   type FilterSet,
 } from "@/lib/journal/reports/filters";
-import { VIEW_MODES, type ViewMode } from "@/lib/journal/units";
+import {
+  VIEW_MODES,
+  canRender,
+  metric as mkMetric,
+  type ViewMode,
+} from "@/lib/journal/units";
 import { FilterBar } from "@/components/journal/reports/filter-bar";
 import { PerformanceSummaryPanel } from "@/components/journal/reports/performance-summary";
 import { ReportChart, MAX_CHART_METRICS } from "@/components/journal/reports/report-chart";
@@ -53,7 +60,11 @@ import {
   type PlaybookLookup,
 } from "@/lib/journal/reports/playbook-dimensions";
 import type { Playbook, PositionRule } from "@/lib/journal/playbook-types";
-import type { CashEvent } from "@/lib/journal/balance";
+import {
+  buildBalanceTimeline,
+  currentEquity,
+  type CashEvent,
+} from "@/lib/journal/balance";
 
 const DEFAULT_COLUMNS = [
   "net_pnl",
@@ -135,12 +146,25 @@ export function ReportsWorkbench({
   const dimensionKey = params.get("dim") ?? "setup_grade";
   const crossKey = params.get("cross") ?? "";
   const metricKey = params.get("metric") ?? "net_pnl";
-  const viewMode = (params.get("view") as ViewMode) ?? "dollars";
-  const pnlBasis = (params.get("basis") as PnlMode) ?? "net";
-  const chartType = (params.get("chart") as "bar" | "line") ?? "bar";
   const sortBy = params.get("sort") ?? undefined;
-  const minSample = Number(params.get("min") ?? DEFAULT_MIN_SAMPLE);
   const mode = params.get("mode") ?? "single";
+
+  // Everything below is READ FROM THE URL AND VALIDATED, never cast.
+  //
+  // `dim` and `metric` above are safe because they are resolved through the
+  // registries, which answer undefined for a name they do not know. These four
+  // were `as`-cast straight into typed variables, and TypeScript cannot check a
+  // string that arrives at runtime — so a typo in a bookmarked URL became a
+  // silently different report.
+  //
+  // The worst was `min`: `?min=abc` gives NaN, `trades.length < NaN` is false,
+  // so NO row was ever flagged `belowSample` and the whole small-sample guard —
+  // the mechanism that stops a three-trade bucket being crowned "best" — turned
+  // itself off with no visible sign.
+  const viewMode = asViewMode(params.get("view"));
+  const pnlBasis = asPnlBasis(params.get("basis"));
+  const chartType = asChartType(params.get("chart"));
+  const minSample = asMinSample(params.get("min"));
 
   const setParam = useCallback(
     (patch: Record<string, string | undefined>) => {
@@ -216,17 +240,44 @@ export function ReportsWorkbench({
     return set.size === 1 ? [...set][0] : "USD";
   }, [accounts]);
 
+  /**
+   * Denominator for percentage mode.
+   *
+   * Equity, per `balance.ts`, is `starting balance + realized P&L + cash flow`.
+   * This used to be starting balance plus cash flow only — the realized term was
+   * missing, so on a book that had doubled every "% of equity" figure came out
+   * roughly twice what it should be, and the error grew with the account.
+   *
+   * Two scoping rules that look inconsistent and are not:
+   *
+   *   - the ACCOUNT filter applies, because equity belongs to an account;
+   *   - every other report filter does NOT. Equity is what the account holds
+   *     today, not what the trades currently on screen add up to. Narrowing it
+   *     to "trades tagged FVG" would make the same net P&L show a different
+   *     percentage depending on an unrelated filter.
+   *
+   * Built through `buildBalanceTimeline` / `currentEquity` rather than a fourth
+   * hand-rolled sum, so it cannot drift from the dashboard's equity curve.
+   */
   const equityBase = useMemo(() => {
-    const scoped = filters.accountIds?.length
-      ? accounts.filter((a) => filters.accountIds!.includes(a.id))
-      : accounts;
-    const start = scoped.reduce((s, a) => s + (a.starting_balance ?? 0), 0);
-    const flow = cashEvents
-      .filter((c) => !filters.accountIds?.length || filters.accountIds.includes(c.account_id))
-      .reduce((s, c) => s + c.amount, 0);
-    const base = start + flow;
+    const ids = filters.accountIds;
+    const inScope = (accountId: string | null) =>
+      !ids?.length || (accountId != null && ids.includes(accountId));
+
+    const start = accounts
+      .filter((a) => inScope(a.id))
+      .reduce((s, a) => s + (a.starting_balance ?? 0), 0);
+
+    const realized = toRealized(trades.filter((t) => inScope(t.account_id)));
+    const base = currentEquity(
+      buildBalanceTimeline(
+        start,
+        realized.map((t) => ({ at: t.closedAt ?? "", pnl: t.net })),
+        cashEvents.filter((c) => inScope(c.account_id)),
+      ),
+    );
     return base > 0 ? base : null;
-  }, [accounts, cashEvents, filters.accountIds]);
+  }, [accounts, trades, cashEvents, filters.accountIds]);
 
   // Insights double as a dimension and as a filter, so they are evaluated once
   // and indexed by trade.
@@ -276,6 +327,32 @@ export function ReportsWorkbench({
     () => ({ pnlBasis, range, currency, rules: playbookLookup.rules }),
     [pnlBasis, range, currency, playbookLookup],
   );
+
+  /**
+   * Which of the seven view modes this report can actually render.
+   *
+   * `units.ts` has computed this since it was written — "so a UI can grey out a
+   * mode instead of silently showing something else" — and nothing called it.
+   * All seven buttons rendered, and four of them did nothing: a report groups
+   * trades across many instruments, so the format context here carries a
+   * currency and an equity base and no instrument and no per-trade risk. Pick
+   * "Pips" and `formatMetric` falls through to money; the button lights up and
+   * the numbers do not move.
+   *
+   * Probed with a money-unit value because those are the only ones a view mode
+   * changes — counts, ratios and durations render the same in every mode.
+   */
+  const modeRenderable = useMemo(() => {
+    const probe = mkMetric(1, "money", { currency, equityBase });
+    return new Map(VIEW_MODES.map((m) => [m.value, canRender(probe, m.value)]));
+  }, [currency, equityBase]);
+
+  // A mode can also arrive from the URL, where no button guards it. Falling back
+  // for display closes the same lie from the other side; the URL is left alone so
+  // the choice returns by itself once an equity base exists.
+  const effectiveViewMode: ViewMode = modeRenderable.get(viewMode)
+    ? viewMode
+    : "dollars";
 
   const result = useMemo(
     () =>
@@ -401,24 +478,30 @@ export function ReportsWorkbench({
           </div>
 
           <div className="flex flex-wrap rounded-md border p-0.5">
-            {VIEW_MODES.map((m) => (
-              <button
-                key={m.value}
-                onClick={() => setParam({ view: m.value })}
-                className={`rounded px-2 py-1 text-xs ${
-                  viewMode === m.value
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground"
-                }`}
-                title={
-                  m.value === "privacy"
-                    ? "Sakrij novčane iznose"
-                    : `Prikaži u ${m.label}`
-                }
-              >
-                {m.label}
-              </button>
-            ))}
+            {VIEW_MODES.map((m) => {
+              const usable = modeRenderable.get(m.value) ?? true;
+              return (
+                <button
+                  key={m.value}
+                  disabled={!usable}
+                  onClick={() => setParam({ view: m.value })}
+                  className={`rounded px-2 py-1 text-xs ${
+                    viewMode === m.value && usable
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground"
+                  } ${!usable ? "cursor-not-allowed opacity-40" : ""}`}
+                  title={
+                    !usable
+                      ? `${m.label} ne može ovde — izveštaj grupiše trejdove preko više instrumenata, pa nema ni jedan point value ni rizik po trejdu. Ranije se ovo tiho prikazivalo u dolarima.`
+                      : m.value === "privacy"
+                        ? "Sakrij novčane iznose"
+                        : `Prikaži u ${m.label}`
+                  }
+                >
+                  {m.label}
+                </button>
+              );
+            })}
           </div>
 
           <Select value={String(minSample)} onValueChange={(v) => setParam({ min: v })}>
@@ -471,7 +554,7 @@ export function ReportsWorkbench({
           dimensionKey={dimensionKey}
           columnKeys={columnKeys}
           minSample={minSample}
-          viewMode={viewMode}
+          viewMode={effectiveViewMode}
           currency={currency}
           equityBase={equityBase}
         />
@@ -481,7 +564,7 @@ export function ReportsWorkbench({
             <PerformanceSummaryPanel
               summary={summarizeReport(result, metricKey)}
               metric={selectedMetric}
-              viewMode={viewMode}
+              viewMode={effectiveViewMode}
               currency={currency}
               equityBase={equityBase}
               minSample={minSample}
@@ -491,7 +574,7 @@ export function ReportsWorkbench({
               result={result}
               metricKeys={chartMetrics}
               chartType={chartType}
-              viewMode={viewMode}
+              viewMode={effectiveViewMode}
               currency={currency}
               equityBase={equityBase}
               action={
@@ -543,7 +626,7 @@ export function ReportsWorkbench({
 
             <ReportTable
               result={result}
-              viewMode={viewMode}
+              viewMode={effectiveViewMode}
               currency={currency}
               equityBase={equityBase}
               sortBy={sortBy}
@@ -574,7 +657,7 @@ export function ReportsWorkbench({
                 </div>
                 <CrossAnalysis
                   result={pivot}
-                  viewMode={viewMode}
+                  viewMode={effectiveViewMode}
                   currency={currency}
                   equityBase={equityBase}
                 />

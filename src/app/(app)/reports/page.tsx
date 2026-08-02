@@ -10,6 +10,13 @@ import { ReportsWorkbench } from "@/components/journal/reports/reports-workbench
 import type { TradeRow } from "@/lib/journal/types";
 
 export default async function ReportsPage() {
+  // `tj_position_rules` is drained ONCE, and the per-rule counts are derived
+  // from the result inside `getPlaybooks`. Both reads used to sit in this
+  // Promise.all, draining the same table — one row per rule per trade, the
+  // fastest-growing in the schema — twice on every render of the route. One
+  // extra await costs a round trip; the second drain cost the whole table.
+  const positionRules = await getPositionRules();
+
   const [
     trades,
     accounts,
@@ -18,7 +25,6 @@ export default async function ReportsPage() {
     cashEvents,
     fieldDefs,
     playbooks,
-    positionRules,
     optionsMap,
   ] = await Promise.all([
     getTradesWithStats(),
@@ -32,8 +38,7 @@ export default async function ReportsPage() {
     // Retired rules included for the same reason — their recorded answers are
     // real observations, and dropping them would move numbers for trades logged
     // long before the rule was retired.
-    getPlaybooks({ includeDeleted: true }),
-    getPositionRules(),
+    getPlaybooks({ includeDeleted: true, positionRules }),
     // Inactive options included, for the third time and the same reason: an
     // emotion the trader has since retired is still the emotion those trades
     // were tagged with, and dropping it would move a tag from the Emocija

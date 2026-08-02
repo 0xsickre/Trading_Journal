@@ -94,7 +94,12 @@ function matchesClause(
   }
 }
 
-export function matchesFilterSet(
+/**
+ * One trade against a whole filter set. Not exported: `applyFilters` is the
+ * only caller and the only supported entry point, and an export here invites a
+ * second call site that skips the pagination `applyFilters` does around it.
+ */
+function matchesFilterSet(
   t: EnrichedTrade,
   filters: FilterSet,
   ctx: DimensionContext,

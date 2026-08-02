@@ -26,6 +26,13 @@ export default async function DashboardPage() {
   // Fallback seed for legacy users / missed signup trigger — runs on the landing
   // page only (must finish before we read accounts on a brand-new user).
   await ensureDefaults();
+  // `tj_position_rules` is drained ONCE, and the per-rule counts are derived
+  // from the result inside `getPlaybooks`. Both reads used to sit in this
+  // Promise.all, draining the same table — one row per rule per trade, the
+  // fastest-growing in the schema — twice on every render of the route. One
+  // extra await costs a round trip; the second drain cost the whole table.
+  const positionRules = await getPositionRules();
+
   const [
     trades,
     accounts,
@@ -36,7 +43,6 @@ export default async function DashboardPage() {
     fieldDefs,
     trackerRules,
     playbooks,
-    positionRules,
   ] = await Promise.all([
     getTradesWithStats(),
     getAccounts(),
@@ -51,8 +57,7 @@ export default async function DashboardPage() {
     getTrackerRules({ includeRetired: true }),
     // Follow rate is 40 % of process adherence, and a retired rule's answers are
     // real observations — same reason the reports screen loads them all.
-    getPlaybooks({ includeDeleted: true }),
-    getPositionRules(),
+    getPlaybooks({ includeDeleted: true, positionRules }),
   ]);
 
   // The account's day, not the browser's — every day key in the tracker is in

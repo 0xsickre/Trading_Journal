@@ -11,7 +11,7 @@
  * touching grouping logic.
  */
 
-import { durationBucket } from "../hold-time";
+import { DURATION_BUCKETS, durationBucket } from "../hold-time";
 import { arrayFieldValue, stringFieldValue } from "../field-values";
 import { isShortDirection } from "../plan-calculations";
 import type { EnrichedTrade } from "../enriched-trade";
@@ -281,7 +281,10 @@ const derivedDimensions: Dimension[] = [
     key: "hold_duration",
     label: "Trajanje držanja",
     group: "derived",
-    order: ["<1d", "1–3d", "3–7d", "1–2w", ">2w"],
+    // From the constant `durationBucket` itself buckets by, not a copy of its
+    // labels. A stale `order` entry sorts a real bucket to the bottom forever
+    // and nothing errors — and the two lists sat here as separate literals.
+    order: DURATION_BUCKETS,
     valueOf: (t) => durationBucket(t.durationSeconds),
   },
   {

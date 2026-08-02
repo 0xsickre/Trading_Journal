@@ -115,6 +115,28 @@ export function computePositionStats(
     }
 
     if (riskPts != null && entryQty > 0) {
+      /**
+       * R IS MEASURED AGAINST THE RISK ACTUALLY TAKEN, NOT THE PART CLOSED.
+       *
+       * The denominator uses `entryQty` — the whole position — while
+       * `grossPoints` above covers only `exitQty`. For a fully closed trade the
+       * two quantities are equal and this is exact. For a partially closed one
+       * it is deliberately diluted: a position half closed at +2R reports +1R,
+       * because the other half is still exposed to the same 1R of risk and has
+       * not paid anything yet.
+       *
+       * The alternative — dividing by `exitQty` — would report the closed half
+       * at its full +2R while the open half could still stop out, and a trade
+       * scaled out in four pieces would print four 2R rows for one 1R of risk.
+       *
+       * Two consequences worth knowing, since `realized_r` flows on into
+       * `rHistogram`, `expectancy` and the R filter alongside closed trades:
+       *
+       *   - an open partial reads LOW and drifts up as the rest closes;
+       *   - the same expression lives in the SQL view
+       *     (`20260728120000_snapshot_instrument_spec.sql`). The two must agree,
+       *     so neither may be changed alone.
+       */
       const riskDenom = riskPts * entryQty;
       realizedR = grossPoints / riskDenom;
       if (pointValue != null) {

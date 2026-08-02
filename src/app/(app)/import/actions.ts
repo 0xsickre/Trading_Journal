@@ -73,6 +73,11 @@ export async function commitImport(input: CommitInput) {
     let createdPositionId: string | null = null;
     // Fills this row displaced, kept so `undoImportBatch` can put them back.
     let replacedExecs: ImportExec[] | null = null;
+    // Counted only once the audit row has landed too. The counters used to be
+    // bumped inline, which was harmless while the audit insert could not fail —
+    // now that it throws, an inline bump would count the same row as merged AND
+    // as failed, and the four totals would no longer sum to the batch.
+    let outcome: "created" | "merged" | "skipped" | null = null;
 
     try {
       if (item.decision === "create") {
@@ -103,7 +108,7 @@ export async function commitImport(input: CommitInput) {
           });
           if (exErr) throw new Error(exErr.message);
         }
-        created++;
+        outcome = "created";
       } else if (item.decision === "merge" && matchedId) {
         const pid: string = matchedId;
         // Replace ONLY the objective fills; subjective position fields untouched.
@@ -120,19 +125,30 @@ export async function commitImport(input: CommitInput) {
           p_executions: item.executions.map((e) => ({ ...e, source: "import" })),
         });
         if (exErr) throw new Error(exErr.message);
-        await supabase
+        const { error: stErr } = await supabase
           .from("tj_positions")
           .update({
             status: statusOf(item.executions),
             needs_review: item.executions.length === 0,
           })
           .eq("id", pid);
-        merged++;
+        // Thrown, not ignored: the fills have already been replaced by the line
+        // above, so a swallowed failure here leaves the position carrying new
+        // fills under its old status — closed fills on a row still reading
+        // `open`, which every stat then reads as an unfinished trade.
+        if (stErr) throw new Error(stErr.message);
+        outcome = "merged";
       } else {
-        skipped++;
+        outcome = "skipped";
       }
 
-      await supabase.from("tj_import_rows").insert({
+      // The audit row is the serious one. `prev_executions` is the ONLY record
+      // of the fills a merge displaced, and by this point they are already
+      // gone from `tj_executions`. Swallowing this error made undo permanently
+      // impossible for that row — `undoImportBatch` would report it under
+      // `unrestorableMerges` with nothing to say the cause was a failed write
+      // rather than a batch predating the snapshot column.
+      const { error: auditErr } = await supabase.from("tj_import_rows").insert({
         batch_id: batch.id,
         raw: item.raw,
         parsed: {
@@ -144,6 +160,11 @@ export async function commitImport(input: CommitInput) {
         matched_position_id: matchedId,
         prev_executions: replacedExecs,
       });
+      if (auditErr) throw new Error(auditErr.message);
+
+      if (outcome === "created") created++;
+      else if (outcome === "merged") merged++;
+      else skipped++;
     } catch (e) {
       failed++;
       // A position inserted moments ago whose fills then failed is not a trade,

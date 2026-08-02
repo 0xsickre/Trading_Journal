@@ -1,3 +1,4 @@
+import { numberFieldValue as numField } from "./field-values";
 import type { TradeRow } from "./types";
 import {
   computePlannedRewardR,
@@ -21,11 +22,6 @@ export { parsePlannedRewardR } from "./plan-calculations";
  * near-zero planned reward makes exit-efficiency % explode.
  */
 const MIN_PLANNED_REWARD_R = 0.1;
-
-function numField(row: TradeRow, key: string): number | null {
-  const v = row[key];
-  return typeof v === "number" && !Number.isNaN(v) ? v : null;
-}
 
 /**
  * Planned reward R: the stored `planned_rr` when there is one, otherwise

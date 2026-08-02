@@ -201,13 +201,6 @@ export function buildPlaybookLookup(
   };
 }
 
-/** Empty lookup, for callers that have no playbook data loaded. */
-export const EMPTY_RULE_LOOKUP: RuleLookup = {
-  text: new Map(),
-  showWhen: new Map(),
-  answersByTrade: new Map(),
-};
-
 /** Every playbook-derived dimension, for the registry. */
 export function playbookDimensions(lookup: PlaybookLookup): Dimension[] {
   return [

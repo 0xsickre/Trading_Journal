@@ -107,10 +107,3 @@ export function durationBucket(
   if (days < 14) return "1–2w";
   return ">2w";
 }
-
-/** Bucket label for a trade, for use as a report dimension. */
-export function durationBucketOfTrade(
-  t: RealizedTrade,
-): DurationBucket | null {
-  return durationBucket(t.row.stats?.duration_seconds ?? null);
-}

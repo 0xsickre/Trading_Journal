@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { selectAllByIds, selectAllPages } from "@/lib/supabase/paginate";
 import type { Instrument } from "./types";
 
 /** The contract spec snapshotted onto a position when it is written. */
@@ -43,12 +44,35 @@ export async function getInstrumentSpecs(
   if (symbols != null && wanted.length === 0) return new Map();
 
   const supabase = await createClient();
-  let query = supabase.from("tj_instruments").select("symbol,point_value,tick_size");
-  if (wanted.length > 0) query = query.in("symbol", wanted);
+  type Row = InstrumentSpec & { symbol: string };
+  const select = "symbol,point_value,tick_size";
 
-  const { data } = await query;
+  // Both paths drain: an `.in()` filter is spelled into the URL and PostgREST
+  // caps the URL's length, while an unfiltered read is capped at `db-max-rows`
+  // and comes back truncated with HTTP 200 and no error. `commitImport` passes
+  // one symbol per imported row, so a wide multi-symbol import is exactly the
+  // case that reached the first cap — and a missing spec means the trade is
+  // stamped with no point value and every money column on it turns null.
+  const data =
+    wanted.length > 0
+      ? await selectAllByIds<Row, string>(wanted, (chunk, from, to) =>
+          supabase
+            .from("tj_instruments")
+            .select(select)
+            .in("symbol", chunk)
+            .order("symbol")
+            .range(from, to),
+        )
+      : await selectAllPages<Row>((from, to) =>
+          supabase
+            .from("tj_instruments")
+            .select(select)
+            .order("symbol")
+            .range(from, to),
+        );
+
   const map = new Map<string, InstrumentSpec>();
-  for (const row of (data ?? []) as (InstrumentSpec & { symbol: string })[]) {
+  for (const row of data) {
     map.set(row.symbol, {
       point_value: row.point_value,
       tick_size: row.tick_size,

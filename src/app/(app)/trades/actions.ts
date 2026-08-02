@@ -205,6 +205,18 @@ export async function createTrade(input: TradeInput) {
 }
 
 export async function updateTrade(id: string, input: TradeInput) {
+  // Same freeze guard as `createTrade`, and for the same reason: editing a
+  // planned trade into an active one opens a position on the account, which is
+  // exactly what the FTMO freeze exists to stop. Only `createTrade` had it, so
+  // the rule was enforceable through one door and not the other.
+  if (await isFtmoAccountFrozen(input.account_id)) {
+    return {
+      ok: false as const,
+      error:
+        "FTMO nalog je zamrznut — pravilo je prekršeno. Resetuj izazov u Settings da nastaviš.",
+    };
+  }
+
   const supabase = await createClient();
   const patch = await sanitizeFields(input.fields);
   const execs = cleanExecs(input.executions);
@@ -226,11 +238,20 @@ export async function updateTrade(id: string, input: TradeInput) {
     .eq("id", id)
     .maybeSingle();
 
+  // A missing row is not an empty previous state, it is a trade that is not
+  // there. Without this the code walked on: `symbolChanged` false, the snapshot
+  // re-taken, the UPDATE matching zero rows, PostgREST returning no error — and
+  // the action answering `{ ok: true }` for a save that wrote nothing. The
+  // sibling lifecycle actions have always returned "Trade not found" here.
+  if (!prevPos) return { ok: false as const, error: "Trade not found" };
+
   const symbol =
     typeof patch.columns.instrument === "string" ? patch.columns.instrument : null;
-  const symbolChanged = prevPos != null && prevPos.instrument !== symbol;
+  // `prevPos` is non-null past the guard above, so the optional chains that
+  // used to paper over the missing-row case are gone with it.
+  const symbolChanged = prevPos.instrument !== symbol;
   const snapshot =
-    symbolChanged || prevPos?.point_value_at_trade == null
+    symbolChanged || prevPos.point_value_at_trade == null
       ? instrumentSnapshot(symbol, await getInstrumentSpecs([symbol]))
       : {};
 
@@ -238,7 +259,7 @@ export async function updateTrade(id: string, input: TradeInput) {
     .from("tj_positions")
     .update({
       ...patch.columns,
-      custom: mergeCustom(prevPos?.custom, patch.custom) as Json,
+      custom: mergeCustom(prevPos.custom, patch.custom) as Json,
       account_id: input.account_id,
       trade_no: input.trade_no,
       ...statusPatch,
@@ -296,7 +317,17 @@ export async function markTradeMissed(
       ? [pos.trade_journal_notes, notes].filter(Boolean).join("\n\n")
       : pos.trade_journal_notes;
 
-  const { error } = await supabase
+  // The status predicate rides ALONG WITH the write, not before it. Read-then-
+  // update let a second tab (or an import merge) change the row in between, and
+  // the update then landed on a state nobody checked. `.select()` makes
+  // PostgREST return the affected rows, so zero rows means the predicate no
+  // longer held — a stale page, not a database error.
+  //
+  // The fill half of the guard is not expressible here and does not need to be:
+  // `20260730140000_integrity_guards` refuses `status = 'missed'` on a position
+  // that has fills, with a row lock that serialises against the fill insert. The
+  // check above this only exists to produce a better message than the trigger's.
+  const { data: changed, error } = await supabase
     .from("tj_positions")
     .update({
       status: "missed",
@@ -304,9 +335,14 @@ export async function markTradeMissed(
       miss_reason: input?.miss_reason?.trim() || null,
       trade_journal_notes: mergedNotes,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .neq("status", "missed")
+    .select("id");
 
   if (error) return { ok: false as const, error: error.message };
+  if (!changed || changed.length === 0) {
+    return { ok: false as const, error: "Trade changed — refresh the page" };
+  }
 
   revalidatePath("/journal");
   revalidatePath(`/trades/${id}`);
@@ -333,16 +369,21 @@ export async function restoreTradeToPlanned(id: string) {
     return { ok: false as const, error: "Cannot restore a trade with fills" };
   }
 
-  const { error } = await supabase
+  const { data: changed, error } = await supabase
     .from("tj_positions")
     .update({
       status: "planned",
       missed_at: null,
       miss_reason: null,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("status", "missed")
+    .select("id");
 
   if (error) return { ok: false as const, error: error.message };
+  if (!changed || changed.length === 0) {
+    return { ok: false as const, error: "Trade changed — refresh the page" };
+  }
 
   revalidatePath("/journal");
   revalidatePath(`/trades/${id}`);
@@ -373,12 +414,17 @@ export async function activateTrade(id: string) {
     return { ok: false as const, error: "Trade already has fills — refresh the page" };
   }
 
-  const { error } = await supabase
+  const { data: changed, error } = await supabase
     .from("tj_positions")
     .update({ status: "open", needs_review: false })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("status", "planned")
+    .select("id");
 
   if (error) return { ok: false as const, error: error.message };
+  if (!changed || changed.length === 0) {
+    return { ok: false as const, error: "Trade changed — refresh the page" };
+  }
 
   revalidatePath("/journal");
   revalidatePath(`/trades/${id}`);

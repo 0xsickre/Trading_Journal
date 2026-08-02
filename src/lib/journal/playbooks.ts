@@ -35,7 +35,24 @@ type RuleRow = {
  * numbers for trades that were logged years before the rule was retired.
  */
 export async function getPlaybooks(
-  { includeDeleted = false, activeOnly = false } = {},
+  {
+    includeDeleted = false,
+    activeOnly = false,
+    positionRules,
+  }: {
+    includeDeleted?: boolean;
+    activeOnly?: boolean;
+    /**
+     * Answers the caller has already loaded.
+     *
+     * `tj_position_rules` holds one row per rule per trade and is the
+     * fastest-growing table in the schema. `/reports` and the dashboard both
+     * need the raw answers AND the per-rule counts, and used to drain the whole
+     * table twice per render — once here and once through `getPositionRules`.
+     * Handing the map in derives the counts from rows already in memory.
+     */
+    positionRules?: Map<string, PositionRule[]>;
+  } = {},
 ): Promise<Playbook[]> {
   const supabase = await createClient();
 
@@ -61,7 +78,7 @@ export async function getPlaybooks(
         .order("id")
         .range(from, to),
     ),
-    ruleAnswerCounts(),
+    positionRules ? countAnswersByRule(positionRules) : ruleAnswerCounts(),
   ]);
 
   const rulesByGroup = new Map<string, PlaybookRule[]>();
@@ -92,8 +109,27 @@ export async function getPlaybooks(
     .map((b) => ({ ...b, groups: groupsByBook.get(b.id) ?? [] }));
 }
 
-/** Trades answered per rule id — what makes `show_when` frozen and delete soft. */
-export async function ruleAnswerCounts(): Promise<Map<string, number>> {
+/** Per-rule answer counts from answers already in hand. No query. */
+function countAnswersByRule(
+  byTrade: Map<string, PositionRule[]>,
+): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const answers of byTrade.values()) {
+    for (const a of answers) {
+      map.set(a.rule_id, (map.get(a.rule_id) ?? 0) + 1);
+    }
+  }
+  return map;
+}
+
+/**
+ * Trades answered per rule id — what makes `show_when` frozen and delete soft.
+ *
+ * The fallback for callers that do NOT already hold the answers (Settings, the
+ * trade form). Anything that also needs `getPositionRules` should pass that map
+ * in instead and skip this read entirely.
+ */
+async function ruleAnswerCounts(): Promise<Map<string, number>> {
   const supabase = await createClient();
   const rows = await selectAllPages<{ rule_id: string }>((from, to) =>
     supabase

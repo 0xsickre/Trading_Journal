@@ -697,6 +697,10 @@ rule now lives in a `CHECK` where it cannot be bypassed.
 Everything under Medium and Low in round 2, minus M5's corruption path (closed by D2).
 Nothing under Critical or High. Plus the four dashboard items listed above.
 
+> **Superseded.** All fourteen were resolved in round 3, step 1 below — eleven fixed, one
+> already closed by phase 5, and two corrections to this document's own findings. The four
+> Supabase-dashboard items are unchanged and still require the dashboard.
+
 ---
 
 # Round 3 — full-project audit
@@ -850,3 +854,90 @@ would have poisoned the control value for all nine remaining steps.
 `RECORDED` — P1, P2, P3, P4, to be decided in steps 8 and 3.
 Two knip false positives dismissed before recording (`server-only`, `tw-animate-css`).
 Baseline holds: 700 tests, **1** lint warning, `tsc` clean, build green, 12 routes.
+
+## Step 1 — closing round 2's fourteen
+
+Round 2 left M1–M8 and L1–L6 in a bucket called "documented, not applied", and there they
+stayed. Each was re-checked against today's code before anything was touched, because a
+finding list nobody re-verified is not a work list — and two of the fourteen turned out not
+to need work at all, in opposite directions.
+
+**Two corrections to round 2, stated plainly:**
+
+- **L5 was wrong.** It claimed `formatMetric`'s money fallbacks rendered `+$250.00` where
+  dollars mode rendered `$250.00`. They never did: `fmtMoney(n, currency, opts)` defaults
+  `opts` to `{}`, so `opts.sign && v > 0` is falsy and the two spellings have always been
+  identical. `REJECTED`. A test now pins the equivalence across all five fallback paths, so
+  the claim is settled by execution rather than re-argued; the six call sites were also
+  folded into one local `money()` — not a fix, just one fewer place for a future
+  `sign: true` to land in isolation.
+- **L1 over-counted by five.** It listed eight symbols as "referenced from nowhere outside
+  their own module or its test". Treating a test as a non-consumer is the wrong test: these
+  are pure functions whose tests are their specification. knip, which counts test imports,
+  finds only three genuinely unreferenced — and `getDimension` has since been wired into the
+  journal grid's outcome filter, so the list is down to three.
+
+### Outcomes
+
+| # | Outcome | What changed |
+|---|---|---|
+| M1 | `FIXED` | URL parsing extracted to `reports/url-params.ts` with tests |
+| M2 | `FIXED` | `equityBase` now includes realized P&L |
+| M3 | `FIXED` | FTMO freeze guard added to `updateTrade` |
+| M4 | `FIXED` | Missing trade returns "Trade not found", not `{ ok: true }` |
+| M5 | `FIXED` | Guard predicate folded into all three lifecycle writes |
+| M6 | `FIXED` | Both swallowed errors now throw; counters made consistent |
+| M7 | `FIXED` | `tj_position_rules` drained once per route, not twice |
+| M8 | `FIXED (documented)` | Partial-exit R convention written at the point of calculation |
+| L1 | `FIXED (3)` / `REJECTED (5)` | See correction above |
+| L2 | `ALREADY CLOSED` | Phase 5 wired `processAdherencePct`; round 2's text was stale |
+| L3 | `FIXED` | `canRender` wired; unusable view modes are disabled |
+| L4 | `FIXED` | Three private accessors replaced by `numberFieldValue` |
+| L5 | `REJECTED` | The finding was wrong; equivalence pinned by test |
+| L6 | `FIXED` | `getInstrumentSpecs` chunks and pages both of its paths |
+
+### The three that were more than mechanical
+
+**M1 — `?min=abc` silently disabled the small-sample guard.** `Number("abc")` is `NaN`,
+`trades.length < NaN` is `false`, so no bucket was ever flagged `belowSample` and
+`summarizeReport` let everything through — the entire mechanism stopping a three-trade
+bucket from being crowned "best". Parsing moved out of the component into
+`reports/url-params.ts`, where it can be imported and tested; a component-local helper is
+untestable by construction, which is part of why this survived. `basis` was also inverted to
+"gross only when the URL says gross", since the cast treated `?basis=Net` — one capital
+letter — as gross under a toggle still highlighting Net.
+
+**L3 — four of seven view modes were lying.** `units.ts` has computed `canRender` since it
+was written, with a header saying it exists "so a UI can grey out a mode instead of silently
+showing something else", and nothing ever called it. A report groups trades across many
+instruments, so the format context carries a currency and an equity base and no instrument
+and no per-trade risk: R, points, ticks and pips cannot render there at all. Selecting Pips
+lit the button up and changed nothing. They are now disabled with a tooltip explaining why,
+and a mode arriving from the URL that cannot render falls back for display — the same lie
+was reachable from both directions.
+
+**M6 — and the regression the fix would have introduced.** Making the audit insert throw is
+right: `prev_executions` is the only record of the fills a merge displaced, and swallowing
+its error made undo permanently impossible for that row while reporting it as merely
+`unrestorableMerges`. But `merged++` sat BEFORE that insert, so a throw would have counted
+the same row as merged *and* as failed, and the four totals would no longer have summed to
+the batch. The counters now record an outcome and are applied once the audit row has landed.
+Worth noting as its own small lesson: a fix that turns a silent path into a throwing one has
+to re-check everything downstream of it that assumed no throw.
+
+### Verified
+
+`tsc` clean · **711 tests / 47 files** (700 → 711; the eleven are M1's URL parsing and L5's
+equivalence pin) · lint back to exactly **1** warning · build green · knip unused exports
+67 → 62.
+
+Not exercised against the live database: M3–M7 are server actions and this container has no
+Supabase credentials. M5's atomicity rests on the DB triggers from round 2b (D2), which were
+exercised then; what changed here is the error the user sees, not the guarantee.
+
+### Outcome
+
+`FIXED` — M1, M2, M3, M4, M5, M6, M7, M8, L3, L4, L6, and three of L1.
+`REJECTED` — L5 (finding incorrect), five of L1 (test imports are consumers).
+`ALREADY CLOSED` — L2.
+The "documented, not applied" bucket no longer exists.

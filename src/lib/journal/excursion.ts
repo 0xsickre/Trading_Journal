@@ -11,6 +11,7 @@
  */
 
 import type { TradeRow } from "./types";
+import { numberFieldValue as num } from "./field-values";
 import { plannedRiskPts, tradeDirectionMultiplier } from "./position-stats";
 
 export type Excursion = {
@@ -21,11 +22,6 @@ export type Excursion = {
   /** realized R / MFE R — how much of the best available move was kept. */
   capturePct: number | null;
 };
-
-function num(row: TradeRow, key: string): number | null {
-  const v = row[key];
-  return typeof v === "number" && !Number.isNaN(v) ? v : null;
-}
 
 /**
  * Excursion in R, on the journal's R convention.

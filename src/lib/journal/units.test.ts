@@ -78,6 +78,21 @@ describe("formatMetric — impossible conversions fall back, never invent", () =
     const v = metric(250, "money", { currency: "USD", instrument: future });
     expect(formatMetric(v, "pips")).toBe("$250.00");
   });
+
+  it("spells a fallback exactly like dollars mode, sign included", () => {
+    // Round 2 recorded this as defect L5 — a claim that the fallbacks rendered
+    // "+$250.00" against dollars mode's "$250.00". They did not: `fmtMoney`
+    // takes `{ sign }` defaulted to undefined, so `opts.sign && v > 0` is falsy
+    // and the two spellings were always identical. Pinned so the finding is
+    // settled by a test rather than re-argued, and so a future `sign: true`
+    // slipped into one branch shows up here instead of on screen.
+    const v = metric(250, "money", { currency: "USD" });
+    const dollars = formatMetric(v, "dollars");
+    expect(dollars).toBe("$250.00");
+    for (const mode of ["percentage", "r", "points", "ticks", "pips"] as const) {
+      expect(formatMetric(v, mode)).toBe(dollars);
+    }
+  });
 });
 
 describe("formatMetric — unit-less quantities ignore the mode", () => {

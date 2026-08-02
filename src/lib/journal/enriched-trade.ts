@@ -10,9 +10,9 @@
 
 import type { RealizedTrade } from "./analytics";
 import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
+import { numberFieldValue as numField } from "./field-values";
 import { excursionFromTrade, type Excursion } from "./excursion";
 import { zonedDateKey, zonedWeekStartKey } from "./time";
-import type { TradeRow } from "./types";
 import type { Micromanage } from "./daily-report";
 
 /** The journal fields downstream consumers join against — process, not prose. */
@@ -59,11 +59,6 @@ export type EnrichOptions = {
   pnlOf?: (t: RealizedTrade) => number;
   fillCounts?: FillCounts;
 };
-
-function numField(row: TradeRow, key: string): number | null {
-  const v = row[key];
-  return typeof v === "number" && !Number.isNaN(v) ? v : null;
-}
 
 export function enrichTrades(
   trades: RealizedTrade[],

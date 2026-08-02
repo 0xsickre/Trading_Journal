@@ -157,35 +157,40 @@ export function formatMetric(v: MetricValue, mode: ViewMode = "dollars"): string
   }
 
   // money
+  //
+  // Every branch below can fall back to money when its own unit is unavailable,
+  // and the fallback must render EXACTLY like the dollars branch. Spelled out as
+  // one local so the two cannot drift: they used to, and the same +250 showed as
+  // "+$250.00" in percentage mode and "$250.00" in dollars mode — one column,
+  // one number, two spellings depending on a toggle that was supposed to change
+  // the unit, not the punctuation.
+  const money = () => fmtMoney(v.base, currency, { sign: false });
+
   switch (mode) {
     case "percentage": {
       const base = ctx.equityBase ?? 0;
-      return base > 0 ? fmtPct((v.base / base) * 100, 2) : fmtMoney(v.base, currency);
+      return base > 0 ? fmtPct((v.base / base) * 100, 2) : money();
     }
     case "r": {
       const risk = ctx.riskMoney ?? 0;
-      return risk > 0 ? fmtR(v.base / risk) : fmtMoney(v.base, currency);
+      return risk > 0 ? fmtR(v.base / risk) : money();
     }
     case "points":
     case "ticks":
     case "pips": {
       const pv = ctx.instrument?.point_value ?? 0;
-      if (!(pv > 0)) return fmtMoney(v.base, currency);
+      if (!(pv > 0)) return money();
       const points = v.base / pv;
       if (mode === "points") return `${fmtNum(points, 2)} pts`;
       if (mode === "ticks") {
         const tick = ctx.instrument?.tick_size ?? 0;
-        return tick > 0
-          ? `${fmtNum(points / tick, 1)} ticks`
-          : fmtMoney(v.base, currency);
+        return tick > 0 ? `${fmtNum(points / tick, 1)} ticks` : money();
       }
       const pip = pipSize(ctx.instrument);
-      return pip != null
-        ? `${fmtNum(points / pip, 1)} pips`
-        : fmtMoney(v.base, currency);
+      return pip != null ? `${fmtNum(points / pip, 1)} pips` : money();
     }
     default:
-      return fmtMoney(v.base, currency, { sign: false });
+      return money();
   }
 }
 
