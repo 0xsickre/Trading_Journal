@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored reporter assets from `vitest run --coverage`. Git already ignores
+    // the directory, but this list REPLACES the defaults rather than extending
+    // them, so anything not named here gets linted — and istanbul's bundled JS
+    // carries its own eslint directives, which surface as warnings we did not
+    // write and cannot fix.
+    "coverage/**",
   ]),
   {
     rules: {

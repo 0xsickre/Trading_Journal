@@ -696,3 +696,157 @@ rule now lives in a `CHECK` where it cannot be bypassed.
 
 Everything under Medium and Low in round 2, minus M5's corruption path (closed by D2).
 Nothing under Critical or High. Plus the four dashboard items listed above.
+
+---
+
+# Round 3 — full-project audit
+
+Rounds 1 and 2 closed at commit `f5270b2`. Since then **32 commits, 101 files,
++12 567 / −866 lines** have landed and never been reviewed: phases 5 (Progress Tracker),
+6 (Notebook), 7 (calendar, daily block, grid columns), 8A (candle-derived MAE/MFE), and the
+parity cleanup that dropped four dead columns. That delta is where this round concentrates;
+earlier code gets a re-check rather than a fresh read.
+
+**Process change, decided by the owner before this round started: the
+"documented, not applied" bucket is abolished.** Round 2 left fourteen findings in it and
+all fourteen are still sitting there — which is the whole argument. Every finding in round 3
+carries an outcome in its own step: `FIXED` or `REJECTED — reason`. Nothing is parked.
+
+Scope decisions for this round, also the owner's: no large refactors (correctness, dead code
+and small duplications only — `dashboard.tsx` and the other large working components are not
+taken apart), and `knip` joins the repo as a permanent devDependency.
+
+The audit runs in ten steps, each ending in its own commit, with a stop for approval between
+every pair. This section grows one step at a time.
+
+## Step 0 — inventory (no fixes)
+
+Nothing was changed in `src/` in this step. The point was to stand up the machines that find
+things mechanically, record what they say, and decide nothing.
+
+### Baseline
+
+| | |
+|---|---|
+| `npx tsc --noEmit` | clean |
+| `npx vitest run` | **700 tests / 46 files**, all passing |
+| `npm run lint` | 0 errors, **1 warning** (`journal-grid.tsx:538`, React Compiler × TanStack Table — knowingly kept) |
+| `npm run build` | passes, 12 routes |
+| Source | 222 files, ~41 000 lines |
+| Migrations | 41 |
+| Supabase advisors | 2 WARN, both known and accepted |
+
+These are control values for the rest of the round. The lint warning count in particular must
+stay at exactly **1**; any other number means a later step introduced something.
+
+### Tooling
+
+`knip` (devDependency) with `knip.json`: Next.js and Vitest plugins on, the generated
+`src/lib/supabase/types.ts` excluded. `@vitest/coverage-v8` was already installed and is now
+actually used.
+
+Two knip results were investigated and dismissed before recording anything, so they do not
+pollute the list:
+
+- **`server-only`, reported as an unlisted dependency in 17 files — false positive.** It
+  does not resolve through node (`require.resolve` throws `MODULE_NOT_FOUND`) and it is not
+  in any `package.json`, yet every build passes. Next ships it as
+  `next/dist/compiled/server-only` and aliases the bare specifier in
+  `next/dist/build/create-compiler-aliases.js`. Adding it to `package.json` would install a
+  redundant second copy. Silenced in `knip.json`.
+- **`tw-animate-css`, reported as used.** It is — `src/app/globals.css:2` imports it, which
+  knip reads. An initial guess that it was dead was wrong and the ignore entry was removed.
+
+### P1 — Seven unused files
+
+All in `src/components/ui/`, none imported anywhere:
+`calendar.tsx`, `filter-select.tsx`, `form.tsx`, `input-group.tsx`, `scroll-area.tsx`,
+`separator.tsx`, `tooltip.tsx`.
+
+Confirmed twice — by knip and independently by grep for `components/ui/<name>"`.
+
+### P2 — Four unused dependencies
+
+`@base-ui/react`, `@hookform/resolvers`, `react-day-picker`, `react-hook-form`.
+
+Two of the four are held up only by P1 files: `react-day-picker` by `ui/calendar.tsx`,
+`react-hook-form` by `ui/form.tsx`. `@base-ui/react` and `@hookform/resolvers` have zero
+references anywhere in `src/`. Deleting P1 and P2 together is one move, in step 8.
+
+Note for that step: `ui/calendar.tsx` is the react-day-picker wrapper deliberately **not**
+used by `/calendar` — it resolves real `Date` objects in the browser's zone, while every day
+key in this app is a day in the **account's** zone. That reasoning is already recorded in the
+phase 7 plan; deleting the file removes the temptation along with the code.
+
+### P3 — 67 unused exports and 22 unused exported types
+
+Raw count from knip. This is a triage list, not a defect list: an export used only inside its
+own module is a missing `export` keyword removal, not dead code, and the `ui/` re-exports are
+a component library shipping its complete API on purpose. Three groups worth separating in
+step 8:
+
+1. **`ui/` re-exports** (~30 of the 67) — `AlertTitle`, `CardFooter`, `DropdownMenuSub…`,
+   `SelectGroup`, `TableCaption` and so on. Almost certainly keep: they are the shadcn
+   surface, and pruning them means editing vendored components that get re-generated.
+2. **Genuinely unreferenced application code** — `renameList` and `deleteList`
+   (`settings/actions.ts:147,159`), `getNotesForPosition` (`notes/queries.ts:58`),
+   `getLockedDays` (`tracker/queries.ts:130`), `getFtmoStatuses` (`ftmo-status.ts:22`),
+   `durationBucketOfTrade` (`hold-time.ts:112`), `matchesFilterSet` (`filters.ts:97`),
+   `isTradingViewChartLayoutUrl` (`tradingview-snapshot.ts:25`). Each needs a decision: wire
+   it up, or delete it.
+3. **Constants and types exported for readability but never imported** — `EMPTY_COSTS`,
+   `EMPTY_PREFS`, `EMPTY_PERIOD_SUMMARY`, `EMPTY_RULE_LOOKUP`, `SEVERITY_ORDER`,
+   `CONSISTENCY_SCALE`, `MIN_VISIBLE_COLUMNS`, `TAG_SPLITS`, `SIZE_EDGES`,
+   `AUTO_RULE_KEYS`… Cheapest resolution is usually to drop the `export`, and several are
+   deliberately exported so a test or a future caller can reach them.
+
+### P4 — Coverage: where no test reaches
+
+`vitest run --coverage`: **88.42% statements, 82.1% branches, 87.25% functions** across the
+2 799 statements that any test imports.
+
+The number is not the finding. These are:
+
+| Module | Stmts | Funcs | What is dark |
+|---|--:|--:|---|
+| `reports/metrics.ts` | 44.7% | **39.0%** | Most `compute` callbacks never run — including all four risk ratios added in phase 7 |
+| `trade-lifecycle.ts` | 53.8% | 69.2% | Lines 29–57 and 109–138: the guards this session's button-gating work depends on |
+| `analytics.ts` | 61.1% | **44.0%** | Lines 397–415, 460–478 — slippage and exit-efficiency aggregates |
+| `time.ts` | 62.2% | 75.0% | Lines 11–77: `fmtInTz`, `zonedInputToUtc`, `utcToZonedInput`, `parseImportTime` — every timezone conversion in the app |
+| `format.ts` | 63.2% | 83.3% | |
+| `mentor-export.ts` | 74.6% | 80.8% | 59.5% branch |
+| `units.ts` | 77.5% | 100% | 68.7% branch |
+| `reports/dimensions.ts` | 77.3% | 81.6% | Lines 418–432, 503–507 |
+| `field-def-types.ts` | 60.0% | 0% | `slugifyFieldKey` has no test at all |
+
+`metrics.ts` and `time.ts` are the two that matter most: the first is the registry every
+report column reads through, the second is the module where a mistake shifts every date in
+the app by a day, silently.
+
+**What this table does NOT cover, and must not be read as covered:** any module no test
+imports never appears in it at all. That is every server query module, every server action
+and every component — roughly half the codebase. Those are steps 5 through 8, and coverage
+tooling will not help there.
+
+### P5 — `eslint.config.mjs` replaces the default ignore list instead of extending it
+
+Found by the baseline itself, which is the argument for having one: the first
+`vitest run --coverage` took the lint warning count from 1 to 2. The second warning was
+`coverage/block-navigation.js:1 — Unused eslint-disable directive`, in istanbul's own
+vendored reporter JS.
+
+`.gitignore:14` already carries `/coverage`, so nothing was ever going to be committed — but
+`globalIgnores` in `eslint.config.mjs` is a hand-copied replacement for
+`eslint-config-next`'s defaults, not an addition to them. Anything not named in that array
+gets linted, including generated output. `coverage/**` added, with the reason written at the
+point of decision so the next person adding a tool knows the list must grow with it.
+
+Fixed here rather than deferred: the tool installed in this step caused it, and leaving it
+would have poisoned the control value for all nine remaining steps.
+
+### Outcome
+
+`FIXED` — P5 only (lint config; no `src/` change).
+`RECORDED` — P1, P2, P3, P4, to be decided in steps 8 and 3.
+Two knip false positives dismissed before recording (`server-only`, `tw-animate-css`).
+Baseline holds: 700 tests, **1** lint warning, `tsc` clean, build green, 12 routes.
