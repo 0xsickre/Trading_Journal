@@ -62,6 +62,24 @@ export function ruleIsLiveOn(rule: TrackerRule, day: string): boolean {
 }
 
 /**
+ * The rules in force on day D.
+ *
+ * Every per-day computation must start here, and that includes reading a rule's
+ * CONFIG, not only whether it is counted. `configsFromRules` keys by `auto_key`
+ * and lets the last rule win, and the unique index on `auto_key` is partial —
+ * it only covers live rules — so a retired rule and its replacement coexist
+ * under one key. Ordered by `sort_order`, which the user can reorder freely,
+ * the retired one can come last and hand a dead limit to every day the
+ * evaluator scores, today included.
+ */
+export function rulesLiveOn(
+  rules: readonly TrackerRule[],
+  day: string,
+): TrackerRule[] {
+  return rules.filter((r) => ruleIsLiveOn(r, day));
+}
+
+/**
  * Whether rule R is applicable to day D — live, and for an auto rule also
  * actually answerable: condition 4 is that the evaluator reached a verdict.
  */
@@ -258,15 +276,25 @@ export function meanCompliance(series: readonly DayCompliance[]): number | null 
  * `checked: null`. Without the `na` rows, locking a Monday with no trades would
  * write nothing for those rules — and a later import backfilling a Monday trade
  * would resurrect them on a day that is supposed to be sealed.
+ *
+ * The day is a parameter so that "which rules apply" is answered HERE, by
+ * `ruleIsLiveOn`, and nowhere else. It used to be answered twice: the caller
+ * filtered by `ruleIsLiveOn(rule, day)` and this function then dropped anything
+ * with a `deleted_at` at all. Those two agree on today and disagree on the past
+ * — sealing a day from before a rule was retired left that rule applicable on
+ * read (it was live that day) but unfrozen, so the one thing the lock exists to
+ * prevent kept happening to it: the verdict re-derived itself whenever a trade
+ * on that day was corrected.
  */
 export function freezeAutoCheckins(
   rules: readonly TrackerRule[],
   auto: AutoResults,
+  day: string,
 ): { rule_id: string; checked: boolean | null }[] {
   const out: { rule_id: string; checked: boolean | null }[] = [];
   for (const rule of rules) {
     if (!rule.auto_key) continue;
-    if (rule.deleted_at) continue;
+    if (!ruleIsLiveOn(rule, day)) continue;
     const verdict = auto[rule.auto_key]?.verdict;
     out.push({
       rule_id: rule.id,

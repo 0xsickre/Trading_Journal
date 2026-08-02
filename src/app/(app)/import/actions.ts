@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { chunkIds, selectAllPages } from "@/lib/supabase/paginate";
 
 import { computeStatus } from "@/lib/journal/trade-lifecycle";
 import { normalizeInstrumentSymbol } from "@/lib/journal/instrument-aliases";
@@ -16,6 +17,12 @@ export type ImportExec = {
   fee: number;
   swap_funding: number;
 };
+
+/**
+ * A fill as captured in `prev_executions` — the wizard's shape plus the
+ * provenance the row already carried, which undo must give back unchanged.
+ */
+type SnapshotExec = ImportExec & { source?: string | null };
 
 export type ImportItem = {
   decision: "create" | "merge" | "skip";
@@ -72,7 +79,7 @@ export async function commitImport(input: CommitInput) {
     // instead of leaving an empty shell behind.
     let createdPositionId: string | null = null;
     // Fills this row displaced, kept so `undoImportBatch` can put them back.
-    let replacedExecs: ImportExec[] | null = null;
+    let replacedExecs: SnapshotExec[] | null = null;
     // Counted only once the audit row has landed too. The counters used to be
     // bumped inline, which was harmless while the audit insert could not fail —
     // now that it throws, an inline bump would count the same row as merged AND
@@ -118,7 +125,7 @@ export async function commitImport(input: CommitInput) {
           .from("tj_executions")
           .select("side,price,qty,executed_at,fee,swap_funding,source")
           .eq("position_id", pid);
-        replacedExecs = (prevExecs ?? []) as unknown as ImportExec[];
+        replacedExecs = (prevExecs ?? []) as unknown as SnapshotExec[];
 
         const { error: exErr } = await supabase.rpc("tj_replace_executions", {
           p_position_id: pid,
@@ -229,27 +236,59 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
     .maybeSingle();
   if (!batch) return { ok: false, error: "Import batch not found." };
 
-  // Positions this batch created. Deleting them cascades to their executions.
-  const { data: createdRows, error: createdErr } = await supabase
-    .from("tj_positions")
-    .select("id")
-    .eq("import_batch_id", batchId);
-  if (createdErr) return { ok: false, error: createdErr.message };
-  const createdIds = new Set((createdRows ?? []).map((p) => p.id));
+  // BOTH reads are paged, and here that is not the usual "a number would come
+  // out wrong" — it is data loss. A CSV of more than 1000 rows is ordinary for a
+  // year of trading, and PostgREST truncates at 1000 with HTTP 200 and no error.
+  //
+  //   - a short `tj_positions` page leaves the positions past 1000 undeleted,
+  //     still carrying an `import_batch_id` whose batch this function deletes at
+  //     the end. There is no FK on that column to cascade or to refuse, so they
+  //     survive as trades no undo can ever reach again.
+  //   - a short `tj_import_rows` page leaves those merges unrestored, and the
+  //     delete further down then removes every audit row — including the
+  //     `prev_executions` snapshots that were the only copy of the fills the
+  //     import displaced.
+  //
+  // Both end with the user reading `ok` and a count that understates what was
+  // actually left behind.
+  let createdRows: { id: string }[];
+  let rows: { matched_position_id: string | null; prev_executions: unknown }[];
+  try {
+    [createdRows, rows] = await Promise.all([
+      selectAllPages<{ id: string }>((from, to) =>
+        supabase
+          .from("tj_positions")
+          .select("id")
+          .eq("import_batch_id", batchId)
+          .order("id")
+          .range(from, to),
+      ),
+      selectAllPages<{ matched_position_id: string | null; prev_executions: unknown }>(
+        (from, to) =>
+          supabase
+            .from("tj_import_rows")
+            .select("matched_position_id, prev_executions, id")
+            .eq("batch_id", batchId)
+            .order("id")
+            .range(from, to),
+      ),
+    ]);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 
-  const { data: rows, error: rowsErr } = await supabase
-    .from("tj_import_rows")
-    .select("matched_position_id, prev_executions")
-    .eq("batch_id", batchId);
-  if (rowsErr) return { ok: false, error: rowsErr.message };
-
-  const plan = planUndo<ImportExec>(rows ?? [], createdIds);
+  const plan = planUndo<SnapshotExec>(rows, new Set(createdRows.map((p) => p.id)));
 
   for (const { positionId, executions } of plan.restore) {
     // Atomic: an undo that half-applied would leave the position with neither
     // the imported fills nor the ones it displaced.
     const { error: insErr } = await supabase.rpc("tj_replace_executions", {
       p_position_id: positionId,
+      // `source` is carried back through. The snapshot captures it, and the RPC
+      // coalesces a missing one to `manual` — so listing the other six fields by
+      // hand quietly relabelled every restored fill as hand-entered, including
+      // fills that an EARLIER import had put there. Undo has to give back what
+      // it displaced, field for field, or the word means nothing.
       p_executions: executions.map((e) => ({
         side: e.side,
         price: e.price,
@@ -257,6 +296,7 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
         executed_at: e.executed_at,
         fee: e.fee,
         swap_funding: e.swap_funding,
+        source: e.source ?? "manual",
       })),
     });
     if (insErr) return { ok: false, error: insErr.message };
@@ -281,22 +321,23 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
     .eq("batch_id", batchId);
   if (rowsDelErr) return { ok: false, error: rowsDelErr.message };
 
-  if (plan.deleteIds.length > 0) {
+  // Chunked for the same reason every `.in()` in this codebase is: PostgREST
+  // takes the id list in the URL, and a batch that created a few thousand
+  // positions builds a URL past the server's limit — which fails the delete
+  // outright, after the audit rows above are already gone.
+  for (const ids of chunkIds(plan.deleteIds)) {
     const { error: execDelErr } = await supabase
       .from("tj_executions")
       .delete()
-      .in("position_id", plan.deleteIds);
+      .in("position_id", ids);
     if (execDelErr) return { ok: false, error: execDelErr.message };
 
-    await supabase
-      .from("tj_trade_images")
-      .delete()
-      .in("position_id", plan.deleteIds);
+    await supabase.from("tj_trade_images").delete().in("position_id", ids);
 
     const { error: delErr } = await supabase
       .from("tj_positions")
       .delete()
-      .in("id", plan.deleteIds);
+      .in("id", ids);
     if (delErr) return { ok: false, error: delErr.message };
   }
 

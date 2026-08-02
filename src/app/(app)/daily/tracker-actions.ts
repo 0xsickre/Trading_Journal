@@ -16,7 +16,7 @@ import {
 } from "@/lib/journal/tracker/auto-rules";
 import {
   freezeAutoCheckins,
-  ruleIsLiveOn,
+  rulesLiveOn,
 } from "@/lib/journal/tracker/compliance";
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -145,20 +145,22 @@ export async function lockDay(reportDate: string): Promise<Result> {
     trades,
     (row) => accounts.find((a) => a.id === row.account_id)?.timezone ?? timezone,
   );
+  // The limits in force ON THIS DAY, not whatever a retired rule still carries.
   const auto = evaluateAutoRulesForDay(
     reportDate,
     index,
-    configsFromRules(rules),
+    configsFromRules(rulesLiveOn(rules, reportDate)),
   );
-
-  // Only rules live on THIS day get frozen. Freezing a rule that did not run on
-  // this weekday would invent an answer for a question never asked.
-  const live = rules.filter((r) => ruleIsLiveOn(r, reportDate));
 
   const { error } = await supabase.rpc("tj_lock_day", {
     p_date: reportDate,
+    // Only rules live on THIS day get frozen — freezing a rule that did not run
+    // on this weekday would invent an answer to a question never asked. The day
+    // goes in so `freezeAutoCheckins` decides that itself; filtering here as
+    // well gave two answers to one question.
+    //
     // `Json` because the RPC takes jsonb; the shape is fixed by freezeAutoCheckins.
-    p_auto: freezeAutoCheckins(live, auto) as unknown as Json,
+    p_auto: freezeAutoCheckins(rules, auto, reportDate) as unknown as Json,
   });
   if (error) return { ok: false, error: error.message };
 

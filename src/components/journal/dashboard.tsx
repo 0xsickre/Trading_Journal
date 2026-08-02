@@ -34,6 +34,7 @@ import {
   computeComplianceSeries,
   meanCompliance,
   resolveAutoResults,
+  rulesLiveOn,
 } from "@/lib/journal/tracker/compliance";
 import { processAdherence } from "@/lib/journal/tracker/process-adherence";
 import type {
@@ -573,7 +574,6 @@ export function Dashboard({
         accounts.find((a) => a.id === row.account_id)?.timezone ??
         "America/New_York",
     );
-    const configs = configsFromRules(trackerRules);
 
     const byDate = new Map<string, Map<string, TrackerCheckin>>();
     for (const c of checkins) {
@@ -591,7 +591,10 @@ export function Dashboard({
       // the money and leaves that day's compliance where it was.
       resolveAutoResults(
         trackerRules,
-        evaluateAutoRulesForDay(d, index, configs),
+        // Configs are resolved PER DAY: a retired rule and its replacement share
+        // one `auto_key`, so a set built once for the whole span can hand a dead
+        // limit to every day in it.
+        evaluateAutoRulesForDay(d, index, configsFromRules(rulesLiveOn(trackerRules, d))),
         byDate.get(d) ?? new Map(),
       ),
     todayKey);

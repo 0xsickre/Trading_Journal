@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { selectAllByIds } from "@/lib/supabase/paginate";
 
 export type ImportBatchSummary = {
   total?: number;
@@ -33,21 +34,43 @@ export async function getImportBatches(limit = 20): Promise<ImportBatch[]> {
   const ids = (batches ?? []).map((b) => b.id);
   if (ids.length === 0) return [];
 
-  const [{ data: rows }, { data: createdPositions }] = await Promise.all([
-    supabase
-      .from("tj_import_rows")
-      .select("batch_id, matched_position_id, prev_executions")
-      .in("batch_id", ids),
-    supabase.from("tj_positions").select("id").in("import_batch_id", ids),
+  // Paged: this is one row per imported trade across the last `limit` batches,
+  // which passes a PostgREST page after a couple of ordinary CSVs. A short page
+  // does not error — it just quietly understates the merge counts, and those
+  // counts are what tells the user whether an undo can put their fills back.
+  const [rows, createdPositions] = await Promise.all([
+    selectAllByIds<
+      {
+        batch_id: string;
+        matched_position_id: string | null;
+        prev_executions: unknown;
+      },
+      string
+    >(ids, (chunk, from, to) =>
+      supabase
+        .from("tj_import_rows")
+        .select("batch_id, matched_position_id, prev_executions, id")
+        .in("batch_id", chunk)
+        .order("id")
+        .range(from, to),
+    ),
+    selectAllByIds<{ id: string }, string>(ids, (chunk, from, to) =>
+      supabase
+        .from("tj_positions")
+        .select("id")
+        .in("import_batch_id", chunk)
+        .order("id")
+        .range(from, to),
+    ),
   ]);
 
   // A created row also carries a matched_position_id (the row it just made), so
   // merges are identified by exclusion: matched, but not created by this import.
-  const createdIds = new Set((createdPositions ?? []).map((p) => p.id));
+  const createdIds = new Set(createdPositions.map((p) => p.id));
 
   const restorable = new Map<string, number>();
   const unrestorable = new Map<string, number>();
-  for (const r of rows ?? []) {
+  for (const r of rows) {
     if (!r.matched_position_id || createdIds.has(r.matched_position_id)) continue;
     const bucket = r.prev_executions == null ? unrestorable : restorable;
     bucket.set(r.batch_id, (bucket.get(r.batch_id) ?? 0) + 1);

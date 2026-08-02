@@ -15,7 +15,7 @@ import {
 import {
   computeDayCompliance,
   resolveAutoResults,
-  ruleIsLiveOn,
+  rulesLiveOn,
 } from "@/lib/journal/tracker/compliance";
 import { computeStats, toRealized } from "@/lib/journal/analytics";
 import { computeCostStats } from "@/lib/journal/costs";
@@ -44,7 +44,7 @@ export default async function DailyPage({
   const [accounts, rules, trades] = await Promise.all([
     getAccounts(),
     // Retired rules included: this page can look at any past day, and a rule that
-    // was live on that day still applied to it. `ruleIsLiveOn` filters per day —
+    // was live on that day still applied to it. `rulesLiveOn` filters per day —
     // which is exactly why it takes the day as an argument.
     getTrackerRules({ includeRetired: true }),
     getTradesWithStats(),
@@ -75,7 +75,7 @@ export default async function DailyPage({
     accounts.find((a) => a.id === row.account_id)?.timezone ?? timezone;
 
   const index = buildTradeDayIndex(trades, tzOf);
-  const dayRules = rules.filter((r) => ruleIsLiveOn(r, reportDate));
+  const dayRules = rulesLiveOn(rules, reportDate);
 
   // Live verdicts, then the frozen ones on top. On an unlocked day the overlay is
   // empty and this is just the live evaluation; on a locked day the sealed row
@@ -83,7 +83,9 @@ export default async function DailyPage({
   // compliance where it was.
   const auto = resolveAutoResults(
     dayRules,
-    evaluateAutoRulesForDay(reportDate, index, configsFromRules(rules)),
+    // `dayRules`, not `rules`: the limits scored here must be the ones in force
+    // on this day, not a retired rule's leftovers.
+    evaluateAutoRulesForDay(reportDate, index, configsFromRules(dayRules)),
     checkins,
   );
 

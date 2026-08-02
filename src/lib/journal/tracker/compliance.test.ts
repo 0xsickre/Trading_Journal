@@ -9,6 +9,7 @@ import {
   resolveAutoResults,
   ruleAppliesOn,
   ruleIsLiveOn,
+  rulesLiveOn,
   type AutoResults,
 } from "./compliance";
 import {
@@ -20,7 +21,7 @@ import {
   monthGridDays,
 } from "../time";
 import { canEditDay, type TrackerCheckin, type TrackerRule } from "../tracker-types";
-import type { AutoRuleKey, AutoVerdict } from "./auto-rules";
+import { configsFromRules, type AutoRuleKey, type AutoVerdict } from "./auto-rules";
 
 const TODAY = "2026-07-29"; // a Wednesday
 
@@ -288,6 +289,57 @@ describe("series and aggregates", () => {
   });
 });
 
+describe("rulesLiveOn is what every per-day computation starts from", () => {
+  it("hands the evaluator the limit in force that day, not a retired one", () => {
+    // The unique index on `auto_key` is PARTIAL — it covers live rules only —
+    // so a retired rule and its replacement coexist under one key.
+    // `configsFromRules` lets the last one win, and the order is `sort_order`,
+    // which the user can drag around. Built once for a whole span, the dead
+    // 400 limit was scoring days the 1000 limit governs.
+    const retired = rule({
+      id: "old",
+      auto_key: "max_loss_per_day",
+      config: { amount: 400 },
+      deleted_at: "2026-06-01T00:00:00Z",
+      sort_order: 9,
+    });
+    const live = rule({
+      id: "new",
+      auto_key: "max_loss_per_day",
+      config: { amount: 1000 },
+      created_at: "2026-06-01T00:00:00Z",
+      sort_order: 1,
+    });
+    const both = [live, retired]; // as `sort_order` would order them
+
+    expect(configsFromRules(both).max_loss_per_day).toEqual({ amount: 400 });
+    expect(
+      configsFromRules(rulesLiveOn(both, TODAY)).max_loss_per_day,
+    ).toEqual({ amount: 1000 });
+  });
+
+  it("still answers with the OLD limit for a day the old rule governed", () => {
+    // Not merely "prefer the live rule": a day in May was lived under the 400
+    // limit and must keep being scored against it.
+    const retired = rule({
+      id: "old",
+      auto_key: "max_loss_per_day",
+      config: { amount: 400 },
+      created_at: "2026-01-01T00:00:00Z",
+      deleted_at: "2026-06-01T00:00:00Z",
+    });
+    const live = rule({
+      id: "new",
+      auto_key: "max_loss_per_day",
+      config: { amount: 1000 },
+      created_at: "2026-06-01T00:00:00Z",
+    });
+    expect(
+      configsFromRules(rulesLiveOn([live, retired], "2026-05-20")).max_loss_per_day,
+    ).toEqual({ amount: 400 });
+  });
+});
+
 describe("freezing at lock time", () => {
   it("writes a row for a not-applicable auto rule too", () => {
     // The resurrection hole: without a NULL row, a later import backfilling a
@@ -299,6 +351,7 @@ describe("freezing at lock time", () => {
         rule({ id: "manual" }),
       ],
       autoOf({ max_loss_per_day: "na", stop_loss_set: "pass" }),
+      TODAY,
     );
     expect(rows).toEqual([
       { rule_id: "a", checked: null },
@@ -310,16 +363,60 @@ describe("freezing at lock time", () => {
     const rows = freezeAutoCheckins(
       [rule({ id: "a", auto_key: "playbook_linked" })],
       autoOf({ playbook_linked: "fail" }),
+      TODAY,
     );
     expect(rows).toEqual([{ rule_id: "a", checked: false }]);
   });
 
-  it("skips retired rules — they are not on the checklist being sealed", () => {
+  it("skips a rule already retired on the day being sealed", () => {
     const rows = freezeAutoCheckins(
       [rule({ id: "gone", auto_key: "stop_loss_set", deleted_at: "2026-01-01T00:00:00Z" })],
       autoOf({ stop_loss_set: "pass" }),
+      TODAY,
     );
     expect(rows).toEqual([]);
+  });
+
+  it("FREEZES a rule retired later, because it was live on the sealed day", () => {
+    // The gap that made the day parameter necessary. Locking a past day after
+    // retiring a rule used to skip it here while `ruleAppliesOn` still counted
+    // it on read — so it stayed in the denominator with no frozen verdict, and
+    // re-derived itself every time a trade on that day was corrected. Which is
+    // the exact thing the lock exists to stop.
+    const retiredLater = rule({
+      id: "later",
+      auto_key: "stop_loss_set",
+      deleted_at: "2026-07-30T00:00:00Z", // the day AFTER TODAY
+    });
+    const auto = autoOf({ stop_loss_set: "pass" });
+
+    expect(ruleAppliesOn(retiredLater, TODAY, auto)).toBe(true);
+    expect(freezeAutoCheckins([retiredLater], auto, TODAY)).toEqual([
+      { rule_id: "later", checked: true },
+    ]);
+  });
+
+  it("skips a rule that does not run on the sealed day's weekday", () => {
+    // Same one filter, other half: a Monday-only rule sealed on a Wednesday.
+    const mondayOnly = rule({
+      id: "mon",
+      auto_key: "max_loss_per_day",
+      active_days: [1],
+    });
+    expect(
+      freezeAutoCheckins([mondayOnly], autoOf({ max_loss_per_day: "pass" }), TODAY),
+    ).toEqual([]);
+  });
+
+  it("skips a rule created after the day being sealed", () => {
+    const future = rule({
+      id: "new",
+      auto_key: "playbook_linked",
+      created_at: "2026-08-15T00:00:00Z",
+    });
+    expect(
+      freezeAutoCheckins([future], autoOf({ playbook_linked: "pass" }), TODAY),
+    ).toEqual([]);
   });
 });
 

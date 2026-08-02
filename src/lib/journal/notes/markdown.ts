@@ -200,28 +200,81 @@ export function parseMarkdown(src: string): Block[] {
 }
 
 /**
- * First non-empty line, stripped of heading marks — the fallback title for a
- * note saved without one.
+ * Visible text of a run of inline nodes.
+ *
+ * `code` carries its value verbatim — a code span is shown as typed, so its
+ * text is searchable as typed. A rejected link is not a link node at all by the
+ * time it gets here; it is literal text, and comes back as the literal text the
+ * reader sees.
+ */
+function inlineText(nodes: readonly Inline[]): string {
+  let out = "";
+  for (const n of nodes) {
+    out += n.type === "text" || n.type === "code" ? n.value : inlineText(n.children);
+  }
+  return out;
+}
+
+function blockText(block: Block): string {
+  switch (block.type) {
+    case "heading":
+    case "paragraph":
+    case "quote":
+      return inlineText(block.children);
+    case "list":
+      return block.items.map(inlineText).join(" ");
+    // Fenced code is not prose. It is dropped from previews on purpose — a
+    // preview of a pasted trade log tells the reader nothing about the note.
+    case "code":
+    case "rule":
+      return "";
+  }
+}
+
+/**
+ * Plain text of a note, for search and for the list preview.
+ *
+ * Derived from the PARSE TREE, not from the source with a second set of regexes.
+ * Two parsers over the same grammar is two answers to "what does this note say",
+ * and the search box promises the rendered text: looking for `bold` must find a
+ * note that wrote `**bold**`, and looking for `a**b` must find a note that wrote
+ * it inside a code span, where the asterisks are literal and shown.
+ */
+export function plainText(content: string): string {
+  return parseMarkdown(content)
+    .map(blockText)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * First non-empty line, stripped of its marks — the fallback title for a note
+ * saved without one.
  *
  * A note with no title is normal: you start typing and think about the title
  * later, and an untitled row in the list is useless for finding it again.
+ *
+ * Line-based rather than block-based on purpose: a paragraph joins its lines,
+ * and a title made of three joined sentences truncated at 80 characters is
+ * worse at finding the note than its first line. Only the BLOCK marks are
+ * stripped here; the inline ones go through the parser, so a note opening with
+ * `**Nedelja 31**` is titled `Nedelja 31` and not `**Nedelja 31**`.
+ *
+ * The block marks are stripped with the SAME regexes the block parser uses. A
+ * hand-written `^[>\-*+]\s*` looks equivalent and is not: it has no `\s+` after
+ * the bullet, so it ate the first asterisk of `**Nedelja 31**` and left the
+ * title reading `Nedelja 31*`.
  */
 export function deriveTitle(content: string, fallback = "Bez naslova"): string {
   for (const line of content.split("\n")) {
-    const text = line.replace(/^#{1,6}\s*/, "").replace(/^[>\-*+]\s*/, "").trim();
+    const stripped = line
+      .replace(HEADING_RE, "$2")
+      .replace(UL_RE, "$1")
+      .replace(OL_RE, "$1")
+      .replace(QUOTE_RE, "$1");
+    const text = inlineText(parseInline(stripped)).trim();
     if (text) return text.length > 80 ? `${text.slice(0, 79)}…` : text;
   }
   return fallback;
-}
-
-/** Plain text of a note, for search and for the list preview. */
-export function plainText(content: string): string {
-  return content
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/`([^`]*)`/g, "$1")
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/^[#>\-*+\s]+/gm, " ")
-    .replace(/[*_]{1,2}/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
 }

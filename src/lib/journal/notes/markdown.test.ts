@@ -190,4 +190,42 @@ describe("plainText", () => {
   it("drops fenced code entirely — it is not prose", () => {
     expect(plainText("pre\n```\nselect 1\n```\npost")).toBe("pre post");
   });
+
+  // `plainText` used to be a SECOND regex parser over the raw source, which is
+  // two answers to "what does this note say". It now walks the same tree the
+  // renderer walks. These are the cases where the two disagreed — each one is
+  // text the reader can see on screen but could not previously search for.
+  it("keeps a code span exactly as typed, markers and all", () => {
+    // The old pass unwrapped the span and THEN stripped `*`, so a note showing
+    // `a**b` was searchable only as `ab`.
+    expect(plainText("radi `a**b` ovde")).toBe("radi a**b ovde");
+    expect(plainText("`_x_`")).toBe("_x_");
+  });
+
+  it("drops the marker of an ordered list, not just a bullet", () => {
+    // The old line-start strip listed `#>-*+` and no digits, so every numbered
+    // item kept its "1." in the preview.
+    expect(plainText("1. prvo\n2. drugo")).toBe("prvo drugo");
+  });
+
+  it("shows a refused link the way the note renders it — literally", () => {
+    // A `javascript:` target is not a link, so the reader sees the raw text.
+    // The old regex tore it into "x" plus a stray bracket, so the preview and
+    // the note disagreed about what was written.
+    expect(plainText("[x](javascript:alert(1))")).toBe("[x](javascript:alert(1))");
+    expect(plainText("[x](https://a.example)")).toBe("x");
+  });
+});
+
+describe("deriveTitle and plainText answer from the same parse", () => {
+  it("strips inline marks from the title too", () => {
+    expect(deriveTitle("**Nedelja 31**")).toBe("Nedelja 31");
+    expect(deriveTitle("> `plan` za ponedeljak")).toBe("plan za ponedeljak");
+  });
+
+  it("still takes the first LINE, not the first paragraph", () => {
+    // A paragraph joins its lines. A title of three joined sentences cut at 80
+    // characters is worse at finding the note than its opening line.
+    expect(deriveTitle("prva linija\ndruga linija\ntreća")).toBe("prva linija");
+  });
 });

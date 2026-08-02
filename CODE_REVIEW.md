@@ -1359,3 +1359,249 @@ tested. Its hint was corrected instead.
 861 tests / 52 files (830 → 861). Coverage **95.43 / 89.44 / 96.70 / 96.74** (from
 93.9 / 89.05 / 91.59 / 95.22); `metrics.ts` from 44.7 / 39.0 to **100 / 100**. Floor raised to
 95 / 89 / 96 / 96. Lint 1 warning, build green, `tsc` clean.
+
+---
+
+## Step 5 — tracker, notebook, import
+
+The three subsystems that carry the most state, and the one operation in the whole application
+that **deletes** data. The step's own bar was set in the plan: *undo demonstrably gives back
+exactly what it imported; the parser lets through no scheme outside the allowlist.*
+
+### U1 (High) — undo truncated at 1000 rows and called it success
+
+`src/app/(app)/import/actions.ts:233-244` (before), `undoImportBatch`
+
+Both reads that the undo plan is built from were unbounded `.select()`s. PostgREST caps a
+response at `db-max-rows` — 1000 — and returns the short page with **HTTP 200 and no error**.
+A CSV past a thousand rows is an ordinary year of trading.
+
+Two distinct failures, both silent, both permanent:
+
+- a short `tj_positions` page leaves every position past the thousandth **undeleted**. They
+  still carry the `import_batch_id` of a batch this function deletes four statements later.
+  There is no foreign key on `tj_positions.import_batch_id` (verified against the live schema)
+  — nothing cascades and nothing refuses — so those trades survive as rows no undo can ever
+  reach again, polluting every stat forever.
+- a short `tj_import_rows` page leaves those merges unrestored, and the delete further down
+  removes **every** audit row for the batch, not just the thousand that were read. Those rows
+  held `prev_executions`, the only copy of the fills the import displaced. Gone.
+
+Either way the user reads `ok` and a restored count that understates what was actually left
+behind.
+
+`FIXED` — both reads go through `selectAllPages`, run in parallel, with the thrown page error
+surfaced as `{ ok: false }` instead of a rejected promise.
+
+### U2 (High) — the deletes put an unbounded id list in the URL
+
+Same function, the three `.in()` deletes. `IN_FILTER_CHUNK` exists in `paginate.ts` precisely
+because PostgREST takes the id list as a query parameter and a URL has a length limit. Once U1
+was fixed, `plan.deleteIds` could genuinely hold thousands of uuids — roughly 37 bytes each —
+and the delete would fail on URL length **after** the audit rows had already been removed.
+Un-fixing U1 alone would have converted a silent partial undo into a loud broken one.
+
+`FIXED` — all three deletes iterate `chunkIds(plan.deleteIds)`.
+
+### U3 (Medium) — undo relabelled every fill it restored as hand-entered
+
+`commitImport` snapshots the displaced fills with `select("side,price,qty,executed_at,fee,swap_funding,source")`
+— provenance included. The restore then rebuilt each fill by listing six fields **by name**,
+dropping `source`, and `tj_replace_executions` coalesces a missing one to `'manual'`
+(confirmed from the live function definition).
+
+So fills that an earlier import had put on a position came back as if the trader had typed
+them. Nothing in the application reads `tj_executions.source` today, which is why it went
+unnoticed — but "undo gives back what it displaced" is the step's stated bar, and it did not.
+
+`FIXED` — `source` is carried through. A `SnapshotExec` type now names the shape actually
+stored in `prev_executions` (the wizard's `ImportExec` plus provenance), instead of the two
+being conflated.
+
+**Proved on the live database**, in a transaction rolled back by a raised exception: a position
+seeded with mixed-provenance fills at non-round prices, snapshotted the way `commitImport`
+snapshots, overwritten the way an import overwrites, then replayed the way undo replays. The
+`jsonb` before and after compared `IS NOT DISTINCT FROM` — identical, `source` included. A
+leftover check afterwards confirmed the rollback took.
+
+### U4 (Medium) — the import history undercounted restorable merges
+
+`src/lib/journal/import-batches.ts` — the same unbounded-`.select()` class, over the last 20
+batches at once. Not destructive: it drives the two numbers the history screen shows for
+whether an undo can put your fills back. Wrong low, silently.
+
+`FIXED` — both reads go through `selectAllByIds`, which chunks the `.in()` and drains each
+chunk page by page.
+
+### I1 (High) — the wizard read `2345,67` as `234567`
+
+`src/components/journal/import-wizard.tsx` — `num()` was one line: strip everything that is not
+a digit, a dot or a minus, then `Number()`. On a European locale — which is how MT5 exports and
+every Serbian broker statement write a decimal — that is a **hundredfold error on a price**,
+applied silently, with the wrong number then flowing into P&L, R, and every metric downstream.
+
+The same class of defect as T1 in step 3, and it gets the same answer: parse what is
+unambiguous, refuse what is not.
+
+`FIXED` — extracted to `src/lib/journal/import-number.ts` as `parseImportNumber`, out of the
+client component and under test. It reads `1.234,56` and `1,234.56` by taking whichever
+separator comes **last** as the decimal point, reads a lone comma as a decimal point when its
+tail is not three digits, reads repeated separators as grouping only when every group is
+well-formed, and handles accounting parentheses, trailing minus, currency noise and NBSP
+grouping.
+
+It **refuses `1,234`** — 1234 to a US broker, 1.234 to a German one, with nothing in the cell
+to decide it. Both readings are plausible prices, so a guess is wrong a thousandfold half the
+time. A refused cell surfaces in the wizard preview; a guessed one never does.
+
+### I2 (Medium) — a refused cell was invisible unless it was a price
+
+A refused price already shows as `—` in the preview, because no execution row gets built. A
+refused **qty** does not: it falls back to `0`, looks like a real zero, and
+`tj_replace_executions` then drops a qty-0 fill outright — so the row imports as an empty
+position with nothing on screen naming the cell that caused it. A refused fee or swap falls
+back to `0` the same way, which is this project's cardinal sin: a null read as a zero.
+
+`FIXED` — every refused cell is collected by name and shown on the row in the existing
+warnings column (`nečitljivo: qty, fee`). Deliberately appended **after** the duplicate check,
+so an unreadable cell never changes how a row is matched — it only makes sure the reader is
+told.
+
+### N1 (Medium) — the notebook had two markdown parsers
+
+`plainText` was a second, independent implementation: five regexes over the **raw source**,
+where `parseMarkdown` walks a tree. It feeds note search (`notebook-workbench.tsx:227`) and the
+list preview (`:432`), and the search call site's own comment states the contract — *"search
+the rendered text, not the source"*. A regex pass over the source is an approximation of the
+rendered text, and the places it approximated badly are places where text the reader can see
+could not be found:
+
+- a code span was unwrapped and *then* stripped of `*` and `_`, so a note showing `` `a**b` ``
+  was searchable only as `ab`;
+- the line-start strip listed `#>-*+` and no digits, so every numbered list item kept its
+  `1.` in the preview;
+- a refused `javascript:` link was torn into `x` plus a stray bracket, while the note renders
+  it literally.
+
+`FIXED` — `plainText` now walks the same tree the renderer walks. Fenced code stays excluded;
+that was a deliberate decision (`markdown.test.ts`: *"drops fenced code entirely — it is not
+prose"*) and it is preserved rather than quietly reversed, now expressed as one `case` in
+`blockText` instead of a regex.
+
+`deriveTitle` was the same duplication in miniature and carried a live bug: its block-mark
+strip `^[>\-*+]\s*` has no `\s+` after the bullet, so a note opening with `**Nedelja 31**` was
+titled `Nedelja 31*` — one asterisk eaten by a rule meant for bullet lists. It now strips block
+marks with the **same regexes the block parser uses** and runs the rest through `parseInline`.
+It stays line-based on purpose: a paragraph joins its lines, and a title of three joined
+sentences cut at 80 characters is worse at finding the note than its first line.
+
+### N2 — the parser itself: attacked, and it holds
+
+`markdown.ts` is the one file here where a bug is a security bug. The design closes injection by
+construction — it returns a tree, `markdown-view.tsx` walks it into React elements, there is no
+`dangerouslySetInnerHTML` anywhere and no image node, so the only sink left is a link `href`.
+
+`markdown-security.test.ts` (new) is the evasion battery a **blocklist** would have had to
+anticipate and an allowlist does not: `javascript:` with leading whitespace, mixed case and full
+upper case, `vbscript:`, `data:text/html;base64`, `blob:`, `filesystem:`, `jar:`,
+`view-source:`, `chrome://`, `about:blank`, `ws://`, and percent- and entity-encoded forms —
+which must stay refused precisely *because* the parser does not decode them. Plus the two
+deliberate allowances pinned as decisions on record: protocol-relative `//host` (navigates,
+does not execute, and gets neither `target` nor `rel`, so it cannot reverse-tabnab) and bare
+relative paths.
+
+And DoS, since injection is closed: 20 000 unmatched markers of each kind, 5 000 complete
+tokens on one line, a large document, and bounded recursion. Every alternative in `INLINE_RE`
+needs at least two characters, so a match always shortens the input and there is no zero-width
+match to spin on; `**` cannot nest because its inner class excludes `*`.
+
+Nothing got through. `REVIEWED — clean`, and now pinned.
+
+### K1 (Medium) — a retired rule's dead limit governed today
+
+`configsFromRules` keys by `auto_key` and lets the last rule win. The unique index on
+`auto_key` is **partial** — `WHERE auto_key IS NOT NULL AND deleted_at IS NULL`, verified on
+the live schema — so a retired rule and its replacement legally coexist under one key. All
+three call sites (`dashboard.tsx`, `daily/page.tsx`, `lockDay`) passed the full rule set,
+retired included, and built the configs **once for the whole span**.
+
+Rules come back ordered by `sort_order`, which the user reorders by dragging. A retired "max
+loss 400" sitting at ordinal 9 therefore overrode its live replacement at ordinal 1, and every
+day the evaluator scored — today included — was judged against a limit that no longer existed.
+
+`FIXED` — new `rulesLiveOn(rules, day)` in `compliance.ts`, and the configs are resolved **per
+day** at all three sites. Not merely "prefer the live rule": a day in May stays scored against
+the limit that was in force in May, which is the same principle the module's header already
+states for whether a rule counts at all.
+
+### K2 (Medium) — the lock ran two different retirement filters
+
+`lockDay` filtered with `ruleIsLiveOn(rule, day)`; `freezeAutoCheckins` then dropped anything
+with a `deleted_at` **at all**. Those agree on today and disagree on the past.
+
+Retire a rule, then lock an older day it was live on — allowed, the only bar is that the day is
+not in the future. `ruleAppliesOn` counts the rule on that day (it was live), `freezeAutoCheckins`
+skips it, so it sits in the denominator with no frozen verdict and **re-derives itself every
+time a trade from that day is corrected** — which is the exact thing the lock exists to prevent,
+on the exact rule the user just decided to retire.
+
+`FIXED` — `freezeAutoCheckins` takes the day and answers the question itself with
+`ruleIsLiveOn`. One filter, in one place; `lockDay` no longer pre-filters. Four cases pinned:
+retired-before (skipped), retired-after (frozen — the regression), wrong weekday, created-later.
+
+### Reviewed, no defect found
+
+**`auto-rules.ts`.** The day-attribution split is right and argued in place: money on the CLOSE
+day, decisions on the OPEN day, with the counter-case written down (on close-day attribution a
+still-open trade is invisible, so ten unlinked open trades would report a perfect day). The two
+loss rules diverge on unpriced trades **deliberately** and correctly — the daily rule refuses to
+answer because an unknown trade could be a winner that brings the sum back over the limit, the
+per-trade rule does not because a priced breach is a breach regardless. A no-trade day is `na`
+and never `pass`, which is what stops a 200-day streak being farmed by not trading.
+
+**`resolveAutoResults` and the shared-`auto_key` collision.** It overlays by `auto_key` while
+looking up by `rule.id`, so two rules sharing a key could in principle overwrite each other.
+They cannot: frozen rows only exist for days a rule was live on, the partial unique index
+forbids two live rules under one key, and a replacement's `created_at` is therefore after its
+predecessor's `deleted_at` — the two rules' live spans are disjoint. Checked because it looks
+dangerous; it is not.
+
+**`compliance.ts` streak semantics.** `skipped` and `pending` neither break nor extend.
+Breaking on a deliberately excluded Saturday would cap every weekday trader at 5; extending on
+it would let the streak be inflated by narrowing `active_days` to Mondays.
+
+**`tracker/queries.ts` and `notes/queries.ts`.** Every read that grows with history already
+goes through `selectAllPages` — check-ins, locked days, notes. The three that do not
+(`getTrackerRules`, `getNoteFolders`, `getNoteTags`) are hand-managed vocabularies of tens of
+rows; a user would have to create a thousand rules by hand to reach the cap. Left as they are,
+recorded here rather than left unexamined.
+
+**`instrument-aliases.ts`, `cost-defaults.ts`.** Sound and already tested. `nightsBetween`
+counts calendar rollovers rather than elapsed 24-hour blocks, which is how swap is actually
+charged; `round2` normalizes `-0`.
+
+### Checked and deliberately NOT changed
+
+**`lockDay` calls `getTradesWithStats()` — the whole book — to evaluate one day.** Paged, so
+correct; wasteful, so noted. Locking a day is a deliberate once-a-day action and the query is
+the same one the journal page already runs. Out of scope under "no large refactors"; recorded
+so the next reader does not have to rediscover it.
+
+**`undoImportBatch` restores one position per round trip.** A thousand merges is a thousand
+RPCs. Correct and atomic per position; a bulk RPC would be a new database function, which is a
+larger change than this step is scoped for.
+
+**`tj_executions.source` is written and never read.** A candidate for the dead-column sweep of
+step 2, kept on purpose: it is provenance on a fills table, it is what U3's fix restores, and
+dropping it would re-open exactly the fidelity hole just closed.
+
+### Outcome
+
+`FIXED` — U1, U2, U3, U4 (import undo and history), I1, I2 (wizard number parsing), N1
+(one markdown parser, plus the `deriveTitle` asterisk bug), K1, K2 (tracker rule lifetime).
+`REVIEWED — clean` — the markdown security model, `auto-rules` day attribution, the
+shared-`auto_key` collision, streak semantics, the notes and tracker query layer.
+
+895 tests / 54 files (861 → 895). New: `import-number.test.ts` (15),
+`markdown-security.test.ts`, and the tracker and markdown cases above. Coverage
+**95.47 / 89.75 / 96.74 / 96.82**. Lint 1 warning (the known one), build green, `tsc` clean.

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import type { Account } from "@/lib/journal/types";
 import { parseImportTime, fmtInTz } from "@/lib/journal/time";
+import { parseImportNumber as num } from "@/lib/journal/import-number";
 import { fmtNum } from "@/lib/journal/format";
 import {
   instrumentsMatch,
@@ -82,14 +83,6 @@ function autoMap(headers: string[]): Record<Canonical, string> {
     map[key] = found ?? "";
   }
   return map;
-}
-
-function num(v: string | undefined): number | null {
-  if (v == null) return null;
-  const cleaned = String(v).replace(/[^0-9.\-]/g, "");
-  if (cleaned === "") return null;
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
 }
 
 function normDirection(v: string | undefined): string | null {
@@ -172,13 +165,30 @@ export function ImportWizard({
       const instrument =
         normalizeInstrumentSymbol(row[map.instrument] ?? "") ?? null;
       const direction = normDirection(row[map.direction]);
-      const qty = num(row[map.qty]) ?? 0;
-      const entryPrice = num(row[map.entry_price]);
+
+      // Cells the parsers refused rather than guess at. Named on the row, not
+      // swallowed: a refused price already shows as "—", but a refused qty or
+      // fee falls back to 0 and looks like a real zero. `tj_replace_executions`
+      // then drops a qty-0 fill outright, so the row would import as an empty
+      // position with nothing saying which cell was the problem.
+      const unreadable: string[] = [];
+      const read = (col: string, label: string): number | null => {
+        const raw = row[col];
+        const n = num(raw);
+        if (n == null && raw != null && raw.trim() !== "") unreadable.push(label);
+        return n;
+      };
+
+      const qty = read(map.qty, "qty") ?? 0;
+      const entryPrice = read(map.entry_price, "entry price");
       const entryTime = parseImportTime(row[map.entry_time], tz);
-      const exitPrice = map.exit_price ? num(row[map.exit_price]) : null;
+      if (!entryTime && row[map.entry_time]?.trim()) unreadable.push("entry time");
+      const exitPrice = map.exit_price ? read(map.exit_price, "exit price") : null;
       const exitTime = map.exit_time ? parseImportTime(row[map.exit_time], tz) : null;
-      const fee = map.fee ? num(row[map.fee]) ?? 0 : 0;
-      const swap = map.swap ? num(row[map.swap]) ?? 0 : 0;
+      if (map.exit_time && !exitTime && row[map.exit_time]?.trim())
+        unreadable.push("exit time");
+      const fee = (map.fee ? read(map.fee, "fee") : null) ?? 0;
+      const swap = (map.swap ? read(map.swap, "swap") : null) ?? 0;
 
       const execs: ImportExec[] = [];
       if (entryPrice != null && entryTime) {
@@ -254,7 +264,11 @@ export function ImportWizard({
         direction,
         executions: execs,
         raw: row,
-        _diff: diff,
+        // After the duplicate check above, so an unreadable cell never changes
+        // how a row is MATCHED — it only makes sure the reader is told.
+        _diff: unreadable.length > 0
+          ? [...diff, `nečitljivo: ${unreadable.join(", ")}`]
+          : diff,
       };
     });
     setItems(built);
