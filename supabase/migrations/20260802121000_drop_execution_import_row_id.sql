@@ -1,0 +1,24 @@
+-- Brisanje tj_executions.import_row_id.
+--
+-- Goli `uuid` bez FK-a i bez indeksa, koji nijedan kod nikad nije upisao ni
+-- pročitao — provereno: nula referenci u `src/` van generisanih tipova, i nula
+-- redova sa vrednošću u bazi.
+--
+-- Ime obećava vezu fill → CSV red, ali kolona nema `REFERENCES`, pa tu vezu ne
+-- bi ni čuvala da je neko počne upisivati. A i da je ima, bila bi suvišna:
+-- `tj_import_rows.matched_position_id` već vezuje uvezeni red na poziciju, a
+-- `tj_import_rows.prev_executions` čuva fillove koje je merge pomerio — što je
+-- ono što `undoImportBatch` stvarno koristi. Model koji je isporučen vodi vezu
+-- iz uvoznog reda ka trejdu; ova kolona je bila druga, nikad povezana polovina
+-- suprotnog smera.
+--
+-- Briše se sa `tj_executions`, tabele sa najviše redova po trejdu, gde svaka
+-- kolona košta na svakom fillu.
+--
+-- Suprotan slučaj, radi poređenja: `tj_column_mappings` (cela tabela) i
+-- `tj_import_batches.broker_preset` su takođe bez ijednog čitaoca, ali se NE
+-- diraju — oni su skela za „broker presete" (J5), stavku koju ROADMAP vodi kao
+-- neurađenu, sa zapisanim šavom u `import-wizard.tsx`. Razlika je u tome što
+-- iza njih stoji imenovan plan, a iza `import_row_id` ne stoji ništa.
+
+ALTER TABLE public.tj_executions DROP COLUMN import_row_id;

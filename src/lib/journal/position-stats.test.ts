@@ -168,3 +168,63 @@ describe("an unpriceable trade yields no money, matching the view", () => {
     expect(s.net_pl).toBeCloseTo(1000);
   });
 });
+
+describe("golden vector read back off the live SQL view", () => {
+  /**
+   * The file header says this module "must stay in sync with `tj_position_stats`
+   * SQL view", and until now nothing enforced it — the two could drift and only
+   * a hand-comparison of two languages would notice.
+   *
+   * These numbers are not hand-derived. The same position and the same two
+   * fills were inserted into the deployed database inside a rolled-back
+   * transaction, and the view's own output was read off and pasted here. A
+   * failure means the TypeScript twin has moved away from the SQL, or the SQL
+   * has moved and this vector needs re-reading — either way, the two disagree.
+   *
+   * The case is chosen to exercise everything that differs between naive and
+   * correct: a SHORT (sign flip), a PARTIAL exit (2 of 3, so entry_qty and
+   * exit_qty diverge), fees and swap on both legs, and a planned entry of 100
+   * against an average fill of 101 — so the R denominator uses the PLAN while
+   * the numerator uses the FILL, which is the convention most likely to be
+   * "simplified" by someone who has not read `excursion.ts`.
+   */
+  const stats = computePositionStats({
+    direction: "Short",
+    entry_price: 100,
+    stop_price: 105,
+    point_value: 2,
+    executions: [
+      { side: "entry", price: 101, qty: 3, fee: 1.0, swap_funding: 0.5 },
+      { side: "exit", price: 96, qty: 2, fee: 0.7, swap_funding: 0.2 },
+    ],
+  });
+
+  it("agrees with the view on quantities and averages", () => {
+    expect(stats.entry_qty).toBe(3);
+    expect(stats.exit_qty).toBe(2);
+    expect(stats.avg_entry).toBe(101);
+    expect(stats.avg_exit).toBe(96);
+  });
+
+  it("agrees on costs", () => {
+    expect(stats.total_fees).toBeCloseTo(1.7, 10);
+    expect(stats.total_swap).toBeCloseTo(0.7, 10);
+  });
+
+  it("agrees on points and money, sign flip included", () => {
+    // Short: price fell from a 101 average to 96, so the move is FAVOURABLE and
+    // gross_points is positive despite exit < entry.
+    expect(stats.gross_points).toBeCloseTo(10, 10);
+    expect(stats.gross_pl).toBeCloseTo(20, 10);
+    expect(stats.net_pl).toBeCloseTo(17.6, 10);
+  });
+
+  it("agrees on R, on the plan-vs-fill convention", () => {
+    // risk_pts = |planned entry 100 − stop 105| = 5, NOT |101 − 105|.
+    expect(stats.planned_risk_pts).toBe(5);
+    // Diluted by the whole position, not the closed part — see the note at the
+    // point of calculation.
+    expect(stats.realized_r).toBeCloseTo(0.66666667, 8);
+    expect(stats.realized_r_net).toBeCloseTo(0.58666667, 8);
+  });
+});

@@ -271,7 +271,6 @@ export type Database = {
           executed_at: string
           fee: number
           id: string
-          import_row_id: string | null
           position_id: string
           price: number
           qty: number
@@ -285,7 +284,6 @@ export type Database = {
           executed_at: string
           fee?: number
           id?: string
-          import_row_id?: string | null
           position_id: string
           price: number
           qty: number
@@ -299,7 +297,6 @@ export type Database = {
           executed_at?: string
           fee?: number
           id?: string
-          import_row_id?: string | null
           position_id?: string
           price?: number
           qty?: number

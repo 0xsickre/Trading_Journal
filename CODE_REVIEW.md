@@ -941,3 +941,116 @@ exercised then; what changed here is the error the user sees, not the guarantee.
 `REJECTED` — L5 (finding incorrect), five of L1 (test imports are consumers).
 `ALREADY CLOSED` — L2.
 The "documented, not applied" bucket no longer exists.
+
+## Step 2 — schema, migrations, seed
+
+The step that justified the whole round: it found a **critical, live, user-facing break** that
+nothing in the test suite, the type checker, the linter or the build could have caught, because
+it lives entirely in SQL that only runs for a user who does not exist yet.
+
+### C1 (Critical) — `tj_seed_defaults` threw for every new user
+
+`tj_option_items.label` is `NOT NULL` with no default. Since phase 6 the seed has inserted
+only `(user_id, list_id, value, sort_order)`, so every call ended in
+
+```
+null value in column "label" of relation "tj_option_items" violates not-null constraint
+```
+
+**No new account could be initialised.** Not through the `tj_on_auth_user_created` trigger at
+signup, not through `tj_seed_my_defaults()` which `ensureDefaults()` calls on every page load.
+A new user would land in an app with no account, no option lists, no instruments, no playbooks,
+no tracker rules and no note folders — the trade form would open empty and stay empty.
+
+Traced exactly: `20260801140000_notebook.sql` rewrote the whole function body to add
+`perform public.tj_seed_note_folders(target)` and dropped `label` from the column list while
+doing it. Every version through `20260729150000_tracker.sql` has
+`(user_id, list_id, value, label, sort_order)` with `select target, l.id, v.value, v.value,
+v.ord` — the value doubles as the label, because the label is the part the user may rename
+without touching the value already written into trades. **Two later migrations, both mine,
+copied the broken body forward** (`20260801170000`, `20260801190000`).
+
+Why nobody noticed: the only user in the database was seeded before the break, and
+`ensureDefaults` merely `console.error`s the failure and carries on — so the one code path
+that would have shown it was also the one path that swallows it. That swallowing is its own
+finding and belongs to step 6.
+
+The lesson generalises and is written into the migration: `CREATE OR REPLACE FUNCTION` with a
+hand-copied body inherits the original's mistakes, and nothing verifies it until the function
+is actually called.
+
+Fixed in `20260802120000_fix_seed_option_item_label.sql`, applied, and **proved by execution**:
+a synthetic user was inserted into `auth.users` inside a rolled-back transaction, seeded, and
+compared column by column against the live account.
+
+| | fresh user | live user | |
+|---|---|---|---|
+| option lists | 13 keys | 13 keys | identical |
+| option items | 66 | 71 | **expected** — see below |
+| labels ≠ values | 0 | — | every label seeded |
+| field defs | 4, same groups | same | identical |
+| instruments | 10 symbols | same | identical |
+| tracker rules | 10 | 10 | identical |
+| note folders | 3 names | same | identical |
+| accounts | 1 | 1 | identical |
+
+The five extra items on the live account are **user customisations**, verified per list:
+`risk_pct` 6 vs 4, `technical_tag` 12 vs 8, `entry_tf` 5 vs 6. That is the seed giving
+defaults and the owner editing them, which is the design.
+
+### Checked and deliberately NOT changed
+
+- **`tj_seed_playbooks` seeds 6 playbooks and 18 groups with ZERO rules.** This reads like the
+  same class of bug and is not: `20260729130000_playbook.sql:203` states the intent — *"Rules
+  are left empty on purpose: a seeded rule you did not write is a rule you will check without
+  reading."* Left alone.
+- **`tj_column_mappings` (whole table) and `tj_import_batches.broker_preset`** have no reader
+  anywhere in `src/`. Kept: they are scaffolding for broker presets (J5), which ROADMAP tracks
+  as an outstanding phase 7 block and which names this table and the seam in
+  `import-wizard.tsx`. A named plan is the difference between scaffolding and debt.
+
+### C2 (Low) — `tj_executions.import_row_id` dropped
+
+A bare `uuid` with **no foreign key and no index**, never written and never read — so it did
+not even do the job its name implies. The shipped model runs the link the other way
+(`tj_import_rows.matched_position_id` plus `prev_executions`, which is what `undoImportBatch`
+actually uses). Dropped from the table with the most rows per trade, in
+`20260802121000_drop_execution_import_row_id.sql`.
+
+### C3 — the SQL view and its TypeScript twin, finally pinned
+
+`position-stats.ts` opens with *"must stay in sync with `tj_position_stats` SQL view"* and
+nothing enforced it. The same position and fills were inserted into the deployed database in a
+rolled-back transaction, the view's own output read off, and pasted into
+`position-stats.test.ts` as a golden vector. The case exercises everything that separates
+naive from correct: a short (sign flip), a partial exit (2 of 3, so `entry_qty ≠ exit_qty`),
+fees and swap on both legs, and a planned entry of 100 against an average fill of 101 — so the
+R denominator uses the PLAN while the numerator uses the FILL.
+
+The twin agrees with the view to eight decimals on all eleven values.
+
+### Swept clean
+
+- **RLS**: all 24 tables, `authenticated`, `FOR ALL`, `user_id = (SELECT auth.uid())` in both
+  `USING` and `WITH CHECK`. No exceptions.
+- **`SECURITY DEFINER` grants**: all five functions taking a `uuid` have `EXECUTE` revoked from
+  everyone but `postgres` and `service_role`; every function in the schema sets
+  `search_path = ''`. The one `authenticated`-callable definer is `tj_seed_my_defaults()`,
+  which takes no argument and can only seed its caller.
+- **Foreign keys**: zero without a covering index (round 2b's D3 has held).
+- **CHECK constraints**: the phase-5 `COALESCE(array_length(…), 0)` guard is intact on
+  `tj_tracker_rules.active_days`; `tj_user_prefs` handles a null length explicitly. Every
+  `= ANY(ARRAY[…])` enum check sits on a `NOT NULL` column — all 13 verified — so the usual
+  "NULL passes a CHECK" hole is closed by construction.
+- **Column ↔ code, both directions**: every distinctive column has a reader outside the
+  generated types, after the two removals above.
+- **Advisors**: security unchanged at the two known WARNs. Performance reports 14 `unused_index`
+  at INFO — every one is on a table with **zero rows**, which is what "never used" means on an
+  empty database. Not actionable; re-check once there is history.
+
+### Outcome
+
+`FIXED` — C1 (critical), C2. `PINNED` — C3.
+`REJECTED` — empty playbook rules (documented intent), `tj_column_mappings` /
+`broker_preset` (named roadmap scaffolding), unused-index advisors (empty tables).
+715 tests / 47 files, lint 1 warning, build green, `tsc` clean.
