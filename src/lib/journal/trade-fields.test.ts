@@ -74,6 +74,51 @@ describe("buildPositionPatch", () => {
   });
 });
 
+describe("text is trimmed before it becomes a report bucket", () => {
+  it("strips surrounding whitespace from a column value", () => {
+    // `dimensions.ts` groups on the stored value, so an untrimmed instrument
+    // splits into two buckets that each hold half the trades and each fall
+    // below the sample threshold — with nothing on screen to say they are the
+    // same symbol. A trailing space is invisible in an input and survives every
+    // paste from a broker statement.
+    const a = buildPositionPatch({ instrument: "XAUUSD " }, DEFS);
+    const b = buildPositionPatch({ instrument: " XAUUSD" }, DEFS);
+    const c = buildPositionPatch({ instrument: "XAUUSD" }, DEFS);
+    expect(a.columns.instrument).toBe("XAUUSD");
+    expect(b.columns.instrument).toBe("XAUUSD");
+    expect(c.columns.instrument).toBe("XAUUSD");
+  });
+
+  it("strips it from a custom field too, not only from real columns", () => {
+    const patch = buildPositionPatch({ macro_align: "  Uz bias  " }, DEFS);
+    expect(patch.custom.macro_align).toBe("Uz bias");
+  });
+
+  it("collapses a whitespace-only value to null, like an empty one", () => {
+    // "   " is not a value the user chose; it is an empty field they tabbed
+    // through. Stored as-is it becomes its own report bucket labelled with
+    // nothing at all.
+    expect(buildPositionPatch({ instrument: "   " }, DEFS).columns.instrument).toBeNull();
+    expect(buildPositionPatch({ instrument: "" }, DEFS).columns.instrument).toBeNull();
+    expect(
+      buildPositionPatch({ conviction_note: "\t\n " }, DEFS).custom.conviction_note,
+    ).toBeNull();
+  });
+
+  it("leaves the array branch alone — it has always trimmed", () => {
+    // Pinned so the two branches cannot drift apart again: this was the
+    // asymmetry, arrays trimmed and scalars did not.
+    const patch = buildPositionPatch({ confluences: [" FVG ", "OB", "  "] }, DEFS);
+    expect(patch.custom.confluences).toEqual(["FVG", "OB"]);
+  });
+
+  it("does not mangle interior whitespace", () => {
+    expect(buildPositionPatch({ macro_align: " Uz  bias " }, DEFS).custom.macro_align).toBe(
+      "Uz  bias",
+    );
+  });
+});
+
 describe("mergeCustom", () => {
   it("keeps keys the submission did not mention", () => {
     // A field deactivated after the trade was logged is not on the form, so its

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
+import { isValidTimeZone } from "@/lib/journal/time";
 import {
   FIELD_DEF_GROUPS,
   FIELD_DEF_TYPES,
@@ -110,11 +111,22 @@ export async function toggleOptionActive(id: string, is_active: boolean) {
 
 export async function reorderOptions(orderedIds: string[]) {
   const supabase = await createClient();
-  await Promise.all(
+  // Every result is inspected. This used to `await Promise.all(...)` and throw
+  // the array away, then return `{ ok: true }` unconditionally — so a reorder
+  // that half-applied reported success, the list snapped back on the next load,
+  // and nothing anywhere said why. The two sibling reorders in this codebase
+  // (`moveFieldDef` below, and the tracker's) have always checked; this was the
+  // odd one out.
+  //
+  // Still dispatched in parallel — the ordinals are independent, and one round
+  // trip per option would make a long list crawl.
+  const results = await Promise.all(
     orderedIds.map((id, i) =>
       supabase.from("tj_option_items").update({ sort_order: i }).eq("id", id),
     ),
   );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { ok: false, error: failed.error.message };
   revalidateAll();
   return { ok: true };
 }
@@ -166,6 +178,36 @@ export async function deleteList(id: string) {
 
 // ---- Instruments ----
 
+/**
+ * Contract specs that multiply into money must be strictly positive.
+ *
+ * `point_value` is the multiplier in `grossPl = grossPoints * point_value`: a 0
+ * makes every trade on the instrument worth nothing and a negative one flips
+ * the sign of all of them, silently in both cases. And the value is SNAPSHOTTED
+ * onto each trade at creation, so a bad one is copied into every trade booked
+ * while it stood and fixing the instrument later does not fix those trades.
+ *
+ * A CHECK constraint enforces the same thing in the database, which is the
+ * guard that actually holds; this one exists to say why in Serbian instead of
+ * raising a constraint name at the user.
+ */
+function badSpec(patch: {
+  point_value?: number | null;
+  tick_size?: number | null;
+  tick_value?: number | null;
+}): string | null {
+  const fields: [string, number | null | undefined][] = [
+    ["Point value", patch.point_value],
+    ["Tick size", patch.tick_size],
+    ["Tick value", patch.tick_value],
+  ];
+  for (const [label, v] of fields) {
+    if (v == null) continue;
+    if (!Number.isFinite(v) || v <= 0) return `${label} mora biti veći od nule.`;
+  }
+  return null;
+}
+
 export async function addInstrument(input: {
   symbol: string;
   name?: string;
@@ -178,6 +220,8 @@ export async function addInstrument(input: {
   const supabase = await createClient();
   const symbol = input.symbol.trim();
   if (!symbol) return { ok: false, error: "Symbol required." };
+  const spec = badSpec(input);
+  if (spec) return { ok: false, error: spec };
   const { error } = await supabase.from("tj_instruments").insert({
     symbol,
     name: input.name?.trim() || null,
@@ -204,6 +248,8 @@ export async function updateInstrument(
     is_active?: boolean;
   },
 ) {
+  const spec = badSpec(patch);
+  if (spec) return { ok: false, error: spec };
   const supabase = await createClient();
   const { error } = await supabase
     .from("tj_instruments")
@@ -275,6 +321,17 @@ export async function updateAccount(
     return { ok: false, error: "Starting balance cannot be negative." };
   }
 
+  // The account's timezone decides which calendar DAY every trade, every
+  // compliance verdict and every daily total belongs to. The read path uses
+  // `safeTz`, which degrades an unknown zone to the default rather than
+  // throwing — right for rendering, and it makes a typo invisible: save
+  // `Europe/Belgrad` and the whole journal quietly re-dates itself to New York
+  // with nothing on screen that looks wrong. Refused here, where the user is
+  // still looking at the field they typed it into.
+  if (patch.timezone != null && !isValidTimeZone(patch.timezone)) {
+    return { ok: false, error: `Nepoznata vremenska zona: ${patch.timezone}` };
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.from("tj_accounts").update(patch).eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -303,6 +360,10 @@ export async function addAccount(input: {
 }) {
   const supabase = await createClient();
   if (!input.name.trim()) return { ok: false, error: "Name required." };
+  // Same guard as `updateAccount` — a bad zone must not be creatable either.
+  if (input.timezone != null && !isValidTimeZone(input.timezone)) {
+    return { ok: false, error: `Nepoznata vremenska zona: ${input.timezone}` };
+  }
   const { error } = await supabase.from("tj_accounts").insert({
     name: input.name.trim(),
     currency: input.currency ?? "USD",
@@ -444,6 +505,19 @@ export async function addFieldDef(input: {
     return { ok: false as const, error: "Nepoznat tip polja." };
   if (!FIELD_DEF_GROUPS.includes(input.group_id))
     return { ok: false as const, error: "Nepoznata grupa." };
+
+  // A label with no letter or digit in it has no key to derive. `slugifyFieldKey`
+  // strips punctuation, finds nothing left, and falls back to the bare `f` —
+  // so `!!!`, `___` and `---` are three visibly different labels that all
+  // become the same field. The collision itself is caught below (23505), but
+  // the message it produces — "a field with that key already exists" — is
+  // baffling next to a label the user can see is new. Refused at the source
+  // instead, where the reason can be stated.
+  if (!/[a-z0-9]/i.test(label.normalize("NFD").replace(/[\u0300-\u036f]/g, "")))
+    return {
+      ok: false as const,
+      error: "Naziv mora sadržati bar jedno slovo ili broj.",
+    };
 
   const key = (input.key?.trim() || slugifyFieldKey(label)).toLowerCase();
   if (!KEY_RE.test(key))

@@ -33,6 +33,20 @@ function safeTz(tz: string): string {
   return resolved;
 }
 
+/**
+ * Whether the runtime recognizes this zone.
+ *
+ * Exported so a WRITE can refuse what the read path would silently paper over.
+ * `safeTz` degrading to the default is right for rendering — a mistyped zone
+ * must not blank the journal — but it makes a bad value invisible: save
+ * `Europe/Belgrad` with the "e" missing and every day key, every calendar cell
+ * and every daily total quietly resolves in New York instead, with no error and
+ * nothing on screen that looks wrong. The place to catch that is the save.
+ */
+export function isValidTimeZone(tz: string): boolean {
+  return safeTz(tz) === tz;
+}
+
 /** Format a UTC timestamp in the account's timezone (e.g. "New York time"). */
 export function fmtInTz(
   iso: string | Date | null | undefined,

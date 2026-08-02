@@ -49,8 +49,20 @@ export function buildPositionPatch(
     } else if (numeric.has(key)) {
       const n = raw === "" || raw == null ? null : Number(raw);
       coerced[key] = n != null && Number.isFinite(n) ? n : null;
+    } else if (typeof raw === "string") {
+      // Trimmed, and whitespace-only collapses to null — the same treatment the
+      // array branch above has always given its members.
+      //
+      // Untrimmed text SPLITS REPORT BUCKETS. `dimensions.ts` groups on the
+      // stored value, so "XAUUSD" and "XAUUSD " are two instruments, each
+      // holding half the trades and each below the sample threshold, with
+      // nothing on screen to say they are the same symbol. A trailing space is
+      // invisible in an input box and survives every copy-paste from a broker
+      // statement, so this is not a hypothetical way to produce it.
+      const trimmed = raw.trim();
+      coerced[key] = trimmed === "" ? null : trimmed;
     } else {
-      coerced[key] = raw === "" ? null : raw;
+      coerced[key] = raw;
     }
   }
 

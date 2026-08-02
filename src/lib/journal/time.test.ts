@@ -7,6 +7,7 @@ import {
   zonedDateKey,
   zonedInputToUtc,
   zonedWeekStartKey,
+  isValidTimeZone,
 } from "./time";
 
 /**
@@ -171,5 +172,41 @@ describe("zonedWeekStartKey", () => {
     // ISO week. This is the attribution bug the whole zone discipline exists for.
     expect(zonedWeekStartKey("2026-03-09T02:00:00Z", NY)).toBe("2026-03-02");
     expect(zonedWeekStartKey("2026-03-09T02:00:00Z", BG)).toBe("2026-03-09");
+  });
+});
+
+describe("isValidTimeZone", () => {
+  it("accepts the zones an account can actually be set to", () => {
+    for (const tz of [
+      "America/New_York",
+      "Europe/Belgrade",
+      "Europe/London",
+      "Asia/Tokyo",
+      "UTC",
+    ]) {
+      expect(isValidTimeZone(tz), tz).toBe(true);
+    }
+  });
+
+  it("rejects the typo the read path would have swallowed", () => {
+    // `safeTz` degrades an unknown zone to the default rather than throwing,
+    // which is right for rendering and hides the mistake completely: save
+    // `Europe/Belgrad` and every day key, calendar cell and daily total
+    // silently resolves in New York. This is the function that lets the WRITE
+    // refuse what the read would paper over.
+    expect(isValidTimeZone("Europe/Belgrad")).toBe(false);
+    expect(isValidTimeZone("America/New York")).toBe(false);
+    expect(isValidTimeZone("")).toBe(false);
+    expect(isValidTimeZone("Mars/Olympus_Mons")).toBe(false);
+    expect(isValidTimeZone("GMT+2")).toBe(false);
+  });
+
+  it("stays correct when asked twice, since the answer is memoized", () => {
+    // `safeTz` caches by string. A cache that stored the FALLBACK under the bad
+    // key would answer true the second time.
+    expect(isValidTimeZone("Europe/Belgrad")).toBe(false);
+    expect(isValidTimeZone("Europe/Belgrad")).toBe(false);
+    expect(isValidTimeZone("Europe/Belgrade")).toBe(true);
+    expect(isValidTimeZone("Europe/Belgrade")).toBe(true);
   });
 });

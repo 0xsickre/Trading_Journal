@@ -74,13 +74,14 @@ describe("one trade, from form values to a report row", () => {
     expect(patch.columns.entry_price).toBe(2400);
     expect(patch.columns.stop_price).toBe(2390);
     expect(patch.columns.technical_tags).toEqual(["FVG", "Liquidity Sweep"]);
-    // NOT trimmed — asserted as-is, because it is a finding rather than a
-    // behaviour to assume. Harmless for a note, but `customFieldDimensions`
-    // registers every user-defined `text` field as a groupable dimension, so a
-    // stray space splits "A" and " A" into two report buckets that look
-    // identical on screen. The place to trim is the save path; recorded for
-    // step 6 rather than changed from here.
-    expect(patch.columns.trade_journal_notes).toBe("  sweep into FVG  ");
+    // Trimmed. This assertion used to read `"  sweep into FVG  "` and carried a
+    // note saying the untrimmed value was a FINDING rather than a behaviour to
+    // rely on — `customFieldDimensions` registers every user-defined text field
+    // as a groupable dimension, so a stray space splits "A" and " A" into two
+    // report buckets that look identical on screen. Step 6 closed it in
+    // `buildPositionPatch`, which is the save path the note pointed at, and the
+    // assertion flipped with the fix.
+    expect(patch.columns.trade_journal_notes).toBe("sweep into FVG");
   });
 
   // ---- 2. Fills arrive, status follows from them -------------------------

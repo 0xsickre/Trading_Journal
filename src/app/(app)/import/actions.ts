@@ -301,13 +301,21 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
     });
     if (insErr) return { ok: false, error: insErr.message };
 
-    await supabase
+    // Reported, not swallowed — the same write `commitImport` throws on, for
+    // the same reason, three hundred lines up: the fills have already been
+    // replaced by the call above, so a failure here leaves the position holding
+    // the restored fills under the status the IMPORT left behind. Closed fills
+    // on a row still reading `open`, which every stat then treats as an
+    // unfinished trade. One of the two paths threw and the other did not, on
+    // identical statements.
+    const { error: stErr } = await supabase
       .from("tj_positions")
       .update({
         status: statusOf(executions),
         needs_review: executions.length === 0,
       })
       .eq("id", positionId);
+    if (stErr) return { ok: false, error: stErr.message };
   }
 
   // Delete children before parents, explicitly, rather than relying on the FK

@@ -1798,3 +1798,150 @@ build green, `tsc` clean.
 `lib/` pipeline from realized trades to the score. It does not touch the 16 250 lines of
 components or the 25 routes, which have no tests at all and are where S1 actually lived. Steps
 6–8 read that code; they do not execute it.
+
+---
+
+## Step 6 — the server layer
+
+Every `"use server"` action (10 files, 63 actions) and every `server-only` query module (17
+files). This step also carried three findings owed from earlier steps.
+
+### Mechanical invariants — all clean
+
+- **`"use server"` files export only async functions.** Swept; nothing else is exported.
+  A non-async export from one of these files is a build-time footgun and there are none.
+- **Every `update` and `delete` is filtered by `id`**, under RLS policies that are uniformly the
+  owner pattern. There is no unqualified mutation anywhere in the codebase.
+- **Pagination**: every read that grows with history already drains through `selectAllPages`
+  or `selectAllByIds`. The unpaginated reads left are `getAccounts`, `getFieldDefs`,
+  `getOptionLists` / `getOptionItems`, `getTrackerRules`, `getNoteFolders` and `getNoteTags` —
+  hand-managed vocabularies bounded by what a person types into Settings, tens of rows each. A
+  user would have to define a thousand custom fields by hand to reach the cap. Recorded rather
+  than left unexamined; the same decision as step 5 and now consistent across both.
+
+### V1 (Medium) — `reorderOptions` reported success it never checked
+
+`settings/actions.ts` — it dispatched one update per option with `await Promise.all(...)`,
+**discarded the array**, and returned `{ ok: true }` unconditionally. A reorder that half
+applied reported success, the list snapped back on the next load, and nothing said why.
+
+The tell is that the same operation exists three times in this codebase and the other two —
+`moveFieldDef` in the same file, and the tracker's — both inspect every error and return
+`{ ok: false }`. This was the odd one out.
+
+`FIXED` — results are inspected, still dispatched in parallel (the ordinals are independent and
+one round trip per option would make a long list crawl).
+
+### V2 (Medium) — undo swallowed the write its own sibling throws on
+
+`import/actions.ts`. In `undoImportBatch`, after the displaced fills are put back, the position's
+status is recomputed and written — and the error was dropped on the floor.
+
+Three hundred lines up, `commitImport` performs the *identical* statement and throws, under a
+comment explaining exactly why: *"the fills have already been replaced by the line above, so a
+swallowed failure here leaves the position carrying new fills under its old status — closed
+fills on a row still reading `open`, which every stat then reads as an unfinished trade."*
+
+Every word of that applies to the undo path. One of the two paths acted on it.
+
+`FIXED` — the error is returned. Both halves of the import/undo pair now behave the same way on
+the same statement.
+
+### V3 (High) — a point value of zero silently made every trade worth nothing
+
+`tj_instruments` carried **no CHECK constraints at all**, and neither `addInstrument` nor
+`updateInstrument` validated anything but the symbol.
+
+`point_value` is the multiplier in `computePositionStats`:
+
+```ts
+grossPl = grossPoints * pointValue;
+netPl   = grossPl - totalFees - totalSwap;
+```
+
+Set it to 0 — one cleared number input away — and every trade on that instrument is worth
+exactly nothing: gross 0, net minus the fees. Set it negative and every P&L on it inverts.
+Neither raises anything; the journal renders wrong money as fact.
+
+And it is worse than a live-lookup bug, because `instrumentSnapshot` **freezes** the value onto
+each position as `point_value_at_trade` at creation — deliberately, so later edits cannot
+rewrite finished history. A bad point value is therefore copied into every trade booked while it
+stood, and correcting the instrument afterwards does **not** correct those trades.
+
+`FIXED`, in both places that matter:
+
+- migration `20260802140000_instrument_positive_contract_specs` — CHECK constraints on
+  `point_value`, `tick_size` and `tick_value`. This is the guard that holds: PostgREST with the
+  user's JWT is a live write path, so a check living only in TypeScript is a lock you walk
+  around.
+- `addInstrument` / `updateInstrument` — the same rule in Serbian, so the user reads a sentence
+  instead of a constraint name.
+
+Verified against the live table before applying (10 rows, none violating) and proved afterwards
+in a rolled-back transaction: `point_value` 0, `point_value` −5 and `tick_size` 0 all refused,
+3 of 3. `tick_size` and `tick_value` keep their null arm — null means "not specified", which
+`units.ts` already tests for with `(tick_size ?? 0) > 0` before dividing. `point_value` is
+NOT NULL already, so its null arm is unreachable and kept only so the three read identically.
+
+### The three findings carried in from earlier steps
+
+**(a) `updateAccount` accepted any timezone string.** `FIXED`, and `addAccount` with it — the
+note only named one of the two doors. The account's zone decides which calendar DAY every trade,
+compliance verdict and daily total belongs to. The read path uses `safeTz`, which degrades an
+unknown zone to the default rather than throwing — correct for rendering, and it makes a typo
+invisible: save `Europe/Belgrad` and the whole journal quietly re-dates itself to New York with
+nothing on screen that looks wrong. `isValidTimeZone` is now exported from `time.ts` so a WRITE
+can refuse what the read path papers over, with a test pinning that the memo cache cannot start
+answering `true` for a bad zone on the second call.
+
+**(b) `addFieldDef` and a label that slugs to nothing.** `FIXED`, at **lower severity than the
+note claimed** — checking the code first was worth it. The collision the note worried about is
+already handled: the insert returns `23505` and the action turns that into "Polje sa tim ključem
+već postoji." What was actually wrong is narrower — `!!!`, `___` and `---` are three visibly
+different labels that all slug to the same bare `f`, so the second one gets a
+key-already-exists message next to a label the user can see is new. Now refused at the source,
+where the reason can be stated: a label needs at least one letter or digit.
+
+**(c) `buildPositionPatch` did not trim text.** `FIXED`. The array branch had always trimmed its
+members; the scalar branch did not, so the same value behaved differently depending on the
+field's type. `dimensions.ts` groups on the stored value, so `"XAUUSD"` and `"XAUUSD "` are two
+instruments — each holding half the trades, each below the sample threshold, with nothing on
+screen to say they are the same symbol. A trailing space is invisible in an input box and
+survives every paste from a broker statement. Whitespace-only now collapses to null for the same
+reason: `"   "` is not a value anyone chose, and stored as-is it becomes its own report bucket
+labelled with nothing at all.
+
+The assertion in `pipeline.integration.test.ts` that RECORDED this behaviour — with a note saying
+the fix belonged in step 6 — flipped with the fix, which is the deferral closing itself.
+
+### Checked and deliberately NOT changed
+
+**A zero-row `update` returns no error from PostgREST**, so an action can answer `{ ok: true }`
+for a write that hit nothing. The lifecycle family already handles this properly and is the
+model: `markTradeMissed`, `restoreTradeToPlanned` and `activateTrade` all carry their predicate
+into the statement and add `.select("id")`, so zero rows means "Trade changed — refresh the
+page" rather than false success. `updateTrade` covers it with its `if (!prevPos)` read guard.
+The remainder are Settings CRUD on a row the user is looking at, where zero rows can only mean
+it was deleted in another tab. Recorded rather than mass-edited into twenty call sites.
+
+**`rememberTags` discards its upsert error.** Genuinely best-effort: a tag that fails to be
+remembered just will not autocomplete next time, and the note itself has already saved.
+
+**zod covers 4 of 10 action files.** M1 from round 2 was specifically about URL parameters and
+was closed in step 1 by extracting `reports/url-params.ts`; the broader "zod everywhere"
+ambition is not what that finding said, and retrofitting schemas onto 63 actions is a refactor
+the owner ruled out. What matters is whether an unvalidated value can write a wrong number, and
+that was answered by asking the database what it already refuses: breakeven ordering, non-negative
+starting balance, cash-event sign against type, `qty > 0`, and the enum CHECKs on side, source,
+status and conviction are all enforced in Postgres. `tj_instruments` was the one table with
+nothing — V3 above.
+
+### Outcome
+
+`FIXED` — V1, V2, V3, plus carried findings (a), (b) and (c).
+`REVIEWED — clean` — `"use server"` export discipline, mutation filtering, pagination coverage,
+the lifecycle actions' stale-predicate handling.
+
+941 tests / 55 files (933 → 941). Coverage **95.54 / 89.89 / 96.75 / 96.80**. Migrations 42.
+`get_advisors` — the same 2 known WARNs as the baseline, none new. Lint 1 warning, build green,
+`tsc` clean.
