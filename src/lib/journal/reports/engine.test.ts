@@ -297,3 +297,42 @@ describe("summarizeReport respects the metric's direction", () => {
     expect(summarizeReport(r, "total_fees").best?.bucket).toBe("CHEAP");
   });
 });
+
+describe("summarizeReport orders ties instead of leaving them to chance", () => {
+  it("does not produce an arbitrary best when two buckets are both flawless", () => {
+    // `profit_factor` answers Infinity for a bucket with no losing trade, by
+    // design. `Infinity - Infinity` is NaN, and a comparator returning NaN
+    // leaves the sort in an unspecified order — so with two flawless buckets
+    // both `best` and `worst` were whatever the engine happened to produce.
+    // The row sort has always guarded equality; the summary did not.
+    const r = run(
+      enrich([
+        { instrument: "ZZZ", net: 100, r: 1 },
+        { instrument: "AAA", net: 100, r: 1 },
+        { instrument: "MID", net: 100, r: 1 },
+        { instrument: "MID", net: -50, r: -0.5 },
+      ]),
+      "instrument",
+      { metricKeys: ["profit_factor"], sortBy: "profit_factor", minSample: 1 },
+    )!;
+
+    const s = summarizeReport(r, "profit_factor");
+    // Both flawless buckets outrank the one that has a loss, and the tie
+    // between them breaks on the bucket name — deterministically.
+    expect(s.best?.bucket).toBe("AAA");
+    expect(s.worst?.bucket).toBe("MID");
+  });
+
+  it("agrees with the row order it summarises", () => {
+    const r = run(
+      enrich([
+        { instrument: "ZZZ", net: 100, r: 1 },
+        { instrument: "AAA", net: 100, r: 1 },
+      ]),
+      "instrument",
+      { metricKeys: ["profit_factor"], sortBy: "profit_factor", minSample: 1 },
+    )!;
+    // The table and the headline must not disagree about who is on top.
+    expect(summarizeReport(r, "profit_factor").best?.bucket).toBe(r.rows[0].bucket);
+  });
+});

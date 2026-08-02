@@ -59,10 +59,10 @@ export default defineConfig({
        * contorting the code to satisfy a counter.
        */
       thresholds: {
-        statements: 93,
-        branches: 88,
-        functions: 91,
-        lines: 95,
+        statements: 95,
+        branches: 89,
+        functions: 96,
+        lines: 96,
         ...Object.fromEntries(
           MONEY_MODULES.map((f) => [f, { statements: 100, functions: 100 }]),
         ),

@@ -28,8 +28,6 @@ export type DimensionContext = {
   insightsByTrade?: Map<string, string[]>;
   /** Account id → display name. */
   accountNames?: Map<string, string>;
-  /** Option value → human label, per option-list key. */
-  labelsByList?: Map<string, Map<string, string>>;
   /**
    * Dimensions over user-defined fields, built per request from
    * `tj_field_defs`.

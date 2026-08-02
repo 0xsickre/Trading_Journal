@@ -206,10 +206,18 @@ export function summarizeReport(
 
   const withValue = eligible.filter((r) => r.values[metricKey] != null);
   // Best first, worst last, whichever way "better" runs for this metric.
-  const byMetric = [...withValue].sort(
-    (a, b) =>
-      ((a.values[metricKey] as number) - (b.values[metricKey] as number)) * dir,
-  );
+  //
+  // The equality guard is not decoration. `profit_factor` answers Infinity for a
+  // bucket with no losing trade — deliberately, see its entry in `metrics.ts` —
+  // and `Infinity - Infinity` is `NaN`. A comparator that returns NaN leaves the
+  // sort in an unspecified order, so with two flawless buckets `best` and
+  // `worst` were both arbitrary. The row sort above has always had this guard;
+  // this one did not, and the two used different orders for the same data.
+  const byMetric = [...withValue].sort((a, b) => {
+    const av = a.values[metricKey] as number;
+    const bv = b.values[metricKey] as number;
+    return av === bv ? a.bucket.localeCompare(b.bucket) : (av - bv) * dir;
+  });
   const byWinRate = eligible
     .filter((r) => r.values.win_rate != null)
     .sort((a, b) => (b.values.win_rate as number) - (a.values.win_rate as number));

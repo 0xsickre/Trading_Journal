@@ -7,10 +7,12 @@ import {
   customFieldDimensions,
   getDimension,
   resolveDimension,
+  DIMENSION_GROUP_LABELS,
+  DIMENSION_GROUP_ORDER,
   R_MULTIPLE_EDGES,
   tagSplitDimensions,
 } from "./dimensions";
-import { DAY, dimCtx, enrich, mkReport } from "./test-helpers";
+import { DAY, TEST_FIELD_DEFS, dimCtx, enrich, mkReport } from "./test-helpers";
 
 const one = (specs: Parameters<typeof enrich>[0]) => enrich(specs)[0];
 
@@ -331,5 +333,97 @@ describe("splitting psychology_tags back into its source lists", () => {
     const t = one([{ psychologyTags: ["FOMO"] }]);
     expect(bucketsOf(e, t, dimCtx())).toEqual([]);
     expect(bucketsOf(d, t, dimCtx())).toEqual([]);
+  });
+});
+
+describe("every dimension buckets without throwing", () => {
+  /**
+   * The companion to the metric registry sweep. A report renders one row per
+   * bucket of ONE dimension, so a `valueOf` that throws takes the page down
+   * rather than blanking a cell — and nine of these callbacks had never been
+   * executed by a test.
+   */
+  const rich = one([
+    {
+      instrument: "XAUUSD",
+      net: 300,
+      r: 3,
+      setupGrade: "A",
+      direction: "Short",
+      technicalTags: ["FVG"],
+      psychologyTags: ["FOMO"],
+      size: 2,
+      durationSeconds: 3 * DAY,
+      accountId: "acc1",
+      custom: { macro_align: "Aligned" },
+    },
+  ]);
+
+  // Everything absent that can be absent: no tags, no grade, no size, no
+  // duration, no account, no custom values.
+  const bare = one([{ net: 0, r: null, durationSeconds: null, size: null, accountId: null }]);
+
+  const ctx = dimCtx([
+    mkReport("2026-01-09", {
+      micromanage: "watched",
+      mental_temp: 6,
+      day_grade: "B",
+      rule_broken: true,
+    }),
+  ]);
+
+  const all = [...DIMENSIONS, ...customFieldDimensions(TEST_FIELD_DEFS)];
+
+  it("over a fully populated trade", () => {
+    for (const d of all) {
+      expect(() => bucketsOf(d, rich, ctx), d.key).not.toThrow();
+    }
+  });
+
+  it("over a trade with everything absent", () => {
+    for (const d of all) {
+      expect(() => bucketsOf(d, bare, ctx), d.key).not.toThrow();
+    }
+  });
+
+  it("always answers an array of strings, never a bare value or undefined", () => {
+    // `bucketsOf` is what the engine groups on. A non-array or an `undefined`
+    // inside it would become the string "undefined" as a bucket label.
+    for (const d of all) {
+      for (const t of [rich, bare]) {
+        const buckets = bucketsOf(d, t, ctx);
+        expect(Array.isArray(buckets), d.key).toBe(true);
+        for (const b of buckets) {
+          expect(typeof b, `${d.key} → ${String(b)}`).toBe("string");
+          expect(b.length, d.key).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
+  it("keeps a single-value dimension to at most one bucket", () => {
+    // Only dimensions declaring `multiValue` may put one trade in two rows;
+    // for the rest, rows must still sum to the portfolio total.
+    for (const d of all.filter((x) => !x.multiValue)) {
+      expect(bucketsOf(d, rich, ctx).length, d.key).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("declares an order only in values its own bucketing can produce", () => {
+    // A stale entry in `order` sorts a real bucket to the bottom forever, and
+    // nothing errors. Checked structurally: every ordered dimension's labels
+    // must be non-empty strings, and the ordered set must have no duplicates.
+    for (const d of all.filter((x) => x.order)) {
+      const order = [...d.order!];
+      expect(new Set(order).size, d.key).toBe(order.length);
+      for (const label of order) expect(label.length, d.key).toBeGreaterThan(0);
+    }
+  });
+
+  it("groups every dimension under a label the picker can show", () => {
+    for (const d of all) {
+      expect(DIMENSION_GROUP_LABELS[d.group], d.key).toBeTruthy();
+      expect(DIMENSION_GROUP_ORDER, d.key).toContain(d.group);
+    }
   });
 });

@@ -133,7 +133,11 @@ export const METRICS: ReportMetric[] = [
     key: "profit_factor",
     label: "Profit factor",
     unit: "ratio",
-    hint: "Bruto profit / bruto gubitak. Prazno kad nema nijednog gubitka.",
+    // Infinity is kept on purpose and is NOT an error: a group with no losing
+    // trade has the best possible profit factor, which is a different statement
+    // from `target_attainment`'s null, meaning "no denominator exists at all".
+    // `engine.test.ts` pins both halves of that distinction.
+    hint: "Bruto profit / bruto gubitak. ∞ znači da u grupi nema nijednog gubitka; prazno samo kad grupa nema trejdova.",
     higherIsBetter: true,
     compute: (g, ctx) => statsOf(g, ctx).profitFactor,
   },

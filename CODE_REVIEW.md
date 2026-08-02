@@ -1260,3 +1260,102 @@ can run the app.
 
 830 tests / 51 files (756 → 830). Coverage 93.3 → **93.9 / 89.05 / 91.59 / 95.22**, thresholds
 enforced. Lint 1 warning, build green, `tsc` clean.
+
+## Step 4 — the two registries
+
+`reports/` and `insights/` share one contract: *adding an entry is one entry and nothing
+else*. That only holds if every entry actually works, and one of the two registries had never
+been executed by a test at all.
+
+### R1 (High) — `metrics.ts` had no test file, and 25 of 26 `compute` callbacks never ran
+
+353 lines. Every column of every report, every pivot cell and every "best performing" headline
+reads through this file. Statement coverage 44.7%, **function coverage 39.0%** — the lowest in
+the codebase — and no `metrics.test.ts` existed.
+
+Now tested **as a registry**, which is a different shape from testing a function: the
+properties every entry must hold, swept across all of them, and then the handful of values
+worth pinning by hand.
+
+- no duplicate keys; every metric has a label, a legal unit and a direction
+- every default column resolves, so a fresh report cannot render blank
+- **every metric computes without throwing** — over a normal group, a single trade, and an
+  empty group. A report renders one column per metric, so one throw takes the page down rather
+  than blanking a cell
+- **no metric ever answers NaN**, on any group. NaN renders as "NaN", compares false against
+  itself, and poisons any comparator that reaches it
+- the arithmetic a reader would check by hand: net and gross sums, win rate on the account's
+  band, profit factor, R totals, costs, drawdown inside the group, hold time in seconds,
+  planned-vs-realized R over the *same* trades, MAE averaged only over trades that carry one
+- `follow_rate` scoped and unscoped, the one metric whose answer depends on which bucket it
+  is in
+
+Result: **100% statements and 100% functions.**
+
+### R2 (Medium) — `summarizeReport` could return an arbitrary best and worst
+
+Found by the sweep above, and it is a genuine defect rather than a coverage artefact.
+
+`profit_factor` answers `Infinity` for a bucket with no losing trade. That is **deliberate**
+and documented — `engine.test.ts` pins it, and the rule it encodes is a real distinction:
+`Infinity` means "best possible", `null` (as `target_attainment` uses) means "no denominator
+exists at all", and the two must not rank the same way.
+
+What the design did not consider is that `Infinity - Infinity` is `NaN`. The row sort in
+`engine.ts` has always guarded equality first; **`summarizeReport`'s comparator did not**. With
+two flawless buckets it returned NaN, which leaves a sort in an unspecified order — so `best`
+and `worst` were both whatever the engine happened to produce, and the headline could disagree
+with the table it was summarising.
+
+Fixed by giving the summary the same equality guard the row sort has, with a deterministic
+tie-break on the bucket name. Two tests pin it: that the tie resolves, and that the summary
+agrees with the row order.
+
+**A correction to my own first move.** I initially "fixed" this by collapsing the Infinity to
+null in the metric, which broke `engine.test.ts` — a test that exists precisely to state that
+Infinity is intended. That was me treating documented intent as a bug. Reverted; what stayed
+is the corrected **hint**, which had claimed the cell would be "prazno kad nema nijednog
+gubitka" while it in fact shows ∞. The behaviour was right and the documentation was wrong,
+which is the opposite of what the failing test first suggested.
+
+### R3 (Low) — `labelsByList` deleted
+
+`DimensionContext.labelsByList` — declared, typed, documented as "option value → human label,
+per option-list key", and **never written by anyone and never read by anyone**. A context field
+that is always `undefined` invites a reader to build a feature around it. Removed.
+
+### R4 — the dimension registry swept the same way
+
+Nine `valueOf` callbacks had never executed. The same shape of test now covers all of them,
+plus the custom-field dimensions: buckets a fully populated trade and a completely bare one
+without throwing, always returns an **array of non-empty strings** (an `undefined` inside it
+becomes the literal bucket label "undefined"), keeps a non-`multiValue` dimension to at most
+one bucket so rows still sum to the portfolio total, declares no duplicate `order` entries,
+and files every dimension under a group label the picker can show.
+
+`dimensions.ts` 77.3% → 83.3% statements, 81.6% → 89.8% functions.
+`playbook-dimensions.ts` 81.5% → 98.1%.
+
+### Checked and found sound
+
+**The insight registry needs nothing.** `registry.test.ts` already pins duplicate ids, the
+implemented/omitted split, a stated reason on every omission, a description and a non-negative
+sample floor on every rule, disjointness of TradeZella-derived and own rules, lookup by id, the
+sample-floor skip, zero-sample rules on a single trade, severity ordering and grouping. 31
+rules across four files, all reachable. Nothing to add.
+
+The `points` unit is pinned as having **no producer**: it is a legal `MetricUnit` with a whole
+branch in `formatMetric`, and no metric emits it. If one is ever added, the test fails and
+sends the author to check that the report table passes an instrument context — without which
+that branch silently renders as money.
+
+### Outcome
+
+`FIXED` — R1 (registry now fully exercised), R2 (`summarizeReport` comparator), R3
+(`labelsByList` deleted), R4 (dimension sweep).
+`REJECTED` — collapsing `profit_factor`'s Infinity to null; the design is deliberate and
+tested. Its hint was corrected instead.
+
+861 tests / 52 files (830 → 861). Coverage **95.43 / 89.44 / 96.70 / 96.74** (from
+93.9 / 89.05 / 91.59 / 95.22); `metrics.ts` from 44.7 / 39.0 to **100 / 100**. Floor raised to
+95 / 89 / 96 / 96. Lint 1 warning, build green, `tsc` clean.
