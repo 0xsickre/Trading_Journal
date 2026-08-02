@@ -424,7 +424,6 @@ const RESERVED_KEYS = new Set([
   "max_profit_price",
   "trade_journal_notes",
   "needs_review",
-  "reviewed",
   "playbook_id",
   "conviction",
   "import_batch_id",

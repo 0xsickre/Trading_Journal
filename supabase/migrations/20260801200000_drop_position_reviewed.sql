@@ -1,0 +1,26 @@
+-- Brisanje tj_positions.reviewed.
+--
+-- Poslednja od tri mrtve kolone dodate u 20260727121000. `rating` je otišao u
+-- 20260801180000, `profit_calc_method` u 20260801160000; ostaje ova.
+--
+-- Namera je zapisana u toj migraciji, doslovno: „`needs_review` već postoji i
+-- znači 'import je ostavio ovaj trejd nepotpun'. `reviewed` je druga, korisnička
+-- tvrdnja: pogledao sam ovaj trejd." Razlika je stvarna i danas — ali druga
+-- polovina nikad nije napravljena. Nijedan checkbox je ne postavlja, nijedan
+-- filter, brojač ni izveštaj je ne čita. `needs_review` radi svoj posao i vidi
+-- se u gridu; `reviewed` je ostao prazan.
+--
+-- Zajedno sa kolonom odlazi i indeks `tj_positions_reviewed_idx` nad
+-- (user_id, reviewed) — Postgres ga briše sam. To je bio indeks za pretragu
+-- koja se nikad nije izvršila.
+--
+-- Provereno pre pisanja: nijedan red nema `reviewed = true`, i nijedan view ne
+-- zavisi od kolone (za razliku od `result`, koji je morao da sruši
+-- tj_position_stats).
+--
+-- Ako „pogledao sam ovaj trejd" jednom zatreba, vraća se jednim ALTER-om — ali
+-- tek zajedno sa dugmetom koje ga čeka. Ovaj put je i tracker prirodniji dom:
+-- „prošao sam juče zatvorene trejdove" je dnevno pravilo procesa, a ne
+-- svojstvo pojedinačnog trejda.
+
+ALTER TABLE public.tj_positions DROP COLUMN reviewed;
