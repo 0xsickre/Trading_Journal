@@ -650,10 +650,17 @@ export function Dashboard({
         recoveryFactor: recovery,
         consistencyScore: consistency.score,
         processAdherencePct,
+        // Drawdown, win % and consistency all answer 0 for an empty book, and a
+        // 0 drawdown scores 100. The counts let the score tell "no evidence"
+        // from "measured zero" and drop the component instead.
+        sample: { trades: stats.count, decided: stats.wins + stats.losses },
       }),
     [
       stats.profitFactor,
       stats.winRate,
+      stats.count,
+      stats.wins,
+      stats.losses,
       winLossRatio,
       drawdown.maxPctOfPeakPnl,
       recovery,

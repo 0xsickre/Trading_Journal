@@ -63,12 +63,22 @@ export function SickreScoreCard({ score }: { score: SickreScore }) {
           ))}
         </div>
 
-        {score.components.some((c) => !c.counted) && (
+        {score.coverage === 0 ? (
+          // Nothing measurable at all. Said outright, because a bare "—" next
+          // to seven dashes looks like the card failed rather than like the
+          // account has no history yet.
           <p className="text-xs text-muted-foreground">
-            Komponente bez podataka su izbačene, a preostali ponderi
-            renormalizovani — mlad track record se ne kažnjava za račun koji
-            nema šta da podeli.
+            Još nema šta da se oceni — nijedna komponenta nema podatke iza sebe.
+            Skor se pojavljuje kad uneseš prvi zatvoren trejd.
           </p>
+        ) : (
+          score.components.some((c) => !c.counted) && (
+            <p className="text-xs text-muted-foreground">
+              Komponente bez podataka su izbačene, a preostali ponderi
+              renormalizovani — mlad track record se ne kažnjava za račun koji
+              nema šta da podeli.
+            </p>
+          )
         )}
 
         <p className="text-xs text-muted-foreground">

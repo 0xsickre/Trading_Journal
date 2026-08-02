@@ -18,8 +18,17 @@
  *      produce a score that cannot be compared across tools.
  *
  * A component with no data (no drawdown yet, no losses yet) is dropped and the
- * remaining weights are renormalized, so an young track record is not punished
+ * remaining weights are renormalized, so a young track record is not punished
  * for arithmetic that has nothing to divide by.
+ *
+ * That renormalization is only as good as the "no data" signal reaching it, and
+ * for three components it did not. Drawdown, win % and consistency all answer
+ * `0` for an empty book — correctly, as statistics — and `0` drawdown scores
+ * **100**. An account with no trades at all therefore read 33/100 with "Max
+ * drawdown: 100" on the card, a claim about risk management made on the
+ * strength of having never taken a risk. `sample` closes that: the counts come
+ * in with the values, and a component with nothing behind it is dropped like
+ * any other.
  */
 
 export type ScoreBand = { min: number; scoreMin: number; scoreMax: number };
@@ -97,6 +106,33 @@ export type ScoreInputs = {
   consistencyScore: number | null;
   /** Optional seventh component; TradeZella has no equivalent. */
   processAdherencePct?: number | null;
+  /**
+   * How many trades are behind the numbers above.
+   *
+   * Required, and required for a reason. Three of the inputs answer `0` for an
+   * empty book because zero is the honest value of the STATISTIC — a book with
+   * no trades has drawn down no money, won no trades and has no variance. But
+   * zero evidence is not zero performance, and the score has to tell those
+   * apart: `100 - 0 = 100` scored a brand-new account as flawless risk
+   * management on the strength of never having traded, which then dragged a
+   * whole composite up on nothing.
+   *
+   * `profitFactor`, `avgWinLossRatio` and `recoveryFactor` already answer null
+   * on an empty book and drop themselves. These three cannot, because their
+   * zero is indistinguishable from a real one — so the count comes in beside
+   * them and this module does the distinguishing.
+   */
+  sample: {
+    /** Closed trades in scope. */
+    trades: number;
+    /**
+     * Decided trades — wins + losses, breakeven excluded. This is `winRate`'s
+     * own denominator, so gating on it asks exactly the question the number
+     * was computed from: a day of nothing but breakeven scratches is a 0 %
+     * win rate over no decisions, which is not a 0 % win rate.
+     */
+    decided: number;
+  };
 };
 
 export type ScoreComponent = {
@@ -138,15 +174,23 @@ const BASE_WEIGHTS = {
 export const PROCESS_ADHERENCE_WEIGHT = 15;
 
 export function computeSickreScore(inputs: ScoreInputs): SickreScore {
+  // Evidence gate, before anything is scored. A component with no trades behind
+  // it is reported as having no value at all — so the card shows "—" rather
+  // than a 0 or a 100 the reader would take for a measurement.
+  const hasTrades = inputs.sample.trades > 0;
+  const drawdownPct = hasTrades ? inputs.maxDrawdownPctOfPeakPnl : null;
+  const winPct = inputs.sample.decided > 0 ? inputs.winPct : null;
+  const consistency = hasTrades ? inputs.consistencyScore : null;
+
   const drawdownScore =
-    inputs.maxDrawdownPctOfPeakPnl == null
+    drawdownPct == null
       ? null
-      : Math.max(0, Math.min(100, 100 - inputs.maxDrawdownPctOfPeakPnl));
+      : Math.max(0, Math.min(100, 100 - drawdownPct));
 
   const winScore =
-    inputs.winPct == null
+    winPct == null
       ? null
-      : Math.min(100, (inputs.winPct / WIN_PCT_TOP_THRESHOLD) * 100);
+      : Math.min(100, (winPct / WIN_PCT_TOP_THRESHOLD) * 100);
 
   const components: ScoreComponent[] = [
     {
@@ -169,7 +213,7 @@ export function computeSickreScore(inputs: ScoreInputs): SickreScore {
       key: "maxDrawdown",
       label: "Max drawdown",
       weight: BASE_WEIGHTS.maxDrawdown,
-      value: inputs.maxDrawdownPctOfPeakPnl,
+      value: drawdownPct,
       score: drawdownScore,
       counted: false,
     },
@@ -177,7 +221,7 @@ export function computeSickreScore(inputs: ScoreInputs): SickreScore {
       key: "winPct",
       label: "Win %",
       weight: BASE_WEIGHTS.winPct,
-      value: inputs.winPct,
+      value: winPct,
       score: winScore,
       counted: false,
     },
@@ -193,8 +237,8 @@ export function computeSickreScore(inputs: ScoreInputs): SickreScore {
       key: "consistency",
       label: "Consistency",
       weight: BASE_WEIGHTS.consistency,
-      value: inputs.consistencyScore,
-      score: inputs.consistencyScore,
+      value: consistency,
+      score: consistency,
       counted: false,
     },
   ];

@@ -9,6 +9,7 @@ const base = {
   winPct: 50,
   recoveryFactor: 2.0,
   consistencyScore: 70,
+  sample: { trades: 30, decided: 30 },
 };
 
 describe("processAdherence", () => {

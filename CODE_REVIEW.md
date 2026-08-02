@@ -1605,3 +1605,52 @@ shared-`auto_key` collision, streak semantics, the notes and tracker query layer
 895 tests / 54 files (861 → 895). New: `import-number.test.ts` (15),
 `markdown-security.test.ts`, and the tracker and markdown cases above. Coverage
 **95.47 / 89.75 / 96.74 / 96.82**. Lint 1 warning (the known one), build green, `tsc` clean.
+
+### S1 (High, reported from the running app) — the score rewarded an empty account
+
+Reported against a live account with **zero trades entered**: the card read 33/100 with
+**Max drawdown: 100**, 52 % of weights covered.
+
+The arithmetic was exactly right and the answer was exactly wrong.
+`(100×20 + 0×15 + 0×10 + 0×15) / 60 = 33.33`, and `60/115 = 52 %` — both numbers on the
+screenshot, both reproduced in a test before touching anything.
+
+`computeSickreScore` already had the mechanism for this: a component whose input is null is
+dropped and the remaining weights renormalized. `profitFactor`, `avgWinLossRatio` and
+`recoveryFactor` all answer null on an empty book, and all three correctly showed `—`. The
+other three cannot:
+
+| input | empty book | why it is not null |
+|---|---|---|
+| `maxPctOfPeakPnl` | `0` | `EMPTY_DRAWDOWN` — a book with no trades has drawn down no money |
+| `winRate` | `0` | `analytics.ts:195` — `wins + losses > 0 ? … : 0` |
+| `consistencyScore().score` | `0` | `risk-metrics.ts:66` — count 0 returns score 0, though `mean`, `stdev` and `raw` are null |
+
+Each of those zeros is the honest value of its **statistic**. The defect is that the score read
+them as **measurements**: `100 − 0 = 100` turned "has never traded" into "flawless risk
+management", worth a fifth of the composite and the only thing holding the number above zero.
+Zero evidence is not zero performance — this project's cardinal sin, in the one place that
+aggregates every other number.
+
+The card's own header comment had promised the correct behaviour all along — *"Components that
+could not be computed are shown as dropped, not as zero — a book with no drawdown yet should
+not be scored as if it had a terrible one."* Only the input path never delivered a null for it
+to act on.
+
+`FIXED` — `ScoreInputs` takes a required `sample: { trades, decided }`, and the three
+components are gated on it before scoring, so their `value` reads `—` too rather than a
+misleading 0 or 100. Required rather than optional on purpose: a new call site must answer the
+question instead of inheriting a default that reintroduces the bug.
+
+Two denominators, not one, because the two statistics have two: `trades` gates drawdown and
+consistency, `decided` (wins + losses, breakeven excluded) gates win % — which is win rate's
+own denominator. A book of nothing but breakeven scratches has trades to be consistent about
+and no decisions to have won.
+
+The empty account now scores what it can actually defend: process adherence alone, at 15 of 115
+weights. With **no** process data either, coverage is 0 and the card says so in words instead
+of showing seven dashes that look like a failure.
+
+Pinned by five tests, including a reproduction of the reported 33.33 / 52 % — the same values
+with a non-empty sample still produce it, so the counts are demonstrably the only thing that
+changed, and a genuine zero drawdown over 8 real trades still scores 100.
