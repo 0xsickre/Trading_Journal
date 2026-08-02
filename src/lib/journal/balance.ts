@@ -163,8 +163,15 @@ export type DrawdownStats = {
    * Worst drop as a share of peak cumulative P&L before the drop, per the
    * TradeZella formula. Exists so the composite score stays comparable with
    * theirs — not for display.
+   *
+   * `0` means "never fell". **`null` means the question has no answer**: the
+   * curve fell, but from a peak that was never above zero, so there is no peak
+   * profit to express the fall as a share of. Those are not the same statement
+   * and they used to be the same number — a book of nothing but losses reported
+   * `0`, which the composite score read as a flawless 100 for risk management.
+   * A trader in a straight drawdown was told their risk control was perfect.
    */
-  maxPctOfPeakPnl: number;
+  maxPctOfPeakPnl: number | null;
   /** Mean depth across every drawdown episode, in money. Negative or 0. */
   avgMoney: number;
   /** How far below the running peak the account sits at the end of the period. */
@@ -226,7 +233,10 @@ export function computeDrawdown(timeline: BalancePoint[]): DrawdownStats {
   let maxMoney = 0;
   let maxAt: string | null = null;
   let maxPctOfEquity = 0;
-  let maxPctOfPeakPnl = 0;
+  // Starts at 0 — "never fell" — and only becomes null if a fall happens with
+  // no positive peak behind it. The two zeros the old code conflated are now
+  // the initial 0 (nothing fell) and null (fell, nothing to divide by).
+  let maxPctOfPeakPnl: number | null = 0;
 
   // One "episode" runs from a new peak until the series recovers to that peak.
   const episodeDepths: number[] = [];
@@ -247,7 +257,7 @@ export function computeDrawdown(timeline: BalancePoint[]): DrawdownStats {
       maxPctOfEquity =
         w.peakEquity > 0 ? (Math.abs(w.dropMoney) / w.peakEquity) * 100 : 0;
       maxPctOfPeakPnl =
-        w.peakPnl > 0 ? (Math.abs(w.dropMoney) / w.peakPnl) * 100 : 0;
+        w.peakPnl > 0 ? (Math.abs(w.dropMoney) / w.peakPnl) * 100 : null;
     }
 
     lastDrop = w.dropMoney;

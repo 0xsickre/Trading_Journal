@@ -1707,3 +1707,94 @@ same inputs at 29 and at 30 trades produce the identical score, pinned by a test
 number that moved with its own confidence label would be two scores sharing a name.
 
 907 tests / 54 files.
+
+---
+
+## Step 8b — the book, computed by hand
+
+Prompted by a question the review could not honestly answer: *are the numbers I actually read
+correct?*
+
+The honest answer was no — not established. Every test in this suite checked a function against
+its own contract, which catches a wrong formula and misses a right formula fed the wrong thing.
+That gap is not theoretical: `sickre-score.ts` stood at 96 % statements and **100 % functions**
+with thirteen green tests while it displayed 33/100 on an empty account, and `balance.ts` stands
+at **100 % statements, 100 % functions** and shipped S3 below.
+
+So `book.fixture.test.ts` inverts the question. One book of ten trades, every headline figure
+derived on paper in the comments — arithmetic visible — and the code asserted against the paper.
+A snapshot test pins current behaviour including its bugs; this pins the answer.
+
+The book is built so the aggregates land where an off-by-one would show: profit factor comes to
+exactly **2.2** and recovery factor to exactly **3.0**, both of which are band floors in the
+score's own tables.
+
+| derived on paper | value |
+|---|---|
+| net P&L | 600 |
+| wins / losses / breakeven | 5 / 4 / 1 |
+| win rate | 5 ÷ 9 = 55.56 % — breakeven out of the denominator |
+| profit factor | 1100 ÷ 500 = 2.2 |
+| avg win / avg loss (money) | 220 / −125 → ratio 1.76 |
+| max drawdown | −200, from a running peak of 500 → 40 % |
+| recovery factor | 600 ÷ 200 = 3.0 |
+| consistency | σ = √35 400 ≈ 188.15; 100 − 188.15/600 × 100 ≈ 68.64 |
+| **Sickre Score** | (80×25 + 20×20 + 60×20 + 92.59×15 + 70×10 + 68.64×10) ÷ 100 = **63.75** |
+
+Also pinned: a trade opened Monday and closed Tuesday files its **money on the close day** and
+its **decision on the open day**; every day key resolves in New York rather than UTC; and the
+book straddles the 8 March 2026 DST change without a trade moving.
+
+### S3 (High) — six straight losses scored 100 for risk management
+
+Found by the second half of the file, which sweeps the SHAPES a book can take rather than its
+values — empty, one trade, all winners, all losers, all breakeven, open-only. The empty-account
+defect was one member of that family; nobody had looked at the other five.
+
+`maxPctOfPeakPnl` divides the fall by the peak cumulative P&L that preceded it. A book that
+never rose above zero has no such peak, and the guard read:
+
+```ts
+maxPctOfPeakPnl = w.peakPnl > 0 ? (Math.abs(w.dropMoney) / w.peakPnl) * 100 : 0;
+```
+
+That `0` is the same null-as-zero conflation as S1, in the same statistic, one layer further
+down — and it is the worst of the three, because it needs **neither an empty account nor a thin
+one**. A trader whose first six trades all lost was told, by the only composite number in the
+application, that their risk management was flawless. `100 − 0 = 100`, weight 20, on a book down
+700.
+
+`FIXED` — `maxPctOfPeakPnl` is `number | null`. The two meanings are now separable: `0` is
+*never fell*, `null` is *fell, with no peak profit to express it against*. The initial value
+stays `0`, so a book that genuinely rises the whole way still earns its 100 — pinned by its own
+test, because trading one lie for the opposite one would be no improvement. The score's existing
+drop-and-renormalize handles the null, and the only consumer is the score.
+
+`maxPctOfEquity` carries the identical `peakEquity > 0 ? … : 0` guard and is left alone: it is
+display-only, and reaching it requires peak equity at or below zero across the entire window,
+which cannot happen with a positive starting balance. Recorded rather than changed.
+
+### What this says about the coverage numbers
+
+`balance.ts` is on the `MONEY_MODULES` list with a 100 % statement and function floor. It was at
+100 / 100 with S3 live. `balance.test.ts` did assert `maxPctOfPeakPnl` — at line 118, for the
+profitable case, expecting 50. The losing arm was **executed and never asserted**, and branch
+coverage sat at 81.6 %.
+
+This is the config's own warning arriving in practice: *coverage counts EXECUTION, not
+assertion.* The three defects S1, S2 and S3 were all in fully covered files. The branch number
+is the one that would have hinted, and even that only hints — what actually found all three was
+asking what the number MEANS on a book shaped differently from the fixtures.
+
+### Outcome
+
+`FIXED` — S3. `ADDED` — `book.fixture.test.ts`: 26 tests, one hand-derived book plus a
+six-shape sweep.
+
+933 tests / 55 files (907 → 933). Coverage **95.56 / 89.92 / 96.74 / 96.84**. Lint 1 warning,
+build green, `tsc` clean.
+
+**Still not established**, and stated plainly so the README cannot overclaim it: this proves the
+`lib/` pipeline from realized trades to the score. It does not touch the 16 250 lines of
+components or the 25 routes, which have no tests at all and are where S1 actually lived. Steps
+6–8 read that code; they do not execute it.
