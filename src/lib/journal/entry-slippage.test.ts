@@ -3,6 +3,7 @@ import {
   computeEntrySlippage,
   fmtSlippageR,
   slippageFromTrade,
+  fmtSlippagePts,
 } from "./entry-slippage";
 import type { TradeRow } from "./types";
 
@@ -132,5 +133,39 @@ describe("slippage money needs a contract spec", () => {
     const r = slippageFromTrade(row);
     expect(r!.slippageMoney).toBeNull();
     expect(r!.adversePts).toBeCloseTo(1);
+  });
+});
+
+describe("fmtSlippagePts", () => {
+  it("marks the direction of the slip with an explicit sign", () => {
+    // Adverse is positive here: the number answers "how much worse than plan",
+    // so a bare "0.0025" would read as an improvement to half the readers.
+    expect(fmtSlippagePts(0.0025)).toBe("+0.0025 pts");
+    expect(fmtSlippagePts(0)).toBe("+0.0000 pts");
+  });
+
+  it("keeps the minus for a fill better than the plan", () => {
+    expect(fmtSlippagePts(-0.0012)).toBe("-0.0012 pts");
+  });
+
+  it("holds four decimals, because FX slippage lives there", () => {
+    // Two decimals would render every EURUSD slip as 0.00.
+    expect(fmtSlippagePts(0.00001)).toBe("+0.0000 pts");
+    expect(fmtSlippagePts(1.23456)).toBe("+1.2346 pts");
+  });
+});
+
+describe("fmtSlippageR inverts the sign so a cost reads as a cost", () => {
+  it("shows adverse slippage as negative R", () => {
+    // The stored value is "how much worse than plan", positive-is-bad. On
+    // screen it joins other R figures where positive-is-good, so it is flipped.
+    expect(fmtSlippageR(0.2)).toBe("-0.20R");
+    expect(fmtSlippageR(-0.2)).toBe("+0.20R");
+  });
+
+  it("shows an em dash for a missing measurement", () => {
+    expect(fmtSlippageR(null)).toBe("—");
+    expect(fmtSlippageR(undefined)).toBe("—");
+    expect(fmtSlippageR(Number.NaN)).toBe("—");
   });
 });

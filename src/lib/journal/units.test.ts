@@ -164,3 +164,74 @@ describe("secondsToDays", () => {
     expect(secondsToDays(-1)).toBeNull();
   });
 });
+
+describe("a points-unit value rescales without touching money", () => {
+  // `formatMetric`'s `points` branch had no coverage because nothing in the app
+  // constructs a points-unit metric today — recorded in step 3 and covered here
+  // so the branch is at least specified before someone starts producing one.
+  const fx = { asset_class: "forex", point_value: 100_000, tick_size: 0.00001 };
+  const future = { asset_class: "futures", point_value: 50, tick_size: 0.25 };
+
+  it("prints points as points in every money-ish mode", () => {
+    // Trailing zeros are dropped: `fmtNum` sets `minimumFractionDigits: 0`
+    // explicitly, so the decimals vary with the value. Asserted as-is rather
+    // than "fixed" — it is a deliberate choice, not a slip.
+    const v = metric(12.5, "points", { currency: "USD" });
+    expect(formatMetric(v, "dollars")).toBe("12.5 pts");
+    expect(formatMetric(v, "points")).toBe("12.5 pts");
+  });
+
+  it("divides by the tick size for ticks", () => {
+    const v = metric(2.5, "points", { currency: "USD", instrument: future });
+    expect(formatMetric(v, "ticks")).toBe("10 ticks");
+  });
+
+  it("divides by the pip for a forex instrument", () => {
+    const v = metric(0.0025, "points", { currency: "USD", instrument: fx });
+    expect(formatMetric(v, "pips")).toBe("25 pips");
+  });
+
+  it("falls back to points when the instrument cannot supply the unit", () => {
+    // No instrument, or a non-forex one asked for pips: the value is still
+    // points and says so, rather than silently rendering as money.
+    expect(formatMetric(metric(3, "points", {}), "ticks")).toBe("3 pts");
+    expect(
+      formatMetric(metric(3, "points", { instrument: future }), "pips"),
+    ).toBe("3 pts");
+  });
+
+  it("masks a points value under privacy like any other P&L-bearing unit", () => {
+    expect(formatMetric(metric(12.5, "points", {}), "privacy")).toBe("•••");
+  });
+});
+
+describe("canRender gates the modes an instrument cannot supply", () => {
+  const fx = { asset_class: "forex", point_value: 100_000, tick_size: 0.00001 };
+  const future = { asset_class: "futures", point_value: 50, tick_size: 0.25 };
+  const money = (ctx: object) => metric(100, "money", ctx);
+
+  it("allows points and ticks only with the specs they divide by", () => {
+    expect(canRender(money({ instrument: future }), "points")).toBe(true);
+    expect(canRender(money({ instrument: future }), "ticks")).toBe(true);
+    expect(canRender(money({}), "points")).toBe(false);
+    expect(canRender(money({}), "ticks")).toBe(false);
+  });
+
+  it("allows pips only for forex", () => {
+    expect(canRender(money({ instrument: fx }), "pips")).toBe(true);
+    // A futures contract has a tick, not a pip — the mode would silently fall
+    // back to money, which is exactly what this gate exists to prevent.
+    expect(canRender(money({ instrument: future }), "pips")).toBe(false);
+  });
+
+  it("treats an already-points value as renderable in points", () => {
+    expect(canRender(metric(3, "points", {}), "points")).toBe(true);
+  });
+
+  it("needs an equity base for percentage and a risk for R", () => {
+    expect(canRender(money({ equityBase: 10_000 }), "percentage")).toBe(true);
+    expect(canRender(money({ equityBase: 0 }), "percentage")).toBe(false);
+    expect(canRender(money({ riskMoney: 250 }), "r")).toBe(true);
+    expect(canRender(money({}), "r")).toBe(false);
+  });
+});

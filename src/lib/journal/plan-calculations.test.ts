@@ -179,3 +179,71 @@ describe("computePositionSize refuses to size without a contract spec", () => {
     expect(computePositionSize({ ...plan, pointValue: -50 })).toBeNull();
   });
 });
+
+describe("guard clauses that exist to refuse, not to compute", () => {
+  it("parseRiskPct rejects everything that is not a positive number", () => {
+    expect(parseRiskPct("1%")).toBe(1);
+    expect(parseRiskPct(" 0.5 ")).toBe(0.5);
+    for (const v of [null, undefined, "", "abc", "0", "-1", "%"]) {
+      expect(parseRiskPct(v)).toBeNull();
+    }
+  });
+
+  it("computePlannedRewardR refuses a short whose prices contradict it", () => {
+    // A short needs stop ABOVE and target BELOW entry. Anything else is a typo,
+    // and returning a number for it would put a fictional R:R on the plan.
+    const rr = (stop: number, target: number) =>
+      computePlannedRewardR({ direction: "Short", entry: 100, stop, target });
+    expect(rr(105, 90)).toBeCloseTo(2, 10);
+    expect(rr(95, 90)).toBeNull(); // stop below entry
+    expect(rr(105, 110)).toBeNull(); // target above entry
+  });
+
+  it("computePlannedRewardR refuses a zero-width stop or target", () => {
+    const rr = (stop: number, target: number) =>
+      computePlannedRewardR({ direction: null, entry: 100, stop, target });
+    expect(rr(100, 110)).toBeNull();
+    expect(rr(95, 100)).toBeNull();
+  });
+
+  it("computePositionSize refuses a zero stop distance instead of dividing", () => {
+    const size = (stop: number) =>
+      computePositionSize({
+        balance: 10_000,
+        riskPct: 1,
+        entry: 100,
+        stop,
+        pointValue: 1,
+      });
+    expect(size(100)).toBeNull();
+    expect(size(95)).toBeCloseTo(20, 10);
+  });
+
+  it("computePositionSize refuses a non-positive balance", () => {
+    expect(
+      computePositionSize({
+        balance: 0,
+        riskPct: 1,
+        entry: 100,
+        stop: 95,
+        pointValue: 1,
+      }),
+    ).toBeNull();
+  });
+
+  it("riskPlanFieldVisible reveals each field only once its inputs exist", () => {
+    // entry, stop, target, riskPct — positional.
+    expect(riskPlanFieldVisible("entry_price", null, null, null, null)).toBe(true);
+    expect(riskPlanFieldVisible("stop_price", null, null, null, null)).toBe(false);
+    expect(riskPlanFieldVisible("stop_price", 100, null, null, null)).toBe(true);
+    expect(riskPlanFieldVisible("direction", 100, null, null, null)).toBe(false);
+    expect(riskPlanFieldVisible("direction", 100, 95, null, null)).toBe(true);
+    expect(riskPlanFieldVisible("risk_pct", 100, 95, null, null)).toBe(true);
+    expect(riskPlanFieldVisible("position_size", 100, 95, null, null)).toBe(false);
+    expect(riskPlanFieldVisible("position_size", 100, 95, null, 1)).toBe(true);
+    expect(riskPlanFieldVisible("planned_rr", 100, 95, null, 1)).toBe(false);
+    expect(riskPlanFieldVisible("planned_rr", 100, 95, 110, 1)).toBe(true);
+    // Anything outside the progressive plan is always shown.
+    expect(riskPlanFieldVisible("instrument", null, null, null, null)).toBe(true);
+  });
+});

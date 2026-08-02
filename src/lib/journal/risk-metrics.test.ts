@@ -126,3 +126,30 @@ describe("avgWinLossRatio", () => {
     expect(avgWinLossRatio(0, -1)).toBeNull();
   });
 });
+
+describe("consistencyScore carries both readings of the spec", () => {
+  it("reports the coefficient of variation alongside the implemented ratio", () => {
+    // The source spec is ambiguous about the unit, and the module keeps `cv`
+    // precisely so the alternative reading can be compared without recomputing.
+    // Untested until now, which made the carried value pure decoration.
+    const r = consistencyScore([100, 200, 300]);
+    expect(r.mean).toBe(200);
+    expect(r.stdev).toBeCloseTo(81.6496580927726, 9);
+    expect(r.cv).toBeCloseTo(0.408248290463863, 9);
+    expect(r.raw).toBeCloseTo(81.6496580927726 / 600, 9);
+  });
+
+  it("leaves cv null when the mean is exactly zero", () => {
+    // Dividing by a zero mean is the one place this could produce Infinity.
+    const r = consistencyScore([-100, 100]);
+    expect(r.mean).toBe(0);
+    expect(r.cv).toBeNull();
+    expect(r.score).toBe(0);
+  });
+
+  it("scores a losing book at zero rather than a negative", () => {
+    const r = consistencyScore([-50, -20]);
+    expect(r.score).toBe(0);
+    expect(r.raw).toBeNull();
+  });
+});

@@ -80,3 +80,20 @@ describe("fmtExitEfficiencyPct / target attainment label", () => {
     expect(fmtExitEfficiencyPct(-33)).toBe("-33%");
   });
 });
+
+describe("fmtExitEfficiencyPct", () => {
+  it("rounds to whole percent", () => {
+    expect(fmtExitEfficiencyPct(72.4)).toBe("72%");
+    expect(fmtExitEfficiencyPct(72.6)).toBe("73%");
+    expect(fmtExitEfficiencyPct(0)).toBe("0%");
+  });
+
+  it("shows an em dash for a missing value, never 0%", () => {
+    // 0% means "took none of the planned move"; absent means the trade had no
+    // plan to measure against. Rendering the second as the first invents a
+    // finding.
+    expect(fmtExitEfficiencyPct(null)).toBe("—");
+    expect(fmtExitEfficiencyPct(undefined)).toBe("—");
+    expect(fmtExitEfficiencyPct(Number.NaN)).toBe("—");
+  });
+});

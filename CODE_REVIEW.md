@@ -1171,3 +1171,92 @@ all and do timezone-dependent bucketing).
 `RECORDED, owner named` — bad-zone rejection in `updateAccount` (step 6), degenerate-label
 rejection in `addFieldDef` (step 6), `points`-unit metric with no producer (step 4).
 756 tests / 49 files, lint 1 warning, build green, `tsc` clean.
+
+## Step 3b — coverage as a floor, not a target
+
+Done at the owner's request after step 3, in answer to "can't coverage just be 100%
+everywhere?". The short answer is that it can, on a quarter of the codebase, and would not
+mean what it looks like it means. All three of the proposals from that exchange landed.
+
+### What the number actually describes
+
+Coverage only sees files a test imports: **46 of 177 source files.** Components (~16k lines),
+routes and the server-only query layer produce no number at all — and "no number" is not
+"0%", it is "not measured". So `93.9%` is 93.9% of roughly a quarter of the code, and reading
+it as "the app is 93.9% tested" is the mistake worth guarding against.
+
+Nor would 100% mean correct: coverage counts EXECUTION, not assertion. The clearest proof is
+in this round — **C1, the critical seed defect, lives in SQL.** No TypeScript percentage would
+ever have moved for it, at any target.
+
+### 1. A floor in `vitest.config.ts`
+
+Global thresholds set at what the suite achieves (93 / 88 / 91 / 95), plus a **100% statement
+and function floor on thirteen named money modules** — the ones where a wrong number reaches
+the screen as a fact. The floor's only job is to fail when a change lowers coverage; raising
+it is deliberate, drifting down is not. The reasoning above is written into the config so the
+next reader does not have to re-derive it.
+
+The threshold earned its keep immediately: it failed on five modules that were *not* at 100%,
+which is how the rest of this section came to exist.
+
+### 2. The money modules taken to 100%
+
+`analytics`, `balance`, `breakeven`, `costs`, `entry-slippage`, `excursion`, `excursion-scan`,
+`exit-efficiency`, `hold-time`, `plan-calculations`, `position-stats`, `risk-metrics`,
+`risk-ratios` — all at 100% statements and functions.
+
+What was missing turned out not to be arithmetic but **guard clauses whose entire job is to
+refuse to produce a number**: `plannedRiskPts` with no reference price, `computePositionSize`
+with a zero stop distance, `computePlannedRewardR` on a short whose stop sits below the entry,
+`toRealized` on a row with no stats, `dailyPnl` on a trade with no close, both weekly
+aggregators on a reference the zone cannot resolve. Those are exactly the lines that decide
+whether the app shows a blank or an invented figure, and none of them had a test.
+
+Two branches are marked unreachable rather than contorted into coverage:
+
+- `analytics.ts` — `runReport`'s null result. It answers null only for a dimension NAME it
+  cannot resolve, and this call site passes a built `Dimension` object. Marked with a
+  `v8 ignore` carrying that reason; the guard stays because the parameter type still permits a
+  string.
+- `risk-ratios.ts` — `spanDays > 0 ? … : null`, where `spanDays` is `daysBetween + 1` after a
+  guard that already rejects a backwards window. Left uncovered, which is why the branch floor
+  sits below the statement floor.
+
+One assertion was corrected rather than the code: `fmtNum` sets `minimumFractionDigits: 0`
+explicitly, so `12.5 pts` and `10 ticks` drop trailing zeros. Deliberate, not a slip — the test
+now pins the real behaviour.
+
+### 3. One trade, all the way through
+
+`pipeline.integration.test.ts`. Every other test checks a module against its own contract,
+which catches a module that is wrong and misses **two modules that are each right and
+disagree** — which is where this codebase's defects have actually come from: the form and the
+server with two fill predicates, the grid and the picker with two column lists, the SQL view
+and its TypeScript twin drifting apart.
+
+This walks one trade from the shape the form produces to the number a report prints —
+`buildPositionPatch → computeStatus → computePositionStats → toRealized → enrichTrades →
+runReport` — and asserts the same facts at every stage they are visible: the money, the R
+against the PLANNED risk, the day in the ACCOUNT's zone, the outcome against the account's
+breakeven band, the excursion in R, and finally the report row.
+
+**It found something on the first run.** `buildPositionPatch` trims tag arrays but **not text
+fields**. Harmless for a note — but `customFieldDimensions` registers every user-defined `text`
+field as a groupable dimension, so a stray space splits `"A"` and `" A"` into two report
+buckets that look identical on screen. Asserted as-is and recorded for step 6, which owns the
+save path.
+
+**Browser end-to-end is not built here, deliberately.** It would need Supabase credentials and
+a running server, and this container has neither; a suite that cannot be executed is worse
+than an honest gap. Playwright and Chromium are available for it to be added on a machine that
+can run the app.
+
+### Outcome
+
+`FIXED` — thirteen money modules to 100% statements/functions; coverage floor added.
+`RECORDED, owner named` — untrimmed text fields in `buildPositionPatch` (step 6).
+`REJECTED` — 100% branch coverage as a goal, with the two unreachable guards named.
+
+830 tests / 51 files (756 → 830). Coverage 93.3 → **93.9 / 89.05 / 91.59 / 95.22**, thresholds
+enforced. Lint 1 warning, build green, `tsc` clean.

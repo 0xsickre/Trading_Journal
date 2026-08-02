@@ -379,3 +379,19 @@ describe("suggestInterval", () => {
     expect(suggestInterval(Number.NaN)).toBe("m5");
   });
 });
+
+describe("a candle with an unreadable timestamp is skipped", () => {
+  it("does not let a bad bar's extremes into the answer", () => {
+    const r = scanExcursion({
+      ...base,
+      candles: [
+        { t: "not a time", o: 100, h: 999, l: 1, c: 100 },
+        ...bars(11, [[97, 103]]),
+      ],
+    });
+    // The 1 and the 999 must not become MAE and MFE.
+    expect(r.maePrice).toBe(97);
+    expect(r.mfePrice).toBe(103);
+    expect(r.bars).toBe(1);
+  });
+});

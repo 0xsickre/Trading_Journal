@@ -228,3 +228,24 @@ describe("golden vector read back off the live SQL view", () => {
     expect(stats.realized_r_net).toBeCloseTo(0.58666667, 8);
   });
 });
+
+describe("plannedRiskPts refuses rather than inventing a denominator", () => {
+  it("falls back to the average fill when there is no planned entry", () => {
+    expect(plannedRiskPts(null, 95, 101)).toBe(6);
+  });
+
+  it("returns null when neither reference price exists", () => {
+    // No plan entry AND no fill: R has no denominator, and a zero here would
+    // divide into Infinity two lines later.
+    expect(plannedRiskPts(null, 95, null)).toBeNull();
+    expect(plannedRiskPts(Number.NaN, 95, null)).toBeNull();
+  });
+
+  it("returns null for a zero-width stop", () => {
+    expect(plannedRiskPts(100, 100, null)).toBeNull();
+  });
+
+  it("returns null when there is no stop at all", () => {
+    expect(plannedRiskPts(100, null, 100)).toBeNull();
+  });
+});

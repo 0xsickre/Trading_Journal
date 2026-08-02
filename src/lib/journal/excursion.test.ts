@@ -152,3 +152,68 @@ describe("R convention: fill-based numerator, plan-based denominator", () => {
     expect(e.capturePct).toBeCloseTo(100, 10);
   });
 });
+
+describe("a non-adverse excursion is zero, never negative", () => {
+  const row = (over: Record<string, unknown>) =>
+    ({
+      id: "t1",
+      account_id: null,
+      trade_no: null,
+      status: "closed",
+      source: "manual",
+      needs_review: false,
+      created_at: "2026-03-01T00:00:00Z",
+      direction: "Long",
+      entry_price: 100,
+      stop_price: 95,
+      ...over,
+      stats: {
+        position_id: "t1",
+        avg_entry: 100,
+        avg_exit: 110,
+        entry_qty: 1,
+        exit_qty: 1,
+        gross_pl: 1000,
+        net_pl: 1000,
+        total_fees: 0,
+        total_swap: 0,
+        realized_r: 2,
+        realized_r_net: 2,
+        opened_at: "2026-03-02T10:00:00Z",
+        closed_at: "2026-03-02T18:00:00Z",
+        duration_seconds: 3600,
+        point_value: 1,
+        tick_size: null,
+        point_value_source: "snapshot",
+      },
+    }) as never;
+
+  it("clamps an MFE that never went onside to 0R", () => {
+    // A long whose best price was BELOW the entry never went favourable. The
+    // ratio would be negative, which reads as "the best available move was
+    // against me" — not a thing. Zero is the honest floor.
+    const e = excursionFromTrade(row({ max_profit_price: 98 }));
+    expect(e.mfeR).toBe(0);
+    // And capture is withheld rather than dividing by that zero.
+    expect(e.capturePct).toBeNull();
+  });
+
+  it("clamps a short's MFE the same way, mirrored", () => {
+    const e = excursionFromTrade(
+      row({ direction: "Short", stop_price: 105, max_profit_price: 102 }),
+    );
+    expect(e.mfeR).toBe(0);
+  });
+
+  it("counts the MFE sample separately from the MAE sample", () => {
+    // A book where one trade has only an MAE and another only an MFE must
+    // report two different denominators, not one joint count.
+    const stats = computeExcursionStats([
+      { row: row({ max_drawdown_price: 97 }) },
+      { row: row({ max_profit_price: 112 }) },
+    ]);
+    expect(stats.maeCount).toBe(1);
+    expect(stats.mfeCount).toBe(1);
+    expect(stats.avgMfeR).toBeCloseTo(2.4, 10);
+  });
+});

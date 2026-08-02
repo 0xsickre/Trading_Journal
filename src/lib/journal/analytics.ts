@@ -348,6 +348,9 @@ export function breakdownByField(
     metricContext: { pnlBasis: "net", range, currency: "USD" },
     sortBy: "net_pnl",
   });
+  /* v8 ignore next 2 -- unreachable: `runReport` answers null only for a
+     dimension NAME it cannot resolve, and this passes a built Dimension object.
+     Kept as a guard because the parameter's type still permits a string. */
   if (!result) return [];
 
   return result.rows.map((r) => ({

@@ -96,3 +96,52 @@ describe("durationBucket", () => {
     expect(durationBucket(-1)).toBeNull();
   });
 });
+
+describe("hold time in days", () => {
+  it("derives days from seconds for both the average and the longest", () => {
+    const t = (id: string, secs: number) =>
+      ({
+        id,
+        account_id: null,
+        trade_no: null,
+        status: "closed",
+        source: "manual",
+        needs_review: false,
+        created_at: "2026-03-01T00:00:00Z",
+        stats: {
+          position_id: id,
+          avg_entry: 100,
+          avg_exit: 101,
+          entry_qty: 1,
+          exit_qty: 1,
+          gross_pl: 1,
+          net_pl: 1,
+          total_fees: 0,
+          total_swap: 0,
+          realized_r: 1,
+          realized_r_net: 1,
+          opened_at: "2026-03-01T00:00:00Z",
+          closed_at: "2026-03-02T00:00:00Z",
+          duration_seconds: secs,
+          point_value: 1,
+          tick_size: null,
+          point_value_source: "snapshot" as const,
+        },
+      }) as never;
+
+    const h = computeHoldTime(
+      [{ row: t("a", 86_400), net: 1, gross: 1, r: 1, id: "a", closedAt: "2026-03-02T00:00:00Z" }, // 1d
+       { row: t("b", 3 * 86_400), net: 1, gross: 1, r: 1, id: "b", closedAt: "2026-03-04T00:00:00Z" }] as never,
+      resolveBreakevenRange({ breakeven_from: 0, breakeven_to: 0, breakeven_unit: "currency", starting_balance: 0 } as never),
+    );
+    expect(h.avgDays).toBeCloseTo(2, 10);
+    expect(h.maxDays).toBeCloseTo(3, 10);
+    expect(h.longestTradeId).toBe("b");
+  });
+
+  it("leaves the day figures null when nothing has a duration", () => {
+    const h = computeHoldTime([], resolveBreakevenRange({ breakeven_from: 0, breakeven_to: 0, breakeven_unit: "currency", starting_balance: 0 } as never));
+    expect(h.avgDays).toBeNull();
+    expect(h.maxDays).toBeNull();
+  });
+});
