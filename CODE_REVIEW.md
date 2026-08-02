@@ -1054,3 +1054,120 @@ The twin agrees with the view to eight decimals on all eleven values.
 `REJECTED` — empty playbook rules (documented intent), `tj_column_mappings` /
 `broker_preset` (named roadmap scaffolding), unused-index advisors (empty tables).
 715 tests / 47 files, lint 1 warning, build green, `tsc` clean.
+
+## Step 3 — the pure math layer
+
+Twenty-two modules, weighted toward what landed after `f5270b2` and toward the branches
+coverage marked dark. Three defects, all in the same module, all in the same family: **a
+timestamp read wrongly and then trusted.**
+
+`time.ts` was the right place to look. It had 46% branch coverage and 62% statements — the
+lowest of any module that decides *which day* something belongs to — and the whole app joins
+on the day keys it produces.
+
+### T1 (High) — `parseImportTime` silently read a European date as American
+
+The function ended in a bare `new Date(s)` fallback. `"02/03/2026 10:00"` came back as
+`2026-02-03T10:00:00.000Z`, wrong in two independent ways at once:
+
+- **Wrong month.** V8 reads slashed numerics as US month-first, so an export meaning 2 March
+  became 3 February. Above day 12 the same string is `Invalid Date` and fails loudly — so the
+  ambiguous half of the calendar failed *silently* while the unambiguous half failed *safely*.
+  Exactly backwards.
+- **Wrong zone.** The fallback never received `tz`. Every other branch routes wall-clock
+  through `fromZonedTime`; this one took the system zone, which on a server is UTC. For a New
+  York account that is five hours — enough to carry a close over midnight into the wrong day's
+  P&L, the wrong calendar cell and the wrong week.
+
+Now it refuses. An all-numeric date that does not start with the year returns `null`, because
+nothing in the string says which number is the month. Month-name forms are still accepted and
+are now re-applied through the account's zone rather than the server's.
+
+**A second bug surfaced while fixing it, and it was already live:** the `hasOffset` test was
+`/([zZ]|[+-]\d{2}:?\d{2})$/`, and `"02-03-2026"` ends in `-2026`, a syntactically valid ±HHMM
+offset. That date took the absolute-instant branch. The check now requires a time before the
+offset, which is what an offset means. Caught by the new test failing on input I had expected
+the refusal to cover.
+
+### T2 (High) — the import wizard invented a timestamp
+
+`import-wizard.tsx:192`, the worst line in the import path:
+
+```ts
+executed_at: exitTime ?? entryTime ?? new Date().toISOString()
+```
+
+A row whose timestamps could not be read got stamped with **the moment of import**. A trade
+from three months ago closed *today* — landing in today's P&L, today's calendar cell and
+today's week, with nothing on screen saying the date was invented rather than read.
+
+This had to be fixed in the same step as T1, not deferred to step 5: making `parseImportTime`
+stricter sends *more* rows down this path, so fixing one without the other would have been net
+harmful. The entry-time fallback is kept — a same-row entry timestamp is a real observation
+about this trade, just a coarser one. `new Date()` is an observation about nothing.
+
+### T3 (Medium) — one bad timezone string was a lock-out, not a wrong clock
+
+`Intl` throws `RangeError: Invalid time zone specified` on a name it does not know, and
+`formatInTimeZone` passes it straight up. `tj_accounts.timezone` is plain `text` with no
+constraint. One bad value — a direct PostgREST write, a future code path — and every Server
+Component that renders a date throws: a 500 on the dashboard, the journal, the calendar, and
+**on Settings, which is the only place the value could be corrected.**
+
+Every zone use in the module now goes through a memoized `safeTz` that falls back to the
+default, and every instant-taking function returns a placeholder rather than throwing on
+unparseable input. Degrading beats locking the user out of the fix.
+
+The other half — refusing to *store* a bad zone — belongs to `updateAccount` and is listed as
+open for step 6.
+
+### Reviewed, no defect found
+
+`analytics`, `balance`, `breakeven`, `costs`, `equity`, `entry-slippage`, `excursion`,
+`excursion-scan`, `exit-efficiency`, `ftmo`, `hold-time`, `period-stats`, `plan-calculations`,
+`position-stats`, `risk-metrics`, `risk-ratios`, `sickre-score`, `units`, `column-prefs`,
+`trade-fields`, `field-values` — read for the failure modes this codebase is prone to: division
+producing `Infinity` instead of `null`, `NaN` propagating, `null` treated as `0`, money dated by
+open instead of close, `Date#getDay` instead of ISO weekday, browser zone instead of account
+zone. None found.
+
+`slugifyFieldKey` had **0% coverage and generates a database identifier from free text**, which
+is a bad combination even when the code turns out to be right — and it is: every label tried,
+including diacritics, symbols-only and 60 characters, satisfies
+`CHECK (key ~ '^[a-z][a-z0-9_]{0,48}$')`. One thing recorded rather than fixed: `"!!!"`,
+`"___"`, `"-"` and whitespace all slug to `"f"`, so a second such field collides on the unique
+index. The right place to refuse that is `addFieldDef` — step 6.
+
+### Tests added
+
+| Module | Was | Now |
+|---|--:|--:|
+| `time.ts` statements | 62.2% | **93.4%** |
+| `time.ts` branches | 46.3% | **84.0%** |
+| `time.ts` functions | 75% | **100%** |
+| `analytics.ts` statements | 61.1% | **78.9%** |
+| `analytics.ts` functions | 44% | **76%** |
+| whole suite | 88.4 / 82.1 / 87.3 | **91.4 / 85.0 / 90.3** |
+
+New files: `time.test.ts` (19), `field-def-types.test.ts` (8). Extended:
+`trade-lifecycle.test.ts` (+13, including a check that every status in the DB `CHECK` has a
+label and a hint), `analytics.test.ts` (+5, the two weekly aggregators that had no coverage at
+all and do timezone-dependent bucketing).
+
+### Coverage left open, with reasons
+
+- **`analytics.ts:250–314`** — `buildEquity` and `rHistogram`. Both are chart feeds whose
+  output is read visually on the dashboard, and both are simple accumulators over data that
+  `computeStats` already covers. Recorded, not tested.
+- **`format.ts:51–52`** — `pnlClass` returning a Tailwind class string. A test would assert a
+  colour name against itself.
+- **`units.ts:132–134, 148–156`** — the `points`-unit branch of `formatMetric`. Unreachable
+  from the app today: no caller constructs a `points`-unit metric, which is itself worth a
+  note. Left for step 4, which owns the metric registry.
+
+### Outcome
+
+`FIXED` — T1, T2, T3.
+`RECORDED, owner named` — bad-zone rejection in `updateAccount` (step 6), degenerate-label
+rejection in `addFieldDef` (step 6), `points`-unit metric with no producer (step 4).
+756 tests / 49 files, lint 1 warning, build green, `tsc` clean.

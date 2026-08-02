@@ -3,7 +3,11 @@ import {
   canMarkMissed,
   canRestoreToPlanned,
   computeStatus,
+  formatLifecycleStatusLabel,
   hasEntryFill,
+  isValidFill,
+  lifecycleStatusHint,
+  statusToTradePhase,
   type ExecutionInput,
 } from "./trade-lifecycle";
 
@@ -78,5 +82,81 @@ describe("canRestoreToPlanned", () => {
 
   it("not when planned", () => {
     expect(canRestoreToPlanned(0, "planned")).toBe(false);
+  });
+});
+
+describe("isValidFill", () => {
+  const fill = (over: Partial<Parameters<typeof isValidFill>[0]> = {}) => ({
+    side: "entry" as const,
+    price: 100,
+    qty: 1,
+    ...over,
+  });
+
+  it("accepts a complete fill on either side", () => {
+    expect(isValidFill(fill())).toBe(true);
+    expect(isValidFill(fill({ side: "exit" }))).toBe(true);
+  });
+
+  it("rejects qty 0 — the case that used to eat a commission", () => {
+    // The docblock records the bug: the form accepted qty 0 while the server
+    // dropped the row, taking the fee and swap typed on it. One predicate now,
+    // and this is the input that proves the two agree.
+    expect(isValidFill(fill({ qty: 0 }))).toBe(false);
+    expect(isValidFill(fill({ qty: -1 }))).toBe(false);
+  });
+
+  it("rejects a non-finite number rather than letting NaN through", () => {
+    expect(isValidFill(fill({ price: Number.NaN }))).toBe(false);
+    expect(isValidFill(fill({ qty: Number.NaN }))).toBe(false);
+    expect(isValidFill(fill({ price: Number.POSITIVE_INFINITY }))).toBe(false);
+  });
+
+  it("rejects a missing price or qty", () => {
+    expect(isValidFill(fill({ price: null }))).toBe(false);
+    expect(isValidFill(fill({ qty: null }))).toBe(false);
+  });
+
+  it("rejects a side the schema does not allow", () => {
+    expect(isValidFill({ ...fill(), side: "both" } as never)).toBe(false);
+  });
+});
+
+describe("every stored status has a label and a hint", () => {
+  // The five values are the DB CHECK on `tj_positions.status`
+  // (`planned | missed | open | partial | closed`). Both switches fall through
+  // to the raw value / an empty string, so a status added to the schema without
+  // a label here surfaces in the grid as `partial` rather than "Partial" — a
+  // silent gap, since neither branch errors.
+  const STORED_STATUSES = ["planned", "missed", "open", "partial", "closed"];
+
+  it("labels all five, and never echoes the raw value", () => {
+    for (const s of STORED_STATUSES) {
+      const label = formatLifecycleStatusLabel(s);
+      expect(label.length).toBeGreaterThan(0);
+      expect(label).not.toBe(s);
+    }
+  });
+
+  it("hints all five", () => {
+    for (const s of STORED_STATUSES) {
+      expect(lifecycleStatusHint(s).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("degrades rather than throwing on an unknown status", () => {
+    expect(formatLifecycleStatusLabel("zzz")).toBe("zzz");
+    expect(lifecycleStatusHint("zzz")).toBe("");
+  });
+});
+
+describe("statusToTradePhase", () => {
+  it("calls a position with fills active, everything else planned", () => {
+    for (const s of ["open", "partial", "closed"]) {
+      expect(statusToTradePhase(s)).toBe("active");
+    }
+    for (const s of ["planned", "missed", "", null, undefined, "unknown"]) {
+      expect(statusToTradePhase(s)).toBe("planned");
+    }
   });
 });

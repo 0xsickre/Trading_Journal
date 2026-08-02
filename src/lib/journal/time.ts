@@ -2,6 +2,37 @@ import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
 export const DEFAULT_TZ = "America/New_York";
 
+/**
+ * A timezone name the platform actually knows, or the default.
+ *
+ * `Intl` throws `RangeError: Invalid time zone specified` on an unknown name,
+ * and `formatInTimeZone` passes that straight up. Account timezone comes from a
+ * fixed picker in Settings, but the column is plain `text` with no constraint,
+ * so a direct PostgREST write or a future code path can put anything there —
+ * and one bad row would then throw inside a Server Component, i.e. a 500 on
+ * every page that shows a date, INCLUDING Settings, where the value would have
+ * to be corrected. Locking the user out of the only fix is worse than showing
+ * the wrong clock, so this degrades instead of throwing.
+ *
+ * Memoized because it runs per formatted timestamp and the answer never changes
+ * for a given string.
+ */
+const TZ_CACHE = new Map<string, string>();
+
+function safeTz(tz: string): string {
+  const hit = TZ_CACHE.get(tz);
+  if (hit !== undefined) return hit;
+  let resolved = DEFAULT_TZ;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    resolved = tz;
+  } catch {
+    // Unknown zone — fall through to the default.
+  }
+  TZ_CACHE.set(tz, resolved);
+  return resolved;
+}
+
 /** Format a UTC timestamp in the account's timezone (e.g. "New York time"). */
 export function fmtInTz(
   iso: string | Date | null | undefined,
@@ -9,7 +40,10 @@ export function fmtInTz(
   fmt = "yyyy-MM-dd HH:mm",
 ): string {
   if (!iso) return "";
-  return formatInTimeZone(iso, tz, fmt);
+  // An unparseable instant renders as an em dash rather than throwing: this is
+  // called from render paths, and one malformed timestamp must not blank a page.
+  if (!Number.isFinite(toEpoch(iso))) return "—";
+  return formatInTimeZone(iso, safeTz(tz), fmt);
 }
 
 /**
@@ -21,7 +55,8 @@ export function zonedInputToUtc(
   tz: string = DEFAULT_TZ,
 ): string | null {
   if (!local) return null;
-  return fromZonedTime(local, tz).toISOString();
+  const at = fromZonedTime(local, safeTz(tz));
+  return Number.isNaN(at.getTime()) ? null : at.toISOString();
 }
 
 /** Inverse of zonedInputToUtc — UTC ISO -> "yyyy-MM-dd'T'HH:mm" in `tz`. */
@@ -30,13 +65,37 @@ export function utcToZonedInput(
   tz: string = DEFAULT_TZ,
 ): string {
   if (!iso) return "";
-  return formatInTimeZone(iso, tz, "yyyy-MM-dd'T'HH:mm");
+  // Empty, not an em dash: this feeds a `<input type="datetime-local">`, where a
+  // value the control cannot parse is worse than no value at all.
+  if (!Number.isFinite(toEpoch(iso))) return "";
+  return formatInTimeZone(iso, safeTz(tz), "yyyy-MM-dd'T'HH:mm");
 }
 
 /**
  * Parse a broker-exported timestamp into UTC ISO. If the string carries an
  * explicit offset/Z it's respected; otherwise it's interpreted as wall-clock
  * time in the account `tz` (e.g. an MT5 export in broker-server/NY time).
+ *
+ * **This function refuses to guess, and that is the whole design.**
+ *
+ * It used to end in a bare `new Date(s)` fallback, which broke two ways at once
+ * on the same input. `"02/03/2026 10:00"` came back as
+ * `2026-02-03T10:00:00.000Z`:
+ *
+ *   1. **Wrong month.** V8 reads slashed numerics as US month-first, so a
+ *      European export meaning 2 March became 3 February. Above day 12 the same
+ *      string is simply Invalid Date, so exactly the ambiguous window — the half
+ *      of the calendar where both readings are plausible — failed silently while
+ *      the unambiguous half failed loudly.
+ *   2. **Wrong zone.** The fallback never saw `tz` at all. Every other branch
+ *      routes wall-clock through `fromZonedTime`; this one took the system zone,
+ *      which on a server is UTC. For a New York account that is five hours, more
+ *      than enough to move a close over midnight and into the wrong day's P&L,
+ *      the wrong calendar cell and the wrong week.
+ *
+ * An unreadable timestamp now returns `null`, and the import wizard refuses to
+ * build a fill without one. A row the user must look at beats a row that is
+ * quietly a month off.
  */
 export function parseImportTime(
   raw: string | null | undefined,
@@ -46,7 +105,18 @@ export function parseImportTime(
   const s = raw.trim();
   if (!s) return null;
 
-  const hasOffset = /([zZ]|[+-]\d{2}:?\d{2})$/.test(s);
+  // FIRST, before anything tries to read it: an all-numeric date that does not
+  // start with the year is unresolvable. 02/03/2026 is 2 March to half the
+  // world and 3 February to the other half, and nothing in the string says
+  // which. Refused rather than guessed — including when it carries a time or an
+  // offset, since those settle the clock but never the field order.
+  if (/^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}/.test(s)) return null;
+
+  // An offset is only meaningful after a time, and demanding one is not
+  // pedantry: `"02-03-2026"` ends in `-2026`, which is a syntactically valid
+  // ±HHMM offset. Without the time requirement that date took the absolute-
+  // instant branch and came back as 3 February, in UTC.
+  const hasOffset = /\d{1,2}:\d{2}(:\d{2})?(\.\d+)?\s*([zZ]|[+-]\d{2}:?\d{2})$/.test(s);
   if (hasOffset) {
     const d = new Date(s);
     return Number.isNaN(d.getTime()) ? null : d.toISOString();
@@ -62,7 +132,7 @@ export function parseImportTime(
       2,
       "0",
     )}:${mi}:${se ?? "00"}`;
-    return fromZonedTime(local, tz).toISOString();
+    return fromZonedTime(local, safeTz(tz)).toISOString();
   }
 
   // Date only.
@@ -70,11 +140,23 @@ export function parseImportTime(
   if (dOnly) {
     const [, y, mo, d] = dOnly;
     const local = `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}T00:00:00`;
-    return fromZonedTime(local, tz).toISOString();
+    return fromZonedTime(local, safeTz(tz)).toISOString();
   }
 
-  const fallback = new Date(s);
-  return Number.isNaN(fallback.getTime()) ? null : fallback.toISOString();
+  // A month NAME is unambiguous, so these are still accepted — but the wall
+  // clock has to be lifted out and re-applied in the account's zone. `new Date`
+  // resolves a name-form string in the SYSTEM zone; reading the local getters
+  // back gives exactly the wall clock the string stated, which is then the
+  // input `fromZonedTime` needs.
+  const named = new Date(s);
+  if (Number.isNaN(named.getTime())) return null;
+  const wall =
+    `${named.getFullYear()}-${String(named.getMonth() + 1).padStart(2, "0")}` +
+    `-${String(named.getDate()).padStart(2, "0")}` +
+    `T${String(named.getHours()).padStart(2, "0")}` +
+    `:${String(named.getMinutes()).padStart(2, "0")}` +
+    `:${String(named.getSeconds()).padStart(2, "0")}`;
+  return fromZonedTime(wall, safeTz(tz)).toISOString();
 }
 
 /**
@@ -109,7 +191,11 @@ export function zonedDateKey(
   tz: string = DEFAULT_TZ,
 ): string {
   if (!iso) return "";
-  return formatInTimeZone(iso, tz, "yyyy-MM-dd");
+  // Guarded like the rest: a day key is the join key for every daily
+  // aggregation, so throwing here would take down the calendar, the dashboard
+  // and the tracker at once.
+  if (!Number.isFinite(toEpoch(iso))) return "";
+  return formatInTimeZone(iso, safeTz(tz), "yyyy-MM-dd");
 }
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -120,9 +206,10 @@ export function zonedWeekStartKey(
   tz: string = DEFAULT_TZ,
 ): string {
   if (!iso) return "";
+  if (!Number.isFinite(toEpoch(iso))) return "";
   // One pass through the timezone conversion for both the date and the weekday
   // ("i" is the ISO day, 1=Mon … 7=Sun); this used to call it twice.
-  const [dayKey, isoDow] = formatInTimeZone(iso, tz, "yyyy-MM-dd|i").split("|");
+  const [dayKey, isoDow] = formatInTimeZone(iso, safeTz(tz), "yyyy-MM-dd|i").split("|");
   if (!dayKey) return "";
   const offset = Number(isoDow) - 1;
   const [y, mo, d] = dayKey.split("-").map(Number);

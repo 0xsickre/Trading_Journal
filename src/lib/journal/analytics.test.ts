@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { breakdownByField, computeStats, toRealized } from "./analytics";
+import {
+  breakdownByField,
+  computeStats,
+  toRealized,
+  weeklyExitEfficiency,
+  weeklySlippageR,
+} from "./analytics";
 import type { TradeRow } from "./types";
 
 function trade(
@@ -251,5 +257,106 @@ describe("drawdown covers the same trades as the money sums", () => {
     );
     expect(s.netSum).toBe(150);
     expect(s.maxDrawdown).toBe(0);
+  });
+});
+
+describe("weekly aggregates attribute to the ACCOUNT's week", () => {
+  /**
+   * `weeklySlippageR` and `weeklyExitEfficiency` had zero coverage — two
+   * exported functions doing timezone-dependent bucketing, which is the exact
+   * class of mistake this codebase has already been bitten by twice.
+   *
+   * Both need a planned entry that differs from the fill (slippage) and a
+   * target that the exit fell short of (exit efficiency), so the rows are built
+   * with the plan columns rather than the bare helper above.
+   */
+  const planned = (
+    id: string,
+    closedAt: string,
+    over: Partial<TradeRow> = {},
+  ): TradeRow => ({
+    id,
+    account_id: null,
+    trade_no: null,
+    status: "closed",
+    source: "manual",
+    needs_review: false,
+    created_at: "2026-03-01T00:00:00Z",
+    direction: "Long",
+    entry_price: 100,
+    stop_price: 95,
+    target_price: 115,
+    ...over,
+    stats: {
+      position_id: id,
+      avg_entry: 101, // one point of adverse slippage against the plan
+      avg_exit: 110,
+      entry_qty: 1,
+      exit_qty: 1,
+      gross_pl: 900,
+      net_pl: 900,
+      total_fees: 0,
+      total_swap: 0,
+      realized_r: 1.8,
+      realized_r_net: 1.8,
+      opened_at: "2026-03-02T14:00:00Z",
+      closed_at: closedAt,
+      duration_seconds: 3600,
+      point_value: 1,
+      tick_size: null,
+      point_value_source: "snapshot",
+    },
+  });
+
+  const NY = () => "America/New_York";
+  const BG = () => "Europe/Belgrade";
+
+  it("buckets by the Monday of the closing week", () => {
+    const rows = toRealized([
+      planned("a", "2026-03-03T15:00:00Z"), // Tue, week of Mar 2
+      planned("b", "2026-03-05T15:00:00Z"), // Thu, same week
+      planned("c", "2026-03-10T15:00:00Z"), // Tue, week of Mar 9
+    ]);
+
+    const slip = weeklySlippageR(rows, NY);
+    expect(slip.map((w) => w.week)).toEqual(["2026-03-02", "2026-03-09"]);
+    expect(slip.map((w) => w.tradeCount)).toEqual([2, 1]);
+
+    const eff = weeklyExitEfficiency(rows, NY);
+    expect(eff.map((w) => w.week)).toEqual(["2026-03-02", "2026-03-09"]);
+    expect(eff.map((w) => w.tradeCount)).toEqual([2, 1]);
+  });
+
+  it("puts a Monday-02:00-UTC close in the PREVIOUS week for New York", () => {
+    // Still Sunday evening in New York, so it belongs to the week before — the
+    // whole reason these functions take a `tzOf` rather than reading UTC.
+    const rows = toRealized([planned("a", "2026-03-09T02:00:00Z")]);
+    expect(weeklySlippageR(rows, NY)[0].week).toBe("2026-03-02");
+    expect(weeklySlippageR(rows, BG)[0].week).toBe("2026-03-09");
+  });
+
+  it("returns rows sorted by week, whatever order the trades arrive in", () => {
+    const rows = toRealized([
+      planned("late", "2026-03-17T15:00:00Z"),
+      planned("early", "2026-03-03T15:00:00Z"),
+    ]);
+    expect(weeklySlippageR(rows, NY).map((w) => w.week)).toEqual([
+      "2026-03-02",
+      "2026-03-16",
+    ]);
+  });
+
+  it("skips a trade with no usable measurement instead of averaging a zero", () => {
+    // No stop price → no R denominator → no slippage in R. The week must not
+    // appear at all rather than appear with a 0 that reads as "no slippage".
+    const rows = toRealized([
+      planned("no-stop", "2026-03-03T15:00:00Z", { stop_price: null }),
+    ]);
+    expect(weeklySlippageR(rows, NY)).toEqual([]);
+  });
+
+  it("returns nothing for an empty book", () => {
+    expect(weeklySlippageR([], NY)).toEqual([]);
+    expect(weeklyExitEfficiency([], NY)).toEqual([]);
   });
 });

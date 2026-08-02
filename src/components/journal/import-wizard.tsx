@@ -184,12 +184,22 @@ export function ImportWizard({
       if (entryPrice != null && entryTime) {
         execs.push({ side: "entry", price: entryPrice, qty, executed_at: entryTime, fee: 0, swap_funding: 0 });
       }
-      if (exitPrice != null) {
+      // `?? new Date()` used to close this branch, and it was the worst line in
+      // the import: a row whose timestamps could not be read got stamped with
+      // the MOMENT OF IMPORT. A trade from three months ago then closed today —
+      // landing in today's P&L, today's calendar cell and today's week, with
+      // nothing on screen to say the date was invented rather than read.
+      //
+      // Falling back to the entry time is kept: a same-row entry timestamp is a
+      // real observation about this trade, just a less precise one. Inventing
+      // "now" is not an observation about anything.
+      const exitAt = exitTime ?? entryTime;
+      if (exitPrice != null && exitAt) {
         execs.push({
           side: "exit",
           price: exitPrice,
           qty,
-          executed_at: exitTime ?? entryTime ?? new Date().toISOString(),
+          executed_at: exitAt,
           fee,
           swap_funding: swap,
         });
