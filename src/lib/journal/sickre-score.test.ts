@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  MIN_SAMPLE,
   RATIO_BANDS,
   RECOVERY_BANDS,
+  RELIABLE_SAMPLE,
   computeSickreScore,
   scoreFromBands,
 } from "./sickre-score";
@@ -177,10 +179,16 @@ describe("an empty book scores nothing, not something", () => {
     expect(asIfTraded.score).toBeCloseTo(33.33, 1);
     expect(asIfTraded.coverage / asIfTraded.maxCoverage).toBeCloseTo(0.52, 2);
 
-    // The same account with nothing traded now scores only what it can defend.
+    // The same account with nothing traded now has no score at all. Not 0 —
+    // that 0 would have been process adherence alone, at 15 of 115 weights,
+    // presented under the heading of a seven-component composite.
     const empty = computeSickreScore({ ...emptyBook, processAdherencePct: 0 });
-    expect(empty.score).toBe(0); // process adherence alone, honestly measured
-    expect(empty.coverage).toBe(15);
+    expect(empty.score).toBeNull();
+    expect(empty.confidence).toEqual({
+      level: "withheld",
+      reason: "sample",
+      tradesShort: 5,
+    });
   });
 
   it("keeps a REAL zero drawdown at 100 once there are trades behind it", () => {
@@ -207,6 +215,129 @@ describe("an empty book scores nothing, not something", () => {
     });
     expect(r.components.find((c) => c.key === "winPct")!.counted).toBe(false);
     expect(r.components.find((c) => c.key === "consistency")!.score).toBe(40);
+  });
+});
+
+describe("the sample floor — the other half of the same bug", () => {
+  /**
+   * Closing "no evidence" left "almost no evidence" wide open: ONE winning
+   * trade scored **100/100**. Infinite profit factor (no loss to divide by), no
+   * drawdown (nothing to fall from), a 100 % win rate (1 of 1) and zero
+   * variance (one sample) — four components at their maximum, every one an
+   * artifact of n=1 rather than a measurement of anything.
+   */
+  const oneWinner = {
+    profitFactor: Infinity,
+    avgWinLossRatio: null,
+    maxDrawdownPctOfPeakPnl: 0,
+    winPct: 100,
+    recoveryFactor: null,
+    consistencyScore: 100,
+    sample: { trades: 1, decided: 1 },
+  };
+
+  it("no longer scores a single winning trade at 100", () => {
+    const r = computeSickreScore(oneWinner);
+    expect(r.score).toBeNull();
+    expect(r.confidence).toEqual({
+      level: "withheld",
+      reason: "sample",
+      tradesShort: 4,
+    });
+    expect(r.components.every((c) => !c.counted)).toBe(true);
+  });
+
+  it("counts down so the card can say how far off the score is", () => {
+    for (const [trades, short] of [[0, 5], [1, 4], [3, 2], [4, 1]] as const) {
+      const r = computeSickreScore({ ...oneWinner, sample: { trades, decided: trades } });
+      expect(r.confidence, `trades=${trades}`).toEqual({
+        level: "withheld",
+        reason: "sample",
+        tradesShort: short,
+      });
+    }
+  });
+
+  it("opens up exactly at the floor the rest of the codebase uses", () => {
+    // MIN_SAMPLE is DEFAULT_MIN_SAMPLE and MIN_RATIO_DAYS — one number, one
+    // place to change it. If someone lowers it, this fails and says so.
+    expect(MIN_SAMPLE).toBe(5);
+    const r = computeSickreScore({
+      ...oneWinner,
+      sample: { trades: MIN_SAMPLE, decided: MIN_SAMPLE },
+    });
+    expect(r.score).toBe(100);
+    expect(r.confidence.level).toBe("provisional");
+  });
+
+  it("gates on the denominator each statistic was built from", () => {
+    // Eight trades, all breakeven scratches: a path to measure, no decisions to
+    // have won. Gating both on one count would answer one of them wrongly.
+    const r = computeSickreScore({
+      ...oneWinner,
+      consistencyScore: 40,
+      sample: { trades: 8, decided: 0 },
+    });
+    const counted = (k: string) => r.components.find((c) => c.key === k)!.counted;
+    expect(counted("maxDrawdown")).toBe(true);
+    expect(counted("consistency")).toBe(true);
+    expect(counted("winPct")).toBe(false);
+    expect(counted("profitFactor")).toBe(false);
+    expect(counted("avgWinLoss")).toBe(false);
+  });
+
+  it("stops calling the score provisional once the sample is real", () => {
+    const thin = computeSickreScore({
+      ...oneWinner,
+      sample: { trades: RELIABLE_SAMPLE - 1, decided: RELIABLE_SAMPLE - 1 },
+    });
+    const solid = computeSickreScore({
+      ...oneWinner,
+      sample: { trades: RELIABLE_SAMPLE, decided: RELIABLE_SAMPLE },
+    });
+    expect(thin.confidence).toEqual({ level: "provisional", trades: 29 });
+    expect(solid.confidence).toEqual({ level: "ok", trades: 30 });
+    // Same inputs, same number — the tier describes the evidence, never the
+    // arithmetic. A score that changed with its own confidence label would be
+    // two different scores sharing a name.
+    expect(thin.score).toBe(solid.score);
+  });
+
+  it("withholds a composite that is really just one component", () => {
+    // Enough trades, but only the process component has data: 15 of 115
+    // weights. Reported separately from the sample case because the trader
+    // cannot fix it by trading more — there is nothing to count down.
+    const r = computeSickreScore({
+      profitFactor: null,
+      avgWinLossRatio: null,
+      maxDrawdownPctOfPeakPnl: null,
+      winPct: null,
+      recoveryFactor: null,
+      consistencyScore: null,
+      processAdherencePct: 90,
+      sample: { trades: 50, decided: 50 },
+    });
+    expect(r.coverage).toBe(15);
+    expect(r.score).toBeNull();
+    expect(r.confidence).toEqual({
+      level: "withheld",
+      reason: "coverage",
+      tradesShort: 0,
+    });
+  });
+
+  it("still shows a score built from most of its weight", () => {
+    // A flawless book with no losing trade at all drops avgWinLoss and recovery
+    // — 70 of 100 weights — and must still produce a number. The coverage gate
+    // is for one component out of seven, not for an incomplete but substantial
+    // picture.
+    const r = computeSickreScore({
+      ...oneWinner,
+      sample: { trades: 40, decided: 40 },
+    });
+    expect(r.coverage).toBe(70);
+    expect(r.score).toBe(100);
+    expect(r.confidence.level).toBe("ok");
   });
 });
 

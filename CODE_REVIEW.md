@@ -1654,3 +1654,56 @@ of showing seven dashes that look like a failure.
 Pinned by five tests, including a reproduction of the reported 33.33 / 52 % — the same values
 with a non-empty sample still produce it, so the counts are demonstrably the only thing that
 changed, and a genuine zero drawdown over 8 real trades still scores 100.
+
+### S2 (High) — the same bug one trade later: n=1 scored 100/100
+
+Closing "no evidence" left "almost no evidence" wide open. Measured immediately after S1, on a
+single winning trade:
+
+```
+SCORE: 100 / 100        coverage: 70 / 100
+  profitFactor    100  counted   ← no loss to divide by → Infinity → top band
+  avgWinLoss      null dropped
+  maxDrawdown     100  counted   ← nothing to fall from
+  winPct          100  counted   ← 1 of 1
+  recovery        null dropped
+  consistency     100  counted   ← stdev of one sample is 0
+```
+
+Four components at their maximum, every one an artifact of n=1 rather than a measurement.
+
+This was an inconsistency inside the codebase, not a matter of taste. Every other module here
+carries a sample floor and argues for it in place — `DEFAULT_MIN_SAMPLE = 5` in the report
+engine (*"a category with three trades and a 100 % win rate is not a finding"*),
+`MIN_RATIO_DAYS = 5` in `risk-ratios`, a floor on all 31 insight rules, `belowSample` carried
+on every report row. The score aggregates all of them and demanded nothing.
+
+`FIXED` — two tiers, because the two failure modes differ:
+
+- **Below `MIN_SAMPLE` (5) the number is noise, so there is no number.** Every trade-derived
+  component is gated, each on **its own denominator**: `trades` for the path-dependent
+  statistics (drawdown walks the sequence, consistency is its dispersion), `decided` for the
+  ones built from wins against losses. A book of nothing but breakeven scratches has a path to
+  measure and no decisions to have won; one count would answer one of them wrongly.
+- **Below `RELIABLE_SAMPLE` (30) the number is real but unstable, so it is shown WITH its
+  sample.** A win rate over five decided trades carries a confidence interval about forty
+  points wide. Withholding until it narrows would leave a new account staring at a blank card
+  for weeks — dishonest in the other direction. The report engine settled this argument for
+  rows long ago (*sample size is carried on every row and never hidden*); the score now answers
+  it the same way, with an `n` badge beside the number and a line saying it will move.
+
+`MIN_SAMPLE` is deliberately the same 5 the rest of the codebase uses, pinned by a test so
+lowering it fails loudly.
+
+Plus a third gate that S1 exposed and could not close: **`MIN_COVERAGE_SHARE = 0.5`.** With no
+trades but a tracker history, exactly one of seven components had data, and the card put the
+words "Sickre Score" above a single metric at 15 of 115 weights. That is not a composite. It is
+reported as a distinct `withheld` reason from the sample case, because the trader cannot fix it
+by trading more — there is nothing to count down.
+
+`confidence` rides on the result rather than being re-derived by the card from a trade count it
+would have to fetch separately. The tier describes the evidence and never the arithmetic: the
+same inputs at 29 and at 30 trades produce the identical score, pinned by a test, because a
+number that moved with its own confidence label would be two scores sharing a name.
+
+907 tests / 54 files.

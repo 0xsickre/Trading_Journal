@@ -58,6 +58,47 @@ export const RECOVERY_BANDS: ScoreBand[] = [
 export const WIN_PCT_TOP_THRESHOLD = 60;
 
 /**
+ * Sample thresholds.
+ *
+ * A composite score is the one number a trader will quote at themselves, so it
+ * has the strictest evidence bar in the application — and until now it had
+ * none, while every other module here has one: `DEFAULT_MIN_SAMPLE = 5` in the
+ * report engine (*"a category with three trades and a 100 % win rate is not a
+ * finding"*), `MIN_RATIO_DAYS = 5` in `risk-ratios`, a sample floor on all 31
+ * insight rules. The score aggregated all of them and demanded nothing.
+ *
+ * Two tiers rather than one, because the two failure modes are different:
+ *
+ *   - **Below `MIN_SAMPLE` the number is noise, so there is no number.** One
+ *     winning trade produced 100/100 — infinite profit factor, no drawdown to
+ *     have had, a 100 % win rate and zero variance over a single sample. Four
+ *     components at their maximum, every one of them an artifact of n=1.
+ *   - **Below `RELIABLE_SAMPLE` the number is real but unstable**, so it is
+ *     shown WITH its sample rather than withheld. A win rate over five decided
+ *     trades carries a confidence interval about forty points wide; hiding the
+ *     score until it narrows would leave a new account staring at a blank card
+ *     for weeks, which is its own kind of dishonest. The report engine already
+ *     settled this argument for rows — *sample size is carried on every row and
+ *     never hidden* — and the score now answers it the same way.
+ *
+ * `MIN_SAMPLE` is deliberately the same 5 the rest of the codebase uses. One
+ * number to remember, and one place to change it.
+ */
+export const MIN_SAMPLE = 5;
+export const RELIABLE_SAMPLE = 30;
+
+/**
+ * Share of total weight that must be covered before a composite is a composite.
+ *
+ * The gate the empty-account report needed: with no trades but a tracker
+ * history, exactly one of seven components had data, and the card presented
+ * that single component under the heading "Sickre Score". A score built from
+ * 15 of 115 weights is not a composite of anything — it is one metric wearing
+ * another metric's name.
+ */
+export const MIN_COVERAGE_SHARE = 0.5;
+
+/**
  * Score a value against a band table, interpolating linearly within the band
  * it lands in.
  */
@@ -145,9 +186,22 @@ export type ScoreComponent = {
   counted: boolean;
 };
 
+/**
+ * How much the number can be leaned on — carried WITH it, never inferred by the
+ * caller from a trade count it would have to fetch separately.
+ */
+export type ScoreConfidence =
+  /** No score at all. `tradesShort` is how many more trades until there is one. */
+  | { level: "withheld"; reason: "sample" | "coverage"; tradesShort: number }
+  /** Real, but thin enough that it will move a lot. Show `trades` beside it. */
+  | { level: "provisional"; trades: number }
+  | { level: "ok"; trades: number };
+
 export type SickreScore = {
+  /** Null while `confidence.level` is `withheld`. */
   score: number | null;
   components: ScoreComponent[];
+  confidence: ScoreConfidence;
   /** Sum of weights that actually contributed. */
   coverage: number;
   /**
@@ -174,13 +228,30 @@ const BASE_WEIGHTS = {
 export const PROCESS_ADHERENCE_WEIGHT = 15;
 
 export function computeSickreScore(inputs: ScoreInputs): SickreScore {
-  // Evidence gate, before anything is scored. A component with no trades behind
-  // it is reported as having no value at all — so the card shows "—" rather
-  // than a 0 or a 100 the reader would take for a measurement.
-  const hasTrades = inputs.sample.trades > 0;
-  const drawdownPct = hasTrades ? inputs.maxDrawdownPctOfPeakPnl : null;
-  const winPct = inputs.sample.decided > 0 ? inputs.winPct : null;
-  const consistency = hasTrades ? inputs.consistencyScore : null;
+  // Evidence gate, before anything is scored. Every component derived from
+  // trades is held to `MIN_SAMPLE`, each on ITS OWN denominator — the two are
+  // not interchangeable. `trades` governs the path-dependent statistics
+  // (drawdown is a walk over the sequence; consistency is its dispersion),
+  // while `decided` governs the ones built from wins against losses. A book of
+  // nothing but breakeven scratches has a path to measure and no decisions to
+  // have won, and gating both on one count would answer one of them wrongly.
+  //
+  // A gated component reports `value: null` as well as `score: null`, so the
+  // card shows "—" rather than a 0 or a 100 the reader would take for a
+  // measurement. That is the whole bug this section exists to prevent: on an
+  // empty book `100 - 0 = 100`, and on a single winning trade four separate
+  // components sat at their maximum, every one of them an artifact of n=1.
+  const enoughTrades = inputs.sample.trades >= MIN_SAMPLE;
+  const enoughDecided = inputs.sample.decided >= MIN_SAMPLE;
+
+  const gate = <T>(value: T | null, ok: boolean): T | null => (ok ? value : null);
+
+  const profitFactor = gate(inputs.profitFactor, enoughDecided);
+  const winLossRatio = gate(inputs.avgWinLossRatio, enoughDecided);
+  const winPct = gate(inputs.winPct, enoughDecided);
+  const drawdownPct = gate(inputs.maxDrawdownPctOfPeakPnl, enoughTrades);
+  const recovery = gate(inputs.recoveryFactor, enoughTrades);
+  const consistency = gate(inputs.consistencyScore, enoughTrades);
 
   const drawdownScore =
     drawdownPct == null
@@ -197,16 +268,16 @@ export function computeSickreScore(inputs: ScoreInputs): SickreScore {
       key: "profitFactor",
       label: "Profit factor",
       weight: BASE_WEIGHTS.profitFactor,
-      value: inputs.profitFactor,
-      score: scoreFromBands(inputs.profitFactor, RATIO_BANDS),
+      value: profitFactor,
+      score: scoreFromBands(profitFactor, RATIO_BANDS),
       counted: false,
     },
     {
       key: "avgWinLoss",
       label: "Avg win/loss",
       weight: BASE_WEIGHTS.avgWinLoss,
-      value: inputs.avgWinLossRatio,
-      score: scoreFromBands(inputs.avgWinLossRatio, RATIO_BANDS),
+      value: winLossRatio,
+      score: scoreFromBands(winLossRatio, RATIO_BANDS),
       counted: false,
     },
     {
@@ -229,8 +300,8 @@ export function computeSickreScore(inputs: ScoreInputs): SickreScore {
       key: "recovery",
       label: "Recovery factor",
       weight: BASE_WEIGHTS.recovery,
-      value: inputs.recoveryFactor,
-      score: scoreFromBands(inputs.recoveryFactor, RECOVERY_BANDS),
+      value: recovery,
+      score: scoreFromBands(recovery, RECOVERY_BANDS),
       counted: false,
     },
     {
@@ -265,9 +336,30 @@ export function computeSickreScore(inputs: ScoreInputs): SickreScore {
     coverage += c.weight;
   }
 
+  // Two independent reasons to withhold, reported separately because they tell
+  // the trader different things.
+  //
+  // `sample` is "come back after more trades" and can be counted down to.
+  // `coverage` is "what data you have does not add up to a composite" — the
+  // empty-account case, where a tracker history alone covered 15 of 115 weights
+  // and the card put the word "Sickre Score" above a single component.
+  const trades = inputs.sample.trades;
+  const confidence: ScoreConfidence =
+    trades < MIN_SAMPLE
+      ? { level: "withheld", reason: "sample", tradesShort: MIN_SAMPLE - trades }
+      : coverage < maxCoverage * MIN_COVERAGE_SHARE
+        ? { level: "withheld", reason: "coverage", tradesShort: 0 }
+        : trades < RELIABLE_SAMPLE
+          ? { level: "provisional", trades }
+          : { level: "ok", trades };
+
   return {
-    score: coverage > 0 ? weighted / coverage : null,
+    score:
+      confidence.level === "withheld" || coverage === 0
+        ? null
+        : weighted / coverage,
     components,
+    confidence,
     coverage,
     maxCoverage,
   };
