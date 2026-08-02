@@ -416,7 +416,6 @@ const RESERVED_KEYS = new Set([
   "setup_grade",
   "technical_tags",
   "psychology_tags",
-  "result",
   "exit_reason",
   "mistake",
   "miss_reason",

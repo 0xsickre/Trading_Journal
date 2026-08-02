@@ -83,7 +83,6 @@ describe("field inventory", () => {
       "setup_grade",
       "technical_tags",
       "miss_reason",
-      "result",
       "exit_reason",
       "max_drawdown_price",
       "max_profit_price",
@@ -93,6 +92,15 @@ describe("field inventory", () => {
     ]) {
       expect(names).toContain(key);
     }
+  });
+
+  it("no longer carries the manual result field", () => {
+    // The outcome is derived, not declared: `classifyOutcome` reads net P&L
+    // against the account's breakeven band. Re-adding a field named `result`
+    // would start writing a second, hand-maintained answer to a question the
+    // numbers already settle.
+    expect(names).not.toContain("result");
+    expect(names).toContain("exit_reason");
   });
 
   it("lists a field once even though the note appears on both tabs", () => {

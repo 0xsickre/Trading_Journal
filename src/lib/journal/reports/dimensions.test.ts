@@ -244,6 +244,19 @@ describe("user-defined fields as dimensions", () => {
       expect(keys).not.toContain(gone);
     }
   });
+
+  it("no longer offers the manual result column", () => {
+    // Dropped in 20260801190000: a hand-picked Win/Loss/Breakeven duplicated
+    // `outcome`, which every statistic already derives from net P&L and the
+    // account's breakeven band — and could contradict it with nothing to catch
+    // the disagreement.
+    expect(DIMENSIONS.map((d) => d.key)).not.toContain("result");
+    expect(getDimension("outcome")?.order).toEqual([
+      "win",
+      "breakeven",
+      "loss",
+    ]);
+  });
 });
 
 describe("splitting psychology_tags back into its source lists", () => {

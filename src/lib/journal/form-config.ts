@@ -173,10 +173,13 @@ const BASE_TABS: FormTab[] = [
     description: "Fill this in when you close or review the trade.",
     groups: [
       {
+        // No manual Win/Loss/Breakeven field: the outcome falls out of net P&L
+        // and the account's breakeven band via `classifyOutcome`, which is what
+        // every statistic already reads. `exit_reason` stays because the REASON
+        // for the exit — target, stop, time — is not in the price.
         id: "outcome",
         title: "Kako je izašao",
         fields: [
-          { name: "result", label: "Result", type: "select", listKey: "result" },
           { name: "exit_reason", label: "Exit Reason", type: "select", listKey: "exit_reason" },
           {
             name: "max_drawdown_price",

@@ -72,7 +72,6 @@ function detailFieldsFor(defs: readonly FieldDef[]) {
   add("tv_htf_pre", "TV HTF Pre");
   add("tv_ltf_pre", "TV LTF Pre");
   add("tv_ltf_post", "TV LTF Post");
-  add("result", "Result");
   return out;
 }
 

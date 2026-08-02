@@ -251,7 +251,9 @@ const tradeDimensions: Dimension[] = [
   // macro_align / cot_filter / htf_bias / entry_tf are no longer listed here:
   // they became user-defined fields in Phase 4a and arrive through
   // `customFieldDimensions`. ict_entry_model became the playbook.
-  column("result", "Result", "result"),
+  // `result` is gone: it was a manual Win/Loss/Breakeven select that duplicated
+  // the derived `outcome` dimension below, and could contradict it without any
+  // report noticing. Group by "Ishod" instead.
   column("exit_reason", "Exit Reason", "exit_reason"),
   column("mistake", "Greška", "mistake"),
   column("miss_reason", "Razlog propuštanja", "miss_reason"),

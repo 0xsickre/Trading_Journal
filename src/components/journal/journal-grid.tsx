@@ -46,7 +46,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { dimensionsByGroup } from "@/lib/journal/reports/dimensions";
+import { dimensionsByGroup, getDimension } from "@/lib/journal/reports/dimensions";
+import {
+  classifyOutcome,
+  resolveBreakevenRange,
+  EXACT_ZERO_RANGE,
+} from "@/lib/journal/breakeven";
 import { Badge } from "@/components/ui/badge";
 import type { Account, TradeRow } from "@/lib/journal/types";
 import { fmtInTz } from "@/lib/journal/time";
@@ -96,22 +101,45 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 /**
- * Grid filters come from the dimension registry. The grid filters on the RAW
- * column value (see `fieldMatchesFilter` below), so only trade-column
- * dimensions are eligible — a derived bucket like "1–3d" is not a value any
- * row actually stores.
+ * Grid filters come from the dimension registry, so a label is written once.
+ *
+ * Most of them filter on the RAW column value (see `fieldMatchesFilter`), which
+ * is why only trade-column dimensions qualify — a derived bucket like "1–3d" is
+ * not a value any row stores.
+ *
+ * `outcome` is the one exception, and it is here on purpose: it replaced the
+ * manual `result` column, which was dropped for duplicating it. Win / loss /
+ * breakeven fall out of net P&L against the account's breakeven band, so the
+ * value has to be COMPUTED per row rather than read — hence its own branch in
+ * `filtered` and its own fixed option list below.
  */
 const FILTER_KEYS = new Set([
   "instrument",
   "direction",
   "setup_grade",
   "ict_entry_model",
-  "result",
   "status",
 ]);
-const FILTERS: { key: string; label: string }[] = dimensionsByGroup("trade")
-  .filter((d) => FILTER_KEYS.has(d.key))
-  .map((d) => ({ key: d.key, label: d.label }));
+
+const OUTCOME_KEY = "outcome";
+const outcomeDimension = getDimension(OUTCOME_KEY);
+
+const FILTERS: { key: string; label: string; options?: readonly string[] }[] = [
+  ...dimensionsByGroup("trade")
+    .filter((d) => FILTER_KEYS.has(d.key))
+    .map((d) => ({ key: d.key, label: d.label })),
+  ...(outcomeDimension
+    ? [
+        {
+          key: OUTCOME_KEY,
+          label: outcomeDimension.label,
+          // `distinct()` has nothing to read for a derived value, so the
+          // buckets come from the dimension's own declared order.
+          options: outcomeDimension.order ?? ["win", "breakeven", "loss"],
+        },
+      ]
+    : []),
+];
 
 function distinct(rows: TradeRow[], key: string): string[] {
   const set = new Set<string>();
@@ -219,11 +247,43 @@ export function JournalGrid({
     });
   }
 
+  /**
+   * Breakeven band per account, for the outcome filter.
+   *
+   * Per account and not one global band: the same −$40 is a breakeven trade on
+   * an account whose band reaches −$50 and a loss on one that does not, and
+   * collapsing the two would classify a trade by whichever account happened to
+   * be first.
+   */
+  const rangeByAccount = useMemo(
+    () => new Map(accounts.map((a) => [a.id, resolveBreakevenRange(a)])),
+    [accounts],
+  );
+
+  const outcomeOf = useCallback(
+    (t: TradeRow): "win" | "loss" | "breakeven" | null => {
+      const net = t.stats?.net_pl;
+      // An open or missed trade has no outcome yet. Null excludes it from every
+      // outcome bucket rather than parking it in "loss" at 0.
+      if (net == null) return null;
+      const range =
+        (t.account_id ? rangeByAccount.get(t.account_id) : null) ??
+        EXACT_ZERO_RANGE;
+      return classifyOutcome(net, range);
+    },
+    [rangeByAccount],
+  );
+
   const filtered = useMemo(() => {
     return trades.filter((t) => {
       if (accountFilter !== "all" && t.account_id !== accountFilter) return false;
       for (const [k, v] of Object.entries(filters)) {
-        if (v && v !== "all" && !fieldMatchesFilter(t, k, v)) return false;
+        if (!v || v === "all") continue;
+        if (k === OUTCOME_KEY) {
+          if (outcomeOf(t) !== v) return false;
+          continue;
+        }
+        if (!fieldMatchesFilter(t, k, v)) return false;
       }
       if (search.trim()) {
         const q = search.toLowerCase();
@@ -247,7 +307,7 @@ export function JournalGrid({
       }
       return true;
     });
-  }, [trades, accountFilter, filters, search]);
+  }, [trades, accountFilter, filters, search, outcomeOf]);
 
   const tzOf = useCallback(
     (t: TradeRow) =>
@@ -559,7 +619,10 @@ export function JournalGrid({
             label={f.label}
             value={filters[f.key] ?? "all"}
             onChange={(v) => setFilters((p) => ({ ...p, [f.key]: v }))}
-            options={distinct(trades, f.key).map((v) => ({ value: v, label: v }))}
+            options={(f.options ?? distinct(trades, f.key)).map((v) => ({
+              value: v,
+              label: v,
+            }))}
           />
         ))}
         <Button
