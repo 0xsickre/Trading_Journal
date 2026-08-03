@@ -6,7 +6,7 @@ export type UserPrefs = {
   journalHiddenColumns: string[];
 };
 
-export const EMPTY_PREFS: UserPrefs = { journalHiddenColumns: [] };
+const EMPTY_PREFS: UserPrefs = { journalHiddenColumns: [] };
 
 /**
  * The signed-in user's UI preferences.

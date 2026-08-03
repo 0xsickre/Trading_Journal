@@ -217,7 +217,12 @@ function ListCard({ list }: { list: OptionList }) {
     const ids = active.map((i) => i.id);
     [ids[index], ids[target]] = [ids[target], ids[index]];
     start(async () => {
-      await reorderOptions(ids);
+      // The result is read. `reorderOptions` reports a partial write since the
+      // round-3 server pass; throwing it away here would keep that invisible —
+      // the refresh below snaps the list back to whatever actually persisted,
+      // which without a message reads as the drag simply not working.
+      const res = await reorderOptions(ids);
+      if (!res.ok) toast.error(res.error);
       router.refresh();
     });
   }

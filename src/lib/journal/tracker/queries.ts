@@ -126,22 +126,3 @@ export async function getCheckinsForDay(
   return (await getCheckins(date, date)).get(date) ?? new Map();
 }
 
-/** Days that already carry a lock, so the UI can mark them without re-reading. */
-export async function getLockedDays(
-  from: string,
-  to: string,
-): Promise<Set<string>> {
-  const supabase = await createClient();
-  const rows = await selectAllPages<{ report_date: string }>((lo, hi) =>
-    supabase
-      .from("tj_daily_reports")
-      .select("report_date, id")
-      .not("locked_at", "is", null)
-      .gte("report_date", from)
-      .lte("report_date", to)
-      .order("report_date")
-      .order("id")
-      .range(lo, hi),
-  );
-  return new Set(rows.map((r) => r.report_date));
-}

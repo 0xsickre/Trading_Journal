@@ -23,13 +23,6 @@ export const AUTO_RULE_KEYS = [
 ] as const;
 export type AutoRuleKey = (typeof AUTO_RULE_KEYS)[number];
 
-export const AUTO_RULE_LABELS: Record<AutoRuleKey, string> = {
-  max_loss_per_trade: "Net max gubitak po trejdu",
-  max_loss_per_day: "Net max gubitak po danu",
-  playbook_linked: "Svaki trejd vezan za playbook",
-  stop_loss_set: "Svaki trejd ima stop loss",
-};
-
 /** Auto rules that need a money limit before they can say anything. */
 export const AUTO_RULES_NEEDING_AMOUNT: ReadonlySet<AutoRuleKey> = new Set([
   "max_loss_per_trade",

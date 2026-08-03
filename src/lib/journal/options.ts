@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { OptionItem, OptionList, OptionsMap } from "./types";
 
-export type { OptionItem, OptionList, OptionsMap } from "./types";
+export type { OptionList, OptionsMap } from "./types";
 
 /** All lists with their items. `activeOnly` filters soft-deleted options. */
 export async function getListsWithItems(

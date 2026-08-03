@@ -15,7 +15,7 @@ import { formatDuration } from "../units";
 import type { EnrichedTrade, InsightContext } from "./context";
 import type { Insight, InsightRule } from "./types";
 
-export const T = {
+const T = {
   /** MFE (in R) above which a trade counts as "was meaningfully in profit". */
   WAS_GREEN_R: 0.5,
   /** MAE (in R) above which a trade counts as "was meaningfully offside". */

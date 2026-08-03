@@ -54,17 +54,3 @@ export async function getNoteTags(): Promise<string[]> {
   return (data ?? []).map((r) => r.name);
 }
 
-/** Notes attached to one trade, for the trade page. */
-export async function getNotesForPosition(positionId: string): Promise<Note[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("tj_notes")
-    .select(
-      "id, folder_id, title, content, position_id, report_date, tags, pinned, deleted_at, created_at, updated_at",
-    )
-    .eq("position_id", positionId)
-    .is("deleted_at", null)
-    .order("updated_at", { ascending: false })
-    .order("id");
-  return (data ?? []) as Note[];
-}

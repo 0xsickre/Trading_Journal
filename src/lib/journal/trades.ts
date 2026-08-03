@@ -7,7 +7,7 @@ import type { TradeFormInitial } from "@/components/journal/trade-form";
 import type { TradeImageKind } from "./tradingview-snapshot";
 import type { PositionStat, TradeRow, TradeTvImages } from "./types";
 
-export type { PositionStat, TradeRow } from "./types";
+export type { TradeRow } from "./types";
 
 /** Position joined with its derived stats — the row shape for the journal grid. */
 export type TradeWithStats = TradeRow;

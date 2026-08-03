@@ -20,10 +20,14 @@ import {
 } from "../enriched-trade";
 import type { TradeRow } from "../types";
 
-// Re-exported so existing importers keep working; the definitions now live in
-// `enriched-trade.ts` because the report engine needs them too.
+// Re-exported because the definitions live in `enriched-trade.ts` — the report
+// engine needs them too — and the insight rules refer to these types by name.
+//
+// `percentile` and `median` used to be re-exported here as well, under a comment
+// saying it was "so existing importers keep working". There were none: every
+// caller imports them from `enriched-trade.ts` directly. A compatibility shim
+// for a compatibility problem nobody had.
 export type { DailyReportLite, EnrichedTrade };
-export { percentile, median };
 
 export type DayBucket = {
   key: string;

@@ -22,7 +22,7 @@ export function parseTradingViewSnapshotId(url: string): string | null {
   return m?.[1] ?? null;
 }
 
-export function isTradingViewChartLayoutUrl(url: string): boolean {
+function isTradingViewChartLayoutUrl(url: string): boolean {
   return CHART_LAYOUT_RE.test(url.trim());
 }
 

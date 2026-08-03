@@ -9,7 +9,7 @@
  */
 
 /** At least one column must survive, or the grid renders as an empty frame. */
-export const MIN_VISIBLE_COLUMNS = 1;
+const MIN_VISIBLE_COLUMNS = 1;
 
 /**
  * TanStack's `columnVisibility` state, built from the stored hidden ids.

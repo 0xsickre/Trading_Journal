@@ -2046,3 +2046,125 @@ playbook half of the score with no error.
 
 951 tests / 55 files (941 → 951). Coverage **95.55 / 89.92 / 96.76 / 96.81**. Lint 1 warning,
 build green with the same 12 routes, `tsc` clean.
+
+---
+
+## Step 8 — components, dead UI and dependencies
+
+The step's bar: *`knip` reports zero unused files, exports and dependencies, or each survivor has
+a recorded reason; `package.json` has no dependency without a consumer.*
+
+### Deleted outright
+
+**Seven `ui/` components**, imported from nowhere: `calendar`, `filter-select`, `form`,
+`input-group`, `scroll-area`, `separator`, `tooltip`. Verified by import count before removal,
+not on knip's word alone.
+
+**Four dependencies**, which those files were the last consumers of: `@base-ui/react`,
+`@hookform/resolvers`, `react-day-picker`, `react-hook-form`. The form library pair is the
+telling one — this app builds its forms from field definitions, so `react-hook-form` was never
+going to be used; it arrived with a scaffold and stayed.
+
+**Five dead functions.** `getNotesForPosition`, `getLockedDays`, `renameList`, `deleteList`,
+`fmtScoreValue` — zero references each. Two deserve a note rather than a silent delete:
+
+- `getNotesForPosition` was a server-side query for notes on one trade. The notebook already
+  does that filtering client-side over `getNotes()`, so this was a *second path to the same
+  answer* rather than a missing feature — the duplication class this review keeps finding.
+- `renameList` / `deleteList` were server actions, i.e. HTTP endpoints, with no caller and no
+  button anywhere that should have called them (checked). A dead endpoint is live attack
+  surface for a feature that does not exist.
+
+### D1 (Low) — a compatibility shim for a problem nobody had
+
+`insights/context.ts` re-exported `percentile` and `median` under the comment *"Re-exported so
+existing importers keep working"*. There were no existing importers: every caller takes them
+from `enriched-trade.ts` directly. Deleted; the type re-exports beside it are used and stayed.
+
+### D2 (Low) — a second source of truth for four labels
+
+`AUTO_RULE_LABELS` mapped the four auto-rule keys to Serbian text and was read by nothing. The
+text the checklist actually shows comes from `tj_tracker_rules.text`, seeded in the database.
+Two places holding the same label is two places that drift, and this one had already stopped
+being the real one. Deleted.
+
+### D3 — `AUTO_RULE_KEYS` had no consumer, and its promise was unenforced
+
+Unexporting it turned up something better. Its own header states a contract — *"The set is
+closed and mirrors the DB CHECK. Adding one means writing an evaluator, so a key with no
+evaluator must never be storable"* — and nothing checked either half. `auto_key` is never chosen
+in the UI, only seeded, so the constant genuinely had **no runtime consumer at all**: it existed
+to derive its own union type.
+
+`FIXED` by making the promise executable rather than hiding the constant: three tests assert that
+`evaluateAutoRulesForDay` answers for exactly these four keys and no others, that each verdict
+carries the key it answers for (the result is indexed by key downstream, so a mislabelled verdict
+would answer for the wrong rule), and that the two money rules are exactly the ones that ask for
+a limit.
+
+### D4 (Medium) — the step-6 fix was invisible to the user
+
+`reorderOptions` was changed in step 6 to report a partial write instead of always answering
+`{ ok: true }`. Its only caller, `list-manager.tsx`, threw the result away — so the fix changed
+nothing anyone could see: the list still snapped back on refresh with no message, which reads as
+the drag simply not working. `notebook-workbench.tsx` did the same with `moveFolder`, twice.
+
+`FIXED` — all three read the result and surface the error. Recorded as a finding against my own
+previous step, because a server-side fix whose caller discards it is not a fix.
+
+### Constants: pinned rather than hidden
+
+Sixteen module-internal constants lost their `export` — they had no reader outside their own
+file. Four did not, deliberately:
+
+`WIN_PCT_TOP_THRESHOLD`, `MIN_COVERAGE_SHARE`, `PROCESS_ADHERENCE_WEIGHT` and
+`CONSISTENCY_SCALE` **are the score**. Nothing else reads them, so they were exported-but-unused
+— and changing any one of them silently moves every score the user has ever seen with no test
+going red. They are now asserted by value. Pinning is the more useful of the two options: a
+deliberate recalibration has to edit the test too, which is exactly the moment to think about
+whether past numbers stay comparable.
+
+### The 26 that remain, and why
+
+Every one is a shadcn re-export in `src/components/ui/` — `CardFooter`, `DialogClose`,
+`SelectGroup`, the dropdown sub-menu family, and so on. **Own code is at zero.**
+
+Kept, for a reason that is about the next change rather than this one: these files are vendored
+from an upstream generator. Trimming their export surface makes every future `shadcn add` a
+manual merge, and the components are wanted — a `SelectGroup` will be needed the first time a
+dropdown gets categories. The alternative was excluding `src/components/ui/**` from knip's
+project, which was tried and **reverted**: it stopped knip seeing those files as consumers and
+falsely reported `radix-ui`, `cmdk`, `class-variance-authority`, `next-themes` and `tailwindcss`
+as unused. A configuration that produces five false positives to silence 26 true ones is worse
+than the 26.
+
+`ignoreExportsUsedInFile: true` was added instead, which is not a suppression: it stops knip
+reporting an export that its own file consumes, which was never dead code. That alone took the
+list from 55 to 26.
+
+### Reviewed, no defect found
+
+**Effects that sync state.** Two exist and both are correct. `note-editor.tsx` documents in place
+that there is *deliberately* no effect syncing from props — the workbench keys the component by
+note id, so selecting another note remounts it, and a sync effect would additionally fire on the
+`router.refresh()` after each autosave and overwrite what was typed during the round trip. That
+is the bug found and fixed in an earlier phase, still fixed. `trade-form.tsx` hydrates from
+`localStorage`, a client-only external store that cannot be read during SSR render, with a
+scoped eslint-disable saying so.
+
+**Buttons that do not work.** Swept the action call sites in components; the only failures were
+D4's discarded results. `trade-form.tsx`'s submit handler reads its result correctly (a grep
+false positive, checked rather than assumed).
+
+**`dashboard.tsx` was not taken apart**, per the owner's standing instruction. Its two real
+defects were fixed in place in step 7.
+
+### Outcome
+
+`FIXED` — D1, D2, D3, D4. `DELETED` — 7 files, 4 dependencies, 5 functions, 16 stray exports.
+`ACCEPTED WITH REASON` — 26 vendored shadcn re-exports.
+
+958 tests / 55 files (951 → 958). Coverage **95.54 / 89.92 / 96.76 / 96.81**. Source is now
+171 files / 33 259 lines; 22 dependencies and 12 devDependencies, none without a consumer. Lint
+back to exactly **1** warning — it briefly went to 3 from this step's own edits, which is the
+baseline invariant doing its job. Build green, `tsc` clean.

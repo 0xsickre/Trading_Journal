@@ -156,26 +156,6 @@ export async function addList(
   return { ok: true };
 }
 
-export async function renameList(id: string, label: string) {
-  const supabase = await createClient();
-  if (!label.trim()) return { ok: false, error: "Empty label." };
-  const { error } = await supabase
-    .from("tj_option_lists")
-    .update({ label: label.trim() })
-    .eq("id", id);
-  if (error) return { ok: false, error: error.message };
-  revalidateAll();
-  return { ok: true };
-}
-
-export async function deleteList(id: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("tj_option_lists").delete().eq("id", id);
-  if (error) return { ok: false, error: error.message };
-  revalidateAll();
-  return { ok: true };
-}
-
 // ---- Instruments ----
 
 /**

@@ -282,7 +282,8 @@ export function NotebookWorkbench({
                     disabled={pending || i === 0}
                     onClick={() =>
                       start(async () => {
-                        await moveFolder(f.id, -1);
+                        const res = await moveFolder(f.id, -1);
+                        if (!res.ok) toast.error(res.error);
                         router.refresh();
                       })
                     }
@@ -297,7 +298,8 @@ export function NotebookWorkbench({
                     disabled={pending || i === folders.length - 1}
                     onClick={() =>
                       start(async () => {
-                        await moveFolder(f.id, 1);
+                        const res = await moveFolder(f.id, 1);
+                        if (!res.ok) toast.error(res.error);
                         router.refresh();
                       })
                     }

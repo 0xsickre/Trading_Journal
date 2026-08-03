@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { selectAllPages } from "@/lib/supabase/paginate";
 import type { CashEvent } from "./balance";
 
-export type { CashEvent, CashEventType } from "./balance";
+export type { CashEvent } from "./balance";
 
 /** Cash events for one account, or all accounts when `accountId` is omitted. */
 export async function getCashEvents(

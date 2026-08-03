@@ -3,5 +3,6 @@
   "next": true,
   "vitest": true,
   "ignore": ["src/lib/supabase/types.ts"],
-  "ignoreDependencies": ["server-only"]
+  "ignoreDependencies": ["server-only"],
+  "ignoreExportsUsedInFile": true
 }

@@ -64,7 +64,7 @@ export type PeriodSummary = {
   maxConsecutiveLosing: number;
 };
 
-export const EMPTY_PERIOD_SUMMARY: PeriodSummary = {
+const EMPTY_PERIOD_SUMMARY: PeriodSummary = {
   periods: 0,
   winPct: 0,
   winning: 0,

@@ -19,7 +19,7 @@ export type AccountFtmo = { account: Account; result: FtmoResult };
  * whole-portfolio dashboard banner needs but is far more than a single-account
  * check requires.
  */
-export async function getFtmoStatuses(
+async function getFtmoStatuses(
   accountIds?: string[],
 ): Promise<AccountFtmo[]> {
   const accounts = await getAccounts();

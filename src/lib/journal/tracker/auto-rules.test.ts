@@ -6,6 +6,7 @@ import {
   type AutoConfigs,
 } from "./auto-rules";
 import type { TradeRow } from "../types";
+import { AUTO_RULE_KEYS, AUTO_RULES_NEEDING_AMOUNT } from "../tracker-types";
 
 type Spec = {
   id: string;
@@ -273,5 +274,46 @@ describe("buildTradeDayIndex", () => {
     (row.stats as { opened_at: string | null }).opened_at = null;
     const idx = buildTradeDayIndex([row], () => "UTC");
     expect(idx.byOpenDay.size).toBe(0);
+  });
+});
+
+describe("the closed set of auto rules", () => {
+  /**
+   * `AUTO_RULE_KEYS` carries a contract in its own header: *"The set is closed
+   * and mirrors the DB CHECK. Adding one means writing an evaluator, so a key
+   * with no evaluator must never be storable."*
+   *
+   * Nothing checked either half. `auto_key` is never chosen in the UI — it is
+   * only seeded — so the constant had NO runtime consumer at all: it existed to
+   * derive its own union type, and the promise it made was unenforced. These
+   * three are that promise, written down as assertions.
+   */
+  const empty = () => buildTradeDayIndex([], () => "UTC");
+  const verdicts = () => evaluateAutoRulesForDay("2026-03-02", empty(), {});
+
+  it("has an evaluator for every key, and a key for every evaluator", () => {
+    expect(Object.keys(verdicts()).sort()).toEqual([...AUTO_RULE_KEYS].sort());
+  });
+
+  it("labels each verdict with the key it answers for", () => {
+    // The result is indexed by key downstream (`auto[rule.auto_key]`), so a
+    // verdict carrying someone else's key would silently answer for the wrong
+    // rule.
+    for (const key of AUTO_RULE_KEYS) expect(verdicts()[key].key, key).toBe(key);
+  });
+
+  it("asks for a limit on the money rules and only on those", () => {
+    expect([...AUTO_RULES_NEEDING_AMOUNT].sort()).toEqual([
+      "max_loss_per_day",
+      "max_loss_per_trade",
+    ]);
+    // With no config and no trades, a money rule cannot answer for want of a
+    // limit; the other two cannot answer for want of trades. Two different
+    // reasons, and the checklist shows each of them to the user.
+    for (const key of AUTO_RULE_KEYS) {
+      expect(verdicts()[key].reason, key).toBe(
+        AUTO_RULES_NEEDING_AMOUNT.has(key) ? "unconfigured" : "no_trades",
+      );
+    }
   });
 });

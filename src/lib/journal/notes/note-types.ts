@@ -38,7 +38,7 @@ export type NoteScope =
   | { kind: "unfiled" }
   | { kind: "trash" };
 
-export const ALL_SCOPE: NoteScope = { kind: "all" };
+const ALL_SCOPE: NoteScope = { kind: "all" };
 
 export function scopeKey(scope: NoteScope): string {
   return scope.kind === "folder" ? `folder:${scope.id}` : scope.kind;

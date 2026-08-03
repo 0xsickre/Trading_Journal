@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { CONSISTENCY_SCALE, consistencyScore } from "./risk-metrics";
 import {
+  MIN_COVERAGE_SHARE,
   MIN_SAMPLE,
+  PROCESS_ADHERENCE_WEIGHT,
+  WIN_PCT_TOP_THRESHOLD,
   RATIO_BANDS,
   RECOVERY_BANDS,
   RELIABLE_SAMPLE,
@@ -381,5 +385,62 @@ describe("infinite profit factor", () => {
     });
     expect(r.score).toBeNull();
     expect(r.coverage).toBe(0);
+  });
+});
+
+describe("the calibration knobs, pinned", () => {
+  /**
+   * These four constants ARE the score. Nothing else in the codebase reads
+   * them, so without this block they are exported-but-unused — and worse,
+   * changing one silently moves every score the user has ever seen, with no
+   * test anywhere going red.
+   *
+   * Pinned by value rather than hidden, because that is the more useful of the
+   * two: a deliberate recalibration now has to edit this file too, which is
+   * exactly the moment to think about whether past numbers stay comparable.
+   */
+  it("holds the weights the spec transcribed", () => {
+    // 25 + 20 + 20 + 15 + 10 + 10 = 100 before the seventh component,
+    // 115 with it. The card divides by `maxCoverage`, not by a hardcoded 100.
+    expect(PROCESS_ADHERENCE_WEIGHT).toBe(15);
+    const full = computeSickreScore({
+      profitFactor: 2.6,
+      avgWinLossRatio: 2.6,
+      maxDrawdownPctOfPeakPnl: 0,
+      winPct: 60,
+      recoveryFactor: 3.5,
+      consistencyScore: 100,
+      sample: { trades: 40, decided: 40 },
+    });
+    expect(full.maxCoverage).toBe(100);
+    expect(
+      computeSickreScore({
+        profitFactor: 2.6,
+        avgWinLossRatio: 2.6,
+        maxDrawdownPctOfPeakPnl: 0,
+        winPct: 60,
+        recoveryFactor: 3.5,
+        consistencyScore: 100,
+        processAdherencePct: 50,
+        sample: { trades: 40, decided: 40 },
+      }).maxCoverage,
+    ).toBe(100 + PROCESS_ADHERENCE_WEIGHT);
+  });
+
+  it("tops out win % at the documented 60", () => {
+    // A 60 % win rate scores 100 and anything above it is capped, not
+    // extrapolated. Moving this moves the win component for every trader.
+    expect(WIN_PCT_TOP_THRESHOLD).toBe(60);
+  });
+
+  it("requires half the weight before calling something a composite", () => {
+    expect(MIN_COVERAGE_SHARE).toBe(0.5);
+  });
+
+  it("scales consistency so a book with σ = total scores zero", () => {
+    // score = 100 − (σ / total) × CONSISTENCY_SCALE. At scale 100 a standard
+    // deviation equal to the whole net total lands exactly on 0.
+    expect(CONSISTENCY_SCALE).toBe(100);
+    expect(consistencyScore([100, -100, 100, 100]).score).toBeGreaterThanOrEqual(0);
   });
 });

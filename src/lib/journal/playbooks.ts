@@ -9,12 +9,7 @@ import type {
   ShowWhen,
 } from "./playbook-types";
 
-export type {
-  Playbook,
-  PlaybookGroup,
-  PlaybookRule,
-  PositionRule,
-} from "./playbook-types";
+export type { Playbook, PositionRule } from "./playbook-types";
 
 type RuleRow = {
   id: string;

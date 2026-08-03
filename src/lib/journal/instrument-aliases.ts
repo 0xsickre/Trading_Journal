@@ -11,7 +11,7 @@ export function cleanInstrumentKey(raw: string): string {
  * FTMO + legacy broker names → vault canonical symbol.
  * Keys are cleaned (see cleanInstrumentKey).
  */
-export const INSTRUMENT_ALIAS_TO_CANONICAL: Record<string, string> = {
+const INSTRUMENT_ALIAS_TO_CANONICAL: Record<string, string> = {
   // FTMO indices
   US500CASH: "SP500",
   US500: "SP500",

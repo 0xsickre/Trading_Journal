@@ -10,7 +10,7 @@ import { isShortDirection } from "../plan-calculations";
 import type { DayBucket, InsightContext } from "./context";
 import type { Insight, InsightRule } from "./types";
 
-export const D = {
+const D = {
   /** R at which a single-trade day counts as a conviction day. */
   HIGH_CONVICTION_R: 2,
   /** Win rate above which a red day is a sizing problem, not a picking one. */

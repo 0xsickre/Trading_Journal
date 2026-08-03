@@ -73,7 +73,7 @@ export type AutoConfigs = Partial<Record<AutoRuleKey, { amount?: number }>>;
  * `planned` and `missed` are plans and observations — grading them would
  * penalize the habit of logging setups you deliberately did not take.
  */
-export const EXECUTED_STATUSES: ReadonlySet<string> = new Set([
+const EXECUTED_STATUSES: ReadonlySet<string> = new Set([
   "open",
   "partial",
   "closed",

@@ -116,7 +116,7 @@ function tagColumn(key: string, label: string): Dimension {
  * lists say which value came from where. These specs declare the split, one
  * dimension per source list.
  */
-export const TAG_SPLITS = [
+const TAG_SPLITS = [
   {
     key: "psych_emotion",
     field: "psychology_tags",
@@ -208,7 +208,7 @@ export const R_MULTIPLE_EDGES = [
   { min: 3, label: "> 3R" },
 ] as const;
 
-export const SIZE_EDGES = [
+const SIZE_EDGES = [
   { min: -Infinity, label: "< 1" },
   { min: 1, label: "1 – 2" },
   { min: 2, label: "2 – 5" },

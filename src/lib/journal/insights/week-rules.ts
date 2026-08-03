@@ -11,7 +11,7 @@ import { formatDuration } from "../units";
 import type { InsightContext, WeekBucket } from "./context";
 import type { Insight, InsightRule } from "./types";
 
-export const W = {
+const W = {
   /** Trades above this multiple of your weekly average is overtrading. */
   OVERTRADING_MULTIPLE: 2,
   /** Net below this share of your average green week is low efficiency. */

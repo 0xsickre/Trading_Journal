@@ -12,7 +12,7 @@ import { fmtMoney } from "../format";
 import type { InsightContext } from "./context";
 import type { Insight, InsightRule } from "./types";
 
-export const P = {
+const P = {
   /** Mental temperature below which entries are flagged. */
   LOW_MENTAL_TEMP: 5,
   /** Swap above this share of gross P&L has eaten the trade. */

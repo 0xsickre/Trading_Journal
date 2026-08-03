@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { FieldDef } from "./field-def-types";
 
-export type { FieldDef, FieldDefGroup } from "./field-def-types";
+export type { FieldDef } from "./field-def-types";
 
 /**
  * User-defined trade fields, in render order.

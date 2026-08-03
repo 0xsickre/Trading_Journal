@@ -54,7 +54,7 @@ export type InsightRule<Ctx> = {
   evaluate(ctx: Ctx): Insight[];
 };
 
-export const SEVERITY_ORDER: Record<InsightSeverity, number> = {
+const SEVERITY_ORDER: Record<InsightSeverity, number> = {
   critical: 0,
   warning: 1,
   info: 2,

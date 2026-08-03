@@ -1,7 +1,6 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { fmtNum } from "@/lib/journal/format";
 import {
   MIN_SAMPLE,
   RELIABLE_SAMPLE,
@@ -135,6 +134,3 @@ function scoreClass(v: number | null): string {
   return "text-[var(--loss)]";
 }
 
-export function fmtScoreValue(n: number | null): string {
-  return n == null ? "—" : fmtNum(n, 2);
-}

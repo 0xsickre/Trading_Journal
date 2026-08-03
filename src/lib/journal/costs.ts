@@ -32,7 +32,7 @@ export type CostStats = {
   holdingDays: number;
 };
 
-export const EMPTY_COSTS: CostStats = {
+const EMPTY_COSTS: CostStats = {
   totalFees: 0,
   totalSwap: 0,
   totalCosts: 0,
