@@ -2168,3 +2168,88 @@ defects were fixed in place in step 7.
 171 files / 33 259 lines; 22 dependencies and 12 devDependencies, none without a consumer. Lint
 back to exactly **1** warning — it briefly went to 3 from this step's own edits, which is the
 baseline invariant doing its job. Build green, `tsc` clean.
+
+---
+
+## Round 3 — conclusion
+
+Nine steps, one commit each, over 32 commits and 101 files that rounds 1 and 2 never saw.
+
+### The verification the plan asked for
+
+| Gate | Baseline (2026-08-02) | Now |
+|---|---|---|
+| `npx tsc --noEmit` | clean | clean |
+| `npx vitest run` | 700 tests / 46 files | **958 / 55**, all passing |
+| `npm run lint` | 0 errors, **1** warning | 0 errors, **1** warning |
+| `npm run build` | passes, 12 routes | passes, 12 routes |
+| `npx knip` | 7 dead files, 4 dead deps, 62 unused exports | **0 / 0 / 26**, all 26 vendored shadcn with a written reason |
+| Supabase advisors | 2 WARN, both known | 2 WARN, the same two |
+| Migrations | 41 | 44 |
+| Source | 222 files, ~41 000 lines | 171 files, 33 259 lines |
+| Coverage | 93.9 / 89.05 / 91.59 / 95.22 | **95.54 / 89.92 / 96.76 / 96.81** |
+
+The bucket called *"documented, not applied"* no longer exists. Every finding from rounds 1 and 2
+carries an outcome, and so does every finding from this round.
+
+### What was actually wrong
+
+31 findings. Stripped of their particulars, nearly all of them are one of four mistakes:
+
+**A `0` standing in for "no data" — 8 findings.** The most expensive class by a distance, and the
+one that produced the only defect the owner found himself. `100 − 0 = 100` scored an empty
+account, a one-trade account and a six-loss account as flawless risk management. `winRate = 0`
+over no decisions. `consistencyScore = 0` over an empty set. A refused `qty` falling back to `0`
+and looking like a real zero.
+
+**Two answers to one question — 7 findings.** Two markdown parsers. Two definitions of "last 90
+days" inside one component, feeding two halves of one score. Two retirement filters that agree on
+today and disagree on the past. Three reorder implementations, one of which never checked its
+errors. An import path that throws and an undo path that swallows, on identical statements.
+
+**A silent truncation — 5 findings.** PostgREST returning 1000 rows with HTTP 200. In `undo` it
+was not a wrong number but permanent data loss: positions left undeleted with no foreign key to
+catch them, and `prev_executions` snapshots destroyed.
+
+**Input taken on faith — 6 findings.** A European date read as American. `2345,67` read as
+`234567`. A timezone typo silently re-dating the whole journal. `2026-00-00` rolling into December
+2025. A point value of zero making every trade on an instrument worth nothing — and freezing that
+onto every trade booked while it stood.
+
+The remaining five are ordinary dead code and one genuine logic error in a comparator.
+
+### What this round is honest about
+
+**Coverage did not find these.** `sickre-score.ts` was at 96 % statements and 100 % functions with
+`S1` live. `balance.ts` was at 100 / 100 with `S3` live. Coverage counts execution, not assertion;
+`vitest.config.ts` said so in a comment before this round proved it three times.
+
+**Tests of formulas did not find these either.** Every one of `S1`, `S2` and `S3` was a correct
+formula fed the wrong thing, or fed a shape no fixture had. What found them was `book.fixture.test.ts`
+— one book with every figure derived on paper, plus a sweep of the six *shapes* a book can take.
+
+**The owner found the first one by opening the application.** That is the finding behind the
+finding: 16 250 lines of components and 25 routes have no test at all, and the defect lived
+there. Steps 6, 7 and 8 read that code; they do not execute it.
+
+**One finding was against this round's own work.** `D4` — a server fix from step 6 whose only
+caller discarded the result, so nothing visible changed until step 8 caught it.
+
+**One earlier finding was over-claimed and got corrected on inspection.** The carried note about
+`addFieldDef` described a collision that was already handled; the real defect was narrower. Reading
+the code first was worth more than trusting the note.
+
+### What is still not established
+
+Stated plainly, because the README must not overclaim it:
+
+- **The component and route layer is unverified by execution.** Reviewed by reading, not by
+  running. This is where the reported defect lived.
+- **Nothing has been seen in a browser with real trades.** The container has no Supabase
+  credentials and the account has no trades. Manual verification remains the owner's.
+- **Phase 8B is blocked**, not finished — the OANDA adapter waits on a practice token.
+
+The honest summary is narrower than "everything is correct": **the `lib/` pipeline from a realized
+trade to a displayed number is proved, by hand-derived fixtures and by 958 tests. The layer between
+that pipeline and the screen is reviewed but not executed.** Closing that gap needs either a
+component test runner or a browser suite, and is the obvious next piece of work.

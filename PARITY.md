@@ -40,12 +40,24 @@ odeljak §8 ostaje najbolja procena a ne provereno stanje.
 
 ## 1. Metrike — pokriveno
 
-Izveštajni engine registruje **26 metrika**, i svaka nosi veličinu uzorka uz sebe:
+Izveštajni engine registruje **30 metrika**, i svaka nosi veličinu uzorka uz sebe:
 
 `net_pnl` · `gross_pnl` · `trade_count` · `win_rate` · `profit_factor` · `expectancy` · `avg_r` ·
 `total_r` · `avg_win` · `avg_loss` · `avg_win_loss` · `best` · `worst` · `max_drawdown` ·
-`recovery_factor` · `consistency` · `avg_hold` · `total_fees` · `total_swap` · `cost_pct_of_gross` ·
-`avg_planned_r` · `delta_r` · `avg_mae_r` · `target_attainment` · `breakeven_count` · `follow_rate`
+`avg_daily_dd` · `recovery_factor` · `sharpe` · `sortino` · `calmar` · `consistency` · `avg_hold` ·
+`total_fees` · `total_swap` · `cost_pct_of_gross` · `avg_planned_r` · `delta_r` · `avg_mae_r` ·
+`target_attainment` · `breakeven_count` · `follow_rate`
+
+> **Ispravka ovog dokumenta.** Ranija verzija je tvrdila da „nema metrike iz čeklista koja
+> nedostaje" dok su **Sharpe, Sortino, Calmar i avg daily drawdown stvarno nedostajali**. Tvrdnja
+> je bila netačna kad je napisana; ROADMAP je tada ispravljen a ovaj fajl nije. Sve četiri su
+> otad implementirane (`risk-ratios.ts`), pa je tvrdnja sada tačna — ali je ovde zapisano da
+> nije bila, jer dokument koji tiho postane tačan ne razlikuje se od dokumenta kojem se ne veri.
+>
+> Uz njih ide jedna razlika u odnosu na uobičajenu praksu: **godišnja skala se meri, ne
+> pretpostavlja.** `periodsPerYear = (dana trgovanja × 365) / kalendarskih dana raspona`, umesto
+> zakucanih 252 — koji za swing knjigu sa 40 dana trgovanja preko 300 kalendarskih dana naduva
+> svaki racio. Sva tri racija vraćaju `null` ispod pet dana.
 
 Van registra, ali izračunato i prikazano: equity kriva, kumulativni drawdown, R-histogram, dnevni
 P&L, hold time po ishodu, izveštaj o troškovima, entry slippage po nedelji, target attainment po
@@ -206,3 +218,13 @@ jedina koja bi promenila kako radiš** — ostale dve su udobnost i integracija.
 
 **Neproveravano:** ništa od faza 5–7 nije viđeno u pregledaču. Kontejner nema Supabase env
 promenljive, a baza ima nula trejdova.
+
+**Dopuna posle runde 3 revizije.** Ta poslednja rečenica je bila skuplja nego što je zvučala. Baš
+zato što baza ima nula trejdova, prazan nalog je bio jedino stanje u kojem je vlasnik mogao da
+vidi aplikaciju — i tu je našao nalaz koji nijedan test nije uhvatio: skor od 33/100 sa „Max
+drawdown: 100" na nalogu bez ijednog trejda. Iz njega su ispala još dva iste vrste (`S1`–`S3` u
+`CODE_REVIEW.md`).
+
+Zaključak koji ostaje, i za ovaj dokument i za README: **parity na papiru nije parity na ekranu.**
+Sve što je ovde označeno kao pokriveno pokriveno je u kodu i pod testom; ništa od toga nije
+zamena za otvaranje stranice sa stvarnim trejdovima.
