@@ -2253,3 +2253,93 @@ The honest summary is narrower than "everything is correct": **the `lib/` pipeli
 trade to a displayed number is proved, by hand-derived fixtures and by 958 tests. The layer between
 that pipeline and the screen is reviewed but not executed.** Closing that gap needs either a
 component test runner or a browser suite, and is the obvious next piece of work.
+
+---
+
+# Phase 10 — executing the render layer
+
+Round 3 closed by naming its own gap: 16 250 lines of components and 25 routes reviewed by
+reading, never by running — and the one defect the owner found himself lived there. This phase
+closes it.
+
+## Step 0 — the harness, and nothing else
+
+No behaviour is asserted here beyond one smoke test. The point is to prove a component can be
+mounted at all, because four separate things in this stack say no by default.
+
+### What was in the way
+
+**`server-only` is not installed.** Not a version mismatch — the package is absent from
+`package.json` and from `node_modules` entirely. Next aliases it at build time to a module that
+throws if it ever reaches a client bundle. Outside Next the import is unresolvable, and 20 of 43
+journal components reach it transitively through the `"use server"` action modules they import, so
+the module graph dies before a single component renders.
+
+Fixed with a vitest alias to `test/server-only-stub.ts`, an empty module. Its production job is to
+fail a client build, which is a bundler concern; under vitest there is no client bundle to protect.
+
+A side effect worth recording: `knip.json` had carried `ignoreDependencies: ["server-only"]` to
+paper over the phantom import. With the alias in place knip resolves it, and knip itself flagged
+the entry as stale. Removed.
+
+**jsdom has no layout engine.** `ResizeObserver` (Radix and recharts), `DOMRect`, pointer capture
+(Radix drag handling) and `Element.prototype.scrollIntoView` (Radix Select) are all missing, and
+`URL.createObjectURL` — used by the CSV and XLSX exports in `dashboard.tsx:790` and
+`journal-grid.tsx:847` — is not implemented either. `vitest.setup.ts` shims each one **with its
+consumer named in the comment**. A shim with no stated reason is a shim nobody can ever delete: the
+day a library is dropped, the next reader cannot tell whether the polyfill went with it.
+
+**One environment cannot serve both suites.** The 958 library tests run in `node` in about twelve
+seconds; putting them behind jsdom taxes every pure-arithmetic test for a DOM none of them touch.
+Split into two vitest `projects` — `lib` (node, `*.test.ts`) and `components` (jsdom, `*.test.tsx`).
+The rule is the file extension, so no file can land in both.
+
+`@vitejs/plugin-react` turned out to be unnecessary and was dropped after its install hit a
+`@babel/core` peer conflict: `tsconfig.json` already sets `jsx: "react-jsx"`, so esbuild transforms
+TSX on its own. One fewer dependency and one fewer conflict to carry.
+
+### C1 (caught during this step) — the coverage scope trap, and the wrong fix for it
+
+The plan predicted that component tests would drag 16 250 unmeasured lines into the coverage
+denominator and blow the floors. It did. **The first fix was wrong and is worth recording**, because
+it failed in a way that looks like a regression and is not one.
+
+Scoping with `include: ["src/lib/**/*.ts"]` switches v8 from *"files a test imported"* to *"every
+file that matches"*. That pulls in the `server-only` query modules no unit test can reach — they
+need a database — and scores them 0. Coverage read **86.01 / 82.13 / 84.15 / 86.74** and four
+thresholds failed. Nothing had got worse; the metric had quietly started measuring something else
+under the same name.
+
+`FIXED` with `exclude: ["src/components/**", "src/app/**", ...]` instead, which keeps the original
+meaning. Coverage returned to **95.55 / 89.92 / 96.77 / 96.81** — the pre-step baseline, moved only
+by the render test importing `sickre-score.ts`.
+
+The component layer gets its own measured floors once there is enough of it to measure. Until then
+"not counted here" is said in the config rather than hidden behind a percentage that changed
+meaning.
+
+### The smoke test
+
+`sickre-score-card.test.tsx` — the first test in this repository that renders anything. Chosen
+because the card is pure presentation: no `next/navigation`, no server action, no chart, no Radix.
+A failure there means the harness is wrong, not the component.
+
+Four assertions, and one of them is `S1` re-asserted at the layer where it was actually seen: with
+an empty book the card must show `—` and *"treba još 5 zatvorenih trejdova"*, where before the
+round-3 fix it read **33** with *"Max drawdown: 100"*.
+
+Writing it also produced two small lessons the later steps inherit. `getByText("—")` fails on an
+empty book because every component row reads `—`, so the headline has to be found by position —
+`screen.getByText("/ 100").previousElementSibling`. And the dash count is six components plus the
+headline, not seven: the card omits the process row entirely when no process data is supplied,
+rather than showing it empty.
+
+`@testing-library/user-event` was installed and then **uninstalled** in the same step — nothing
+clicks anything yet, and this project does not keep a dependency it does not use. It comes back in
+step 2, where the period and account controls need it.
+
+### Outcome
+
+962 tests / 56 files (958 → 962), of which 4 render. Coverage **95.55 / 89.92 / 96.77 / 96.81**,
+unchanged in meaning and in value. Lint 1 warning, build green, `tsc` clean, `knip` zero in own
+code.
