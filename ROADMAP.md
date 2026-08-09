@@ -844,11 +844,45 @@ ovaj model ima strukturno.
 | 7 | *ostatak:* widget layout, cron recap, broker preseti, merge/split | Delom | 5–7 |
 | 8 | Automatski MAE/MFE — polovina A (čist skener sveća) | Ne | ✅ |
 | 8 | *ostatak:* polovina B — OANDA adapter, `tj_candles`, backfill | Da | 1–2 ⛔ |
+| 9 | Revizija runde 3 — devet koraka, 31 nalaz, README od nule | Ne | ✅ |
+| 10 | Izvršavanje render sloja — jsdom + testing-library | Ne | 5–7 🔨 |
 
 ⛔ = blokirano. Faza 8B čeka OANDA praktični token; ništa drugo ne fali.
+🔨 = u toku. Faza 10, Korak 0 (harness) je gotov; Koraci 1–7 predstoje.
 
-**Ukupno: 41–46 sesija.** Posle F4 journal odgovara na svih šest pitanja iz sanity provere.
-F5–F7 su disciplina, udobnost i parity.
+## Faza 10 — izvršavanje render sloja
+
+**Povod.** Runda 3 se zatvorila imenovanjem sopstvene rupe: 16 250 linija komponenti i 25 ruta
+pregledanih čitanjem, nikad izvršavanjem. Sva četiri nalaza koja su promenila brojeve na ekranu —
+`S1`, `S2`, `S3`, `P1` — živela su u tom sloju, a `S1` je vlasnik našao sam, otvaranjem aplikacije.
+Nijedan od tada 958 testova ga nije uhvatio, jer je formula bila tačna; pogrešno je bilo ono što
+joj `dashboard.tsx` prosleđuje.
+
+**Kičma.** `book.fixture.test.ts` već drži knjigu od deset trejdova sa svakom brojkom izvedenom na
+papiru. `mkTrade(spec).row` vraća `TradeRow` — tačno tip koji `Dashboard` traži. Ista knjiga
+postaje propovi renderovanog Dashboard-a, pa test tvrdi da se isti brojevi pojave u DOM-u: papir →
+`lib/` → ekran, jedan skup brojeva kroz sva tri sloja. I šest oblika knjige (prazna, jedan trejd,
+sve dobitnici, sve gubitnici, sve breakeven, samo otvorene) prelaze iz `lib/` testa u render test.
+
+| Korak | Šta | Stanje |
+|---|---|---|
+| 0 | Harness: jsdom, testing-library, shim-ovi, `server-only` alias, podela na dva vitest projekta | ✅ |
+| 1 | Dashboard: knjiga na ekranu + šest oblika | |
+| 2 | Dashboard kontrole: period / nalog / osnova mere isti prozor (`P1`) | |
+| 3 | Čiste prezentacione komponente, uključujući `markdown-view` | |
+| 4 | `journal-grid` | |
+| 5 | Forme: `trade-form`, `daily-report-form`, `tracker-checklist` | |
+| 6 | `import-wizard` — odbijene ćelije na ekranu | |
+| 7 | Dokumentacija i izmereni podovi za render sloj | |
+
+**Svesno izvan obima:** rasklapanje `dashboard.tsx` (šav postoji na liniji 807, ali izdvojena
+funkcija dokazuje račun a ne ekran), Playwright (traži pokrenutu aplikaciju i kredencijale kojih
+kontejner nema), i testovi ruta (server komponente traže Next runtime, a logika im je tanka —
+dohvat pa prosleđivanje propova koji se sad tvrde na drugoj strani).
+
+**Ukupno: 41–46 sesija za F1–F8**, plus 9 potrošenih na reviziju runde 3 (F9) i 5–7 procenjenih za
+render sloj (F10). Posle F4 journal odgovara na svih šest pitanja iz sanity provere. F5–F7 su
+disciplina, udobnost i parity; F9–F10 su dokaz da brojevi koje pokazuju stvarno stoje.
 
 **Prva tri koraka, konkretno:** `tj_cash_events` + `classifyOutcome()` → `units.ts` → hold time i
 cost report. Prva dva su temelji koje je skupo naknadno ubaciti; treći je prva stvar koju ćeš videti
