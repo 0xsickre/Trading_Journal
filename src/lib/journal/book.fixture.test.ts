@@ -5,7 +5,7 @@ import { EXACT_ZERO_RANGE } from "./breakeven";
 import { enrichTrades } from "./enriched-trade";
 import { avgWinLossRatio, consistencyScore, recoveryFactor } from "./risk-metrics";
 import { computeSickreScore } from "./sickre-score";
-import { mkTrade, type TradeSpec } from "./reports/test-helpers";
+import { BOOK, BOOK_NET, CLOSE_DAYS, TZ, shapedBook } from "./book.fixture";
 import type { RealizedTrade } from "./analytics";
 
 /**
@@ -32,60 +32,11 @@ import type { RealizedTrade } from "./analytics";
  *
  * Timezone is America/New_York throughout, so the day keys exercise the real
  * zone conversion rather than a UTC identity.
+ *
+ * The book itself lives in `book.fixture.ts`, shared with
+ * `dashboard.render.test.tsx` — the same figures derived here on paper are
+ * asserted there against the actual rendered screen.
  */
-
-const TZ = "America/New_York";
-
-/**
- * THE BOOK. Ten closed trades, 2–13 March 2026.
- *
- * Net P&L is chosen so every aggregate lands on a number that can be checked
- * without a calculator, and so profit factor and recovery factor come to rest
- * exactly on a scoring-band floor — the place an off-by-one in the band table
- * would show.
- *
- *   #   closed (NY)   net     cumulative   running peak   drop
- *   1   Mon 03-02    +300         300          300          0
- *   2   Tue 03-03    -100         200          300       -100
- *   3   Wed 03-04    +200         400          400          0
- *   4   Thu 03-05     -50         350          400        -50
- *   5   Fri 03-06    +150         500          500          0
- *   6   Mon 03-09    -200         300          500       -200  ← worst
- *   7   Tue 03-10    +400         700          700          0
- *   8   Wed 03-11    -150         550          700       -150
- *   9   Thu 03-12       0         550          700       -150   breakeven
- *  10   Fri 03-13     +50         600          700       -100
- *
- * Trade 7 is opened on Monday the 9th and closed on Tuesday the 10th: its money
- * belongs to the 10th and the decision to take it belongs to the 9th. Every
- * other trade opens and closes the same day.
- */
-const BOOK_NET = [300, -100, 200, -50, 150, -200, 400, -150, 0, 50];
-const CLOSE_DAYS = [
-  "2026-03-02",
-  "2026-03-03",
-  "2026-03-04",
-  "2026-03-05",
-  "2026-03-06",
-  "2026-03-09",
-  "2026-03-10",
-  "2026-03-11",
-  "2026-03-12",
-  "2026-03-13",
-];
-
-const BOOK: RealizedTrade[] = BOOK_NET.map((net, i) =>
-  mkTrade({
-    id: `b${i + 1}`,
-    net,
-    // 18:00Z is 13:00 EST before 8 March and 14:00 EDT after it — the same
-    // calendar day in New York either way, so the DST change inside this window
-    // cannot silently move a trade between days.
-    closedAt: `${CLOSE_DAYS[i]}T18:00:00Z`,
-    openedAt:
-      i === 6 ? "2026-03-09T18:00:00Z" : `${CLOSE_DAYS[i]}T14:00:00Z`,
-  }),
-);
 
 const stats = () => computeStats(BOOK, "net", EXACT_ZERO_RANGE);
 
@@ -270,17 +221,7 @@ describe("the book, scored", () => {
  * five, checked once each against the figure that would be a lie.
  */
 describe("the shapes a book can take", () => {
-  const book = (nets: number[], specs: Partial<TradeSpec> = {}) =>
-    nets.map((net, i) =>
-      mkTrade({
-        id: `s${i}`,
-        net,
-        r: net / 100,
-        closedAt: `2026-04-${String(i + 1).padStart(2, "0")}T18:00:00Z`,
-        ...specs,
-      }),
-    );
-
+  // `shapedBook` lives in `book.fixture.ts`, shared with the render test.
   const scoreOf = (trades: RealizedTrade[], nets: number[]) => {
     const s = computeStats(trades, "net", EXACT_ZERO_RANGE);
     const dd = computeDrawdown(
@@ -315,7 +256,7 @@ describe("the shapes a book can take", () => {
   });
 
   it("ONE WINNER — four components peak, and none of them counts", () => {
-    const r = scoreOf(book([250]), [250]);
+    const r = scoreOf(shapedBook([250]), [250]);
     expect(r.score).toBeNull();
     expect(r.confidence).toEqual({
       level: "withheld",
@@ -329,7 +270,7 @@ describe("the shapes a book can take", () => {
     // band rather than being mistaken for missing data. Avg win/loss and
     // recovery have no denominator at all and drop out honestly.
     const nets = [100, 200, 150, 300, 250, 175];
-    const r = scoreOf(book(nets), nets);
+    const r = scoreOf(shapedBook(nets), nets);
     const by = Object.fromEntries(r.components.map((c) => [c.key, c]));
     expect(by.profitFactor.value).toBe(Infinity);
     expect(by.profitFactor.score).toBe(100);
@@ -355,13 +296,13 @@ describe("the shapes a book can take", () => {
     const dd = computeDrawdown(
       buildBalanceTimeline(
         0,
-        book(nets).map((t) => ({ at: t.closedAt ?? "", pnl: t.net })),
+        shapedBook(nets).map((t) => ({ at: t.closedAt ?? "", pnl: t.net })),
       ),
     );
     expect(dd.maxMoney).toBe(-700); // it really did fall, all the way
     expect(dd.maxPctOfPeakPnl).toBeNull(); // and there is no peak to divide by
 
-    const r = scoreOf(book(nets), nets);
+    const r = scoreOf(shapedBook(nets), nets);
     const by = Object.fromEntries(r.components.map((c) => [c.key, c]));
     expect(by.profitFactor.score).toBe(20); // bottom band
     expect(by.winPct.score).toBe(0);
@@ -377,7 +318,7 @@ describe("the shapes a book can take", () => {
     const dd = computeDrawdown(
       buildBalanceTimeline(
         0,
-        book([100, 200, 150]).map((t) => ({ at: t.closedAt ?? "", pnl: t.net })),
+        shapedBook([100, 200, 150]).map((t) => ({ at: t.closedAt ?? "", pnl: t.net })),
       ),
     );
     expect(dd.maxMoney).toBe(0);
@@ -389,7 +330,7 @@ describe("the shapes a book can take", () => {
     // Drawdown and consistency have a series to work on; win rate, profit
     // factor and avg win/loss have no denominator and must drop.
     const nets = [0, 0, 0, 0, 0, 0];
-    const r = scoreOf(book(nets), nets);
+    const r = scoreOf(shapedBook(nets), nets);
     const by = Object.fromEntries(r.components.map((c) => [c.key, c]));
     expect(by.winPct.counted).toBe(false);
     expect(by.profitFactor.counted).toBe(false);
@@ -408,7 +349,7 @@ describe("the shapes a book can take", () => {
     // `toRealized` is what decides this upstream; here the guard is that a
     // book of trades with no close date produces no money statistics rather
     // than a set of zeros presented as a flat month.
-    const open = book([0, 0, 0]).map((t) => ({ ...t, closedAt: null }));
+    const open = shapedBook([0, 0, 0]).map((t) => ({ ...t, closedAt: null }));
     const s = computeStats(open, "net", EXACT_ZERO_RANGE);
     expect(s.count).toBe(3);
     expect(s.netSum).toBe(0);

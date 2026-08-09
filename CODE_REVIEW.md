@@ -2343,3 +2343,66 @@ step 2, where the period and account controls need it.
 962 tests / 56 files (958 → 962), of which 4 render. Coverage **95.55 / 89.92 / 96.77 / 96.81**,
 unchanged in meaning and in value. Lint 1 warning, build green, `tsc` clean, `knip` zero in own
 code.
+
+---
+
+## Step 1 — the book, on screen
+
+`book.fixture.test.ts`'s ten-trade book, extracted to a shared `book.fixture.ts`, is now also the
+input to a rendered `<Dashboard>`. `dashboard.render.test.tsx` asserts the same hand-derived
+figures — net 600, win rate 55.6 %, profit factor 2.2, total R 6.00, best +400, worst −200, Sickre
+Score 64 — appear in the DOM, by the label a reader would actually read. Papir → `lib/` → ekran,
+one set of numbers checked at all three layers.
+
+`ResponsiveContainer` is mocked to a fixed size — jsdom has no layout engine, so an unmocked one
+measures 0×0 and there is nothing to assert on. The chart pixels are not the point; the chart data
+already comes from the same `stats`/`drawdown` objects the KPI tiles read, and those are asserted
+directly.
+
+The six shapes swept in `book.fixture.test.ts` (empty, one trade, all winners, all losers, all
+breakeven, open-only) are re-swept here at the render layer through a shared `shapedBook` helper,
+also moved into `book.fixture.ts`. The empty-book case is `S1` itself, re-asserted at the exact
+layer it was seen on: before the round-3 fix this screen read **33** with *"Max drawdown: 100"* on
+zero trades; it now reads `—` and *"treba još 5 zatvorenih trejdova"*.
+
+### W1 (Medium) — the Win rate tile answered "0.0 %" for zero decided trades
+
+Found by the render test itself, not by reading — this is what step 1 exists to catch. The
+ALL-BREAKEVEN sweep asserted `statValue("Win rate")` should read `—`, and the rendered Dashboard
+read `"0.0%"` instead.
+
+`computeStats.winRate` is `wins + losses > 0 ? (wins/(wins+losses))*100 : 0` — `0`, not `null`,
+when nothing was decided. That is the right answer for the *statistic*: with breakeven excluded
+from both sides of the ratio, there is nothing to divide. Read as a *measurement* it says something
+false — a book of six breakeven trades and a book that decided nine trades and lost every one both
+render `"0.0%"`, indistinguishable on screen.
+
+The guard already exists, twice: `day-stats-card.tsx` (`stats.wins + stats.losses === 0 ? "—" :
+…`) and `month-calendar.tsx` (`decided === 0 ? "—" : …`), each with a comment naming the same
+reasoning. `dashboard.tsx`'s main KPI tile — the highest-traffic screen in the app — was the one
+place it had been missed.
+
+`FIXED`, at the tile the render test caught and its one exact sibling in the same file — "Week win
+%" (`weekly.winPct`, same `0`-not-`null` contract in `period-stats.ts`, same missing guard). Both
+now read `stats.wins + stats.losses === 0` / `weekly.winning + weekly.losing === 0` before
+formatting, matching the established pattern.
+
+**Deliberately not fixed in this step:** the "Performance by tag" breakdown table's `winRate`
+column (`dashboard.tsx`, fed by `breakdownByField` in `analytics.ts`). Same defect, same class —
+but `BreakdownRow` carries only the already-collapsed `winRate: number`, not `wins`/`losses`, so a
+correct fix means widening a `MONEY_MODULE` type (100 % coverage floor) rather than adding a guard
+at a call site with data already in hand. That is a wider, separate change and gets its own
+attention rather than being folded into this step's render-test pass. Recorded here so the next
+reader does not have to rediscover it. The registry's own `win_rate` metric (`reports/metrics.ts`,
+feeding `/reports`) is not touched either — it already has a working, different mitigation via the
+report engine's per-row `n`/`belowSample`, reviewed and confirmed in step 4 of this round.
+
+### Outcome
+
+`FIXED` — W1, at its two clean sites. **Recorded, not fixed** — the same defect in the breakdown
+table, pending a `BreakdownRow` shape change.
+
+969 tests / 57 files (962 → 969). Coverage **95.44 / 90.18 / 96.33 / 96.50** — `book.fixture.ts`
+is now a measured file in its own right, shared by both the paper proof and the render proof; all
+four floors still clear. Lint 1 warning, build green (12 routes), `tsc` clean, `knip` zero in own
+code.

@@ -1001,7 +1001,20 @@ export function Dashboard({
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Stat label="Trades" value={String(stats.count)} />
-        <Stat label="Win rate" value={fmtPct(stats.winRate)} />
+        <Stat
+          label="Win rate"
+          // `computeStats` answers `0`, not `null`, when there are no decided
+          // trades — correct for the STATISTIC (breakeven excluded from both
+          // sides, so nothing to divide), wrong read as a MEASUREMENT: an
+          // all-breakeven book showed "Win rate: 0.0%", indistinguishable from
+          // a book that decided nine trades and lost every one. Caught by
+          // `dashboard.render.test.tsx`'s all-breakeven case; the guard already
+          // exists at the same call in `day-stats-card.tsx` and
+          // `month-calendar.tsx` — this tile was the one place it was missed.
+          value={
+            stats.wins + stats.losses === 0 ? "—" : fmtPct(stats.winRate)
+          }
+        />
         <Stat
           label="Net P/L"
           value={fmtMoney(stats.netSum, currency, { sign: true })}
@@ -1123,7 +1136,15 @@ export function Dashboard({
         />
         <Stat
           label="Week win %"
-          value={fmtPct(weekly.winPct)}
+          // Same guard, same reason: a book whose only week was flat (net
+          // exactly at the breakeven band) has `winning + losing === 0`, and
+          // `winPct` answers 0 for that — not "0% of weeks won" but "no week
+          // was won or lost at all".
+          value={
+            weekly.winning + weekly.losing === 0
+              ? "—"
+              : fmtPct(weekly.winPct)
+          }
           title={`${weekly.winning} winning of ${weekly.periods} weeks. The swing replacement for Day Win %.`}
         />
         <Stat

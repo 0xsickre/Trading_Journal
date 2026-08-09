@@ -867,7 +867,7 @@ sve dobitnici, sve gubitnici, sve breakeven, samo otvorene) prelaze iz `lib/` te
 | Korak | Šta | Stanje |
 |---|---|---|
 | 0 | Harness: jsdom, testing-library, shim-ovi, `server-only` alias, podela na dva vitest projekta | ✅ |
-| 1 | Dashboard: knjiga na ekranu + šest oblika | |
+| 1 | Dashboard: knjiga na ekranu + šest oblika | ✅ |
 | 2 | Dashboard kontrole: period / nalog / osnova mere isti prozor (`P1`) | |
 | 3 | Čiste prezentacione komponente, uključujući `markdown-view` | |
 | 4 | `journal-grid` | |
