@@ -875,6 +875,19 @@ sve dobitnici, sve gubitnici, sve breakeven, samo otvorene) prelaze iz `lib/` te
 | 6 | `import-wizard` — odbijene ćelije na ekranu | |
 | 7 | Dokumentacija i izmereni podovi za render sloj | |
 
+**Rangiranje po riziku** (izmereno, 43 fajla). Tier 1 — računa sam i ima stanje koje to menja:
+`dashboard.tsx` (42 memo, 10 kontrola), `reports/reports-workbench.tsx` (stanje u URL-u),
+`journal-grid.tsx` (račun i u `accessorFn` i u ćeliji), `month-calendar.tsx`, `trade-form.tsx`,
+`reports/compare-view.tsx`, `drawdown-chart.tsx`, `cash-events-manager.tsx`. Tier 2 računa bez
+korisničkog stanja (14 fajlova), Tier 3 je čista prezentacija (21).
+
+**Nova klasa koju runda 3 nije tražila: aritmetika pisana direktno u JSX-u.** Ona zaobilazi
+testiranu biblioteku u potpunosti, pa je nijedan `lib/` test ne može uhvatiti. Jedan nalaz je već
+potvrđen čitanjem izvora — `drawdown-chart.tsx:122` prikazuje `Max` nenegirano a `:138` prikazuje
+`Trenutni` negirano, iako `balance.ts` obe računa kao `Math.abs(...)`; u novčanoj osnovi su pak obe
+negativne. Dve brojke jedna do druge, suprotne konvencije znaka. Popravlja se zajedno sa svojim
+testom, u koraku koji pokriva tu komponentu. Sedam daljih kandidata je popisano u planu faze.
+
 **Svesno izvan obima:** rasklapanje `dashboard.tsx` (šav postoji na liniji 807, ali izdvojena
 funkcija dokazuje račun a ne ekran), Playwright (traži pokrenutu aplikaciju i kredencijale kojih
 kontejner nema), i testovi ruta (server komponente traže Next runtime, a logika im je tanka —
