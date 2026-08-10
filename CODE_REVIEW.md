@@ -2406,3 +2406,80 @@ table, pending a `BreakdownRow` shape change.
 is now a measured file in its own right, shared by both the paper proof and the render proof; all
 four floors still clear. Lint 1 warning, build green (12 routes), `tsc` clean, `knip` zero in own
 code.
+
+---
+
+## Step 2 — the controls, not just the numbers
+
+`P1` did not live in a formula — it lived in what the period BUTTON did when clicked: `cutoffMs`
+read `new Date()`, so "last 90 days" depended on the browser's timezone and the second the page
+happened to load, not the account's day. Step 1 proved one fixed render matches paper; step 2
+proves the state a reader actually touches — period, account, net/gross — keeps producing the
+right number as it changes. `dashboard.controls.render.test.tsx`, 8 tests, three groups.
+
+**Period vs. the clock.** A ten-trade book placed so the 30-day account-zone cutoff falls mid-book
+(`todayKey = 2026-04-05`, cutoff `2026-03-07`, splitting 5/5). Default 90d covers the whole book;
+clicking 30d leaves exactly trades 6–10 (`net −200+400−150+0+50 = 100`); and, the direct regression
+test for `P1`, rendering the same book at `2026-04-05T00:05:00Z` and at `2026-04-05T23:55:00Z` —
+same `todayKey` prop, wildly different wall-clock instants — gives the *identical* 30d Net P/L both
+times. If anything in the tree still read `Date.now()` for the money window, one of those two
+numbers would move.
+
+**Net vs. gross.** One trade built so a fee flips its sign — `net: −10, gross: 50` — so the two
+modes classify it on opposite sides of the breakeven band. Net mode: win rate 50.0 %, Best +$40,
+Worst −$10. Click `gross`: win rate 100.0 %, Best +$50, Worst +$40. `Net P/L` and `Gross P/L`
+themselves never move (`+$30.00` / `+$90.00` in both modes) — they are always the raw sums,
+confirming the `analytics.ts` contract read in the round-3 review holds on screen: mode changes
+*classification*, not the two summary tiles.
+
+**Account filter.** Two accounts, three trades (2 on one, 1 on the other). Default view pools all
+three (`Trades = 3`, `+$650.00`). Selecting one account narrows to exactly its trades and total;
+selecting the other *replaces* the scope rather than adding to it.
+
+### Two test-infrastructure bugs, not application bugs
+
+Both diagnosed by isolating the failure down to a bare `<button>` with no Dashboard, no Radix, no
+recharts involved — worth recording since they will recur the moment a later step needs a click
+under a mocked clock.
+
+- **`userEvent.click()` deadlocks under `vi.useFakeTimers()`, even with `advanceTimers` wired to
+  `vi.advanceTimersByTime`.** Reproduced on a bare `<button>`: `userEvent.setup({ delay: null,
+  advanceTimers: vi.advanceTimersByTime })` still times out at 5000 ms on a single click. The fix
+  actually used: don't install fake timers at all. `vi.setSystemTime()` mocks `Date` on its own —
+  it does not require `vi.useFakeTimers()` — so real timers keep flowing (userEvent's internal
+  waits resolve normally) while `new Date()` inside the component still reads the mocked instant.
+  This is what the `P1` regression test needed anyway: two different *wall-clock* instants with the
+  *same* mocked `Date`.
+- **`getByRole("combobox", { name })` cannot disambiguate Radix `Select` triggers by their visible
+  text.** The Dashboard renders three (account filter, granularity, "Performance by tag" breakdown
+  field), and every one of them computes to an accessible **name** of `""` — confirmed empirically
+  by dumping the accessible-roles tree. Per the ARIA accname spec a combobox's visible text is its
+  *value*, not its *name*; Radix's trigger has no `aria-label`, so `{ name: "All accounts" }` finds
+  nothing at all, not even ambiguously. Fixed in the test by scoping to DOM proximity instead —
+  `screen.getByText("All accounts").closest('[role="combobox"]')` — rather than by adding an
+  `aria-label` to the component for a test's convenience.
+
+### Investigated, left alone: `todayYMD()`
+
+`dashboard.tsx:170` (`new Date().toISOString().slice(0, 10)`) is a genuine remaining wall-clock
+read, structurally identical to the shape `P1` had. Traced every call site: it seeds the initial
+`anchor`/`customFrom`/`customTo` state for the calendar-style date pickers (a default the reader
+can see and change before doing anything), and it stamps the exported mentor-pack filename when
+`granularity === "all"` (`mentor-pack-all-2026-08-10.md`) — cosmetic, and the export's own date
+range is computed from `todayKey`/`timezone`, not from this stamp, and is shown live on screen
+(`Izvoz: {exportRange.rangeText}`) before the reader clicks. No KPI, chart, or score reads it.
+Different defect class from `P1`: that one silently mislabeled a number the reader trusted; this
+one only names a downloaded file. Left as-is; recorded so it isn't rediscovered as a false `P1`
+repeat.
+
+### Outcome
+
+No production defect found this step — `P1`'s fix (round 3, step 7) holds under a real click, a
+real render, and a mocked clock. Two test-harness bugs found and fixed (fake timers vs. userEvent;
+combobox accessible-name). One wall-clock read investigated and deliberately left alone, with
+reasoning recorded above.
+
+977 tests / 58 files (969 → 977). Coverage **95.44 / 90.26 / 96.33 / 96.50** — branches ticked up
+fractionally (90.18 → 90.26): the net/gross controls test exercises `analytics.ts` branches no
+earlier test reached with `mode: "gross"` on a mixed-sign book. All four floors still clear. Lint 1
+warning, build green (12 routes), `tsc` clean, `knip` zero in own code.
