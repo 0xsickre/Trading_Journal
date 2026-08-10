@@ -848,7 +848,7 @@ ovaj model ima strukturno.
 | 10 | Izvršavanje render sloja — jsdom + testing-library | Ne | 5–7 🔨 |
 
 ⛔ = blokirano. Faza 8B čeka OANDA praktični token; ništa drugo ne fali.
-🔨 = u toku. Faza 10, Koraci 0–2 su gotovi; Koraci 3–7 predstoje.
+🔨 = u toku. Faza 10, Koraci 0–3 su gotovi; Koraci 4–7 predstoje.
 
 ## Faza 10 — izvršavanje render sloja
 
@@ -869,7 +869,7 @@ sve dobitnici, sve gubitnici, sve breakeven, samo otvorene) prelaze iz `lib/` te
 | 0 | Harness: jsdom, testing-library, shim-ovi, `server-only` alias, podela na dva vitest projekta | ✅ |
 | 1 | Dashboard: knjiga na ekranu + šest oblika | ✅ |
 | 2 | Dashboard kontrole: period / nalog / osnova mere isti prozor (`P1`) | ✅ |
-| 3 | Čiste prezentacione komponente, uključujući `markdown-view` | |
+| 3 | Čiste prezentacione komponente, uključujući `markdown-view` | ✅ |
 | 4 | `journal-grid` | |
 | 5 | Forme: `trade-form`, `daily-report-form`, `tracker-checklist` | |
 | 6 | `import-wizard` — odbijene ćelije na ekranu | |

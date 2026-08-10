@@ -198,7 +198,15 @@ export function PeriodPerformanceCard({
       <CardContent>
         <Row
           label="Win %"
-          value={fmtPct(summary.winPct)}
+          // `summary.winPct` is 0, not null, when nothing was decided (all
+          // periods flat) — same contract as trade win rate, same guard as
+          // `day-stats-card.tsx` and the Dashboard KPI tile (`W1`). This card
+          // shared the underlying `summary` with that tile but read the
+          // number directly, so it kept showing "0.0%" here after `W1` fixed
+          // the tile.
+          value={
+            summary.winning + summary.losing === 0 ? "—" : fmtPct(summary.winPct)
+          }
           cls={summary.winPct >= 50 ? "text-[var(--profit)]" : undefined}
           hint="Udeo perioda sa pozitivnim ukupnim P&L-om. Ravni periodi su van imenioca."
         />

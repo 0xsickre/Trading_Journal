@@ -2483,3 +2483,81 @@ reasoning recorded above.
 fractionally (90.18 → 90.26): the net/gross controls test exercises `analytics.ts` branches no
 earlier test reached with `mode: "gross"` on a mixed-sign book. All four floors still clear. Lint 1
 warning, build green (12 routes), `tsc` clean, `knip` zero in own code.
+
+---
+
+## Step 3 — fourteen presentational components, real lib output on screen
+
+The plan's Tier 3: components that render props they did not compute, named cheap because they
+were expected to just format a value. Twelve new render-test files, one per component or tight
+cluster (`heatmap-grid.tsx` + its two callers share one file, `metrics-panel.tsx`'s four cards
+share another). Wherever a real library function exists to produce the prop — `runReport`,
+`runPivot`, `summarizeReport`, `summarizePeriods`, `computeStats`, `computeCostStats`,
+`computeStreak`, `meanCompliance`, `daysOnActiveGoal` — the test calls it, continuing step 1's
+"papir → lib → ekran" bridge instead of hand-typing a plausible-looking prop object. Two of the
+fourteen turned up real, previously undiscovered defects.
+
+### W2 (Medium) — `PeriodPerformanceCard`'s Win % repeated W1 at a second call site
+
+`dashboard.tsx` renders `PeriodPerformanceCard` twice — "Nedeljni učinak" and "Mesečni učinak" —
+fed by the exact same `weekly`/`monthly` `PeriodSummary` objects step 1's `W1` fix already guards
+at the KPI tile. `metrics-panel.tsx`'s card reads `summary.winPct` directly, without that guard: an
+all-flat book (every week breakeven) rendered `"0.0%"` here even after `W1` fixed the tile sitting
+right above it on the same page. Same root cause as `W1` — `winPct` is `0`, not `null`, when
+`winning + losing === 0` — same fix, applied where it was still missing:
+`summary.winning + summary.losing === 0 ? "—" : fmtPct(summary.winPct)`. Proven with a real
+`summarizePeriods([...])` call on an all-flat input, not a hand-built summary object, so the test
+fails if the library's own contract ever changes shape.
+
+### W3 (Medium, privacy) — `PerformanceSummaryPanel`'s win-rate tile ignored `viewMode` entirely
+
+Flagged as a suspicion in the phase plan (`reports/performance-summary.tsx:75`) and confirmed here.
+Three of the panel's four tiles — Najbolji, Najgori, Najaktivniji — are formatted through
+`formatMetric(metric(...), viewMode)`, the same path every other number in Reports uses, which masks
+under `viewMode: "privacy"`. The fourth, "Najviši win rate", used a raw `` `${...toFixed(1)}%` `` that
+never looked at `viewMode` at all. In privacy mode the other three tiles correctly showed `•••`
+while this one kept printing the real percentage — a privacy setting that silently exempted one
+number from itself. `FIXED`: routed through the same `formatMetric(metric(v, "pct", {currency,
+equityBase}), viewMode)` call the rest of the panel uses. Proven by rendering the SAME
+`summarizeReport()` output in `"dollars"` mode (real percentage shows) and `"privacy"` mode (no `%`
+anywhere on the card, not even masked-but-present) — the regression this closes is specifically a
+number surviving where masking should have applied.
+
+### Security-relevant: `markdown-view.tsx`'s href allowlist, re-proven at the DOM
+
+`notes/markdown.ts`'s scheme allowlist is already proven in isolation; this step proves the one
+thing a lib test cannot — that a rejected scheme (`javascript:`, `data:`) never reaches the DOM as
+a clickable `<a>`. Confirmed: the rejected link's raw markdown source renders as plain text (not
+just the label — the parser keeps the whole `[text](href)` token, so the reader sees exactly what
+they typed rather than a silently truncated sentence), and literal `<img onerror=...>` typed into a
+note renders as escaped text, never as a live element — there is no `dangerouslySetInnerHTML`
+anywhere in the renderer and this step is the regression guard for that fact staying true.
+
+### Two more of the fourteen, without their own findings
+
+- `heatmap-grid.tsx` — re-proves the class of bug the file's own doc comment names (the grid used
+  to end at a BROWSER-local `new Date()` instead of the account-zone `endDay` prop). The render test
+  anchors two windows a week apart on identical weekdays and confirms only `endDay` moves the grid.
+- `day-stats-card.tsx` — already carried the `W1`-class guard (`stats.wins + stats.losses === 0`)
+  before this round; the render test exists to hold that guard in place, not to fix anything.
+
+### Outcome
+
+`FIXED` — `W2` (`metrics-panel.tsx`), `W3` (`reports/performance-summary.tsx`, privacy leak).
+Fourteen components now have render tests: `heatmap-grid.tsx`, `calendar-heatmap.tsx`,
+`compliance-heatmap.tsx`, `markdown-view.tsx`, `insights-panel.tsx`, `metrics-panel.tsx` (four
+cards), `day-stats-card.tsx`, `ftmo-banner.tsx`, `reports/report-table.tsx`,
+`reports/cross-analysis.tsx`, `reports/performance-summary.tsx`, `chart-shell.tsx`,
+`tracker-streak-card.tsx`, `focus-goal-card.tsx`.
+
+`next/navigation`'s `useRouter()` throws without an `AppRouterContext` in jsdom — hit on
+`ftmo-banner.tsx` and `focus-goal-card.tsx`, both of which call it only inside a click handler this
+step does not exercise. Mocked per-file (`vi.mock("next/navigation", ...)`) rather than in the
+shared harness, so a later step that DOES need to assert on a router call is free to mock it
+differently.
+
+1029 tests / 70 files (977 → 1029). Coverage **95.50 / 90.39 / 96.49 / 96.58** — every floor moved
+up, not just held: the new tests reach `reports/engine.ts`, `reports/pivot.ts`, `period-stats.ts`
+and `ftmo.ts` through paths no earlier test exercised (privacy-mode formatting, all-flat period
+summaries, a full FTMO breach/pass/active render cycle). Lint 1 warning, build green (12 routes),
+`tsc` clean, `knip` zero in own code.

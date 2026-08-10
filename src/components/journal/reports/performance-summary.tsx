@@ -70,10 +70,17 @@ export function PerformanceSummaryPanel({
     {
       label: "Najviši win rate",
       bucket: summary.highestWinRate?.bucket,
-      value:
-        summary.highestWinRate?.values.win_rate != null
-          ? `${summary.highestWinRate.values.win_rate.toFixed(1)}%`
-          : "—",
+      // Routed through `formatMetric` like every other value in this panel —
+      // a raw `.toFixed(1)` here used to ignore `viewMode` entirely, which
+      // meant privacy mode masked every other tile but still leaked the win
+      // rate in the clear.
+      value: formatMetric(
+        metric(summary.highestWinRate?.values.win_rate ?? null, "pct", {
+          currency,
+          equityBase,
+        }),
+        viewMode,
+      ),
       n: summary.highestWinRate?.n,
       cls: "",
     },
