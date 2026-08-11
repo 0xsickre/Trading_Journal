@@ -40,7 +40,7 @@ import {
   fmtSlippagePts,
   fmtSlippageR,
 } from "@/lib/journal/entry-slippage";
-import { fmtExitEfficiencyPct, parsePlannedRewardR } from "@/lib/journal/exit-efficiency";
+import { exitEfficiencyFromTrade, fmtExitEfficiencyPct } from "@/lib/journal/exit-efficiency";
 import { excursionFromTrade } from "@/lib/journal/excursion";
 import { fmtMoney, fmtR, pnlClass } from "@/lib/journal/format";
 import {
@@ -424,20 +424,24 @@ export function TradeForm({
       pointValue,
     });
 
-    let targetAttainment: {
-      plannedRewardR: number;
-      realizedR: number;
-      pct: number;
-    } | null = null;
-    const plannedReward =
-      plannedRR ?? parsePlannedRewardR(String(fields.planned_rr ?? ""));
-    if (r != null && plannedReward != null && plannedReward > 0) {
-      targetAttainment = {
-        plannedRewardR: plannedReward,
-        realizedR: r,
-        pct: (r / plannedReward) * 100,
-      };
-    }
+    // Same function the grid's "Target %" column and the mentor export read —
+    // this used to be a second copy with two divergences from it: no floor on
+    // a near-zero planned reward (a stray 0.01 R target could blow the shown
+    // percentage into the thousands, where `exitEfficiencyFromTrade` would
+    // have shown "—"), and the WRONG precedence between stored and live —
+    // it preferred the price fields' live-computed plan over the stored
+    // `planned_rr`, so editing `target_price` after a trade went active
+    // silently moved its own grading baseline instead of grading against the
+    // plan as it stood when the trade was taken (see `plannedRewardFromTrade`
+    // in `exit-efficiency.ts` for why stored wins on purpose).
+    const targetAttainment = exitEfficiencyFromTrade({
+      planned_rr: fields.planned_rr,
+      direction: dir || null,
+      entry_price: pe,
+      stop_price: stop,
+      target_price: pt,
+      stats: { realized_r: r },
+    } as unknown as TradeRow);
 
     return {
       avgEntry,

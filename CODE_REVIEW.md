@@ -2622,3 +2622,104 @@ not `findByText`, in any component test that fires a toast).
 1042 tests / 71 files (1029 → 1042). Coverage **95.54 / 90.39 / 96.49 / 96.62** — statements and
 lines ticked up on the export and outcome-filter paths. Lint 1 warning, build green (12 routes),
 `tsc` clean, `knip` zero in own code.
+
+---
+
+## Step 5 — forms
+
+`trade-form.tsx` (1605 lines — the largest file in the app after `dashboard.tsx`),
+`daily-report-form.tsx`, `tracker-checklist.tsx`. The plan named two specific candidates in
+`trade-form.tsx` in advance; one was real, the other checked out as a duplicate that happens to
+always agree. Both the fact that they existed and the fact that they resolved differently is the
+argument for reading and testing every one of these, not for trusting the pattern.
+
+### W4 (Medium) — Target attainment: a second implementation, looser and with the wrong precedence
+
+`trade-form.tsx:427-440` computed "Target attainment" inline instead of calling
+`exitEfficiencyFromTrade` — the same function the grid's "Target %" column and the mentor export
+both read. Two divergences from it, found by comparing the two side by side and confirmed by a
+render test built to reproduce each:
+
+- **No floor.** `exitEfficiencyFromTrade` refuses to grade against a planned reward under
+  `MIN_PLANNED_REWARD_R` (0.1R) — a data-entry near-zero would otherwise make the percentage
+  explode. The form's inline version guarded only `plannedReward > 0`, so a stored `1:0.05` planned
+  reward next to a 2R realized result would have shown `4000%` instead of the library's `—`.
+- **Wrong precedence.** `plannedRewardFromTrade`'s own comment says *why* the stored `planned_rr`
+  must win over a live recompute from the price fields once a trade has left `planned`: editing
+  `target_price` after the fact must not let a trader quietly move their own grading baseline. The
+  form's inline version did the opposite — `plannedRR ?? parsePlannedRewardR(fields.planned_rr)`
+  always preferred the LIVE value. Reproduced directly: entry 100 / stop 90 / target 200 implies a
+  live reward of 10R, while the trade's actual stored plan was `1:2`; the on-screen badge showed
+  10R's percentage instead of the 2R that was really being graded.
+
+`FIXED` by deleting the duplicate and calling `exitEfficiencyFromTrade` with a small synthetic
+`TradeRow` — the same pattern already used one block above it for `excursionFromTrade` ("Same
+implementation the dashboard aggregates over — this used to be a second copy of the geometry living
+only in the form"). One function, one floor, one precedence, for every screen that shows this
+number.
+
+### Checked and rejected — `grossPl − metrics.netPl` vs. `metrics.fees`
+
+The plan's other suspicion (`:1024`, now the "Gross → Net" tile) turned out to be algebraically
+guaranteed, not a duplicate that can drift: `position-stats.ts` defines
+`net_pl = gross_pl − total_fees − total_swap`, so `grossPl − netPl` and `totalFees + totalSwap`
+are the same expression rearranged, not two independent computations that happen to agree today.
+Not fixed — there is nothing to fix — but given its own test asserting the two render identically,
+so a future change to `position-stats.ts`'s definition would be caught here rather than assumed.
+
+### Lifecycle button gating — regression guard for a bug this file already had once
+
+Commit `dd5a079` (round 3-era) fixed exactly this class of defect: "Mark as missed" used to be
+offered on an unsaved trade and then refuse on click, because `markTradeMissed` needs a saved row.
+"A button that is shown and cannot work is worse than no button." Five render tests now hold the
+current gating in place: an unsaved trade shows none of the three lifecycle buttons; a saved
+`planned` trade with no fills offers Move-to-active and Mark-missed but not Restore; a trade with a
+valid entry fill is already active and offers none of the three (the render-time phase promotion —
+`hasValidEntryFill && tradePhase !== "active"` — is itself covered); a `missed` trade offers only
+Restore; and clicking Mark-missed in the one state that shows it is confirmed to actually call
+`markTradeMissed`, not just render.
+
+FTMO freeze is covered the same way: a new trade on a frozen account has its Save button
+`disabled`, not merely warned against on click — confirmed by asserting `toBeDisabled()` and that a
+click on a disabled button reaches neither `createTrade` nor a toast. Editing an *already-saved*
+trade on the same frozen account stays enabled, matching `ftmoBlocked`'s `!initial` guard — freezing
+blocks new risk, not a correction to something already on the books.
+
+### Day locking — `tracker-checklist.tsx` and `daily-report-form.tsx` together
+
+The plan's stated goal for this step: "da zaključan dan zaista onemogući čekiranje." Proven at two
+levels. In `tracker-checklist.tsx` alone: a locked `ManualRow` renders a read-only `Badge`, not a
+disabled button — the interactive control is *absent*, not present-but-inert, which matters because
+a disabled-but-visible checkbox reads as "you could check this if you tried harder." In
+`daily-report-form.tsx`, embedding the same component: a locked day's `<fieldset disabled>` cascade
+reaches all the way through to that same embedded tracker row, confirmed by asserting the badge
+appears two component boundaries away from the prop that set it. Save and Zaključaj buttons are
+removed entirely (not disabled) and replaced by "Dan je zaključan" text. The lock flow's own
+ordering — save the report, then lock, abort the lock if the save fails — is confirmed by call
+order, not just by both mocks having fired.
+
+### A coverage gap the render layer surfaced, not introduced
+
+`trade-form-prefs.ts` had no test before this step and had never appeared in any coverage report —
+`exclude`-based coverage only measures files a test actually reaches, and nothing had ever imported
+this module. `trade-form.render.test.tsx` finally pulled it in transitively, which surfaced it with
+real but partial coverage and pulled the aggregate down (95.54 → 95.23 before the fix below) instead
+of up, the mirror image of step 1's C1 coverage-scope note. Closed properly rather than left as an
+accidental side effect: the module is `typeof window === "undefined"`-guarded for SSR, so its tests
+split across both projects on purpose — `trade-form-prefs.test.ts` (`lib`, `environment: "node"`)
+tests the SSR no-window branches for real, since that environment genuinely has no `window`, and
+`trade-form-prefs.render.test.tsx` (`components`, jsdom) tests the real `localStorage` round trip,
+merge, malformed-JSON recovery, and quota-failure paths — one module, one behaviour, tested in
+whichever environment actually reproduces it.
+
+### Outcome
+
+`FIXED` — `W4`, target attainment's floor and precedence, by deleting the duplicate in favour of
+the tested library function. **Checked, not fixed** — `grossPl − netPl` vs. `fees`, verified
+algebraically identical, insured with a test. Lifecycle gating, FTMO freeze, and day-lock cascade
+all confirmed correct under real renders and real clicks — no defect, but each now has a regression
+test where none existed. One coverage gap (`trade-form-prefs.ts`) found and closed with its own
+tests rather than left as a number.
+
+1079 tests / 76 files (1042 → 1079). Coverage **95.56 / 90.49 / 96.51 / 96.64** — every floor above
+where step 4 left it. Lint 1 warning, build green (12 routes), `tsc` clean, `knip` zero in own code.
