@@ -2561,3 +2561,64 @@ up, not just held: the new tests reach `reports/engine.ts`, `reports/pivot.ts`, 
 and `ftmo.ts` through paths no earlier test exercised (privacy-mode formatting, all-flat period
 summaries, a full FTMO breach/pass/active render cycle). Lint 1 warning, build green (12 routes),
 `tsc` clean, `knip` zero in own code.
+
+---
+
+## Step 4 — journal-grid
+
+The plan's #3 Tier 1 risk: a row computation living in BOTH `accessorFn` (what TanStack sorts on)
+and the cell renderer (what the reader sees) — two places the same number has to agree, with
+nothing in the type system forcing them to. `journal-grid.render.test.tsx`, 13 tests.
+
+**Breakeven classification, per account.** The plan's own stated goal for this step —
+"breakeven klasifikacija u redu" — proven directly: the same −$30 net renders as a **loss** on an
+account with no breakeven band and as **breakeven** on an account whose band reaches −$50, filtered
+through the "Ishod" (outcome) dropdown. `outcomeOf()` reads each row's OWN account's
+`resolveBreakevenRange`, not a single global band; collapsing the two would have put both trades on
+the same side of the filter, and the render test is what would have caught it.
+
+**Sorting** — clicking the "Net" header sorts ascending on `stats.net_pl`, the exact value TanStack
+reads from `accessorFn`, matching the value the cell itself renders.
+
+**Search** — matches instrument case-insensitively, confirmed against the exact three fields the
+component searches (`instrument`, notes, tags) and not, e.g., the trade id or status.
+
+**The column picker never empties the grid.** `MIN_VISIBLE_COLUMNS = 1` is already proven in
+isolation in `column-prefs.test.ts`; this step proves the render layer HOLDS that rule live: with
+every hideable column but one already off, that last column's checkbox renders `aria-disabled`, and
+clicking it anyway calls neither `setJournalHiddenColumns` nor changes the DOM — the "Net" header
+is still there afterward. Also covered: the optimistic hide (column disappears before the save
+resolves) and the revert-on-failure path (`setJournalHiddenColumns` rejects → the column reappears
+and an error toast fires).
+
+**Export** — both dynamic-import branches, `import("papaparse")` and `import("xlsx")`, exercised
+with mocked modules so the test asserts on the actual row shape reaching each library (`Net P/L`
+present and correct) rather than on file-download side effects jsdom can't observe anyway. The
+empty-filtered-set guard (`toast.error("Nothing to export")`) is confirmed as a real early return,
+not just a message that happens to exist in the source.
+
+**Row actions and navigation** — clicking a row pushes to `/trades/{id}/edit`; clicking inside the
+row's action menu does not also trigger that navigation (`stopPropagation` on the actions cell,
+confirmed by asserting `router.push` was NOT called after opening the menu). `deleteTrade` /
+`activateTrade` are mocked at the module boundary (they are real Server Actions, correctly out of
+scope for a render test) and asserted as called with the right id, with `router.refresh()` following
+a successful delete. "Move to active" is confirmed absent for anything but a `planned` trade.
+
+**Toast assertions needed their own fix.** `<Toaster/>` lives in the root layout, which none of
+these render tests mount — a real `toast.error(...)` call has literally nowhere to paint text into,
+so `screen.findByText(...)` on a toast message can never pass here regardless of whether the call
+happened. Fixed by mocking `sonner` at the module boundary and asserting on the call
+(`toastErrorMock`) instead of DOM output — the same category of harness fix as step 2's
+`userEvent`/fake-timers issue, recorded here so a later step doesn't waste time chasing the same
+dead end.
+
+### Outcome
+
+No production defect found — the grid's dual-path computation (`accessorFn` vs. cell), its
+per-account breakeven classification, and `MIN_VISIBLE_COLUMNS` all hold under a real render, a
+real click, and a real (mocked) export. One test-harness lesson recorded (`sonner` needs mocking,
+not `findByText`, in any component test that fires a toast).
+
+1042 tests / 71 files (1029 → 1042). Coverage **95.54 / 90.39 / 96.49 / 96.62** — statements and
+lines ticked up on the export and outcome-filter paths. Lint 1 warning, build green (12 routes),
+`tsc` clean, `knip` zero in own code.
