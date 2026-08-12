@@ -848,7 +848,7 @@ ovaj model ima strukturno.
 | 10 | Izvršavanje render sloja — jsdom + testing-library | Ne | 5–7 🔨 |
 
 ⛔ = blokirano. Faza 8B čeka OANDA praktični token; ništa drugo ne fali.
-🔨 = u toku. Faza 10, Koraci 0–5 su gotovi; Koraci 6–7 predstoje.
+🔨 = u toku. Faza 10, Koraci 0–6 su gotovi; Korak 7 predstoji.
 
 ## Faza 10 — izvršavanje render sloja
 
@@ -872,7 +872,7 @@ sve dobitnici, sve gubitnici, sve breakeven, samo otvorene) prelaze iz `lib/` te
 | 3 | Čiste prezentacione komponente, uključujući `markdown-view` | ✅ |
 | 4 | `journal-grid` | ✅ |
 | 5 | Forme: `trade-form`, `daily-report-form`, `tracker-checklist` | ✅ |
-| 6 | `import-wizard` — odbijene ćelije na ekranu | |
+| 6 | `import-wizard` — odbijene ćelije na ekranu | ✅ |
 | 7 | Dokumentacija i izmereni podovi za render sloj | |
 
 **Rangiranje po riziku** (izmereno, 43 fajla). Tier 1 — računa sam i ima stanje koje to menja:

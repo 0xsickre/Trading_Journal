@@ -2723,3 +2723,55 @@ tests rather than left as a number.
 
 1079 tests / 76 files (1042 → 1079). Coverage **95.56 / 90.49 / 96.51 / 96.64** — every floor above
 where step 4 left it. Lint 1 warning, build green (12 routes), `tsc` clean, `knip` zero in own code.
+
+---
+
+## Step 6 — import-wizard
+
+The plan's own stated goal, verbatim: "Odbijene ćelije (`nečitljivo: qty, fee`) na ekranu,
+klasifikacija create/merge/skip, i da se dvosmislen datum i `1,234` vide kao odbijeni a ne kao
+pogođeni." `parseImportNumber` and `parseImportTime` are already proven in isolation — both refuse
+ambiguous input rather than guess at it, by design, per their own doc comments. What round 3 could
+not prove is that a refused cell actually reaches the screen as refused, instead of the wizard
+quietly substituting `0` or `null` and moving on. `import-wizard.render.test.tsx`, 9 tests, real
+CSV text through the real dynamic `import("papaparse")` path — no mocked parser.
+
+**The core claim, proven directly.** A row with qty `"1,234"` (ambiguous — 1234 to a US broker,
+1.234 to a German one) and entry time `"02/03/2026 10:00"` (ambiguous — 2 March or 3 February,
+nothing in the string says which) renders `nečitljivo: qty, entry time` in the row's Differences
+column, exactly as the source comments describe. A clean, unambiguous row of the same shape shows
+no rejected cells at all and classifies as `new`/`create` — the negative control, so the first
+result isn't just "everything shows *something* here."
+
+**The exit-time fallback, regression-guarded.** `exitAt = exitTime ?? entryTime`, never
+`new Date()` — this was `import-wizard.tsx`'s own worst line before round 3 fixed it ("a row from
+three months ago closed today, with nothing on screen to say the date was invented"). A row dated
+2020 with no exit-time column commits with its exit execution stamped to the SAME 2020 entry
+instant, confirmed by inspecting the actual `commitImport` payload rather than trusting the source
+comment — a regression back to `new Date()` would be unmistakable against a 2020 fixture on a 2026
+test run.
+
+**Classification**, against a small `candidates` fixture: an exact repeat (same instrument,
+direction, price, and time within the matcher's tolerance) reads `duplicate`, defaults to `skip`;
+a matching position whose exit price differs reads `match`, defaults to `merge`, and names the
+difference (`exit 2,100→2,050`); an instrument with nothing to match against has its `Merge` option
+`aria-disabled` in that row's own decision `Select` — there is genuinely nothing to merge into, not
+merely an unlikely choice. The decision is confirmed overridable per row (`create` → `skip`), and
+the override is confirmed to reach the actual `commitImport` call, not just the visible `Select`.
+
+**Guards.** The required-column check (`Map a column for "direction"`) blocks reconciling with a
+missing mapping — confirmed by absence of the review table afterward, not just the toast. Partial
+commit failure names the row and reason (`row 1 (EURUSD): missing account`) instead of a bare
+`"1 row(s) failed"`.
+
+### Outcome
+
+No production defect found — `parseImportNumber`'s and `parseImportTime`'s refusals, the
+`exitAt ?? entryTime` fallback (the round-3 fix this step exists to re-prove), and the
+create/merge/skip classification all hold under a real render with real CSV parsing. Nine tests now
+guard exactly the four things the plan named for this step in advance.
+
+1088 tests / 77 files (1079 → 1088). Coverage **95.56 / 90.53 / 96.51 / 96.64** — branches ticked up
+on `import-number.ts`'s and `time.ts`'s ambiguous-input paths, reached here through a real parse
+instead of only through their own unit tests. Lint 1 warning, build green (12 routes), `tsc` clean,
+`knip` zero in own code.
