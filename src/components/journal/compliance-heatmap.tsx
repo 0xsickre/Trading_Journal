@@ -52,7 +52,7 @@ export function ComplianceHeatmap({
       }}
       title={(c) => {
         const d = byDay.get(c.key);
-        if (!d || d.pct == null) return `${c.key}: nema pravila`;
+        if (!d || d.pct == null) return `${c.key}: no rules`;
         return `${c.key}: ${Math.round(d.pct)}% (${d.satisfied}/${d.applicable})`;
       }}
     />

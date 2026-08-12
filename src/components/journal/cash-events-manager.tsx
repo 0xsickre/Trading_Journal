@@ -25,10 +25,10 @@ import {
 } from "@/app/(app)/settings/actions";
 
 const TYPES: { value: CashEventType; label: string; hint: string }[] = [
-  { value: "deposit", label: "Uplata", hint: "Novac ušao na nalog" },
-  { value: "withdrawal", label: "Isplata", hint: "Novac izašao sa naloga" },
+  { value: "deposit", label: "Deposit", hint: "Money came into the account" },
+  { value: "withdrawal", label: "Withdrawal", hint: "Money left the account" },
   { value: "payout", label: "Payout", hint: "Prop-firm isplata profita" },
-  { value: "adjustment", label: "Korekcija", hint: "Ručna ispravka balansa" },
+  { value: "adjustment", label: "Adjustment", hint: "Manual balance correction" },
 ];
 
 const todayLocal = () => new Date().toISOString().slice(0, 10);
@@ -58,7 +58,7 @@ export function CashEventsManager({
   function submit() {
     const magnitude = Number(amount);
     if (!Number.isFinite(magnitude) || magnitude === 0) {
-      toast.error("Unesi iznos različit od nule.");
+      toast.error("Enter an amount other than zero.");
       return;
     }
     start(async () => {
@@ -77,7 +77,7 @@ export function CashEventsManager({
       }
       setAmount("");
       setNote("");
-      toast.success("Zabeleženo");
+      toast.success("Recorded");
       router.refresh();
     });
   }
@@ -93,7 +93,7 @@ export function CashEventsManager({
   if (accounts.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Napravi nalog pre unosa uplata i isplata.
+        Create an account before recording deposits and withdrawals.
       </p>
     );
   }
@@ -102,7 +102,7 @@ export function CashEventsManager({
     <div className="space-y-4">
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Nova stavka</CardTitle>
+          <CardTitle className="text-base">New entry</CardTitle>
           <p className="text-sm text-muted-foreground">
             Uplate i isplate ne ulaze u P&amp;L. One pomeraju balans, pa time i
             svaki procentualni pogled — drawdown u <strong>$</strong> ostaje isti,
@@ -111,7 +111,7 @@ export function CashEventsManager({
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-1.5">
-            <Label className="text-xs">Nalog</Label>
+            <Label className="text-xs">Account</Label>
             <Select value={accountId} onValueChange={setAccountId}>
               <SelectTrigger>
                 <SelectValue />
@@ -170,7 +170,7 @@ export function CashEventsManager({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">Beleška</Label>
+            <Label className="text-xs">Note</Label>
             <Input
               value={note}
               placeholder="Opciono"
@@ -180,7 +180,7 @@ export function CashEventsManager({
 
           <div className="sm:col-span-2 lg:col-span-5">
             <Button disabled={pending} onClick={submit}>
-              <Plus className="size-4" /> Dodaj
+              <Plus className="size-4" /> Add
             </Button>
           </div>
         </CardContent>
@@ -188,7 +188,7 @@ export function CashEventsManager({
 
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-3">
-          <CardTitle className="text-base">Istorija</CardTitle>
+          <CardTitle className="text-base">History</CardTitle>
           <span className="text-sm text-muted-foreground">
             Neto tok: {fmtMoney(netCashFlow(events), currency, { sign: true })}
           </span>
@@ -196,7 +196,7 @@ export function CashEventsManager({
         <CardContent>
           {events.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Još nema uplata ni isplata.
+              No deposits or withdrawals yet.
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -207,7 +207,7 @@ export function CashEventsManager({
                     <th className="py-2 text-left font-medium">Nalog</th>
                     <th className="py-2 text-left font-medium">Tip</th>
                     <th className="py-2 text-right font-medium">Iznos</th>
-                    <th className="py-2 text-left font-medium">Beleška</th>
+                    <th className="py-2 text-left font-medium">Note</th>
                     <th className="py-2" />
                   </tr>
                 </thead>
@@ -240,7 +240,7 @@ export function CashEventsManager({
                             size="sm"
                             disabled={pending}
                             onClick={() => remove(e.id)}
-                            aria-label="Obriši"
+                            aria-label="Delete"
                           >
                             <Trash2 className="size-4" />
                           </Button>

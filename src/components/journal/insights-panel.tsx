@@ -9,10 +9,10 @@ import type { RunResult } from "@/lib/journal/insights/registry";
 import { OMITTED_RULES } from "@/lib/journal/insights/registry";
 
 const SEVERITY_LABEL: Record<InsightSeverity, string> = {
-  critical: "Kritično",
-  warning: "Pažnja",
-  info: "Zapažanje",
-  good: "Dobro",
+  critical: "Critical",
+  warning: "Warning",
+  info: "Observation",
+  good: "Good",
 };
 
 const SEVERITY_CLASS: Record<InsightSeverity, string> = {
@@ -55,7 +55,7 @@ export function InsightsPanel({ result }: { result: RunResult }) {
     <Card>
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-base">Automatska zapažanja</CardTitle>
+          <CardTitle className="text-base">Automated insights</CardTitle>
           <div className="flex flex-wrap gap-1.5">
             {(["critical", "warning", "info", "good"] as const)
               .filter((s) => counts[s] > 0)
@@ -70,15 +70,15 @@ export function InsightsPanel({ result }: { result: RunResult }) {
           </div>
         </div>
         <p className="text-sm text-muted-foreground">
-          Deterministička pravila nad postojećim podacima — nema modela, nema
-          nagađanja. Pravilo koje nema dovoljan uzorak se ne pokreće.
+          Deterministic rules over the data already here — no model, no guessing.
+          A rule without a large enough sample does not run.
         </p>
       </CardHeader>
 
       <CardContent className="space-y-2">
         {groups.length === 0 ? (
           <p className="py-4 text-sm text-muted-foreground">
-            Nijedan obrazac nije okinuo u izabranom periodu.
+            No pattern fired in the selected period.
           </p>
         ) : (
           groups.map((g) => {
@@ -120,7 +120,7 @@ export function InsightsPanel({ result }: { result: RunResult }) {
                         <span>{i.detail}</span>
                         {i.sample != null && (
                           <span className="ml-1.5 text-xs text-muted-foreground">
-                            (uzorak {i.sample})
+                            (sample {i.sample})
                           </span>
                         )}
                       </div>
@@ -140,7 +140,7 @@ export function InsightsPanel({ result }: { result: RunResult }) {
               onClick={() => setShowSkipped((v) => !v)}
               className="h-7 px-2 text-xs text-muted-foreground"
             >
-              {showSkipped ? "Sakrij" : "Šta nije procenjeno"} (
+              {showSkipped ? "Hide" : "What was not assessed"} (
               {result.skipped.length + OMITTED_RULES.length})
             </Button>
 
@@ -148,11 +148,11 @@ export function InsightsPanel({ result }: { result: RunResult }) {
               <div className="mt-2 space-y-2 rounded-md border border-dashed p-3 text-xs text-muted-foreground">
                 {result.skipped.length > 0 && (
                   <div>
-                    <div className="mb-1 font-medium">Nedovoljan uzorak</div>
+                    <div className="mb-1 font-medium">Sample too small</div>
                     <ul className="space-y-0.5">
                       {result.skipped.map((s) => (
                         <li key={s.id}>
-                          <code>{s.id}</code> — traži {s.minSample}, ima{" "}
+                          <code>{s.id}</code> — needs {s.minSample}, has{" "}
                           {s.sample}
                         </li>
                       ))}
@@ -162,7 +162,7 @@ export function InsightsPanel({ result }: { result: RunResult }) {
                 {OMITTED_RULES.length > 0 && (
                   <div>
                     <div className="mb-1 font-medium">
-                      Svesno neimplementirano
+                      Deliberately not implemented
                     </div>
                     <ul className="space-y-1">
                       {OMITTED_RULES.map((o) => (

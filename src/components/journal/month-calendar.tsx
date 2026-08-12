@@ -25,7 +25,7 @@ import type { PeriodRow } from "@/lib/journal/period-stats";
 const METRICS = [
   { key: "net", label: "Net P&L" },
   { key: "r", label: "R" },
-  { key: "trades", label: "Broj trejdova" },
+  { key: "trades", label: "Trade count" },
   { key: "winrate", label: "Win rate" },
 ] as const;
 
@@ -60,26 +60,28 @@ function cellValue(
   }
 }
 
-const WEEKDAYS = ["Pon", "Uto", "Sre", "Čet", "Pet", "Sub", "Ned"];
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const MONTHS = [
-  "januar",
-  "februar",
-  "mart",
-  "april",
-  "maj",
-  "jun",
-  "jul",
-  "avgust",
-  "septembar",
-  "oktobar",
-  "novembar",
-  "decembar",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 function monthLabel(monthKey: string): string {
   const [y, m] = monthKey.split("-").map(Number);
-  return `${MONTHS[m - 1] ?? monthKey} ${y}.`;
+  // No trailing dot: that was the Serbian date convention, and "January 2026."
+  // reads as a typo in English.
+  return `${MONTHS[m - 1] ?? monthKey} ${y}`;
 }
 
 /**
@@ -135,7 +137,7 @@ export function MonthCalendar({
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="icon" className="size-8" asChild>
-            <Link href={`/calendar?month=${prev}`} aria-label="Prethodni mesec">
+            <Link href={`/calendar?month=${prev}`} aria-label="Previous month">
               <ChevronLeft className="size-4" />
             </Link>
           </Button>
@@ -152,14 +154,14 @@ export function MonthCalendar({
             <Link
               href={`/calendar?month=${atCurrent ? monthKey : next}`}
               aria-disabled={atCurrent}
-              aria-label="Sledeći mesec"
+              aria-label="Next month"
             >
               <ChevronRight className="size-4" />
             </Link>
           </Button>
           {monthKey !== currentMonth && (
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/calendar">Danas</Link>
+              <Link href="/calendar">Today</Link>
             </Button>
           )}
 
@@ -169,8 +171,8 @@ export function MonthCalendar({
             </span>
             <span className="text-muted-foreground">
               {byMonth?.trades ?? 0}{" "}
-              {byMonth?.trades === 1 ? "trejd" : "trejdova"} · {tradingDays}{" "}
-              {tradingDays === 1 ? "dan" : "dana"}
+              {byMonth?.trades === 1 ? "trade" : "trades"} · {tradingDays}{" "}
+              {tradingDays === 1 ? "day" : "days"}
             </span>
             <Select
               value={metric}
@@ -206,7 +208,7 @@ export function MonthCalendar({
                 </div>
               ))}
               <div className="px-1 text-center text-xs font-medium text-muted-foreground">
-                Nedelja
+                Week
               </div>
             </div>
 
@@ -236,10 +238,10 @@ export function MonthCalendar({
             never happen on a float that already carries fees. */}
         {hasBreakevenBand(breakevenRange) && (
           <p className="mt-3 text-xs text-muted-foreground">
-            Sivo = dan unutar breakeven opsega naloga (
-            {fmtMoney(breakevenRange.from, currency)} do{" "}
-            {fmtMoney(breakevenRange.to, currency)}), pa se ne broji ni kao
-            dobitak ni kao gubitak.
+            Grey = a day inside the account&apos;s breakeven range (
+            {fmtMoney(breakevenRange.from, currency)} to{" "}
+            {fmtMoney(breakevenRange.to, currency)}), so it counts as neither
+            a win nor a loss.
           </p>
         )}
       </CardContent>
@@ -298,7 +300,7 @@ function WeekRow({
               {logged && (
                 <NotebookPen
                   className="size-3 text-muted-foreground"
-                  aria-label="Dan ima dnevni izveštaj"
+                  aria-label="Day has a daily report"
                 />
               )}
             </div>
@@ -318,7 +320,7 @@ function WeekRow({
                 <div className="text-[11px] text-muted-foreground">
                   {metric === "trades"
                     ? fmtMoney(row.net, currency, { sign: true })
-                    : `${row.trades} ${row.trades === 1 ? "trejd" : "trejdova"}`}
+                    : `${row.trades} ${row.trades === 1 ? "trade" : "trades"}`}
                 </div>
               </>
             )}
@@ -342,7 +344,7 @@ function WeekRow({
               {cellValue(weekRow, metric, currency)}
             </div>
             <div className="text-[11px] text-muted-foreground">
-              {weekRow.trades} {weekRow.trades === 1 ? "trejd" : "trejdova"}
+              {weekRow.trades} {weekRow.trades === 1 ? "trade" : "trades"}
             </div>
           </>
         ) : (

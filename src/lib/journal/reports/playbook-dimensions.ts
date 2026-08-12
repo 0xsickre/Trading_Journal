@@ -63,7 +63,7 @@ export function applicableAnswers(
 export function playbookRuleDimension(rules: RuleLookup): Dimension {
   return {
     key: "playbook_rule",
-    label: "Pravilo iz playbook-a",
+    label: "Playbook rule",
     group: "process",
     multiValue: true,
     valueOf: (t) => {

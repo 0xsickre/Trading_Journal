@@ -17,11 +17,11 @@ describe("ChartShell — chrome around a chart, empty state takes priority", () 
 
   it("`empty` replaces the children entirely rather than rendering alongside them", () => {
     render(
-      <ChartShell title="Equity" empty={<p>Nema podataka</p>}>
+      <ChartShell title="Equity" empty={<p>No data</p>}>
         <div>chart body</div>
       </ChartShell>,
     );
-    expect(screen.getByText("Nema podataka")).toBeInTheDocument();
+    expect(screen.getByText("No data")).toBeInTheDocument();
     expect(screen.queryByText("chart body")).not.toBeInTheDocument();
   });
 });

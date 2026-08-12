@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
-import { sr } from "date-fns/locale";
 import {
   ArchiveRestore,
   Eye,
@@ -156,7 +155,7 @@ export function NoteEditor({
       {deleted && (
         <div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-4 py-2 print:hidden">
           <span className="text-sm text-muted-foreground">
-            Beleška je u korpi i ne može se menjati dok je ne vratiš.
+            This note is in the trash and cannot be edited until you restore it.
           </span>
           <div className="ml-auto flex gap-2">
             <Button
@@ -171,7 +170,7 @@ export function NoteEditor({
                 })
               }
             >
-              <ArchiveRestore className="mr-2 size-3.5" /> Vrati
+              <ArchiveRestore className="mr-2 size-3.5" /> Restore
             </Button>
             <Button
               size="sm"
@@ -185,7 +184,7 @@ export function NoteEditor({
                 })
               }
             >
-              <Trash2 className="mr-2 size-3.5" /> Obriši zauvek
+              <Trash2 className="mr-2 size-3.5" /> Delete forever
             </Button>
           </div>
         </div>
@@ -220,10 +219,10 @@ export function NoteEditor({
           disabled={deleted || pending}
         >
           <SelectTrigger className="h-8 w-44">
-            <SelectValue placeholder="Bez trejda" />
+            <SelectValue placeholder="No trade" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={UNFILED}>Bez trejda</SelectItem>
+            <SelectItem value={UNFILED}>No trade</SelectItem>
             {trades.map((t) => (
               <SelectItem key={t.id} value={t.id}>
                 {t.label}
@@ -246,15 +245,15 @@ export function NoteEditor({
             variant="ghost"
             size="sm"
             onClick={() => setPreview((p) => !p)}
-            title={preview ? "Nazad na pisanje" : "Pregled"}
+            title={preview ? "Back to writing" : "Preview"}
           >
             {preview ? (
               <>
-                <Pencil className="mr-1 size-3.5" /> Piši
+                <Pencil className="mr-1 size-3.5" /> Write
               </>
             ) : (
               <>
-                <Eye className="mr-1 size-3.5" /> Pregled
+                <Eye className="mr-1 size-3.5" /> Preview
               </>
             )}
           </Button>
@@ -266,10 +265,10 @@ export function NoteEditor({
             onClick={() =>
               patch(
                 { pinned: !note.pinned },
-                note.pinned ? "Otkačeno" : "Zakačeno na vrh",
+                note.pinned ? "Unpinned" : "Pinned to top",
               )
             }
-            aria-label={note.pinned ? "Otkači" : "Zakači"}
+            aria-label={note.pinned ? "Unpin" : "Pin"}
           >
             {note.pinned ? (
               <PinOff className="size-3.5" />
@@ -282,8 +281,8 @@ export function NoteEditor({
             size="icon"
             className="size-8"
             onClick={() => window.print()}
-            aria-label="Štampaj / sačuvaj kao PDF"
-            title="Štampaj — u dijalogu izaberi „Sačuvaj kao PDF”"
+            aria-label="Print / save as PDF"
+            title="Print — choose &quot;Save as PDF&quot; in the dialog"
           >
             <Printer className="size-3.5" />
           </Button>
@@ -298,13 +297,13 @@ export function NoteEditor({
                   const res = await deleteNote(note.id);
                   if (!res.ok) toast.error(res.error);
                   else {
-                    toast.success("Premešteno u korpu");
+                    toast.success("Moved to trash");
                     router.refresh();
                   }
                 })
               }
-              aria-label="Obriši"
-              title="Ide u korpu — ništa se ne gubi odmah."
+              aria-label="Delete"
+              title="Goes to the trash — nothing is lost immediately."
             >
               <Trash2 className="size-3.5" />
             </Button>
@@ -383,7 +382,7 @@ export function NoteEditor({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               disabled={deleted}
-              placeholder="Piši u markdown-u — ## naslov, - lista, **podebljano**…"
+              placeholder="Write in markdown — ## heading, - list, **bold**…"
               className="min-h-[24rem] resize-y font-mono text-sm leading-relaxed"
             />
           )}
@@ -398,12 +397,12 @@ export function NoteEditor({
 
       <div className="border-t px-4 py-1.5 text-xs text-muted-foreground print:hidden">
         {deleted
-          ? `Obrisano ${format(parseISO(note.deleted_at!), "d. MMM yyyy. HH:mm", { locale: sr })}`
+          ? `Deleted ${format(parseISO(note.deleted_at!), "d MMM yyyy, HH:mm")}`
           : dirty
-            ? "Čuvanje…"
+            ? "Saving…"
             : savedAt
-              ? `Sačuvano ${format(parseISO(savedAt), "d. MMM yyyy. HH:mm", { locale: sr })}`
-              : "Nije sačuvano"}
+              ? `Saved ${format(parseISO(savedAt), "d MMM yyyy, HH:mm")}`
+              : "Not saved"}
       </div>
     </div>
   );
@@ -415,10 +414,10 @@ export function NoteEmptyState({ onCreate }: { onCreate: () => void }) {
     <div className={cn("flex flex-1 items-center justify-center p-8")}>
       <div className="text-center">
         <p className="text-sm text-muted-foreground">
-          Izaberi belešku levo ili napravi novu.
+          Pick a note on the left, or create a new one.
         </p>
         <Button className="mt-3" onClick={onCreate}>
-          Nova beleška
+          New note
         </Button>
       </div>
     </div>

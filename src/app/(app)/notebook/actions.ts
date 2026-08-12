@@ -176,7 +176,7 @@ export async function updateNote(
   }
 
   if (Object.keys(next).length === 0)
-    return { ok: false, error: "Nema izmena." };
+    return { ok: false, error: "No changes." };
 
   const { data, error } = await supabase
     .from("tj_notes")
@@ -264,7 +264,7 @@ export async function createFolder(
     name: name.trim(),
     template_text: templateText ?? null,
   });
-  if (!parsed.success) return { ok: false, error: "Naziv ne može biti prazan." };
+  if (!parsed.success) return { ok: false, error: "The name cannot be empty." };
 
   const supabase = await createClient();
   const user = await getCurrentUser();
@@ -293,7 +293,7 @@ export async function createFolder(
       ok: false,
       // The UNIQUE (user_id, name) surfaces as 23505; the raw message names the
       // constraint, which tells the user nothing.
-      error: error.code === "23505" ? "Folder sa tim imenom već postoji." : error.message,
+      error: error.code === "23505" ? "A folder with that name already exists." : error.message,
     };
   revalidateNotes();
   return { ok: true, id: data.id };
@@ -306,7 +306,7 @@ export async function updateFolder(
   const next: FolderUpdate = {};
   if (patch.name !== undefined) {
     const name = patch.name.trim();
-    if (!name) return { ok: false, error: "Naziv ne može biti prazan." };
+    if (!name) return { ok: false, error: "The name cannot be empty." };
     next.name = name;
   }
   if (patch.template_text !== undefined)
@@ -319,7 +319,7 @@ export async function updateFolder(
   if (error)
     return {
       ok: false,
-      error: error.code === "23505" ? "Folder sa tim imenom već postoji." : error.message,
+      error: error.code === "23505" ? "A folder with that name already exists." : error.message,
     };
   revalidateNotes();
   return { ok: true };
@@ -358,7 +358,7 @@ export async function moveFolder(
     .select("id")
     .order("sort_order")
     .order("id");
-  if (!siblings) return { ok: false, error: "Greška pri čitanju." };
+  if (!siblings) return { ok: false, error: "Read failed." };
 
   const i = siblings.findIndex((s) => s.id === id);
   const j = i + direction;

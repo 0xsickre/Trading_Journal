@@ -49,8 +49,8 @@ const NUMERIC_FIELDS: Record<string, (t: EnrichedTrade) => number | null> = {
 export const NUMERIC_FIELD_LABELS: Record<string, string> = {
   r: "R-multiple",
   pnl: "P&L",
-  size: "Veličina pozicije",
-  duration_days: "Trajanje (dana)",
+  size: "Position size",
+  duration_days: "Duration (days)",
   mae_r: "MAE u R",
   mfe_r: "MFE u R",
 };

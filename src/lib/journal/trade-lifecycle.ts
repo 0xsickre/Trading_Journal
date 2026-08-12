@@ -125,13 +125,13 @@ export function formatLifecycleStatusLabel(status: string): string {
 export function lifecycleStatusHint(status: string): string {
   switch (status) {
     case "planned":
-      return "Plan trade — još nisi u poziciji.";
+      return "A planned trade — you are not in the position yet.";
     case "missed":
-      return "Setup propušten — nisi ušao.";
+      return "Setup missed — you never entered.";
     case "open":
       return "Aktivan trade.";
     case "partial":
-      return "Delimičan exit.";
+      return "Partial exit.";
     case "closed":
       return "Zatvoren trade.";
     default:

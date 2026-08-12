@@ -117,7 +117,7 @@ beforeEach(() => {
 });
 
 describe("a locked day disables everything, including the embedded tracker checklist", () => {
-  it("Save and Zaključaj dan are gone, replaced by 'Dan je zaključan'", () => {
+  it("Save and Lock day are gone, replaced by 'Day is locked'", () => {
     render(
       <DailyReportForm
         report={report({ locked_at: "2026-04-02T20:00:00Z" })}
@@ -128,9 +128,9 @@ describe("a locked day disables everything, including the embedded tracker check
         tracker={trackerData({ locked: true, answers: { r1: true } })}
       />,
     );
-    expect(screen.queryByRole("button", { name: /Sačuvaj izveštaj/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Zaključaj dan/ })).not.toBeInTheDocument();
-    expect(screen.getByText("Dan je zaključan")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Save report/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Lock day/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Day is locked")).toBeInTheDocument();
   });
 
   it("the day-grade buttons are genuinely disabled (fieldset cascade)", () => {
@@ -159,8 +159,8 @@ describe("a locked day disables everything, including the embedded tracker check
         tracker={trackerData({ locked: true, answers: { r1: true } })}
       />,
     );
-    expect(screen.getByText("ispunjeno")).toBeInTheDocument(); // the lock badge's own state text
-    expect(screen.queryByRole("button", { name: "Ispunjeno" })).not.toBeInTheDocument();
+    expect(screen.getByText("met")).toBeInTheDocument(); // the lock badge's own state text
+    expect(screen.queryByRole("button", { name: "Met" })).not.toBeInTheDocument();
   });
 
   it("an UNLOCKED day keeps every one of those controls live", () => {
@@ -175,13 +175,13 @@ describe("a locked day disables everything, including the embedded tracker check
       />,
     );
     expect(screen.getByRole("button", { name: "A" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: /Zaključaj dan/ })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Ispunjeno" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Lock day/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Met" })).toBeEnabled();
   });
 });
 
 describe("no-trade-day clears the impulse fields it hides", () => {
-  it("checking 'Dan bez trejdova' resets every impulse checkbox and hides that card", async () => {
+  it("checking 'No-trade day' resets every impulse checkbox and hides that card", async () => {
     const user = userEvent.setup({ delay: null });
     render(
       <DailyReportForm
@@ -193,11 +193,11 @@ describe("no-trade-day clears the impulse fields it hides", () => {
         tracker={trackerData()}
       />,
     );
-    expect(screen.getByText("Kontrola impulsa")).toBeInTheDocument();
+    expect(screen.getByText("Impulse control")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("checkbox", { name: /Dan bez trejdova/ }));
+    await user.click(screen.getByRole("checkbox", { name: /No-trade day/ }));
 
-    expect(screen.queryByText("Kontrola impulsa")).not.toBeInTheDocument();
+    expect(screen.queryByText("Impulse control")).not.toBeInTheDocument();
   });
 });
 
@@ -213,7 +213,7 @@ describe("the Friday card only shows up on a Friday", () => {
         tracker={trackerData({ reportDate: "2026-04-02" })}
       />,
     );
-    expect(screen.queryByText("Petak pravilo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Friday rule")).not.toBeInTheDocument();
 
     rerender(
       <DailyReportForm
@@ -225,7 +225,7 @@ describe("the Friday card only shows up on a Friday", () => {
         tracker={trackerData({ reportDate: "2026-04-03" })}
       />,
     );
-    expect(screen.getByText("Petak pravilo")).toBeInTheDocument();
+    expect(screen.getByText("Friday rule")).toBeInTheDocument();
   });
 });
 
@@ -252,8 +252,8 @@ describe("locking saves the report first, so it never seals empty text", () => {
         tracker={trackerData()}
       />,
     );
-    await user.click(screen.getByRole("button", { name: /Zaključaj dan/ }));
-    await user.click(screen.getByRole("button", { name: "Zaključaj" }));
+    await user.click(screen.getByRole("button", { name: /Lock day/ }));
+    await user.click(screen.getByRole("button", { name: "Lock" }));
 
     await vi.waitFor(() => expect(lockDayMock).toHaveBeenCalled());
     expect(order).toEqual(["save", "lock"]);
@@ -261,7 +261,7 @@ describe("locking saves the report first, so it never seals empty text", () => {
 
   it("aborts the lock when the save fails — nothing gets sealed", async () => {
     const user = userEvent.setup({ delay: null });
-    saveDailyReportMock.mockResolvedValue({ ok: false, error: "mreža je pukla" });
+    saveDailyReportMock.mockResolvedValue({ ok: false, error: "network failed" });
 
     render(
       <DailyReportForm
@@ -273,8 +273,8 @@ describe("locking saves the report first, so it never seals empty text", () => {
         tracker={trackerData()}
       />,
     );
-    await user.click(screen.getByRole("button", { name: /Zaključaj dan/ }));
-    await user.click(screen.getByRole("button", { name: "Zaključaj" }));
+    await user.click(screen.getByRole("button", { name: /Lock day/ }));
+    await user.click(screen.getByRole("button", { name: "Lock" }));
 
     await vi.waitFor(() => expect(saveDailyReportMock).toHaveBeenCalled());
     expect(lockDayMock).not.toHaveBeenCalled();

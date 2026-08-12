@@ -129,8 +129,11 @@ describe("the book, on screen — same figures the paper already proved", () => 
     renderDashboard(rowsOf(BOOK));
     expect(scoreHeadline()).toBe("64");
     // Ten trades: real, and thin — labelled so, with the count beside it.
-    expect(screen.getByText(/privremeno/)).toBeInTheDocument();
-    expect(screen.getByText(/10 trejda/)).toBeInTheDocument();
+    // Asserted as ONE string rather than two lookups: "10 trades" on its own
+    // now also matches the Hold time card's "10 trades with a known duration",
+    // and a query that matches two different facts proves neither. The Serbian
+    // "10 trejda" this replaced happened to be unique; the English is not.
+    expect(screen.getByText(/provisional · 10 trades/)).toBeInTheDocument();
   });
 });
 
@@ -153,7 +156,7 @@ describe("the shapes a book can take, on screen", () => {
     expect(statValue("Trades")).toBe("0");
     expect(statValue("Net P/L")).toBe("$0.00");
     expect(scoreHeadline()).toBe("—");
-    expect(screen.getByText(/još 5/)).toBeInTheDocument();
+    expect(screen.getByText(/5 more/)).toBeInTheDocument();
   });
 
   it("ONE WINNER — the score withholds rather than reading 100", () => {

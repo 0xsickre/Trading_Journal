@@ -578,7 +578,7 @@ export function TradeForm({
   function submit() {
     if (ftmoBlocked) {
       toast.error(
-        "FTMO nalog je zamrznut — pravilo prekršeno. Resetuj izazov u Settings.",
+        "The FTMO account is frozen — a rule was breached. Reset the challenge in Settings.",
       );
       return;
     }
@@ -657,7 +657,7 @@ export function TradeForm({
 
   function handleMarkMissed() {
     if (!initial?.id) {
-      toast.error("Sačuvaj plan pre označavanja miss-a.");
+      toast.error("Save the plan before marking it missed.");
       return;
     }
     start(async () => {
@@ -670,7 +670,7 @@ export function TradeForm({
         return;
       }
       setIsMissed(true);
-      toast.success("Trade označen kao miss");
+      toast.success("Trade marked as missed");
       router.refresh();
     });
   }
@@ -685,7 +685,7 @@ export function TradeForm({
       }
       setIsMissed(false);
       setTradePhase("planned");
-      toast.success("Vraćeno u planned");
+      toast.success("Restored to planned");
       router.refresh();
     });
   }
@@ -741,7 +741,7 @@ export function TradeForm({
               disabled={tab.id === "execution" && !executionUnlocked}
               title={
                 tab.id === "execution" && !executionUnlocked
-                  ? "Postavi Trade phase na Active ili Add Entry Fill."
+                  ? "Set Trade phase to Active, or use Add Entry Fill."
                   : undefined
               }
             >
@@ -755,8 +755,8 @@ export function TradeForm({
             {tab.id === "execution" && !executionUnlocked ? (
               <Card>
                 <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                  Postavi <b>Trade phase</b> na <b>Active</b> ili koristi{" "}
-                  <b>Add Entry Fill</b> na Plan tabu da loguješ izvršenje.
+                  Set <b>Trade phase</b> to <b>Active</b>, or use{" "}
+                  <b>Add Entry Fill</b> on the Plan tab to log execution.
                 </CardContent>
               </Card>
             ) : (
@@ -838,8 +838,8 @@ export function TradeForm({
                               // field just reads "—" and looks like the form
                               // failed, rather than saying what is missing.
                               position_size: fields.instrument
-                                ? `Nema point value za ${String(fields.instrument)} — dodaj instrument u Settings da bi se veličina pozicije računala.`
-                                : "Izaberi instrument da bi se veličina pozicije računala.",
+                                ? `No point value for ${String(fields.instrument)} — add the instrument in Settings so position size can be computed.`
+                                : "Pick an instrument so position size can be computed.",
                             }
                           : undefined
                       }
@@ -922,7 +922,7 @@ export function TradeForm({
                           disabled={pending}
                           onClick={handleMarkMissed}
                         >
-                          Označi kao miss
+                          Mark as missed
                         </Button>
                       )}
                       {showRestorePlanned && (
@@ -1034,8 +1034,8 @@ export function TradeForm({
           <div className="flex flex-col items-end gap-1.5">
             {ftmoBlocked && (
               <p className="text-xs text-[var(--loss)]">
-                FTMO nalog zamrznut — pravilo prekršeno. Resetuj izazov u Settings
-                da dodaš nove trejdove.
+                FTMO account frozen — a rule was breached. Reset the challenge in
+                Settings to add new trades.
               </p>
             )}
             <div className="flex gap-2">
@@ -1151,7 +1151,7 @@ function FormGroupSection({
           {group.id === "risk_plan" && (
             <p className="mt-1 text-xs text-muted-foreground">
               Planned Entry = nivo na chartu. <b>Planned</b> = plan trade;
-              <b> Active</b> = već si u poziciji.
+              <b> Active</b> = you are already in the position.
             </p>
           )}
         </div>
@@ -1212,7 +1212,7 @@ function FormGroupSection({
             )}
             {isMissed && (
               <p className="text-xs text-muted-foreground">
-                Vrati iz miss da promeniš fazu.
+                Restore from missed to change the phase.
               </p>
             )}
           </div>

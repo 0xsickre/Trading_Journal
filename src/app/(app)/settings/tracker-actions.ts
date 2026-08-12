@@ -60,12 +60,12 @@ export async function addTrackerRule(input: {
   active_days?: number[];
 }): Promise<Result> {
   const text = input.text.trim();
-  if (!text) return { ok: false, error: "Pravilo ne može biti prazno." };
+  if (!text) return { ok: false, error: "The rule cannot be empty." };
   if (!TRACKER_STAGES.includes(input.stage))
-    return { ok: false, error: "Nepoznata faza." };
+    return { ok: false, error: "Unknown stage." };
 
   const days = normalizeDays(input.active_days ?? [1, 2, 3, 4, 5]);
-  if (!days) return { ok: false, error: "Izaberi bar jedan dan." };
+  if (!days) return { ok: false, error: "Pick at least one day." };
 
   const supabase = await createClient();
   const user = await getCurrentUser();
@@ -125,17 +125,17 @@ export async function updateTrackerRule(
 
   if (patch.text != null) {
     const text = patch.text.trim();
-    if (!text) return { ok: false, error: "Pravilo ne može biti prazno." };
+    if (!text) return { ok: false, error: "The rule cannot be empty." };
     next.text = text;
   }
   if (patch.stage != null) {
     if (!TRACKER_STAGES.includes(patch.stage))
-      return { ok: false, error: "Nepoznata faza." };
+      return { ok: false, error: "Unknown stage." };
     next.stage = patch.stage;
   }
   if (patch.active_days != null) {
     const days = normalizeDays(patch.active_days);
-    if (!days) return { ok: false, error: "Izaberi bar jedan dan." };
+    if (!days) return { ok: false, error: "Pick at least one day." };
     next.active_days = days;
   }
 
@@ -149,7 +149,7 @@ export async function updateTrackerRule(
       .select("auto_key")
       .eq("id", id)
       .maybeSingle();
-    if (!current) return { ok: false, error: "Pravilo nije nađeno." };
+    if (!current) return { ok: false, error: "Rule not found." };
 
     const parsed = configSchema(
       (current.auto_key as AutoRuleKey | null) ?? null,
@@ -159,8 +159,8 @@ export async function updateTrackerRule(
         ok: false,
         error:
           current.auto_key == null
-            ? "Ručno pravilo nema šta da podešava."
-            : "Limit mora biti pozitivan broj.",
+            ? "A manual rule has nothing to configure."
+            : "The limit must be a positive number.",
       };
     }
     next.config = parsed.data;
@@ -209,7 +209,7 @@ export async function deleteTrackerRule(id: string): Promise<Result> {
       .select("id", { count: "exact", head: true })
       .eq("rule_id", id),
   ]);
-  if (!rule) return { ok: false, error: "Pravilo nije nađeno." };
+  if (!rule) return { ok: false, error: "Rule not found." };
 
   const answered = (count ?? 0) > 0;
   if (rule.is_mandatory && !answered) {
@@ -265,7 +265,7 @@ export async function moveTrackerRule(
     .select("id, stage")
     .eq("id", id)
     .maybeSingle();
-  if (!self) return { ok: false, error: "Pravilo nije nađeno." };
+  if (!self) return { ok: false, error: "Rule not found." };
 
   const { data: siblings } = await supabase
     .from("tj_tracker_rules")
@@ -274,7 +274,7 @@ export async function moveTrackerRule(
     .is("deleted_at", null)
     .order("sort_order")
     .order("id");
-  if (!siblings) return { ok: false, error: "Greška pri čitanju." };
+  if (!siblings) return { ok: false, error: "Read failed." };
 
   const i = siblings.findIndex((s) => s.id === id);
   const j = i + direction;

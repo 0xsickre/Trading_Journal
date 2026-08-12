@@ -35,7 +35,7 @@ describe("PeriodPerformanceCard — Win % on a flat book (W2)", () => {
     ]);
     expect(summary.winning + summary.losing).toBe(0); // sanity: the input really is all-flat
 
-    render(<PeriodPerformanceCard summary={summary} label="Nedeljni učinak" currency="USD" />);
+    render(<PeriodPerformanceCard summary={summary} label="Weekly performance" currency="USD" />);
     expect(screen.getByText("—")).toBeInTheDocument();
     expect(screen.queryByText("0.0%")).not.toBeInTheDocument();
   });
@@ -46,7 +46,7 @@ describe("PeriodPerformanceCard — Win % on a flat book (W2)", () => {
       row({ key: "2026-W11", net: 100, wins: 1, trades: 1 }),
       row({ key: "2026-W12", net: -50, losses: 1, trades: 1 }),
     ]);
-    render(<PeriodPerformanceCard summary={summary} label="Nedeljni učinak" currency="USD" />);
+    render(<PeriodPerformanceCard summary={summary} label="Weekly performance" currency="USD" />);
     expect(screen.getByText("66.7%")).toBeInTheDocument();
   });
 
@@ -55,7 +55,7 @@ describe("PeriodPerformanceCard — Win % on a flat book (W2)", () => {
       row({ key: "2026-W10", net: 300, wins: 1, trades: 1 }),
       row({ key: "2026-W11", net: -100, losses: 1, trades: 1 }),
     ]);
-    render(<PeriodPerformanceCard summary={summary} label="Nedeljni učinak" currency="USD" />);
+    render(<PeriodPerformanceCard summary={summary} label="Weekly performance" currency="USD" />);
     expect(screen.getByText("2026-W10 · $300.00")).toBeInTheDocument();
     expect(screen.getByText("2026-W11 · -$100.00")).toBeInTheDocument();
   });
@@ -76,7 +76,7 @@ describe("HoldTimeCard, CostReportCard, PlanVsRealityCard — presentation only,
 
   it("HoldTimeCard formats every duration and leaves breakeven as a dash when unset", () => {
     render(<HoldTimeCard stats={holdStats} />);
-    expect(screen.getByText("4 trejdova sa poznatim trajanjem")).toBeInTheDocument();
+    expect(screen.getByText("4 trades with a known duration")).toBeInTheDocument();
     expect(screen.getByText("—")).toBeInTheDocument(); // avgBreakevenSeconds
   });
 
@@ -93,7 +93,7 @@ describe("HoldTimeCard, CostReportCard, PlanVsRealityCard — presentation only,
       holdingDays: 0,
     };
     render(<CostReportCard costs={costs} currency="USD" />);
-    expect(screen.getByText(/Nijedan od 5 trejdova nema unet trošak/)).toBeInTheDocument();
+    expect(screen.getByText(/None of the 5 trades carries a cost/)).toBeInTheDocument();
   });
 
   it("CostReportCard reports actual costs, tinted as a loss, when data exists", () => {

@@ -123,20 +123,20 @@ export function PlaybookChecklist({
 
       {book == null ? (
         <p className="text-sm text-muted-foreground">
-          Izaberi playbook da dobiješ čeklistu njegovih pravila. Svako pravilo
-          nosi sopstvenu statistiku — tako vidiš koje stvarno nosi edge, a koje
+          Pick a playbook to get the checklist of its rules. Every rule carries its
+          own statistics — that is how you see which one really carries edge and which
           je samo ritual.
         </p>
       ) : visibleGroups.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {book.groups.some((g) => g.rules.length > 0)
-            ? "Nijedno pravilo se ne odnosi na ovaj ishod još uvek."
-            : "Ovaj playbook još nema pravila — dodaj ih u Settings."}
+            ? "No rule applies to this outcome yet."
+            : "This playbook has no rules yet — add them in Settings."}
         </p>
       ) : (
         <div className="space-y-4">
           <div className="text-xs text-muted-foreground">
-            Ispoštovano {followed} od {answered.length} odgovorenih
+            Followed {followed} of {answered.length} answered
             {answered.length === 0 && " — neodgovoreno se ne broji u statistiku"}
           </div>
 
@@ -159,7 +159,7 @@ export function PlaybookChecklist({
                         onClick={() =>
                           onAnswerChange(rule.id, value === true ? null : true)
                         }
-                        label="Ispoštovano"
+                        label="Followed"
                         tone="profit"
                       >
                         <Check className="size-3.5" />
@@ -176,7 +176,7 @@ export function PlaybookChecklist({
                         onClick={() =>
                           onAnswerChange(rule.id, value === false ? null : false)
                         }
-                        label="Prekršeno"
+                        label="Broken"
                         tone="loss"
                       >
                         <X className="size-3.5" />

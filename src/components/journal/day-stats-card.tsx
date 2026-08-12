@@ -67,8 +67,8 @@ export function DayStatsCard({
     return (
       <Card>
         <CardContent className="py-4 text-sm text-muted-foreground">
-          Nijedan trejd nije zatvoren ovog dana. Dnevnik ispod se svejedno piše —
-          disciplina se meri i na dan bez trgovanja.
+          No trade closed on this day. The journal below is still worth writing —
+          discipline is measured on days without trading too.
         </CardContent>
       </Card>
     );
@@ -78,7 +78,7 @@ export function DayStatsCard({
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-          <span>Dan u brojevima</span>
+          <span>The day in numbers</span>
           <span className={cn("tabular-nums", pnlClass(stats.netSum))}>
             {fmtMoney(stats.netSum, currency, { sign: true })}
           </span>
@@ -97,7 +97,7 @@ export function DayStatsCard({
             value={fmtMoney(stats.grossSum, currency, { sign: true })}
             cls={pnlClass(stats.grossSum)}
           />
-          <Figure label="Trejdova" value={String(stats.count)} />
+          <Figure label="Trades" value={String(stats.count)} />
           <Figure
             label="Win rate"
             value={
@@ -141,7 +141,7 @@ export function DayStatsCard({
             // confident $0 and implies the trading was free.
             hint={
               costs.withCostData === 0
-                ? "nijedan trejd nema podatak"
+                ? "no trade carries the data"
                 : costs.withCostData < stats.count
                   ? `${costs.withCostData} od ${stats.count} trejdova`
                   : undefined
@@ -170,7 +170,7 @@ export function DayStatsCard({
             ) : (
               <ChevronRight className="size-3.5" />
             )}
-            {open ? "Sakrij" : "Prikaži"} trejdove zatvorene ovog dana
+            {open ? "Hide" : "Show"} trades closed on this day
           </button>
 
           {open && (

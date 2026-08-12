@@ -29,10 +29,10 @@ import type { EnrichedTrade } from "@/lib/journal/enriched-trade";
 
 const OP_LABELS: Record<FilterClause["op"], string> = {
   in: "jeste",
-  notIn: "nije",
-  between: "između",
+  notIn: "is not",
+  between: "between",
   isSet: "ima vrednost",
-  isNotSet: "nema vrednost",
+  isNotSet: "has no value",
 };
 
 /**
@@ -315,7 +315,7 @@ export function FilterBar({
         )}
 
         <Button variant="outline" size="sm" className="h-8" onClick={addClause}>
-          <Plus className="size-3.5" /> Dodaj filter
+          <Plus className="size-3.5" /> Add filter
         </Button>
 
         {activeFilterCount(filters) > 0 && (
@@ -325,7 +325,7 @@ export function FilterBar({
             className="h-8 text-muted-foreground"
             onClick={() => onChange({ clauses: [] })}
           >
-            Očisti sve
+            Clear all
           </Button>
         )}
       </div>

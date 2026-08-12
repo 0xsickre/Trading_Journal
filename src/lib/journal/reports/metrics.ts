@@ -116,7 +116,7 @@ export const METRICS: ReportMetric[] = [
   },
   {
     key: "trade_count",
-    label: "Trejdova",
+    label: "Trades",
     unit: "count",
     higherIsBetter: true,
     compute: (g) => g.length,
@@ -137,7 +137,7 @@ export const METRICS: ReportMetric[] = [
     // trade has the best possible profit factor, which is a different statement
     // from `target_attainment`'s null, meaning "no denominator exists at all".
     // `engine.test.ts` pins both halves of that distinction.
-    hint: "Bruto profit / bruto gubitak. ∞ znači da u grupi nema nijednog gubitka; prazno samo kad grupa nema trejdova.",
+    hint: "Gross profit / gross loss. ∞ means the group holds no losing trade at all; empty only when the group has no trades.",
     higherIsBetter: true,
     compute: (g, ctx) => statsOf(g, ctx).profitFactor,
   },
@@ -213,7 +213,7 @@ export const METRICS: ReportMetric[] = [
     key: "avg_daily_dd",
     label: "Avg daily DD",
     unit: "money",
-    hint: "Prosečan pad unutar dana, mereno od dnevnog vrha. Dan bez pada ulazi kao 0.",
+    hint: "Average drop within a day, measured from that day's high. A day with no drop enters as 0.",
     higherIsBetter: true,
     compute: (g) => computeDailyDrawdown(dayPointsOf(g)).avgMoney,
   },
@@ -230,7 +230,7 @@ export const METRICS: ReportMetric[] = [
     key: "sharpe",
     label: "Sharpe",
     unit: "ratio",
-    hint: "Prosečan dnevni P&L / njegova standardna devijacija, godišnje skalirano brojem dana kojima si stvarno trgovao. Traži bar 5 dana.",
+    hint: "Mean daily P&L / its standard deviation, annualized by the number of days actually traded. Needs at least 5 days.",
     higherIsBetter: true,
     compute: (g) => computeRiskRatios(dayPointsOf(g), maxDrawdownOf(g)).sharpe,
   },
@@ -238,7 +238,7 @@ export const METRICS: ReportMetric[] = [
     key: "sortino",
     label: "Sortino",
     unit: "ratio",
-    hint: "Kao Sharpe, ali imenilac broji samo gubitaške dane — rast nije rizik. Prazno kad nijedan dan nije bio u minusu.",
+    hint: "Like Sharpe, but the denominator counts losing days only — upside is not risk. Empty while no day has lost money.",
     higherIsBetter: true,
     compute: (g) => computeRiskRatios(dayPointsOf(g), maxDrawdownOf(g)).sortino,
   },
@@ -246,7 +246,7 @@ export const METRICS: ReportMetric[] = [
     key: "calmar",
     label: "Calmar",
     unit: "ratio",
-    hint: "Godišnji prinos / max drawdown. Recovery factor podeljen vremenom koje mu je trebalo.",
+    hint: "Annualized return / max drawdown. The recovery factor divided by how long it took.",
     higherIsBetter: true,
     compute: (g) => computeRiskRatios(dayPointsOf(g), maxDrawdownOf(g)).calmar,
   },
@@ -280,9 +280,9 @@ export const METRICS: ReportMetric[] = [
   },
   {
     key: "cost_pct_of_gross",
-    label: "Trošak % bruto",
+    label: "Cost % of gross",
     unit: "pct",
-    hint: "Imenilac je bruto profit dobitnika.",
+    hint: "The denominator is the winners' gross profit.",
     higherIsBetter: false,
     compute: (g) => computeCostStats(realized(g)).costPctOfGross,
   },
@@ -305,7 +305,7 @@ export const METRICS: ReportMetric[] = [
     key: "avg_mae_r",
     label: "Avg MAE u R",
     unit: "r",
-    hint: "Koliko duboko su trejdovi išli protiv pozicije.",
+    hint: "How deep trades went against the position.",
     higherIsBetter: false,
     compute: (g) => computeExcursionStats(g.map((e) => ({ row: e.trade.row }))).avgMaeR,
   },
@@ -331,7 +331,7 @@ export const METRICS: ReportMetric[] = [
     key: "follow_rate",
     label: "Follow rate",
     unit: "pct",
-    hint: "Udeo odgovorenih pravila koja su ispoštovana. Neodgovoreno se ne broji ni u brojilac ni u imenilac.",
+    hint: "Share of answered rules that were followed. Unanswered counts in neither the numerator nor the denominator.",
     higherIsBetter: true,
     // Null rather than 0 when no playbook data is loaded: a zero here would read
     // as "no rule was ever followed", which is a finding, not a missing input.

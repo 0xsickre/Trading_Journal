@@ -25,7 +25,7 @@ vi.mock("recharts", async (importOriginal) => {
  * earlier step: `balance.ts` computes BOTH `maxPctOfEquity` and
  * `currentPctOfEquity` as `Math.abs(...)` — positive magnitudes — but the
  * component only negated one of the two before display. "Max 9.09%" sat
- * right next to "Trenutni −7.27%" and read like a gain. `FIXED` alongside
+ * right next to "Current −7.27%" and read like a gain. `FIXED` alongside
  * this test, per the plan's own note ("popravlja se zajedno sa svojim
  * testom u koraku koji pokriva ovu komponentu").
  */
@@ -43,10 +43,10 @@ describe("DrawdownChart — both percent figures read negative, like the money b
   const stats = computeDrawdown(timeline);
   const series = drawdownSeries(timeline);
 
-  it("money basis: both Max and Trenutni are negative, matching each other's sign", () => {
+  it("money basis: both Max and Current are negative, matching each other's sign", () => {
     render(<DrawdownChart series={series} stats={stats} currency="USD" />);
     expect(figureValue("Max")).toBe("-$1,000.00");
-    expect(figureValue("Trenutni")).toBe("-$800.00");
+    expect(figureValue("Current")).toBe("-$800.00");
   });
 
   it("percent basis: Max is negative too, not the un-negated positive magnitude balance.ts stores", async () => {
@@ -56,9 +56,9 @@ describe("DrawdownChart — both percent figures read negative, like the money b
 
     // 1000 / 11000 × 100 = 9.0909…%; 800 / 11000 × 100 = 7.2727…%.
     expect(figureValue("Max")).toBe("-9.09%");
-    expect(figureValue("Trenutni")).toBe("-7.27%");
+    expect(figureValue("Current")).toBe("-7.27%");
     // The pre-fix bug, explicitly absent: Max must not read as a positive
-    // percentage next to a negative Trenutni.
+    // percentage next to a negative Current.
     expect(screen.queryByText("9.09%")).not.toBeInTheDocument();
   });
 });

@@ -267,7 +267,7 @@ export function ImportWizard({
         // After the duplicate check above, so an unreadable cell never changes
         // how a row is MATCHED — it only makes sure the reader is told.
         _diff: unreadable.length > 0
-          ? [...diff, `nečitljivo: ${unreadable.join(", ")}`]
+          ? [...diff, `unreadable: ${unreadable.join(", ")}`]
           : diff,
       };
     });

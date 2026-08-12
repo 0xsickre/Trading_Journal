@@ -4,7 +4,6 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
-import { sr } from "date-fns/locale";
 import {
   ChevronDown,
   ChevronUp,
@@ -101,8 +100,9 @@ function FolderSettingsDialog({
         <DialogHeader>
           <DialogTitle>Folder</DialogTitle>
           <DialogDescription>
-            Šablon se upisuje u telo svake nove beleške u ovom folderu. Poenta
-            nedeljnog pregleda je da pitanja već stoje tu kad sedneš.
+            The template is written into the body of every new note in this folder.
+            The point of a weekly review is that the questions are already there
+            when you sit down.
           </DialogDescription>
         </DialogHeader>
 
@@ -110,12 +110,12 @@ function FolderSettingsDialog({
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Naziv foldera"
+            placeholder="Folder name"
           />
           <Textarea
             value={template}
             onChange={(e) => setTemplate(e.target.value)}
-            placeholder="## Naslov&#10;&#10;### Pitanje&#10;"
+            placeholder="## Heading&#10;&#10;### Question&#10;"
             className="min-h-[12rem] font-mono text-xs"
           />
         </div>
@@ -133,19 +133,19 @@ function FolderSettingsDialog({
                 }
                 toast.success(
                   res.orphaned > 0
-                    ? `Folder obrisan. ${res.orphaned} beleški je premešteno u „Bez foldera”.`
-                    : "Folder obrisan.",
+                    ? `Folder deleted. ${res.orphaned} notes moved to "Unfiled".`
+                    : "Folder deleted.",
                 );
                 onOpenChange(false);
                 router.refresh();
               })
             }
           >
-            <Trash2 className="mr-2 size-3.5" /> Obriši folder
+            <Trash2 className="mr-2 size-3.5" /> Delete folder
           </Button>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
-              Odustani
+              Cancel
             </Button>
             <Button
               disabled={pending}
@@ -164,7 +164,7 @@ function FolderSettingsDialog({
                 })
               }
             >
-              Sačuvaj
+              Save
             </Button>
           </div>
         </DialogFooter>
@@ -252,14 +252,14 @@ export function NotebookWorkbench({
         {/* Sidebar */}
         <aside className="w-full shrink-0 space-y-4 lg:w-56 print:hidden">
           <Button className="w-full" onClick={newNote} disabled={pending}>
-            <Plus className="mr-2 size-4" /> Nova beleška
+            <Plus className="mr-2 size-4" /> New note
           </Button>
 
           <div className="space-y-0.5">
             <ScopeButton
               active={scope.kind === "all"}
               icon={FileText}
-              label="Sve beleške"
+              label="All notes"
               count={counts.all}
               onClick={() => setScope({ kind: "all" })}
             />
@@ -287,7 +287,7 @@ export function NotebookWorkbench({
                         router.refresh();
                       })
                     }
-                    aria-label="Pomeri gore"
+                    aria-label="Move up"
                   >
                     <ChevronUp className="size-3" />
                   </Button>
@@ -303,7 +303,7 @@ export function NotebookWorkbench({
                         router.refresh();
                       })
                     }
-                    aria-label="Pomeri dole"
+                    aria-label="Move down"
                   >
                     <ChevronDown className="size-3" />
                   </Button>
@@ -312,7 +312,7 @@ export function NotebookWorkbench({
                     size="icon"
                     className="size-6"
                     onClick={() => setEditingFolder(f)}
-                    aria-label="Podesi folder"
+                    aria-label="Folder settings"
                   >
                     <Settings2 className="size-3" />
                   </Button>
@@ -323,7 +323,7 @@ export function NotebookWorkbench({
               <ScopeButton
                 active={scope.kind === "unfiled"}
                 icon={Inbox}
-                label="Bez foldera"
+                label="Unfiled"
                 count={counts.unfiled}
                 onClick={() => setScope({ kind: "unfiled" })}
               />
@@ -331,7 +331,7 @@ export function NotebookWorkbench({
             <ScopeButton
               active={scope.kind === "trash"}
               icon={Trash2}
-              label="Nedavno obrisano"
+              label="Recently deleted"
               count={counts.trash}
               onClick={() => setScope({ kind: "trash" })}
             />
@@ -357,7 +357,7 @@ export function NotebookWorkbench({
                     router.refresh();
                   });
                 }}
-                placeholder="Naziv…"
+                placeholder="Name…"
                 className="h-8"
               />
             </div>
@@ -368,7 +368,7 @@ export function NotebookWorkbench({
               className="w-full justify-start"
               onClick={() => setAddingFolder(true)}
             >
-              <FolderPlus className="mr-2 size-3.5" /> Novi folder
+              <FolderPlus className="mr-2 size-3.5" /> New folder
             </Button>
           )}
 
@@ -383,19 +383,19 @@ export function NotebookWorkbench({
                   const res = await emptyTrash();
                   if (!res.ok) toast.error(res.error);
                   else {
-                    toast.success("Korpa je ispražnjena.");
+                    toast.success("Trash emptied.");
                     router.refresh();
                   }
                 })
               }
             >
-              Isprazni korpu
+              Empty trash
             </Button>
           )}
 
           {tags.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground">Tagovi</p>
+              <p className="text-xs font-medium text-muted-foreground">Tags</p>
               <div className="flex flex-wrap gap-1">
                 {tags.map((t) => (
                   <button key={t} type="button" onClick={() => setTagFilter(tagFilter === t ? null : t)}>
@@ -415,7 +415,7 @@ export function NotebookWorkbench({
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Pretraži…"
+                placeholder="Search…"
                 className="h-8 pl-7"
               />
             </div>
@@ -424,10 +424,10 @@ export function NotebookWorkbench({
             {visible.length === 0 && (
               <p className="p-4 text-sm text-muted-foreground">
                 {scope.kind === "trash"
-                  ? "Korpa je prazna."
+                  ? "The trash is empty."
                   : query || tagFilter
-                    ? "Nema beleške koja odgovara."
-                    : "Nema beleški. Napravi prvu levo."}
+                    ? "No note matches."
+                    : "No notes yet. Create the first one on the left."}
               </p>
             )}
             {visible.map((n) => {
@@ -445,14 +445,14 @@ export function NotebookWorkbench({
                   <div className="flex items-center gap-1.5">
                     {n.pinned && <Pin className="size-3 shrink-0 text-muted-foreground" />}
                     <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                      {n.title || "Bez naslova"}
+                      {n.title || "Untitled"}
                     </span>
                   </div>
                   <p className="truncate text-xs text-muted-foreground">
-                    {preview || "Prazna beleška"}
+                    {preview || "Empty note"}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    {format(parseISO(n.updated_at), "d. MMM yyyy.", { locale: sr })}
+                    {format(parseISO(n.updated_at), "d MMM yyyy")}
                     {n.tags.length > 0 && ` · ${n.tags.join(", ")}`}
                   </p>
                 </button>

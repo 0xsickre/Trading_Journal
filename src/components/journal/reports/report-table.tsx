@@ -35,7 +35,7 @@ export function ReportTable({
         </CardHeader>
         <CardContent>
           <p className="py-6 text-center text-sm text-muted-foreground">
-            Nema trejdova za izabrane filtere.
+            No trades match the selected filters.
           </p>
         </CardContent>
       </Card>
@@ -59,7 +59,7 @@ export function ReportTable({
         </p>
         {result.multiValue && (
           <p className="text-xs text-[var(--chart-4)]">
-            Jedan trejd može da uđe u više redova, pa zbir redova{" "}
+            One trade can land in several rows, so the sum of the rows{" "}
             <strong>nije</strong> ukupan P&amp;L.
           </p>
         )}
@@ -101,7 +101,7 @@ export function ReportTable({
                   }`}
                   title={
                     row.belowSample
-                      ? `Samo ${row.n} trejdova — ispod praga od ${result.minSample}. Brojevi su prikazani, ali im ne veruj.`
+                      ? `Only ${row.n} trades — below the threshold of ${result.minSample}. The numbers are shown, but do not trust them.`
                       : undefined
                   }
                 >
@@ -131,7 +131,7 @@ export function ReportTable({
 
         {result.rows.some((r) => r.belowSample) && (
           <p className="mt-3 text-xs text-muted-foreground">
-            Prigušeni redovi imaju manje od {result.minSample} trejdova.
+            Dimmed rows have fewer than {result.minSample} trades.
           </p>
         )}
       </CardContent>

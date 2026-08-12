@@ -49,13 +49,13 @@ describe("CrossAnalysis — real pivot output, on screen", () => {
 
     const thinCell = firstMatch("$900.00").closest("td")!;
     expect(thinCell.className).toContain("opacity-40");
-    expect(thinCell).toHaveAttribute("title", expect.stringContaining("ispod praga"));
+    expect(thinCell).toHaveAttribute("title", expect.stringContaining("below the threshold"));
 
     const bigCell = firstMatch("$600.00").closest("td")!; // 6 × 100, the well-sampled cell
     expect(bigCell.className).not.toContain("opacity-40");
   });
 
-  it("grand totals sit in their own row, labelled 'Ukupno'", () => {
+  it("grand totals sit in their own row, labelled 'Total'", () => {
     const book = enrich([
       { setupGrade: "A", macroAlign: "Uz bias", net: 300 },
       { setupGrade: "A", macroAlign: "Protiv bias", net: 50 },
@@ -65,7 +65,7 @@ describe("CrossAnalysis — real pivot output, on screen", () => {
     const result = run(book, "setup_grade", "macro_align");
     render(<CrossAnalysis result={result} viewMode="dollars" currency="USD" equityBase={null} />);
 
-    expect(screen.getAllByText("Ukupno").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Total").length).toBeGreaterThan(0);
     // Grand total: 300 + 50 − 100 + 20 = 270, distinct from every cell/axis
     // total, so this can only be the one true grand-total figure.
     expect(screen.getByText("$270.00")).toBeInTheDocument();
@@ -74,6 +74,6 @@ describe("CrossAnalysis — real pivot output, on screen", () => {
   it("empty axes show the no-intersection sentence instead of an empty grid", () => {
     const result = run(enrich([]), "setup_grade", "macro_align");
     render(<CrossAnalysis result={result} viewMode="dollars" currency="USD" equityBase={null} />);
-    expect(screen.getByText(/Nema trejdova koji imaju vrednost za obe dimenzije/)).toBeInTheDocument();
+    expect(screen.getByText(/No trades carry a value for both dimensions/)).toBeInTheDocument();
   });
 });

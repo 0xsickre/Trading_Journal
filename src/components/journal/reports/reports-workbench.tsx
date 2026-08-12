@@ -436,7 +436,7 @@ export function ReportsWorkbench({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-muted-foreground">Grupiši po</span>
+        <span className="text-sm text-muted-foreground">Group by</span>
         {dimensionPicker}
 
         <span className="text-sm text-muted-foreground">×</span>
@@ -448,7 +448,7 @@ export function ReportsWorkbench({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">Bez cross-analize</SelectItem>
+            <SelectItem value="none">No cross-analysis</SelectItem>
             {dimensions.filter((d) => d.key !== dimensionKey).map((d) => (
               <SelectItem key={d.key} value={d.key}>
                 {d.label}
@@ -492,10 +492,10 @@ export function ReportsWorkbench({
                   } ${!usable ? "cursor-not-allowed opacity-40" : ""}`}
                   title={
                     !usable
-                      ? `${m.label} ne može ovde — izveštaj grupiše trejdove preko više instrumenata, pa nema ni jedan point value ni rizik po trejdu. Ranije se ovo tiho prikazivalo u dolarima.`
+                      ? `${m.label} does not work here — the report groups trades across several instruments, so there is neither a single point value nor a per-trade risk. This used to be shown silently in dollars.`
                       : m.value === "privacy"
-                        ? "Sakrij novčane iznose"
-                        : `Prikaži u ${m.label}`
+                        ? "Hide money amounts"
+                        : `Show in ${m.label}`
                   }
                 >
                   {m.label}
@@ -511,7 +511,7 @@ export function ReportsWorkbench({
             <SelectContent>
               {[1, 3, 5, 10, 20].map((n) => (
                 <SelectItem key={n} value={String(n)}>
-                  prag n≥{n}
+                  min n≥{n}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -528,7 +528,7 @@ export function ReportsWorkbench({
                     : "text-muted-foreground"
                 }`}
               >
-                {m === "single" ? "Jedan" : "Poređenje"}
+                {m === "single" ? "Single" : "Compare"}
               </button>
             ))}
           </div>
@@ -590,7 +590,7 @@ export function ReportsWorkbench({
                             : "text-muted-foreground"
                         }`}
                       >
-                        {t === "bar" ? "Stubići" : "Linija"}
+                        {t === "bar" ? "Bars" : "Line"}
                       </button>
                     ))}
                   </div>
@@ -605,7 +605,7 @@ export function ReportsWorkbench({
                     }
                   >
                     <SelectTrigger className="h-8 w-44">
-                      <SelectValue placeholder="Metrike" />
+                      <SelectValue placeholder="Metrics" />
                     </SelectTrigger>
                     <SelectContent>
                       {columnKeys.map((k) => {
@@ -637,7 +637,7 @@ export function ReportsWorkbench({
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm text-muted-foreground">
-                    Metrika u ćelijama
+                    Metric in cells
                   </span>
                   <Select
                     value={metricKey}
@@ -674,7 +674,7 @@ export function ReportsWorkbench({
           className="text-muted-foreground"
           onClick={() => router.replace("/reports", { scroll: false })}
         >
-          Resetuj report
+          Reset report
         </Button>
       </div>
     </div>

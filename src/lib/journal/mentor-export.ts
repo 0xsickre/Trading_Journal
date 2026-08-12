@@ -220,7 +220,7 @@ export function resolveCalendarRange(
   to?: string,
 ): CalendarRange {
   if (granularity === "all")
-    return { fromISO: null, toISO: null, label: "All", rangeText: "sve vreme" };
+    return { fromISO: null, toISO: null, label: "All", rangeText: "all time" };
 
   if (granularity === "custom") {
     const f = from || anchor;

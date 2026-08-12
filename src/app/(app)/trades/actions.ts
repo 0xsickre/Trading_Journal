@@ -143,7 +143,7 @@ export async function createTrade(input: TradeInput) {
     return {
       ok: false as const,
       error:
-        "FTMO nalog je zamrznut — pravilo je prekršeno. Resetuj izazov u Settings da nastaviš.",
+        "The FTMO account is frozen — a rule was breached. Reset the challenge in Settings to continue.",
     };
   }
 
@@ -213,7 +213,7 @@ export async function updateTrade(id: string, input: TradeInput) {
     return {
       ok: false as const,
       error:
-        "FTMO nalog je zamrznut — pravilo je prekršeno. Resetuj izazov u Settings da nastaviš.",
+        "The FTMO account is frozen — a rule was breached. Reset the challenge in Settings to continue.",
     };
   }
 

@@ -62,14 +62,14 @@ export function ReportChart({
   const empty =
     data.length === 0 || shown.length === 0 ? (
       <p className="py-10 text-center text-sm text-muted-foreground">
-        Nema podataka za prikaz.
+        No data to plot.
       </p>
     ) : undefined;
 
   return (
     <ChartShell
       title={`${result.dimension.label} — grafik`}
-      subtitle={`Do ${MAX_CHART_METRICS} metrike istovremeno. Prigušene kolone imaju manje od ${result.minSample} trejdova.`}
+      subtitle={`Up to ${MAX_CHART_METRICS} metrics at once. Dimmed columns have fewer than ${result.minSample} trades.`}
       action={action}
       empty={empty}
     >

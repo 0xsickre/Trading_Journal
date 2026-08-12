@@ -183,7 +183,7 @@ function badSpec(patch: {
   ];
   for (const [label, v] of fields) {
     if (v == null) continue;
-    if (!Number.isFinite(v) || v <= 0) return `${label} mora biti veći od nule.`;
+    if (!Number.isFinite(v) || v <= 0) return `${label} must be greater than zero.`;
   }
   return null;
 }
@@ -480,7 +480,7 @@ export async function addFieldDef(input: {
   key?: string;
 }) {
   const label = input.label.trim();
-  if (!label) return { ok: false as const, error: "Naziv ne može biti prazan." };
+  if (!label) return { ok: false as const, error: "The name cannot be empty." };
   if (!FIELD_DEF_TYPES.includes(input.field_type))
     return { ok: false as const, error: "Nepoznat tip polja." };
   if (!FIELD_DEF_GROUPS.includes(input.group_id))
@@ -496,19 +496,19 @@ export async function addFieldDef(input: {
   if (!/[a-z0-9]/i.test(label.normalize("NFD").replace(/[\u0300-\u036f]/g, "")))
     return {
       ok: false as const,
-      error: "Naziv mora sadržati bar jedno slovo ili broj.",
+      error: "The name must contain at least one letter or digit.",
     };
 
   const key = (input.key?.trim() || slugifyFieldKey(label)).toLowerCase();
   if (!KEY_RE.test(key))
     return {
       ok: false as const,
-      error: "Ključ mora početi slovom i sadržati samo mala slova, brojeve i _.",
+      error: "The key must start with a letter and contain only lowercase letters, digits and _.",
     };
   if (RESERVED_KEYS.has(key))
     return {
       ok: false as const,
-      error: `„${key}" je rezervisano ime kolone — izaberi drugo.`,
+      error: `"${key}" is a reserved column name — pick another.`,
     };
 
   const supabase = await createClient();
@@ -541,7 +541,7 @@ export async function addFieldDef(input: {
   if (error) {
     return {
       ok: false as const,
-      error: error.code === "23505" ? "Polje sa tim ključem već postoji." : error.message,
+      error: error.code === "23505" ? "A field with that key already exists." : error.message,
     };
   }
   revalidateAll();
@@ -571,7 +571,7 @@ export async function updateFieldDef(
   } = {};
   if (patch.label != null) {
     const label = patch.label.trim();
-    if (!label) return { ok: false as const, error: "Naziv ne može biti prazan." };
+    if (!label) return { ok: false as const, error: "The name cannot be empty." };
     next.label = label;
   }
   if (patch.field_type != null) {
@@ -619,7 +619,7 @@ export async function moveFieldDef(id: string, direction: -1 | 1) {
     .select("id, group_id, sort_order")
     .eq("id", id)
     .maybeSingle();
-  if (!self) return { ok: false as const, error: "Polje nije nađeno." };
+  if (!self) return { ok: false as const, error: "Field not found." };
 
   const { data: siblings } = await supabase
     .from("tj_field_defs")
@@ -627,7 +627,7 @@ export async function moveFieldDef(id: string, direction: -1 | 1) {
     .eq("group_id", self.group_id)
     .order("sort_order")
     .order("id");
-  if (!siblings) return { ok: false as const, error: "Greška pri čitanju." };
+  if (!siblings) return { ok: false as const, error: "Read failed." };
 
   const i = siblings.findIndex((s) => s.id === id);
   const j = i + direction;

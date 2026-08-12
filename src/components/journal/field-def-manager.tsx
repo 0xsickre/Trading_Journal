@@ -35,9 +35,9 @@ import type { OptionList } from "@/lib/journal/types";
 
 const TYPE_LABELS: Record<FieldDefType, string> = {
   select: "Izbor iz liste",
-  tags: "Više oznaka",
+  tags: "Multiple tags",
   text: "Tekst",
-  textarea: "Duži tekst",
+  textarea: "Long text",
   number: "Broj",
   url: "Link",
 };
@@ -62,7 +62,7 @@ function FieldRow({
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     start(async () => {
       const res = await fn();
-      if (!res.ok) toast.error(res.error ?? "Nije uspelo");
+      if (!res.ok) toast.error(res.error ?? "Failed");
       else router.refresh();
     });
   }
@@ -179,7 +179,7 @@ function FieldRow({
           aria-label={def.is_active ? "Arhiviraj" : "Vrati"}
           title={
             def.is_active
-              ? "Skloni sa forme. Postojeći trejdovi zadržavaju vrednost."
+              ? "Remove from the form. Existing trades keep their value."
               : "Vrati na formu."
           }
         >
@@ -276,14 +276,14 @@ function AddFieldForm({ lists }: { lists: OptionList[] }) {
           </Select>
         )}
         <Button size="sm" className="h-8" onClick={submit} disabled={pending}>
-          <Plus className="size-3.5" /> Dodaj polje
+          <Plus className="size-3.5" /> Add field
         </Button>
       </div>
       {label.trim() && (
         <p className="text-xs text-muted-foreground">
-          Ključ:{" "}
+          Key:{" "}
           <code className="rounded bg-muted px-1 py-0.5">{key}</code> — trajan je,
-          pod njim se čuvaju vrednosti i po njemu se polje zove u izveštajima.
+          values are stored under it, and the field is named by it in reports.
         </p>
       )}
     </div>
@@ -307,8 +307,8 @@ export function FieldDefManager({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Polja koja sam dodaš. Pojavljuju se na formi u izabranoj grupi i odmah
-        postaju dimenzija u izveštajima — bez ijedne izmene koda.
+        Fields you add yourself. They appear on the form in the chosen group and
+        immediately become a report dimension — with no code change at all.
       </p>
 
       <AddFieldForm lists={lists} />

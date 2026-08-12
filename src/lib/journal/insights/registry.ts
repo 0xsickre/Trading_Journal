@@ -38,12 +38,12 @@ export const OMITTED_RULES: OmittedRule[] = [
   {
     id: "most_time_in_drawdown",
     reason:
-      "Traži udeo VREMENA provedenog u minusu, dakle punu running P&L krivu. Iz MAE/MFE se vidi koliko duboko, ne koliko dugo.",
+      "Needs the share of TIME spent underwater, so the full running P&L curve. MAE/MFE shows how deep, not how long.",
   },
   {
     id: "deep_in_drawdown_day",
     reason:
-      "Dnevna verzija istog — isti nedostajući podatak, ista odluka.",
+      "The daily version of the same — same missing data, same decision.",
   },
   {
     id: "patience_paid_off",
@@ -53,7 +53,7 @@ export const OMITTED_RULES: OmittedRule[] = [
   {
     id: "maximize_your_profit_day",
     reason:
-      "Traži dnevni vrh kumulativnog P&L-a unutar dana. Trade-level `maximize_your_profit` pokriva isto ponašanje iz MFE-a.",
+      "Needs the intraday peak of cumulative P&L. The trade-level `maximize_your_profit` covers the same behaviour from MFE.",
   },
 ];
 

@@ -23,9 +23,9 @@ describe("InsightsPanel — grouped by rule, not a flat wall of lines", () => {
       skipped: [],
     };
     render(<InsightsPanel result={result} />);
-    expect(screen.getByText("Kritično 2")).toBeInTheDocument();
-    expect(screen.getByText("Dobro 1")).toBeInTheDocument();
-    expect(screen.queryByText(/^Pažnja/)).not.toBeInTheDocument();
+    expect(screen.getByText("Critical 2")).toBeInTheDocument();
+    expect(screen.getByText("Good 1")).toBeInTheDocument();
+    expect(screen.queryByText(/^Warning/)).not.toBeInTheDocument();
   });
 
   it("a rule fired twice collapses to one row, expandable to both instances", async () => {
@@ -50,7 +50,7 @@ describe("InsightsPanel — grouped by rule, not a flat wall of lines", () => {
 
   it("empty insights shows the explicit 'nothing fired' sentence, not a blank panel", () => {
     render(<InsightsPanel result={{ insights: [], skipped: [] }} />);
-    expect(screen.getByText(/Nijedan obrazac nije okinuo/)).toBeInTheDocument();
+    expect(screen.getByText(/No pattern fired/)).toBeInTheDocument();
   });
 
   it("skipped rules and omitted rules are counted together and listed on demand", async () => {
@@ -62,14 +62,14 @@ describe("InsightsPanel — grouped by rule, not a flat wall of lines", () => {
     render(<InsightsPanel result={result} />);
 
     const toggle = screen.getByRole("button", {
-      name: `Šta nije procenjeno (${1 + OMITTED_RULES.length})`,
+      name: `What was not assessed (${1 + OMITTED_RULES.length})`,
     });
     expect(toggle).toBeInTheDocument();
     expect(screen.queryByText("thin_rule")).not.toBeInTheDocument();
 
     await user.click(toggle);
     expect(screen.getByText("thin_rule")).toBeInTheDocument();
-    expect(screen.getByText(/traži 10, ima 3/)).toBeInTheDocument();
+    expect(screen.getByText(/needs 10, has 3/)).toBeInTheDocument();
     // At least one deliberately-omitted rule is always listed alongside it.
     expect(OMITTED_RULES.length).toBeGreaterThan(0);
     expect(screen.getByText(OMITTED_RULES[0].id)).toBeInTheDocument();

@@ -20,10 +20,10 @@ import type {
 import { setCheckin } from "@/app/(app)/daily/tracker-actions";
 
 const STATUS_LABELS: Record<DayStatus, string> = {
-  compliant: "Dan ispunjen",
-  broken: "Dan prekršen",
-  skipped: "Nema pravila za ovaj dan",
-  pending: "Dan u toku",
+  compliant: "Day met",
+  broken: "Day broken",
+  skipped: "No rules for this day",
+  pending: "Day in progress",
 };
 
 /**
@@ -40,21 +40,21 @@ function autoReasonText(
 ): string {
   switch (res.reason) {
     case "unconfigured":
-      return "Nema postavljen limit — postavi ga u Settings › Tracker da pravilo počne da se ocenjuje.";
+      return "No limit set — set one in Settings › Tracker so the rule starts being scored.";
     case "no_trades":
-      return "Nema trejdova koje bi ovo pravilo ocenilo na ovaj dan.";
+      return "No trades for this rule to score on this day.";
     case "unpriced":
-      return "Trejd bez cene poena — rezultat je nepoznat, pa se dan ne ocenjuje po ovom pravilu.";
+      return "A trade without a point value — the result is unknown, so the day is not scored on this rule.";
     case "frozen":
-      return "Zamrznuto pri zaključavanju dana. Ispravka trejda menja P&L, ali ne i ocenu ovog dana.";
+      return "Frozen when the day was locked. Correcting a trade moves P&L, but not this day's rating.";
     case "violated":
       return res.observed != null && limit != null
-        ? `Probijeno: ${fmtMoney(res.observed, currency)} od dozvoljenih ${fmtMoney(-Math.abs(limit), currency)}.`
-        : "Prekršeno.";
+        ? `Breached: ${fmtMoney(res.observed, currency)} of the allowed ${fmtMoney(-Math.abs(limit), currency)}.`
+        : "Broken.";
     case "ok":
       return res.observed != null
-        ? `U granicama — najgore ${fmtMoney(res.observed, currency)}.`
-        : "Ispunjeno na svim trejdovima ovog dana.";
+        ? `Within limits — worst ${fmtMoney(res.observed, currency)}.`
+        : "Met on every trade this day.";
   }
 }
 
@@ -62,18 +62,18 @@ function VerdictBadge({ res }: { res: AutoRuleResult }) {
   if (res.verdict === "pass")
     return (
       <Badge className="gap-1 shrink-0">
-        <Check className="size-3" /> ispunjeno
+        <Check className="size-3" /> met
       </Badge>
     );
   if (res.verdict === "fail")
     return (
       <Badge variant="destructive" className="gap-1 shrink-0">
-        <X className="size-3" /> prekršeno
+        <X className="size-3" /> broken
       </Badge>
     );
   return (
     <Badge variant="outline" className="gap-1 shrink-0 text-muted-foreground">
-      <Minus className="size-3" /> ne ocenjuje se
+      <Minus className="size-3" /> not scored
     </Badge>
   );
 }
@@ -104,8 +104,8 @@ function AnswerButtons({
         className="size-8"
         disabled={disabled}
         aria-pressed={value === true}
-        aria-label="Ispunjeno"
-        title={value === true ? "Klikni ponovo da obrišeš odgovor" : "Ispunjeno"}
+        aria-label="Met"
+        title={value === true ? "Click again to clear the answer" : "Met"}
         onClick={() => onSet(value === true ? null : true)}
       >
         <Check className="size-4" />
@@ -117,9 +117,9 @@ function AnswerButtons({
         className="size-8"
         disabled={disabled}
         aria-pressed={value === false}
-        aria-label="Nije ispunjeno"
+        aria-label="Not met"
         title={
-          value === false ? "Klikni ponovo da obrišeš odgovor" : "Nije ispunjeno"
+          value === false ? "Click again to clear the answer" : "Not met"
         }
         onClick={() => onSet(value === false ? null : false)}
       >
@@ -172,7 +172,7 @@ function ManualRow({
       {locked ? (
         <Badge variant="outline" className="gap-1 shrink-0">
           <Lock className="size-3" />
-          {local === true ? "ispunjeno" : local === false ? "prekršeno" : "bez odgovora"}
+          {local === true ? "met" : local === false ? "broken" : "no answer"}
         </Badge>
       ) : (
         <AnswerButtons value={local} disabled={pending} onSet={set} />
@@ -206,7 +206,7 @@ function AutoRow({
             {rule.text}
             <Zap
               className="size-3 shrink-0 text-muted-foreground"
-              aria-label="Automatsko pravilo"
+              aria-label="Automatic rule"
             />
           </p>
           {res && (
@@ -312,7 +312,7 @@ export function TrackerStageSection({
 
   return (
     <div className="space-y-2 border-t pt-4">
-      <p className="text-sm font-medium">Čeklista procesa</p>
+      <p className="text-sm font-medium">Process checklist</p>
       {rows}
     </div>
   );
@@ -330,7 +330,7 @@ export function TrackerDayBadge({
     <span className="flex items-center gap-2">
       {locked && (
         <Badge variant="outline" className="gap-1">
-          <Lock className="size-3" /> zaključan
+          <Lock className="size-3" /> locked
         </Badge>
       )}
       <Badge
@@ -343,8 +343,8 @@ export function TrackerDayBadge({
         }
         title={
           compliance.applicable === 0
-            ? "Ni jedno pravilo ne važi za ovaj dan."
-            : "Dan se računa kao ispunjen samo na 100%. Pravila koja se ne ocenjuju ne ulaze ni u brojilac ni u imenilac."
+            ? "No rule applies to this day."
+            : "A day counts as met only at 100%. Rules that are not scored stay out of both the numerator and the denominator."
         }
       >
         {STATUS_LABELS[compliance.status]}

@@ -38,8 +38,8 @@ export function SickreScoreCard({ score }: { score: SickreScore }) {
               can only know which if the n is on screen with it. */}
           {confidence.level === "provisional" && (
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-              privremeno · {confidence.trades}{" "}
-              {confidence.trades === 1 ? "trejd" : "trejda"}
+              provisional · {confidence.trades}{" "}
+              {confidence.trades === 1 ? "trade" : "trades"}
             </span>
           )}
           {/* Against maxCoverage, not 100: the total is 115 once the process
@@ -83,19 +83,19 @@ export function SickreScoreCard({ score }: { score: SickreScore }) {
           <p className="text-xs text-muted-foreground">
             {confidence.reason === "sample" ? (
               <>
-                Skor još ne postoji — treba{" "}
+                No score yet — it needs{" "}
                 <strong>
-                  još {confidence.tradesShort}{" "}
-                  {confidence.tradesShort === 1 ? "zatvoren trejd" : "zatvorena trejda"}
+                  {confidence.tradesShort} more{" "}
+                  {confidence.tradesShort === 1 ? "zatvoren trejd" : "closed trades"}
                 </strong>
                 . Ispod {MIN_SAMPLE} trejda svaka komponenta je artefakt uzorka:
-                jedan dobitnik daje beskonačan profit factor, nula drawdown-a i
-                100 % win rate — četiri maksimuma koji ne znače ništa.
+                a single winner gives an infinite profit factor, zero drawdown and a
+                100 % win rate — four maxima that mean nothing.
               </>
             ) : (
               <>
                 Skor se ne prikazuje jer je pokriveno manje od pola pondera.
-                Ono što se meri je prikazano dole po komponentama — ali jedna
+                What is measured is shown below by component — but one
                 komponenta pod imenom kompozita nije kompozit.
               </>
             )}
@@ -103,23 +103,23 @@ export function SickreScoreCard({ score }: { score: SickreScore }) {
         ) : (
           score.components.some((c) => !c.counted) && (
             <p className="text-xs text-muted-foreground">
-              Komponente bez podataka su izbačene, a preostali ponderi
-              renormalizovani — mlad track record se ne kažnjava za račun koji
-              nema šta da podeli.
+              Components without data are dropped and the remaining weights are
+              renormalized — a young track record is not punished for arithmetic
+              that has nothing to divide.
             </p>
           )
         )}
 
         {confidence.level === "provisional" && (
           <p className="text-xs text-muted-foreground">
-            Uzorak je još mali, pa će skor osetno skakati sa svakim trejdom.
+            The sample is still small, so the score will swing noticeably with every trade.
             Stabilizuje se oko {RELIABLE_SAMPLE} zatvorenih trejdova.
           </p>
         )}
 
         <p className="text-xs text-muted-foreground">
           Max drawdown komponenta deli pad vrhom <strong>kumulativnog P&amp;L-a</strong>,
-          ne equity-jem prikazanim gore. Dva različita imenioca — ovaj je izabran
+          not the equity shown above. Two different denominators — this one is chosen
           da skor ostane uporediv sa istom metrikom kod drugih alata.
         </p>
       </CardContent>

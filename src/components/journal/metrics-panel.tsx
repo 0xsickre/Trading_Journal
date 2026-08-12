@@ -37,29 +37,29 @@ export function HoldTimeCard({ stats }: { stats: HoldTimeStats }) {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Vreme držanja</CardTitle>
+        <CardTitle className="text-base">Hold time</CardTitle>
         <p className="text-xs text-muted-foreground">
-          {stats.count} trejdova sa poznatim trajanjem
+          {stats.count} trades with a known duration
         </p>
       </CardHeader>
       <CardContent>
-        <Row label="Prosek — svi" value={formatDuration(stats.avgSeconds)} />
+        <Row label="Average — all" value={formatDuration(stats.avgSeconds)} />
         <Row
-          label="Prosek — dobitnici"
+          label="Average — winners"
           value={formatDuration(stats.avgWinnerSeconds)}
         />
         <Row
-          label="Prosek — gubitnici"
+          label="Average — losers"
           value={formatDuration(stats.avgLoserSeconds)}
         />
         <Row
-          label="Prosek — breakeven"
+          label="Average — breakeven"
           value={formatDuration(stats.avgBreakevenSeconds)}
-          hint="TradeZella ovo zove 'scratch'. Prazno je dok ne podesiš breakeven opseg po nalogu."
+          hint="TradeZella calls this a 'scratch'. Empty until you set a breakeven range per account."
         />
-        <Row label="Najduži" value={formatDuration(stats.longestSeconds)} />
+        <Row label="Longest" value={formatDuration(stats.longestSeconds)} />
         <Row
-          label="Prosek u danima"
+          label="Average in days"
           value={stats.avgDays != null ? `${fmtNum(stats.avgDays, 1)} d` : "—"}
         />
       </CardContent>
@@ -78,16 +78,16 @@ export function CostReportCard({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Troškovi</CardTitle>
+        <CardTitle className="text-base">Costs</CardTitle>
         <p className="text-xs text-muted-foreground">
           {noData
-            ? `Nijedan od ${costs.count} trejdova nema unet trošak — nula ovde znači "nema podatka", ne "besplatno".`
-            : `${costs.withCostData} od ${costs.count} trejdova nosi trošak`}
+            ? `None of the ${costs.count} trades carries a cost — this zero means "no data", not "free".`
+            : `${costs.withCostData} of ${costs.count} trades carry a cost`}
         </p>
       </CardHeader>
       <CardContent>
         <Row
-          label="Komisije i takse"
+          label="Commissions and fees"
           value={fmtMoney(costs.totalFees, currency)}
           cls={costs.totalFees !== 0 ? "text-[var(--loss)]" : undefined}
         />
@@ -97,23 +97,23 @@ export function CostReportCard({
           cls={costs.totalSwap !== 0 ? "text-[var(--loss)]" : undefined}
         />
         <Row
-          label="Ukupan trošak"
+          label="Total cost"
           value={fmtMoney(costs.totalCosts, currency)}
           cls={costs.totalCosts !== 0 ? "text-[var(--loss)]" : undefined}
         />
         <Row
-          label="Trošak kao % bruto profita"
+          label="Cost as % of gross profit"
           value={costs.costPctOfGross != null ? fmtPct(costs.costPctOfGross) : "—"}
-          hint="Imenilac je bruto profit dobitnika — trošak se meri prema onome što je edge stvarno proizveo."
+          hint="The denominator is the winners' gross profit — cost measured against what the edge actually produced."
         />
         <Row
-          label="Swap po danu držanja"
+          label="Swap per holding day"
           value={
             costs.avgSwapPerHoldingDay != null
               ? fmtMoney(costs.avgSwapPerHoldingDay, currency)
               : "—"
           }
-          hint={`Ukupan swap raspoređen na ${fmtNum(costs.holdingDays, 1)} dana izloženosti.`}
+          hint={`Total swap spread across ${fmtNum(costs.holdingDays, 1)} days of exposure.`}
         />
       </CardContent>
     </Card>
@@ -132,35 +132,35 @@ export function PlanVsRealityCard({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Plan vs stvarnost</CardTitle>
+        <CardTitle className="text-base">Plan vs reality</CardTitle>
         <p className="text-xs text-muted-foreground">
-          {plannedR.count} trejdova sa planiranim i ostvarenim R
+          {plannedR.count} trades with both planned and realized R
         </p>
       </CardHeader>
       <CardContent>
         <Row label="Avg planned R" value={fmtR(plannedR.avgPlannedR)} />
         <Row label="Avg realized R" value={fmtR(plannedR.avgRealizedR)} />
         <Row
-          label="Razlika"
+          label="Difference"
           value={fmtR(plannedR.deltaR)}
           cls={pnlClass(plannedR.deltaR)}
-          hint="Koliko planiranog reward-a stvarno uzimaš. Negativno je normalno; trend je ono što se prati."
+          hint="How much of the planned reward you actually take. Negative is normal; the trend is what to watch."
         />
         <Row
-          label="Avg MAE u R"
+          label="Avg MAE in R"
           value={
             excursion.avgMaeR != null ? `−${fmtNum(excursion.avgMaeR, 2)}R` : "—"
           }
-          hint={`Koliko duboko su trejdovi išli protiv tebe pre ishoda. Uzorak: ${excursion.maeCount}.`}
+          hint={`How deep trades went against you before the outcome. Sample: ${excursion.maeCount}.`}
         />
         <Row
-          label="Bez drawdown-a"
+          label="No drawdown"
           value={
             excursion.maeCount > 0
               ? `${excursion.noDrawdownCount} / ${excursion.maeCount}`
               : "—"
           }
-          hint="Trejdovi koji nikad nisu bili u minusu."
+          hint="Trades that were never underwater."
         />
         <Row
           label="Long / Short"
@@ -192,7 +192,7 @@ export function PeriodPerformanceCard({
       <CardHeader className="pb-2">
         <CardTitle className="text-base">{label}</CardTitle>
         <p className="text-xs text-muted-foreground">
-          {summary.periods} perioda · swing zamena za Day Win %
+          {summary.periods} periods · the swing replacement for Day Win %
         </p>
       </CardHeader>
       <CardContent>
@@ -208,15 +208,15 @@ export function PeriodPerformanceCard({
             summary.winning + summary.losing === 0 ? "—" : fmtPct(summary.winPct)
           }
           cls={summary.winPct >= 50 ? "text-[var(--profit)]" : undefined}
-          hint="Udeo perioda sa pozitivnim ukupnim P&L-om. Ravni periodi su van imenioca."
+          hint="Share of periods with a positive total P&L. Flat periods stay out of the denominator."
         />
         <Row
-          label="Dobitni / gubitni"
+          label="Winning / losing"
           value={`${summary.winning} / ${summary.losing}`}
         />
-        <Row label="Prosek" value={fmtMoney(summary.avgPnl, currency)} cls={pnlClass(summary.avgPnl)} />
+        <Row label="Average" value={fmtMoney(summary.avgPnl, currency)} cls={pnlClass(summary.avgPnl)} />
         <Row
-          label="Najbolji"
+          label="Best"
           value={
             summary.largest
               ? `${summary.largest.key} · ${fmtMoney(summary.largestPnl, currency)}`
@@ -225,7 +225,7 @@ export function PeriodPerformanceCard({
           cls="text-[var(--profit)]"
         />
         <Row
-          label="Najgori"
+          label="Worst"
           value={
             summary.smallest
               ? `${summary.smallest.key} · ${fmtMoney(summary.smallestPnl, currency)}`
@@ -234,7 +234,7 @@ export function PeriodPerformanceCard({
           cls="text-[var(--loss)]"
         />
         <Row
-          label="Max niz W / L"
+          label="Max streak W / L"
           value={`${summary.maxConsecutiveWinning} / ${summary.maxConsecutiveLosing}`}
         />
       </CardContent>

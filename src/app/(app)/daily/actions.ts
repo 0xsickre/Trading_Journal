@@ -55,7 +55,7 @@ export async function saveDailyReport(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Niste prijavljeni." };
+  if (!user) return { ok: false, error: "You are not signed in." };
 
   const { data: activeGoal } = await supabase
     .from("tj_focus_goals")
@@ -75,7 +75,7 @@ export async function saveDailyReport(
     .eq("report_date", reportDate)
     .maybeSingle();
   if (existing?.locked_at != null)
-    return { ok: false, error: "Dan je zaključan i više se ne menja." };
+    return { ok: false, error: "This day is locked and no longer changes." };
 
   const row = {
     user_id: user.id,
@@ -114,13 +114,13 @@ export async function saveFocusGoal(
   goalText: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const text = goalText.trim();
-  if (!text) return { ok: false, error: "Cilj fokusa ne može biti prazan." };
+  if (!text) return { ok: false, error: "The focus goal cannot be empty." };
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Niste prijavljeni." };
+  if (!user) return { ok: false, error: "You are not signed in." };
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -166,7 +166,7 @@ export async function endFocusGoal(): Promise<
     .eq("is_active", true)
     .maybeSingle();
 
-  if (!current) return { ok: false, error: "Nema aktivnog cilja fokusa." };
+  if (!current) return { ok: false, error: "No active focus goal." };
 
   const { error } = await supabase
     .from("tj_focus_goals")

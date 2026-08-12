@@ -25,7 +25,7 @@ describe("ReportTable — real report engine output, on screen", () => {
     render(
       <ReportTable result={result} viewMode="dollars" currency="USD" equityBase={null} onSort={vi.fn()} />,
     );
-    expect(screen.getByText(/Nema trejdova za izabrane filtere/)).toBeInTheDocument();
+    expect(screen.getByText(/No trades match the selected filters/)).toBeInTheDocument();
   });
 
   it("a thin row is dimmed and carries the sample-size warning, but its numbers still show", () => {
@@ -42,7 +42,7 @@ describe("ReportTable — real report engine output, on screen", () => {
     expect(thinRow.className).toContain("opacity-45");
     expect(thinRow).toHaveAttribute(
       "title",
-      expect.stringContaining(`ispod praga od ${DEFAULT_MIN_SAMPLE}`),
+      expect.stringContaining(`below the threshold of ${DEFAULT_MIN_SAMPLE}`),
     );
     expect(screen.getByText("$900.00")).toBeInTheDocument(); // shown, not hidden
 

@@ -29,7 +29,7 @@ export function FtmoBanner({
       const res = await resetFtmoChallenge(account.id);
       if (!res.ok) toast.error(res.error);
       else {
-        toast.success("Izazov resetovan — nova serija počinje od sada");
+        toast.success("Challenge reset — a new run starts now");
         router.refresh();
       }
     });
@@ -69,7 +69,7 @@ export function FtmoBanner({
             {result.status === "failed"
               ? "Zamrznut"
               : result.status === "passed"
-                ? "Položen"
+                ? "Passed"
                 : "Aktivan"}
           </span>
         </div>
@@ -90,10 +90,10 @@ export function FtmoBanner({
         <ul className="space-y-0.5 text-sm text-[var(--loss)]">
           {result.breaches.map((b) => (
             <li key={`${b.rule}-${b.date}`}>
-              <strong>{ruleLabel(b.rule)}</strong> prekršen {b.date} —{" "}
+              <strong>{ruleLabel(b.rule)}</strong> breached {b.date} —{" "}
               {fmtMoney(b.amount, ccy, { sign: true })} (limit{" "}
               {fmtMoney(b.limit, ccy, { sign: true })}). Novi trejdovi su blokirani
-              dok ne resetuješ izazov.
+              until you reset the challenge.
             </li>
           ))}
         </ul>

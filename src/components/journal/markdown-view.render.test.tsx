@@ -61,6 +61,6 @@ describe("MarkdownView — the allowlist holds on screen, not just in the parser
 
   it("empty content shows the placeholder, not a blank card", () => {
     render(<MarkdownView content="" />);
-    expect(screen.getByText(/Prazna beleška/)).toBeInTheDocument();
+    expect(screen.getByText(/Empty note/)).toBeInTheDocument();
   });
 });

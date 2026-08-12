@@ -217,13 +217,13 @@ const SIZE_EDGES = [
 ] as const;
 
 const WEEKDAYS = [
-  "Nedelja",
-  "Ponedeljak",
-  "Utorak",
-  "Sreda",
-  "Četvrtak",
-  "Petak",
-  "Subota",
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
 ] as const;
 
 /** Weekday name from a yyyy-MM-dd key, without re-resolving a timezone. */
@@ -253,17 +253,17 @@ const tradeDimensions: Dimension[] = [
   // the derived `outcome` dimension below, and could contradict it without any
   // report noticing. Group by "Ishod" instead.
   column("exit_reason", "Exit Reason", "exit_reason"),
-  column("mistake", "Greška", "mistake"),
-  column("miss_reason", "Razlog propuštanja", "miss_reason"),
+  column("mistake", "Mistake", "mistake"),
+  column("miss_reason", "Miss reason", "miss_reason"),
   column("status", "Status"),
   tagColumn("technical_tags", "Technical Tags"),
   // Kept alongside the `emotion` / `discipline` split (see `tagSplitDimensions`)
   // rather than replaced by it: this is the only dimension that still shows a
   // free-typed tag belonging to no option list.
-  tagColumn("psychology_tags", "Psychology Tags (sve)"),
+  tagColumn("psychology_tags", "Psychology Tags (all)"),
   {
     key: "account",
-    label: "Nalog",
+    label: "Account",
     group: "trade",
     valueOf: (t, ctx) =>
       t.accountId
@@ -277,7 +277,7 @@ const tradeDimensions: Dimension[] = [
 const derivedDimensions: Dimension[] = [
   {
     key: "hold_duration",
-    label: "Trajanje držanja",
+    label: "Hold duration",
     group: "derived",
     // From the constant `durationBucket` itself buckets by, not a copy of its
     // labels. A stale `order` entry sorts a real bucket to the bottom forever
@@ -294,7 +294,7 @@ const derivedDimensions: Dimension[] = [
   },
   {
     key: "size_bucket",
-    label: "Veličina pozicije",
+    label: "Position size",
     group: "derived",
     order: SIZE_EDGES.map((e) => e.label),
     valueOf: (t) => bucketByEdges(t.size, SIZE_EDGES),
@@ -308,20 +308,20 @@ const derivedDimensions: Dimension[] = [
   },
   {
     key: "month",
-    label: "Mesec",
+    label: "Month",
     group: "derived",
     valueOf: (t) => (t.closeDay ? t.closeDay.slice(0, 7) : null),
   },
   {
     key: "dow_entry",
-    label: "Dan ulaska",
+    label: "Entry weekday",
     group: "derived",
     order: WEEKDAYS,
     valueOf: (t) => weekdayOf(t.openDay),
   },
   {
     key: "dow_exit",
-    label: "Dan izlaska",
+    label: "Exit weekday",
     group: "derived",
     order: WEEKDAYS,
     valueOf: (t) => weekdayOf(t.closeDay),
@@ -403,7 +403,7 @@ const processDimensions: Dimension[] = [
   ),
   processDimension(
     "day_grade",
-    "Ocena dana",
+    "Day rating",
     "close",
     (rs) => rs[0]?.day_grade ?? null,
     ["A", "B", "C", "D", "E", "F"],
@@ -415,16 +415,16 @@ const processDimensions: Dimension[] = [
     (rs) => {
       const v = rs[0]?.mental_temp;
       if (v == null) return null;
-      if (v <= 3) return "1–3 (loše)";
-      if (v <= 5) return "4–5 (ispod proseka)";
+      if (v <= 3) return "1–3 (poor)";
+      if (v <= 5) return "4–5 (below average)";
       if (v <= 7) return "6–7 (dobro)";
-      return "8–10 (odlično)";
+      return "8–10 (excellent)";
     },
-    ["1–3 (loše)", "4–5 (ispod proseka)", "6–7 (dobro)", "8–10 (odlično)"],
+    ["1–3 (poor)", "4–5 (below average)", "6–7 (good)", "8–10 (excellent)"],
   ),
   processDimension(
     "rule_broken",
-    "Prekršeno pravilo",
+    "Rule broken",
     "hold",
     (rs) => {
       if (rs.length === 0) return null;
@@ -509,7 +509,7 @@ export function dimensionsByGroup(group: DimensionGroup): Dimension[] {
 }
 
 export const DIMENSION_GROUP_LABELS: Record<DimensionGroup, string> = {
-  trade: "Trejd",
+  trade: "Trade",
   derived: "Izvedeno",
   process: "Proces",
   insight: "Insight",

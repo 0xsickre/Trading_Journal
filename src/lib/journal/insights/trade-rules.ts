@@ -51,7 +51,7 @@ export const noDrawdown: Rule = {
   minSample: 0,
   // Restricted to winners on purpose: a trade that never moved against you yet
   // still closed red is a fee-only loss, and calling that "good" would be wrong.
-  description: "Dobitnik koji nijednom nije bio u minusu.",
+  description: "A winner that was never underwater.",
   evaluate: (ctx) =>
     ctx.trades
       .filter((e) => e.excursion.maeR === 0 && e.outcome === "win")
@@ -59,8 +59,8 @@ export const noDrawdown: Rule = {
         insight(e, {
           ruleId: "no_drawdown",
           severity: "good",
-          title: "Bez drawdown-a",
-          detail: "Cena se nijednom nije vratila ispod ulaza — čist ulaz.",
+          title: "No drawdown",
+          detail: "Price never came back below the entry — a clean entry.",
         }),
       ),
 };
@@ -70,7 +70,7 @@ export const drawdownExceedsProfit: Rule = {
   level: "trade",
   minSample: 0,
   description:
-    "MAE veći od realizovanog profita — R-multiple izgleda bolje nego što je trejd bio.",
+    "MAE larger than the realized profit — the R-multiple looks better than the trade was.",
   evaluate: (ctx) =>
     ctx.trades
       .filter(
@@ -84,10 +84,10 @@ export const drawdownExceedsProfit: Rule = {
         insight(e, {
           ruleId: "drawdown_exceeds_profit",
           severity: "warning",
-          title: "Drawdown veći od profita",
-          detail: `Išao je ${r2(e.excursion.maeR!)}R protiv tebe da bi doneo ${r2(
+          title: "Drawdown larger than the profit",
+          detail: `It went ${r2(e.excursion.maeR!)}R against you to return ${r2(
             e.r!,
-          )}R. Rizik koji si stvarno nosio je veći nego što R-multiple sugeriše.`,
+          )}R. The risk you actually carried is larger than the R-multiple suggests.`,
         }),
       ),
 };
@@ -96,7 +96,7 @@ export const cleanHold: Rule = {
   id: "clean_hold",
   level: "trade",
   minSample: 0,
-  description: "Profit je nadmašio drawdown višestruko.",
+  description: "The profit beat the drawdown several times over.",
   evaluate: (ctx) =>
     ctx.trades
       .filter(
@@ -111,8 +111,8 @@ export const cleanHold: Rule = {
         insight(e, {
           ruleId: "clean_hold",
           severity: "good",
-          title: "Čisto držanje",
-          detail: `${r2(e.r!)}R profita uz samo ${r2(
+          title: "Clean hold",
+          detail: `${r2(e.r!)}R of profit with only ${r2(
             e.excursion.maeR!,
           )}R protiv — teza je radila skoro odmah.`,
         }),
@@ -123,7 +123,7 @@ export const greenToRed: Rule = {
   id: "green_to_red",
   level: "trade",
   minSample: 0,
-  description: "Bio u profitu, zatvoren u gubitku.",
+  description: "Was in profit, closed at a loss.",
   evaluate: (ctx) =>
     ctx.trades
       .filter(
@@ -136,8 +136,8 @@ export const greenToRed: Rule = {
         insight(e, {
           ruleId: "green_to_red",
           severity: "critical",
-          title: "Iz zelenog u crveno",
-          detail: `Bio je ${r2(
+          title: "Green to red",
+          detail: `It was ${r2(
             e.excursion.mfeR!,
           )}R u profitu pa zatvoren sa ${fmtMoney(e.pnl, ctx.currency)}.`,
         }),
@@ -148,7 +148,7 @@ export const greenToBreakeven: Rule = {
   id: "green_to_breakeven",
   level: "trade",
   minSample: 0,
-  description: "Bio u profitu, završio oko nule.",
+  description: "Was in profit, finished around zero.",
   evaluate: (ctx) =>
     ctx.trades
       .filter(
@@ -161,10 +161,10 @@ export const greenToBreakeven: Rule = {
         insight(e, {
           ruleId: "green_to_breakeven",
           severity: "warning",
-          title: "Iz zelenog u nulu",
-          detail: `Vrh je bio ${r2(
+          title: "Green to flat",
+          detail: `The peak was ${r2(
             e.excursion.mfeR!,
-          )}R, a rezultat nula. Ceo pomeraj je vraćen.`,
+          )}R, and the result was zero. The whole move was given back.`,
         }),
       ),
 };
@@ -173,7 +173,7 @@ export const redToGreen: Rule = {
   id: "red_to_green",
   level: "trade",
   minSample: 0,
-  description: "Bio u drawdown-u, zatvoren u profitu.",
+  description: "Was in drawdown, closed in profit.",
   evaluate: (ctx) =>
     ctx.trades
       .filter(
@@ -186,10 +186,10 @@ export const redToGreen: Rule = {
         insight(e, {
           ruleId: "red_to_green",
           severity: "info",
-          title: "Iz crvenog u zeleno",
-          detail: `Išao je ${r2(
+          title: "Red to green",
+          detail: `It went ${r2(
             e.excursion.maeR!,
-          )}R protiv pre nego što je proradio — izdržao si, ali proveri je li stop bio na pravom mestu.`,
+          )}R against you before it worked — you held, but check whether the stop was in the right place.`,
         }),
       ),
 };
@@ -200,7 +200,7 @@ export const exceedAvgHoldTime: Rule = {
   // Comparing against "your own winners" is meaningless until there are enough
   // winners to form a distribution.
   minSample: 8,
-  description: "Držan duže od 75 % tvojih dobitnika.",
+  description: "Held longer than 75 % of your winners.",
   evaluate: (ctx) => {
     const p75 = ctx.baseline.winnerHoldP75;
     if (p75 == null) return [];
@@ -210,10 +210,10 @@ export const exceedAvgHoldTime: Rule = {
         insight(e, {
           ruleId: "exceed_avg_hold_time",
           severity: "info",
-          title: "Duže od uobičajenog",
-          detail: `Držan ${formatDuration(
+          title: "Longer than usual",
+          detail: `Held ${formatDuration(
             e.durationSeconds,
-          )} — duže od 75 % tvojih dobitnika (${formatDuration(p75)}).`,
+          )} — longer than 75 % of your winners (${formatDuration(p75)}).`,
           sample: ctx.baseline.sample,
         }),
       );
@@ -225,7 +225,7 @@ export const loserLongHold: Rule = {
   level: "trade",
   minSample: 8,
   description:
-    "Gubitnik držan duže od medijane gubitnika i veći od prosečnog gubitka.",
+    "A loser held longer than the median loser and larger than the average loss.",
   evaluate: (ctx) => {
     const med = ctx.baseline.loserHoldMedian;
     const avgLoss = ctx.baseline.avgLossMagnitude;
@@ -242,10 +242,10 @@ export const loserLongHold: Rule = {
         insight(e, {
           ruleId: "loser_long_hold",
           severity: "critical",
-          title: "Gubitnik držan predugo",
+          title: "Loser held too long",
           detail: `${formatDuration(
             e.durationSeconds,
-          )} i ${fmtMoney(e.pnl, ctx.currency)} — duže i skuplje od tvog tipičnog gubitka. Nadanje, ne plan.`,
+          )} i ${fmtMoney(e.pnl, ctx.currency)} — longer and costlier than your typical loss. Hope, not a plan.`,
           sample: ctx.baseline.sample,
         }),
       );
@@ -256,7 +256,7 @@ export const gaveBackProfit: Rule = {
   id: "gave_back_profit",
   level: "trade",
   minSample: 8,
-  description: "Vrh profita iznad tvog proseka, a zatvoreno znatno ispod.",
+  description: "A profit peak above your average, closed well below it.",
   evaluate: (ctx) => {
     const avgMfe = ctx.baseline.avgMfeR;
     if (avgMfe == null) return [];
@@ -272,10 +272,10 @@ export const gaveBackProfit: Rule = {
         insight(e, {
           ruleId: "gave_back_profit",
           severity: "warning",
-          title: "Vraćen natprosečan pomeraj",
-          detail: `Vrh ${r2(
+          title: "Above-average move given back",
+          detail: `A peak of ${r2(
             e.excursion.mfeR!,
-          )}R (iznad tvog proseka ${r2(avgMfe)}R), a uzeo si ${e.excursion.capturePct!.toFixed(
+          )}R (above your average of ${r2(avgMfe)}R), and you took ${e.excursion.capturePct!.toFixed(
             0,
           )} % toga.`,
           sample: ctx.baseline.sample,
@@ -288,7 +288,7 @@ export const maximizeYourProfit: Rule = {
   id: "maximize_your_profit",
   level: "trade",
   minSample: 0,
-  description: "Dobitnik kod kojeg je većina pomeraja vraćena.",
+  description: "A winner where most of the move was given back.",
   evaluate: (ctx) =>
     ctx.trades
       .filter(
@@ -301,10 +301,10 @@ export const maximizeYourProfit: Rule = {
         insight(e, {
           ruleId: "maximize_your_profit",
           severity: "warning",
-          title: "Uzeto malo od pomeraja",
-          detail: `Zadržao si ${e.excursion.capturePct!.toFixed(
+          title: "Little of the move taken",
+          detail: `You kept ${e.excursion.capturePct!.toFixed(
             0,
-          )} % maksimalnog pomeraja u tvoju korist.`,
+          )} % of the maximum move in your favour.`,
         }),
       ),
 };
@@ -313,7 +313,7 @@ export const weakWin: Rule = {
   id: "weak_win",
   level: "trade",
   minSample: 0,
-  description: "Zatvoren u zelenom, ali jedva — uz veliki propušteni pomeraj.",
+  description: "Closed green, but barely — with a large missed move.",
   evaluate: (ctx) =>
     ctx.trades
       .filter(
@@ -328,10 +328,10 @@ export const weakWin: Rule = {
         insight(e, {
           ruleId: "weak_win",
           severity: "info",
-          title: "Slab dobitnik",
-          detail: `${r2(e.r!)}R uzeto iz pomeraja od ${r2(
+          title: "Weak winner",
+          detail: `${r2(e.r!)}R taken from a move of ${r2(
             e.excursion.mfeR!,
-          )}R — zeleno na papiru, propušteno u praksi.`,
+          )}R — green on paper, missed in practice.`,
         }),
       ),
 };
@@ -341,7 +341,7 @@ export const revengeTrade: Rule = {
   level: "trade",
   minSample: 0,
   description:
-    "Ulaz istog ili sledećeg dana posle gubitka, koji je i sam završio gubitkom.",
+    "An entry the same or next day after a loss, which itself ended in a loss.",
   evaluate: (ctx) => {
     // Swing translation of TradeZella's 30-second window. Sorted newest-first
     // so the loss reported is the one actually being reacted to, rather than
@@ -365,8 +365,8 @@ export const revengeTrade: Rule = {
         insight(e, {
           ruleId: "revenge_trade",
           severity: "critical",
-          title: "Revenge ulaz",
-          detail: `Otvoren u roku od ${T.REVENGE_WINDOW_DAYS} dana od gubitka na ${priorLoss.label} i takođe završio gubitkom.`,
+          title: "Revenge entry",
+          detail: `Opened within ${T.REVENGE_WINDOW_DAYS} days of a loss on ${priorLoss.label} and also ended in a loss.`,
         }),
       );
     }
@@ -378,7 +378,7 @@ export const scaleIn: Rule = {
   id: "scale_in",
   level: "trade",
   minSample: 0,
-  description: "Više ulaznih fill-ova.",
+  description: "Several entry fills.",
   evaluate: (ctx) =>
     ctx.trades
       .filter((e) => e.entryFills > 1)
@@ -387,7 +387,7 @@ export const scaleIn: Rule = {
           ruleId: "scale_in",
           severity: "info",
           title: "Scale-in",
-          detail: `${e.entryFills} ulazna fill-a, prosečan ulaz ${
+          detail: `${e.entryFills} entry fills, average entry ${
             e.trade.row.stats?.avg_entry?.toFixed(4) ?? "—"
           }.`,
         }),
@@ -398,7 +398,7 @@ export const scaleOut: Rule = {
   id: "scale_out",
   level: "trade",
   minSample: 0,
-  description: "Više izlaznih fill-ova.",
+  description: "Several exit fills.",
   evaluate: (ctx) =>
     ctx.trades
       .filter((e) => e.exitFills > 1)
@@ -407,7 +407,7 @@ export const scaleOut: Rule = {
           ruleId: "scale_out",
           severity: "info",
           title: "Scale-out",
-          detail: `${e.exitFills} izlazna fill-a, prosečan izlaz ${
+          detail: `${e.exitFills} exit fills, average exit ${
             e.trade.row.stats?.avg_exit?.toFixed(4) ?? "—"
           }.`,
         }),
@@ -418,7 +418,7 @@ export const unusualSize: Rule = {
   id: "unusual_size",
   level: "trade",
   minSample: 8,
-  description: "Veličina veća od 75 % tvojih trejdova.",
+  description: "Size larger than 75 % of your trades.",
   evaluate: (ctx) => {
     const p75 = ctx.baseline.sizeP75;
     if (p75 == null || !(p75 > 0)) return [];
@@ -428,8 +428,8 @@ export const unusualSize: Rule = {
         insight(e, {
           ruleId: "unusual_size",
           severity: e.outcome === "loss" ? "warning" : "info",
-          title: "Natprosečna veličina",
-          detail: `Veličina ${e.size} je iznad 75. percentila (${p75.toFixed(
+          title: "Above-average size",
+          detail: `Size ${e.size} is above the 75th percentile (${p75.toFixed(
             2,
           )}) tvojih pozicija.`,
           sample: ctx.baseline.sample,

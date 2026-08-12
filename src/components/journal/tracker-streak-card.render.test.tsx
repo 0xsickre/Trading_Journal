@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { TrackerStreakCard } from "./tracker-streak-card";
 import type { DayCompliance, DayStatus } from "@/lib/journal/tracker/compliance";
 
-/** The value under a `Stat` label — "Trenutni niz"/"Najduži niz" can share
+/** The value under a `Stat` label — "Current streak"/"Najduži niz" can share
  *  the same number, and "—" appears for more than one guard independently. */
 function statValue(label: string): string {
   return screen.getByText(label).nextElementSibling?.textContent ?? "";
@@ -22,8 +22,8 @@ const day = (date: string, status: DayStatus, pct: number | null): DayCompliance
 describe("TrackerStreakCard — real computeStreak/meanCompliance, on screen", () => {
   it("no rules set up shows the setup prompt, not a zeroed streak", () => {
     render(<TrackerStreakCard series={[]} endDay="2026-04-10" hasRules={false} />);
-    expect(screen.getByText(/Nema pravila/)).toBeInTheDocument();
-    expect(screen.queryByText("Trenutni niz")).not.toBeInTheDocument();
+    expect(screen.getByText(/No rules yet/)).toBeInTheDocument();
+    expect(screen.queryByText("Current streak")).not.toBeInTheDocument();
   });
 
   it("a skipped weekend neither breaks nor extends the streak", () => {
@@ -37,7 +37,7 @@ describe("TrackerStreakCard — real computeStreak/meanCompliance, on screen", (
       day("2026-04-12", "skipped", null), // Sunday, excluded
     ];
     render(<TrackerStreakCard series={series} endDay="2026-04-12" hasRules />);
-    expect(statValue("Trenutni niz")).toBe("5"); // steps over the weekend
+    expect(statValue("Current streak")).toBe("5"); // steps over the weekend
   });
 
   it("a broken day resets the current streak and is recorded as the last break", () => {
@@ -53,7 +53,7 @@ describe("TrackerStreakCard — real computeStreak/meanCompliance, on screen", (
   it("mean compliance is null with no scored days and reads as a dash, not 0%", () => {
     const series = [day("2026-04-06", "skipped", null)];
     render(<TrackerStreakCard series={series} endDay="2026-04-06" hasRules />);
-    expect(statValue("Prosečna doslednost")).toBe("—");
+    expect(statValue("Average consistency")).toBe("—");
     expect(screen.getByText("0 ocenjenih dana")).toBeInTheDocument();
   });
 });

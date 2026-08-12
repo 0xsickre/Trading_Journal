@@ -39,7 +39,7 @@ export const perfectDay: Rule = {
   id: "perfect_day",
   level: "day",
   minSample: 0,
-  description: "Zelen dan, svi trejdovi dobitni, nijedan nije išao protiv tebe.",
+  description: "A green day, every trade a winner, none went against you.",
   evaluate: (ctx) =>
     ctx.days
       .filter(
@@ -55,8 +55,8 @@ export const perfectDay: Rule = {
         dayInsight(d, {
           ruleId: "perfect_day",
           severity: "good",
-          title: "Savršen dan",
-          detail: `${d.trades.length} trejdova, ${fmtMoney(
+          title: "Perfect day",
+          detail: `${d.trades.length} trades, ${fmtMoney(
             d.net,
             ctx.currency,
           )}, nijedan nije bio u minusu.`,
@@ -68,7 +68,7 @@ export const highConvictionDay: Rule = {
   id: "high_conviction_day",
   level: "day",
   minSample: 0,
-  description: "Jedan trejd, visok R.",
+  description: "A single trade, high R.",
   evaluate: (ctx) =>
     ctx.days
       .filter(
@@ -81,10 +81,10 @@ export const highConvictionDay: Rule = {
         dayInsight(d, {
           ruleId: "high_conviction_day",
           severity: "good",
-          title: "Dan visoke uverenosti",
-          detail: `Jedan trejd (${d.trades[0].label}) za ${d.trades[0].r!.toFixed(
+          title: "High-conviction day",
+          detail: `One trade (${d.trades[0].label}) for ${d.trades[0].r!.toFixed(
             2,
-          )}R. Nema šuma.`,
+          )}R. No noise.`,
         }),
       ),
 };
@@ -94,7 +94,7 @@ export const sizingProblemDay: Rule = {
   level: "day",
   minSample: 0,
   description:
-    "Visok win rate, a dan crven — prosečan gubitak nadmašuje prosečan dobitak.",
+    "A high win rate but a red day — the average loss beats the average win.",
   evaluate: (ctx) =>
     ctx.days
       .filter((d) => {
@@ -106,11 +106,11 @@ export const sizingProblemDay: Rule = {
         dayInsight(d, {
           ruleId: "sizing_problem_day",
           severity: "critical",
-          title: "Više dobitnika, dan crven",
-          detail: `${d.wins}W / ${d.losses}L a rezultat ${fmtMoney(
+          title: "More winners, red day",
+          detail: `${d.wins}W / ${d.losses}L and the result ${fmtMoney(
             d.net,
             ctx.currency,
-          )}. Problem je veličina gubitaka, ne izbor trejdova.`,
+          )}. The problem is loss size, not trade selection.`,
         }),
       ),
 };
@@ -129,7 +129,7 @@ export const flipFlopDay: Rule = {
   id: "flip_flop_day",
   level: "day",
   minSample: 0,
-  description: "Obe strane istog dana.",
+  description: "Both sides on the same day.",
   evaluate: (ctx) =>
     ctx.days
       .filter((d) => {
@@ -142,16 +142,16 @@ export const flipFlopDay: Rule = {
         return dayInsight(d, {
           ruleId: "flip_flop_day",
           severity: red ? "warning" : "info",
-          title: red ? "Menjanje strane, dan crven" : "Menjanje strane, dan zelen",
+          title: red ? "Side-switching, red day" : "Side-switching, green day",
           detail: red
             ? `${longs} long i ${shorts} short istog dana za ${fmtMoney(
                 d.net,
                 ctx.currency,
-              )} — bias nije bio odlučen.`
+              )} — the bias was not settled.`
             : `${longs} long i ${shorts} short istog dana za ${fmtMoney(
                 d.net,
                 ctx.currency,
-              )}. Prošlo je, ali proveri je li moglo čistije.`,
+              )}. It worked, but check whether it could have been cleaner.`,
         });
       }),
 };
@@ -160,7 +160,7 @@ export const leftMoneyOnTable: Rule = {
   id: "left_money_on_table",
   level: "day",
   minSample: 0,
-  description: "Zbir propuštenog pomeraja preko trejdova tog dana.",
+  description: "The sum of missed move across that day's trades.",
   evaluate: (ctx) =>
     ctx.days
       .map((d) => {
@@ -181,10 +181,10 @@ export const leftMoneyOnTable: Rule = {
         dayInsight(d, {
           ruleId: "left_money_on_table",
           severity: "warning",
-          title: "Ostavljeno na stolu",
+          title: "Left on the table",
           detail: `${missed.toFixed(
             2,
-          )}R neuzeto preko ${counted} trejdova tog dana.`,
+          )}R left on the table across ${counted} trades that day.`,
         }),
       ),
 };
@@ -193,7 +193,7 @@ export const overconfidence: Rule = {
   id: "overconfidence",
   level: "day",
   minSample: 0,
-  description: "Veličina povećana posle niza dobitaka, pa gubitak.",
+  description: "Size raised after a winning streak, then a loss.",
   evaluate: (ctx) => {
     const ordered = [...ctx.trades]
       .filter((e) => e.closedAt && e.size != null && e.size > 0)
@@ -214,8 +214,8 @@ export const overconfidence: Rule = {
           ruleId: "overconfidence",
           level: "day",
           severity: "critical",
-          title: "Preterano samopouzdanje",
-          detail: `Posle ${streak} dobitka zaredom veličina je podignuta sa ${prev.size} na ${e.size} — i trejd je izgubio ${fmtMoney(
+          title: "Overconfidence",
+          detail: `After ${streak} wins in a row the size was raised from ${prev.size} to ${e.size} — and the trade lost ${fmtMoney(
             e.pnl,
             ctx.currency,
           )}.`,

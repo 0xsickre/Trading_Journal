@@ -67,8 +67,8 @@ const BASE_TABS: FormTab[] = [
     groups: [
       {
         id: "meta",
-        title: "Trejd",
-        description: "Šta, na kom nalogu, u kojoj fazi.",
+        title: "Trade",
+        description: "What, on which account, at which phase.",
         fields: [
           { name: "instrument", label: "Instrument", type: "instrument" },
         ],
@@ -79,7 +79,7 @@ const BASE_TABS: FormTab[] = [
         // direction; risk % and the stop distance give the size; the target
         // gives the R:R. Reading top to bottom is reading the arithmetic.
         id: "risk_plan",
-        title: "Rizik i plan",
+        title: "Risk and plan",
         fields: [
           { name: "entry_price", label: "Planned Entry Price", type: "number" },
           { name: "stop_price", label: "Stop Price", type: "number" },
@@ -122,8 +122,8 @@ const BASE_TABS: FormTab[] = [
       },
       {
         id: "macro",
-        title: "Kontekst",
-        description: "Iz dashboard readiness matrice — smer i kvalitet ulaza.",
+        title: "Context",
+        description: "From the dashboard readiness matrix — direction and entry quality.",
         fields: [],
       },
       {
@@ -132,15 +132,15 @@ const BASE_TABS: FormTab[] = [
         // it cannot read as "plan notes" versus "review notes". Splitting the
         // entry thesis from the after-the-fact lesson needs its own column.
         id: "notes",
-        title: "Beleška",
-        description: "Ista beleška se vidi i na tabu izvršenja.",
+        title: "Note",
+        description: "The same note is shown on the execution tab too.",
         fields: [
           {
             name: "trade_journal_notes",
-            label: "Beleška o trejdu",
+            label: "Trade note",
             type: "textarea",
             colSpan: 2,
-            placeholder: "Zašto ulazim, logika stopa i targeta…",
+            placeholder: "Why I am entering, stop and target logic…",
           },
         ],
       },
@@ -148,8 +148,8 @@ const BASE_TABS: FormTab[] = [
         // Rendered only for a missed setup, right above the lifecycle buttons
         // that produced that state — the reason belongs next to the act.
         id: "plan_review",
-        title: "Promašen setup",
-        description: "Zašto plan nikad nije otvoren.",
+        title: "Missed setup",
+        description: "Why the plan was never opened.",
         fields: [
           {
             name: "miss_reason",
@@ -178,20 +178,20 @@ const BASE_TABS: FormTab[] = [
         // every statistic already reads. `exit_reason` stays because the REASON
         // for the exit — target, stop, time — is not in the price.
         id: "outcome",
-        title: "Kako je izašao",
+        title: "How it exited",
         fields: [
           { name: "exit_reason", label: "Exit Reason", type: "select", listKey: "exit_reason" },
           {
             name: "max_drawdown_price",
             label: "MAE Price (max adverse)",
             type: "number",
-            placeholder: "Najgora cena protiv pozicije",
+            placeholder: "Worst price against the position",
           },
           {
             name: "max_profit_price",
             label: "MFE Price (max favorable)",
             type: "number",
-            placeholder: "Najbolja cena u korist pozicije",
+            placeholder: "Best price in favour of the position",
           },
         ],
       },
@@ -200,7 +200,7 @@ const BASE_TABS: FormTab[] = [
         // among the two or three fields the journal exists to collect; behind a
         // disclosure triangle it was the one field nobody fills.
         id: "psychology_notes",
-        title: "Revizija",
+        title: "Review",
         fields: [
           { name: "mistake", label: "Mistake", type: "select", listKey: "mistake" },
           {
@@ -213,10 +213,10 @@ const BASE_TABS: FormTab[] = [
           },
           {
             name: "trade_journal_notes",
-            label: "Beleška o trejdu",
+            label: "Trade note",
             type: "textarea",
             colSpan: 2,
-            placeholder: "Zašto ulaz, stop/target logika, lekcija…",
+            placeholder: "Why the entry, stop/target logic, the lesson…",
           },
         ],
       },

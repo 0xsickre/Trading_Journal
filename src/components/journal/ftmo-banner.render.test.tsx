@@ -93,7 +93,7 @@ describe("FtmoBanner", () => {
         result={result({ status: "passed", profitPct: 10.4, daysTraded: 14 })}
       />,
     );
-    expect(screen.getByText("Položen")).toBeInTheDocument();
+    expect(screen.getByText("Passed")).toBeInTheDocument();
     expect(screen.getAllByText(/10\.4%/).length).toBeGreaterThan(0);
     expect(screen.getByText(/14 trading dana/)).toBeInTheDocument();
   });

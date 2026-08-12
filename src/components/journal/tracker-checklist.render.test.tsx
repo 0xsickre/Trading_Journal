@@ -67,9 +67,9 @@ describe("a locked day removes the control, not just disables it", () => {
         data={data({ rules: R, answers: { r1: true }, locked: true })}
       />,
     );
-    expect(screen.getByText("ispunjeno")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Ispunjeno" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Nije ispunjeno" })).not.toBeInTheDocument();
+    expect(screen.getByText("met")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Met" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Not met" })).not.toBeInTheDocument();
   });
 
   it("unlocked: the same rule offers real, clickable answer buttons", () => {
@@ -79,11 +79,11 @@ describe("a locked day removes the control, not just disables it", () => {
         data={data({ rules: R, answers: {}, locked: false })}
       />,
     );
-    expect(screen.getByRole("button", { name: "Ispunjeno" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Nije ispunjeno" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Met" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Not met" })).toBeEnabled();
   });
 
-  it("clicking Ispunjeno while unlocked actually saves, and clicking it again clears the answer", async () => {
+  it("clicking Met while unlocked actually saves, and clicking it again clears the answer", async () => {
     const user = userEvent.setup({ delay: null });
     render(
       <TrackerStageSection
@@ -91,15 +91,15 @@ describe("a locked day removes the control, not just disables it", () => {
         data={data({ rules: R, answers: {}, locked: false })}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Ispunjeno" }));
+    await user.click(screen.getByRole("button", { name: "Met" }));
     expect(setCheckinMock).toHaveBeenCalledWith("r1", "2026-04-06", true);
 
-    await user.click(screen.getByRole("button", { name: "Ispunjeno" }));
+    await user.click(screen.getByRole("button", { name: "Met" }));
     expect(setCheckinMock).toHaveBeenCalledWith("r1", "2026-04-06", null);
   });
 
   it("a failed save reverts the optimistic answer and surfaces the error", async () => {
-    setCheckinMock.mockResolvedValue({ ok: false, error: "mreža je pukla" });
+    setCheckinMock.mockResolvedValue({ ok: false, error: "network failed" });
     const user = userEvent.setup({ delay: null });
     render(
       <TrackerStageSection
@@ -107,7 +107,7 @@ describe("a locked day removes the control, not just disables it", () => {
         data={data({ rules: R, answers: {}, locked: false })}
       />,
     );
-    const btn = screen.getByRole("button", { name: "Ispunjeno" });
+    const btn = screen.getByRole("button", { name: "Met" });
     await user.click(btn);
     // The optimistic press reverts once the server action reports failure —
     // an answer that LOOKS saved but was actually rejected is worse than a
@@ -156,7 +156,7 @@ describe("auto rules show a verdict but never a manual control", () => {
         })}
       />,
     );
-    expect(screen.getByText("prekršeno")).toBeInTheDocument();
+    expect(screen.getByText("broken")).toBeInTheDocument();
     expect(screen.getByText(/-\$620\.00.*-\$500\.00/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "#12 EURUSD" })).toHaveAttribute(
       "href",
@@ -184,7 +184,7 @@ describe("auto rules show a verdict but never a manual control", () => {
         })}
       />,
     );
-    expect(screen.getByText("ne ocenjuje se")).toBeInTheDocument();
-    expect(screen.getByText(/Nema postavljen limit/)).toBeInTheDocument();
+    expect(screen.getByText("not scored")).toBeInTheDocument();
+    expect(screen.getByText(/No limit set/)).toBeInTheDocument();
   });
 });

@@ -900,8 +900,8 @@ export function Dashboard({
               <div>
                 <p className="text-sm font-medium">Export for Claude</p>
                 <p className="text-xs text-muted-foreground">
-                  Markdown pack za izabrani period — otpremi ga u Claude za
-                  mentorski osvrt.
+                  A Markdown pack for the selected period — upload it to Claude for
+                  mentor feedback.
                 </p>
               </div>
 
@@ -1023,7 +1023,7 @@ export function Dashboard({
 
               {granularity !== "all" && (
                 <p className="text-xs text-muted-foreground">
-                  Izvoz: {exportRange.rangeText}
+                  Range: {exportRange.rangeText}
                 </p>
               )}
 
@@ -1032,7 +1032,7 @@ export function Dashboard({
                 className="w-full"
                 onClick={handleExportMentorPack}
               >
-                <Download className="size-4" /> Preuzmi .md
+                <Download className="size-4" /> Download .md
               </Button>
             </PopoverContent>
           </Popover>
@@ -1205,7 +1205,7 @@ export function Dashboard({
           />
         </StatGroup>
 
-        <StatGroup id="execution" title="Izvršenje i aktivnost" count={8}>
+        <StatGroup id="execution" title="Execution and activity" count={8}>
           <Stat
             label="Avg entry slip"
             value={
@@ -1368,7 +1368,7 @@ export function Dashboard({
         />
         <PeriodPerformanceCard
           summary={weekly}
-          label="Nedeljni učinak"
+          label="Weekly performance"
           currency={currency}
         />
       </div>
@@ -1376,7 +1376,7 @@ export function Dashboard({
       <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-2">
         <PeriodPerformanceCard
           summary={monthly}
-          label="Mesečni učinak"
+          label="Monthly performance"
           currency={currency}
         />
         <ChartShell title="R-multiple distribution">

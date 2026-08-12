@@ -41,7 +41,7 @@ function useAction() {
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>) =>
     start(async () => {
       const res = await fn();
-      if (!res.ok) toast.error(res.error ?? "Nije uspelo");
+      if (!res.ok) toast.error(res.error ?? "Failed");
       else router.refresh();
     });
   return { pending, run };
@@ -106,7 +106,7 @@ function RuleRow({ rule, currency }: { rule: TrackerRule; currency: string }) {
     }
     const n = Number(raw);
     if (!Number.isFinite(n) || n <= 0) {
-      toast.error("Limit mora biti pozitivan broj.");
+      toast.error("The limit must be a positive number.");
       return;
     }
     if (n === rule.config.amount) return;
@@ -202,11 +202,11 @@ function RuleRow({ rule, currency }: { rule: TrackerRule; currency: string }) {
           onClick={() =>
             run(() => (retired ? restoreTrackerRule(rule.id) : deleteTrackerRule(rule.id)))
           }
-          aria-label={retired ? "Vrati pravilo" : "Penzioniši pravilo"}
+          aria-label={retired ? "Restore rule" : "Retire rule"}
           title={
             retired
-              ? "Vrati na čeklistu. Dani dok je bilo penzionisano postaju ponovo ocenjeni."
-              : "Sklanja se sa čekliste. Doslednost prošlih dana ostaje netaknuta."
+              ? "Restore to the checklist. Days it was retired for become scored again."
+              : "Removed from the checklist. Past days' consistency stays untouched."
           }
         >
           {retired ? (
@@ -220,7 +220,7 @@ function RuleRow({ rule, currency }: { rule: TrackerRule; currency: string }) {
       {unconfigured && (
         <p className="w-full text-xs text-amber-600 dark:text-amber-500">
           Bez limita ovo pravilo se ne ocenjuje — ni pozitivno ni negativno.
-          Postavi iznos da počne da radi.
+          Set an amount to make it work.
         </p>
       )}
     </div>
@@ -249,7 +249,7 @@ function AddRuleForm({ stage }: { stage: TrackerStage }) {
         onKeyDown={(e) => {
           if (e.key === "Enter") submit();
         }}
-        placeholder="Novo pravilo…"
+        placeholder="New rule…"
         className="h-8 min-w-0 flex-1"
         disabled={pending}
       />
@@ -290,17 +290,18 @@ export function TrackerRuleManager({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Pravila procesa po fazi dana. Označena kao <b>auto</b> baza ocenjuje sama
-        iz trejdova — njih ne čekiraš rukom. Dani biraju kada pravilo važi;
-        vikend koji isključiš ne prekida niz.
+        Process rules by stage of the day. The ones marked <b>auto</b> are scored by
+        the database from the trades themselves — you do not tick those by hand.
+        Days decide when a rule applies; a weekend you exclude does not break the
+        streak.
       </p>
 
       {unconfigured > 0 && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-sm text-amber-700 dark:text-amber-400">
           {unconfigured}{" "}
-          {unconfigured === 1 ? "pravilo nema" : "pravila nemaju"} postavljen limit
+          {unconfigured === 1 ? "rule has no" : "pravila nemaju"} postavljen limit
           i zato se ne ocenjuje. Namerno nije seed-ovan podrazumevani iznos —
-          limit koji nisi sam izabrao je limit koji ćeš prolaziti ne primetivši.
+          a limit you did not choose yourself is a limit you will pass without noticing.
         </p>
       )}
 
@@ -320,8 +321,8 @@ export function TrackerRuleManager({
               {inStage.length === 0 && (
                 <p className="text-sm text-muted-foreground">
                   {stage === "reflect"
-                    ? "Nema pravila za osvrt. Ovde ide ono što radiš posle zatvaranja — pregled dana, beleška, ocena."
-                    : "Nema pravila u ovoj fazi."}
+                    ? "No rules for the review stage. This is what you do after the close — day overview, note, rating."
+                    : "No rules in this stage."}
                 </p>
               )}
               {inStage.map((rule) => (
@@ -337,7 +338,7 @@ export function TrackerRuleManager({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
-              Penzionisana pravila
+              Retired rules
               <span className="ml-2 text-sm font-normal text-muted-foreground">
                 statistika starih dana ostaje netaknuta
               </span>

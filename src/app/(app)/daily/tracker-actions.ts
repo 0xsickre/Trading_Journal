@@ -53,22 +53,22 @@ export async function setCheckin(
   const account = await getPrimaryAccount();
   const today = todayInTz(account?.timezone ?? "America/New_York");
   if (reportDate > today)
-    return { ok: false, error: "Budući dan još nije počeo." };
+    return { ok: false, error: "A future day has not started yet." };
 
   const { data: rule } = await supabase
     .from("tj_tracker_rules")
     .select("id, auto_key, deleted_at")
     .eq("id", ruleId)
     .maybeSingle();
-  if (!rule) return { ok: false, error: "Pravilo nije nađeno." };
+  if (!rule) return { ok: false, error: "Rule not found." };
 
   // An auto rule is answered by the evaluator, and by tj_lock_day at freeze
   // time. A hand-written row would be ignored by the read path on an unlocked
   // day and then overwritten at lock time — dead data that reads as an answer.
   if (rule.auto_key != null)
-    return { ok: false, error: "Automatsko pravilo se ne čekira rukom." };
+    return { ok: false, error: "An automatic rule is not ticked by hand." };
   if (rule.deleted_at != null)
-    return { ok: false, error: "Pravilo je penzionisano." };
+    return { ok: false, error: "The rule is retired." };
 
   // Checked before writing so the user sees this sentence instead of the
   // trigger's. The trigger stays the actual guard: PostgREST with the user's JWT
@@ -79,7 +79,7 @@ export async function setCheckin(
     .eq("report_date", reportDate)
     .maybeSingle();
   if (report?.locked_at != null)
-    return { ok: false, error: "Dan je zaključan — čekiranje je zamrznuto." };
+    return { ok: false, error: "The day is locked — ticking is frozen." };
 
   const { error } =
     checked == null
@@ -139,7 +139,7 @@ export async function lockDay(reportDate: string): Promise<Result> {
   const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
   const timezone = primary?.timezone ?? DEFAULT_TZ;
   if (reportDate > todayInTz(timezone))
-    return { ok: false, error: "Budući dan se ne može zaključati." };
+    return { ok: false, error: "A future day cannot be locked." };
 
   const index = buildTradeDayIndex(
     trades,

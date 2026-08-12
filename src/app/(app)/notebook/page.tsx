@@ -31,9 +31,9 @@ export default async function NotebookPage() {
       <div className="min-w-0">
         <h1 className="text-2xl font-semibold">Notebook</h1>
         <p className="text-muted-foreground">
-          Duži zapisi — nedeljni pregled, zapažanje o tržištu, misao o jednom
-          trejdu. Dnevni izveštaj ostaje forma sa fiksnim pitanjima; ovde pišeš
-          slobodno.
+          Longer writing — a weekly review, a market observation, a thought about one
+          trade. The daily report stays a form with fixed questions; here you
+          write freely.
         </p>
       </div>
 

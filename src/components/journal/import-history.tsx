@@ -34,13 +34,13 @@ export function ImportHistory({
         return;
       }
       const parts = [
-        `${res.deletedPositions} obrisano`,
-        `${res.restoredPositions} vraćeno`,
+        `${res.deletedPositions} deleted`,
+        `${res.restoredPositions} restored`,
       ];
       if (res.unrestorableMerges > 0) {
-        parts.push(`${res.unrestorableMerges} bez snimka`);
+        parts.push(`${res.unrestorableMerges} without a snapshot`);
       }
-      toast.success(`Import poništen — ${parts.join(", ")}`);
+      toast.success(`Import undone — ${parts.join(", ")}`);
       router.refresh();
     });
   }
@@ -50,11 +50,11 @@ export function ImportHistory({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Istorija importa</CardTitle>
+        <CardTitle className="text-base">Import history</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Poništavanje briše trejdove koje je import napravio i vraća fill-ove
-          koje je pregazio. Plan, psihologija i beleške se ne diraju — import ih
-          nikad nije ni posedovao.
+          Undoing deletes the trades the import created and restores the fills it
+          overwrote. Plan, psychology and notes are untouched — the import never
+          owned them in the first place.
         </p>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -68,18 +68,18 @@ export function ImportHistory({
             >
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">
-                  {b.filename ?? "Bez imena"}
+                  {b.filename ?? "Unnamed"}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {fmtInTz(b.created_at, tzOf(b.account_id))} ·{" "}
-                  {s.created ?? 0} novih · {s.merged ?? 0} spojenih ·{" "}
-                  {s.skipped ?? 0} preskočenih
-                  {(s.failed ?? 0) > 0 && ` · ${s.failed} neuspelih`}
+                  {s.created ?? 0} new · {s.merged ?? 0} merged ·{" "}
+                  {s.skipped ?? 0} skipped
+                  {(s.failed ?? 0) > 0 && ` · ${s.failed} failed`}
                 </div>
                 {b.unrestorableMerges > 0 && (
                   <div className="mt-1 text-xs text-[var(--loss)]">
-                    {b.unrestorableMerges} spojenih redova nema snimak prethodnih
-                    fill-ova — ti se ne mogu vratiti.
+                    {b.unrestorableMerges} merged rows have no snapshot of the previous
+                    fills — those cannot be restored.
                   </div>
                 )}
               </div>
@@ -87,7 +87,7 @@ export function ImportHistory({
               {isConfirming ? (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">
-                    Sigurno?
+                    Are you sure?
                   </span>
                   <Button
                     size="sm"
@@ -95,7 +95,7 @@ export function ImportHistory({
                     disabled={pending}
                     onClick={() => undo(b)}
                   >
-                    Poništi
+                    Undo
                   </Button>
                   <Button
                     size="sm"
@@ -103,7 +103,7 @@ export function ImportHistory({
                     disabled={pending}
                     onClick={() => setConfirming(null)}
                   >
-                    Odustani
+                    Cancel
                   </Button>
                 </div>
               ) : (
@@ -113,7 +113,7 @@ export function ImportHistory({
                   disabled={pending}
                   onClick={() => setConfirming(b.id)}
                 >
-                  <Undo2 className="size-4" /> Poništi import
+                  <Undo2 className="size-4" /> Undo import
                 </Button>
               )}
             </div>

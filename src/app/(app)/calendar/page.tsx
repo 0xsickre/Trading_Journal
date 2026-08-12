@@ -83,11 +83,11 @@ export default async function CalendarPage({
   return (
     <div className="space-y-5">
       <div className="min-w-0">
-        <h1 className="text-2xl font-semibold">Kalendar</h1>
+        <h1 className="text-2xl font-semibold">Calendar</h1>
         <p className="text-muted-foreground">
-          Mesec po danima, sa zbirom svake nedelje sa strane. P&amp;L se pripisuje
-          danu <b>zatvaranja</b> — swing otvoren u ponedeljak a zatvoren u petak
-          stoji u petku, jer je tad novac stigao.
+          The month by day, with each week&apos;s total alongside. P&amp;L is attributed to
+          the day it <b>closed</b> — a swing opened Monday and closed Friday sits
+          on Friday, because that is when the money arrived.
         </p>
       </div>
 

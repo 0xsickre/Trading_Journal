@@ -33,7 +33,7 @@ export function PerformanceSummaryPanel({
       <Card>
         <CardContent className="p-4 text-sm text-muted-foreground">
           Nijedna kategorija nema bar {minSample} trejdova. Dok je tako,
-          proglašavanje &bdquo;najbolje&ldquo; bi bilo nagađanje, pa se ne prikazuje.
+          calling one &quot;best&quot; would be guessing, so none is shown.
         </CardContent>
       </Card>
     );
@@ -63,12 +63,12 @@ export function PerformanceSummaryPanel({
     {
       label: "Najaktivniji",
       bucket: summary.mostActive?.bucket,
-      value: `${summary.mostActive?.n ?? 0} trejdova`,
+      value: `${summary.mostActive?.n ?? 0} trades`,
       n: summary.mostActive?.n,
       cls: "",
     },
     {
-      label: "Najviši win rate",
+      label: "Highest win rate",
       bucket: summary.highestWinRate?.bucket,
       // Routed through `formatMetric` like every other value in this panel —
       // a raw `.toFixed(1)` here used to ignore `viewMode` entirely, which

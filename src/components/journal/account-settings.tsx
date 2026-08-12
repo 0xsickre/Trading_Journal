@@ -151,10 +151,10 @@ function AccountCard({ account }: { account: Account }) {
         <div className="col-span-2 space-y-2 rounded-md border p-3">
           <div className="text-sm font-medium">Breakeven opseg</div>
           <p className="text-xs text-muted-foreground">
-            Trejd čiji neto P&amp;L padne u ovaj opseg broji se kao breakeven, ne
-            kao gubitak. Opseg je <strong>asimetričan</strong> — tipično
-            &minus;trošak do 0, ne &plusmn;X. Dok je 0 do 0, breakeven znači
-            tačno nulu i praktično nikad ne okine.
+            A trade whose net P&amp;L lands in this range counts as breakeven, not as a
+            loss. The range is <strong>asymmetric</strong> — typically
+            &minus;cost to 0, not &plusmn;X. While it is 0 to 0, breakeven means
+            exactly zero and practically never fires.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <Input
@@ -188,11 +188,11 @@ function AccountCard({ account }: { account: Account }) {
         </div>
 
         <div className="col-span-2 space-y-2 rounded-md border p-3">
-          <div className="text-sm font-medium">Default troškovi</div>
+          <div className="text-sm font-medium">Default costs</div>
           <p className="text-xs text-muted-foreground">
             Predpopunjavaju se na svaki novi fill u formi. Uvek se mogu
-            pregaziti ručno. <strong>Pozitivan swap je trošak</strong> — unesi
-            negativan broj samo ako na toj poziciji zarađuješ carry.
+            override by hand. <strong>A positive swap is a cost</strong> — enter a
+            negative number only if you earn carry on that position.
           </p>
           <div className="grid gap-2 sm:grid-cols-3">
             <div className="space-y-1">
@@ -214,7 +214,7 @@ function AccountCard({ account }: { account: Account }) {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Swap po jedinici / noći</Label>
+              <Label className="text-xs">Swap per unit / night</Label>
               <Input
                 inputMode="decimal"
                 value={swapPerDay}
@@ -231,9 +231,9 @@ function AccountCard({ account }: { account: Account }) {
               checked={ftmoMode}
               onCheckedChange={(v) => setFtmoMode(v === true)}
             />
-            <span className="text-sm font-medium">FTMO nalog mod</span>
+            <span className="text-sm font-medium">FTMO account mode</span>
             <span className="text-xs text-muted-foreground">
-              Pravila zamrznu nalog kad se prekrše
+              Rules freeze the account when breached
             </span>
           </label>
 
@@ -245,7 +245,7 @@ function AccountCard({ account }: { account: Account }) {
                 onEnabled={setDailyOn}
                 value={dailyPct}
                 onValue={setDailyPct}
-                suffix="% balansa / dan"
+                suffix="% of balance / day"
               />
               <FtmoRule
                 label="Max ukupni gubitak"
@@ -264,7 +264,7 @@ function AccountCard({ account }: { account: Account }) {
                 suffix="% balansa"
               />
               <FtmoRule
-                label="Min. trading dana"
+                label="Min. trading days"
                 enabled={minDaysOn}
                 onEnabled={setMinDaysOn}
                 value={minDays}
@@ -273,9 +273,9 @@ function AccountCard({ account }: { account: Account }) {
                 step="1"
               />
               <p className="text-xs text-muted-foreground">
-                Drawdown je statički (od početnog balansa {balance || "0"}{" "}
-                {currency}). Prekršaj = crveni banner + blokada novih trejdova dok
-                ne resetuješ izazov.
+                Drawdown is static (from the starting balance {balance || "0"}{" "}
+                {currency}). A breach = a red banner plus a block on new trades
+                until you reset the challenge.
               </p>
             </div>
           )}

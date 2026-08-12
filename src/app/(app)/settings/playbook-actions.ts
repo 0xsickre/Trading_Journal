@@ -19,7 +19,7 @@ type Result = { ok: true } | { ok: false; error: string };
 
 export async function addPlaybook(name: string): Promise<Result> {
   const clean = name.trim();
-  if (!clean) return { ok: false, error: "Naziv ne može biti prazan." };
+  if (!clean) return { ok: false, error: "The name cannot be empty." };
 
   const supabase = await createClient();
   const user = await getCurrentUser();
@@ -46,7 +46,7 @@ export async function addPlaybook(name: string): Promise<Result> {
       ok: false,
       error:
         error?.code === "23505"
-          ? "Playbook sa tim imenom već postoji."
+          ? "A playbook with that name already exists."
           : (error?.message ?? "Insert failed"),
     };
   }
@@ -54,7 +54,7 @@ export async function addPlaybook(name: string): Promise<Result> {
   // A playbook with no groups has nowhere to put a rule, so the empty state
   // would be a dead end. Same three groups the seed uses.
   const { error: gErr } = await supabase.from("tj_playbook_groups").insert(
-    ["Ulazak", "Izlazak", "Uslovi tržišta"].map((n, i) => ({
+    ["Entry", "Exit", "Market conditions"].map((n, i) => ({
       user_id: user.id,
       playbook_id: book.id,
       name: n,
@@ -74,7 +74,7 @@ export async function updatePlaybook(
   const next: { name?: string; description?: string | null; is_active?: boolean } = {};
   if (patch.name != null) {
     const clean = patch.name.trim();
-    if (!clean) return { ok: false, error: "Naziv ne može biti prazan." };
+    if (!clean) return { ok: false, error: "The name cannot be empty." };
     next.name = clean;
   }
   if (patch.description !== undefined)
@@ -123,7 +123,7 @@ export async function addPlaybookGroup(
   name: string,
 ): Promise<Result> {
   const clean = name.trim();
-  if (!clean) return { ok: false, error: "Naziv grupe ne može biti prazan." };
+  if (!clean) return { ok: false, error: "The group name cannot be empty." };
 
   const supabase = await createClient();
   const user = await getCurrentUser();
@@ -153,7 +153,7 @@ export async function renamePlaybookGroup(
   name: string,
 ): Promise<Result> {
   const clean = name.trim();
-  if (!clean) return { ok: false, error: "Naziv grupe ne može biti prazan." };
+  if (!clean) return { ok: false, error: "The group name cannot be empty." };
   const supabase = await createClient();
   const { error } = await supabase
     .from("tj_playbook_groups")
@@ -176,7 +176,7 @@ export async function deletePlaybookGroup(id: string): Promise<Result> {
   if ((count ?? 0) > 0) {
     return {
       ok: false,
-      error: "Grupa još ima pravila — prvo ih obriši ili premesti.",
+      error: "The group still has rules — delete or move them first.",
     };
   }
 
@@ -190,7 +190,7 @@ export async function deletePlaybookGroup(id: string): Promise<Result> {
     return {
       ok: false,
       error:
-        "Grupa sadrži arhivirana pravila čija statistika još stoji uz stare trejdove — ne može se obrisati.",
+        "The group holds archived rules whose statistics still sit on old trades — it cannot be deleted.",
     };
   }
 
@@ -208,7 +208,7 @@ export async function addPlaybookRule(input: {
   show_when?: ShowWhen;
 }): Promise<Result> {
   const clean = input.text.trim();
-  if (!clean) return { ok: false, error: "Pravilo ne može biti prazno." };
+  if (!clean) return { ok: false, error: "The rule cannot be empty." };
   const showWhen = input.show_when ?? "always";
   if (!SHOW_WHEN_VALUES.includes(showWhen))
     return { ok: false, error: "Nepoznata vrednost za „kada se prikazuje“." };
@@ -253,7 +253,7 @@ export async function updatePlaybookRule(
   const next: { text?: string; show_when?: ShowWhen } = {};
   if (patch.text != null) {
     const clean = patch.text.trim();
-    if (!clean) return { ok: false, error: "Pravilo ne može biti prazno." };
+    if (!clean) return { ok: false, error: "The rule cannot be empty." };
     next.text = clean;
   }
 
@@ -277,7 +277,7 @@ export async function updatePlaybookRule(
       if ((count ?? 0) > 0) {
         return {
           ok: false,
-          error: `Pravilo je već čekirano na ${count} trejdova — „kada se prikazuje“ je zaključano, jer bi izmena retroaktivno promenila statistiku. Napravi novo pravilo.`,
+          error: `The rule is already answered on ${count} trades — "when it shows" is locked, because editing it would retroactively change the statistics. Create a new rule instead.`,
         };
       }
       next.show_when = patch.show_when;

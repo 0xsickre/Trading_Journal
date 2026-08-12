@@ -50,7 +50,7 @@ export function DrawdownChart({
           <p className="mt-1 text-xs text-muted-foreground">
             {basis === "money"
               ? "Pad ispod vrha kumulativnog P&L-a. Uplate i isplate nisu gubitak."
-              : "Pad ispod vrha equity-ja, uključujući uplate i isplate."}
+              : "Drop below peak equity, including deposits and withdrawals."}
           </p>
         </div>
         <div className="flex rounded-md border p-0.5">
@@ -133,11 +133,11 @@ export function DrawdownChart({
                 value={stats.maxAt ? stats.maxAt.slice(0, 10) : "—"}
               />
               <Figure
-                label="Prosečan"
+                label="Average"
                 value={fmtMoney(stats.avgMoney, currency)}
               />
               <Figure
-                label="Trenutni"
+                label="Current"
                 value={
                   basis === "money"
                     ? fmtMoney(stats.currentMoney, currency)

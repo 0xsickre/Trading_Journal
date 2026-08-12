@@ -88,7 +88,7 @@ beforeEach(() => {
 });
 
 describe("ambiguous cells are shown as refused, not silently defaulted", () => {
-  it("'1,234' (qty) and '02/03/2026' (entry time) both surface as nečitljivo", async () => {
+  it("'1,234' (qty) and '02/03/2026' (entry time) both surface as unreadable", async () => {
     const user = userEvent.setup({ delay: null });
     render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} />);
 
@@ -102,8 +102,8 @@ describe("ambiguous cells are shown as refused, not silently defaulted", () => {
     await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
 
     const row = screen.getByText("EURUSD").closest("tr")!;
-    expect(within(row).getByText(/nečitljivo:/)).toHaveTextContent("qty");
-    expect(within(row).getByText(/nečitljivo:/)).toHaveTextContent("entry time");
+    expect(within(row).getByText(/unreadable:/)).toHaveTextContent("qty");
+    expect(within(row).getByText(/unreadable:/)).toHaveTextContent("entry time");
   });
 
   it("a clean, unambiguous row reads no rejected cells and imports as new/create", async () => {

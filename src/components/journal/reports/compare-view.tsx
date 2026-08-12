@@ -165,14 +165,14 @@ export function CompareView({
         <div className="grid gap-3 lg:grid-cols-2">
           {[
             { label: `${value}`, side: ta, tone: "border-[var(--profit)]" },
-            { label: `Sve osim: ${value}`, side: tb, tone: "border-[var(--chart-3)]" },
+            { label: `All except: ${value}`, side: tb, tone: "border-[var(--chart-3)]" },
           ].map((col) => (
             <Card key={col.label} className={`border-t-2 ${col.tone}`}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">{col.label}</CardTitle>
                 <p className="text-xs text-muted-foreground">
                   {col.side?.n ?? 0} trejdova
-                  {(col.side?.n ?? 0) < minSample && " — ispod praga, ne zaključuj"}
+                  {(col.side?.n ?? 0) < minSample && " — below the threshold, draw no conclusion"}
                 </p>
               </CardHeader>
               <CardContent>
@@ -207,7 +207,7 @@ export function CompareView({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Druga strana je tačna negacija prve, pa dve polovine zajedno čine ceo
+        The other side is the exact negation of the first, so the two halves make the whole
         skup — bez preklapanja i bez izgubljenih trejdova.
       </p>
     </div>

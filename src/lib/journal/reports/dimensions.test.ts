@@ -104,10 +104,10 @@ describe("derived bucket dimensions", () => {
       { openedAt: "2026-01-05T10:00:00Z", closedAt: "2026-01-09T10:00:00Z" },
     ]);
     expect(bucketsOf(getDimension("dow_entry")!, t, dimCtx())).toEqual([
-      "Ponedeljak",
+      "Monday",
     ]);
     expect(bucketsOf(getDimension("dow_exit")!, t, dimCtx())).toEqual([
-      "Petak",
+      "Friday",
     ]);
   });
 });
@@ -125,7 +125,7 @@ describe("process dimensions", () => {
       mkReport("2026-01-09", { mental_temp: 9 }),
     ]);
     expect(bucketsOf(getDimension("mental_temp")!, t, ctx)).toEqual([
-      "1–3 (loše)",
+      "1–3 (poor)",
     ]);
   });
 

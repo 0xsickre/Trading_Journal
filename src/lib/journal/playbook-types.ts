@@ -15,9 +15,9 @@ export type ShowWhen = (typeof SHOW_WHEN_VALUES)[number];
 
 export const SHOW_WHEN_LABELS: Record<ShowWhen, string> = {
   always: "Uvek",
-  winner: "Samo kod dobitka",
-  loser: "Samo kod gubitka",
-  breakeven: "Samo kod breakeven-a",
+  winner: "Winners only",
+  loser: "Losers only",
+  breakeven: "Breakeven only",
 };
 
 export type PlaybookRule = {

@@ -75,7 +75,7 @@ describe("the score card renders what the score says", () => {
     // Every one of the seven components reads "—" here, which is why the
     // headline has to be found by position rather than by its text.
     expect(headline()).toBe("—");
-    expect(screen.getByText(/još 5/)).toBeInTheDocument();
+    expect(screen.getByText(/5 more/)).toBeInTheDocument();
     expect(componentValue("Max drawdown")).toBe("—");
     // Six components here, not seven: this fixture supplies no process
     // adherence, so the card omits that row entirely rather than showing it
@@ -85,7 +85,7 @@ describe("the score card renders what the score says", () => {
 
   it("marks a thin sample as provisional, with the count beside it", () => {
     render(<SickreScoreCard score={scoreOf({ sample: { trades: 10, decided: 10 } })} />);
-    expect(screen.getByText(/privremeno/)).toBeInTheDocument();
-    expect(screen.getByText(/10 trejda/)).toBeInTheDocument();
+    expect(screen.getByText(/provisional/)).toBeInTheDocument();
+    expect(screen.getByText(/10 trades/)).toBeInTheDocument();
   });
 });

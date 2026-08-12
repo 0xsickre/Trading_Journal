@@ -38,7 +38,7 @@ export function CrossAnalysis({
         </CardHeader>
         <CardContent>
           <p className="py-6 text-center text-sm text-muted-foreground">
-            Nema trejdova koji imaju vrednost za obe dimenzije.
+            No trades carry a value for both dimensions.
           </p>
         </CardContent>
       </Card>
@@ -52,12 +52,12 @@ export function CrossAnalysis({
           {result.rowDimension.label} × {result.colDimension.label}
         </CardTitle>
         <p className="text-xs text-muted-foreground">
-          {result.metric.label} · {result.grandTotal.n} trejdova · ćelije ispod{" "}
-          {result.minSample} trejdova su prigušene
+          {result.metric.label} · {result.grandTotal.n} trades · cells below{" "}
+          {result.minSample} trades are dimmed
         </p>
         {result.multiValue && (
           <p className="text-xs text-[var(--chart-4)]">
-            Jedna od osa je viševrednosna — zbirovi premašuju ukupan broj trejdova.
+            One axis is multi-valued — the totals exceed the overall trade count.
           </p>
         )}
       </CardHeader>
@@ -72,7 +72,7 @@ export function CrossAnalysis({
                     {c}
                   </th>
                 ))}
-                <th className="py-2 pl-3 text-right font-medium">Ukupno</th>
+                <th className="py-2 pl-3 text-right font-medium">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -90,9 +90,9 @@ export function CrossAnalysis({
                         title={
                           cell
                             ? `${cell.n} trejdova${
-                                cell.belowSample ? " — ispod praga" : ""
+                                cell.belowSample ? " — below the threshold" : ""
                               }`
-                            : "Nijedan trejd u ovom preseku"
+                            : "No trade in this intersection"
                         }
                       >
                         {cell ? (
@@ -117,7 +117,7 @@ export function CrossAnalysis({
                 </tr>
               ))}
               <tr className="border-t-2">
-                <td className="py-2 pr-3 font-medium">Ukupno</td>
+                <td className="py-2 pr-3 font-medium">Total</td>
                 {result.colKeys.map((c) => (
                   <td
                     key={c}

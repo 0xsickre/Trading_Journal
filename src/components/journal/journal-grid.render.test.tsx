@@ -228,14 +228,14 @@ describe("the column picker refuses to empty the grid", () => {
   });
 
   it("reverts the hide and shows an error toast when the save fails", async () => {
-    setHiddenColumnsMock.mockResolvedValue({ ok: false, error: "mreža je pukla" });
+    setHiddenColumnsMock.mockResolvedValue({ ok: false, error: "network failed" });
     const user = userEvent.setup({ delay: null });
     render(<JournalGrid trades={rowsOf(trades)} accounts={[ACCOUNT]} />);
 
     await user.click(screen.getByRole("button", { name: /Kolone/ }));
     await user.click(screen.getByRole("menuitemcheckbox", { name: "Grafikon" }));
 
-    await vi.waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith("mreža je pukla"));
+    await vi.waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith("network failed"));
   });
 });
 

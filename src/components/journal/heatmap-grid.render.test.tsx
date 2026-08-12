@@ -103,12 +103,12 @@ describe("ComplianceHeatmap — fixed 0–100 scale, one hue", () => {
     expect(screen.getByTitle("2026-03-13: 75% (3/4)")).toBeInTheDocument();
   });
 
-  it("a day with no applicable rule reads 'nema pravila', not 0%", () => {
+  it("a day with no applicable rule reads 'no rules', not 0%", () => {
     const series = [
       day({ date: "2026-03-13", pct: null, satisfied: 0, applicable: 0, status: "skipped" }),
     ];
     render(<ComplianceHeatmap series={series} endDay="2026-03-13" weeks={1} />);
-    expect(screen.getByTitle("2026-03-13: nema pravila")).toBeInTheDocument();
+    expect(screen.getByTitle("2026-03-13: no rules")).toBeInTheDocument();
   });
 
   it("a genuine 0% day is the faintest primary, not muted like a no-data day", () => {

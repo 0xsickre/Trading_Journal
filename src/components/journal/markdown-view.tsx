@@ -117,7 +117,7 @@ export function MarkdownView({
   if (blocks.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Prazna beleška. Počni da pišeš levo — pregled se osvežava dok kucaš.
+        Empty note. Start writing on the left — the preview refreshes as you type.
       </p>
     );
   }

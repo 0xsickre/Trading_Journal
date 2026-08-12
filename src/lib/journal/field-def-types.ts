@@ -30,7 +30,7 @@ export const FIELD_DEF_GROUP_LABELS: Record<FieldDefGroup, string> = {
   macro: "Plan — Kontekst",
   setup: "Plan — Setup",
   plan_advanced: "Plan — Advanced",
-  execution_advanced: "Izvršenje — Advanced",
+  execution_advanced: "Execution — Advanced",
 };
 
 export const FIELD_DEF_TYPES = [

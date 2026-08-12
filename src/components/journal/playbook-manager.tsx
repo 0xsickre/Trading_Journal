@@ -43,7 +43,7 @@ function useAction() {
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>) =>
     start(async () => {
       const res = await fn();
-      if (!res.ok) toast.error(res.error ?? "Nije uspelo");
+      if (!res.ok) toast.error(res.error ?? "Failed");
       else router.refresh();
     });
   return { pending, run };
@@ -84,7 +84,7 @@ function RuleRow({ rule }: { rule: PlaybookRule }) {
           className="h-8 w-48"
           title={
             locked
-              ? `Zaključano — pravilo je već čekirano na ${rule.answerCount} trejdova. Izmena bi retroaktivno promenila statistiku.`
+              ? `Locked — the rule is already answered on ${rule.answerCount} trades. Editing it would retroactively change the statistics.`
               : undefined
           }
         >
@@ -116,13 +116,13 @@ function RuleRow({ rule }: { rule: PlaybookRule }) {
             retired ? restorePlaybookRule(rule.id) : deletePlaybookRule(rule.id),
           )
         }
-        aria-label={retired ? "Vrati pravilo" : "Obriši pravilo"}
+        aria-label={retired ? "Restore rule" : "Delete rule"}
         title={
           retired
-            ? "Vrati na čeklistu."
+            ? "Restore to the checklist."
             : locked
-              ? "Sklanja se sa čekliste. Statistika starih trejdova ostaje netaknuta."
-              : "Briše se — nijedan trejd ga nije čekirao."
+              ? "Removed from the checklist. Statistics on past trades stay untouched."
+              : "Deleted — no trade has ever answered it."
         }
       >
         {retired ? (
@@ -178,7 +178,7 @@ function GroupBlock({ group }: { group: PlaybookGroup }) {
           className="ml-auto size-7"
           disabled={pending}
           onClick={() => run(() => deletePlaybookGroup(group.id))}
-          aria-label="Obriši grupu"
+          aria-label="Delete group"
         >
           <Trash2 className="size-3.5" />
         </Button>
@@ -195,7 +195,7 @@ function GroupBlock({ group }: { group: PlaybookGroup }) {
           onKeyDown={(e) => {
             if (e.key === "Enter") addRule();
           }}
-          placeholder="Novo pravilo, npr. Čekaj sweep pa MSS"
+          placeholder="New rule, e.g. Wait for the sweep, then MSS"
           className="h-8 min-w-0 flex-1"
           disabled={pending}
         />
@@ -272,8 +272,8 @@ function PlaybookCard({ book }: { book: Playbook }) {
               className="size-8"
               disabled={pending}
               onClick={() => run(() => deletePlaybook(book.id))}
-              aria-label="Obriši playbook"
-              title="Moguće samo dok ga nijedan trejd ne koristi."
+              aria-label="Delete playbook"
+              title="Only possible while no trade uses it."
             >
               <Trash2 className="size-3.5" />
             </Button>
@@ -297,7 +297,7 @@ function PlaybookCard({ book }: { book: Playbook }) {
                   return res;
                 });
             }}
-            placeholder="Nova grupa pravila"
+            placeholder="New rule group"
             className="h-8 w-56"
             disabled={pending}
           />
@@ -342,9 +342,10 @@ export function PlaybookManager({ playbooks }: { playbooks: Playbook[] }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Svako pravilo nosi sopstvenu statistiku — na <b>/reports</b> grupiši po
-        „Pravilo iz playbook-a“ i vidi follow rate uz veličinu uzorka. To je
-        razlika između pravila koje nosi edge i onog koje je postalo ritual.
+        Every rule carries its own statistics — on <b>/reports</b>, group by
+        &quot;Playbook rule&quot; and read the follow rate beside its sample size.
+        That is the difference between a rule that carries edge and one that has
+        become a ritual.
       </p>
 
       <div className="flex items-center gap-2">
@@ -375,12 +376,12 @@ export function PlaybookManager({ playbooks }: { playbooks: Playbook[] }) {
             })
           }
         >
-          <Plus className="size-4" /> Dodaj playbook
+          <Plus className="size-4" /> Add playbook
         </Button>
       </div>
 
       {playbooks.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Još nema nijednog playbook-a.</p>
+        <p className="text-sm text-muted-foreground">No playbook yet.</p>
       ) : (
         playbooks.map((book) => <PlaybookCard key={book.id} book={book} />)
       )}

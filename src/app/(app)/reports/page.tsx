@@ -51,8 +51,8 @@ export default async function ReportsPage() {
       <div className="min-w-0">
         <h1 className="text-2xl font-semibold">Reports</h1>
         <p className="text-muted-foreground">
-          Grupiši po bilo čemu, ukrsti sa bilo čim. Uz svaki broj stoji uzorak
-          na kome počiva.
+          Group by anything, cross it with anything. Every number carries the sample
+          it rests on.
         </p>
       </div>
 

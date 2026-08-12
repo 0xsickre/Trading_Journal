@@ -33,13 +33,13 @@ export const AUTO_RULES_NEEDING_AMOUNT: ReadonlySet<AutoRuleKey> = new Set([
 export const ISO_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 export const WEEKDAY_LABELS: Record<number, string> = {
-  1: "Pon",
-  2: "Uto",
-  3: "Sre",
-  4: "Čet",
-  5: "Pet",
-  6: "Sub",
-  7: "Ned",
+  1: "Mon",
+  2: "Tue",
+  3: "Wed",
+  4: "Thu",
+  5: "Fri",
+  6: "Sat",
+  7: "Sun",
 };
 
 export type TrackerRule = {

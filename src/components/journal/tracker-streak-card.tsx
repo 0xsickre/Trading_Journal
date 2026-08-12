@@ -48,33 +48,33 @@ export function TrackerStreakCard({
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <Flame className="size-4" />
-          Doslednost procesa
+          Process consistency
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {!hasRules ? (
           <p className="text-sm text-muted-foreground">
-            Nema pravila. Postavi ih u{" "}
+            No rules yet. Set them up in{" "}
             <Link href="/settings" className="underline underline-offset-2">
               Settings › Tracker
             </Link>
-            , pa ih čekiraj u dnevnom izveštaju.
+            , then tick them off in the daily report.
           </p>
         ) : (
           <>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <Stat
-                label="Trenutni niz"
+                label="Current streak"
                 value={`${streak.current}`}
                 hint={streak.current === 1 ? "dan" : "dana"}
               />
               <Stat
-                label="Najduži niz"
+                label="Longest streak"
                 value={`${streak.longest}`}
                 hint={streak.longest === 1 ? "dan" : "dana"}
               />
               <Stat
-                label="Prosečna doslednost"
+                label="Average consistency"
                 value={mean == null ? "—" : `${Math.round(mean)}%`}
                 // Mean of DAYS, not of pooled rule counts: a Monday with 12
                 // rules must not outweigh a Wednesday with 3, because the unit
@@ -89,8 +89,8 @@ export function TrackerStreakCard({
 
             <ComplianceHeatmap series={series} endDay={endDay} />
             <p className="text-xs text-muted-foreground">
-              Poslednjih 26 nedelja — jača boja je veća doslednost. Dan bez
-              ijednog pravila (vikend, ili pre nego što je pravilo postojalo)
+              Last 26 weeks — stronger colour is higher consistency. A day with no
+              rule at all (a weekend, or before the rule existed)
               stoji prazan i ne prekida niz.
             </p>
           </>

@@ -33,7 +33,7 @@ const weekInsight = (
   ...partial,
   level: "week",
   subjectId: w.key,
-  subjectLabel: `Nedelja ${w.key}`,
+  subjectLabel: `Week ${w.key}`,
 });
 
 export const overtradingWeek: Rule = {
@@ -41,7 +41,7 @@ export const overtradingWeek: Rule = {
   level: "week",
   // Needs several weeks before "your average week" means anything.
   minSample: 4,
-  description: "Broj trejdova daleko iznad tvog nedeljnog proseka.",
+  description: "Trade count far above your weekly average.",
   evaluate: (ctx) => {
     const avg = ctx.baseline.weeklyTradeCountAvg;
     if (avg == null || ctx.weeks.length < 4) return [];
@@ -51,10 +51,10 @@ export const overtradingWeek: Rule = {
         weekInsight(w, {
           ruleId: "overtrading_week",
           severity: w.net < 0 ? "critical" : "warning",
-          title: "Overtrading nedelja",
-          detail: `${w.trades.length} trejdova naspram proseka ${avg.toFixed(
+          title: "Overtrading week",
+          detail: `${w.trades.length} trades against an average of ${avg.toFixed(
             1,
-          )} — rezultat ${fmtMoney(w.net, ctx.currency)}.`,
+          )} — result ${fmtMoney(w.net, ctx.currency)}.`,
           sample: ctx.weeks.length,
         }),
       );
@@ -65,7 +65,7 @@ export const lowEfficiencyWeek: Rule = {
   id: "low_efficiency_week",
   level: "week",
   minSample: 4,
-  description: "Mnogo trejdova, mali rezultat u odnosu na tvoju prosečnu zelenu nedelju.",
+  description: "Many trades, a small result compared with your average green week.",
   evaluate: (ctx) => {
     const greenAvg = ctx.baseline.greenWeekAvgNet;
     if (greenAvg == null || !(greenAvg > 0) || ctx.weeks.length < 4) return [];
@@ -80,11 +80,11 @@ export const lowEfficiencyWeek: Rule = {
         weekInsight(w, {
           ruleId: "low_efficiency_week",
           severity: "warning",
-          title: "Slaba efikasnost",
-          detail: `${w.trades.length} trejdova za ${fmtMoney(
+          title: "Poor efficiency",
+          detail: `${w.trades.length} trades for ${fmtMoney(
             w.net,
             ctx.currency,
-          )} — tvoja prosečna zelena nedelja nosi ${fmtMoney(
+          )} — your average green week carries ${fmtMoney(
             greenAvg,
             ctx.currency,
           )}. Mnogo rada za malo.`,
@@ -99,7 +99,7 @@ export const tiltWeek: Rule = {
   level: "week",
   minSample: 0,
   description:
-    "Gubitnička nedelja sa više gubitaka i neuobičajeno kratkim držanjem.",
+    "A losing week with several losses and unusually short holds.",
   evaluate: (ctx) =>
     ctx.weeks
       .filter((w) => {
@@ -120,13 +120,13 @@ export const tiltWeek: Rule = {
         return weekInsight(w, {
           ruleId: "tilt_week",
           severity: "critical",
-          title: "Tilt nedelja",
-          detail: `${w.losses} gubitaka, ${fmtMoney(
+          title: "Tilt week",
+          detail: `${w.losses} losses, ${fmtMoney(
             w.net,
             ctx.currency,
-          )}, prosečno držanje ${formatDuration(
+          )}, average hold ${formatDuration(
             avgSeconds,
-          )}. Za swing knjigu to je reagovanje, ne vođenje pozicije.`,
+          )}. For a swing book that is reacting, not managing a position.`,
         });
       }),
 };

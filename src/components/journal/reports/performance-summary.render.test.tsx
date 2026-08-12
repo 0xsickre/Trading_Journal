@@ -40,7 +40,7 @@ describe("PerformanceSummaryPanel — W3: the win-rate tile respects privacy mod
     expect(screen.getByText("100.0%")).toBeInTheDocument(); // EURUSD: 2/2 wins
   });
 
-  it("privacy mode: every tile masks, including 'Najviši win rate' — the bug this fix closed", () => {
+  it("privacy mode: every tile masks, including 'Highest win rate' — the bug this fix closed", () => {
     const result = run(book);
     const summary = summarizeReport(result, "net_pnl");
     render(

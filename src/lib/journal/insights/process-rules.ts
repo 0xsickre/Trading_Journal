@@ -53,7 +53,7 @@ export const micromanagedASetup: Rule = {
   level: "trade",
   minSample: 0,
   description:
-    "A-setup koji je bio otvoren nekog dana kad si upisao da si dirao poziciju.",
+    "An A-setup that was open on a day you recorded touching the position.",
   evaluate: (ctx) => {
     const out: Insight[] = [];
     for (const e of ctx.trades) {
@@ -73,8 +73,8 @@ export const micromanagedASetup: Rule = {
         ruleId: "micromanaged_a_setup",
         level: "trade",
         severity: "critical",
-        title: "Micromanage na A-setup-u",
-        detail: `A-setup je bio otvoren ${violatedOn}, na dan kad si sam upisao da si dirao poziciju. Ishod: ${rPart}.`,
+        title: "Micromanaged an A-setup",
+        detail: `The A-setup was open on ${violatedOn}, a day you recorded touching the position yourself. Outcome: ${rPart}.`,
         subjectId: e.id,
         subjectLabel: e.label,
       });
@@ -88,7 +88,7 @@ export const againstMacroBias: Rule = {
   id: "against_macro_bias",
   level: "trade",
   minSample: P.MIN_CATEGORY_SAMPLE,
-  description: "Ulaz protiv makro bias-a, sa istorijskim rezultatom te kategorije.",
+  description: "An entry against the macro bias, with that category's historical result.",
   evaluate: (ctx) => {
     const against = ctx.trades.filter((e) =>
       norm(strField(e.trade.row, "macro_align")).includes("protiv"),
@@ -106,14 +106,14 @@ export const againstMacroBias: Rule = {
         ruleId: "against_macro_bias",
         level: "portfolio",
         severity: net < 0 ? "warning" : "info",
-        title: "Trejdovi protiv makro bias-a",
-        detail: `${against.length} trejdova protiv bias-a: ${fmtMoney(
+        title: "Trades against the macro bias",
+        detail: `${against.length} trades against the bias: ${fmtMoney(
           net,
           ctx.currency,
         )}, win rate ${winPct.toFixed(0)} %. ${
           net < 0
-            ? "Kategorija je u minusu — to je filter, ne mišljenje."
-            : "Kategorija je pozitivna — bias nije apsolutna zabrana."
+            ? "The category is in the red — that is a filter, not an opinion."
+            : "The category is positive — the bias is not an absolute ban."
         }`,
         subjectId: "against_macro_bias",
         sample: against.length,
@@ -127,7 +127,7 @@ export const cotChase: Rule = {
   id: "cot_chase",
   level: "trade",
   minSample: 0,
-  description: "Ulaz uprkos COT filteru koji je rekao da se ne juri.",
+  description: "An entry despite the COT filter saying not to chase.",
   evaluate: (ctx) =>
     ctx.trades
       .filter((e) => norm(strField(e.trade.row, "cot_filter")).includes("ne chase"))
@@ -135,8 +135,8 @@ export const cotChase: Rule = {
         ruleId: "cot_chase",
         level: "trade" as const,
         severity: e.outcome === "loss" ? ("warning" as const) : ("info" as const),
-        title: "Chase uprkos COT filteru",
-        detail: `COT filter je bio „ne chase", a ušao si svejedno. Ishod: ${
+        title: "Chased despite the COT filter",
+        detail: `The COT filter said "do not chase", and you entered anyway. Outcome: ${
           e.r != null ? `${e.r.toFixed(2)}R` : fmtMoney(e.pnl, ctx.currency)
         }.`,
         subjectId: e.id,
@@ -149,7 +149,7 @@ export const lowMentalTempEntry: Rule = {
   id: "low_mental_temp_entry",
   level: "trade",
   minSample: 0,
-  description: "Ulaz na dan sa mentalnom temperaturom ispod praga.",
+  description: "An entry on a day with mental temperature below the threshold.",
   evaluate: (ctx) => {
     const out: Insight[] = [];
     for (const e of ctx.trades) {
@@ -162,8 +162,8 @@ export const lowMentalTempEntry: Rule = {
         ruleId: "low_mental_temp_entry",
         level: "trade",
         severity: e.outcome === "loss" ? "critical" : "warning",
-        title: "Ulaz na lošu mentalnu ocenu",
-        detail: `Na dan ulaska ocenio si mentalnu temperaturu ${temp}/10. Ishod: ${
+        title: "Entry on a poor mental rating",
+        detail: `On the entry day you rated your mental temperature ${temp}/10. Outcome: ${
           e.r != null ? `${e.r.toFixed(2)}R` : fmtMoney(e.pnl, ctx.currency)
         }.`,
         subjectId: e.id,
@@ -179,7 +179,7 @@ export const missedASetup: Rule = {
   id: "missed_a_setup",
   level: "portfolio",
   minSample: 0,
-  description: "A-setup-i označeni kao propušteni.",
+  description: "A-setups marked as missed.",
   evaluate: (ctx) => {
     const missed = ctx.allRows.filter(
       (r) => r.status === "missed" && norm(strField(r, "setup_grade")).startsWith("a"),
@@ -190,8 +190,8 @@ export const missedASetup: Rule = {
         ruleId: "missed_a_setup",
         level: "portfolio",
         severity: "warning",
-        title: "Propušteni A-setup-i",
-        detail: `${missed.length} A-setup-a je planirano i nikad izvršeno. Nijedna P&L statistika to ne pokazuje — problem izvršenja, ne izbora.`,
+        title: "Missed A-setups",
+        detail: `${missed.length} A-setups were planned and never executed. No P&L statistic shows this — an execution problem, not a selection one.`,
         subjectId: "missed_a_setup",
         sample: missed.length,
       },
@@ -204,7 +204,7 @@ export const swapAteTheTrade: Rule = {
   id: "swap_ate_the_trade",
   level: "trade",
   minSample: 0,
-  description: "Swap je pojeo znatan deo bruto rezultata.",
+  description: "Swap consumed a meaningful share of the gross result.",
   evaluate: (ctx) =>
     ctx.trades
       .filter((e) => {
@@ -221,11 +221,11 @@ export const swapAteTheTrade: Rule = {
           ruleId: "swap_ate_the_trade",
           level: "trade" as const,
           severity: "warning" as const,
-          title: "Swap je pojeo trejd",
-          detail: `${fmtMoney(swap, ctx.currency)} swapa na ${fmtMoney(
+          title: "Swap ate the trade",
+          detail: `${fmtMoney(swap, ctx.currency)} of swap on ${fmtMoney(
             e.trade.gross,
             ctx.currency,
-          )} bruto — ${share.toFixed(0)} %. Držanje je koštalo koliko i greška.`,
+          )} gross — ${share.toFixed(0)} %. Holding cost as much as a mistake would have.`,
           subjectId: e.id,
           subjectLabel: e.label,
         };
@@ -237,7 +237,7 @@ export const stalePlan: Rule = {
   id: "stale_plan",
   level: "portfolio",
   minSample: 0,
-  description: "Planirani trejdovi stariji od praga bez ijednog fill-a.",
+  description: "Planned trades older than the threshold with no fill at all.",
   evaluate: (ctx) => {
     const now = Date.now();
     const stale = ctx.allRows.filter((r) => {
@@ -252,8 +252,8 @@ export const stalePlan: Rule = {
         ruleId: "stale_plan",
         level: "portfolio",
         severity: "info",
-        title: "Planovi bez izvršenja",
-        detail: `${stale.length} plana starijih od ${P.STALE_PLAN_DAYS} dana bez ijednog fill-a. Ili ih označi kao propuštene, ili ih zatvori — mrtvi planovi kvare statistiku propuštenog.`,
+        title: "Plans without execution",
+        detail: `${stale.length} plans older than ${P.STALE_PLAN_DAYS} days with no fill at all. Either mark them as missed or close them — dead plans corrupt the missed-setup statistics.`,
         subjectId: "stale_plan",
         sample: stale.length,
       },

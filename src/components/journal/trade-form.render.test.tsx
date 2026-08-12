@@ -231,7 +231,7 @@ describe("lifecycle buttons only appear where the action can actually succeed", 
     render(<TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} />);
     await goToPlanTab(user);
     expect(screen.queryByRole("button", { name: /Move to active trade/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Označi kao miss/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Mark as missed/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Vrati u planned/ })).not.toBeInTheDocument();
   });
 
@@ -247,7 +247,7 @@ describe("lifecycle buttons only appear where the action can actually succeed", 
     );
     await goToPlanTab(user);
     expect(screen.getByRole("button", { name: /Move to active trade/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Označi kao miss/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Mark as missed/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Vrati u planned/ })).not.toBeInTheDocument();
   });
 
@@ -263,7 +263,7 @@ describe("lifecycle buttons only appear where the action can actually succeed", 
     );
     await goToPlanTab(user);
     expect(screen.queryByRole("button", { name: /Move to active trade/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Označi kao miss/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Mark as missed/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Vrati u planned/ })).not.toBeInTheDocument();
   });
 
@@ -280,7 +280,7 @@ describe("lifecycle buttons only appear where the action can actually succeed", 
     await goToPlanTab(user);
     expect(screen.getByRole("button", { name: /Vrati u planned/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Move to active trade/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Označi kao miss/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Mark as missed/ })).not.toBeInTheDocument();
   });
 
   it("clicking Mark missed on the one state that offers it actually succeeds, not just shows", async () => {
@@ -295,7 +295,7 @@ describe("lifecycle buttons only appear where the action can actually succeed", 
       />,
     );
     await goToPlanTab(user);
-    await user.click(screen.getByRole("button", { name: /Označi kao miss/ }));
+    await user.click(screen.getByRole("button", { name: /Mark as missed/ }));
     expect(markTradeMissedMock).toHaveBeenCalledWith("t1", expect.anything());
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
