@@ -7,6 +7,7 @@ import { NAV_ITEMS, NAV_SECTIONS, PRIMARY_ACTION } from "@/lib/journal/nav";
 import { logout } from "@/app/login/actions";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/app/theme-toggle";
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -64,9 +65,10 @@ export function AppSidebar({ email }: { email: string | null }) {
         ))}
       </nav>
 
-      <div className="border-t p-2">
+      <div className="space-y-2 border-t p-2">
+        <ThemeToggle />
         {email && (
-          <p className="truncate px-3 pb-2 pt-1 text-xs text-muted-foreground">
+          <p className="truncate px-3 pt-1 text-xs text-muted-foreground">
             {email}
           </p>
         )}
