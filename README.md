@@ -81,7 +81,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
 | `npm run dev` | Razvojni server |
 | `npm run build` | Produkcijski build — 12 ruta |
 | `npm run lint` | ESLint. **Očekuje se tačno jedno upozorenje** (vidi ispod) |
-| `npm test` | Vitest — 962 testa u 56 fajlova, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
+| `npm test` | Vitest — 1088 testa u 77 fajlova, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
 | `npm test -- --coverage` | Izveštaj o pokrivenosti |
 | `npx knip` | Mrtvi fajlovi, eksporti i zavisnosti |
 
@@ -397,44 +397,72 @@ P&L i drawdown izračunate nad delimičnim skupom, bez ijednog vidljivog simptom
 
 ## Testovi
 
-962 testa u 56 fajlova, podeljena u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
-`*.test.ts`) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`). Pravilo je ekstenzija, pa
-nijedan fajl ne može upasti u oba. Podela postoji da 958 čisto aritmetičkih testova ne plaća cenu
-DOM-a koji ne dodiruju.
+1088 testa u 77 fajlova, podeljena u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
+`*.test.ts`, 964 testa) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`, ostatak). Pravilo
+je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
+plaćaju cenu DOM-a koji ne dodiruju.
 
 `vitest.config.ts` nosi **podove** pokrivenosti, ne ciljeve — stoje na onome što paket trenutno
-postiže, pa jedino što mogu je da padnu kad izmena spusti pokrivenost.
+postiže, pa jedino što mogu je da padnu kad izmena spusti pokrivenost. Od Faze 10 postoje **dva
+odvojena poda**, provereni nezavisno umesto stopljeni u jedan prosek:
 
-Tri stvari koje brojevi namerno **ne** tvrde:
+| Sloj | Statements | Branch | Functions | Lines |
+|---|---|---|---|---|
+| `src/lib/**` | 95 % | 89 % | 96 % | 96 % |
+| `src/components/**` | 64 % | 64 % | 61 % | 65 % |
 
-1. **Mere biblioteku, ne render sloj.** `coverage.exclude` drži `src/components` i `src/app` van
-   imenioca. Bez toga bi prvi render test uvukao 16 250 linija koje dotad nisu merene i oborio
-   podove — a pod koji se spušta da napravi mesta novom kodu nije pod. Render sloj dobija svoje
-   izmerene podove kad ga bude dovoljno da se meri.
+Zašto dva, ne jedan: `src/lib` je čista aritmetika i drži se blizu 96 % od Faze 0. `src/components`
+je render sloj Faze 10 — 22 od 42 fajla ima **posvećen** render test, ostatak je dohvaćen samo
+uzgredno, kroz ono što neka testirana komponenta uveze (mnogi `src/components/ui` primitivi
+izvoze pod-delove — `DropdownMenuRadioItem`, `PopoverTitle` — koje ništa u aplikaciji ne renderuje).
+Jedan stopljen broj bi ili povukao bibliotečki pod na nivo render sloja, ili slagao o tome koliko
+je render sloj zapravo pokriven; dva poda kažu obe stvari pošteno umesto da ih usrednje u broj koji
+ne opisuje nijedno.
+
+Četiri stvari koje brojevi namerno **ne** tvrde:
+
+1. **`src/components`-ov pod nije „dobro testirano".** 64/64/61/65 je pošteno stanje sloja koji je
+   ovu fazu počeo od nule i nije završen — Faza 10 pokriva komponente najvišeg rizika (Tier 1 i 2 u
+   `ROADMAP.md`), ne svih 42. Čitati ovaj pod kao „UI je 64 % tačan" ponavlja tačno grešku na koju
+   sledeća tačka upozorava, jedan sloj iznad.
 2. **Isključivanje mora biti `exclude`, ne `include`.** Ista greška je napravljena i zapisana:
    `include: ["src/lib/**"]` prebacuje v8 sa „fajlovi koje je test uvezao" na „svi fajlovi koji
    odgovaraju", pa uvuče serverske upitne module koje nijedan unit test ne može dosegnuti i oceni
    ih nulom. Broj padne sa 95,5 na 86 — što liči na nazadovanje a nije: metrika je počela da meri
    drugo pod istim imenom.
-3. **100 % ne bi značilo tačno.** Pokrivenost broji *izvršavanje*, ne *tvrdnju*. Sva tri nalaza
-   runde 3 oko skora živela su u fajlovima na 100 % izraza i funkcija.
+3. **100 % ne bi značilo tačno, ni na jednom podu.** Pokrivenost broji *izvršavanje*, ne *tvrdnju*.
+   Sva tri nalaza runde 3 oko skora živela su u fajlovima na 100 % izraza i funkcija — i sva četiri
+   nalaza Faze 10 (`W1`–`W4`) su nađena render testom koji je tvrdio da već pokriven kod daje
+   POGREŠAN broj, ne time što je neka linija ostala neizvršena.
+4. **`src/app` (25 ruta) nema nijedan broj**, i „nema broj" nije „0 %" — to je „nije mereno". Rute
+   su server komponente čija je logika `await getCurrentUser()` pa `redirect()` pa prosleđivanje
+   propova; propovi se tvrde na drugoj strani, gde ih render test već čita.
 
 `src/lib/journal/book.fixture.test.ts` postoji baš zbog druge tačke. Fiksira jednu knjigu od deset
 trejdova, izvodi svaku glavnu brojku na papiru u komentarima — sa vidljivom aritmetikom — pa tvrdi
 kod prema papiru. Snapshot test zaključava trenutno ponašanje uključujući njegove bagove; ovaj
 zaključava odgovor. Druga polovina fajla prolazi *oblike* koje knjiga može imati (prazna, jedan
 trejd, sve dobitnici, sve gubitnici, sve breakeven, samo otvorene) — tako je nađen treći nalaz oko
-drawdown-a.
+drawdown-a. Ista knjiga, iste brojke na papiru, postaju i propovi renderovanog Dashboard-a u
+`dashboard.render.test.tsx` — papir → `lib/` → ekran, jedan skup brojeva tvrđen na sva tri sloja.
 
-**Render sloj se od Faze 10 izvršava, ali tek počinje.** `sickre-score-card.test.tsx` je prvi test
-u repou koji nešto renderuje, i jedna od njegove četiri tvrdnje je `S1` zaključan na sloju na kojem
-je i viđen: prazna knjiga mora pokazati `—` i „treba još 5 zatvorenih trejdova", gde je pre
-popravke pisalo 33 sa „Max drawdown: 100".
+**Render sloj se izvršava od Faze 10.** Osam koraka, svaki commit + push + `tsc` + `vitest` + `lint`
++ `build` + `knip`, dokumentovano u `CODE_REVIEW.md`. Dashboard (najveći fajl, 42 `useMemo`),
+`journal-grid`, tri forme (`trade-form`, `daily-report-form`, `tracker-checklist`),
+`import-wizard`, i 14 čistih prezentacionih komponenti uključujući `markdown-view` — jedini
+renderer sa bezbednosnim značajem u aplikaciji (href allowlist na ekranu, ne samo u parseru).
+Nađeno i popravljeno četvoro: `W1` (Win rate pločica čitala „0.0%" umesto „—" na nula odlučenih
+trejdova), `W2` (isti nalaz na drugom mestu, `PeriodPerformanceCard`), `W3` (privacy mod je
+maskirao tri od četiri polja u jednom panelu — četvrto je curilo pravi procenat), `W4` (Target
+attainment u formi za unos trejda računao bez donjeg praga i sa pogrešnim prioritetom između
+sačuvanog i uživo izračunatog plana). `S1`, `S2`, `S3` i `P1` iz runde 3 — svi nađeni čitanjem, ne
+testom — sada svaki ima svoj render test koji bi ih uhvatio da su se ponovili.
 
 **Šta i dalje nije utvrđeno**, rečeno otvoreno da ovde ništa ne tvrdi više nego što sme: dokazan je
-`lib/` lanac od realizovanih trejdova do skora, plus jedna prezentaciona komponenta. Dashboard,
-grid, forme i 25 ruta se i dalje ne izvršavaju ni u jednom testu — a prijavljeni nalaz sa praznim
-nalogom živeo je baš tamo. Plan za to je Faza 10 u `ROADMAP.md`.
+`lib/` lanac od realizovanih trejdova do skora, i render sloj za komponente najvišeg rizika. 25 ruta
+u `src/app` se i dalje ne izvršavaju ni u jednom testu — logika koja tamo živi je tanka
+(dohvat + `redirect()`), a Playwright bi tražio pokrenutu aplikaciju i Supabase kredencijale kojih
+ovaj kontejner nema. Ostaje kao kasnija opcija, ne kao propust.
 
 ---
 

@@ -119,7 +119,13 @@ export function DrawdownChart({
                 value={
                   basis === "money"
                     ? fmtMoney(stats.maxMoney, currency)
-                    : fmtPct(stats.maxPctOfEquity, 2)
+                    : // `maxPctOfEquity` is a positive magnitude (balance.ts computes
+                      // it via `Math.abs`); negated here so a drawdown reads negative
+                      // in BOTH bases, matching `maxMoney` (already ≤ 0) and matching
+                      // "Trenutni" below — before this fix "Max 40.00%" sat next to
+                      // "Trenutni −15.00%" and read like a gain, not the worse of the
+                      // two drawdowns.
+                      fmtPct(-stats.maxPctOfEquity, 2)
                 }
               />
               <Figure

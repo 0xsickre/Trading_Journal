@@ -39,7 +39,7 @@ export default defineConfig({
     /**
      * Two projects, two environments, on purpose.
      *
-     * The 958 library tests run in `node` and finish in about twelve seconds.
+     * The 964 library tests run in `node` and finish in about twelve seconds.
      * jsdom builds a document per test file, and putting the whole suite behind
      * it would tax every pure-arithmetic test for a DOM none of them touch.
      * Splitting keeps the fast suite fast and lets the slow one be slow.
@@ -71,58 +71,77 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "html"],
       /**
-       * The render layer is held OUT of this number, deliberately.
+       * `src/app` (25 routes) stays out. They are server components whose logic
+       * is `await getCurrentUser()` then `redirect()` then pass props along —
+       * the props are what carry a number, and those are asserted on the other
+       * side, at the component that renders them. Testing a route means a Next
+       * runtime this repo's tests do not have; see `ROADMAP.md`'s Faza 10 for
+       * why that stays a deliberate non-goal, not an oversight.
        *
-       * v8 counts every file a test imports, so the moment a component test
-       * mounts a tree it drags 16 250 previously unmeasured lines into the
-       * denominator — and the floors would have to come down to accommodate
-       * them. A floor that gets lowered to make room for new code is not a
-       * floor.
-       *
-       * `exclude` rather than `include: ["src/lib/**"]`, and the difference is
-       * not cosmetic: setting `include` switches v8 from "files a test imported"
-       * to "every file that matches", which pulls in the `server-only` query
-       * modules no unit test can reach and scores them 0. That measured a
-       * different thing under the same name and dropped the figure from 95.5 to
-       * 86 — a number that looks like a regression and is not one. This keeps
-       * the metric it always was.
-       *
-       * The component layer gets its own measured floors once there is enough
-       * of it to measure. Until then "not counted here" is said out loud rather
-       * than hidden behind a percentage that quietly changed meaning.
+       * `exclude` rather than `include: ["src/lib/**", "src/components/**"]`,
+       * and the difference is not cosmetic: setting `include` switches v8 from
+       * "files a test imported" to "every file that matches", which pulls in
+       * the `server-only` query modules no unit test can reach and scores them
+       * 0. That measured a different thing under the same name and dropped the
+       * figure from 95.5 to 86 in an earlier round — a number that looks like a
+       * regression and is not one. This keeps the metric it always was.
        */
-      exclude: ["src/components/**", "src/app/**", "src/lib/supabase/types.ts"],
+      exclude: ["src/app/**", "src/lib/supabase/types.ts"],
       /**
-       * These numbers are a FLOOR, not a target.
+       * Two floors, not one — `src/lib/**` and `src/components/**` are checked
+       * independently below, deliberately never blended into one aggregate.
        *
-       * They sit at what the suite achieves today, so the only thing they can do
-       * is fail when a change lowers coverage — which is the entire point.
-       * Raising them is a deliberate act; drifting down is not.
+       * They measure different things by design: `src/lib` is pure functions,
+       * mostly arithmetic, and Phase 0–9 held it near 96%. `src/components` is
+       * Phase 10's render layer — 43 files, 14 with dedicated render tests as
+       * of Faza 10 and the rest reached only incidentally, through whatever a
+       * tested component happens to import (many `src/components/ui` primitives
+       * export sub-parts — `DropdownMenuRadioItem`, `PopoverTitle` — that
+       * nothing in this app renders at all). A single blended number would
+       * either drag the library floor down to component-layer reality or lie
+       * about how tested the render layer actually is; two floors say both
+       * things honestly instead of averaging them into a number that describes
+       * neither.
        *
-       * Two things they deliberately do NOT claim:
+       * Both are FLOORS, not targets — they sit at what the suite achieves
+       * today, so the only thing they can do is fail when a change lowers
+       * coverage. Two things they deliberately do NOT claim:
        *
-       *   1. **They describe the library, and say so above.** Components and
-       *      routes have no number at all, and "no number" is not "0%", it is
-       *      "not measured". Reading 95% as "the app is 95% tested" is the
-       *      mistake this comment exists to prevent.
+       *   1. **`src/components`'s floor is not "well tested".** 64/64/61/65 is
+       *      the honest state of a layer that started this phase at zero and
+       *      is not finished — Faza 10 covers the highest-risk components
+       *      (Tier 1 and 2 in `ROADMAP.md`), not all 43. Reading this floor as
+       *      "the UI is 64% correct" repeats the exact mistake the `src/lib`
+       *      floor's comment already warns against, one layer up.
        *
-       *   2. **100% would not mean correct.** Coverage counts EXECUTION, not
-       *      assertion: a line run by a test with no `expect` counts as covered.
-       *      All three round-3 score defects lived in files at 100% statements
-       *      and functions.
+       *   2. **100% would not mean correct, on either floor.** Coverage counts
+       *      EXECUTION, not assertion: a line run by a test with no `expect`
+       *      counts as covered. All three round-3 score defects lived in files
+       *      at 100% statements and functions, and `W1`–`W4` (Faza 10) were
+       *      each found by a render test asserting something already-covered
+       *      code got WRONG, not by a line going uncovered.
        *
-       * Branch sits lower than statements on purpose. What is left is mostly
-       * defensive `?? 0` arms and guards that cannot fire — e.g.
-       * `risk-ratios.ts`'s `spanDays > 0 ? … : null`, where `spanDays` is
-       * `daysBetween + 1` after a guard that already rejects a backwards window,
-       * so the null arm is unreachable by construction. Chasing those means
-       * contorting the code to satisfy a counter.
+       * Branch sits lower than statements on both floors, for the same reason:
+       * on `src/lib`, mostly defensive `?? 0` arms and guards that cannot fire
+       * by construction (see `risk-ratios.ts`'s `spanDays > 0 ? … : null`,
+       * unreachable once an earlier guard rejects a backwards window). On
+       * `src/components`, the same shape plus every conditional branch of a
+       * component reached only transitively — a prop value another test never
+       * happened to pass.
        */
       thresholds: {
-        statements: 95,
-        branches: 89,
-        functions: 96,
-        lines: 96,
+        "src/lib/**": {
+          statements: 95,
+          branches: 89,
+          functions: 96,
+          lines: 96,
+        },
+        "src/components/**": {
+          statements: 64,
+          branches: 64,
+          functions: 61,
+          lines: 65,
+        },
         ...Object.fromEntries(
           MONEY_MODULES.map((f) => [f, { statements: 100, functions: 100 }]),
         ),

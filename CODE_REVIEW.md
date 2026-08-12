@@ -2775,3 +2775,155 @@ guard exactly the four things the plan named for this step in advance.
 on `import-number.ts`'s and `time.ts`'s ambiguous-input paths, reached here through a real parse
 instead of only through their own unit tests. Lint 1 warning, build green (12 routes), `tsc` clean,
 `knip` zero in own code.
+
+---
+
+## Step 7 — the component layer gets its own measured floor
+
+Step 0's own note said it plainly: "the component layer gets its own measured floors once there is
+enough of it to measure." Six steps later there is — 22 of 42 component files now carry a dedicated
+render test, and `src/components` had been sitting in `coverage.exclude` the entire time, measured
+by nothing at all. This step closes that, and closes the phase.
+
+### Splitting the floor instead of blending it
+
+Removing `src/components/**` from `coverage.exclude` and running the suite once gave the honest
+number: **64.78 / 64.41 / 61.05 / 65.43** across the 41 component files a test actually reaches
+(one of 42 is never imported by any test at all, directly or transitively). Measured with the same
+`exclude`-not-`include` discipline `C1` (step 0) established — the "files a test imports" semantics,
+not "every file that matches a glob."
+
+Folding that into the existing single `statements: 95 / branches: 89 / …` threshold was considered
+and rejected. `src/lib` and `src/components` are different measurement domains — one pure
+arithmetic sitting near 96% since Phase 0, the other a render layer that started this phase at zero
+and covers its highest-risk files, not all of them. A single blended number does one of two things,
+both dishonest: drags the library floor down to component-layer reality, or overstates how tested
+the render layer actually is. Vitest's `thresholds` accepts glob-keyed groups precisely for this —
+already used once, for the `MONEY_MODULES` individual 100% floors — so the fix is two independent
+groups instead of one:
+
+```
+"src/lib/**":        { statements: 95, branches: 89, functions: 96, lines: 96 }
+"src/components/**": { statements: 64, branches: 64, functions: 61, lines: 65 }
+```
+
+Each checked on its own; neither can hide behind the other's number. `src/app` (25 routes) stays
+excluded, unchanged from step 0 — routes remain a deliberate non-goal for this phase, documented in
+`ROADMAP.md`, not an oversight.
+
+### What the two floors do and do not claim
+
+Written into `vitest.config.ts` at length, and repeated here because it is the one thing a coverage
+number is most often misread as saying: **64% is not "the UI is 64% correct."** It is "64% of
+`src/components`'s statements execute under a test today," on a layer where every one of `W1`–`W4`
+(steps 1–5) was found by a render test asserting that ALREADY-EXECUTED code produced the WRONG
+number — not by a line sitting uncovered. Coverage answers "does this run," never "is this right."
+Both floors say that about themselves now, not just the library one.
+
+### One finding from the plan's own reconnaissance, never picked up by any step, closed here
+
+`drawdown-chart.tsx:122` vs. `:138` — confirmed by reading the source before any step of this phase
+began, and recorded in the plan with the note "popravlja se zajedno sa svojim testom u koraku koji
+pokriva ovu komponentu." No step ever specifically covered `drawdown-chart.tsx`: it renders inside
+Dashboard, but neither `dashboard.render.test.tsx` nor `dashboard.controls.render.test.tsx` asserted
+on its own figures. Writing this phase's conclusion without checking is exactly the kind of gap the
+whole phase exists to close, so it gets closed here rather than carried forward as a known miss.
+
+`balance.ts` computes both `maxPctOfEquity` and `currentPctOfEquity` as `Math.abs(...)` — positive
+magnitudes, by design, so the two are comparable regardless of direction. The component negated only
+one of the two before display: "Trenutni" correctly showed a negative percentage, "Max" showed the
+raw positive magnitude right next to it — `+9.09%` beside `−7.27%`, reading like the worse of the two
+drawdowns was a gain. `money`-basis figures (`maxMoney`/`currentMoney`, both stored ≤ 0) never had
+this problem, which is what made the `%`-basis asymmetry easy to miss reading the file top to bottom.
+
+`FIXED` by negating `maxPctOfEquity` at the one display site, matching `currentPctOfEquity`'s
+existing negation and matching the money basis's own convention.
+`drawdown-chart.render.test.tsx` builds a real timeline through `buildBalanceTimeline` /
+`computeDrawdown` shaped so max and current are different, nonzero values — `−$1,000.00` /
+`−$800.00` in money, `−9.09%` / `−7.27%` in percent — and asserts both bases read negative
+consistently, with the pre-fix positive `9.09%` explicitly asserted absent.
+
+### Outcome
+
+**ADDED** — `src/components`'s own measured coverage floor (64/64/61/65), split from `src/lib`'s
+(95/89/96/96) rather than blended into it. **FIXED** — the drawdown-chart percent-basis sign
+asymmetry flagged in the phase's own reconnaissance and left open through steps 1–6, closed here
+with its own test rather than carried forward unfixed.
+
+1090 tests / 78 files (1088 → 1090). Coverage unchanged on the `src/lib` floor; the new render test
+adds to `src/components`'s measured set. Lint 1 warning, build green (12 routes), `tsc` clean, `knip`
+zero in own code.
+
+---
+
+## Phase 10 — conclusion
+
+Eight steps, one commit each, the same ritual every time: `tsc` → `vitest` → `lint` → `build` →
+`knip` → commit → push → stop and ask. 958 tests grew to 1090; 56 test files grew to 78; the
+component layer went from zero render tests to 22 of 42 files carrying one, with a second, measured
+coverage floor of its own.
+
+### What this phase found
+
+Five real defects, all fixed with the render test that caught them:
+
+- **`W1`** — the Dashboard's "Win rate" and "Week win %" tiles read `"0.0%"` instead of `"—"` for
+  zero decided trades/periods — the exact `0`-not-`null` contract two other components already
+  guarded correctly, missed at the highest-traffic screen in the app.
+- **`W2`** — the same defect, at a second call site (`PeriodPerformanceCard` in `metrics-panel.tsx`)
+  sharing the same underlying `summary` object `W1`'s fix did not reach.
+- **`W3`** — `PerformanceSummaryPanel`'s "Najviši win rate" tile bypassed `formatMetric`/`viewMode`
+  with a raw `.toFixed(1)`, so privacy mode masked three of its four tiles and leaked the real
+  percentage on the fourth. The one of the four with a genuine privacy dimension.
+- **`W4`** — `trade-form.tsx`'s own "Target attainment" was a second implementation of
+  `exitEfficiencyFromTrade`, looser (no floor on a near-zero planned reward) and with the wrong
+  precedence (live-recomputed plan preferred over the stored one, letting an edited `target_price`
+  silently move a trade's own grading baseline after the fact).
+- **`drawdown-chart.tsx`'s percent-basis sign asymmetry** — flagged by the plan's own reconnaissance
+  before step 1, left open through six steps because none specifically covered that file, and closed
+  in step 7 rather than left for the conclusion to gloss over: "Max" showed a positive percentage
+  next to "Trenutni"'s negative one, reading like the worse drawdown was a gain.
+
+`W1`–`W4` are all the same shape: a number computed twice, once in the tested library and once
+again, uninspected, in the component that displays it. Round 3 found this pattern in `lib/`
+internals (duplicated accessors, inconsistent guards); Phase 10 found its render-layer twin. Two
+candidates the plan flagged in advance as *suspected* instances of this same pattern —
+`month-calendar.tsx`'s hand-rolled win rate (step 0's own reconnaissance) and `trade-form.tsx`'s
+`grossPl − netPl` (step 5) — were checked against the math and found to be genuine duplicates that
+happen to always agree, not defects. Both got their own regression test anyway, as insurance against
+the day they stop agreeing. The drawdown-chart finding is a different shape — not a duplicated
+computation but an inconsistently applied sign convention on a single, correctly-computed value —
+which is exactly why reading the file for one shape of bug missed the other for six steps.
+
+Every one of round 3's four component-layer findings — `S1`, `S2`, `S3`, `P1` — now has a render
+test that would catch it if it recurred. `S1` specifically: the empty-account render that showed
+33 with "Max drawdown: 100" is `dashboard.render.test.tsx`'s own empty-book case, re-asserted at
+the exact layer where the owner first saw it.
+
+### What this phase is honest about
+
+**Not every component has a dedicated test.** 22 of 42 — the Tier 1 and Tier 2 files the plan's own
+risk ranking named, plus the 14 pure-presentation files cheap enough to cover in one step. The
+other 21 are reached only incidentally, through whatever a tested component happens to import, and
+`src/components`'s 64% floor says exactly that rather than implying more.
+
+**Two test-infrastructure lessons, recorded so a later step doesn't rediscover them by trial and
+error:** `userEvent.click()` deadlocks under `vi.useFakeTimers()` even with `advanceTimers` wired
+correctly — `vi.setSystemTime()` alone, without installing fake timers, is the fix when a test needs
+a mocked `Date` under a real click (step 2). And `<Toaster/>` lives in the root layout, which no
+component test mounts, so a real `toast.error(...)` call has nowhere to paint text into —
+`sonner` needs mocking at the module boundary, with assertions on the call, in any component test
+that fires a toast (step 4).
+
+**`src/app`'s 25 routes remain unexecuted**, by the same deliberate choice recorded in step 0 and in
+`ROADMAP.md`: their own logic is thin (an `await`, a `redirect()`, propping a component), the props
+they build are asserted at the component that receives them, and a real test would need a Next
+runtime and Supabase credentials this container does not have. Playwright remains the later option
+for that layer and for auth, not a gap this phase pretends to have closed.
+
+The honest summary, matching the shape of round 3's own: **the `lib/` pipeline from a realized
+trade to a displayed number was proved in round 3. Phase 10 proved the second half — that the
+number reaching the screen is the same one the pipeline computed — for every component load-bearing
+enough to be Tier 1 or Tier 2, plus a swept Tier 3.** What is left is breadth, not a known gap:
+21 more components with no dedicated test, and 25 routes with none at all, neither hiding a
+suspected defect the way the render layer once did.

@@ -845,10 +845,9 @@ ovaj model ima strukturno.
 | 8 | Automatski MAE/MFE — polovina A (čist skener sveća) | Ne | ✅ |
 | 8 | *ostatak:* polovina B — OANDA adapter, `tj_candles`, backfill | Da | 1–2 ⛔ |
 | 9 | Revizija runde 3 — devet koraka, 31 nalaz, README od nule | Ne | ✅ |
-| 10 | Izvršavanje render sloja — jsdom + testing-library | Ne | 5–7 🔨 |
+| 10 | Izvršavanje render sloja — jsdom + testing-library | Ne | ✅ |
 
 ⛔ = blokirano. Faza 8B čeka OANDA praktični token; ništa drugo ne fali.
-🔨 = u toku. Faza 10, Koraci 0–6 su gotovi; Korak 7 predstoji.
 
 ## Faza 10 — izvršavanje render sloja
 
@@ -873,7 +872,7 @@ sve dobitnici, sve gubitnici, sve breakeven, samo otvorene) prelaze iz `lib/` te
 | 4 | `journal-grid` | ✅ |
 | 5 | Forme: `trade-form`, `daily-report-form`, `tracker-checklist` | ✅ |
 | 6 | `import-wizard` — odbijene ćelije na ekranu | ✅ |
-| 7 | Dokumentacija i izmereni podovi za render sloj | |
+| 7 | Dokumentacija i izmereni podovi za render sloj | ✅ |
 
 **Rangiranje po riziku** (izmereno, 43 fajla). Tier 1 — računa sam i ima stanje koje to menja:
 `dashboard.tsx` (42 memo, 10 kontrola), `reports/reports-workbench.tsx` (stanje u URL-u),
@@ -883,15 +882,24 @@ korisničkog stanja (14 fajlova), Tier 3 je čista prezentacija (21).
 
 **Nova klasa koju runda 3 nije tražila: aritmetika pisana direktno u JSX-u.** Ona zaobilazi
 testiranu biblioteku u potpunosti, pa je nijedan `lib/` test ne može uhvatiti. Jedan nalaz je već
-potvrđen čitanjem izvora — `drawdown-chart.tsx:122` prikazuje `Max` nenegirano a `:138` prikazuje
+potvrđen čitanjem izvora — `drawdown-chart.tsx:122` prikazivao je `Max` nenegirano a `:138`
 `Trenutni` negirano, iako `balance.ts` obe računa kao `Math.abs(...)`; u novčanoj osnovi su pak obe
-negativne. Dve brojke jedna do druge, suprotne konvencije znaka. Popravlja se zajedno sa svojim
-testom, u koraku koji pokriva tu komponentu. Sedam daljih kandidata je popisano u planu faze.
+negativne. Dve brojke jedna do druge, suprotne konvencije znaka. **Popravljeno u Koraku 7**, sa
+svojim testom (`drawdown-chart.render.test.tsx`) — nijedan raniji korak nije konkretno pokrio taj
+fajl, pa je zatvoreno pri zaključivanju faze umesto da ostane otvoreno. Sedam daljih kandidata iz
+plana faze ostaje van obima ove faze, popisano tamo za buduću proveru.
 
 **Svesno izvan obima:** rasklapanje `dashboard.tsx` (šav postoji na liniji 807, ali izdvojena
 funkcija dokazuje račun a ne ekran), Playwright (traži pokrenutu aplikaciju i kredencijale kojih
 kontejner nema), i testovi ruta (server komponente traže Next runtime, a logika im je tanka —
 dohvat pa prosleđivanje propova koji se sad tvrde na drugoj strani).
+
+**Zaključak.** Faza zatvorena, svih osam koraka. 1090 testova u 78 fajlova (958 → 1090); render
+sloj ima svoj izmereni pod pokrivenosti (64/64/61/65), odvojen od bibliotečkog (95/89/96/96), a ne
+stopljen u njega. Pet nalaza: `W1`–`W4` (Koraci 1, 1, 3, 5) i `drawdown-chart.tsx`-ov znak (Korak 7,
+flagovan u izviđanju a nijedan raniji korak ga nije konkretno pokrio). Sva četiri nalaza runde 3 —
+`S1`, `S2`, `S3`, `P1` — sada imaju render test koji bi ih uhvatio da su se ponovila. Detaljno u
+`CODE_REVIEW.md`, sekcija „Phase 10 — conclusion".
 
 **Ukupno: 41–46 sesija za F1–F8**, plus 9 potrošenih na reviziju runde 3 (F9) i 5–7 procenjenih za
 render sloj (F10). Posle F4 journal odgovara na svih šest pitanja iz sanity provere. F5–F7 su
