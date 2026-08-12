@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { Download } from "lucide-react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -22,7 +23,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import {
+  AXIS_PROPS,
+  ChartShell,
+  GRID_PROPS,
+  TOOLTIP_STYLE,
+} from "@/components/journal/chart-shell";
+import { StatGroup } from "@/components/journal/stat-group";
 import { CalendarHeatmap } from "@/components/journal/calendar-heatmap";
 import { TrackerStreakCard } from "@/components/journal/tracker-streak-card";
 import {
@@ -814,7 +827,10 @@ export function Dashboard({
         </div>
       )}
 
-      {/* Filters */}
+      {/* Scope. Everything in this bar narrows the page; nothing in it exports.
+          That was not true before — the mentor-pack pickers sat here too, and a
+          bar where two of the eight controls silently mean something else is a
+          bar the reader has to learn instead of read. */}
       <div className="flex flex-wrap items-center gap-2">
         {accounts.length > 1 && (
           <Select value={accountFilter} onValueChange={setAccountFilter}>
@@ -860,148 +876,189 @@ export function Dashboard({
         <span className="text-xs text-muted-foreground">
           {mode === "net" ? "Net = after fees & swap" : "Gross = price move only"}
         </span>
-        {/* This group used to be `ml-auto flex items-center` with no wrap: on a
-            phone the granularity select + quarter/year pickers + export button
-            never fit on one line, so the row overflowed past the viewport edge
-            and forced the WHOLE page to scroll sideways just to reach the
-            button. It now wraps onto its own lines below `sm`, matching the
-            wrap behaviour the rest of this filter bar already has; at `sm` and
-            up it's byte-for-byte the old single-row, right-aligned layout. */}
-        <div className="flex w-full flex-wrap items-center gap-1 sm:ml-auto sm:w-auto sm:flex-nowrap">
-          <Select
-            value={granularity}
-            onValueChange={(v) => setGranularity(v as Granularity)}
-          >
-            <SelectTrigger className="h-8 w-28">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {GRANULARITIES.map((g) => (
-                <SelectItem key={g.value} value={g.value}>
-                  {g.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {granularity === "custom" ? (
-            <>
-              <Input
-                type="date"
-                value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
-                className="h-8 w-36"
-                aria-label="From date"
-              />
-              <span className="text-xs text-muted-foreground">→</span>
-              <Input
-                type="date"
-                value={customTo}
-                onChange={(e) => setCustomTo(e.target.value)}
-                className="h-8 w-36"
-                aria-label="To date"
-              />
-            </>
-          ) : granularity === "day" ? (
-            <Input
-              type="date"
-              value={anchor}
-              onChange={(e) => e.target.value && setAnchor(e.target.value)}
-              className="h-8 w-36"
-              aria-label="Day"
-            />
-          ) : granularity === "week" ? (
-            <Input
-              type="week"
-              value={anchorToWeekInput(anchor)}
-              onChange={(e) =>
-                e.target.value && setAnchor(weekInputToAnchor(e.target.value))
-              }
-              className="h-8 w-40"
-              aria-label="Week (Mon–Sun)"
-            />
-          ) : granularity === "month" ? (
-            <Input
-              type="month"
-              value={anchor.slice(0, 7)}
-              onChange={(e) =>
-                e.target.value && setAnchor(`${e.target.value}-01`)
-              }
-              className="h-8 w-36"
-              aria-label="Month"
-            />
-          ) : granularity === "quarter" ? (
-            <>
-              <Select
-                value={String(anchorQuarter)}
-                onValueChange={(v) =>
-                  setAnchor(`${anchorYear}-${pad2((Number(v) - 1) * 3 + 1)}-01`)
-                }
+
+        {/* The export pickers used to sit here, inline: a granularity select,
+            up to two date inputs or a quarter+year pair, a button, and a range
+            preview line under the whole bar. Six controls that describe a
+            DIFFERENT period than the one this bar sets — and, sitting among the
+            filters, read as though they narrowed the page. They are one popover
+            now; the trigger says what they are for, and the range preview lives
+            next to the pickers that produce it instead of under the filters. */}
+        <div className="sm:ml-auto">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                title="Download a Markdown pack for the selected period to upload into Claude for mentor feedback"
               >
-                <SelectTrigger className="h-8 w-24">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[1, 2, 3, 4].map((q) => (
-                    <SelectItem key={q} value={String(q)}>{`Q${q}`}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={String(anchorYear)}
-                onValueChange={(v) =>
-                  setAnchor(`${v}-${pad2((anchorQuarter - 1) * 3 + 1)}-01`)
-                }
+                <Download className="size-4" /> Export for Claude
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 space-y-3">
+              <div>
+                <p className="text-sm font-medium">Export for Claude</p>
+                <p className="text-xs text-muted-foreground">
+                  Markdown pack za izabrani period — otpremi ga u Claude za
+                  mentorski osvrt.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1">
+                <Select
+                  value={granularity}
+                  onValueChange={(v) => setGranularity(v as Granularity)}
+                >
+                  <SelectTrigger className="h-8 w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GRANULARITIES.map((g) => (
+                      <SelectItem key={g.value} value={g.value}>
+                        {g.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {granularity === "custom" ? (
+                  <>
+                    <Input
+                      type="date"
+                      value={customFrom}
+                      onChange={(e) => setCustomFrom(e.target.value)}
+                      className="h-8 w-36"
+                      aria-label="From date"
+                    />
+                    <span className="text-xs text-muted-foreground">→</span>
+                    <Input
+                      type="date"
+                      value={customTo}
+                      onChange={(e) => setCustomTo(e.target.value)}
+                      className="h-8 w-36"
+                      aria-label="To date"
+                    />
+                  </>
+                ) : granularity === "day" ? (
+                  <Input
+                    type="date"
+                    value={anchor}
+                    onChange={(e) => e.target.value && setAnchor(e.target.value)}
+                    className="h-8 w-36"
+                    aria-label="Day"
+                  />
+                ) : granularity === "week" ? (
+                  <Input
+                    type="week"
+                    value={anchorToWeekInput(anchor)}
+                    onChange={(e) =>
+                      e.target.value && setAnchor(weekInputToAnchor(e.target.value))
+                    }
+                    className="h-8 w-40"
+                    aria-label="Week (Mon–Sun)"
+                  />
+                ) : granularity === "month" ? (
+                  <Input
+                    type="month"
+                    value={anchor.slice(0, 7)}
+                    onChange={(e) =>
+                      e.target.value && setAnchor(`${e.target.value}-01`)
+                    }
+                    className="h-8 w-36"
+                    aria-label="Month"
+                  />
+                ) : granularity === "quarter" ? (
+                  <>
+                    <Select
+                      value={String(anchorQuarter)}
+                      onValueChange={(v) =>
+                        setAnchor(`${anchorYear}-${pad2((Number(v) - 1) * 3 + 1)}-01`)
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-24">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3, 4].map((q) => (
+                          <SelectItem key={q} value={String(q)}>{`Q${q}`}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={String(anchorYear)}
+                      onValueChange={(v) =>
+                        setAnchor(`${v}-${pad2((anchorQuarter - 1) * 3 + 1)}-01`)
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-24">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {yearOptions.map((y) => (
+                          <SelectItem key={y} value={String(y)}>
+                            {y}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </>
+                ) : granularity === "year" ? (
+                  <Select
+                    value={String(anchorYear)}
+                    onValueChange={(v) => setAnchor(`${v}-01-01`)}
+                  >
+                    <SelectTrigger className="h-8 w-28">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {yearOptions.map((y) => (
+                        <SelectItem key={y} value={String(y)}>
+                          {y}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : null}
+              </div>
+
+              {granularity !== "all" && (
+                <p className="text-xs text-muted-foreground">
+                  Izvoz: {exportRange.rangeText}
+                </p>
+              )}
+
+              <Button
+                size="sm"
+                className="w-full"
+                onClick={handleExportMentorPack}
               >
-                <SelectTrigger className="h-8 w-24">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {yearOptions.map((y) => (
-                    <SelectItem key={y} value={String(y)}>
-                      {y}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </>
-          ) : granularity === "year" ? (
-            <Select
-              value={String(anchorYear)}
-              onValueChange={(v) => setAnchor(`${v}-01-01`)}
-            >
-              <SelectTrigger className="h-8 w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {yearOptions.map((y) => (
-                  <SelectItem key={y} value={String(y)}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8"
-            onClick={handleExportMentorPack}
-            title="Download a Markdown pack for the selected period to upload into Claude for mentor feedback"
-          >
-            Export for Claude
-          </Button>
+                <Download className="size-4" /> Preuzmi .md
+              </Button>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
-      {granularity !== "all" && (
-        <p className="-mt-2 text-right text-xs text-muted-foreground">
-          Izvoz: {exportRange.rangeText}
-        </p>
-      )}
 
-      {/* Stat cards */}
+      {/* THE HEADLINE SIX.
+          Everything below used to sit in this one flat grid — thirty tiles at
+          one size, no headings, so `Net P/L` and `Total swap` carried the same
+          visual weight and the reader had to know the app to find the number
+          they came for. These six are the ones a session actually opens on.
+
+          `Trades` is up here as sample size, not as a metric: README's rule is
+          "veličina uzorka putuje uz broj", and a win rate over four trades read
+          without its denominator is exactly the kind of confident-wrong figure
+          this project is built to refuse. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Stat label="Trades" value={String(stats.count)} />
         <Stat
+          size="hero"
+          label="Net P/L"
+          value={fmtMoney(stats.netSum, currency, { sign: true })}
+          cls={pnlClass(stats.netSum)}
+        />
+        <Stat size="hero" label="Trades" value={String(stats.count)} />
+        <Stat
+          size="hero"
           label="Win rate"
           // `computeStats` answers `0`, not `null`, when there are no decided
           // trades — correct for the STATISTIC (breakeven excluded from both
@@ -1016,18 +1073,7 @@ export function Dashboard({
           }
         />
         <Stat
-          label="Net P/L"
-          value={fmtMoney(stats.netSum, currency, { sign: true })}
-          cls={pnlClass(stats.netSum)}
-        />
-        <Stat
-          label="Gross P/L"
-          value={fmtMoney(stats.grossSum, currency, { sign: true })}
-          cls={pnlClass(stats.grossSum)}
-        />
-        <Stat label="Total R" value={fmtR(stats.totalR)} cls={pnlClass(stats.totalR)} />
-        <Stat label="Avg R" value={fmtR(stats.avgR)} cls={pnlClass(stats.avgR)} />
-        <Stat
+          size="hero"
           label="Profit factor"
           value={
             stats.profitFactor == null
@@ -1038,206 +1084,236 @@ export function Dashboard({
           }
           title="Gross profit / gross loss. ∞ means no losing trades in range."
         />
-        <Stat label="Expectancy" value={fmtR(stats.expectancy)} cls={pnlClass(stats.expectancy)} />
-        <Stat label="Best" value={fmtMoney(stats.best, currency, { sign: true })} cls={pnlClass(stats.best)} />
-        <Stat label="Worst" value={fmtMoney(stats.worst, currency, { sign: true })} cls={pnlClass(stats.worst)} />
         <Stat
-          label="Streak W/L"
-          value={`${stats.maxWinStreak} / ${stats.maxLossStreak}`}
+          size="hero"
+          label="Expectancy"
+          value={fmtR(stats.expectancy)}
+          cls={pnlClass(stats.expectancy)}
         />
         <Stat
+          size="hero"
           label="Max drawdown"
           value={fmtMoney(stats.maxDrawdown, currency)}
           cls="text-[var(--loss)]"
           title="Worst peak-to-trough drop in cumulative P&L. Deposits and withdrawals are not losses, so they do not move this number."
         />
-        <Stat
-          label="Max drawdown %"
-          value={fmtPct(drawdown.maxPctOfEquity)}
-          cls="text-[var(--loss)]"
-          title={
-            drawdown.maxAt
-              ? `Share of peak account equity, including deposits and withdrawals. Trough on ${drawdown.maxAt.slice(0, 10)}.`
-              : "Share of peak account equity, including deposits and withdrawals."
-          }
-        />
-        <Stat
-          label="Avg daily DD"
-          value={fmtMoney(dailyDd.avgMoney, currency)}
-          cls={dailyDd.avgMoney < 0 ? "text-[var(--loss)]" : undefined}
-          title={
-            dailyDd.worstDay
-              ? `Average drop below the day's own high-water mark, across ${dailyDd.days} days with a trade. A day that never went underwater counts as 0. Worst: ${fmtMoney(dailyDd.worstMoney, currency)} on ${dailyDd.worstDay}.`
-              : `Average drop below the day's own high-water mark, across ${dailyDd.days} days with a trade.`
-          }
-        />
-        <Stat
-          label="Sharpe"
-          value={ratios.sharpe != null ? fmtNum(ratios.sharpe, 2) : "—"}
-          title={ratioTitle(
-            "Mean daily P&L divided by its standard deviation.",
-            ratios,
-          )}
-        />
-        <Stat
-          label="Sortino"
-          value={ratios.sortino != null ? fmtNum(ratios.sortino, 2) : "—"}
-          title={ratioTitle(
-            "Like Sharpe, but the denominator counts losing days only — upside is not risk. Empty while no day has lost money.",
-            ratios,
-          )}
-        />
-        <Stat
-          label="Calmar"
-          value={ratios.calmar != null ? fmtNum(ratios.calmar, 2) : "—"}
-          title={ratioTitle(
-            "Annualized profit divided by max drawdown — the recovery factor divided by how long it took to earn.",
-            ratios,
-          )}
-        />
-        <Stat
-          label="Breakeven"
-          value={String(stats.breakeven)}
-          title={
-            hasBreakevenBand(breakevenRange)
-              ? `Trades landing in ${fmtMoney(breakevenRange.from, currency)} … ${fmtMoney(breakevenRange.to, currency)}.`
-              : "No breakeven band configured — only an exact 0.00 counts, which almost never happens once fees are included. Set a range per account in Settings."
-          }
-        />
-        <Stat
-          label="Avg win/loss"
-          value={winLossRatio != null ? fmtNum(winLossRatio, 2) : "—"}
-          title="Average winning R divided by average losing R."
-        />
-        <Stat
-          label="Recovery factor"
-          value={recovery != null ? fmtNum(recovery, 2) : "—"}
-          title="Net profit divided by max drawdown. Undefined — not infinite — while the curve has never fallen."
-        />
-        <Stat
-          label="Consistency"
-          value={fmtNum(consistency.score, 0)}
-          title="100 − (stdev of trade P&L / total profit). Zero while the book is losing."
-        />
-        <Stat
-          label="Avg hold"
-          value={formatDuration(holdTime.avgSeconds)}
-          title={`Across ${holdTime.count} trades with a known duration.`}
-        />
-        <Stat
-          label="Total swap"
-          value={fmtMoney(costs.totalSwap, currency)}
-          cls={costs.totalSwap !== 0 ? "text-[var(--loss)]" : undefined}
-          title={
-            costs.withCostData === 0
-              ? "No trade in scope carries a cost — this zero means 'no data', not 'free'."
-              : `${costs.withCostData} of ${costs.count} trades carry cost data.`
-          }
-        />
-        <Stat
-          label="Week win %"
-          // Same guard, same reason: a book whose only week was flat (net
-          // exactly at the breakeven band) has `winning + losing === 0`, and
-          // `winPct` answers 0 for that — not "0% of weeks won" but "no week
-          // was won or lost at all".
-          value={
-            weekly.winning + weekly.losing === 0
-              ? "—"
-              : fmtPct(weekly.winPct)
-          }
-          title={`${weekly.winning} winning of ${weekly.periods} weeks. The swing replacement for Day Win %.`}
-        />
-        <Stat
-          label="Trading days"
-          value={String(tradingDays)}
-          title="Days a position was OPENED. Money is dated by close; activity by open."
-        />
-        <Stat
-          label="Logged days"
-          value={String(loggedDays)}
-          title="Days with a journal entry — including days you deliberately did not trade."
-        />
-        <Stat
-          label="Avg entry slip"
-          value={
-            slippageStats.count > 0
-              ? fmtR(-slippageStats.avgAdverseR)
-              : "—"
-          }
-          cls={
-            slippageStats.count > 0
-              ? pnlClass(-slippageStats.avgAdverseR)
-              : undefined
-          }
-        />
-        <Stat
-          label="Total slip R"
-          value={
-            slippageStats.count > 0
-              ? fmtR(-slippageStats.totalAdverseR)
-              : "—"
-          }
-          cls={
-            slippageStats.count > 0
-              ? pnlClass(-slippageStats.totalAdverseR)
-              : undefined
-          }
-        />
-        <Stat
-          label="Target attainment"
-          value={
-            exitEffStats.count > 0
-              ? fmtExitEfficiencyPct(exitEffStats.avgPct)
-              : "—"
-          }
-          cls={
-            exitEffStats.count > 0
-              ? pnlClass(exitEffStats.avgPct - 50)
-              : undefined
-          }
-          title={
-            exitEffStats.count > 0
-              ? `Realized R / planned target R · ${exitEffStats.count} closed trades`
-              : undefined
-          }
-        />
-        <Stat
-          label="Winner target attainment"
-          value={
-            exitEffStats.winnerCount > 0
-              ? fmtExitEfficiencyPct(exitEffStats.avgWinnerPct)
-              : "—"
-          }
-          cls={
-            exitEffStats.winnerCount > 0
-              ? pnlClass(exitEffStats.avgWinnerPct - 50)
-              : undefined
-          }
-          title="Winning trades only — early exit vs plan"
-        />
       </div>
 
-      {/* Equity curve */}
-      <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-base">
-            Equity curve ({mode}, {equityMetric === "money" ? currency : "R"})
-          </CardTitle>
-          <div className="flex rounded-md border p-0.5">
-            {(["money", "r"] as const).map((mt) => (
-              <Button
-                key={mt}
-                variant={equityMetric === mt ? "secondary" : "ghost"}
-                size="sm"
-                className="h-7"
-                onClick={() => setEquityMetric(mt)}
-              >
-                {mt === "money" ? "$" : "R"}
-              </Button>
-            ))}
-          </div>
-        </CardHeader>
-        <CardContent>
+      {/* The remaining twenty-four, in three named blocks the reader can fold
+          away. Nothing is dropped and nothing is hidden by default — the tiles
+          are the same tiles, they just no longer arrive as one undifferentiated
+          wall. See `stat-group.tsx` for why "open" is an invariant here and not
+          merely a default. */}
+      <div className="space-y-4">
+        <StatGroup id="result" title="Rezultat — detaljno" count={9}>
+          <Stat
+            label="Gross P/L"
+            value={fmtMoney(stats.grossSum, currency, { sign: true })}
+            cls={pnlClass(stats.grossSum)}
+          />
+          <Stat label="Total R" value={fmtR(stats.totalR)} cls={pnlClass(stats.totalR)} />
+          <Stat label="Avg R" value={fmtR(stats.avgR)} cls={pnlClass(stats.avgR)} />
+          <Stat label="Best" value={fmtMoney(stats.best, currency, { sign: true })} cls={pnlClass(stats.best)} />
+          <Stat label="Worst" value={fmtMoney(stats.worst, currency, { sign: true })} cls={pnlClass(stats.worst)} />
+          <Stat
+            label="Streak W/L"
+            value={`${stats.maxWinStreak} / ${stats.maxLossStreak}`}
+          />
+          <Stat
+            label="Avg win/loss"
+            value={winLossRatio != null ? fmtNum(winLossRatio, 2) : "—"}
+            title="Average winning R divided by average losing R."
+          />
+          <Stat
+            label="Breakeven"
+            value={String(stats.breakeven)}
+            title={
+              hasBreakevenBand(breakevenRange)
+                ? `Trades landing in ${fmtMoney(breakevenRange.from, currency)} … ${fmtMoney(breakevenRange.to, currency)}.`
+                : "No breakeven band configured — only an exact 0.00 counts, which almost never happens once fees are included. Set a range per account in Settings."
+            }
+          />
+          <Stat
+            label="Week win %"
+            // Same guard, same reason: a book whose only week was flat (net
+            // exactly at the breakeven band) has `winning + losing === 0`, and
+            // `winPct` answers 0 for that — not "0% of weeks won" but "no week
+            // was won or lost at all".
+            value={
+              weekly.winning + weekly.losing === 0
+                ? "—"
+                : fmtPct(weekly.winPct)
+            }
+            title={`${weekly.winning} winning of ${weekly.periods} weeks. The swing replacement for Day Win %.`}
+          />
+        </StatGroup>
+
+        <StatGroup id="risk" title="Rizik" count={7}>
+          <Stat
+            label="Max drawdown %"
+            value={fmtPct(drawdown.maxPctOfEquity)}
+            cls="text-[var(--loss)]"
+            title={
+              drawdown.maxAt
+                ? `Share of peak account equity, including deposits and withdrawals. Trough on ${drawdown.maxAt.slice(0, 10)}.`
+                : "Share of peak account equity, including deposits and withdrawals."
+            }
+          />
+          <Stat
+            label="Avg daily DD"
+            value={fmtMoney(dailyDd.avgMoney, currency)}
+            cls={dailyDd.avgMoney < 0 ? "text-[var(--loss)]" : undefined}
+            title={
+              dailyDd.worstDay
+                ? `Average drop below the day's own high-water mark, across ${dailyDd.days} days with a trade. A day that never went underwater counts as 0. Worst: ${fmtMoney(dailyDd.worstMoney, currency)} on ${dailyDd.worstDay}.`
+                : `Average drop below the day's own high-water mark, across ${dailyDd.days} days with a trade.`
+            }
+          />
+          <Stat
+            label="Sharpe"
+            value={ratios.sharpe != null ? fmtNum(ratios.sharpe, 2) : "—"}
+            title={ratioTitle(
+              "Mean daily P&L divided by its standard deviation.",
+              ratios,
+            )}
+          />
+          <Stat
+            label="Sortino"
+            value={ratios.sortino != null ? fmtNum(ratios.sortino, 2) : "—"}
+            title={ratioTitle(
+              "Like Sharpe, but the denominator counts losing days only — upside is not risk. Empty while no day has lost money.",
+              ratios,
+            )}
+          />
+          <Stat
+            label="Calmar"
+            value={ratios.calmar != null ? fmtNum(ratios.calmar, 2) : "—"}
+            title={ratioTitle(
+              "Annualized profit divided by max drawdown — the recovery factor divided by how long it took to earn.",
+              ratios,
+            )}
+          />
+          <Stat
+            label="Recovery factor"
+            value={recovery != null ? fmtNum(recovery, 2) : "—"}
+            title="Net profit divided by max drawdown. Undefined — not infinite — while the curve has never fallen."
+          />
+          <Stat
+            label="Consistency"
+            value={fmtNum(consistency.score, 0)}
+            title="100 − (stdev of trade P&L / total profit). Zero while the book is losing."
+          />
+        </StatGroup>
+
+        <StatGroup id="execution" title="Izvršenje i aktivnost" count={8}>
+          <Stat
+            label="Avg entry slip"
+            value={
+              slippageStats.count > 0
+                ? fmtR(-slippageStats.avgAdverseR)
+                : "—"
+            }
+            cls={
+              slippageStats.count > 0
+                ? pnlClass(-slippageStats.avgAdverseR)
+                : undefined
+            }
+          />
+          <Stat
+            label="Total slip R"
+            value={
+              slippageStats.count > 0
+                ? fmtR(-slippageStats.totalAdverseR)
+                : "—"
+            }
+            cls={
+              slippageStats.count > 0
+                ? pnlClass(-slippageStats.totalAdverseR)
+                : undefined
+            }
+          />
+          <Stat
+            label="Target attainment"
+            value={
+              exitEffStats.count > 0
+                ? fmtExitEfficiencyPct(exitEffStats.avgPct)
+                : "—"
+            }
+            cls={
+              exitEffStats.count > 0
+                ? pnlClass(exitEffStats.avgPct - 50)
+                : undefined
+            }
+            title={
+              exitEffStats.count > 0
+                ? `Realized R / planned target R · ${exitEffStats.count} closed trades`
+                : undefined
+            }
+          />
+          <Stat
+            label="Winner target attainment"
+            value={
+              exitEffStats.winnerCount > 0
+                ? fmtExitEfficiencyPct(exitEffStats.avgWinnerPct)
+                : "—"
+            }
+            cls={
+              exitEffStats.winnerCount > 0
+                ? pnlClass(exitEffStats.avgWinnerPct - 50)
+                : undefined
+            }
+            title="Winning trades only — early exit vs plan"
+          />
+          <Stat
+            label="Avg hold"
+            value={formatDuration(holdTime.avgSeconds)}
+            title={`Across ${holdTime.count} trades with a known duration.`}
+          />
+          <Stat
+            label="Total swap"
+            value={fmtMoney(costs.totalSwap, currency)}
+            cls={costs.totalSwap !== 0 ? "text-[var(--loss)]" : undefined}
+            title={
+              costs.withCostData === 0
+                ? "No trade in scope carries a cost — this zero means 'no data', not 'free'."
+                : `${costs.withCostData} of ${costs.count} trades carry cost data.`
+            }
+          />
+          <Stat
+            label="Trading days"
+            value={String(tradingDays)}
+            title="Days a position was OPENED. Money is dated by close; activity by open."
+          />
+          <Stat
+            label="Logged days"
+            value={String(loggedDays)}
+            title="Days with a journal entry — including days you deliberately did not trade."
+          />
+        </StatGroup>
+      </div>
+
+      {/* The verdict, beside the shape that produced it. The Sickre Score used
+          to sit six sections down, below every raw money tile — the one figure
+          that weighs result AND process together, ranked under `Total swap`. */}
+      <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-2">
+        <ChartShell
+          title={`Equity curve (${mode}, ${equityMetric === "money" ? currency : "R"})`}
+          action={
+            <div className="flex rounded-md border p-0.5">
+              {(["money", "r"] as const).map((mt) => (
+                <Button
+                  key={mt}
+                  variant={equityMetric === mt ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7"
+                  onClick={() => setEquityMetric(mt)}
+                >
+                  {mt === "money" ? "$" : "R"}
+                </Button>
+              ))}
+            </div>
+          }
+        >
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={equity} margin={{ left: 4, right: 8, top: 8 }}>
               <defs>
@@ -1246,16 +1322,11 @@ export function Dashboard({
                   <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="i" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
-              <YAxis tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" width={56} />
+              <CartesianGrid {...GRID_PROPS} />
+              <XAxis dataKey="i" {...AXIS_PROPS} />
+              <YAxis {...AXIS_PROPS} width={56} />
               <Tooltip
-                contentStyle={{
-                  background: "var(--popover)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
+                contentStyle={TOOLTIP_STYLE}
                 formatter={(v) =>
                   equityMetric === "money"
                     ? fmtMoney(Number(v), currency)
@@ -1271,19 +1342,21 @@ export function Dashboard({
               />
             </AreaChart>
           </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      <InsightsPanel result={insightResult} />
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <DrawdownChart
-          series={ddSeries}
-          stats={drawdown}
-          currency={currency}
-        />
+        </ChartShell>
         <SickreScoreCard score={sickreScore} />
       </div>
+
+      {/* What the app has to say, before the reader digs for it themselves. */}
+      <InsightsPanel result={insightResult} />
+
+      {/* Process, high — not at the foot of the page. README: "P&L je posledica,
+          proces je uzrok." A discipline streak buried under nine sections of
+          money is the layout arguing the opposite of the thesis. */}
+      <TrackerStreakCard
+        series={trackerSeries}
+        endDay={todayKey}
+        hasRules={trackerRules.length > 0}
+      />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <HoldTimeCard stats={holdTime} />
@@ -1300,216 +1373,172 @@ export function Dashboard({
         />
       </div>
 
-      {/* min-w-0 on the items: grid tracks default to min-width:auto, which lets
-          the heatmap's intrinsic width push the card past the viewport. */}
       <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-2">
         <PeriodPerformanceCard
           summary={monthly}
           label="Mesečni učinak"
           currency={currency}
         />
-        {/* R distribution */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">R-multiple distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={hist} margin={{ left: 4, right: 8, top: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="bucket" tick={{ fontSize: 10 }} stroke="var(--muted-foreground)" />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" width={28} />
-                <ReferenceLine x="-1..0" stroke="var(--border)" />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--popover)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                />
-                <Bar dataKey="count" radius={[3, 3, 0, 0]}>
-                  {hist.map((b, i) => (
-                    <Cell
-                      key={i}
-                      fill={
-                        b.bucket.startsWith("-") || b.bucket === "<-3"
-                          ? "var(--loss)"
-                          : "var(--profit)"
-                      }
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Calendar heatmap */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Daily P/L ({mode})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CalendarHeatmap
-              daily={daily}
-              endDay={todayKey}
-              currency={currency}
-            />
-            <p className="mt-2 text-xs text-muted-foreground">
-              Last 26 weeks — green = profit, red = loss (account days).
-            </p>
-          </CardContent>
-        </Card>
+        <ChartShell title="R-multiple distribution">
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={hist} margin={{ left: 4, right: 8, top: 8 }}>
+              <CartesianGrid {...GRID_PROPS} />
+              <XAxis dataKey="bucket" {...AXIS_PROPS} tick={{ fontSize: 10 }} />
+              <YAxis allowDecimals={false} {...AXIS_PROPS} width={28} />
+              <ReferenceLine x="-1..0" stroke="var(--border)" />
+              <Tooltip contentStyle={TOOLTIP_STYLE} />
+              <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                {hist.map((b, i) => (
+                  <Cell
+                    key={i}
+                    fill={
+                      b.bucket.startsWith("-") || b.bucket === "<-3"
+                        ? "var(--loss)"
+                        : "var(--profit)"
+                    }
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartShell>
       </div>
 
-      <TrackerStreakCard
-        series={trackerSeries}
-        endDay={todayKey}
-        hasRules={trackerRules.length > 0}
-      />
+      {/* The underwater curve beside the calendar of days that dug it.
 
-      {/* Entry slippage by week */}
-      {weeklySlip.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Entry slippage by week</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart
-                data={weeklySlip.map((w) => ({
-                  week: w.week.slice(5),
-                  avgDisplayR: -w.avgSlipR,
-                  tradeCount: w.tradeCount,
-                }))}
-                margin={{ left: 4, right: 8, top: 8 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis
-                  dataKey="week"
-                  tick={{ fontSize: 10 }}
-                  stroke="var(--muted-foreground)"
-                />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  stroke="var(--muted-foreground)"
-                  width={40}
-                  tickFormatter={(v) => `${Number(v).toFixed(2)}R`}
-                />
-                <ReferenceLine y={0} stroke="var(--border)" />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--popover)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                  formatter={(v, _name, item) => {
-                    const payload = item.payload as {
-                      avgDisplayR: number;
-                      tradeCount: number;
-                    };
-                    return [
-                      `${Number(v).toFixed(2)}R avg (${payload.tradeCount} trades)`,
-                      "Slippage",
-                    ];
-                  }}
-                  labelFormatter={(label) => `Week ${label}`}
-                />
-                <Bar dataKey="avgDisplayR" radius={[3, 3, 0, 0]}>
-                  {weeklySlip.map((w, i) => (
-                    <Cell
-                      key={i}
-                      fill={
-                        w.avgSlipR > 0
-                          ? "var(--loss)"
-                          : w.avgSlipR < 0
+          `min-w-0` on the items is load-bearing, not tidiness: grid tracks
+          default to `min-width:auto`, and the heatmap's intrinsic width would
+          otherwise push its card straight past the viewport edge. */}
+      <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-2">
+        <DrawdownChart series={ddSeries} stats={drawdown} currency={currency} />
+        <ChartShell
+          title={`Daily P/L (${mode})`}
+          subtitle="Last 26 weeks — green = profit, red = loss (account days)."
+        >
+          <CalendarHeatmap
+            daily={daily}
+            endDay={todayKey}
+            currency={currency}
+          />
+        </ChartShell>
+      </div>
+
+      {/* Execution quality. Both charts are conditional and both draw on the
+          same well of closed trades, so they share a row: they were two
+          full-width bands stacked one under the other, which is most of the
+          reason the page ran as long as it did. */}
+      {(weeklySlip.length > 0 || weeklyExitEff.length > 0) && (
+        <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-2">
+          {weeklySlip.length > 0 && (
+            <ChartShell
+              title="Entry slippage by week"
+              subtitle="Planned entry vs avg fill, in R (vs planned stop). Includes spread when planned was mid and fill was ask/bid."
+            >
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart
+                  data={weeklySlip.map((w) => ({
+                    week: w.week.slice(5),
+                    avgDisplayR: -w.avgSlipR,
+                    tradeCount: w.tradeCount,
+                  }))}
+                  margin={{ left: 4, right: 8, top: 8 }}
+                >
+                  <CartesianGrid {...GRID_PROPS} />
+                  <XAxis dataKey="week" {...AXIS_PROPS} tick={{ fontSize: 10 }} />
+                  <YAxis
+                    {...AXIS_PROPS}
+                    width={40}
+                    tickFormatter={(v) => `${Number(v).toFixed(2)}R`}
+                  />
+                  <ReferenceLine y={0} stroke="var(--border)" />
+                  <Tooltip
+                    contentStyle={TOOLTIP_STYLE}
+                    formatter={(v, _name, item) => {
+                      const payload = item.payload as {
+                        avgDisplayR: number;
+                        tradeCount: number;
+                      };
+                      return [
+                        `${Number(v).toFixed(2)}R avg (${payload.tradeCount} trades)`,
+                        "Slippage",
+                      ];
+                    }}
+                    labelFormatter={(label) => `Week ${label}`}
+                  />
+                  <Bar dataKey="avgDisplayR" radius={[3, 3, 0, 0]}>
+                    {weeklySlip.map((w, i) => (
+                      <Cell
+                        key={i}
+                        fill={
+                          w.avgSlipR > 0
+                            ? "var(--loss)"
+                            : w.avgSlipR < 0
+                              ? "var(--profit)"
+                              : "var(--muted-foreground)"
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartShell>
+          )}
+
+          {weeklyExitEff.length > 0 && (
+            <ChartShell
+              title="Target attainment by week"
+              subtitle="Realized R vs planned target R. Not the same as Capture % (realized / MFE)."
+            >
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart
+                  data={weeklyExitEff.map((w) => ({
+                    week: w.week.slice(5),
+                    avgPct: w.avgPct,
+                    tradeCount: w.tradeCount,
+                  }))}
+                  margin={{ left: 4, right: 8, top: 8 }}
+                >
+                  <CartesianGrid {...GRID_PROPS} />
+                  <XAxis dataKey="week" {...AXIS_PROPS} tick={{ fontSize: 10 }} />
+                  <YAxis
+                    {...AXIS_PROPS}
+                    width={44}
+                    tickFormatter={(v) => `${Number(v).toFixed(0)}%`}
+                  />
+                  <ReferenceLine y={50} stroke="var(--border)" strokeDasharray="4 4" />
+                  <Tooltip
+                    contentStyle={TOOLTIP_STYLE}
+                    formatter={(v, _name, item) => {
+                      const payload = item.payload as {
+                        avgPct: number;
+                        tradeCount: number;
+                      };
+                      return [
+                        `${Number(v).toFixed(0)}% avg (${payload.tradeCount} trades)`,
+                        "Target attainment",
+                      ];
+                    }}
+                    labelFormatter={(label) => `Week ${label}`}
+                  />
+                  <Bar dataKey="avgPct" radius={[3, 3, 0, 0]}>
+                    {weeklyExitEff.map((w, i) => (
+                      <Cell
+                        key={i}
+                        fill={
+                          w.avgPct >= 50
                             ? "var(--profit)"
-                            : "var(--muted-foreground)"
-                      }
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Planned entry vs avg fill, in R (vs planned stop). Includes spread
-              when planned was mid and fill was ask/bid.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {weeklyExitEff.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Target attainment by week</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart
-                data={weeklyExitEff.map((w) => ({
-                  week: w.week.slice(5),
-                  avgPct: w.avgPct,
-                  tradeCount: w.tradeCount,
-                }))}
-                margin={{ left: 4, right: 8, top: 8 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis
-                  dataKey="week"
-                  tick={{ fontSize: 10 }}
-                  stroke="var(--muted-foreground)"
-                />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  stroke="var(--muted-foreground)"
-                  width={44}
-                  tickFormatter={(v) => `${Number(v).toFixed(0)}%`}
-                />
-                <ReferenceLine y={50} stroke="var(--border)" strokeDasharray="4 4" />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--popover)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                  formatter={(v, _name, item) => {
-                    const payload = item.payload as {
-                      avgPct: number;
-                      tradeCount: number;
-                    };
-                    return [
-                      `${Number(v).toFixed(0)}% avg (${payload.tradeCount} trades)`,
-                      "Target attainment",
-                    ];
-                  }}
-                  labelFormatter={(label) => `Week ${label}`}
-                />
-                <Bar dataKey="avgPct" radius={[3, 3, 0, 0]}>
-                  {weeklyExitEff.map((w, i) => (
-                    <Cell
-                      key={i}
-                      fill={
-                        w.avgPct >= 50
-                          ? "var(--profit)"
-                          : w.avgPct >= 0
-                            ? "var(--chart-4)"
-                            : "var(--loss)"
-                      }
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Realized R vs planned target R. Not the same as Capture % (realized /
-              MFE).
-            </p>
-          </CardContent>
-        </Card>
+                            : w.avgPct >= 0
+                              ? "var(--chart-4)"
+                              : "var(--loss)"
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartShell>
+          )}
+        </div>
       )}
 
       {/* Breakdown by tag */}
@@ -1571,22 +1600,49 @@ export function Dashboard({
   );
 }
 
+/**
+ * A KPI tile.
+ *
+ * THE DOM SHAPE BELOW IS LOAD-BEARING. `dashboard.render.test.tsx` and
+ * `dashboard.controls.render.test.tsx` read a tile's value by finding the label
+ * text, walking up to the element carrying `data-slot="card-content"`, and
+ * taking `children[1]` — shadcn's own attribute, so the tests need no test ids
+ * in production code. That makes exactly two things a contract:
+ *
+ *   1. `<CardContent>` has EXACTLY two direct children, and
+ *   2. the label is the first, the value the second.
+ *
+ * Wrapping either in a div, or slipping a badge or an icon between them, moves
+ * the value off `children[1]` and silently breaks nine assertions that exist to
+ * prove the numbers on screen are the numbers the book computes. `size` is
+ * therefore a CLASS switch and nothing more — it must never add an element.
+ */
 function Stat({
   label,
   value,
   cls,
   title,
+  size = "default",
 }: {
   label: string;
   value: string;
   cls?: string;
   title?: string;
+  /** "hero" is the headline row: same markup, larger type. */
+  size?: "default" | "hero";
 }) {
+  const hero = size === "hero";
   return (
-    <Card title={title}>
-      <CardContent className="p-3">
+    <Card title={title} className={hero ? "border-border/80 shadow-none" : ""}>
+      <CardContent className={hero ? "p-4" : "p-3"}>
         <div className="text-xs text-muted-foreground">{label}</div>
-        <div className={`mt-1 text-lg font-semibold ${cls ?? ""}`}>{value}</div>
+        <div
+          className={`mt-1 font-semibold tabular-nums ${
+            hero ? "text-2xl" : "text-lg"
+          } ${cls ?? ""}`}
+        >
+          {value}
+        </div>
       </CardContent>
     </Card>
   );
