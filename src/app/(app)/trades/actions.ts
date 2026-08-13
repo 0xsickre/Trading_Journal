@@ -8,6 +8,11 @@ import { buildPositionPatch, mergeCustom } from "@/lib/journal/trade-fields";
 import { computeStatus, isValidFill } from "@/lib/journal/trade-lifecycle";
 import { isFtmoAccountFrozen } from "@/lib/journal/ftmo-status";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
+import {
+  TRADE_IMAGE_KINDS,
+  validateTradingViewSnapshotUrl,
+  type TradeImageKind,
+} from "@/lib/journal/tradingview-snapshot";
 
 export type ExecutionInput = {
   side: "entry" | "exit";
@@ -30,6 +35,14 @@ export type TradeInput = {
   conviction?: number | null;
   /** Rule id → followed. Absent key means the rule was not answered. */
   rule_answers?: Record<string, boolean>;
+  /**
+   * Chart snapshot links captured before the trade existed.
+   *
+   * Create only. Once the position has an id, `TradeImages` owns these rows and
+   * writes them itself — accepting them on update as well would give one row two
+   * writers with no rule for which wins.
+   */
+  images?: { kind: string; image_url: string }[];
 };
 
 /**
@@ -199,9 +212,53 @@ export async function createTrade(input: TradeInput) {
     return { ok: false as const, error: ruleErr };
   }
 
+  const imgErr = await saveTradeImages(supabase, pos.id, input.images);
+  if (imgErr) {
+    await supabase.from("tj_positions").delete().eq("id", pos.id);
+    return { ok: false as const, error: imgErr };
+  }
+
   revalidatePath("/journal");
   revalidatePath("/", "layout");
   return { ok: true as const, id: pos.id };
+}
+
+/**
+ * Persist the chart links captured on a not-yet-saved trade.
+ *
+ * Re-validates with `validateTradingViewSnapshotUrl` — the same function the
+ * client already ran. That is not duplication: the client check is there to
+ * give a fast, specific message, and this one is there because a server action
+ * is a public endpoint. The column also carries a CHECK, so a bad URL would be
+ * refused regardless; validating here turns a constraint violation into the
+ * sentence that says what to paste instead.
+ *
+ * Returns an error string so the caller can roll the position back. A trade
+ * whose chart silently vanished is worse than one that failed loudly: the
+ * screenshot is often the only record of what the setup looked like.
+ */
+async function saveTradeImages(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  positionId: string,
+  images: TradeInput["images"],
+): Promise<string | null> {
+  const rows: { position_id: string; kind: string; image_url: string }[] = [];
+  for (const img of images ?? []) {
+    if (!TRADE_IMAGE_KINDS.includes(img.kind as TradeImageKind)) {
+      return `Unknown chart slot: ${img.kind}`;
+    }
+    const validated = validateTradingViewSnapshotUrl(img.image_url);
+    if (!validated.ok) return validated.message;
+    rows.push({
+      position_id: positionId,
+      kind: img.kind,
+      image_url: validated.url,
+    });
+  }
+  if (rows.length === 0) return null;
+
+  const { error } = await supabase.from("tj_trade_images").insert(rows);
+  return error?.message ?? null;
 }
 
 export async function updateTrade(id: string, input: TradeInput) {

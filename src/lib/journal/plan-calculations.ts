@@ -104,8 +104,32 @@ export function computePositionSize(params: {
   }
   const stopDist = Math.abs(entry - stop);
   if (stopDist <= 0) return null;
-  const riskAmount = (balance * riskPct) / 100;
+  const riskAmount = computeRiskAmount({ balance, riskPct });
+  if (riskAmount == null) return null;
   return riskAmount / (stopDist * pointValue);
+}
+
+/**
+ * What "1 %" is actually worth, in account currency.
+ *
+ * Extracted from `computePositionSize`, which computed it inline and threw it
+ * away — the sizing formula's first step is the number the trader most needs to
+ * see. A percentage is an abstraction you can agree to without flinching; the
+ * same risk written as money is the one that makes you check the stop again.
+ *
+ * Reads CURRENT equity, not the starting balance, for the same reason position
+ * size does: risk is a share of what the account is worth now.
+ *
+ * Null rather than 0 on bad input, matching every other calculator here — a
+ * refusal to answer must not render as a confident zero.
+ */
+export function computeRiskAmount(params: {
+  balance: number;
+  riskPct: number | null;
+}): number | null {
+  const { balance, riskPct } = params;
+  if (riskPct == null || !Number.isFinite(balance) || balance <= 0) return null;
+  return (balance * riskPct) / 100;
 }
 
 /** Store/display reward multiple as plain decimal string (e.g. "2.45"). */
@@ -154,8 +178,30 @@ export function riskPlanFieldVisible(
     case "position_size":
       return hasEntry && hasStop && hasRisk;
     case "planned_rr":
+    // How much comes off on the way is part of the same decision as where you
+    // are going — it appears with the target, not before there is one.
+    case "scale_out_plan":
       return hasEntry && hasStop && hasTarget;
     default:
       return true;
   }
+}
+
+/**
+ * Is the "Why this trade" group answerable yet?
+ *
+ * The same gate as `risk_pct` and `target_price`: entry and stop define the
+ * trade, and until they exist there is nothing to write a thesis about.
+ *
+ * Its own function rather than three more cases in `riskPlanFieldVisible`,
+ * because the group is gated ONCE as a whole. Routing it through the per-field
+ * switch is how these three ended up on a blank form in the first place — that
+ * switch answers `true` for any name it does not recognise, so a field added to
+ * the group without a matching case fails open and shows up immediately.
+ */
+export function thesisGroupVisible(
+  entry: number | null,
+  stop: number | null,
+): boolean {
+  return entry != null && stop != null;
 }

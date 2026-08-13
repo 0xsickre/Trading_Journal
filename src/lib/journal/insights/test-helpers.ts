@@ -19,6 +19,8 @@ export type TradeSpec = {
   timeStopDays?: number | null;
   /** The reason for the trade, in writing. */
   thesis?: string | null;
+  /** How the position was meant to be taken off. */
+  scaleOutPlan?: string | null;
   direction?: string;
   openedAt?: string;
   closedAt?: string;
@@ -87,6 +89,7 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     // silent in every fixture that is not about it — a rule that fires across
     // unrelated suites teaches nothing except to ignore it.
     thesis: spec.thesis === undefined ? "Written" : spec.thesis,
+    scale_out_plan: spec.scaleOutPlan ?? null,
     instrument: spec.instrument ?? "EURUSD",
     stats,
   } as unknown as TradeRow;

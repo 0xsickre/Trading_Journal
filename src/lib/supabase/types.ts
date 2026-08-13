@@ -950,6 +950,7 @@ export type Database = {
           position_size: number | null
           psychology_tags: string[]
           risk_pct: string | null
+          scale_out_plan: string | null
           setup_grade: string | null
           source: string
           status: string
@@ -988,6 +989,7 @@ export type Database = {
           position_size?: number | null
           psychology_tags?: string[]
           risk_pct?: string | null
+          scale_out_plan?: string | null
           setup_grade?: string | null
           source?: string
           status?: string
@@ -1026,6 +1028,7 @@ export type Database = {
           position_size?: number | null
           psychology_tags?: string[]
           risk_pct?: string | null
+          scale_out_plan?: string | null
           setup_grade?: string | null
           source?: string
           status?: string

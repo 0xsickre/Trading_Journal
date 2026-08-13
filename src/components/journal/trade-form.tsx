@@ -26,6 +26,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EditableSelect } from "@/components/journal/editable-select";
 import { TagMultiSelect } from "@/components/journal/tag-multi-select";
 import { TradeImages } from "@/components/journal/trade-images";
+import {
+  TradeImageDrafts,
+  imageDraftsToPayload,
+  type ImageDrafts,
+  type PreImageKind,
+} from "@/components/journal/trade-image-drafts";
 import { PlaybookChecklist } from "@/components/journal/playbook-checklist";
 import {
   buildFormTabs,
@@ -46,10 +52,12 @@ import { fmtMoney, fmtR, pnlClass } from "@/lib/journal/format";
 import {
   computePlannedRewardR,
   computePositionSize,
+  computeRiskAmount,
   formatPlannedRewardR,
   inferDirectionFromPrices,
   parseRiskPct,
   riskPlanFieldVisible,
+  thesisGroupVisible,
 } from "@/lib/journal/plan-calculations";
 import { computePositionStats } from "@/lib/journal/position-stats";
 import { utcToZonedInput, zonedInputToUtc, fmtInTz } from "@/lib/journal/time";
@@ -226,6 +234,13 @@ export function TradeForm({
   const [fields, setFields] = useState<Record<string, FieldValue>>(
     initial?.fields ?? {},
   );
+
+  // Only meaningful before the trade exists. Once it does, `TradeImages` owns
+  // the rows and writes them itself, so this state is never read again.
+  const [imageDrafts, setImageDrafts] = useState<ImageDrafts>({});
+  function setImageDraft(kind: PreImageKind, url: string) {
+    setImageDrafts((prev) => ({ ...prev, [kind]: url }));
+  }
 
   const [execs, setExecs] = useState<ExecRow[]>(() => {
     if (initial && initial.executions.length > 0) {
@@ -414,6 +429,11 @@ export function TradeForm({
       stop,
       pointValue,
     });
+    // Computed even when sizing is impossible. A missing point value blocks the
+    // SIZE, not the risk: "1 % of this account is 420" is true whether or not
+    // the instrument spec is on file, and it is the half of the answer worth
+    // showing while the other half is unavailable.
+    const riskAmount = computeRiskAmount({ balance, riskPct });
 
     const slippage = computeEntrySlippage({
       direction: String(fields.direction ?? ""),
@@ -453,6 +473,7 @@ export function TradeForm({
       r,
       plannedRR,
       sizeSuggestion,
+      riskAmount,
       totalFees,
       totalSwap,
       fees,
@@ -632,6 +653,10 @@ export function TradeForm({
       current_status: isMissed ? "missed" : null,
       playbook_id: playbookId,
       conviction,
+      // Only on create. An existing trade's images are owned by `TradeImages`,
+      // which writes them directly — sending them here too would give one row
+      // two writers.
+      images: initial ? undefined : imageDraftsToPayload(imageDrafts),
       // Only answers to rules the checklist actually offered. An answer to a
       // rule hidden by the current outcome would be recorded against a
       // population the trader was never shown.
@@ -804,12 +829,7 @@ export function TradeForm({
                           ? setTradeNo
                           : undefined
                       }
-                      tradePhase={tab.id === "plan" && group.id === "meta" ? tradePhase : undefined}
-                      onTradePhaseChange={
-                        tab.id === "plan" && group.id === "meta" && !isMissed
-                          ? setTradePhase
-                          : undefined
-                      }
+                      tradePhase={tradePhase}
                       isMissed={isMissed}
                       computedDisplay={
                         tab.id === "plan" && group.id === "risk_plan"
@@ -848,7 +868,16 @@ export function TradeForm({
                           ? handleAddEntryFromPlan
                           : undefined
                       }
-                      hasEntryFill={hasValidEntryFill}
+                      // The percentage in money. A share of equity is an
+                      // abstraction you can agree to without flinching; the same
+                      // risk as a figure is what makes you re-check the stop.
+                      riskNote={
+                        tab.id === "plan" &&
+                        group.id === "risk_plan" &&
+                        metrics.riskAmount != null
+                          ? `Risking ${fmtMoney(metrics.riskAmount, currency)} if the stop is hit.`
+                          : null
+                      }
                     />
                   ))}
 
@@ -900,9 +929,47 @@ export function TradeForm({
                   </AdvancedSection>
                 )}
 
-                {tab.id === "plan" &&
-                  (showMoveToActive || showMarkMissed || showRestorePlanned) && (
-                  <div className="mt-6 space-y-2 border-t pt-4">
+                {/* Lifecycle, at the bottom and on its own.
+                    `Trade phase` used to sit in the "Trade" group at the very
+                    top, between the account and the instrument. It is not a
+                    field of the trade — it is the same control as the buttons
+                    below it, worded as a select, and asking "planned or active?"
+                    before the trader has said what they are trading put the
+                    lifecycle question first in a form about a setup. Here it
+                    stands next to the actions that move the trade between the
+                    same two states. */}
+                {tab.id === "plan" && (
+                  <div className="mt-6 space-y-3 border-t pt-4">
+                    {!isMissed && (
+                      <div className="max-w-xs space-y-1.5">
+                        <Label className="text-xs">Trade phase</Label>
+                        <Select
+                          value={tradePhase}
+                          onValueChange={(v) => setTradePhase(v as TradePhase)}
+                          disabled={hasValidEntryFill}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="planned" disabled={hasValidEntryFill}>
+                              Planned
+                            </SelectItem>
+                            <SelectItem value="active">Active</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          {hasValidEntryFill
+                            ? "Automatically active — an entry fill exists."
+                            : "Planned = the trade is still a plan. Active = you are already in the position."}
+                        </p>
+                      </div>
+                    )}
+                    {isMissed && (
+                      <p className="text-xs text-muted-foreground">
+                        Restore from missed to change the phase.
+                      </p>
+                    )}
                     <div className="flex flex-wrap gap-2">
                       {showMoveToActive && (
                         <Button
@@ -933,7 +1000,7 @@ export function TradeForm({
                           disabled={pending}
                           onClick={handleRestorePlanned}
                         >
-                          Vrati u planned
+                          Restore to planned
                         </Button>
                       )}
                     </div>
@@ -952,7 +1019,11 @@ export function TradeForm({
         ))}
       </Tabs>
 
-      {initial && <TradeImages positionId={initial.id} />}
+      {initial ? (
+        <TradeImages positionId={initial.id} />
+      ) : (
+        <TradeImageDrafts drafts={imageDrafts} onChange={setImageDraft} />
+      )}
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 p-3 backdrop-blur md:left-60">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
@@ -1096,13 +1167,12 @@ function FormGroupSection({
   showAccount,
   onAddEntryFill,
   tradePhase,
-  onTradePhaseChange,
   isMissed,
-  hasEntryFill,
   computedDisplay,
   fieldHints,
   tradeNo,
   onTradeNoChange,
+  riskNote,
   nested,
 }: {
   group: FormGroup;
@@ -1115,14 +1185,15 @@ function FormGroupSection({
   onAccountChange?: (id: string) => void;
   showAccount?: boolean;
   onAddEntryFill?: () => void;
+  /** Only to hide the review note on a trade that has not happened yet. */
   tradePhase?: TradePhase;
-  onTradePhaseChange?: (phase: TradePhase) => void;
   isMissed?: boolean;
-  hasEntryFill?: boolean;
   computedDisplay?: Record<string, string>;
   fieldHints?: Record<string, string>;
   tradeNo?: string;
   onTradeNoChange?: (value: string) => void;
+  /** What the chosen risk % is worth in money — the number that makes you look twice. */
+  riskNote?: string | null;
   nested?: boolean;
 }) {
   const entry = n(String(fields.entry_price ?? ""));
@@ -1140,22 +1211,13 @@ function FormGroupSection({
           ? group.fields.filter((field) => field.name !== "trade_journal_notes")
           : group.fields;
 
-  return (
-    <div className={nested ? "space-y-4" : "space-y-4"}>
-      {!nested && (
-        <div>
-          <h3 className="text-sm font-semibold">{group.title}</h3>
-          {group.description && (
-            <p className="text-sm text-muted-foreground">{group.description}</p>
-          )}
-          {group.id === "risk_plan" && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Planned Entry = nivo na chartu. <b>Planned</b> = plan trade;
-              <b> Active</b> = you are already in the position.
-            </p>
-          )}
-        </div>
-      )}
+  // Gated as a whole, not field by field — see `thesisGroupVisible`. Rendering
+  // nothing rather than an empty heading: a title over no inputs reads like the
+  // form failed to load.
+  if (group.id === "thesis" && !thesisGroupVisible(entry, stop)) return null;
+
+  const body = (
+    <>
       <div className="grid gap-4 sm:grid-cols-2">
         {showAccount && accounts && onAccountChange && (
           <div className="space-y-1.5">
@@ -1187,36 +1249,6 @@ function FormGroupSection({
             />
           </div>
         )}
-        {onTradePhaseChange && tradePhase != null && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Trade phase</Label>
-            <Select
-              value={tradePhase}
-              onValueChange={(v) => onTradePhaseChange(v as TradePhase)}
-              disabled={isMissed || hasEntryFill}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="planned" disabled={hasEntryFill}>
-                  Planned
-                </SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-              </SelectContent>
-            </Select>
-            {hasEntryFill && (
-              <p className="text-xs text-muted-foreground">
-                Auto Active — ima entry fill.
-              </p>
-            )}
-            {isMissed && (
-              <p className="text-xs text-muted-foreground">
-                Restore from missed to change the phase.
-              </p>
-            )}
-          </div>
-        )}
         {fieldsToRender.map((field) => (
           <FieldRenderer
             key={field.name}
@@ -1230,11 +1262,47 @@ function FormGroupSection({
           />
         ))}
       </div>
+      {riskNote && (
+        <p className="text-xs text-muted-foreground">{riskNote}</p>
+      )}
       {onAddEntryFill && group.id === "risk_plan" && (
         <Button type="button" variant="outline" size="sm" onClick={onAddEntryFill}>
           <ArrowDownToLine className="size-4" /> Add Entry Fill
         </Button>
       )}
+    </>
+  );
+
+  if (group.collapsed && !nested) {
+    return (
+      <details className="rounded-md border">
+        <summary className="cursor-pointer list-none px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+          <span className="inline-flex items-center gap-1.5">
+            <ChevronDown className="size-4 transition-transform [details[open]_&]:rotate-180" />
+            {group.title}
+          </span>
+        </summary>
+        <div className="space-y-4 border-t p-3">
+          {group.description && (
+            <p className="text-sm text-muted-foreground">{group.description}</p>
+          )}
+          {body}
+        </div>
+      </details>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {!nested && (
+        <div>
+          <h3 className="text-sm font-semibold">{group.title}</h3>
+          {group.description && (
+            <p className="text-sm text-muted-foreground">{group.description}</p>
+          )}
+        </div>
+      )}
+      {body}
     </div>
   );
 }

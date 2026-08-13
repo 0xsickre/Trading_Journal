@@ -46,6 +46,17 @@ export type FormGroup = {
   description?: string;
   fields: FieldConfig[];
   advanced?: boolean;
+  /**
+   * Rendered behind its own disclosure, open on demand.
+   *
+   * Distinct from `advanced`, which sweeps every such group into one shared
+   * "Advanced" box at the bottom of the tab. A collapsed group keeps its own
+   * heading and its own place in the order — it is not demoted, it is folded.
+   * The difference matters for a group you consult on some trades and skip on
+   * most: buried under "Advanced" it reads as rarely-useful, folded in place it
+   * reads as one click away.
+   */
+  collapsed?: boolean;
 };
 
 export type FormTab = {
@@ -103,9 +114,37 @@ const BASE_TABS: FormTab[] = [
             type: "computed",
             placeholder: "Auto from entry / stop / target",
           },
-          // The three swing fields sit at the END of the risk plan, after the
-          // arithmetic, because they are the part the numbers cannot answer:
-          // why this trade, what would end it, and when to stop waiting.
+          {
+            // Sits with the target because it is part of the same decision: the
+            // target says where you are going, this says how much comes off on
+            // the way. Revealed with `planned_rr`, so it appears only once
+            // there is a target to scale out toward.
+            name: "scale_out_plan",
+            label: "Scale-out plan",
+            type: "textarea",
+            colSpan: 2,
+            placeholder: "50% at 1R, rest to target…",
+          },
+        ],
+      },
+      {
+        // The three swing fields stand as their own group rather than trailing
+        // the risk plan.
+        //
+        // They used to be appended to `risk_plan`, and that had a concrete bug:
+        // `riskPlanFieldVisible` falls through to `true` for any name it does
+        // not know, so all three showed on a COMPLETELY BLANK form — Entry
+        // Price, then three large textareas below it. The progressive reveal
+        // exists to ask one decision at a time, and the three fields defeated
+        // it. As a group they are gated once, on entry and stop.
+        //
+        // The heading also earns its place: the numbers above are what the
+        // trade IS, these are why it exists. Reading them under "Risk and plan"
+        // filed the reasoning as an appendix to the arithmetic.
+        id: "thesis",
+        title: "Why this trade",
+        description: "The part the numbers cannot answer.",
+        fields: [
           {
             name: "thesis",
             label: "Thesis",
@@ -147,29 +186,28 @@ const BASE_TABS: FormTab[] = [
         ],
       },
       {
+        // Folded by default. These are standing conditions rather than a
+        // per-trade decision — the macro read does not change between two
+        // trades taken the same morning — so they cost attention on every entry
+        // while earning it on few. Folded in place rather than pushed into
+        // "Advanced": one click away, still in the order the trade is thought
+        // through.
         id: "macro",
         title: "Context",
-        description: "From the dashboard readiness matrix — direction and entry quality.",
+        description: "Direction and entry quality — the standing read.",
+        collapsed: true,
         fields: [],
       },
-      {
-        // One column, `trade_journal_notes`, shown here and again on Execution.
-        // Same note, not two — the label says the same thing in both places so
-        // it cannot read as "plan notes" versus "review notes". Splitting the
-        // entry thesis from the after-the-fact lesson needs its own column.
-        id: "notes",
-        title: "Note",
-        description: "The same note is shown on the execution tab too.",
-        fields: [
-          {
-            name: "trade_journal_notes",
-            label: "Trade note",
-            type: "textarea",
-            colSpan: 2,
-            placeholder: "Why I am entering, stop and target logic…",
-          },
-        ],
-      },
+      // The `notes` group stood here: one `trade_journal_notes` textarea,
+      // placeholder "Why I am entering, stop and target logic…", the same
+      // column also rendered on Execution.
+      //
+      // It is gone from the PLAN tab because it asked the same question as
+      // `thesis` two groups above it. Two free-text boxes for "why", filled
+      // one at a time, meant no report could tell which one held the reasoning.
+      // `thesis` wins that job: it is the field the daily position check-in
+      // reads. The note keeps the Execution tab, where the same column means
+      // the lesson AFTER the outcome — one question, one place.
       {
         // Rendered only for a missed setup, right above the lifecycle buttons
         // that produced that state — the reason belongs next to the act.

@@ -278,7 +278,7 @@ describe("lifecycle buttons only appear where the action can actually succeed", 
       />,
     );
     await goToPlanTab(user);
-    expect(screen.getByRole("button", { name: /Vrati u planned/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Restore to planned/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Move to active trade/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Mark as missed/ })).not.toBeInTheDocument();
   });
@@ -333,5 +333,155 @@ describe("FTMO-frozen account blocks a new trade before anything else is validat
     // Freezing blocks NEW trades only — an existing one must stay editable,
     // or a trader could never even correct a typo on a frozen account.
     expect(screen.getByRole("button", { name: /Update trade/ })).toBeEnabled();
+  });
+});
+
+describe("the plan reveals one decision at a time", () => {
+  /**
+   * The regression this block exists for.
+   *
+   * `thesis`, `invalidation` and `time_stop_days` were appended to the
+   * `risk_plan` group when they were added. `riskPlanFieldVisible` answers
+   * `true` for any field name it does not recognise, so all three rendered on a
+   * COMPLETELY BLANK form: Entry Price, and then three large textareas under it.
+   * The progressive reveal exists precisely to stop that.
+   */
+  it("a blank form asks for the entry and nothing about the reasoning", async () => {
+    render(
+      <TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} />,
+    );
+    expect(screen.getByText("Planned Entry Price")).toBeInTheDocument();
+    expect(screen.queryByText("Why this trade")).not.toBeInTheDocument();
+    expect(screen.queryByText("Thesis")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Invalidation — what would prove me wrong"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Time stop (days)")).not.toBeInTheDocument();
+  });
+
+  it("the reasoning appears once entry and stop define a trade", async () => {
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        initial={baseInitial({ status: "planned" })}
+      />,
+    );
+    expect(screen.getByText("Why this trade")).toBeInTheDocument();
+    expect(screen.getByText("Thesis")).toBeInTheDocument();
+    expect(screen.getByText("Time stop (days)")).toBeInTheDocument();
+  });
+
+  it("the scale-out plan waits for a target", async () => {
+    // Two independent renders, not a rerender: `fields` is seeded from
+    // `initial` by a useState INITIALISER, so new props never move it.
+    const noTarget = render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        initial={baseInitial({
+          status: "planned",
+          fields: { instrument: "EURUSD", entry_price: "100", stop_price: "90" },
+        })}
+      />,
+    );
+    expect(screen.queryByText("Scale-out plan")).not.toBeInTheDocument();
+    noTarget.unmount();
+
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        initial={baseInitial({ status: "planned" })}
+      />,
+    );
+    expect(screen.getByText("Scale-out plan")).toBeInTheDocument();
+  });
+});
+
+describe("the risk is shown in money, not only as a percentage", () => {
+  it("prints what the chosen percentage costs if the stop is hit", async () => {
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        accountEquity={{ "acc-1": 42_000 }}
+        initial={baseInitial({
+          status: "planned",
+          fields: {
+            instrument: "EURUSD",
+            entry_price: "100",
+            stop_price: "90",
+            risk_pct: "1%",
+          },
+        })}
+      />,
+    );
+    // 1 % of 42 000 equity. A percentage is easy to agree to; the figure is
+    // what makes a trader re-check the stop.
+    expect(screen.getByText(/Risking .*420/)).toBeInTheDocument();
+  });
+
+  it("says nothing when no risk % has been chosen", async () => {
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        accountEquity={{ "acc-1": 42_000 }}
+        initial={baseInitial({ status: "planned" })}
+      />,
+    );
+    expect(screen.queryByText(/Risking/)).not.toBeInTheDocument();
+  });
+});
+
+describe("one question, one place", () => {
+  it("the Plan tab no longer carries a second free-text 'why'", async () => {
+    // `trade_journal_notes` used to sit on this tab under "Why I am entering,
+    // stop and target logic…", asking the same thing as Thesis two groups up.
+    // It keeps the Execution tab, where the same column means the lesson AFTER
+    // the outcome.
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        initial={baseInitial({ status: "planned" })}
+      />,
+    );
+    expect(screen.getByText("Thesis")).toBeInTheDocument();
+    expect(screen.queryByText("Trade note")).not.toBeInTheDocument();
+  });
+});
+
+describe("the chart can be attached before the trade exists", () => {
+  it("a new trade offers the two pre-entry snapshot slots", async () => {
+    render(
+      <TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} />,
+    );
+    expect(screen.getByText("HTF Pre")).toBeInTheDocument();
+    expect(screen.getByText("LTF Pre")).toBeInTheDocument();
+    // Not the post-exit slot: that is a screenshot of something that has not
+    // happened.
+    expect(screen.queryByText("LTF Post")).not.toBeInTheDocument();
+  });
+
+  it("keeps what is pasted, ready for the save", async () => {
+    // The payload mapping itself is asserted in `trade-image-drafts.test.ts`.
+    // Driving it through here would mean opening a Radix Select in jsdom to
+    // satisfy the instrument check — a test that fails on the widget rather
+    // than on the behaviour.
+    const user = userEvent.setup({ delay: null });
+    render(
+      <TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} />,
+    );
+    const inputs = screen.getAllByPlaceholderText("https://www.tradingview.com/x/…");
+    await user.type(inputs[0], "https://www.tradingview.com/x/AbC123/");
+    expect(inputs[0]).toHaveValue("https://www.tradingview.com/x/AbC123/");
   });
 });

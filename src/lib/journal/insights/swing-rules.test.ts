@@ -4,6 +4,7 @@ import {
   pastTimeStop,
   thesisInvalidatedButHeld,
   touchedAnIntactThesis,
+  unplannedPartial,
   weekendHoldRecord,
 } from "./swing-rules";
 import { ctxOf, fired, mkCheckin, mkTrade } from "./test-helpers";
@@ -195,6 +196,45 @@ describe("touchedAnIntactThesis", () => {
       ],
     });
     expect(fired(touchedAnIntactThesis, ctx)).toEqual([]);
+  });
+});
+
+describe("unplannedPartial", () => {
+  it("fires on a partial exit with no scale-out written at entry", () => {
+    const ctx = ctxOf([mkTrade({ id: "a" })], {
+      checkins: [mkCheckin("a", "2026-01-07", { touched: "partial_exit" })],
+    });
+    expect(fired(unplannedPartial, ctx)).toEqual(["a"]);
+  });
+
+  it("stays silent when the partial was the plan", () => {
+    // The whole point of the column: this and the case above are recorded
+    // identically in the check-in, and only the written plan separates them.
+    const ctx = ctxOf(
+      [mkTrade({ id: "a", scaleOutPlan: "50% at 1R, rest to target" })],
+      { checkins: [mkCheckin("a", "2026-01-07", { touched: "partial_exit" })] },
+    );
+    expect(fired(unplannedPartial, ctx)).toEqual([]);
+  });
+
+  it("treats whitespace as no plan", () => {
+    const ctx = ctxOf([mkTrade({ id: "a", scaleOutPlan: "   " })], {
+      checkins: [mkCheckin("a", "2026-01-07", { touched: "partial_exit" })],
+    });
+    expect(fired(unplannedPartial, ctx)).toEqual(["a"]);
+  });
+
+  it("does not fire on any other intervention", () => {
+    // Moving a stop is a different act with its own rules. This one is about
+    // taking size off.
+    const ctx = ctxOf([mkTrade({ id: "a" })], {
+      checkins: [mkCheckin("a", "2026-01-07", { touched: "stop_moved" })],
+    });
+    expect(fired(unplannedPartial, ctx)).toEqual([]);
+  });
+
+  it("does not fire without a check-in", () => {
+    expect(fired(unplannedPartial, ctxOf([mkTrade({ id: "a" })]))).toEqual([]);
   });
 });
 

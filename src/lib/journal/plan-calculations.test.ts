@@ -6,7 +6,9 @@ import {
   inferDirectionFromPrices,
   parsePlannedRewardR,
   parseRiskPct,
+  computeRiskAmount,
   riskPlanFieldVisible,
+  thesisGroupVisible,
 } from "./plan-calculations";
 
 describe("riskPlanFieldVisible", () => {
@@ -37,6 +39,13 @@ describe("riskPlanFieldVisible", () => {
 
   it("planned R:R after target", () => {
     expect(vis("planned_rr", 100, 98, 104, 1)).toBe(true);
+  });
+
+  it("scale-out plan appears with the target, not before it", () => {
+    // How much comes off on the way is part of the same decision as where you
+    // are going.
+    expect(vis("scale_out_plan", 100, 98, null, 1)).toBe(false);
+    expect(vis("scale_out_plan", 100, 98, 104, 1)).toBe(true);
   });
 });
 
@@ -245,5 +254,55 @@ describe("guard clauses that exist to refuse, not to compute", () => {
     expect(riskPlanFieldVisible("planned_rr", 100, 95, 110, 1)).toBe(true);
     // Anything outside the progressive plan is always shown.
     expect(riskPlanFieldVisible("instrument", null, null, null, null)).toBe(true);
+  });
+});
+
+describe("thesisGroupVisible", () => {
+  it("stays hidden until entry AND stop define a trade", () => {
+    // The regression this pins: the three fields it gates used to live inside
+    // `risk_plan`, where `riskPlanFieldVisible` answers `true` for any name it
+    // does not recognise. All three showed on a completely blank form — Entry
+    // Price, then three large textareas — which is exactly what the progressive
+    // reveal exists to prevent.
+    expect(thesisGroupVisible(null, null)).toBe(false);
+    expect(thesisGroupVisible(100, null)).toBe(false);
+    expect(thesisGroupVisible(null, 98)).toBe(false);
+    expect(thesisGroupVisible(100, 98)).toBe(true);
+  });
+
+  it("does not care whether the trade is long or short", () => {
+    expect(thesisGroupVisible(100, 102)).toBe(true);
+  });
+});
+
+describe("computeRiskAmount", () => {
+  it("is the percentage of current equity", () => {
+    expect(computeRiskAmount({ balance: 42_000, riskPct: 1 })).toBe(420);
+    expect(computeRiskAmount({ balance: 42_000, riskPct: 0.25 })).toBe(105);
+  });
+
+  it("refuses rather than answering zero", () => {
+    // Same contract as every other calculator here: a refusal must not render
+    // as a confident 0, which reads as "you are risking nothing".
+    expect(computeRiskAmount({ balance: 42_000, riskPct: null })).toBeNull();
+    expect(computeRiskAmount({ balance: 0, riskPct: 1 })).toBeNull();
+    expect(computeRiskAmount({ balance: -100, riskPct: 1 })).toBeNull();
+    expect(computeRiskAmount({ balance: Number.NaN, riskPct: 1 })).toBeNull();
+  });
+
+  it("agrees with the sizing formula it was extracted from", () => {
+    // computePositionSize = riskAmount / (stopDist × pointValue). One
+    // implementation of the first step, so the two can never drift.
+    const balance = 42_000;
+    const riskPct = 1;
+    const size = computePositionSize({
+      balance,
+      riskPct,
+      entry: 100,
+      stop: 98,
+      pointValue: 1,
+    });
+    const risk = computeRiskAmount({ balance, riskPct });
+    expect(size).toBeCloseTo(risk! / (2 * 1), 10);
   });
 });

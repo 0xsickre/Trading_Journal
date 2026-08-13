@@ -230,10 +230,58 @@ export const touchedAnIntactThesis: Rule = {
   },
 };
 
+/**
+ * Reducing a position that had no plan to be reduced.
+ *
+ * This is what makes `scale_out_plan` a column rather than a nicety. The daily
+ * check-in records `partial_exit` on the day it happens, and on its own that
+ * value cannot tell EXECUTING THE PLAN from BAILING EARLY — opposite facts about
+ * a trader, stored identically. With a written scale-out to compare against, the
+ * two separate.
+ *
+ * Same class of correction as phase 2's: a recorded value that looked like a
+ * finding while having nothing to be a finding against.
+ *
+ * Warning, not critical. Taking something off a runner is a defensible
+ * discretionary act; doing it repeatedly without ever planning to is the habit
+ * worth seeing.
+ */
+export const unplannedPartial: Rule = {
+  id: "unplanned_partial",
+  level: "trade",
+  minSample: 0,
+  description:
+    "A position reduced mid-hold with no scale-out written when it was opened.",
+  evaluate: (ctx) => {
+    const out: Insight[] = [];
+    for (const e of ctx.trades) {
+      if ((stringFieldValue(e.trade.row, "scale_out_plan") ?? "").trim() !== "")
+        continue;
+
+      const day = (ctx.checkinsByPosition.get(e.id) ?? []).find(
+        (c) => c.touched === "partial_exit",
+      );
+      if (!day) continue;
+
+      out.push({
+        ruleId: "unplanned_partial",
+        level: "trade",
+        severity: "warning",
+        title: "Partial exit with no plan for one",
+        detail: `You took part of this off on ${day.report_date}, and no scale-out was written at entry. Outcome: ${rPart(e, ctx.currency)}.`,
+        subjectId: e.id,
+        subjectLabel: e.label,
+      });
+    }
+    return out;
+  },
+};
+
 export const SWING_RULES: Rule[] = [
   thesisInvalidatedButHeld,
   pastTimeStop,
   touchedAnIntactThesis,
+  unplannedPartial,
   entryWithoutThesis,
   weekendHoldRecord,
 ];
