@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { AppSidebar, MobileTopbar } from "./app-sidebar";
 import { NAV_ITEMS, PRIMARY_ACTION } from "@/lib/journal/nav";
 
@@ -32,32 +33,61 @@ describe("the theme switch is reachable on every breakpoint", () => {
     expect(screen.getByRole("group", { name: "Theme" })).toBeInTheDocument();
   });
 
-  it("keeps the mobile switch OUT of the horizontally scrolling nav strip", () => {
-    // Pinned rather than appended: nine entries overflow a phone, so anything
-    // inside the scroller sits past the right edge until the user scrolls a
-    // strip they have no reason to scroll to the end of.
-    const { container } = render(<MobileTopbar />);
-    const scroller = container.querySelector(".overflow-x-auto")!;
-    expect(scroller).toBeTruthy();
+  it("keeps the mobile switch reachable WITHOUT opening the nav menu", () => {
+    // Same invariant as before the strip became a menu, restated for the new
+    // shape: the switch must not be one of the things you have to go looking
+    // for. Previously that meant "not inside the scroller"; now it means "not
+    // behind the trigger".
+    render(<MobileTopbar />);
+    const bar = screen.getByRole("group", { name: "Theme" });
+    expect(bar).toBeInTheDocument();
+    // The primary action is held to the same rule.
     expect(
-      within(scroller as HTMLElement).queryByRole("group", { name: "Theme" }),
-    ).toBeNull();
+      screen.getByRole("link", { name: new RegExp(PRIMARY_ACTION.label) }),
+    ).toHaveAttribute("href", PRIMARY_ACTION.href);
   });
 });
 
 describe("both chromes render the whole menu", () => {
-  it.each([
-    ["sidebar", () => render(<AppSidebar email={null} />)],
-    ["mobile top bar", () => render(<MobileTopbar />)],
-  ])("%s lists every nav item and the primary action", (_name, mount) => {
-    mount();
+  /**
+   * Every nav entry resolves to its own route, wherever the chrome puts it.
+   *
+   * The role differs by chrome and that is not incidental: inside the dropdown
+   * the entries are `DropdownMenuItem asChild`, and Radix stamps
+   * `role="menuitem"` onto the `<Link>`, which overrides its implicit link
+   * role. The element is still an anchor with an href — which is what is
+   * actually being asserted.
+   */
+  function expectEveryNavLink(role: "link" | "menuitem") {
     for (const item of NAV_ITEMS) {
       expect(
-        screen.getByRole("link", { name: new RegExp(item.label) }),
+        screen.getByRole(role, { name: new RegExp(item.label) }),
       ).toHaveAttribute("href", item.href);
     }
+  }
+
+  it("the sidebar lists every nav item and the primary action", () => {
+    render(<AppSidebar email={null} />);
+    expectEveryNavLink("link");
     expect(
       screen.getByRole("link", { name: new RegExp(PRIMARY_ACTION.label) }),
     ).toHaveAttribute("href", PRIMARY_ACTION.href);
+  });
+
+  it("the mobile menu lists every nav item once opened", async () => {
+    // The strip rendered all nine inline; the menu renders them on open. The
+    // assertion is unchanged — only the step before it is new.
+    const user = userEvent.setup({ delay: null });
+    render(<MobileTopbar />);
+    await user.click(screen.getByRole("button", { name: /Dashboard|Menu/ }));
+    expectEveryNavLink("menuitem");
+  });
+
+  it("the mobile trigger names the page you are on", () => {
+    // `usePathname` is mocked to "/", which is Dashboard.
+    render(<MobileTopbar />);
+    expect(
+      screen.getByRole("button", { name: /Dashboard/ }),
+    ).toBeInTheDocument();
   });
 });
