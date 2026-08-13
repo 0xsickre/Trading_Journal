@@ -139,6 +139,9 @@ describe("outcome filter classifies by EACH account's own breakeven band", () =>
     const user = userEvent.setup({ delay: null });
     render(<JournalGrid trades={rowsOf(trades)} accounts={[TIGHT, WIDE]} />);
 
+    // The dimension filters moved behind the Filters popover; the assertion
+    // below is unchanged, only the path to the control is longer now.
+    await user.click(screen.getByRole("button", { name: /Filters/ }));
     await user.click(screen.getByText("Outcome:").closest("button")!);
     await user.click(await screen.findByRole("option", { name: "breakeven" }));
 
@@ -274,7 +277,9 @@ describe("export", () => {
   it("shows an error toast instead of exporting an empty filtered set", async () => {
     const user = userEvent.setup({ delay: null });
     render(<JournalGrid trades={[]} accounts={[ACCOUNT]} />);
-    await user.click(screen.getByRole("button", { name: /CSV/ }));
+    // CSV and Excel are two items under one Export button now.
+    await user.click(screen.getByRole("button", { name: /Export/ }));
+    await user.click(await screen.findByRole("menuitem", { name: "CSV" }));
     expect(toastErrorMock).toHaveBeenCalledWith("Nothing to export");
   });
 
@@ -283,7 +288,8 @@ describe("export", () => {
     render(
       <JournalGrid trades={rowsOf([mkTrade({ id: "t1", net: 100, r: 1 })])} accounts={[ACCOUNT]} />,
     );
-    await user.click(screen.getByRole("button", { name: /CSV/ }));
+    await user.click(screen.getByRole("button", { name: /Export/ }));
+    await user.click(await screen.findByRole("menuitem", { name: "CSV" }));
 
     await vi.waitFor(() => expect(unparseMock).toHaveBeenCalled());
     const rows = unparseMock.mock.calls[0][0] as Record<string, unknown>[];
@@ -296,7 +302,8 @@ describe("export", () => {
     render(
       <JournalGrid trades={rowsOf([mkTrade({ id: "t1", net: 250 })])} accounts={[ACCOUNT]} />,
     );
-    await user.click(screen.getByRole("button", { name: /Excel/ }));
+    await user.click(screen.getByRole("button", { name: /Export/ }));
+    await user.click(await screen.findByRole("menuitem", { name: "Excel" }));
 
     await vi.waitFor(() => expect(jsonToSheetMock).toHaveBeenCalled());
     const rows = jsonToSheetMock.mock.calls[0][0] as Record<string, unknown>[];

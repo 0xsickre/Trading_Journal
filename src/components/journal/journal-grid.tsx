@@ -20,6 +20,7 @@ import {
   Trash2,
   AlertTriangle,
   ExternalLink,
+  SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -44,6 +45,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { dimensionsByGroup, getDimension } from "@/lib/journal/reports/dimensions";
@@ -53,6 +59,7 @@ import {
   EXACT_ZERO_RANGE,
 } from "@/lib/journal/breakeven";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import type { Account, TradeRow } from "@/lib/journal/types";
 import { fmtInTz } from "@/lib/journal/time";
 import { fmtMoney, fmtNum, fmtR, pnlClass } from "@/lib/journal/format";
@@ -225,6 +232,22 @@ export function JournalGrid({
   // Optimistic: the column disappears on click and the save follows. A round
   // trip before the grid reacts would read as a dead checkbox.
   const [hidden, setHidden] = useState<string[]>(hiddenColumns);
+
+  /**
+   * How many of the dimension filters are actually narrowing the grid.
+   *
+   * Only the keys in `FILTERS` count: `search` and the account picker stay
+   * visible in the toolbar, so they never need a badge to be noticed. `"all"`
+   * is the unset value, and an absent key means the same thing.
+   */
+  const activeFilterCount = useMemo(
+    () =>
+      FILTERS.filter((f) => {
+        const v = filters[f.key];
+        return v != null && v !== "all";
+      }).length,
+    [filters],
+  );
   const columnVisibility = useMemo(
     // Only the hideable ids are listed; TanStack treats every column it does
     // not hear about as visible, which is exactly right for `actions`.
@@ -613,18 +636,55 @@ export function JournalGrid({
             options={accounts.map((a) => ({ value: a.id, label: a.name }))}
           />
         )}
-        {FILTERS.map((f) => (
-          <FilterSelect
-            key={f.key}
-            label={f.label}
-            value={filters[f.key] ?? "all"}
-            onChange={(v) => setFilters((p) => ({ ...p, [f.key]: v }))}
-            options={(f.options ?? distinct(trades, f.key)).map((v) => ({
-              value: v,
-              label: v,
-            }))}
-          />
-        ))}
+        {/* The six dimension filters live behind one button now. They used to
+            sit inline, which put eight controls in a row that wrapped onto two
+            or three lines on any normal screen — and buried the two that
+            actually get reached for (search, Missed) among six that mostly sit
+            on "all".
+
+            The COUNT on the trigger is what makes this safe: a filter you
+            cannot see is a filter you can forget you set, and a grid quietly
+            showing a third of its rows is worse than a crowded toolbar. */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9">
+              <SlidersHorizontal className="size-4" /> Filters
+              {activeFilterCount > 0 && (
+                <Badge variant="secondary" className="ml-1">
+                  {activeFilterCount}
+                </Badge>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-72 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Filters</p>
+              {activeFilterCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs text-muted-foreground"
+                  onClick={() => setFilters({})}
+                >
+                  Clear all
+                </Button>
+              )}
+            </div>
+            {FILTERS.map((f) => (
+              <FilterSelect
+                key={f.key}
+                label={f.label}
+                value={filters[f.key] ?? "all"}
+                onChange={(v) => setFilters((p) => ({ ...p, [f.key]: v }))}
+                options={(f.options ?? distinct(trades, f.key)).map((v) => ({
+                  value: v,
+                  label: v,
+                }))}
+                className="w-full"
+              />
+            ))}
+          </PopoverContent>
+        </Popover>
         <Button
           type="button"
           variant={filters.status === "missed" ? "default" : "outline"}
@@ -677,12 +737,24 @@ export function JournalGrid({
               })}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" size="sm" onClick={() => exportData("csv")}>
-            <Download className="size-4" /> CSV
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => exportData("xlsx")}>
-            <Download className="size-4" /> Excel
-          </Button>
+          {/* One export button with two formats behind it, rather than two
+              buttons. The choice of file format is not a decision worth two
+              slots in a toolbar that had run out of them. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Download className="size-4" /> Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => exportData("csv")}>
+                CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportData("xlsx")}>
+                Excel
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -765,15 +837,17 @@ function FilterSelect({
   value,
   onChange,
   options,
+  className,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
+  className?: string;
 }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-9 w-auto min-w-28 gap-1">
+      <SelectTrigger className={cn("h-9 w-auto min-w-28 gap-1", className)}>
         <span className="text-muted-foreground">{label}:</span>
         <SelectValue />
       </SelectTrigger>
