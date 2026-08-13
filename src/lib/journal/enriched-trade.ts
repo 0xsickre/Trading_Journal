@@ -11,6 +11,7 @@
 import type { RealizedTrade } from "./analytics";
 import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
 import { numberFieldValue as numField } from "./field-values";
+import { spansWeekend } from "./weekend-hold";
 import { excursionFromTrade, type Excursion } from "./excursion";
 import { zonedDateKey, zonedWeekStartKey } from "./time";
 import type { Micromanage } from "./daily-report";
@@ -46,6 +47,15 @@ export type EnrichedTrade = {
   /** Day key of the CLOSE — where the money lands. */
   closeDay: string;
   closeWeek: string;
+  /**
+   * Whether the holding window crossed a Saturday or Sunday.
+   *
+   * Derived here rather than stored on the row — see `weekend-hold.ts`. It rides
+   * along on every enriched trade because the weekend is a DIFFERENT risk from
+   * an overnight gap, not a longer one, and a trader who crosses one rarely is
+   * running a small self-selected sample worth measuring against the rest.
+   */
+  weekendHold: boolean;
   entryFills: number;
   exitFills: number;
   size: number | null;
@@ -96,6 +106,7 @@ export function enrichTrades(
       openDay: zonedDateKey(t.row.stats?.opened_at ?? t.closedAt, tz),
       closeDay: zonedDateKey(t.closedAt, tz),
       closeWeek: zonedWeekStartKey(t.closedAt, tz),
+      weekendHold: spansWeekend(t.row.stats?.opened_at ?? null, t.closedAt, tz),
       entryFills: fills?.entries ?? 0,
       exitFills: fills?.exits ?? 0,
       size: numField(t.row, "position_size"),

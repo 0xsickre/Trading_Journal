@@ -410,14 +410,14 @@ const processDimensions: Dimension[] = [
   ),
   processDimension(
     "mental_temp",
-    "Mentalna temperatura",
+    "Mental temperature",
     "open",
     (rs) => {
       const v = rs[0]?.mental_temp;
       if (v == null) return null;
       if (v <= 3) return "1–3 (poor)";
       if (v <= 5) return "4–5 (below average)";
-      if (v <= 7) return "6–7 (dobro)";
+      if (v <= 7) return "6–7 (good)";
       return "8–10 (excellent)";
     },
     ["1–3 (poor)", "4–5 (below average)", "6–7 (good)", "8–10 (excellent)"],

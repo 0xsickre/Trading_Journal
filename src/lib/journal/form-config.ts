@@ -103,6 +103,32 @@ const BASE_TABS: FormTab[] = [
             type: "computed",
             placeholder: "Auto from entry / stop / target",
           },
+          // The three swing fields sit at the END of the risk plan, after the
+          // arithmetic, because they are the part the numbers cannot answer:
+          // why this trade, what would end it, and when to stop waiting.
+          {
+            name: "thesis",
+            label: "Thesis",
+            type: "textarea",
+            colSpan: 2,
+            placeholder: "Why I am in this, in one line…",
+          },
+          {
+            // The one field a daily check can actually check AGAINST. Without
+            // it, "is the thesis still good?" has no referent and decays into
+            // reading the P&L, which is the question it exists to replace.
+            name: "invalidation",
+            label: "Invalidation — what would prove me wrong",
+            type: "textarea",
+            colSpan: 2,
+            placeholder: "The level, the close, the event that ends this…",
+          },
+          {
+            name: "time_stop_days",
+            label: "Time stop (days)",
+            type: "number",
+            placeholder: "Exit flat if unresolved after N days",
+          },
         ],
       },
       {
