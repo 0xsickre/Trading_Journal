@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
@@ -868,6 +868,13 @@ export type Database = {
             foreignKeyName: "tj_position_checkins_position_id_fkey"
             columns: ["position_id"]
             isOneToOne: false
+            referencedRelation: "tj_position_stats"
+            referencedColumns: ["position_id"]
+          },
+          {
+            foreignKeyName: "tj_position_checkins_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
             referencedRelation: "tj_positions"
             referencedColumns: ["id"]
           },
@@ -1288,6 +1295,7 @@ export type Database = {
         Returns: number
       }
       tj_seed_defaults: { Args: { target: string }; Returns: undefined }
+      tj_seed_note_folders: { Args: { target: string }; Returns: undefined }
       tj_seed_instruments_defaults: {
         Args: { target: string }
         Returns: undefined
