@@ -85,6 +85,7 @@ import {
 } from "@/lib/journal/risk-metrics";
 import { computeSickreScore } from "@/lib/journal/sickre-score";
 import { buildInsightContext, type DailyReportLite } from "@/lib/journal/insights/context";
+import type { PositionCheckin } from "@/lib/journal/position-checkin";
 import { runInsights } from "@/lib/journal/insights/registry";
 import { InsightsPanel } from "@/components/journal/insights-panel";
 import { DrawdownChart } from "@/components/journal/drawdown-chart";
@@ -226,6 +227,7 @@ export function Dashboard({
   cashEvents = [],
   loggedDates = [],
   dailyReports = [],
+  positionCheckins = [],
   fillCounts,
   fieldDefs = [],
   trackerRules = [],
@@ -240,6 +242,8 @@ export function Dashboard({
   cashEvents?: CashEvent[];
   loggedDates?: string[];
   dailyReports?: DailyReportLite[];
+  /** Per-position daily check-ins — what the micromanage insight joins on. */
+  positionCheckins?: PositionCheckin[];
   fillCounts?: Map<string, { entries: number; exits: number }>;
   /** User-defined fields, so the mentor pack carries them too. */
   fieldDefs?: FieldDef[];
@@ -576,6 +580,7 @@ export function Dashboard({
             ? trades
             : trades.filter((t) => t.account_id === accountFilter),
           reports: dailyReports,
+          checkins: positionCheckins,
           tzOf,
           range: breakevenRange,
           pnlOf,
@@ -588,6 +593,7 @@ export function Dashboard({
       trades,
       accountFilter,
       dailyReports,
+      positionCheckins,
       tzOf,
       breakevenRange,
       pnlOf,
@@ -779,6 +785,7 @@ export function Dashboard({
         trades: toRealized(scoped),
         allRows: scoped,
         reports: dailyReports,
+        checkins: positionCheckins,
         tzOf,
         range: breakevenRange,
         pnlOf,

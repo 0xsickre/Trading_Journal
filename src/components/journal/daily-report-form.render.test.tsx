@@ -3,22 +3,25 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DailyReportForm } from "./daily-report-form";
 import type { DailyReport } from "@/lib/journal/daily-report";
+import type { OpenPositionView } from "./open-positions-card";
 import type { TrackerDayData } from "./tracker-checklist";
 import type { TrackerRule } from "@/lib/journal/tracker-types";
 
 /**
- * The other half of "da zaključan dan zaista onemogući čekiranje": the
- * report side of a locked day. `<fieldset disabled>` is the mechanism, and
- * this file checks it actually reaches a real control (a checkbox two
- * levels of composition away), not just the fields this component owns
+ * The other half of "a locked day really does refuse answers": the report side.
+ * `<fieldset disabled>` is the mechanism, and this file checks it actually
+ * reaches a real control two levels of composition away — a tracker checkbox,
+ * and now a position check-in button — not just the fields this component owns
  * directly.
  */
 
 const saveDailyReportMock = vi.fn();
+const savePositionCheckinMock = vi.fn();
 const lockDayMock = vi.fn();
 const setCheckinMock = vi.fn();
 vi.mock("@/app/(app)/daily/actions", () => ({
   saveDailyReport: (...a: unknown[]) => saveDailyReportMock(...a),
+  savePositionCheckin: (...a: unknown[]) => savePositionCheckinMock(...a),
 }));
 vi.mock("@/app/(app)/daily/tracker-actions", () => ({
   lockDay: (...a: unknown[]) => lockDayMock(...a),
@@ -80,26 +83,13 @@ function report(over: Partial<DailyReport> = {}): DailyReport {
     id: "rep1",
     user_id: "u1",
     report_date: "2026-04-02",
-    day_grade: null,
     mental_temp: null,
-    sleep_quality: null,
     macro_note: null,
-    mental_rehearsal: null,
-    market_type: null,
-    micromanage: null,
     impulse_fomo: false,
     impulse_fear: false,
     impulse_greed: false,
     impulse_fear_wrong: false,
     impulse_note: null,
-    rule_broken: null,
-    rule_broken_note: null,
-    learned_today: null,
-    tomorrow_change: null,
-    easiest_setup: null,
-    day_overview: null,
-    celebrate_win: null,
-    friday_flat: null,
     no_trade_day: false,
     locked_at: null,
     created_at: "2026-04-02T00:00:00Z",
@@ -108,8 +98,23 @@ function report(over: Partial<DailyReport> = {}): DailyReport {
   };
 }
 
+function position(over: Partial<OpenPositionView> = {}): OpenPositionView {
+  return {
+    id: "p1",
+    label: "#12 XAUUSD",
+    daysInTrade: 3,
+    timeStopDays: 5,
+    pastTimeStop: false,
+    thesis: null,
+    invalidation: null,
+    checkin: null,
+    ...over,
+  };
+}
+
 beforeEach(() => {
   saveDailyReportMock.mockReset().mockResolvedValue({ ok: true, updated_at: "2026-04-02T12:00:00Z" });
+  savePositionCheckinMock.mockReset().mockResolvedValue({ ok: true });
   lockDayMock.mockReset().mockResolvedValue({ ok: true });
   setCheckinMock.mockReset().mockResolvedValue({ ok: true });
   toastErrorMock.mockClear();
@@ -125,6 +130,7 @@ describe("a locked day disables everything, including the embedded tracker check
         today="2026-04-10"
         timezone="America/New_York"
         activeGoal={null}
+        positions={[position()]}
         tracker={trackerData({ locked: true, answers: { r1: true } })}
       />,
     );
@@ -133,7 +139,7 @@ describe("a locked day disables everything, including the embedded tracker check
     expect(screen.getByText("Day is locked")).toBeInTheDocument();
   });
 
-  it("the day-grade buttons are genuinely disabled (fieldset cascade)", () => {
+  it("the position check-in buttons are genuinely disabled", () => {
     render(
       <DailyReportForm
         report={report({ locked_at: "2026-04-02T20:00:00Z" })}
@@ -141,11 +147,16 @@ describe("a locked day disables everything, including the embedded tracker check
         today="2026-04-10"
         timezone="America/New_York"
         activeGoal={null}
+        positions={[position()]}
         tracker={trackerData({ locked: true })}
       />,
     );
-    // DAY_GRADES renders A/B/C/D/F as buttons.
-    expect(screen.getByRole("button", { name: "A" })).toBeDisabled();
+    // Belt and braces, and deliberately so. These carry their own `disabled`
+    // AND sit inside the disabled fieldset — a check-in writes through its own
+    // server action rather than the form's Save, so if the fieldset were ever
+    // restructured the lock would otherwise leak on this control alone.
+    expect(screen.getByRole("button", { name: "Intact" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Moved stop" })).toBeDisabled();
   });
 
   it("the embedded tracker rule shows a Lock badge, not clickable answer buttons", () => {
@@ -156,6 +167,7 @@ describe("a locked day disables everything, including the embedded tracker check
         today="2026-04-10"
         timezone="America/New_York"
         activeGoal={null}
+        positions={[position()]}
         tracker={trackerData({ locked: true, answers: { r1: true } })}
       />,
     );
@@ -171,17 +183,18 @@ describe("a locked day disables everything, including the embedded tracker check
         today="2026-04-10"
         timezone="America/New_York"
         activeGoal={null}
+        positions={[position()]}
         tracker={trackerData({ locked: false })}
       />,
     );
-    expect(screen.getByRole("button", { name: "A" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Intact" })).toBeEnabled();
     expect(screen.getByRole("button", { name: /Lock day/ })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Met" })).toBeEnabled();
   });
 });
 
 describe("no-trade-day clears the impulse fields it hides", () => {
-  it("checking 'No-trade day' resets every impulse checkbox and hides that card", async () => {
+  it("checking it hides the impulse card — but not the open positions", async () => {
     const user = userEvent.setup({ delay: null });
     render(
       <DailyReportForm
@@ -190,42 +203,154 @@ describe("no-trade-day clears the impulse fields it hides", () => {
         today="2026-04-10"
         timezone="America/New_York"
         activeGoal={null}
+        positions={[position()]}
         tracker={trackerData()}
       />,
     );
     expect(screen.getByText("Impulse control")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("checkbox", { name: /No-trade day/ }));
+    await user.click(screen.getByRole("checkbox", { name: /No new entry today/ }));
 
     expect(screen.queryByText("Impulse control")).not.toBeInTheDocument();
+    // The point of the reworded label. "No new entry" is not "no exposure": a
+    // swing book's quietest days are the ones spent holding, and hiding the
+    // check-in on them would drop the journal on exactly the days it is the
+    // only thing being decided.
+    expect(screen.getByText("#12 XAUUSD")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Intact" })).toBeInTheDocument();
   });
 });
 
-describe("the Friday card only shows up on a Friday", () => {
-  it("2026-04-03 (Friday) shows the rule, 2026-04-02 (Thursday) does not", () => {
-    const { rerender } = render(
+describe("the daily page asks about positions, not about the day", () => {
+  it("shows the hold's age, the time stop, and the thesis off the trade", () => {
+    render(
       <DailyReportForm
-        report={report({ report_date: "2026-04-02" })}
+        report={report()}
         reportDate="2026-04-02"
         today="2026-04-10"
         timezone="America/New_York"
         activeGoal={null}
-        tracker={trackerData({ reportDate: "2026-04-02" })}
+        positions={[
+          position({
+            thesis: "Dollar weakness into CPI",
+            invalidation: "Daily close back under 2340",
+          }),
+        ]}
+        tracker={trackerData()}
       />,
     );
-    expect(screen.queryByText("Friday rule")).not.toBeInTheDocument();
+    expect(screen.getByText(/day 3 of 5/)).toBeInTheDocument();
+    expect(screen.getByText("Dollar weakness into CPI")).toBeInTheDocument();
+    expect(screen.getByText("Daily close back under 2340")).toBeInTheDocument();
+  });
 
-    rerender(
+  it("warns only once the time stop is PAST, not on the day it is reached", () => {
+    const { rerender } = render(
       <DailyReportForm
-        report={report({ report_date: "2026-04-03" })}
-        reportDate="2026-04-03"
+        report={report()}
+        reportDate="2026-04-02"
         today="2026-04-10"
         timezone="America/New_York"
         activeGoal={null}
-        tracker={trackerData({ reportDate: "2026-04-03" })}
+        positions={[position({ daysInTrade: 5, pastTimeStop: false })]}
+        tracker={trackerData()}
       />,
     );
-    expect(screen.getByText("Friday rule")).toBeInTheDocument();
+    expect(screen.queryByText("Past time stop")).not.toBeInTheDocument();
+
+    rerender(
+      <DailyReportForm
+        report={report()}
+        reportDate="2026-04-02"
+        today="2026-04-10"
+        timezone="America/New_York"
+        activeGoal={null}
+        positions={[position({ daysInTrade: 6, pastTimeStop: true })]}
+        tracker={trackerData()}
+      />,
+    );
+    expect(screen.getByText("Past time stop")).toBeInTheDocument();
+  });
+
+  it("saves a check-in the moment it is answered, without pressing Save", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(
+      <DailyReportForm
+        report={report()}
+        reportDate="2026-04-02"
+        today="2026-04-10"
+        timezone="America/New_York"
+        activeGoal={null}
+        positions={[position()]}
+        tracker={trackerData()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Weakened" }));
+
+    await vi.waitFor(() => expect(savePositionCheckinMock).toHaveBeenCalled());
+    expect(savePositionCheckinMock).toHaveBeenCalledWith("2026-04-02", {
+      position_id: "p1",
+      thesis_state: "weakened",
+      touched: null,
+      note: null,
+    });
+    // The report itself is untouched: three taps are worth persisting on their
+    // own, and a check-in must not depend on the form's Save button.
+    expect(saveDailyReportMock).not.toHaveBeenCalled();
+  });
+
+  it("sends the WHOLE row, so answering one question does not blank the other", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(
+      <DailyReportForm
+        report={report()}
+        reportDate="2026-04-02"
+        today="2026-04-10"
+        timezone="America/New_York"
+        activeGoal={null}
+        positions={[
+          position({
+            checkin: {
+              id: "c1",
+              position_id: "p1",
+              report_date: "2026-04-02",
+              thesis_state: "intact",
+              touched: null,
+              note: null,
+            },
+          }),
+        ]}
+        tracker={trackerData()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Moved stop" }));
+
+    await vi.waitFor(() => expect(savePositionCheckinMock).toHaveBeenCalled());
+    // The upsert writes all three columns. A patch-shaped payload would clear
+    // the thesis answer given a moment earlier.
+    expect(savePositionCheckinMock).toHaveBeenCalledWith("2026-04-02", {
+      position_id: "p1",
+      thesis_state: "intact",
+      touched: "stop_moved",
+      note: null,
+    });
+  });
+
+  it("says so plainly when nothing was open", () => {
+    render(
+      <DailyReportForm
+        report={report()}
+        reportDate="2026-04-02"
+        today="2026-04-10"
+        timezone="America/New_York"
+        activeGoal={null}
+        positions={[]}
+        tracker={trackerData()}
+      />,
+    );
+    expect(screen.getByText(/Nothing was open on this day/)).toBeInTheDocument();
   });
 });
 
@@ -249,6 +374,7 @@ describe("locking saves the report first, so it never seals empty text", () => {
         today="2026-04-10"
         timezone="America/New_York"
         activeGoal={null}
+        positions={[position()]}
         tracker={trackerData()}
       />,
     );
@@ -270,6 +396,7 @@ describe("locking saves the report first, so it never seals empty text", () => {
         today="2026-04-10"
         timezone="America/New_York"
         activeGoal={null}
+        positions={[position()]}
         tracker={trackerData()}
       />,
     );

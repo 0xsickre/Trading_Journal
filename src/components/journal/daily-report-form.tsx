@@ -31,18 +31,11 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
-  DAY_GRADES,
   emptyDailyReport,
-  isFriday,
-  isReportComplete,
-  MARKET_TYPE_LABELS,
-  MARKET_TYPES,
-  MICROMANAGE_LABELS,
+  isDayComplete,
   nextReportDate,
   prevReportDate,
   type DailyReport,
-  type DayGrade,
-  type MarketType,
 } from "@/lib/journal/daily-report";
 import type { FocusGoal } from "@/lib/journal/focus-goal";
 import {
@@ -56,6 +49,10 @@ import {
   TrackerStageSection,
   type TrackerDayData,
 } from "@/components/journal/tracker-checklist";
+import {
+  OpenPositionsCard,
+  type OpenPositionView,
+} from "@/components/journal/open-positions-card";
 
 type FormState = SaveDailyReportInput;
 
@@ -69,26 +66,13 @@ function toFormState(
     return rest;
   }
   return {
-    day_grade: report.day_grade as DayGrade | null,
     mental_temp: report.mental_temp,
-    sleep_quality: report.sleep_quality,
     macro_note: report.macro_note,
-    mental_rehearsal: report.mental_rehearsal,
-    market_type: report.market_type,
-    micromanage: report.micromanage,
     impulse_fomo: report.impulse_fomo,
     impulse_fear: report.impulse_fear,
     impulse_greed: report.impulse_greed,
     impulse_fear_wrong: report.impulse_fear_wrong,
     impulse_note: report.impulse_note,
-    rule_broken: report.rule_broken,
-    rule_broken_note: report.rule_broken_note,
-    learned_today: report.learned_today,
-    tomorrow_change: report.tomorrow_change,
-    easiest_setup: report.easiest_setup,
-    day_overview: report.day_overview,
-    celebrate_win: report.celebrate_win,
-    friday_flat: report.friday_flat,
     no_trade_day: report.no_trade_day ?? false,
   };
 }
@@ -100,12 +84,21 @@ export function DailyReportForm({
   timezone,
   activeGoal,
   tracker,
+  positions,
 }: {
   report: DailyReport | null;
   reportDate: string;
   today: string;
   timezone: string;
   activeGoal: FocusGoal | null;
+  /**
+   * Positions that were open on this day, with the answers already given.
+   *
+   * They render inside this form rather than beside it because `tj_lock_day`
+   * seals the report, the checklist and now these check-ins in one call, and the
+   * one `disabled` fieldset below is what makes a sealed day read-only.
+   */
+  positions: OpenPositionView[];
   /**
    * The tracker checklist for this same day.
    *
@@ -124,17 +117,23 @@ export function DailyReportForm({
   );
   const [lastSaved, setLastSaved] = useState(report?.updated_at ?? null);
 
+  // Read off the positions rather than the form: the day's remaining work is
+  // judging what was open, and the answers are saved on tap, so this counts
+  // stored rows and does not need to live in form state.
   const complete = useMemo(
     () =>
-      isReportComplete(
-        { day_grade: form.day_grade, rule_broken: form.rule_broken },
+      isDayComplete(
+        {
+          openCount: positions.length,
+          judgedCount: positions.filter((p) => p.checkin?.thesis_state != null)
+            .length,
+        },
         activeGoal,
       ),
-    [form.day_grade, form.rule_broken, activeGoal],
+    [positions, activeGoal],
   );
 
   const isToday = reportDate === today;
-  const showFriday = isFriday(reportDate);
   const lowMental = form.mental_temp != null && form.mental_temp < 5;
   const lockedAt = report?.locked_at
     ? format(new Date(report.locked_at), "d MMM yyyy, HH:mm")
@@ -150,7 +149,6 @@ export function DailyReportForm({
       no_trade_day: checked,
       ...(checked
         ? {
-            micromanage: null,
             impulse_fomo: false,
             impulse_fear: false,
             impulse_greed: false,
@@ -168,7 +166,7 @@ export function DailyReportForm({
       return false;
     }
     if (res.warnNoFocusGoal) {
-      toast.warning("Set a focus goal so the day rating means something.");
+      toast.warning("Set a focus goal — it is what the day is measured against.");
     }
     setLastSaved(res.updated_at);
     return true;
@@ -229,7 +227,7 @@ export function DailyReportForm({
             locked={tracker.locked}
           />
           <Badge variant={complete ? "default" : "secondary"}>
-            {complete ? "Kompletan" : "Nacrt"}
+            {complete ? "Complete" : "Draft"}
           </Badge>
         </div>
       </div>
@@ -253,37 +251,76 @@ export function DailyReportForm({
           </Alert>
         )}
 
+      {/* First, because it is the only thing on this page whose answer actually
+          changes from one day to the next while a swing is running. */}
+      <OpenPositionsCard
+        positions={positions}
+        reportDate={reportDate}
+        locked={tracker.locked}
+      />
+
+      {/* The tracker checklist is the backbone of the day, not an extra — it is
+          what `tj_lock_day` scores. The trade-stage rules stand on their own
+          because they still apply on a day you did not trade: "I only trade in
+          my defined hours" is answerable, and answerable well, on a flat day,
+          and hiding them would quietly drop rules from the denominator on
+          exactly the days discipline matters most. */}
+      <TrackerStageSection stage="prepare" data={tracker} />
+      <TrackerStageSection
+        stage="trade"
+        data={tracker}
+        title="Trading · checklist"
+      />
+
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Day rating</CardTitle>
+          <CardTitle className="text-base">Before you enter</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Based only on progress toward the active focus goal — not P&amp;L.
+            A gate, not a diary. Both questions are about what you are about to
+            do, which is why they sit below the positions and not above them.
           </p>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {DAY_GRADES.map((g) => (
-              <Button
-                key={g}
-                type="button"
-                size="sm"
-                variant={form.day_grade === g ? "default" : "outline"}
-                className="w-10"
-                onClick={() => patch("day_grade", g)}
-              >
-                {g}
-              </Button>
-            ))}
-            {form.day_grade && (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => patch("day_grade", null)}
-              >
-                Clear
-              </Button>
-            )}
+        <CardContent className="space-y-5">
+          {lowMental && (
+            <Alert>
+              <AlertDescription>
+                Mental temperature below 5 — consider smaller size, or sitting out
+                until you feel readier.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-2">
+            <Label>Mental temperature (1–10)</Label>
+            <Select
+              value={form.mental_temp?.toString() ?? ""}
+              onValueChange={(v) => patch("mental_temp", v ? Number(v) : null)}
+            >
+              <SelectTrigger className="w-full sm:w-40">
+                <SelectValue placeholder="Pick…" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Same column as the old "macro events today", asked differently on
+              purpose. "Today" is the day trader's window; a position carried to
+              Thursday is exposed to Thursday's release whether or not it lands
+              in this session. */}
+          <div className="space-y-2">
+            <Label>Catalysts before my planned exit</Label>
+            <Textarea
+              value={form.macro_note ?? ""}
+              onChange={(e) => patch("macro_note", e.target.value || null)}
+              placeholder="What lands between now and when I expect to be out — releases, earnings, the weekend…"
+              rows={2}
+            />
           </div>
 
           <div className="flex items-start gap-2 rounded-md border border-dashed p-3">
@@ -298,197 +335,16 @@ export function DailyReportForm({
                 htmlFor="no_trade_day"
                 className="cursor-pointer text-sm font-medium"
               >
-                No-trade day
+                No new entry today
               </label>
               <p className="text-xs text-muted-foreground">
-                I entered no position. The impulse section is skipped — the focus is
-                process and learning, not P&amp;L.
+                I opened nothing new. Open positions above are still checked —
+                holding is a decision too.
               </p>
             </div>
           </div>
         </CardContent>
       </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Morning · pre-market</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {lowMental && (
-            <Alert>
-              <AlertDescription>
-                Mental temperature below 5 — consider smaller size, or sitting out
-                until you feel readier.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Mental temperature (1–10)</Label>
-              <Select
-                value={form.mental_temp?.toString() ?? ""}
-                onValueChange={(v) =>
-                  patch("mental_temp", v ? Number(v) : null)
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Pick…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                    <SelectItem key={n} value={String(n)}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Sleep quality (1–5, optional)</Label>
-              <Select
-                value={form.sleep_quality?.toString() ?? ""}
-                onValueChange={(v) =>
-                  patch("sleep_quality", v ? Number(v) : null)
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Optional" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 5 }, (_, i) => i + 1).map((n) => (
-                    <SelectItem key={n} value={String(n)}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Macro events today</Label>
-            <Textarea
-              value={form.macro_note ?? ""}
-              onChange={(e) => patch("macro_note", e.target.value || null)}
-              placeholder="Key releases, speeches, liquidity context…"
-              rows={2}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Market type (setup filter)</Label>
-            <Select
-              value={form.market_type ?? ""}
-              onValueChange={(v) =>
-                patch("market_type", (v || null) as MarketType | null)
-              }
-            >
-              <SelectTrigger className="w-full sm:w-64">
-                <SelectValue placeholder="Pick a regime…" />
-              </SelectTrigger>
-              <SelectContent>
-                {MARKET_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {MARKET_TYPE_LABELS[t]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Mental rehearsal (optional)</Label>
-            <Textarea
-              value={form.mental_rehearsal ?? ""}
-              onChange={(e) =>
-                patch("mental_rehearsal", e.target.value || null)
-              }
-              placeholder="1–2 sentences: how I will react to a stop or a missed setup…"
-              rows={2}
-            />
-          </div>
-
-          <TrackerStageSection stage="prepare" data={tracker} />
-        </CardContent>
-      </Card>
-
-      {/* The trade-stage rules stand in their own card instead of inside "Tokom
-          dana", which is hidden on a no-trade day. Those rules still apply then —
-          "I only trade in my defined hours" is answerable, and answerable well,
-          on a day you did not trade — so hiding them would quietly drop rules
-          from the denominator on exactly the days discipline matters most. */}
-      <TrackerStageSection
-        stage="trade"
-        data={tracker}
-        title="Trading · checklist"
-      />
-
-      {!form.no_trade_day && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">During the day</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Mid-day check for an intraweek swing — check in when you review the
-              market (London, NY, or in between), not only in the evening.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-start gap-2 rounded-md border border-dashed p-3">
-              <Checkbox
-                id="midday_no_touch"
-                checked={form.micromanage === "untouched"}
-                onCheckedChange={(c) =>
-                  patch("micromanage", c ? "untouched" : null)
-                }
-                className="mt-0.5"
-              />
-              <div>
-                <label
-                  htmlFor="midday_no_touch"
-                  className="cursor-pointer text-sm font-medium"
-                >
-                  I did not touch open positions today
-                </label>
-                <p className="text-xs text-muted-foreground">
-                  No stop moves, partial exits, averaging, or closing outside the plan.
-                </p>
-              </div>
-            </div>
-
-            {form.micromanage !== "untouched" && (
-              <div className="space-y-2">
-                <Label>If not true — what happened?</Label>
-                <div className="flex flex-wrap gap-2">
-                  {(["watched", "violated"] as const).map((opt) => (
-                    <Button
-                      key={opt}
-                      type="button"
-                      size="sm"
-                      variant={
-                        form.micromanage === opt ? "default" : "outline"
-                      }
-                      onClick={() => patch("micromanage", opt)}
-                    >
-                      {MICROMANAGE_LABELS[opt]}
-                    </Button>
-                  ))}
-                  {form.micromanage && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => patch("micromanage", null)}
-                    >
-                      Clear
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {!form.no_trade_day && (
         <Card>
@@ -542,100 +398,13 @@ export function DailyReportForm({
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Evening · debrief</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            A quiet day with few trades? Fill it in anyway — the learning counts.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Did you break a trading rule today?</Label>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={form.rule_broken === true ? "destructive" : "outline"}
-                onClick={() => patch("rule_broken", true)}
-              >
-                Yes
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={
-                  form.rule_broken === false ? "default" : "outline"
-                }
-                onClick={() => patch("rule_broken", false)}
-              >
-                No
-              </Button>
-            </div>
-            {form.rule_broken && (
-              <Textarea
-                value={form.rule_broken_note ?? ""}
-                onChange={(e) =>
-                  patch("rule_broken_note", e.target.value || null)
-                }
-                placeholder="Which rule? The cost in process terms, not P&amp;L…"
-                rows={2}
-              />
-            )}
-          </div>
-
-          <Field
-            label="What I learned or improved today"
-            value={form.learned_today}
-            onChange={(v) => patch("learned_today", v)}
-          />
-          <Field
-            label="Changes for tomorrow (with solutions)"
-            value={form.tomorrow_change}
-            onChange={(v) => patch("tomorrow_change", v)}
-            hint="Name the change and how you will apply it."
-          />
-          <Field
-            label="Easiest layup setup"
-            value={form.easiest_setup}
-            onChange={(v) => patch("easiest_setup", v)}
-            hint="The playbook setup that was clearest — not the biggest move."
-          />
-          <Field
-            label="Day overview"
-            value={form.day_overview}
-            onChange={(v) => patch("day_overview", v)}
-          />
-          <Field
-            label="Celebrate a win"
-            value={form.celebrate_win}
-            onChange={(v) => patch("celebrate_win", v)}
-            hint="A process win, discipline, or self-awareness — not dollar P&amp;L."
-          />
-
-          <TrackerStageSection stage="reflect" data={tracker} />
-        </CardContent>
-      </Card>
-
-      {showFriday && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Friday rule</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="friday_flat"
-                checked={form.friday_flat === true}
-                onCheckedChange={(c) => patch("friday_flat", c === true)}
-              />
-              <label htmlFor="friday_flat" className="cursor-pointer text-sm">
-                Sve pozicije zatvorene pre vikenda
-              </label>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* What used to be the "Evening · debrief" card lived here: what I learned,
+          what I will change tomorrow, the day overview, whether I broke a rule.
+          Five prose fields, asked daily, mid-hold. All five moved to the weekly
+          review — a debrief written before the position is closed is a debrief
+          written without the outcome, and asking for one every evening is how a
+          journal turns into homework. */}
+      <TrackerStageSection stage="reflect" data={tracker} />
       </fieldset>
 
       <div
@@ -764,26 +533,3 @@ function LockDayButton({
   );
 }
 
-function Field({
-  label,
-  value,
-  onChange,
-  hint,
-}: {
-  label: string;
-  value: string | null;
-  onChange: (v: string | null) => void;
-  hint?: string;
-}) {
-  return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-      <Textarea
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value || null)}
-        rows={2}
-      />
-    </div>
-  );
-}

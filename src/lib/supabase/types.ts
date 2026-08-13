@@ -177,89 +177,50 @@ export type Database = {
       }
       tj_daily_reports: {
         Row: {
-          celebrate_win: string | null
           created_at: string
-          day_grade: string | null
-          day_overview: string | null
-          easiest_setup: string | null
-          friday_flat: boolean | null
           id: string
           impulse_fear: boolean
           impulse_fear_wrong: boolean
           impulse_fomo: boolean
           impulse_greed: boolean
           impulse_note: string | null
-          learned_today: string | null
           locked_at: string | null
           macro_note: string | null
-          market_type: string | null
-          mental_rehearsal: string | null
           mental_temp: number | null
-          micromanage: string | null
           no_trade_day: boolean
           report_date: string
-          rule_broken: boolean | null
-          rule_broken_note: string | null
-          sleep_quality: number | null
-          tomorrow_change: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
-          celebrate_win?: string | null
           created_at?: string
-          day_grade?: string | null
-          day_overview?: string | null
-          easiest_setup?: string | null
-          friday_flat?: boolean | null
           id?: string
           impulse_fear?: boolean
           impulse_fear_wrong?: boolean
           impulse_fomo?: boolean
           impulse_greed?: boolean
           impulse_note?: string | null
-          learned_today?: string | null
           locked_at?: string | null
           macro_note?: string | null
-          market_type?: string | null
-          mental_rehearsal?: string | null
           mental_temp?: number | null
-          micromanage?: string | null
           no_trade_day?: boolean
           report_date: string
-          rule_broken?: boolean | null
-          rule_broken_note?: string | null
-          sleep_quality?: number | null
-          tomorrow_change?: string | null
           updated_at?: string
           user_id?: string
         }
         Update: {
-          celebrate_win?: string | null
           created_at?: string
-          day_grade?: string | null
-          day_overview?: string | null
-          easiest_setup?: string | null
-          friday_flat?: boolean | null
           id?: string
           impulse_fear?: boolean
           impulse_fear_wrong?: boolean
           impulse_fomo?: boolean
           impulse_greed?: boolean
           impulse_note?: string | null
-          learned_today?: string | null
           locked_at?: string | null
           macro_note?: string | null
-          market_type?: string | null
-          mental_rehearsal?: string | null
           mental_temp?: number | null
-          micromanage?: string | null
           no_trade_day?: boolean
           report_date?: string
-          rule_broken?: boolean | null
-          rule_broken_note?: string | null
-          sleep_quality?: number | null
-          tomorrow_change?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -868,6 +829,50 @@ export type Database = {
         }
         Relationships: []
       }
+      tj_position_checkins: {
+        Row: {
+          created_at: string
+          id: string
+          note: string | null
+          position_id: string
+          report_date: string
+          thesis_state: string | null
+          touched: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          position_id: string
+          report_date: string
+          thesis_state?: string | null
+          touched?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          position_id?: string
+          report_date?: string
+          thesis_state?: string | null
+          touched?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tj_position_checkins_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "tj_positions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tj_position_rules: {
         Row: {
           created_at: string
@@ -925,6 +930,7 @@ export type Database = {
           id: string
           import_batch_id: string | null
           instrument: string | null
+          invalidation: string | null
           max_drawdown_price: number | null
           max_profit_price: number | null
           mistake: string | null
@@ -943,7 +949,9 @@ export type Database = {
           stop_price: number | null
           target_price: number | null
           technical_tags: string[]
+          thesis: string | null
           tick_size_at_trade: number | null
+          time_stop_days: number | null
           trade_journal_notes: string | null
           trade_no: number | null
           updated_at: string
@@ -960,6 +968,7 @@ export type Database = {
           id?: string
           import_batch_id?: string | null
           instrument?: string | null
+          invalidation?: string | null
           max_drawdown_price?: number | null
           max_profit_price?: number | null
           mistake?: string | null
@@ -978,7 +987,9 @@ export type Database = {
           stop_price?: number | null
           target_price?: number | null
           technical_tags?: string[]
+          thesis?: string | null
           tick_size_at_trade?: number | null
+          time_stop_days?: number | null
           trade_journal_notes?: string | null
           trade_no?: number | null
           updated_at?: string
@@ -995,6 +1006,7 @@ export type Database = {
           id?: string
           import_batch_id?: string | null
           instrument?: string | null
+          invalidation?: string | null
           max_drawdown_price?: number | null
           max_profit_price?: number | null
           mistake?: string | null
@@ -1013,7 +1025,9 @@ export type Database = {
           stop_price?: number | null
           target_price?: number | null
           technical_tags?: string[]
+          thesis?: string | null
           tick_size_at_trade?: number | null
+          time_stop_days?: number | null
           trade_journal_notes?: string | null
           trade_no?: number | null
           updated_at?: string

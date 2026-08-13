@@ -2,65 +2,30 @@ import { formatInTimeZone } from "date-fns-tz";
 import { addDays, format, parseISO, subDays } from "date-fns";
 import type { FocusGoal } from "./focus-goal";
 
-export const DAY_GRADES = ["A", "B", "C", "D", "E", "F"] as const;
-export type DayGrade = (typeof DAY_GRADES)[number];
-
-export const MICROMANAGE_OPTIONS = [
-  "untouched",
-  "watched",
-  "violated",
-] as const;
-export type Micromanage = (typeof MICROMANAGE_OPTIONS)[number];
-
-export const MARKET_TYPES = [
-  "bull_quiet",
-  "bull_volatile",
-  "bear_quiet",
-  "bear_volatile",
-  "sideways_quiet",
-  "sideways_volatile",
-] as const;
-export type MarketType = (typeof MARKET_TYPES)[number];
-
-export const MARKET_TYPE_LABELS: Record<MarketType, string> = {
-  bull_quiet: "Bull · Quiet",
-  bull_volatile: "Bull · Volatile",
-  bear_quiet: "Bear · Quiet",
-  bear_volatile: "Bear · Volatile",
-  sideways_quiet: "Sideways · Quiet",
-  sideways_volatile: "Sideways · Volatile",
-};
-
-export const MICROMANAGE_LABELS: Record<Micromanage, string> = {
-  untouched: "Did not touch",
-  watched: "Watched",
-  violated: "Broke the plan",
-};
+// `DAY_GRADES`, `MICROMANAGE_*` and `MARKET_TYPE*` lived here. The grade moved
+// to the weekly review (rating a day mid-hold reads the P&L), and "did I touch
+// it" moved to the position — see `position-checkin.ts`, where it also gained
+// the `added` state the day-level version could not express. Market type had no
+// reader at all: nothing grouped, scored or surfaced it.
 
 export type DailyReport = {
   id: string;
   user_id: string;
   report_date: string;
-  day_grade: DayGrade | null;
   mental_temp: number | null;
-  sleep_quality: number | null;
+  /**
+   * What is on the calendar between now and the planned exit.
+   *
+   * Re-asked rather than renamed: the column used to mean "macro events today",
+   * which is the day trader's window. A position held to Thursday is exposed to
+   * Thursday's release whether or not it lands today.
+   */
   macro_note: string | null;
-  mental_rehearsal: string | null;
-  market_type: MarketType | null;
-  micromanage: Micromanage | null;
   impulse_fomo: boolean;
   impulse_fear: boolean;
   impulse_greed: boolean;
   impulse_fear_wrong: boolean;
   impulse_note: string | null;
-  rule_broken: boolean | null;
-  rule_broken_note: string | null;
-  learned_today: string | null;
-  tomorrow_change: string | null;
-  easiest_setup: string | null;
-  day_overview: string | null;
-  celebrate_win: string | null;
-  friday_flat: boolean | null;
   no_trade_day: boolean;
   /**
    * When the day's process journal was sealed. Null while it is still editable.
@@ -100,39 +65,40 @@ export function isFriday(date: string): boolean {
   return parseISO(date).getDay() === 5;
 }
 
-/** Complete when grade + rule-broken answered and an active focus goal exists. */
-export function isReportComplete(
-  report: Pick<DailyReport, "day_grade" | "rule_broken"> | null,
+/**
+ * Is there anything left to answer for this day?
+ *
+ * This replaces `isReportComplete`, and the change of subject is the point. The
+ * old question was "did you grade the day and say whether you broke a rule" —
+ * both of which are now weekly, because a day mid-hold has no outcome to grade.
+ * The daily question that remains is about POSITIONS: every one that was open
+ * today should have been judged today.
+ *
+ * A day with no open positions is complete as soon as a focus goal exists.
+ * There is nothing to answer, and inventing something to answer is exactly the
+ * friction that gets journals abandoned.
+ *
+ * The focus goal still gates it: the day is measured against the goal, and with
+ * no goal set there is nothing for "complete" to mean.
+ */
+export function isDayComplete(
+  positions: { openCount: number; judgedCount: number },
   activeGoal: FocusGoal | null,
 ): boolean {
   if (!activeGoal) return false;
-  if (!report) return false;
-  return report.day_grade != null && report.rule_broken != null;
+  return positions.judgedCount >= positions.openCount;
 }
 
 export function emptyDailyReport(reportDate: string): DailyReportInput {
   return {
     report_date: reportDate,
-    day_grade: null,
     mental_temp: null,
-    sleep_quality: null,
     macro_note: null,
-    mental_rehearsal: null,
-    market_type: null,
-    micromanage: null,
     impulse_fomo: false,
     impulse_fear: false,
     impulse_greed: false,
     impulse_fear_wrong: false,
     impulse_note: null,
-    rule_broken: null,
-    rule_broken_note: null,
-    learned_today: null,
-    tomorrow_change: null,
-    easiest_setup: null,
-    day_overview: null,
-    celebrate_win: null,
-    friday_flat: null,
     no_trade_day: false,
   };
 }

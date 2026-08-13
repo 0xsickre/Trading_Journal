@@ -5,6 +5,7 @@ import { getDailyReportDates, getDailyReportsLite } from "@/lib/journal/daily-re
 import { ensureDefaults } from "@/lib/journal/ensure-defaults";
 import { getFieldDefs } from "@/lib/journal/field-defs";
 import { getTrackerRules, getCheckins } from "@/lib/journal/tracker/queries";
+import { getPositionCheckins } from "@/lib/journal/position-checkin-queries";
 import { getPlaybooks, getPositionRules } from "@/lib/journal/playbooks";
 import { todayInTz } from "@/lib/journal/daily-report";
 import { addDaysToDayKey, DEFAULT_TZ } from "@/lib/journal/time";
@@ -41,6 +42,7 @@ export default async function DashboardPage() {
     fieldDefs,
     trackerRules,
     playbooks,
+    positionCheckins,
   ] = await Promise.all([
     getTradesWithStats(),
     getAccounts(),
@@ -56,6 +58,10 @@ export default async function DashboardPage() {
     // Follow rate is 40 % of process adherence, and a retired rule's answers are
     // real observations — same reason the reports screen loads them all.
     getPlaybooks({ includeDeleted: true, positionRules }),
+    // Unbounded, unlike the tracker check-ins below: those fill a 28-week
+    // heatmap, while these are joined to trades by position id and a trade in
+    // range can carry answers given outside it.
+    getPositionCheckins(),
   ]);
 
   // The account's day, not the browser's — every day key in the tracker is in
@@ -84,6 +90,7 @@ export default async function DashboardPage() {
         cashEvents={cashEvents}
         loggedDates={loggedDates}
         dailyReports={dailyReports}
+        positionCheckins={positionCheckins}
         fillCounts={fillCounts}
         fieldDefs={fieldDefs}
         trackerRules={trackerRules}

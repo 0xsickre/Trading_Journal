@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   againstMacroBias,
-  dayKeysBetween,
   cotChase,
   lowMentalTempEntry,
   micromanagedASetup,
@@ -9,11 +8,11 @@ import {
   stalePlan,
   swapAteTheTrade,
 } from "./process-rules";
-import { ctxOf, fired, mkReport, mkTrade } from "./test-helpers";
+import { ctxOf, fired, mkCheckin, mkReport, mkTrade } from "./test-helpers";
 import type { TradeRow } from "../types";
 
 describe("micromanagedASetup", () => {
-  it("fires for an A-setup closed on a day you logged as violated", () => {
+  it("fires for an A-setup you recorded moving the stop on", () => {
     const ctx = ctxOf(
       [
         mkTrade({
@@ -24,12 +23,12 @@ describe("micromanagedASetup", () => {
           closedAt: "2026-01-05T12:00:00Z",
         }),
       ],
-      { reports: [mkReport("2026-01-05", { micromanage: "violated" })] },
+      { checkins: [mkCheckin("a", "2026-01-05", { touched: "stop_moved" })] },
     );
     expect(fired(micromanagedASetup, ctx)).toEqual(["a"]);
   });
 
-  it("fires when the violation happened mid-hold, not on the close day", () => {
+  it("fires when the interference was mid-hold, not on the close day", () => {
     // The behaviour being caught happens while the position is open; a swing
     // trade is almost never interfered with on the exact day it closes.
     const ctx = ctxOf(
@@ -43,12 +42,20 @@ describe("micromanagedASetup", () => {
           closedAt: "2026-01-12T09:00:00Z",
         }),
       ],
-      { reports: [mkReport("2026-01-08", { micromanage: "violated" })] },
+      {
+        checkins: [
+          mkCheckin("a", "2026-01-06", { touched: "untouched" }),
+          mkCheckin("a", "2026-01-08", { touched: "added" }),
+        ],
+      },
     );
     expect(fired(micromanagedASetup, ctx)).toEqual(["a"]);
   });
 
-  it("does not fire when the violation fell outside the holding window", () => {
+  it("does not convict a position for what was done to ANOTHER one", () => {
+    // The bug this redesign exists to fix. `micromanage` was a column on the
+    // DAY, so an A-setup left strictly alone was flagged whenever some other
+    // position was touched while it happened to be open.
     const ctx = ctxOf(
       [
         mkTrade({
@@ -57,16 +64,27 @@ describe("micromanagedASetup", () => {
           openedAt: "2026-01-05T09:00:00Z",
           closedAt: "2026-01-08T09:00:00Z",
         }),
+        mkTrade({
+          id: "b",
+          setupGrade: "A",
+          openedAt: "2026-01-05T09:00:00Z",
+          closedAt: "2026-01-08T09:00:00Z",
+        }),
       ],
-      { reports: [mkReport("2026-01-20", { micromanage: "violated" })] },
+      {
+        checkins: [
+          mkCheckin("a", "2026-01-06", { touched: "untouched" }),
+          mkCheckin("b", "2026-01-06", { touched: "stop_moved" }),
+        ],
+      },
     );
-    expect(fired(micromanagedASetup, ctx)).toEqual([]);
+    expect(fired(micromanagedASetup, ctx)).toEqual(["b"]);
   });
 
-  it("does not fire when the day was logged as untouched", () => {
+  it("does not fire when the position was left alone", () => {
     const ctx = ctxOf(
       [mkTrade({ id: "a", setupGrade: "A", closedAt: "2026-01-05T12:00:00Z" })],
-      { reports: [mkReport("2026-01-05", { micromanage: "untouched" })] },
+      { checkins: [mkCheckin("a", "2026-01-05", { touched: "untouched" })] },
     );
     expect(fired(micromanagedASetup, ctx)).toEqual([]);
   });
@@ -74,12 +92,22 @@ describe("micromanagedASetup", () => {
   it("does not fire for a lower grade setup", () => {
     const ctx = ctxOf(
       [mkTrade({ id: "a", setupGrade: "B", closedAt: "2026-01-05T12:00:00Z" })],
-      { reports: [mkReport("2026-01-05", { micromanage: "violated" })] },
+      { checkins: [mkCheckin("a", "2026-01-05", { touched: "stop_moved" })] },
     );
     expect(fired(micromanagedASetup, ctx)).toEqual([]);
   });
 
-  it("does not fire when no journal entry exists for that day", () => {
+  it("does not fire when the question was never answered", () => {
+    // A check-in row with no `touched` is silence, not a denial — and silence
+    // is not evidence of interference.
+    const ctx = ctxOf(
+      [mkTrade({ id: "a", setupGrade: "A", closedAt: "2026-01-05T12:00:00Z" })],
+      { checkins: [mkCheckin("a", "2026-01-05")] },
+    );
+    expect(fired(micromanagedASetup, ctx)).toEqual([]);
+  });
+
+  it("does not fire when there is no check-in at all", () => {
     const ctx = ctxOf([
       mkTrade({ id: "a", setupGrade: "A", closedAt: "2026-01-05T12:00:00Z" }),
     ]);
@@ -231,30 +259,9 @@ describe("stalePlan", () => {
   });
 });
 
-describe("dayKeysBetween", () => {
-  it("is inclusive on both ends", () => {
-    expect(dayKeysBetween("2026-01-05", "2026-01-08")).toEqual([
-      "2026-01-05",
-      "2026-01-06",
-      "2026-01-07",
-      "2026-01-08",
-    ]);
-  });
-
-  it("handles a same-day trade", () => {
-    expect(dayKeysBetween("2026-01-05", "2026-01-05")).toEqual(["2026-01-05"]);
-  });
-
-  it("crosses month and year boundaries", () => {
-    expect(dayKeysBetween("2025-12-31", "2026-01-02")).toEqual([
-      "2025-12-31",
-      "2026-01-01",
-      "2026-01-02",
-    ]);
-  });
-
-  it("degrades safely on reversed or missing input", () => {
-    expect(dayKeysBetween("2026-01-08", "2026-01-05")).toEqual(["2026-01-08"]);
-    expect(dayKeysBetween("", "2026-01-05")).toEqual([]);
-  });
-});
+// `dayKeysBetween` and its four tests stood here. It existed only to sweep the
+// holding window looking for a day marked as micromanaged; the check-in now
+// names its position, so there is no window to sweep and no caller left. The
+// equivalent day-walk that survives is `daysBetweenKeys` in `open-positions.ts`,
+// which is tested there — and walks day keys rather than epoch days, so DST
+// cannot round it off by one.

@@ -9,6 +9,7 @@
 
 import { stringFieldValue } from "../field-values";
 import { fmtMoney } from "../format";
+import { isInterference, TOUCHED_LABELS } from "../position-checkin";
 import type { InsightContext } from "./context";
 import type { Insight, InsightRule } from "./types";
 
@@ -32,41 +33,34 @@ function strField(row: Record<string, unknown>, key: string): string {
 
 const norm = (s: string) => s.trim().toLowerCase();
 
-/** Calendar days from `from` to `to` inclusive, as yyyy-MM-dd keys. */
-export function dayKeysBetween(from: string, to: string): string[] {
-  if (!from || !to || from > to) return from ? [from] : [];
-  const out: string[] = [];
-  const cursor = new Date(`${from}T00:00:00Z`);
-  const end = new Date(`${to}T00:00:00Z`);
-  if (Number.isNaN(cursor.getTime()) || Number.isNaN(end.getTime())) return [];
-  // Guard against a pathological range producing an unbounded loop.
-  for (let i = 0; cursor <= end && i < 3_650; i++) {
-    out.push(cursor.toISOString().slice(0, 10));
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-  return out;
-}
-
-/** Micromanaging an A-setup, priced in R. */
+/**
+ * Micromanaging an A-setup, priced in R.
+ *
+ * `dayKeysBetween(openDay, closeDay)` used to be the first half of this rule: it
+ * swept every day of the hold and asked the DAILY report whether the day was
+ * marked as touched. That answer was about the day, not about this position, so
+ * an A-setup left strictly alone was flagged whenever some OTHER position was
+ * touched while it happened to be open.
+ *
+ * The check-in now names its position, so no sweep is needed and no other
+ * position's answer can reach this one — the join is on the position id.
+ */
 export const micromanagedASetup: Rule = {
   id: "micromanaged_a_setup",
   level: "trade",
   minSample: 0,
   description:
-    "An A-setup that was open on a day you recorded touching the position.",
+    "An A-setup you recorded interfering with while it was open.",
   evaluate: (ctx) => {
     const out: Insight[] = [];
     for (const e of ctx.trades) {
       const grade = norm(strField(e.trade.row, "setup_grade"));
       if (!grade.startsWith("a")) continue;
 
-      // Micromanaging happens while the position is OPEN, so the whole holding
-      // window is checked. Looking only at the close day would miss every swing
-      // trade that was interfered with mid-hold — which is most of them.
-      const violatedOn = dayKeysBetween(e.openDay, e.closeDay).find(
-        (day) => ctx.reportByDate.get(day)?.micromanage === "violated",
+      const touchedOn = (ctx.checkinsByPosition.get(e.id) ?? []).find((c) =>
+        isInterference(c.touched),
       );
-      if (!violatedOn) continue;
+      if (!touchedOn?.touched) continue;
 
       const rPart = e.r != null ? `${e.r.toFixed(2)}R` : fmtMoney(e.pnl, ctx.currency);
       out.push({
@@ -74,7 +68,7 @@ export const micromanagedASetup: Rule = {
         level: "trade",
         severity: "critical",
         title: "Micromanaged an A-setup",
-        detail: `The A-setup was open on ${violatedOn}, a day you recorded touching the position yourself. Outcome: ${rPart}.`,
+        detail: `On ${touchedOn.report_date} you recorded "${TOUCHED_LABELS[touchedOn.touched].toLowerCase()}" on this A-setup. Outcome: ${rPart}.`,
         subjectId: e.id,
         subjectLabel: e.label,
       });

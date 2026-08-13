@@ -14,6 +14,13 @@
 import { DURATION_BUCKETS, durationBucket } from "../hold-time";
 import { arrayFieldValue, stringFieldValue } from "../field-values";
 import { isShortDirection } from "../plan-calculations";
+import {
+  THESIS_STATES,
+  TOUCHED_STATES,
+  worstTouched,
+  type PositionCheckin,
+  type ThesisState,
+} from "../position-checkin";
 import type { EnrichedTrade } from "../enriched-trade";
 import type { DailyReportLite } from "../enriched-trade";
 
@@ -24,6 +31,14 @@ export type DimensionGroup = "trade" | "derived" | "process" | "insight" | "cust
 
 export type DimensionContext = {
   reportByDate: Map<string, DailyReportLite>;
+  /**
+   * Position id → that position's daily check-ins.
+   *
+   * Position-scoped, not day-scoped, and that is the whole point: the old
+   * `micromanage` column lived on the DAY, so holding two positions and touching
+   * one tagged both — the untouched one convicted by the calendar.
+   */
+  checkinsByPosition?: Map<string, PositionCheckin[]>;
   /** rule ids that fired per trade id, for the insight dimension. */
   insightsByTrade?: Map<string, string[]>;
   /** Account id → display name. */
@@ -328,112 +343,122 @@ const derivedDimensions: Dimension[] = [
   },
 ];
 
-// --- process dimensions (join on tj_daily_reports) --------------------------
+// --- process dimensions ----------------------------------------------------
+//
+// These used to be a family built by one `processDimension(key, label, window,
+// …)` helper, where `window` chose whether to read the trade's open day, its
+// close day, or every day of the hold. The window mattered because the journal
+// was per-DAY and a trade spans several: reading the wrong end mis-attributed
+// the process to the wrong decision.
+//
+// Two of the three windows are gone with the columns that needed them. `close`
+// existed for `day_grade`, which is now weekly. `hold` existed for
+// `micromanage`, which is now per-position and joins on the position id rather
+// than sweeping a date range. What is left reads a single day — the open day,
+// for a judgement made at entry — so the helper collapses into the one
+// dimension that still uses it.
 
 /**
- * Which day of the trade the journal entry is read from.
+ * Was this position managed, or left alone?
  *
- * This is a real distinction, not a detail. Mental temperature is a judgement
- * made at ENTRY, so it reads the open day. Micromanaging happens while the
- * position is open, so it reads the whole holding window. Reading the close day
- * for either would silently mis-attribute the process to the wrong decision.
+ * Hand-written rather than a `processDimension`, because it is the one process
+ * dimension that no longer reads the DAY. It used to: `micromanage` was a column
+ * on `tj_daily_reports` and this dimension let the worst state across the
+ * holding window win — so holding two positions and touching one tagged BOTH as
+ * violated, the untouched one convicted by the calendar.
+ *
+ * Now each check-in names its position, so the window collapses over that
+ * position's own rows. The worst-wins rule stays, and stays deliberate: touching
+ * a position once in five days is the fact worth grouping on, and averaging it
+ * across the quiet days would hide it.
  */
-type ProcessWindow = "open" | "close" | "hold";
+const touchedDimension: Dimension = {
+  key: "touched",
+  label: "Position managed",
+  group: "process",
+  order: [...TOUCHED_STATES],
+  // No check-in at all means the question was never answered — unknown, not a
+  // value, so the trade drops out rather than landing in a bucket that would
+  // read as a finding.
+  valueOf: (t, ctx) => {
+    const rows = ctx.checkinsByPosition?.get(t.id);
+    if (!rows || rows.length === 0) return null;
+    return worstTouched(rows.map((r) => r.touched));
+  },
+};
 
-function reportsInWindow(
-  t: EnrichedTrade,
-  ctx: DimensionContext,
-  window: ProcessWindow,
-): DailyReportLite[] {
-  if (window === "open") {
-    const r = ctx.reportByDate.get(t.openDay);
-    return r ? [r] : [];
-  }
-  if (window === "close") {
-    const r = ctx.reportByDate.get(t.closeDay);
-    return r ? [r] : [];
-  }
-  const out: DailyReportLite[] = [];
-  if (!t.openDay || !t.closeDay) return out;
-  const cursor = new Date(`${t.openDay}T00:00:00Z`);
-  const end = new Date(`${t.closeDay}T00:00:00Z`);
-  if (Number.isNaN(cursor.getTime()) || Number.isNaN(end.getTime())) return out;
-  for (let i = 0; cursor <= end && i < 3_650; i++) {
-    const r = ctx.reportByDate.get(cursor.toISOString().slice(0, 10));
-    if (r) out.push(r);
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-  return out;
-}
+/**
+ * Did the reason for holding survive?
+ *
+ * Same worst-wins shape, over the thesis instead of the intervention, and the
+ * ordering runs intact → invalidated so a table reads left-to-right as the
+ * thesis decaying. Grouping on it answers the question a swing book exists to
+ * answer: what happens to the trades I keep holding after the reason is gone.
+ */
+const thesisDimension: Dimension = {
+  key: "thesis_state",
+  label: "Thesis at close",
+  group: "process",
+  order: [...THESIS_STATES],
+  valueOf: (t, ctx) => {
+    const rows = ctx.checkinsByPosition?.get(t.id);
+    if (!rows || rows.length === 0) return null;
+    let worst: ThesisState | null = null;
+    for (const r of rows) {
+      const s = r.thesis_state;
+      if (s == null) continue;
+      if (worst == null || THESIS_STATES.indexOf(s) > THESIS_STATES.indexOf(worst))
+        worst = s;
+    }
+    return worst;
+  },
+};
 
-function processDimension(
-  key: string,
-  label: string,
-  window: ProcessWindow,
-  pick: (reports: DailyReportLite[]) => string | null,
-  order?: readonly string[],
-): Dimension {
-  return {
-    key,
-    label,
-    group: "process",
-    order,
-    // No journal entry means the process was not recorded — that is unknown,
-    // not a value, so the trade is excluded rather than lumped into a bucket
-    // that would look like a finding.
-    valueOf: (t, ctx) => pick(reportsInWindow(t, ctx, window)),
-  };
-}
+/**
+ * Did the holding window cross a weekend?
+ *
+ * Derived on every enriched trade (see `weekend-hold.ts`), so this is a lookup,
+ * not a join. It earns a dimension because a weekend gap is a DIFFERENT risk
+ * from an overnight one rather than a longer one — and for a trader who crosses
+ * one rarely, that rare subset is exactly the one worth grouping out.
+ */
+const weekendHoldDimension: Dimension = {
+  key: "weekend_hold",
+  label: "Weekend hold",
+  group: "derived",
+  order: ["Held over weekend", "Flat by Friday"],
+  valueOf: (t) => (t.weekendHold ? "Held over weekend" : "Flat by Friday"),
+};
+
+/**
+ * How ready you said you were, read from the day you ENTERED.
+ *
+ * The open day and not the close day: mental temperature is a gate checked
+ * before taking the position, so on a four-day hold it belongs to Monday's
+ * decision, not to Thursday's exit. No entry for that day means the gate was
+ * never recorded — unknown, so the trade drops out rather than landing in a
+ * bucket that would read as a finding.
+ */
+const mentalTempDimension: Dimension = {
+  key: "mental_temp",
+  label: "Mental temperature",
+  group: "process",
+  order: ["1–3 (poor)", "4–5 (below average)", "6–7 (good)", "8–10 (excellent)"],
+  valueOf: (t, ctx) => {
+    const v = ctx.reportByDate.get(t.openDay)?.mental_temp;
+    if (v == null) return null;
+    if (v <= 3) return "1–3 (poor)";
+    if (v <= 5) return "4–5 (below average)";
+    if (v <= 7) return "6–7 (good)";
+    return "8–10 (excellent)";
+  },
+};
 
 const processDimensions: Dimension[] = [
-  processDimension(
-    "micromanage",
-    "Micromanage",
-    "hold",
-    (rs) => {
-      if (rs.length === 0) return null;
-      // Worst state across the holding window wins: one violated day is the
-      // fact worth grouping on.
-      if (rs.some((r) => r.micromanage === "violated")) return "violated";
-      if (rs.some((r) => r.micromanage === "watched")) return "watched";
-      if (rs.some((r) => r.micromanage === "untouched")) return "untouched";
-      return null;
-    },
-    ["untouched", "watched", "violated"],
-  ),
-  processDimension(
-    "day_grade",
-    "Day rating",
-    "close",
-    (rs) => rs[0]?.day_grade ?? null,
-    ["A", "B", "C", "D", "E", "F"],
-  ),
-  processDimension(
-    "mental_temp",
-    "Mental temperature",
-    "open",
-    (rs) => {
-      const v = rs[0]?.mental_temp;
-      if (v == null) return null;
-      if (v <= 3) return "1–3 (poor)";
-      if (v <= 5) return "4–5 (below average)";
-      if (v <= 7) return "6–7 (good)";
-      return "8–10 (excellent)";
-    },
-    ["1–3 (poor)", "4–5 (below average)", "6–7 (good)", "8–10 (excellent)"],
-  ),
-  processDimension(
-    "rule_broken",
-    "Rule broken",
-    "hold",
-    (rs) => {
-      if (rs.length === 0) return null;
-      if (rs.some((r) => r.rule_broken === true)) return "yes";
-      if (rs.some((r) => r.rule_broken === false)) return "no";
-      return null;
-    },
-    ["no", "yes"],
-  ),
+  touchedDimension,
+  thesisDimension,
+  weekendHoldDimension,
+  mentalTempDimension,
 ];
 
 // --- insight dimension -----------------------------------------------------

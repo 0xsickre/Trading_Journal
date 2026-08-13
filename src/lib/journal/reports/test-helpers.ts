@@ -1,5 +1,6 @@
 import type { RealizedTrade } from "../analytics";
 import { enrichTrades, type DailyReportLite } from "../enriched-trade";
+import type { PositionCheckin } from "../position-checkin";
 import type { PositionStat, TradeRow } from "../types";
 import { customFieldDimensions, type DimensionContext } from "./dimensions";
 import type { MetricContext } from "./metrics";
@@ -116,13 +117,46 @@ export function mkReport(
 ): DailyReportLite {
   return {
     report_date,
-    micromanage: null,
     mental_temp: null,
-    day_grade: null,
-    rule_broken: null,
     no_trade_day: false,
     ...overrides,
   };
+}
+
+/**
+ * A position's check-in for one day.
+ *
+ * `position_id` is the trade id, because that is the join — the whole reason
+ * these rows exist is that "did I touch it" is a fact about a position and not
+ * about a day.
+ */
+export function mkCheckin(
+  position_id: string,
+  report_date: string,
+  overrides: Partial<PositionCheckin> = {},
+): PositionCheckin {
+  return {
+    id: `${position_id}-${report_date}`,
+    position_id,
+    report_date,
+    thesis_state: null,
+    touched: null,
+    note: null,
+    ...overrides,
+  };
+}
+
+/** Check-ins bucketed the way `DimensionContext` wants them. */
+export function byPosition(
+  checkins: PositionCheckin[],
+): Map<string, PositionCheckin[]> {
+  const out = new Map<string, PositionCheckin[]>();
+  for (const c of checkins) {
+    const list = out.get(c.position_id);
+    if (list) list.push(c);
+    else out.set(c.position_id, [c]);
+  }
+  return out;
 }
 
 /** The user-defined fields the fixtures use. */

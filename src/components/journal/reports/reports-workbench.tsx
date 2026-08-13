@@ -17,6 +17,7 @@ import {
   resolveBreakevenRange,
 } from "@/lib/journal/breakeven";
 import { buildInsightContext } from "@/lib/journal/insights/context";
+import type { PositionCheckin } from "@/lib/journal/position-checkin";
 import { runInsights } from "@/lib/journal/insights/registry";
 import {
   DIMENSION_GROUP_LABELS,
@@ -79,6 +80,7 @@ export function ReportsWorkbench({
   trades,
   accounts,
   dailyReports = [],
+  positionCheckins = [],
   fillCounts,
   cashEvents = [],
   fieldDefs = [],
@@ -89,6 +91,8 @@ export function ReportsWorkbench({
   trades: TradeRow[];
   accounts: Account[];
   dailyReports?: DailyReportLite[];
+  /** Per-position daily check-ins — what `touched` and `thesis_state` group on. */
+  positionCheckins?: PositionCheckin[];
   fillCounts?: FillCounts;
   cashEvents?: CashEvent[];
   /** User-defined fields — each becomes a groupable dimension on its own. */
@@ -279,6 +283,21 @@ export function ReportsWorkbench({
     return base > 0 ? base : null;
   }, [accounts, trades, cashEvents, filters.accountIds]);
 
+  // Indexed once and shared by the insight context and the dimension context —
+  // both join check-ins on the position id, and building the map twice per
+  // render would walk the same rows twice for the same answer.
+  const checkinsByPosition = useMemo(() => {
+    const out = new Map<string, PositionCheckin[]>();
+    for (const c of [...positionCheckins].sort((a, b) =>
+      a.report_date.localeCompare(b.report_date),
+    )) {
+      const list = out.get(c.position_id);
+      if (list) list.push(c);
+      else out.set(c.position_id, [c]);
+    }
+    return out;
+  }, [positionCheckins]);
+
   // Insights double as a dimension and as a filter, so they are evaluated once
   // and indexed by trade.
   const insightsByTrade = useMemo(() => {
@@ -291,6 +310,7 @@ export function ReportsWorkbench({
       pnlOf,
       currency,
       fillCounts,
+      checkins: positionCheckins,
     });
     const map = new Map<string, string[]>();
     for (const i of runInsights(ctx).insights) {
@@ -298,11 +318,21 @@ export function ReportsWorkbench({
       map.set(i.subjectId, [...(map.get(i.subjectId) ?? []), i.ruleId]);
     }
     return map;
-  }, [trades, dailyReports, tzOf, range, pnlOf, currency, fillCounts]);
+  }, [
+    trades,
+    dailyReports,
+    positionCheckins,
+    tzOf,
+    range,
+    pnlOf,
+    currency,
+    fillCounts,
+  ]);
 
   const dimensionContext = useMemo<DimensionContext>(
     () => ({
       reportByDate: new Map(dailyReports.map((r) => [r.report_date, r])),
+      checkinsByPosition,
       insightsByTrade,
       accountNames: new Map(accounts.map((a) => [a.id, a.name])),
       // Tag splits, custom fields and playbook rules all resolve by key
@@ -315,6 +345,7 @@ export function ReportsWorkbench({
     }),
     [
       dailyReports,
+      checkinsByPosition,
       insightsByTrade,
       accounts,
       tagDimensions,

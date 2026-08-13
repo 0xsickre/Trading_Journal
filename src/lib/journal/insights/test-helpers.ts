@@ -1,4 +1,5 @@
 import type { RealizedTrade } from "../analytics";
+import type { PositionCheckin } from "../position-checkin";
 import type { PositionStat, TradeRow } from "../types";
 import { buildInsightContext, type DailyReportLite } from "./context";
 
@@ -97,11 +98,25 @@ export function mkReport(
 ): DailyReportLite {
   return {
     report_date,
-    micromanage: null,
     mental_temp: null,
-    day_grade: null,
-    rule_broken: null,
     no_trade_day: false,
+    ...overrides,
+  };
+}
+
+/** A position's check-in for one day. `position_id` is the trade id. */
+export function mkCheckin(
+  position_id: string,
+  report_date: string,
+  overrides: Partial<PositionCheckin> = {},
+): PositionCheckin {
+  return {
+    id: `${position_id}-${report_date}`,
+    position_id,
+    report_date,
+    thesis_state: null,
+    touched: null,
+    note: null,
     ...overrides,
   };
 }
@@ -112,6 +127,7 @@ export function ctxOf(
     reports?: DailyReportLite[];
     allRows?: TradeRow[];
     fillCounts?: Map<string, { entries: number; exits: number }>;
+    checkins?: PositionCheckin[];
   } = {},
 ) {
   return buildInsightContext({
@@ -120,6 +136,7 @@ export function ctxOf(
     reports: extra.reports,
     allRows: extra.allRows,
     fillCounts: extra.fillCounts,
+    checkins: extra.checkins,
     currency: "USD",
   });
 }

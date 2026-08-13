@@ -2,6 +2,9 @@ import { getAccounts } from "@/lib/journal/accounts";
 import { getDailyReport } from "@/lib/journal/daily-report-queries";
 import { todayInTz } from "@/lib/journal/daily-report";
 import { getActiveFocusGoal } from "@/lib/journal/focus-goal-queries";
+import { getPositionCheckinsForDay } from "@/lib/journal/position-checkin-queries";
+import { openPositionsOn } from "@/lib/journal/open-positions";
+import { stringFieldValue } from "@/lib/journal/field-values";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import {
   getCheckinsForDay,
@@ -36,6 +39,7 @@ import {
   type DayTradeRow,
 } from "@/components/journal/day-stats-card";
 import type { TrackerDayData } from "@/components/journal/tracker-checklist";
+import type { OpenPositionView } from "@/components/journal/open-positions-card";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
 
@@ -70,10 +74,11 @@ export default async function DailyPage({
         : dateParam
       : today;
 
-  const [report, activeGoal, checkins] = await Promise.all([
+  const [report, activeGoal, checkins, positionCheckins] = await Promise.all([
     getDailyReport(reportDate),
     getActiveFocusGoal(),
     getCheckinsForDay(reportDate),
+    getPositionCheckinsForDay(reportDate),
   ]);
 
   // Per-trade timezone, not the primary account's: a trade on a NY account and
@@ -141,6 +146,33 @@ export default async function DailyPage({
     qty: tradeVolume(t),
   }));
 
+  /**
+   * The positions this day has to answer for.
+   *
+   * Derived from `trades`, which this page already loaded for the day's numbers
+   * — a second round trip for a list computable from the first is a round trip
+   * spent on nothing. Only the seven values the card renders cross to the
+   * client: a `TradeRow` carries every custom field on the trade, and shipping
+   * whole records to draw a heading is how a page gets slow quietly.
+   */
+  const openPositions: OpenPositionView[] = openPositionsOn(
+    trades,
+    reportDate,
+    tzOf,
+  ).map((p) => ({
+    id: p.id,
+    label: p.label,
+    daysInTrade: p.daysInTrade,
+    timeStopDays: p.timeStopDays,
+    pastTimeStop: p.pastTimeStop,
+    // Read through the field accessor, not off the row: thesis and invalidation
+    // are columns today, but the same accessor covers them if they are ever
+    // re-declared as custom fields.
+    thesis: stringFieldValue(p.row, "thesis"),
+    invalidation: stringFieldValue(p.row, "invalidation"),
+    checkin: positionCheckins.get(p.id) ?? null,
+  }));
+
   const tracker: TrackerDayData = {
     reportDate,
     rules: dayRules,
@@ -155,8 +187,8 @@ export default async function DailyPage({
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
-        title="Daily Report"
-        description="A journal of process and discipline — rate the day by progress toward the focus goal, not by P&L."
+        title="Daily Check-in"
+        description="Did the reason for holding each position survive today, and did you touch it. The review of how the week went is on the weekly page."
       />
 
       <FocusGoalCard goal={activeGoal} reportDate={reportDate} />
@@ -178,6 +210,7 @@ export default async function DailyPage({
         timezone={timezone}
         activeGoal={activeGoal}
         tracker={tracker}
+        positions={openPositions}
       />
     </div>
   );

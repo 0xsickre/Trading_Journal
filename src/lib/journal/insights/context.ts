@@ -18,6 +18,7 @@ import {
   type EnrichedTrade,
   type FillCounts,
 } from "../enriched-trade";
+import type { PositionCheckin } from "../position-checkin";
 import type { TradeRow } from "../types";
 
 // Re-exported because the definitions live in `enriched-trade.ts` — the report
@@ -74,6 +75,16 @@ export type InsightContext = {
   weeks: WeekBucket[];
   reports: DailyReportLite[];
   reportByDate: Map<string, DailyReportLite>;
+  /**
+   * Position id → that position's daily check-ins, oldest first.
+   *
+   * Keyed by position rather than by date, and that is not a storage detail. The
+   * process facts a swing book records — did the thesis hold, did I touch it —
+   * belong to a POSITION across several days. Indexing them by day was the old
+   * shape, and it forced every reader to sweep a date range and then guess which
+   * of that day's open positions the answer was about.
+   */
+  checkinsByPosition: Map<string, PositionCheckin[]>;
   baseline: InsightBaseline;
   currency: string;
 };
@@ -88,6 +99,8 @@ export type BuildContextInput = {
   currency?: string;
   /** Fill counts per position id, when execution detail is available. */
   fillCounts?: FillCounts;
+  /** Per-position daily check-ins, flat; bucketed by position id here. */
+  checkins?: PositionCheckin[];
 };
 
 export function buildInsightContext(input: BuildContextInput): InsightContext {
@@ -100,11 +113,23 @@ export function buildInsightContext(input: BuildContextInput): InsightContext {
     pnlOf = (t) => t.net,
     currency = "USD",
     fillCounts,
+    checkins = [],
   } = input;
 
   const enriched = enrichTrades(trades, { tzOf, range, pnlOf, fillCounts });
 
   const reportByDate = new Map(reports.map((r) => [r.report_date, r]));
+
+  // Sorted by date inside each bucket so a rule that wants "the day the thesis
+  // died" gets the first such day, not whichever row the query returned first.
+  const checkinsByPosition = new Map<string, PositionCheckin[]>();
+  for (const c of [...checkins].sort((a, b) =>
+    a.report_date.localeCompare(b.report_date),
+  )) {
+    const list = checkinsByPosition.get(c.position_id);
+    if (list) list.push(c);
+    else checkinsByPosition.set(c.position_id, [c]);
+  }
 
   // Days are keyed on the CLOSE date, because a day bucket exists to answer
   // "what did this day produce", and production is realization.
@@ -176,6 +201,7 @@ export function buildInsightContext(input: BuildContextInput): InsightContext {
     weeks,
     reports,
     reportByDate,
+    checkinsByPosition,
     baseline,
     currency,
   };

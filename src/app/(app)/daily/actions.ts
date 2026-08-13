@@ -3,37 +3,33 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import {
-  DAY_GRADES,
-  MARKET_TYPES,
-  MICROMANAGE_OPTIONS,
-} from "@/lib/journal/daily-report";
+import { THESIS_STATES, TOUCHED_STATES } from "@/lib/journal/position-checkin";
 
+// Eight fields, down from twenty-one. What left did not move here — it moved to
+// the position (`micromanage`, now `savePositionCheckin` below) or to the weekly
+// review (the grade and the debrief prose). What stayed is what a day mid-hold
+// can honestly answer.
 const dailyReportSchema = z.object({
-  day_grade: z.enum(DAY_GRADES).nullable(),
   mental_temp: z.number().int().min(1).max(10).nullable(),
-  sleep_quality: z.number().int().min(1).max(5).nullable(),
   macro_note: z.string().nullable(),
-  mental_rehearsal: z.string().nullable(),
-  market_type: z.enum(MARKET_TYPES).nullable(),
-  micromanage: z.enum(MICROMANAGE_OPTIONS).nullable(),
   impulse_fomo: z.boolean(),
   impulse_fear: z.boolean(),
   impulse_greed: z.boolean(),
   impulse_fear_wrong: z.boolean(),
   impulse_note: z.string().nullable(),
-  rule_broken: z.boolean().nullable(),
-  rule_broken_note: z.string().nullable(),
-  learned_today: z.string().nullable(),
-  tomorrow_change: z.string().nullable(),
-  easiest_setup: z.string().nullable(),
-  day_overview: z.string().nullable(),
-  celebrate_win: z.string().nullable(),
-  friday_flat: z.boolean().nullable(),
   no_trade_day: z.boolean(),
 });
 
 export type SaveDailyReportInput = z.infer<typeof dailyReportSchema>;
+
+const positionCheckinSchema = z.object({
+  position_id: z.string().uuid(),
+  thesis_state: z.enum(THESIS_STATES).nullable(),
+  touched: z.enum(TOUCHED_STATES).nullable(),
+  note: z.string().nullable(),
+});
+
+export type SavePositionCheckinInput = z.infer<typeof positionCheckinSchema>;
 
 function revalidateDaily() {
   revalidatePath("/daily");
@@ -63,8 +59,10 @@ export async function saveDailyReport(
     .eq("is_active", true)
     .maybeSingle();
 
-  const warnNoFocusGoal =
-    parsed.data.day_grade != null && !activeGoal ? true : undefined;
+  // Warned on any saved day rather than on a grade being set: the grade is gone,
+  // and the focus goal is now what the whole day is measured against, so a day
+  // journalled without one is the case worth naming.
+  const warnNoFocusGoal = !activeGoal ? true : undefined;
 
   // Checked so the user sees this sentence rather than the trigger's. The trigger
   // stays the real guard — PostgREST with the user's JWT is a live write path, so
@@ -82,14 +80,7 @@ export async function saveDailyReport(
     report_date: reportDate,
     ...parsed.data,
     macro_note: emptyToNull(parsed.data.macro_note),
-    mental_rehearsal: emptyToNull(parsed.data.mental_rehearsal),
     impulse_note: emptyToNull(parsed.data.impulse_note),
-    rule_broken_note: emptyToNull(parsed.data.rule_broken_note),
-    learned_today: emptyToNull(parsed.data.learned_today),
-    tomorrow_change: emptyToNull(parsed.data.tomorrow_change),
-    easiest_setup: emptyToNull(parsed.data.easiest_setup),
-    day_overview: emptyToNull(parsed.data.day_overview),
-    celebrate_win: emptyToNull(parsed.data.celebrate_win),
   };
 
   const { data, error } = await supabase
@@ -102,6 +93,58 @@ export async function saveDailyReport(
 
   revalidateDaily();
   return { ok: true, updated_at: data.updated_at, warnNoFocusGoal };
+}
+
+/**
+ * One position's answers for one day.
+ *
+ * Saved on its own rather than folded into `saveDailyReport`, for the same
+ * reason the tracker checklist writes as you tick it: a check-in is three taps
+ * and is worth persisting the moment it is given. A trader who answers two
+ * positions and closes the tab should not lose both to an unpressed Save.
+ *
+ * The lock is checked here for the message, and enforced by
+ * `tj_position_checkin_lock_guard` for real — PostgREST with the user's JWT is a
+ * live write path, so a check in this file alone is a lock you can walk around.
+ */
+export async function savePositionCheckin(
+  reportDate: string,
+  input: SavePositionCheckinInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = positionCheckinSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "You are not signed in." };
+
+  const { data: existing } = await supabase
+    .from("tj_daily_reports")
+    .select("locked_at")
+    .eq("report_date", reportDate)
+    .maybeSingle();
+  if (existing?.locked_at != null)
+    return { ok: false, error: "This day is locked and no longer changes." };
+
+  const { error } = await supabase.from("tj_position_checkins").upsert(
+    {
+      user_id: user.id,
+      position_id: parsed.data.position_id,
+      report_date: reportDate,
+      thesis_state: parsed.data.thesis_state,
+      touched: parsed.data.touched,
+      note: emptyToNull(parsed.data.note),
+    },
+    { onConflict: "position_id,report_date" },
+  );
+  if (error) return { ok: false, error: error.message };
+
+  revalidateDaily();
+  return { ok: true };
 }
 
 function emptyToNull(s: string | null): string | null {

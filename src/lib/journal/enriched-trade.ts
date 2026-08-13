@@ -14,15 +14,18 @@ import { numberFieldValue as numField } from "./field-values";
 import { spansWeekend } from "./weekend-hold";
 import { excursionFromTrade, type Excursion } from "./excursion";
 import { zonedDateKey, zonedWeekStartKey } from "./time";
-import type { Micromanage } from "./daily-report";
 
-/** The journal fields downstream consumers join against — process, not prose. */
+/**
+ * The journal fields downstream consumers join against — process, not prose.
+ *
+ * `micromanage`, `day_grade` and `rule_broken` used to be here. The first moved
+ * to `tj_position_checkins` (a fact about a position, not about a day); the
+ * other two moved to the weekly review. What is left is what a DAY can actually
+ * answer about a multi-day hold.
+ */
 export type DailyReportLite = {
   report_date: string;
-  micromanage: Micromanage | null;
   mental_temp: number | null;
-  day_grade: string | null;
-  rule_broken: boolean | null;
   no_trade_day: boolean;
 };
 

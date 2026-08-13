@@ -12,7 +12,15 @@ import {
   R_MULTIPLE_EDGES,
   tagSplitDimensions,
 } from "./dimensions";
-import { DAY, TEST_FIELD_DEFS, dimCtx, enrich, mkReport } from "./test-helpers";
+import {
+  DAY,
+  TEST_FIELD_DEFS,
+  byPosition,
+  dimCtx,
+  enrich,
+  mkCheckin,
+  mkReport,
+} from "./test-helpers";
 
 const one = (specs: Parameters<typeof enrich>[0]) => enrich(specs)[0];
 
@@ -129,42 +137,86 @@ describe("process dimensions", () => {
     ]);
   });
 
-  it("reads day grade from the CLOSE day — the outcome", () => {
-    const t = one([held]);
-    const ctx = dimCtx([
-      mkReport("2026-01-05", { day_grade: "F" }),
-      mkReport("2026-01-09", { day_grade: "A" }),
-    ]);
-    expect(bucketsOf(getDimension("day_grade")!, t, ctx)).toEqual(["A"]);
+  it("reads interference from the position's OWN check-ins, mid-hold", () => {
+    // Interference happens while the position is open; neither endpoint of the
+    // trade would catch it.
+    const t = one([{ ...held, id: "p1" }]);
+    const ctx = dimCtx([], {
+      checkinsByPosition: byPosition([
+        mkCheckin("p1", "2026-01-07", { touched: "stop_moved" }),
+      ]),
+    });
+    expect(bucketsOf(getDimension("touched")!, t, ctx)).toEqual(["stop_moved"]);
   });
 
-  it("reads micromanage across the whole holding window", () => {
-    // Interference happens mid-hold; neither endpoint would catch it.
-    const t = one([held]);
-    const ctx = dimCtx([mkReport("2026-01-07", { micromanage: "violated" })]);
-    expect(bucketsOf(getDimension("micromanage")!, t, ctx)).toEqual([
-      "violated",
+  it("takes the furthest-from-plan state across the hold", () => {
+    // Not the last answer and not the average: touching a position once in five
+    // days is the fact worth grouping on, and `added` outranks `stop_moved`
+    // because it takes on exposure the plan never sized for.
+    const t = one([{ ...held, id: "p1" }]);
+    const ctx = dimCtx([], {
+      checkinsByPosition: byPosition([
+        mkCheckin("p1", "2026-01-05", { touched: "untouched" }),
+        mkCheckin("p1", "2026-01-07", { touched: "added" }),
+        mkCheckin("p1", "2026-01-09", { touched: "partial_exit" }),
+      ]),
+    });
+    expect(bucketsOf(getDimension("touched")!, t, ctx)).toEqual(["added"]);
+  });
+
+  it("never lets ANOTHER position's answer reach this one", () => {
+    // The measurement bug this replaced: `micromanage` was a column on the DAY,
+    // so an untouched position was convicted by the calendar whenever a
+    // different one was touched while both were open.
+    const t = one([{ ...held, id: "p1" }]);
+    const ctx = dimCtx([], {
+      checkinsByPosition: byPosition([
+        mkCheckin("p1", "2026-01-07", { touched: "untouched" }),
+        mkCheckin("p2", "2026-01-07", { touched: "added" }),
+      ]),
+    });
+    expect(bucketsOf(getDimension("touched")!, t, ctx)).toEqual(["untouched"]);
+  });
+
+  it("takes the worst thesis state across the hold", () => {
+    const t = one([{ ...held, id: "p1" }]);
+    const ctx = dimCtx([], {
+      checkinsByPosition: byPosition([
+        mkCheckin("p1", "2026-01-05", { thesis_state: "intact" }),
+        mkCheckin("p1", "2026-01-07", { thesis_state: "invalidated" }),
+        mkCheckin("p1", "2026-01-09", { thesis_state: "weakened" }),
+      ]),
+    });
+    expect(bucketsOf(getDimension("thesis_state")!, t, ctx)).toEqual([
+      "invalidated",
     ]);
   });
 
-  it("takes the worst micromanage state across the window", () => {
-    const t = one([held]);
-    const ctx = dimCtx([
-      mkReport("2026-01-05", { micromanage: "untouched" }),
-      mkReport("2026-01-07", { micromanage: "violated" }),
-      mkReport("2026-01-09", { micromanage: "watched" }),
+  it("splits weekend holds from trades that were flat by Friday", () => {
+    // Mon→Fri never crosses a Saturday; Fri→Mon does.
+    const flat = one([held]);
+    const over = one([
+      { openedAt: "2026-01-09T09:00:00Z", closedAt: "2026-01-12T09:00:00Z" },
     ]);
-    expect(bucketsOf(getDimension("micromanage")!, t, ctx)).toEqual([
-      "violated",
-    ]);
+    const dim = getDimension("weekend_hold")!;
+    expect(bucketsOf(dim, flat, dimCtx())).toEqual(["Flat by Friday"]);
+    expect(bucketsOf(dim, over, dimCtx())).toEqual(["Held over weekend"]);
   });
 
-  it("excludes a trade with no journal entry rather than inventing a bucket", () => {
+  it("excludes a trade with no entry rather than inventing a bucket", () => {
     // Unrecorded process is unknown, not a value — bucketing it would make an
-    // absence look like a finding.
-    const t = one([held]);
-    expect(bucketsOf(getDimension("micromanage")!, t, dimCtx())).toEqual([]);
+    // absence look like a finding. A check-in row that exists but answers
+    // nothing is the same silence.
+    const t = one([{ ...held, id: "p1" }]);
+    expect(bucketsOf(getDimension("touched")!, t, dimCtx())).toEqual([]);
+    expect(bucketsOf(getDimension("thesis_state")!, t, dimCtx())).toEqual([]);
     expect(bucketsOf(getDimension("mental_temp")!, t, dimCtx())).toEqual([]);
+
+    const silent = dimCtx([], {
+      checkinsByPosition: byPosition([mkCheckin("p1", "2026-01-07")]),
+    });
+    expect(bucketsOf(getDimension("touched")!, t, silent)).toEqual([]);
+    expect(bucketsOf(getDimension("thesis_state")!, t, silent)).toEqual([]);
   });
 });
 
@@ -345,6 +397,9 @@ describe("every dimension buckets without throwing", () => {
    */
   const rich = one([
     {
+      // Named so the check-in fixture below joins onto it — the sweep is meant
+      // to execute each `valueOf`'s populated path, not its early return.
+      id: "rich",
       instrument: "XAUUSD",
       net: 300,
       r: 3,
@@ -363,14 +418,14 @@ describe("every dimension buckets without throwing", () => {
   // duration, no account, no custom values.
   const bare = one([{ net: 0, r: null, durationSeconds: null, size: null, accountId: null }]);
 
-  const ctx = dimCtx([
-    mkReport("2026-01-09", {
-      micromanage: "watched",
-      mental_temp: 6,
-      day_grade: "B",
-      rule_broken: true,
-    }),
-  ]);
+  const ctx = dimCtx([mkReport("2026-01-09", { mental_temp: 6 })], {
+    checkinsByPosition: byPosition([
+      mkCheckin("rich", "2026-01-09", {
+        thesis_state: "weakened",
+        touched: "partial_exit",
+      }),
+    ]),
+  });
 
   const all = [...DIMENSIONS, ...customFieldDimensions(TEST_FIELD_DEFS)];
 

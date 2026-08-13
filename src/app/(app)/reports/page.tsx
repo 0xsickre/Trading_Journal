@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getCashEvents } from "@/lib/journal/cash-events";
 import { getDailyReportsLite } from "@/lib/journal/daily-report-queries";
+import { getPositionCheckins } from "@/lib/journal/position-checkin-queries";
 import { getFillCounts, getTradesWithStats } from "@/lib/journal/trades";
 import { getFieldDefs } from "@/lib/journal/field-defs";
 import { getOptionsMap } from "@/lib/journal/options";
@@ -27,6 +28,7 @@ export default async function ReportsPage() {
     fieldDefs,
     playbooks,
     optionsMap,
+    positionCheckins,
   ] = await Promise.all([
     getTradesWithStats(),
     getAccounts(),
@@ -45,6 +47,11 @@ export default async function ReportsPage() {
     // were tagged with, and dropping it would move a tag from the Emocija
     // dimension into nothing at all.
     getOptionsMap(false),
+    // Every check-in, not just a window: they feed the `touched` and
+    // `thesis_state` dimensions, which group CLOSED trades by what was recorded
+    // while they were open. A date-bounded read would drop the answers given
+    // during a hold that started before the window.
+    getPositionCheckins(),
   ]);
 
   return (
@@ -61,6 +68,7 @@ export default async function ReportsPage() {
           trades={trades as TradeRow[]}
           accounts={accounts}
           dailyReports={dailyReports}
+          positionCheckins={positionCheckins}
           fillCounts={fillCounts}
           cashEvents={cashEvents}
           fieldDefs={fieldDefs}

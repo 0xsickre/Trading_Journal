@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   emptyDailyReport,
+  isDayComplete,
   isFriday,
-  isReportComplete,
   nextReportDate,
   prevReportDate,
 } from "./daily-report";
@@ -19,21 +19,21 @@ const goal = {
   updated_at: "2026-07-20T00:00:00Z",
 };
 
-describe("isReportComplete", () => {
-  it("requires grade, rule_broken, and active goal", () => {
-    expect(
-      isReportComplete({ day_grade: "B", rule_broken: false }, goal),
-    ).toBe(true);
-    expect(
-      isReportComplete({ day_grade: "B", rule_broken: false }, null),
-    ).toBe(false);
-    expect(
-      isReportComplete({ day_grade: null, rule_broken: false }, goal),
-    ).toBe(false);
-    expect(
-      isReportComplete({ day_grade: "A", rule_broken: null }, goal),
-    ).toBe(false);
-    expect(isReportComplete(null, goal)).toBe(false);
+describe("isDayComplete", () => {
+  it("is complete when every open position was judged", () => {
+    expect(isDayComplete({ openCount: 2, judgedCount: 2 }, goal)).toBe(true);
+    expect(isDayComplete({ openCount: 2, judgedCount: 1 }, goal)).toBe(false);
+  });
+
+  it("is complete with nothing open — there is nothing to answer", () => {
+    expect(isDayComplete({ openCount: 0, judgedCount: 0 }, goal)).toBe(true);
+  });
+
+  it("is never complete without an active focus goal", () => {
+    // The day is measured against the goal. With no goal set, "complete" has
+    // nothing to be complete against.
+    expect(isDayComplete({ openCount: 0, judgedCount: 0 }, null)).toBe(false);
+    expect(isDayComplete({ openCount: 2, judgedCount: 2 }, null)).toBe(false);
   });
 });
 
@@ -53,10 +53,10 @@ describe("emptyDailyReport", () => {
   it("defaults booleans and nulls", () => {
     const row = emptyDailyReport("2026-07-22");
     expect(row.report_date).toBe("2026-07-22");
-    expect(row.day_grade).toBeNull();
+    expect(row.mental_temp).toBeNull();
+    expect(row.macro_note).toBeNull();
     expect(row.impulse_fomo).toBe(false);
     expect(row.no_trade_day).toBe(false);
-    expect(row.rule_broken).toBeNull();
   });
 });
 
