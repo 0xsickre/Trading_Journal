@@ -210,3 +210,72 @@ export function playbookDimensions(lookup: PlaybookLookup): Dimension[] {
     playbookRuleDimension(lookup.rules),
   ];
 }
+
+// --- Does the rule carry anything? -----------------------------------------
+//
+// The question a playbook page exists to answer, and the reason it is NOT
+// "win rate per rule".
+//
+// Rules get followed on good setups and skipped on marginal ones. So the win
+// rate of trades where a rule was followed measures the QUALITY OF THE SETUP as
+// much as the rule — the two are confounded, and the confound runs the same
+// direction for every rule, which makes a ranking of them look meaningful when
+// it is not.
+//
+// The contrast below compares a rule with ITSELF: followed against broken, same
+// rule, same book, same trader. That is not a perfect control, but it removes
+// the part of the confound that a cross-rule ranking cannot touch.
+
+/**
+ * Sample thresholds, from the backtesting literature on how many observations a
+ * per-rule number needs before it means anything.
+ *
+ * Named rather than inlined because they are a claim about statistics, not a
+ * display choice: below `USABLE` the page refuses to draw a verdict, and that
+ * refusal is the feature. Testing many rules and keeping the best-looking one is
+ * exactly how a journal talks its owner into overfitting.
+ */
+export const RULE_SAMPLE = {
+  /** Below this, a rule shows counts only — no win rate, no gap. */
+  MIN: 30,
+  /** At or above this, the numbers stand without a hedge. */
+  USABLE: 100,
+} as const;
+
+export type RuleSampleTier = "thin" | "provisional" | "usable";
+
+export function ruleSampleTier(n: number): RuleSampleTier {
+  if (n < RULE_SAMPLE.MIN) return "thin";
+  if (n < RULE_SAMPLE.USABLE) return "provisional";
+  return "usable";
+}
+
+/**
+ * Group by rule AND by whether it was followed.
+ *
+ * Splits what `playbookRuleDimension` merges. That one answers "how did trades
+ * where this rule was in play do", which mixes the times you kept it with the
+ * times you did not — a row that reads like a statement about the rule while
+ * describing both sides of it at once.
+ *
+ * Multi-value for the same reason as its sibling: one trade answers several
+ * rules, so it lands in several buckets and the rows do not sum to the
+ * portfolio total.
+ */
+export function ruleFollowedDimension(rules: RuleLookup): Dimension {
+  return {
+    key: "playbook_rule_followed",
+    label: "Playbook rule · followed",
+    group: "process",
+    multiValue: true,
+    valueOf: (t) => {
+      const buckets = applicableAnswers(t, rules)
+        .filter((a) => a.followed != null)
+        .map(
+          (a) =>
+            `${rules.text.get(a.rule_id) ?? a.rule_id} · ${a.followed ? "followed" : "broken"}`,
+        );
+      return buckets.length > 0 ? buckets : null;
+    },
+  };
+}
