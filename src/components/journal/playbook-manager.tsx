@@ -170,7 +170,7 @@ function GroupBlock({ group }: { group: PlaybookGroup }) {
           disabled={pending}
         />
         <span className="text-xs text-muted-foreground">
-          {group.rules.length} {group.rules.length === 1 ? "pravilo" : "pravila"}
+          {group.rules.length} {group.rules.length === 1 ? "rule" : "rules"}
         </span>
         <Button
           variant="ghost"
@@ -241,7 +241,7 @@ function PlaybookCard({ book }: { book: Playbook }) {
           />
           <CardTitle className="sr-only">{book.name}</CardTitle>
           <span className="text-xs text-muted-foreground">
-            {ruleCount} {ruleCount === 1 ? "pravilo" : "pravila"}
+            {ruleCount} {ruleCount === 1 ? "rule" : "rules"}
           </span>
           {!book.is_active && <Badge variant="outline">inactive</Badge>}
           <div className="ml-auto flex items-center gap-1">

@@ -330,7 +330,7 @@ export function NoteEditor({
                     type="button"
                     onClick={() => removeTag(tag)}
                     className="text-muted-foreground hover:text-foreground"
-                    aria-label={`Ukloni ${tag}`}
+                    aria-label={`Remove ${tag}`}
                   >
                     ×
                   </button>
@@ -389,7 +389,7 @@ export function NoteEditor({
 
           {/* The printed page is the note, not the app: only this block survives. */}
           <div className="hidden print:block">
-            <h1 className="text-xl font-semibold">{title || "Bez naslova"}</h1>
+            <h1 className="text-xl font-semibold">{title || "Untitled"}</h1>
             <MarkdownView content={content} />
           </div>
         </div>

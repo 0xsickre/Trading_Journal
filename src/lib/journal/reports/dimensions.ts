@@ -428,11 +428,11 @@ const processDimensions: Dimension[] = [
     "hold",
     (rs) => {
       if (rs.length === 0) return null;
-      if (rs.some((r) => r.rule_broken === true)) return "da";
-      if (rs.some((r) => r.rule_broken === false)) return "ne";
+      if (rs.some((r) => r.rule_broken === true)) return "yes";
+      if (rs.some((r) => r.rule_broken === false)) return "no";
       return null;
     },
-    ["ne", "da"],
+    ["no", "yes"],
   ),
 ];
 
@@ -511,7 +511,7 @@ export function dimensionsByGroup(group: DimensionGroup): Dimension[] {
 export const DIMENSION_GROUP_LABELS: Record<DimensionGroup, string> = {
   trade: "Trade",
   derived: "Izvedeno",
-  process: "Proces",
+  process: "Process",
   insight: "Insight",
   custom: "My fields",
 };

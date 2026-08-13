@@ -223,5 +223,5 @@ export function evaluateFtmo(
 }
 
 export function ruleLabel(rule: FtmoRule): string {
-  return rule === "daily_loss" ? "Max dnevni gubitak" : "Max ukupni gubitak";
+  return rule === "daily_loss" ? "Max daily loss" : "Max total loss";
 }

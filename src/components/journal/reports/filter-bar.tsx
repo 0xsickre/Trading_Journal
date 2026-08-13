@@ -28,7 +28,7 @@ import {
 import type { EnrichedTrade } from "@/lib/journal/enriched-trade";
 
 const OP_LABELS: Record<FilterClause["op"], string> = {
-  in: "jeste",
+  in: "is",
   notIn: "is not",
   between: "between",
   isSet: "has a value",

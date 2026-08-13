@@ -80,10 +80,10 @@ describe("FtmoBanner", () => {
         })}
       />,
     );
-    expect(screen.getByText("Zamrznut")).toBeInTheDocument();
+    expect(screen.getByText("Frozen")).toBeInTheDocument();
     expect(screen.getByText(/-\$5,200\.00/)).toBeInTheDocument();
     expect(screen.getByText(/limit -\$5,000\.00/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Reset izazov/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Reset challenge/ })).toBeInTheDocument();
   });
 
   it("a passed challenge shows the profit target reached and days traded, no reset needed message", () => {
@@ -95,7 +95,7 @@ describe("FtmoBanner", () => {
     );
     expect(screen.getByText("Passed")).toBeInTheDocument();
     expect(screen.getAllByText(/10\.4%/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/14 trading dana/)).toBeInTheDocument();
+    expect(screen.getByText(/14 trading days/)).toBeInTheDocument();
   });
 
   it("an active challenge shows no reset button and flags insufficient trading days", () => {
@@ -105,8 +105,8 @@ describe("FtmoBanner", () => {
         result={result({ status: "active", daysTraded: 1, minDaysMet: false })}
       />,
     );
-    expect(screen.getByText("Aktivan")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Reset izazov/ })).not.toBeInTheDocument();
-    expect(screen.getByText(/1 \(nedovoljno\)/)).toBeInTheDocument();
+    expect(screen.getByText("Active")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Reset challenge/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/1 \(not enough\)/)).toBeInTheDocument();
   });
 });

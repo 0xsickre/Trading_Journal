@@ -67,10 +67,10 @@ export function FtmoBanner({
             )}
           >
             {result.status === "failed"
-              ? "Zamrznut"
+              ? "Frozen"
               : result.status === "passed"
                 ? "Passed"
-                : "Aktivan"}
+                : "Active"}
           </span>
         </div>
         {(result.status === "failed" || result.status === "passed") && (
@@ -81,7 +81,7 @@ export function FtmoBanner({
             disabled={pending}
             onClick={reset}
           >
-            <RotateCcw className="size-3.5" /> Reset izazov
+            <RotateCcw className="size-3.5" /> Reset challenge
           </Button>
         )}
       </div>
@@ -92,7 +92,7 @@ export function FtmoBanner({
             <li key={`${b.rule}-${b.date}`}>
               <strong>{ruleLabel(b.rule)}</strong> breached {b.date} —{" "}
               {fmtMoney(b.amount, ccy, { sign: true })} (limit{" "}
-              {fmtMoney(b.limit, ccy, { sign: true })}). Novi trejdovi su blokirani
+              {fmtMoney(b.limit, ccy, { sign: true })}). New trades are blocked
               until you reset the challenge.
             </li>
           ))}
@@ -101,8 +101,8 @@ export function FtmoBanner({
 
       {result.status === "passed" && (
         <p className="text-sm text-[var(--profit)]">
-          Profitni cilj dostignut ({fmtPct(result.profitPct)}) uz{" "}
-          {result.daysTraded} trading dana. 🎉
+          Profit target reached ({fmtPct(result.profitPct)}) over{" "}
+          {result.daysTraded} trading days. 🎉
         </p>
       )}
 
@@ -112,17 +112,17 @@ export function FtmoBanner({
         </span>
         <span>Drawdown: {fmtPct(result.maxDrawdownPct)}</span>
         {result.profitTargetAmount != null && (
-          <span>Cilj: {fmtMoney(result.profitTargetAmount, ccy)}</span>
+          <span>Target: {fmtMoney(result.profitTargetAmount, ccy)}</span>
         )}
         {result.dailyLossLimit != null && (
-          <span>Dnevni limit: {fmtMoney(result.dailyLossLimit, ccy, { sign: true })}</span>
+          <span>Daily limit: {fmtMoney(result.dailyLossLimit, ccy, { sign: true })}</span>
         )}
         {result.maxLossFloor != null && (
-          <span>Prag (floor): {fmtMoney(result.maxLossFloor, ccy)}</span>
+          <span>Floor: {fmtMoney(result.maxLossFloor, ccy)}</span>
         )}
         <span>
-          Dana: {result.daysTraded}
-          {!result.minDaysMet && result.status === "active" ? " (nedovoljno)" : ""}
+          Days: {result.daysTraded}
+          {!result.minDaysMet && result.status === "active" ? " (not enough)" : ""}
         </span>
       </div>
     </div>

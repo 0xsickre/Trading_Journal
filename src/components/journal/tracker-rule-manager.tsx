@@ -129,7 +129,7 @@ function RuleRow({ rule, currency }: { rule: TrackerRule; currency: string }) {
         }}
         className="h-8 min-w-0 flex-1"
         disabled={pending || retired || isAuto}
-        title={isAuto ? "Tekst automatskog pravila je fiksan." : undefined}
+        title={isAuto ? "An automatic rule's text is fixed." : undefined}
       />
 
       {isAuto && (
@@ -299,7 +299,7 @@ export function TrackerRuleManager({
       {unconfigured > 0 && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-sm text-amber-700 dark:text-amber-400">
           {unconfigured}{" "}
-          {unconfigured === 1 ? "rule has no" : "pravila nemaju"} postavljen limit
+          {unconfigured === 1 ? "rule has no" : "rules have no"} limit set
           i zato se ne ocenjuje. Namerno nije seed-ovan podrazumevani iznos —
           a limit you did not choose yourself is a limit you will pass without noticing.
         </p>
@@ -313,7 +313,7 @@ export function TrackerRuleManager({
               <CardTitle className="text-base">
                 {STAGE_LABELS[stage]}
                 <span className="ml-2 text-sm font-normal text-muted-foreground">
-                  {inStage.length} {inStage.length === 1 ? "pravilo" : "pravila"}
+                  {inStage.length} {inStage.length === 1 ? "rule" : "rules"}
                 </span>
               </CardTitle>
             </CardHeader>
@@ -340,7 +340,7 @@ export function TrackerRuleManager({
             <CardTitle className="text-base">
               Retired rules
               <span className="ml-2 text-sm font-normal text-muted-foreground">
-                statistika starih dana ostaje netaknuta
+                past days&apos; statistics stay untouched
               </span>
             </CardTitle>
           </CardHeader>

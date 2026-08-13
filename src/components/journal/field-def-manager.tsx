@@ -176,11 +176,11 @@ function FieldRow({
           className="size-7"
           disabled={pending}
           onClick={() => run(() => toggleFieldDefActive(def.id, !def.is_active))}
-          aria-label={def.is_active ? "Arhiviraj" : "Vrati"}
+          aria-label={def.is_active ? "Archive" : "Restore"}
           title={
             def.is_active
               ? "Remove from the form. Existing trades keep their value."
-              : "Vrati na formu."
+              : "Restore to the form."
           }
         >
           {def.is_active ? (

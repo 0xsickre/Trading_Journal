@@ -48,7 +48,7 @@ export async function saveDailyReport(
 > {
   const parsed = dailyReportSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Neispravan unos." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
   const supabase = await createClient();

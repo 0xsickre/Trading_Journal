@@ -168,8 +168,8 @@ describe("deriveTitle", () => {
   });
 
   it("falls back when there is nothing to take", () => {
-    expect(deriveTitle("")).toBe("Bez naslova");
-    expect(deriveTitle("   \n\n")).toBe("Bez naslova");
+    expect(deriveTitle("")).toBe("Untitled");
+    expect(deriveTitle("   \n\n")).toBe("Untitled");
     expect(deriveTitle("", "Prazna")).toBe("Prazna");
   });
 

@@ -92,7 +92,7 @@ export function playbookDimension(names: Map<string, string>): Dimension {
 /** Conviction rating recorded at entry, 1–5. */
 export const convictionDimension: Dimension = {
   key: "conviction",
-  label: "Uverenost (1–5)",
+  label: "Conviction (1–5)",
   group: "trade",
   order: ["1", "2", "3", "4", "5"],
   valueOf: (t) => {

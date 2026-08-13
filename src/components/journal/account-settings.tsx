@@ -269,7 +269,7 @@ function AccountCard({ account }: { account: Account }) {
                 onEnabled={setMinDaysOn}
                 value={minDays}
                 onValue={setMinDays}
-                suffix="dana"
+                suffix="days"
                 step="1"
               />
               <p className="text-xs text-muted-foreground">

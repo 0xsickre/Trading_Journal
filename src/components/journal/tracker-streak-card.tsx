@@ -66,12 +66,12 @@ export function TrackerStreakCard({
               <Stat
                 label="Current streak"
                 value={`${streak.current}`}
-                hint={streak.current === 1 ? "dan" : "dana"}
+                hint={streak.current === 1 ? "day" : "days"}
               />
               <Stat
                 label="Longest streak"
                 value={`${streak.longest}`}
-                hint={streak.longest === 1 ? "dan" : "dana"}
+                hint={streak.longest === 1 ? "day" : "days"}
               />
               <Stat
                 label="Average consistency"

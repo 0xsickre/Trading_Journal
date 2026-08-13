@@ -171,7 +171,7 @@ export function CompareView({
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">{col.label}</CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  {col.side?.n ?? 0} trejdova
+                  {col.side?.n ?? 0} trades
                   {(col.side?.n ?? 0) < minSample && " — below the threshold, draw no conclusion"}
                 </p>
               </CardHeader>

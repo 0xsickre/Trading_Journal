@@ -266,7 +266,7 @@ export function plainText(content: string): string {
  * the bullet, so it ate the first asterisk of `**Nedelja 31**` and left the
  * title reading `Nedelja 31*`.
  */
-export function deriveTitle(content: string, fallback = "Bez naslova"): string {
+export function deriveTitle(content: string, fallback = "Untitled"): string {
   for (const line of content.split("\n")) {
     const stripped = line
       .replace(HEADING_RE, "$2")

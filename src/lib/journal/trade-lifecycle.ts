@@ -129,7 +129,7 @@ export function lifecycleStatusHint(status: string): string {
     case "missed":
       return "Setup missed — you never entered.";
     case "open":
-      return "Aktivan trade.";
+      return "Active trade.";
     case "partial":
       return "Partial exit.";
     case "closed":
