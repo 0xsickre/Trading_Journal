@@ -5,6 +5,7 @@ import {
   Upload,
   Settings,
   ClipboardCheck,
+  CalendarCheck,
   BarChart3,
   CalendarDays,
   NotebookPen,
@@ -62,7 +63,11 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Journal",
     items: [
       { href: "/journal", label: "Trades", icon: BookOpen },
-      { href: "/daily", label: "Daily Report", icon: ClipboardCheck },
+      // Daily then weekly, in the order they are written. The daily entry asks
+      // what is true right now; the weekly one asks what it added up to, and it
+      // is the second because it reads the first.
+      { href: "/daily", label: "Daily Check-in", icon: ClipboardCheck },
+      { href: "/weekly", label: "Weekly Review", icon: CalendarCheck },
       { href: "/notebook", label: "Notebook", icon: NotebookPen },
     ],
   },

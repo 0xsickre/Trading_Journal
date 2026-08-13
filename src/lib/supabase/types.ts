@@ -1136,6 +1136,51 @@ export type Database = {
           },
         ]
       }
+      tj_weekly_reviews: {
+        Row: {
+          created_at: string
+          id: string
+          locked_at: string | null
+          next_week_catalysts: string | null
+          one_change: string | null
+          one_pattern: string | null
+          updated_at: string
+          user_id: string
+          week_grade: string | null
+          week_start: string
+          went_badly: string | null
+          went_well: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          locked_at?: string | null
+          next_week_catalysts?: string | null
+          one_change?: string | null
+          one_pattern?: string | null
+          updated_at?: string
+          user_id: string
+          week_grade?: string | null
+          week_start: string
+          went_badly?: string | null
+          went_well?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          locked_at?: string | null
+          next_week_catalysts?: string | null
+          one_change?: string | null
+          one_pattern?: string | null
+          updated_at?: string
+          user_id?: string
+          week_grade?: string | null
+          week_start?: string
+          went_badly?: string | null
+          went_well?: string | null
+        }
+        Relationships: []
+      }
       tj_tracker_rules: {
         Row: {
           active_days: number[]
