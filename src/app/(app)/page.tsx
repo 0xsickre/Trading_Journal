@@ -1,6 +1,3 @@
-import Link from "next/link";
-import { PlusCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { getTradesWithStats, getFillCounts } from "@/lib/journal/trades";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getCashEvents } from "@/lib/journal/cash-events";
@@ -79,13 +76,6 @@ export default async function DashboardPage() {
       <PageHeader
         title="Dashboard"
         description="Your edge at a glance — filter by account, period and any tag."
-        action={
-          <Button asChild>
-            <Link href="/trades/new">
-              <PlusCircle className="size-4" /> New Trade
-            </Link>
-          </Button>
-        }
       />
 
       <Dashboard

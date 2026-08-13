@@ -12,10 +12,15 @@ import type { ReactNode } from "react";
  * word with `<b>`, and narrowing the type would have forced that page to keep
  * its hand-rolled copy, which is the whole thing being fixed.
  *
- * `min-w-0` is unconditional. A flex child defaults to `min-width:auto`, so a
- * long unbroken title (an instrument name, a pasted string) pushes the row wider
- * than its container and the action slides off the edge. The three pages that
- * lacked it were not choosing differently; they were the ones nobody had hit yet.
+ * `min-w-0` is kept even though nothing sits beside the heading today: it costs
+ * nothing, and it is what stops a long unbroken title (an instrument name, a
+ * pasted string) from widening the row past its container the moment anything
+ * ever does.
+ *
+ * There is no `action` slot. There was one, for the "New Trade" button `/` and
+ * `/journal` each carried — but that button became the sidebar's and the mobile
+ * bar's primary action, so the page-level copy was the third on screen at once.
+ * With both gone the prop described a case the app no longer has.
  *
  * NOT used by `trade-form.tsx`, which carries the same `h1` class over a
  * different thing: its subtitle is `text-sm` with live content (timezone, the
@@ -26,26 +31,14 @@ import type { ReactNode } from "react";
 export function PageHeader({
   title,
   description,
-  action,
 }: {
   title: string;
   description?: ReactNode;
-  /** Rendered opposite the title. Omitted entirely when absent — no empty slot. */
-  action?: ReactNode;
 }) {
-  const heading = (
+  return (
     <div className="min-w-0">
       <h1 className="text-2xl font-semibold">{title}</h1>
       {description && <p className="text-muted-foreground">{description}</p>}
-    </div>
-  );
-
-  if (!action) return heading;
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      {heading}
-      {action}
     </div>
   );
 }

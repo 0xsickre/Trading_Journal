@@ -1,6 +1,3 @@
-import Link from "next/link";
-import { PlusCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getFieldDefs } from "@/lib/journal/field-defs";
@@ -24,13 +21,6 @@ export default async function JournalPage() {
       <PageHeader
         title="Journal"
         description="Every logged trade. Filter by any tag — archived options stay filterable."
-        action={
-          <Button asChild>
-            <Link href="/trades/new">
-              <PlusCircle className="size-4" /> New Trade
-            </Link>
-          </Button>
-        }
       />
 
       <JournalGrid

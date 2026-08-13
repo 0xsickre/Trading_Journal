@@ -5,11 +5,11 @@ import { PageHeader } from "./page-header";
 /**
  * The heading contract, so eight pages can stop repeating it.
  *
- * The assertion worth having is the LAST one: a component like this normally
- * grows a wrapper row that is always rendered, with an empty slot where the
- * action would be. Nothing looks wrong on the page with an action, and on the
- * six pages without one the heading silently stops filling its line. Checking
- * the markup shape — not just the text — is what catches that.
+ * The two action-slot cases this file used to carry are gone with the prop:
+ * `New Trade` is the sidebar's and the mobile bar's primary action now, and the
+ * page-level copy was the third on screen at once. What remains still checks
+ * markup SHAPE and not only text — the last case is the one that catches a
+ * heading quietly wrapped in an always-rendered row.
  */
 describe("PageHeader", () => {
   it("renders the title as the page's h1", () => {
@@ -45,26 +45,15 @@ describe("PageHeader", () => {
     expect(screen.getByText("closed").tagName).toBe("B");
   });
 
-  it("renders the action beside the title when one is given", () => {
-    render(<PageHeader title="Journal" action={<button>New Trade</button>} />);
-    expect(
-      screen.getByRole("button", { name: "New Trade" }),
-    ).toBeInTheDocument();
-  });
-
-  it("renders NO action row at all when there is no action", () => {
+  it("is the bare heading — no wrapper row, no empty slot", () => {
     const { container } = render(<PageHeader title="Reports" />);
-    // The bare heading is the root — not a justify-between row holding it and
-    // an empty second child.
     const root = container.firstElementChild!;
     expect(root.className).not.toContain("justify-between");
     expect(root.children).toHaveLength(1); // the h1 only
   });
 
-  it("keeps min-w-0 on the heading so a long title cannot push the action off", () => {
-    const { container } = render(
-      <PageHeader title="Journal" action={<button>New Trade</button>} />,
-    );
+  it("keeps min-w-0, so a long title cannot widen the row past its container", () => {
+    const { container } = render(<PageHeader title="Journal" />);
     const heading = container.querySelector("h1")!.parentElement!;
     expect(heading.className).toContain("min-w-0");
   });
