@@ -6,6 +6,7 @@ import {
   Settings,
   ClipboardCheck,
   CalendarCheck,
+  BookMarked,
   BarChart3,
   CalendarDays,
   NotebookPen,
@@ -63,6 +64,9 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Journal",
     items: [
       { href: "/journal", label: "Trades", icon: BookOpen },
+      // Beside Trades, not under Setup. A playbook is judged by what it did, so
+      // it belongs with the record rather than with the dropdown lists.
+      { href: "/playbooks", label: "Playbooks", icon: BookMarked },
       // Daily then weekly, in the order they are written. The daily entry asks
       // what is true right now; the weekly one asks what it added up to, and it
       // is the second because it reads the first.

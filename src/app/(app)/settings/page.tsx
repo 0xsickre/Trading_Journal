@@ -10,8 +10,6 @@ import { CashEventsManager } from "@/components/journal/cash-events-manager";
 import { NewListForm } from "@/components/journal/new-list-form";
 import { FieldDefManager } from "@/components/journal/field-def-manager";
 import { getFieldDefs } from "@/lib/journal/field-defs";
-import { PlaybookManager } from "@/components/journal/playbook-manager";
-import { getPlaybooks, getRuleLibrary } from "@/lib/journal/playbooks";
 import { TrackerRuleManager } from "@/components/journal/tracker-rule-manager";
 import { getTrackerRules } from "@/lib/journal/tracker/queries";
 import { PageHeader } from "@/components/app/page-header";
@@ -23,8 +21,6 @@ export default async function SettingsPage() {
     accounts,
     cashEvents,
     fieldDefs,
-    playbooks,
-    ruleLibrary,
     trackerRules,
   ] = await Promise.all([
       getListsWithItems(false),
@@ -34,11 +30,6 @@ export default async function SettingsPage() {
       // Archived defs included — this screen is where you un-archive them.
       getFieldDefs(false),
       // Retired rules included, for the same reason.
-      getPlaybooks({ includeDeleted: true }),
-      // The whole library, not only the linked rules: the manager offers an
-      // existing rule for re-linking, which is what stops a second playbook
-      // retyping it into a new id with empty statistics.
-      getRuleLibrary({ includeDeleted: true }),
       getTrackerRules({ includeRetired: true }),
     ]);
 
@@ -59,9 +50,6 @@ export default async function SettingsPage() {
         <TabsList className="flex w-full max-w-full justify-start overflow-x-auto sm:w-fit">
           <TabsTrigger value="lists" className="flex-none">
             Dropdown Lists
-          </TabsTrigger>
-          <TabsTrigger value="playbooks" className="flex-none">
-            Playbook
           </TabsTrigger>
           <TabsTrigger value="fields" className="flex-none">
             My fields
@@ -85,10 +73,6 @@ export default async function SettingsPage() {
             <NewListForm />
           </div>
           <ListManager lists={lists} />
-        </TabsContent>
-
-        <TabsContent value="playbooks">
-          <PlaybookManager playbooks={playbooks} library={ruleLibrary} />
         </TabsContent>
 
         <TabsContent value="fields">
