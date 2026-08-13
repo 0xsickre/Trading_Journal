@@ -332,7 +332,7 @@ function WeekRow({
           the neighbouring month. A week is a week — cutting it at the month
           boundary would print a number that matches no period the trader had. */}
       <div className="min-h-[4.5rem] rounded-md border border-dashed p-1.5">
-        <div className="text-xs text-muted-foreground">Ukupno</div>
+        <div className="text-xs text-muted-foreground">Total</div>
         {weekRow ? (
           <>
             <div

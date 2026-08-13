@@ -82,7 +82,7 @@ export function TrackerStreakCard({
                 hint={`${scored} ocenjenih dana`}
               />
               <Stat
-                label="Poslednji prekid"
+                label="Last break"
                 value={streak.lastBrokenOn ?? "—"}
               />
             </div>

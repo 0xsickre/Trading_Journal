@@ -31,7 +31,7 @@ const OP_LABELS: Record<FilterClause["op"], string> = {
   in: "jeste",
   notIn: "is not",
   between: "between",
-  isSet: "ima vrednost",
+  isSet: "has a value",
   isNotSet: "has no value",
 };
 
@@ -119,7 +119,7 @@ export function FilterBar({
   return (
     <div className="space-y-3 rounded-md border p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium">Filteri</span>
+        <span className="text-sm font-medium">Filters</span>
         {activeFilterCount(filters) > 0 && (
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
             {activeFilterCount(filters)} aktivnih
@@ -133,7 +133,7 @@ export function FilterBar({
               onChange({ ...filters, dateFrom: e.target.value || undefined })
             }
             className="h-8 w-auto"
-            aria-label="Od datuma"
+            aria-label="From date"
           />
           <span className="text-xs text-muted-foreground">do</span>
           <Input
@@ -143,7 +143,7 @@ export function FilterBar({
               onChange({ ...filters, dateTo: e.target.value || undefined })
             }
             className="h-8 w-auto"
-            aria-label="Do datuma"
+            aria-label="To date"
           />
           <Select
             value={filters.accountIds?.[0] ?? "all"}
@@ -158,7 +158,7 @@ export function FilterBar({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Svi nalozi</SelectItem>
+              <SelectItem value="all">All accounts</SelectItem>
               {accounts.map((a) => (
                 <SelectItem key={a.id} value={a.id}>
                   {a.name}
@@ -259,7 +259,7 @@ export function FilterBar({
             size="sm"
             className="h-7 px-2"
             onClick={() => removeClause(i)}
-            aria-label="Ukloni filter"
+            aria-label="Remove filter"
           >
             <X className="size-3.5" />
           </Button>
@@ -288,7 +288,7 @@ export function FilterBar({
                 </div>
               );
             })}
-            <div className="px-2 py-1 text-xs text-muted-foreground">Brojevi</div>
+            <div className="px-2 py-1 text-xs text-muted-foreground">Numbers</div>
             {Object.entries(NUMERIC_FIELD_LABELS).map(([k, label]) => (
               <SelectItem key={k} value={k}>
                 {label}

@@ -482,9 +482,9 @@ export async function addFieldDef(input: {
   const label = input.label.trim();
   if (!label) return { ok: false as const, error: "The name cannot be empty." };
   if (!FIELD_DEF_TYPES.includes(input.field_type))
-    return { ok: false as const, error: "Nepoznat tip polja." };
+    return { ok: false as const, error: "Unknown field type." };
   if (!FIELD_DEF_GROUPS.includes(input.group_id))
-    return { ok: false as const, error: "Nepoznata grupa." };
+    return { ok: false as const, error: "Unknown group." };
 
   // A label with no letter or digit in it has no key to derive. `slugifyFieldKey`
   // strips punctuation, finds nothing left, and falls back to the bare `f` —
@@ -576,12 +576,12 @@ export async function updateFieldDef(
   }
   if (patch.field_type != null) {
     if (!FIELD_DEF_TYPES.includes(patch.field_type))
-      return { ok: false as const, error: "Nepoznat tip polja." };
+      return { ok: false as const, error: "Unknown field type." };
     next.field_type = patch.field_type;
   }
   if (patch.group_id != null) {
     if (!FIELD_DEF_GROUPS.includes(patch.group_id))
-      return { ok: false as const, error: "Nepoznata grupa." };
+      return { ok: false as const, error: "Unknown group." };
     next.group_id = patch.group_id;
   }
   if (patch.list_key !== undefined) next.list_key = patch.list_key?.trim() || null;

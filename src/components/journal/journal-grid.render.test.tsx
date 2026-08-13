@@ -139,7 +139,7 @@ describe("outcome filter classifies by EACH account's own breakeven band", () =>
     const user = userEvent.setup({ delay: null });
     render(<JournalGrid trades={rowsOf(trades)} accounts={[TIGHT, WIDE]} />);
 
-    await user.click(screen.getByText("Ishod:").closest("button")!);
+    await user.click(screen.getByText("Outcome:").closest("button")!);
     await user.click(await screen.findByRole("option", { name: "breakeven" }));
 
     expect(screen.getByText(/1 of 2 trades/)).toBeInTheDocument();
@@ -202,7 +202,7 @@ describe("the column picker refuses to empty the grid", () => {
     const user = userEvent.setup({ delay: null });
     render(<JournalGrid trades={rowsOf(trades)} accounts={[ACCOUNT]} hiddenColumns={ALL_BUT_NET} />);
 
-    await user.click(screen.getByRole("button", { name: /Kolone/ }));
+    await user.click(screen.getByRole("button", { name: /Columns/ }));
     const netItem = screen.getByRole("menuitemcheckbox", { name: "Net" });
     expect(netItem).toHaveAttribute("aria-disabled", "true");
 
@@ -219,8 +219,8 @@ describe("the column picker refuses to empty the grid", () => {
     const user = userEvent.setup({ delay: null });
     render(<JournalGrid trades={rowsOf(trades)} accounts={[ACCOUNT]} />);
 
-    await user.click(screen.getByRole("button", { name: /Kolone/ }));
-    await user.click(screen.getByRole("menuitemcheckbox", { name: "Grafikon" }));
+    await user.click(screen.getByRole("button", { name: /Columns/ }));
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Chart" }));
 
     expect(setHiddenColumnsMock).toHaveBeenCalledWith(
       expect.arrayContaining(["chart"]),
@@ -232,8 +232,8 @@ describe("the column picker refuses to empty the grid", () => {
     const user = userEvent.setup({ delay: null });
     render(<JournalGrid trades={rowsOf(trades)} accounts={[ACCOUNT]} />);
 
-    await user.click(screen.getByRole("button", { name: /Kolone/ }));
-    await user.click(screen.getByRole("menuitemcheckbox", { name: "Grafikon" }));
+    await user.click(screen.getByRole("button", { name: /Columns/ }));
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Chart" }));
 
     await vi.waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith("network failed"));
   });

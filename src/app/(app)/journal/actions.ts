@@ -20,7 +20,7 @@ const schema = z.array(z.string().min(1).max(64)).max(100);
 
 export async function setJournalHiddenColumns(ids: string[]): Promise<Result> {
   const parsed = schema.safeParse(ids);
-  if (!parsed.success) return { ok: false, error: "Neispravan izbor kolona." };
+  if (!parsed.success) return { ok: false, error: "Invalid column selection." };
 
   const supabase = await createClient();
   const user = await getCurrentUser();

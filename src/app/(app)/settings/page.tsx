@@ -54,7 +54,7 @@ export default async function SettingsPage() {
             Playbook
           </TabsTrigger>
           <TabsTrigger value="fields" className="flex-none">
-            Moja polja
+            My fields
           </TabsTrigger>
           <TabsTrigger value="tracker" className="flex-none">
             Tracker
@@ -66,7 +66,7 @@ export default async function SettingsPage() {
             Accounts
           </TabsTrigger>
           <TabsTrigger value="cash" className="flex-none">
-            Uplate / isplate
+            Deposits / withdrawals
           </TabsTrigger>
         </TabsList>
 

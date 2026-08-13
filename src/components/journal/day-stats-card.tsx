@@ -124,18 +124,18 @@ export function DayStatsCard({
             }
           />
           <Figure
-            label="Dobitnici"
+            label="Winners"
             value={String(stats.wins)}
             cls="text-[var(--profit)]"
           />
           <Figure
-            label="Gubitnici"
+            label="Losers"
             value={String(stats.losses)}
             cls="text-[var(--loss)]"
           />
-          <Figure label="Volumen" value={fmtNum(volume, 2)} hint="ugovora" />
+          <Figure label="Volume" value={fmtNum(volume, 2)} hint="contracts" />
           <Figure
-            label="Komisije"
+            label="Commissions"
             value={fmtMoney(costs.totalFees, currency)}
             // Without this a day of trades logged with no fee data shows a
             // confident $0 and implies the trading was free.
@@ -143,7 +143,7 @@ export function DayStatsCard({
               costs.withCostData === 0
                 ? "no trade carries the data"
                 : costs.withCostData < stats.count
-                  ? `${costs.withCostData} od ${stats.count} trejdova`
+                  ? `${costs.withCostData} of ${stats.count} trades`
                   : undefined
             }
           />

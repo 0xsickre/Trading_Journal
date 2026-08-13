@@ -121,13 +121,13 @@ const TAG_SPLITS = [
     key: "psych_emotion",
     field: "psychology_tags",
     listKey: "emotion",
-    label: "Emocija",
+    label: "Emotion",
   },
   {
     key: "psych_discipline",
     field: "psychology_tags",
     listKey: "discipline",
-    label: "Disciplina",
+    label: "Discipline",
   },
 ] as const;
 
@@ -240,7 +240,7 @@ const tradeDimensions: Dimension[] = [
   column("instrument", "Instrument"),
   {
     key: "direction",
-    label: "Smer",
+    label: "Direction",
     group: "trade",
     order: ["Long", "Short"],
     valueOf: (t) => (isShortDirection(str(t, "direction")) ? "Short" : "Long"),
@@ -301,7 +301,7 @@ const derivedDimensions: Dimension[] = [
   },
   {
     key: "outcome",
-    label: "Ishod",
+    label: "Outcome",
     group: "derived",
     order: ["win", "breakeven", "loss"],
     valueOf: (t) => t.outcome,
@@ -440,7 +440,7 @@ const processDimensions: Dimension[] = [
 
 const insightDimension: Dimension = {
   key: "insight",
-  label: "Okinuti insight",
+  label: "Fired insight",
   group: "insight",
   multiValue: true,
   valueOf: (t, ctx) => {
@@ -513,7 +513,7 @@ export const DIMENSION_GROUP_LABELS: Record<DimensionGroup, string> = {
   derived: "Izvedeno",
   process: "Proces",
   insight: "Insight",
-  custom: "Moja polja",
+  custom: "My fields",
 };
 
 export const DIMENSION_GROUP_ORDER: DimensionGroup[] = [

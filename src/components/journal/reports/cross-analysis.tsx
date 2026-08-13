@@ -34,7 +34,7 @@ export function CrossAnalysis({
     return (
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Cross-analiza</CardTitle>
+          <CardTitle className="text-base">Cross-analysis</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="py-6 text-center text-sm text-muted-foreground">

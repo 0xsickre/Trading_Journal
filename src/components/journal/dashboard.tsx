@@ -1105,7 +1105,7 @@ export function Dashboard({
           wall. See `stat-group.tsx` for why "open" is an invariant here and not
           merely a default. */}
       <div className="space-y-4">
-        <StatGroup id="result" title="Rezultat — detaljno" count={9}>
+        <StatGroup id="result" title="Result — detail" count={9}>
           <Stat
             label="Gross P/L"
             value={fmtMoney(stats.grossSum, currency, { sign: true })}
@@ -1148,7 +1148,7 @@ export function Dashboard({
           />
         </StatGroup>
 
-        <StatGroup id="risk" title="Rizik" count={7}>
+        <StatGroup id="risk" title="Risk" count={7}>
           <Stat
             label="Max drawdown %"
             value={fmtPct(drawdown.maxPctOfEquity)}

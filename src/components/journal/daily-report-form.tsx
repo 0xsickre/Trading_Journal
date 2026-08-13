@@ -168,7 +168,7 @@ export function DailyReportForm({
       return false;
     }
     if (res.warnNoFocusGoal) {
-      toast.warning("Postavi cilj fokusa da ocena dana ima smisla.");
+      toast.warning("Set a focus goal so the day rating means something.");
     }
     setLastSaved(res.updated_at);
     return true;
@@ -219,7 +219,7 @@ export function DailyReportForm({
           </Button>
           {!isToday && (
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/daily">Danas</Link>
+              <Link href="/daily">Today</Link>
             </Button>
           )}
         </div>
@@ -345,7 +345,7 @@ export function DailyReportForm({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Kvalitet sna (1–5, opciono)</Label>
+              <Label>Sleep quality (1–5, optional)</Label>
               <Select
                 value={form.sleep_quality?.toString() ?? ""}
                 onValueChange={(v) =>
@@ -353,7 +353,7 @@ export function DailyReportForm({
                 }
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Opciono" />
+                  <SelectValue placeholder="Optional" />
                 </SelectTrigger>
                 <SelectContent>
                   {Array.from({ length: 5 }, (_, i) => i + 1).map((n) => (

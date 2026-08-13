@@ -27,7 +27,7 @@ import {
 const TYPES: { value: CashEventType; label: string; hint: string }[] = [
   { value: "deposit", label: "Deposit", hint: "Money came into the account" },
   { value: "withdrawal", label: "Withdrawal", hint: "Money left the account" },
-  { value: "payout", label: "Payout", hint: "Prop-firm isplata profita" },
+  { value: "payout", label: "Payout", hint: "Prop-firm profit payout" },
   { value: "adjustment", label: "Adjustment", hint: "Manual balance correction" },
 ];
 
@@ -104,9 +104,9 @@ export function CashEventsManager({
         <CardHeader className="pb-3">
           <CardTitle className="text-base">New entry</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Uplate i isplate ne ulaze u P&amp;L. One pomeraju balans, pa time i
-            svaki procentualni pogled — drawdown u <strong>$</strong> ostaje isti,
-            drawdown u <strong>%</strong> se menja.
+            Deposits and withdrawals are not P&amp;L. They move the balance, and with it
+            every percentage view — drawdown in <strong>$</strong> stays the same,
+            drawdown in <strong>%</strong> changes.
           </p>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -127,7 +127,7 @@ export function CashEventsManager({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">Tip</Label>
+            <Label className="text-xs">Type</Label>
             <Select
               value={type}
               onValueChange={(v) => setType(v as CashEventType)}
@@ -147,9 +147,9 @@ export function CashEventsManager({
 
           <div className="space-y-1.5">
             <Label className="text-xs">
-              Iznos ({currency})
+              Amount ({currency})
               {type !== "adjustment" && (
-                <span className="ml-1 text-muted-foreground">bez predznaka</span>
+                <span className="ml-1 text-muted-foreground">unsigned</span>
               )}
             </Label>
             <Input
@@ -161,7 +161,7 @@ export function CashEventsManager({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">Datum</Label>
+            <Label className="text-xs">Date</Label>
             <Input
               type="date"
               value={date}
@@ -173,7 +173,7 @@ export function CashEventsManager({
             <Label className="text-xs">Note</Label>
             <Input
               value={note}
-              placeholder="Opciono"
+              placeholder="Optional"
               onChange={(e) => setNote(e.target.value)}
             />
           </div>
@@ -190,7 +190,7 @@ export function CashEventsManager({
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-3">
           <CardTitle className="text-base">History</CardTitle>
           <span className="text-sm text-muted-foreground">
-            Neto tok: {fmtMoney(netCashFlow(events), currency, { sign: true })}
+            Net flow: {fmtMoney(netCashFlow(events), currency, { sign: true })}
           </span>
         </CardHeader>
         <CardContent>
@@ -203,10 +203,10 @@ export function CashEventsManager({
               <table className="w-full text-sm">
                 <thead className="text-muted-foreground">
                   <tr className="border-b">
-                    <th className="py-2 text-left font-medium">Datum</th>
-                    <th className="py-2 text-left font-medium">Nalog</th>
-                    <th className="py-2 text-left font-medium">Tip</th>
-                    <th className="py-2 text-right font-medium">Iznos</th>
+                    <th className="py-2 text-left font-medium">Date</th>
+                    <th className="py-2 text-left font-medium">Account</th>
+                    <th className="py-2 text-left font-medium">Type</th>
+                    <th className="py-2 text-right font-medium">Amount</th>
                     <th className="py-2 text-left font-medium">Note</th>
                     <th className="py-2" />
                   </tr>

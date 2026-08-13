@@ -48,7 +48,7 @@ export const OMITTED_RULES: OmittedRule[] = [
   {
     id: "patience_paid_off",
     reason:
-      "Meri koliko kasno u SESIJI je prvi ulaz. Intraday pojam bez smislenog swing ekvivalenta.",
+      "Measures how late in the SESSION the first entry falls. An intraday notion with no meaningful swing equivalent.",
   },
   {
     id: "maximize_your_profit_day",

@@ -73,6 +73,6 @@ describe("PerformanceSummaryPanel — W3: the win-rate tile respects privacy mod
         minSample={DEFAULT_MIN_SAMPLE}
       />,
     );
-    expect(screen.getByText(new RegExp(`bar ${DEFAULT_MIN_SAMPLE} trejdova`))).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`at least ${DEFAULT_MIN_SAMPLE} trades`))).toBeInTheDocument();
   });
 });

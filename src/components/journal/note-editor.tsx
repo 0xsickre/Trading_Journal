@@ -202,7 +202,7 @@ export function NoteEditor({
             <SelectValue placeholder="Folder" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={UNFILED}>Bez foldera</SelectItem>
+            <SelectItem value={UNFILED}>Unfiled</SelectItem>
             {folders.map((f) => (
               <SelectItem key={f.id} value={f.id}>
                 {f.name}
@@ -235,7 +235,7 @@ export function NoteEditor({
         {note.position_id && (
           <Button variant="ghost" size="sm" asChild>
             <Link href={`/trades/${note.position_id}/edit`}>
-              <Link2 className="mr-1 size-3.5" /> Otvori trejd
+              <Link2 className="mr-1 size-3.5" /> Open trade
             </Link>
           </Button>
         )}
@@ -316,7 +316,7 @@ export function NoteEditor({
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Naslov — ostavi prazno da se uzme prvi red"
+            placeholder="Title — leave empty to use the first line"
             disabled={deleted}
             className="h-auto border-0 px-0 text-xl font-semibold shadow-none focus-visible:ring-0"
           />

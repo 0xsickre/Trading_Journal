@@ -323,7 +323,7 @@ describe("splitting psychology_tags back into its source lists", () => {
 
   it("resolves by key once carried on the context", () => {
     const ctx = dimCtx([], { customDimensions: tagSplitDimensions(OPTIONS) });
-    expect(resolveDimension("psych_discipline", ctx)?.label).toBe("Disciplina");
+    expect(resolveDimension("psych_discipline", ctx)?.label).toBe("Discipline");
     // Per user, never a global — same rule as the custom field dimensions.
     expect(resolveDimension("psych_discipline")).toBeUndefined();
   });

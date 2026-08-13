@@ -44,7 +44,7 @@ export async function setCheckin(
   reportDate: string,
   checked: boolean | null,
 ): Promise<Result> {
-  if (!DAY_RE.test(reportDate)) return { ok: false, error: "Neispravan datum." };
+  if (!DAY_RE.test(reportDate)) return { ok: false, error: "Invalid date." };
 
   const supabase = await createClient();
   const user = await getCurrentUser();
@@ -124,7 +124,7 @@ export async function setCheckin(
  * the one rule in this phase most easily got wrong.
  */
 export async function lockDay(reportDate: string): Promise<Result> {
-  if (!DAY_RE.test(reportDate)) return { ok: false, error: "Neispravan datum." };
+  if (!DAY_RE.test(reportDate)) return { ok: false, error: "Invalid date." };
 
   const supabase = await createClient();
   const user = await getCurrentUser();

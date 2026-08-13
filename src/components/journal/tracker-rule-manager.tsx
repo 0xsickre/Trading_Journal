@@ -164,10 +164,10 @@ function RuleRow({ rule, currency }: { rule: TrackerRule; currency: string }) {
 
       {rule.is_mandatory && (
         <Badge variant="outline" className="gap-1 shrink-0">
-          <Lock className="size-3" /> obavezno
+          <Lock className="size-3" /> required
         </Badge>
       )}
-      {retired && <Badge variant="outline">penzionisano</Badge>}
+      {retired && <Badge variant="outline">retired</Badge>}
 
       <div className="ml-auto flex shrink-0 items-center gap-1">
         {!retired && (
@@ -178,7 +178,7 @@ function RuleRow({ rule, currency }: { rule: TrackerRule; currency: string }) {
               className="size-7"
               disabled={pending}
               onClick={() => run(() => moveTrackerRule(rule.id, -1))}
-              aria-label="Pomeri gore"
+              aria-label="Move up"
             >
               <ChevronUp className="size-3.5" />
             </Button>
@@ -188,7 +188,7 @@ function RuleRow({ rule, currency }: { rule: TrackerRule; currency: string }) {
               className="size-7"
               disabled={pending}
               onClick={() => run(() => moveTrackerRule(rule.id, 1))}
-              aria-label="Pomeri dole"
+              aria-label="Move down"
             >
               <ChevronDown className="size-3.5" />
             </Button>
@@ -219,7 +219,7 @@ function RuleRow({ rule, currency }: { rule: TrackerRule; currency: string }) {
 
       {unconfigured && (
         <p className="w-full text-xs text-amber-600 dark:text-amber-500">
-          Bez limita ovo pravilo se ne ocenjuje — ni pozitivno ni negativno.
+          Without a limit this rule is not scored — neither for nor against.
           Set an amount to make it work.
         </p>
       )}
@@ -255,7 +255,7 @@ function AddRuleForm({ stage }: { stage: TrackerStage }) {
       />
       <DayToggles days={days} disabled={pending} onChange={setDays} />
       <Button size="sm" className="h-8" onClick={submit} disabled={pending}>
-        <Plus className="size-3.5" /> Dodaj
+        <Plus className="size-3.5" /> Add
       </Button>
     </div>
   );

@@ -83,10 +83,10 @@ export function PlaybookChecklist({
             onValueChange={(v) => onPlaybookChange(v === "none" ? null : v)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Bez playbook-a" />
+              <SelectValue placeholder="No playbook" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Bez playbook-a</SelectItem>
+              <SelectItem value="none">No playbook</SelectItem>
               {playbooks
                 .filter((p) => p.is_active || p.id === playbookId)
                 .map((p) => (
@@ -99,7 +99,7 @@ export function PlaybookChecklist({
         </div>
 
         <div className="space-y-1.5">
-          <Label className="text-xs">Uverenost (1–5)</Label>
+          <Label className="text-xs">Conviction (1–5)</Label>
           <Select
             value={conviction != null ? String(conviction) : "none"}
             onValueChange={(v) =>
@@ -107,10 +107,10 @@ export function PlaybookChecklist({
             }
           >
             <SelectTrigger>
-              <SelectValue placeholder="Neocenjeno" />
+              <SelectValue placeholder="Not rated" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Neocenjeno</SelectItem>
+              <SelectItem value="none">Not rated</SelectItem>
               {[1, 2, 3, 4, 5].map((v) => (
                 <SelectItem key={v} value={String(v)}>
                   {v}
@@ -137,7 +137,7 @@ export function PlaybookChecklist({
         <div className="space-y-4">
           <div className="text-xs text-muted-foreground">
             Followed {followed} of {answered.length} answered
-            {answered.length === 0 && " — neodgovoreno se ne broji u statistiku"}
+            {answered.length === 0 && " — unanswered does not count toward the statistics"}
           </div>
 
           {visibleGroups.map((group) => (
@@ -167,7 +167,7 @@ export function PlaybookChecklist({
                       <TriButton
                         active={value === undefined}
                         onClick={() => onAnswerChange(rule.id, null)}
-                        label="Neodgovoreno"
+                        label="Unanswered"
                       >
                         <Minus className="size-3.5" />
                       </TriButton>

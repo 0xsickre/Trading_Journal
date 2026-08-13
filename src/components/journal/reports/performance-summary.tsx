@@ -32,7 +32,7 @@ export function PerformanceSummaryPanel({
     return (
       <Card>
         <CardContent className="p-4 text-sm text-muted-foreground">
-          Nijedna kategorija nema bar {minSample} trejdova. Dok je tako,
+          No category has at least {minSample} trades. While that holds,
           calling one &quot;best&quot; would be guessing, so none is shown.
         </CardContent>
       </Card>
@@ -47,21 +47,21 @@ export function PerformanceSummaryPanel({
 
   const items = [
     {
-      label: `Najbolji — ${selected.label}`,
+      label: `Best — ${selected.label}`,
       bucket: summary.best?.bucket,
       value: fmt(summary.best?.values[selected.key]),
       n: summary.best?.n,
       cls: "text-[var(--profit)]",
     },
     {
-      label: `Najgori — ${selected.label}`,
+      label: `Worst — ${selected.label}`,
       bucket: summary.worst?.bucket,
       value: fmt(summary.worst?.values[selected.key]),
       n: summary.worst?.n,
       cls: "text-[var(--loss)]",
     },
     {
-      label: "Najaktivniji",
+      label: "Most active",
       bucket: summary.mostActive?.bucket,
       value: `${summary.mostActive?.n ?? 0} trades`,
       n: summary.mostActive?.n,

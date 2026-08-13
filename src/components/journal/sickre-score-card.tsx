@@ -47,7 +47,7 @@ export function SickreScoreCard({ score }: { score: SickreScore }) {
               score as fully covered. */}
           {score.coverage > 0 && score.coverage < score.maxCoverage && (
             <span className="ml-auto text-xs text-muted-foreground">
-              {Math.round((score.coverage / score.maxCoverage) * 100)}% pondera pokriveno
+              {Math.round((score.coverage / score.maxCoverage) * 100)}% of weights covered
             </span>
           )}
         </div>
@@ -86,17 +86,17 @@ export function SickreScoreCard({ score }: { score: SickreScore }) {
                 No score yet — it needs{" "}
                 <strong>
                   {confidence.tradesShort} more{" "}
-                  {confidence.tradesShort === 1 ? "zatvoren trejd" : "closed trades"}
+                  {confidence.tradesShort === 1 ? "closed trade" : "closed trades"}
                 </strong>
-                . Ispod {MIN_SAMPLE} trejda svaka komponenta je artefakt uzorka:
+                . Below {MIN_SAMPLE} trades every component is an artefact of the sample:
                 a single winner gives an infinite profit factor, zero drawdown and a
                 100 % win rate — four maxima that mean nothing.
               </>
             ) : (
               <>
-                Skor se ne prikazuje jer je pokriveno manje od pola pondera.
+                The score is withheld because less than half the weights are covered.
                 What is measured is shown below by component — but one
-                komponenta pod imenom kompozita nije kompozit.
+                component under a composite&apos;s name is not a composite.
               </>
             )}
           </p>
@@ -113,14 +113,14 @@ export function SickreScoreCard({ score }: { score: SickreScore }) {
         {confidence.level === "provisional" && (
           <p className="text-xs text-muted-foreground">
             The sample is still small, so the score will swing noticeably with every trade.
-            Stabilizuje se oko {RELIABLE_SAMPLE} zatvorenih trejdova.
+            It settles around {RELIABLE_SAMPLE} closed trades.
           </p>
         )}
 
         <p className="text-xs text-muted-foreground">
-          Max drawdown komponenta deli pad vrhom <strong>kumulativnog P&amp;L-a</strong>,
+          The max drawdown component divides the fall by the peak of <strong>cumulative P&amp;L</strong>,
           not the equity shown above. Two different denominators — this one is chosen
-          da skor ostane uporediv sa istom metrikom kod drugih alata.
+          so the score stays comparable with the same metric in other tools.
         </p>
       </CardContent>
     </Card>

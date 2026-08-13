@@ -149,7 +149,7 @@ function AccountCard({ account }: { account: Account }) {
           />
         </div>
         <div className="col-span-2 space-y-2 rounded-md border p-3">
-          <div className="text-sm font-medium">Breakeven opseg</div>
+          <div className="text-sm font-medium">Breakeven range</div>
           <p className="text-xs text-muted-foreground">
             A trade whose net P&amp;L lands in this range counts as breakeven, not as a
             loss. The range is <strong>asymmetric</strong> — typically
@@ -162,7 +162,7 @@ function AccountCard({ account }: { account: Account }) {
               value={beFrom}
               onChange={(e) => setBeFrom(e.target.value)}
               className="h-8 w-28"
-              aria-label="Breakeven od"
+              aria-label="Breakeven from"
             />
             <span className="text-sm text-muted-foreground">do</span>
             <Input
@@ -170,7 +170,7 @@ function AccountCard({ account }: { account: Account }) {
               value={beTo}
               onChange={(e) => setBeTo(e.target.value)}
               className="h-8 w-28"
-              aria-label="Breakeven do"
+              aria-label="Breakeven to"
             />
             <Select
               value={beUnit}
@@ -181,7 +181,7 @@ function AccountCard({ account }: { account: Account }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="currency">{currency}</SelectItem>
-                <SelectItem value="pct">% balansa</SelectItem>
+                <SelectItem value="pct">% of balance</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -190,13 +190,13 @@ function AccountCard({ account }: { account: Account }) {
         <div className="col-span-2 space-y-2 rounded-md border p-3">
           <div className="text-sm font-medium">Default costs</div>
           <p className="text-xs text-muted-foreground">
-            Predpopunjavaju se na svaki novi fill u formi. Uvek se mogu
+            Pre-filled on every new fill in the form. Always possible to
             override by hand. <strong>A positive swap is a cost</strong> — enter a
             negative number only if you earn carry on that position.
           </p>
           <div className="grid gap-2 sm:grid-cols-3">
             <div className="space-y-1">
-              <Label className="text-xs">Komisija po jedinici</Label>
+              <Label className="text-xs">Commission per unit</Label>
               <Input
                 inputMode="decimal"
                 value={commPerUnit}
@@ -205,7 +205,7 @@ function AccountCard({ account }: { account: Account }) {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Fiksna taksa po fill-u</Label>
+              <Label className="text-xs">Fixed fee per fill</Label>
               <Input
                 inputMode="decimal"
                 value={feeFixed}
@@ -240,7 +240,7 @@ function AccountCard({ account }: { account: Account }) {
           {ftmoMode && (
             <div className="space-y-2 pl-1">
               <FtmoRule
-                label="Max dnevni gubitak"
+                label="Max daily loss"
                 enabled={dailyOn}
                 onEnabled={setDailyOn}
                 value={dailyPct}
@@ -248,20 +248,20 @@ function AccountCard({ account }: { account: Account }) {
                 suffix="% of balance / day"
               />
               <FtmoRule
-                label="Max ukupni gubitak"
+                label="Max total loss"
                 enabled={maxOn}
                 onEnabled={setMaxOn}
                 value={maxPct}
                 onValue={setMaxPct}
-                suffix="% balansa (drawdown)"
+                suffix="% of balance (drawdown)"
               />
               <FtmoRule
-                label="Profitni cilj"
+                label="Profit target"
                 enabled={targetOn}
                 onEnabled={setTargetOn}
                 value={targetPct}
                 onValue={setTargetPct}
-                suffix="% balansa"
+                suffix="% of balance"
               />
               <FtmoRule
                 label="Min. trading days"

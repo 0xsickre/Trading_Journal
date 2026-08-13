@@ -86,7 +86,7 @@ export async function createNote(
   input: NotePatch = {},
 ): Promise<Result<{ id: string }>> {
   const parsed = noteSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Neispravan unos." };
+  if (!parsed.success) return { ok: false, error: "Invalid input." };
 
   const supabase = await createClient();
   const user = await getCurrentUser();
@@ -131,7 +131,7 @@ export async function updateNote(
   patch: NotePatch,
 ): Promise<Result<{ updated_at: string }>> {
   const parsed = noteSchema.safeParse(patch);
-  if (!parsed.success) return { ok: false, error: "Neispravan unos." };
+  if (!parsed.success) return { ok: false, error: "Invalid input." };
 
   const supabase = await createClient();
   const user = await getCurrentUser();

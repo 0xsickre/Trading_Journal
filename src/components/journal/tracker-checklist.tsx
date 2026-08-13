@@ -220,7 +220,7 @@ function AutoRow({
 
       {res && res.offenders.length > 0 && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">Trejdovi:</span>
+          <span className="text-xs text-muted-foreground">Trades:</span>
           {res.offenders.map((id) => (
             <Link
               key={id}

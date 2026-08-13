@@ -104,7 +104,7 @@ function RuleRow({ rule }: { rule: PlaybookRule }) {
           <Lock className="size-3" /> {rule.answerCount}
         </Badge>
       )}
-      {retired && <Badge variant="outline">arhivirano</Badge>}
+      {retired && <Badge variant="outline">archived</Badge>}
 
       <Button
         variant="ghost"
@@ -212,7 +212,7 @@ function GroupBlock({ group }: { group: PlaybookGroup }) {
           </SelectContent>
         </Select>
         <Button size="sm" className="h-8" onClick={addRule} disabled={pending}>
-          <Plus className="size-3.5" /> Dodaj
+          <Plus className="size-3.5" /> Add
         </Button>
       </div>
     </div>
@@ -243,7 +243,7 @@ function PlaybookCard({ book }: { book: Playbook }) {
           <span className="text-xs text-muted-foreground">
             {ruleCount} {ruleCount === 1 ? "pravilo" : "pravila"}
           </span>
-          {!book.is_active && <Badge variant="outline">neaktivan</Badge>}
+          {!book.is_active && <Badge variant="outline">inactive</Badge>}
           <div className="ml-auto flex items-center gap-1">
             <Button
               variant="ghost"
@@ -256,8 +256,8 @@ function PlaybookCard({ book }: { book: Playbook }) {
               aria-label={book.is_active ? "Deaktiviraj" : "Aktiviraj"}
               title={
                 book.is_active
-                  ? "Skloni iz izbora na formi. Stari trejdovi ostaju vezani za njega."
-                  : "Vrati u izbor na formi."
+                  ? "Remove from the picker on the form. Old trades stay attached to it."
+                  : "Restore to the picker on the form."
               }
             >
               {book.is_active ? (
@@ -314,7 +314,7 @@ function PlaybookCard({ book }: { book: Playbook }) {
               })
             }
           >
-            <Plus className="size-3.5" /> Grupa
+            <Plus className="size-3.5" /> Group
           </Button>
         </div>
       </CardContent>
@@ -360,7 +360,7 @@ export function PlaybookManager({ playbooks }: { playbooks: Playbook[] }) {
                 return res;
               });
           }}
-          placeholder="Novi playbook, npr. London Reversal"
+          placeholder="New playbook, e.g. London Reversal"
           className="h-9 w-64"
           disabled={pending}
         />

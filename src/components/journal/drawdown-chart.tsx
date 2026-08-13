@@ -49,7 +49,7 @@ export function DrawdownChart({
           <CardTitle className="text-base">Drawdown</CardTitle>
           <p className="mt-1 text-xs text-muted-foreground">
             {basis === "money"
-              ? "Pad ispod vrha kumulativnog P&L-a. Uplate i isplate nisu gubitak."
+              ? "Fall below the peak of cumulative P&L. Deposits and withdrawals are not losses."
               : "Drop below peak equity, including deposits and withdrawals."}
           </p>
         </div>
@@ -72,7 +72,7 @@ export function DrawdownChart({
       <CardContent>
         {data.length <= 1 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            Nema dovoljno zatvorenih trejdova.
+            Not enough closed trades.
           </p>
         ) : (
           <>
@@ -129,7 +129,7 @@ export function DrawdownChart({
                 }
               />
               <Figure
-                label="Datum dna"
+                label="Trough date"
                 value={stats.maxAt ? stats.maxAt.slice(0, 10) : "—"}
               />
               <Figure

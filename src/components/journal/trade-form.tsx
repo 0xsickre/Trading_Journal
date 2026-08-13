@@ -939,8 +939,8 @@ export function TradeForm({
                     </div>
                     {showMarkMissed && (
                       <p className="text-xs text-muted-foreground">
-                        Miss = plan nikad nije otvoren (limit nije udario, setup
-                        propao…).
+                        Miss = the plan was never opened (the limit never hit, the setup
+                        never came…).
                       </p>
                     )}
                   </div>

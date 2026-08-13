@@ -187,7 +187,7 @@ const COLUMN_LABELS: Record<string, string> = {
   gross: "Gross",
   net: "Net",
   status: "Status",
-  chart: "Grafikon",
+  chart: "Chart",
 };
 
 const HIDEABLE_COLUMNS = Object.keys(COLUMN_LABELS);
@@ -643,7 +643,7 @@ export function JournalGrid({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
-                <Columns3 className="size-4" /> Kolone
+                <Columns3 className="size-4" /> Columns
                 {hidden.length > 0 && (
                   <Badge variant="secondary" className="ml-1">
                     {visibleCount(hidden, HIDEABLE_COLUMNS)}/

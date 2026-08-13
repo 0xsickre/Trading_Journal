@@ -34,7 +34,7 @@ import {
 import type { OptionList } from "@/lib/journal/types";
 
 const TYPE_LABELS: Record<FieldDefType, string> = {
-  select: "Izbor iz liste",
+  select: "Pick from a list",
   tags: "Multiple tags",
   text: "Tekst",
   textarea: "Long text",
@@ -135,10 +135,10 @@ function FieldRow({
           }
         >
           <SelectTrigger className="h-8 w-44">
-            <SelectValue placeholder="Lista" />
+            <SelectValue placeholder="List" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">Bez liste (slobodan unos)</SelectItem>
+            <SelectItem value="none">No list (free text)</SelectItem>
             {lists.map((l) => (
               <SelectItem key={l.key} value={l.key}>
                 {l.label}
@@ -149,14 +149,14 @@ function FieldRow({
       )}
 
       <div className="ml-auto flex items-center gap-1">
-        {!def.is_active && <Badge variant="outline">arhivirano</Badge>}
+        {!def.is_active && <Badge variant="outline">archived</Badge>}
         <Button
           variant="ghost"
           size="icon"
           className="size-7"
           disabled={pending || !canUp}
           onClick={() => run(() => moveFieldDef(def.id, -1))}
-          aria-label="Pomeri gore"
+          aria-label="Move up"
         >
           <ChevronUp className="size-3.5" />
         </Button>
@@ -166,7 +166,7 @@ function FieldRow({
           className="size-7"
           disabled={pending || !canDown}
           onClick={() => run(() => moveFieldDef(def.id, 1))}
-          aria-label="Pomeri dole"
+          aria-label="Move down"
         >
           <ChevronDown className="size-3.5" />
         </Button>
@@ -232,7 +232,7 @@ function AddFieldForm({ lists }: { lists: OptionList[] }) {
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();
           }}
-          placeholder="Naziv polja, npr. ATR na ulazu"
+          placeholder="Field name, e.g. ATR at entry"
           className="h-8 w-56"
           disabled={pending}
         />
@@ -263,10 +263,10 @@ function AddFieldForm({ lists }: { lists: OptionList[] }) {
         {NEEDS_LIST(type) && (
           <Select value={listKey} onValueChange={setListKey}>
             <SelectTrigger className="h-8 w-44">
-              <SelectValue placeholder="Lista" />
+              <SelectValue placeholder="List" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Napravi novu listu</SelectItem>
+              <SelectItem value="none">Create a new list</SelectItem>
               {lists.map((l) => (
                 <SelectItem key={l.key} value={l.key}>
                   {l.label}
@@ -321,14 +321,14 @@ export function FieldDefManager({
               <CardTitle className="text-base">
                 {FIELD_DEF_GROUP_LABELS[group]}
                 <span className="ml-2 text-sm font-normal text-muted-foreground">
-                  {inGroup.length} {inGroup.length === 1 ? "polje" : "polja"}
+                  {inGroup.length} {inGroup.length === 1 ? "field" : "fields"}
                 </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {inGroup.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Nema polja u ovoj grupi.
+                  No fields in this group.
                 </p>
               ) : (
                 inGroup.map((def, i) => (

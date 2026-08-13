@@ -122,7 +122,7 @@ export function CompareView({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-muted-foreground">Podeli po</span>
+        <span className="text-sm text-muted-foreground">Split by</span>
         <Select
           value={splitField}
           onValueChange={(v) => {
@@ -143,7 +143,7 @@ export function CompareView({
         </Select>
         <Select value={value} onValueChange={setSplitValue}>
           <SelectTrigger className="h-9 w-52">
-            <SelectValue placeholder="Vrednost" />
+            <SelectValue placeholder="Value" />
           </SelectTrigger>
           <SelectContent>
             {options.map((o) => (
@@ -158,7 +158,7 @@ export function CompareView({
       {!value ? (
         <Card>
           <CardContent className="p-4 text-sm text-muted-foreground">
-            Izaberi vrednost po kojoj se knjiga deli na dva dela.
+            Pick the value that splits the book in two.
           </CardContent>
         </Card>
       ) : (
@@ -208,7 +208,7 @@ export function CompareView({
 
       <p className="text-xs text-muted-foreground">
         The other side is the exact negation of the first, so the two halves make the whole
-        skup — bez preklapanja i bez izgubljenih trejdova.
+        set — no overlap, no lost trades.
       </p>
     </div>
   );

@@ -106,7 +106,7 @@ export async function deletePlaybook(id: string): Promise<Result> {
   if ((count ?? 0) > 0) {
     return {
       ok: false,
-      error: `${count} trejdova koristi ovaj playbook — deaktiviraj ga umesto brisanja.`,
+      error: `${count} trades use this playbook — deactivate it instead of deleting.`,
     };
   }
 
@@ -211,7 +211,7 @@ export async function addPlaybookRule(input: {
   if (!clean) return { ok: false, error: "The rule cannot be empty." };
   const showWhen = input.show_when ?? "always";
   if (!SHOW_WHEN_VALUES.includes(showWhen))
-    return { ok: false, error: "Nepoznata vrednost za „kada se prikazuje“." };
+    return { ok: false, error: "Unknown value for \"when it shows\"." };
 
   const supabase = await createClient();
   const user = await getCurrentUser();
@@ -261,7 +261,7 @@ export async function updatePlaybookRule(
 
   if (patch.show_when != null) {
     if (!SHOW_WHEN_VALUES.includes(patch.show_when))
-      return { ok: false, error: "Nepoznata vrednost za „kada se prikazuje“." };
+      return { ok: false, error: "Unknown value for \"when it shows\"." };
 
     const { data: current } = await supabase
       .from("tj_playbook_rules")

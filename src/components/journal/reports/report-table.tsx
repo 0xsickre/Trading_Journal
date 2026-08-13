@@ -52,7 +52,7 @@ export function ReportTable({
             <>
               {" "}
               · <span className="text-[var(--chart-4)]">
-                {result.excluded} bez vrednosti za ovu dimenziju, izostavljeno
+                {result.excluded} without a value for this dimension, omitted
               </span>
             </>
           )}
@@ -60,7 +60,7 @@ export function ReportTable({
         {result.multiValue && (
           <p className="text-xs text-[var(--chart-4)]">
             One trade can land in several rows, so the sum of the rows{" "}
-            <strong>nije</strong> ukupan P&amp;L.
+            is <strong>not</strong> the overall P&amp;L.
           </p>
         )}
       </CardHeader>
