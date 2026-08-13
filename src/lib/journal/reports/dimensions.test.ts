@@ -203,6 +203,43 @@ describe("process dimensions", () => {
     expect(bucketsOf(dim, over, dimCtx())).toEqual(["Held over weekend"]);
   });
 
+  it("splits trades that outlived their time stop from those that did not", () => {
+    // Mon→Fri is five sessions. Against a 3-day stop that is a breach; against
+    // a 5-day one it is the plan, on the last day of it.
+    const dim = getDimension("time_stop_breached")!;
+    const late = one([{ ...held, timeStopDays: 3 }]);
+    const onTime = one([{ ...held, timeStopDays: 5 }]);
+    expect(bucketsOf(dim, late, dimCtx())).toEqual(["Held past it"]);
+    expect(bucketsOf(dim, onTime, dimCtx())).toEqual(["Exited in time"]);
+  });
+
+  it("excludes a trade that never had a time stop", () => {
+    // Unmeasured, not compliant. Bucketing it as "exited in time" would flatter
+    // every trade logged before the field existed.
+    expect(
+      bucketsOf(getDimension("time_stop_breached")!, one([held]), dimCtx()),
+    ).toEqual([]);
+  });
+
+  it("reads the week grade from the week the trade CLOSED in", () => {
+    // A judgement made after the fact belongs to the week that had the fact —
+    // the same reason the old `day_grade` dimension read the close day.
+    const t = one([held]); // closes Fri 2026-01-09, week of Mon 2026-01-05
+    const ctx = dimCtx([], {
+      weekGradeByWeek: new Map([
+        ["2025-12-29", "F"],
+        ["2026-01-05", "B"],
+      ]),
+    });
+    expect(bucketsOf(getDimension("week_grade")!, t, ctx)).toEqual(["B"]);
+  });
+
+  it("excludes a trade whose week was never reviewed", () => {
+    expect(
+      bucketsOf(getDimension("week_grade")!, one([held]), dimCtx()),
+    ).toEqual([]);
+  });
+
   it("excludes a trade with no entry rather than inventing a bucket", () => {
     // Unrecorded process is unknown, not a value — bucketing it would make an
     // absence look like a finding. A check-in row that exists but answers
@@ -400,6 +437,8 @@ describe("every dimension buckets without throwing", () => {
       // Named so the check-in fixture below joins onto it — the sweep is meant
       // to execute each `valueOf`'s populated path, not its early return.
       id: "rich",
+      timeStopDays: 3,
+      thesis: "Dollar weakness into CPI",
       instrument: "XAUUSD",
       net: 300,
       r: 3,
@@ -425,6 +464,7 @@ describe("every dimension buckets without throwing", () => {
         touched: "partial_exit",
       }),
     ]),
+    weekGradeByWeek: new Map([["2026-01-05", "B"]]),
   });
 
   const all = [...DIMENSIONS, ...customFieldDimensions(TEST_FIELD_DEFS)];

@@ -16,6 +16,7 @@ type Spec = {
   net?: number | null;
   playbook?: boolean;
   stop?: boolean;
+  thesis?: boolean;
 };
 
 function mkRow(s: Spec): TradeRow {
@@ -29,6 +30,7 @@ function mkRow(s: Spec): TradeRow {
     created_at: s.opened,
     playbook_id: s.playbook === false ? null : "pb-1",
     stop_price: s.stop === false ? null : 90,
+    thesis: s.thesis === false ? null : "Written before entry",
     stats: {
       position_id: s.id,
       avg_entry: 100,
@@ -93,6 +95,31 @@ describe("day attribution", () => {
     const d3 = evalDay("2026-03-04", [swing]);
     expect(d3.playbook_linked.verdict).toBe("na");
     expect(d3.stop_loss_set.verdict).toBe("na");
+  });
+
+  it("charges the thesis to the OPEN day, which is the whole rule", () => {
+    // A thesis written afterwards is a rationalisation. The check is that the
+    // reason existed BEFORE the position did, and only the open day can say so
+    // — scoring it on the close day would pass a thesis typed at the exit.
+    const late: Spec = { ...swing, thesis: false };
+    expect(evalDay("2026-03-02", [late]).thesis_written.verdict).toBe("fail");
+    expect(evalDay("2026-03-04", [late]).thesis_written.verdict).toBe("na");
+  });
+
+  it("passes a trade opened with a thesis", () => {
+    expect(evalDay("2026-03-02", [swing]).thesis_written.verdict).toBe("pass");
+  });
+
+  it("does not accept whitespace as a thesis", () => {
+    // Otherwise the rule is satisfied by pressing the spacebar.
+    const blank = { ...mkRow({ ...swing, id: "blank" }), thesis: "   " };
+    const out = evaluateAutoRulesForDay(
+      "2026-03-02",
+      buildTradeDayIndex([blank as TradeRow], () => "UTC"),
+      LIMITS,
+    );
+    expect(out.thesis_written.verdict).toBe("fail");
+    expect(out.thesis_written.offenders).toEqual(["blank"]);
   });
 
   it("fails an open trade with no playbook on its open day", () => {

@@ -30,6 +30,10 @@ export type TradeSpec = {
   plannedRr?: string | null;
   mae?: number | null;
   mfe?: number | null;
+  /** The exit deadline written at entry, in sessions. */
+  timeStopDays?: number | null;
+  /** The reason for the trade, in writing. */
+  thesis?: string | null;
   /** Values for user-defined fields, as they are actually stored. */
   custom?: Record<string, unknown>;
 };
@@ -89,6 +93,8 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     technical_tags: spec.technicalTags ?? [],
     psychology_tags: spec.psychologyTags ?? [],
     planned_rr: spec.plannedRr ?? null,
+    time_stop_days: spec.timeStopDays ?? null,
+    thesis: spec.thesis ?? null,
     stats,
   } as unknown as TradeRow;
 

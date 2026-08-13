@@ -13,6 +13,7 @@
  * describes days you did not live.
  */
 
+import { stringFieldValue } from "../field-values";
 import { zonedDateKey } from "../time";
 import type { AutoRuleKey } from "../tracker-types";
 import type { TradeRow } from "../types";
@@ -56,6 +57,8 @@ export type TrackerTrade = {
   netPl: number | null;
   hasPlaybook: boolean;
   hasStop: boolean;
+  /** A non-empty `thesis` on the row — the reason for the trade, in writing. */
+  hasThesis: boolean;
 };
 
 export type TradeDayIndex = {
@@ -91,6 +94,9 @@ function toTrackerTrade(row: TradeRow, tz: string): TrackerTrade | null {
     netPl: row.stats?.net_pl ?? null,
     hasPlaybook: row.playbook_id != null && row.playbook_id !== "",
     hasStop: row.stop_price != null,
+    // Trimmed: a thesis of three spaces is not a thesis, and storing one would
+    // let the rule be satisfied by pressing the spacebar.
+    hasThesis: (stringFieldValue(row, "thesis") ?? "").trim() !== "",
   };
 }
 
@@ -258,6 +264,11 @@ export function evaluateAutoRulesForDay(
     // Open day for the sharper reason: the point is that the stop existed WHEN
     // YOU ENTERED. Grading it on the close day grades it after the risk is gone.
     stop_loss_set: evalOpenDayFlag("stop_loss_set", opened, (t) => t.hasStop),
+    // Open day, and for this rule it is not a nuance but the entire content of
+    // it. A thesis written after the fact is a rationalisation — the check is
+    // that the reason existed BEFORE the position did, and only the open day
+    // can say that.
+    thesis_written: evalOpenDayFlag("thesis_written", opened, (t) => t.hasThesis),
   };
 }
 

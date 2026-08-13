@@ -11,6 +11,7 @@
 import type { RealizedTrade } from "./analytics";
 import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
 import { numberFieldValue as numField } from "./field-values";
+import { daysBetweenKeys } from "./open-positions";
 import { spansWeekend } from "./weekend-hold";
 import { excursionFromTrade, type Excursion } from "./excursion";
 import { zonedDateKey, zonedWeekStartKey } from "./time";
@@ -59,6 +60,26 @@ export type EnrichedTrade = {
    * running a small self-selected sample worth measuring against the rest.
    */
   weekendHold: boolean;
+  /**
+   * Days held, counted in SESSIONS and inclusive of the open day.
+   *
+   * Not `durationDays`, which is the hold in hours divided by 24. A position
+   * opened at 15:50 Monday and closed at 09:10 Tuesday lasted 0.7 of a day and
+   * spanned two of them — and a time stop written as "3 days" means three
+   * sessions, not seventy-two hours.
+   */
+  heldDays: number;
+  /** The exit deadline written on the trade at entry, if one was. */
+  timeStopDays: number | null;
+  /**
+   * Held STRICTLY past that deadline.
+   *
+   * On the day the time stop is reached the plan is still being followed; the
+   * breach belongs to the day it was broken. Same boundary as
+   * `openPositionsOn`, and deliberately the same — a position flagged live on
+   * `/daily` must not un-flag itself once it closes.
+   */
+  pastTimeStop: boolean;
   entryFills: number;
   exitFills: number;
   size: number | null;
@@ -92,6 +113,11 @@ export function enrichTrades(
     const tradeNo = t.row.trade_no;
     const instrument = (t.row.instrument as string) ?? null;
 
+    const openDay = zonedDateKey(t.row.stats?.opened_at ?? t.closedAt, tz);
+    const closeDay = zonedDateKey(t.closedAt, tz);
+    const heldDays = daysBetweenKeys(openDay, closeDay);
+    const timeStopDays = numField(t.row, "time_stop_days");
+
     return {
       trade: t,
       id: t.id,
@@ -106,10 +132,13 @@ export function enrichTrades(
       durationDays: secs != null ? secs / 86_400 : null,
       openedAt: t.row.stats?.opened_at ?? null,
       closedAt: t.closedAt,
-      openDay: zonedDateKey(t.row.stats?.opened_at ?? t.closedAt, tz),
-      closeDay: zonedDateKey(t.closedAt, tz),
+      openDay,
+      closeDay,
       closeWeek: zonedWeekStartKey(t.closedAt, tz),
       weekendHold: spansWeekend(t.row.stats?.opened_at ?? null, t.closedAt, tz),
+      heldDays,
+      timeStopDays,
+      pastTimeStop: timeStopDays != null && heldDays > timeStopDays,
       entryFills: fills?.entries ?? 0,
       exitFills: fills?.exits ?? 0,
       size: numField(t.row, "position_size"),

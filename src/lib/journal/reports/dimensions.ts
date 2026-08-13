@@ -39,6 +39,14 @@ export type DimensionContext = {
    * one tagged both — the untouched one convicted by the calendar.
    */
   checkinsByPosition?: Map<string, PositionCheckin[]>;
+  /**
+   * Week start (`yyyy-MM-dd`, Monday) → the grade given in that week's review.
+   *
+   * Only the grade: the review's prose is written to be read, not grouped on,
+   * and shipping five paragraphs per week to the browser to render one letter
+   * would be paying for the whole review to draw a bucket label.
+   */
+  weekGradeByWeek?: Map<string, string>;
   /** rule ids that fired per trade id, for the insight dimension. */
   insightsByTrade?: Map<string, string[]>;
   /** Account id → display name. */
@@ -454,10 +462,55 @@ const mentalTempDimension: Dimension = {
   },
 };
 
+/**
+ * Did the position outlive the exit deadline it was given?
+ *
+ * The trade only enters the table if it HAD a deadline — a trade with no time
+ * stop is not "within" one, it is unmeasured, and bucketing it as compliant
+ * would flatter every trade written before the field existed.
+ *
+ * Worth grouping because a time stop is the one rule a swing trader breaks
+ * without noticing. Moving a stop is an act; sitting on a position for a fourth
+ * day is the absence of one, and it is invisible unless something counts it.
+ */
+const timeStopDimension: Dimension = {
+  key: "time_stop_breached",
+  label: "Time stop",
+  group: "derived",
+  order: ["Exited in time", "Held past it"],
+  valueOf: (t) =>
+    t.timeStopDays == null
+      ? null
+      : t.pastTimeStop
+        ? "Held past it"
+        : "Exited in time",
+};
+
+/**
+ * The grade you gave the week this trade closed in.
+ *
+ * The successor to the `day_grade` dimension, which Phase 2 removed. It reads
+ * the CLOSE week for the reason the old one read the close day — the grade is a
+ * judgement made after the fact, so it belongs to the week that had the fact.
+ *
+ * What this can show that the daily version could not: whether the weeks you
+ * rated highly are the weeks that actually paid, which is the check on whether
+ * your own sense of a good week is calibrated at all.
+ */
+const weekGradeDimension: Dimension = {
+  key: "week_grade",
+  label: "Week rating",
+  group: "process",
+  order: ["A", "B", "C", "D", "E", "F"],
+  valueOf: (t, ctx) => ctx.weekGradeByWeek?.get(t.closeWeek) ?? null,
+};
+
 const processDimensions: Dimension[] = [
   touchedDimension,
   thesisDimension,
   weekendHoldDimension,
+  timeStopDimension,
+  weekGradeDimension,
   mentalTempDimension,
 ];
 

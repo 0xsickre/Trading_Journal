@@ -3,6 +3,7 @@ import { getAccounts } from "@/lib/journal/accounts";
 import { getCashEvents } from "@/lib/journal/cash-events";
 import { getDailyReportsLite } from "@/lib/journal/daily-report-queries";
 import { getPositionCheckins } from "@/lib/journal/position-checkin-queries";
+import { getWeekGrades } from "@/lib/journal/weekly-review-queries";
 import { getFillCounts, getTradesWithStats } from "@/lib/journal/trades";
 import { getFieldDefs } from "@/lib/journal/field-defs";
 import { getOptionsMap } from "@/lib/journal/options";
@@ -29,6 +30,7 @@ export default async function ReportsPage() {
     playbooks,
     optionsMap,
     positionCheckins,
+    weekGrades,
   ] = await Promise.all([
     getTradesWithStats(),
     getAccounts(),
@@ -52,6 +54,10 @@ export default async function ReportsPage() {
     // while they were open. A date-bounded read would drop the answers given
     // during a hold that started before the window.
     getPositionCheckins(),
+    // Only the grade per week. The review's prose is written to be read, not
+    // grouped on, and shipping five paragraphs a week to the browser to render
+    // one letter would be paying for the whole review to draw a bucket label.
+    getWeekGrades(),
   ]);
 
   return (
@@ -69,6 +75,7 @@ export default async function ReportsPage() {
           accounts={accounts}
           dailyReports={dailyReports}
           positionCheckins={positionCheckins}
+          weekGrades={weekGrades}
           fillCounts={fillCounts}
           cashEvents={cashEvents}
           fieldDefs={fieldDefs}

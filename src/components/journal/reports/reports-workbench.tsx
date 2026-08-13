@@ -81,6 +81,7 @@ export function ReportsWorkbench({
   accounts,
   dailyReports = [],
   positionCheckins = [],
+  weekGrades,
   fillCounts,
   cashEvents = [],
   fieldDefs = [],
@@ -93,6 +94,8 @@ export function ReportsWorkbench({
   dailyReports?: DailyReportLite[];
   /** Per-position daily check-ins — what `touched` and `thesis_state` group on. */
   positionCheckins?: PositionCheckin[];
+  /** Week start → that week's review grade, for the `week_grade` dimension. */
+  weekGrades?: Map<string, string>;
   fillCounts?: FillCounts;
   cashEvents?: CashEvent[];
   /** User-defined fields — each becomes a groupable dimension on its own. */
@@ -333,6 +336,7 @@ export function ReportsWorkbench({
     () => ({
       reportByDate: new Map(dailyReports.map((r) => [r.report_date, r])),
       checkinsByPosition,
+      weekGradeByWeek: weekGrades,
       insightsByTrade,
       accountNames: new Map(accounts.map((a) => [a.id, a.name])),
       // Tag splits, custom fields and playbook rules all resolve by key
@@ -346,6 +350,7 @@ export function ReportsWorkbench({
     [
       dailyReports,
       checkinsByPosition,
+      weekGrades,
       insightsByTrade,
       accounts,
       tagDimensions,

@@ -15,6 +15,10 @@ export type TradeSpec = {
   stop?: number;
   mae?: number | null;
   mfe?: number | null;
+  /** The exit deadline written at entry, in sessions. */
+  timeStopDays?: number | null;
+  /** The reason for the trade, in writing. */
+  thesis?: string | null;
   direction?: string;
   openedAt?: string;
   closedAt?: string;
@@ -78,6 +82,11 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     // it in the custom bag, the way a real row does.
     custom: spec.macroAlign ? { macro_align: spec.macroAlign } : {},
     cot_filter: spec.cotFilter ?? null,
+    time_stop_days: spec.timeStopDays ?? null,
+    // Defaults to a written thesis so the `entry_without_thesis` rule stays
+    // silent in every fixture that is not about it — a rule that fires across
+    // unrelated suites teaches nothing except to ignore it.
+    thesis: spec.thesis === undefined ? "Written" : spec.thesis,
     instrument: spec.instrument ?? "EURUSD",
     stats,
   } as unknown as TradeRow;

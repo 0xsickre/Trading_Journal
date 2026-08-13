@@ -20,6 +20,7 @@ export const AUTO_RULE_KEYS = [
   "max_loss_per_day",
   "playbook_linked",
   "stop_loss_set",
+  "thesis_written",
 ] as const;
 export type AutoRuleKey = (typeof AUTO_RULE_KEYS)[number];
 
