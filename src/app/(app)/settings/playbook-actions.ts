@@ -3,10 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
-import { SHOW_WHEN_VALUES, type ShowWhen } from "@/lib/journal/playbook-types";
+import {
+  RULE_CATEGORIES,
+  SHOW_WHEN_VALUES,
+  type RuleCategory,
+  type ShowWhen,
+} from "@/lib/journal/playbook-types";
 
 function revalidateAll() {
   revalidatePath("/settings");
+  revalidatePath("/playbooks");
   revalidatePath("/trades/new");
   revalidatePath("/journal");
   revalidatePath("/reports");
@@ -51,27 +57,29 @@ export async function addPlaybook(name: string): Promise<Result> {
     };
   }
 
-  // A playbook with no groups has nowhere to put a rule, so the empty state
-  // would be a dead end. Same three groups the seed uses.
-  const { error: gErr } = await supabase.from("tj_playbook_groups").insert(
-    ["Entry", "Exit", "Market conditions"].map((n, i) => ({
-      user_id: user.id,
-      playbook_id: book.id,
-      name: n,
-      sort_order: i,
-    })),
-  );
-  if (gErr) return { ok: false, error: gErr.message };
-
+  // No starter groups any more. A rule carries its own category, so an empty
+  // playbook is a playbook with nothing linked yet — not a dead end.
   revalidateAll();
   return { ok: true };
 }
 
 export async function updatePlaybook(
   id: string,
-  patch: { name?: string; description?: string | null; is_active?: boolean },
+  patch: {
+    name?: string;
+    description?: string | null;
+    is_active?: boolean;
+    default_risk_pct?: number | null;
+    a_plus_criteria?: string | null;
+  },
 ): Promise<Result> {
-  const next: { name?: string; description?: string | null; is_active?: boolean } = {};
+  const next: {
+    name?: string;
+    description?: string | null;
+    is_active?: boolean;
+    default_risk_pct?: number | null;
+    a_plus_criteria?: string | null;
+  } = {};
   if (patch.name != null) {
     const clean = patch.name.trim();
     if (!clean) return { ok: false, error: "The name cannot be empty." };
@@ -80,6 +88,17 @@ export async function updatePlaybook(
   if (patch.description !== undefined)
     next.description = patch.description?.trim() || null;
   if (patch.is_active != null) next.is_active = patch.is_active;
+  if (patch.a_plus_criteria !== undefined)
+    next.a_plus_criteria = patch.a_plus_criteria?.trim() || null;
+  if (patch.default_risk_pct !== undefined) {
+    const r = patch.default_risk_pct;
+    // Mirrors the DB CHECK so the user reads a sentence, not a constraint. Zero
+    // is refused rather than stored: "risk nothing" is not a default, it is a
+    // cleared field, and null already says that.
+    if (r != null && (!Number.isFinite(r) || r <= 0 || r > 100))
+      return { ok: false, error: "Default risk must be between 0 and 100 %." };
+    next.default_risk_pct = r;
+  }
   if (Object.keys(next).length === 0) return { ok: true };
 
   const supabase = await createClient();
@@ -116,85 +135,67 @@ export async function deletePlaybook(id: string): Promise<Result> {
   return { ok: true };
 }
 
-// --- Groups -----------------------------------------------------------------
+// --- Links: which rules a playbook uses -------------------------------------
+//
+// This replaces the group actions. A group was a name owned by ONE playbook and
+// rules cascaded from it, so removing a rule from a book destroyed the rule and
+// its recorded answers. A link is the opposite: severing it says "this book no
+// longer uses that rule" and leaves the rule, and every answer ever given to
+// it, exactly where they were.
 
-export async function addPlaybookGroup(
+export async function linkRule(
   playbookId: string,
-  name: string,
+  ruleId: string,
 ): Promise<Result> {
-  const clean = name.trim();
-  if (!clean) return { ok: false, error: "The group name cannot be empty." };
-
   const supabase = await createClient();
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Not signed in." };
 
   const { data: last } = await supabase
-    .from("tj_playbook_groups")
+    .from("tj_playbook_rule_links")
     .select("sort_order")
     .eq("playbook_id", playbookId)
     .order("sort_order", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  const { error } = await supabase.from("tj_playbook_groups").insert({
+  const { error } = await supabase.from("tj_playbook_rule_links").insert({
     user_id: user.id,
     playbook_id: playbookId,
-    name: clean,
+    rule_id: ruleId,
     sort_order: (last?.sort_order ?? -1) + 1,
   });
-  if (error) return { ok: false, error: error.message };
-  revalidateAll();
-  return { ok: true };
-}
-
-export async function renamePlaybookGroup(
-  id: string,
-  name: string,
-): Promise<Result> {
-  const clean = name.trim();
-  if (!clean) return { ok: false, error: "The group name cannot be empty." };
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("tj_playbook_groups")
-    .update({ name: clean })
-    .eq("id", id);
-  if (error) return { ok: false, error: error.message };
-  revalidateAll();
-  return { ok: true };
-}
-
-/** Refused while the group still holds live rules — cascade would take them. */
-export async function deletePlaybookGroup(id: string): Promise<Result> {
-  const supabase = await createClient();
-  const { count } = await supabase
-    .from("tj_playbook_rules")
-    .select("id", { count: "exact", head: true })
-    .eq("group_id", id)
-    .is("deleted_at", null);
-
-  if ((count ?? 0) > 0) {
-    return {
-      ok: false,
-      error: "The group still has rules — delete or move them first.",
-    };
-  }
-
-  const { count: archived } = await supabase
-    .from("tj_playbook_rules")
-    .select("id", { count: "exact", head: true })
-    .eq("group_id", id)
-    .not("deleted_at", "is", null);
-
-  if ((archived ?? 0) > 0) {
+  if (error) {
     return {
       ok: false,
       error:
-        "The group holds archived rules whose statistics still sit on old trades — it cannot be deleted.",
+        error.code === "23505"
+          ? "That rule is already in this playbook."
+          : error.message,
     };
   }
+  revalidateAll();
+  return { ok: true };
+}
 
-  const { error } = await supabase.from("tj_playbook_groups").delete().eq("id", id);
+/**
+ * Take a rule out of one playbook.
+ *
+ * Never asks whether the rule has been answered, and that is the whole point of
+ * the library: the answers belong to the RULE, not to this book's use of it. A
+ * rule dropped from OTE keeps every answer it collected there, and keeps
+ * collecting them in whatever other playbook still links it.
+ */
+export async function unlinkRule(
+  playbookId: string,
+  ruleId: string,
+): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tj_playbook_rule_links")
+    .delete()
+    .eq("playbook_id", playbookId)
+    .eq("rule_id", ruleId);
   if (error) return { ok: false, error: error.message };
   revalidateAll();
   return { ok: true };
@@ -202,16 +203,27 @@ export async function deletePlaybookGroup(id: string): Promise<Result> {
 
 // --- Rules ------------------------------------------------------------------
 
+/**
+ * Write a rule into the library, and optionally link it into a playbook.
+ *
+ * `playbook_id` is optional because the two acts are genuinely separate now: a
+ * rule can be written once and linked into three books, or written from inside
+ * one book and linked immediately. Writing it takes the same shape either way,
+ * which is what keeps a rule reused from becoming a rule retyped.
+ */
 export async function addPlaybookRule(input: {
-  group_id: string;
+  category: RuleCategory;
   text: string;
   show_when?: ShowWhen;
+  playbook_id?: string;
 }): Promise<Result> {
   const clean = input.text.trim();
   if (!clean) return { ok: false, error: "The rule cannot be empty." };
   const showWhen = input.show_when ?? "always";
   if (!SHOW_WHEN_VALUES.includes(showWhen))
     return { ok: false, error: "Unknown value for \"when it shows\"." };
+  if (!RULE_CATEGORIES.includes(input.category))
+    return { ok: false, error: "Unknown rule category." };
 
   const supabase = await createClient();
   const user = await getCurrentUser();
@@ -220,19 +232,31 @@ export async function addPlaybookRule(input: {
   const { data: last } = await supabase
     .from("tj_playbook_rules")
     .select("sort_order")
-    .eq("group_id", input.group_id)
+    .eq("category", input.category)
     .order("sort_order", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  const { error } = await supabase.from("tj_playbook_rules").insert({
-    user_id: user.id,
-    group_id: input.group_id,
-    text: clean,
-    show_when: showWhen,
-    sort_order: (last?.sort_order ?? -1) + 1,
-  });
-  if (error) return { ok: false, error: error.message };
+  const { data: rule, error } = await supabase
+    .from("tj_playbook_rules")
+    .insert({
+      user_id: user.id,
+      category: input.category,
+      text: clean,
+      show_when: showWhen,
+      sort_order: (last?.sort_order ?? -1) + 1,
+    })
+    .select("id")
+    .single();
+  if (error || !rule) {
+    return { ok: false, error: error?.message ?? "Insert failed" };
+  }
+
+  if (input.playbook_id) {
+    const link = await linkRule(input.playbook_id, rule.id);
+    if (!link.ok) return link;
+  }
+
   revalidateAll();
   return { ok: true };
 }
@@ -248,13 +272,22 @@ export async function addPlaybookRule(input: {
  */
 export async function updatePlaybookRule(
   id: string,
-  patch: { text?: string; show_when?: ShowWhen },
+  patch: { text?: string; show_when?: ShowWhen; category?: RuleCategory },
 ): Promise<Result> {
-  const next: { text?: string; show_when?: ShowWhen } = {};
+  const next: { text?: string; show_when?: ShowWhen; category?: RuleCategory } = {};
   if (patch.text != null) {
     const clean = patch.text.trim();
     if (!clean) return { ok: false, error: "The rule cannot be empty." };
     next.text = clean;
+  }
+  // Unlike `show_when`, the category is NOT frozen once answered. It only
+  // decides where the rule is drawn; no statistic counts a denominator from it,
+  // so moving "waited for the sweep" from entry to context changes nothing that
+  // was already measured.
+  if (patch.category != null) {
+    if (!RULE_CATEGORIES.includes(patch.category))
+      return { ok: false, error: "Unknown rule category." };
+    next.category = patch.category;
   }
 
   const supabase = await createClient();

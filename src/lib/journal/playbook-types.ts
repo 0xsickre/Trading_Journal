@@ -14,15 +14,54 @@ export const SHOW_WHEN_VALUES = ["always", "winner", "loser", "breakeven"] as co
 export type ShowWhen = (typeof SHOW_WHEN_VALUES)[number];
 
 export const SHOW_WHEN_LABELS: Record<ShowWhen, string> = {
-  always: "Uvek",
+  always: "Always",
   winner: "Winners only",
   loser: "Losers only",
   breakeven: "Breakeven only",
 };
 
+/**
+ * Where a rule sits in the sequence of a trade.
+ *
+ * This replaces the per-playbook group. A group was a name owned by ONE
+ * playbook, so "Entry" under OTE and "Entry" under Order Block were two
+ * unrelated rows — and a rule could only ever belong to one of them. The
+ * category belongs to the RULE, which is what lets the same rule be linked into
+ * several playbooks and keep one id, and therefore one set of answers.
+ *
+ * Closed set, mirroring the DB CHECK, in the order a trade is actually thought
+ * through. `no_trade` is the one with no predecessor in the old schema: nothing
+ * could express "this is when I stand aside", which is the decision a playbook
+ * most needs to make explicit.
+ */
+export const RULE_CATEGORIES = [
+  "context",
+  "entry",
+  "management",
+  "exit",
+  "no_trade",
+] as const;
+export type RuleCategory = (typeof RULE_CATEGORIES)[number];
+
+export const RULE_CATEGORY_LABELS: Record<RuleCategory, string> = {
+  context: "Context",
+  entry: "Entry",
+  management: "Management",
+  exit: "Exit",
+  no_trade: "No-trade",
+};
+
+export const RULE_CATEGORY_HINTS: Record<RuleCategory, string> = {
+  context: "The standing read, before you look for an entry.",
+  entry: "What has to be true at the moment you take it.",
+  management: "What you do — and do not do — while it runs.",
+  exit: "How the position comes off.",
+  no_trade: "When you stand aside. Answered false on a trade you took anyway.",
+};
+
 export type PlaybookRule = {
   id: string;
-  group_id: string;
+  category: RuleCategory;
   text: string;
   show_when: ShowWhen;
   sort_order: number;
@@ -35,14 +74,6 @@ export type PlaybookRule = {
   answerCount: number;
 };
 
-export type PlaybookGroup = {
-  id: string;
-  playbook_id: string;
-  name: string;
-  sort_order: number;
-  rules: PlaybookRule[];
-};
-
 export type Playbook = {
   id: string;
   name: string;
@@ -51,8 +82,26 @@ export type Playbook = {
   icon: string | null;
   is_active: boolean;
   sort_order: number;
-  groups: PlaybookGroup[];
+  /**
+   * Suggested risk for this setup. Prefills the trade form only into an EMPTY
+   * field — a deliberate 0.5 % on a marginal setup is never overwritten.
+   */
+  default_risk_pct: number | null;
+  /** What earns an A+ grade here. Shown beside `setup_grade` on the form. */
+  a_plus_criteria: string | null;
+  /** The rules linked into this playbook, in link order within each category. */
+  rules: PlaybookRule[];
 };
+
+/** Rules bucketed by category, in `RULE_CATEGORIES` order, empties dropped. */
+export function rulesByCategory(
+  rules: readonly PlaybookRule[],
+): { category: RuleCategory; rules: PlaybookRule[] }[] {
+  return RULE_CATEGORIES.map((category) => ({
+    category,
+    rules: rules.filter((r) => r.category === category),
+  })).filter((g) => g.rules.length > 0);
+}
 
 /** One trade's answer for one rule. `followed: null` means "not answered". */
 export type PositionRule = {

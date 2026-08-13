@@ -169,7 +169,9 @@ function ruleIdsByText(rules: RuleLookup): Map<string, Set<string>> {
  *
  * Rule text is indexed across ALL rules, retired ones included: a retired rule's
  * historical answers are real observations, and losing its name would turn them
- * into rows labelled by a uuid.
+ * into rows labelled by a uuid. Pass the library, not just the linked rules,
+ * when the caller has it — a rule unlinked from every playbook still names its
+ * own history.
  *
  * Lives here rather than in the reports screen because the dashboard needs the
  * same lookup for the follow rate that feeds Process Adherence, and two copies
@@ -179,20 +181,19 @@ export function buildPlaybookLookup(
   playbooks: readonly {
     id: string;
     name: string;
-    groups: readonly {
-      rules: readonly { id: string; text: string; show_when: ShowWhen }[];
-    }[];
+    rules: readonly { id: string; text: string; show_when: ShowWhen }[];
   }[],
   answersByTrade?: Map<string, PositionRule[]>,
 ): PlaybookLookup {
   const text = new Map<string, string>();
   const showWhen = new Map<string, ShowWhen>();
+  // One pass over links, and a rule shared by two playbooks is simply seen
+  // twice with the same id — which is the point of the library. Before, the
+  // same wording under two books carried two ids and its statistics split.
   for (const book of playbooks) {
-    for (const group of book.groups) {
-      for (const rule of group.rules) {
-        text.set(rule.id, rule.text);
-        showWhen.set(rule.id, rule.show_when);
-      }
+    for (const rule of book.rules) {
+      text.set(rule.id, rule.text);
+      showWhen.set(rule.id, rule.show_when);
     }
   }
   return {

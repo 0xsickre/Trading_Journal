@@ -508,12 +508,10 @@ export function TradeForm({
             : ("breakeven" as const);
 
     const out: Record<string, boolean> = {};
-    for (const group of book.groups) {
-      for (const rule of group.rules) {
-        if (!ruleAppliesTo(rule.show_when, outcome)) continue;
-        const v = ruleAnswers[rule.id];
-        if (v !== undefined) out[rule.id] = v;
-      }
+    for (const rule of book.rules) {
+      if (!ruleAppliesTo(rule.show_when, outcome)) continue;
+      const v = ruleAnswers[rule.id];
+      if (v !== undefined) out[rule.id] = v;
     }
     return out;
   }, [playbooks, playbookId, ruleAnswers, metrics.netPl]);

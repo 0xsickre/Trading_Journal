@@ -233,13 +233,9 @@ describe("follow_rate is the one metric that depends on WHICH bucket it is in", 
         {
           id: "pb",
           name: "Book",
-          groups: [
-            {
-              rules: [
-                { id: "r1", text: "Waited for confirmation", show_when: "always" },
-                { id: "r2", text: "Sized to plan", show_when: "always" },
-              ],
-            },
+          rules: [
+            { id: "r1", text: "Waited for confirmation", show_when: "always" },
+            { id: "r2", text: "Sized to plan", show_when: "always" },
           ],
         },
       ],

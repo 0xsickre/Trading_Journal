@@ -11,14 +11,22 @@ import { NewListForm } from "@/components/journal/new-list-form";
 import { FieldDefManager } from "@/components/journal/field-def-manager";
 import { getFieldDefs } from "@/lib/journal/field-defs";
 import { PlaybookManager } from "@/components/journal/playbook-manager";
-import { getPlaybooks } from "@/lib/journal/playbooks";
+import { getPlaybooks, getRuleLibrary } from "@/lib/journal/playbooks";
 import { TrackerRuleManager } from "@/components/journal/tracker-rule-manager";
 import { getTrackerRules } from "@/lib/journal/tracker/queries";
 import { PageHeader } from "@/components/app/page-header";
 
 export default async function SettingsPage() {
-  const [lists, instruments, accounts, cashEvents, fieldDefs, playbooks, trackerRules] =
-    await Promise.all([
+  const [
+    lists,
+    instruments,
+    accounts,
+    cashEvents,
+    fieldDefs,
+    playbooks,
+    ruleLibrary,
+    trackerRules,
+  ] = await Promise.all([
       getListsWithItems(false),
       getInstruments(false),
       getAccounts(),
@@ -27,6 +35,10 @@ export default async function SettingsPage() {
       getFieldDefs(false),
       // Retired rules included, for the same reason.
       getPlaybooks({ includeDeleted: true }),
+      // The whole library, not only the linked rules: the manager offers an
+      // existing rule for re-linking, which is what stops a second playbook
+      // retyping it into a new id with empty statistics.
+      getRuleLibrary({ includeDeleted: true }),
       getTrackerRules({ includeRetired: true }),
     ]);
 
@@ -76,7 +88,7 @@ export default async function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="playbooks">
-          <PlaybookManager playbooks={playbooks} />
+          <PlaybookManager playbooks={playbooks} library={ruleLibrary} />
         </TabsContent>
 
         <TabsContent value="fields">

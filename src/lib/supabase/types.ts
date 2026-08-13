@@ -708,49 +708,53 @@ export type Database = {
         }
         Relationships: []
       }
-      tj_playbook_groups: {
+      tj_playbook_rule_links: {
         Row: {
           created_at: string
           id: string
-          name: string
           playbook_id: string
+          rule_id: string
           sort_order: number
-          updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
-          name: string
           playbook_id: string
+          rule_id: string
           sort_order?: number
-          updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
-          name?: string
           playbook_id?: string
+          rule_id?: string
           sort_order?: number
-          updated_at?: string
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "tj_playbook_groups_playbook_id_fkey"
+            foreignKeyName: "tj_playbook_rule_links_playbook_id_fkey"
             columns: ["playbook_id"]
             isOneToOne: false
             referencedRelation: "tj_playbooks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tj_playbook_rule_links_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "tj_playbook_rules"
             referencedColumns: ["id"]
           },
         ]
       }
       tj_playbook_rules: {
         Row: {
+          category: string
           created_at: string
           deleted_at: string | null
-          group_id: string
           id: string
           show_when: string
           sort_order: number
@@ -759,9 +763,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          category?: string
           created_at?: string
           deleted_at?: string | null
-          group_id: string
           id?: string
           show_when?: string
           sort_order?: number
@@ -770,9 +774,9 @@ export type Database = {
           user_id: string
         }
         Update: {
+          category?: string
           created_at?: string
           deleted_at?: string | null
-          group_id?: string
           id?: string
           show_when?: string
           sort_order?: number
@@ -780,20 +784,14 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "tj_playbook_rules_group_id_fkey"
-            columns: ["group_id"]
-            isOneToOne: false
-            referencedRelation: "tj_playbook_groups"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       tj_playbooks: {
         Row: {
+          a_plus_criteria: string | null
           color: string | null
           created_at: string
+          default_risk_pct: number | null
           description: string | null
           icon: string | null
           id: string
@@ -804,8 +802,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          a_plus_criteria?: string | null
           color?: string | null
           created_at?: string
+          default_risk_pct?: number | null
           description?: string | null
           icon?: string | null
           id?: string
@@ -816,8 +816,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          a_plus_criteria?: string | null
           color?: string | null
           created_at?: string
+          default_risk_pct?: number | null
           description?: string | null
           icon?: string | null
           id?: string

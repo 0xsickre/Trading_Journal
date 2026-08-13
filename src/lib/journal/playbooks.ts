@@ -3,9 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { selectAllPages } from "@/lib/supabase/paginate";
 import type {
   Playbook,
-  PlaybookGroup,
   PlaybookRule,
   PositionRule,
+  RuleCategory,
   ShowWhen,
 } from "./playbook-types";
 
@@ -13,12 +13,14 @@ export type { Playbook, PositionRule } from "./playbook-types";
 
 type RuleRow = {
   id: string;
-  group_id: string;
+  category: string;
   text: string;
   show_when: string;
   sort_order: number;
   deleted_at: string | null;
 };
+
+type LinkRow = { playbook_id: string; rule_id: string; sort_order: number };
 
 /**
  * Playbooks with their groups and rules.
@@ -51,24 +53,25 @@ export async function getPlaybooks(
 ): Promise<Playbook[]> {
   const supabase = await createClient();
 
-  const [{ data: books }, { data: groups }, rules, counts] = await Promise.all([
+  const [{ data: books }, { data: links }, rules, counts] = await Promise.all([
     supabase
       .from("tj_playbooks")
-      .select("id,name,description,color,icon,is_active,sort_order")
+      .select(
+        "id,name,description,color,icon,is_active,sort_order,default_risk_pct,a_plus_criteria",
+      )
       .order("sort_order")
       .order("id"),
     supabase
-      .from("tj_playbook_groups")
-      .select("id,playbook_id,name,sort_order")
+      .from("tj_playbook_rule_links")
+      .select("playbook_id,rule_id,sort_order")
       .order("sort_order")
       .order("id"),
-    // Rule count is unbounded in principle — a book with many groups and a few
-    // years of iteration passes a page easily, and a short page would silently
-    // drop rules from a checklist.
+    // The LIBRARY, not one book's rules: every rule the user has written, so the
+    // manager can offer them for linking and the lookup can name a retired one.
     selectAllPages<RuleRow>((from, to) =>
       supabase
         .from("tj_playbook_rules")
-        .select("id,group_id,text,show_when,sort_order,deleted_at")
+        .select("id,category,text,show_when,sort_order,deleted_at")
         .order("sort_order")
         .order("id")
         .range(from, to),
@@ -76,32 +79,75 @@ export async function getPlaybooks(
     positionRules ? countAnswersByRule(positionRules) : ruleAnswerCounts(),
   ]);
 
-  const rulesByGroup = new Map<string, PlaybookRule[]>();
+  const byId = new Map<string, PlaybookRule>();
+  const library: PlaybookRule[] = [];
   for (const r of rules) {
     if (!includeDeleted && r.deleted_at != null) continue;
-    const bucket = rulesByGroup.get(r.group_id) ?? [];
-    bucket.push({
+    const rule: PlaybookRule = {
       id: r.id,
-      group_id: r.group_id,
+      category: r.category as RuleCategory,
       text: r.text,
       show_when: r.show_when as ShowWhen,
       sort_order: r.sort_order,
       deleted_at: r.deleted_at,
       answerCount: counts.get(r.id) ?? 0,
-    });
-    rulesByGroup.set(r.group_id, bucket);
+    };
+    byId.set(r.id, rule);
+    library.push(rule);
   }
 
-  const groupsByBook = new Map<string, PlaybookGroup[]>();
-  for (const g of groups ?? []) {
-    const bucket = groupsByBook.get(g.playbook_id) ?? [];
-    bucket.push({ ...g, rules: rulesByGroup.get(g.id) ?? [] });
-    groupsByBook.set(g.playbook_id, bucket);
+  // A link to a rule filtered out above (retired, with includeDeleted false) is
+  // skipped rather than left as a hole — the checklist must not offer it, and a
+  // placeholder row would be a rule with no text.
+  const rulesByBook = new Map<string, PlaybookRule[]>();
+  for (const l of (links ?? []) as LinkRow[]) {
+    const rule = byId.get(l.rule_id);
+    if (!rule) continue;
+    const bucket = rulesByBook.get(l.playbook_id) ?? [];
+    bucket.push(rule);
+    rulesByBook.set(l.playbook_id, bucket);
   }
 
   return (books ?? [])
     .filter((b) => !activeOnly || b.is_active)
-    .map((b) => ({ ...b, groups: groupsByBook.get(b.id) ?? [] }));
+    .map((b) => ({ ...b, rules: rulesByBook.get(b.id) ?? [] }));
+}
+
+/**
+ * Every rule the user has written, regardless of which playbooks use it.
+ *
+ * The manager needs this to offer existing rules for linking — the whole point
+ * of the library being flat. Derived from the same read as `getPlaybooks` when
+ * both are wanted; kept separate so a caller that only lists rules does not
+ * also drain the links.
+ */
+export async function getRuleLibrary(
+  { includeDeleted = false } = {},
+): Promise<PlaybookRule[]> {
+  const supabase = await createClient();
+  const [rules, counts] = await Promise.all([
+    selectAllPages<RuleRow>((from, to) =>
+      supabase
+        .from("tj_playbook_rules")
+        .select("id,category,text,show_when,sort_order,deleted_at")
+        .order("sort_order")
+        .order("id")
+        .range(from, to),
+    ),
+    ruleAnswerCounts(),
+  ]);
+
+  return rules
+    .filter((r) => includeDeleted || r.deleted_at == null)
+    .map((r) => ({
+      id: r.id,
+      category: r.category as RuleCategory,
+      text: r.text,
+      show_when: r.show_when as ShowWhen,
+      sort_order: r.sort_order,
+      deleted_at: r.deleted_at,
+      answerCount: counts.get(r.id) ?? 0,
+    }));
 }
 
 /** Per-rule answer counts from answers already in hand. No query. */

@@ -11,7 +11,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { ruleAppliesTo, type Playbook } from "@/lib/journal/playbook-types";
+import {
+  RULE_CATEGORY_LABELS,
+  ruleAppliesTo,
+  rulesByCategory,
+  type Playbook,
+} from "@/lib/journal/playbook-types";
 
 /**
  * Playbook picker plus the rule checklist.
@@ -57,14 +62,14 @@ export function PlaybookChecklist({
     return "breakeven";
   }, [netPl]);
 
+  // Bucketed by the rule's own category rather than by a group owned by this
+  // playbook. Same reading order every time — context, entry, management, exit,
+  // no-trade — so a rule sits in the same place whichever book it is linked in.
   const visibleGroups = useMemo(
     () =>
-      (book?.groups ?? [])
-        .map((g) => ({
-          ...g,
-          rules: g.rules.filter((r) => ruleAppliesTo(r.show_when, outcome)),
-        }))
-        .filter((g) => g.rules.length > 0),
+      rulesByCategory(
+        (book?.rules ?? []).filter((r) => ruleAppliesTo(r.show_when, outcome)),
+      ),
     [book, outcome],
   );
 
@@ -123,15 +128,15 @@ export function PlaybookChecklist({
 
       {book == null ? (
         <p className="text-sm text-muted-foreground">
-          Pick a playbook to get the checklist of its rules. Every rule carries its
-          own statistics — that is how you see which one really carries edge and which
-          je samo ritual.
+          Pick a playbook to get the checklist of its rules. Every rule carries
+          its own statistics — that is how you see which one really carries edge
+          and which one is just ritual.
         </p>
       ) : visibleGroups.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          {book.groups.some((g) => g.rules.length > 0)
+          {book.rules.length > 0
             ? "No rule applies to this outcome yet."
-            : "This playbook has no rules yet — add them in Settings."}
+            : "This playbook has no rules linked yet — add them under Playbooks."}
         </p>
       ) : (
         <div className="space-y-4">
@@ -141,9 +146,9 @@ export function PlaybookChecklist({
           </div>
 
           {visibleGroups.map((group) => (
-            <div key={group.id} className="space-y-1.5">
+            <div key={group.category} className="space-y-1.5">
               <h4 className="text-xs font-semibold text-muted-foreground">
-                {group.name}
+                {RULE_CATEGORY_LABELS[group.category]}
               </h4>
               {group.rules.map((rule) => {
                 const value = answers[rule.id];
