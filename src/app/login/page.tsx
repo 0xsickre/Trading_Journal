@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { LineChart } from "lucide-react";
+import { ThemeToggle } from "@/components/app/theme-toggle";
 
 const initial: AuthState = {};
 
@@ -25,7 +26,14 @@ export default function LoginPage() {
   );
 
   return (
-    <div className="flex min-h-svh items-center justify-center p-4">
+    <div className="relative flex min-h-svh items-center justify-center p-4">
+      {/* The sidebar carries the switch everywhere else, and there is no sidebar
+          here — so without this, the one screen a signed-out reader can reach is
+          the one screen whose theme they cannot change. */}
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
+
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
           <div className="flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">

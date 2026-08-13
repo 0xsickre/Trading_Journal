@@ -93,40 +93,50 @@ export function AppSidebar({ email }: { email: string | null }) {
  * Flat, because a strip this narrow has no room for section headings — but it
  * reads `NAV_ITEMS`, which is derived from the sections, so it stays in the same
  * order as the sidebar without repeating the list.
+ *
+ * TWO BOXES, not one scrolling row. The nav scrolls sideways because nine
+ * entries never fit a phone; the theme switch must NOT, or it would sit off the
+ * right edge on every screen and be reachable only by scrolling a strip nobody
+ * scrolls to the end of. It is pinned outside the scroll container instead.
  */
 export function MobileTopbar() {
   const pathname = usePathname();
   const PrimaryIcon = PRIMARY_ACTION.icon;
 
   return (
-    <div className="flex items-center gap-1 overflow-x-auto border-b px-2 py-2 md:hidden">
-      <Link
-        href={PRIMARY_ACTION.href}
-        aria-label={PRIMARY_ACTION.label}
-        className="flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-primary-foreground"
-      >
-        <PrimaryIcon className="size-3.5" />
-        New
-      </Link>
-      {NAV_ITEMS.map((item) => {
-        const active = isActive(pathname, item.href);
-        const Icon = item.icon;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium whitespace-nowrap",
-              active
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-muted-foreground",
-            )}
-          >
-            <Icon className="size-3.5" />
-            {item.label}
-          </Link>
-        );
-      })}
+    <div className="flex items-center gap-2 border-b px-2 py-2 md:hidden">
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+        <Link
+          href={PRIMARY_ACTION.href}
+          aria-label={PRIMARY_ACTION.label}
+          className="flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-primary-foreground"
+        >
+          <PrimaryIcon className="size-3.5" />
+          New
+        </Link>
+        {NAV_ITEMS.map((item) => {
+          const active = isActive(pathname, item.href);
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium whitespace-nowrap",
+                active
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-muted-foreground",
+              )}
+            >
+              <Icon className="size-3.5" />
+              {item.label}
+            </Link>
+          );
+        })}
+      </div>
+      <div className="shrink-0">
+        <ThemeToggle />
+      </div>
     </div>
   );
 }
