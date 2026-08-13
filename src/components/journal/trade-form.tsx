@@ -55,6 +55,7 @@ import {
   computeRiskAmount,
   formatPlannedRewardR,
   inferDirectionFromPrices,
+  matchRiskOption,
   parseRiskPct,
   riskPlanFieldVisible,
   thesisGroupVisible,
@@ -199,6 +200,32 @@ export function TradeForm({
   const [ruleAnswers, setRuleAnswers] = useState<Record<string, boolean>>(
     initial?.rule_answers ?? {},
   );
+
+  const activeBook = playbooks.find((p) => p.id === playbookId) ?? null;
+
+  /**
+   * Picking a playbook offers its default risk — into an EMPTY field only.
+   *
+   * A suggestion, never a correction. A deliberate 0.5 % on a marginal setup is
+   * the trader overriding their own default, and a prefill that overwrote it
+   * would be the form arguing with the person filling it in.
+   *
+   * The option list is the source of truth for what "1 %" looks like as a
+   * value: the field is a select over `risk_pct` options, so a playbook default
+   * that has no matching option cannot be offered at all rather than being
+   * written as a string the picker will not show.
+   */
+  function pickPlaybook(id: string | null) {
+    setPlaybookId(id);
+    const book = playbooks.find((p) => p.id === id);
+    const pct = book?.default_risk_pct;
+    if (pct == null) return;
+    setFields((prev) => {
+      if (prev.risk_pct != null && prev.risk_pct !== "") return prev;
+      const match = matchRiskOption(optionsMap.risk_pct ?? [], pct);
+      return match ? { ...prev, risk_pct: match } : prev;
+    });
+  }
 
   function setRuleAnswer(ruleId: string, followed: boolean | null) {
     setRuleAnswers((prev) => {
@@ -847,6 +874,18 @@ export function TradeForm({
                             }
                           : undefined
                       }
+                      // The playbook's own A+ definition, next to the grade it
+                      // grades. An A+ label that changes nothing about size or
+                      // management is decoration; having the criterion in front
+                      // of you while you pick the grade is what makes it a
+                      // judgement instead of a mood.
+                      groupNote={
+                        tab.id === "plan" &&
+                        group.id === "setup" &&
+                        activeBook?.a_plus_criteria
+                          ? `A+ for ${activeBook.name}: ${activeBook.a_plus_criteria}`
+                          : null
+                      }
                       fieldHints={
                         tab.id === "plan" &&
                         group.id === "risk_plan" &&
@@ -898,7 +937,7 @@ export function TradeForm({
                   <PlaybookChecklist
                     playbooks={playbooks}
                     playbookId={playbookId}
-                    onPlaybookChange={setPlaybookId}
+                    onPlaybookChange={pickPlaybook}
                     conviction={conviction}
                     onConvictionChange={setConviction}
                     answers={ruleAnswers}
@@ -1171,6 +1210,7 @@ function FormGroupSection({
   tradeNo,
   onTradeNoChange,
   riskNote,
+  groupNote,
   nested,
 }: {
   group: FormGroup;
@@ -1192,6 +1232,8 @@ function FormGroupSection({
   onTradeNoChange?: (value: string) => void;
   /** What the chosen risk % is worth in money — the number that makes you look twice. */
   riskNote?: string | null;
+  /** A line of context for the whole group, shown under its fields. */
+  groupNote?: string | null;
   nested?: boolean;
 }) {
   const entry = n(String(fields.entry_price ?? ""));
@@ -1262,6 +1304,9 @@ function FormGroupSection({
       </div>
       {riskNote && (
         <p className="text-xs text-muted-foreground">{riskNote}</p>
+      )}
+      {groupNote && (
+        <p className="text-xs text-muted-foreground">{groupNote}</p>
       )}
       {onAddEntryFill && group.id === "risk_plan" && (
         <Button type="button" variant="outline" size="sm" onClick={onAddEntryFill}>

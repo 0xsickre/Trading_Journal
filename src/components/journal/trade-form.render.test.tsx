@@ -485,3 +485,84 @@ describe("the chart can be attached before the trade exists", () => {
     expect(inputs[0]).toHaveValue("https://www.tradingview.com/x/AbC123/");
   });
 });
+
+describe("the playbook offers its risk, and never argues with you", () => {
+  const BOOK = {
+    id: "pb1",
+    name: "ICT 2022",
+    description: null,
+    color: null,
+    icon: null,
+    is_active: true,
+    sort_order: 0,
+    default_risk_pct: 1,
+    a_plus_criteria: "Sweep of a daily level, MSS with displacement",
+    rules: [],
+  };
+  const RISK_OPTIONS = {
+    risk_pct: [
+      { id: "o1", value: "0.5%", label: "0.5%", color: null, is_active: true, sort_order: 0 },
+      { id: "o2", value: "1%", label: "1%", color: null, is_active: true, sort_order: 1 },
+    ],
+  } as never;
+
+  // The "fills an empty field" half is asserted in plan-calculations.test.ts via
+  // `matchRiskOption`. Driving it here would mean opening a Radix Select in
+  // jsdom — a test that fails on the widget rather than on the behaviour.
+
+  it("does NOT overwrite a risk % already chosen", async () => {
+    // The whole contract. A deliberate 0.5 % on a marginal setup is the trader
+    // overriding their own default; a prefill that replaced it would be the
+    // form arguing with the person filling it in.
+    render(
+      <TradeForm
+        optionsMap={RISK_OPTIONS}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        playbooks={[BOOK]}
+        accountEquity={{ "acc-1": 42_000 }}
+        initial={baseInitial({
+          status: "planned",
+          playbook_id: "pb1",
+          fields: {
+            instrument: "EURUSD",
+            entry_price: "100",
+            stop_price: "90",
+            risk_pct: "0.5%",
+          },
+        })}
+      />,
+    );
+    // 0.5 % of 42 000 = 210. If the playbook's 1 % had overwritten it, this
+    // would read 420.
+    expect(screen.getByText(/Risking .*210/)).toBeInTheDocument();
+  });
+
+  it("puts the playbook's A+ criterion in front of the setup grade", async () => {
+    render(
+      <TradeForm
+        optionsMap={RISK_OPTIONS}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        playbooks={[BOOK]}
+        initial={baseInitial({ status: "planned", playbook_id: "pb1" })}
+      />,
+    );
+    expect(
+      screen.getByText(/A\+ for ICT 2022: Sweep of a daily level/),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing when the playbook has no A+ criterion", async () => {
+    render(
+      <TradeForm
+        optionsMap={RISK_OPTIONS}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        playbooks={[{ ...BOOK, a_plus_criteria: null }]}
+        initial={baseInitial({ status: "planned", playbook_id: "pb1" })}
+      />,
+    );
+    expect(screen.queryByText(/A\+ for/)).not.toBeInTheDocument();
+  });
+});

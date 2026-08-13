@@ -7,6 +7,7 @@ import {
   parsePlannedRewardR,
   parseRiskPct,
   computeRiskAmount,
+  matchRiskOption,
   riskPlanFieldVisible,
   thesisGroupVisible,
 } from "./plan-calculations";
@@ -304,5 +305,31 @@ describe("computeRiskAmount", () => {
     });
     const risk = computeRiskAmount({ balance, riskPct });
     expect(size).toBeCloseTo(risk! / (2 * 1), 10);
+  });
+});
+
+describe("matchRiskOption", () => {
+  const OPTIONS = [{ value: "0.5%" }, { value: "1%" }, { value: "2%" }];
+
+  it("finds the option a playbook default stands for", () => {
+    expect(matchRiskOption(OPTIONS, 1)).toBe("1%");
+    expect(matchRiskOption(OPTIONS, 0.5)).toBe("0.5%");
+  });
+
+  it("compares as numbers, not as strings", () => {
+    // The user's list may spell it "1.0 %"; the playbook stores 1.
+    expect(matchRiskOption([{ value: "1.0 %" }], 1)).toBe("1.0 %");
+  });
+
+  it("offers nothing when the list has no such option", () => {
+    // Writing "3%" into a select without it would leave the control blank while
+    // the form believed a risk was chosen — a blank that looks answered.
+    expect(matchRiskOption(OPTIONS, 3)).toBeNull();
+    expect(matchRiskOption([], 1)).toBeNull();
+  });
+
+  it("offers nothing for a playbook with no default", () => {
+    expect(matchRiskOption(OPTIONS, null)).toBeNull();
+    expect(matchRiskOption(OPTIONS, undefined)).toBeNull();
   });
 });

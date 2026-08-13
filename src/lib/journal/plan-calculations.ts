@@ -188,6 +188,26 @@ export function riskPlanFieldVisible(
 }
 
 /**
+ * The risk-% option that stands for a playbook's default.
+ *
+ * The field is a SELECT over the user's own `risk_pct` list, so a default of 1
+ * has to be matched to whatever that list calls it — "1%", "1 %", "1.0%". Values
+ * are compared as numbers through `parseRiskPct`, never as strings.
+ *
+ * Null when nothing matches, and the caller then offers nothing. Writing "1%"
+ * into a select that has no such option would leave the control blank while the
+ * form believed a risk was chosen — worse than leaving it empty, because the
+ * blank looks answered.
+ */
+export function matchRiskOption(
+  options: readonly { value: string }[],
+  pct: number | null | undefined,
+): string | null {
+  if (pct == null) return null;
+  return options.find((o) => parseRiskPct(o.value) === pct)?.value ?? null;
+}
+
+/**
  * Is the "Why this trade" group answerable yet?
  *
  * The same gate as `risk_pct` and `target_price`: entry and stop define the
