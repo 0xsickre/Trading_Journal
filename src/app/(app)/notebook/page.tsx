@@ -5,6 +5,7 @@ import {
 } from "@/lib/journal/notes/queries";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { NotebookWorkbench } from "@/components/journal/notebook-workbench";
+import { PageHeader } from "@/components/app/page-header";
 
 export default async function NotebookPage() {
   const [folders, notes, tags, trades] = await Promise.all([
@@ -28,14 +29,10 @@ export default async function NotebookPage() {
 
   return (
     <div className="space-y-5">
-      <div className="min-w-0">
-        <h1 className="text-2xl font-semibold">Notebook</h1>
-        <p className="text-muted-foreground">
-          Longer writing — a weekly review, a market observation, a thought about one
-          trade. The daily report stays a form with fixed questions; here you
-          write freely.
-        </p>
-      </div>
+      <PageHeader
+        title="Notebook"
+        description="Longer writing — a weekly review, a market observation, a thought about one trade. The daily report stays a form with fixed questions; here you write freely."
+      />
 
       <NotebookWorkbench
         folders={folders}

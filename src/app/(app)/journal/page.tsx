@@ -7,6 +7,7 @@ import { getFieldDefs } from "@/lib/journal/field-defs";
 import { getUserPrefs } from "@/lib/journal/user-prefs";
 import { JournalGrid } from "@/components/journal/journal-grid";
 import type { TradeRow } from "@/lib/journal/types";
+import { PageHeader } from "@/components/app/page-header";
 
 export default async function JournalPage() {
   const [trades, accounts, fieldDefs, prefs] = await Promise.all([
@@ -20,20 +21,17 @@ export default async function JournalPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold">Journal</h1>
-          <p className="text-muted-foreground">
-            Every logged trade. Filter by any tag — archived options stay
-            filterable.
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/trades/new">
-            <PlusCircle className="size-4" /> New Trade
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        title="Journal"
+        description="Every logged trade. Filter by any tag — archived options stay filterable."
+        action={
+          <Button asChild>
+            <Link href="/trades/new">
+              <PlusCircle className="size-4" /> New Trade
+            </Link>
+          </Button>
+        }
+      />
 
       <JournalGrid
         trades={trades as TradeRow[]}

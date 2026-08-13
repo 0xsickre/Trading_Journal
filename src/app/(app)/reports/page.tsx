@@ -8,6 +8,7 @@ import { getOptionsMap } from "@/lib/journal/options";
 import { getPlaybooks, getPositionRules } from "@/lib/journal/playbooks";
 import { ReportsWorkbench } from "@/components/journal/reports/reports-workbench";
 import type { TradeRow } from "@/lib/journal/types";
+import { PageHeader } from "@/components/app/page-header";
 
 export default async function ReportsPage() {
   // `tj_position_rules` is drained ONCE, and the per-rule counts are derived
@@ -48,13 +49,10 @@ export default async function ReportsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="min-w-0">
-        <h1 className="text-2xl font-semibold">Reports</h1>
-        <p className="text-muted-foreground">
-          Group by anything, cross it with anything. Every number carries the sample
-          it rests on.
-        </p>
-      </div>
+      <PageHeader
+        title="Reports"
+        description="Group by anything, cross it with anything. Every number carries the sample it rests on."
+      />
 
       {/* useSearchParams needs a Suspense boundary to keep the route from
           opting the whole page out of static rendering. */}

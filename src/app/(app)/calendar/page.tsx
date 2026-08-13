@@ -10,6 +10,7 @@ import {
 import { todayInTz } from "@/lib/journal/daily-report";
 import { DEFAULT_TZ, isValidMonthKey } from "@/lib/journal/time";
 import { MonthCalendar } from "@/components/journal/month-calendar";
+import { PageHeader } from "@/components/app/page-header";
 
 
 function indexBy(rows: PeriodRow[]): Map<string, PeriodRow> {
@@ -82,14 +83,16 @@ export default async function CalendarPage({
 
   return (
     <div className="space-y-5">
-      <div className="min-w-0">
-        <h1 className="text-2xl font-semibold">Calendar</h1>
-        <p className="text-muted-foreground">
-          The month by day, with each week&apos;s total alongside. P&amp;L is attributed to
-          the day it <b>closed</b> — a swing opened Monday and closed Friday sits
-          on Friday, because that is when the money arrived.
-        </p>
-      </div>
+      <PageHeader
+        title="Calendar"
+        description={
+          <>
+            The month by day, with each week&apos;s total alongside. P&amp;L is
+            attributed to the day it <b>closed</b> — a swing opened Monday and
+            closed Friday sits on Friday, because that is when the money arrived.
+          </>
+        }
+      />
 
       <MonthCalendar
         monthKey={monthKey}

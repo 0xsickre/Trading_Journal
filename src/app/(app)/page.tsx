@@ -13,6 +13,7 @@ import { todayInTz } from "@/lib/journal/daily-report";
 import { addDaysToDayKey, DEFAULT_TZ } from "@/lib/journal/time";
 import { Dashboard } from "@/components/journal/dashboard";
 import type { TradeRow } from "@/lib/journal/types";
+import { PageHeader } from "@/components/app/page-header";
 
 /**
  * How far back the compliance calendar and the streak look.
@@ -75,19 +76,17 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Your edge at a glance — filter by account, period and any tag.
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/trades/new">
-            <PlusCircle className="size-4" /> New Trade
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Your edge at a glance — filter by account, period and any tag."
+        action={
+          <Button asChild>
+            <Link href="/trades/new">
+              <PlusCircle className="size-4" /> New Trade
+            </Link>
+          </Button>
+        }
+      />
 
       <Dashboard
         trades={trades as TradeRow[]}

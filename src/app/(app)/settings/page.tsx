@@ -14,6 +14,7 @@ import { PlaybookManager } from "@/components/journal/playbook-manager";
 import { getPlaybooks } from "@/lib/journal/playbooks";
 import { TrackerRuleManager } from "@/components/journal/tracker-rule-manager";
 import { getTrackerRules } from "@/lib/journal/tracker/queries";
+import { PageHeader } from "@/components/app/page-header";
 
 export default async function SettingsPage() {
   const [lists, instruments, accounts, cashEvents, fieldDefs, playbooks, trackerRules] =
@@ -35,13 +36,10 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your dropdown lists, instruments and accounts. Archiving an
-          option hides it from entry forms but keeps it filterable in history.
-        </p>
-      </div>
+      <PageHeader
+        title="Settings"
+        description="Manage your dropdown lists, instruments and accounts. Archiving an option hides it from entry forms but keeps it filterable in history."
+      />
 
       <Tabs defaultValue="lists">
         {/* The labels are wider than a phone screen, and the triggers are

@@ -6,6 +6,7 @@ import {
   type MatchCandidate,
 } from "@/components/journal/import-wizard";
 import { ImportHistory } from "@/components/journal/import-history";
+import { PageHeader } from "@/components/app/page-header";
 
 export default async function ImportPage() {
   const [accounts, trades, batches] = await Promise.all([
@@ -27,13 +28,10 @@ export default async function ImportPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Import Trades</h1>
-        <p className="text-muted-foreground">
-          Upload a broker CSV/Excel. Already-logged trades are matched so only
-          objective numbers update — your psychology and ICT notes stay intact.
-        </p>
-      </div>
+      <PageHeader
+        title="Import Trades"
+        description="Upload a broker CSV/Excel. Already-logged trades are matched so only objective numbers update — your psychology and ICT notes stay intact."
+      />
       <ImportWizard accounts={accounts} candidates={candidates} />
       <ImportHistory batches={batches} accounts={accounts} />
     </div>

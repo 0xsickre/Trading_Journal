@@ -37,6 +37,7 @@ import {
 } from "@/components/journal/day-stats-card";
 import type { TrackerDayData } from "@/components/journal/tracker-checklist";
 import type { TradeRow } from "@/lib/journal/types";
+import { PageHeader } from "@/components/app/page-header";
 
 export default async function DailyPage({
   searchParams,
@@ -153,13 +154,10 @@ export default async function DailyPage({
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Daily Report</h1>
-        <p className="text-muted-foreground">
-          A journal of process and discipline — rate the day by progress toward the
-          focus goal, not by P&amp;L.
-        </p>
-      </div>
+      <PageHeader
+        title="Daily Report"
+        description="A journal of process and discipline — rate the day by progress toward the focus goal, not by P&L."
+      />
 
       <FocusGoalCard goal={activeGoal} reportDate={reportDate} />
 
