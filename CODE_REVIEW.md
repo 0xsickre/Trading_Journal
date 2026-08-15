@@ -2927,3 +2927,131 @@ number reaching the screen is the same one the pipeline computed — for every c
 enough to be Tier 1 or Tier 2, plus a swept Tier 3.** What is left is breadth, not a known gap:
 21 more components with no dedicated test, and 25 routes with none at all, neither hiding a
 suspected defect the way the render layer once did.
+
+---
+
+# Round 4 — the SQL layer, executed
+
+Rounds 1–3 proved the `lib/` pipeline. Phase 10 proved the render layer. Both stopped at the
+same boundary and neither said so: **the money is born in SQL, and no test has ever executed
+SQL.** `tj_position_stats` computes `gross_pl`, `net_pl` and `realized_r`; `mkTrade` in
+`reports/test-helpers.ts:47` hands `net_pl` to the library as a given. What was proved was the
+aggregation of a number, never the birth of one.
+
+This round runs against the live project (`hjwvhzcszhjhpocfjatm`). Supabase branching was the
+plan; it requires the Pro plan and the organization is on Free, so the book was seeded into
+production under a reserved UUID prefix and deleted at the end, with the row counts verified back
+to zero.
+
+## Step 0 — baseline
+
+`node_modules` was absent, so nothing in the repo could run. Once installed, the gate was **not
+green**: `plan-calculations.ts` — a `MONEY_MODULE` pinned at 100 % statements — stood at 98.64 %.
+The breach dates to `e098593`, which extracted `computeRiskAmount` from `computePositionSize`
+without re-running coverage.
+
+Three uncovered points, two different outcomes:
+
+- **`computePositionSize` lets a non-finite balance past its entry guard.** `NaN <= 0` and
+  `Infinity <= 0` are both false, so a corrupt equity figure reaches one line before the division
+  and is stopped only by the `computeRiskAmount` refusal. That refusal is the sole barrier between
+  a bad equity number and a position size *written into the trade*. Reachable, unexercised, now
+  tested.
+- **`parsePlannedRewardR` rejects anything that is not a positive multiple.** `planned_rr` is a
+  TEXT column, so this parser is the only validation between a stored string and every R figure
+  derived from a plan. Now tested.
+- **Two `risk > 0 && reward > 0` guards in `computePlannedRewardR` were unreachable.** The `if`
+  three lines above already establishes both signs, and IEEE-754 subtraction of two unequal finite
+  doubles is never 0. Removed.
+
+`knip` also found `getReviewedWeekStarts` — a dead export from the weekly work no review round had
+seen. Removed. Documentation counts were corrected: the README claimed 1088 tests in 77 files
+(actual 1265 in 91), 24 tables (26), 12 routes (15), and still listed the dropped
+`tj_playbook_groups`.
+
+## Step 1 — the base schema, and the bug its absence hid
+
+Ten tables — `tj_positions` and `tj_executions` among them — were created directly against the
+live project before `supabase/migrations/` existed. The oldest migration in the repo is a DROP.
+`CREATE TABLE public.tj_positions` existed nowhere.
+
+What that absence cost:
+
+`tj_on_auth_user_created`, bound to `AFTER INSERT ON auth.users`, called
+`tj_seed_analysis_defaults` — dropped on 19 July 2026. That migration carried an explicit step,
+*"Patch tj_seed_my_defaults: remove call to tj_seed_analysis_defaults"*, and performed it
+correctly. It missed the **second** caller, because the trigger function was not in the repo and
+nothing could show that anyone else called it.
+
+The consequence is worse than a missing extra. A PL/pgSQL block with an `EXCEPTION` clause is a
+subtransaction: when the second call raised, the whole block rolled back — including the
+`tj_seed_defaults` that had already succeeded. Measured on the live database, one throwaway user
+per trigger body:
+
+| trigger body | `tj_accounts` | `tj_instruments` | `tj_option_lists` | `tj_tracker_rules` |
+|---|---|---|---|---|
+| old (with the dead call) | **0** | **0** | **0** | **0** |
+| new | 1 | 10 | 13 | 7 |
+
+Zero on *every* column is what confirms the diagnosis: had the rollback not covered the whole
+block, the first row would equal the second.
+
+Every account registered after 19 July got no account row, no instruments, no option lists, no
+note folders and no tracker rules. `raise warning` does not fail signup, so nothing surfaced. The
+only thing covering it was `ensureDefaults()` → `tj_seed_my_defaults()`, which runs **from the home
+page only** — a user whose first navigation was a bookmarked `/journal` met an empty application.
+The comment in `ensure-defaults.ts` asserted the trigger worked; it had been wrong for thirteen
+months.
+
+Fixed in `20260815120000_fix_auth_seed_trigger.sql`, applied to production, verified.
+
+**What was checked and was not broken.** The database stores the full SQL of every applied
+migration, so the comparison was literal rather than inferred. 78 migrations in the database, 52
+files in the repo; the difference is 22 pre-repo migrations (8 base + 14 for the deleted analysis
+module) and 4 that were **folded into** repo files — `tj_replace_executions_owner_from_position`,
+`simplify_trade_fields_seed` and two `seed_defaults_foldin`s, each checked line by line and all
+present. The repo's migration folder is a squashed, renumbered retelling of the database's
+history, not a 1:1 copy. A legitimate choice, but one worth having written down.
+
+`supabase/schema/production_base_tables.sql` now records the ten base tables with every
+constraint, index, RLS policy and comment. It sits in `schema/` rather than `migrations/` on
+purpose: it describes the tables as they are *today*, so as a first migration it would collide
+with every later `ADD COLUMN`.
+
+## Step 2 — `tj_position_stats`, executed for the first time
+
+Twelve trade shapes, every figure derived on paper first, seeded into the live database and
+asserted column by column: **12 cases × 9 columns = 108 assertions, all passing.**
+
+| shape | what it pins |
+|---|---|
+| long / short, one fill | `dir_mult`, `gross_points` |
+| scale-in (two entry fills) | `avg_entry` weighted by quantity, not a mean of prices |
+| partial exit (4 of 10) | `gross_points` over the closed quantity |
+| two exit fills | `avg_exit` weighted likewise |
+| fees + swap | `net = gross − fees − swap`, and `realized_r` staying on the gross basis |
+| unknown instrument | every money column `NULL`, `point_value_source = 'missing'`, R surviving |
+| stop == entry | `risk_pts` → `NULL`, R undefined rather than infinite |
+| open position | `closed_at`, `duration_seconds`, `gross_points` all `NULL` |
+| breakeven | an exact zero, as data rather than as absence |
+| forex point value | 0.01 points × 100 000 = $1000 |
+| no plan entry | risk measured from the average fill |
+
+**The partial-exit R convention was the one open question, and it is a decision, not a defect.**
+`realized_r = gross_points / (risk_pts × entry_qty)` puts the numerator over the *closed* quantity
+and the denominator over the *whole* position. A position closed 4-of-10 at what was a full 1.0 R
+on the closed part reports **0.4 R**. `position-stats.ts:118-139` argues the case: the remaining
+six units still stand against the same risk and have paid nothing, and dividing by `exit_qty`
+instead would print four 2R rows for one 1R of risk on a trade scaled out in four pieces. The
+convention is deliberate, documented at the point of decision, and now pinned by a test that
+asserts both numbers so a reader can see what was rejected.
+
+**The two engines now share one measure.** `position-stats.parity.fixture.ts` holds the twelve
+cases with their paper-derived expectations — not the output of either engine. `computePositionStats`
+is asserted against it on every `vitest run`; the SQL view was asserted against the same numbers
+by the run recorded above. The fixture was mutation-checked: changing the R denominator from
+`entryQty` to `exitQty` fails it, restoring it passes.
+
+**Still not established here.** The library was proved against the SQL for a single position. How
+those positions aggregate into win rate, profit factor, expectancy and the score is Step 4's
+subject, and the screen is Step 10's.
