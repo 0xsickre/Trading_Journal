@@ -38,6 +38,19 @@
 -- tvrdio da su „novi korisnici seedovani na registraciji okidačem" — što nije
 -- bilo tačno ni jednom od 19.07.
 --
+-- IZMERENO, NE ZAKLJUČENO
+--
+-- Oba tela su puštena nad živim projektom, svako sa svojim test korisnikom
+-- ubačenim u `auth.users`, pa su redovi prebrojani i korisnici obrisani:
+--
+--   telo              tj_accounts  tj_instruments  tj_option_lists  tj_tracker_rules
+--   staro (sa pozivom)      0             0                0                0
+--   novo                    1            10               13                7
+--
+-- Nula na svakoj koloni je potvrda podtransakcije: `tj_seed_defaults` je i u
+-- starom telu odradio svoje pre nego što je sledeći red bacio, pa da poništenje
+-- nije zahvatalo ceo blok, brojevi bi bili isti u oba reda.
+--
 -- POPRAVKA
 --
 -- Mrtav poziv izlazi napolje. `tj_seed_defaults` već sam grana na instrumente,
