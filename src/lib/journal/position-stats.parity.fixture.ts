@@ -1,7 +1,7 @@
 import type { PositionStatsInput } from "./position-stats";
 
 /**
- * DVANAEST OBLIKA TREJDA, IZVEDENIH NA PAPIRU, ZA OBA MOTORA KOJI RAČUNAJU NOVAC.
+ * SEDAMNAEST OBLIKA TREJDA, IZVEDENIH NA PAPIRU, ZA OBA MOTORA KOJI RAČUNAJU NOVAC.
  *
  * `position-stats.ts` počinje rečenicom „must stay in sync with `tj_position_stats`
  * SQL view". Do ovog fajla to je bila samo rečenica: TS strana je imala testove,
@@ -14,9 +14,9 @@ import type { PositionStatsInput } from "./position-stats";
  *
  *   - `position-stats.parity.test.ts` pušta `computePositionStats` kroz sve ove
  *     slučajeve pri svakom `vitest run`;
- *   - ista knjiga je puštena i kroz `tj_position_stats` nad živom bazom, 12
- *     slučajeva × 9 kolona = 108 tvrdnji, sve prošle. Postupak i rezultat su
- *     zapisani u `CODE_REVIEW.md`.
+ *   - ista knjiga je puštena i kroz `tj_position_stats` nad živom bazom: 12
+ *     osnovnih oblika × 9 kolona = 108 tvrdnji, plus 5 FX oblika × 7 kolona = 35,
+ *     ukupno 143 — sve prošle. Postupak i rezultat su u `CODE_REVIEW.md`.
  *
  * Dok obe strane gađaju iste brojeve sa papira, ne mogu da se raziđu a da bar
  * jedna ne padne. Snapshot testovi zaključavaju trenutno ponašanje uključujući
@@ -51,6 +51,7 @@ export const PARITY_CASES: ParityCase[] = [
       entry_price: 5000,
       stop_price: 4990,
       point_value: 1,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 5000, qty: 1 },
         { side: "exit", price: 5030, qty: 1 },
@@ -76,6 +77,7 @@ export const PARITY_CASES: ParityCase[] = [
       entry_price: 5000,
       stop_price: 5010,
       point_value: 1,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 5000, qty: 1 },
         { side: "exit", price: 4970, qty: 1 },
@@ -101,6 +103,7 @@ export const PARITY_CASES: ParityCase[] = [
       entry_price: 5000,
       stop_price: 4990,
       point_value: 1,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 5000, qty: 2 },
         { side: "entry", price: 5010, qty: 2 },
@@ -131,6 +134,7 @@ export const PARITY_CASES: ParityCase[] = [
       entry_price: 100,
       stop_price: 90,
       point_value: 1,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 100, qty: 10 },
         { side: "exit", price: 110, qty: 4 },
@@ -157,6 +161,7 @@ export const PARITY_CASES: ParityCase[] = [
       entry_price: 5000,
       stop_price: 4990,
       point_value: 1,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 5000, qty: 1, fee: 2, swap_funding: 3 },
         { side: "exit", price: 5030, qty: 1, fee: 2 },
@@ -186,6 +191,7 @@ export const PARITY_CASES: ParityCase[] = [
       entry_price: 100,
       stop_price: 90,
       point_value: null,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 100, qty: 1 },
         { side: "exit", price: 130, qty: 1 },
@@ -212,6 +218,7 @@ export const PARITY_CASES: ParityCase[] = [
       entry_price: 5000,
       stop_price: 5000,
       point_value: 1,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 5000, qty: 1 },
         { side: "exit", price: 5030, qty: 1 },
@@ -236,6 +243,7 @@ export const PARITY_CASES: ParityCase[] = [
       entry_price: 5000,
       stop_price: 4990,
       point_value: 1,
+      fx_rate: 1,
       executions: [{ side: "entry", price: 5000, qty: 1 }],
     },
     paper: {
@@ -257,6 +265,7 @@ export const PARITY_CASES: ParityCase[] = [
       entry_price: 5000,
       stop_price: 4990,
       point_value: 1,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 5000, qty: 1 },
         { side: "exit", price: 5000, qty: 1 },
@@ -281,6 +290,7 @@ export const PARITY_CASES: ParityCase[] = [
       entry_price: 100,
       stop_price: 90,
       point_value: 1,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 100, qty: 4 },
         { side: "exit", price: 110, qty: 2 },
@@ -309,6 +319,7 @@ export const PARITY_CASES: ParityCase[] = [
       entry_price: 1.1,
       stop_price: 1.095,
       point_value: 100_000,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 1.1, qty: 1 },
         { side: "exit", price: 1.11, qty: 1 },
@@ -335,6 +346,7 @@ export const PARITY_CASES: ParityCase[] = [
       entry_price: null,
       stop_price: 90,
       point_value: 1,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 100, qty: 1 },
         { side: "exit", price: 110, qty: 1 },
@@ -349,6 +361,147 @@ export const PARITY_CASES: ParityCase[] = [
       planned_risk_pts: 10,
       realized_r: 1,
       realized_r_net: 1,
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // FX — novac je do 20260815130000 bio u valuti KOTACIJE i sabirao se kao da nije.
+  // ---------------------------------------------------------------------------
+  {
+    name: "FX1 USDJPY, kurs snimljen",
+    proves:
+      "bruto nastaje u JENIMA i mora kroz kurs. Bez konverzije ovaj trejd je " +
+      "prijavljivao 100 000 i ispisivao ih sa `$` — 149 puta previše",
+    input: {
+      direction: "Long",
+      entry_price: 150.0,
+      stop_price: 149.0,
+      point_value: 100_000,
+      fx_rate: 0.0067,
+      executions: [
+        { side: "entry", price: 150.0, qty: 1 },
+        { side: "exit", price: 151.0, qty: 1 },
+      ],
+    },
+    // bruto = 1.00 poena × 100 000 = 100 000 JPY ; × 0.0067 = 670 USD
+    // rizik = 1.00 → R = 1.00 / (1.00 × 1) = 1 ; R_net = 670 / (1 × 1 × 100000 × 0.0067)
+    paper: {
+      avg_entry: 150.0,
+      avg_exit: 151.0,
+      gross_points: 1,
+      gross_pl: 670,
+      net_pl: 670,
+      planned_risk_pts: 1,
+      realized_r: 1,
+      realized_r_net: 1,
+    },
+  },
+  {
+    name: "FX2 USDCAD, provizija se NE konvertuje",
+    proves:
+      "redosled: bruto × kurs − troškovi. Provizija je već u valuti naloga jer " +
+      "je brokeri tako i knjiže, pa bi drugi redosled naplatio $5 po kursu 0.73",
+    input: {
+      direction: "Long",
+      entry_price: 1.35,
+      stop_price: 1.345,
+      point_value: 100_000,
+      fx_rate: 0.73,
+      executions: [
+        { side: "entry", price: 1.35, qty: 1, fee: 5 },
+        { side: "exit", price: 1.36, qty: 1 },
+      ],
+    },
+    // bruto = 0.01 × 100 000 = 1000 CAD ; × 0.73 = 730 USD ; − 5 = 725
+    // rizik = 0.005 → R = 0.01 / 0.005 = 2 ; R_net = 725 / (0.005 × 100000 × 0.73) = 725/365
+    paper: {
+      avg_entry: 1.35,
+      avg_exit: 1.36,
+      gross_points: 0.01,
+      gross_pl: 730,
+      net_pl: 725,
+      planned_risk_pts: 0.005,
+      realized_r: 2,
+      realized_r_net: 725 / 365,
+    },
+  },
+  {
+    name: "FX3 kurs nepoznat",
+    proves:
+      "nepoznat kurs nuluje NOVAC, ne trejd. Ista politika kao za point_value: " +
+      "kurs 1 kao fallback tiho bi izjednačio jen sa dolarom",
+    input: {
+      direction: "Long",
+      entry_price: 150.0,
+      stop_price: 149.0,
+      point_value: 100_000,
+      fx_rate: null,
+      executions: [
+        { side: "entry", price: 150.0, qty: 1 },
+        { side: "exit", price: 151.0, qty: 1 },
+      ],
+    },
+    paper: {
+      avg_entry: 150.0,
+      avg_exit: 151.0,
+      gross_points: 1,
+      gross_pl: null,
+      net_pl: null,
+      planned_risk_pts: 1,
+      realized_r: 1,
+      realized_r_net: null,
+    },
+  },
+  {
+    name: "FX4 ista valuta, kurs 1",
+    proves: "USD instrument na USD nalogu prolazi nedirnut — konverzija je no-op",
+    input: {
+      direction: "Long",
+      entry_price: 1.1,
+      stop_price: 1.095,
+      point_value: 100_000,
+      fx_rate: 1,
+      executions: [
+        { side: "entry", price: 1.1, qty: 1 },
+        { side: "exit", price: 1.11, qty: 1 },
+      ],
+    },
+    paper: {
+      avg_entry: 1.1,
+      avg_exit: 1.11,
+      gross_points: 0.01,
+      gross_pl: 1000,
+      net_pl: 1000,
+      planned_risk_pts: 0.005,
+      realized_r: 2,
+      realized_r_net: 2,
+    },
+  },
+  {
+    name: "FX5 kurs i point_value oba nepoznata",
+    proves:
+      "dva nezavisna razloga za isti ishod ne smeju da se ponište — R i dalje " +
+      "stoji, jer je odnos u prostoru cena i ne traži ni jedno ni drugo",
+    input: {
+      direction: "Long",
+      entry_price: 1.1,
+      stop_price: 1.095,
+      point_value: null,
+      fx_rate: null,
+      executions: [
+        { side: "entry", price: 1.1, qty: 1 },
+        { side: "exit", price: 1.11, qty: 1 },
+      ],
+    },
+    paper: {
+      avg_entry: 1.1,
+      avg_exit: 1.11,
+      gross_points: 0.01,
+      gross_pl: null,
+      net_pl: null,
+      planned_risk_pts: 0.005,
+      realized_r: 2,
+      realized_r_net: null,
     },
   },
 ];

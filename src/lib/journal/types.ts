@@ -30,7 +30,8 @@ export type Instrument = {
   point_value: number;
   tick_size: number | null;
   tick_value: number | null;
-  currency: string;
+  /** Valuta u kojoj je instrument KOTIRAN — valuta `point_value`, pa i bruto P&L-a pre konverzije. */
+  quote_currency: string;
   is_active: boolean;
   sort_order: number;
 };

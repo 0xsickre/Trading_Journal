@@ -61,6 +61,7 @@ import {
   thesisGroupVisible,
 } from "@/lib/journal/plan-calculations";
 import { computePositionStats } from "@/lib/journal/position-stats";
+import { resolveFxRate } from "@/lib/journal/fx";
 import { utcToZonedInput, zonedInputToUtc, fmtInTz } from "@/lib/journal/time";
 import {
   NO_COST_DEFAULTS,
@@ -383,6 +384,20 @@ export function TradeForm({
    */
   const pointValue = instrument?.point_value ?? null;
 
+  /**
+   * Kurs valute kotacije prema valuti naloga, razrešen istim redosledom koji
+   * `tj_position_stats` ima u SQL-u — `resolveFxRate` je jedini izraz za oba.
+   *
+   * Trejd koji se tek unosi još nema snimljen kurs, pa se ovde odgovara na
+   * pitanje koje se može odgovoriti bez njega: da li je konverzija uopšte
+   * potrebna. Kad nije (instrument kotiran u valuti naloga) preview pokazuje
+   * novac; kad jeste, pokazuje prazno umesto broja u pogrešnoj valuti.
+   */
+  const fx = resolveFxRate({
+    quoteCurrency: instrument?.quote_currency,
+    accountCurrency: account?.currency,
+  });
+
   const metrics = useMemo(() => {
     const executionFills = execs
       .map((e) => ({
@@ -404,6 +419,7 @@ export function TradeForm({
       entry_price: pe,
       stop_price: stop,
       point_value: pointValue,
+      fx_rate: fx.rate,
       executions: executionFills,
     });
 
@@ -511,7 +527,10 @@ export function TradeForm({
       plannedEntry: pe,
       targetAttainment,
     };
-  }, [execs, fields, pointValue, account, accountEquity]);
+    // `fx.rate` je primitiv i menja se sa instrumentom — bez njega u listi
+    // pregled bi zadržao novac izračunat po starom kursu posle promene simbola,
+    // što je tačno ona klasa greške koju Faza 10 zove „broj izračunat dvaput".
+  }, [execs, fields, pointValue, fx.rate, account, accountEquity]);
 
   /**
    * Answers to rules the checklist is currently OFFERING.

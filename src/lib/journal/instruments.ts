@@ -1,4 +1,5 @@
 import "server-only";
+import { resolveFxRate } from "./fx";
 import { createClient } from "@/lib/supabase/server";
 import { selectAllByIds, selectAllPages } from "@/lib/supabase/paginate";
 import type { Instrument } from "./types";
@@ -7,10 +8,12 @@ import type { Instrument } from "./types";
 export type InstrumentSpec = {
   point_value: number | null;
   tick_size: number | null;
+  /** Valuta kotacije — valuta u kojoj `point_value` izražava novac. */
+  quote_currency: string | null;
 };
 
 const INSTRUMENT_COLUMNS =
-  "id,symbol,name,asset_class,point_value,tick_size,tick_value,currency,is_active,sort_order";
+  "id,symbol,name,asset_class,point_value,tick_size,tick_value,quote_currency,is_active,sort_order";
 
 export async function getInstruments(
   activeOnly = false,
@@ -45,7 +48,7 @@ export async function getInstrumentSpecs(
 
   const supabase = await createClient();
   type Row = InstrumentSpec & { symbol: string };
-  const select = "symbol,point_value,tick_size";
+  const select = "symbol,point_value,tick_size,quote_currency";
 
   // Both paths drain: an `.in()` filter is spelled into the URL and PostgREST
   // caps the URL's length, while an unfiltered read is capped at `db-max-rows`
@@ -76,6 +79,7 @@ export async function getInstrumentSpecs(
     map.set(row.symbol, {
       point_value: row.point_value,
       tick_size: row.tick_size,
+      quote_currency: row.quote_currency,
     });
   }
   return map;
@@ -91,10 +95,29 @@ export async function getInstrumentSpecs(
 export function instrumentSnapshot(
   symbol: string | null | undefined,
   specs: Map<string, InstrumentSpec>,
-): { point_value_at_trade: number | null; tick_size_at_trade: number | null } {
+  /**
+   * Valuta naloga na koji trejd ide. Bez nje se ne zna da li je konverzija
+   * uopšte potrebna, pa se kurs ne snima — view tada javi `fx_rate_source`
+   * 'missing' ili 'no_account' umesto da vrednuje jene kao dolare.
+   */
+  accountCurrency?: string | null,
+): {
+  point_value_at_trade: number | null;
+  tick_size_at_trade: number | null;
+  quote_currency_at_trade: string | null;
+  fx_rate_at_trade: number | null;
+} {
   const spec = symbol ? specs.get(symbol) : undefined;
+  const quote = spec?.quote_currency ?? null;
+  // Isti izraz koji view ima u SQL-u, i koji forma koristi za pregled.
+  const { rate } = resolveFxRate({
+    quoteCurrency: quote,
+    accountCurrency,
+  });
   return {
     point_value_at_trade: spec?.point_value ?? null,
     tick_size_at_trade: spec?.tick_size ?? null,
+    quote_currency_at_trade: quote,
+    fx_rate_at_trade: rate,
   };
 }

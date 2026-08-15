@@ -8,6 +8,7 @@ import { computeStatus } from "@/lib/journal/trade-lifecycle";
 import { normalizeInstrumentSymbol } from "@/lib/journal/instrument-aliases";
 import { planUndo } from "@/lib/journal/import-undo";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
+import { getAccountCurrency } from "@/lib/journal/accounts";
 
 export type ImportExec = {
   side: "entry" | "exit";
@@ -61,6 +62,8 @@ export async function commitImport(input: CommitInput) {
 
   // One lookup for the whole batch — the snapshot is per-position but the specs
   // are shared, and a per-row query would be a round trip per imported trade.
+  // Jednom po uvozu, ne po redu: valuta naloga je ista za ceo batch.
+  const accountCurrency = await getAccountCurrency(input.account_id);
   const specs = await getInstrumentSpecs(
     input.items.map((i) => normalizeInstrumentSymbol(i.instrument)),
   );
@@ -99,7 +102,7 @@ export async function commitImport(input: CommitInput) {
             import_batch_id: batch.id,
             needs_review: item.executions.length === 0,
             status: statusOf(item.executions),
-            ...instrumentSnapshot(instrument, specs),
+            ...instrumentSnapshot(instrument, specs, accountCurrency),
           })
           .select("id")
           .single();

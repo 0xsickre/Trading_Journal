@@ -100,6 +100,7 @@ describe("one trade, from form values to a report row", () => {
     entry_price: 2400,
     stop_price: 2390,
     point_value: 1,
+    fx_rate: 1,
     executions: fills,
   });
 
@@ -128,6 +129,7 @@ describe("one trade, from form values to a report row", () => {
       closed_at: fills[1].executed_at,
       duration_seconds: 18_900,
       point_value: 1,
+      fx_rate: 1,
       tick_size: 0.01,
       point_value_source: "snapshot",
     } as PositionStat,

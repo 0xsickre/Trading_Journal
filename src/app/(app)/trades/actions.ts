@@ -8,6 +8,7 @@ import { buildPositionPatch, mergeCustom } from "@/lib/journal/trade-fields";
 import { computeStatus, isValidFill } from "@/lib/journal/trade-lifecycle";
 import { isFtmoAccountFrozen } from "@/lib/journal/ftmo-status";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
+import { getAccountCurrency } from "@/lib/journal/accounts";
 import {
   TRADE_IMAGE_KINDS,
   validateTradingViewSnapshotUrl,
@@ -176,6 +177,7 @@ export async function createTrade(input: TradeInput) {
   const snapshot = instrumentSnapshot(
     symbol,
     await getInstrumentSpecs([symbol]),
+    await getAccountCurrency(input.account_id),
   );
 
   const { data: pos, error: posErr } = await supabase
@@ -309,7 +311,11 @@ export async function updateTrade(id: string, input: TradeInput) {
   const symbolChanged = prevPos.instrument !== symbol;
   const snapshot =
     symbolChanged || prevPos.point_value_at_trade == null
-      ? instrumentSnapshot(symbol, await getInstrumentSpecs([symbol]))
+      ? instrumentSnapshot(
+          symbol,
+          await getInstrumentSpecs([symbol]),
+          await getAccountCurrency(input.account_id),
+        )
       : {};
 
   const { error: upErr } = await supabase

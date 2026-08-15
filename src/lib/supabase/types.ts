@@ -416,7 +416,7 @@ export type Database = {
         Row: {
           asset_class: string | null
           created_at: string
-          currency: string
+          quote_currency: string
           id: string
           is_active: boolean
           name: string | null
@@ -430,7 +430,7 @@ export type Database = {
         Insert: {
           asset_class?: string | null
           created_at?: string
-          currency?: string
+          quote_currency?: string
           id?: string
           is_active?: boolean
           name?: string | null
@@ -444,7 +444,7 @@ export type Database = {
         Update: {
           asset_class?: string | null
           created_at?: string
-          currency?: string
+          quote_currency?: string
           id?: string
           is_active?: boolean
           name?: string | null
@@ -951,6 +951,8 @@ export type Database = {
           point_value_at_trade: number | null
           position_size: number | null
           psychology_tags: string[]
+          quote_currency_at_trade: string | null
+          fx_rate_at_trade: number | null
           risk_pct: string | null
           scale_out_plan: string | null
           setup_grade: string | null
@@ -990,6 +992,8 @@ export type Database = {
           point_value_at_trade?: number | null
           position_size?: number | null
           psychology_tags?: string[]
+          quote_currency_at_trade?: string | null
+          fx_rate_at_trade?: number | null
           risk_pct?: string | null
           scale_out_plan?: string | null
           setup_grade?: string | null
@@ -1029,6 +1033,8 @@ export type Database = {
           point_value_at_trade?: number | null
           position_size?: number | null
           psychology_tags?: string[]
+          quote_currency_at_trade?: string | null
+          fx_rate_at_trade?: number | null
           risk_pct?: string | null
           scale_out_plan?: string | null
           setup_grade?: string | null
@@ -1256,9 +1262,13 @@ export type Database = {
           instrument: string | null
           net_pl: number | null
           opened_at: string | null
+          account_currency: string | null
+          fx_rate: number | null
+          fx_rate_source: string | null
           point_value: number | null
           point_value_source: string | null
           position_id: string | null
+          quote_currency: string | null
           realized_r: number | null
           realized_r_net: number | null
           status: string | null

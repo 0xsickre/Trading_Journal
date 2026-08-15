@@ -1,11 +1,18 @@
 // Canonical watchlist — seeded for every user (DB: tj_seed_instruments_defaults).
 // Keep in sync with Trading data vault: instrument_registry.TRADE + RADAR (B6 FTMO).
 //
-// NOTE on point_value: P/L = points × point_value, expressed in the instrument's
-// QUOTE currency. For USD-quoted FX (EURUSD, GBPUSD, AUDUSD) that equals the USD
-// account P/L. For quote currencies other than the account currency (e.g. USDJPY →
-// JPY, USDCAD → CAD) the figure is in the quote currency and NOT FX-converted here.
-// If exact multi-currency P/L is required, add per-instrument tick_value/conversion.
+// point_value: novac u VALUTI KOTACIJE po 1.00 pomeraja cene, po 1 jedinici
+// izvršene količine. `qty` na fill-u se broji u tim istim jedinicama:
+// 1 standardni FX lot, 1 CFD ugovor, 1 futures ugovor.
+//
+// quote_currency je valuta tog iznosa. Od 20260815130000 view je i koristi:
+// bruto se množi kursom snimljenim na trejdu pre nego što uđe u bilo koji zbir.
+// Do tada su USDJPY (jeni) i USDCAD (kanadski dolari) ulazili u isti `sum()` kao
+// EURUSD i ispisivali se sa `$`.
+//
+// tick_value ostaje null: za sve dole navedeno point_value je direktan podatak.
+// Za futures važi tick_value / tick_size = point_value (ES: 12.50 / 0.25 = 50),
+// pa se jedno izvodi iz drugog kad zatreba.
 
 export type DefaultInstrument = {
   symbol: string;
@@ -14,6 +21,8 @@ export type DefaultInstrument = {
   point_value: number;
   tick_size: number | null;
   tick_value: number | null;
+  /** Valuta u kojoj point_value izražava novac. */
+  quote_currency: string;
   sort_order: number;
 };
 
@@ -26,6 +35,7 @@ export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
     point_value: 100_000,
     tick_size: 0.00001,
     tick_value: null,
+    quote_currency: "USD",
     sort_order: 0,
   },
   {
@@ -35,6 +45,7 @@ export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
     point_value: 100_000,
     tick_size: 0.00001,
     tick_value: null,
+    quote_currency: "USD",
     sort_order: 1,
   },
   {
@@ -44,6 +55,7 @@ export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
     point_value: 100_000,
     tick_size: 0.001,
     tick_value: null,
+    quote_currency: "JPY",
     sort_order: 2,
   },
   {
@@ -53,6 +65,7 @@ export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
     point_value: 100_000,
     tick_size: 0.00001,
     tick_value: null,
+    quote_currency: "CAD",
     sort_order: 3,
   },
   {
@@ -62,6 +75,7 @@ export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
     point_value: 100_000,
     tick_size: 0.00001,
     tick_value: null,
+    quote_currency: "USD",
     sort_order: 4,
   },
   {
@@ -71,6 +85,7 @@ export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
     point_value: 1,
     tick_size: 0.1,
     tick_value: null,
+    quote_currency: "USD",
     sort_order: 5,
   },
   {
@@ -80,6 +95,7 @@ export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
     point_value: 1,
     tick_size: 0.25,
     tick_value: null,
+    quote_currency: "USD",
     sort_order: 6,
   },
   {
@@ -89,6 +105,7 @@ export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
     point_value: 1,
     tick_size: 0.01,
     tick_value: null,
+    quote_currency: "USD",
     sort_order: 7,
   },
   {
@@ -98,6 +115,7 @@ export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
     point_value: 1,
     tick_size: 0.0001,
     tick_value: null,
+    quote_currency: "USD",
     sort_order: 8,
   },
   {
@@ -107,6 +125,7 @@ export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
     point_value: 1,
     tick_size: 0.1,
     tick_value: null,
+    quote_currency: "USD",
     sort_order: 9,
   },
 ];

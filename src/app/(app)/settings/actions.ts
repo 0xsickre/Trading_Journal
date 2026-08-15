@@ -195,7 +195,7 @@ export async function addInstrument(input: {
   point_value?: number;
   tick_size?: number | null;
   tick_value?: number | null;
-  currency?: string;
+  quote_currency?: string;
 }) {
   const supabase = await createClient();
   const symbol = input.symbol.trim();
@@ -209,7 +209,7 @@ export async function addInstrument(input: {
     point_value: input.point_value ?? 1,
     tick_size: input.tick_size ?? null,
     tick_value: input.tick_value ?? null,
-    currency: input.currency?.trim() || "USD",
+    quote_currency: input.quote_currency?.trim().toUpperCase() || "USD",
   });
   if (error) return { ok: false, error: error.message };
   revalidateAll();
@@ -224,7 +224,7 @@ export async function updateInstrument(
     point_value?: number;
     tick_size?: number | null;
     tick_value?: number | null;
-    currency?: string;
+    quote_currency?: string;
     is_active?: boolean;
   },
 ) {

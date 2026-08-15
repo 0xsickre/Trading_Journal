@@ -29,6 +29,7 @@ describe("computePositionStats", () => {
       entry_price: 100,
       stop_price: 98,
       point_value: 1,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 100.5, qty: 1 },
         { side: "exit", price: 104, qty: 1 },
@@ -45,6 +46,7 @@ describe("computePositionStats", () => {
       entry_price: 100,
       stop_price: 99,
       point_value: 1,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 100, qty: 2 },
         { side: "exit", price: 101, qty: 1 },
@@ -62,6 +64,7 @@ describe("computePositionStats", () => {
       entry_price: 100,
       stop_price: 98,
       point_value: 1,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 100, qty: 1, fee: 0 },
         { side: "exit", price: 104, qty: 1, fee: 20 },
@@ -78,6 +81,7 @@ describe("computePositionStats", () => {
       entry_price: 100,
       stop_price: 102,
       point_value: 1,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 100, qty: 1 },
         { side: "exit", price: 98, qty: 1 },
@@ -99,6 +103,7 @@ describe("cost accrual matches the SQL view", () => {
       entry_price: 100,
       stop_price: 90,
       point_value: 1,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 100, qty: 1, fee: 2, swap_funding: 0 },
         { side: "exit", price: 110, qty: 1, fee: 2, swap_funding: 1 },
@@ -123,6 +128,7 @@ describe("cost accrual matches the SQL view", () => {
       entry_price: null,
       stop_price: null,
       point_value: 1,
+      fx_rate: 1,
       executions: [
         { side: "entry", price: 100, qty: 2, fee: 0, swap_funding: 0 },
         { side: "entry", price: Number.NaN, qty: 5, fee: 0, swap_funding: 0 },
@@ -162,6 +168,7 @@ describe("an unpriceable trade yields no money, matching the view", () => {
       entry_price: 5000,
       stop_price: 4990,
       point_value: 50,
+      fx_rate: 1,
       executions: fills,
     });
     expect(s.gross_pl).toBeCloseTo(1000);
@@ -193,6 +200,7 @@ describe("golden vector read back off the live SQL view", () => {
     entry_price: 100,
     stop_price: 105,
     point_value: 2,
+    fx_rate: 1,
     executions: [
       { side: "entry", price: 101, qty: 3, fee: 1.0, swap_funding: 0.5 },
       { side: "exit", price: 96, qty: 2, fee: 0.7, swap_funding: 0.2 },

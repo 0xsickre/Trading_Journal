@@ -60,7 +60,7 @@ function InstrumentRow({ inst }: { inst: Instrument }) {
       <div className="col-span-12 sm:col-span-2">
         <div className="font-mono text-sm font-semibold">{inst.symbol}</div>
         <div className="text-[11px] text-muted-foreground">
-          {inst.currency}
+          {inst.quote_currency}
         </div>
       </div>
       <div className="col-span-6 sm:col-span-3">

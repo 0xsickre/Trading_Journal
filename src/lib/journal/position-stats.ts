@@ -19,6 +19,17 @@ export type PositionStatsInput = {
    * instrument at 1 renders a 500-point ES win as $500.
    */
   point_value?: number | null;
+  /**
+   * Valuta kotacije → valuta naloga, snimljena pri upisu trejda.
+   *
+   * 1 kad su valute iste. NULL znači da kurs nije poznat, i tada je novac null
+   * po istom pravilu kao za `point_value`: USDJPY vrednovan kursom 1 sabrao bi
+   * sto hiljada jena sa dolarima i ispisao ih sa `$`.
+   *
+   * Snimljen, ne izračunat u trenutku čitanja — inače bi današnji kurs pomerao
+   * prošlogodišnji P&L pri svakom otvaranju stranice.
+   */
+  fx_rate?: number | null;
   executions: ExecutionFill[];
 };
 
@@ -63,6 +74,7 @@ export function computePositionStats(
   input: PositionStatsInput,
 ): ComputedPositionStats {
   const pointValue = input.point_value ?? null;
+  const fxRate = input.fx_rate ?? null;
   const dir = tradeDirectionMultiplier(input.direction);
 
   let entryQty = 0;
@@ -107,10 +119,14 @@ export function computePositionStats(
 
   if (avgEntry != null && exitQty > 0) {
     grossPoints = (exitNotional - avgEntry * exitQty) * dir;
-    // Money is null without a point value; points and R are price-space
-    // quantities and survive one, exactly as the SQL view has them.
-    if (pointValue != null) {
-      grossPl = grossPoints * pointValue;
+    // Money is null without a point value OR without a rate; points and R are
+    // price-space quantities and survive both, exactly as the SQL view has them.
+    //
+    // Provizije i swap se NE množe kursom: brokeri ih knjiže u valuti depozita,
+    // a podrazumevane vrednosti iz kojih se popunjavaju stoje na nalogu. Zato
+    // `bruto × kurs − troškovi`, a ne `(bruto − troškovi) × kurs`.
+    if (pointValue != null && fxRate != null) {
+      grossPl = grossPoints * pointValue * fxRate;
       netPl = grossPl - totalFees - totalSwap;
     }
 
@@ -139,8 +155,9 @@ export function computePositionStats(
        */
       const riskDenom = riskPts * entryQty;
       realizedR = grossPoints / riskDenom;
-      if (pointValue != null) {
-        const riskMoney = riskDenom * pointValue;
+      if (pointValue != null && fxRate != null) {
+        // Neto R deli novac novcem, pa imenilac mora u istu valutu kao brojilac.
+        const riskMoney = riskDenom * pointValue * fxRate;
         if (riskMoney > 0 && netPl != null) {
           realizedRNet = netPl / riskMoney;
         }

@@ -91,7 +91,10 @@ const INSTRUMENT: Instrument = {
   point_value: 1,
   tick_size: null,
   tick_value: null,
-  currency: "USD",
+  // Ista valuta kao nalog, pa `resolveFxRate` daje 1 i preview pokazuje novac.
+  // Kad se ove dve razlikuju a kurs nije poznat, forma NAMERNO ne prikazuje
+  // iznose — vidi `fx.ts`. Zbog toga je ovo polje ovde load-bearing, ne dekor.
+  quote_currency: "USD",
   is_active: true,
   sort_order: 0,
 } as unknown as Instrument;
@@ -218,6 +221,36 @@ describe("Gross → Net (rejected candidate, verified correct — not W)", () =>
     const grossToNetLabel = screen.getByText("Gross → Net").closest("div")!;
     expect(feesLabel.textContent).toContain("$7.00");
     expect(grossToNetLabel.textContent).toContain("$7.00");
+  });
+
+  it("ne prikazuje novac kad kurs kotacija→nalog nije poznat", async () => {
+    // Instrument kotiran u jenima na dolarskom nalogu, bez snimljenog kursa.
+    // Do 20260815130000 forma bi ovde ispisala bruto u JENIMA sa `$` ispred —
+    // isti broj, pogrešna valuta, bez ijednog znaka da nešto ne valja.
+    //
+    // Očekivanje je odsustvo, ne nula: `resolveFxRate` vraća null, pa
+    // `computePositionStats` ne računa novac, pa blok nema šta da iscrta.
+    const user = userEvent.setup({ delay: null });
+    const jpy = { ...INSTRUMENT, symbol: "USDJPY", quote_currency: "JPY" };
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[jpy]}
+        accounts={[ACCOUNT]}
+        initial={baseInitial({
+          fields: { ...baseInitial().fields, instrument: "USDJPY" },
+          executions: twoFillExecutions(5, 2),
+        })}
+      />,
+    );
+    await goToExecutionTab(user);
+
+    expect(screen.queryByText("Gross → Net")).toBeNull();
+
+    // R preživljava nepoznat kurs — odnos u prostoru cena ne traži valutu.
+    // Da ovaj deo nestane zajedno sa novcem, izgubila bi se jedina brojka koja
+    // je i dalje tačna.
+    expect(screen.queryByText("Fees + Swap")).not.toBeNull();
   });
 });
 

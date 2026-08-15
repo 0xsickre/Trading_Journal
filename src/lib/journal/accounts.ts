@@ -18,3 +18,26 @@ export async function getPrimaryAccount(): Promise<Account | null> {
   const accounts = await getAccounts();
   return accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
 }
+
+/**
+ * Valuta jednog naloga, za snimanje kursa pri upisu trejda.
+ *
+ * Sopstveni upit umesto `getAccounts()` zato što se zove na svakom upisu i
+ * uvozu: povlačiti dvadeset šest kolona svih naloga da bi se pročitala jedna
+ * troslovna oznaka je cena koja se plaća po redu uvoza.
+ *
+ * `null` kad naloga nema — trejd bez naloga se ne može konvertovati, i view to
+ * prijavljuje kao `fx_rate_source = 'no_account'` umesto da pretpostavi dolare.
+ */
+export async function getAccountCurrency(
+  accountId: string | null | undefined,
+): Promise<string | null> {
+  if (!accountId) return null;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("tj_accounts")
+    .select("currency")
+    .eq("id", accountId)
+    .maybeSingle();
+  return data?.currency ?? null;
+}
