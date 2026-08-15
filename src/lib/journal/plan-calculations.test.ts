@@ -162,6 +162,19 @@ describe("parsePlannedRewardR", () => {
   it("parses legacy 1:X", () => {
     expect(parsePlannedRewardR("1:3.00")).toBe(3);
   });
+
+  it("refuses anything that is not a positive multiple", () => {
+    // `planned_rr` is stored as TEXT, so the column itself guarantees nothing —
+    // this parser is the only validation between a stored string and every R
+    // figure derived from a plan. A garbage value must come back null rather
+    // than as NaN, which would spread silently through avg planned R and
+    // target attainment.
+    expect(parsePlannedRewardR("abc")).toBeNull();
+    expect(parsePlannedRewardR("0")).toBeNull();
+    expect(parsePlannedRewardR("-2")).toBeNull();
+    expect(parsePlannedRewardR(null)).toBeNull();
+    expect(parsePlannedRewardR("")).toBeNull();
+  });
 });
 
 describe("computePositionSize refuses to size without a contract spec", () => {
@@ -239,6 +252,26 @@ describe("guard clauses that exist to refuse, not to compute", () => {
         pointValue: 1,
       }),
     ).toBeNull();
+  });
+
+  it("computePositionSize refuses a non-finite balance", () => {
+    // `balance <= 0` does NOT catch these: both `NaN <= 0` and `Infinity <= 0`
+    // are false, so a non-finite equity walks past the entry guard and is
+    // stopped only by the `computeRiskAmount` refusal one line before the
+    // division. That refusal is the sole thing standing between a corrupt
+    // equity figure and a position size written into the trade, and it was
+    // reachable but unexercised — the 100 % floor on this module is what
+    // surfaced it.
+    const size = (balance: number) =>
+      computePositionSize({
+        balance,
+        riskPct: 1,
+        entry: 100,
+        stop: 95,
+        pointValue: 1,
+      });
+    expect(size(Number.NaN)).toBeNull();
+    expect(size(Number.POSITIVE_INFINITY)).toBeNull();
   });
 
   it("riskPlanFieldVisible reveals each field only once its inputs exist", () => {

@@ -79,9 +79,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
 | Komanda | Šta radi |
 |---|---|
 | `npm run dev` | Razvojni server |
-| `npm run build` | Produkcijski build — 12 ruta |
+| `npm run build` | Produkcijski build — 15 ruta |
 | `npm run lint` | ESLint. **Očekuje se tačno jedno upozorenje** (vidi ispod) |
-| `npm test` | Vitest — 1088 testa u 77 fajlova, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
+| `npm test` | Vitest — 1265 testova u 91 fajlu, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
 | `npm test -- --coverage` | Izveštaj o pokrivenosti |
 | `npx knip` | Mrtvi fajlovi, eksporti i zavisnosti |
 
@@ -100,7 +100,7 @@ React 19.2.4, TypeScript 5, Tailwind 4, shadcn/ui, TanStack Table 8, Recharts 3,
 
 ## Model podataka
 
-24 tabele i 1 view, sve sa prefiksom `tj_`. **Row-level security je uključen na svih 24 tabele**,
+26 tabela i 1 view, sve sa prefiksom `tj_`. **Row-level security je uključen na svih 26 tabela**,
 svaka politika po istom vlasničkom obrascu:
 
 ```sql
@@ -134,9 +134,10 @@ Test drži oba nad istim ulazima.
 | **Trejdovi** | `tj_positions`, `tj_executions`, `tj_trade_images` |
 | **Nalozi i novac** | `tj_accounts`, `tj_cash_events`, `tj_instruments` |
 | **Konfiguracija** | `tj_option_lists`, `tj_option_items`, `tj_field_defs`, `tj_user_prefs` |
-| **Dnevni proces** | `tj_daily_reports`, `tj_focus_goals` |
+| **Dnevni proces** | `tj_daily_reports`, `tj_focus_goals`, `tj_position_checkins` |
+| **Nedeljni proces** | `tj_weekly_reviews` |
 | **Tracker** | `tj_tracker_rules`, `tj_tracker_checkins` |
-| **Playbook-ovi** | `tj_playbooks`, `tj_playbook_groups`, `tj_playbook_rules`, `tj_position_rules` |
+| **Playbook-ovi** | `tj_playbooks`, `tj_playbook_rules`, `tj_playbook_rule_links`, `tj_position_rules` |
 | **Notebook** | `tj_notes`, `tj_note_folders`, `tj_note_tags` |
 | **Uvoz** | `tj_import_batches`, `tj_import_rows`, `tj_column_mappings` |
 
@@ -162,6 +163,8 @@ obrisano nevezanim snimanjem.
 | `/trades/new`, `/trades/[id]/edit` | Forma trejda: plan, fill-ovi, playbook checklist, psihologija, slike |
 | `/daily` | Dnevni izveštaj + tracker checklist za jedan dan; zaključavanje dana |
 | `/calendar` | Mesečna mreža P&L-a po danu, nedeljni zbirovi |
+| `/weekly` | Nedeljni pregled: ocena nedelje, pet pitanja, brojke nedelje (`week-recap.ts`) |
+| `/playbooks` | Definisanje playbook-a i dokaz na istom ekranu — pravila, per-rule scorecard |
 | `/reports` | Radni sto za izveštaje — bilo koja metrika protiv bilo koje dimenzije, plus pivot |
 | `/tracker` | Preusmerava na `/daily` (ostalo jer je tracker nekad živeo ovde) |
 | `/notebook` | Beleške, folderi, tagovi, markdown |
@@ -376,7 +379,7 @@ Svaka odbijena ćelija je imenovana na svom redu u pregledu (`nečitljivo: qty, 
 
 ### Bezbednosni model
 
-- **RLS na svih 24 tabele**, vlasnički obrazac, provereno nad živom bazom.
+- **RLS na svih 26 tabela**, vlasnički obrazac, provereno nad živom bazom.
 - **`SECURITY DEFINER` + uuid argument je rupa**, jer svaki prijavljen korisnik može da je pozove sa
   tuđim id-em. Svih šest takvih funkcija ima oduzet `EXECUTE` od `authenticated`. Jedina koja ostaje
   pozivna je `tj_seed_my_defaults()`, koja ne prima argument i seed-uje samo podatke pozivaoca.
@@ -397,8 +400,8 @@ P&L i drawdown izračunate nad delimičnim skupom, bez ijednog vidljivog simptom
 
 ## Testovi
 
-1088 testa u 77 fajlova, podeljena u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
-`*.test.ts`, 964 testa) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`, ostatak). Pravilo
+1265 testova u 91 fajlu, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
+`*.test.ts`, 1101 test u 65 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`, ostatak). Pravilo
 je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
 plaćaju cenu DOM-a koji ne dodiruju.
 
@@ -412,7 +415,7 @@ odvojena poda**, provereni nezavisno umesto stopljeni u jedan prosek:
 | `src/components/**` | 64 % | 64 % | 61 % | 65 % |
 
 Zašto dva, ne jedan: `src/lib` je čista aritmetika i drži se blizu 96 % od Faze 0. `src/components`
-je render sloj Faze 10 — 22 od 42 fajla ima **posvećen** render test, ostatak je dohvaćen samo
+je render sloj Faze 10 — 24 od 51 fajla ima **posvećen** render test, ostatak je dohvaćen samo
 uzgredno, kroz ono što neka testirana komponenta uveze (mnogi `src/components/ui` primitivi
 izvoze pod-delove — `DropdownMenuRadioItem`, `PopoverTitle` — koje ništa u aplikaciji ne renderuje).
 Jedan stopljen broj bi ili povukao bibliotečki pod na nivo render sloja, ili slagao o tome koliko

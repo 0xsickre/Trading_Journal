@@ -46,22 +46,3 @@ export async function getWeekGrades(): Promise<Map<string, string>> {
   }
   return out;
 }
-
-/**
- * Week starts that already have a review.
- *
- * Only the keys, and only so the navigation can mark which weeks are written up
- * — the same shape and the same reasoning as `getDailyReportDates`: the answer
- * wanted is whether the week was reviewed, not what the review said.
- */
-export async function getReviewedWeekStarts(): Promise<string[]> {
-  const supabase = await createClient();
-  const data = await selectAllPages((from, to) =>
-    supabase
-      .from("tj_weekly_reviews")
-      .select("week_start")
-      .order("week_start", { ascending: false })
-      .range(from, to),
-  );
-  return data.map((r) => r.week_start);
-}

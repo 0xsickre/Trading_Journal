@@ -54,17 +54,18 @@ export function computePlannedRewardR(params: {
 
   const dir = String(direction ?? "").trim();
   if (dir) {
+    // The ordering guard above already establishes both signs: IEEE-754
+    // subtraction of two unequal finite doubles is never 0, so `stop > entry`
+    // makes `stop - entry` positive by construction. A second `> 0` test here
+    // would be a branch no input can take — and this module is pinned at 100 %
+    // statements precisely so unreachable code cannot accumulate unnoticed.
     if (isShortDirection(dir)) {
       if (!(stop > entry && target < entry)) return null;
-      const risk = stop - entry;
-      const reward = entry - target;
-      return risk > 0 && reward > 0 ? reward / risk : null;
+      return (entry - target) / (stop - entry);
     }
     // long (or non-short)
     if (!(stop < entry && target > entry)) return null;
-    const risk = entry - stop;
-    const reward = target - entry;
-    return risk > 0 && reward > 0 ? reward / risk : null;
+    return (target - entry) / (entry - stop);
   }
 
   const risk = Math.abs(entry - stop);

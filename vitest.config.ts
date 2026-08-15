@@ -39,7 +39,7 @@ export default defineConfig({
     /**
      * Two projects, two environments, on purpose.
      *
-     * The 964 library tests run in `node` and finish in about twelve seconds.
+     * The 1101 library tests run in `node` and finish in about twelve seconds.
      * jsdom builds a document per test file, and putting the whole suite behind
      * it would tax every pure-arithmetic test for a DOM none of them touch.
      * Splitting keeps the fast suite fast and lets the slow one be slow.
