@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { winRateOf } from "@/lib/journal/analytics";
 import { fmtMoney, fmtNum, fmtR, pnlClass } from "@/lib/journal/format";
 import { addMonthsToMonthKey, monthGridDays } from "@/lib/journal/time";
 import {
@@ -53,9 +54,10 @@ function cellValue(
       return String(row.trades);
     case "winrate": {
       // Breakeven days drop out of the denominator, matching how win rate is
-      // computed everywhere else in the app.
-      const decided = row.wins + row.losses;
-      return decided === 0 ? "—" : `${fmtNum((row.wins / decided) * 100, 0)}%`;
+      // computed everywhere else in the app — `winRateOf` JE to „everywhere
+      // else". Vraća null bez ijedne odluke; „—" je izbor OVOG ekrana.
+      const pct = winRateOf(row.wins, row.losses);
+      return pct == null ? "—" : `${fmtNum(pct, 0)}%`;
     }
   }
 }

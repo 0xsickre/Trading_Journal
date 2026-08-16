@@ -57,3 +57,29 @@ export function classifyOutcome(
 export function hasBreakevenBand(range: BreakevenRange): boolean {
   return range.from !== 0 || range.to !== 0;
 }
+
+/**
+ * Jedan breakeven pojas za skup naloga.
+ *
+ * Isti blok od šest redova stajao je u pet kopija — `dashboard.tsx` i četiri
+ * rute (`/daily`, `/calendar`, `/weekly`, `/playbooks`). Dok su identične,
+ * dupliranje je samo trošak; problem je što bi izmena jedne tiho razišla ekrane,
+ * a win rate na Dashboard-u i na kalendaru bi počeo da se razlikuje nad istim
+ * trejdovima.
+ *
+ * Pravilo: pojas se primenjuje samo ako se SVI nalozi u opsegu slažu oko njega.
+ * Kad se ne slažu, pada na tačnu nulu — jer trejd od +15 $ ne može istovremeno
+ * biti breakeven na jednom nalogu i dobitak na drugom, a birati jedan od dva
+ * pojasa značilo bi primeniti tuđe pravilo na tuđe trejdove.
+ *
+ * Prazan skup takođe daje tačnu nulu: nema naloga čiji bi se pojas primenio.
+ */
+export function sharedBreakevenRange(
+  accounts: readonly BreakevenConfig[],
+): BreakevenRange {
+  if (accounts.length === 0) return EXACT_ZERO_RANGE;
+  const ranges = accounts.map((a) => resolveBreakevenRange(a));
+  const first = ranges[0];
+  const uniform = ranges.every((r) => r.from === first.from && r.to === first.to);
+  return uniform ? first : EXACT_ZERO_RANGE;
+}

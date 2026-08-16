@@ -1,6 +1,7 @@
 import { formatInTimeZone } from "date-fns-tz";
 import { addDays, format, parseISO, subDays } from "date-fns";
 import type { FocusGoal } from "./focus-goal";
+import { isoWeekdayOfDayKey } from "./time";
 
 // `DAY_GRADES`, `MICROMANAGE_*` and `MARKET_TYPE*` lived here. The grade moved
 // to the weekly review (rating a day mid-hold reads the P&L), and "did I touch
@@ -61,8 +62,17 @@ export function nextReportDate(date: string): string {
   return formatDate(addDays(parseISO(date), 1));
 }
 
+/**
+ * Petak, po ISO numeraciji (1 = ponedeljak … 5 = petak).
+ *
+ * Ranije `parseISO(date).getDay() === 5`. To JESTE bilo tačno — `parseISO` na
+ * datum-string daje lokalnu ponoć, pa je i čitanje u lokalnom vremenu bilo
+ * dosledno — ali je tražilo da čitalac to zna, i `time.ts` je oko toga nosio
+ * upozorenje da se taj obrazac ne kopira. Sada nema šta da se ne kopira: isti
+ * `isoWeekdayOfDayKey` koji koriste tracker pravila i dimenzija dana u nedelji.
+ */
 export function isFriday(date: string): boolean {
-  return parseISO(date).getDay() === 5;
+  return isoWeekdayOfDayKey(date) === 5;
 }
 
 /**

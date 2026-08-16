@@ -54,7 +54,11 @@ import type {
   TrackerCheckin,
   TrackerRule,
 } from "@/lib/journal/tracker-types";
-import { addDaysToDayKey, dayKeyStartUtc } from "@/lib/journal/time";
+import {
+  accountTimezoneResolver,
+  addDaysToDayKey,
+  dayKeyStartUtc,
+} from "@/lib/journal/time";
 import {
   buildPlaybookLookup,
   computeFollowRate,
@@ -97,9 +101,8 @@ import {
   PlanVsRealityCard,
 } from "@/components/journal/metrics-panel";
 import {
-  EXACT_ZERO_RANGE,
   hasBreakevenBand,
-  resolveBreakevenRange,
+  sharedBreakevenRange,
 } from "@/lib/journal/breakeven";
 import {
   customFieldDimensions,
@@ -323,12 +326,27 @@ export function Dashboard({
     [granularity, anchor, customFrom, customTo],
   );
 
+  /**
+   * Zona po nalogu, sa istim lancem rezervi koji koriste rute.
+   *
+   * Ovde je stajalo `?? "America/New_York"` bez rezerve na PRIMARNI nalog, dok
+   * su `/calendar` i `/playbooks` padale na `primary?.timezone`. Za trejd bez
+   * `account_id` — a takav nastaje kad se nalog obriše, jer je strani ključ
+   * `ON DELETE SET NULL` — Dashboard bi ga datirao po njujorškom danu a kalendar
+   * po zoni primarnog naloga. Na nalogu u `Europe/Berlin` to je isti trejd u dve
+   * različite kolone kalendara.
+   *
+   * Primarni je „prvi aktivan, inače prvi" — isto pravilo koje `getPrimaryAccount`
+   * primenjuje na serveru.
+   */
+  const tzForAccount = useMemo(() => {
+    const primary = accounts.find((a) => a.is_active) ?? accounts[0];
+    return accountTimezoneResolver(accounts, primary?.timezone);
+  }, [accounts]);
+
   const tzOf = useCallback(
-    (t: { row: TradeRow }) => {
-      const a = accounts.find((x) => x.id === t.row.account_id);
-      return a?.timezone ?? "America/New_York";
-    },
-    [accounts],
+    (t: { row: TradeRow }) => tzForAccount(t.row.account_id),
+    [tzForAccount],
   );
 
   const currency = useMemo(() => {
@@ -399,13 +417,11 @@ export function Dashboard({
       accountFilter === "all"
         ? accounts
         : accounts.filter((a) => a.id === accountFilter);
-    if (scoped.length === 0) return EXACT_ZERO_RANGE;
-    const ranges = scoped.map((a) => resolveBreakevenRange(a));
-    const first = ranges[0];
-    const uniform = ranges.every(
-      (r) => r.from === first.from && r.to === first.to,
-    );
-    return uniform ? first : EXACT_ZERO_RANGE;
+    // Isti izraz koji četiri rute koriste — razlika je samo u tome ŠTA se
+    // prosleđuje: Dashboard filtrira po izabranom nalogu, rute uzimaju sve.
+    // Ta razlika je namerna i ostaje; ono što je uklonjeno je pet kopija samog
+    // pravila „pojas važi samo ako se svi nalozi slažu".
+    return sharedBreakevenRange(scoped);
   }, [accountFilter, accounts]);
 
   const scopedCashEvents = useMemo(
@@ -524,11 +540,9 @@ export function Dashboard({
       accountFilter === "all"
         ? trades
         : trades.filter((t) => t.account_id === accountFilter);
-    return tradingDayKeysFromRows(scoped, (row) => {
-      const a = accounts.find((x) => x.id === row.account_id);
-      return a?.timezone ?? "America/New_York";
-    }).size;
-  }, [trades, accountFilter, accounts]);
+    return tradingDayKeysFromRows(scoped, (row) => tzForAccount(row.account_id))
+      .size;
+  }, [trades, accountFilter, tzForAccount]);
   const loggedDays = useMemo(
     () => countLoggedDays(loggedDates),
     [loggedDates],
@@ -616,11 +630,8 @@ export function Dashboard({
       accountFilter === "all"
         ? trades
         : trades.filter((t) => t.account_id === accountFilter);
-    const index = buildTradeDayIndex(
-      scoped,
-      (row) =>
-        accounts.find((a) => a.id === row.account_id)?.timezone ??
-        "America/New_York",
+    const index = buildTradeDayIndex(scoped, (row) =>
+      tzForAccount(row.account_id),
     );
 
     const byDate = new Map<string, Map<string, TrackerCheckin>>();
@@ -646,7 +657,7 @@ export function Dashboard({
         byDate.get(d) ?? new Map(),
       ),
     todayKey);
-  }, [trackerRules, checkins, trades, accounts, accountFilter, todayKey]);
+  }, [trackerRules, checkins, trades, accountFilter, tzForAccount, todayKey]);
 
   /**
    * Process adherence for the score, over the SAME window as the other six

@@ -1,4 +1,4 @@
-import { addDaysToDayKey, zonedDateKey } from "./time";
+import { daysBetweenDayKeys, zonedDateKey } from "./time";
 import type { TradeRow } from "./types";
 
 /**
@@ -37,12 +37,15 @@ function numOrNull(v: unknown): number | null {
  */
 export function daysBetweenKeys(from: string, to: string): number {
   if (!from || !to || to < from) return 0;
-  let day = from;
-  for (let i = 1; i <= 3_650; i++) {
-    if (day >= to) return i;
-    day = addDaysToDayKey(day, 1);
-  }
-  return 3_650;
+  // 1-bazno: dan otvaranja se broji kao prva sesija držanja, pa `from === to`
+  // daje 1 a ne 0. `daysBetweenDayKeys` je 0-bazna kalendarska razlika i tu
+  // razliku u konvenciji nosi ovo `+ 1` — jedino mesto gde stoji.
+  //
+  // Ranije je ovo bila petlja koja je dodavala po jedan dan i brojala korake,
+  // sa gornjom granicom od 3650. Ista aritmetika, ali izvedena drugim putem od
+  // kanonske funkcije, pa su dve implementacije mogle da se raziđu oko prelaska
+  // preko prestupne godine ili promene vremena.
+  return daysBetweenDayKeys(from, to) + 1;
 }
 
 /**

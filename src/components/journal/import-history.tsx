@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { fmtInTz } from "@/lib/journal/time";
+import { fmtInTz, DEFAULT_TZ } from "@/lib/journal/time";
 import type { ImportBatch } from "@/lib/journal/import-batches";
 import type { Account } from "@/lib/journal/types";
 import { undoImportBatch } from "@/app/(app)/import/actions";
@@ -23,7 +23,7 @@ export function ImportHistory({
   const [confirming, setConfirming] = useState<string | null>(null);
 
   const tzOf = (accountId: string | null) =>
-    accounts.find((a) => a.id === accountId)?.timezone ?? "America/New_York";
+    accounts.find((a) => a.id === accountId)?.timezone ?? DEFAULT_TZ;
 
   function undo(batch: ImportBatch) {
     start(async () => {

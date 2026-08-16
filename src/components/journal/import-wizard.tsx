@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Account } from "@/lib/journal/types";
-import { parseImportTime, fmtInTz } from "@/lib/journal/time";
+import { parseImportTime, fmtInTz, DEFAULT_TZ } from "@/lib/journal/time";
 import { parseImportNumber as num } from "@/lib/journal/import-number";
 import { fmtNum } from "@/lib/journal/format";
 import {
@@ -118,7 +118,7 @@ export function ImportWizard({
     accounts.find((a) => a.is_active)?.id ?? accounts[0]?.id ?? "",
   );
   const account = accounts.find((a) => a.id === accountId) ?? null;
-  const tz = account?.timezone ?? "America/New_York";
+  const tz = account?.timezone ?? DEFAULT_TZ;
 
   const [filename, setFilename] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);

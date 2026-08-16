@@ -9,12 +9,12 @@ import { toRealized } from "@/lib/journal/analytics";
 import { enrichTrades } from "@/lib/journal/enriched-trade";
 import { buildPlaybookLookup } from "@/lib/journal/reports/playbook-dimensions";
 import {
-  EXACT_ZERO_RANGE,
-  resolveBreakevenRange,
+  sharedBreakevenRange,
 } from "@/lib/journal/breakeven";
 import { PlaybooksScreen } from "@/components/journal/playbooks-screen";
 import { PageHeader } from "@/components/app/page-header";
 import type { RealizedTrade } from "@/lib/journal/analytics";
+import { accountTimezoneResolver } from "@/lib/journal/time";
 
 /**
  * Playbooks: define them and judge them in the same place.
@@ -43,20 +43,13 @@ export default async function PlaybooksPage() {
   const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
   const currency = primary?.currency ?? "USD";
 
-  const tzOf = (t: RealizedTrade) =>
-    accounts.find((a) => a.id === t.row.account_id)?.timezone ??
-    primary?.timezone ??
-    "America/New_York";
+  const tzFor = accountTimezoneResolver(accounts, primary?.timezone);
+  const tzOf = (t: RealizedTrade) => tzFor(t.row.account_id);
 
   // The same band the dashboard and reports classify with, so a win rate here
   // matches the one on every other screen. Mixed bands fall back to exact zero
   // rather than silently adopting one account's tolerance.
-  const ranges = accounts.map((a) => resolveBreakevenRange(a));
-  const breakevenRange =
-    ranges.length > 0 &&
-    ranges.every((r) => r.from === ranges[0].from && r.to === ranges[0].to)
-      ? ranges[0]
-      : EXACT_ZERO_RANGE;
+  const breakevenRange = sharedBreakevenRange(accounts);
 
   const enriched = enrichTrades(toRealized(trades), {
     tzOf,

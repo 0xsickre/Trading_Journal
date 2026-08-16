@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { RESERVED_KEYS } from "@/lib/journal/reserved-keys";
 import { getCurrentUser } from "@/lib/supabase/user";
-import { isValidTimeZone } from "@/lib/journal/time";
+import { isValidTimeZone, DEFAULT_TZ } from "@/lib/journal/time";
 import {
   FIELD_DEF_GROUPS,
   FIELD_DEF_TYPES,
@@ -349,7 +349,7 @@ export async function addAccount(input: {
     name: input.name.trim(),
     currency: input.currency ?? "USD",
     starting_balance: input.starting_balance ?? 0,
-    timezone: input.timezone ?? "America/New_York",
+    timezone: input.timezone ?? DEFAULT_TZ,
     default_asset_class: input.default_asset_class ?? null,
   });
   if (error) return { ok: false, error: error.message };

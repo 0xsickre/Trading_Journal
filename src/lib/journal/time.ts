@@ -417,3 +417,31 @@ export function monthGridDays(monthKey: string): string[] {
   for (let d = start; d <= end; d = addDaysToDayKey(d, 1)) out.push(d);
   return out;
 }
+
+/**
+ * Zona u kojoj se trejd datira, po nalogu kome pripada.
+ *
+ * Ovo je stajalo u pet kopija sa ČETIRI različita lanca rezervi:
+ *
+ *   dashboard.tsx   ?? "America/New_York"                  ← bez naloga-primarnog
+ *   /daily          ?? primary.timezone
+ *   /weekly         ?? primary.timezone
+ *   /calendar       ?? primary?.timezone ?? DEFAULT_TZ
+ *   /playbooks      ?? primary?.timezone ?? "America/New_York"
+ *
+ * Razlika nije kozmetička. Trejd bez `account_id` — a takav nastaje kad se nalog
+ * obriše, jer je strani ključ `ON DELETE SET NULL` — Dashboard bi datirao po
+ * njujorškom danu, a kalendar po zoni primarnog naloga. Za nalog u
+ * `Europe/Berlin` to je razlika od jedne kolone u kalendaru, na istom trejdu.
+ *
+ * Jedan lanac za sve: zona naloga → zona primarnog naloga → `DEFAULT_TZ`.
+ */
+export function accountTimezoneResolver(
+  accounts: readonly { id: string; timezone: string }[],
+  primaryTz?: string | null,
+): (accountId: string | null | undefined) => string {
+  const byId = new Map(accounts.map((a) => [a.id, a.timezone]));
+  const fallback = primaryTz ?? DEFAULT_TZ;
+  return (accountId) =>
+    (accountId ? byId.get(accountId) : undefined) ?? fallback;
+}

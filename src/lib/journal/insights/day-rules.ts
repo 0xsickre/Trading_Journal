@@ -9,6 +9,7 @@ import { fmtMoney } from "../format";
 import { isShortDirection } from "../plan-calculations";
 import type { DayBucket, InsightContext } from "./context";
 import type { Insight, InsightRule } from "./types";
+import { winRateOf } from "../analytics";
 
 const D = {
   /** R at which a single-trade day counts as a conviction day. */
@@ -100,7 +101,7 @@ export const sizingProblemDay: Rule = {
       .filter((d) => {
         const decided = d.wins + d.losses;
         if (decided < 2 || d.net >= 0) return false;
-        return (d.wins / decided) * 100 >= D.SIZING_PROBLEM_WIN_PCT;
+        return (winRateOf(d.wins, d.losses) ?? 0) >= D.SIZING_PROBLEM_WIN_PCT;
       })
       .map((d) =>
         dayInsight(d, {

@@ -6,7 +6,7 @@
  * same statistics are computed per ISO week and per calendar month instead.
  */
 
-import type { RealizedTrade } from "./analytics";
+import { winRateOf, type RealizedTrade } from "./analytics";
 import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
 import { zonedDateKey, zonedWeekStartKey } from "./time";
 
@@ -217,12 +217,11 @@ export function summarizePeriods(
     if (smallest == null || p < pnlOf(smallest)) smallest = r;
   }
 
-  const decided = winning + losing;
   return {
     periods: rows.length,
     // Flat periods are excluded from the denominator, matching how trade win
     // rate treats breakeven trades.
-    winPct: decided > 0 ? (winning / decided) * 100 : 0,
+    winPct: winRateOf(winning, losing) ?? 0,
     winning,
     losing,
     flat,

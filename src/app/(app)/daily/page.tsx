@@ -24,8 +24,7 @@ import { computeStats, toRealized } from "@/lib/journal/analytics";
 import { computeCostStats } from "@/lib/journal/costs";
 import { tradeVolume } from "@/lib/journal/period-stats";
 import {
-  EXACT_ZERO_RANGE,
-  resolveBreakevenRange,
+  sharedBreakevenRange,
 } from "@/lib/journal/breakeven";
 import {
   DEFAULT_TZ,
@@ -42,6 +41,7 @@ import type { TrackerDayData } from "@/components/journal/tracker-checklist";
 import type { OpenPositionView } from "@/components/journal/open-positions-card";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
+import { accountTimezoneResolver } from "@/lib/journal/time";
 
 export default async function DailyPage({
   searchParams,
@@ -84,8 +84,8 @@ export default async function DailyPage({
   // Per-trade timezone, not the primary account's: a trade on a NY account and
   // one on a London account close on different calendar days, and attributing
   // both with one zone would misfile the money rules for the other.
-  const tzOf = (row: TradeRow) =>
-    accounts.find((a) => a.id === row.account_id)?.timezone ?? timezone;
+  const tzFor = accountTimezoneResolver(accounts, timezone);
+  const tzOf = (row: TradeRow) => tzFor(row.account_id);
 
   const index = buildTradeDayIndex(trades, tzOf);
   const dayRules = rulesLiveOn(rules, reportDate);
@@ -124,12 +124,7 @@ export default async function DailyPage({
    * `dailyPnl` use, so the two screens can never print different figures for the
    * same date. `toRealized` already drops anything not fully closed.
    */
-  const ranges = accounts.map((a) => resolveBreakevenRange(a));
-  const breakevenRange =
-    ranges.length > 0 &&
-    ranges.every((r) => r.from === ranges[0].from && r.to === ranges[0].to)
-      ? ranges[0]
-      : EXACT_ZERO_RANGE;
+  const breakevenRange = sharedBreakevenRange(accounts);
 
   const dayTrades = toRealized(trades).filter(
     (t) => t.closedAt && zonedDateKey(t.closedAt, tzOf(t.row)) === reportDate,

@@ -1,3 +1,4 @@
+import { tradeDirectionMultiplier } from "./position-stats";
 import type { TradeRow } from "./types";
 
 export type SlippageInput = {
@@ -21,14 +22,6 @@ export type SlippageResult = {
   favorable: boolean;
 };
 
-function tradeDirection(dir: string | null): 1 | -1 {
-  return String(dir ?? "")
-    .toLowerCase()
-    .startsWith("short")
-    ? -1
-    : 1;
-}
-
 /** Entry slippage: planned vs avg fill. Positive adversePts = worse fill (cost). */
 export function computeEntrySlippage(input: SlippageInput): SlippageResult | null {
   const { plannedEntry, avgEntry, stopPrice, direction, entryQty, pointValue = null } =
@@ -43,7 +36,7 @@ export function computeEntrySlippage(input: SlippageInput): SlippageResult | nul
     return null;
   }
 
-  const dir = tradeDirection(direction);
+  const dir = tradeDirectionMultiplier(direction);
   const adversePts =
     dir === 1 ? avgEntry - plannedEntry : plannedEntry - avgEntry;
 

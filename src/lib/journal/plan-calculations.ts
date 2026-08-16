@@ -1,5 +1,18 @@
 /** Planned R:R and position size — shared by trade form and tests. */
 
+/**
+ * Da li je trejd short.
+ *
+ * Jedini predikat za smer u celom projektu. Do sada su postojala tri izraza sa
+ * istim telom — ovaj, `tradeDirectionMultiplier` u `position-stats.ts` i privatni
+ * `tradeDirection` u `entry-slippage.ts`. Smer određuje ZNAK svakog rezultata,
+ * pa je to poslednje mesto na kojem tri kopije smeju da žive: dovoljno je da
+ * jedna počne da prepoznaje „SELL" a druge dve ne, i isti trejd bi bio dobitak
+ * na jednom ekranu a gubitak na drugom.
+ *
+ * `startsWith` a ne jednakost: broker i ručni unos pišu „Short", „short",
+ * „Short (swing)".
+ */
 export function isShortDirection(direction: string | null | undefined): boolean {
   return String(direction ?? "")
     .toLowerCase()

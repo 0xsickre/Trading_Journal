@@ -1,5 +1,7 @@
 /** Shared P/L + R math — must stay in sync with `tj_position_stats` SQL view. */
 
+import { isShortDirection } from "./plan-calculations";
+
 export type ExecutionFill = {
   side: "entry" | "exit";
   price: number;
@@ -60,12 +62,9 @@ export type ComputedPositionStats = {
   realized_r_net: number | null;
 };
 
+/** Znak smera: −1 za short, +1 inače. Predikat živi u `plan-calculations.ts`. */
 export function tradeDirectionMultiplier(direction: string | null): 1 | -1 {
-  return String(direction ?? "")
-    .toLowerCase()
-    .startsWith("short")
-    ? -1
-    : 1;
+  return isShortDirection(direction) ? -1 : 1;
 }
 
 /** Planned stop distance (points); prefers plan entry, falls back to avg fill. */

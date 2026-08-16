@@ -100,6 +100,26 @@ export type Stats = {
  * profit factor would be quietly overstated and the parts would stop adding up
  * to net P&L.
  */
+/**
+ * Win rate nad ODLUČENIM trejdovima: dobici / (dobici + gubici) × 100.
+ *
+ * Breakeven je van imenioca. Scratch od ±20 $ nije ni dobitak ni gubitak, i
+ * računati ga kao gubitak potcenilo bi knjigu punu scratch-eva za nekoliko
+ * poena — README §Novac i brojanje.
+ *
+ * Vraća `null` kad nijedan trejd nije odlučen, i to je jedina razlika između
+ * ovog izraza i šest kopija koje su ga do sada nosile (`analytics`, `activity`,
+ * `period-stats`, `month-calendar`, `insights/process-rules`,
+ * `insights/day-rules`). Svaka je birala svoju rezervu — neka 0, neka „—" — pa
+ * je odluka bila razasuta umesto donesena jednom. Sada je izbor vidljiv na
+ * mestu poziva: `?? 0` gde je nula ugovor, sam `null` gde ekran treba da pokaže
+ * odsustvo.
+ */
+export function winRateOf(wins: number, losses: number): number | null {
+  const decided = wins + losses;
+  return decided > 0 ? (wins / decided) * 100 : null;
+}
+
 export function computeStats(
   trades: RealizedTrade[],
   mode: PnlMode = "net",
@@ -192,7 +212,10 @@ export function computeStats(
   // Win/loss is classified by realized money (p > 0 / p < 0), independent of the
   // user-entered `result` label. Breakeven (p === 0) is excluded from winRate's
   // denominator, so winRate + lossRate === 100 among decided trades only.
-  const winRate = wins + losses > 0 ? (wins / (wins + losses)) * 100 : 0;
+  // `?? 0` je ugovor OVE funkcije: `Stats` je skup brojeva, a odluku „prikaži —"
+  // donosi prezentacioni sloj uz `wins`/`losses` koje nosi pored. To su popravke
+  // W1 i W2 utvrdile; vidi spec-conformance.test.ts §nula naspram null-a.
+  const winRate = winRateOf(wins, losses) ?? 0;
   const avgR = rCount > 0 ? totalR / rCount : 0;
   const avgWinR = winRCount > 0 ? winRSum / winRCount : 0;
   const avgLossR = lossRCount > 0 ? lossRSum / lossRCount : 0;

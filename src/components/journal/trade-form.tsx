@@ -64,7 +64,7 @@ import {
 } from "@/lib/journal/plan-calculations";
 import { computePositionStats } from "@/lib/journal/position-stats";
 import { resolveFxRate } from "@/lib/journal/fx";
-import { utcToZonedInput, zonedInputToUtc, fmtInTz } from "@/lib/journal/time";
+import { utcToZonedInput, zonedInputToUtc, fmtInTz, DEFAULT_TZ } from "@/lib/journal/time";
 import {
   NO_COST_DEFAULTS,
   nightsBetween,
@@ -267,7 +267,7 @@ export function TradeForm({
   // Block only NEW trades on a frozen FTMO account (editing existing is allowed).
   const ftmoBlocked =
     !initial && accountId != null && ftmoFailedAccountIds.includes(accountId);
-  const tz = account?.timezone ?? "America/New_York";
+  const tz = account?.timezone ?? DEFAULT_TZ;
   const currency = account?.currency ?? "USD";
   const costDefaults = account
     ? {

@@ -8,8 +8,7 @@ import { toRealized } from "@/lib/journal/analytics";
 import { enrichTrades } from "@/lib/journal/enriched-trade";
 import { buildWeekRecap } from "@/lib/journal/week-recap";
 import {
-  EXACT_ZERO_RANGE,
-  resolveBreakevenRange,
+  sharedBreakevenRange,
 } from "@/lib/journal/breakeven";
 import { DEFAULT_TZ, isValidDayKey } from "@/lib/journal/time";
 import {
@@ -19,6 +18,7 @@ import {
 import { WeeklyReviewForm } from "@/components/journal/weekly-review-form";
 import { PageHeader } from "@/components/app/page-header";
 import type { RealizedTrade } from "@/lib/journal/analytics";
+import { accountTimezoneResolver } from "@/lib/journal/time";
 
 export default async function WeeklyPage({
   searchParams,
@@ -62,18 +62,13 @@ export default async function WeeklyPage({
   // Per-trade timezone, not the primary account's: a trade on a NY account and
   // one on a London account close on different calendar days, and one zone for
   // both would file the week's money under the wrong week at the boundary.
-  const tzOf = (t: RealizedTrade) =>
-    accounts.find((a) => a.id === t.row.account_id)?.timezone ?? timezone;
+  const tzFor = accountTimezoneResolver(accounts, timezone);
+  const tzOf = (t: RealizedTrade) => tzFor(t.row.account_id);
 
   // The same band the dashboard classifies with, so a week's win/loss split here
   // matches the one on every other screen. Mixed bands across accounts fall back
   // to exact zero rather than silently adopting one account's tolerance.
-  const ranges = accounts.map((a) => resolveBreakevenRange(a));
-  const breakevenRange =
-    ranges.length > 0 &&
-    ranges.every((r) => r.from === ranges[0].from && r.to === ranges[0].to)
-      ? ranges[0]
-      : EXACT_ZERO_RANGE;
+  const breakevenRange = sharedBreakevenRange(accounts);
 
   const recap = buildWeekRecap(
     enrichTrades(toRealized(trades), { tzOf, range: breakevenRange }),

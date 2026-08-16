@@ -13,8 +13,7 @@ import {
 import { toRealized } from "@/lib/journal/analytics";
 import { enrichTrades, type DailyReportLite, type FillCounts } from "@/lib/journal/enriched-trade";
 import {
-  EXACT_ZERO_RANGE,
-  resolveBreakevenRange,
+  sharedBreakevenRange,
 } from "@/lib/journal/breakeven";
 import { buildInsightContext } from "@/lib/journal/insights/context";
 import type { PositionCheckin } from "@/lib/journal/position-checkin";
@@ -66,6 +65,7 @@ import {
   currentEquity,
   type CashEvent,
 } from "@/lib/journal/balance";
+import { accountTimezoneResolver } from "@/lib/journal/time";
 
 const DEFAULT_COLUMNS = [
   "net_pnl",
@@ -205,9 +205,12 @@ export function ReportsWorkbench({
   );
 
   const tzOf = useCallback(
-    (t: { row: TradeRow }) =>
-      accounts.find((a) => a.id === t.row.account_id)?.timezone ??
-      "America/New_York",
+    (t: { row: TradeRow }) => {
+      const primary = accounts.find((a) => a.is_active) ?? accounts[0];
+      return accountTimezoneResolver(accounts, primary?.timezone)(
+        t.row.account_id,
+      );
+    },
     [accounts],
   );
 
@@ -217,12 +220,7 @@ export function ReportsWorkbench({
     const scoped = filters.accountIds?.length
       ? accounts.filter((a) => filters.accountIds!.includes(a.id))
       : accounts;
-    if (scoped.length === 0) return EXACT_ZERO_RANGE;
-    const ranges = scoped.map((a) => resolveBreakevenRange(a));
-    const first = ranges[0];
-    return ranges.every((r) => r.from === first.from && r.to === first.to)
-      ? first
-      : EXACT_ZERO_RANGE;
+    return sharedBreakevenRange(scoped);
   }, [accounts, filters.accountIds]);
 
   const pnlOf = useCallback(

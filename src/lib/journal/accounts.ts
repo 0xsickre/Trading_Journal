@@ -41,3 +41,4 @@ export async function getAccountCurrency(
     .maybeSingle();
   return data?.currency ?? null;
 }
+

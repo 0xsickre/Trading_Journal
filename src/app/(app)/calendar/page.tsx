@@ -4,13 +4,13 @@ import { getDailyReportDates } from "@/lib/journal/daily-report-queries";
 import { toRealized, type RealizedTrade } from "@/lib/journal/analytics";
 import { bucketByPeriod, type PeriodRow } from "@/lib/journal/period-stats";
 import {
-  EXACT_ZERO_RANGE,
-  resolveBreakevenRange,
+  sharedBreakevenRange,
 } from "@/lib/journal/breakeven";
 import { todayInTz } from "@/lib/journal/daily-report";
 import { DEFAULT_TZ, isValidMonthKey } from "@/lib/journal/time";
 import { MonthCalendar } from "@/components/journal/month-calendar";
 import { PageHeader } from "@/components/app/page-header";
+import { accountTimezoneResolver } from "@/lib/journal/time";
 
 
 function indexBy(rows: PeriodRow[]): Map<string, PeriodRow> {
@@ -46,10 +46,8 @@ export default async function CalendarPage({
   // Per-trade timezone, not the primary account's: a trade on a NY account and
   // one on a London account close on different calendar days, and one zone for
   // both would file them under the wrong cells.
-  const tzOf = (t: RealizedTrade) =>
-    accounts.find((a) => a.id === t.row.account_id)?.timezone ??
-    primary?.timezone ??
-    DEFAULT_TZ;
+  const tzFor = accountTimezoneResolver(accounts, primary?.timezone);
+  const tzOf = (t: RealizedTrade) => tzFor(t.row.account_id);
 
   // Mixed currencies have no common unit; the dashboard makes the same call.
   const currencies = new Set(accounts.map((a) => a.currency));
@@ -66,12 +64,7 @@ export default async function CalendarPage({
    * intended reading, one unit up: a ±50 band that calls a single +30 trade flat
    * says the same about a day that ended +30.
    */
-  const ranges = accounts.map((a) => resolveBreakevenRange(a));
-  const breakevenRange =
-    ranges.length > 0 &&
-    ranges.every((r) => r.from === ranges[0].from && r.to === ranges[0].to)
-      ? ranges[0]
-      : EXACT_ZERO_RANGE;
+  const breakevenRange = sharedBreakevenRange(accounts);
 
   const realized = toRealized(trades);
 

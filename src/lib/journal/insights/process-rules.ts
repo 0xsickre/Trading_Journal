@@ -8,6 +8,7 @@
  */
 
 import { stringFieldValue } from "../field-values";
+import { winRateOf } from "../analytics";
 import { fmtMoney } from "../format";
 import { isInterference, TOUCHED_LABELS } from "../position-checkin";
 import type { InsightContext } from "./context";
@@ -92,8 +93,7 @@ export const againstMacroBias: Rule = {
     const net = against.reduce((s, e) => s + e.pnl, 0);
     const wins = against.filter((e) => e.outcome === "win").length;
     const losses = against.filter((e) => e.outcome === "loss").length;
-    const decided = wins + losses;
-    const winPct = decided > 0 ? (wins / decided) * 100 : 0;
+    const winPct = winRateOf(wins, losses) ?? 0;
 
     return [
       {

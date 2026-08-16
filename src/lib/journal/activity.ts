@@ -13,7 +13,7 @@
  * traded on days you did nothing.
  */
 
-import type { RealizedTrade } from "./analytics";
+import { winRateOf, type RealizedTrade } from "./analytics";
 import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
 import { isShortDirection } from "./plan-calculations";
 import { zonedDateKey } from "./time";
@@ -61,8 +61,7 @@ export function computeDirectionSplit(
   }
 
   for (const b of [longs, shorts]) {
-    const decided = b.wins + b.losses;
-    b.winRate = decided > 0 ? (b.wins / decided) * 100 : 0;
+    b.winRate = winRateOf(b.wins, b.losses) ?? 0;
   }
 
   return { longs, shorts };

@@ -51,7 +51,7 @@ export async function setCheckin(
   if (!user) return { ok: false, error: "Not signed in." };
 
   const account = await getPrimaryAccount();
-  const today = todayInTz(account?.timezone ?? "America/New_York");
+  const today = todayInTz(account?.timezone ?? DEFAULT_TZ);
   if (reportDate > today)
     return { ok: false, error: "A future day has not started yet." };
 

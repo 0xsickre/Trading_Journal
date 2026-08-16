@@ -23,6 +23,7 @@ import {
 } from "../position-checkin";
 import type { EnrichedTrade } from "../enriched-trade";
 import type { DailyReportLite } from "../enriched-trade";
+import { isoWeekdayOfDayKey } from "../time";
 
 /** Bucket shown when a trade has no value for the dimension. */
 export const EMPTY_BUCKET = "—";
@@ -249,12 +250,20 @@ const WEEKDAYS = [
   "Saturday",
 ] as const;
 
-/** Weekday name from a yyyy-MM-dd key, without re-resolving a timezone. */
+/**
+ * Ime dana iz `yyyy-MM-dd` ključa, bez ponovnog razrešavanja zone.
+ *
+ * Delegira `isoWeekdayOfDayKey`, koji vraća ISO numeraciju 1 = ponedeljak …
+ * 7 = nedelja. `WEEKDAYS` počinje nedeljom, pa `iso % 7` preslikava 7 → 0.
+ *
+ * Ranije je ovde stajao sopstveni `new Date(...Z).getUTCDay()` — tačan, ali
+ * druga implementacija istog kalendarskog računa, sa drugom numeracijom (0–6).
+ * Dve numeracije za isto pitanje su tačno onaj oblik koji se pomeša pri prvoj
+ * izmeni.
+ */
 function weekdayOf(dayKey: string): string | null {
-  if (!dayKey) return null;
-  const d = new Date(`${dayKey}T00:00:00Z`);
-  if (Number.isNaN(d.getTime())) return null;
-  return WEEKDAYS[d.getUTCDay()];
+  const iso = isoWeekdayOfDayKey(dayKey);
+  return iso === 0 ? null : WEEKDAYS[iso % 7];
 }
 
 // --- trade columns ---------------------------------------------------------
