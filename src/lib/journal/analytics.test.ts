@@ -45,6 +45,16 @@ function trade(
       duration_seconds: null,
       point_value: 1,
       tick_size: null,
+      quote_currency: "USD",
+
+      account_currency: "USD",
+
+      fx_rate: 1,
+
+      fx_rate_source: "same_currency",
+
+      money_overridden: false,
+
       point_value_source: "snapshot",
     },
   };
@@ -308,6 +318,16 @@ describe("weekly aggregates attribute to the ACCOUNT's week", () => {
       duration_seconds: 3600,
       point_value: 1,
       tick_size: null,
+      quote_currency: "USD",
+
+      account_currency: "USD",
+
+      fx_rate: 1,
+
+      fx_rate_source: "same_currency",
+
+      money_overridden: false,
+
       point_value_source: "snapshot",
     },
   });
@@ -467,6 +487,16 @@ describe("computeSlippageStats", () => {
           duration_seconds: 3600,
           point_value: 1,
           tick_size: null,
+          quote_currency: "USD",
+
+          account_currency: "USD",
+
+          fx_rate: 1,
+
+          fx_rate_source: "same_currency",
+
+          money_overridden: false,
+
           point_value_source: "snapshot",
         },
       },

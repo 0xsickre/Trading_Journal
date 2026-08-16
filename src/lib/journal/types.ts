@@ -93,6 +93,29 @@ export type PositionStat = {
   tick_size: number | null;
   /** Where `point_value` came from. `missing` means the money columns are null. */
   point_value_source: "snapshot" | "instrument" | "missing";
+  /**
+   * Valuta u kojoj je instrument kotiran, i valuta naloga uz nju.
+   *
+   * Bruto nastaje u prvoj, prikazuje se u drugoj. Kad se razlikuju, novac je
+   * prošao kroz `fx_rate` — ili je null ako kurs nije bio poznat.
+   */
+  quote_currency: string | null;
+  account_currency: string | null;
+  /** Kurs kotacija → nalog, kojim je ovaj trejd zaista vrednovan. */
+  fx_rate: number | null;
+  /**
+   * Odakle kurs. `missing` i `no_account` znače da su novčane kolone null —
+   * isto pravilo kao `point_value_source`, i isti razlog: bolje ništa nego
+   * jen sabran sa dolarom.
+   */
+  fx_rate_source: "snapshot" | "same_currency" | "no_account" | "missing";
+  /**
+   * Da li je bruto UPISAN umesto izračunat iz cena.
+   *
+   * `true` znači da broj dolazi sa brokerovog izvoda i da ga ni ugovorna
+   * specifikacija ni kurs nisu dodirnuli. R je i tada računat iz cena.
+   */
+  money_overridden: boolean | null;
 };
 
 export type TradeTvImages = Partial<Record<TradeImageKind, string>>;

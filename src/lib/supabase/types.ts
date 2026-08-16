@@ -1266,6 +1266,7 @@ export type Database = {
           gross_pl: number | null
           gross_points: number | null
           instrument: string | null
+          money_overridden: boolean | null
           net_pl: number | null
           opened_at: string | null
           account_currency: string | null

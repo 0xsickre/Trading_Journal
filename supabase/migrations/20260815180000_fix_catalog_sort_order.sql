@@ -1,0 +1,33 @@
+-- Dva instrumenta su zadržala redosled iz starog seed-a.
+--
+-- Nađeno revizijom Koraka 3, poređenjem svih 91 reda u bazi protiv
+-- `default-instruments.ts`: 89 se poklapa, dva ne.
+--
+--   simbol   sort_order u bazi   u katalogu
+--   USDCAD           3                4
+--   AUDUSD           4                5
+--
+-- Uzrok je prelaz sa liste od deset simbola na katalog. Stari seed je imao
+-- USDCAD na 3 i AUDUSD na 4; novi katalog ubacuje USDCHF na 3, pa se sve iza
+-- njega pomera za jedno mesto. Migracija `20260815150000` unosi nove redove sa
+-- `on conflict do nothing` — namerno, da ne gazi korisnikove izmene — a njena
+-- jednokratna ispravka je pokrivala samo simbole čije su BROJKE bile pogrešne
+-- (XAUUSD, HG, RTY) i dva preimenovanja (SP500, NAS100). Redosled nije bio na
+-- toj listi jer nije menjao nijedan rezultat.
+--
+-- Posledica je čisto vizuelna: dva instrumenta se u Settings listi pojavljuju
+-- pre USDCHF umesto posle njega. Nijedna brojka ne zavisi od `sort_order`.
+--
+-- Zašto se ipak ispravlja: katalog je ovde merodavan. `sort_order` je jedino
+-- polje instrumenta koje korisnik NE MOŽE da menja kroz UI — `updateInstrument`
+-- prima name, asset_class, point_value, tick_size, tick_value, quote_currency i
+-- is_active, ali ne i redosled. Sve što korisnik ne može da podesi, katalog
+-- treba da drži tačnim, inače razlika stoji zauvek i nema ko da je zatvori.
+--
+-- Ostaje `do nothing` u seed-u, bez promene. Ova vrsta razlike može nastati samo
+-- pri PREUREĐIVANJU već postojećih simbola, što je jednokratan događaj i rešava
+-- se ovako — a ne pretvaranjem seed-a u nešto što svakim učitavanjem strane
+-- prepisuje 91 red.
+
+UPDATE public.tj_instruments SET sort_order = 4 WHERE symbol = 'USDCAD';
+UPDATE public.tj_instruments SET sort_order = 5 WHERE symbol = 'AUDUSD';
