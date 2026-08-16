@@ -199,5 +199,5 @@ export function dimCtx(
 export const metricCtx: MetricContext = {
   pnlBasis: "net",
   range: EXACT_ZERO_RANGE,
-  currency: "USD",
+
 };

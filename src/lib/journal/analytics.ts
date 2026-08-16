@@ -368,7 +368,12 @@ export function breakdownByField(
     dimension: rawFieldDimension(field),
     metricKeys: ["net_pnl", "win_rate", "total_r", "avg_r"],
     dimensionContext: { reportByDate: new Map() },
-    metricContext: { pnlBasis: "net", range, currency: "USD" },
+    // Bez valute, i to je tačno umesto zakucanog `"USD"` koje je ovde stajalo.
+    // `metricContext.currency` služi FORMATIRANJU, a ova funkcija vraća sirove
+    // brojeve (`r.values.*`) koje pozivalac formatira u valuti svog naloga.
+    // Zakucan dolar nije proizvodio pogrešan broj, ali je čitaocu govorio da je
+    // razlaganje na dashboard-u dolarsko — što nije.
+    metricContext: { pnlBasis: "net", range },
     sortBy: "net_pnl",
   });
   /* v8 ignore next 2 -- unreachable: `runReport` answers null only for a

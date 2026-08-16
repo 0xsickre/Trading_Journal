@@ -22,7 +22,7 @@
  * Korak 5.
  */
 
-import type { PositionStat } from "./types";
+import type { PositionStat, TradeRow } from "./types";
 
 export type MoneyProvenance = {
   /** Kratka oznaka za značku, ili null kad nema šta da se kaže. */
@@ -95,4 +95,39 @@ export function moneyProvenance(
   }
 
   return NONE;
+}
+
+/**
+ * Zatvoreni trejdovi koje nijedna statistika ne broji.
+ *
+ * NALAZ KORAKA 9, i najozbiljnije mesto na kojem broj na ekranu može da bude
+ * pogrešan a da niko ne primeti — jer nije pogrešan, nego NEPOTPUN.
+ *
+ * `toRealized` odbacuje svaki red čiji je `net_pl` null:
+ *
+ *     if (!stats || stats.net_pl == null) return [];
+ *
+ * To je tačna odluka. Trejd koji se ne može vrednovati ne sme da uđe u zbir kao
+ * nula, i ceo projekat je oko toga izgrađen. Ali odbačen red nestaje iz SVEGA
+ * što se od `toRealized` gradi: broja trejdova, neto rezultata, profit factora,
+ * expectancy, Sickre Score-a, kalendara, izveštaja i uvida.
+ *
+ * Trejder sa deset zatvorenih trejdova, od kojih su tri na simbolu bez
+ * instrumenta, vidi „7 trades" i neto koji izostavlja tri stvarna rezultata.
+ * `/journal` od Koraka 8 nosi značku po redu, ali dashboard i izveštaji ne kažu
+ * ništa — a to su ekrani na kojima se gleda ukupno stanje.
+ *
+ * Ova funkcija broji upravo taj razmak, da bi ekran mogao da ga prizna. NE
+ * pokušava da ga popuni: procena bi bila izmišljanje, a to je greška od koje
+ * sve ovo i beži.
+ */
+export function unpricedClosedCount(trades: readonly TradeRow[]): number {
+  let n = 0;
+  for (const t of trades) {
+    // Samo zatvoreni. Planiran ili propušten trejd nema šta da vrednuje, a
+    // otvoren još nije ni realizovao rezultat — nijedan od njih nije razmak.
+    if (t.status !== "closed") continue;
+    if (t.stats?.net_pl == null) n++;
+  }
+  return n;
 }

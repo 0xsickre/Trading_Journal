@@ -41,7 +41,6 @@ import type { Account } from "./types";
 const ACCOUNT = {
   id: "acc1",
   name: "Main",
-  currency: "USD",
   starting_balance: 10_000,
   timezone: "America/New_York",
   breakeven_from: -20,
@@ -186,7 +185,7 @@ describe("one trade, from form values to a report row", () => {
     dimension: rawFieldDimension("setup_grade"),
     metricKeys: ["net_pnl", "trade_count", "win_rate", "avg_r", "expectancy"],
     dimensionContext: { reportByDate: new Map() },
-    metricContext: { pnlBasis: "net", range, currency: "USD" },
+    metricContext: { pnlBasis: "net", range },
     minSample: 1,
   });
 
@@ -212,7 +211,7 @@ describe("one trade, from form values to a report row", () => {
       dimension: rawFieldDimension("setup_grade"),
       metricKeys: ["net_pnl"],
       dimensionContext: { reportByDate: new Map() },
-      metricContext: { pnlBasis: "net", range, currency: "USD" },
+      metricContext: { pnlBasis: "net", range },
       minSample: 5,
     });
     expect(guarded!.rows[0].belowSample).toBe(true);

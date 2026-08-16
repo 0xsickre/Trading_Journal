@@ -7,6 +7,7 @@ import {
   type BreakevenConfig,
 } from "./breakeven";
 import { isFriday } from "./daily-report";
+import { lifecycleStatusHint } from "./trade-lifecycle";
 import { daysBetweenKeys } from "./open-positions";
 import { isShortDirection } from "./plan-calculations";
 import { tradeDirectionMultiplier } from "./position-stats";
@@ -180,5 +181,27 @@ describe("zona naloga — jedan lanac rezervi", () => {
   it("bez primarnog naloga pada na DEFAULT_TZ", () => {
     const tz = accountTimezoneResolver([], null);
     expect(tz(null)).toBe("America/New_York");
+  });
+});
+
+describe("poruke o statusu — jedan jezik", () => {
+  it("nijedan status ne odgovara na srpskom", () => {
+    // `lifecycleStatusHint("closed")` je vraćao „Zatvoren trade." — jedina
+    // srpska rečenica među pet, i to na najčešćem statusu u knjizi. Tekst je
+    // `title` na svakoj značci u gridu, pa ga je korisnik viđao češće od bilo
+    // koje druge poruke u ovom modulu.
+    //
+    // Provera je na SLOVIMA, ne na spisku reči: dijakritika je jedini pouzdan
+    // znak, a svaka nova poruka koja se omakne na srpskom nosi bar jedno.
+    for (const status of ["planned", "missed", "open", "partial", "closed"]) {
+      const hint = lifecycleStatusHint(status);
+      expect(hint, status).not.toMatch(/[čćžšđČĆŽŠĐ]/);
+      expect(hint.length, status).toBeGreaterThan(0);
+    }
+  });
+
+  it("svaki status ima poruku, nepoznat nema", () => {
+    expect(lifecycleStatusHint("closed")).toBe("Closed trade — fully exited.");
+    expect(lifecycleStatusHint("izmisljen")).toBe("");
   });
 });

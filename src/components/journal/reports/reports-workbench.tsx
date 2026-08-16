@@ -358,8 +358,8 @@ export function ReportsWorkbench({
   );
 
   const metricContext = useMemo(
-    () => ({ pnlBasis, range, currency, rules: playbookLookup.rules }),
-    [pnlBasis, range, currency, playbookLookup],
+    () => ({ pnlBasis, range, rules: playbookLookup.rules }),
+    [pnlBasis, range, playbookLookup],
   );
 
   /**

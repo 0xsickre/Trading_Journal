@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moneyProvenance } from "./money-provenance";
+import { moneyProvenance, unpricedClosedCount } from "./money-provenance";
 import type { PositionStat } from "./types";
 
 /**
@@ -102,5 +102,60 @@ describe("moneyProvenance", () => {
       expect(p.title, p.label ?? "").toBeTruthy();
       expect(p.title!.length).toBeGreaterThan(40);
     }
+  });
+});
+
+describe("unpricedClosedCount — nalaz Koraka 9", () => {
+  const t = (over: Record<string, unknown> = {}) =>
+    ({
+      id: "t",
+      status: "closed",
+      stats: { net_pl: 100 },
+      ...over,
+    }) as unknown as Parameters<typeof unpricedClosedCount>[0][number];
+
+  it("broji zatvorene trejdove bez neto rezultata", () => {
+    expect(
+      unpricedClosedCount([
+        t(),
+        t({ stats: { net_pl: null } }),
+        t({ stats: null }),
+      ]),
+    ).toBe(2);
+  });
+
+  it("cela knjiga vrednovana daje nulu", () => {
+    expect(unpricedClosedCount([t(), t(), t()])).toBe(0);
+    expect(unpricedClosedCount([])).toBe(0);
+  });
+
+  it("planiran, propušten i OTVOREN trejd nisu razmak", () => {
+    // Nijedan od njih nema realizovan rezultat koji bi statistika izostavila.
+    // Kad bi se brojali, traka bi stajala na svakoj knjizi sa jednom otvorenom
+    // pozicijom — i prestala bi da znači išta.
+    expect(
+      unpricedClosedCount([
+        t({ status: "planned", stats: null }),
+        t({ status: "missed", stats: null }),
+        t({ status: "open", stats: { net_pl: null } }),
+        t({ status: "partial", stats: { net_pl: null } }),
+      ]),
+    ).toBe(0);
+  });
+
+  it("razmak je tačno ono što `toRealized` odbacuje na zatvorenim trejdovima", () => {
+    // Ista granica koju `toRealized` koristi (`stats.net_pl == null`), da broj u
+    // traci ne bi mogao da se raziđe sa brojem koji stranica prikazuje.
+    const knjiga = [
+      t({ id: "a" }),
+      t({ id: "b" }),
+      t({ id: "c", stats: { net_pl: null } }),
+    ];
+    const usli = knjiga.filter(
+      (x) =>
+        (x as { status: string }).status === "closed" &&
+        (x as { stats: { net_pl: number | null } | null }).stats?.net_pl != null,
+    ).length;
+    expect(usli + unpricedClosedCount(knjiga)).toBe(knjiga.length);
   });
 });

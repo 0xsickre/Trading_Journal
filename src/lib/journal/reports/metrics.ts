@@ -36,7 +36,19 @@ import { computeFollowRate, type RuleLookup } from "./playbook-dimensions";
 export type MetricContext = {
   pnlBasis: PnlMode;
   range: BreakevenRange;
-  currency: string;
+  /**
+   * `currency` je STAJALA ovde i nijedno mesto je nije čitalo.
+   *
+   * Nalaz Koraka 9. Nijedna od trideset metrika je nije dodirivala, ni engine,
+   * ni jedna komponenta — a bila je OBAVEZNA, pa je svaki pozivalac morao da
+   * smisli vrednost. `breakdownByField` je smislio `"USD"`, što je čitaocu
+   * govorilo da je razlaganje na dashboard-u dolarsko. Nije bilo: funkcija
+   * vraća sirove brojeve koje pozivalac formatira u valuti svog naloga.
+   *
+   * Formatiranje ima svoj kontekst (`units.ts`, `FormatContext.currency`) i
+   * njega valuta zaista zanima. Dva konteksta sa istim imenom polja, od kojih
+   * jedno ne radi ništa, su tačno onaj oblik greške zbog kojeg Korak 5 postoji.
+   */
   /**
    * Playbook rule answers, when loaded. Rides on the context for the same
    * reason the custom dimensions do: the catalogue is process-wide and this

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { Download } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, Download } from "lucide-react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -126,6 +127,7 @@ import {
 import { fmtExitEfficiencyPct } from "@/lib/journal/exit-efficiency";
 import { evaluateFtmo, ftmoConfigFromAccount } from "@/lib/journal/ftmo";
 import { FtmoBanner } from "@/components/journal/ftmo-banner";
+import { unpricedClosedCount } from "@/lib/journal/money-provenance";
 import {
   buildMentorPack,
   resolveCalendarRange,
@@ -548,6 +550,23 @@ export function Dashboard({
     [loggedDates],
   );
 
+  /**
+   * Zatvoreni trejdovi koje NIJEDAN broj na ovoj stranici ne uključuje.
+   *
+   * `toRealized` odbacuje svaki red bez `net_pl`, i to je tačno — trejd koji se
+   * ne može vrednovati ne sme da uđe u zbir kao nula. Ali odbačen red nestaje i
+   * iz broja trejdova, i iz neto rezultata, i iz svake metrike ispod. Dashboard
+   * je do sada o tome ćutao, pa je knjiga od deset trejdova sa tri
+   * nevrednovana pisala „7" bez ijedne reči.
+   */
+  const unpriced = useMemo(() => {
+    const scoped =
+      accountFilter === "all"
+        ? trades
+        : trades.filter((t) => t.account_id === accountFilter);
+    return unpricedClosedCount(scoped);
+  }, [trades, accountFilter]);
+
   const winLossRatio = useMemo(
     () => avgWinLossRatio(stats.avgWinMoney, stats.avgLossMoney),
     [stats.avgWinMoney, stats.avgLossMoney],
@@ -842,6 +861,28 @@ export function Dashboard({
           {ftmoStatuses.map(({ account, result }) => (
             <FtmoBanner key={account.id} account={account} result={result} />
           ))}
+        </div>
+      )}
+
+      {unpriced > 0 && (
+        <div
+          role="status"
+          className="flex items-start gap-2 rounded-md border border-[var(--loss)]/40 bg-[var(--loss)]/5 p-3 text-sm"
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[var(--loss)]" />
+          <span>
+            <strong className="font-medium">
+              {unpriced} closed {unpriced === 1 ? "trade is" : "trades are"} missing from every
+              figure on this page.
+            </strong>{" "}
+            Their P&amp;L could not be calculated — no instrument definition, or
+            no exchange rate for a quote currency that differs from the account.
+            Open{" "}
+            <Link href="/journal" className="underline">
+              the journal
+            </Link>{" "}
+            to see which, and fix them in Settings or on the trade.
+          </span>
         </div>
       )}
 

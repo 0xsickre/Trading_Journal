@@ -53,10 +53,9 @@ export function PlaybooksScreen({
     () => ({
       pnlBasis: "net",
       range: breakevenRange,
-      currency,
       rules: lookup.rules,
     }),
-    [breakevenRange, currency, lookup],
+    [breakevenRange, lookup],
   );
 
   /**
@@ -91,6 +90,7 @@ export function PlaybooksScreen({
               trades={trades}
               lookup={lookup}
               metricCtx={metricCtx}
+              currency={currency}
             />
           ))}
         </div>
@@ -114,12 +114,21 @@ function PlaybookScorecard({
   trades,
   lookup,
   metricCtx,
+  currency,
 }: {
   book: Playbook;
   row: ReportRow | undefined;
   trades: EnrichedTrade[];
   lookup: PlaybookLookup;
   metricCtx: MetricContext;
+  /**
+   * Valuta naloga, prosleđena ODVOJENO od `metricCtx`.
+   *
+   * Ranije je jahala na njemu, iako je `MetricContext` kontekst RAČUNANJA a ne
+   * formatiranja i nijedna metrika je nije čitala. `formatMetric` ima svoj
+   * `FormatContext` i njemu valuta zaista treba — pa ide direktno tamo.
+   */
+  currency: string;
 }) {
   const n = row?.n ?? 0;
 
@@ -179,7 +188,7 @@ function PlaybookScorecard({
                   <dd className="text-lg font-semibold tabular-nums">
                     {formatMetric(
                       mkMetric(row?.values[key] ?? null, m.unit, {
-                        currency: metricCtx.currency,
+                        currency,
                       }),
                     )}
                   </dd>
