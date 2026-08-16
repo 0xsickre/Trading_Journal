@@ -228,3 +228,25 @@ drawdown: 100" na nalogu bez ijednog trejda. Iz njega su ispala još dva iste vr
 Zaključak koji ostaje, i za ovaj dokument i za README: **parity na papiru nije parity na ekranu.**
 Sve što je ovde označeno kao pokriveno pokriveno je u kodu i pod testom; ništa od toga nije
 zamena za otvaranje stranice sa stvarnim trejdovima.
+
+---
+
+## Dopuna posle runde 4 (avgust 2026.)
+
+Runda 4 nije menjala obim paritetne provere — nije dodala nijedan TradeZella modul. Ali je promenila
+dve stvari koje ovaj dokument tvrdi, pa se beleže ovde umesto da tabele iznad tiho zastare.
+
+**Instrumenti više nisu ograničenje.** Ovaj dokument je na više mesta merio paritet uz napomenu da
+katalog ima deset instrumenata bez `tick_value`-a i bez konverzije valute. Sada ih je **91** — major
+i cross parovi, metali i energija kao CFD i kao fjučersi, index CFD odvojen od index fjučersa, kamate,
+softs i FX fjučersi — sa snimljenim kursom po trejdu. Sve što je u tabelama iznad označeno kao
+„nedostaje jer nema instrumenata" treba čitati kao rešeno.
+
+**Egress ograničenje iz odeljka „Metod" i dalje važi, i sad je izmereno preciznije.** Nije u pitanju
+samo TradeZella: sredina ne pušta ni `hjwvhzcszhjhpocfjatm.supabase.co`. Posledica za ovaj dokument
+je ista kao i ranije — poređenje ostaje na spec dokumentima i na čeklistu, a ne na živim stranicama.
+
+Ono što runda 4 jeste dodala paritetu, uzgred, jeste **poštenje prikaza**: kad broj ne može da se
+izračuna, ekran sada kaže zašto (`unpriced`, `no FX`, `no account`), a kad je bruto prepisan sa
+brokerovog izvoda umesto izračunat iz cena, i to piše (`broker`). Nijedan poznat konkurent ne
+razlikuje ta četiri stanja; to nije paritetna stavka nego razlika u korist ovog journal-a.

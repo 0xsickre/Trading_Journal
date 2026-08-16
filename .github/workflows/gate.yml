@@ -1,0 +1,105 @@
+# Gate — dogovor pretvoren u prepreku.
+#
+# Do Koraka 11 ovaj projekat nije imao CI. Pet provera (typecheck, testovi,
+# lint, build, knip) su se vrtele pred svaki commit zato što je tako DOGOVORENO,
+# a dogovor ne obara pull request. Ovaj fajl to menja: ista petorka, istim
+# redosledom, na svakom push-u i svakom PR-u.
+#
+# Redosled nije proizvoljan — ide od najbržeg ka najskupljem, pa greška pada za
+# sekunde umesto za minute:
+#
+#   typecheck  ~10 s   hvata najveći deo izmena koje ne stoje
+#   test       ~40 s   1712 tvrdnji, uključujući podove pokrivenosti
+#   lint       ~20 s   tačno JEDAN očekivan warning (vidi ispod)
+#   build      ~60 s   jedino mesto koje izvršava Next-ov compiler
+#   knip       ~20 s   0 mrtvih fajlova, 0 mrtvih zavisnosti
+#
+# `--frozen-lockfile` preko `npm ci`: build koji sme da promeni lockfile nije
+# isti build koji je čovek pokrenuo lokalno.
+
+name: gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Novi push na istu granu otkazuje prethodni prolaz. Bez ovoga tri commit-a u
+# minuti drže tri runnera na poslu koji je već zastareo.
+concurrency:
+  group: gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Build traži ove dve promenljive da bi Next mogao da napravi Supabase
+    # klijenta. Obe su JAVNE po projektu (anon ključ ne daje pristup sam po
+    # sebi — svaki red je iza RLS-a), pa stoje kao repo varijable, ne tajne.
+    # Ako nisu podešene, korak build ispod to kaže rečenicom umesto da padne na
+    # nerazumljivoj grešci iz Next-a.
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: install
+        run: npm ci
+
+      - name: typecheck
+        run: npm run typecheck
+
+      - name: test
+        run: npx vitest run --coverage
+
+      # ESLint izlazi sa 0 i na warning-ima, pa `npm run lint` sam po sebi ne
+      # čuva ništa. Broj se meri i poredi sa jedinim koji je prihvaćen:
+      # `journal-grid.tsx` i React Compiler-ova poruka o TanStack Table-u, koja
+      # je tačna i koju ne možemo ukloniti bez odustajanja od te biblioteke.
+      # Svaki drugi warning je nov i obara prolaz.
+      - name: lint (tačno 1 očekivan warning)
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee /tmp/lint.log || true
+          if grep -qE "✖ [0-9]+ problems? \([1-9][0-9]* errors?" /tmp/lint.log; then
+            echo "::error::ESLint je prijavio greške."
+            exit 1
+          fi
+          warnings=$(grep -oE "\(0 errors, ([0-9]+) warnings?\)" /tmp/lint.log | grep -oE "[0-9]+ warning" | grep -oE "^[0-9]+" || echo 0)
+          echo "warnings=$warnings"
+          if [ "${warnings:-0}" -ne 1 ]; then
+            echo "::error::Očekivan je tačno 1 warning, izmereno: ${warnings:-0}. Vidi /tmp/lint.log."
+            exit 1
+          fi
+
+      - name: build
+        run: |
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Nedostaju repo varijable NEXT_PUBLIC_SUPABASE_URL i/ili NEXT_PUBLIC_SUPABASE_ANON_KEY (Settings → Secrets and variables → Actions → Variables)."
+            exit 1
+          fi
+          npm run build
+
+      # Knip izlazi sa 0 kad nađe samo neiskorišćene EXPORT-e (22 su re-export-i
+      # iz shadcn/ui komponenti i prihvaćeni su). Mrtav FAJL ili mrtva
+      # ZAVISNOST su druga stvar i moraju da obore prolaz.
+      - name: knip (0 mrtvih fajlova, 0 mrtvih zavisnosti)
+        run: |
+          npx knip --no-exit-code 2>&1 | tee /tmp/knip.log
+          if grep -qE "^Unused files" /tmp/knip.log; then
+            echo "::error::Knip je našao mrtve fajlove."
+            exit 1
+          fi
+          if grep -qE "^Unused (dependencies|devDependencies)" /tmp/knip.log; then
+            echo "::error::Knip je našao mrtve zavisnosti."
+            exit 1
+          fi

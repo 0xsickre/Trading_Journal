@@ -908,3 +908,37 @@ disciplina, udobnost i parity; F9–F10 su dokaz da brojevi koje pokazuju stvarn
 **Prva tri koraka, konkretno:** `tj_cash_events` + `classifyOutcome()` → `units.ts` → hold time i
 cost report. Prva dva su temelji koje je skupo naknadno ubaciti; treći je prva stvar koju ćeš videti
 u UI-ju.
+
+---
+
+## Runda 4 — SQL sloj, put upisa i ekran (avgust 2026.)
+
+Jedanaest koraka, vođenih pitanjem koje su prethodne runde ostavile otvorenim: **da li su brojevi
+tačni**, a ne samo da li je kod sam sa sobom saglasan.
+
+Rupa koju je runda zatvorila je bila u temelju: **novac se rađa u SQL-u, a nijedan test nikad nije
+izvršio SQL**. `tj_position_stats` računa `gross_pl`, `net_pl` i `realized_r`; svaki TS test je
+`net_pl` primao kao datost. Dokazana je bila agregacija nad brojem, ne rađanje broja.
+
+| Korak | Šta je bilo | Ishod |
+|---|---|---|
+| 0 | nema `node_modules`, `typecheck` skripte ni CI-ja; brojke u dokumentaciji ne stoje | baseline izmeren, trigger za seed popravljen (0/0/0/0 → radi) |
+| 1 | 10 tabela nigde u repou; baza se ne može rekonstruisati iz koda | bazna šema izvučena, view dokazan bajt za bajt |
+| 2 | SQL nikad izvršen testom | knjiga sa papira, svaka kolona view-a tvrđena |
+| 3 | 10 instrumenata, nema FX konverzije, `tick_value` svuda null | 91 instrument, kurs snimljen pri upisu, `gross_pnl_override` |
+| 4 | tvrdi se da kod radi ono što README kaže, ali ništa to ne proverava | 30 metrika + 7 komponenti skora protiv specifikacije |
+| 5 | pet dupliranih izraza po inventaru | **dvadeset** kopija u šest klasa, dve sa stvarnim razilaženjem |
+| 6 | cena bez ijednog ograničenja; upis u četiri odvojena poziva | CHECK + zod, `tj_save_trade` u jednoj transakciji |
+| 7 | spajanje bira prvog kandidata i briše fill-ove; `110'16` = 11016 | dvosmislenost vidljiva, 32-inski zapis odbijen, undo atomičan |
+| 8 | poreklo novca se ne vidi; 10 komponenti bez testa | `money-provenance.ts`, sedam jedinica pokriveno |
+| 9 | 22 commit-a koje nijedna revizija nije pročitala | neprocenjiv trejd tiho ispada iz svakog broja — sad se priznaje |
+| 10 | aplikacija nikad viđena sa podacima | knjiga kroz živu bazu; **ekran ostaje blokiran mrežom** |
+| 11 | gate se drži konvencijom | `.github/workflows/gate.yml` |
+
+**Šta i dalje nije dokazano** — zapisano u `CODE_REVIEW.md`, „Round 4 — conclusion": jedanaest od
+četrnaest ruta nikad nije viđeno kako iscrtava knjigu (mrežna politika sredine ne pušta Supabase iz
+kontejnera); pet komponenti izveštaja (~1720 linija) nema test; prozor spajanja pri uvozu je i dalje
+procena a ne merenje; migracije reprodukuju žive objekte ali nisu zapis istorije koji se može
+odvrteti.
+
+**Testovi: 1712 u 108 fajlova** (1090 → 1712 kroz rundu 4).

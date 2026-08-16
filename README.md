@@ -79,9 +79,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
 | Komanda | Šta radi |
 |---|---|
 | `npm run dev` | Razvojni server |
-| `npm run build` | Produkcijski build — 15 ruta |
+| `npm run build` | Produkcijski build — 14 ruta |
 | `npm run lint` | ESLint. **Očekuje se tačno jedno upozorenje** (vidi ispod) |
-| `npm test` | Vitest — 1265 testova u 91 fajlu, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
+| `npm test` | Vitest — 1712 testova u 108 fajlova, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
 | `npm test -- --coverage` | Izveštaj o pokrivenosti |
 | `npx knip` | Mrtvi fajlovi, eksporti i zavisnosti |
 
@@ -89,6 +89,23 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
 incompatible library"* — React Compiler odbija da memoizuje komponentu koja koristi
 `useReactTable` iz TanStack Table. Razumemo ga i prihvatamo. To što ih je **tačno 1** je kontrolna
 vrednost: svaki drugi broj znači da je neka izmena nešto uvela.
+
+### CI
+
+`.github/workflows/gate.yml` vrti tih pet provera na svakom push-u na `main` i na svakom pull
+request-u. Do runde 4 gate je postojao samo kao dogovor — vrteo se pred commit zato što je tako
+dogovoreno — a dogovor ne obara pull request.
+
+Dva koraka traže više od jedne komande, jer im alat sam po sebi ne čuva ništa:
+
+- **lint** — ESLint izlazi sa 0 i na upozorenjima, pa se broj MERI i poredi sa jedinim prihvaćenim.
+- **knip** — izlazi sa 0 kad nađe samo neiskorišćene EXPORT-e (22 su re-export-i iz `shadcn/ui`).
+  Mrtav FAJL i mrtva ZAVISNOST se traže odvojeno i obaraju prolaz.
+
+Build traži `NEXT_PUBLIC_SUPABASE_URL` i `NEXT_PUBLIC_SUPABASE_ANON_KEY` kao **repo varijable**
+(Settings → Secrets and variables → Actions → Variables), ne kao tajne — obe su javne po dizajnu,
+jer anon ključ sam po sebi ne daje pristup nijednom redu iza RLS-a. Kad nisu podešene, korak to
+kaže rečenicom umesto da padne na nerazumljivoj grešci iz Next-a.
 
 ### Stack
 
@@ -100,7 +117,7 @@ React 19.2.4, TypeScript 5, Tailwind 4, shadcn/ui, TanStack Table 8, Recharts 3,
 
 ## Model podataka
 
-26 tabela i 1 view, sve sa prefiksom `tj_`. **Row-level security je uključen na svih 26 tabela**,
+25 tabela i 1 view, sve sa prefiksom `tj_`. **Row-level security je uključen na svih 25 tabela**,
 svaka politika po istom vlasničkom obrascu:
 
 ```sql
@@ -139,7 +156,7 @@ Test drži oba nad istim ulazima.
 | **Tracker** | `tj_tracker_rules`, `tj_tracker_checkins` |
 | **Playbook-ovi** | `tj_playbooks`, `tj_playbook_rules`, `tj_playbook_rule_links`, `tj_position_rules` |
 | **Notebook** | `tj_notes`, `tj_note_folders`, `tj_note_tags` |
-| **Uvoz** | `tj_import_batches`, `tj_import_rows`, `tj_column_mappings` |
+| **Uvoz** | `tj_import_batches`, `tj_import_rows` |
 
 ### Korisnički definisana polja
 
@@ -379,7 +396,7 @@ Svaka odbijena ćelija je imenovana na svom redu u pregledu (`nečitljivo: qty, 
 
 ### Bezbednosni model
 
-- **RLS na svih 26 tabela**, vlasnički obrazac, provereno nad živom bazom.
+- **RLS na svih 25 tabela**, vlasnički obrazac, provereno nad živom bazom.
 - **`SECURITY DEFINER` + uuid argument je rupa**, jer svaki prijavljen korisnik može da je pozove sa
   tuđim id-em. Svih šest takvih funkcija ima oduzet `EXECUTE` od `authenticated`. Jedina koja ostaje
   pozivna je `tj_seed_my_defaults()`, koja ne prima argument i seed-uje samo podatke pozivaoca.
@@ -400,9 +417,9 @@ P&L i drawdown izračunate nad delimičnim skupom, bez ijednog vidljivog simptom
 
 ## Testovi
 
-1265 testova u 91 fajlu, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
-`*.test.ts`, 1101 test u 65 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`, ostatak). Pravilo
-je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
+1712 testova u 108 fajlova, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
+`*.test.ts`, 1496 testova u 78 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
+216 testova u 30 fajlova). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
 plaćaju cenu DOM-a koji ne dodiruju.
 
 `vitest.config.ts` nosi **podove** pokrivenosti, ne ciljeve — stoje na onome što paket trenutno

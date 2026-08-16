@@ -3055,3 +3055,280 @@ by the run recorded above. The fixture was mutation-checked: changing the R deno
 **Still not established here.** The library was proved against the SQL for a single position. How
 those positions aggregate into win rate, profit factor, expectancy and the score is Step 4's
 subject, and the screen is Step 10's.
+
+---
+
+## Steps 3–11 — the rest of round 4
+
+Steps 0–2 above are written up in full. Steps 3–11 are recorded here as one chapter, finding by
+finding, in the same format: what was found, how it was measured, what was done, and what it cost.
+
+Every fix below carries a regression test that was **confirmed to fail before the change** and to
+pass after — the same rule rounds 1–3 used. Where the finding was in SQL, the proof is a
+measurement on the live database, quoted verbatim.
+
+### Step 3 — instrument, currency and contract spec
+
+`tj_instruments` held ten rows, `tick_value` null on all of them, and P&L was never converted:
+a USDJPY trade produced yen and was added to dollars. The catalogue is now 91 instruments —
+majors and crosses, metals and energy as both CFD and futures, index CFDs separated from index
+futures, rates, softs and FX futures — with `point_value × tick_size = tick_value` holding on every
+futures row.
+
+`fx_rate_at_trade` was added and **snapshotted on write**, for the same reason `point_value_at_trade`
+was: without it, today's rate silently rewrites last year's P&L on every page load. The view
+multiplies by it, and when the rate is unknown the money columns go null rather than pretending
+the pair is dollar-denominated.
+
+The owner then rejected the per-trade FX field as unnecessary — the platform already converted the
+number, and it is typed in by hand or imported. That was accepted, and `gross_pnl_override` exists
+because of it: a gross figure entered directly bypasses both the contract spec and the rate. **R is
+still measured from prices even then**, because money and R are two different questions and the
+override answers only the first. The deviation from "money is never written twice" was flagged at
+the time and is restated here rather than buried.
+
+### Step 4 — the formulas against the specification
+
+30 report metrics and 7 score components were derived on paper and asserted against what
+`README.md` §Metrike claims: `periodsPerYear` measured rather than assumed to be 252, Sortino
+dividing by all days, `MIN_RATIO_DAYS = 5`, average daily drawdown keeping non-losing days in the
+denominator, the Sickre weights, the band floors, `WIN_PCT_TOP_THRESHOLD`. Every metric was then
+run through seven degenerate populations — 210 assertions that no metric returns `NaN` or
+`undefined`.
+
+**A finding about my own work, not the code.** My first draft asserted that every metric returns
+null on an empty book. That was wrong: `computeStats` deliberately returns 0 and the presentation
+layer decides what "—" means, and `runReport` never builds an empty group at all. The test was
+rewritten to assert the real contract.
+
+### Step 5 — one question, one answer
+
+The inventory listed five duplicated expressions. Consolidating them surfaced **twenty copies in
+six classes** — a sixth breakeven block in `reports-workbench.tsx` and two more `tzOf` closures
+inside `dashboard.tsx` itself.
+
+Two were more than duplication:
+
+- **`tzOf` had four different fallback chains.** `dashboard.tsx` and `reports-workbench.tsx`
+  hardcoded `"America/New_York"` with no primary-account fallback; the routes fell back to
+  `primary?.timezone`. A trade with `account_id = NULL` — which happens on its own when an account
+  is deleted, since the FK is `ON DELETE SET NULL` — would be dated to a different calendar column
+  on the dashboard than on `/calendar` for a Europe/Berlin account.
+- **The breakeven band was resolved six times, and the copies disagreed by construction.** Some
+  took the first account's band when accounts differ; the canonical one falls to exact zero. A
+  +15 $ trade could read breakeven on one screen and a win on another.
+
+**A correction to an earlier finding of mine.** Reconnaissance reported `isFriday` as a latent
+timezone bug. It was not: `time.ts` documents that `parseISO` of a date-only string yields local
+midnight, so `getDay()` is consistent. Two correct implementations, not a bug — merged anyway,
+because it asked the reader to know that.
+
+### Step 6 — the write path
+
+**Price had no constraint anywhere.** Not in the form, not in `buildPositionPatch` (which checks
+column names and type, never range), not in the database. Measured on the live view before the fix:
+
+```
+ES, entry_price −5000, stop −5010, point_value 50, fx 1
+fill entry −5000 ×1, fill exit −4990 ×1
+→ gross_pl = 500, net_pl = 500, realized_r = 1.00
+```
+
+A sign typo does not fail and is not flagged — it prints as an ordinary $500 ES win and enters
+profit factor, expectancy and the score as though it were earned. Not an error: a **confident wrong
+number**, which is the whole reason this round exists.
+
+Six price columns and `tj_executions.price` now carry CHECK constraints, with a zod copy on both
+write paths so the user gets a sentence instead of a constraint violation. `gross_pnl_override`
+deliberately has no lower bound — a loss is a negative number.
+
+The decision to reject `price <= 0` is recorded with its counter-example: WTI settled at −$37.63 on
+20 April 2020. That was a settlement price on one day in history, against every mis-keyed sign and
+every minus pasted from a statement. The rule is changed in one place if it ever needs to be.
+
+**The write was not one transaction.** `createTrade` was four round trips with a compensating
+`delete` after each — and the compensation is itself a network call that can fail. `updateTrade`
+was worse: the position `UPDATE` had already committed before the fills and the rule answers were
+written, so a failure in either could not be undone even in principle. The user read "not saved"
+over a trade that had changed.
+
+`tj_save_trade` does all of it in one function body. Proven by measurement: an update carrying a
+non-existent rule id used to leave `instrument = NQ`, `entry_price = 21000` and one fill behind;
+through the function the same call leaves ES / 5000 / two fills, untouched.
+
+**A regression I introduced and caught by measuring.** The dynamic UPDATE reset `trade_no` to NULL,
+because the form sends `trade_no: initial?.trade_no ?? null` where null means "let the database
+decide", not "clear it". Reading the function would not have found this; running a full payload
+through it did.
+
+`import_batch_id` got a foreign key (`ON DELETE SET NULL`). `PositionStat` stopped being a
+hand-written list of 22 fields against a 29-column view and is now derived from the generated types,
+with `narrowPositionStat` checking the three narrowings at runtime.
+
+### Step 7 — import
+
+**Ambiguity existed in the type but never in the code.** `ImportItem.match_status` has always
+listed `"ambiguous"`; nothing in the project ever produced it. The loop `break`s on the first
+candidate that passes, and candidates arrive ordered by `created_at DESC` — by which trade was
+entered last, which has nothing to do with which trade this row is.
+
+The window is 10 minutes and a price within `max(0.05 %, 0.01)`. For ES at 5000 that is 2.5 points.
+A scalper entering at 5000.00 at 14:00 and again at 5001.50 at 14:06 has two trades that both pass
+the same filter — and merge calls `tj_replace_executions`, which **deletes** the existing fills.
+
+The threshold was not tightened; any number chosen would be invented. Ambiguity is now visible:
+more than one candidate means `ambiguous`, and the row is **created**. The asymmetry is deliberate —
+a surplus trade is deleted in one action, while fills deleted off the correct trade do not come back
+and are not noticed until someone looks for them.
+
+**`110'16` parsed as 11016.** Treasury futures quote in 32nds, so that price is 110.5 — a
+hundredfold error, through the one character nobody had considered: the apostrophe fell under
+"currency symbols and letters are noise". Found by running a real ZB statement format through the
+parser rather than by reading the regex. It is now refused rather than converted, because converting
+needs the instrument (ZB and ZN quote in 32nds, ZF and ZT in fractions of one).
+
+**Commission vanished on an open position.** Costs sat unconditionally on the exit fill, so a
+statement row without an exit price carried neither fee nor swap. Not a visible failure — the trade
+imports, its net result is simply too high by what was actually paid.
+
+**Undo was not one transaction**, and the comment defending its manual delete order was measurably
+false: no foreign key to `tj_positions` or `tj_import_batches` is restrictive — every one is CASCADE
+or SET NULL. `tj_undo_import_batch` does it in one body; `planUndo` stays in TypeScript because it
+decides *what* is restored and has its own test.
+
+`tj_column_mappings` was dropped: table, RLS policy and index existed from the start, no line of code
+read or wrote it, and the database held 0 rows and 0 references.
+
+### Step 8 — code that shows numbers and had never been executed
+
+The view has carried three provenance columns since Step 3. The screen read **one**, in one place.
+The consequence was a hole: a trade on an instrument that *has* a point value but no recorded rate
+has null money and a perfectly ordinary `snapshot` source, so no badge appeared and the P&L column
+rendered a bare dash with nothing to act on.
+
+`money-provenance.ts` is now the single answer, with four states. `broker` is **not** a fault and
+carries `unpriced: false` — that figure is often more accurate than the computed one, because the
+platform converted it at the rate in force at execution. A screen that colours problems red reads
+`unpriced`, never the presence of a badge.
+
+Seven units that print numbers gained tests: `month-calendar` (14 assertions), `open-positions-card`
+(13), `stat-group` (11), both heatmaps, `position-checkin`, `dashboard-prefs`.
+
+`StatGroup`'s invariant — *without a stored preference a group is open* — was previously a claim in
+a comment. Making it default-collapsed fails **eight** tests including the dashboard's KPI
+assertions, which is what turns the claim into a proof: those nine number checks would otherwise
+have gone silently dark.
+
+**Two more findings about my tests, not the code.** `TOUCHED_STATES` is ordered for the screen, not
+by severity (severity lives in `TOUCHED_SEVERITY`, and the declaration order matches the live CHECK).
+`fmtMoney(0, { sign: true })` deliberately omits the sign — zero is neither a win nor a loss.
+
+**Not covered, and left open:** `reports-workbench` (716 lines), `filter-bar` (334),
+`playbooks-screen` (307), `compare-view` (215), `report-chart` (151). Roughly 1720 lines, mostly UI
+state and URL parameters, whose numbers are computed by `lib` modules that *are* covered.
+
+### Step 9 — the code no review had read
+
+The six modules that landed after Phase 10 all had tests. The gap was not coverage — it was that
+nobody had **read** them. Three findings, each of a kind a test written alongside the code would
+share the assumption of and therefore miss.
+
+**An unpriceable trade silently leaves every number.** `toRealized` drops any row whose `net_pl` is
+null, which is correct — a trade that cannot be valued must not enter a sum as zero. But the dropped
+row disappears from everything built on it: trade count, net result, profit factor, expectancy, the
+score, the calendar, the reports and the insights.
+
+A trader with ten closed trades, three of them on a symbol without an instrument, sees **"7 trades"**
+and a net that omits three real results. No number is *wrong*; all of them are **incomplete**, which
+is harder to notice. `/journal` badges the row; the dashboard said nothing. It now carries a banner
+that names the cause and does not attempt to fill the gap — an estimate would be invention.
+
+**`MetricContext.currency` was dead.** A required field no metric, no engine and no component ever
+read, which every caller had to invent a value for. `breakdownByField` invented `"USD"`, telling the
+reader the dashboard breakdown was dollar-denominated; it is not, the function returns raw numbers.
+Removed. `playbooks-screen` was the only real user, and only as a *carrier* to `formatMetric`, which
+has its own `FormatContext` — so the currency goes there directly now.
+
+**`lifecycleStatusHint("closed")` returned "Zatvoren trade."** The only Serbian sentence among five,
+on the most common status in the book, rendered as the `title` on every badge in the grid. The
+regression guard checks for **diacritics** rather than a word list, so it catches the next one too.
+
+Three things looked suspicious and turned out correct, recorded so they are not re-investigated:
+`spansWeekend`'s bounded loop, `week-recap.net`'s inability to receive a phantom zero, and every
+denominator in `swing-rules` being guarded above.
+
+### Step 10 — the app on screen — **partially done**
+
+A temporary test user was created (the owner's account was not touched) and a paper-derived book
+seeded through `tj_save_trade`. Every figure the view produced matches the paper to the cent:
+
+| # | trade | gross | net | R |
+|---|---|---|---|---|
+| 1 | ES Long 2 @ 5000→5010 | +1000 | +996 | +1.00 |
+| 2 | ES Short 1 @ 5020→5030 | −500 | −502 | −1.00 |
+| 3 | EURUSD 0.5 lot, swap 0.5 | +150 | +148.50 | +1.50 |
+| 4 | NQ 21000→21000 | 0 | −2 | 0 |
+| 5 | XYZ — no instrument row | null | null | **+2.00** |
+| 6 | NQ open, 3-day time stop | null | null | null |
+
+Row 5 is the interesting one: **R exists although money does not.** R lives in price space and
+survives an unknown point value — but `toRealized` drops the row for its money, so that R appears
+nowhere. A gap, not a bug, and now measured.
+
+Signing up proved the Step 0 trigger fix on the real path: a new account receives 1 account, 91
+instruments, 13 option lists, 4 field definitions, 7 tracker rules and 3 note folders. Before that
+fix it received 0/0/0/0. `tj_seed_playbooks` returning nothing is deliberate and documented in the
+function itself.
+
+`live-book.integration.test.ts` takes those rows **verbatim as the view returned them** and runs them
+through the real library, closing the SQL → `lib` seam on real data: net 640.50, gross 650, 2 wins /
+1 loss / 1 breakeven by the account's band, win rate 66.67 %, total R 1.50, day by day in the
+account's zone. Auth protection was verified on all twelve routes (307 → `/login`), and malformed
+`?month=`, `?date=` and `?week=` do not bring a page down.
+
+**What was not done, and why.** The application cannot sign in from this container: the
+environment's network policy does not allow `hjwvhzcszhjhpocfjatm.supabase.co`
+(`Host not in allowlist`, CONNECT 403). Neither the browser nor the Next server gets a response from
+Supabase, so no authenticated page was ever seen with data. The MCP tools work because they travel
+a different channel, not the container's egress. Fixing this needs an environment settings change —
+adding the host to the network egress allowlist.
+
+Noted and left untouched: the owner entered a real trade through the app during this round
+(EURUSD Short, net 77.50, R 5.49). It priced correctly, which is incidental confirmation that the
+Step 6 write path works in production.
+
+### Step 11 — CI, and the documentation
+
+`.github/workflows/gate.yml` turns the five-check gate from a convention into an obstacle. Two steps
+needed more than a command: ESLint exits 0 on warnings, so the count is measured and compared
+against the one accepted warning; `knip` exits 0 on unused exports, so unused **files** and
+**dependencies** are grepped for separately. Both step scripts were verified against real output
+before being committed, not just validated as YAML.
+
+## Round 4 — conclusion
+
+**What is now established that was not before.**
+
+The SQL layer has been executed and asserted, on a book derived on paper, for the first time in this
+project's history. Money is born in `tj_position_stats`, and until this round every test received
+`net_pl` as a given. The library was proved to agree with it on a single position (Step 2) and then
+on a whole book taken verbatim out of the live database (Step 10).
+
+Range is enforced at the boundary. The write path is one transaction on both doors. Import can no
+longer silently merge into the wrong trade, and can no longer read a Treasury price a hundred times
+too large. Provenance is visible: when money is missing the screen says which of the three reasons
+it is, and when a figure came from the broker rather than from prices it says that too.
+
+**What is still not established.**
+
+- **The screen with real data.** Eleven of the fourteen routes have never been seen rendering a
+  book. Component tests assert what a component does with props; they do not assert that the route
+  hands it the right props. That seam is open, and it is the one Step 10 existed to close.
+- **Five report components** remain untested (~1720 lines).
+- **`realized_r` on an unpriceable trade** is computed and then discarded. Defensible, but nothing
+  on any screen says that R exists and is being ignored.
+- **The 0.05 % / 10-minute merge window** is now honest about ambiguity but has never been measured
+  against a real broker export of a real trading week. The thresholds remain judgement, not
+  measurement.
+- **Migrations are not 1:1 with the database.** The repo's files reproduce the live objects — proved
+  byte-for-byte for `tj_save_trade` — but the history is a squashed retelling, not a replayable log.
