@@ -59,6 +59,7 @@ import {
   EXACT_ZERO_RANGE,
 } from "@/lib/journal/breakeven";
 import { Badge } from "@/components/ui/badge";
+import { moneyProvenance } from "@/lib/journal/money-provenance";
 import { cn } from "@/lib/utils";
 import type { Account, TradeRow } from "@/lib/journal/types";
 import { fmtInTz } from "@/lib/journal/time";
@@ -369,22 +370,28 @@ export function JournalGrid({
         accessorKey: "instrument",
         header: COLUMN_LABELS.instrument,
         cell: ({ row }) => {
-          // A trade whose instrument can no longer be resolved has no point value,
-          // so the view returns null money rather than pricing it in raw points.
-          // Say so here instead of letting the P/L column render a bare dash.
-          const unpriced = row.original.stats?.point_value_source === "missing";
+          // Where this trade's money came from, or why there is none. This used
+          // to read `point_value_source` alone, which left the FX cases silent:
+          // an instrument WITH a point value but without a recorded rate has
+          // null money and a perfectly ordinary `snapshot` source, so the P/L
+          // column rendered a bare dash with nothing to act on.
+          const money = moneyProvenance(row.original.stats);
           return (
             <span className="flex items-center gap-1.5">
               <span className="font-mono">
                 {(row.original.instrument as string) ?? "—"}
               </span>
-              {unpriced && (
+              {money.label && (
                 <Badge
                   variant="outline"
-                  className="text-[var(--loss)]"
-                  title="No instrument definition for this symbol, so its point value is unknown and P/L cannot be calculated. Add the instrument in Settings."
+                  className={
+                    money.unpriced
+                      ? "text-[var(--loss)]"
+                      : "text-muted-foreground"
+                  }
+                  title={money.title ?? undefined}
                 >
-                  unpriced
+                  {money.label}
                 </Badge>
               )}
             </span>
