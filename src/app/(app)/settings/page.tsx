@@ -87,6 +87,20 @@ export default async function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="instruments">
+          {/*
+            Katalog stiže popunjen i sve što je u njemu odmah stoji u formi za
+            unos trejda — ovde se ne „pali" ništa. Sekcija postoji zbog dve
+            stvari koje katalog ne može da pogodi: simbola kojeg nema, i
+            specifikacije koja se kod tvog brokera razlikuje.
+          */}
+          <p className="mb-4 text-sm text-muted-foreground">
+            Katalog od 91 instrumenta je već aktivan i vidljiv pri unosu trejda.
+            Ovde se dodaje simbol kojeg nema, ili ispravlja{" "}
+            <span className="font-medium">$ / point</span> i{" "}
+            <span className="font-medium">tick</span> kad se tvoj broker
+            razlikuje od podrazumevane specifikacije — kod CFD-ova se razlikuje
+            često, kod futures ugovora nikad, jer ih objavljuje berza.
+          </p>
           <InstrumentManager instruments={instruments} />
         </TabsContent>
 

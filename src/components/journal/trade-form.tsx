@@ -17,7 +17,9 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -100,6 +102,25 @@ type ExecRow = {
 };
 
 export type FieldValue = string | number | string[] | null;
+
+/**
+ * Instrumenti po klasi, redosledom kataloga.
+ *
+ * `sort_order` je već grupisan po opsezima (Forex 0–120, CFD 200–312, futures
+ * 400+), pa je dovoljno zadržati redosled u kom stižu iz `getInstruments` i
+ * grupisati susedne. Sopstveni instrument koji korisnik doda bez klase pada u
+ * „Ostalo" umesto da nestane iz liste.
+ */
+function groupByAssetClass(instruments: Instrument[]): [string, Instrument[]][] {
+  const groups = new Map<string, Instrument[]>();
+  for (const i of instruments) {
+    const key = i.asset_class?.trim() || "Ostalo";
+    const arr = groups.get(key);
+    if (arr) arr.push(i);
+    else groups.set(key, [i]);
+  }
+  return [...groups.entries()];
+}
 
 export type TradeFormInitial = {
   id: string;
@@ -1422,11 +1443,24 @@ function FieldRenderer({
             <SelectValue placeholder="Select instrument…" />
           </SelectTrigger>
           <SelectContent>
-            {instruments.map((i) => (
-              <SelectItem key={i.id} value={i.symbol}>
-                {i.symbol}
-                {i.name ? ` — ${i.name}` : ""}
-              </SelectItem>
+            {/*
+              Grupisano po klasi, ne ravna lista od devedeset stavki.
+              Katalog nudi ceo univerzum (Forex, CFD, futures), pa je jedina
+              stvar koja tu listu čini upotrebljivom podela na blokove —
+              Radix uz to nosi kucanje-za-skok, pa se do simbola stiže odmah.
+              Prva verzija je umesto ovoga gasila 80 instrumenata da lista
+              ostane kratka; to je krilo katalog umesto da ga uredi.
+            */}
+            {groupByAssetClass(instruments).map(([cls, list]) => (
+              <SelectGroup key={cls}>
+                <SelectLabel>{cls}</SelectLabel>
+                {list.map((i) => (
+                  <SelectItem key={i.id} value={i.symbol}>
+                    {i.symbol}
+                    {i.name ? ` — ${i.name}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             ))}
           </SelectContent>
         </Select>

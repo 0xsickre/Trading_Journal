@@ -24,8 +24,6 @@ function num(v: string): number | null {
 function InstrumentRow({ inst }: { inst: Instrument }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [name, setName] = useState(inst.name ?? "");
-  const [assetClass, setAssetClass] = useState(inst.asset_class ?? "");
   const [pointValue, setPointValue] = useState(String(inst.point_value));
   const [tickSize, setTickSize] = useState(
     inst.tick_size == null ? "" : String(inst.tick_size),
@@ -33,9 +31,11 @@ function InstrumentRow({ inst }: { inst: Instrument }) {
 
   function save() {
     start(async () => {
+      // Šalju se samo dva polja. Ime i klasa dolaze iz kataloga i menjati ih
+      // ne rešava nijedan problem koji korisnik ima; `$ / point` i `tick` rešavaju
+      // onaj jedan koji ima — broker čija se specifikacija razlikuje od
+      // podrazumevane.
       const res = await updateInstrument(inst.id, {
-        name: name || null,
-        asset_class: assetClass || null,
         point_value: num(pointValue) ?? 1,
         tick_size: num(tickSize),
       });
@@ -57,27 +57,12 @@ function InstrumentRow({ inst }: { inst: Instrument }) {
 
   return (
     <div className="grid grid-cols-12 items-end gap-2 rounded-md border p-2">
-      <div className="col-span-12 sm:col-span-2">
+      <div className="col-span-12 sm:col-span-5">
         <div className="font-mono text-sm font-semibold">{inst.symbol}</div>
         <div className="text-[11px] text-muted-foreground">
-          {inst.quote_currency}
+          {inst.name ? `${inst.name} · ` : ""}
+          {inst.asset_class ?? "—"} · {inst.quote_currency}
         </div>
-      </div>
-      <div className="col-span-6 sm:col-span-3">
-        <Label className="text-[11px] text-muted-foreground">Name</Label>
-        <Input
-          className="h-8"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-      </div>
-      <div className="col-span-6 sm:col-span-2">
-        <Label className="text-[11px] text-muted-foreground">Asset class</Label>
-        <Input
-          className="h-8"
-          value={assetClass}
-          onChange={(e) => setAssetClass(e.target.value)}
-        />
       </div>
       <div className="col-span-4 sm:col-span-2">
         <Label className="text-[11px] text-muted-foreground">$ / point</Label>
@@ -88,7 +73,7 @@ function InstrumentRow({ inst }: { inst: Instrument }) {
           onChange={(e) => setPointValue(e.target.value)}
         />
       </div>
-      <div className="col-span-4 sm:col-span-1">
+      <div className="col-span-4 sm:col-span-2">
         <Label className="text-[11px] text-muted-foreground">Tick</Label>
         <Input
           className="h-8"
@@ -97,7 +82,7 @@ function InstrumentRow({ inst }: { inst: Instrument }) {
           onChange={(e) => setTickSize(e.target.value)}
         />
       </div>
-      <div className="col-span-4 flex gap-1 sm:col-span-2">
+      <div className="col-span-4 flex gap-1 sm:col-span-3">
         <Button
           size="sm"
           className="h-8 flex-1"

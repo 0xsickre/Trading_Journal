@@ -88,13 +88,14 @@ describe("katalog instrumenata", () => {
     }
   });
 
-  it("aktivna je samo radna lista, ostalo čeka u Settings-u", () => {
-    // Forma čita getInstruments(true). Stotinu aktivnih instrumenata pretvorilo
-    // bi padajuću listu u pretragu, pa katalog stiže spreman ali ugašen.
-    const active = DEFAULT_INSTRUMENTS.filter((i) => i.is_active).map((i) => i.symbol);
-    expect(active).toEqual([
-      "EURUSD", "GBPUSD", "USDJPY", "USDCAD", "AUDUSD",
-      "XAUUSD", "SP500", "NAS100", "US2000", "RTY", "HG",
-    ]);
+  it("ceo katalog je aktivan — ni jedan instrument se ne krije od forme", () => {
+    // Prva verzija je aktivirala jedanaest simbola a osamdeset ostavljala
+    // ugašene, „da padajuća lista ne naraste". Posledica je bila da instrument
+    // postoji u Settings-u a ne može da se izabere pri unosu trejda — što je
+    // suprotno od razloga zbog kojeg je katalog i tražen.
+    //
+    // Duga lista se rešava grupisanjem, ne skrivanjem: forma grupiše po
+    // `asset_class`.
+    expect(DEFAULT_INSTRUMENTS.every((i) => i.is_active)).toBe(true);
   });
 });
