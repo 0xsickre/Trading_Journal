@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { chunkIds, selectAllPages } from "@/lib/supabase/paginate";
+import type { Json } from "@/lib/supabase/types";
+import { selectAllPages } from "@/lib/supabase/paginate";
 
 import { computeStatus } from "@/lib/journal/trade-lifecycle";
 import { normalizeInstrumentSymbol } from "@/lib/journal/instrument-aliases";
@@ -363,17 +364,30 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
     }
   }
 
-  for (const { positionId, executions } of plan.restore) {
-    // Atomic: an undo that half-applied would leave the position with neither
-    // the imported fills nor the ones it displaced.
-    const { error: insErr } = await supabase.rpc("tj_replace_executions", {
-      p_position_id: positionId,
-      // `source` is carried back through. The snapshot captures it, and the RPC
-      // coalesces a missing one to `manual` — so listing the other six fields by
-      // hand quietly relabelled every restored fill as hand-entered, including
-      // fills that an EARLIER import had put there. Undo has to give back what
-      // it displaced, field for field, or the word means nothing.
-      p_executions: executions.map((e) => ({
+  // JEDAN POZIV, JEDNA TRANSAKCIJA.
+  //
+  // Ovo je bilo pet grupa odvojenih brisanja preko PostgREST-a — fill-ovi,
+  // slike, pozicije (sve troje u komadima), pa audit redovi, pa batch — i svaki
+  // od njih je mrežni poziv koji može da padne. Poništavanje koje stane na pola
+  // ostavlja knjigu u stanju koje niko nije birao, a korisnik čita grešku nad
+  // uvozom koji je delimično poništen.
+  //
+  // Ručni redosled je bio opravdan komentarom da bi drugi „fails on a
+  // restrictive constraint". IZMERENO: nijedan strani ključ ka `tj_positions`
+  // ni ka `tj_import_batches` nije restriktivan — svi su CASCADE ili SET NULL.
+  // Baza je sve to brisala i sama, tačnije, bez komada i bez redosleda.
+  //
+  // `planUndo` ostaje ovde: ona odlučuje ŠTA se vraća i ima svoj test.
+  // Funkcija u bazi samo izvršava tu odluku.
+  const { error: undoErr } = await supabase.rpc("tj_undo_import_batch", {
+    p_batch_id: batchId,
+    p_restore: plan.restore.map(({ positionId, executions }) => ({
+      position_id: positionId,
+      // `source` se nosi nazad. Snimak ga sadrži, a funkcija svodi odsutan na
+      // `manual` — pa bi nabrajanje ostalih šest polja rukom tiho preimenovalo
+      // svaki vraćen fill u ručno unet, uključujući i one koje je RANIJI uvoz
+      // tu ostavio.
+      executions: executions.map((e) => ({
         side: e.side,
         price: e.price,
         qty: e.qty,
@@ -382,67 +396,14 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
         swap_funding: e.swap_funding,
         source: e.source ?? "manual",
       })),
-    });
-    if (insErr) return { ok: false, error: insErr.message };
-
-    // Reported, not swallowed — the same write `commitImport` throws on, for
-    // the same reason, three hundred lines up: the fills have already been
-    // replaced by the call above, so a failure here leaves the position holding
-    // the restored fills under the status the IMPORT left behind. Closed fills
-    // on a row still reading `open`, which every stat then treats as an
-    // unfinished trade. One of the two paths threw and the other did not, on
-    // identical statements.
-    const { error: stErr } = await supabase
-      .from("tj_positions")
-      .update({
-        status: statusOf(executions),
-        needs_review: executions.length === 0,
-        // Vraća se i kad je bio null: undo koji ostavi rezultat sa izvoda na
-        // trejdu koji ga pre uvoza nije imao nije povratak nego pola izmene.
-        ...(prevOverrides.has(positionId)
-          ? { gross_pnl_override: prevOverrides.get(positionId) ?? null }
-          : {}),
-      })
-      .eq("id", positionId);
-    if (stErr) return { ok: false, error: stErr.message };
-  }
-
-  // Delete children before parents, explicitly, rather than relying on the FK
-  // delete rules being cascades. Audit rows reference the positions and the
-  // positions reference the batch, so removing them in any other order fails
-  // on a restrictive constraint — and the base schema is not versioned in this
-  // repo, so that is not something to assume.
-  const { error: rowsDelErr } = await supabase
-    .from("tj_import_rows")
-    .delete()
-    .eq("batch_id", batchId);
-  if (rowsDelErr) return { ok: false, error: rowsDelErr.message };
-
-  // Chunked for the same reason every `.in()` in this codebase is: PostgREST
-  // takes the id list in the URL, and a batch that created a few thousand
-  // positions builds a URL past the server's limit — which fails the delete
-  // outright, after the audit rows above are already gone.
-  for (const ids of chunkIds(plan.deleteIds)) {
-    const { error: execDelErr } = await supabase
-      .from("tj_executions")
-      .delete()
-      .in("position_id", ids);
-    if (execDelErr) return { ok: false, error: execDelErr.message };
-
-    await supabase.from("tj_trade_images").delete().in("position_id", ids);
-
-    const { error: delErr } = await supabase
-      .from("tj_positions")
-      .delete()
-      .in("id", ids);
-    if (delErr) return { ok: false, error: delErr.message };
-  }
-
-  const { error: batchDelErr } = await supabase
-    .from("tj_import_batches")
-    .delete()
-    .eq("id", batchId);
-  if (batchDelErr) return { ok: false, error: batchDelErr.message };
+      status: statusOf(executions),
+      needs_review: executions.length === 0,
+      restore_override: prevOverrides.has(positionId),
+      gross_pnl_override: prevOverrides.get(positionId) ?? null,
+    })) as unknown as Json,
+    p_delete_ids: plan.deleteIds,
+  });
+  if (undoErr) return { ok: false, error: undoErr.message };
 
   revalidatePath("/journal");
   revalidatePath("/import");

@@ -151,30 +151,6 @@ export type Database = {
           },
         ]
       }
-      tj_column_mappings: {
-        Row: {
-          broker_name: string
-          created_at: string
-          id: string
-          mapping: Json
-          user_id: string
-        }
-        Insert: {
-          broker_name: string
-          created_at?: string
-          id?: string
-          mapping: Json
-          user_id?: string
-        }
-        Update: {
-          broker_name?: string
-          created_at?: string
-          id?: string
-          mapping?: Json
-          user_id?: string
-        }
-        Relationships: []
-      }
       tj_daily_reports: {
         Row: {
           created_at: string
@@ -1322,6 +1298,14 @@ export type Database = {
       tj_replace_position_rules: {
         Args: { p_position_id: string; p_rules: Json }
         Returns: number
+      }
+      tj_undo_import_batch: {
+        Args: {
+          p_batch_id: string
+          p_restore?: Json
+          p_delete_ids?: string[]
+        }
+        Returns: undefined
       }
       tj_save_trade: {
         Args: {

@@ -43,6 +43,27 @@ export function parseImportNumber(input: string | null | undefined): number | nu
     s = s.slice(1, -1).trim();
   }
 
+  /**
+   * Tick notation is a VALUE, not noise — and it is refused.
+   *
+   * `110'16` is how a Treasury futures price is written: 110 and 16/32, i.e.
+   * 110.5. Stripping the apostrophe as though it were a currency symbol gave
+   * `11016` — a hundredfold error on a price, which is the exact class of bug
+   * this module was written to stop, arriving through the one character nobody
+   * had thought about. Found by running a real ZB statement through it, not by
+   * reading the regex.
+   *
+   * Refused rather than converted, because converting needs the instrument:
+   * ZB and ZN quote in 32nds, ZF and ZT in halves and quarters of a 32nd, and
+   * this function is handed a bare cell. A refused cell shows on screen as a
+   * row that will not import; a converted one would be silently wrong for
+   * three of the five contracts.
+   *
+   * `110-16` is the other spelling and was already refused — the hyphen trips
+   * the sign check below.
+   */
+  if (/['"′″]/.test(s)) return null;
+
   // Currency symbols, letters and thin/non-breaking spaces are noise around the
   // number, never part of it. Separators are decided below, so they stay.
   s = s.replace(/[^\d.,+-]/g, "");

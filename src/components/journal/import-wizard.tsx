@@ -22,25 +22,14 @@ import {
   instrumentsMatch,
   normalizeInstrumentSymbol,
 } from "@/lib/journal/instrument-aliases";
+import { matchImportRow, type MatchCandidate } from "@/lib/journal/import-match";
 import {
   commitImport,
   type ImportExec,
   type ImportItem,
 } from "@/app/(app)/import/actions";
 
-export type MatchCandidate = {
-  id: string;
-  instrument: string | null;
-  direction: string | null;
-  avgEntry: number | null;
-  avgExit: number | null;
-  openedAt: string | null;
-  /** Samo provizije. Ranije je nosila fee+swap zbrojene, pa se nije videlo koje od to dvoje se razišlo. */
-  totalFees: number | null;
-  totalSwap: number | null;
-  grossPl: number | null;
-  netPl: number | null;
-};
+export type { MatchCandidate };
 
 type Canonical =
   | "instrument"
@@ -202,9 +191,31 @@ export function ImportWizard({
       // bi značila „trejd je završio na nuli". Razlika je cela poenta polja.
       const profit = map.profit ? read(map.profit, "profit") : null;
 
+      // Količina od nule je isto što i neproččitana ćelija, i mora da se vidi
+      // kao takva. `read` je označavao samo ćeliju koju parser NIJE mogao da
+      // pročita; literalna „0" je prolazila kao stvarna vrednost, a onda
+      // `tj_save_trade` (kao i `tj_replace_executions` pre njega) odbacuje
+      // fill sa `qty <= 0` kroz svoj WHERE. Red bi se uvezao kao prazna
+      // pozicija, bez ijednog fill-a i bez ijedne reči o tome zašto.
+      if (qty <= 0) unreadable.push("qty");
+
       const execs: ImportExec[] = [];
+      const hasExit = exitPrice != null && (exitTime ?? entryTime) != null;
       if (entryPrice != null && entryTime) {
-        execs.push({ side: "entry", price: entryPrice, qty, executed_at: entryTime, fee: 0, swap_funding: 0 });
+        execs.push({
+          side: "entry",
+          price: entryPrice,
+          qty,
+          executed_at: entryTime,
+          // Troškovi idu na IZLAZ kad izlaz postoji, inače na ulaz.
+          //
+          // Ranije su bezuslovno stajali na izlazu, pa je otvorena pozicija —
+          // red izvoda bez izlazne cene — gubila proviziju i swap u potpunosti.
+          // Nije bila greška koja se vidi: trejd se uveze, samo mu je neto
+          // rezultat previsok za iznos koji je stvarno plaćen.
+          fee: hasExit ? 0 : fee,
+          swap_funding: hasExit ? 0 : swap,
+        });
       }
       // `?? new Date()` used to close this branch, and it was the worst line in
       // the import: a row whose timestamps could not be read got stamped with
@@ -227,32 +238,28 @@ export function ImportWizard({
         });
       }
 
-      // matching
-      let matched: MatchCandidate | null = null;
-      const entryMs = entryTime ? new Date(entryTime).getTime() : null;
-      for (const c of candidates) {
-        if (!c.instrument || !instrument) continue;
-        if (!instrumentsMatch(c.instrument, instrument)) continue;
-        if ((c.direction ?? "").toLowerCase() !== (direction ?? "").toLowerCase())
-          continue;
-        const timeOk =
-          entryMs != null && c.openedAt
-            ? Math.abs(new Date(c.openedAt).getTime() - entryMs) < 10 * 60 * 1000
-            : false;
-        const priceOk =
-          entryPrice != null && c.avgEntry != null
-            ? Math.abs(c.avgEntry - entryPrice) <=
-              Math.max(0.0005 * Math.abs(entryPrice), 0.01)
-            : false;
-        if (timeOk && priceOk) {
-          matched = c;
-          break;
-        }
-      }
+      // Spajanje živi u `import-match.ts` — odluka od koje zavisi da li se
+      // postojeći trejd PREPISUJE ne sme da bude petlja bez testa unutar
+      // komponente od 572 linije.
+      const outcome = matchImportRow(
+        { instrument, direction, entryPrice, entryTime },
+        candidates,
+        instrumentsMatch,
+      );
+      const matched = outcome.matched;
 
       const diff: string[] = [];
-      let status: ImportItem["match_status"] = "new";
+      let status: ImportItem["match_status"] = outcome.status === "ambiguous"
+        ? "ambiguous"
+        : "new";
       let decision: ImportItem["decision"] = "create";
+      if (outcome.status === "ambiguous") {
+        // Vidljivo, i kreira se. Ako se ovaj red spoji sa pogrešnim trejdom,
+        // `tj_replace_executions` briše fill-ove onog tačnog.
+        diff.push(
+          `${outcome.candidates.length} postojeća trejda odgovaraju — kreira se novi`,
+        );
+      }
       if (matched) {
         status = "match";
         decision = "merge";
