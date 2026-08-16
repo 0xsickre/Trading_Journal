@@ -1066,6 +1066,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "tj_positions_import_batch_id_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "tj_import_batches"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "tj_positions_playbook_id_fkey"
             columns: ["playbook_id"]
             isOneToOne: false
@@ -1315,6 +1322,16 @@ export type Database = {
       tj_replace_position_rules: {
         Args: { p_position_id: string; p_rules: Json }
         Returns: number
+      }
+      tj_save_trade: {
+        Args: {
+          p_id?: string
+          p_position?: Json
+          p_executions?: Json
+          p_rules?: Json
+          p_images?: Json
+        }
+        Returns: string
       }
       tj_seed_defaults: { Args: { target: string }; Returns: undefined }
       tj_seed_note_folders: { Args: { target: string }; Returns: undefined }

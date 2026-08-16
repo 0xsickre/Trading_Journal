@@ -10,6 +10,11 @@ import { isFtmoAccountFrozen } from "@/lib/journal/ftmo-status";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
 import { getAccountCurrency } from "@/lib/journal/accounts";
 import {
+  firstIssue,
+  invalidTradeNumber,
+  tradeInputSchema,
+} from "@/lib/journal/trade-input-schema";
+import {
   TRADE_IMAGE_KINDS,
   validateTradingViewSnapshotUrl,
   type TradeImageKind,
@@ -66,34 +71,18 @@ function playbookPatch(input: TradeInput) {
 }
 
 /**
- * Replace a trade's rule answers.
+ * Rule answers as the rows `tj_save_trade` expects.
  *
- * Delete-then-insert rather than upsert: a rule the trader UN-answered has no
- * key in the payload at all, so an upsert would leave the old answer standing
- * and the follow rate would keep counting a judgement that was withdrawn.
- *
- * Both halves run inside `tj_replace_position_rules`, for the same reason fills
- * got `tj_replace_executions`. As two round trips, a DELETE that committed and
- * an INSERT that then failed destroyed every recorded answer for the trade — and
- * in `updateTrade` the position write has already landed by then, so returning
- * the error undoes nothing. A function body is one transaction: either the new
- * answers land or the old ones were never removed.
+ * Delete-then-insert rather than upsert — that half lives in the function — for
+ * the reason the payload shape makes plain: a rule the trader UN-answered has
+ * no key here at all, so an upsert would leave the old answer standing and the
+ * follow rate would keep counting a judgement that was withdrawn.
  */
-async function saveRuleAnswers(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  positionId: string,
-  answers: Record<string, boolean> | undefined,
-) {
-  const rules = Object.entries(answers ?? {}).map(([rule_id, followed]) => ({
+function ruleRows(answers: Record<string, boolean> | undefined) {
+  return Object.entries(answers ?? {}).map(([rule_id, followed]) => ({
     rule_id,
     followed,
   }));
-
-  const { error } = await supabase.rpc("tj_replace_position_rules", {
-    p_position_id: positionId,
-    p_rules: rules,
-  });
-  return error?.message ?? null;
 }
 
 /**
@@ -107,6 +96,39 @@ async function sanitizeFields(
   fields: Record<string, string | number | string[] | null>,
 ) {
   return buildPositionPatch(fields, await getFieldDefs(false));
+}
+
+/**
+ * Both write paths, prepared and checked in one place.
+ *
+ * A server action is a public endpoint, and until now this one accepted any
+ * finite number. Measured against the live view before the fix: entry −5000,
+ * exit −4990 on ES priced at 50 came back as `gross_pl = 500`, `realized_r =
+ * 1.00` — a wrong figure wearing the shape of a right one, which then feeds
+ * profit factor, expectancy and the score. The DB now carries the same rules as
+ * CHECK constraints; this copy exists to answer in a sentence.
+ *
+ * Structure is checked BEFORE anything touches the database. `account_id` used
+ * to go straight into `isFtmoAccountFrozen`, so a non-uuid produced a Postgres
+ * type error instead of a message about the account.
+ */
+async function prepareTrade(input: TradeInput) {
+  const parsed = tradeInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false as const, error: firstIssue(parsed.error) };
+  }
+
+  const patch = await sanitizeFields(input.fields);
+  const rangeError = invalidTradeNumber(patch.columns);
+  if (rangeError) return { ok: false as const, error: rangeError };
+
+  const execs = cleanExecs(input.executions);
+  return {
+    ok: true as const,
+    patch,
+    execs,
+    statusPatch: resolveStatus(execs, input.trade_phase, input.current_status),
+  };
 }
 
 function cleanExecs(execs: ExecutionInput[]) {
@@ -151,6 +173,9 @@ function resolveStatus(
 }
 
 export async function createTrade(input: TradeInput) {
+  const prep = await prepareTrade(input);
+  if (!prep.ok) return prep;
+
   // Freeze: block new trades on an FTMO account that broke a rule. Scoped to
   // the one account being written to — this used to evaluate every account.
   if (await isFtmoAccountFrozen(input.account_id)) {
@@ -162,13 +187,7 @@ export async function createTrade(input: TradeInput) {
   }
 
   const supabase = await createClient();
-  const patch = await sanitizeFields(input.fields);
-  const execs = cleanExecs(input.executions);
-  const statusPatch = resolveStatus(
-    execs,
-    input.trade_phase,
-    input.current_status,
-  );
+  const { patch, execs, statusPatch } = prep;
 
   // Freeze the contract spec onto the trade. Without this, later edits to the
   // instrument would retroactively rewrite this trade's P&L.
@@ -180,9 +199,16 @@ export async function createTrade(input: TradeInput) {
     await getAccountCurrency(input.account_id),
   );
 
-  const { data: pos, error: posErr } = await supabase
-    .from("tj_positions")
-    .insert({
+  const images = validateTradeImages(input.images);
+  if (!images.ok) return { ok: false as const, error: images.error };
+
+  // ONE call, and therefore one transaction. This was four round trips with a
+  // compensating `delete` after each — and the compensation is itself a network
+  // call that can fail, leaving a position with no fills: a trade that reads as
+  // planned, with empty money, that nobody asked for.
+  const { data: id, error } = await supabase.rpc("tj_save_trade", {
+    // No `p_id` — its absence is what tells the function to create.
+    p_position: {
       ...patch.columns,
       // Cast: the bag is `unknown`-valued by design (a def can declare any
       // field type); PostgREST serializes it as jsonb either way.
@@ -193,40 +219,22 @@ export async function createTrade(input: TradeInput) {
       ...snapshot,
       ...playbookPatch(input),
       source: "manual",
-    })
-    .select("id")
-    .single();
-  if (posErr || !pos) return { ok: false as const, error: posErr?.message ?? "Insert failed" };
-
-  if (execs.length > 0) {
-    const { error: exErr } = await supabase
-      .from("tj_executions")
-      .insert(execs.map((e) => ({ ...e, position_id: pos.id })));
-    if (exErr) {
-      await supabase.from("tj_positions").delete().eq("id", pos.id);
-      return { ok: false as const, error: exErr.message };
-    }
-  }
-
-  const ruleErr = await saveRuleAnswers(supabase, pos.id, input.rule_answers);
-  if (ruleErr) {
-    await supabase.from("tj_positions").delete().eq("id", pos.id);
-    return { ok: false as const, error: ruleErr };
-  }
-
-  const imgErr = await saveTradeImages(supabase, pos.id, input.images);
-  if (imgErr) {
-    await supabase.from("tj_positions").delete().eq("id", pos.id);
-    return { ok: false as const, error: imgErr };
+    } as Json,
+    p_executions: execs as unknown as Json,
+    p_rules: ruleRows(input.rule_answers) as unknown as Json,
+    p_images: images.rows as unknown as Json,
+  });
+  if (error || !id) {
+    return { ok: false as const, error: error?.message ?? "Insert failed" };
   }
 
   revalidatePath("/journal");
   revalidatePath("/", "layout");
-  return { ok: true as const, id: pos.id };
+  return { ok: true as const, id };
 }
 
 /**
- * Persist the chart links captured on a not-yet-saved trade.
+ * Check the chart links captured on a not-yet-saved trade, and normalise them.
  *
  * Re-validates with `validateTradingViewSnapshotUrl` — the same function the
  * client already ran. That is not duplication: the client check is there to
@@ -235,35 +243,32 @@ export async function createTrade(input: TradeInput) {
  * refused regardless; validating here turns a constraint violation into the
  * sentence that says what to paste instead.
  *
- * Returns an error string so the caller can roll the position back. A trade
- * whose chart silently vanished is worse than one that failed loudly: the
- * screenshot is often the only record of what the setup looked like.
+ * Pure now — it hands back rows instead of writing them, because the write
+ * belongs to `tj_save_trade` along with everything else. It used to insert on
+ * its own and the caller compensated by deleting the position, which is the
+ * pattern this whole step exists to remove.
  */
-async function saveTradeImages(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  positionId: string,
+function validateTradeImages(
   images: TradeInput["images"],
-): Promise<string | null> {
-  const rows: { position_id: string; kind: string; image_url: string }[] = [];
+):
+  | { ok: true; rows: { kind: string; image_url: string }[] }
+  | { ok: false; error: string } {
+  const rows: { kind: string; image_url: string }[] = [];
   for (const img of images ?? []) {
     if (!TRADE_IMAGE_KINDS.includes(img.kind as TradeImageKind)) {
-      return `Unknown chart slot: ${img.kind}`;
+      return { ok: false, error: `Unknown chart slot: ${img.kind}` };
     }
     const validated = validateTradingViewSnapshotUrl(img.image_url);
-    if (!validated.ok) return validated.message;
-    rows.push({
-      position_id: positionId,
-      kind: img.kind,
-      image_url: validated.url,
-    });
+    if (!validated.ok) return { ok: false, error: validated.message };
+    rows.push({ kind: img.kind, image_url: validated.url });
   }
-  if (rows.length === 0) return null;
-
-  const { error } = await supabase.from("tj_trade_images").insert(rows);
-  return error?.message ?? null;
+  return { ok: true, rows };
 }
 
 export async function updateTrade(id: string, input: TradeInput) {
+  const prep = await prepareTrade(input);
+  if (!prep.ok) return prep;
+
   // Same freeze guard as `createTrade`, and for the same reason: editing a
   // planned trade into an active one opens a position on the account, which is
   // exactly what the FTMO freeze exists to stop. Only `createTrade` had it, so
@@ -277,13 +282,7 @@ export async function updateTrade(id: string, input: TradeInput) {
   }
 
   const supabase = await createClient();
-  const patch = await sanitizeFields(input.fields);
-  const execs = cleanExecs(input.executions);
-  const statusPatch = resolveStatus(
-    execs,
-    input.trade_phase,
-    input.current_status,
-  );
+  const { patch, execs, statusPatch } = prep;
 
   // Re-snapshot the contract spec ONLY when the trade moves to a different
   // symbol, or when it predates the snapshot column. Re-stamping on every save
@@ -318,9 +317,20 @@ export async function updateTrade(id: string, input: TradeInput) {
         )
       : {};
 
-  const { error: upErr } = await supabase
-    .from("tj_positions")
-    .update({
+  // Fields, fills and rule answers in ONE transaction — the fix this path
+  // needed most. As three round trips the position UPDATE was already committed
+  // by the time the fills and the answers were written, so a failure in either
+  // could not be undone even in principle: the action returned an error while
+  // half the edit stood in the database. The user read "not saved" over a trade
+  // that had changed.
+  //
+  // Proven on the live database before the change: an update carrying a
+  // non-existent rule id left `instrument = NQ`, `entry_price = 21000` and one
+  // fill behind. Through `tj_save_trade` the same call leaves ES / 5000 / two
+  // fills — untouched.
+  const { error: saveErr } = await supabase.rpc("tj_save_trade", {
+    p_id: id,
+    p_position: {
       ...patch.columns,
       custom: mergeCustom(prevPos.custom, patch.custom) as Json,
       account_id: input.account_id,
@@ -329,22 +339,11 @@ export async function updateTrade(id: string, input: TradeInput) {
       ...snapshot,
       ...playbookPatch(input),
       ...(execs.length > 0 ? { needs_review: false } : {}),
-    })
-    .eq("id", id);
-  if (upErr) return { ok: false as const, error: upErr.message };
-
-  // Delete + insert in ONE transaction. Doing it as two round trips left a
-  // window where the trade had no fills at all — reading as planned with null
-  // P&L to any concurrent render — and the application-level rollback could
-  // itself fail and lose the fills for good.
-  const { error: exErr } = await supabase.rpc("tj_replace_executions", {
-    p_position_id: id,
-    p_executions: execs,
+    } as Json,
+    p_executions: execs as unknown as Json,
+    p_rules: ruleRows(input.rule_answers) as unknown as Json,
   });
-  if (exErr) return { ok: false as const, error: exErr.message };
-
-  const ruleErr = await saveRuleAnswers(supabase, id, input.rule_answers);
-  if (ruleErr) return { ok: false as const, error: ruleErr };
+  if (saveErr) return { ok: false as const, error: saveErr.message };
 
   revalidatePath("/journal");
   revalidatePath(`/trades/${id}`);

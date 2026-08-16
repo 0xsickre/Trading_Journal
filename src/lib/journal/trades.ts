@@ -5,6 +5,7 @@ import { CUSTOM_FIELD_COLUMN, flattenCustom } from "./field-values";
 import { getTradeRuleAnswers } from "./playbooks";
 import type { TradeFormInitial } from "@/components/journal/trade-form";
 import type { TradeImageKind } from "./tradingview-snapshot";
+import { narrowPositionStat } from "./types";
 import type { PositionStat, TradeRow, TradeTvImages } from "./types";
 
 export type { TradeRow } from "./types";
@@ -67,9 +68,15 @@ export async function getTradesWithStats(
     imagesByPosition.set(img.position_id, bucket);
   }
 
+  // `narrowPositionStat` instead of `statRows as PositionStat[]`. The cast
+  // asserted three fields to be non-null and two of them to be closed unions,
+  // and nothing anywhere checked it. The function checks, and an unrecognised
+  // source falls to `missing` — the label that reads as "unpriced" rather than
+  // as "verified".
   const statById = new Map<string, PositionStat>();
-  for (const s of statRows as PositionStat[]) {
-    if (s.position_id) statById.set(s.position_id, s);
+  for (const row of statRows) {
+    const s = narrowPositionStat(row);
+    if (s) statById.set(s.position_id, s);
   }
 
   return positions.map(

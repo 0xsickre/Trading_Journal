@@ -23,6 +23,11 @@ const MONEY_MODULES = [
   "src/lib/journal/position-stats.ts",
   "src/lib/journal/risk-metrics.ts",
   "src/lib/journal/risk-ratios.ts",
+  // Ne računa novac — ČUVA ga. Jedina provera koja stoji između omašenog znaka
+  // i `gross_pl`-a koji izgleda uredno (izmereno: ulaz −5000, izlaz −4990 na ES
+  // daje +500 $ i R = 1.00, bez ijedne oznake). Granica koja propusti jedan
+  // slučaj je granica koje nema, pa je i ona pod istim podom kao i računice.
+  "src/lib/journal/trade-input-schema.ts",
 ];
 
 const alias = {

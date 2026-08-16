@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { chunkIds, selectAllPages } from "@/lib/supabase/paginate";
 
@@ -9,6 +10,11 @@ import { normalizeInstrumentSymbol } from "@/lib/journal/instrument-aliases";
 import { planUndo } from "@/lib/journal/import-undo";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
 import { getAccountCurrency } from "@/lib/journal/accounts";
+import {
+  commitImportSchema,
+  firstIssue,
+  importItemSchema,
+} from "@/lib/journal/trade-input-schema";
 
 export type ImportExec = {
   side: "entry" | "exit";
@@ -53,6 +59,11 @@ function statusOf(execs: ImportExec[]) {
 }
 
 export async function commitImport(input: CommitInput) {
+  const envelope = commitImportSchema.safeParse(input);
+  if (!envelope.success) {
+    return { ok: false as const, error: firstIssue(envelope.error) };
+  }
+
   const supabase = await createClient();
 
   const { data: batch, error: batchErr } = await supabase
@@ -99,6 +110,15 @@ export async function commitImport(input: CommitInput) {
     let outcome: "created" | "merged" | "skipped" | null = null;
 
     try {
+      // Per row, inside the try, so a bad cell costs that row and not the file.
+      // Until now nothing checked the numbers on this path at all: a mapping
+      // that lands the P&L column on `price` produces negative fills, and the
+      // view then prices them into a confident wrong figure. `tj_executions`
+      // now carries `price > 0` as a CHECK too — this is the copy that names
+      // the row.
+      const parsed = importItemSchema.safeParse(item);
+      if (!parsed.success) throw new Error(firstIssue(parsed.error));
+
       if (item.decision === "create") {
         const instrument = normalizeInstrumentSymbol(item.instrument);
         const { data: pos, error } = await supabase
@@ -258,6 +278,13 @@ export type UndoResult =
  * keeps its plan, psychology and notes — the import never owned those.
  */
 export async function undoImportBatch(batchId: string): Promise<UndoResult> {
+  // A non-uuid used to reach PostgREST and come back as a Postgres type error.
+  // "Import batch not found." is the same answer this function already gives
+  // for an id that is well-formed but gone.
+  if (!z.uuid().safeParse(batchId).success) {
+    return { ok: false, error: "Import batch not found." };
+  }
+
   const supabase = await createClient();
 
   const { data: batch } = await supabase

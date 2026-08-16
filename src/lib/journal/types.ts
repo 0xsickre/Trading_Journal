@@ -1,5 +1,6 @@
 // Client-safe shared types (no server-only imports here).
 
+import type { Database } from "@/lib/supabase/types";
 import type { TradeImageKind } from "./tradingview-snapshot";
 
 export type OptionItem = {
@@ -69,54 +70,102 @@ export type Account = {
   ftmo_reset_at: string | null;
 };
 
-export type PositionStat = {
+/** Where `point_value` came from. `missing` means the money columns are null. */
+export const POINT_VALUE_SOURCES = ["snapshot", "instrument", "missing"] as const;
+export type PointValueSource = (typeof POINT_VALUE_SOURCES)[number];
+
+/**
+ * Odakle kurs. `missing` i `no_account` znače da su novčane kolone null — isto
+ * pravilo kao `point_value_source`, i isti razlog: bolje ništa nego jen sabran
+ * sa dolarom.
+ */
+export const FX_RATE_SOURCES = [
+  "snapshot",
+  "same_currency",
+  "no_account",
+  "missing",
+] as const;
+export type FxRateSource = (typeof FX_RATE_SOURCES)[number];
+
+type StatsViewRow = Database["public"]["Views"]["tj_position_stats"]["Row"];
+
+/**
+ * Jedan red `tj_position_stats` — IZVEDEN iz generisanog tipa, ne prepisan.
+ *
+ * Ovo je do sada bio ručni spisak od 22 polja naspram 29 kolona view-a, pa je
+ * `statRows as PositionStat[]` u `trades.ts` bio tvrdnja koju ništa nije
+ * proveravalo: sedam kolona (`user_id`, `account_id`, `instrument`,
+ * `direction`, `status`, `dir_mult`, `gross_points`) tip nije ni poznavao, a
+ * `position_id` i dva `*_source` polja su bila sužena na ne-null iako
+ * PostgREST za view ne garantuje ništa.
+ *
+ * Sada izmena view-a menja i ovaj tip. Kolona koja nestane ili promeni tip
+ * obara typecheck ovde — što je tačno ono što ručni spisak nije mogao.
+ *
+ * `Pick`, a ne ceo red: view nosi i `user_id`, `account_id`, `instrument`,
+ * `direction`, `status`, `dir_mult` i `gross_points`, koje aplikacija čita sa
+ * SAME POZICIJE a ne odavde (provereno grep-om — nijedno mesto ne dodiruje
+ * `stats.instrument` ni ostale). Projekcija je poštenija od `Omit`-a: govori
+ * šta se zaista troši, a nova kolona u view-u ne postaje obaveza za svaki
+ * fixture koji je nikad neće pročitati.
+ *
+ * Tri sužavanja ostaju, i to su jedina tri:
+ *   • `position_id` je `p.id`, primarni ključ — nikad null u praksi;
+ *   • dva `*_source` polja su `CASE` sa `ELSE` granom, pa uvek vrate vrednost.
+ * `narrowPositionStat` ih proverava u vreme izvršavanja, i to ne slepo.
+ */
+export type PositionStat = Pick<
+  StatsViewRow,
+  | "avg_entry"
+  | "avg_exit"
+  | "entry_qty"
+  | "exit_qty"
+  | "gross_pl"
+  | "net_pl"
+  | "total_fees"
+  | "total_swap"
+  | "realized_r"
+  | "realized_r_net"
+  | "opened_at"
+  | "closed_at"
+  | "duration_seconds"
+  | "point_value"
+  | "tick_size"
+  | "quote_currency"
+  | "account_currency"
+  | "fx_rate"
+  | "money_overridden"
+> & {
   position_id: string;
-  avg_entry: number | null;
-  avg_exit: number | null;
-  entry_qty: number | null;
-  exit_qty: number | null;
-  gross_pl: number | null;
-  net_pl: number | null;
-  total_fees: number | null;
-  total_swap: number | null;
-  realized_r: number | null;
-  realized_r_net: number | null;
-  opened_at: string | null;
-  closed_at: string | null;
-  duration_seconds: number | null;
-  /**
-   * Point value actually used to price this trade. Null when neither a snapshot
-   * nor an instrument row could supply one — in that case every money column is
-   * null too, rather than silently pricing the trade in raw points.
-   */
-  point_value: number | null;
-  tick_size: number | null;
-  /** Where `point_value` came from. `missing` means the money columns are null. */
-  point_value_source: "snapshot" | "instrument" | "missing";
-  /**
-   * Valuta u kojoj je instrument kotiran, i valuta naloga uz nju.
-   *
-   * Bruto nastaje u prvoj, prikazuje se u drugoj. Kad se razlikuju, novac je
-   * prošao kroz `fx_rate` — ili je null ako kurs nije bio poznat.
-   */
-  quote_currency: string | null;
-  account_currency: string | null;
-  /** Kurs kotacija → nalog, kojim je ovaj trejd zaista vrednovan. */
-  fx_rate: number | null;
-  /**
-   * Odakle kurs. `missing` i `no_account` znače da su novčane kolone null —
-   * isto pravilo kao `point_value_source`, i isti razlog: bolje ništa nego
-   * jen sabran sa dolarom.
-   */
-  fx_rate_source: "snapshot" | "same_currency" | "no_account" | "missing";
-  /**
-   * Da li je bruto UPISAN umesto izračunat iz cena.
-   *
-   * `true` znači da broj dolazi sa brokerovog izvoda i da ga ni ugovorna
-   * specifikacija ni kurs nisu dodirnuli. R je i tada računat iz cena.
-   */
-  money_overridden: boolean | null;
+  point_value_source: PointValueSource;
+  fx_rate_source: FxRateSource;
 };
+
+/**
+ * Suzi jedan red view-a u `PositionStat`, ili odbij red bez `position_id`.
+ *
+ * Nepoznata vrednost u `*_source` polju pada na `"missing"` — namerno u smeru
+ * OPREZA: `missing` je oznaka koja kaže „novac ovde nije pouzdan", pa nepoznato
+ * stanje čita kao neprocenjeno umesto da ga tiho prizna kao snimljeno. Obrnut
+ * izbor bi vrednost nepoznatog porekla predstavio kao proverenu.
+ */
+export function narrowPositionStat(row: StatsViewRow): PositionStat | null {
+  if (!row.position_id) return null;
+  return {
+    ...row,
+    position_id: row.position_id,
+    point_value_source: (POINT_VALUE_SOURCES as readonly string[]).includes(
+      row.point_value_source ?? "",
+    )
+      ? (row.point_value_source as PointValueSource)
+      : "missing",
+    fx_rate_source: (FX_RATE_SOURCES as readonly string[]).includes(
+      row.fx_rate_source ?? "",
+    )
+      ? (row.fx_rate_source as FxRateSource)
+      : "missing",
+  };
+}
 
 export type TradeTvImages = Partial<Record<TradeImageKind, string>>;
 
