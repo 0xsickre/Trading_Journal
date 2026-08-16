@@ -1143,11 +1143,18 @@ export function Dashboard({
           }
           title="Gross profit / gross loss. ∞ means no losing trades in range."
         />
+        {/* ZAŠTO SE OVO RAZLIKUJE OD `Avg R`.
+            Isti R, dva imenioca — i bez ove rečenice to na ekranu izgleda kao
+            nesaglasnost. Expectancy je ponderisan win rate-om nad ODLUČENOM R
+            populacijom, pa breakeven trejd ispada; `Avg R` je običan prosek
+            preko svih koji imaju R. Na knjizi od 20 trejdova sa jednim
+            breakeven-om to je 12.84/19 = 0.68 naspram 12.84/20 = 0.64. */}
         <Stat
           size="hero"
           label="Expectancy"
           value={fmtR(stats.expectancy)}
           cls={pnlClass(stats.expectancy)}
+          title={`Expected R per trade, weighted by win rate over the ${stats.expectancySample} decided trades that carry an R. Breakeven trades are excluded, which is why this can differ from Avg R — that one is a plain mean over every trade with an R.`}
         />
         <Stat
           size="hero"
@@ -1164,14 +1171,19 @@ export function Dashboard({
           wall. See `stat-group.tsx` for why "open" is an invariant here and not
           merely a default. */}
       <div className="space-y-4">
-        <StatGroup id="result" title="Result — detail" count={9}>
+        <StatGroup id="result" title="Result — detail" count={10}>
           <Stat
             label="Gross P/L"
             value={fmtMoney(stats.grossSum, currency, { sign: true })}
             cls={pnlClass(stats.grossSum)}
           />
           <Stat label="Total R" value={fmtR(stats.totalR)} cls={pnlClass(stats.totalR)} />
-          <Stat label="Avg R" value={fmtR(stats.avgR)} cls={pnlClass(stats.avgR)} />
+          <Stat
+            label="Avg R"
+            value={fmtR(stats.avgR)}
+            cls={pnlClass(stats.avgR)}
+            title="Plain mean R over every trade that has one. Includes breakeven trades, which is why it can sit below Expectancy — that one weights by win rate over decided trades only."
+          />
           <Stat label="Best" value={fmtMoney(stats.best, currency, { sign: true })} cls={pnlClass(stats.best)} />
           <Stat label="Worst" value={fmtMoney(stats.worst, currency, { sign: true })} cls={pnlClass(stats.worst)} />
           <Stat
@@ -1183,12 +1195,28 @@ export function Dashboard({
             value={winLossRatio != null ? fmtNum(winLossRatio, 2) : "—"}
             title="Average winning R divided by average losing R."
           />
+          {/* THE DENOMINATOR, SPELLED OUT.
+
+              `Breakeven` has always been here as a raw count while wins and
+              losses were not, so "Win rate 52.6 %" sat on screen with nothing
+              saying 52.6 % OF WHAT. The reader had to derive it from the trade
+              count minus the breakeven count — arithmetic the screen should be
+              doing. Reported by the owner on a real 20-trade book.
+
+              Beside `Breakeven` on purpose: the three counts add up to
+              `Trades`, and read together they show that breakeven sits OUTSIDE
+              the win-rate denominator rather than being counted as a loss. */}
+          <Stat
+            label="Wins / Losses"
+            value={`${stats.wins} / ${stats.losses}`}
+            title={`Win rate is ${stats.wins} of ${stats.wins + stats.losses} decided trades. Breakeven trades are excluded from both sides, so wins + losses + breakeven = ${stats.count}.`}
+          />
           <Stat
             label="Breakeven"
             value={String(stats.breakeven)}
             title={
               hasBreakevenBand(breakevenRange)
-                ? `Trades landing in ${fmtMoney(breakevenRange.from, currency)} … ${fmtMoney(breakevenRange.to, currency)}.`
+                ? `Trades landing in ${fmtMoney(breakevenRange.from, currency)} … ${fmtMoney(breakevenRange.to, currency)}. Outside the win-rate denominator — neither a win nor a loss.`
                 : "No breakeven band configured — only an exact 0.00 counts, which almost never happens once fees are included. Set a range per account in Settings."
             }
           />

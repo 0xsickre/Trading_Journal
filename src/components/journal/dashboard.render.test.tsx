@@ -125,6 +125,25 @@ describe("the book, on screen — same figures the paper already proved", () => 
     expect(statValue("Worst")).toBe("-$200.00");
   });
 
+  it("IMENILAC WIN RATE-A JE ISPISAN, ne prepušten čitaocu da ga izračuna", () => {
+    // Nalaz vlasnika na stvarnoj knjizi od dvadeset trejdova: dashboard je
+    // pokazivao `Breakeven` kao broj, a dobitke i gubitke nigde. „Win rate
+    // 52.6 %" je stajalo na ekranu bez ijedne naznake OD ČEGA je to procenat —
+    // čitalac je morao da ga izvede iz broja trejdova minus breakeven.
+    //
+    // Tri broja se sada čitaju zajedno i moraju da se saberu u ukupan broj
+    // trejdova. To je tvrdnja koja usput dokazuje i da breakeven stoji VAN
+    // imenioca, a ne da se broji kao gubitak.
+    renderDashboard(rowsOf(BOOK));
+    expect(statValue("Wins / Losses")).toBe("5 / 4");
+    expect(statValue("Breakeven")).toBe("1");
+
+    const wins = 5, losses = 4, breakeven = 1;
+    expect(String(wins + losses + breakeven)).toBe(statValue("Trades"));
+    // 5 od 9 odlučenih = 55.6 %, ne 5 od 10.
+    expect(statValue("Win rate")).toBe("55.6%");
+  });
+
   it("shows the Sickre Score the paper works out to 63.75, rounded to 64", () => {
     renderDashboard(rowsOf(BOOK));
     expect(scoreHeadline()).toBe("64");
