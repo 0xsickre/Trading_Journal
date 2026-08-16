@@ -246,6 +246,25 @@ const BASE_TABS: FormTab[] = [
         fields: [
           { name: "exit_reason", label: "Exit Reason", type: "select", listKey: "exit_reason" },
           {
+            // Rezultat prepisan sa brokerovog izvoda, umesto izvedenog iz cena.
+            //
+            // Postoji zato što je broj koji broker prikazuje VEĆ konvertovan u
+            // valutu naloga, po kursu iz trenutka izvršenja koji se ne može ni
+            // saznati ni ponoviti. Za USDJPY, GER40 ili FDAX na dolarskom nalogu
+            // to je jedini način da rezultat bude tačan.
+            //
+            // Prazno = računaj iz cena, kao i do sada. Popunjeno = ovaj broj je
+            // BRUTO; provizije i swap se i dalje oduzimaju posebno, jer ih i
+            // brokerov izvod vodi kao zasebne kolone.
+            //
+            // R se NE menja: i dalje se meri iz cena, pa je i sa upisanim
+            // rezultatom R-multiple i dalje uporediv između trejdova.
+            name: "gross_pnl_override",
+            label: "Actual Gross P&L (broker)",
+            type: "number",
+            placeholder: "Leave empty to compute from prices",
+          },
+          {
             name: "max_drawdown_price",
             label: "MAE Price (max adverse)",
             type: "number",

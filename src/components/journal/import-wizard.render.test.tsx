@@ -164,6 +164,8 @@ describe("classification against existing trades", () => {
       avgExit: 1.205,
       openedAt: "2026-01-05T15:00:00Z", // 10:00 America/New_York
       totalFees: 2.5,
+      totalSwap: 0,
+      grossPl: 502.5,
       netPl: 500,
     },
     {
@@ -174,6 +176,8 @@ describe("classification against existing trades", () => {
       avgExit: 2100, // will differ from the imported 2050 → shows as "match"
       openedAt: "2026-01-06T15:00:00Z",
       totalFees: 0,
+      totalSwap: 0,
+      grossPl: 200,
       netPl: 200,
     },
   ];
@@ -213,6 +217,53 @@ describe("classification against existing trades", () => {
     expect(within(row).getByText("match")).toBeInTheDocument();
     expect(within(row).getByText("Merge")).toBeInTheDocument();
     expect(within(row).getByText(/exit 2,100.*2,050/)).toBeInTheDocument();
+  });
+
+  it("izvod ispravlja profit i swap na trejdu koji je unet rukom", async () => {
+    // Ovo je provera zbog koje uvoz postoji i kad su trejdovi već uneti: broker
+    // je merodavan za novac, čovek za sve ostalo. Trejd u bazi nosi bruto 200 i
+    // swap 0; izvod kaže 214.30 i 1.25.
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={CANDIDATES} />);
+    await upload(
+      user,
+      csvFile(
+        "broker.csv",
+        "Symbol,Direction,Qty,Entry Price,Entry Time,Exit Price,Exit Time,Swap,Profit\n" +
+          "XAUUSD,Buy,1,2000,2026-01-06 10:00,2100,2026-01-06 14:00,1.25,214.30\n",
+      ),
+    );
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+
+    const row = screen.getByText("XAUUSD").closest("tr")!;
+    // Izlazna cena se POKLAPA (2100), pa red ne bi bio 'match' da se novac ne
+    // poredi — bez ove dve provere bio bi 'duplicate' i preskočen.
+    expect(within(row).getByText("match")).toBeInTheDocument();
+    expect(within(row).getByText("Merge")).toBeInTheDocument();
+    expect(row.textContent).toContain("profit 200→214.3");
+    expect(row.textContent).toContain("swap 0→1.25");
+  });
+
+  it("provizija i swap se porede odvojeno, pa se ne poništavaju", async () => {
+    // Trejd nosi fee 2.50 i swap 0. Izvod kaže fee 0 i swap 2.50 — zbir je
+    // isti, pa je ranije poređenje (fee+swap kao jedan broj) ovo videlo kao
+    // savršeno poklapanje i preskočilo red.
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={CANDIDATES} />);
+    await upload(
+      user,
+      csvFile(
+        "broker.csv",
+        "Symbol,Direction,Qty,Entry Price,Entry Time,Exit Price,Exit Time,Fee,Swap\n" +
+          "EURUSD,Buy,1,1.2000,2026-01-05 10:00,1.2050,2026-01-05 14:00,0,2.50\n",
+      ),
+    );
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+
+    const row = screen.getByText("EURUSD").closest("tr")!;
+    expect(within(row).getByText("match")).toBeInTheDocument();
+    expect(row.textContent).toContain("fee 2.5→0");
+    expect(row.textContent).toContain("swap 0→2.5");
   });
 
   it("a brand new instrument has nothing to merge into — Merge is disabled in its own row", async () => {

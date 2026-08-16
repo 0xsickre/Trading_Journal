@@ -30,6 +30,18 @@ export type PositionStatsInput = {
    * prošlogodišnji P&L pri svakom otvaranju stranice.
    */
   fx_rate?: number | null;
+  /**
+   * Bruto rezultat unet DIREKTNO, u valuti naloga.
+   *
+   * Kad postoji, zaobilazi `gross_points × point_value × fx_rate` u potpunosti —
+   * ni ugovorna specifikacija ni kurs mu nisu potrebni. Za to i postoji: ručni
+   * unos i brokerov CSV oba nose broj koji je platforma već konvertovala po
+   * kursu iz trenutka izvršenja, a taj kurs se ne može ni saznati ni ponoviti.
+   *
+   * `realized_r` ostaje računat IZ CENA i kad je ovo postavljeno. Novac i R su
+   * dva različita pitanja i ovo polje odgovara samo na prvo.
+   */
+  gross_pnl_override?: number | null;
   executions: ExecutionFill[];
 };
 
@@ -75,6 +87,8 @@ export function computePositionStats(
 ): ComputedPositionStats {
   const pointValue = input.point_value ?? null;
   const fxRate = input.fx_rate ?? null;
+  const override = input.gross_pnl_override ?? null;
+  const hasOverride = override != null && Number.isFinite(override);
   const dir = tradeDirectionMultiplier(input.direction);
 
   let entryQty = 0;
@@ -125,7 +139,10 @@ export function computePositionStats(
     // Provizije i swap se NE množe kursom: brokeri ih knjiže u valuti depozita,
     // a podrazumevane vrednosti iz kojih se popunjavaju stoje na nalogu. Zato
     // `bruto × kurs − troškovi`, a ne `(bruto − troškovi) × kurs`.
-    if (pointValue != null && fxRate != null) {
+    if (hasOverride) {
+      grossPl = override;
+      netPl = grossPl - totalFees - totalSwap;
+    } else if (pointValue != null && fxRate != null) {
       grossPl = grossPoints * pointValue * fxRate;
       netPl = grossPl - totalFees - totalSwap;
     }
@@ -157,6 +174,10 @@ export function computePositionStats(
       realizedR = grossPoints / riskDenom;
       if (pointValue != null && fxRate != null) {
         // Neto R deli novac novcem, pa imenilac mora u istu valutu kao brojilac.
+        //
+        // Traži point_value i kurs čak i kad je `netPl` poznat preko override-a:
+        // rizik u novcu se i dalje izvodi iz cena. Zato R U NOVCU može ostati
+        // null dok su i neto rezultat i R U CENAMA poznati — razmak, ne bag.
         const riskMoney = riskDenom * pointValue * fxRate;
         if (riskMoney > 0 && netPl != null) {
           realizedRNet = netPl / riskMoney;

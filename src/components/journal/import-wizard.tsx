@@ -35,7 +35,10 @@ export type MatchCandidate = {
   avgEntry: number | null;
   avgExit: number | null;
   openedAt: string | null;
+  /** Samo provizije. Ranije je nosila fee+swap zbrojene, pa se nije videlo koje od to dvoje se razišlo. */
   totalFees: number | null;
+  totalSwap: number | null;
+  grossPl: number | null;
   netPl: number | null;
 };
 
@@ -48,7 +51,8 @@ type Canonical =
   | "exit_price"
   | "exit_time"
   | "fee"
-  | "swap";
+  | "swap"
+  | "profit";
 
 const CANONICAL: { key: Canonical; label: string; required?: boolean }[] = [
   { key: "instrument", label: "Instrument", required: true },
@@ -60,6 +64,7 @@ const CANONICAL: { key: Canonical; label: string; required?: boolean }[] = [
   { key: "exit_time", label: "Exit Time" },
   { key: "fee", label: "Fee / Commission" },
   { key: "swap", label: "Swap / Funding" },
+  { key: "profit", label: "Profit / P&L (bruto)" },
 ];
 
 const KEYWORDS: Record<Canonical, string[]> = {
@@ -72,6 +77,10 @@ const KEYWORDS: Record<Canonical, string[]> = {
   exit_time: ["exit time", "close time", "closetime", "time out", "exit date", "close"],
   fee: ["commission", "fee", "comm", "fees"],
   swap: ["swap", "funding", "rollover"],
+  // Namerno posle `swap` u redosledu automatskog mapiranja: brokerski izvodi
+  // često imaju i "Swap" i "Profit", a `includes` bi na "profit" pogodio i
+  // kolonu "Gross profit". Redosled u CANONICAL odlučuje ko prvi uzme header.
+  profit: ["profit", "p/l", "pnl", "p&l", "net p", "gross p", "result", "realized"],
 };
 
 function autoMap(headers: string[]): Record<Canonical, string> {
@@ -189,6 +198,9 @@ export function ImportWizard({
         unreadable.push("exit time");
       const fee = (map.fee ? read(map.fee, "fee") : null) ?? 0;
       const swap = (map.swap ? read(map.swap, "swap") : null) ?? 0;
+      // Bez `?? 0`: nemapirana kolona profita znači „računaj iz cena", a nula
+      // bi značila „trejd je završio na nuli". Razlika je cela poenta polja.
+      const profit = map.profit ? read(map.profit, "profit") : null;
 
       const execs: ImportExec[] = [];
       if (entryPrice != null && entryTime) {
@@ -248,8 +260,20 @@ export function ImportWizard({
           diff.push(`entry ${fmtNum(matched.avgEntry, 2)}→${fmtNum(entryPrice, 2)}`);
         if (exitPrice != null && matched.avgExit != null && Math.abs(matched.avgExit - exitPrice) > 1e-9)
           diff.push(`exit ${fmtNum(matched.avgExit, 2)}→${fmtNum(exitPrice, 2)}`);
-        if (matched.totalFees != null && Math.abs((matched.totalFees ?? 0) - (fee + swap)) > 1e-9)
-          diff.push(`fees ${fmtNum(matched.totalFees, 2)}→${fmtNum(fee + swap, 2)}`);
+        // Provizija i swap se porede ODVOJENO. Ranije su sabirani u jedan broj,
+        // pa je izvod koji ispravlja swap a ne proviziju (ili obrnuto) prolazio
+        // kao „fees se poklapaju" kad god bi se razlike poništile.
+        if (matched.totalFees != null && Math.abs(matched.totalFees - fee) > 1e-9)
+          diff.push(`fee ${fmtNum(matched.totalFees, 2)}→${fmtNum(fee, 2)}`);
+        if (matched.totalSwap != null && Math.abs(matched.totalSwap - swap) > 1e-9)
+          diff.push(`swap ${fmtNum(matched.totalSwap, 2)}→${fmtNum(swap, 2)}`);
+        // Rezultat sa izvoda protiv onoga što trejd trenutno pokazuje. Ovo je
+        // provera zbog koje uvoz i postoji kad su trejdovi već uneti rukom:
+        // broker je merodavan za novac, čovek za sve ostalo.
+        if (profit != null && matched.grossPl != null && Math.abs(matched.grossPl - profit) > 1e-9)
+          diff.push(`profit ${fmtNum(matched.grossPl, 2)}→${fmtNum(profit, 2)}`);
+        else if (profit != null && matched.grossPl == null)
+          diff.push(`profit —→${fmtNum(profit, 2)}`);
         if (diff.length === 0) {
           status = "duplicate";
           decision = "skip";
@@ -263,6 +287,7 @@ export function ImportWizard({
         instrument,
         direction,
         executions: execs,
+        gross_pnl_override: profit,
         raw: row,
         // After the duplicate check above, so an unreadable cell never changes
         // how a row is MATCHED — it only makes sure the reader is told.

@@ -256,9 +256,8 @@ export function TradeForm({
       }
     : NO_COST_DEFAULTS;
 
-  const [tradeNo, setTradeNo] = useState<string>(
-    initial?.trade_no != null ? String(initial.trade_no) : "",
-  );
+  // Ne `useState`: broj dodeljuje baza pri upisu i forma ga ne menja.
+  const tradeNo = initial?.trade_no != null ? String(initial.trade_no) : "";
   const [fields, setFields] = useState<Record<string, FieldValue>>(
     initial?.fields ?? {},
   );
@@ -420,6 +419,9 @@ export function TradeForm({
       stop_price: stop,
       point_value: pointValue,
       fx_rate: fx.rate,
+      // Prepisan rezultat pobeđuje cene — isto kao u view-u. Bez ovoga bi
+      // pregled u formi pokazivao izračunat broj, a lista trejdova upisan.
+      gross_pnl_override: n(String(fields.gross_pnl_override ?? "")),
       executions: executionFills,
     });
 
@@ -690,7 +692,9 @@ export function TradeForm({
 
     const payload = {
       account_id: accountId,
-      trade_no: tradeNo ? Number(tradeNo) : null,
+      // NULL na upisu prepušta broj triggeru; na izmeni se postojeći ne dira
+      // jer ga trigger popunjava samo kad je NULL.
+      trade_no: initial?.trade_no ?? null,
       fields: fieldsToSave,
       executions: buildExecInputs(),
       trade_phase: hasValidEntryFill ? "active" : tradePhase,
@@ -868,11 +872,7 @@ export function TradeForm({
                       onAccountChange={setAccountId}
                       showAccount={tab.id === "plan" && group.id === "meta"}
                       tradeNo={tradeNo}
-                      onTradeNoChange={
-                        tab.id === "plan" && group.id === "meta"
-                          ? setTradeNo
-                          : undefined
-                      }
+                      showTradeNo={tab.id === "plan" && group.id === "meta"}
                       tradePhase={tradePhase}
                       isMissed={isMissed}
                       computedDisplay={
@@ -1227,7 +1227,7 @@ function FormGroupSection({
   computedDisplay,
   fieldHints,
   tradeNo,
-  onTradeNoChange,
+  showTradeNo,
   riskNote,
   groupNote,
   nested,
@@ -1248,7 +1248,7 @@ function FormGroupSection({
   computedDisplay?: Record<string, string>;
   fieldHints?: Record<string, string>;
   tradeNo?: string;
-  onTradeNoChange?: (value: string) => void;
+  showTradeNo?: boolean;
   /** What the chosen risk % is worth in money — the number that makes you look twice. */
   riskNote?: string | null;
   /** A line of context for the whole group, shown under its fields. */
@@ -1298,13 +1298,20 @@ function FormGroupSection({
             </Select>
           </div>
         )}
-        {onTradeNoChange && (
+        {/*
+          Redni broj se ne kuca. `tj_positions_assign_trade_no` ga dodeljuje pri
+          upisu, po nalogu, pod advisory lock-om — vidi 20260815170000. Ovde
+          stoji samo da se vidi šta je trejd dobio; za nov trejd još ne postoji.
+        */}
+        {showTradeNo && (
           <div className="space-y-1.5">
             <Label className="text-xs">Trade #</Label>
             <Input
-              inputMode="numeric"
-              value={tradeNo ?? ""}
-              onChange={(e) => onTradeNoChange(e.target.value)}
+              readOnly
+              tabIndex={-1}
+              aria-readonly
+              className="bg-muted text-muted-foreground"
+              value={tradeNo ? `#${tradeNo}` : "assigned on save"}
             />
           </div>
         )}

@@ -47,8 +47,8 @@ describe("position-stats ↔ tj_position_stats — paritet prema papiru", () => 
   it("pokriva svaki oblik koji knjiga može da ima", () => {
     // Skup nije proizvoljan: svaki slučaj postoji zbog jedne grane u view-u.
     // Ako neko doda granu a ne doda oblik, ovaj broj je mesto gde se to primeti.
-    expect(PARITY_CASES).toHaveLength(17);
-    expect(new Set(PARITY_CASES.map((c) => c.name)).size).toBe(17);
+    expect(PARITY_CASES).toHaveLength(20);
+    expect(new Set(PARITY_CASES.map((c) => c.name)).size).toBe(20);
   });
 
   it("R na delimičnom izlazu se razblažuje, i to je odluka a ne posledica", () => {

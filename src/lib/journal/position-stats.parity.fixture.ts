@@ -1,7 +1,7 @@
 import type { PositionStatsInput } from "./position-stats";
 
 /**
- * SEDAMNAEST OBLIKA TREJDA, IZVEDENIH NA PAPIRU, ZA OBA MOTORA KOJI RAČUNAJU NOVAC.
+ * DVADESET OBLIKA TREJDA, IZVEDENIH NA PAPIRU, ZA OBA MOTORA KOJI RAČUNAJU NOVAC.
  *
  * `position-stats.ts` počinje rečenicom „must stay in sync with `tj_position_stats`
  * SQL view". Do ovog fajla to je bila samo rečenica: TS strana je imala testove,
@@ -502,6 +502,97 @@ export const PARITY_CASES: ParityCase[] = [
       planned_risk_pts: 0.005,
       realized_r: 2,
       realized_r_net: null,
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // OVERRIDE — rezultat unet direktno, umesto izveden iz cena.
+  // ---------------------------------------------------------------------------
+  {
+    name: "OV1 override zaobilazi cene i kurs",
+    proves:
+      "unet rezultat pobeđuje izračunati. Cene i dalje daju gross_points i R, " +
+      "ali novac dolazi sa brokerovog izvoda gde je već konvertovan",
+    input: {
+      direction: "Long",
+      entry_price: 150.0,
+      stop_price: 149.0,
+      point_value: 100_000,
+      // Kurs NIJE poznat — i to više ne smeta novcu.
+      fx_rate: null,
+      gross_pnl_override: 642.18,
+      executions: [
+        { side: "entry", price: 150.0, qty: 1 },
+        { side: "exit", price: 151.0, qty: 1 },
+      ],
+    },
+    // Izračunato bi bilo 100 000 JPY × nepoznat kurs = null. Uneto je 642.18.
+    paper: {
+      avg_entry: 150.0,
+      avg_exit: 151.0,
+      gross_points: 1,
+      gross_pl: 642.18,
+      net_pl: 642.18,
+      planned_risk_pts: 1,
+      realized_r: 1,
+      // R U NOVCU i dalje traži imenilac iz cena × kurs, pa ostaje null.
+      realized_r_net: null,
+    },
+  },
+  {
+    name: "OV2 override i dalje plaća troškove",
+    proves:
+      "net = override − provizije − swap. Override je BRUTO, ne neto — brokerov " +
+      "izvod ih vodi kao zasebne kolone i tako se i unose",
+    input: {
+      direction: "Long",
+      entry_price: 100,
+      stop_price: 90,
+      point_value: 1,
+      fx_rate: 1,
+      gross_pnl_override: 250,
+      executions: [
+        { side: "entry", price: 100, qty: 1, fee: 7, swap_funding: 3 },
+        { side: "exit", price: 130, qty: 1 },
+      ],
+    },
+    // Izračunato bi bilo 30. Uneto 250 → neto 250 − 7 − 3 = 240.
+    // R ostaje 30/10 = 3.0 jer se meri iz CENA, ne iz unetog novca.
+    paper: {
+      avg_entry: 100,
+      avg_exit: 130,
+      gross_points: 30,
+      gross_pl: 250,
+      net_pl: 240,
+      planned_risk_pts: 10,
+      realized_r: 3,
+      realized_r_net: 24,
+    },
+  },
+  {
+    name: "OV3 override može biti gubitak",
+    proves: "negativan unos prolazi; nula bi bila breakeven a ne odsustvo",
+    input: {
+      direction: "Long",
+      entry_price: 100,
+      stop_price: 90,
+      point_value: 1,
+      fx_rate: 1,
+      gross_pnl_override: -125.5,
+      executions: [
+        { side: "entry", price: 100, qty: 1 },
+        { side: "exit", price: 95, qty: 1 },
+      ],
+    },
+    paper: {
+      avg_entry: 100,
+      avg_exit: 95,
+      gross_points: -5,
+      gross_pl: -125.5,
+      net_pl: -125.5,
+      planned_risk_pts: 10,
+      realized_r: -0.5,
+      realized_r_net: -12.55,
     },
   },
 ];

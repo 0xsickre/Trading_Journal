@@ -32,6 +32,13 @@ export type ImportItem = {
   instrument: string | null;
   direction: string | null;
   executions: ImportExec[];
+  /**
+   * Bruto rezultat sa brokerovog izvoda, kad ga kolona nosi.
+   *
+   * `null` znači „nije mapirano" i ostavlja trejd da računa iz cena. Nula je
+   * stvarna nula i upisuje se — razlika je ono zbog čega ovde nema `?? 0`.
+   */
+  gross_pnl_override: number | null;
   raw: Record<string, string>;
 };
 
@@ -83,6 +90,8 @@ export async function commitImport(input: CommitInput) {
     let createdPositionId: string | null = null;
     // Fills this row displaced, kept so `undoImportBatch` can put them back.
     let replacedExecs: SnapshotExec[] | null = null;
+    // Rezultat koji je merge prepisao, za undo.
+    let prevOverride: number | null = null;
     // Counted only once the audit row has landed too. The counters used to be
     // bumped inline, which was harmless while the audit insert could not fail —
     // now that it throws, an inline bump would count the same row as merged AND
@@ -102,6 +111,7 @@ export async function commitImport(input: CommitInput) {
             import_batch_id: batch.id,
             needs_review: item.executions.length === 0,
             status: statusOf(item.executions),
+            gross_pnl_override: item.gross_pnl_override,
             ...instrumentSnapshot(instrument, specs, accountCurrency),
           })
           .select("id")
@@ -130,6 +140,17 @@ export async function commitImport(input: CommitInput) {
           .eq("position_id", pid);
         replacedExecs = (prevExecs ?? []) as unknown as SnapshotExec[];
 
+        // Rezultat koji je stajao pre uvoza, da ga undo može vratiti. Isti
+        // razlog zbog kojeg `prev_executions` postoji od 20260727122000: merge
+        // TRAJNO gazi ono što je čovek uneo, pa undo bez snimka nije povratak
+        // nego druga izmena.
+        const { data: prevPos } = await supabase
+          .from("tj_positions")
+          .select("gross_pnl_override")
+          .eq("id", pid)
+          .maybeSingle();
+        prevOverride = prevPos?.gross_pnl_override ?? null;
+
         const { error: exErr } = await supabase.rpc("tj_replace_executions", {
           p_position_id: pid,
           p_executions: item.executions.map((e) => ({ ...e, source: "import" })),
@@ -140,6 +161,12 @@ export async function commitImport(input: CommitInput) {
           .update({
             status: statusOf(item.executions),
             needs_review: item.executions.length === 0,
+            // Izvod je merodavan za novac. Kolona koja nije mapirana ostavlja
+            // postojeću vrednost na miru umesto da je obriše — uvoz bez kolone
+            // profita ne sme da poništi rezultat unet rukom.
+            ...(item.gross_pnl_override != null
+              ? { gross_pnl_override: item.gross_pnl_override }
+              : {}),
           })
           .eq("id", pid);
         // Thrown, not ignored: the fills have already been replaced by the line
@@ -169,6 +196,7 @@ export async function commitImport(input: CommitInput) {
         match_status: item.match_status,
         matched_position_id: matchedId,
         prev_executions: replacedExecs,
+        prev_gross_pnl_override: prevOverride,
       });
       if (auditErr) throw new Error(auditErr.message);
 
@@ -255,7 +283,11 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
   // Both end with the user reading `ok` and a count that understates what was
   // actually left behind.
   let createdRows: { id: string }[];
-  let rows: { matched_position_id: string | null; prev_executions: unknown }[];
+  let rows: {
+    matched_position_id: string | null;
+    prev_executions: unknown;
+    prev_gross_pnl_override?: number | null;
+  }[];
   try {
     [createdRows, rows] = await Promise.all([
       selectAllPages<{ id: string }>((from, to) =>
@@ -266,11 +298,15 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
           .order("id")
           .range(from, to),
       ),
-      selectAllPages<{ matched_position_id: string | null; prev_executions: unknown }>(
+      selectAllPages<{
+        matched_position_id: string | null;
+        prev_executions: unknown;
+        prev_gross_pnl_override: number | null;
+      }>(
         (from, to) =>
           supabase
             .from("tj_import_rows")
-            .select("matched_position_id, prev_executions, id")
+            .select("matched_position_id, prev_executions, prev_gross_pnl_override, id")
             .eq("batch_id", batchId)
             .order("id")
             .range(from, to),
@@ -281,6 +317,24 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
   }
 
   const plan = planUndo<SnapshotExec>(rows, new Set(createdRows.map((p) => p.id)));
+
+  /**
+   * Rezultat koji je merge prepisao, po poziciji.
+   *
+   * Ne kroz `planUndo`: ta funkcija je čista i testirana nad oblikom
+   * `{ matched_position_id, prev_executions }`, pa bi proširivanje njenog tipa
+   * značilo menjati potpis zbog podatka koji joj u odluci ne treba. Undo ionako
+   * ovde već ima `rows` pri ruci.
+   *
+   * `undefined` znači „ovaj red nije bio merge" i takva pozicija se ne dira.
+   * `null` znači „pre uvoza ovde nije bilo ničega" i to se VRAĆA kao null.
+   */
+  const prevOverrides = new Map<string, number | null>();
+  for (const r of rows) {
+    if (r.matched_position_id && !createdRows.some((c) => c.id === r.matched_position_id)) {
+      prevOverrides.set(r.matched_position_id, r.prev_gross_pnl_override ?? null);
+    }
+  }
 
   for (const { positionId, executions } of plan.restore) {
     // Atomic: an undo that half-applied would leave the position with neither
@@ -316,6 +370,11 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
       .update({
         status: statusOf(executions),
         needs_review: executions.length === 0,
+        // Vraća se i kad je bio null: undo koji ostavi rezultat sa izvoda na
+        // trejdu koji ga pre uvoza nije imao nije povratak nego pola izmene.
+        ...(prevOverrides.has(positionId)
+          ? { gross_pnl_override: prevOverrides.get(positionId) ?? null }
+          : {}),
       })
       .eq("id", positionId);
     if (stErr) return { ok: false, error: stErr.message };

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { RESERVED_KEYS } from "@/lib/journal/reserved-keys";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { isValidTimeZone } from "@/lib/journal/time";
 import {
@@ -431,46 +432,6 @@ export async function deleteCashEvent(id: string) {
  */
 const KEY_RE = /^[a-z][a-z0-9_]{0,48}$/;
 
-/**
- * Column names on tj_positions. A custom field may never take one of these:
- * `fieldValue` reads columns first, so a colliding key would be written to the
- * bag and then read from the column — permanently invisible.
- */
-const RESERVED_KEYS = new Set([
-  "id",
-  "user_id",
-  "account_id",
-  "trade_no",
-  "status",
-  "source",
-  "custom",
-  "created_at",
-  "updated_at",
-  "instrument",
-  "direction",
-  "entry_price",
-  "stop_price",
-  "target_price",
-  "risk_pct",
-  "planned_rr",
-  "position_size",
-  "setup_grade",
-  "technical_tags",
-  "psychology_tags",
-  "exit_reason",
-  "mistake",
-  "miss_reason",
-  "missed_at",
-  "max_drawdown_price",
-  "max_profit_price",
-  "trade_journal_notes",
-  "needs_review",
-  "playbook_id",
-  "conviction",
-  "import_batch_id",
-  "point_value_at_trade",
-  "tick_size_at_trade",
-]);
 
 export async function addFieldDef(input: {
   label: string;

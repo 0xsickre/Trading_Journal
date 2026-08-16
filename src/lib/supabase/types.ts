@@ -363,6 +363,7 @@ export type Database = {
           matched_position_id: string | null
           parsed: Json | null
           prev_executions: Json | null
+          prev_gross_pnl_override: number | null
           raw: Json | null
           user_id: string
         }
@@ -374,6 +375,7 @@ export type Database = {
           matched_position_id?: string | null
           parsed?: Json | null
           prev_executions?: Json | null
+          prev_gross_pnl_override?: number | null
           raw?: Json | null
           user_id?: string
         }
@@ -385,6 +387,7 @@ export type Database = {
           matched_position_id?: string | null
           parsed?: Json | null
           prev_executions?: Json | null
+          prev_gross_pnl_override?: number | null
           raw?: Json | null
           user_id?: string
         }
@@ -953,6 +956,7 @@ export type Database = {
           psychology_tags: string[]
           quote_currency_at_trade: string | null
           fx_rate_at_trade: number | null
+          gross_pnl_override: number | null
           risk_pct: string | null
           scale_out_plan: string | null
           setup_grade: string | null
@@ -994,6 +998,7 @@ export type Database = {
           psychology_tags?: string[]
           quote_currency_at_trade?: string | null
           fx_rate_at_trade?: number | null
+          gross_pnl_override?: number | null
           risk_pct?: string | null
           scale_out_plan?: string | null
           setup_grade?: string | null
@@ -1035,6 +1040,7 @@ export type Database = {
           psychology_tags?: string[]
           quote_currency_at_trade?: string | null
           fx_rate_at_trade?: number | null
+          gross_pnl_override?: number | null
           risk_pct?: string | null
           scale_out_plan?: string | null
           setup_grade?: string | null
