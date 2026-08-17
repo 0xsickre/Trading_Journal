@@ -189,7 +189,7 @@ export default async function DailyPage({
       <FocusGoalCard goal={activeGoal} reportDate={reportDate} />
 
       <DayStatsCard
-        key={reportDate}
+        key={`stats:${reportDate}`}
         stats={dayStats}
         costs={dayCosts}
         volume={dayVolume}
@@ -198,7 +198,7 @@ export default async function DailyPage({
       />
 
       <DailyReportForm
-        key={reportDate}
+        key={`form:${reportDate}`}
         report={report}
         reportDate={reportDate}
         today={today}

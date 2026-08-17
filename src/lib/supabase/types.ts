@@ -1317,6 +1317,8 @@ export type Database = {
         }
         Returns: string
       }
+      tj_delete_account: { Args: { p_account_id: string }; Returns: undefined }
+      tj_reset_my_data: { Args: never; Returns: undefined }
       tj_seed_defaults: { Args: { target: string }; Returns: undefined }
       tj_seed_note_folders: { Args: { target: string }; Returns: undefined }
       tj_seed_instruments_defaults: {

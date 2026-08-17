@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { RESERVED_KEYS } from "@/lib/journal/reserved-keys";
 import { getCurrentUser } from "@/lib/supabase/user";
+import { EMPTY_USAGE, usageIsEmpty } from "@/lib/journal/account-usage";
+import { getAccountUsage } from "@/lib/journal/account-usage-queries";
+import { RESET_PHRASE } from "@/lib/journal/reset-phrase";
 import { isValidTimeZone, DEFAULT_TZ } from "@/lib/journal/time";
 import {
   FIELD_DEF_GROUPS,
@@ -355,6 +358,94 @@ export async function addAccount(input: {
   if (error) return { ok: false, error: error.message };
   revalidateAll();
   return { ok: true };
+}
+
+/**
+ * Delete an account and everything that hangs off it.
+ *
+ * The work happens in `tj_delete_account`, not here, for a reason worth stating:
+ * `tj_positions.account_id` is ON DELETE SET NULL, so a plain delete would
+ * remove the account and leave its trades behind with no account — still in
+ * every total, no longer convertible to the book currency, and with nothing on
+ * screen to say why. The function deletes dependants first, in one transaction.
+ *
+ * `confirmName` is required whenever the account holds anything. The typing is
+ * not ceremony: this is the only screen in the application where one click can
+ * destroy a trade record, and undo does not cover it.
+ */
+export async function deleteAccount(id: string, confirmName?: string) {
+  const supabase = await createClient();
+  // Server Actions are reachable by direct POST, not only through the dialog
+  // that renders them — so the signed-in check is repeated here rather than
+  // assumed from the caller.
+  const user = await getCurrentUser();
+  if (!user) return { ok: false as const, error: "Not signed in." };
+
+  const { data: account } = await supabase
+    .from("tj_accounts")
+    .select("id,name")
+    .eq("id", id)
+    .maybeSingle();
+  if (!account) return { ok: false as const, error: "Account not found." };
+
+  const usage = (await getAccountUsage([id]))[id] ?? EMPTY_USAGE;
+  if (!usageIsEmpty(usage)) {
+    if ((confirmName ?? "").trim() !== account.name.trim()) {
+      return {
+        ok: false as const,
+        error: `This account is not empty. Type its name exactly — ${account.name} — to confirm.`,
+      };
+    }
+  }
+
+  const { error } = await supabase.rpc("tj_delete_account", {
+    p_account_id: id,
+  });
+  if (error) {
+    // The two the function raises deliberately, given back in the words the
+    // screen can use. Anything else is passed through unchanged.
+    if (error.message.includes("last account"))
+      return {
+        ok: false as const,
+        error:
+          "This is your only account, and the journal needs one — its timezone and currency date every trade. Create another first.",
+      };
+    if (error.message.includes("not found"))
+      return { ok: false as const, error: "Account not found." };
+    return { ok: false as const, error: error.message };
+  }
+
+  revalidateAll();
+  return { ok: true as const };
+}
+
+/**
+ * Delete everything this user owns and re-seed the defaults.
+ *
+ * Irreversible, and the only operation here that is. `RESET_PHRASE` is checked
+ * on the server as well as in the dialog for the same reason the signed-in check
+ * is: the action is callable without the dialog.
+ */
+export async function resetAllData(confirmPhrase: string) {
+  if (confirmPhrase.trim() !== RESET_PHRASE) {
+    return {
+      ok: false as const,
+      error: `Type ${RESET_PHRASE} to confirm.`,
+    };
+  }
+
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) return { ok: false as const, error: "Not signed in." };
+
+  const { error } = await supabase.rpc("tj_reset_my_data");
+  if (error) return { ok: false as const, error: error.message };
+
+  // Every route reads something this just deleted, so the whole tree goes —
+  // revalidating only /settings would leave the dashboard drawing a book that
+  // no longer exists.
+  revalidatePath("/", "layout");
+  return { ok: true as const };
 }
 
 // ---- Cash events (deposits / withdrawals / payouts) ----

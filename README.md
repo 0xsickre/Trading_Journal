@@ -81,7 +81,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
 | `npm run dev` | Razvojni server |
 | `npm run build` | Produkcijski build — 14 ruta |
 | `npm run lint` | ESLint. **Očekuje se tačno jedno upozorenje** (vidi ispod) |
-| `npm test` | Vitest — 1712 testova u 108 fajlova, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
+| `npm test` | Vitest — 1723 testa u 110 fajlova, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
 | `npm test -- --coverage` | Izveštaj o pokrivenosti |
 | `npx knip` | Mrtvi fajlovi, eksporti i zavisnosti |
 
@@ -186,7 +186,7 @@ obrisano nevezanim snimanjem.
 | `/tracker` | Preusmerava na `/daily` (ostalo jer je tracker nekad živeo ovde) |
 | `/notebook` | Beleške, folderi, tagovi, markdown |
 | `/import` | Čarobnjak za CSV uvoz, istorija batch-eva, undo |
-| `/settings` | Nalozi, instrumenti, liste opcija, korisnička polja, playbook-ovi, tracker pravila |
+| `/settings` | Nalozi, instrumenti, liste opcija, korisnička polja, playbook-ovi, tracker pravila, brisanje naloga i reset |
 | `/login` | Supabase auth |
 
 ---
@@ -364,7 +364,7 @@ CSV unutra, sa mapiranjem kolona, pregledom i odlukom create/merge/skip po redu.
 **Merge menja samo objektivne fill-ove.** Plan, psihologija, ocena i beleške se ne diraju — uvoz ih
 nikad nije ni posedovao.
 
-**Undo je jedina operacija u aplikaciji koja briše podatke.** Uklanja pozicije koje je batch
+**Undo je jedina operacija uvoza koja briše podatke.** Uklanja pozicije koje je batch
 napravio, vraća fill-ove koje je istisnuo, pa briše batch i njegove audit redove.
 `tj_import_rows.prev_executions` je jedini primerak onoga što je merge istisnuo, i undo ga vraća
 polje po polje, zajedno sa poreklom — dokazano nad živom bazom u transakciji koja se rollback-uje.
@@ -383,9 +383,46 @@ Svaka odbijena ćelija je imenovana na svom redu u pregledu (`nečitljivo: qty, 
 
 ---
 
+## Brisanje
+
+Dve operacije van uvoza koje brišu podatke, obe u `/settings` → Accounts, obe bez undo-a.
+
+**Brisanje naloga** (`tj_delete_account`). Nalog bez trejdova, uplata i uvoza briše se jednom
+potvrdom; nalog koji nešto drži traži da mu se ukuca ime i pre toga ispiše koliko trejdova,
+uplata i batch-eva nestaje. Poslednji nalog se ne može obrisati — odbija i akcija i baza, jer
+`accounts[0]` je izvor zone i valute u kojoj se datira svaki dan.
+
+Zašto funkcija a ne `DELETE`: `tj_positions.account_id` je **ON DELETE SET NULL**, isto i
+`tj_import_batches.account_id`. Običan delete kroz PostgREST bi sklonio nalog a **ostavio trejdove
+bez naloga** — i dalje u svim zbirovima, bez valute za konverziju (`fx_rate_source = 'no_account'`),
+sa nalogom kojeg više nema da to objasni. Funkcija briše zavisne redove prvo, u jednoj transakciji.
+Dokazano nad živom bazom u transakciji koja se rollback-uje: nalog sa 21 trejdom ostavlja **0
+osirotelih** pozicija, i 0 fill-ova, odgovora na pravila i slika.
+
+**Reset svega** (`tj_reset_my_data`). Briše svih 25 tabela za pozivaoca pa zove
+`tj_seed_my_defaults()` — istu seed funkciju koju dashboard vrti na praznom nalogu, pa „reset" i
+„prvo učitavanje ikad" završavaju u istom stanju. Traži da se ukuca `RESET EVERYTHING`.
+
+Izmereno šta se stvarno vraća, umesto pretpostavljeno iz imena seed-a: **1 Main Account, 91
+instrument, 13 lista sa 66 opcija, 7 tracker pravila, 4 korisnička polja, 3 note foldera.**
+
+**Šta se NE vraća: playbook-ovi.** `tj_seed_my_defaults` zove samo `tj_seed_defaults` i
+`tj_seed_instruments_defaults`; `tj_seed_playbooks` postoji ali nije zakačen na njega, pa reset
+završava sa nula playbook-ova i nula pravila bez obzira koliko ih je bilo napisano. Isto važi za
+sve dodato rukom — opcije, tracker pravila, naloge. Panel to piše na ekranu, jer nabrojati šta se
+vraća a prećutati šta ne znači reći tačnu polovinu.
+
+Obe funkcije su **SECURITY INVOKER**, ne DEFINER: svaka tabela nosi
+`FOR ALL TO authenticated USING (user_id = auth.uid())`, pa RLS već ograničava svaki upit na
+pozivaoca, i nema šta da se izvodi ručno. `anon` je oduzet **imenom**, ne samo preko `PUBLIC` —
+Supabase-ove default privilegije dodele EXECUTE svakoj novoj funkciji u `public`, a
+`REVOKE ... FROM PUBLIC` ne skida eksplicitan grant na rolu. Provereno nad živim projektom.
+
+---
+
 ## Migracije
 
-44 fajla u `supabase/migrations/`, imenovanih `YYYYMMDDHHMMSS_opis.sql`.
+45 fajlova u `supabase/migrations/`, imenovanih `YYYYMMDDHHMMSS_opis.sql`.
 
 - **Aditivne.** Nikad se ne menja primenjena migracija — piše se nova delta.
 - **Migracija objašnjava samu sebe.** Svaka počinje komentarom šta je bilo pogrešno i šta puca bez
@@ -417,9 +454,9 @@ P&L i drawdown izračunate nad delimičnim skupom, bez ijednog vidljivog simptom
 
 ## Testovi
 
-1712 testova u 108 fajlova, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
+1723 testa u 110 fajlova, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
 `*.test.ts`, 1496 testova u 78 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
-216 testova u 30 fajlova). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
+227 testova u 32 fajla). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
 plaćaju cenu DOM-a koji ne dodiruju.
 
 `vitest.config.ts` nosi **podove** pokrivenosti, ne ciljeve — stoje na onome što paket trenutno

@@ -3,10 +3,24 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Save } from "lucide-react";
+import { Plus, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  UNKNOWN_USAGE,
+  usageIsEmpty,
+  usageIsUnknown,
+  type AccountUsage,
+} from "@/lib/journal/account-usage";
 import {
   Select,
   SelectContent,
@@ -17,7 +31,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Account } from "@/lib/journal/types";
-import { updateAccount, addAccount } from "@/app/(app)/settings/actions";
+import {
+  updateAccount,
+  addAccount,
+  deleteAccount,
+} from "@/app/(app)/settings/actions";
 
 const TIMEZONES = [
   "America/New_York",
@@ -34,9 +52,134 @@ const TIMEZONES = [
 
 const CURRENCIES = ["USD", "EUR", "GBP", "CHF", "JPY", "AUD", "CAD"];
 
-function AccountCard({ account }: { account: Account }) {
+/**
+ * The confirmation for deleting one account.
+ *
+ * Two paths on purpose. An account holding nothing is a mistake being tidied
+ * away — a single button is the honest weight for that. An account holding
+ * trades is the only click in this application that destroys a trade record and
+ * that undo does not cover, so it asks for the name to be typed and, above the
+ * box, says exactly what disappears. The counts are the point: "delete account?"
+ * cannot be answered honestly without them.
+ */
+function DeleteAccountDialog({
+  account,
+  usage,
+  open,
+  onOpenChange,
+}: {
+  account: Account;
+  usage: AccountUsage;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [typed, setTyped] = useState("");
+
+  const empty = usageIsEmpty(usage);
+  const unknown = usageIsUnknown(usage);
+  const nameMatches = typed.trim() === account.name.trim();
+
+  function confirm() {
+    start(async () => {
+      const res = await deleteAccount(account.id, typed);
+      if (!res.ok) toast.error(res.error);
+      else {
+        toast.success(`Account "${account.name}" deleted`);
+        onOpenChange(false);
+        setTyped("");
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete &ldquo;{account.name}&rdquo;?</DialogTitle>
+          <DialogDescription>
+            {empty
+              ? "This account holds no trades, no deposits and no imports. Nothing else is affected."
+              : "This cannot be undone. Import undo does not cover it."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {!empty && (
+          <div className="space-y-3">
+            <ul className="space-y-1 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+              {unknown ? (
+                <li className="text-destructive">
+                  The contents of this account could not be counted. Continuing
+                  deletes whatever is in it.
+                </li>
+              ) : (
+                <>
+                  <li>
+                    <strong>{usage.trades}</strong> trades, with their fills,
+                    playbook answers, check-ins and chart images
+                  </li>
+                  <li>
+                    <strong>{usage.cashEvents}</strong> deposits / withdrawals
+                  </li>
+                  <li>
+                    <strong>{usage.importBatches}</strong> import batches
+                  </li>
+                </>
+              )}
+            </ul>
+            <p className="text-xs text-muted-foreground">
+              Notes written about these trades keep their text and lose the link.
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-xs">
+                Type <span className="font-mono">{account.name}</span> to confirm
+              </Label>
+              <Input
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                autoComplete="off"
+                aria-label="Confirm account name"
+              />
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={pending || (!empty && !nameMatches)}
+            onClick={confirm}
+          >
+            <Trash2 className="size-4" />
+            {pending ? "Deleting…" : "Delete account"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AccountCard({
+  account,
+  usage,
+  canDelete,
+}: {
+  account: Account;
+  usage: AccountUsage;
+  canDelete: boolean;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [name, setName] = useState(account.name);
   const [tz, setTz] = useState(account.timezone);
   const [currency, setCurrency] = useState(account.currency);
@@ -281,12 +424,32 @@ function AccountCard({ account }: { account: Account }) {
           )}
         </div>
 
-        <div className="col-span-2">
+        <div className="col-span-2 flex items-center justify-between">
           <Button disabled={pending} onClick={save}>
             <Save className="size-4" /> Save
           </Button>
+          {/* Hidden rather than disabled on the last account: a greyed button
+              invites a hover to find out why, and the reason only arrives after
+              the click. The Danger zone below is where "start over" lives. */}
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setConfirmOpen(true)}
+            >
+              <Trash2 className="size-4" /> Delete
+            </Button>
+          )}
         </div>
       </CardContent>
+
+      <DeleteAccountDialog
+        account={account}
+        usage={usage}
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+      />
     </Card>
   );
 }
@@ -334,7 +497,13 @@ function FtmoRule({
   );
 }
 
-export function AccountSettings({ accounts }: { accounts: Account[] }) {
+export function AccountSettings({
+  accounts,
+  usage,
+}: {
+  accounts: Account[];
+  usage: Record<string, AccountUsage>;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
 
@@ -350,7 +519,14 @@ export function AccountSettings({ accounts }: { accounts: Account[] }) {
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2">
         {accounts.map((a) => (
-          <AccountCard key={a.id} account={a} />
+          <AccountCard
+            key={a.id}
+            account={a}
+            // An account whose count never arrived is treated as non-empty by
+            // usageIsEmpty, which is the safe direction.
+            usage={usage[a.id] ?? UNKNOWN_USAGE}
+            canDelete={accounts.length > 1}
+          />
         ))}
       </div>
       <Button variant="outline" disabled={pending} onClick={addNew}>

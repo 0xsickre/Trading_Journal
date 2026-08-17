@@ -6,6 +6,8 @@ import { getCashEvents } from "@/lib/journal/cash-events";
 import { ListManager } from "@/components/journal/list-manager";
 import { InstrumentManager } from "@/components/journal/instrument-manager";
 import { AccountSettings } from "@/components/journal/account-settings";
+import { DangerZone } from "@/components/journal/danger-zone";
+import { getAccountUsage } from "@/lib/journal/account-usage-queries";
 import { CashEventsManager } from "@/components/journal/cash-events-manager";
 import { NewListForm } from "@/components/journal/new-list-form";
 import { FieldDefManager } from "@/components/journal/field-def-manager";
@@ -36,6 +38,11 @@ export default async function SettingsPage() {
   // Same choice as getPrimaryAccount, made from the list already in hand rather
   // than with a second round trip. Only the currency label needs it.
   const primaryAccount = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
+
+  // Counted here rather than when the delete dialog opens: the confirmation has
+  // to state what it is about to destroy at the moment it is read, and a dialog
+  // that fetches on open shows an empty list first and the truth a beat later.
+  const accountUsage = await getAccountUsage(accounts.map((a) => a.id));
 
   return (
     <div className="space-y-6">
@@ -104,8 +111,11 @@ export default async function SettingsPage() {
           <InstrumentManager instruments={instruments} />
         </TabsContent>
 
-        <TabsContent value="accounts">
-          <AccountSettings accounts={accounts} />
+        <TabsContent value="accounts" className="space-y-6">
+          <AccountSettings accounts={accounts} usage={accountUsage} />
+          {/* On the Accounts tab, not a seventh one: this is where someone
+              already is when they discover they cannot remove what they made. */}
+          <DangerZone />
         </TabsContent>
 
         <TabsContent value="cash">
