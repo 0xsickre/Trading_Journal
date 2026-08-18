@@ -164,6 +164,12 @@ export function toggleWidget(
  * are appended in registry order — so neither a widget renamed in a release nor
  * one added in it can leave the page short a section. An empty stored order is
  * the normal state and means "the default", not "nothing".
+ *
+ * LOCKED WIDGETS ALWAYS COME FIRST, whatever the stored array says. They are
+ * drawn above the rows and never inside them, so a resolved order that placed
+ * them anywhere else would describe a page that cannot exist — and the picker,
+ * which renders straight from this list, would show "Always on" rows floating
+ * in the middle of the sequence.
  */
 export function resolveOrder(
   order: readonly string[],
@@ -172,6 +178,12 @@ export function resolveOrder(
   const known = new Map(registry.map((w) => [w.id, w]));
   const placed: DashboardWidget[] = [];
   const seen = new Set<string>();
+
+  for (const w of registry) {
+    if (w.hideable) continue;
+    placed.push(w);
+    seen.add(w.id);
+  }
 
   for (const id of order) {
     const w = known.get(id);
@@ -216,6 +228,64 @@ export function packRows(
   }
   if (row.length > 0) rows.push(row);
   return rows;
+}
+
+/**
+ * One widget moved a place, as a FULL canonical order.
+ *
+ * Never a swap of two positions in a sparse array: the stored order is usually
+ * empty — meaning "the registry's" — and a sparse edit of an empty array cannot
+ * express a move at all. Materializing the whole sequence first is the same
+ * reasoning `moveFieldDef` follows when it rewrites a group's ordinals rather
+ * than swapping two of them.
+ *
+ * LOCKED WIDGETS ARE SKIPPED, not swapped with. They render above the rows and
+ * never inside them, so trading places with one would move the array and change
+ * nothing on screen — a button that visibly does nothing is worse than one that
+ * is unavailable. Moving a locked widget is refused outright, and moving past
+ * one steps over it.
+ */
+export function moveWidget(
+  order: readonly string[],
+  id: string,
+  direction: -1 | 1,
+): string[] {
+  const resolved = resolveOrder(order);
+  const asIds = () => resolved.map((w) => w.id);
+
+  const target = getWidget(id);
+  if (!target || !target.hideable) return asIds();
+
+  const movable = resolved.filter((w) => w.hideable);
+  const from = movable.findIndex((w) => w.id === id);
+  const to = from + direction;
+  // Clamped at both ends rather than wrapping: a widget at the top that jumps
+  // to the bottom on one more click is a surprise, not a feature.
+  if (from < 0 || to < 0 || to >= movable.length) return asIds();
+
+  const next = [...movable];
+  [next[from], next[to]] = [next[to], next[from]];
+
+  // Locked ones keep the front. They are drawn above the rows regardless, so
+  // their position in this array is bookkeeping rather than layout.
+  return [
+    ...resolved.filter((w) => !w.hideable).map((w) => w.id),
+    ...next.map((w) => w.id),
+  ];
+}
+
+/** Whether `id` can still move that way — for greying out the chevron. */
+export function canMoveWidget(
+  order: readonly string[],
+  id: string,
+  direction: -1 | 1,
+): boolean {
+  const w = getWidget(id);
+  if (!w || !w.hideable) return false;
+  const movable = resolveOrder(order).filter((x) => x.hideable);
+  const from = movable.findIndex((x) => x.id === id);
+  const to = from + direction;
+  return from >= 0 && to >= 0 && to < movable.length;
 }
 
 /** How many hideable widgets are currently on, and how many there are. */

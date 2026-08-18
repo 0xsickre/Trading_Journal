@@ -623,6 +623,7 @@ export type Database = {
           created_at: string
           dashboard_hidden_widgets: string[]
           dashboard_template_id: string | null
+          dashboard_widget_order: string[]
           journal_hidden_columns: string[]
           updated_at: string
           user_id: string
@@ -631,6 +632,7 @@ export type Database = {
           created_at?: string
           dashboard_hidden_widgets?: string[]
           dashboard_template_id?: string | null
+          dashboard_widget_order?: string[]
           journal_hidden_columns?: string[]
           updated_at?: string
           user_id: string
@@ -639,6 +641,7 @@ export type Database = {
           created_at?: string
           dashboard_hidden_widgets?: string[]
           dashboard_template_id?: string | null
+          dashboard_widget_order?: string[]
           journal_hidden_columns?: string[]
           updated_at?: string
           user_id?: string

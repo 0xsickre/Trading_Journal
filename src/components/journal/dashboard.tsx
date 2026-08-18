@@ -106,13 +106,17 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { WidgetPicker } from "@/components/journal/widget-picker";
 import {
+  moveWidget,
   packRows,
   resolveOrder,
   toggleWidget,
   visibleWidgets,
   type WidgetSpan,
 } from "@/lib/journal/dashboard-widgets";
-import { setDashboardHiddenWidgets } from "@/app/(app)/actions";
+import {
+  setDashboardHiddenWidgets,
+  setDashboardWidgetOrder,
+} from "@/app/(app)/actions";
 import {
   CostReportCard,
   HoldTimeCard,
@@ -290,6 +294,7 @@ export function Dashboard({
   playbooks = [],
   positionRules,
   dashboardHiddenWidgets = [],
+  dashboardWidgetOrder = [],
 }: {
   trades: TradeRow[];
   accounts: Account[];
@@ -328,6 +333,11 @@ export function Dashboard({
    * meaning "show everything" — see the note beside the state below.
    */
   dashboardHiddenWidgets?: string[];
+  /**
+   * Section order from `tj_user_prefs`. Empty means the registry order, which
+   * is the layout this page had before any of it was configurable.
+   */
+  dashboardWidgetOrder?: string[];
 }) {
   /**
    * Sections switched off in the picker.
@@ -347,6 +357,24 @@ export function Dashboard({
   const [hiddenWidgets, setHiddenWidgets] = useState<string[]>(
     dashboardHiddenWidgets,
   );
+
+  /** Section order, same shape and same default reasoning as the hidden set. */
+  const [widgetOrder, setWidgetOrder] = useState<string[]>(
+    dashboardWidgetOrder,
+  );
+
+  const moveWidgetPosition = useCallback((id: string, direction: -1 | 1) => {
+    setWidgetOrder((current) => {
+      const next = moveWidget(current, id, direction);
+      void setDashboardWidgetOrder(next).then((res) => {
+        if (!res.ok) {
+          setWidgetOrder(current);
+          toast.error(res.error);
+        }
+      });
+      return next;
+    });
+  }, []);
 
   const toggleWidgetVisibility = useCallback((id: string) => {
     setHiddenWidgets((current) => {
@@ -1048,7 +1076,12 @@ export function Dashboard({
             it is the same kind of control: it changes what you get, not which
             trades are counted. */}
         <div className="flex items-center gap-2 sm:ml-auto">
-          <WidgetPicker hidden={hiddenWidgets} onToggle={toggleWidgetVisibility} />
+          <WidgetPicker
+            hidden={hiddenWidgets}
+            order={widgetOrder}
+            onToggle={toggleWidgetVisibility}
+            onMove={moveWidgetPosition}
+          />
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -1727,11 +1760,7 @@ export function Dashboard({
       </Card>
         ),
         },
-        // No stored order yet — this resolves to the registry's own sequence,
-        // which is exactly the layout the hand-written JSX produced. The order
-        // becomes a preference in the next commit; the plumbing is here so that
-        // change touches one argument and nothing else.
-        [],
+        widgetOrder,
       )}
     </div>
   );

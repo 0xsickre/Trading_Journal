@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   DASHBOARD_WIDGETS,
   WIDGET_IDS,
+  canMoveWidget,
   getWidget,
+  moveWidget,
   packRows,
   resolveOrder,
   toggleWidget,
@@ -126,16 +128,29 @@ describe("resolveOrder", () => {
     // The half the guard exists for: a widget added in a release is absent from
     // every stored order, and must still reach the page.
     const ids = resolveOrder(["calendar", "equity"]).map((w) => w.id);
-    expect(ids[0]).toBe("calendar");
-    expect(ids[1]).toBe("equity");
+    const movable = ids.filter((id) => getWidget(id)!.hideable);
+    expect(movable[0]).toBe("calendar");
+    expect(movable[1]).toBe("equity");
     expect(ids).toHaveLength(WIDGET_IDS.length);
     expect(new Set(ids).size).toBe(WIDGET_IDS.length);
+  });
+
+  it("PUTS LOCKED WIDGETS FIRST whatever the stored array says", () => {
+    // They are drawn above the rows and never inside them, so any other
+    // placement describes a page that cannot exist — and the picker, which
+    // renders straight from this list, would show "Always on" rows floating in
+    // the middle of the sequence.
+    const ids = resolveOrder(["tag-breakdown", "equity"]).map((w) => w.id);
+    expect(ids.slice(0, 3)).toEqual(
+      DASHBOARD_WIDGETS.filter((w) => !w.hideable).map((w) => w.id),
+    );
+    expect(ids[3]).toBe("tag-breakdown");
   });
 
   it("drops ids the registry no longer knows", () => {
     const ids = resolveOrder(["ghost-widget", "equity"]).map((w) => w.id);
     expect(ids).not.toContain("ghost-widget");
-    expect(ids[0]).toBe("equity");
+    expect(ids.filter((id) => getWidget(id)!.hideable)[0]).toBe("equity");
   });
 
   it("renders a duplicated id once, not twice", () => {
@@ -199,6 +214,97 @@ describe("packRows", () => {
 
   it("packs nothing into nothing", () => {
     expect(packRows([])).toEqual([]);
+  });
+});
+
+describe("moveWidget", () => {
+  /** Movable ids only — the sequence the reader actually sees rearranged. */
+  const movable = (order: string[]) =>
+    resolveOrder(order).filter((w) => w.hideable).map((w) => w.id);
+
+  it("materializes a FULL order from an empty one", () => {
+    // The stored value is usually empty, meaning "the registry's". A sparse
+    // edit of an empty array cannot express a move at all.
+    const next = moveWidget([], "score", -1);
+    expect(next).toHaveLength(WIDGET_IDS.length);
+    expect(new Set(next).size).toBe(WIDGET_IDS.length);
+  });
+
+  it("swaps a widget with its neighbour", () => {
+    const before = movable([]);
+    const next = movable(moveWidget([], "score", -1));
+    const i = before.indexOf("score");
+    expect(next[i - 1]).toBe("score");
+    expect(next[i]).toBe(before[i - 1]);
+  });
+
+  it("moves down as well as up, and the two undo each other", () => {
+    // Down then up must land exactly back on the registry order — otherwise a
+    // reader who nudges a section and changes their mind cannot get back.
+    const original = resolveOrder([]).map((w) => w.id);
+    const down = moveWidget([], "equity", 1);
+    expect(down).not.toEqual(original);
+    expect(moveWidget(down, "equity", -1)).toEqual(original);
+  });
+
+  it("clamps at both ends rather than wrapping", () => {
+    // A widget at the top that jumps to the bottom on one more click is a
+    // surprise, not a feature.
+    const first = movable([])[0];
+    const last = movable([]).at(-1)!;
+    expect(movable(moveWidget([], first, -1))[0]).toBe(first);
+    expect(movable(moveWidget([], last, 1)).at(-1)).toBe(last);
+  });
+
+  it("REFUSES TO MOVE A LOCKED WIDGET", () => {
+    expect(moveWidget([], "headline", 1)).toEqual(
+      resolveOrder([]).map((w) => w.id),
+    );
+  });
+
+  it("steps OVER locked widgets instead of trading places with one", () => {
+    // The locked three render above the rows and never inside them, so swapping
+    // with one would rewrite the array and change nothing on screen — a button
+    // that visibly does nothing.
+    const first = movable([])[0];
+    const next = moveWidget([], first, 1);
+    // The locked ids keep the front; the movable sequence is what changed.
+    expect(next.slice(0, 3)).toEqual(
+      DASHBOARD_WIDGETS.filter((w) => !w.hideable).map((w) => w.id),
+    );
+    expect(movable(next)[1]).toBe(first);
+  });
+
+  it("ignores an unknown id", () => {
+    expect(moveWidget([], "nope", 1)).toEqual(resolveOrder([]).map((w) => w.id));
+  });
+});
+
+describe("canMoveWidget", () => {
+  const movable = resolveOrder([]).filter((w) => w.hideable).map((w) => w.id);
+
+  it("says no at the ends and yes in the middle", () => {
+    expect(canMoveWidget([], movable[0], -1)).toBe(false);
+    expect(canMoveWidget([], movable[0], 1)).toBe(true);
+    expect(canMoveWidget([], movable.at(-1)!, 1)).toBe(false);
+    expect(canMoveWidget([], movable.at(-1)!, -1)).toBe(true);
+  });
+
+  it("says no for a locked widget in either direction", () => {
+    expect(canMoveWidget([], "headline", -1)).toBe(false);
+    expect(canMoveWidget([], "headline", 1)).toBe(false);
+  });
+
+  it("agrees with moveWidget — a refused move leaves the order alone", () => {
+    // The chevron is greyed out on exactly the moves that would be no-ops, so
+    // the two must not be able to disagree.
+    for (const id of [...movable, "headline", "nope"]) {
+      for (const dir of [-1, 1] as const) {
+        const changed =
+          moveWidget([], id, dir).join() !== resolveOrder([]).map((w) => w.id).join();
+        expect(changed, `${id} ${dir}`).toBe(canMoveWidget([], id, dir));
+      }
+    }
   });
 });
 

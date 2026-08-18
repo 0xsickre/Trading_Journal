@@ -106,6 +106,7 @@ export default async function DashboardPage() {
         playbooks={playbooks}
         positionRules={positionRules}
         dashboardHiddenWidgets={userPrefs.dashboardHiddenWidgets}
+        dashboardWidgetOrder={userPrefs.dashboardWidgetOrder}
       />
     </div>
   );

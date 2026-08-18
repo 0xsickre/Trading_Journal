@@ -50,3 +50,37 @@ export async function setDashboardHiddenWidgets(
   revalidatePath("/");
   return { ok: true };
 }
+
+/**
+ * The order the dashboard's sections render in, top to bottom.
+ *
+ * Stored as the WHOLE sequence rather than as a moved id and a direction. The
+ * client already computes the full canonical order — `moveWidget` materializes
+ * it precisely so a move can be expressed against an empty stored value — and
+ * having the server recompute it from a delta would be two implementations of
+ * one rule, drifting the first time the registry changes.
+ *
+ * Deduped for the same reason the hidden set is: a duplicated id would render
+ * one section twice, and `resolveOrder` already refuses that on the way out.
+ * Doing it here too keeps the stored value equal to what the client believes it
+ * wrote.
+ */
+export async function setDashboardWidgetOrder(ids: string[]): Promise<Result> {
+  const parsed = schema.safeParse(ids);
+  if (!parsed.success) return { ok: false, error: "Invalid section order." };
+
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const order = [...new Set(parsed.data)];
+
+  const { error } = await supabase.from("tj_user_prefs").upsert(
+    { user_id: user.id, dashboard_widget_order: order },
+    { onConflict: "user_id" },
+  );
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/");
+  return { ok: true };
+}

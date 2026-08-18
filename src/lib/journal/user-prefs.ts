@@ -12,11 +12,20 @@ export type UserPrefs = {
    * to mean "shown".
    */
   dashboardHiddenWidgets: string[];
+  /**
+   * Dashboard sections top to bottom.
+   *
+   * EMPTY MEANS THE REGISTRY ORDER, not "no sections" — it is what every
+   * account starts with and what most keep. `resolveOrder` turns it into a
+   * full sequence.
+   */
+  dashboardWidgetOrder: string[];
 };
 
 const EMPTY_PREFS: UserPrefs = {
   journalHiddenColumns: [],
   dashboardHiddenWidgets: [],
+  dashboardWidgetOrder: [],
 };
 
 /** A stored array survives only if it is genuinely an array of strings. */
@@ -36,12 +45,15 @@ export async function getUserPrefs(): Promise<UserPrefs> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("tj_user_prefs")
-    .select("journal_hidden_columns, dashboard_hidden_widgets")
+    .select(
+      "journal_hidden_columns, dashboard_hidden_widgets, dashboard_widget_order",
+    )
     .maybeSingle();
 
   if (!data) return EMPTY_PREFS;
   return {
     journalHiddenColumns: stringArray(data.journal_hidden_columns),
     dashboardHiddenWidgets: stringArray(data.dashboard_hidden_widgets),
+    dashboardWidgetOrder: stringArray(data.dashboard_widget_order),
   };
 }
