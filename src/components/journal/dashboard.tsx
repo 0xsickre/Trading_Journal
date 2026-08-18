@@ -114,9 +114,21 @@ import {
   type WidgetSpan,
 } from "@/lib/journal/dashboard-widgets";
 import {
+  createDashboardTemplate,
+  deleteDashboardTemplate,
+  renameDashboardTemplate,
+  selectDashboardTemplate,
   setDashboardHiddenWidgets,
   setDashboardWidgetOrder,
+  updateDashboardTemplateWidgets,
 } from "@/app/(app)/actions";
+import { TemplateMenu } from "@/components/journal/template-menu";
+import {
+  layoutToWidgets,
+  templateMatchesLayout,
+  widgetsToLayout,
+  type DashboardTemplate,
+} from "@/lib/journal/dashboard-templates";
 import {
   CostReportCard,
   HoldTimeCard,
@@ -295,6 +307,8 @@ export function Dashboard({
   positionRules,
   dashboardHiddenWidgets = [],
   dashboardWidgetOrder = [],
+  dashboardTemplateId = null,
+  dashboardTemplates = [],
 }: {
   trades: TradeRow[];
   accounts: Account[];
@@ -338,7 +352,25 @@ export function Dashboard({
    * is the layout this page had before any of it was configurable.
    */
   dashboardWidgetOrder?: string[];
+  /** Which saved arrangement the live layout came from. Provenance, not rule. */
+  dashboardTemplateId?: string | null;
+  dashboardTemplates?: DashboardTemplate[];
 }) {
+  /*
+   * NO `useRouter` HERE, and the reason is worth stating because reaching for
+   * one is the obvious move. Template writes change data the SERVER renders —
+   * the list of saved layouts and which is selected — so a manual
+   * `router.refresh()` looks necessary. It is not: a Server Action calling
+   * `revalidatePath` returns the updated RSC payload with its own response, and
+   * React applies it. The refresh would be a second round trip for a payload
+   * already in hand.
+   *
+   * It also cannot be had. `useRouter` throws "invariant expected app router to
+   * be mounted" outside a Next runtime, and both dashboard test files render
+   * this component directly — seventeen assertions died on that import before
+   * this comment existed.
+   */
+
   /**
    * Sections switched off in the picker.
    *
@@ -361,6 +393,123 @@ export function Dashboard({
   /** Section order, same shape and same default reasoning as the hidden set. */
   const [widgetOrder, setWidgetOrder] = useState<string[]>(
     dashboardWidgetOrder,
+  );
+
+  /**
+   * Which saved arrangement the live layout came from.
+   *
+   * Provenance only — the two arrays above are what renders. Touching the
+   * picker leaves this alone, which is exactly how the layout comes to differ
+   * from the template and how `modified` below notices.
+   */
+  const [templateId, setTemplateId] = useState<string | null>(
+    dashboardTemplateId,
+  );
+
+  const selectedTemplate = useMemo(
+    () => dashboardTemplates.find((t) => t.id === templateId) ?? null,
+    [dashboardTemplates, templateId],
+  );
+
+  const templateModified = useMemo(
+    () =>
+      selectedTemplate != null &&
+      !templateMatchesLayout(selectedTemplate, hiddenWidgets, widgetOrder),
+    [selectedTemplate, hiddenWidgets, widgetOrder],
+  );
+
+  /** One place that reports a failed write, so none of the five forgets to. */
+  const report = useCallback((res: { ok: boolean; error?: string }) => {
+    if (!res.ok) toast.error(res.error ?? "Could not save.");
+    return res.ok;
+  }, []);
+
+  const applyLayout = useCallback(
+    (id: string | null, hidden: string[], order: string[]) => {
+      const prev = { id: templateId, hidden: hiddenWidgets, order: widgetOrder };
+      setTemplateId(id);
+      setHiddenWidgets(hidden);
+      setWidgetOrder(order);
+      void selectDashboardTemplate(id, hidden, order).then((res) => {
+        if (!res.ok) {
+          setTemplateId(prev.id);
+          setHiddenWidgets(prev.hidden);
+          setWidgetOrder(prev.order);
+          toast.error(res.error);
+        }
+      });
+    },
+    [templateId, hiddenWidgets, widgetOrder],
+  );
+
+  const onSelectTemplate = useCallback(
+    (id: string | null) => {
+      if (id == null) {
+        // Detach without touching the page: the arrangement on screen is the
+        // one the reader is looking at, and dropping its name should not also
+        // rearrange it.
+        applyLayout(null, hiddenWidgets, widgetOrder);
+        return;
+      }
+      const t = dashboardTemplates.find((x) => x.id === id);
+      if (!t) return;
+      const next = widgetsToLayout(t.widgets);
+      applyLayout(id, next.hidden, next.order);
+    },
+    [applyLayout, dashboardTemplates, hiddenWidgets, widgetOrder],
+  );
+
+  const onCreateTemplate = useCallback(
+    (name: string) => {
+      void createDashboardTemplate(
+        name,
+        layoutToWidgets(hiddenWidgets, widgetOrder),
+      ).then((res) => {
+        // The new row's id is assigned by the database, so the selection it
+        // sets server-side only reaches this component on the next render.
+        report(res);
+      });
+    },
+    [hiddenWidgets, widgetOrder, report],
+  );
+
+  const onSaveTemplate = useCallback(() => {
+    if (!selectedTemplate) return;
+    void updateDashboardTemplateWidgets(
+      selectedTemplate.id,
+      layoutToWidgets(hiddenWidgets, widgetOrder),
+    ).then((res) => {
+      report(res);
+    });
+  }, [selectedTemplate, hiddenWidgets, widgetOrder, report]);
+
+  const onRevertTemplate = useCallback(() => {
+    if (!selectedTemplate) return;
+    const next = widgetsToLayout(selectedTemplate.widgets);
+    applyLayout(selectedTemplate.id, next.hidden, next.order);
+  }, [selectedTemplate, applyLayout]);
+
+  const onRenameTemplate = useCallback(
+    (id: string, name: string) => {
+      void renameDashboardTemplate(id, name).then((res) => {
+        report(res);
+      });
+    },
+    [report],
+  );
+
+  const onDeleteTemplate = useCallback(
+    (id: string) => {
+      void deleteDashboardTemplate(id).then((res) => {
+        if (!report(res)) return;
+        // The foreign key is ON DELETE SET NULL, so the page keeps the layout
+        // and loses only its name. Said out loud, because a name silently
+        // vanishing from the toolbar reads as a bug.
+        setTemplateId(null);
+        toast.success("Layout deleted. The sections on screen are unchanged.");
+      });
+    },
+    [report],
   );
 
   const moveWidgetPosition = useCallback((id: string, direction: -1 | 1) => {
@@ -1076,6 +1225,17 @@ export function Dashboard({
             it is the same kind of control: it changes what you get, not which
             trades are counted. */}
         <div className="flex items-center gap-2 sm:ml-auto">
+          <TemplateMenu
+            templates={dashboardTemplates}
+            selectedId={templateId}
+            modified={templateModified}
+            onSelect={onSelectTemplate}
+            onCreate={onCreateTemplate}
+            onSave={onSaveTemplate}
+            onRevert={onRevertTemplate}
+            onRename={onRenameTemplate}
+            onDelete={onDeleteTemplate}
+          />
           <WidgetPicker
             hidden={hiddenWidgets}
             order={widgetOrder}

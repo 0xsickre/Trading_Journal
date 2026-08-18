@@ -20,12 +20,21 @@ export type UserPrefs = {
    * full sequence.
    */
   dashboardWidgetOrder: string[];
+  /**
+   * Which saved arrangement the live layout above came from, if any.
+   *
+   * PROVENANCE, NOT INSTRUCTION. The page renders from the two arrays; this
+   * only says which template they were last loaded from, so the UI can tell
+   * "still matches" from "modified since". Null is the normal state.
+   */
+  dashboardTemplateId: string | null;
 };
 
 const EMPTY_PREFS: UserPrefs = {
   journalHiddenColumns: [],
   dashboardHiddenWidgets: [],
   dashboardWidgetOrder: [],
+  dashboardTemplateId: null,
 };
 
 /** A stored array survives only if it is genuinely an array of strings. */
@@ -46,7 +55,7 @@ export async function getUserPrefs(): Promise<UserPrefs> {
   const { data } = await supabase
     .from("tj_user_prefs")
     .select(
-      "journal_hidden_columns, dashboard_hidden_widgets, dashboard_widget_order",
+      "journal_hidden_columns, dashboard_hidden_widgets, dashboard_widget_order, dashboard_template_id",
     )
     .maybeSingle();
 
@@ -55,5 +64,9 @@ export async function getUserPrefs(): Promise<UserPrefs> {
     journalHiddenColumns: stringArray(data.journal_hidden_columns),
     dashboardHiddenWidgets: stringArray(data.dashboard_hidden_widgets),
     dashboardWidgetOrder: stringArray(data.dashboard_widget_order),
+    dashboardTemplateId:
+      typeof data.dashboard_template_id === "string"
+        ? data.dashboard_template_id
+        : null,
   };
 }

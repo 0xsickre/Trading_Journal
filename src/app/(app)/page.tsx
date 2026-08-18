@@ -8,6 +8,7 @@ import { getTrackerRules, getCheckins } from "@/lib/journal/tracker/queries";
 import { getPositionCheckins } from "@/lib/journal/position-checkin-queries";
 import { getPlaybooks, getPositionRules } from "@/lib/journal/playbooks";
 import { getUserPrefs } from "@/lib/journal/user-prefs";
+import { getDashboardTemplates } from "@/lib/journal/dashboard-template-queries";
 import { todayInTz } from "@/lib/journal/daily-report";
 import { addDaysToDayKey, DEFAULT_TZ } from "@/lib/journal/time";
 import { Dashboard } from "@/components/journal/dashboard";
@@ -45,6 +46,7 @@ export default async function DashboardPage() {
     playbooks,
     positionCheckins,
     userPrefs,
+    dashboardTemplates,
   ] = await Promise.all([
     getTradesWithStats(),
     getAccounts(),
@@ -68,6 +70,8 @@ export default async function DashboardPage() {
     // normal state and answers "none", so a brand-new account gets the whole
     // page rather than an empty one.
     getUserPrefs(),
+    // The saved arrangements themselves. Small, per user, and scoped by RLS.
+    getDashboardTemplates(),
   ]);
 
   // The account's day, not the browser's — every day key in the tracker is in
@@ -107,6 +111,8 @@ export default async function DashboardPage() {
         positionRules={positionRules}
         dashboardHiddenWidgets={userPrefs.dashboardHiddenWidgets}
         dashboardWidgetOrder={userPrefs.dashboardWidgetOrder}
+        dashboardTemplateId={userPrefs.dashboardTemplateId}
+        dashboardTemplates={dashboardTemplates}
       />
     </div>
   );
