@@ -36,6 +36,7 @@ import {
 import { runPivot } from "@/lib/journal/reports/pivot";
 import { METRICS, getMetric } from "@/lib/journal/reports/metrics";
 import {
+  applyFilters,
   fromSearchParams,
   toSearchParams,
   type FilterSet,
@@ -46,6 +47,7 @@ import {
   metric as mkMetric,
   type ViewMode,
 } from "@/lib/journal/units";
+import { BookOverviewPanel } from "@/components/journal/reports/book-overview";
 import { FilterBar } from "@/components/journal/reports/filter-bar";
 import { PerformanceSummaryPanel } from "@/components/journal/reports/performance-summary";
 import { ReportChart, MAX_CHART_METRICS } from "@/components/journal/reports/report-chart";
@@ -388,6 +390,19 @@ export function ReportsWorkbench({
     ? viewMode
     : "dollars";
 
+  /**
+   * The filter-scoped book, undivided.
+   *
+   * The same call `runReport` makes before it buckets anything, so the overview
+   * and the report below it can never disagree about which trades are in scope.
+   * Recomputing it here rather than having the engine hand it back keeps
+   * `ReportResult` about the report.
+   */
+  const scopedBook = useMemo(
+    () => applyFilters(enriched, filters, dimensionContext),
+    [enriched, filters, dimensionContext],
+  );
+
   const result = useMemo(
     () =>
       runReport({
@@ -595,6 +610,14 @@ export function ReportsWorkbench({
       ) : (
         result && (
           <>
+            <BookOverviewPanel
+              trades={scopedBook}
+              metricContext={metricContext}
+              viewMode={effectiveViewMode}
+              currency={currency}
+              equityBase={equityBase}
+            />
+
             <PerformanceSummaryPanel
               summary={summarizeReport(result, metricKey)}
               metric={selectedMetric}

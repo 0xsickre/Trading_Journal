@@ -57,3 +57,48 @@ describe("TrackerStreakCard — real computeStreak/meanCompliance, on screen", (
     expect(screen.getByText("0 ocenjenih dana")).toBeInTheDocument();
   });
 });
+
+describe("activity, which arrived here from the dashboard's tile wall", () => {
+  it("SHOWS THE DAY COUNTS EVEN WITH NO TRACKER RULES", () => {
+    // The trap this placement exists to avoid. Nested inside the `hasRules`
+    // branch — the obvious place, since everything else in this card is about
+    // rules — both numbers would vanish for exactly the users who have not set
+    // the tracker up. How many days you traded is a fact about the account, not
+    // about a checklist.
+    render(
+      <TrackerStreakCard
+        series={[]}
+        endDay="2026-04-10"
+        hasRules={false}
+        tradingDays={18}
+        loggedDays={21}
+      />,
+    );
+    expect(screen.getByText(/No rules yet/)).toBeInTheDocument();
+    expect(statValue("Trading days")).toBe("18");
+    expect(statValue("Logged days")).toBe("21");
+  });
+
+  it("lets logged days exceed trading days without complaint", () => {
+    // A day you deliberately did not trade and wrote down anyway is process,
+    // and it is the one this application is an argument for.
+    render(
+      <TrackerStreakCard
+        series={[]}
+        endDay="2026-04-10"
+        hasRules
+        tradingDays={12}
+        loggedDays={30}
+      />,
+    );
+    expect(statValue("Logged days")).toBe("30");
+  });
+
+  it("says nothing at all when the counts are not supplied", () => {
+    // Rendering "0 trading days" for a caller that never passed the number
+    // would be stating a fact the card was never told.
+    render(<TrackerStreakCard series={[]} endDay="2026-04-10" hasRules />);
+    expect(screen.queryByText("Trading days")).not.toBeInTheDocument();
+    expect(screen.queryByText("Logged days")).not.toBeInTheDocument();
+  });
+});

@@ -265,9 +265,16 @@ const SHAPES: Record<string, TradeSpec[]> = {
 };
 
 describe("svaka metrika kroz svaki oblik knjige", () => {
-  it("registar ima trideset metrika i nijedan dvostruk ključ", () => {
-    expect(METRICS).toHaveLength(30);
-    expect(new Set(METRICS.map((m) => m.key)).size).toBe(30);
+  it("registar ima trideset tri metrike i nijedan dvostruk ključ", () => {
+    // Broj je zakucan namerno: petlja ispod vrti SVAKU metriku kroz svaki
+    // oblik knjige, pa metrika dodata bez razmišljanja tiho dobije dvadeset
+    // jednu novu tvrdnju i nijedan pogled. Ovaj red je taj pogled — pada kad
+    // se registar promeni i traži da neko potvrdi da je promena namerna.
+    //
+    // 30 → 33 kad su `winner_target_attainment`, `avg_entry_slip` i
+    // `total_slip_r` došli sa dashboard-a, gde su prestali da se prikazuju.
+    expect(METRICS).toHaveLength(33);
+    expect(new Set(METRICS.map((m) => m.key)).size).toBe(33);
   });
 
   for (const [shapeName, specs] of Object.entries(SHAPES)) {

@@ -33,11 +33,29 @@ export function TrackerStreakCard({
   series,
   endDay,
   hasRules,
+  tradingDays,
+  loggedDays,
 }: {
   series: readonly DayCompliance[];
   endDay: string;
   /** False when the tracker has never been set up, which reads differently from zero. */
   hasRules: boolean;
+  /**
+   * Days a position was OPENED, and days carrying a journal entry.
+   *
+   * They arrived here from the dashboard's tile wall, where they sat between
+   * `Total swap` and `Avg entry slip` as though they were execution figures.
+   * They are not: read together they are the ratio this whole application is an
+   * argument for — how many of the days you traded, you also wrote down. That
+   * belongs beside the consistency streak and nowhere else.
+   *
+   * Optional so the two dozen existing call sites and tests that predate them
+   * keep working, and rendered only when supplied — a card inventing "0 trading
+   * days" for a caller that simply did not pass the number would be stating a
+   * fact it was never told.
+   */
+  tradingDays?: number;
+  loggedDays?: number;
 }) {
   const streak = useMemo(() => computeStreak(series), [series]);
   const mean = useMemo(() => meanCompliance(series), [series]);
@@ -52,6 +70,32 @@ export function TrackerStreakCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* OUTSIDE the `hasRules` branch on purpose. Activity is not compliance
+            — how many days you traded and how many you wrote down are facts
+            about the account whether or not a single tracker rule has ever been
+            written. Nesting them inside would delete both numbers from the app
+            for exactly the users least likely to have set the tracker up. */}
+        {(tradingDays != null || loggedDays != null) && (
+          <div className="grid grid-cols-2 gap-4">
+            {tradingDays != null && (
+              <Stat
+                label="Trading days"
+                value={String(tradingDays)}
+                hint="days a position was opened"
+              />
+            )}
+            {loggedDays != null && (
+              <Stat
+                label="Logged days"
+                value={String(loggedDays)}
+                // Can exceed trading days, and that is the point: a day you
+                // deliberately did not trade and wrote down is process.
+                hint="days with a journal entry"
+              />
+            )}
+          </div>
+        )}
+
         {!hasRules ? (
           <p className="text-sm text-muted-foreground">
             No rules yet. Set them up in{" "}

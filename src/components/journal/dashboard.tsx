@@ -126,13 +126,10 @@ import {
   rHistogram,
   dailyPnl,
   breakdownByField,
-  computeSlippageStats,
   weeklySlippageR,
-  computeExitEfficiencyStats,
   weeklyExitEfficiency,
   type PnlMode,
 } from "@/lib/journal/analytics";
-import { fmtExitEfficiencyPct } from "@/lib/journal/exit-efficiency";
 import { evaluateFtmo, ftmoConfigFromAccount } from "@/lib/journal/ftmo";
 import { FtmoBanner } from "@/components/journal/ftmo-banner";
 import { unpricedClosedCount } from "@/lib/journal/money-provenance";
@@ -150,31 +147,11 @@ import {
   startOfISOWeek,
 } from "date-fns";
 import { fmtMoney, fmtR, fmtPct, fmtNum, pnlClass } from "@/lib/journal/format";
-import { formatDuration } from "@/lib/journal/units";
 import { toEpoch, zonedDateKey } from "@/lib/journal/time";
 import {
-  MIN_RATIO_DAYS,
   computeDailyDrawdown,
-  computeRiskRatios,
   type DayPnlPoint,
-  type RiskRatios,
 } from "@/lib/journal/risk-ratios";
-
-/**
- * Shared tooltip tail for the three risk ratios.
- *
- * Every one of them is annualized by the number of days actually traded rather
- * than by a fixed 252, so the scale factor is spelled out. Without it the
- * figure is not comparable to a Sharpe quoted anywhere else, and the reader has
- * no way to know that.
- */
-function ratioTitle(base: string, r: RiskRatios): string {
-  if (r.days < MIN_RATIO_DAYS) {
-    return `${base} Needs at least ${MIN_RATIO_DAYS} days with a closed trade — there are ${r.days}.`;
-  }
-  const scale = Math.round(r.periodsPerYear ?? 0);
-  return `${base} ${r.days} trading days across ${r.spanDays} calendar days, so the annual scale is √${scale}.`;
-}
 
 const PERIODS = [
   { value: "30", label: "30d" },
@@ -604,12 +581,6 @@ export function Dashboard({
       })),
     [realized, tzOf, pnlOf],
   );
-  const ratios = useMemo(
-    // The same drawdown the KPI row shows, so Calmar and Recovery factor cannot
-    // disagree about the denominator they share.
-    () => computeRiskRatios(dayPoints, drawdown.maxMoney),
-    [dayPoints, drawdown.maxMoney],
-  );
   const dailyDd = useMemo(() => computeDailyDrawdown(dayPoints), [dayPoints]);
 
   const insightResult = useMemo(
@@ -784,17 +755,9 @@ export function Dashboard({
     () => breakdownByField(realized, breakdownField, breakevenRange),
     [realized, breakdownField, breakevenRange],
   );
-  const slippageStats = useMemo(
-    () => computeSlippageStats(realized),
-    [realized],
-  );
   const weeklySlip = useMemo(
     () => weeklySlippageR(realized, tzOf),
     [realized, tzOf],
-  );
-  const exitEffStats = useMemo(
-    () => computeExitEfficiencyStats(realized),
-    [realized],
   );
   const weeklyExitEff = useMemo(
     () => weeklyExitEfficiency(realized, tzOf),
@@ -1285,7 +1248,18 @@ export function Dashboard({
           />
         </StatGroup>
 
-        <StatGroup id="risk" title="Risk" count={7}>
+        {/* WHAT LEFT THIS BLOCK, AND WHY IT IS NOT A LOSS.
+            Eleven tiles moved to /reports' "This book, whole" panel, and six of
+            those were never relocations at all — they restated a card sitting
+            on this same page. `Avg hold` was `HoldTimeCard`; `Total swap` was
+            `CostReportCard`; the four execution tiles were the two weekly
+            charts a screen below. The other five (Sharpe, Sortino, Calmar,
+            Recovery factor, Consistency) are long-horizon figures that cannot
+            move inside this screen's ninety-day default — and two of them were
+            already components of the Sickre Score, stated twice.
+
+            What stays is what a trader checks against a limit today. */}
+        <StatGroup id="risk" title="Risk" count={2}>
           <Stat
             label="Max drawdown %"
             value={fmtPct(drawdown.maxPctOfEquity)}
@@ -1305,126 +1279,6 @@ export function Dashboard({
                 ? `Average drop below the day's own high-water mark, across ${dailyDd.days} days with a trade. A day that never went underwater counts as 0. Worst: ${fmtMoney(dailyDd.worstMoney, currency)} on ${dailyDd.worstDay}.`
                 : `Average drop below the day's own high-water mark, across ${dailyDd.days} days with a trade.`
             }
-          />
-          <Stat
-            label="Sharpe"
-            value={ratios.sharpe != null ? fmtNum(ratios.sharpe, 2) : "—"}
-            title={ratioTitle(
-              "Mean daily P&L divided by its standard deviation.",
-              ratios,
-            )}
-          />
-          <Stat
-            label="Sortino"
-            value={ratios.sortino != null ? fmtNum(ratios.sortino, 2) : "—"}
-            title={ratioTitle(
-              "Like Sharpe, but the denominator counts losing days only — upside is not risk. Empty while no day has lost money.",
-              ratios,
-            )}
-          />
-          <Stat
-            label="Calmar"
-            value={ratios.calmar != null ? fmtNum(ratios.calmar, 2) : "—"}
-            title={ratioTitle(
-              "Annualized profit divided by max drawdown — the recovery factor divided by how long it took to earn.",
-              ratios,
-            )}
-          />
-          <Stat
-            label="Recovery factor"
-            value={recovery != null ? fmtNum(recovery, 2) : "—"}
-            title="Net profit divided by max drawdown. Undefined — not infinite — while the curve has never fallen."
-          />
-          <Stat
-            label="Consistency"
-            value={fmtNum(consistency.score, 0)}
-            title="100 − (stdev of trade P&L / total profit). Zero while the book is losing."
-          />
-        </StatGroup>
-
-        <StatGroup id="execution" title="Execution and activity" count={8}>
-          <Stat
-            label="Avg entry slip"
-            value={
-              slippageStats.count > 0
-                ? fmtR(-slippageStats.avgAdverseR)
-                : "—"
-            }
-            cls={
-              slippageStats.count > 0
-                ? pnlClass(-slippageStats.avgAdverseR)
-                : undefined
-            }
-          />
-          <Stat
-            label="Total slip R"
-            value={
-              slippageStats.count > 0
-                ? fmtR(-slippageStats.totalAdverseR)
-                : "—"
-            }
-            cls={
-              slippageStats.count > 0
-                ? pnlClass(-slippageStats.totalAdverseR)
-                : undefined
-            }
-          />
-          <Stat
-            label="Target attainment"
-            value={
-              exitEffStats.count > 0
-                ? fmtExitEfficiencyPct(exitEffStats.avgPct)
-                : "—"
-            }
-            cls={
-              exitEffStats.count > 0
-                ? pnlClass(exitEffStats.avgPct - 50)
-                : undefined
-            }
-            title={
-              exitEffStats.count > 0
-                ? `Realized R / planned target R · ${exitEffStats.count} closed trades`
-                : undefined
-            }
-          />
-          <Stat
-            label="Winner target attainment"
-            value={
-              exitEffStats.winnerCount > 0
-                ? fmtExitEfficiencyPct(exitEffStats.avgWinnerPct)
-                : "—"
-            }
-            cls={
-              exitEffStats.winnerCount > 0
-                ? pnlClass(exitEffStats.avgWinnerPct - 50)
-                : undefined
-            }
-            title="Winning trades only — early exit vs plan"
-          />
-          <Stat
-            label="Avg hold"
-            value={formatDuration(holdTime.avgSeconds)}
-            title={`Across ${holdTime.count} trades with a known duration.`}
-          />
-          <Stat
-            label="Total swap"
-            value={fmtMoney(costs.totalSwap, currency)}
-            cls={costs.totalSwap !== 0 ? "text-[var(--loss)]" : undefined}
-            title={
-              costs.withCostData === 0
-                ? "No trade in scope carries a cost — this zero means 'no data', not 'free'."
-                : `${costs.withCostData} of ${costs.count} trades carry cost data.`
-            }
-          />
-          <Stat
-            label="Trading days"
-            value={String(tradingDays)}
-            title="Days a position was OPENED. Money is dated by close; activity by open."
-          />
-          <Stat
-            label="Logged days"
-            value={String(loggedDays)}
-            title="Days with a journal entry — including days you deliberately did not trade."
           />
         </StatGroup>
       </div>
@@ -1493,6 +1347,8 @@ export function Dashboard({
         series={trackerSeries}
         endDay={todayKey}
         hasRules={trackerRules.length > 0}
+        tradingDays={tradingDays}
+        loggedDays={loggedDays}
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

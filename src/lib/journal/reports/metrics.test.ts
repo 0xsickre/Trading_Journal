@@ -254,3 +254,67 @@ describe("follow_rate is the one metric that depends on WHICH bucket it is in", 
     expect(m.compute(BOOK, ctx)).toBeCloseTo((2 / 3) * 100, 10);
   });
 });
+
+/**
+ * The three entries added when the dashboard's execution tiles moved here.
+ *
+ * They exist so `/reports` can state what the dashboard stopped stating, and
+ * the reason each one is worth pinning is the same: the underlying function
+ * answers `0` for "nothing measured", and `0` is a perfectly plausible reading
+ * of the metric itself. A fill exactly at plan is `0` slippage; a book with no
+ * planned entries recorded is also `0`. Only one of those is a measurement.
+ */
+describe("execution metrics relocated from the dashboard", () => {
+  const val = (key: string, group = BOOK) =>
+    getMetric(key)!.compute(group, metricCtx);
+
+  it("tells a fill exactly at plan apart from no fills measured at all", () => {
+    // The whole reason the guard exists. `computeSlippageStats` answers
+    // `avgAdverseR: 0` for BOTH — and only one of them is a measurement.
+    //
+    // This book's trades all plan an entry at 100 and fill at 100, so zero is
+    // the honest answer: perfect fills.
+    expect(val("avg_entry_slip")).toBe(0);
+    expect(val("total_slip_r")).toBe(0);
+    // With nothing to measure the metric declines to answer, rather than
+    // reporting the same zero and calling it flawless execution.
+    expect(val("avg_entry_slip", [])).toBeNull();
+    expect(val("total_slip_r", [])).toBeNull();
+  });
+
+  it("declares slippage higher-is-better, matching the flipped sign", () => {
+    // The registry publishes `-avgAdverseR`, so a worse fill is a MORE
+    // negative number and "higher is better" is the honest direction. If the
+    // sign ever stops being flipped in `compute`, this flag becomes a lie and
+    // the bar colouring inverts across the whole reports screen.
+    expect(getMetric("avg_entry_slip")!.higherIsBetter).toBe(true);
+    expect(getMetric("total_slip_r")!.higherIsBetter).toBe(true);
+    expect(getMetric("avg_entry_slip")!.unit).toBe("r");
+  });
+
+  it("declines to score consistency on an empty book, but scores a losing one", () => {
+    // Two books, one number, opposite meanings. `consistencyScore` answers 0
+    // for both — the losing book because it has earned that verdict, the empty
+    // one because there is nothing to divide. Surfaced by the new /reports
+    // panel, where a confident `0` sat next to five honest dashes.
+    expect(val("consistency", [])).toBeNull();
+
+    const losing = enrich([
+      { id: "x", net: -100, r: -1 },
+      { id: "y", net: -200, r: -2 },
+    ]);
+    expect(val("consistency", losing)).toBe(0);
+  });
+
+  it("measures winner target attainment over WINNERS, not the whole book", () => {
+    // Two of the three trades closed green: `w` planned 2R and took 3 (150 %),
+    // `b` planned 1R and took 0.05 (5 %). Mean 77.5.
+    const winners = val("winner_target_attainment");
+    const all = val("target_attainment");
+    expect(winners).toBeCloseTo(77.5, 6);
+    // The loser drags the all-trades figure below the winners-only one, which
+    // is the entire reason both tiles existed side by side on the dashboard.
+    expect(all!).toBeLessThan(winners!);
+    expect(val("winner_target_attainment", [])).toBeNull();
+  });
+});

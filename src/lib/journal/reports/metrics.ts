@@ -9,6 +9,7 @@
 
 import {
   computeExitEfficiencyStats,
+  computeSlippageStats,
   computeStats,
   type PnlMode,
   type RealizedTrade,
@@ -84,6 +85,16 @@ export type ReportMetric = {
 
 const realized = (group: EnrichedTrade[]): RealizedTrade[] =>
   group.map((e) => e.trade);
+
+/**
+ * Negation that cannot produce `-0`.
+ *
+ * `-0` is a real IEEE value and it survives all the way to the formatter, where
+ * a book of perfect fills would read `-0.00R` — a number that looks like a
+ * rounding artefact of some small loss rather than what it is, which is no
+ * slippage at all.
+ */
+const negate = (n: number): number => (n === 0 ? 0 : -n);
 
 /** computeStats is the workhorse; memoized per group to avoid recomputation. */
 function statsOf(group: EnrichedTrade[], ctx: MetricContext) {
@@ -267,7 +278,23 @@ export const METRICS: ReportMetric[] = [
     label: "Consistency",
     unit: "count",
     higherIsBetter: true,
-    compute: (g) => consistencyScore(g.map((e) => e.pnl)).score,
+    compute: (g) => {
+      /*
+       * `count === 0` IS THE ONLY CASE THAT GETS A NULL, AND THE DISTINCTION IS
+       * THE WHOLE POINT.
+       *
+       * `consistencyScore` answers `score: 0` for two very different books: one
+       * with no trades, and one that is losing money ("a losing book has no
+       * consistency to speak of"). The second is a verdict on real trades and
+       * belongs on screen as a zero. The first is no evidence at all, and
+       * publishing it put a confident `0` next to five honest dashes on an
+       * empty account — the same defect `sickre-score.ts` was rewritten to fix
+       * one layer up, surviving down here because this registry read `.score`
+       * and ignored the `count` sitting beside it.
+       */
+      const c = consistencyScore(g.map((e) => e.pnl));
+      return c.count > 0 ? c.score : null;
+    },
   },
   {
     key: "avg_hold",
@@ -330,6 +357,52 @@ export const METRICS: ReportMetric[] = [
     compute: (g) => {
       const s = computeExitEfficiencyStats(realized(g));
       return s.count > 0 ? s.avgPct : null;
+    },
+  },
+  {
+    key: "winner_target_attainment",
+    label: "Winner target attainment",
+    unit: "pct",
+    hint: "Winning trades only — how much of the plan was taken before exiting early.",
+    higherIsBetter: true,
+    compute: (g) => {
+      const s = computeExitEfficiencyStats(realized(g));
+      return s.winnerCount > 0 ? s.avgWinnerPct : null;
+    },
+  },
+  {
+    /*
+     * SIGN IS FLIPPED ON PURPOSE, AND MATCHES THE TILE IT REPLACES.
+     *
+     * `computeSlippageStats` reports adverse slippage as a POSITIVE number —
+     * bigger is worse. Every consumer so far has negated it before display
+     * (`fmtR(-slippageStats.avgAdverseR)` on the dashboard), so a fill worse
+     * than planned reads as `-0.05R`: money lost to slippage, in the same
+     * direction as every other loss on the page. Publishing the raw sign here
+     * would give the reports engine a metric where `higherIsBetter: false` and
+     * make the same quantity point two ways in one app.
+     */
+    key: "avg_entry_slip",
+    label: "Avg entry slip",
+    unit: "r",
+    hint: "Planned entry vs average fill, in R against the planned stop. Negative means the fill was worse than planned.",
+    higherIsBetter: true,
+    compute: (g) => {
+      const s = computeSlippageStats(realized(g));
+      // `count === 0` answers `avgAdverseR: 0`, which is "nothing measured"
+      // wearing the face of "filled exactly at plan".
+      return s.count > 0 ? negate(s.avgAdverseR) : null;
+    },
+  },
+  {
+    key: "total_slip_r",
+    label: "Total slip R",
+    unit: "r",
+    hint: "Every R given up to entry slippage in the period, added together.",
+    higherIsBetter: true,
+    compute: (g) => {
+      const s = computeSlippageStats(realized(g));
+      return s.count > 0 ? negate(s.totalAdverseR) : null;
     },
   },
   {
