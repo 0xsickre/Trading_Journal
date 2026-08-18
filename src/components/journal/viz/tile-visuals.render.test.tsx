@@ -133,4 +133,18 @@ describe("Sparkline", () => {
     const { container } = render(<Sparkline values={[]} />);
     expect(container.querySelector('[data-viz="sparkline"]')).toBeNull();
   });
+
+  it("renders nothing for a SINGLE point — an empty book has no path", () => {
+    // Found by looking at the running app, not at the code. `buildEquity`
+    // opens every series with the starting balance, so a book with no trades
+    // arrives as one point, and one point drawn as a flat line reads as
+    // "equity held steady" under a tile saying `$0.00` over `0` trades.
+    const { container } = render(<Sparkline values={[10_000]} />);
+    expect(container.querySelector('[data-viz="sparkline"]')).toBeNull();
+  });
+
+  it("draws as soon as there are two points to join", () => {
+    const { container } = render(<Sparkline values={[10_000, 10_600]} />);
+    expect(container.querySelector('[data-viz="sparkline"]')).toBeTruthy();
+  });
 });

@@ -204,12 +204,24 @@ export function SplitBar({
   );
 }
 
+/** A sparkline needs a path, and two points are the fewest that make one. */
+const MIN_SPARK_POINTS = 2;
+
 /**
  * The shape of a series, bleeding along the bottom of the tile.
  *
  * Deliberately unlabelled and unscaled: the number in the tile carries the
  * magnitude, this carries the path it took. Drawn at low opacity so it reads as
  * ground rather than as a chart competing with the figure above it.
+ *
+ * NOTHING IS DRAWN BELOW TWO POINTS, and that rule was written after looking at
+ * the running app rather than at the code. `buildEquity` opens every series
+ * with the account's starting balance, so a book with no trades arrives here as
+ * exactly one point — which `sparkPoints` will honestly render as a flat line,
+ * because one value genuinely has no slope. On screen that line says "equity
+ * held steady" underneath a tile reading `$0.00` over `0` trades, and the truth
+ * is that there is no history to have held steady. Same distinction the gauges
+ * make one function up: no evidence is not a measurement of zero.
  */
 export function Sparkline({
   values,
@@ -223,6 +235,9 @@ export function Sparkline({
   height?: number;
 }) {
   const stroke = 1.5;
+  if (values.filter((v) => Number.isFinite(v)).length < MIN_SPARK_POINTS) {
+    return null;
+  }
   const points = sparkPoints(values, width, height, stroke);
   if (points === "") return null;
 
