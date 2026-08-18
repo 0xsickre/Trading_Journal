@@ -1172,13 +1172,19 @@ export function Dashboard({
         />
       </div>
 
-      {/* The remaining twenty-four, in three named blocks the reader can fold
-          away. Nothing is dropped and nothing is hidden by default — the tiles
-          are the same tiles, they just no longer arrive as one undifferentiated
-          wall. See `stat-group.tsx` for why "open" is an invariant here and not
-          merely a default. */}
+      {/* The rest, in ONE named block the reader can fold away.
+          Three blocks once, then two, now one — each round of moving tiles to
+          /reports left fewer behind, and a heading over two tiles costs more
+          attention than the tiles pay back. Nothing is hidden by default; see
+          `stat-group.tsx` for why "open" is an invariant here and not merely a
+          default.
+
+          `id` stays `result` even though the title no longer does. It keys the
+          stored fold preference, and `stat-group.tsx` documents that renaming
+          one re-opens that group — a reader who folded this block away should
+          not find it open again because the heading above it was reworded. */}
       <div className="space-y-4">
-        <StatGroup id="result" title="Result — detail" count={10}>
+        <StatGroup id="result" title="Result and risk — detail" count={12}>
           <Stat
             label="Gross P/L"
             value={fmtMoney(stats.grossSum, currency, { sign: true })}
@@ -1246,20 +1252,19 @@ export function Dashboard({
             }
             title={`${weekly.winning} winning of ${weekly.periods} weeks. The swing replacement for Day Win %.`}
           />
-        </StatGroup>
+          {/* THE TWO DRAWDOWN TILES CLOSE THIS GRID RATHER THAN OPENING THEIR
+              OWN. They were a `StatGroup` of their own for one round, and a
+              heading plus a rule plus a fold for two tiles is more furniture
+              than content — it read as a leftover, which is exactly what it
+              was after the other eleven moved to /reports. Here they fill the
+              two empty cells the six-column grid was already leaving, and the
+              block lands on twelve: two full rows, no gaps.
 
-        {/* WHAT LEFT THIS BLOCK, AND WHY IT IS NOT A LOSS.
-            Eleven tiles moved to /reports' "This book, whole" panel, and six of
-            those were never relocations at all — they restated a card sitting
-            on this same page. `Avg hold` was `HoldTimeCard`; `Total swap` was
-            `CostReportCard`; the four execution tiles were the two weekly
-            charts a screen below. The other five (Sharpe, Sortino, Calmar,
-            Recovery factor, Consistency) are long-horizon figures that cannot
-            move inside this screen's ninety-day default — and two of them were
-            already components of the Sickre Score, stated twice.
-
-            What stays is what a trader checks against a limit today. */}
-        <StatGroup id="risk" title="Risk" count={2}>
+              They belong in "detail" on their own merit, not only to tidy the
+              layout. Both expand a tile in the headline row above — `Max
+              drawdown %` is the percentage companion of `Max drawdown`, the
+              same relationship `Gross P/L` has to `Net P/L` at the start of
+              this group. */}
           <Stat
             label="Max drawdown %"
             value={fmtPct(drawdown.maxPctOfEquity)}
