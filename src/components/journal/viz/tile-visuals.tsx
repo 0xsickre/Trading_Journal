@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import {
   dashArc,
   fraction,
@@ -262,5 +263,63 @@ export function Sparkline({
         />
       </svg>
     </div>
+  );
+}
+
+/**
+ * A 0–100 score placed on a bad-to-good scale.
+ *
+ * THE GRADIENT IS SVG AND NOT CSS, WHICH IS NOT A STYLE PREFERENCE. This app
+ * ships a print stylesheet whose `* { background: transparent !important }`
+ * resets `background-image` along with `background-color` — the shorthand takes
+ * both — so a `bg-gradient-to-r` bar comes out of the printer blank. An SVG
+ * `<linearGradient>` fill is untouched by that rule.
+ *
+ * Red through amber to green is the one place on this page where those colours
+ * do NOT mean money direction, and it is deliberate: here the axis genuinely
+ * runs bad to good, which is the meaning the reader already brings to a red-to-
+ * green ramp. Everywhere else green means "up", which is why the gauges avoid
+ * it.
+ *
+ * Renders nothing without a score. The bar's whole job is to place a number on
+ * a scale, and there is no placing of a number that was withheld.
+ */
+export function ScoreBar({ score }: { score: number | null }) {
+  // Scoped per instance. `drawdown-chart.tsx` learned this the hard way with a
+  // hardcoded gradient id: two of the same chart on one page and the second
+  // silently takes the first's fill.
+  const gradientId = useId();
+  if (score == null) return null;
+
+  const at = Math.max(0, Math.min(100, score));
+
+  return (
+    <svg
+      viewBox="0 0 100 8"
+      preserveAspectRatio="none"
+      className="h-2 w-full"
+      data-viz="score-bar"
+    >
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="var(--loss)" />
+          <stop offset="50%" stopColor="var(--chart-4)" />
+          <stop offset="100%" stopColor="var(--profit)" />
+        </linearGradient>
+      </defs>
+      <rect x="0" y="2" width="100" height="4" rx="2" fill={`url(#${gradientId})`} />
+      {/* A bar rather than a dot: `preserveAspectRatio="none"` stretches the
+          viewBox horizontally, which would flatten a circle into an ellipse of
+          whatever width the card happens to be. */}
+      <rect
+        x={at - 0.5}
+        y="0"
+        width="1"
+        height="8"
+        rx="0.5"
+        fill="var(--foreground)"
+        data-viz-marker=""
+      />
+    </svg>
   );
 }

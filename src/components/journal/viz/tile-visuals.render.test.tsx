@@ -3,6 +3,7 @@ import { render } from "@testing-library/react";
 import {
   DonutRing,
   PROFIT_FACTOR_FULL,
+  ScoreBar,
   SemiGauge,
   Sparkline,
   SplitBar,
@@ -33,9 +34,55 @@ describe("the visuals contribute no text", () => {
         <DonutRing value={2.2} full={PROFIT_FACTOR_FULL} />
         <SplitBar left={300} right={-100} />
         <Sparkline values={[1, 2, 3]} />
+        <ScoreBar score={64} />
       </>,
     );
     expect(container.textContent).toBe("");
+  });
+});
+
+describe("ScoreBar", () => {
+  it("places the marker at the score along the scale", () => {
+    const { container } = render(<ScoreBar score={64} />);
+    expect(container.querySelector('[data-viz-marker]')?.getAttribute("x")).toBe(
+      "63.5",
+    );
+  });
+
+  it("clamps rather than sliding the marker off the bar", () => {
+    const { container } = render(<ScoreBar score={140} />);
+    expect(container.querySelector('[data-viz-marker]')?.getAttribute("x")).toBe(
+      "99.5",
+    );
+  });
+
+  it("renders nothing for a withheld score", () => {
+    // There is no placing of a number that was never stated.
+    const { container } = render(<ScoreBar score={null} />);
+    expect(container.querySelector('[data-viz="score-bar"]')).toBeNull();
+  });
+
+  it("paints the gradient in SVG, so it survives the print stylesheet", () => {
+    // `@media print { * { background: transparent !important } }` resets
+    // `background-image` too — a CSS gradient prints blank.
+    const { container } = render(<ScoreBar score={50} />);
+    expect(container.querySelector("linearGradient")).toBeTruthy();
+  });
+
+  it("scopes the gradient id per instance", () => {
+    // Two bars on one page must not share a fill. `drawdown-chart.tsx` has a
+    // hardcoded id and this is the bug that would follow it here.
+    const { container } = render(
+      <>
+        <ScoreBar score={20} />
+        <ScoreBar score={80} />
+      </>,
+    );
+    const ids = [...container.querySelectorAll("linearGradient")].map(
+      (g) => g.id,
+    );
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
   });
 });
 

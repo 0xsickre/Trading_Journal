@@ -89,3 +89,73 @@ describe("the score card renders what the score says", () => {
     expect(screen.getByText(/10 trades/)).toBeInTheDocument();
   });
 });
+
+/**
+ * The radar half, asserted through the card's OWN markup.
+ *
+ * Not through recharts: a spike against this repo's `ResponsiveContainer` mock
+ * found it renders nothing at all in jsdom — no svg, no polygon, no axis ticks,
+ * just an empty `.recharts-wrapper`. Which axes the polygon actually has is
+ * therefore proved in `sickre-radar.test.ts`, where it is pure arithmetic. What
+ * IS checkable here is everything the card says around the chart, and that is
+ * the part a reader relies on to interpret the shape.
+ */
+describe("the radar, and what the card says around it", () => {
+  it("states how many components the shape is built from", () => {
+    render(<SickreScoreCard score={scoreOf()} />);
+    // A polygon missing two corners looks like a shape, not like a gap, unless
+    // something says so.
+    expect(
+      screen.getByText(/6 of 6 components · 100 of 100 weights/),
+    ).toBeInTheDocument();
+  });
+
+  it("refuses the radar below four axes and says why", () => {
+    // Three components dropped, chosen so 65 of 100 weights survive — past
+    // `MIN_COVERAGE_SHARE`, so the score is still stated and it is the AXIS
+    // COUNT alone doing the refusing.
+    render(
+      <SickreScoreCard
+        score={scoreOf({
+          recoveryFactor: null,
+          consistencyScore: null,
+          winPct: null,
+        })}
+      />,
+    );
+    expect(screen.getByText(/would describe the gaps/)).toBeInTheDocument();
+    expect(screen.queryByText(/components · /)).not.toBeInTheDocument();
+  });
+
+  it("keeps the weights and the renormalization note, folded but present", () => {
+    // The two facts a radar structurally cannot carry: that profit factor is a
+    // quarter of the score, and that a dropped component renormalizes the rest.
+    render(<SickreScoreCard score={scoreOf({ recoveryFactor: null })} />);
+    expect(screen.getByText("25%")).toBeInTheDocument();
+    expect(screen.getByText(/renormalized/)).toBeInTheDocument();
+  });
+});
+
+describe("the breakdown opens itself exactly when it is needed", () => {
+  const details = (): HTMLDetailsElement =>
+    document.querySelector("details") as HTMLDetailsElement;
+
+  it("stays folded on a settled score", () => {
+    render(<SickreScoreCard score={scoreOf()} />);
+    expect(details().open).toBe(false);
+  });
+
+  it("opens on a provisional score", () => {
+    // A reader handed a shaky number should not have to go looking for the
+    // reason it is shaky.
+    render(<SickreScoreCard score={scoreOf({ sample: { trades: 10, decided: 10 } })} />);
+    expect(details().open).toBe(true);
+  });
+
+  it("opens when the score is withheld altogether", () => {
+    render(
+      <SickreScoreCard score={scoreOf({ sample: { trades: 0, decided: 0 } })} />,
+    );
+    expect(details().open).toBe(true);
+  });
+});
