@@ -3,6 +3,8 @@ import {
   DASHBOARD_WIDGETS,
   WIDGET_IDS,
   getWidget,
+  packRows,
+  resolveOrder,
   toggleWidget,
   visibleWidgets,
   widgetCounts,
@@ -112,6 +114,91 @@ describe("widgetCounts", () => {
   it("is unmoved by a locked id in the stored set", () => {
     const total = DASHBOARD_WIDGETS.filter((w) => w.hideable).length;
     expect(widgetCounts(["headline"])).toEqual({ visible: total, total });
+  });
+});
+
+describe("resolveOrder", () => {
+  it("returns the registry order when nothing is stored", () => {
+    expect(resolveOrder([]).map((w) => w.id)).toEqual(WIDGET_IDS);
+  });
+
+  it("honours the stored order and appends whatever it never mentioned", () => {
+    // The half the guard exists for: a widget added in a release is absent from
+    // every stored order, and must still reach the page.
+    const ids = resolveOrder(["calendar", "equity"]).map((w) => w.id);
+    expect(ids[0]).toBe("calendar");
+    expect(ids[1]).toBe("equity");
+    expect(ids).toHaveLength(WIDGET_IDS.length);
+    expect(new Set(ids).size).toBe(WIDGET_IDS.length);
+  });
+
+  it("drops ids the registry no longer knows", () => {
+    const ids = resolveOrder(["ghost-widget", "equity"]).map((w) => w.id);
+    expect(ids).not.toContain("ghost-widget");
+    expect(ids[0]).toBe("equity");
+  });
+
+  it("renders a duplicated id once, not twice", () => {
+    // A hand-edited array can name the same widget twice; rendering it twice
+    // would duplicate a whole section of the page.
+    const ids = resolveOrder(["equity", "equity"]).map((w) => w.id);
+    expect(ids.filter((i) => i === "equity")).toHaveLength(1);
+  });
+
+  it("never loses a widget, whatever the stored value", () => {
+    for (const stored of [[], ["nope"], WIDGET_IDS, [...WIDGET_IDS].reverse()]) {
+      expect(resolveOrder(stored)).toHaveLength(WIDGET_IDS.length);
+    }
+  });
+});
+
+describe("packRows", () => {
+  const spans = (rows: { span: number }[][]) => rows.map((r) => r.map((w) => w.span));
+
+  it("REPRODUCES THE DEFAULT LAYOUT from the registry order", () => {
+    // The assertion that made the extraction safe: rendering from this list has
+    // to produce the same rows the hand-written JSX did. Measured against the
+    // running page — equity beside score, four cards in one row.
+    const rows = packRows(resolveOrder([]));
+    for (const row of rows) {
+      expect(row.reduce((s, w) => s + w.span, 0)).toBeLessThanOrEqual(4);
+    }
+    const byId = rows.map((r) => r.map((w) => w.id));
+    expect(byId).toContainEqual(["equity", "score"]);
+    expect(byId).toContainEqual(["hold-time", "costs", "plan-vs-reality", "weekly"]);
+    expect(byId).toContainEqual(["drawdown", "calendar"]);
+  });
+
+  it("fills a row to four quarters and then opens a new one", () => {
+    const w = (id: string, span: 1 | 2 | 4) =>
+      ({ id, label: id, group: "detail", span, hideable: true }) as const;
+    expect(
+      spans(packRows([w("a", 2), w("b", 1), w("c", 1), w("d", 2)])),
+    ).toEqual([[2, 1, 1], [2]]);
+  });
+
+  it("gives a full-width widget its own row", () => {
+    const w = (id: string, span: 1 | 2 | 4) =>
+      ({ id, label: id, group: "detail", span, hideable: true }) as const;
+    expect(spans(packRows([w("a", 1), w("b", 4), w("c", 1)]))).toEqual([
+      [1],
+      [4],
+      [1],
+    ]);
+  });
+
+  it("NEVER REORDERS to make a tidier fit", () => {
+    // A 2 followed by two 1s packs as 2+1+1. A 1, a 4 and a 1 could fit as
+    // 1+1 then 4 — and must not, because the reader's sequence is the one thing
+    // this function may not second-guess.
+    const w = (id: string, span: 1 | 2 | 4) =>
+      ({ id, label: id, group: "detail", span, hideable: true }) as const;
+    const flat = packRows([w("a", 1), w("b", 4), w("c", 1)]).flat().map((x) => x.id);
+    expect(flat).toEqual(["a", "b", "c"]);
+  });
+
+  it("packs nothing into nothing", () => {
+    expect(packRows([])).toEqual([]);
   });
 });
 

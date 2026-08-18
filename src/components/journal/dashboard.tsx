@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Children,
-  useCallback,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { AlertTriangle, Download } from "lucide-react";
 import {
@@ -112,8 +106,11 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { WidgetPicker } from "@/components/journal/widget-picker";
 import {
+  packRows,
+  resolveOrder,
   toggleWidget,
   visibleWidgets,
+  type WidgetSpan,
 } from "@/lib/journal/dashboard-widgets";
 import { setDashboardHiddenWidgets } from "@/app/(app)/actions";
 import {
@@ -167,35 +164,56 @@ import {
 } from "@/lib/journal/risk-ratios";
 
 /**
- * Column classes by how many widgets actually survived the picker.
+ * How many of the four columns a widget takes.
  *
- * A map of literals rather than a template string: Tailwind's compiler scans
- * source text, so `grid-cols-${n}` compiles to nothing and the row silently
- * stacks. Every class here has to be written out to exist in the stylesheet.
+ * Literal classes rather than a template string: Tailwind's compiler scans
+ * source text, so `col-span-${n}` compiles to nothing and every widget silently
+ * collapses to one column. Each of these has to be written out to exist in the
+ * stylesheet at all.
  */
-const ROW_GRID: Record<number, string> = {
-  2: "grid gap-4 [&>*]:min-w-0 lg:grid-cols-2",
-  3: "grid gap-4 [&>*]:min-w-0 md:grid-cols-2 xl:grid-cols-3",
-  4: "grid gap-4 [&>*]:min-w-0 md:grid-cols-2 xl:grid-cols-4",
+const SPAN_CLASS: Record<WidgetSpan, string> = {
+  1: "",
+  2: "md:col-span-2 xl:col-span-2",
+  4: "md:col-span-2 xl:col-span-4",
 };
 
 /**
- * A row of widgets that narrows as they are switched off.
+ * The page below the headline, rendered FROM A LIST rather than written out.
  *
- * Gating the children of a fixed `lg:grid-cols-2` would leave the survivor at
- * half width with an empty column beside it — the layout still describing a
- * widget the reader removed. Here the column count comes from what is left:
- * one widget renders full width with no grid at all, and the row disappears
- * entirely when nothing survives, taking its `gap` with it.
+ * This is what makes the section order a preference instead of a fact about the
+ * source file. The nodes arrive keyed by widget id; the reader's stored order
+ * decides the sequence, `packRows` decides where the rows break, and a widget
+ * with nothing to draw — a section switched off, or one whose data is absent
+ * like the execution charts — is dropped before packing so it cannot leave a
+ * gap behind.
  *
- * `Children.toArray` drops `false` and `null`, which is exactly what a
- * `{show("x") && <Widget/>}` child evaluates to.
+ * `false` as well as `null` counts as nothing, because that is what a
+ * `show("x") && <Widget/>` expression evaluates to when the answer is no.
  */
-function WidgetRow({ cols, children }: { cols: 2 | 3 | 4; children: ReactNode }) {
-  const items = Children.toArray(children);
-  if (items.length === 0) return null;
-  if (items.length === 1) return <>{items[0]}</>;
-  return <div className={ROW_GRID[Math.min(items.length, cols)]}>{items}</div>;
+function renderRows(
+  nodes: Record<string, ReactNode>,
+  order: readonly string[],
+) {
+  const present = resolveOrder(order).filter((w) => {
+    const node = nodes[w.id];
+    return node != null && node !== false;
+  });
+
+  return packRows(present).map((row) => (
+    <div
+      // Keyed by the row's first widget rather than by index: an index key
+      // makes React reuse a chart's DOM for whatever lands in that slot after a
+      // reorder, and recharts does not survive having its data swapped under it.
+      key={row[0].id}
+      className="grid gap-4 [&>*]:min-w-0 md:grid-cols-2 xl:grid-cols-4"
+    >
+      {row.map((w) => (
+        <div key={w.id} className={SPAN_CLASS[w.span]}>
+          {nodes[w.id]}
+        </div>
+      ))}
+    </div>
+  ));
 }
 
 const PERIODS = [
@@ -1282,7 +1300,9 @@ export function Dashboard({
           stored fold preference, and `stat-group.tsx` documents that renaming
           one re-opens that group — a reader who folded this block away should
           not find it open again because the heading above it was reworded. */}
-      {show("detail-tiles") && (
+      {renderRows(
+        {
+        "detail-tiles": show("detail-tiles") && (
         <StatGroup id="result" title="Result and risk — detail" count={12}>
           <Stat
             label="Gross P/L"
@@ -1385,13 +1405,14 @@ export function Dashboard({
             }
           />
         </StatGroup>
-      )}
+        ),
 
-      {/* The verdict, beside the shape that produced it. The Sickre Score used
-          to sit six sections down, below every raw money tile — the one figure
-          that weighs result AND process together, ranked under `Total swap`. */}
-      <WidgetRow cols={2}>
-        {show("equity") && (
+        /* The verdict, beside the shape that produced it — a DEFAULT
+           adjacency now rather than a fixed one, since the reader can move
+           either. The Sickre Score used to sit six sections down, below every
+           raw money tile: the one figure that weighs result AND process
+           together, ranked under `Total swap`. */
+        equity: show("equity") && (
         <ChartShell
           title={`Equity curve (${mode}, ${equityMetric === "money" ? currency : "R"})`}
           action={
@@ -1439,54 +1460,49 @@ export function Dashboard({
             </AreaChart>
           </ResponsiveContainer>
         </ChartShell>
-        )}
-        {show("score") && <SickreScoreCard score={sickreScore} />}
-      </WidgetRow>
+        ),
+        score: show("score") && <SickreScoreCard score={sickreScore} />,
 
-      {/* What the app has to say, before the reader digs for it themselves. */}
-      {show("insights") && <InsightsPanel result={insightResult} />}
+        /* What the app has to say, before the reader digs for it themselves. */
+        insights: show("insights") && <InsightsPanel result={insightResult} />,
 
-      {/* Process, high — not at the foot of the page. README: "P&L je posledica,
-          proces je uzrok." A discipline streak buried under nine sections of
-          money is the layout arguing the opposite of the thesis. */}
-      {show("tracker") && (
-        <TrackerStreakCard
-          series={trackerSeries}
-          endDay={todayKey}
-          hasRules={trackerRules.length > 0}
-          tradingDays={tradingDays}
-          loggedDays={loggedDays}
-        />
-      )}
+        /* Process, high by default — not at the foot of the page. README:
+           "P&L je posledica, proces je uzrok." A discipline streak buried under
+           nine sections of money is the layout arguing the opposite. */
+        tracker: show("tracker") && (
+          <TrackerStreakCard
+            series={trackerSeries}
+            endDay={todayKey}
+            hasRules={trackerRules.length > 0}
+            tradingDays={tradingDays}
+            loggedDays={loggedDays}
+          />
+        ),
 
-      <WidgetRow cols={4}>
-        {show("hold-time") && <HoldTimeCard stats={holdTime} />}
-        {show("costs") && <CostReportCard costs={costs} currency={currency} />}
-        {show("plan-vs-reality") && (
+        "hold-time": show("hold-time") && <HoldTimeCard stats={holdTime} />,
+        costs: show("costs") && <CostReportCard costs={costs} currency={currency} />,
+        "plan-vs-reality": show("plan-vs-reality") && (
           <PlanVsRealityCard
             plannedR={plannedR}
             excursion={excursion}
             direction={directionSplit}
           />
-        )}
-        {show("weekly") && (
+        ),
+        weekly: show("weekly") && (
           <PeriodPerformanceCard
             summary={weekly}
             label="Weekly performance"
             currency={currency}
           />
-        )}
-      </WidgetRow>
-
-      <WidgetRow cols={2}>
-        {show("monthly") && (
+        ),
+        monthly: show("monthly") && (
           <PeriodPerformanceCard
             summary={monthly}
             label="Monthly performance"
             currency={currency}
           />
-        )}
-        {show("r-distribution") && (
+        ),
+        "r-distribution": show("r-distribution") && (
         <ChartShell title="R-multiple distribution">
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={hist} margin={{ left: 4, right: 8, top: 8 }}>
@@ -1510,20 +1526,18 @@ export function Dashboard({
             </BarChart>
           </ResponsiveContainer>
         </ChartShell>
-        )}
-      </WidgetRow>
+        ),
 
-      {/* The underwater curve beside the calendar of days that dug it.
+        /* The underwater curve beside the calendar of days that dug it.
 
-          `min-w-0` on the items is load-bearing, not tidiness: grid tracks
-          default to `min-width:auto`, and the heatmap's intrinsic width would
-          otherwise push its card straight past the viewport edge. It lives in
-          `ROW_GRID` now, so `WidgetRow` carries it for every row. */}
-      <WidgetRow cols={2}>
-        {show("drawdown") && (
+           `min-w-0` on the items is load-bearing, not tidiness: grid tracks
+           default to `min-width:auto`, and the heatmap's intrinsic width would
+           otherwise push its card straight past the viewport edge. It lives on
+           the row container in `renderRows` now, so every row carries it. */
+        drawdown: show("drawdown") && (
           <DrawdownChart series={ddSeries} stats={drawdown} currency={currency} />
-        )}
-        {show("calendar") && (
+        ),
+        calendar: show("calendar") && (
           <ChartShell
             title={`Daily P/L (${mode})`}
             subtitle="Last 26 weeks — green = profit, red = loss (account days)."
@@ -1534,14 +1548,14 @@ export function Dashboard({
               currency={currency}
             />
           </ChartShell>
-        )}
-      </WidgetRow>
+        ),
 
-      {/* Execution quality. Both charts are conditional on having data of their
-          own, ON TOP of the picker — a section switched on that has nothing to
-          plot still shows nothing. */}
-      {show("execution-quality") &&
-        (weeklySlip.length > 0 || weeklyExitEff.length > 0) && (
+        /* Execution quality. Both charts are conditional on having data of
+           their own, ON TOP of the picker — a section switched on that has
+           nothing to plot still shows nothing, and `renderRows` drops it before
+           packing so it cannot leave a gap. */
+        "execution-quality": show("execution-quality") &&
+          (weeklySlip.length > 0 || weeklyExitEff.length > 0) && (
         <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-2">
           {weeklySlip.length > 0 && (
             <ChartShell
@@ -1653,10 +1667,10 @@ export function Dashboard({
             </ChartShell>
           )}
         </div>
-      )}
+        ),
 
-      {/* Breakdown by tag */}
-      {show("tag-breakdown") && (
+        /* Breakdown by tag */
+        "tag-breakdown": show("tag-breakdown") && (
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-base">Performance by tag</CardTitle>
@@ -1711,6 +1725,13 @@ export function Dashboard({
           </div>
         </CardContent>
       </Card>
+        ),
+        },
+        // No stored order yet — this resolves to the registry's own sequence,
+        // which is exactly the layout the hand-written JSX produced. The order
+        // becomes a preference in the next commit; the plumbing is here so that
+        // change touches one argument and nothing else.
+        [],
       )}
     </div>
   );
