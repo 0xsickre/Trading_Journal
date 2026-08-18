@@ -106,3 +106,40 @@ describe("toggleCollapsed", () => {
     expect(stored.includes(novaGrupa)).toBe(false);
   });
 });
+
+describe("dva polja u istoj prodavnici", () => {
+  // Isti stabovi kao u „u browseru" bloku — bez njih `typeof window` je
+  // „undefined" i modul se, sasvim ispravno, ponaša kao na serveru.
+  beforeEach(() => {
+    vi.stubGlobal("window", {} as Window & typeof globalThis);
+    vi.stubGlobal("localStorage", fakeStorage());
+  });
+
+  it("POKVARENO POLJE KOŠTA SAMO SEBE, ne ceo fajl", () => {
+    // Čuvar je do sada vraćao `{}` čim `collapsedGroups` nije niz. Sa jednim
+    // poljem to je bilo neprimetno; sa dva znači da je preferenca koja drži
+    // samo `hiddenWidgets` bacana u celosti pri svakom čitanju — korisnik bi
+    // sakrio pola dashboard-a i zatekao ga netaknutog posle osvežavanja.
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({ collapsedGroups: "ne-niz", hiddenWidgets: ["equity"] }),
+    );
+    expect(getDashboardPrefs()).toEqual({ hiddenWidgets: ["equity"] });
+  });
+
+  it("odbacuje niz koji nije niz stringova", () => {
+    // `.includes()` nad brojevima ne puca, ali `WIDGET_IDS.filter` nad njima
+    // vraća tišinu umesto greške — bolje da polje ne postoji.
+    localStorage.setItem(KEY, JSON.stringify({ hiddenWidgets: [1, 2] }));
+    expect(getDashboardPrefs()).toEqual({});
+  });
+
+  it("upisom jednog polja ne briše drugo", () => {
+    setDashboardPrefs({ collapsedGroups: ["result"] });
+    setDashboardPrefs({ hiddenWidgets: ["calendar"] });
+    expect(getDashboardPrefs()).toEqual({
+      collapsedGroups: ["result"],
+      hiddenWidgets: ["calendar"],
+    });
+  });
+});

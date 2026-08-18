@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import {
+  Children,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { AlertTriangle, Download } from "lucide-react";
 import {
@@ -103,6 +110,15 @@ import {
   SplitBar,
 } from "@/components/journal/viz/tile-visuals";
 import { cn } from "@/lib/utils";
+import { WidgetPicker } from "@/components/journal/widget-picker";
+import {
+  toggleWidget,
+  visibleWidgets,
+} from "@/lib/journal/dashboard-widgets";
+import {
+  getDashboardPrefs,
+  setDashboardPrefs,
+} from "@/lib/journal/dashboard-prefs";
 import {
   CostReportCard,
   HoldTimeCard,
@@ -152,6 +168,38 @@ import {
   computeDailyDrawdown,
   type DayPnlPoint,
 } from "@/lib/journal/risk-ratios";
+
+/**
+ * Column classes by how many widgets actually survived the picker.
+ *
+ * A map of literals rather than a template string: Tailwind's compiler scans
+ * source text, so `grid-cols-${n}` compiles to nothing and the row silently
+ * stacks. Every class here has to be written out to exist in the stylesheet.
+ */
+const ROW_GRID: Record<number, string> = {
+  2: "grid gap-4 [&>*]:min-w-0 lg:grid-cols-2",
+  3: "grid gap-4 [&>*]:min-w-0 md:grid-cols-2 xl:grid-cols-3",
+  4: "grid gap-4 [&>*]:min-w-0 md:grid-cols-2 xl:grid-cols-4",
+};
+
+/**
+ * A row of widgets that narrows as they are switched off.
+ *
+ * Gating the children of a fixed `lg:grid-cols-2` would leave the survivor at
+ * half width with an empty column beside it — the layout still describing a
+ * widget the reader removed. Here the column count comes from what is left:
+ * one widget renders full width with no grid at all, and the row disappears
+ * entirely when nothing survives, taking its `gap` with it.
+ *
+ * `Children.toArray` drops `false` and `null`, which is exactly what a
+ * `{show("x") && <Widget/>}` child evaluates to.
+ */
+function WidgetRow({ cols, children }: { cols: 2 | 3 | 4; children: ReactNode }) {
+  const items = Children.toArray(children);
+  if (items.length === 0) return null;
+  if (items.length === 1) return <>{items[0]}</>;
+  return <div className={ROW_GRID[Math.min(items.length, cols)]}>{items}</div>;
+}
 
 const PERIODS = [
   { value: "30", label: "30d" },
@@ -257,6 +305,41 @@ export function Dashboard({
   playbooks?: Playbook[];
   positionRules?: Map<string, PositionRule[]>;
 }) {
+  /**
+   * Sections switched off in the picker.
+   *
+   * EMPTY IS THE ONLY SAFE INITIAL STATE, and as an invariant rather than a
+   * default — the same argument `stat-group.tsx` makes at length one component
+   * over. `useState([])` runs identically on the server and on the first client
+   * render, and the stored preference is applied in an effect afterwards.
+   * Reading `localStorage` during render would give the server one answer and
+   * the browser another, which is a hydration mismatch; it would also let a
+   * headless render observe a hidden section and so fail to find a tile that is
+   * genuinely on the page. Nine assertions in `dashboard.render.test.tsx` are
+   * exactly that kind of lookup.
+   */
+  const [hiddenWidgets, setHiddenWidgets] = useState<string[]>([]);
+
+  useEffect(() => {
+    const stored = getDashboardPrefs().hiddenWidgets ?? [];
+    if (stored.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- external-store init
+      setHiddenWidgets(stored);
+    }
+  }, []);
+
+  const toggleWidgetVisibility = useCallback((id: string) => {
+    setHiddenWidgets((current) => {
+      const next = toggleWidget(current, id);
+      setDashboardPrefs({ hiddenWidgets: next });
+      return next;
+    });
+  }, []);
+
+  /** Render gate. Compute is NEVER gated — see the note above `sickreScore`. */
+  const visible = useMemo(() => visibleWidgets(hiddenWidgets), [hiddenWidgets]);
+  const show = useCallback((id: string) => visible.has(id), [visible]);
+
   const [accountFilter, setAccountFilter] = useState("all");
   const [period, setPeriod] = useState("90");
   const [mode, setMode] = useState<PnlMode>("net");
@@ -931,7 +1014,11 @@ export function Dashboard({
             filters, read as though they narrowed the page. They are one popover
             now; the trigger says what they are for, and the range preview lives
             next to the pickers that produce it instead of under the filters. */}
-        <div className="sm:ml-auto">
+        {/* Next to the export popover rather than among the filters, because
+            it is the same kind of control: it changes what you get, not which
+            trades are counted. */}
+        <div className="flex items-center gap-2 sm:ml-auto">
+          <WidgetPicker hidden={hiddenWidgets} onToggle={toggleWidgetVisibility} />
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -1183,7 +1270,7 @@ export function Dashboard({
           stored fold preference, and `stat-group.tsx` documents that renaming
           one re-opens that group — a reader who folded this block away should
           not find it open again because the heading above it was reworded. */}
-      <div className="space-y-4">
+      {show("detail-tiles") && (
         <StatGroup id="result" title="Result and risk — detail" count={12}>
           <Stat
             label="Gross P/L"
@@ -1286,12 +1373,13 @@ export function Dashboard({
             }
           />
         </StatGroup>
-      </div>
+      )}
 
       {/* The verdict, beside the shape that produced it. The Sickre Score used
           to sit six sections down, below every raw money tile — the one figure
           that weighs result AND process together, ranked under `Total swap`. */}
-      <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-2">
+      <WidgetRow cols={2}>
+        {show("equity") && (
         <ChartShell
           title={`Equity curve (${mode}, ${equityMetric === "money" ? currency : "R"})`}
           action={
@@ -1339,44 +1427,54 @@ export function Dashboard({
             </AreaChart>
           </ResponsiveContainer>
         </ChartShell>
-        <SickreScoreCard score={sickreScore} />
-      </div>
+        )}
+        {show("score") && <SickreScoreCard score={sickreScore} />}
+      </WidgetRow>
 
       {/* What the app has to say, before the reader digs for it themselves. */}
-      <InsightsPanel result={insightResult} />
+      {show("insights") && <InsightsPanel result={insightResult} />}
 
       {/* Process, high — not at the foot of the page. README: "P&L je posledica,
           proces je uzrok." A discipline streak buried under nine sections of
           money is the layout arguing the opposite of the thesis. */}
-      <TrackerStreakCard
-        series={trackerSeries}
-        endDay={todayKey}
-        hasRules={trackerRules.length > 0}
-        tradingDays={tradingDays}
-        loggedDays={loggedDays}
-      />
+      {show("tracker") && (
+        <TrackerStreakCard
+          series={trackerSeries}
+          endDay={todayKey}
+          hasRules={trackerRules.length > 0}
+          tradingDays={tradingDays}
+          loggedDays={loggedDays}
+        />
+      )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <HoldTimeCard stats={holdTime} />
-        <CostReportCard costs={costs} currency={currency} />
-        <PlanVsRealityCard
-          plannedR={plannedR}
-          excursion={excursion}
-          direction={directionSplit}
-        />
-        <PeriodPerformanceCard
-          summary={weekly}
-          label="Weekly performance"
-          currency={currency}
-        />
-      </div>
+      <WidgetRow cols={4}>
+        {show("hold-time") && <HoldTimeCard stats={holdTime} />}
+        {show("costs") && <CostReportCard costs={costs} currency={currency} />}
+        {show("plan-vs-reality") && (
+          <PlanVsRealityCard
+            plannedR={plannedR}
+            excursion={excursion}
+            direction={directionSplit}
+          />
+        )}
+        {show("weekly") && (
+          <PeriodPerformanceCard
+            summary={weekly}
+            label="Weekly performance"
+            currency={currency}
+          />
+        )}
+      </WidgetRow>
 
-      <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-2">
-        <PeriodPerformanceCard
-          summary={monthly}
-          label="Monthly performance"
-          currency={currency}
-        />
+      <WidgetRow cols={2}>
+        {show("monthly") && (
+          <PeriodPerformanceCard
+            summary={monthly}
+            label="Monthly performance"
+            currency={currency}
+          />
+        )}
+        {show("r-distribution") && (
         <ChartShell title="R-multiple distribution">
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={hist} margin={{ left: 4, right: 8, top: 8 }}>
@@ -1400,32 +1498,38 @@ export function Dashboard({
             </BarChart>
           </ResponsiveContainer>
         </ChartShell>
-      </div>
+        )}
+      </WidgetRow>
 
       {/* The underwater curve beside the calendar of days that dug it.
 
           `min-w-0` on the items is load-bearing, not tidiness: grid tracks
           default to `min-width:auto`, and the heatmap's intrinsic width would
-          otherwise push its card straight past the viewport edge. */}
-      <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-2">
-        <DrawdownChart series={ddSeries} stats={drawdown} currency={currency} />
-        <ChartShell
-          title={`Daily P/L (${mode})`}
-          subtitle="Last 26 weeks — green = profit, red = loss (account days)."
-        >
-          <CalendarHeatmap
-            daily={daily}
-            endDay={todayKey}
-            currency={currency}
-          />
-        </ChartShell>
-      </div>
+          otherwise push its card straight past the viewport edge. It lives in
+          `ROW_GRID` now, so `WidgetRow` carries it for every row. */}
+      <WidgetRow cols={2}>
+        {show("drawdown") && (
+          <DrawdownChart series={ddSeries} stats={drawdown} currency={currency} />
+        )}
+        {show("calendar") && (
+          <ChartShell
+            title={`Daily P/L (${mode})`}
+            subtitle="Last 26 weeks — green = profit, red = loss (account days)."
+          >
+            <CalendarHeatmap
+              daily={daily}
+              endDay={todayKey}
+              currency={currency}
+            />
+          </ChartShell>
+        )}
+      </WidgetRow>
 
-      {/* Execution quality. Both charts are conditional and both draw on the
-          same well of closed trades, so they share a row: they were two
-          full-width bands stacked one under the other, which is most of the
-          reason the page ran as long as it did. */}
-      {(weeklySlip.length > 0 || weeklyExitEff.length > 0) && (
+      {/* Execution quality. Both charts are conditional on having data of their
+          own, ON TOP of the picker — a section switched on that has nothing to
+          plot still shows nothing. */}
+      {show("execution-quality") &&
+        (weeklySlip.length > 0 || weeklyExitEff.length > 0) && (
         <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-2">
           {weeklySlip.length > 0 && (
             <ChartShell
@@ -1540,6 +1644,7 @@ export function Dashboard({
       )}
 
       {/* Breakdown by tag */}
+      {show("tag-breakdown") && (
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-base">Performance by tag</CardTitle>
@@ -1594,6 +1699,7 @@ export function Dashboard({
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

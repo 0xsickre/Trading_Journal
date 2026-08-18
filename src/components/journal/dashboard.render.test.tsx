@@ -156,6 +156,29 @@ describe("the book, on screen — same figures the paper already proved", () => 
   });
 });
 
+describe("the widget picker cannot start by hiding anything", () => {
+  it("renders every asserted KPI with no stored preference", () => {
+    // THE INVARIANT THE OTHER NINE ASSERTIONS IN THIS FILE STAND ON.
+    //
+    // `hiddenWidgets` initialises to `[]` and the stored value is applied in an
+    // effect, never during render — exactly the argument `stat-group.tsx` makes
+    // for its own open-by-default rule. If that ever inverted, a section would
+    // arrive hidden, `statValue` would return "" for every tile inside it, and
+    // the failures would read as wrong NUMBERS rather than as missing markup.
+    //
+    // Asserted as one list so the guard fails once, loudly, instead of nine
+    // times in nine different tests that each look like an arithmetic bug.
+    renderDashboard(rowsOf(BOOK));
+    for (const label of [
+      "Net P/L", "Trades", "Win rate", "Profit factor",
+      "Gross P/L", "Total R", "Best", "Worst",
+      "Wins / Losses", "Breakeven", "Week win %",
+    ]) {
+      expect(statValue(label), `${label} nije na ekranu`).not.toBe("");
+    }
+  });
+});
+
 describe("Week win %, the same guard on a different denominator", () => {
   it("shows an em dash for a single flat week, not 0%", () => {
     // Two breakeven trades, both closing in the same ISO week (1–2 April

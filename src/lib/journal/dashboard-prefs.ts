@@ -16,18 +16,47 @@ const STORAGE_KEY = "tj:dashboard_prefs";
 export type DashboardPrefs = {
   /** Ids of the stat groups currently collapsed. */
   collapsedGroups?: string[];
+  /**
+   * Ids of the whole sections switched off in the widget picker.
+   *
+   * Hidden and not visible, for the same reason `collapsedGroups` stores the
+   * collapsed set: a widget added in a later release is absent from every
+   * stored preference, and absent has to mean "shown". Storing the visible set
+   * instead would make each new section invisible to exactly the users who had
+   * bothered to configure their dashboard.
+   */
+  hiddenWidgets?: string[];
 };
+
+/** Only arrays of strings survive; anything else is dropped field by field. */
+function readArray(v: unknown): string[] | undefined {
+  return Array.isArray(v) && v.every((x) => typeof x === "string")
+    ? (v as string[])
+    : undefined;
+}
 
 export function getDashboardPrefs(): DashboardPrefs {
   if (typeof window === "undefined") return {};
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as DashboardPrefs;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (typeof parsed !== "object" || parsed == null) return {};
-    // A hand-edited or half-written value must not reach `.includes()` as a
-    // non-array — the panel would throw on render for a preference.
-    return Array.isArray(parsed.collapsedGroups) ? parsed : {};
+
+    // VALIDATED FIELD BY FIELD, not as a whole object. This used to answer `{}`
+    // whenever `collapsedGroups` was not an array — which, the moment a second
+    // field existed, meant a preference file holding only `hiddenWidgets` was
+    // thrown away in full every time it was read. One malformed field must cost
+    // that field and nothing else.
+    //
+    // A hand-edited or half-written value must also never reach `.includes()`
+    // as a non-array: the panel would throw on render, for a preference.
+    const out: DashboardPrefs = {};
+    const collapsed = readArray(parsed.collapsedGroups);
+    if (collapsed) out.collapsedGroups = collapsed;
+    const hidden = readArray(parsed.hiddenWidgets);
+    if (hidden) out.hiddenWidgets = hidden;
+    return out;
   } catch {
     return {};
   }
