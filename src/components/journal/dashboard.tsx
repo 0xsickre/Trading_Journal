@@ -3,7 +3,6 @@
 import {
   Children,
   useCallback,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -110,15 +109,13 @@ import {
   SplitBar,
 } from "@/components/journal/viz/tile-visuals";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { WidgetPicker } from "@/components/journal/widget-picker";
 import {
   toggleWidget,
   visibleWidgets,
 } from "@/lib/journal/dashboard-widgets";
-import {
-  getDashboardPrefs,
-  setDashboardPrefs,
-} from "@/lib/journal/dashboard-prefs";
+import { setDashboardHiddenWidgets } from "@/app/(app)/actions";
 import {
   CostReportCard,
   HoldTimeCard,
@@ -274,6 +271,7 @@ export function Dashboard({
   timezone,
   playbooks = [],
   positionRules,
+  dashboardHiddenWidgets = [],
 }: {
   trades: TradeRow[];
   accounts: Account[];
@@ -304,34 +302,48 @@ export function Dashboard({
   /** Retired rules included — their recorded answers are real observations. */
   playbooks?: Playbook[];
   positionRules?: Map<string, PositionRule[]>;
+  /**
+   * Dashboard sections this user has switched off, from `tj_user_prefs`.
+   *
+   * Optional, defaulting to none hidden. Both dashboard render tests mount this
+   * component without it, and every assertion they make depends on the default
+   * meaning "show everything" — see the note beside the state below.
+   */
+  dashboardHiddenWidgets?: string[];
 }) {
   /**
    * Sections switched off in the picker.
    *
-   * EMPTY IS THE ONLY SAFE INITIAL STATE, and as an invariant rather than a
-   * default — the same argument `stat-group.tsx` makes at length one component
-   * over. `useState([])` runs identically on the server and on the first client
-   * render, and the stored preference is applied in an effect afterwards.
-   * Reading `localStorage` during render would give the server one answer and
-   * the browser another, which is a hydration mismatch; it would also let a
-   * headless render observe a hidden section and so fail to find a tile that is
-   * genuinely on the page. Nine assertions in `dashboard.render.test.tsx` are
-   * exactly that kind of lookup.
+   * SERVER-SIDE NOW, arriving as a prop rather than read from `localStorage` in
+   * an effect. The browser store held this for one commit and was always the
+   * wrong home: it is per BROWSER, which is the exact complaint
+   * `20260801150000_user_prefs.sql` exists to answer. Open the dashboard on a
+   * phone and a layout configured on the desktop was simply gone.
+   *
+   * The prop is OPTIONAL and defaults to empty, which keeps the invariant the
+   * effect version was built around: `dashboard.render.test.tsx` renders this
+   * component with no preferences at all, and every one of its assertions
+   * depends on that meaning "show everything". A default that hid anything
+   * would make eleven tile lookups return "" and read as arithmetic bugs.
    */
-  const [hiddenWidgets, setHiddenWidgets] = useState<string[]>([]);
-
-  useEffect(() => {
-    const stored = getDashboardPrefs().hiddenWidgets ?? [];
-    if (stored.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- external-store init
-      setHiddenWidgets(stored);
-    }
-  }, []);
+  const [hiddenWidgets, setHiddenWidgets] = useState<string[]>(
+    dashboardHiddenWidgets,
+  );
 
   const toggleWidgetVisibility = useCallback((id: string) => {
     setHiddenWidgets((current) => {
       const next = toggleWidget(current, id);
-      setDashboardPrefs({ hiddenWidgets: next });
+      // Optimistic, with the previous value captured for the rollback — the
+      // same shape `journal-grid.tsx` uses for its columns. A picker that waits
+      // for a round trip before the section disappears feels broken on a slow
+      // connection, and a picker that never rolls back lies when the write
+      // fails.
+      void setDashboardHiddenWidgets(next).then((res) => {
+        if (!res.ok) {
+          setHiddenWidgets(current);
+          toast.error(res.error);
+        }
+      });
       return next;
     });
   }, []);

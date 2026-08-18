@@ -1,10 +1,9 @@
 -- Dashboard layout: what is on the page, and saved arrangements of it.
 --
--- NOT YET APPLIED. Written alongside the widget picker, which ships storing its
--- choice in localStorage. That is per BROWSER — the exact complaint
--- `20260801150000_user_prefs.sql` was created to answer — so this migration is
--- the upgrade path, held back only because it must be run against a live
--- database by hand.
+-- Written alongside the widget picker, which shipped one commit earlier storing
+-- its choice in localStorage. That is per BROWSER — the exact complaint
+-- `20260801150000_user_prefs.sql` was created to answer — and this is the
+-- upgrade path off it.
 --
 -- TWO STORES, BECAUSE THERE ARE TWO DIFFERENT THINGS HERE.
 --

@@ -202,6 +202,33 @@ export type Database = {
         }
         Relationships: []
       }
+      tj_dashboard_templates: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+          widgets: string[]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+          widgets: string[]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+          widgets?: string[]
+        }
+        Relationships: []
+      }
       tj_executions: {
         Row: {
           created_at: string
@@ -594,23 +621,37 @@ export type Database = {
       tj_user_prefs: {
         Row: {
           created_at: string
+          dashboard_hidden_widgets: string[]
+          dashboard_template_id: string | null
           journal_hidden_columns: string[]
           updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          dashboard_hidden_widgets?: string[]
+          dashboard_template_id?: string | null
           journal_hidden_columns?: string[]
           updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
+          dashboard_hidden_widgets?: string[]
+          dashboard_template_id?: string | null
           journal_hidden_columns?: string[]
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tj_user_prefs_dashboard_template_id_fkey"
+            columns: ["dashboard_template_id"]
+            isOneToOne: false
+            referencedRelation: "tj_dashboard_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tj_option_lists: {
         Row: {

@@ -7,6 +7,7 @@ import { getFieldDefs } from "@/lib/journal/field-defs";
 import { getTrackerRules, getCheckins } from "@/lib/journal/tracker/queries";
 import { getPositionCheckins } from "@/lib/journal/position-checkin-queries";
 import { getPlaybooks, getPositionRules } from "@/lib/journal/playbooks";
+import { getUserPrefs } from "@/lib/journal/user-prefs";
 import { todayInTz } from "@/lib/journal/daily-report";
 import { addDaysToDayKey, DEFAULT_TZ } from "@/lib/journal/time";
 import { Dashboard } from "@/components/journal/dashboard";
@@ -43,6 +44,7 @@ export default async function DashboardPage() {
     trackerRules,
     playbooks,
     positionCheckins,
+    userPrefs,
   ] = await Promise.all([
     getTradesWithStats(),
     getAccounts(),
@@ -62,6 +64,10 @@ export default async function DashboardPage() {
     // heatmap, while these are joined to trades by position id and a trade in
     // range can carry answers given outside it.
     getPositionCheckins(),
+    // Which dashboard sections this user has switched off. A missing row is the
+    // normal state and answers "none", so a brand-new account gets the whole
+    // page rather than an empty one.
+    getUserPrefs(),
   ]);
 
   // The account's day, not the browser's — every day key in the tracker is in
@@ -99,6 +105,7 @@ export default async function DashboardPage() {
         timezone={primary?.timezone ?? DEFAULT_TZ}
         playbooks={playbooks}
         positionRules={positionRules}
+        dashboardHiddenWidgets={userPrefs.dashboardHiddenWidgets}
       />
     </div>
   );

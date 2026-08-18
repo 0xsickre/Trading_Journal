@@ -16,16 +16,6 @@ const STORAGE_KEY = "tj:dashboard_prefs";
 export type DashboardPrefs = {
   /** Ids of the stat groups currently collapsed. */
   collapsedGroups?: string[];
-  /**
-   * Ids of the whole sections switched off in the widget picker.
-   *
-   * Hidden and not visible, for the same reason `collapsedGroups` stores the
-   * collapsed set: a widget added in a later release is absent from every
-   * stored preference, and absent has to mean "shown". Storing the visible set
-   * instead would make each new section invisible to exactly the users who had
-   * bothered to configure their dashboard.
-   */
-  hiddenWidgets?: string[];
 };
 
 /** Only arrays of strings survive; anything else is dropped field by field. */
@@ -43,19 +33,18 @@ export function getDashboardPrefs(): DashboardPrefs {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (typeof parsed !== "object" || parsed == null) return {};
 
-    // VALIDATED FIELD BY FIELD, not as a whole object. This used to answer `{}`
-    // whenever `collapsedGroups` was not an array — which, the moment a second
-    // field existed, meant a preference file holding only `hiddenWidgets` was
-    // thrown away in full every time it was read. One malformed field must cost
-    // that field and nothing else.
+    // VALIDATED FIELD BY FIELD, not as a whole object — so a malformed field
+    // costs that field and nothing else. With one field the difference is
+    // invisible; the moment a second one exists, whole-object rejection means a
+    // preference holding only the good field is thrown away every time it is
+    // read. It briefly did hold two, and that is exactly what happened.
     //
-    // A hand-edited or half-written value must also never reach `.includes()`
-    // as a non-array: the panel would throw on render, for a preference.
+    // `readArray` also checks the ELEMENTS, which the original did not: a
+    // hand-edited value must never reach `.includes()` as a non-array, and an
+    // array of numbers must not silently match nothing.
     const out: DashboardPrefs = {};
     const collapsed = readArray(parsed.collapsedGroups);
     if (collapsed) out.collapsedGroups = collapsed;
-    const hidden = readArray(parsed.hiddenWidgets);
-    if (hidden) out.hiddenWidgets = hidden;
     return out;
   } catch {
     return {};

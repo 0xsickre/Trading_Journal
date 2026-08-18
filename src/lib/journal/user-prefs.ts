@@ -4,9 +4,25 @@ import { createClient } from "@/lib/supabase/server";
 export type UserPrefs = {
   /** Journal grid columns switched off. Empty means the default — all visible. */
   journalHiddenColumns: string[];
+  /**
+   * Dashboard sections switched off. Empty means the default — all visible.
+   *
+   * Same direction as the columns above and for the same reason: a widget added
+   * in a later release is absent from every stored preference, and absent has
+   * to mean "shown".
+   */
+  dashboardHiddenWidgets: string[];
 };
 
-const EMPTY_PREFS: UserPrefs = { journalHiddenColumns: [] };
+const EMPTY_PREFS: UserPrefs = {
+  journalHiddenColumns: [],
+  dashboardHiddenWidgets: [],
+};
+
+/** A stored array survives only if it is genuinely an array of strings. */
+function stringArray(v: unknown): string[] {
+  return Array.isArray(v) && v.every((x) => typeof x === "string") ? v : [];
+}
 
 /**
  * The signed-in user's UI preferences.
@@ -20,13 +36,12 @@ export async function getUserPrefs(): Promise<UserPrefs> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("tj_user_prefs")
-    .select("journal_hidden_columns")
+    .select("journal_hidden_columns, dashboard_hidden_widgets")
     .maybeSingle();
 
   if (!data) return EMPTY_PREFS;
   return {
-    journalHiddenColumns: Array.isArray(data.journal_hidden_columns)
-      ? data.journal_hidden_columns
-      : [],
+    journalHiddenColumns: stringArray(data.journal_hidden_columns),
+    dashboardHiddenWidgets: stringArray(data.dashboard_hidden_widgets),
   };
 }
