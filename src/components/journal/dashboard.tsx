@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { AlertTriangle, Download } from "lucide-react";
 import {
@@ -95,6 +95,14 @@ import { runInsights } from "@/lib/journal/insights/registry";
 import { InsightsPanel } from "@/components/journal/insights-panel";
 import { DrawdownChart } from "@/components/journal/drawdown-chart";
 import { SickreScoreCard } from "@/components/journal/sickre-score-card";
+import {
+  DonutRing,
+  PROFIT_FACTOR_FULL,
+  SemiGauge,
+  Sparkline,
+  SplitBar,
+} from "@/components/journal/viz/tile-visuals";
+import { cn } from "@/lib/utils";
 import {
   CostReportCard,
   HoldTimeCard,
@@ -750,6 +758,23 @@ export function Dashboard({
     () => buildEquity(realized, mode, equityMetric, windowed.openingEquity),
     [realized, mode, equityMetric, windowed],
   );
+
+  /**
+   * Cumulative money behind the Net P/L tile's sparkline.
+   *
+   * Deliberately not `equity` above, which follows the chart's $/R toggle: a
+   * line drawn in R under a number denominated in money would be two different
+   * quantities sharing one tile, and the line is the half a reader takes in
+   * first. Reuses `equity` whenever the toggle already says money, so the
+   * common case costs nothing.
+   */
+  const netSeries = useMemo(
+    () =>
+      equityMetric === "money"
+        ? equity
+        : buildEquity(realized, mode, "money", windowed.openingEquity),
+    [equity, equityMetric, realized, mode, windowed],
+  );
   const hist = useMemo(() => rHistogram(realized), [realized]);
   const daily = useMemo(
     () => dailyPnl(realized, mode, tzOf),
@@ -1114,6 +1139,14 @@ export function Dashboard({
           label="Net P/L"
           value={fmtMoney(stats.netSum, currency, { sign: true })}
           cls={pnlClass(stats.netSum)}
+          visual={
+            <Sparkline
+              values={netSeries.map((p) => p.value)}
+              tone={
+                stats.netSum < 0 ? "var(--loss)" : "var(--profit)"
+              }
+            />
+          }
         />
         <Stat size="hero" label="Trades" value={String(stats.count)} />
         <Stat
@@ -1130,6 +1163,13 @@ export function Dashboard({
           value={
             stats.wins + stats.losses === 0 ? "—" : fmtPct(stats.winRate)
           }
+          // Same guard as the value: no decided trades means an empty arc, not
+          // an arc sitting at zero. The two must never disagree.
+          visual={
+            <SemiGauge
+              pct={stats.wins + stats.losses === 0 ? null : stats.winRate}
+            />
+          }
         />
         <Stat
           size="hero"
@@ -1142,6 +1182,10 @@ export function Dashboard({
                 : "∞"
           }
           title="Gross profit / gross loss. ∞ means no losing trades in range."
+          // `Infinity` closes the ring — the ∞ above is a maximum, not a gap.
+          visual={
+            <DonutRing value={stats.profitFactor} full={PROFIT_FACTOR_FULL} />
+          }
         />
         {/* ZAŠTO SE OVO RAZLIKUJE OD `Avg R`.
             Isti R, dva imenioca — i bez ove rečenice to na ekranu izgleda kao
@@ -1194,6 +1238,12 @@ export function Dashboard({
             label="Avg win/loss"
             value={winLossRatio != null ? fmtNum(winLossRatio, 2) : "—"}
             title="Average winning R divided by average losing R."
+            // The one place on this page where green and red are literally an
+            // average win and an average loss, so the money colours are right
+            // rather than a collision. Draws nothing until both sides exist.
+            visual={
+              <SplitBar left={stats.avgWinMoney} right={stats.avgLossMoney} />
+            }
           />
           {/* THE DENOMINATOR, SPELLED OUT.
 
@@ -1703,6 +1753,14 @@ export function Dashboard({
  * the value off `children[1]` and silently breaks nine assertions that exist to
  * prove the numbers on screen are the numbers the book computes. `size` is
  * therefore a CLASS switch and nothing more — it must never add an element.
+ *
+ * `visual` is how a gauge gets onto a tile WITHOUT touching any of that: it
+ * renders as a sibling of `CardContent`, so it is structurally incapable of
+ * reaching `children[1]`. Inside the value div would also keep the position —
+ * and would hold only until someone gave the gauge an SVG `<title>`, because
+ * `textContent` concatenates descendants and `"55.6%"` would quietly become
+ * `"55.6%Win rate gauge"`. The failure would point at the tile, not at the
+ * gauge that caused it. Out here that cannot happen at all.
  */
 function Stat({
   label,
@@ -1710,6 +1768,7 @@ function Stat({
   cls,
   title,
   size = "default",
+  visual,
 }: {
   label: string;
   value: string;
@@ -1717,11 +1776,37 @@ function Stat({
   title?: string;
   /** "hero" is the headline row: same markup, larger type. */
   size?: "default" | "hero";
+  /**
+   * A redundant encoding of `value` — a gauge, a ring, a sparkline.
+   *
+   * `aria-hidden` because the number beside it already says this. The visual
+   * adds shape, not information, and a screen reader announcing "gauge, 56 of
+   * 100" next to "55.6%" says the same thing twice, worse.
+   */
+  visual?: ReactNode;
 }) {
   const hero = size === "hero";
   return (
-    <Card title={title} className={hero ? "border-border/80 shadow-none" : ""}>
-      <CardContent className={hero ? "p-4" : "p-3"}>
+    <Card
+      title={title}
+      className={cn(
+        // `py-0`: the base Card ships `py-6`, which this tile never overrode —
+        // 48px of vertical padding around a 12px content box, on every one of
+        // the thirty-one tiles. `relative` anchors `visual`.
+        "relative overflow-hidden py-0",
+        hero && "border-border/80 shadow-none",
+      )}
+    >
+      {visual && (
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          {visual}
+        </div>
+      )}
+      <CardContent
+        // The right gutter is reserved whether or not a visual is present, so a
+        // row of tiles keeps one baseline for its numbers.
+        className={hero ? "p-4 pr-20" : "p-3 pr-16"}
+      >
         <div className="text-xs text-muted-foreground">{label}</div>
         <div
           className={`mt-1 font-semibold tabular-nums ${
