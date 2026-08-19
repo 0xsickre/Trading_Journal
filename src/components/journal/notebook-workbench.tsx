@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { plainText } from "@/lib/journal/notes/markdown";
 import { folderIcon } from "@/lib/journal/notes/folder-icons";
 import {
+  defaultNoteTitle,
   noteInScope,
   type Note,
   type NoteFolder,
@@ -76,11 +77,14 @@ export function NotebookWorkbench({
   notes,
   tags,
   trades,
+  todayKey,
 }: {
   folders: NoteFolder[];
   notes: Note[];
   tags: string[];
   trades: TradeOption[];
+  /** Today in the account's timezone — the default title for a new note. */
+  todayKey: string;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -134,6 +138,9 @@ export function NotebookWorkbench({
     start(async () => {
       const res = await createNote({
         folder_id: scope.kind === "folder" ? scope.id : null,
+        // The date, not blank — see `defaultNoteTitle`. Still just a title:
+        // clear it, replace it, or leave it, same as anything else typed here.
+        title: defaultNoteTitle(todayKey),
       });
       if (!res.ok) {
         toast.error(res.error);

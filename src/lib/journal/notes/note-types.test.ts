@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  defaultNoteTitle,
   noteInScope,
   parseScopeKey,
   scopeKey,
@@ -67,5 +68,21 @@ describe("noteInScope", () => {
   it("matches a note to its own folder only", () => {
     expect(noteInScope(note(), { kind: "folder", id: "f1" })).toBe(true);
     expect(noteInScope(note(), { kind: "folder", id: "f2" })).toBe(false);
+  });
+});
+
+describe("defaultNoteTitle", () => {
+  it("reads the day key in the same 'd MMM yyyy' style the note list already uses", () => {
+    expect(defaultNoteTitle("2026-08-19")).toBe("19 Aug 2026");
+  });
+
+  it("does NOT SHIFT A DAY through UTC parsing", () => {
+    // A bare day key has no time or zone. Reading it through `new Date(string)`
+    // (UTC midnight) and then formatting in a zone west of Greenwich would print
+    // the day before — the exact bug `weekdayOf` and friends exist to avoid.
+    // `parseISO` reads a date-only string as local midnight, so this must hold
+    // regardless of the machine's own timezone.
+    expect(defaultNoteTitle("2026-01-01")).toBe("1 Jan 2026");
+    expect(defaultNoteTitle("2026-12-31")).toBe("31 Dec 2026");
   });
 });

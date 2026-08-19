@@ -1,5 +1,7 @@
 // Client-safe note types, mirroring tracker-types.ts and playbook-types.ts.
 
+import { format, parseISO } from "date-fns";
+
 export type NoteFolder = {
   id: string;
   name: string;
@@ -52,6 +54,27 @@ export function parseScopeKey(key: string | null | undefined): NoteScope {
   if (key === "unfiled" || key === "trash" || key === "all")
     return { kind: key };
   return ALL_SCOPE;
+}
+
+/**
+ * The title a freshly created note starts with: the day it was opened, in the
+ * account's own timezone — the same day key `/daily` and `/calendar` use, not
+ * the browser's.
+ *
+ * Not empty and not "Untitled". A blank note in a list of thirty reads as
+ * nothing to go on; today's date is at minimum a fact the writer can search
+ * for later, and it is exactly as disposable as any other text in the title
+ * field — delete it, append to it, or leave it.
+ *
+ * `dayKey` in, not a `Date`: the caller already resolved "today" against an
+ * account's timezone (`todayInTz`), and re-deriving it from a `Date` here
+ * would risk the same off-by-one that day keys exist to avoid. `parseISO` on a
+ * bare `yyyy-MM-dd` (no time, no zone) reads it as local midnight, which is
+ * exactly right for a key that already IS a local calendar date — the same
+ * call the note list already makes to format `updated_at`.
+ */
+export function defaultNoteTitle(dayKey: string): string {
+  return format(parseISO(dayKey), "d MMM yyyy");
 }
 
 /** Whether a note belongs in the given scope. Trash is exclusive on purpose. */
