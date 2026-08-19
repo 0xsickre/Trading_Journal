@@ -399,6 +399,33 @@ export function addMonthsToMonthKey(key: string, delta: number): string {
  * Returns an empty array for a malformed key, which renders as an empty month
  * rather than as a grid of `NaN` cells.
  */
+/** Monday-first, matching `isoWeekdayOfDayKey`'s 1–7. */
+export const WEEKDAY_LABELS = [
+  "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun",
+] as const;
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/**
+ * "August 2026" from a month key.
+ *
+ * Lives here rather than in the calendar component because BOTH views need it
+ * and one of them renders on the server. It was briefly exported from
+ * `month-calendar.tsx`, which carries `"use client"` — Next refuses a server
+ * component calling into a client module, and the page died at runtime with
+ * "Attempted to call monthLabel() from the server".
+ *
+ * No trailing dot: that was the Serbian date convention, and "January 2026."
+ * reads as a typo in English.
+ */
+export function monthLabel(monthKey: string): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  return `${MONTH_NAMES[m - 1] ?? monthKey} ${y}`;
+}
+
 export function monthGridDays(monthKey: string): string[] {
   if (!/^\d{4}-\d{2}$/.test(monthKey)) return [];
   const [y, m] = monthKey.split("-").map(Number);

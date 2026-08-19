@@ -15,7 +15,12 @@ import {
 import { cn } from "@/lib/utils";
 import { winRateOf } from "@/lib/journal/analytics";
 import { fmtMoney, fmtNum, fmtR, pnlClass } from "@/lib/journal/format";
-import { addMonthsToMonthKey, monthGridDays } from "@/lib/journal/time";
+import {
+  WEEKDAY_LABELS,
+  addMonthsToMonthKey,
+  monthGridDays,
+  monthLabel,
+} from "@/lib/journal/time";
 import {
   classifyOutcome,
   hasBreakevenBand,
@@ -62,29 +67,6 @@ function cellValue(
   }
 }
 
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-function monthLabel(monthKey: string): string {
-  const [y, m] = monthKey.split("-").map(Number);
-  // No trailing dot: that was the Serbian date convention, and "January 2026."
-  // reads as a typo in English.
-  return `${MONTHS[m - 1] ?? monthKey} ${y}`;
-}
 
 /**
  * Monthly P&L calendar.
@@ -201,7 +183,7 @@ export function MonthCalendar({
         <div className="min-w-0 max-w-full overflow-x-auto">
           <div className="min-w-[44rem]">
             <div className="grid grid-cols-8 gap-1 pb-1">
-              {WEEKDAYS.map((d) => (
+              {WEEKDAY_LABELS.map((d) => (
                 <div
                   key={d}
                   className="px-1 text-center text-xs font-medium text-muted-foreground"
