@@ -6,6 +6,8 @@ export type NoteFolder = {
   /** Pre-filled into a new note's body. Null means start blank. */
   template_text: string | null;
   sort_order: number;
+  /** Name of an entry in `NOTE_FOLDER_ICONS`. Null means the plain folder glyph. */
+  icon: string | null;
 };
 
 export type Note = {

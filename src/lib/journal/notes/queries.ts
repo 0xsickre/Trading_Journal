@@ -37,7 +37,7 @@ export async function getNoteFolders(): Promise<NoteFolder[]> {
   // folders sharing an ordinal reshuffle between identical page loads.
   const { data } = await supabase
     .from("tj_note_folders")
-    .select("id, name, template_text, sort_order")
+    .select("id, name, template_text, sort_order, icon")
     .order("sort_order")
     .order("id");
   return (data ?? []) as NoteFolder[];

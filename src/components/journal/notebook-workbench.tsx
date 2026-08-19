@@ -20,17 +20,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { plainText } from "@/lib/journal/notes/markdown";
+import { folderIcon } from "@/lib/journal/notes/folder-icons";
 import {
   noteInScope,
   type Note,
@@ -42,13 +34,12 @@ import {
   NoteEmptyState,
   type TradeOption,
 } from "@/components/journal/note-editor";
+import { FolderSettingsDialog } from "@/components/journal/folder-settings-dialog";
 import {
   createFolder,
   createNote,
-  deleteFolder,
   emptyTrash,
   moveFolder,
-  updateFolder,
 } from "@/app/(app)/notebook/actions";
 
 function ScopeButton({
@@ -77,99 +68,6 @@ function ScopeButton({
       <span className="min-w-0 flex-1 truncate">{label}</span>
       <span className="text-xs text-muted-foreground tabular-nums">{count}</span>
     </button>
-  );
-}
-
-function FolderSettingsDialog({
-  folder,
-  open,
-  onOpenChange,
-}: {
-  folder: NoteFolder;
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-}) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [name, setName] = useState(folder.name);
-  const [template, setTemplate] = useState(folder.template_text ?? "");
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Folder</DialogTitle>
-          <DialogDescription>
-            The template is written into the body of every new note in this folder.
-            The point of a weekly review is that the questions are already there
-            when you sit down.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Folder name"
-          />
-          <Textarea
-            value={template}
-            onChange={(e) => setTemplate(e.target.value)}
-            placeholder="## Heading&#10;&#10;### Question&#10;"
-            className="min-h-[12rem] font-mono text-xs"
-          />
-        </div>
-
-        <DialogFooter className="sm:justify-between">
-          <Button
-            variant="destructive"
-            disabled={pending}
-            onClick={() =>
-              start(async () => {
-                const res = await deleteFolder(folder.id);
-                if (!res.ok) {
-                  toast.error(res.error);
-                  return;
-                }
-                toast.success(
-                  res.orphaned > 0
-                    ? `Folder deleted. ${res.orphaned} notes moved to "Unfiled".`
-                    : "Folder deleted.",
-                );
-                onOpenChange(false);
-                router.refresh();
-              })
-            }
-          >
-            <Trash2 className="mr-2 size-3.5" /> Delete folder
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
-              Cancel
-            </Button>
-            <Button
-              disabled={pending}
-              onClick={() =>
-                start(async () => {
-                  const res = await updateFolder(folder.id, {
-                    name,
-                    template_text: template,
-                  });
-                  if (!res.ok) {
-                    toast.error(res.error);
-                    return;
-                  }
-                  onOpenChange(false);
-                  router.refresh();
-                })
-              }
-            >
-              Save
-            </Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -268,7 +166,7 @@ export function NotebookWorkbench({
                 <div className="min-w-0 flex-1">
                   <ScopeButton
                     active={scope.kind === "folder" && scope.id === f.id}
-                    icon={Folder}
+                    icon={folderIcon(f.icon)}
                     label={f.name}
                     count={counts.byFolder.get(f.id) ?? 0}
                     onClick={() => setScope({ kind: "folder", id: f.id })}

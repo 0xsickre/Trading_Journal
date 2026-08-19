@@ -253,16 +253,24 @@ const folderSchema = z
   .object({
     name: z.string().min(1).max(80),
     template_text: z.string().nullable().optional(),
+    // Not `z.enum(NOTE_FOLDER_ICON_NAMES)`: an unrecognized name (an older
+    // client, a shrunk icon set) should fall back to the plain folder glyph on
+    // read, not fail the whole save. `folderIcon()` already does that fallback;
+    // duplicating the check here would just be a second place for the two
+    // lists to drift apart.
+    icon: z.string().max(40).nullable().optional(),
   })
   .strict();
 
 export async function createFolder(
   name: string,
   templateText?: string | null,
+  icon?: string | null,
 ): Promise<Result<{ id: string }>> {
   const parsed = folderSchema.safeParse({
     name: name.trim(),
     template_text: templateText ?? null,
+    icon: icon ?? null,
   });
   if (!parsed.success) return { ok: false, error: "The name cannot be empty." };
 
@@ -283,6 +291,7 @@ export async function createFolder(
       user_id: user.id,
       name: parsed.data.name,
       template_text: parsed.data.template_text,
+      icon: parsed.data.icon,
       sort_order: (last?.sort_order ?? -1) + 1,
     })
     .select("id")
@@ -301,7 +310,7 @@ export async function createFolder(
 
 export async function updateFolder(
   id: string,
-  patch: { name?: string; template_text?: string | null },
+  patch: { name?: string; template_text?: string | null; icon?: string | null },
 ): Promise<Result> {
   const next: FolderUpdate = {};
   if (patch.name !== undefined) {
@@ -311,6 +320,7 @@ export async function updateFolder(
   }
   if (patch.template_text !== undefined)
     next.template_text = patch.template_text?.trim() || null;
+  if (patch.icon !== undefined) next.icon = patch.icon;
 
   if (Object.keys(next).length === 0) return { ok: true };
 

@@ -510,6 +510,7 @@ export type Database = {
       tj_note_folders: {
         Row: {
           created_at: string
+          icon: string | null
           id: string
           name: string
           sort_order: number
@@ -519,6 +520,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          icon?: string | null
           id?: string
           name: string
           sort_order?: number
@@ -528,6 +530,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          icon?: string | null
           id?: string
           name?: string
           sort_order?: number
