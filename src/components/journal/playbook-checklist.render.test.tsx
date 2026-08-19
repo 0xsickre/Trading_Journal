@@ -48,9 +48,9 @@ function fills(): HTMLElement[] {
 function renderChecklist(
   rules: PlaybookRule[],
   answers: Record<string, boolean>,
-  opts: { netPl?: number | null; onAnswerChange?: ReturnType<typeof vi.fn> } = {},
+  opts: { netPl?: number | null } = {},
 ) {
-  const onAnswerChange = opts.onAnswerChange ?? vi.fn();
+  const onAnswerChange = vi.fn<(ruleId: string, followed: boolean | null) => void>();
   render(
     <PlaybookChecklist
       playbooks={[book(rules)]}
