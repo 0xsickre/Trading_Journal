@@ -116,6 +116,10 @@ export async function getTradeForEdit(
   // the same precedence `fieldValue` applies everywhere else.
   const flat: Record<string, unknown> = { ...flattenCustom(rest), ...rest };
   delete flat[CUSTOM_FIELD_COLUMN];
+  // Not a form field: it is a jsonb array of objects, and the loop below would
+  // reduce it to `[]` — inert, but it would sit in the bag looking like a value
+  // the form could write back. It travels on its own key instead.
+  delete flat.scale_out_levels;
 
   const fields: Record<string, string | number | string[] | null> = {};
   for (const [k, v] of Object.entries(flat)) {
@@ -132,6 +136,7 @@ export async function getTradeForEdit(
     missed_at: (pos as RawPosition & { missed_at?: string | null }).missed_at ?? null,
     playbook_id: (pos as RawPosition & { playbook_id?: string | null }).playbook_id ?? null,
     conviction: (pos as RawPosition & { conviction?: number | null }).conviction ?? null,
+    scale_out_levels: (pos as RawPosition & { scale_out_levels?: unknown }).scale_out_levels ?? [],
     rule_answers: ruleAnswers,
     fields,
     executions: (execs ?? []).map((e) => ({

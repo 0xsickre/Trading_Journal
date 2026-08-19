@@ -34,8 +34,18 @@ import {
   type ImageDrafts,
   type PreImageKind,
 } from "@/components/journal/trade-image-drafts";
+import {
+  incompleteScaleOutRows,
+  levelsToScaleOutRows,
+  parseScaleOutLevels,
+  scaleOutRowsToLevels,
+  totalScaleOutPct,
+  MAX_SCALE_OUT_PCT,
+  type ScaleOutRow,
+} from "@/lib/journal/scale-out";
 import { PlaybookChecklist } from "@/components/journal/playbook-checklist";
 import { StarRating } from "@/components/journal/star-rating";
+import { ScaleOutEditor } from "@/components/journal/scale-out-editor";
 import {
   buildFormTabs,
   type FieldConfig,
@@ -135,6 +145,7 @@ export type TradeFormInitial = {
   missed_at?: string | null;
   playbook_id?: string | null;
   conviction?: number | null;
+  scale_out_levels?: unknown;
   /** Rule id → followed, for rules answered on this trade. */
   rule_answers?: Record<string, boolean>;
   fields: Record<string, FieldValue>;
@@ -223,6 +234,9 @@ export function TradeForm({
   );
   const [conviction, setConviction] = useState<number | null>(
     initial?.conviction ?? null,
+  );
+  const [scaleOutRows, setScaleOutRows] = useState<ScaleOutRow[]>(() =>
+    levelsToScaleOutRows(parseScaleOutLevels(initial?.scale_out_levels)),
   );
   const [ruleAnswers, setRuleAnswers] = useState<Record<string, boolean>>(
     initial?.rule_answers ?? {},
@@ -701,6 +715,28 @@ export function TradeForm({
       return;
     }
 
+    // Same contract as the fills above: a started row is an unfinished
+    // intention, and dropping it silently would tell the trader it was saved.
+    const badLevels = incompleteScaleOutRows(scaleOutRows);
+    if (badLevels.length > 0) {
+      toast.error(
+        `Scale-out level ${badLevels.map((i) => i + 1).join(", ")} needs a percentage and a price above zero — remove it or complete it.`,
+      );
+      setActiveTab("plan");
+      return;
+    }
+
+    // `> 100`, never `>= 100`: taking the whole position off in stages is a
+    // legitimate plan, and 100 % is exactly that.
+    const pctTotal = totalScaleOutPct(scaleOutRows);
+    if (pctTotal > MAX_SCALE_OUT_PCT) {
+      toast.error(
+        `Scale-out levels add up to ${pctTotal}% — more than the position. Reduce them to ${MAX_SCALE_OUT_PCT}% or less.`,
+      );
+      setActiveTab("plan");
+      return;
+    }
+
     const fieldsToSave = { ...fields };
 
     // planned_rr is the PLAN. Once the trade is live it is what "Target
@@ -736,6 +772,7 @@ export function TradeForm({
       current_status: isMissed ? "missed" : null,
       playbook_id: playbookId,
       conviction,
+      scale_out_levels: scaleOutRowsToLevels(scaleOutRows),
       // Only on create. An existing trade's images are owned by `TradeImages`,
       // which writes them directly — sending them here too would give one row
       // two writers.
@@ -965,6 +1002,11 @@ export function TradeForm({
                       onAddEntryFill={
                         tab.id === "plan" && group.id === "risk_plan"
                           ? handleAddEntryFromPlan
+                          : undefined
+                      }
+                      scaleOut={
+                        tab.id === "plan" && group.id === "risk_plan"
+                          ? { rows: scaleOutRows, onChange: setScaleOutRows }
                           : undefined
                       }
                       // The percentage in money. A share of equity is an
@@ -1325,6 +1367,7 @@ function FormGroupSection({
   showTradeNo,
   riskNote,
   groupNote,
+  scaleOut,
   nested,
 }: {
   group: FormGroup;
@@ -1354,6 +1397,15 @@ function FormGroupSection({
    * the same reason: a paragraph may not contain block content.
    */
   groupNote?: ReactNode;
+  /**
+   * Scale-out rows, supplied only for the `risk_plan` group. Bespoke rather
+   * than a `FieldConfig` because the value is a jsonb array of objects, which
+   * no field type expresses.
+   */
+  scaleOut?: {
+    rows: ScaleOutRow[];
+    onChange: (rows: ScaleOutRow[]) => void;
+  };
   nested?: boolean;
 }) {
   const entry = n(String(fields.entry_price ?? ""));
@@ -1438,6 +1490,23 @@ function FormGroupSection({
           />
         ))}
       </div>
+      {/* Behind the SAME gate as `scale_out_plan` — reuses
+          `riskPlanFieldVisible` instead of inventing a name, so
+          `plan-calculations.ts` is not touched at all and the existing test for
+          that gate already covers this. Levels are meaningless before there is
+          a target to scale out toward. */}
+      {scaleOut &&
+        group.id === "risk_plan" &&
+        riskPlanFieldVisible("scale_out_plan", entry, stop, target, riskPct) && (
+          <ScaleOutEditor
+            rows={scaleOut.rows}
+            onChange={scaleOut.onChange}
+            direction={String(fields.direction ?? "").trim() || null}
+            entry={entry}
+            stop={stop}
+          />
+        )}
+
       {riskNote && (
         <p className="text-xs text-muted-foreground">{riskNote}</p>
       )}

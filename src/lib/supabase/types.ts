@@ -979,6 +979,7 @@ export type Database = {
           fx_rate_at_trade: number | null
           gross_pnl_override: number | null
           risk_pct: string | null
+          scale_out_levels: Json
           scale_out_plan: string | null
           setup_grade: string | null
           source: string
@@ -1022,6 +1023,7 @@ export type Database = {
           fx_rate_at_trade?: number | null
           gross_pnl_override?: number | null
           risk_pct?: string | null
+          scale_out_levels?: Json
           scale_out_plan?: string | null
           setup_grade?: string | null
           source?: string
@@ -1065,6 +1067,7 @@ export type Database = {
           fx_rate_at_trade?: number | null
           gross_pnl_override?: number | null
           risk_pct?: string | null
+          scale_out_levels?: Json
           scale_out_plan?: string | null
           setup_grade?: string | null
           source?: string

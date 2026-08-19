@@ -7,6 +7,7 @@ import { getFieldDefs } from "@/lib/journal/field-defs";
 import { buildPositionPatch, mergeCustom } from "@/lib/journal/trade-fields";
 import { computeStatus, isValidFill } from "@/lib/journal/trade-lifecycle";
 import { isFtmoAccountFrozen } from "@/lib/journal/ftmo-status";
+import { parseScaleOutLevels } from "@/lib/journal/scale-out";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
 import { getAccountCurrency } from "@/lib/journal/accounts";
 import {
@@ -39,6 +40,8 @@ export type TradeInput = {
   current_status?: string | null;
   playbook_id?: string | null;
   conviction?: number | null;
+  /** Planned scale-out levels: `[{pct, price}]`. Validated in `scaleOutPatch`. */
+  scale_out_levels?: unknown;
   /** Rule id → followed. Absent key means the rule was not answered. */
   rule_answers?: Record<string, boolean>;
   /**
@@ -68,6 +71,24 @@ function playbookPatch(input: TradeInput) {
       ? input.conviction
       : null;
   return { playbook_id: input.playbook_id || null, conviction };
+}
+
+/**
+ * Coerce the scale-out levels.
+ *
+ * Kept out of `sanitizeFields` for the same reason as the playbook columns: a
+ * jsonb array of objects is not a form-config field type, and routing it
+ * through the field whitelist would mean declaring a definition for a shape no
+ * `FieldType` can express.
+ *
+ * `parseScaleOutLevels` drops anything malformed, so a hand-crafted request
+ * cannot write junk into the column. The "sums to 100" rule is NOT enforced
+ * here — it is a planning aid, not an integrity rule, and a trade imported or
+ * edited around it must still be saveable. The form blocks it before the round
+ * trip; see `scale-out.ts` for why the database cannot.
+ */
+function scaleOutPatch(input: TradeInput) {
+  return { scale_out_levels: parseScaleOutLevels(input.scale_out_levels) };
 }
 
 /**
@@ -218,6 +239,7 @@ export async function createTrade(input: TradeInput) {
       ...statusPatch,
       ...snapshot,
       ...playbookPatch(input),
+      ...scaleOutPatch(input),
       source: "manual",
     } as Json,
     p_executions: execs as unknown as Json,
@@ -338,6 +360,7 @@ export async function updateTrade(id: string, input: TradeInput) {
       ...statusPatch,
       ...snapshot,
       ...playbookPatch(input),
+      ...scaleOutPatch(input),
       ...(execs.length > 0 ? { needs_review: false } : {}),
     } as Json,
     p_executions: execs as unknown as Json,

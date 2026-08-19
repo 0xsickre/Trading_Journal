@@ -11,6 +11,7 @@
  * the reason to be in a trade expires before the trade does.
  */
 
+import { parseScaleOutLevels } from "../scale-out";
 import { stringFieldValue } from "../field-values";
 import { fmtMoney } from "../format";
 import { isInterference } from "../position-checkin";
@@ -255,8 +256,16 @@ export const unplannedPartial: Rule = {
   evaluate: (ctx) => {
     const out: Insight[] = [];
     for (const e of ctx.trades) {
-      if ((stringFieldValue(e.trade.row, "scale_out_plan") ?? "").trim() !== "")
-        continue;
+      // „Plan napisan" sad znači rečenica ILI uneti nivoi. Smer širenja je
+      // bitan: predikat čini da pravilo okida REĐE, nikad češće — nijedan
+      // postojeći insight ne počinje da iznosi novu optužbu zbog ove izmene.
+      const written =
+        (stringFieldValue(e.trade.row, "scale_out_plan") ?? "").trim() !== "";
+      const levelled =
+        parseScaleOutLevels(
+          (e.trade.row as { scale_out_levels?: unknown }).scale_out_levels,
+        ).length > 0;
+      if (written || levelled) continue;
 
       const day = (ctx.checkinsByPosition.get(e.id) ?? []).find(
         (c) => c.touched === "partial_exit",

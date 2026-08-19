@@ -45,6 +45,7 @@ export const RESERVED_KEYS = new Set([
   "playbook_id",
   "conviction",
   "execution_rating",
+  "scale_out_levels",
   "import_batch_id",
   "point_value_at_trade",
   "tick_size_at_trade",

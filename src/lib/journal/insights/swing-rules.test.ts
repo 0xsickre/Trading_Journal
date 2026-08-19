@@ -217,6 +217,27 @@ describe("unplannedPartial", () => {
     expect(fired(unplannedPartial, ctx)).toEqual([]);
   });
 
+  it("STAYS SILENT WHEN THE PLAN WAS STRUCTURED instead of written out", () => {
+    // The predicate was widened from "a sentence exists" to "a sentence or
+    // levels exist" when `scale_out_levels` arrived. The direction is what
+    // makes it safe: widening can only make the rule fire LESS often, so no
+    // existing trade suddenly gains an accusation it did not have.
+    const ctx = ctxOf(
+      [mkTrade({ id: "a", scaleOutLevels: [{ pct: 50, price: 110 }] })],
+      { checkins: [mkCheckin("a", "2026-01-07", { touched: "partial_exit" })] },
+    );
+    expect(fired(unplannedPartial, ctx)).toEqual([]);
+  });
+
+  it("still fires when the levels array is present but empty", () => {
+    // `[]` is the column default on every trade in the book. If an empty array
+    // counted as a plan, the rule would go silent everywhere at once.
+    const ctx = ctxOf([mkTrade({ id: "a", scaleOutLevels: [] })], {
+      checkins: [mkCheckin("a", "2026-01-07", { touched: "partial_exit" })],
+    });
+    expect(fired(unplannedPartial, ctx)).toEqual(["a"]);
+  });
+
   it("treats whitespace as no plan", () => {
     const ctx = ctxOf([mkTrade({ id: "a", scaleOutPlan: "   " })], {
       checkins: [mkCheckin("a", "2026-01-07", { touched: "partial_exit" })],

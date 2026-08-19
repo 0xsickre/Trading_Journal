@@ -21,6 +21,7 @@ export type TradeSpec = {
   thesis?: string | null;
   /** How the position was meant to be taken off. */
   scaleOutPlan?: string | null;
+  scaleOutLevels?: { pct: number; price: number }[];
   direction?: string;
   openedAt?: string;
   closedAt?: string;
@@ -100,6 +101,7 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     // unrelated suites teaches nothing except to ignore it.
     thesis: spec.thesis === undefined ? "Written" : spec.thesis,
     scale_out_plan: spec.scaleOutPlan ?? null,
+    scale_out_levels: spec.scaleOutLevels ?? [],
     instrument: spec.instrument ?? "EURUSD",
     stats,
   } as unknown as TradeRow;

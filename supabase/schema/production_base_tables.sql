@@ -130,6 +130,7 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   invalidation         text,
   time_stop_days       smallint,
   scale_out_plan       text,
+  scale_out_levels     jsonb       NOT NULL DEFAULT '[]'::jsonb,
   CONSTRAINT tj_positions_pkey PRIMARY KEY (id),
   CONSTRAINT tj_positions_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -145,6 +146,8 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
     CHECK (conviction IS NULL OR (conviction >= 1 AND conviction <= 5)),
   CONSTRAINT tj_positions_execution_rating_check
     CHECK (execution_rating IS NULL OR (execution_rating >= 1 AND execution_rating <= 5)),
+  CONSTRAINT tj_positions_scale_out_levels_check
+    CHECK (jsonb_typeof(scale_out_levels) = 'array'),
   CONSTRAINT tj_positions_time_stop_days_positive
     CHECK (time_stop_days IS NULL OR time_stop_days > 0)
 );
