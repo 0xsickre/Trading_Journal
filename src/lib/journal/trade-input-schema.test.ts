@@ -100,6 +100,16 @@ describe("cene na poziciji", () => {
     expect(invalidTradeNumber({ time_stop_days: 2.5 })).toBeTruthy();
     expect(invalidTradeNumber({ time_stop_days: 3 })).toBeNull();
   });
+
+  it("execution_rating mora biti ceo broj veći od nule", () => {
+    // Nula i polovina zvezdice nisu ocene. Gornju granicu (5) čuva DB CHECK i
+    // nedostižna je iz UI-ja sa tačno pet dugmadi, pa se ovde ne dokazuje.
+    expect(invalidTradeNumber({ execution_rating: 0 })).toBeTruthy();
+    expect(invalidTradeNumber({ execution_rating: 2.5 })).toBeTruthy();
+    expect(invalidTradeNumber({ execution_rating: 4 })).toBeNull();
+    // NULL je legitiman i čest: „nije ocenjeno" nije greška.
+    expect(invalidTradeNumber({ execution_rating: null })).toBeNull();
+  });
 });
 
 describe("fill", () => {

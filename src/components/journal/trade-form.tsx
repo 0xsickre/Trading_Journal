@@ -35,6 +35,7 @@ import {
   type PreImageKind,
 } from "@/components/journal/trade-image-drafts";
 import { PlaybookChecklist } from "@/components/journal/playbook-checklist";
+import { StarRating } from "@/components/journal/star-rating";
 import {
   buildFormTabs,
   type FieldConfig,
@@ -1367,7 +1368,16 @@ function FormGroupSection({
         )
       : group.id === "psychology_notes" &&
             (isMissed || tradePhase === "planned")
-          ? group.fields.filter((field) => field.name !== "trade_journal_notes")
+          ? // `execution_rating` ide kroz ISTU kapiju, a ne kroz novo ime: na
+            // planiranom ili propuštenom trejdu nema izvršenja koje bi se
+            // ocenilo, isto kao što nema ni beleške o njemu. Ponovna upotreba
+            // postojećeg predikata znači da nema novog imena koje bi propalo
+            // kroz neki `default: return true`.
+            group.fields.filter(
+              (field) =>
+                field.name !== "trade_journal_notes" &&
+                field.name !== "execution_rating",
+            )
           : group.fields;
 
   // Gated as a whole, not field by field — see `thesisGroupVisible`. Rendering
@@ -1577,6 +1587,23 @@ function FieldRenderer({
           listKey={field.listKey}
           listKeys={field.listKeys}
           placeholder={field.placeholder}
+        />
+      </div>
+    );
+  }
+
+  if (field.type === "rating") {
+    // `null` i `0` se namerno razlikuju: prazna vrednost je „nije ocenjeno",
+    // nikad nula zvezdica. `Number(value)` nad praznim stringom daje 0, pa se
+    // prazno hvata PRE konverzije.
+    const n =
+      value === "" || value == null ? null : Number(value);
+    return (
+      <div className={`space-y-1.5 ${colSpan}`}>
+        <Label className="text-xs">{field.label}</Label>
+        <StarRating
+          value={n != null && Number.isFinite(n) ? n : null}
+          onChange={(next) => onChange(next == null ? "" : String(next))}
         />
       </div>
     );

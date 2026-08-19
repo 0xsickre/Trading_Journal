@@ -958,6 +958,7 @@ export type Database = {
           custom: Json
           direction: string | null
           entry_price: number | null
+          execution_rating: number | null
           exit_reason: string | null
           id: string
           import_batch_id: string | null
@@ -1000,6 +1001,7 @@ export type Database = {
           custom?: Json
           direction?: string | null
           entry_price?: number | null
+          execution_rating?: number | null
           exit_reason?: string | null
           id?: string
           import_batch_id?: string | null
@@ -1042,6 +1044,7 @@ export type Database = {
           custom?: Json
           direction?: string | null
           entry_price?: number | null
+          execution_rating?: number | null
           exit_reason?: string | null
           id?: string
           import_batch_id?: string | null

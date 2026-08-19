@@ -324,6 +324,55 @@ describe("plan vs realized, under 'How it exited'", () => {
   });
 });
 
+describe("execution rating appears only where there is an execution to rate", () => {
+  const stars = () => screen.queryByRole("radiogroup", { name: "Execution rating" });
+
+  it("is offered on a closed trade", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        initial={baseInitial({ executions: twoFillExecutions() })}
+      />,
+    );
+    await goToExecutionTab(user);
+    expect(stars()).toBeInTheDocument();
+  });
+
+  it("IS NOT OFFERED ON A PLANNED TRADE, which has nothing to judge yet", async () => {
+    // Rides the same gate that already drops `trade_journal_notes` from this
+    // group rather than introducing a second name — a new name would have to be
+    // taught to every predicate that defaults to "visible".
+    const user = userEvent.setup({ delay: null });
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        initial={baseInitial({ status: "planned", executions: [] })}
+      />,
+    );
+    await goToExecutionTab(user);
+    expect(stars()).not.toBeInTheDocument();
+  });
+
+  it("is not offered on a missed setup either", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        initial={baseInitial({ status: "missed", executions: [] })}
+      />,
+    );
+    await goToExecutionTab(user);
+    expect(stars()).not.toBeInTheDocument();
+  });
+});
+
 describe("Gross → Net (rejected candidate, verified correct — not W)", () => {
   it("grossPl − netPl always equals Fees + Swap, by construction of net_pl in position-stats.ts", async () => {
     const user = userEvent.setup({ delay: null });

@@ -291,6 +291,22 @@ const tradeDimensions: Dimension[] = [
   tagColumn("mistake", "Mistake"),
   column("miss_reason", "Miss reason", "miss_reason"),
   column("status", "Status"),
+  {
+    // Koliko je trejd dobro ODIGRAN, 1–5, uneto posle izlaska.
+    //
+    // Neocenjen trejd vraća `null`, NE `EMPTY_BUCKET`, i to je namerno: ocena
+    // je subjektivna i popunjava se retko dok se navika ne stvori, pa bi red
+    // „—" mesecima bio najveći u tabeli i gurao pravih pet redova u podnožje.
+    // `null` ga izbacuje iz izveštaja umesto da mu da najglasniji red.
+    key: "execution_rating",
+    label: "Execution rating (1–5)",
+    group: "trade",
+    order: ["1", "2", "3", "4", "5"],
+    valueOf: (t) => {
+      const v = t.trade.row.execution_rating;
+      return typeof v === "number" && v >= 1 && v <= 5 ? String(v) : null;
+    },
+  },
   tagColumn("technical_tags", "Technical Tags"),
   // Kept alongside the `emotion` / `discipline` split (see `tagSplitDimensions`)
   // rather than replaced by it: this is the only dimension that still shows a

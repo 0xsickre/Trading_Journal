@@ -3,6 +3,7 @@ import {
   arrayFieldNames,
   buildFormTabs,
   getAllFormFields,
+  numericFieldNames,
   positionFieldNames,
 } from "./form-config";
 import { FIELD_DEF_GROUPS, type FieldDef } from "./field-def-types";
@@ -146,5 +147,19 @@ describe("mistake is a tags field, not a select", () => {
     const mistake = getAllFormFields().find((f) => f.name === "mistake")!;
     expect(mistake.type).toBe("tags");
     expect(mistake.colSpan).toBe(2);
+  });
+});
+
+describe("execution rating is a first-class form field, not a bespoke one", () => {
+  it("SITS IN numericFieldNames, which is what coerces it for a smallint column", () => {
+    // `conviction` takes a bespoke path and pays for it — it is missing from the
+    // mentor pack because it is not a form-config field. Going through the
+    // config buys write permission, coercion and export ordering for free; this
+    // asserts the coercion half, without which "4" reaches Postgres as text.
+    expect(numericFieldNames()).toContain("execution_rating");
+  });
+
+  it("is writable to its own column", () => {
+    expect(positionFieldNames()).toContain("execution_rating");
   });
 });

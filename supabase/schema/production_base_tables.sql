@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   custom               jsonb       NOT NULL DEFAULT '{}'::jsonb,
   playbook_id          uuid,
   conviction           smallint,
+  execution_rating     smallint,
   thesis               text,
   invalidation         text,
   time_stop_days       smallint,
@@ -142,6 +143,8 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
     'manual'::text, 'import'::text])),
   CONSTRAINT tj_positions_conviction_check
     CHECK (conviction IS NULL OR (conviction >= 1 AND conviction <= 5)),
+  CONSTRAINT tj_positions_execution_rating_check
+    CHECK (execution_rating IS NULL OR (execution_rating >= 1 AND execution_rating <= 5)),
   CONSTRAINT tj_positions_time_stop_days_positive
     CHECK (time_stop_days IS NULL OR time_stop_days > 0)
 );

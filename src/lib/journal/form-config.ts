@@ -26,6 +26,7 @@ export type FieldType =
   | "textarea"
   | "url"
   | "tags"
+  | "rating"
   | "computed";
 
 export type FieldConfig = {
@@ -301,6 +302,21 @@ const BASE_TABS: FormTab[] = [
             placeholder: "Late entry, Moved stop…",
           },
           {
+            // Koliko je trejd dobro ODIGRAN — ne koliko je bio profitabilan.
+            // `conviction` je vera PRE ulaza, `setup_grade` je kvalitet setapa;
+            // ovo je jedino polje koje sudi izvršenju, i sudi mu POSLE izlaska.
+            // Gubitnik odigran po planu zaslužuje 5.
+            //
+            // Config-driven, ne bespoke kao `conviction`: nema ponašanja, jedna
+            // vrednost, jedna grupa. Zato besplatno dobija dozvolu za upis
+            // (`positionFieldNames`), koerciju (`numericFieldNames`) i mesto u
+            // mentor paketu po redosledu forme — a `conviction` tamo baš zato
+            // i nedostaje.
+            name: "execution_rating",
+            label: "Execution rating",
+            type: "rating",
+          },
+          {
             name: "psychology_tags",
             label: "Psychology tags",
             type: "tags",
@@ -400,7 +416,10 @@ export function positionFieldNames(defs: readonly FieldDef[] = []): string[] {
 export function numericFieldNames(defs: readonly FieldDef[] = []): Set<string> {
   return new Set([
     ...getAllFormFields(defs)
-      .filter((f) => f.type === "number")
+      // `rating` is numeric too — five buttons write a number into a `smallint`
+      // column. Left out, it would fall through to the string branch of
+      // `buildPositionPatch` and send "4" to Postgres as text.
+      .filter((f) => f.type === "number" || f.type === "rating")
       .map((f) => f.name),
     "position_size",
   ]);

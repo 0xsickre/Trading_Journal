@@ -89,6 +89,18 @@ describe("trade column dimensions", () => {
     expect(bucketsOf(dim, t, dimCtx())).toEqual(["Late entry", "Moved stop"]);
   });
 
+  it("EXCLUDES AN UNRATED TRADE rather than giving it a '—' row", () => {
+    // Deliberately unlike every other unset column here. Execution rating is
+    // subjective and filled in rarely until the habit forms, so an
+    // `EMPTY_BUCKET` row would be the largest in the table for months and push
+    // the five real rows under the fold. `null` drops it from the report.
+    const unrated = one([{ executionRating: null }]);
+    expect(bucketsOf(getDimension("execution_rating")!, unrated, dimCtx())).toEqual([]);
+
+    const rated = one([{ executionRating: 4 }]);
+    expect(bucketsOf(getDimension("execution_rating")!, rated, dimCtx())).toEqual(["4"]);
+  });
+
   it("buckets a clean trade as empty — 'None' is not a mistake", () => {
     // The migration maps 'None' to `'{}'`, so a clean trade lands here and NOT
     // in a "None" bucket. If it landed in one, `filters.ts` — which only drops

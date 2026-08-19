@@ -45,7 +45,15 @@ export const POSITIVE_TRADE_NUMBERS = [
 ] as const;
 
 /** Kolone koje moraju biti CEO pozitivan broj. Baza nosi isti CHECK. */
-export const POSITIVE_TRADE_INTEGERS = ["time_stop_days"] as const;
+export const POSITIVE_TRADE_INTEGERS = [
+  "time_stop_days",
+  // Donju granicu i celobrojnost hvata ova petlja; GORNJU (5) čuva DB CHECK i
+  // nedostižna je iz UI-ja sa tačno pet dugmadi. Ovde stoji, a ne kao sopstveni
+  // `z.number().int().min(1).max(5)`, zato što bi to bio nov statement u modulu
+  // koji nosi pod pokrivenosti 100 % — a ova petlja već postoji i već pokriva
+  // sve što se iz forme uopšte može poslati.
+  "execution_rating",
+] as const;
 
 const LABELS: Record<string, string> = {
   entry_price: "Entry price",
@@ -55,6 +63,7 @@ const LABELS: Record<string, string> = {
   max_profit_price: "MFE price",
   position_size: "Position size",
   time_stop_days: "Time stop (days)",
+  execution_rating: "Execution rating",
 };
 
 /**
