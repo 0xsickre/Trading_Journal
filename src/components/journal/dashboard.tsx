@@ -70,6 +70,7 @@ import type { Playbook, PositionRule } from "@/lib/journal/playbook-types";
 import {
   buildBalanceTimeline,
   computeDrawdown,
+  currentEquity,
   drawdownSeries,
   resolvePeriodWindow,
   type CashEvent,
@@ -174,6 +175,14 @@ import {
   startOfISOWeek,
 } from "date-fns";
 import { fmtMoney, fmtR, fmtPct, fmtNum, pnlClass } from "@/lib/journal/format";
+import {
+  canRender,
+  formatMetric,
+  metric as mkMetric,
+  VIEW_MODES,
+  type MetricContext,
+  type ViewMode,
+} from "@/lib/journal/units";
 import { toEpoch, zonedDateKey } from "@/lib/journal/time";
 import {
   computeDailyDrawdown,
@@ -193,6 +202,28 @@ const SPAN_CLASS: Record<WidgetSpan, string> = {
   2: "md:col-span-2 xl:col-span-2",
   4: "md:col-span-2 xl:col-span-4",
 };
+
+/**
+ * A money tile, aware of the view-mode switcher — but the "dollars" case
+ * still goes through `fmtMoney(..., { sign: true })` exactly as before,
+ * because that leading "+" on a positive Net P/L is existing, tested
+ * behavior this component already promised (`dashboard.render.test.tsx`).
+ * `formatMetric`'s own money fallback deliberately omits the sign (see its
+ * comment in `units.ts` — one value, one spelling, across every mode that
+ * falls back to it), so reproducing "+" there would have re-introduced the
+ * exact drift that rule exists to prevent. Every OTHER mode — %, Privacy, R,
+ * Points, Ticks, Pips — is new surface with no prior contract, so those go
+ * through `formatMetric` unchanged.
+ */
+function dashboardMoney(
+  value: number | null | undefined,
+  ctx: MetricContext,
+  mode: ViewMode,
+): string {
+  return mode === "dollars"
+    ? fmtMoney(value, ctx.currency, { sign: true })
+    : formatMetric(mkMetric(value, "money", ctx), mode);
+}
 
 /**
  * The page below the headline, rendered FROM A LIST rather than written out.
@@ -544,7 +575,16 @@ export function Dashboard({
   const [accountFilter, setAccountFilter] = useState("all");
   const [period, setPeriod] = useState("90");
   const [mode, setMode] = useState<PnlMode>("net");
-  const [equityMetric, setEquityMetric] = useState<"money" | "r">("money");
+  // Dollars/%/Privacy/R/Ticks/Pips/Points — the same switcher `/reports`
+  // already built (`units.ts`). A plain `useState` like every other control on
+  // this bar (`period`, `accountFilter`, `mode`), not URL-synced: nothing else
+  // here is either.
+  const [viewMode, setViewMode] = useState<ViewMode>("dollars");
+  // The equity chart's old standalone $/R toggle is now just this switcher
+  // read narrowly — "r" picks the R-denominated series, anything else the
+  // money one. `buildEquity` still only knows those two, so the derived value
+  // keeps its original type instead of threading all seven modes into it.
+  const equityMetric: "money" | "r" = viewMode === "r" ? "r" : "money";
   const [breakdownField, setBreakdownField] = useState("setup_grade");
   // The user's own fields are groupable here exactly like a built-in column.
   const breakdownOptions = useMemo(
@@ -702,6 +742,48 @@ export function Dashboard({
         : cashEvents.filter((c) => c.account_id === accountFilter),
     [cashEvents, accountFilter],
   );
+
+  /**
+   * Denominator for Percentage view mode — current equity, not starting
+   * balance. Built through `buildBalanceTimeline`/`currentEquity` exactly like
+   * `/reports` does (`reports-workbench.tsx`), so the two screens cannot
+   * report a different percentage for the same account.
+   *
+   * `realizedAll`, not `realized`: equity is what the account holds TODAY,
+   * scoped by account but never by the period filter — the same reasoning
+   * `/reports` documents for its own `equityBase`. Net P&L, not gross: fees
+   * and swap are real cash effects on the balance a percentage is measured
+   * against, gross P&L is not.
+   */
+  const equityBase = useMemo(() => {
+    const base = currentEquity(
+      buildBalanceTimeline(
+        startBalance,
+        realizedAll.map((t) => ({ at: t.closedAt ?? "", pnl: t.net })),
+        scopedCashEvents,
+      ),
+    );
+    return base > 0 ? base : null;
+  }, [startBalance, realizedAll, scopedCashEvents]);
+
+  const metricCtx: MetricContext = useMemo(
+    () => ({ currency, equityBase }),
+    [currency, equityBase],
+  );
+
+  /**
+   * Which view modes are even meaningful right now, so the switcher can grey
+   * out the ones that are not — R/Points/Ticks/Pips need a single instrument
+   * or a single planned risk, neither of which a portfolio-wide dashboard
+   * tile has. Probed with a representative money value, the same idiom
+   * `reports-workbench.tsx` uses for its own switcher.
+   */
+  const viewModeRenderable = useMemo(() => {
+    const probe = mkMetric(1, "money", metricCtx);
+    return Object.fromEntries(
+      VIEW_MODES.map((m) => [m.value, canRender(probe, m.value)]),
+    ) as Record<ViewMode, boolean>;
+  }, [metricCtx]);
 
   /**
    * The window's opening equity, and the cash events inside it.
@@ -1208,6 +1290,26 @@ export function Dashboard({
           {mode === "net" ? "Net = after fees & swap" : "Gross = price move only"}
         </span>
 
+        {/* Dollars/%/Privacy/R/Ticks/Pips/Points — reuses `/reports`' own
+            switcher (`units.ts`) rather than a second design for the same
+            idea. Disabled rather than hidden when a mode has nothing to show
+            (R/Points/Ticks/Pips on a multi-instrument portfolio view), so the
+            reader sees the mode exists without it silently doing nothing. */}
+        <div className="flex rounded-md border p-0.5">
+          {VIEW_MODES.map((vm) => (
+            <Button
+              key={vm.value}
+              variant={viewMode === vm.value ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7"
+              disabled={!viewModeRenderable[vm.value]}
+              onClick={() => setViewMode(vm.value)}
+            >
+              {vm.label}
+            </Button>
+          ))}
+        </div>
+
         {/* The export pickers used to sit here, inline: a granularity select,
             up to two date inputs or a quarter+year pair, a button, and a range
             preview line under the whole bar. Six controls that describe a
@@ -1404,7 +1506,7 @@ export function Dashboard({
         <Stat
           size="hero"
           label="Net P/L"
-          value={fmtMoney(stats.netSum, currency, { sign: true })}
+          value={dashboardMoney(stats.netSum, metricCtx, viewMode)}
           cls={pnlClass(stats.netSum)}
           visual={
             <Sparkline
@@ -1470,7 +1572,7 @@ export function Dashboard({
         <Stat
           size="hero"
           label="Max drawdown"
-          value={fmtMoney(stats.maxDrawdown, currency)}
+          value={formatMetric(mkMetric(stats.maxDrawdown, "money", metricCtx), viewMode)}
           cls="text-[var(--loss)]"
           title="Worst peak-to-trough drop in cumulative P&L. Deposits and withdrawals are not losses, so they do not move this number."
         />
@@ -1493,7 +1595,7 @@ export function Dashboard({
         <StatGroup id="result" title="Result and risk — detail" count={12}>
           <Stat
             label="Gross P/L"
-            value={fmtMoney(stats.grossSum, currency, { sign: true })}
+            value={dashboardMoney(stats.grossSum, metricCtx, viewMode)}
             cls={pnlClass(stats.grossSum)}
           />
           <Stat label="Total R" value={fmtR(stats.totalR)} cls={pnlClass(stats.totalR)} />
@@ -1503,8 +1605,8 @@ export function Dashboard({
             cls={pnlClass(stats.avgR)}
             title="Plain mean R over every trade that has one. Includes breakeven trades, which is why it can sit below Expectancy — that one weights by win rate over decided trades only."
           />
-          <Stat label="Best" value={fmtMoney(stats.best, currency, { sign: true })} cls={pnlClass(stats.best)} />
-          <Stat label="Worst" value={fmtMoney(stats.worst, currency, { sign: true })} cls={pnlClass(stats.worst)} />
+          <Stat label="Best" value={dashboardMoney(stats.best, metricCtx, viewMode)} cls={pnlClass(stats.best)} />
+          <Stat label="Worst" value={dashboardMoney(stats.worst, metricCtx, viewMode)} cls={pnlClass(stats.worst)} />
           <Stat
             label="Streak W/L"
             value={`${stats.maxWinStreak} / ${stats.maxLossStreak}`}
@@ -1583,7 +1685,7 @@ export function Dashboard({
           />
           <Stat
             label="Avg daily DD"
-            value={fmtMoney(dailyDd.avgMoney, currency)}
+            value={formatMetric(mkMetric(dailyDd.avgMoney, "money", metricCtx), viewMode)}
             cls={dailyDd.avgMoney < 0 ? "text-[var(--loss)]" : undefined}
             title={
               dailyDd.worstDay
@@ -1601,22 +1703,11 @@ export function Dashboard({
            together, ranked under `Total swap`. */
         equity: show("equity") && (
         <ChartShell
+          // The $/R toggle that used to live here is the view-mode switcher
+          // now — "R" mode picks the R-denominated series (see `equityMetric`
+          // above), so the chart reads the shared control instead of keeping
+          // its own narrower copy of the same idea.
           title={`Equity curve (${mode}, ${equityMetric === "money" ? currency : "R"})`}
-          action={
-            <div className="flex rounded-md border p-0.5">
-              {(["money", "r"] as const).map((mt) => (
-                <Button
-                  key={mt}
-                  variant={equityMetric === mt ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-7"
-                  onClick={() => setEquityMetric(mt)}
-                >
-                  {mt === "money" ? "$" : "R"}
-                </Button>
-              ))}
-            </div>
-          }
         >
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={equity} margin={{ left: 4, right: 8, top: 8 }}>
@@ -1903,7 +1994,7 @@ export function Dashboard({
                     <td className={`py-2 pr-4 ${pnlClass(r.avgR)}`}>{fmtR(r.avgR)}</td>
                     <td className={`py-2 pr-4 ${pnlClass(r.totalR)}`}>{fmtR(r.totalR)}</td>
                     <td className={`py-2 pr-4 text-right ${pnlClass(r.netSum)}`}>
-                      {fmtMoney(r.netSum, currency, { sign: true })}
+                      {dashboardMoney(r.netSum, metricCtx, viewMode)}
                     </td>
                   </tr>
                 ))}

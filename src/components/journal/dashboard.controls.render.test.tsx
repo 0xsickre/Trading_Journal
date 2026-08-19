@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Dashboard } from "./dashboard";
 import { mkTrade } from "@/lib/journal/reports/test-helpers";
@@ -266,5 +266,73 @@ describe("the account filter scopes the whole page, not just the grid", () => {
 
     expect(statValue("Trades")).toBe("1");
     expect(statValue("Net P/L")).toBe("+$500.00");
+  });
+});
+
+describe("the view-mode switcher reuses the /reports units layer, not a second design", () => {
+  const ACCOUNT = account({ id: "acc-1" });
+  const trades = [
+    mkTrade({ id: "t1", net: 300, closedAt: "2026-06-01T18:00:00Z" }),
+    mkTrade({ id: "t2", net: 350, closedAt: "2026-06-02T18:00:00Z" }),
+  ];
+
+  function renderIt() {
+    return render(
+      <Dashboard
+        trades={rowsOf(trades)}
+        accounts={[ACCOUNT]}
+        todayKey="2026-06-03"
+        timezone="America/New_York"
+      />,
+    );
+  }
+
+  it("Privacy masks Net P/L with the same mask /reports uses, not a blank tile", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderIt();
+    expect(statValue("Net P/L")).toBe("+$650.00");
+
+    await user.click(screen.getByRole("button", { name: "Privacy" }));
+
+    expect(statValue("Net P/L")).toBe("•••");
+  });
+
+  it("Percentage mode reads against current equity, not the raw dollar figure", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderIt();
+    const dollars = statValue("Net P/L");
+
+    // Scoped to the switcher's own button group — a differently-styled "%"
+    // badge lives elsewhere on the page (process adherence), and `{ name }`
+    // alone matches both.
+    const switcher = screen.getByRole("button", { name: "Privacy" }).parentElement!;
+    await user.click(within(switcher).getByRole("button", { name: "%" }));
+
+    const pct = statValue("Net P/L");
+    expect(pct).toMatch(/%$/);
+    expect(pct).not.toBe(dollars);
+  });
+
+  it("switching back to Dollars restores the tested +$ format", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderIt();
+
+    await user.click(screen.getByRole("button", { name: "Privacy" }));
+    expect(statValue("Net P/L")).toBe("•••");
+    await user.click(screen.getByRole("button", { name: "$" }));
+
+    expect(statValue("Net P/L")).toBe("+$650.00");
+  });
+
+  it("R, Points, Ticks and Pips are disabled — a portfolio tile has no single instrument or planned risk to convert against", () => {
+    renderIt();
+    for (const label of ["R", "Points", "Ticks", "Pips"]) {
+      expect(screen.getByRole("button", { name: label })).toBeDisabled();
+    }
+  });
+
+  it("Max drawdown never gets a + sign, even in Dollars mode — it is a magnitude, not a signed P&L", () => {
+    renderIt();
+    expect(statValue("Max drawdown").startsWith("+")).toBe(false);
   });
 });
