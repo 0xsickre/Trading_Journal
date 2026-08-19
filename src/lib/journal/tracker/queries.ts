@@ -119,10 +119,3 @@ export async function getCheckins(
   return out;
 }
 
-/** Check-ins for one day, for the checklist. */
-export async function getCheckinsForDay(
-  date: string,
-): Promise<Map<string, TrackerCheckin>> {
-  return (await getCheckins(date, date)).get(date) ?? new Map();
-}
-

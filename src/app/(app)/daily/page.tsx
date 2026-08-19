@@ -6,17 +6,18 @@ import { getPositionCheckinsForDay } from "@/lib/journal/position-checkin-querie
 import { openPositionsOn } from "@/lib/journal/open-positions";
 import { stringFieldValue } from "@/lib/journal/field-values";
 import { getTradesWithStats } from "@/lib/journal/trades";
-import {
-  getCheckinsForDay,
-  getTrackerRules,
-} from "@/lib/journal/tracker/queries";
+import { getCheckins, getTrackerRules } from "@/lib/journal/tracker/queries";
 import {
   buildTradeDayIndex,
   configsFromRules,
   evaluateAutoRulesForDay,
 } from "@/lib/journal/tracker/auto-rules";
 import {
+  TRACKER_SPAN_DAYS,
+  computeComplianceSeries,
   computeDayCompliance,
+  computeStreak,
+  meanCompliance,
   resolveAutoResults,
   rulesLiveOn,
 } from "@/lib/journal/tracker/compliance";
@@ -28,11 +29,13 @@ import {
 } from "@/lib/journal/breakeven";
 import {
   DEFAULT_TZ,
+  addDaysToDayKey,
   isValidDayKey,
   zonedDateKey,
 } from "@/lib/journal/time";
 import { FocusGoalCard } from "@/components/journal/focus-goal-card";
 import { DailyReportForm } from "@/components/journal/daily-report-form";
+import { DailyStreakStrip } from "@/components/journal/daily-streak-strip";
 import {
   DayStatsCard,
   type DayTradeRow,
@@ -74,12 +77,22 @@ export default async function DailyPage({
         : dateParam
       : today;
 
-  const [report, activeGoal, checkins, positionCheckins] = await Promise.all([
-    getDailyReport(reportDate),
-    getActiveFocusGoal(),
-    getCheckinsForDay(reportDate),
-    getPositionCheckinsForDay(reportDate),
-  ]);
+  const [report, activeGoal, checkinsByDay, positionCheckins] =
+    await Promise.all([
+      getDailyReport(reportDate),
+      getActiveFocusGoal(),
+      // The whole window, not just this day. The streak strip needs the run
+      // leading UP TO the day in view, and the checklist's single day is the
+      // last entry of that same window — so one round trip serves both, and the
+      // two can never disagree about what was ticked.
+      getCheckins(
+        addDaysToDayKey(reportDate, -(TRACKER_SPAN_DAYS - 1)),
+        reportDate,
+      ),
+      getPositionCheckinsForDay(reportDate),
+    ]);
+
+  const checkins = checkinsByDay.get(reportDate) ?? new Map();
 
   // Per-trade timezone, not the primary account's: a trade on a NY account and
   // one on a London account close on different calendar days, and attributing
@@ -168,6 +181,35 @@ export default async function DailyPage({
     checkin: positionCheckins.get(p.id) ?? null,
   }));
 
+  /**
+   * The run leading up to the day in view.
+   *
+   * Anchored on `reportDate`, NOT on today, and that is the point: opening a day
+   * in July should say what the streak was in July. Anchoring it on today would
+   * print a number about this week on a page about that one.
+   *
+   * `today` is still passed to the series so a day that is genuinely today can
+   * come back `pending` rather than `broken` for rules not yet answered.
+   */
+  const complianceDays: string[] = [];
+  for (let i = TRACKER_SPAN_DAYS - 1; i >= 0; i--) {
+    complianceDays.push(addDaysToDayKey(reportDate, -i));
+  }
+
+  const series = computeComplianceSeries(
+    complianceDays,
+    rules,
+    checkinsByDay,
+    (d) =>
+      resolveAutoResults(
+        rulesLiveOn(rules, d),
+        evaluateAutoRulesForDay(d, index, configsFromRules(rulesLiveOn(rules, d))),
+        checkinsByDay.get(d) ?? new Map(),
+      ),
+    today,
+  );
+  const streak = computeStreak(series);
+
   const tracker: TrackerDayData = {
     reportDate,
     rules: dayRules,
@@ -187,6 +229,16 @@ export default async function DailyPage({
       />
 
       <FocusGoalCard goal={activeGoal} reportDate={reportDate} />
+
+      {/* Above the day's money on purpose. The streak is what this page is FOR
+          — the P&L is the outcome of decisions the checklist below governs, and
+          putting the run first says which of the two the day is judged on. */}
+      <DailyStreakStrip
+        current={streak.current}
+        meanPct={meanCompliance(series)}
+        scoredDays={series.filter((d) => d.pct != null).length}
+        hasRules={rules.length > 0}
+      />
 
       <DayStatsCard
         key={`stats:${reportDate}`}

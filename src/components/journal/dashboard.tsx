@@ -49,6 +49,7 @@ import {
   meanCompliance,
   resolveAutoResults,
   rulesLiveOn,
+  TRACKER_SPAN_DAYS,
 } from "@/lib/journal/tracker/compliance";
 import { processAdherence } from "@/lib/journal/tracker/process-adherence";
 import type {
@@ -282,13 +283,6 @@ function breakdownFields(custom: readonly { key: string; label: string }[]) {
     ...custom,
   ].map((d) => ({ value: d.key, label: d.label }));
 }
-
-/**
- * Days of compliance history held in memory: 28 weeks, matching what the
- * dashboard page fetches, so the 26-week calendar still has data in its leading
- * partial column.
- */
-const TRACKER_SPAN_DAYS = 28 * 7;
 
 export function Dashboard({
   trades,

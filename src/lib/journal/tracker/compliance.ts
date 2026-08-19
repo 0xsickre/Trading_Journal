@@ -183,6 +183,21 @@ export function computeDayCompliance(
   return { date, applicable, satisfied, pct, status, missedRuleIds, unansweredRuleIds };
 }
 
+/**
+ * How far back a compliance series reaches: 28 weeks.
+ *
+ * ONE constant because the streak has to be one number. This used to live twice
+ * — as `TRACKER_WEEKS = 28` on the dashboard page, which decides how many
+ * check-ins are FETCHED, and as `TRACKER_SPAN_DAYS = 28 * 7` in the dashboard
+ * component, which decides how many days are SCORED. Their comments pointed at
+ * each other for safety, which is the tell: two numbers that must agree, kept in
+ * step by prose. A third screen reading the same streak would have made three.
+ *
+ * 26 weeks is what the heatmap draws; the two extra weeks keep the leading
+ * partial column populated once the grid pads out to a full week.
+ */
+export const TRACKER_SPAN_DAYS = 28 * 7;
+
 export function computeComplianceSeries(
   days: readonly string[],
   rules: readonly TrackerRule[],

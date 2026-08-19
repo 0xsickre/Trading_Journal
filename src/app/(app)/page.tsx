@@ -5,6 +5,7 @@ import { getDailyReportDates, getDailyReportsLite } from "@/lib/journal/daily-re
 import { ensureDefaults } from "@/lib/journal/ensure-defaults";
 import { getFieldDefs } from "@/lib/journal/field-defs";
 import { getTrackerRules, getCheckins } from "@/lib/journal/tracker/queries";
+import { TRACKER_SPAN_DAYS } from "@/lib/journal/tracker/compliance";
 import { getPositionCheckins } from "@/lib/journal/position-checkin-queries";
 import { getPlaybooks, getPositionRules } from "@/lib/journal/playbooks";
 import { getUserPrefs } from "@/lib/journal/user-prefs";
@@ -14,14 +15,6 @@ import { addDaysToDayKey, DEFAULT_TZ } from "@/lib/journal/time";
 import { Dashboard } from "@/components/journal/dashboard";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
-
-/**
- * How far back the compliance calendar and the streak look.
- *
- * 26 weeks is what the heatmap draws; two extra weeks of slack keep the leading
- * partial column populated once the grid pads out to a full week.
- */
-const TRACKER_WEEKS = 28;
 
 export default async function DashboardPage() {
   // Fallback seed for legacy users / missed signup trigger — runs on the landing
@@ -80,7 +73,7 @@ export default async function DashboardPage() {
   const todayKey = todayInTz(primary?.timezone ?? DEFAULT_TZ);
 
   const checkinsByDay = await getCheckins(
-    addDaysToDayKey(todayKey, -(TRACKER_WEEKS * 7 - 1)),
+    addDaysToDayKey(todayKey, -(TRACKER_SPAN_DAYS - 1)),
     todayKey,
   );
   // Flattened for the client boundary: a flat array is smaller on the wire than
