@@ -175,9 +175,14 @@ function RuleRow({
           pnlClass(score?.gapPp),
         )}
       >
+        {/* Three outcomes, and they must not collapse into one dash:
+            a gap; "one of the two sides is too thin to compare"; and "there is
+            no contrast here at all" — a rule never broken, or never answered.
+            The last one is an honest absence rather than a missing measurement,
+            so it gets the dash and the other gets words. */}
         {score?.gapPp != null
           ? `${score.gapPp > 0 ? "+" : ""}${score.gapPp.toFixed(0)} pp`
-          : score && score.n > 0 && score.n < RULE_SAMPLE.MIN
+          : score && score.followed.n > 0 && score.broken.n > 0
             ? "too few"
             : "—"}
       </td>
@@ -693,9 +698,11 @@ export function PlaybookCard({
               talks its owner into keeping whichever rule got lucky. */}
           <p className="mt-3 text-xs text-muted-foreground">
             Difference is win % when you kept the rule minus win % when you did
-            not — the only comparison that holds the setup constant. It is
-            withheld below {RULE_SAMPLE.MIN} observations, and blank when a rule
-            has never been broken. Rules are never ranked by result.
+            not — the only comparison that holds the setup constant. It needs{" "}
+            {RULE_SAMPLE.MIN} observations on <em>each</em> side, not just
+            between them, because a difference cannot be sounder than the weaker
+            half of it. Blank when a rule has never been broken. Rules are never
+            ranked by result.
           </p>
         </div>
       </CardContent>

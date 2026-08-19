@@ -82,16 +82,16 @@ describe("ruleFollowedDimension", () => {
 
 describe("ruleScorecard — the contrast", () => {
   it("compares the rule with ITSELF, followed against broken", () => {
-    // 20 followed with 14 winners = 70 %; 20 broken with 8 winners = 40 %.
+    // 30 followed with 21 winners = 70 %; 30 broken with 12 winners = 40 %.
     const { lookup, trades } = book([
-      ...side("f", 20, 14, true),
-      ...side("b", 20, 8, false),
+      ...side("f", 30, 21, true),
+      ...side("b", 30, 12, false),
     ]);
     const [score] = ruleScorecard(trades, lookup.rules, metricCtx, ["r1"]);
 
-    expect(score.n).toBe(40);
-    expect(score.followed.n).toBe(20);
-    expect(score.broken.n).toBe(20);
+    expect(score.n).toBe(60);
+    expect(score.followed.n).toBe(30);
+    expect(score.broken.n).toBe(30);
     expect(score.followed.winRate).toBeCloseTo(70, 6);
     expect(score.broken.winRate).toBeCloseTo(40, 6);
     expect(score.gapPp).toBeCloseTo(30, 6);
@@ -118,6 +118,45 @@ describe("ruleScorecard — the contrast", () => {
     expect(score.n).toBe(10);
     expect(score.gapPp).toBeNull();
     expect(score.tier).toBe("thin");
+  });
+
+  it("REFUSES A GAP WHEN ONLY THE TOTAL CLEARS THE FLOOR", () => {
+    // The case the old rule got wrong, and it took real data to see it: neither
+    // side alone is printable — the screen shows "n=14" and "n=18" rather than
+    // percentages — yet the total is 32, so the difference used to print as a
+    // confident "+100 pp" built from two numbers it had just refused to show.
+    const { lookup, trades } = book([
+      ...side("f", 14, 14, true),
+      ...side("b", 18, 0, false),
+    ]);
+    const [score] = ruleScorecard(trades, lookup.rules, metricCtx, ["r1"]);
+    expect(score.n).toBe(32);
+    expect(score.n).toBeGreaterThanOrEqual(RULE_SAMPLE.MIN); // total is fine…
+    expect(score.followed.n).toBeLessThan(RULE_SAMPLE.MIN); // …the sides are not
+    expect(score.broken.n).toBeLessThan(RULE_SAMPLE.MIN);
+    expect(score.gapPp).toBeNull();
+  });
+
+  it("refuses a gap to a lopsided rule, however large the kept side", () => {
+    // 40 followed and 2 broken clears any total floor and is still a comparison
+    // resting on two trades.
+    const { lookup, trades } = book([
+      ...side("f", 40, 28, true),
+      ...side("b", 2, 0, false),
+    ]);
+    const [score] = ruleScorecard(trades, lookup.rules, metricCtx, ["r1"]);
+    expect(score.followed.n).toBe(40);
+    expect(score.broken.n).toBe(2);
+    expect(score.gapPp).toBeNull();
+  });
+
+  it("reports the gap the moment BOTH sides reach the floor", () => {
+    const { lookup, trades } = book([
+      ...side("f", RULE_SAMPLE.MIN, RULE_SAMPLE.MIN, true),
+      ...side("b", RULE_SAMPLE.MIN, 0, false),
+    ]);
+    const [score] = ruleScorecard(trades, lookup.rules, metricCtx, ["r1"]);
+    expect(score.gapPp).toBeCloseTo(100, 6);
   });
 
   it("counts only the population a winner-only rule was asked about", () => {
