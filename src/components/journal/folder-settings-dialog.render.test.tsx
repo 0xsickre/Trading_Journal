@@ -31,6 +31,7 @@ const folder = (over: Partial<NoteFolder> = {}): NoteFolder => ({
   template_text: null,
   sort_order: 0,
   icon: null,
+  is_system: false,
   ...over,
 });
 
@@ -109,5 +110,29 @@ describe("FolderSettingsDialog — icon picker", () => {
       "f1",
       expect.objectContaining({ icon: "brain" }),
     );
+  });
+});
+
+describe("FolderSettingsDialog — system folder protection", () => {
+  it("disables Delete for a system folder, so the automation it backs can't be deleted out from under it", () => {
+    render(
+      <FolderSettingsDialog
+        folder={folder({ is_system: true })}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /delete folder/i })).toBeDisabled();
+  });
+
+  it("leaves Delete enabled for an ordinary folder", () => {
+    render(
+      <FolderSettingsDialog
+        folder={folder({ is_system: false })}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /delete folder/i })).not.toBeDisabled();
   });
 });

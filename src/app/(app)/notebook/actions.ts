@@ -346,6 +346,19 @@ export async function updateFolder(
 export async function deleteFolder(id: string): Promise<Result<{ orphaned: number }>> {
   const supabase = await createClient();
 
+  // System folders (currently just "Trade Notes") back real automation —
+  // auto-filing on trade link, the "New trade note" workflow — so deleting one
+  // would silently turn that off. Checked here for a clean error message; the
+  // DB trigger (`tj_note_folders_protect_system`) is the actual backstop.
+  const { data: folder } = await supabase
+    .from("tj_note_folders")
+    .select("is_system")
+    .eq("id", id)
+    .maybeSingle();
+  if (folder?.is_system) {
+    return { ok: false, error: "This folder is required and cannot be deleted." };
+  }
+
   const { count } = await supabase
     .from("tj_notes")
     .select("id", { count: "exact", head: true })

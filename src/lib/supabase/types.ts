@@ -512,6 +512,7 @@ export type Database = {
           created_at: string
           icon: string | null
           id: string
+          is_system: boolean
           name: string
           sort_order: number
           template_text: string | null
@@ -522,6 +523,7 @@ export type Database = {
           created_at?: string
           icon?: string | null
           id?: string
+          is_system?: boolean
           name: string
           sort_order?: number
           template_text?: string | null
@@ -532,6 +534,7 @@ export type Database = {
           created_at?: string
           icon?: string | null
           id?: string
+          is_system?: boolean
           name?: string
           sort_order?: number
           template_text?: string | null

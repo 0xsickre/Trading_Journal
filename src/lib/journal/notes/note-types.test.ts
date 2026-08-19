@@ -96,23 +96,33 @@ const folder = (over: Partial<NoteFolder> = {}): NoteFolder => ({
   template_text: null,
   sort_order: 0,
   icon: null,
+  is_system: false,
   ...over,
 });
 
 describe("tradeNotesFolderId", () => {
-  it("finds the seeded folder by its exact name", () => {
-    const folders = [folder({ id: "a", name: "Weekly Review" }), folder({ id: "b" })];
+  it("finds the folder flagged is_system", () => {
+    const folders = [
+      folder({ id: "a", name: "Weekly Review", is_system: false }),
+      folder({ id: "b", is_system: true }),
+    ];
     expect(tradeNotesFolderId(folders)).toBe("b");
   });
 
-  it("returns null when the folder was renamed or deleted, rather than guessing", () => {
-    expect(tradeNotesFolderId([folder({ name: "Trades I renamed" })])).toBeNull();
+  it("survives a rename — matching is by flag, not by name", () => {
+    expect(
+      tradeNotesFolderId([folder({ name: "Renamed folder", is_system: true })]),
+    ).toBe("f1");
+  });
+
+  it("returns null when the folder was deleted, rather than guessing", () => {
+    expect(tradeNotesFolderId([folder({ is_system: false })])).toBeNull();
     expect(tradeNotesFolderId([])).toBeNull();
   });
 });
 
 describe("tradeLinkPatch", () => {
-  const folders = [folder()];
+  const folders = [folder({ is_system: true })];
 
   it("bundles folder_id into the same patch when an unfiled note is linked to a trade", () => {
     expect(tradeLinkPatch(note({ folder_id: null }), folders, "trade-1")).toEqual({

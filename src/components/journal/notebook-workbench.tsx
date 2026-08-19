@@ -11,6 +11,7 @@ import {
   Folder,
   FolderPlus,
   Inbox,
+  Link2,
   Pin,
   Plus,
   Search,
@@ -26,6 +27,7 @@ import { folderIcon } from "@/lib/journal/notes/folder-icons";
 import {
   defaultNoteTitle,
   noteInScope,
+  tradeNotesFolderId,
   type Note,
   type NoteFolder,
   type NoteScope,
@@ -151,6 +153,28 @@ export function NotebookWorkbench({
     });
   }
 
+  /**
+   * A note about a trade, filed the moment it is created — not an incidental
+   * result of picking "Trade Notes" from a dropdown after the fact. The trade
+   * itself is left unlinked (`position_id` stays null): the point is writing
+   * before or around the trade, the same "note first, link later" TradeZella
+   * workflow the folder dropdown in `NoteEditor` already supports.
+   */
+  function newTradeNote() {
+    start(async () => {
+      const res = await createNote({
+        folder_id: tradeNotesFolderId(folders) ?? undefined,
+        title: defaultNoteTitle(todayKey),
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setSelectedId(res.id);
+      router.refresh();
+    });
+  }
+
   return (
     <>
       <div className="flex min-h-[36rem] min-w-0 flex-col gap-4 lg:flex-row print:block">
@@ -158,6 +182,14 @@ export function NotebookWorkbench({
         <aside className="w-full shrink-0 space-y-4 lg:w-56 print:hidden">
           <Button className="w-full" onClick={newNote} disabled={pending}>
             <Plus className="mr-2 size-4" /> New note
+          </Button>
+          <Button
+            className="w-full"
+            variant="outline"
+            onClick={newTradeNote}
+            disabled={pending}
+          >
+            <Link2 className="mr-2 size-4" /> New trade note
           </Button>
 
           <div className="space-y-0.5">

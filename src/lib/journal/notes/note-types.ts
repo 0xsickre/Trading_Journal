@@ -10,6 +10,8 @@ export type NoteFolder = {
   sort_order: number;
   /** Name of an entry in `NOTE_FOLDER_ICONS`. Null means the plain folder glyph. */
   icon: string | null;
+  /** True for the seeded folder automation depends on. Cannot be deleted. */
+  is_system: boolean;
 };
 
 export type Note = {
@@ -78,14 +80,15 @@ export function defaultNoteTitle(dayKey: string): string {
 }
 
 /**
- * The seeded "Trade Notes" folder, found by name.
- *
- * Fragile by design: the folder is an ordinary row with no `is_system` flag,
- * so a rename or delete is possible. `null` here means the caller falls back
- * to doing nothing extra — never recreates the folder, never throws.
+ * The seeded "Trade Notes" folder, found by its `is_system` flag rather than
+ * its name — the flag is protected from deletion and not exposed for
+ * editing, so it is the durable identity; the name is just a label and can
+ * be renamed freely without breaking this lookup. `null` means the caller
+ * falls back to doing nothing extra: never recreates the folder, never
+ * throws.
  */
 export function tradeNotesFolderId(folders: readonly NoteFolder[]): string | null {
-  return folders.find((f) => f.name === "Trade Notes")?.id ?? null;
+  return folders.find((f) => f.is_system)?.id ?? null;
 }
 
 /**

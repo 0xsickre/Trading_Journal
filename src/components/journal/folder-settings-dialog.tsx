@@ -90,28 +90,40 @@ export function FolderSettingsDialog({
         </div>
 
         <DialogFooter className="sm:justify-between">
-          <Button
-            variant="destructive"
-            disabled={pending}
-            onClick={() =>
-              start(async () => {
-                const res = await deleteFolder(folder.id);
-                if (!res.ok) {
-                  toast.error(res.error);
-                  return;
-                }
-                toast.success(
-                  res.orphaned > 0
-                    ? `Folder deleted. ${res.orphaned} notes moved to "Unfiled".`
-                    : "Folder deleted.",
-                );
-                onOpenChange(false);
-                router.refresh();
-              })
-            }
-          >
-            <Trash2 className="mr-2 size-3.5" /> Delete folder
-          </Button>
+          <div>
+            <Button
+              variant="destructive"
+              disabled={pending || folder.is_system}
+              title={
+                folder.is_system
+                  ? "This folder is required and cannot be deleted."
+                  : undefined
+              }
+              onClick={() =>
+                start(async () => {
+                  const res = await deleteFolder(folder.id);
+                  if (!res.ok) {
+                    toast.error(res.error);
+                    return;
+                  }
+                  toast.success(
+                    res.orphaned > 0
+                      ? `Folder deleted. ${res.orphaned} notes moved to "Unfiled".`
+                      : "Folder deleted.",
+                  );
+                  onOpenChange(false);
+                  router.refresh();
+                })
+              }
+            >
+              <Trash2 className="mr-2 size-3.5" /> Delete folder
+            </Button>
+            {folder.is_system && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Required — new trade notes are filed here automatically.
+              </p>
+            )}
+          </div>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
               Cancel
