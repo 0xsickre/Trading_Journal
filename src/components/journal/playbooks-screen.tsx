@@ -1,38 +1,22 @@
 "use client";
 
-import { useMemo } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import { PlaybookManager } from "@/components/journal/playbook-manager";
-import { runReport, type ReportRow } from "@/lib/journal/reports/engine";
-import { getMetric } from "@/lib/journal/reports/metrics";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { HEADER_METRICS, PlaybookCard } from "@/components/journal/playbook-card";
+import { runReport } from "@/lib/journal/reports/engine";
 import type { MetricContext } from "@/lib/journal/reports/metrics";
 import {
-  RULE_SAMPLE,
   playbookDimension,
   type PlaybookLookup,
 } from "@/lib/journal/reports/playbook-dimensions";
-import { ruleScorecard, type RuleScore } from "@/lib/journal/reports/rule-scorecard";
-import { formatMetric, metric as mkMetric } from "@/lib/journal/units";
-import {
-  RULE_CATEGORY_LABELS,
-  rulesByCategory,
-  type Playbook,
-  type PlaybookRule,
-} from "@/lib/journal/playbook-types";
+import type { Playbook, PlaybookRule } from "@/lib/journal/playbook-types";
 import type { EnrichedTrade } from "@/lib/journal/enriched-trade";
 import type { BreakevenRange } from "@/lib/journal/breakeven";
-
-/** Header metrics per playbook — the TradeZella set, computed by our engine. */
-const HEADER_METRICS = [
-  "trade_count",
-  "win_rate",
-  "expectancy",
-  "profit_factor",
-  "avg_r",
-  "follow_rate",
-] as const;
+import { addPlaybook } from "@/app/(app)/settings/playbook-actions";
 
 export function PlaybooksScreen({
   playbooks,
@@ -49,6 +33,10 @@ export function PlaybooksScreen({
   currency: string;
   breakevenRange: BreakevenRange;
 }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [draft, setDraft] = useState("");
+
   const metricCtx = useMemo<MetricContext>(
     () => ({
       pnlBasis: "net",
@@ -73,244 +61,73 @@ export function PlaybooksScreen({
       metricContext: metricCtx,
       metricKeys: [...HEADER_METRICS],
     });
-    return new Map(
-      (result?.rows ?? []).map((r) => [r.bucket, r] as const),
-    );
+    return new Map((result?.rows ?? []).map((r) => [r.bucket, r] as const));
   }, [trades, lookup, metricCtx]);
 
-  return (
-    <div className="space-y-6">
-      {playbooks.length > 0 && (
-        <div className="space-y-4">
-          {playbooks.map((book) => (
-            <PlaybookScorecard
-              key={book.id}
-              book={book}
-              row={byPlaybook.get(book.name)}
-              trades={trades}
-              lookup={lookup}
-              metricCtx={metricCtx}
-              currency={currency}
-            />
-          ))}
-        </div>
-      )}
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Define</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <PlaybookManager playbooks={playbooks} library={library} />
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function PlaybookScorecard({
-  book,
-  row,
-  trades,
-  lookup,
-  metricCtx,
-  currency,
-}: {
-  book: Playbook;
-  row: ReportRow | undefined;
-  trades: EnrichedTrade[];
-  lookup: PlaybookLookup;
-  metricCtx: MetricContext;
-  /**
-   * Valuta naloga, prosleđena ODVOJENO od `metricCtx`.
-   *
-   * Ranije je jahala na njemu, iako je `MetricContext` kontekst RAČUNANJA a ne
-   * formatiranja i nijedna metrika je nije čitala. `formatMetric` ima svoj
-   * `FormatContext` i njemu valuta zaista treba — pa ide direktno tamo.
-   */
-  currency: string;
-}) {
-  const n = row?.n ?? 0;
-
-  const scores = useMemo(
-    () =>
-      ruleScorecard(
-        trades,
-        lookup.rules,
-        metricCtx,
-        book.rules.map((r) => r.id),
-      ),
-    [trades, lookup, metricCtx, book.rules],
-  );
-  const scoreById = new Map(scores.map((s) => [s.ruleId, s]));
-  const sections = rulesByCategory(book.rules);
+  function create() {
+    if (!draft.trim()) return;
+    start(async () => {
+      const res = await addPlaybook(draft);
+      if (!res.ok) toast.error(res.error ?? "Failed");
+      else {
+        setDraft("");
+        router.refresh();
+      }
+    });
+  }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex flex-wrap items-baseline gap-2">
-          <CardTitle className="text-base">{book.name}</CardTitle>
-          <span className="text-sm text-muted-foreground">
-            {n} {n === 1 ? "trade" : "trades"}
-          </span>
-          {n > 0 && n < RULE_SAMPLE.MIN && (
-            <Badge variant="secondary">counts only</Badge>
-          )}
-          {n >= RULE_SAMPLE.MIN && n < RULE_SAMPLE.USABLE && (
-            <Badge variant="secondary">provisional</Badge>
-          )}
-          {!book.is_active && <Badge variant="outline">inactive</Badge>}
-          {book.default_risk_pct != null && (
-            <Badge variant="outline">{book.default_risk_pct}% risk</Badge>
-          )}
-        </div>
-        {book.a_plus_criteria && (
-          <p className="text-sm text-muted-foreground">
-            <b>A+:</b> {book.a_plus_criteria}
-          </p>
-        )}
-      </CardHeader>
+    <div className="space-y-4">
+      {/* Only the half the page header does not already say. It opened with
+          "Rules are a library: written once, linked into any number of
+          playbooks…", which is the page description almost word for word — two
+          paragraphs saying the same thing, stacked. What survives is the part
+          that is genuinely surprising and has no other home on screen. */}
+      <p className="text-sm text-muted-foreground">
+        Removing a rule from a playbook is not deleting it.
+      </p>
 
-      <CardContent className="space-y-4">
-        {n === 0 ? (
-          <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-            No trade has used this playbook yet. Numbers appear once it does —
-            and stay counts, not verdicts, until {RULE_SAMPLE.MIN} observations.
-          </p>
-        ) : (
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-            {HEADER_METRICS.map((key) => {
-              const m = getMetric(key);
-              if (!m) return null;
-              return (
-                <div key={key}>
-                  <dt className="text-xs text-muted-foreground">{m.label}</dt>
-                  <dd className="text-lg font-semibold tabular-nums">
-                    {formatMetric(
-                      mkMetric(row?.values[key] ?? null, m.unit, {
-                        currency,
-                      }),
-                    )}
-                  </dd>
-                </div>
-              );
-            })}
-          </dl>
-        )}
-
-        {sections.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No rules linked yet. Add them below.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[34rem] text-sm">
-              <thead>
-                <tr className="border-b text-xs text-muted-foreground">
-                  <th className="py-1.5 text-left font-medium">Rule</th>
-                  <th className="py-1.5 text-right font-medium">n</th>
-                  <th className="py-1.5 text-right font-medium">Followed</th>
-                  <th className="py-1.5 text-right font-medium">Broken</th>
-                  <th className="py-1.5 text-right font-medium">Difference</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sections.map((section) => (
-                  <RuleSection
-                    key={section.category}
-                    label={RULE_CATEGORY_LABELS[section.category]}
-                    rules={section.rules}
-                    scoreById={scoreById}
-                  />
-                ))}
-              </tbody>
-            </table>
-            {/* Said on the screen, not only in the plan. The alternative — a
-                sorted list of rules by win rate — is exactly how a journal
-                talks its owner into keeping whichever rule got lucky. */}
-            <p className="mt-2 text-xs text-muted-foreground">
-              Difference is win % when you kept the rule minus win % when you did
-              not — the only comparison that holds the setup constant. It is
-              withheld below {RULE_SAMPLE.MIN} observations, and blank when a rule
-              has never been broken. Rules are never ranked by result.
-            </p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function RuleSection({
-  label,
-  rules,
-  scoreById,
-}: {
-  label: string;
-  rules: PlaybookRule[];
-  scoreById: Map<string, RuleScore>;
-}) {
-  return (
-    <>
-      <tr>
-        <td
-          colSpan={5}
-          className="pt-3 pb-1 text-xs font-semibold text-muted-foreground"
+      <div className="flex items-center gap-2">
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") create();
+          }}
+          placeholder="New playbook, e.g. London Reversal"
+          aria-label="New playbook name"
+          className="h-9 w-64"
+          disabled={pending}
+        />
+        <Button
+          size="sm"
+          className="h-9"
+          disabled={pending || !draft.trim()}
+          onClick={create}
         >
-          {label}
-        </td>
-      </tr>
-      {rules.map((rule) => {
-        const s = scoreById.get(rule.id);
-        return (
-          <tr key={rule.id} className="border-b last:border-0">
-            <td className="py-1.5 pr-3">{rule.text}</td>
-            <td className="py-1.5 text-right tabular-nums">{s?.n ?? 0}</td>
-            <td className="py-1.5 text-right tabular-nums">
-              <Side n={s?.followed.n ?? 0} winRate={s?.followed.winRate ?? null} />
-            </td>
-            <td className="py-1.5 text-right tabular-nums">
-              <Side n={s?.broken.n ?? 0} winRate={s?.broken.winRate ?? null} />
-            </td>
-            <td
-              className={cn(
-                "py-1.5 text-right tabular-nums",
-                s?.gapPp != null &&
-                  (s.gapPp > 0
-                    ? "text-emerald-600 dark:text-emerald-500"
-                    : s.gapPp < 0
-                      ? "text-red-600 dark:text-red-500"
-                      : undefined),
-              )}
-            >
-              {s?.gapPp != null
-                ? `${s.gapPp > 0 ? "+" : ""}${s.gapPp.toFixed(0)} pp`
-                : s && s.n > 0 && s.n < RULE_SAMPLE.MIN
-                  ? "too few"
-                  : "—"}
-            </td>
-          </tr>
-        );
-      })}
-    </>
-  );
-}
+          <Plus className="size-4" /> Add playbook
+        </Button>
+      </div>
 
-/**
- * One side of the contrast.
- *
- * The count is shown even when the win rate is withheld, because "answered 4
- * times" is a fact worth seeing while "57 %" on four trades is not.
- */
-function Side({ n, winRate }: { n: number; winRate: number | null }) {
-  if (n === 0) return <span className="text-muted-foreground">—</span>;
-  return (
-    <span>
-      {n < RULE_SAMPLE.MIN || winRate == null ? (
-        <span className="text-muted-foreground">n={n}</span>
+      {playbooks.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No playbook yet.</p>
       ) : (
-        `${winRate.toFixed(0)}%`
+        playbooks.map((book) => (
+          <PlaybookCard
+            key={book.id}
+            book={book}
+            library={library}
+            // Keyed by NAME, because that is the bucket `playbookDimension`
+            // emits. Undefined for one render after a rename, until
+            // `router.refresh()` lands — every reader below degrades to 0 / "—".
+            row={byPlaybook.get(book.name)}
+            trades={trades}
+            lookup={lookup}
+            computeCtx={metricCtx}
+            currency={currency}
+          />
+        ))
       )}
-    </span>
+    </div>
   );
 }
