@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Check, Minus, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -73,10 +74,41 @@ export function PlaybookChecklist({
     [book, outcome],
   );
 
-  const answered = visibleGroups
-    .flatMap((g) => g.rules)
-    .filter((r) => answers[r.id] !== undefined);
+  const visible = useMemo(
+    () => visibleGroups.flatMap((g) => g.rules),
+    [visibleGroups],
+  );
+  const answered = visible.filter((r) => answers[r.id] !== undefined);
   const followed = answered.filter((r) => answers[r.id]).length;
+  const broken = answered.length - followed;
+
+  /**
+   * What "check remaining" is allowed to touch.
+   *
+   * Three exclusions, and each one is a wrong answer written into the
+   * statistics if it is dropped:
+   *
+   *   - ANSWERED rules, either way. An explicit ✗ is something the trader
+   *     entered; a bulk button must never overwrite it.
+   *   - Rules outside `visible`, which is already scoped to the outcome. A
+   *     winner-only rule answered while the trade is red is an observation from
+   *     a population it was never asked about — `applicableAnswers` would drop
+   *     it, and it would come back to life if the P&L later flipped.
+   *   - RETIRED rules. The edit form loads `includeDeleted: true`, so archived
+   *     rules do appear on this checklist. Minting a brand-new observation for a
+   *     rule retired precisely so it would stop collecting them is what the soft
+   *     delete exists to prevent. One deliberate click can still answer it; a
+   *     sweep cannot.
+   */
+  const fillable = visible.filter(
+    (r) => answers[r.id] === undefined && r.deleted_at == null,
+  );
+
+  // Answered + fillable, which is every visible rule EXCEPT the retired ones
+  // nobody has answered. Leaving those in would paint a grey remainder that
+  // "check remaining" is forbidden to fill — a bar that can never complete.
+  const barTotal = answered.length + fillable.length;
+  const pct = (part: number) => (barTotal > 0 ? (part / barTotal) * 100 : 0);
 
   return (
     <div className="space-y-4">
@@ -140,9 +172,70 @@ export function PlaybookChecklist({
         </p>
       ) : (
         <div className="space-y-4">
-          <div className="text-xs text-muted-foreground">
-            Followed {followed} of {answered.length} answered
-            {answered.length === 0 && " — unanswered does not count toward the statistics"}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-3">
+              {/*
+                Followed and broken are painted. THE UNANSWERED SHARE IS NOT —
+                it is the bare track showing through.
+
+                That is the whole design, and it is not a shortcut: the bar only
+                ever grows when the trader gives an explicit answer, so an
+                untouched checklist reads as an empty grey track and never as a
+                red one. A plain followed/total bar would fill the remainder with
+                "not followed", which is the one claim this journal must not make
+                — everything else here, from the three-state buttons to
+                `applicableAnswers`, exists to keep "not answered" and "broken"
+                apart. Painting them the same would undo that in one div.
+
+                aria-hidden, and no role="progressbar": a progressbar carries a
+                single aria-valuenow, and this bar carries two independent
+                quantities. The sentence below states all three numbers, which is
+                the honest encoding — and is why there is no ui/progress.tsx to
+                reach for.
+              */}
+              <div
+                className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-muted"
+                aria-hidden="true"
+              >
+                <div
+                  style={{
+                    width: `${pct(followed)}%`,
+                    background: "var(--profit)",
+                  }}
+                />
+                <div
+                  style={{
+                    width: `${pct(broken)}%`,
+                    background: "var(--loss)",
+                  }}
+                />
+              </div>
+
+              {/* Hidden at zero rather than disabled: a button that is offered
+                  and does nothing is worse than no button. The label says
+                  "remaining" and not "all" because it deliberately does not
+                  touch an answered rule. */}
+              {fillable.length > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 shrink-0 px-2 text-xs"
+                  onClick={() => {
+                    for (const r of fillable) onAnswerChange(r.id, true);
+                  }}
+                  title="Marks the rules you have not answered as followed. An explicit ✗ is never overwritten."
+                >
+                  Check remaining ({fillable.length})
+                </Button>
+              )}
+            </div>
+
+            <div className="text-xs text-muted-foreground">
+              Followed {followed} of {answered.length} answered
+              {fillable.length > 0 && ` · ${fillable.length} not answered`}
+              {answered.length === 0 && " — unanswered does not count toward the statistics"}
+            </div>
           </div>
 
           {visibleGroups.map((group) => (
