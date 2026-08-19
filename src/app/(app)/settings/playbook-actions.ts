@@ -9,6 +9,7 @@ import {
   type RuleCategory,
   type ShowWhen,
 } from "@/lib/journal/playbook-types";
+import { moveRuleWithinCategory } from "@/lib/journal/playbook-order";
 
 function revalidateAll() {
   revalidatePath("/settings");
@@ -197,6 +198,100 @@ export async function unlinkRule(
     .eq("playbook_id", playbookId)
     .eq("rule_id", ruleId);
   if (error) return { ok: false, error: error.message };
+  revalidateAll();
+  return { ok: true };
+}
+
+/**
+ * Move a rule one place within its category, inside ONE playbook.
+ *
+ * The ordinal lives on the LINK, not on the rule, and that is the entire reason
+ * this is possible: a rule linked into three books can sit third in one and
+ * first in another, and reordering here must not disturb the other two. Every
+ * statement below is scoped to `playbookId` for that reason.
+ *
+ * The ordering itself is `moveRuleWithinCategory`, which is pure and tested —
+ * this function only reads, delegates, and writes back.
+ *
+ * WHY IT REWRITES ORDINALS FROM AN ARRAY
+ *
+ * `moveFieldDef` does the same and explains it as deadlock avoidance. That is
+ * not the reason here: `tj_playbook_rule_links` carries only
+ * `UNIQUE (playbook_id, rule_id)`, so two links may legally share a
+ * `sort_order` and a two-row swap would not deadlock. The reason is that they
+ * legally may — `linkRule` assigns `max + 1` through a read-then-write, so two
+ * links added at once can claim the same ordinal, and from then on their order
+ * is whatever the `id` tiebreak happens to give. Numbering the whole array
+ * normalises that on the first arrow click instead of preserving the ambiguity.
+ */
+export async function movePlaybookRule(
+  playbookId: string,
+  ruleId: string,
+  direction: -1 | 1,
+): Promise<Result> {
+  const supabase = await createClient();
+
+  // No explicit user_id filter anywhere in here: `tj_playbook_rule_links_owner`
+  // scopes both the read and the writes to the caller, so somebody else's
+  // playbook id comes back with zero links and stops at the guard below.
+  const { data: links, error: linkError } = await supabase
+    .from("tj_playbook_rule_links")
+    .select("id,rule_id,sort_order")
+    .eq("playbook_id", playbookId)
+    .order("sort_order")
+    .order("id");
+  if (linkError) return { ok: false, error: linkError.message };
+  if (!links?.length) return { ok: false, error: "Playbook not found." };
+
+  // The category is on the rule, not the link, so it takes a second read. Only
+  // the rules this book actually links.
+  const { data: rules, error: ruleError } = await supabase
+    .from("tj_playbook_rules")
+    .select("id,category")
+    .in("id", links.map((l) => l.rule_id));
+  if (ruleError) return { ok: false, error: ruleError.message };
+
+  const categoryOf = new Map((rules ?? []).map((r) => [r.id, r.category as RuleCategory]));
+  const ordered = moveRuleWithinCategory(
+    links.flatMap((l) => {
+      const category = categoryOf.get(l.rule_id);
+      // A link whose rule vanished would otherwise become an `undefined`
+      // category that groups with every other orphan. Dropped instead — it is
+      // not drawn either.
+      return category ? [{ ruleId: l.rule_id, category }] : [];
+    }),
+    ruleId,
+    direction,
+  );
+  // Already at the end of its category, or not in this book. Reported as
+  // success because nothing failed and nothing should change — same as
+  // `moveFieldDef`.
+  if (!ordered) return { ok: true };
+
+  const linkOf = new Map(links.map((l) => [l.rule_id, l]));
+  const writes = ordered
+    .map((rid, ordinal) => ({ link: linkOf.get(rid)!, ordinal }))
+    // Only the rows whose ordinal actually moved. `moveFieldDef` writes all N
+    // sequentially; on a thirty-rule playbook that is thirty round trips for a
+    // swap of two. The normalising effect above is kept — a duplicate ordinal
+    // differs from its new index, so it is in this list.
+    .filter(({ link, ordinal }) => link.sort_order !== ordinal);
+
+  // Dispatched together: the ordinals are independent and there is no unique
+  // index to collide with. Every result is inspected, per `reorderOptions` —
+  // a half-applied reorder that reported success would snap back on the next
+  // load with nothing saying why.
+  const results = await Promise.all(
+    writes.map(({ link, ordinal }) =>
+      supabase
+        .from("tj_playbook_rule_links")
+        .update({ sort_order: ordinal })
+        .eq("id", link.id),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { ok: false, error: failed.error.message };
+
   revalidateAll();
   return { ok: true };
 }
