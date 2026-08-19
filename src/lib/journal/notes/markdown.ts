@@ -207,7 +207,7 @@ export function parseMarkdown(src: string): Block[] {
  * time it gets here; it is literal text, and comes back as the literal text the
  * reader sees.
  */
-function inlineText(nodes: readonly Inline[]): string {
+export function inlineText(nodes: readonly Inline[]): string {
   let out = "";
   for (const n of nodes) {
     out += n.type === "text" || n.type === "code" ? n.value : inlineText(n.children);

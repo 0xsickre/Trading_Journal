@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import {
   ArchiveRestore,
+  Download,
   Eye,
   Link2,
   Pencil,
@@ -28,6 +29,8 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { MarkdownView } from "@/components/journal/markdown-view";
+import { parseMarkdown } from "@/lib/journal/notes/markdown";
+import { renderNoteToPdf } from "@/lib/journal/notes/markdown-pdf";
 import type { Note, NoteFolder } from "@/lib/journal/notes/note-types";
 import {
   deleteNote,
@@ -285,6 +288,19 @@ export function NoteEditor({
             title="Print — choose &quot;Save as PDF&quot; in the dialog"
           >
             <Printer className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={() => {
+              const doc = renderNoteToPdf(title, parseMarkdown(content));
+              doc.save(`${(title || "note").trim()}.pdf`);
+            }}
+            aria-label="Download as PDF"
+            title="Download a real PDF, not a browser print"
+          >
+            <Download className="size-3.5" />
           </Button>
           {!deleted && (
             <Button
