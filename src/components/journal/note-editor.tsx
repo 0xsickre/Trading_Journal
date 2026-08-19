@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 import { MarkdownView } from "@/components/journal/markdown-view";
 import { parseMarkdown } from "@/lib/journal/notes/markdown";
 import { renderNoteToPdf } from "@/lib/journal/notes/markdown-pdf";
-import type { Note, NoteFolder } from "@/lib/journal/notes/note-types";
+import { tradeLinkPatch, type Note, type NoteFolder } from "@/lib/journal/notes/note-types";
 import {
   deleteNote,
   purgeNote,
@@ -217,7 +217,7 @@ export function NoteEditor({
         <Select
           value={note.position_id ?? UNFILED}
           onValueChange={(v) =>
-            patch({ position_id: v === UNFILED ? null : v })
+            patch(tradeLinkPatch(note, folders, v === UNFILED ? null : v))
           }
           disabled={deleted || pending}
         >

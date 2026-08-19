@@ -4,7 +4,10 @@ import {
   noteInScope,
   parseScopeKey,
   scopeKey,
+  tradeLinkPatch,
+  tradeNotesFolderId,
   type Note,
+  type NoteFolder,
   type NoteScope,
 } from "./note-types";
 
@@ -84,5 +87,55 @@ describe("defaultNoteTitle", () => {
     // regardless of the machine's own timezone.
     expect(defaultNoteTitle("2026-01-01")).toBe("1 Jan 2026");
     expect(defaultNoteTitle("2026-12-31")).toBe("31 Dec 2026");
+  });
+});
+
+const folder = (over: Partial<NoteFolder> = {}): NoteFolder => ({
+  id: "f1",
+  name: "Trade Notes",
+  template_text: null,
+  sort_order: 0,
+  icon: null,
+  ...over,
+});
+
+describe("tradeNotesFolderId", () => {
+  it("finds the seeded folder by its exact name", () => {
+    const folders = [folder({ id: "a", name: "Weekly Review" }), folder({ id: "b" })];
+    expect(tradeNotesFolderId(folders)).toBe("b");
+  });
+
+  it("returns null when the folder was renamed or deleted, rather than guessing", () => {
+    expect(tradeNotesFolderId([folder({ name: "Trades I renamed" })])).toBeNull();
+    expect(tradeNotesFolderId([])).toBeNull();
+  });
+});
+
+describe("tradeLinkPatch", () => {
+  const folders = [folder()];
+
+  it("bundles folder_id into the same patch when an unfiled note is linked to a trade", () => {
+    expect(tradeLinkPatch(note({ folder_id: null }), folders, "trade-1")).toEqual({
+      position_id: "trade-1",
+      folder_id: "f1",
+    });
+  });
+
+  it("leaves folder_id untouched when the note is already filed somewhere", () => {
+    expect(tradeLinkPatch(note({ folder_id: "other-folder" }), folders, "trade-1")).toEqual({
+      position_id: "trade-1",
+    });
+  });
+
+  it("does not touch folder_id when unlinking a trade", () => {
+    expect(tradeLinkPatch(note({ folder_id: null }), folders, null)).toEqual({
+      position_id: null,
+    });
+  });
+
+  it("still sets position_id when the Trade Notes folder does not exist", () => {
+    expect(tradeLinkPatch(note({ folder_id: null }), [], "trade-1")).toEqual({
+      position_id: "trade-1",
+    });
   });
 });

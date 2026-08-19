@@ -77,6 +77,37 @@ export function defaultNoteTitle(dayKey: string): string {
   return format(parseISO(dayKey), "d MMM yyyy");
 }
 
+/**
+ * The seeded "Trade Notes" folder, found by name.
+ *
+ * Fragile by design: the folder is an ordinary row with no `is_system` flag,
+ * so a rename or delete is possible. `null` here means the caller falls back
+ * to doing nothing extra — never recreates the folder, never throws.
+ */
+export function tradeNotesFolderId(folders: readonly NoteFolder[]): string | null {
+  return folders.find((f) => f.name === "Trade Notes")?.id ?? null;
+}
+
+/**
+ * The patch to send when a note's trade link changes.
+ *
+ * Bundles `folder_id` into the SAME patch as `position_id` — one server call,
+ * not a race between two — but only when a note that has no folder yet is
+ * being linked to a real trade. A note already filed somewhere is left there;
+ * unlinking a trade (`newPositionId === null`) never touches the folder.
+ */
+export function tradeLinkPatch(
+  note: Pick<Note, "folder_id">,
+  folders: readonly NoteFolder[],
+  newPositionId: string | null,
+): { position_id: string | null; folder_id?: string } {
+  if (newPositionId == null || note.folder_id != null) {
+    return { position_id: newPositionId };
+  }
+  const folderId = tradeNotesFolderId(folders);
+  return folderId ? { position_id: newPositionId, folder_id: folderId } : { position_id: newPositionId };
+}
+
 /** Whether a note belongs in the given scope. Trash is exclusive on purpose. */
 export function noteInScope(note: Note, scope: NoteScope): boolean {
   const deleted = note.deleted_at != null;
