@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TrackerStageSection, type TrackerDayData } from "./tracker-checklist";
 import type { TrackerRule } from "@/lib/journal/tracker-types";
@@ -11,9 +11,34 @@ import type { TrackerRule } from "@/lib/journal/tracker-types";
  * the day can still be checked that the database will then refuse.
  */
 
-const setCheckinMock = vi.fn();
+/**
+ * Returns what the real action returns, and that is not pedantry.
+ *
+ * A bare `vi.fn()` answers `undefined`, and the component does
+ * `const res = await setCheckin(...); if (!res.ok)` — so every click threw a
+ * TypeError inside the `useTransition` callback. The assertions still passed,
+ * because they only ask whether the mock was CALLED and the call happens before
+ * the throw. What never ran was everything after it: no `router.refresh()`, no
+ * rollback on failure, and the transition ending through a rejection instead of
+ * normally.
+ *
+ * So the test claiming "clicking Met actually saves" was in fact exercising a
+ * crash, and the timing of that crash — not the component — decided when
+ * `pending` cleared and the buttons came back. That is the kind of setup whose
+ * behaviour changes under load.
+ */
+type SetCheckinResult = { ok: true } | { ok: false; error: string };
+
+const setCheckinMock = vi.fn<
+  (
+    ruleId: string,
+    reportDate: string,
+    checked: boolean | null,
+  ) => Promise<SetCheckinResult>
+>(async () => ({ ok: true }));
+
 vi.mock("@/app/(app)/daily/tracker-actions", () => ({
-  setCheckin: (...a: unknown[]) => setCheckinMock(...a),
+  setCheckin: (...a: Parameters<typeof setCheckinMock>) => setCheckinMock(...a),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
@@ -91,10 +116,20 @@ describe("a locked day removes the control, not just disables it", () => {
         data={data({ rules: R, answers: {}, locked: false })}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Met" }));
+    const met = () => screen.getByRole("button", { name: "Met" });
+
+    await user.click(met());
     expect(setCheckinMock).toHaveBeenCalledWith("r1", "2026-04-06", true);
 
-    await user.click(screen.getByRole("button", { name: "Met" }));
+    // The control disables itself while the save is in flight, and userEvent
+    // does NOTHING to a disabled button — silently, without an error. Clicking
+    // again before the transition settles therefore lands on a dead control,
+    // and the assertion below fails reporting a toggle bug that is really a
+    // timing one. Waiting for the button to come back is also what a person
+    // does, so the test now describes the same sequence they would perform.
+    await waitFor(() => expect(met()).toBeEnabled());
+
+    await user.click(met());
     expect(setCheckinMock).toHaveBeenCalledWith("r1", "2026-04-06", null);
   });
 
