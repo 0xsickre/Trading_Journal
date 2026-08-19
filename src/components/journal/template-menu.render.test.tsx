@@ -32,9 +32,23 @@ const base = {
   onDelete: noop,
 };
 
+/**
+ * Open the menu, and do not return until it is actually on screen.
+ *
+ * The wait is not defensive padding. Radix portals the content and mounts it
+ * through `Presence`, so it is not guaranteed to be in the DOM at the instant
+ * the click resolves — and three tests below assert that something is ABSENT
+ * from the open menu. A `queryBy…().not.toBeInTheDocument()` cannot tell "the
+ * menu is open and the item is correctly missing" from "the menu never opened",
+ * so without this line those tests pass either way and prove nothing.
+ *
+ * Waiting for the menu itself rather than for each item keeps that guarantee in
+ * one place, and gives the positive assertions the same footing for free.
+ */
 const open = async (label = /Layout|Morning check|Deep dive/) => {
   const user = userEvent.setup({ delay: null });
   await user.click(screen.getByRole("button", { name: label }));
+  await screen.findByRole("menu");
   return user;
 };
 
