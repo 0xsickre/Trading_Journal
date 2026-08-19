@@ -2,12 +2,17 @@ import {
   getNoteFolders,
   getNoteTags,
   getNotes,
+  purgeExpiredNotes,
 } from "@/lib/journal/notes/queries";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { NotebookWorkbench } from "@/components/journal/notebook-workbench";
 import { PageHeader } from "@/components/app/page-header";
 
 export default async function NotebookPage() {
+  // Before the read, not inside it: getNotes() must see the state AFTER
+  // housekeeping, the same ordering ensureDefaults() needs on the dashboard.
+  await purgeExpiredNotes();
+
   const [folders, notes, tags, trades] = await Promise.all([
     getNoteFolders(),
     getNotes(),
