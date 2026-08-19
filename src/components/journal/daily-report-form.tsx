@@ -266,11 +266,9 @@ export function DailyReportForm({
           and hiding them would quietly drop rules from the denominator on
           exactly the days discipline matters most. */}
       <TrackerStageSection stage="prepare" data={tracker} />
-      <TrackerStageSection
-        stage="trade"
-        data={tracker}
-        title="Trading · checklist"
-      />
+      {/* Boxed, unlike the other two: this is the biggest stage by far and a
+          card keeps six rules from reading as a run-on of the section above. */}
+      <TrackerStageSection stage="trade" data={tracker} boxed />
 
       <Card>
         <CardHeader>

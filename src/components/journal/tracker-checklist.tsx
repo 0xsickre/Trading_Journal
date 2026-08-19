@@ -250,6 +250,23 @@ export type TrackerDayData = {
 };
 
 /**
+ * Headings for the three stages on the daily check-in.
+ *
+ * Deliberately NOT `STAGE_LABELS` from `tracker-types.ts`. Those read
+ * "Priprema" / "Trgovanje" / "Osvrt" and serve the Settings screen, where the
+ * rules themselves are written in Serbian. This page's chrome is English
+ * ("Before you enter", "Impulse control", "How it exited"), and a Serbian
+ * heading over an English section reads as a bug rather than as bilingualism.
+ * Two maps because there are two audiences — if you ever merge them, merge the
+ * screens' languages first.
+ */
+const STAGE_HEADINGS: Record<TrackerStage, string> = {
+  prepare: "Prepare",
+  trade: "Trade",
+  reflect: "Reflect",
+};
+
+/**
  * The rules of one stage, for embedding inside the matching daily-report card.
  *
  * Renders nothing when the stage is empty, so a card the user has no rules for
@@ -262,12 +279,21 @@ export type TrackerDayData = {
 export function TrackerStageSection({
   stage,
   data,
-  title,
+  boxed,
 }: {
   stage: TrackerStage;
   data: TrackerDayData;
-  /** Set when the section stands alone rather than inside a card of its own. */
-  title?: string;
+  /**
+   * Render inside a `<Card>` instead of as a bare block under a rule.
+   *
+   * This replaced a `title?: string` that chose the WRAPPER and the TEXT at
+   * once. Both call sites wanting a bare block therefore passed no title and
+   * fell through to a hardcoded "Process checklist" — so that one string was
+   * printed twice on the same page, over `prepare` and again over `reflect`,
+   * naming neither. Splitting the two jobs makes that unrepeatable: the heading
+   * is always the stage's own, and this prop only picks the box.
+   */
+  boxed?: boolean;
 }) {
   const inStage = data.rules.filter((r) => r.stage === stage);
   if (inStage.length === 0) return null;
@@ -299,11 +325,11 @@ export function TrackerStageSection({
     </div>
   );
 
-  if (title) {
+  if (boxed) {
     return (
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">{title}</CardTitle>
+          <CardTitle className="text-base">{STAGE_HEADINGS[stage]}</CardTitle>
         </CardHeader>
         <CardContent>{rows}</CardContent>
       </Card>
@@ -312,7 +338,7 @@ export function TrackerStageSection({
 
   return (
     <div className="space-y-2 border-t pt-4">
-      <p className="text-sm font-medium">Process checklist</p>
+      <p className="text-sm font-medium">{STAGE_HEADINGS[stage]}</p>
       {rows}
     </div>
   );

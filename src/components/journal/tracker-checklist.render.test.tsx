@@ -223,3 +223,38 @@ describe("auto rules show a verdict but never a manual control", () => {
     expect(screen.getByText(/No limit set/)).toBeInTheDocument();
   });
 });
+
+describe("each stage names itself", () => {
+  /**
+   * The heading used to be chosen by a `title` prop that ALSO chose the card
+   * wrapper, so the two stages rendered bare both fell through to a hardcoded
+   * "Process checklist" — one string over `prepare` and the same string again
+   * over `reflect`, on one page, naming neither.
+   */
+  const ofStage = (stage: TrackerRule["stage"]) =>
+    data({ rules: [rule({ id: `r-${stage}`, text: `Rule for ${stage}`, stage })] });
+
+  it.each([
+    ["prepare", "Prepare"],
+    ["trade", "Trade"],
+    ["reflect", "Reflect"],
+  ] as const)("labels the %s stage %s", (stage, heading) => {
+    render(<TrackerStageSection stage={stage} data={ofStage(stage)} />);
+    expect(screen.getByText(heading)).toBeInTheDocument();
+    expect(screen.queryByText("Process checklist")).not.toBeInTheDocument();
+  });
+
+  it("KEEPS THE HEADING WHEN BOXED — the prop picks the wrapper, never the words", () => {
+    // The whole point of splitting `title` into `boxed`: a caller can no longer
+    // hand one stage another stage's name, or two stages the same name.
+    render(<TrackerStageSection stage="trade" data={ofStage("trade")} boxed />);
+    expect(screen.getByText("Trade")).toBeInTheDocument();
+  });
+
+  it("renders nothing at all for a stage with no rules", () => {
+    const { container } = render(
+      <TrackerStageSection stage="reflect" data={ofStage("prepare")} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+});
