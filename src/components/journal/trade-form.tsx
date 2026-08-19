@@ -48,7 +48,11 @@ import {
   fmtSlippagePts,
   fmtSlippageR,
 } from "@/lib/journal/entry-slippage";
-import { exitEfficiencyFromTrade, fmtExitEfficiencyPct } from "@/lib/journal/exit-efficiency";
+import {
+  exitEfficiencyFromTrade,
+  fmtExitEfficiencyPct,
+  plannedRewardFromTrade,
+} from "@/lib/journal/exit-efficiency";
 import { excursionFromTrade } from "@/lib/journal/excursion";
 import { fmtMoney, fmtR, pnlClass } from "@/lib/journal/format";
 import {
@@ -520,14 +524,22 @@ export function TradeForm({
     // silently moved its own grading baseline instead of grading against the
     // plan as it stood when the trade was taken (see `plannedRewardFromTrade`
     // in `exit-efficiency.ts` for why stored wins on purpose).
-    const targetAttainment = exitEfficiencyFromTrade({
+    // One row literal, read twice. The attainment percentage and the planned
+    // baseline printed next to it must never disagree about WHICH plan is being
+    // graded — building the row once is what makes that structurally true.
+    const attainmentRow = {
       planned_rr: fields.planned_rr,
       direction: dir || null,
       entry_price: pe,
       stop_price: stop,
       target_price: pt,
       stats: { realized_r: r },
-    } as unknown as TradeRow);
+    } as unknown as TradeRow;
+    const targetAttainment = exitEfficiencyFromTrade(attainmentRow);
+    // The planned baseline on its own. `exitEfficiencyFromTrade` returns null
+    // for three different reasons — no plan, a plan too small to divide by, and
+    // a trade that has not closed — and the line below has to tell them apart.
+    const plannedReward = plannedRewardFromTrade(attainmentRow);
 
     return {
       avgEntry,
@@ -549,6 +561,7 @@ export function TradeForm({
       slippage,
       plannedEntry: pe,
       targetAttainment,
+      plannedReward,
     };
     // `fx.rate` je primitiv i menja se sa instrumentom — bez njega u listi
     // pregled bi zadržao novac izračunat po starom kursu posle promene simbola,
@@ -914,17 +927,25 @@ export function TradeForm({
                             }
                           : undefined
                       }
-                      // The playbook's own A+ definition, next to the grade it
-                      // grades. An A+ label that changes nothing about size or
-                      // management is decoration; having the criterion in front
-                      // of you while you pick the grade is what makes it a
-                      // judgement instead of a mood.
+                      // Two notes, one slot. On the plan tab: the playbook's own
+                      // A+ definition, next to the grade it grades. An A+ label
+                      // that changes nothing about size or management is
+                      // decoration; having the criterion in front of you while
+                      // you pick the grade is what makes it a judgement instead
+                      // of a mood. On the execution tab: what the plan promised
+                      // against what the exit delivered.
                       groupNote={
                         tab.id === "plan" &&
                         group.id === "setup" &&
-                        activeBook?.a_plus_criteria
-                          ? `A+ for ${activeBook.name}: ${activeBook.a_plus_criteria}`
-                          : null
+                        activeBook?.a_plus_criteria ? (
+                          `A+ for ${activeBook.name}: ${activeBook.a_plus_criteria}`
+                        ) : tab.id === "execution" && group.id === "outcome" ? (
+                          <PlanVsRealized
+                            planned={metrics.plannedReward}
+                            realized={metrics.r}
+                            efficiency={metrics.targetAttainment}
+                          />
+                        ) : null
                       }
                       fieldHints={
                         tab.id === "plan" &&
@@ -1220,6 +1241,58 @@ function Metric({
   );
 }
 
+/**
+ * What you planned to make, against what you made — under the group that asks
+ * how the trade exited.
+ *
+ * The contrast already existed, but only as a `title` tooltip on the summary
+ * bar's "Target attainment": a number you have to hover to learn is a number
+ * nobody reads. It sits in `outcome` rather than becoming a tenth `<Metric>`
+ * because that bar is a `flex-wrap` row inside a fixed footer — a tenth entry
+ * wraps and the bar grows over the form — and because this is a judgement about
+ * the exit, which is what the group is named for.
+ *
+ * THE THREE NULLS ARE NOT THE SAME NULL, and that is the whole design.
+ * `exitEfficiencyFromTrade` returns null when there is no plan, when the plan is
+ * too small to divide by, and when the trade has not closed. Rendering "—%" for
+ * all three would tell a trader still holding a position that they achieved
+ * nothing of their target, which is a verdict on a trade that has not finished.
+ * So an open trade says so in words, and a plan too small to grade shows both
+ * R figures with no percentage rather than a fabricated one.
+ */
+function PlanVsRealized({
+  planned,
+  realized,
+  efficiency,
+}: {
+  planned: number | null;
+  realized: number | null | undefined;
+  efficiency: { pct: number } | null;
+}) {
+  // No plan at all — there is no contrast to draw, so the line does not appear.
+  if (planned == null) return null;
+
+  const plannedTxt = `${planned.toFixed(2)}R`;
+
+  if (realized == null || Number.isNaN(realized)) {
+    return (
+      <span>
+        Planned {plannedTxt} → <span className="italic">not closed yet</span>
+      </span>
+    );
+  }
+
+  return (
+    <span>
+      Planned {plannedTxt} →{" "}
+      <span className={`font-medium ${pnlClass(realized)}`}>
+        {realized.toFixed(2)}R realized
+      </span>
+      {efficiency && ` · ${fmtExitEfficiencyPct(efficiency.pct)} of target`}
+    </span>
+  );
+}
+
 function AdvancedSection({ children }: { children: ReactNode }) {
   return (
     <details className="group rounded-lg border bg-muted/20">
@@ -1273,7 +1346,13 @@ function FormGroupSection({
   /** What the chosen risk % is worth in money — the number that makes you look twice. */
   riskNote?: string | null;
   /** A line of context for the whole group, shown under its fields. */
-  groupNote?: string | null;
+  /**
+   * A note under a group's fields. `ReactNode`, not `string`, because the
+   * plan-vs-realized line under "How it exited" colours the realized half —
+   * see `PlanVsRealized`. The `<p>` this used to render became a `<div>` for
+   * the same reason: a paragraph may not contain block content.
+   */
+  groupNote?: ReactNode;
   nested?: boolean;
 }) {
   const entry = n(String(fields.entry_price ?? ""));
@@ -1353,7 +1432,7 @@ function FormGroupSection({
         <p className="text-xs text-muted-foreground">{riskNote}</p>
       )}
       {groupNote && (
-        <p className="text-xs text-muted-foreground">{groupNote}</p>
+        <div className="text-xs text-muted-foreground">{groupNote}</div>
       )}
       {onAddEntryFill && group.id === "risk_plan" && (
         <Button type="button" variant="outline" size="sm" onClick={onAddEntryFill}>

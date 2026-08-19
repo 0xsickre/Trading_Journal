@@ -202,6 +202,128 @@ describe("target attainment (W4 — a second, looser implementation)", () => {
   });
 });
 
+describe("plan vs realized, under 'How it exited'", () => {
+  /**
+   * The whole point of the line is that ONE null has three causes. These four
+   * tests are one per state; if they ever collapse into "shows a percentage",
+   * the distinction the component exists for has been lost.
+   *
+   * Asserted through `parentElement.textContent` rather than a single
+   * `getByText`, because the realized half lives in its own coloured `<span>` —
+   * so the sentence is split across elements by construction.
+   */
+  const line = (anchor: string) => screen.getByText(anchor).parentElement!;
+
+  it("reads planned, realized and the percentage on a closed trade", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        initial={baseInitial({ executions: twoFillExecutions() })}
+      />,
+    );
+    await goToExecutionTab(user);
+    // The fixture targets 110 against a 10-point stop — a 1R plan — and the
+    // exit fills at 120, so the trade BEAT its target. Over 100% is a real
+    // reading, not an error, which is why nothing here clamps it.
+    expect(line("2.00R realized").textContent).toBe(
+      "Planned 1.00R → 2.00R realized · 200% of target",
+    );
+  });
+
+  it("GRADES AGAINST THE STORED PLAN here too, not a live recompute", async () => {
+    // Same trap as the metric above, one line below it: live geometry says
+    // (200−100)/(100−90) = 10R, the stored plan says 2R. Reading
+    // `metrics.plannedRR` instead of `plannedRewardFromTrade` would print
+    // "Planned 10.00R" and reintroduce the defect a metric was already fixed for.
+    const user = userEvent.setup({ delay: null });
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        initial={baseInitial({
+          fields: {
+            instrument: "EURUSD",
+            direction: "Long",
+            entry_price: "100",
+            stop_price: "90",
+            target_price: "200",
+            planned_rr: "1:2",
+          },
+          executions: twoFillExecutions(),
+        })}
+      />,
+    );
+    await goToExecutionTab(user);
+    expect(line("2.00R realized").textContent).toBe(
+      "Planned 2.00R → 2.00R realized · 100% of target",
+    );
+  });
+
+  it("SAYS THE TRADE IS OPEN rather than showing it achieved nothing", async () => {
+    // A missing realized R is not a zero. "—%" here would tell someone still
+    // holding a position that they hit none of their target.
+    const user = userEvent.setup({ delay: null });
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        initial={baseInitial({
+          status: "open",
+          executions: [
+            {
+              side: "entry",
+              price: 100,
+              qty: 1,
+              executed_at: "2026-04-01T13:00:00Z",
+              fee: 0,
+              swap_funding: 0,
+            },
+          ],
+        })}
+      />,
+    );
+    await goToExecutionTab(user);
+    expect(line("not closed yet").textContent).toBe(
+      "Planned 1.00R → not closed yet",
+    );
+    expect(screen.queryByText(/of target/)).not.toBeInTheDocument();
+  });
+
+  it("shows both figures but NO percentage when the plan is too small to divide by", async () => {
+    // Below MIN_PLANNED_REWARD_R the metric above hides entirely. The two R
+    // figures are still true and still worth showing; only the ratio is not.
+    const user = userEvent.setup({ delay: null });
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        initial={baseInitial({
+          fields: {
+            instrument: "EURUSD",
+            direction: "Long",
+            entry_price: "100",
+            stop_price: "90",
+            target_price: "110",
+            planned_rr: "1:0.05",
+          },
+          executions: twoFillExecutions(),
+        })}
+      />,
+    );
+    await goToExecutionTab(user);
+    expect(line("2.00R realized").textContent).toBe(
+      "Planned 0.05R → 2.00R realized",
+    );
+    expect(screen.queryByText(/of target/)).not.toBeInTheDocument();
+  });
+});
+
 describe("Gross → Net (rejected candidate, verified correct — not W)", () => {
   it("grossPl − netPl always equals Fees + Swap, by construction of net_pl in position-stats.ts", async () => {
     const user = userEvent.setup({ delay: null });
