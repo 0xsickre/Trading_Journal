@@ -20,6 +20,17 @@ export type OpenPosition = {
 };
 
 function numOrNull(v: unknown): number | null {
+  // `Number(null)` and `Number("")` are BOTH 0, and 0 is a value the database
+  // refuses to store — `time_stop_days` carries `CHECK (… IS NULL OR … > 0)`.
+  // So every "of 0" that ever reached the screen was manufactured here: a
+  // position with no time stop read as one with a zero-day stop, which is past
+  // due on its first day, which is why every open position wore an amber
+  // "Past time stop" badge it had not earned.
+  //
+  // `undefined` never had the problem (`Number(undefined)` is NaN), and that is
+  // exactly why the tests missed it — fixtures omit the key, while
+  // `select("*")` returns it present-and-null.
+  if (v == null || v === "") return null;
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : null;
 }

@@ -137,6 +137,23 @@ describe("openPositionsOn", () => {
     expect(open[0].pastTimeStop).toBe(false);
   });
 
+  it("TREATS AN EXPLICIT null THE SAME AS AN ABSENT KEY, which is the shape production sends", () => {
+    // The test above passed for two years while every open position on screen
+    // wore a false "Past time stop" badge, because `held()` OMITS the key when
+    // no `extra` is given: `Number(undefined)` is NaN and coerces to null, but
+    // `Number(null)` is 0 and coerces to a zero-day stop. `trades.ts` uses
+    // `select("*")`, so the column arrives present-and-null — this path.
+    for (const empty of [null, ""]) {
+      const open = openPositionsOn(
+        [held("a", "2026-01-01", undefined, { time_stop_days: empty } as Partial<TradeRow>)],
+        "2026-03-04",
+        tzOf,
+      );
+      expect(open[0].timeStopDays).toBeNull();
+      expect(open[0].pastTimeStop).toBe(false);
+    }
+  });
+
   it("sorts oldest first — closest to a decision, not last on the page", () => {
     const rows = [held("new", "2026-03-04"), held("old", "2026-03-02")];
     expect(openPositionsOn(rows, "2026-03-05", tzOf).map((p) => p.id)).toEqual([
