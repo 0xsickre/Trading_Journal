@@ -1,4 +1,7 @@
+import { computeStats, winRateOf, type RealizedTrade } from "./analytics";
+import type { BreakevenRange } from "./breakeven";
 import type { EnrichedTrade } from "./enriched-trade";
+import { bucketByPeriod, type PeriodRow } from "./period-stats";
 import { isInterference, type PositionCheckin } from "./position-checkin";
 import { weekDayKeys, weekEndOfWeekStart } from "./weekly-review";
 
@@ -31,6 +34,31 @@ export type WeekRecap = {
   interferedPositions: number;
   /** Positions whose thesis was recorded as weakened or invalidated. */
   thesisSlippedPositions: number;
+
+  /*
+   * The four below are MEASUREMENTS, and the distinction is the reason they are
+   * allowed here at all.
+   *
+   * The header above forbids a grade or a verdict, and that still stands: the
+   * week's letter is the trader's to give, in `week_grade`. A win rate is not a
+   * verdict — it is the same counting as `wins` and `losses`, expressed as a
+   * ratio. Nothing here says whether the week was good.
+   *
+   * All four are `null` when the week has nothing to divide by, never 0. A week
+   * with no closed trades has no win rate; printing 0 % would report a result
+   * nobody produced.
+   */
+
+  /** Share of decided trades that won. Null when none were decided. */
+  winRate: number | null;
+  /** Gross profit over gross loss. Null with no losses, `Infinity` with no loss at all. */
+  profitFactor: number | null;
+  /** Mean R across trades that carry one. */
+  avgR: number | null;
+  /** Mean R per trade — the same figure the dashboard calls expectancy. */
+  expectancy: number | null;
+  /** How many trades `expectancy` averaged over; 0 means it is not a reading. */
+  expectancySample: number;
 };
 
 /**
@@ -47,6 +75,7 @@ export function buildWeekRecap(
   checkins: readonly PositionCheckin[],
   reportDates: ReadonlySet<string>,
   weekStart: string,
+  range?: BreakevenRange,
 ): WeekRecap {
   const weekEnd = weekEndOfWeekStart(weekStart);
   const inWeek = trades.filter(
@@ -64,16 +93,62 @@ export function buildWeekRecap(
       slipped.add(c.position_id);
   }
 
+  const wins = inWeek.filter((t) => t.outcome === "win").length;
+  const losses = inWeek.filter((t) => t.outcome === "loss").length;
+
+  // Delegated, not reimplemented — the same function the dashboard and the day
+  // card read. `range` is the one the caller already enriched with, so the
+  // classification behind `profitFactor` cannot disagree with the `wins` and
+  // `losses` counted a line above from `outcome`.
+  const stats = computeStats(
+    inWeek.map((t) => t.trade),
+    "net",
+    range,
+  );
+
   return {
     closed: inWeek.length,
     net: inWeek.reduce((s, t) => s + t.pnl, 0),
-    wins: inWeek.filter((t) => t.outcome === "win").length,
-    losses: inWeek.filter((t) => t.outcome === "loss").length,
+    wins,
+    losses,
     weekendHolds: inWeek.filter((t) => t.weekendHold).length,
     journalledDays: weekDayKeys(weekStart).filter((d) => reportDates.has(d))
       .length,
     checkedPositions: checked.size,
     interferedPositions: interfered.size,
     thesisSlippedPositions: slipped.size,
+
+    // From the counts above rather than from `stats`, so the ratio can never
+    // contradict the two numbers printed beside it.
+    winRate: winRateOf(wins, losses),
+    profitFactor: stats.profitFactor,
+    avgR: stats.expectancySample > 0 ? stats.avgR : null,
+    expectancy: stats.expectancySample > 0 ? stats.expectancy : null,
+    expectancySample: stats.expectancySample,
   };
+}
+
+/**
+ * The week's seven days, in order, each with its trading or nothing.
+ *
+ * Exactly seven entries always — Monday through Sunday — because the strip that
+ * draws them is a week, and a week with three traded days is still a week. A
+ * day that saw no trade is `null`, NOT a zero-filled row: "did not trade" and
+ * "traded to a flat result" are different facts, and only one of them is worth
+ * a reader's attention.
+ *
+ * Uses `bucketByPeriod`, the same function `/calendar` buckets its cells with,
+ * so a day cannot read one number here and another there.
+ */
+export function weekDayRows(
+  weekStart: string,
+  trades: readonly RealizedTrade[],
+  tzOf: (t: RealizedTrade) => string,
+  range?: BreakevenRange,
+): (PeriodRow | null)[] {
+  const byDay = new Map<string, PeriodRow>();
+  for (const row of bucketByPeriod([...trades], "day", tzOf, range)) {
+    byDay.set(row.key, row);
+  }
+  return weekDayKeys(weekStart).map((d) => byDay.get(d) ?? null);
 }

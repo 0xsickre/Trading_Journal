@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { WeeklyReviewForm } from "./weekly-review-form";
 import type { WeeklyReview } from "@/lib/journal/weekly-review";
 import type { WeekRecap } from "@/lib/journal/week-recap";
+import type { PeriodRow } from "@/lib/journal/period-stats";
 
 /**
  * Two things this file exists to pin, both of which are silent when broken:
@@ -64,9 +65,28 @@ function recap(over: Partial<WeekRecap> = {}): WeekRecap {
     checkedPositions: 6,
     interferedPositions: 2,
     thesisSlippedPositions: 1,
+    // Consistent with the counts above by construction: 3 of 4 decided = 75 %.
+    // A fixture whose ratio contradicted its own wins/losses would let the card
+    // print an impossible pair and still pass.
+    winRate: 75,
+    profitFactor: 2.4,
+    avgR: 0.9,
+    expectancy: 0.9,
+    expectancySample: 4,
     ...over,
   };
 }
+
+/** A week that traded Mon–Wed and sat out the rest — seven entries, four null. */
+const DAYS: (PeriodRow | null)[] = [
+  { key: "2026-01-05", net: 400, trades: 2 } as PeriodRow,
+  { key: "2026-01-06", net: -120, trades: 1 } as PeriodRow,
+  { key: "2026-01-07", net: 540, trades: 1 } as PeriodRow,
+  null,
+  null,
+  null,
+  null,
+];
 
 function form(props: Partial<Parameters<typeof WeeklyReviewForm>[0]> = {}) {
   return (
@@ -75,6 +95,7 @@ function form(props: Partial<Parameters<typeof WeeklyReviewForm>[0]> = {}) {
       weekStart={LAST}
       currentWeekStart={THIS}
       recap={recap()}
+      days={DAYS}
       currency="USD"
       {...props}
     />

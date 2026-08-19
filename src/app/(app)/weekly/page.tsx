@@ -6,7 +6,7 @@ import { getTradesWithStats } from "@/lib/journal/trades";
 import { getWeeklyReview } from "@/lib/journal/weekly-review-queries";
 import { toRealized } from "@/lib/journal/analytics";
 import { enrichTrades } from "@/lib/journal/enriched-trade";
-import { buildWeekRecap } from "@/lib/journal/week-recap";
+import { buildWeekRecap, weekDayRows } from "@/lib/journal/week-recap";
 import {
   sharedBreakevenRange,
 } from "@/lib/journal/breakeven";
@@ -70,12 +70,19 @@ export default async function WeeklyPage({
   // to exact zero rather than silently adopting one account's tolerance.
   const breakevenRange = sharedBreakevenRange(accounts);
 
+  const realized = toRealized(trades);
+
   const recap = buildWeekRecap(
-    enrichTrades(toRealized(trades), { tzOf, range: breakevenRange }),
+    enrichTrades(realized, { tzOf, range: breakevenRange }),
     checkins,
     new Set(reportDates),
     weekStart,
+    breakevenRange,
   );
+
+  // The same band and the same bucketing `/calendar` uses, so a day cannot read
+  // one number in the strip and another in the month grid.
+  const days = weekDayRows(weekStart, realized, tzOf, breakevenRange);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -90,6 +97,7 @@ export default async function WeeklyPage({
         weekStart={weekStart}
         currentWeekStart={currentWeekStart}
         recap={recap}
+        days={days}
         currency={currency}
       />
     </div>

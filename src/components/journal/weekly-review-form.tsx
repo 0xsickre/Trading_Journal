@@ -32,6 +32,7 @@ import {
   type WeeklyReview,
 } from "@/lib/journal/weekly-review";
 import type { WeekRecap } from "@/lib/journal/week-recap";
+import type { PeriodRow } from "@/lib/journal/period-stats";
 import {
   lockWeek,
   saveWeeklyReview,
@@ -60,6 +61,7 @@ export function WeeklyReviewForm({
   weekStart,
   currentWeekStart,
   recap,
+  days,
   currency,
 }: {
   review: WeeklyReview | null;
@@ -67,6 +69,8 @@ export function WeeklyReviewForm({
   /** The week containing today — the one that cannot be reviewed or sealed yet. */
   currentWeekStart: string;
   recap: WeekRecap;
+  /** Exactly seven, Monday-first; `null` where the day saw no trade. */
+  days: readonly (PeriodRow | null)[];
   currency: string;
 }) {
   const router = useRouter();
@@ -154,7 +158,7 @@ export function WeeklyReviewForm({
         </Badge>
       </div>
 
-      <WeekRecapCard recap={recap} currency={currency} />
+      <WeekRecapCard recap={recap} days={days} currency={currency} />
 
       {isRunningWeek && (
         <Alert>
@@ -308,9 +312,11 @@ export function WeeklyReviewForm({
  */
 function WeekRecapCard({
   recap,
+  days,
   currency,
 }: {
   recap: WeekRecap;
+  days: readonly (PeriodRow | null)[];
   currency: string;
 }) {
   return (
@@ -332,11 +338,96 @@ function WeekRecapCard({
           <Stat label="Touched" value={String(recap.interferedPositions)} />
           <Stat label="Thesis slipped" value={String(recap.thesisSlippedPositions)} />
           <Stat label="Held over a weekend" value={String(recap.weekendHolds)} />
+
+          {/* Measurements, not verdicts — see the note on `WeekRecap`. Every one
+              reads "—" rather than a zero when the week gave it nothing to
+              divide by, because a week with no closed trade has no win rate. */}
+          <Stat label="Win rate" value={fmtPct(recap.winRate)} />
+          <Stat label="Profit factor" value={fmtFactor(recap.profitFactor)} />
+          <Stat label="Avg R" value={fmtR(recap.avgR)} />
+          <Stat
+            label="Expectancy"
+            value={fmtR(recap.expectancy)}
+            tone={
+              recap.expectancy == null
+                ? undefined
+                : recap.expectancy > 0
+                  ? "up"
+                  : recap.expectancy < 0
+                    ? "down"
+                    : undefined
+            }
+          />
         </dl>
+
+        <WeekDayStrip days={days} currency={currency} />
       </CardContent>
     </Card>
   );
 }
+
+const fmtPct = (v: number | null) => (v == null ? "—" : `${v.toFixed(0)}%`);
+const fmtR = (v: number | null) => (v == null ? "—" : `${v.toFixed(2)}R`);
+
+/**
+ * Profit factor prints "∞" for a week with winners and no losers.
+ *
+ * The same three-way the day card already uses: `null` means there was nothing
+ * to divide, `Infinity` means the divisor was zero — which is a real and very
+ * good week, not missing data, and collapsing the two into one dash would hide
+ * a perfect week behind the same glyph as an empty one.
+ */
+const fmtFactor = (v: number | null) =>
+  v == null ? "—" : v === Infinity ? "∞" : v.toFixed(2);
+
+/**
+ * The week as seven days, in order.
+ *
+ * Always seven columns, Monday to Sunday, so the shape of the week is legible
+ * at a glance: three traded days in a row followed by four blanks looks like
+ * what it was. A day with no trade shows a dash — NOT a zero, which would claim
+ * a flat result was traded for.
+ */
+function WeekDayStrip({
+  days,
+  currency,
+}: {
+  days: readonly (PeriodRow | null)[];
+  currency: string;
+}) {
+  return (
+    <div className="mt-6 grid grid-cols-7 gap-1.5">
+      {days.map((row, i) => (
+        <div
+          key={DAY_LABELS[i]}
+          className={cn(
+            "rounded-md border px-1.5 py-2 text-center",
+            row == null && "opacity-50",
+            row != null && row.net > 0 && "border-emerald-600/40 bg-emerald-600/5",
+            row != null && row.net < 0 && "border-red-600/40 bg-red-600/5",
+          )}
+        >
+          <div className="text-[10px] text-muted-foreground">{DAY_LABELS[i]}</div>
+          <div
+            className={cn(
+              "mt-0.5 truncate text-xs font-medium tabular-nums",
+              row != null && row.net > 0 && "text-emerald-600 dark:text-emerald-500",
+              row != null && row.net < 0 && "text-red-600 dark:text-red-500",
+            )}
+          >
+            {row == null ? "—" : fmtMoney(row.net, currency)}
+          </div>
+          <div className="text-[10px] text-muted-foreground">
+            {row == null ? "" : row.trades === 1 ? "1 trade" : `${row.trades} trades`}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Monday-first, matching `weekDayKeys`. */
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
 function Stat({
   label,
