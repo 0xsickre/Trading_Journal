@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  arrayFieldNames,
   buildFormTabs,
   getAllFormFields,
   positionFieldNames,
@@ -129,5 +130,21 @@ describe("risk plan reads as the arithmetic", () => {
     expect(before("risk_pct", "position_size")).toBe(true);
     expect(before("stop_price", "position_size")).toBe(true);
     expect(before("target_price", "planned_rr")).toBe(true);
+  });
+});
+
+describe("mistake is a tags field, not a select", () => {
+  it("SITS IN arrayFieldNames, which is what reroutes it to a text[] column", () => {
+    // The whole Faza 2 change is one word in the field's `type`. Everything
+    // downstream — `buildPositionPatch` trimming into an array, the reports
+    // dimension splitting it, the grid searching it — follows from membership
+    // in this set. Asserting the set is asserting the route.
+    expect(arrayFieldNames()).toContain("mistake");
+  });
+
+  it("spans both columns so the picker has room for several chips", () => {
+    const mistake = getAllFormFields().find((f) => f.name === "mistake")!;
+    expect(mistake.type).toBe("tags");
+    expect(mistake.colSpan).toBe(2);
   });
 });

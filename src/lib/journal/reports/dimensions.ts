@@ -285,7 +285,10 @@ const tradeDimensions: Dimension[] = [
   // the derived `outcome` dimension below, and could contradict it without any
   // report noticing. Group by "Ishod" instead.
   column("exit_reason", "Exit Reason", "exit_reason"),
-  column("mistake", "Mistake", "mistake"),
+  // `text[]` od migracije `20260819120000_mistake_multi` — trejd sa dve greške
+  // stoji u oba reda, pa redovi NE sabiraju ukupan broj trejdova. Isto važi za
+  // tagove ispod i `tagColumn` je taj koji to saopštava.
+  tagColumn("mistake", "Mistake"),
   column("miss_reason", "Miss reason", "miss_reason"),
   column("status", "Status"),
   tagColumn("technical_tags", "Technical Tags"),

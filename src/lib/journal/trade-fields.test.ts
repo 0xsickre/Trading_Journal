@@ -59,6 +59,25 @@ describe("buildPositionPatch", () => {
     expect(patch.columns.technical_tags).toEqual(["Sweep"]);
   });
 
+  it("routes `mistake` through array coercion now that it is a text[] column", () => {
+    // One word in `form-config` (`type: "select"` → `"tags"`) moves this field
+    // into `arrayFieldNames()`, and everything downstream follows on its own.
+    // This asserts the routing actually changed rather than trusting it.
+    const patch = buildPositionPatch(
+      { mistake: [" Late entry ", "", "Moved stop"] },
+      DEFS,
+    );
+    expect(patch.columns.mistake).toEqual(["Late entry", "Moved stop"]);
+  });
+
+  it("REPLACES A LEFTOVER STRING WITH AN EMPTY ARRAY rather than sending it to a text[] column", () => {
+    // A form that has not reloaded since the migration, or a stale draft in
+    // localStorage, can still hold the old single-string shape. Postgres would
+    // reject it; the coercion turns it into "no mistake recorded" instead.
+    const patch = buildPositionPatch({ mistake: "Late entry" }, DEFS);
+    expect(patch.columns.mistake).toEqual([]);
+  });
+
   it("turns an empty string into null so a cleared field is really cleared", () => {
     const patch = buildPositionPatch({ macro_align: "", instrument: "" }, DEFS);
     expect(patch.custom.macro_align).toBeNull();

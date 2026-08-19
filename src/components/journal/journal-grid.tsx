@@ -311,7 +311,9 @@ export function JournalGrid({
       }
       if (search.trim()) {
         const q = search.toLowerCase();
-        const tagHay = ["technical_tags", "psychology_tags"]
+        // `mistake` je ovde od kad je `text[]`. Ranije nije bio pretraživ ni kao
+        // tekst — propust koji se video tek kad je postao niz kao ostali tagovi.
+        const tagHay = ["technical_tags", "psychology_tags", "mistake"]
           .flatMap((k) => {
             const v = t[k];
             return Array.isArray(v) ? v : [];

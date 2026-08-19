@@ -965,7 +965,7 @@ export type Database = {
           invalidation: string | null
           max_drawdown_price: number | null
           max_profit_price: number | null
-          mistake: string | null
+          mistake: string[]
           miss_reason: string | null
           missed_at: string | null
           needs_review: boolean
@@ -1007,7 +1007,7 @@ export type Database = {
           invalidation?: string | null
           max_drawdown_price?: number | null
           max_profit_price?: number | null
-          mistake?: string | null
+          mistake?: string[]
           miss_reason?: string | null
           missed_at?: string | null
           needs_review?: boolean
@@ -1049,7 +1049,7 @@ export type Database = {
           invalidation?: string | null
           max_drawdown_price?: number | null
           max_profit_price?: number | null
-          mistake?: string | null
+          mistake?: string[]
           miss_reason?: string | null
           missed_at?: string | null
           needs_review?: boolean

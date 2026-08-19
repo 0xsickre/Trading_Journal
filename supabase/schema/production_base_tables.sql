@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   planned_rr           text,
   position_size        numeric,
   exit_reason          text,
-  mistake              text,
+  mistake              text[]      NOT NULL DEFAULT '{}'::text[],
   status               text        NOT NULL DEFAULT 'open',
   source               text        NOT NULL DEFAULT 'manual',
   -- Namerno BEZ strani ključ na tj_import_batches: undo koji promaši poziciju

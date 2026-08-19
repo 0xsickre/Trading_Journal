@@ -121,6 +121,24 @@ describe("search matches instrument, notes and tags — not other fields", () =>
     expect(screen.getByText("EURUSD")).toBeInTheDocument();
     expect(screen.queryByText("XAUUSD")).not.toBeInTheDocument();
   });
+
+  it("FINDS A TRADE BY ITS MISTAKE, which was not searchable at all before", async () => {
+    // `mistake` was never in the haystack — not even while it was a plain
+    // string. Becoming a `text[]` put it alongside the other tag arrays, and
+    // the omission only became visible then. "Which trades did I move the stop
+    // on?" is the question the field exists to answer.
+    const tagged = [
+      mkTrade({ id: "t1", instrument: "EURUSD", mistake: ["Moved stop"] }),
+      mkTrade({ id: "t2", instrument: "XAUUSD", mistake: ["Late entry"] }),
+    ];
+    const user = userEvent.setup({ delay: null });
+    render(<JournalGrid trades={rowsOf(tagged)} accounts={[ACCOUNT]} />);
+    await user.type(screen.getByPlaceholderText(/Search notes/), "moved stop");
+
+    expect(screen.getByText(/1 of 2 trades/)).toBeInTheDocument();
+    expect(screen.getByText("EURUSD")).toBeInTheDocument();
+    expect(screen.queryByText("XAUUSD")).not.toBeInTheDocument();
+  });
 });
 
 describe("outcome filter classifies by EACH account's own breakeven band", () => {

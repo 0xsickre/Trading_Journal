@@ -285,7 +285,21 @@ const BASE_TABS: FormTab[] = [
         id: "psychology_notes",
         title: "Review",
         fields: [
-          { name: "mistake", label: "Mistake", type: "select", listKey: "mistake" },
+          {
+            // Više grešaka po trejdu. Jedan loš trejd retko ima jednu: ušlo se
+            // kasno JER se jurilo, pa se pomerio stop. Izbor između njih baca
+            // baš ono zbog čega polje postoji — koja se greška PONAVLJA.
+            //
+            // „None" se više ne nudi (deaktivirano u migraciji): prazan izbor
+            // već znači „bez greške", a chip „None" pored chipa „Late entry" je
+            // protivrečnost koju picker ne bi mogao da spreči.
+            name: "mistake",
+            label: "Mistake",
+            type: "tags",
+            listKey: "mistake",
+            colSpan: 2,
+            placeholder: "Late entry, Moved stop…",
+          },
           {
             name: "psychology_tags",
             label: "Psychology tags",

@@ -79,6 +79,27 @@ describe("trade column dimensions", () => {
     expect(bucketsOf(dim, t, dimCtx())).toEqual(["Sweep", "FVG", "MSS"]);
   });
 
+  it("COUNTS A TRADE UNDER EVERY MISTAKE IT MADE, not just the first", () => {
+    // The point of the `text[]` migration. Entering late BECAUSE you chased,
+    // then moving the stop, is three facts; forcing a choice between them threw
+    // away the only thing the field is for — which mistake REPEATS.
+    const t = one([{ mistake: ["Late entry", "Moved stop"] }]);
+    const dim = getDimension("mistake")!;
+    expect(dim.multiValue).toBe(true);
+    expect(bucketsOf(dim, t, dimCtx())).toEqual(["Late entry", "Moved stop"]);
+  });
+
+  it("buckets a clean trade as empty — 'None' is not a mistake", () => {
+    // The migration maps 'None' to `'{}'`, so a clean trade lands here and NOT
+    // in a "None" bucket. If it landed in one, `filters.ts` — which only drops
+    // `EMPTY_BUCKET` — would answer "trades WITH a mistake" with every clean
+    // trade in the book.
+    const t = one([{ mistake: [] }]);
+    expect(bucketsOf(getDimension("mistake")!, t, dimCtx())).toEqual([
+      EMPTY_BUCKET,
+    ]);
+  });
+
   it("resolves an account id to its name when one is supplied", () => {
     const t = one([{ accountId: "acc-9" }]);
     const ctx = dimCtx([], { accountNames: new Map([["acc-9", "FTMO 100k"]]) });

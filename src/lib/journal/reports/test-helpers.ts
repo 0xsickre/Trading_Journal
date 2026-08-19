@@ -20,6 +20,7 @@ export type TradeSpec = {
   status?: string;
   technicalTags?: string[];
   psychologyTags?: string[];
+  mistake?: string[];
   size?: number | null;
   swap?: number;
   fees?: number;
@@ -102,6 +103,9 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     instrument: spec.instrument ?? "EURUSD",
     technical_tags: spec.technicalTags ?? [],
     psychology_tags: spec.psychologyTags ?? [],
+    // `text[] NOT NULL DEFAULT '{}'` od migracije `mistake_multi` — prazan niz
+    // je ono što baza vraća za trejd bez greške, nikad null.
+    mistake: spec.mistake ?? [],
     planned_rr: spec.plannedRr ?? null,
     time_stop_days: spec.timeStopDays ?? null,
     thesis: spec.thesis ?? null,
