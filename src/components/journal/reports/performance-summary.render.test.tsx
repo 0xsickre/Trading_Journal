@@ -75,4 +75,38 @@ describe("PerformanceSummaryPanel — W3: the win-rate tile respects privacy mod
     );
     expect(screen.getByText(new RegExp(`at least ${DEFAULT_MIN_SAMPLE} trades`))).toBeInTheDocument();
   });
+
+  it("ONE qualifying category is not crowned both best AND worst", () => {
+    // `summarizeReport` sorts a list of one, so `best` and `worst` come back as
+    // the SAME row — and the four tiles would then state, of a single bucket,
+    // that it is the best, the worst, the most active and the highest win rate.
+    // Every claim derivable, none informative.
+    const lopsided = enrich([
+      ...Array.from({ length: 5 }, (_, i) => ({ id: `a${i}`, instrument: "EURUSD", net: 100, r: 1 })),
+      { id: "b0", instrument: "XAUUSD", net: -50, r: -1 },
+    ]);
+    const result = run(lopsided);
+    const summary = summarizeReport(result, "net_pnl");
+    expect(summary.qualifying).toBe(1);
+    // The engine still reports both — the refusal is a presentation decision,
+    // and this pins that the panel is the layer making it.
+    expect(summary.best).toBe(summary.worst);
+
+    render(
+      <PerformanceSummaryPanel
+        summary={summary}
+        metric={NET_PNL}
+        viewMode="dollars"
+        currency="USD"
+        equityBase={null}
+        minSample={DEFAULT_MIN_SAMPLE}
+      />,
+    );
+
+    expect(screen.queryByText(/^Best —/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Worst —/)).not.toBeInTheDocument();
+    expect(screen.getByText(/nothing to\s+rank it against/)).toBeInTheDocument();
+    // The one category is still named, so the panel is not simply blank.
+    expect(screen.getByText(/EURUSD/)).toBeInTheDocument();
+  });
 });

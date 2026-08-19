@@ -567,6 +567,10 @@ export function TradeForm({
       plannedRR,
       sizeSuggestion,
       riskAmount,
+      // Exposed so the risk note can tell a BUDGET from a CONSEQUENCE: with no
+      // stop on the form there is nothing that can be "hit", and the sentence
+      // has to stop claiming there is.
+      stop,
       totalFees,
       totalSwap,
       fees,
@@ -1012,11 +1016,21 @@ export function TradeForm({
                       // The percentage in money. A share of equity is an
                       // abstraction you can agree to without flinching; the same
                       // risk as a figure is what makes you re-check the stop.
+                      //
+                      // Two wordings, because before a stop is entered the
+                      // figure is a BUDGET and after it is a CONSEQUENCE. On a
+                      // blank form the old single sentence read "Risking $12.32
+                      // if the stop is hit" — naming the loss of a stop that
+                      // did not exist, on the screen where the plan is still
+                      // being written. The number was right (a share of
+                      // equity); the claim around it was not.
                       riskNote={
                         tab.id === "plan" &&
                         group.id === "risk_plan" &&
                         metrics.riskAmount != null
-                          ? `Risking ${fmtMoney(metrics.riskAmount, currency)} if the stop is hit.`
+                          ? metrics.stop != null
+                            ? `Risking ${fmtMoney(metrics.riskAmount, currency)} if the stop is hit.`
+                            : `Risk budget ${fmtMoney(metrics.riskAmount, currency)} — set a stop to commit to it.`
                           : null
                       }
                     />

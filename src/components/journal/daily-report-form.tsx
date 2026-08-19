@@ -244,9 +244,13 @@ export function DailyReportForm({
         {tracker.locked && (
           <Alert>
             <AlertDescription>
-              This day is locked {lockedAt && `(${lockedAt})`} and its journal no
-              longer changes. Trades stay editable — correcting P&amp;L is still
-              correcting a fact, but it does not move this day&apos;s rating.
+              {/* Explicit `{" "}` — see the same banner in
+                  `weekly-review-form.tsx`: the plain space written here did not
+                  reach the DOM and the sentence ran together at the bracket. */}
+              This day is locked {lockedAt && `(${lockedAt})`}{" "}
+              and its journal no longer changes. Trades stay editable —
+              correcting P&amp;L is still correcting a fact, but it does not move
+              this day&apos;s rating.
             </AlertDescription>
           </Alert>
         )}

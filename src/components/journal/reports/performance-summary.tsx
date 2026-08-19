@@ -39,6 +39,34 @@ export function PerformanceSummaryPanel({
     );
   }
 
+  /**
+   * One qualifying category is not a ranking.
+   *
+   * With a single eligible row, `summarizeReport` hands back the SAME row as
+   * `best` and as `worst` — it sorted a list of one — and the four cards below
+   * would then state, of one bucket, that it is both the best and the worst
+   * while "most active" and "highest win rate" name it a third and fourth
+   * time. Every claim is technically derivable and not one of them is
+   * informative: "best of one" says nothing that "the only one" does not.
+   *
+   * Same principle as the `qualifying === 0` branch above, one step along: that
+   * one refuses to crown a thin category, this one refuses to crown an
+   * unopposed one.
+   */
+  if (summary.qualifying === 1) {
+    const only = summary.best ?? summary.mostActive;
+    return (
+      <Card>
+        <CardContent className="p-4 text-sm text-muted-foreground">
+          Only one category clears {minSample} trades
+          {only ? ` (${only.bucket}, n=${only.n})` : ""}, so there is nothing to
+          rank it against. Split the book a different way, or widen the date
+          range, to get a comparison.
+        </CardContent>
+      </Card>
+    );
+  }
+
   const fmt = (v: number | null | undefined) =>
     formatMetric(
       metric(v ?? null, selected.unit, { currency, equityBase }),

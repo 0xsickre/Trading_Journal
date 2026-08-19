@@ -212,6 +212,18 @@ koji to isto računa.
 | Expectancy | `winRate × avgWinR + (1 − winRate) × avgLossR` | Računa se samo nad R populacijom — samo trejd sa stopom ima R |
 | Najbolji / najgori | Najveći i najmanji pojedinačni neto rezultat | |
 | Breakeven | Trejdovi unutar breakeven pojasa naloga | |
+| **R (svuda)** | `bruto poeni / (rizik u poenima × ulazna količina)` | **R je uvek BRUTO**, i ne prati net/gross prekidač — taj prekidač menja samo novac |
+
+**Zašto je R bruto, a novac može biti neto.** To su namerno dva različita pitanja. R meri **setup**: da
+li je cena otišla tamo gde je plan rekao, u odnosu na rizik koji je preuzet. Provizija i swap nisu
+svojstvo setupa nego cena držanja, i za swing knjigu su posebna stavka koju treba videti odvojeno —
+zato imaju svoj tajl (`Swap`) na `/reports` i zato postoji net/gross prekidač nad novcem.
+
+Posledica koju treba znati čitajući ekran: **trejd može biti gubitak u novcu i pozitivan u R-u.**
+Držan tri dana, cena je otišla tvojim putem za +0.03R, a carry je pojeo i to — neto minus. To nije
+nesaglasnost nego dva tačna odgovora na dva pitanja: setup je odradio svoje, držanje se nije
+isplatilo. `tj_position_stats` računa i `realized_r_net` za slučaj da neto R ikad zatreba, ali ga
+nijedan ekran namerno ne čita — jedan R po knjizi, da dva ne bi počela da se razilaze.
 
 **Breakeven pojas** je po nalogu (`breakeven_from`, `breakeven_to`, u valuti ili procentu). Scratch
 od ±20 $ nije ni dobitak ni gubitak, i izbacuje se iz win rate-a umesto da se broji kao gubitak —

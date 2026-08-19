@@ -630,6 +630,28 @@ describe("the risk is shown in money, not only as a percentage", () => {
     expect(screen.getByText(/Risking .*420/)).toBeInTheDocument();
   });
 
+  it("WITHOUT A STOP it is a budget, not a loss — nothing can be 'hit' yet", async () => {
+    // The blank-form bug: the note named the loss a stop would produce while no
+    // stop had been entered. The figure itself was always right (a share of
+    // equity), so the fix is the sentence around it, not the arithmetic.
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        accountEquity={{ "acc-1": 42_000 }}
+        initial={baseInitial({
+          status: "planned",
+          fields: { instrument: "EURUSD", risk_pct: "1%" },
+        })}
+      />,
+    );
+
+    expect(screen.queryByText(/if the stop is hit/)).not.toBeInTheDocument();
+    // Same number, honestly framed — the budget is still worth seeing early.
+    expect(screen.getByText(/Risk budget .*420/)).toBeInTheDocument();
+  });
+
   it("says nothing when no risk % has been chosen", async () => {
     render(
       <TradeForm

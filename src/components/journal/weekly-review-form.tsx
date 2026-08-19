@@ -180,9 +180,15 @@ export function WeeklyReviewForm({
         {locked && (
           <Alert>
             <AlertDescription>
-              This week is locked {lockedAt && `(${lockedAt})`} and no longer
-              changes. Trades stay editable — correcting P&amp;L is still
-              correcting a fact, but it does not move what you concluded here.
+              {/* `{" "}` and not a plain space before `and`: the space that was
+                  written there was swallowed on the way to the DOM, and the
+                  banner read "…22:00)and no longer changes". Explicit is the
+                  only spelling that survives both the JSX whitespace rules and
+                  a reformat. */}
+              This week is locked {lockedAt && `(${lockedAt})`}{" "}
+              and no longer changes. Trades stay editable — correcting P&amp;L is
+              still correcting a fact, but it does not move what you concluded
+              here.
             </AlertDescription>
           </Alert>
         )}

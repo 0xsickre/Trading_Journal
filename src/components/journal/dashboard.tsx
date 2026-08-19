@@ -1598,7 +1598,17 @@ export function Dashboard({
             value={dashboardMoney(stats.grossSum, metricCtx, viewMode)}
             cls={pnlClass(stats.grossSum)}
           />
-          <Stat label="Total R" value={fmtR(stats.totalR)} cls={pnlClass(stats.totalR)} />
+          {/* The basis, said where the number is read. R does not follow the
+              net/gross switch — that switch moves money only — and on a swing
+              book held through carry the two can disagree on a single trade.
+              Left undocumented, that reads as a bug rather than as the two
+              separate questions it is. See README § Novac i brojanje. */}
+          <Stat
+            label="Total R"
+            value={fmtR(stats.totalR)}
+            cls={pnlClass(stats.totalR)}
+            title="Sum of R over every trade that has a stop. R is always GROSS — it measures the setup against the risk taken, and does not follow the net/gross switch, which moves money only. A trade held through carry can therefore be a loss in money and positive in R."
+          />
           <Stat
             label="Avg R"
             value={fmtR(stats.avgR)}
