@@ -525,3 +525,38 @@ export async function deleteTrade(id: string) {
   revalidatePath("/", "layout");
   return { ok: true as const };
 }
+
+/** Same delete, many trades — one round trip, no explicit `user_id` filter (RLS-only, same convention as `deleteTrade`). */
+export async function bulkDeleteTrades(ids: string[]) {
+  if (ids.length === 0) return { ok: true as const, deleted: 0 };
+  const supabase = await createClient();
+  const { error, count } = await supabase
+    .from("tj_positions")
+    .delete({ count: "exact" })
+    .in("id", ids);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/journal");
+  revalidatePath("/", "layout");
+  return { ok: true as const, deleted: count ?? ids.length };
+}
+
+export type BulkTagKind = "technical" | "psychology" | "mistake";
+
+/**
+ * Appends `values` to whichever tag column `kind` maps to, across every id,
+ * deduped per row. Existing tags on each trade are kept — this is additive,
+ * never a replace.
+ */
+export async function bulkAddTag(ids: string[], kind: BulkTagKind, values: string[]) {
+  if (ids.length === 0 || values.length === 0) return { ok: true as const };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("tj_bulk_add_tag", {
+    p_ids: ids,
+    p_kind: kind,
+    p_values: values,
+  });
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/journal");
+  revalidatePath("/", "layout");
+  return { ok: true as const };
+}

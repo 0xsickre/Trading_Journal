@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   type ColumnDef,
+  type RowSelectionState,
   type SortingState,
   flexRender,
   getCoreRowModel,
@@ -17,6 +18,7 @@ import {
   Download,
   MoreHorizontal,
   Pencil,
+  Tag as TagIcon,
   Trash2,
   AlertTriangle,
   ExternalLink,
@@ -50,8 +52,18 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TagMultiSelect } from "@/components/journal/tag-multi-select";
 import { dimensionsByGroup, getDimension } from "@/lib/journal/reports/dimensions";
 import {
   classifyOutcome,
@@ -61,7 +73,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { moneyProvenance } from "@/lib/journal/money-provenance";
 import { cn } from "@/lib/utils";
-import type { Account, TradeRow } from "@/lib/journal/types";
+import type { Account, OptionsMap, TradeRow } from "@/lib/journal/types";
 import { fmtInTz } from "@/lib/journal/time";
 import { fmtMoney, fmtNum, fmtR, pnlClass } from "@/lib/journal/format";
 import { fmtSlippageR, slippageFromTrade } from "@/lib/journal/entry-slippage";
@@ -78,7 +90,13 @@ import {
   displayFieldValue,
   stringFieldValue,
 } from "@/lib/journal/field-values";
-import { deleteTrade, activateTrade } from "@/app/(app)/trades/actions";
+import {
+  deleteTrade,
+  activateTrade,
+  bulkDeleteTrades,
+  bulkAddTag,
+  type BulkTagKind,
+} from "@/app/(app)/trades/actions";
 import { setJournalHiddenColumns } from "@/app/(app)/journal/actions";
 import {
   hiddenToVisibility,
@@ -200,11 +218,29 @@ const COLUMN_LABELS: Record<string, string> = {
 
 const HIDEABLE_COLUMNS = Object.keys(COLUMN_LABELS);
 
+/**
+ * The three tag columns a bulk "Add tag" can target, and the option-list
+ * key(s) each one reads its values from — the same lookup `trade-form.tsx`
+ * uses for the per-trade pickers (`form-config.ts`), so a bulk-applied tag is
+ * never a value the single-trade form wouldn't also offer.
+ */
+const BULK_TAG_CATEGORIES: {
+  value: BulkTagKind;
+  label: string;
+  listKey?: string;
+  listKeys?: string[];
+}[] = [
+  { value: "technical", label: "Technical", listKey: "technical_tag" },
+  { value: "psychology", label: "Psychology", listKeys: ["emotion", "discipline"] },
+  { value: "mistake", label: "Mistake", listKey: "mistake" },
+];
+
 export function JournalGrid({
   trades,
   accounts,
   fieldDefs = [],
   hiddenColumns = [],
+  optionsMap = {},
 }: {
   trades: TradeRow[];
   accounts: Account[];
@@ -212,6 +248,8 @@ export function JournalGrid({
   fieldDefs?: FieldDef[];
   /** Columns the user switched off, from tj_user_prefs. */
   hiddenColumns?: string[];
+  /** Option-list values, keyed by list key — powers the bulk "Add tag" picker. */
+  optionsMap?: OptionsMap;
 }) {
   const router = useRouter();
   const tzByAccount = useMemo(() => {
@@ -233,6 +271,17 @@ export function JournalGrid({
   // Optimistic: the column disappears on click and the save follows. A round
   // trip before the grid reacts would read as a dead checkbox.
   const [hidden, setHidden] = useState<string[]>(hiddenColumns);
+
+  // Bulk selection + the two dialogs it can open. `rowSelection` is keyed by
+  // trade id (`getRowId` below), not row index, so it survives a re-sort or a
+  // filter narrowing the visible set instead of silently pointing at whatever
+  // trade now sits at that position.
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [bulkPending, startBulk] = useTransition();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [tagDialogOpen, setTagDialogOpen] = useState(false);
+  const [tagKind, setTagKind] = useState<BulkTagKind>("technical");
+  const [tagValues, setTagValues] = useState<string[]>([]);
 
   /**
    * How many of the dimension filters are actually narrowing the grid.
@@ -347,6 +396,29 @@ export function JournalGrid({
 
   const columns = useMemo<ColumnDef<TradeRow>[]>(
     () => [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <Checkbox
+            checked={
+              table.getIsAllRowsSelected()
+                ? true
+                : table.getIsSomeRowsSelected()
+                  ? "indeterminate"
+                  : false
+            }
+            onCheckedChange={(v) => table.toggleAllRowsSelected(!!v)}
+            aria-label="Select all"
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(v) => row.toggleSelected(!!v)}
+            aria-label="Select row"
+          />
+        ),
+      },
       {
         accessorKey: "trade_no",
         header: COLUMN_LABELS.trade_no,
@@ -570,14 +642,22 @@ export function JournalGrid({
   const table = useReactTable({
     data: filtered,
     columns,
+    // A trade's own id, not its position in `filtered` — the default. Bulk
+    // selection has to survive a re-sort or a filter change without silently
+    // re-pointing at whatever trade now sits at that row index.
+    getRowId: (row) => row.id,
     // Visibility is controlled from `hidden` and never from the table's own API,
     // so there is deliberately no onColumnVisibilityChange: the picker is the
     // only writer, and it saves as it goes.
-    state: { sorting, columnVisibility },
+    state: { sorting, columnVisibility, rowSelection },
     onSortingChange: setSorting,
+    onRowSelectionChange: setRowSelection,
+    enableRowSelection: true,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
+
+  const selectedIds = table.getSelectedRowModel().rows.map((r) => r.original.id);
 
   function exportData(kind: "csv" | "xlsx") {
     const rows = filtered.map((t) => {
@@ -708,7 +788,32 @@ export function JournalGrid({
         >
           Missed
         </Button>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex items-center gap-2">
+          {selectedIds.length > 0 && (
+            <>
+              <span className="text-xs text-muted-foreground">
+                {selectedIds.length} selected
+              </span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    Bulk actions
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setTagDialogOpen(true)}>
+                    <TagIcon className="size-4" /> Add tag…
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={() => setDeleteDialogOpen(true)}
+                  >
+                    <Trash2 className="size-4" /> Delete selected
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
@@ -804,7 +909,8 @@ export function JournalGrid({
                     <TableCell
                       key={cell.id}
                       onClick={(e) => {
-                        if (cell.column.id === "actions") e.stopPropagation();
+                        if (cell.column.id === "actions" || cell.column.id === "select")
+                          e.stopPropagation();
                       }}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -819,6 +925,130 @@ export function JournalGrid({
       <p className="text-xs text-muted-foreground">
         {filtered.length} of {trades.length} trades. Click a row to edit.
       </p>
+
+      {/* Confirmed here even though `RowActions`' single delete is not — a
+          mis-click deleting one trade is a mistake; a mis-click deleting
+          however many are selected is a much larger one, and the size of the
+          blast radius is exactly what a single-row delete does not have. */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Delete {selectedIds.length} trade{selectedIds.length === 1 ? "" : "s"}?
+            </DialogTitle>
+            <DialogDescription>
+              This cannot be undone. Executions, images and chart snapshots on
+              these trades are deleted with them.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={bulkPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={bulkPending}
+              onClick={() =>
+                startBulk(async () => {
+                  const res = await bulkDeleteTrades(selectedIds);
+                  if (!res.ok) {
+                    toast.error(res.error);
+                    return;
+                  }
+                  toast.success(
+                    `${res.deleted} trade${res.deleted === 1 ? "" : "s"} deleted`,
+                  );
+                  setDeleteDialogOpen(false);
+                  setRowSelection({});
+                  router.refresh();
+                })
+              }
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={tagDialogOpen}
+        onOpenChange={(v) => {
+          setTagDialogOpen(v);
+          if (!v) setTagValues([]);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Add tag to {selectedIds.length} trade{selectedIds.length === 1 ? "" : "s"}
+            </DialogTitle>
+            <DialogDescription>
+              Applied on top of whatever each trade already carries — existing
+              tags are never removed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Select
+              value={tagKind}
+              onValueChange={(v) => {
+                setTagKind(v as BulkTagKind);
+                setTagValues([]);
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {BULK_TAG_CATEGORIES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <TagMultiSelect
+              value={tagValues}
+              onChange={setTagValues}
+              optionsMap={optionsMap}
+              listKey={BULK_TAG_CATEGORIES.find((c) => c.value === tagKind)?.listKey}
+              listKeys={BULK_TAG_CATEGORIES.find((c) => c.value === tagKind)?.listKeys}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setTagDialogOpen(false)}
+              disabled={bulkPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={bulkPending || tagValues.length === 0}
+              onClick={() =>
+                startBulk(async () => {
+                  const res = await bulkAddTag(selectedIds, tagKind, tagValues);
+                  if (!res.ok) {
+                    toast.error(res.error);
+                    return;
+                  }
+                  toast.success(
+                    `Tagged ${selectedIds.length} trade${selectedIds.length === 1 ? "" : "s"}`,
+                  );
+                  setTagDialogOpen(false);
+                  setTagValues([]);
+                  router.refresh();
+                })
+              }
+            >
+              Apply
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

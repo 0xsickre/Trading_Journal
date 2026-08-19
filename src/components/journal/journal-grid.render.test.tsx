@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { JournalGrid } from "./journal-grid";
 import { mkTrade } from "@/lib/journal/reports/test-helpers";
-import type { Account, TradeRow } from "@/lib/journal/types";
+import type { Account, OptionsMap, TradeRow } from "@/lib/journal/types";
 
 /**
  * Tier 1 per the phase plan: 5 `useMemo` and a row computation living in BOTH
@@ -22,9 +22,21 @@ vi.mock("next/navigation", () => ({
 
 const deleteTradeMock = vi.fn();
 const activateTradeMock = vi.fn();
+const bulkDeleteTradesMock = vi.fn();
+const bulkAddTagMock = vi.fn();
 vi.mock("@/app/(app)/trades/actions", () => ({
   deleteTrade: (id: string) => deleteTradeMock(id),
   activateTrade: (id: string) => activateTradeMock(id),
+  bulkDeleteTrades: (ids: string[]) => bulkDeleteTradesMock(ids),
+  bulkAddTag: (ids: string[], kind: string, values: string[]) =>
+    bulkAddTagMock(ids, kind, values),
+}));
+
+// `TagMultiSelect` (used by the bulk "Add tag" dialog) imports this for its
+// create-new-option path; unused here since the tests only pick EXISTING
+// options, but the module import still needs a mock to resolve.
+vi.mock("@/app/(app)/settings/actions", () => ({
+  addOption: vi.fn(),
 }));
 
 const setHiddenColumnsMock = vi.fn();
@@ -93,11 +105,19 @@ function account(over: Partial<Account> & { id: string }): Account {
 
 const rowsOf = (trades: ReturnType<typeof mkTrade>[]): TradeRow[] => trades.map((t) => t.row);
 
+const OPTIONS_MAP: OptionsMap = {
+  technical_tag: [
+    { id: "o1", value: "FVG", label: "FVG", color: null, is_active: true, sort_order: 0 },
+  ],
+};
+
 beforeEach(() => {
   pushMock.mockClear();
   refreshMock.mockClear();
   deleteTradeMock.mockReset().mockResolvedValue({ ok: true });
   activateTradeMock.mockReset().mockResolvedValue({ ok: true });
+  bulkDeleteTradesMock.mockReset().mockResolvedValue({ ok: true, deleted: 0 });
+  bulkAddTagMock.mockReset().mockResolvedValue({ ok: true });
   setHiddenColumnsMock.mockReset().mockResolvedValue({ ok: true });
   unparseMock.mockClear();
   jsonToSheetMock.mockClear();
@@ -327,5 +347,146 @@ describe("export", () => {
     const rows = jsonToSheetMock.mock.calls[0][0] as Record<string, unknown>[];
     expect(rows[0]["Net P/L"]).toBe(250);
     expect(writeFileMock).toHaveBeenCalledWith(expect.anything(), "journal.xlsx");
+  });
+});
+
+describe("bulk selection", () => {
+  const ACCOUNT = account({ id: "acc-1" });
+  const trades = [mkTrade({ id: "t1" }), mkTrade({ id: "t2" })];
+
+  it("selecting a row's checkbox shows the count and does not navigate the row", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<JournalGrid trades={rowsOf(trades)} accounts={[ACCOUNT]} />);
+
+    await user.click(screen.getAllByRole("checkbox", { name: "Select row" })[0]);
+
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("the header checkbox selects every row", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<JournalGrid trades={rowsOf(trades)} accounts={[ACCOUNT]} />);
+
+    await user.click(screen.getByRole("checkbox", { name: "Select all" }));
+
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+    for (const cb of screen.getAllByRole("checkbox", { name: "Select row" })) {
+      expect(cb).toBeChecked();
+    }
+  });
+
+  it("hides the Bulk actions control when nothing is selected", () => {
+    render(<JournalGrid trades={rowsOf(trades)} accounts={[ACCOUNT]} />);
+    expect(screen.queryByRole("button", { name: /Bulk actions/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("bulk delete", () => {
+  const ACCOUNT = account({ id: "acc-1" });
+  const trades = [mkTrade({ id: "t1" }), mkTrade({ id: "t2" })];
+
+  async function selectAllAndOpenDelete(user: ReturnType<typeof userEvent.setup>) {
+    render(<JournalGrid trades={rowsOf(trades)} accounts={[ACCOUNT]} />);
+    await user.click(screen.getByRole("checkbox", { name: "Select all" }));
+    await user.click(screen.getByRole("button", { name: /Bulk actions/ }));
+    await user.click(await screen.findByRole("menuitem", { name: /Delete selected/ }));
+  }
+
+  it("asks for confirmation naming the exact count before deleting anything", async () => {
+    const user = userEvent.setup({ delay: null });
+    await selectAllAndOpenDelete(user);
+
+    expect(screen.getByRole("heading", { name: "Delete 2 trades?" })).toBeInTheDocument();
+    expect(bulkDeleteTradesMock).not.toHaveBeenCalled();
+  });
+
+  it("Cancel closes the dialog without calling the server action", async () => {
+    const user = userEvent.setup({ delay: null });
+    await selectAllAndOpenDelete(user);
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(bulkDeleteTradesMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("heading", { name: /Delete 2 trades/ })).not.toBeInTheDocument();
+  });
+
+  it("Delete sends every selected id, clears the selection and refreshes", async () => {
+    bulkDeleteTradesMock.mockResolvedValue({ ok: true, deleted: 2 });
+    const user = userEvent.setup({ delay: null });
+    await selectAllAndOpenDelete(user);
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    await vi.waitFor(() => expect(bulkDeleteTradesMock).toHaveBeenCalledWith(["t1", "t2"]));
+    expect(toastSuccessMock).toHaveBeenCalledWith("2 trades deleted");
+    expect(refreshMock).toHaveBeenCalled();
+    // The dialog closes and the selection clears — the toolbar's own count
+    // badge is the simplest proof, since the rows themselves are still in
+    // the fixture (this test never re-renders from a real server response).
+    expect(screen.queryByText("2 selected")).not.toBeInTheDocument();
+  });
+
+  it("shows the error toast and leaves the dialog open when the action fails", async () => {
+    bulkDeleteTradesMock.mockResolvedValue({ ok: false, error: "network failed" });
+    const user = userEvent.setup({ delay: null });
+    await selectAllAndOpenDelete(user);
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    await vi.waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith("network failed"));
+    expect(screen.getByRole("heading", { name: "Delete 2 trades?" })).toBeInTheDocument();
+  });
+});
+
+describe("bulk add tag", () => {
+  const ACCOUNT = account({ id: "acc-1" });
+  const trades = [mkTrade({ id: "t1" }), mkTrade({ id: "t2" })];
+
+  async function selectAllAndOpenTagDialog(user: ReturnType<typeof userEvent.setup>) {
+    render(
+      <JournalGrid trades={rowsOf(trades)} accounts={[ACCOUNT]} optionsMap={OPTIONS_MAP} />,
+    );
+    await user.click(screen.getByRole("checkbox", { name: "Select all" }));
+    await user.click(screen.getByRole("button", { name: /Bulk actions/ }));
+    await user.click(await screen.findByRole("menuitem", { name: /Add tag/ }));
+  }
+
+  it("Apply is disabled until a tag is picked", async () => {
+    const user = userEvent.setup({ delay: null });
+    await selectAllAndOpenTagDialog(user);
+
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+  });
+
+  it("picking an existing option and applying sends the category and the value to every selected trade", async () => {
+    const user = userEvent.setup({ delay: null });
+    await selectAllAndOpenTagDialog(user);
+
+    // Technical is the default category; OPTIONS_MAP only seeds that list.
+    await user.type(screen.getByPlaceholderText(/Type to search/), "FVG");
+    await user.click(await screen.findByRole("option", { name: "FVG" }));
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+
+    await vi.waitFor(() =>
+      expect(bulkAddTagMock).toHaveBeenCalledWith(["t1", "t2"], "technical", ["FVG"]),
+    );
+    expect(toastSuccessMock).toHaveBeenCalledWith("Tagged 2 trades");
+    expect(refreshMock).toHaveBeenCalled();
+  });
+
+  it("switching category clears whatever was already picked, so a stray tag cannot land under the wrong column", async () => {
+    const user = userEvent.setup({ delay: null });
+    await selectAllAndOpenTagDialog(user);
+
+    await user.type(screen.getByPlaceholderText(/Type to search/), "FVG");
+    await user.click(await screen.findByRole("option", { name: "FVG" }));
+    expect(screen.getByText("FVG")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "Mistake" }));
+
+    expect(screen.queryByText("FVG")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
   });
 });
