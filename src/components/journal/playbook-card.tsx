@@ -101,14 +101,35 @@ function useAction() {
  * One side of the contrast.
  *
  * The count is shown even when the win rate is withheld, because "answered 4
- * times" is a fact worth seeing while "57 %" on four trades is not.
+ * times" is a fact worth seeing while "57 %" on four trades is not. Expectancy
+ * (R) is a second line under the win rate rather than a column of its own —
+ * this table already pushes `When` toward the edge of its horizontal scroll on
+ * purpose (see the comment above the `<table>`), and an eighth column would
+ * make that worse for a number that reads fine stacked under the one it
+ * qualifies.
  */
-function Side({ n, winRate }: { n: number; winRate: number | null }) {
+function Side({
+  n,
+  winRate,
+  r,
+}: {
+  n: number;
+  winRate: number | null;
+  r: number | null;
+}) {
   if (n === 0) return <span className="text-muted-foreground">—</span>;
-  return n < RULE_SAMPLE.MIN || winRate == null ? (
-    <span className="text-muted-foreground">n={n}</span>
-  ) : (
-    <>{winRate.toFixed(0)}%</>
+  if (n < RULE_SAMPLE.MIN || winRate == null) {
+    return <span className="text-muted-foreground">n={n}</span>;
+  }
+  return (
+    <>
+      <span>{winRate.toFixed(0)}%</span>
+      {r != null && (
+        <span className="block text-xs font-normal text-muted-foreground">
+          {formatMetric(mkMetric(r, "r"))}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -164,10 +185,18 @@ function RuleRow({
         {score?.n ?? 0}
       </td>
       <td className="py-1.5 pl-3 text-right tabular-nums">
-        <Side n={score?.followed.n ?? 0} winRate={score?.followed.winRate ?? null} />
+        <Side
+          n={score?.followed.n ?? 0}
+          winRate={score?.followed.winRate ?? null}
+          r={score?.followed.expectancy ?? null}
+        />
       </td>
       <td className="py-1.5 pl-3 text-right tabular-nums">
-        <Side n={score?.broken.n ?? 0} winRate={score?.broken.winRate ?? null} />
+        <Side
+          n={score?.broken.n ?? 0}
+          winRate={score?.broken.winRate ?? null}
+          r={score?.broken.expectancy ?? null}
+        />
       </td>
       <td
         className={cn(

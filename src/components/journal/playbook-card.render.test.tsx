@@ -144,6 +144,38 @@ describe("PlaybookCard — the editor and the evidence share a row", () => {
   });
 });
 
+describe("PlaybookCard — expectancy under the win rate", () => {
+  it("shows R for each side under its win rate, not as a separate column", () => {
+    const M = RULE_SAMPLE.MIN;
+    renderCard(
+      [rule({ id: "r1", text: "Waited for the sweep" })],
+      [
+        // net=100 → r=1 per `enrich`'s r:net/100, so a side of all-winners
+        // reads +1.00R and a side of all-losers reads -1.00R.
+        ...answers("f", "r1", M, M, true),
+        ...answers("b", "r1", M, 0, false),
+      ],
+    );
+
+    const row = rowOf("Waited for the sweep");
+    expect(within(row).getByText("+1.00R")).toBeInTheDocument();
+    expect(within(row).getByText("-1.00R")).toBeInTheDocument();
+  });
+
+  it("omits R (not a stray dash) when a side is too thin to trust", () => {
+    renderCard(
+      [rule({ id: "r1", text: "Waited for the sweep" })],
+      answers("f", "r1", 1, 1, true),
+    );
+
+    const row = rowOf("Waited for the sweep");
+    // A single-observation side shows its count, not a win rate or an R line —
+    // and with no broken side at all, the row has no R text anywhere.
+    expect(within(row).getByText("n=1")).toBeInTheDocument();
+    expect(within(row).queryByText(/R$/)).toBeNull();
+  });
+});
+
 describe("PlaybookCard — what it refuses to claim", () => {
   it("says `too few` when one side is thin, even though the total is not", () => {
     // The bug real data exposed: both sides under the floor, total over it. The
