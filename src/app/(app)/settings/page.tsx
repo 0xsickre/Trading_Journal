@@ -15,6 +15,13 @@ import { getFieldDefs } from "@/lib/journal/field-defs";
 import { TrackerRuleManager } from "@/components/journal/tracker-rule-manager";
 import { getTrackerRules } from "@/lib/journal/tracker/queries";
 import { PageHeader } from "@/components/app/page-header";
+import { BotBridgeManager } from "@/components/journal/bot-bridge-manager";
+import {
+  countQuarantinedEvents,
+  getBotTokens,
+  getBrokerSymbolMaps,
+  getQuarantinedEvents,
+} from "@/lib/journal/bot-queries";
 
 export default async function SettingsPage() {
   const [
@@ -24,6 +31,10 @@ export default async function SettingsPage() {
     cashEvents,
     fieldDefs,
     trackerRules,
+    botTokens,
+    symbolMaps,
+    quarantined,
+    quarantineTotal,
   ] = await Promise.all([
       getListsWithItems(false),
       getInstruments(false),
@@ -33,6 +44,10 @@ export default async function SettingsPage() {
       getFieldDefs(false),
       // Retired rules included, for the same reason.
       getTrackerRules({ includeRetired: true }),
+      getBotTokens(),
+      getBrokerSymbolMaps(),
+      getQuarantinedEvents(),
+      countQuarantinedEvents(),
     ]);
 
   // Same choice as getPrimaryAccount, made from the list already in hand rather
@@ -72,6 +87,9 @@ export default async function SettingsPage() {
           </TabsTrigger>
           <TabsTrigger value="cash" className="flex-none">
             Deposits / withdrawals
+          </TabsTrigger>
+          <TabsTrigger value="bot" className="flex-none">
+            Bot most
           </TabsTrigger>
         </TabsList>
 
@@ -120,6 +138,22 @@ export default async function SettingsPage() {
 
         <TabsContent value="cash">
           <CashEventsManager accounts={accounts} events={cashEvents} />
+        </TabsContent>
+
+        <TabsContent value="bot">
+          {/*
+            Instruments are passed as bare symbols: the mapping question is
+            "which instrument does this broker symbol mean", and the answer is
+            the symbol itself — the rest of the catalogue row is not part of it.
+          */}
+          <BotBridgeManager
+            accounts={accounts}
+            tokens={botTokens}
+            symbolMaps={symbolMaps}
+            quarantined={quarantined}
+            quarantineTotal={quarantineTotal}
+            instruments={instruments.map((i) => i.symbol)}
+          />
         </TabsContent>
       </Tabs>
     </div>

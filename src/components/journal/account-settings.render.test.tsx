@@ -29,6 +29,7 @@ const account = (over: Partial<Account> = {}): Account => ({
   id: "acc-1",
   name: "Main Account",
   broker: null,
+  broker_account_id: null,
   currency: "USD",
   starting_balance: 100_000,
   default_asset_class: null,

@@ -490,3 +490,34 @@ describe("bulk add tag", () => {
     expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
   });
 });
+
+describe("provenance badge", () => {
+  const ACCOUNT = account({ id: "acc-1" });
+
+  /**
+   * A trade the bot recorded must be distinguishable from one the trader typed.
+   *
+   * The bridge writes broker facts only — instrument, direction, prices, fill —
+   * and leaves plan, thesis, psychology and grade empty. A row that reads as
+   * hand-entered when it is not invites the reader to trust an emptiness that
+   * means "not written yet" as if it meant "nothing to say".
+   */
+  it("marks a bot-recorded trade and leaves a hand-typed one unmarked", () => {
+    const bot = mkTrade({ id: "t1", instrument: "EURUSD" }).row;
+    render(
+      <JournalGrid trades={[{ ...bot, source: "bot" }]} accounts={[ACCOUNT]} />,
+    );
+    expect(screen.getByTitle("Zabeležio bot most iz cTrader-a")).toBeInTheDocument();
+  });
+
+  it("does not mark an imported or manual trade", () => {
+    const manual = mkTrade({ id: "t1", instrument: "EURUSD" }).row;
+    const { rerender } = render(
+      <JournalGrid trades={[{ ...manual, source: "manual" }]} accounts={[ACCOUNT]} />,
+    );
+    expect(screen.queryByTitle("Zabeležio bot most iz cTrader-a")).not.toBeInTheDocument();
+
+    rerender(<JournalGrid trades={[{ ...manual, source: "import" }]} accounts={[ACCOUNT]} />);
+    expect(screen.queryByTitle("Zabeležio bot most iz cTrader-a")).not.toBeInTheDocument();
+  });
+});

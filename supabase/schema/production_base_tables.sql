@@ -44,6 +44,9 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   user_id                     uuid        NOT NULL DEFAULT auth.uid(),
   name                        text        NOT NULL,
   broker                      text,
+  -- Broj naloga kod brokera pod kojim bot most javlja (20260821120000).
+  -- `broker` je slobodan tekst za čoveka; ovo je mašinski čitljiva polovina.
+  broker_account_id           text,
   currency                    text        NOT NULL DEFAULT 'USD',
   starting_balance            numeric     NOT NULL DEFAULT 0,
   default_asset_class         text,
@@ -123,6 +126,12 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   point_value_at_trade numeric,
   tick_size_at_trade   numeric,
   custom               jsonb       NOT NULL DEFAULT '{}'::jsonb,
+  -- Veza ka brokeru za trejdove koje je upisao bot most (20260821120000).
+  -- Sve `text`: to su neprozirni identifikatori, nikad aritmetika.
+  broker               text,
+  broker_account       text,
+  broker_order_id      text,
+  broker_position_id   text,
   playbook_id          uuid,
   conviction           smallint,
   execution_rating     smallint,
@@ -140,8 +149,9 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
     REFERENCES public.tj_playbooks(id) ON DELETE SET NULL,
   CONSTRAINT tj_positions_status_check CHECK (status = ANY (ARRAY[
     'planned'::text, 'missed'::text, 'open'::text, 'partial'::text, 'closed'::text])),
+  -- 'bot' dodat u 20260821120000_bot_ingest.sql: trejd koji je upisao bot most.
   CONSTRAINT tj_positions_source_check CHECK (source = ANY (ARRAY[
-    'manual'::text, 'import'::text])),
+    'manual'::text, 'import'::text, 'bot'::text])),
   CONSTRAINT tj_positions_conviction_check
     CHECK (conviction IS NULL OR (conviction >= 1 AND conviction <= 5)),
   CONSTRAINT tj_positions_execution_rating_check
@@ -208,7 +218,7 @@ CREATE TABLE IF NOT EXISTS public.tj_executions (
     CHECK (side = ANY (ARRAY['entry'::text, 'exit'::text])),
   CONSTRAINT tj_executions_qty_check CHECK (qty > 0::numeric),
   CONSTRAINT tj_executions_source_check
-    CHECK (source = ANY (ARRAY['manual'::text, 'import'::text]))
+    CHECK (source = ANY (ARRAY['manual'::text, 'import'::text, 'bot'::text]))
 );
 CREATE INDEX IF NOT EXISTS tj_executions_user_idx
   ON public.tj_executions USING btree (user_id);

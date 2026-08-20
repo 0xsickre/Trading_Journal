@@ -21,6 +21,7 @@ import {
   Tag as TagIcon,
   Trash2,
   AlertTriangle,
+  Bot,
   ExternalLink,
   SlidersHorizontal,
 } from "lucide-react";
@@ -598,6 +599,14 @@ export function JournalGrid({
               {t.needs_review && (
                 <span title="Needs review">
                   <AlertTriangle className="size-3.5 text-[var(--chart-4)]" />
+                </span>
+              )}
+              {/* A row nobody typed must not read as one they did. The bridge
+                  records broker facts only, so the rest of this trade is still
+                  waiting to be written by hand. */}
+              {t.source === "bot" && (
+                <span title="Zabeležio bot most iz cTrader-a">
+                  <Bot className="size-3.5 text-muted-foreground" />
                 </span>
               )}
             </div>
