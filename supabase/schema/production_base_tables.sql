@@ -239,7 +239,12 @@ CREATE TABLE IF NOT EXISTS public.tj_instruments (
   tick_size   numeric,
   tick_value  numeric,
   point_value numeric     NOT NULL DEFAULT 1,
-  currency    text        NOT NULL DEFAULT 'USD',
+  -- Preimenovana iz `currency` u 20260815130000_quote_currency_and_fx.sql.
+  -- Ovaj fajl je do 21.08. i dalje pisao staro ime — nađeno tek kad se
+  -- 20260821120000_bot_ingest.sql oslonio na njega i pokušao da čita kolonu
+  -- koje nema. Zapis koji zaostane za bazom je gori od nepostojećeg: veruje mu
+  -- se.
+  quote_currency text     NOT NULL DEFAULT 'USD',
   is_active   boolean     NOT NULL DEFAULT true,
   sort_order  integer     NOT NULL DEFAULT 0,
   created_at  timestamptz NOT NULL DEFAULT now(),
@@ -252,7 +257,9 @@ CREATE TABLE IF NOT EXISTS public.tj_instruments (
   CONSTRAINT tj_instruments_tick_size_positive
     CHECK (tick_size IS NULL OR tick_size > 0::numeric),
   CONSTRAINT tj_instruments_tick_value_positive
-    CHECK (tick_value IS NULL OR tick_value > 0::numeric)
+    CHECK (tick_value IS NULL OR tick_value > 0::numeric),
+  CONSTRAINT tj_instruments_quote_currency_format
+    CHECK (quote_currency ~ '^[A-Z]{3}$')
 );
 CREATE INDEX IF NOT EXISTS tj_instruments_user_idx
   ON public.tj_instruments USING btree (user_id);

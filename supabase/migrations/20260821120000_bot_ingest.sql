@@ -520,7 +520,10 @@ BEGIN
   -- currency IS the account currency, and NULL otherwise -- never 1 as a
   -- convenience, which would silently price a cross-currency trade as if no
   -- conversion existed. The view already reports the NULL as 'missing'.
-  SELECT i.point_value, i.tick_size, i.currency
+  -- `quote_currency`, not `currency`. `supabase/schema/production_base_tables.sql`
+  -- still records this column as `currency`; the live table disagrees, and the
+  -- live table wins. Corrected in that file in the same commit.
+  SELECT i.point_value, i.tick_size, i.quote_currency
     INTO v_pv, v_ts, v_ccy
     FROM public.tj_instruments i
    WHERE i.user_id = v_uid AND i.symbol = v_instrument;
