@@ -1,6 +1,17 @@
 -- =============================================================================
 -- Bot ingest: cTrader pending order -> planned trade -> open trade.
 --
+-- APPLY THIS BEFORE DEPLOYING THE CODE THAT CAME WITH IT.
+-- `getAccounts()` now selects `broker_account_id`. PostgREST fails the whole
+-- SELECT on an unknown column, so until this migration is applied the app reads
+-- ZERO accounts — every screen that resolves a currency, a timezone or a
+-- breakeven band goes blank. Order: migration, then deploy. Rolling back means
+-- reverting both (see supabase/rollback/).
+--
+-- Additive apart from two CHECKs, and those only WIDEN
+-- ('manual','import') -> ('manual','import','bot'), so no existing row can fail
+-- the new constraint. Run as one transaction.
+--
 -- WHAT WAS WRONG
 -- Every trade was typed by hand, including the parts the broker had already
 -- established: the symbol, the direction, the limit price, the stop, and the
