@@ -38,6 +38,29 @@ describe("reason labels", () => {
     expect(quarantineReasonLabel("unmapped_symbol")).toContain("instrument");
     expect(quarantineReasonLabel("unmapped_account")).toContain("nalog");
     expect(quarantineReasonLabel("already_has_fills")).toContain("fill");
+    expect(quarantineReasonLabel("malformed_price")).toContain("cenu");
+  });
+
+  /**
+   * Every reason the SQL function can write must have a label here, or a real
+   * refusal reaches the screen as a raw key nobody can act on. Kept as a list
+   * rather than a comment so adding a branch in SQL without a label fails.
+   */
+  it("has a label for every reason tj_bot_ingest can write", () => {
+    const fromSql = [
+      "unmapped_account",
+      "unmapped_symbol",
+      "malformed_symbol",
+      "malformed_direction",
+      "malformed_volume",
+      "malformed_price",
+      "malformed_fill",
+      "unexpected_status",
+      "already_has_fills",
+    ];
+    for (const reason of fromSql) {
+      expect(quarantineReasonLabel(reason), reason).not.toBe(reason);
+    }
   });
 
   it("passes an unknown reason through rather than hiding it", () => {

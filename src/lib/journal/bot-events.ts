@@ -39,6 +39,7 @@ const QUARANTINE_REASONS: Record<string, string> = {
   malformed_symbol: "Bot je poslao prazan simbol",
   malformed_direction: "Bot je poslao nepoznat smer (ni Buy ni Sell)",
   malformed_volume: "Volumen se ne može pretvoriti u količinu",
+  malformed_price: "Order nema upotrebljivu ulaznu cenu",
   malformed_fill: "Fill nema upotrebljivu cenu ili vreme",
   unexpected_status: "Trejd nije bio ni planiran ni propušten — fill nije upisan",
   already_has_fills: "Trejd već ima ulazni fill — drugi nije upisan",

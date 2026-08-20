@@ -335,6 +335,9 @@ DECLARE
   v_status      text;
   v_direction   text;
   v_qty         numeric;
+  v_entry       numeric;
+  v_stop        numeric;
+  v_target      numeric;
   v_fill_price  numeric;
   v_filled_at   timestamptz;
   v_pv          numeric;
@@ -342,7 +345,12 @@ DECLARE
   v_ccy         text;
   v_fx          numeric;
   v_fill_count  integer;
-  v_needs_rev   boolean := true;
+  -- Force needs_review back on, rather than "this trade needs review". A bot
+  -- trade is created with needs_review = true and normally KEEPS whatever the
+  -- human has since set — re-raising the flag on every fill would undo a review
+  -- that was already done. Only the missed -> open flip is surprising enough to
+  -- demand a second look.
+  v_force_review boolean := false;
   v_reason      text;
 BEGIN
   -- 7.1 Authenticate -----------------------------------------------------------
@@ -460,12 +468,41 @@ BEGIN
     RETURN jsonb_build_object('ok', true, 'result', 'quarantined', 'reason', 'malformed_direction');
   END IF;
 
-  v_qty := NULLIF(p_event ->> 'volume_in_units', '')::numeric / v_units;
+  -- Numbers are read through jsonb_typeof rather than cast blindly.
+  --
+  -- This endpoint is reachable by `anon`, so the payload is untrusted input, and
+  -- a bare `(p_event->>'x')::numeric` on the string "abc" raises. A raise here
+  -- would abort the whole transaction INCLUDING the tj_bot_events insert above —
+  -- so the event would vanish, the bot would get an error, and it would retry
+  -- the same bad payload forever. Reading the type first turns that into a
+  -- quarantined row that says what was wrong.
+  v_qty    := CASE WHEN pg_catalog.jsonb_typeof(p_event -> 'volume_in_units') = 'number'
+                   THEN (p_event ->> 'volume_in_units')::numeric END;
+  v_entry  := CASE WHEN pg_catalog.jsonb_typeof(p_event -> 'target_price') = 'number'
+                   THEN (p_event ->> 'target_price')::numeric END;
+  v_stop   := CASE WHEN pg_catalog.jsonb_typeof(p_event -> 'stop_loss') = 'number'
+                   THEN (p_event ->> 'stop_loss')::numeric END;
+  v_target := CASE WHEN pg_catalog.jsonb_typeof(p_event -> 'take_profit') = 'number'
+                   THEN (p_event ->> 'take_profit')::numeric END;
+
+  v_qty := CASE WHEN v_qty IS NOT NULL THEN v_qty / v_units END;
 
   IF v_qty IS NULL OR v_qty <= 0 THEN
     UPDATE public.tj_bot_events SET reason = 'malformed_volume' WHERE id = v_event_id;
     RETURN jsonb_build_object('ok', true, 'result', 'quarantined', 'reason', 'malformed_volume');
   END IF;
+
+  -- The limit price is the trade's entry and must be a real price.
+  IF v_entry IS NULL OR v_entry <= 0 THEN
+    UPDATE public.tj_bot_events SET reason = 'malformed_price' WHERE id = v_event_id;
+    RETURN jsonb_build_object('ok', true, 'result', 'quarantined', 'reason', 'malformed_price');
+  END IF;
+
+  -- Stop and target are optional. cTrader reports "not set" as null, but a 0
+  -- would violate tj_positions_prices_positive and abort the transaction, so a
+  -- non-positive value is read as absent rather than allowed to raise.
+  IF v_stop IS NOT NULL AND v_stop <= 0 THEN v_stop := NULL; END IF;
+  IF v_target IS NOT NULL AND v_target <= 0 THEN v_target := NULL; END IF;
 
   -- 7.8 Freeze the contract spec ------------------------------------------------
   -- Mirrors instrumentSnapshot + resolveFxRate. fx_rate is 1 only when the quote
@@ -502,6 +539,14 @@ BEGIN
 
     v_status := 'planned';
 
+    -- The two-value assertion the header promises. Status here is asserted from
+    -- the event kind, not computed, and this is what stops a later edit from
+    -- quietly widening it into a second implementation of `computeStatus`.
+    IF v_status NOT IN ('planned', 'open') THEN
+      RAISE EXCEPTION 'tj_bot_ingest may only assert planned or open, got %', v_status
+        USING ERRCODE = 'check_violation';
+    END IF;
+
     INSERT INTO public.tj_positions (
       user_id, account_id, status, source, needs_review,
       instrument, direction,
@@ -511,9 +556,7 @@ BEGIN
     ) VALUES (
       v_uid, v_account_id, v_status, 'bot', true,
       v_instrument, v_direction,
-      NULLIF(p_event ->> 'target_price', '')::numeric,
-      NULLIF(p_event ->> 'stop_loss', '')::numeric,
-      NULLIF(p_event ->> 'take_profit', '')::numeric,
+      v_entry, v_stop, v_target,
       v_qty,
       v_pv, v_ts, v_ccy, v_fx,
       v_broker, v_bacct, p_event ->> 'broker_order_id'
@@ -528,8 +571,19 @@ BEGIN
   END IF;
 
   -- order_filled ---------------------------------------------------------------
-  v_fill_price := NULLIF(p_event ->> 'fill_price', '')::numeric;
-  v_filled_at  := NULLIF(p_event ->> 'filled_at', '')::timestamptz;
+  v_fill_price := CASE WHEN pg_catalog.jsonb_typeof(p_event -> 'fill_price') = 'number'
+                       THEN (p_event ->> 'fill_price')::numeric END;
+
+  -- The timestamp is the one value that cannot be type-checked into safety: a
+  -- JSON string is a valid string and still not a valid time. Caught narrowly
+  -- rather than with `others`, so a real defect in this function still surfaces
+  -- as a failure instead of being filed as a bad payload.
+  BEGIN
+    v_filled_at := NULLIF(p_event ->> 'filled_at', '')::timestamptz;
+  EXCEPTION
+    WHEN invalid_datetime_format OR datetime_field_overflow OR invalid_text_representation THEN
+      v_filled_at := NULL;
+  END;
 
   IF v_fill_price IS NULL OR v_fill_price <= 0 OR v_filled_at IS NULL THEN
     UPDATE public.tj_bot_events SET reason = 'malformed_fill' WHERE id = v_event_id;
@@ -547,9 +601,7 @@ BEGIN
     ) VALUES (
       v_uid, v_account_id, 'open', 'bot', true,
       v_instrument, v_direction,
-      NULLIF(p_event ->> 'target_price', '')::numeric,
-      NULLIF(p_event ->> 'stop_loss', '')::numeric,
-      NULLIF(p_event ->> 'take_profit', '')::numeric,
+      v_entry, v_stop, v_target,
       v_qty,
       v_pv, v_ts, v_ccy, v_fx,
       v_broker, v_bacct, p_event ->> 'broker_order_id', p_event ->> 'broker_position_id'
@@ -570,10 +622,10 @@ BEGIN
 
     IF v_pos.status = 'missed' THEN
       -- The human wrote it off; the market disagreed. Keep miss_reason -- that
-      -- judgement was real and is worth reading later -- but the trade happened.
+      -- judgement was real and is worth reading later -- but the trade happened,
+      -- and a write-off that traded is worth looking at again.
       v_reason := 'was_missed';
-    ELSE
-      v_needs_rev := false;
+      v_force_review := true;
     END IF;
 
     -- Status FIRST, fill second: tj_execution_guard / tj_position_missed_guard
@@ -582,7 +634,7 @@ BEGIN
     UPDATE public.tj_positions
        SET status             = 'open',
            broker_position_id = COALESCE(p_event ->> 'broker_position_id', broker_position_id),
-           needs_review       = CASE WHEN v_needs_rev THEN true ELSE needs_review END
+           needs_review       = CASE WHEN v_force_review THEN true ELSE needs_review END
      WHERE id = v_pos_id;
   END IF;
 
