@@ -81,11 +81,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
 | `npm run dev` | Razvojni server |
 | `npm run build` | Produkcijski build — 14 ruta |
 | `npm run lint` | ESLint. **Očekuje se tačno jedno upozorenje** (vidi ispod) |
-| `npm test` | Vitest — 1723 testa u 110 fajlova, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
+| `npm test` | Vitest — 2074 testa u 130 fajlova, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
 | `npm test -- --coverage` | Izveštaj o pokrivenosti |
 | `npx knip` | Mrtvi fajlovi, eksporti i zavisnosti |
 
-**Lint upozorenje je nosivo.** `journal-grid.tsx:538` prijavljuje *„Compilation Skipped: Use of
+**Lint upozorenje je nosivo.** `journal-grid.tsx:642` prijavljuje *„Compilation Skipped: Use of
 incompatible library"* — React Compiler odbija da memoizuje komponentu koja koristi
 `useReactTable` iz TanStack Table. Razumemo ga i prihvatamo. To što ih je **tačno 1** je kontrolna
 vrednost: svaki drugi broj znači da je neka izmena nešto uvela.
@@ -181,7 +181,7 @@ obrisano nevezanim snimanjem.
 | `/daily` | Dnevni izveštaj + tracker checklist za jedan dan; zaključavanje dana |
 | `/calendar` | Mesečna mreža P&L-a po danu, nedeljni zbirovi |
 | `/weekly` | Nedeljni pregled: ocena nedelje, pet pitanja, brojke nedelje (`week-recap.ts`) |
-| `/playbooks` | Definisanje playbook-a i dokaz na istom ekranu — pravila, per-rule scorecard |
+| `/playbooks` | Definisanje playbook-a i dokaz na istom ekranu — pravila, per-rule scorecard, kartice se mogu skupiti/raširiti |
 | `/reports` | Radni sto za izveštaje — bilo koja metrika protiv bilo koje dimenzije, plus pivot |
 | `/tracker` | Preusmerava na `/daily` (ostalo jer je tracker nekad živeo ovde) |
 | `/notebook` | Beleške, folderi, tagovi, markdown |
@@ -193,7 +193,7 @@ obrisano nevezanim snimanjem.
 
 ## Metrike
 
-30 metrika u jednom registru (`src/lib/journal/reports/metrics.ts`), 12 ugrađenih dimenzija plus po
+33 metrike u jednom registru (`src/lib/journal/reports/metrics.ts`), 12 ugrađenih dimenzija plus po
 jedna za svako korisničko polje. Bilo koja metrika ide protiv bilo koje dimenzije — zato postoji
 jedan report engine umesto deset stranica sa izveštajima.
 
@@ -229,6 +229,11 @@ nijedan ekran namerno ne čita — jedan R po knjizi, da dva ne bi počela da se
 od ±20 $ nije ni dobitak ni gubitak, i izbacuje se iz win rate-a umesto da se broji kao gubitak —
 što bi knjigu punu scratch-eva potcenilo za nekoliko poena.
 
+**„All accounts" ne sabira različite valute.** €500 i $300 nisu $800. Kad nalozi u obuhvatu nemaju
+zajedničku valutu, dashboard, `/reports` i „Export for Claude" odbijaju da izračunaju pooled novčanu
+figuru — ceo novčani deo ekrana se zamenjuje upozorenjem umesto da tiho pokaže broj u pogrešnoj
+jedinici. Isti nalozi u istoj valuti se i dalje normalno sabiraju.
+
 ### Rizik
 
 | Metrika | Formula | Napomena |
@@ -237,15 +242,20 @@ od ±20 $ nije ni dobitak ni gubitak, i izbacuje se iz win rate-a umesto da se b
 | Avg daily DD | Prosečan pad unutar dana, od dnevnog vrha | Dan bez pada ulazi kao 0 |
 | Recovery factor | `neto profit / max drawdown` | `null` dok kriva nikad nije pala |
 | Sharpe | `prosečan dnevni P&L / σ × √periodsPerYear` | |
-| Sortino | Isto, ali imenilac broji samo gubitaške dane | `null` kad nijedan dan nije bio u minusu — rast nije rizik |
+| Sortino | Isto, ali brojilac gleda samo padove ispod nule — imenilac i dalje broji **sve** dane, ne samo gubitaške | `null` kad nijedan dan nije bio u minusu — rast nije rizik |
 | Calmar | `godišnji prinos / max drawdown` | Recovery factor podeljen vremenom koje mu je trebalo |
-| Consistency | `100 − (σ / ukupno) × 100` | 0 za knjigu koja gubi |
+| Consistency | `100 − cv × 20`, gde je `cv = σ / \|prosek\|` | 0 za knjigu koja gubi |
 | Avg MAE u R | Prosek koliko su trejdovi išli protiv pozicije | Prosečava se samo nad trejdovima koji *imaju* MAE |
 
 **Godišnja skala se meri, ne pretpostavlja.** `periodsPerYear = (dana trgovanja × 365) /
 kalendarskih dana raspona` — izvedeno iz podataka umesto zakucano na 252. Swing trejder sa 40 dana
 trgovanja preko 300 kalendarskih dana dobija svoj faktor; zakucanih 252 naduvalo bi svaki racio.
 Sva tri racija vraćaju `null` ispod `MIN_RATIO_DAYS` (5).
+
+**Consistency meri odnos prema proseku, ne prema sumi.** Prva verzija je delila σ sa *ukupnim*
+profitom — a ukupan profit raste sa brojem trejdova dok σ ne opada, pa je isti obrazac trgovanja
+posle godinu dana čitao doslednije nego posle meseca, bez ijedne stvarne promene u ponašanju. `cv`
+(koeficijent varijacije, σ prema proseku po trejdu) ne zavisi od veličine uzorka na taj način.
 
 Dva različita imenioca za drawdown postoje namerno:
 
@@ -359,13 +369,18 @@ ispravi, a zamrznuti verdikti su ono što sprečava da compliance krene za njom.
 **Playbook-ovi** drže grupe pravila; odgovaranje na njihov checklist upisuje `tj_position_rules`,
 što hrani follow rate. Neodgovoreno pravilo ne broji se ni u brojiocu ni u imeniocu.
 
-**Insights** su 31 pravilo u četiri familije (dan, nedelja, trejd, proces) koja čitaju iste
+**Insights** su 37 pravila u četiri familije (dan, nedelja, trejd, proces) koja čitaju iste
 obogaćene trejdove kao i izveštaji. Svako pravilo deklariše minimalni uzorak i nijedno ne okida na
 n=1.
 
 **FTMO režim** je po nalogu: dnevni gubitak, ukupni gubitak, profitni cilj i minimalni broj dana.
 Proboj pravila zamrzava nalog — nov trejd se ne može ni napraviti ni aktivirati dok se izazov ne
 resetuje u Settings.
+
+Dnevni limit ima **podesivu bazu**, jer se stvarni FTMO nalozi razlikuju po tome: fiksna (procenat
+od početnog balansa, ceo izazov) za 2-Step tip, ili rolling (procenat od balansa na kraju
+prethodnog trgovinskog dana) za 1-Step tip. Ukupan gubitak (drawdown pod) ostaje uvek fiksan na
+početni balans — to je zajedničko oba tipa.
 
 ---
 
@@ -434,7 +449,7 @@ Supabase-ove default privilegije dodele EXECUTE svakoj novoj funkciji u `public`
 
 ## Migracije
 
-45 fajlova u `supabase/migrations/`, imenovanih `YYYYMMDDHHMMSS_opis.sql`.
+73 fajla u `supabase/migrations/`, imenovanih `YYYYMMDDHHMMSS_opis.sql`.
 
 - **Aditivne.** Nikad se ne menja primenjena migracija — piše se nova delta.
 - **Migracija objašnjava samu sebe.** Svaka počinje komentarom šta je bilo pogrešno i šta puca bez
@@ -466,9 +481,9 @@ P&L i drawdown izračunate nad delimičnim skupom, bez ijednog vidljivog simptom
 
 ## Testovi
 
-1723 testa u 110 fajlova, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
-`*.test.ts`, 1496 testova u 78 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
-227 testova u 32 fajla). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
+2074 testa u 130 fajlova, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
+`*.test.ts`, 1694 testova u 87 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
+380 testova u 43 fajla). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
 plaćaju cenu DOM-a koji ne dodiruju.
 
 `vitest.config.ts` nosi **podove** pokrivenosti, ne ciljeve — stoje na onome što paket trenutno
@@ -516,7 +531,7 @@ drawdown-a. Ista knjiga, iste brojke na papiru, postaju i propovi renderovanog D
 `dashboard.render.test.tsx` — papir → `lib/` → ekran, jedan skup brojeva tvrđen na sva tri sloja.
 
 **Render sloj se izvršava od Faze 10.** Osam koraka, svaki commit + push + `tsc` + `vitest` + `lint`
-+ `build` + `knip`, dokumentovano u `CODE_REVIEW.md`. Dashboard (najveći fajl, 42 `useMemo`),
++ `build` + `knip`, dokumentovano u `CODE_REVIEW.md`. Dashboard (najveći fajl, 48 `useMemo`),
 `journal-grid`, tri forme (`trade-form`, `daily-report-form`, `tracker-checklist`),
 `import-wizard`, i 14 čistih prezentacionih komponenti uključujući `markdown-view` — jedini
 renderer sa bezbednosnim značajem u aplikaciji (href allowlist na ekranu, ne samo u parseru).
