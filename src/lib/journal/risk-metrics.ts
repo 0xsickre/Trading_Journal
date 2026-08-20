@@ -19,29 +19,36 @@ export function recoveryFactor(
 }
 
 /**
- * Scaling applied to the raw ratio before subtracting it from 100.
+ * Scaling applied to the coefficient of variation before subtracting it from
+ * 100.
  *
- * The source spec gives the formula but not the unit, and flags in its own
- * margin that the result "reads like a coefficient of variation × 100". This
- * constant is the single place to recalibrate once there is enough live data to
- * judge — the call sites never need to change.
+ * The source spec's literal wording — stdev / TOTAL profit — was tried first
+ * and dropped: total = mean × count, so that ratio shrinks as more periods
+ * accumulate even when the underlying volatility is unchanged. A book that
+ * trades the same pattern for a year would "become more consistent" purely by
+ * outliving its own sample size. `cv` (stdev / |mean|) does not carry that
+ * bias — it answers "how big is the spread relative to the typical trade",
+ * independent of how many trades there have been. This constant is the single
+ * place to recalibrate once there is enough live data to judge — the call
+ * sites never need to change.
  */
-export const CONSISTENCY_SCALE = 100;
+export const CONSISTENCY_SCALE = 20;
 
 export type ConsistencyResult = {
   count: number;
   mean: number | null;
   stdev: number | null;
   total: number;
-  /** stdev / total profit, per the spec's wording. */
+  /** stdev / total profit, per the spec's literal wording. Not used by the
+   * score (see `CONSISTENCY_SCALE`) — carried so the spec's original reading
+   * can still be inspected without recomputing anything. */
   raw: number | null;
   /**
-   * stdev / mean — the coefficient of variation. Not used by the score, but
-   * carried so the alternative reading of the spec can be compared against the
-   * implemented one without recomputing anything.
+   * stdev / mean — the coefficient of variation. Drives `score`: unlike `raw`,
+   * it does not shrink just because the sample got longer.
    */
   cv: number | null;
-  /** 100 − raw × CONSISTENCY_SCALE, clamped to 0..100. */
+  /** 100 − cv × CONSISTENCY_SCALE, clamped to 0..100. */
   score: number;
 };
 
@@ -50,8 +57,9 @@ export type ConsistencyResult = {
  *
  * The spec defines this as "standard deviation of profit / total profit", then
  * flags in its own margin that the unit is unclear and reads like a coefficient
- * of variation. Both the raw ratio and the derived score are returned so the
- * scaling can be recalibrated without touching call sites.
+ * of variation. Both readings are computed; the score is built from `cv`, not
+ * the spec's literal `raw`, because `raw` scales with sample size rather than
+ * with actual consistency (see `CONSISTENCY_SCALE`).
  */
 export function consistencyScore(profits: number[]): ConsistencyResult {
   const count = profits.length;
@@ -85,7 +93,7 @@ export function consistencyScore(profits: number[]): ConsistencyResult {
   const raw = stdev / total;
   const score = Math.max(
     0,
-    Math.min(100, 100 - raw * CONSISTENCY_SCALE),
+    Math.min(100, 100 - (cv ?? 0) * CONSISTENCY_SCALE),
   );
   return { count, mean, stdev, total, raw, cv, score };
 }

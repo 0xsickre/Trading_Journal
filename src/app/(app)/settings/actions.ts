@@ -275,6 +275,7 @@ export async function updateAccount(
     ftmo_mode?: boolean;
     ftmo_daily_loss_enabled?: boolean;
     ftmo_daily_loss_pct?: number;
+    ftmo_daily_loss_basis?: "starting_balance" | "prev_close";
     ftmo_max_loss_enabled?: boolean;
     ftmo_max_loss_pct?: number;
     ftmo_profit_target_enabled?: boolean;

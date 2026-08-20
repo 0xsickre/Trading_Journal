@@ -132,11 +132,11 @@ describe("the book, walked", () => {
   it("scores consistency off the dispersion of the trades", () => {
     // mean 60; deviations 240 −160 140 −110 90 −260 340 −210 −60 −10;
     // squares sum to 354 000; variance 35 400; stdev √35400 ≈ 188.1489.
-    // raw = 188.1489 / 600 ≈ 0.313582 → 100 − 31.3582 ≈ 68.64.
+    // cv = 188.1489 / 60 ≈ 3.13582 → 100 − 3.13582×20 ≈ 37.28.
     const c = consistencyScore(BOOK_NET);
     expect(c.mean).toBeCloseTo(60, 10);
     expect(c.stdev).toBeCloseTo(Math.sqrt(35_400), 8);
-    expect(c.score).toBeCloseTo(68.64, 2);
+    expect(c.score).toBeCloseTo(37.28, 2);
   });
 });
 
@@ -173,8 +173,8 @@ describe("the book, scored", () => {
    *   max drawdown     40% → 100 − 40                   → 60      × 20 = 1200
    *   win %         55.56% → 55.5556 / 60 × 100         → 92.5926 × 15 = 1388.89
    *   recovery        3.00 → RECOVERY_BANDS floor 3.0   → 70      × 10 =  700
-   *   consistency    68.64 → carried through as-is      → 68.6419 × 10 =  686.42
-   *                                                        total  6375.31 / 100
+   *   consistency    37.28 → carried through as-is      → 37.2837 × 10 =  372.84
+   *                                                        total  6061.73 / 100
    */
   const score = () => {
     const s = stats();
@@ -199,11 +199,11 @@ describe("the book, scored", () => {
     expect(by.maxDrawdown).toBeCloseTo(60, 6);
     expect(by.winPct).toBeCloseTo(92.5926, 3);
     expect(by.recovery).toBeCloseTo(70, 6);
-    expect(by.consistency).toBeCloseTo(68.6419, 3);
+    expect(by.consistency).toBeCloseTo(37.2837, 3);
   });
 
   it("weights them into the number on the card", () => {
-    expect(score().score).toBeCloseTo(63.75, 2);
+    expect(score().score).toBeCloseTo(60.62, 2);
     expect(score().coverage).toBe(100);
   });
 

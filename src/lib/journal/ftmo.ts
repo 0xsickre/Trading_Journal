@@ -10,11 +10,13 @@
 import type { Account } from "./types";
 import { compareInstants, toEpoch, zonedDateKey } from "./time";
 
+export type FtmoDailyLossBasis = "starting_balance" | "prev_close";
+
 export type FtmoConfig = {
   enabled: boolean;
   startingBalance: number;
   timezone: string;
-  dailyLoss: { enabled: boolean; pct: number };
+  dailyLoss: { enabled: boolean; pct: number; basis: FtmoDailyLossBasis };
   maxLoss: { enabled: boolean; pct: number };
   profitTarget: { enabled: boolean; pct: number };
   minDays: { enabled: boolean; days: number };
@@ -66,6 +68,7 @@ export function ftmoConfigFromAccount(account: Account): FtmoConfig {
     dailyLoss: {
       enabled: account.ftmo_daily_loss_enabled,
       pct: account.ftmo_daily_loss_pct,
+      basis: account.ftmo_daily_loss_basis,
     },
     maxLoss: {
       enabled: account.ftmo_max_loss_enabled,
@@ -107,10 +110,7 @@ export function evaluateFtmo(
   if (!config.enabled) return OFF_RESULT;
 
   const start = config.startingBalance;
-  const dailyLossLimit =
-    config.dailyLoss.enabled && start > 0
-      ? -(start * config.dailyLoss.pct) / 100
-      : null;
+  const dailyLossEnabled = config.dailyLoss.enabled && start > 0;
   const maxLossFloor =
     config.maxLoss.enabled && start > 0
       ? start - (start * config.maxLoss.pct) / 100
@@ -165,22 +165,32 @@ export function evaluateFtmo(
     }
   }
 
-  // Daily loss: earliest day whose realized loss crosses the limit.
+  // Daily loss: earliest day whose realized loss crosses THAT DAY's limit.
+  // The limit's basis is configurable per account (`ftmo_daily_loss_basis`),
+  // because real FTMO account types differ on this: a 2-Step challenge pegs it
+  // to the fixed starting balance for the challenge's whole life, a 1-Step /
+  // trailing-style challenge rolls it to the previous trading day's closing
+  // equity. `openingEquity` walks the same fixed value for the static basis
+  // (reproducing the old constant-limit behavior exactly) or the running
+  // close-of-previous-day equity for the rolling basis.
   let dailyBreach: FtmoBreach | null = null;
-  if (dailyLossLimit != null) {
-    for (const [date, net] of [...dayNet.entries()].sort((a, b) =>
+  let dailyLossLimit: number | null = null;
+  if (dailyLossEnabled) {
+    const orderedDays = [...dayNet.entries()].sort((a, b) =>
       a[0].localeCompare(b[0]),
-    )) {
-      if (net <= dailyLossLimit) {
-        dailyBreach = {
-          rule: "daily_loss",
-          date,
-          amount: net,
-          limit: dailyLossLimit,
-        };
-        break;
+    );
+    let openingEquity = start;
+    for (const [date, net] of orderedDays) {
+      const limit = -(openingEquity * config.dailyLoss.pct) / 100;
+      if (dailyBreach == null && net <= limit) {
+        dailyBreach = { rule: "daily_loss", date, amount: net, limit };
       }
+      openingEquity =
+        config.dailyLoss.basis === "prev_close" ? openingEquity + net : start;
     }
+    // The limit in force for the day after the last one traded — the number
+    // that answers "what can I still lose today" right now.
+    dailyLossLimit = -(openingEquity * config.dailyLoss.pct) / 100;
   }
 
   const breaches = [dailyBreach, maxBreach].filter(

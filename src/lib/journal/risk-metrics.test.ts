@@ -152,4 +152,19 @@ describe("consistencyScore carries both readings of the spec", () => {
     expect(r.score).toBe(0);
     expect(r.raw).toBeNull();
   });
+
+  it("does not improve just because the sample got longer", () => {
+    // `raw` (stdev / total) shrinks as more periods accumulate even when the
+    // underlying volatility is unchanged, because total = mean × count. `cv`
+    // does not carry that bias, so a pattern repeated 2x and the same pattern
+    // repeated 10x — identical relative spread, different sample size — must
+    // score identically.
+    const pattern = [100, 200, 300];
+    const short = consistencyScore([...pattern, ...pattern]);
+    const long = consistencyScore(Array(10).fill(pattern).flat());
+
+    expect(short.raw).not.toBeCloseTo(long.raw!, 5); // raw DOES drift with n
+    expect(short.cv).toBeCloseTo(long.cv!, 9); // cv does not
+    expect(short.score).toBeCloseTo(long.score, 9);
+  });
 });

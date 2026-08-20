@@ -115,7 +115,10 @@ export function FtmoBanner({
           <span>Target: {fmtMoney(result.profitTargetAmount, ccy)}</span>
         )}
         {result.dailyLossLimit != null && (
-          <span>Daily limit: {fmtMoney(result.dailyLossLimit, ccy, { sign: true })}</span>
+          <span>
+            Daily limit{account.ftmo_daily_loss_basis === "prev_close" ? " (today)" : ""}:{" "}
+            {fmtMoney(result.dailyLossLimit, ccy, { sign: true })}
+          </span>
         )}
         {result.maxLossFloor != null && (
           <span>Floor: {fmtMoney(result.maxLossFloor, ccy)}</span>

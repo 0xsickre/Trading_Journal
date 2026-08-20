@@ -437,10 +437,16 @@ describe("the calibration knobs, pinned", () => {
     expect(MIN_COVERAGE_SHARE).toBe(0.5);
   });
 
-  it("scales consistency so a book with σ = total scores zero", () => {
-    // score = 100 − (σ / total) × CONSISTENCY_SCALE. At scale 100 a standard
-    // deviation equal to the whole net total lands exactly on 0.
-    expect(CONSISTENCY_SCALE).toBe(100);
-    expect(consistencyScore([100, -100, 100, 100]).score).toBeGreaterThanOrEqual(0);
+  it("scales consistency so cv = 5 exactly zeroes the score", () => {
+    // score = 100 − cv × CONSISTENCY_SCALE, where cv = stdev / |mean|. At
+    // scale 20, a coefficient of variation of 5 — a standard deviation five
+    // times the average trade — lands exactly on 0. (The spec's literal
+    // stdev/total reading was tried first and dropped: it shrinks as the
+    // sample grows even when nothing about the volatility changed — see
+    // `CONSISTENCY_SCALE`'s doc comment in risk-metrics.ts.)
+    expect(CONSISTENCY_SCALE).toBe(20);
+    const r = consistencyScore([60, -40]); // mean 10, stdev 50, cv 5
+    expect(r.cv).toBeCloseTo(5, 10);
+    expect(r.score).toBe(0);
   });
 });

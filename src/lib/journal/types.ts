@@ -61,6 +61,10 @@ export type Account = {
   ftmo_mode: boolean;
   ftmo_daily_loss_enabled: boolean;
   ftmo_daily_loss_pct: number;
+  /** What the daily-loss % is OF: a fixed starting balance, or the previous
+   * trading day's closing equity. Real FTMO account types use both, depending
+   * on the challenge purchased. */
+  ftmo_daily_loss_basis: "starting_balance" | "prev_close";
   ftmo_max_loss_enabled: boolean;
   ftmo_max_loss_pct: number;
   ftmo_profit_target_enabled: boolean;

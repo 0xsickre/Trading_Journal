@@ -5,7 +5,7 @@ const baseConfig = (over: Partial<FtmoConfig> = {}): FtmoConfig => ({
   enabled: true,
   startingBalance: 100_000,
   timezone: "UTC",
-  dailyLoss: { enabled: true, pct: 5 }, // -5000/day
+  dailyLoss: { enabled: true, pct: 5, basis: "starting_balance" }, // -5000/day
   maxLoss: { enabled: true, pct: 10 }, // floor 90_000
   profitTarget: { enabled: true, pct: 10 }, // +10_000
   minDays: { enabled: true, days: 2 },
@@ -42,11 +42,14 @@ describe("evaluateFtmo", () => {
   });
 
   it("fails on static max loss breach", () => {
-    const r = evaluateFtmo(baseConfig({ dailyLoss: { enabled: false, pct: 5 } }), [
-      t("2026-07-01T12:00:00Z", -4000),
-      t("2026-07-02T12:00:00Z", -4000),
-      t("2026-07-03T12:00:00Z", -3000), // equity 89_000 <= 90_000 floor
-    ]);
+    const r = evaluateFtmo(
+      baseConfig({ dailyLoss: { enabled: false, pct: 5, basis: "starting_balance" } }),
+      [
+        t("2026-07-01T12:00:00Z", -4000),
+        t("2026-07-02T12:00:00Z", -4000),
+        t("2026-07-03T12:00:00Z", -3000), // equity 89_000 <= 90_000 floor
+      ],
+    );
     expect(r.status).toBe("failed");
     expect(r.breaches.some((b) => b.rule === "max_loss")).toBe(true);
   });
@@ -76,6 +79,31 @@ describe("evaluateFtmo", () => {
     expect(r.status).toBe("failed");
   });
 
+  it("prev_close basis widens the daily limit after a profitable day", () => {
+    // Day 1: +10_000 → equity 110_000. Day 2 loses 5_400.
+    // starting_balance basis: limit is always -5% of 100_000 = -5_000 → breach.
+    // prev_close basis: day 2's limit is -5% of 110_000 = -5_500 → no breach.
+    const trades = [
+      t("2026-07-01T12:00:00Z", 10_000),
+      t("2026-07-02T12:00:00Z", -5_400),
+    ];
+
+    const staticResult = evaluateFtmo(baseConfig(), trades);
+    expect(staticResult.status).toBe("failed");
+    expect(staticResult.breaches.some((b) => b.rule === "daily_loss")).toBe(true);
+
+    const rollingResult = evaluateFtmo(
+      baseConfig({ dailyLoss: { enabled: true, pct: 5, basis: "prev_close" } }),
+      trades,
+    );
+    expect(rollingResult.breaches.some((b) => b.rule === "daily_loss")).toBe(
+      false,
+    );
+    // The live limit reported is for the day AFTER the last one traded,
+    // based on the latest close (100_000 + 10_000 - 5_400 = 104_600).
+    expect(rollingResult.dailyLossLimit).toBeCloseTo(-(104_600 * 0.05), 6);
+  });
+
   it("ignores trades before resetAt", () => {
     const r = evaluateFtmo(baseConfig({ resetAt: "2026-07-02T00:00:00Z" }), [
       t("2026-07-01T12:00:00Z", -9000), // pre-reset, ignored
@@ -103,7 +131,7 @@ describe("instant comparison at the reset boundary", () => {
     enabled: true,
     startingBalance: 100_000,
     timezone: "America/New_York",
-    dailyLoss: { enabled: false, pct: 5 },
+    dailyLoss: { enabled: false, pct: 5, basis: "starting_balance" as const },
     maxLoss: { enabled: false, pct: 10 },
     profitTarget: { enabled: false, pct: 10 },
     minDays: { enabled: false, days: 4 },
@@ -127,7 +155,7 @@ describe("instant comparison at the reset boundary", () => {
   it("orders mixed-format timestamps chronologically", () => {
     // Wrong ordering would misattribute which day breached first.
     const r = evaluateFtmo(
-      { ...cfg, resetAt: null, dailyLoss: { enabled: true, pct: 1 } },
+      { ...cfg, resetAt: null, dailyLoss: { enabled: true, pct: 1, basis: "starting_balance" as const } },
       [
         { closedAt: "2026-07-28T20:00:00.000Z", net: -600 },
         { closedAt: "2026-07-28T14:00:00+00:00", net: -600 },

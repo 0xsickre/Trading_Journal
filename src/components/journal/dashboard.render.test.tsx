@@ -144,9 +144,9 @@ describe("the book, on screen — same figures the paper already proved", () => 
     expect(statValue("Win rate")).toBe("55.6%");
   });
 
-  it("shows the Sickre Score the paper works out to 63.75, rounded to 64", () => {
+  it("shows the Sickre Score the paper works out to 60.62, rounded to 61", () => {
     renderDashboard(rowsOf(BOOK));
-    expect(scoreHeadline()).toBe("64");
+    expect(scoreHeadline()).toBe("61");
     // Ten trades: real, and thin — labelled so, with the count beside it.
     // Asserted as ONE string rather than two lookups: "10 trades" on its own
     // now also matches the Hold time card's "10 trades with a known duration",

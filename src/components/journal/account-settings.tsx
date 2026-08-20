@@ -189,6 +189,7 @@ function AccountCard({
   const [ftmoMode, setFtmoMode] = useState(account.ftmo_mode);
   const [dailyOn, setDailyOn] = useState(account.ftmo_daily_loss_enabled);
   const [dailyPct, setDailyPct] = useState(String(account.ftmo_daily_loss_pct));
+  const [dailyBasis, setDailyBasis] = useState(account.ftmo_daily_loss_basis);
   const [maxOn, setMaxOn] = useState(account.ftmo_max_loss_enabled);
   const [maxPct, setMaxPct] = useState(String(account.ftmo_max_loss_pct));
   const [targetOn, setTargetOn] = useState(account.ftmo_profit_target_enabled);
@@ -228,6 +229,7 @@ function AccountCard({
         ftmo_mode: ftmoMode,
         ftmo_daily_loss_enabled: dailyOn,
         ftmo_daily_loss_pct: Number(dailyPct) || 0,
+        ftmo_daily_loss_basis: dailyBasis,
         ftmo_max_loss_enabled: maxOn,
         ftmo_max_loss_pct: Number(maxPct) || 0,
         ftmo_profit_target_enabled: targetOn,
@@ -390,6 +392,29 @@ function AccountCard({
                 onValue={setDailyPct}
                 suffix="% of balance / day"
               />
+              {dailyOn && (
+                <div className="flex items-center gap-2 pl-6">
+                  <span className="text-xs text-muted-foreground">of</span>
+                  <Select
+                    value={dailyBasis}
+                    onValueChange={(v) =>
+                      setDailyBasis(v as "starting_balance" | "prev_close")
+                    }
+                  >
+                    <SelectTrigger className="h-7 w-auto text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="starting_balance">
+                        starting balance (fixed — FTMO 2-Step)
+                      </SelectItem>
+                      <SelectItem value="prev_close">
+                        previous day&apos;s close (rolling — FTMO 1-Step)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <FtmoRule
                 label="Max total loss"
                 enabled={maxOn}
@@ -416,9 +441,11 @@ function AccountCard({
                 step="1"
               />
               <p className="text-xs text-muted-foreground">
-                Drawdown is static (from the starting balance {balance || "0"}{" "}
-                {currency}). A breach = a red banner plus a block on new trades
-                until you reset the challenge.
+                Max total loss is always static (from the starting balance{" "}
+                {balance || "0"} {currency}). Max daily loss uses whichever
+                basis is picked above — fixed matches an FTMO 2-Step
+                challenge, rolling matches a 1-Step. A breach = a red banner
+                plus a block on new trades until you reset the challenge.
               </p>
             </div>
           )}

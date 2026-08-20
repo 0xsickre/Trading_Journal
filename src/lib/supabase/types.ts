@@ -28,6 +28,7 @@ export type Database = {
           default_stop_pct: number | null
           default_swap_per_day: number
           default_target_pct: number | null
+          ftmo_daily_loss_basis: string
           ftmo_daily_loss_enabled: boolean
           ftmo_daily_loss_pct: number
           ftmo_max_loss_enabled: boolean
@@ -58,6 +59,7 @@ export type Database = {
           default_stop_pct?: number | null
           default_swap_per_day?: number
           default_target_pct?: number | null
+          ftmo_daily_loss_basis?: string
           ftmo_daily_loss_enabled?: boolean
           ftmo_daily_loss_pct?: number
           ftmo_max_loss_enabled?: boolean
@@ -88,6 +90,7 @@ export type Database = {
           default_stop_pct?: number | null
           default_swap_per_day?: number
           default_target_pct?: number | null
+          ftmo_daily_loss_basis?: string
           ftmo_daily_loss_enabled?: boolean
           ftmo_daily_loss_pct?: number
           ftmo_max_loss_enabled?: boolean

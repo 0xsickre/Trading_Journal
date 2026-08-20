@@ -45,6 +45,7 @@ const account = (over: Partial<Account> = {}): Account => ({
   ftmo_mode: false,
   ftmo_daily_loss_enabled: false,
   ftmo_daily_loss_pct: 0,
+  ftmo_daily_loss_basis: "starting_balance",
   ftmo_max_loss_enabled: false,
   ftmo_max_loss_pct: 0,
   ftmo_profit_target_enabled: false,
