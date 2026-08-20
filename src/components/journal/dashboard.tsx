@@ -1572,9 +1572,24 @@ export function Dashboard({
         <Stat
           size="hero"
           label="Max drawdown"
-          value={formatMetric(mkMetric(stats.maxDrawdown, "money", metricCtx), viewMode)}
+          // Percentage mode is special-cased to the EXISTING peak-relative figure
+          // (the "Max drawdown %" tile below, `drawdown.maxPctOfEquity`) rather
+          // than run through the generic money→% conversion every other tile
+          // uses. The generic one divides by TODAY's equity — a number that
+          // drifts as the account grows even though the drawdown event itself
+          // is fixed in the past, and is not how drawdown percentage is
+          // measured anywhere in trading practice. Peak-to-trough over the
+          // peak IS that measure, and it is what the dedicated tile already
+          // computes correctly; showing a second, different number under the
+          // same "Max drawdown" name would read as a contradiction, not a
+          // second fact.
+          value={
+            viewMode === "percentage" && drawdown.maxAt
+              ? formatMetric(mkMetric(-drawdown.maxPctOfEquity, "pct"), viewMode)
+              : dashboardMoney(stats.maxDrawdown, metricCtx, viewMode)
+          }
           cls="text-[var(--loss)]"
-          title="Worst peak-to-trough drop in cumulative P&L. Deposits and withdrawals are not losses, so they do not move this number."
+          title="Worst peak-to-trough drop in cumulative P&L. Deposits and withdrawals are not losses, so they do not move this number. In Percentage mode this shows the SAME peak-relative share as the 'Max drawdown %' tile below, not a share of today's equity — a drawdown's severity does not shrink just because the account has grown since."
         />
       </div>
 
@@ -1695,7 +1710,17 @@ export function Dashboard({
           />
           <Stat
             label="Avg daily DD"
-            value={formatMetric(mkMetric(dailyDd.avgMoney, "money", metricCtx), viewMode)}
+            // No `equityBase` in the context passed here — on purpose.
+            // Percentage mode's fallback in `formatMetric` is "no denominator,
+            // show money", and there is no sound denominator for this one: a
+            // daily loss limit (the FTMO-style rule this metric mirrors, per
+            // its own doc comment in risk-ratios.ts) is measured against a
+            // FIXED reference such as starting balance, never against
+            // TODAY's fluctuating equity. Rather than invent and ship an
+            // untested percentage basis, this tile opts out of the switcher
+            // the same way Trades/Streak already do — Privacy still masks it,
+            // since that check runs before the denominator is ever consulted.
+            value={formatMetric(mkMetric(dailyDd.avgMoney, "money", { currency }), viewMode)}
             cls={dailyDd.avgMoney < 0 ? "text-[var(--loss)]" : undefined}
             title={
               dailyDd.worstDay

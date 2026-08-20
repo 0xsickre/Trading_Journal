@@ -336,3 +336,69 @@ describe("the view-mode switcher reuses the /reports units layer, not a second d
     expect(statValue("Max drawdown").startsWith("+")).toBe(false);
   });
 });
+
+describe("Max drawdown in Percentage mode: peak-relative, not today's-equity-relative", () => {
+  // Equity path: 2000 → 3000 (peak) → 2600 (trough, −400 from peak) → 2700.
+  // Peak-relative drawdown: 400 / 3000 = 13.3 %. The bug this fixes divided by
+  // TODAY's equity instead — 400 / 2700 = 14.8 % — a number that would keep
+  // shrinking as the account grows even though this drawdown is already over.
+  const ACCOUNT = account({ id: "acc-1", starting_balance: 2000 });
+  const trades = [
+    mkTrade({ id: "t1", net: 1000, closedAt: "2026-06-01T18:00:00Z" }),
+    mkTrade({ id: "t2", net: -400, closedAt: "2026-06-02T18:00:00Z" }),
+    mkTrade({ id: "t3", net: 100, closedAt: "2026-06-03T18:00:00Z" }),
+  ];
+
+  function renderIt() {
+    return render(
+      <Dashboard
+        trades={rowsOf(trades)}
+        accounts={[ACCOUNT]}
+        todayKey="2026-06-04"
+        timezone="America/New_York"
+      />,
+    );
+  }
+
+  it("'Max drawdown' agrees with the dedicated 'Max drawdown %' tile instead of computing a second, different number", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderIt();
+    const dedicated = statValue("Max drawdown %"); // peak-relative, always on
+
+    const switcher = screen.getByRole("button", { name: "Privacy" }).parentElement!;
+    await user.click(within(switcher).getByRole("button", { name: "%" }));
+
+    // Same magnitude as the dedicated tile, signed as a loss — not a second,
+    // conflicting figure under a name that looks like the same claim.
+    expect(statValue("Max drawdown")).toBe(`-${dedicated}`);
+    expect(dedicated).toBe("13.3%");
+  });
+
+  it("does NOT show the today's-equity-relative figure the bug produced", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderIt();
+    const switcher = screen.getByRole("button", { name: "Privacy" }).parentElement!;
+    await user.click(within(switcher).getByRole("button", { name: "%" }));
+
+    expect(statValue("Max drawdown")).not.toBe("-14.8%");
+  });
+
+  it("'Avg daily DD' stays in dollars under Percentage mode — no sound denominator exists for it", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderIt();
+    const dollars = statValue("Avg daily DD");
+    expect(dollars).toMatch(/^-?\$/);
+
+    const switcher = screen.getByRole("button", { name: "Privacy" }).parentElement!;
+    await user.click(within(switcher).getByRole("button", { name: "%" }));
+
+    expect(statValue("Avg daily DD")).toBe(dollars);
+  });
+
+  it("'Avg daily DD' still masks under Privacy — opting out of Percentage is not opting out of Privacy", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderIt();
+    await user.click(screen.getByRole("button", { name: "Privacy" }));
+    expect(statValue("Avg daily DD")).toBe("•••");
+  });
+});
