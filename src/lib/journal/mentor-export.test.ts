@@ -99,6 +99,60 @@ describe("buildMentorPack breakeven band", () => {
   });
 });
 
+describe("buildMentorPack MAE/MFE in R", () => {
+  it("converts the raw chart prices to R, on realized R's own basis", () => {
+    const t = trade("m", 200); // avg_entry 100, realized_r 2
+    Object.assign(t, {
+      entry_price: 100,
+      stop_price: 95, // planned risk: 5 pts
+      direction: "Long",
+      max_drawdown_price: 97, // 3 pts adverse -> 0.60R
+      max_profit_price: 112, // 12 pts favorable -> 2.40R
+    });
+
+    const md = buildMentorPack([t], { currency: "USD" });
+
+    // Per-trade line: the raw chart price is not mistaken for R.
+    expect(md).toContain("MAE 0.60R");
+    expect(md).toContain("MFE 2.40R");
+    // Aggregate row in the stats table, not just the per-trade detail.
+    expect(md).toContain("| Avg MAE (R) | 0.60R (1 trades) |");
+    expect(md).toContain("| Avg MFE (R) | 2.40R (1 trades) |");
+  });
+
+  it("reports — for both when no trade carries a chart price", () => {
+    const md = buildMentorPack([trade("w", 500)], { currency: "USD" });
+    expect(md).toContain("| Avg MAE (R) | — |");
+    expect(md).toContain("| Avg MFE (R) | — |");
+  });
+});
+
+describe("buildMentorPack basis disclosures", () => {
+  it("states the account's actual breakeven band, not just the concept", () => {
+    const range = resolveBreakevenRange({
+      breakeven_from: -37.5,
+      breakeven_to: 0,
+      breakeven_unit: "currency",
+      starting_balance: 100_000,
+    });
+    const md = buildMentorPack([trade("w", 500)], {
+      currency: "USD",
+      breakevenRange: range,
+    });
+    expect(md).toContain("Breakeven pojas: -37.50 do 0.00 USD");
+  });
+
+  it("omits the breakeven line for the exact-zero default", () => {
+    const md = buildMentorPack([trade("w", 500)], { currency: "USD" });
+    expect(md).not.toContain("Breakeven pojas:");
+  });
+
+  it("discloses that R figures are always gross, unlike the money rows", () => {
+    const md = buildMentorPack([trade("w", 500)], { currency: "USD" });
+    expect(md).toContain("uvek bruto (gross)");
+  });
+});
+
 describe("resolveCalendarRange", () => {
   it("returns the calendar quarter containing the anchor", () => {
     const r = resolveCalendarRange("quarter", "2026-08-15");

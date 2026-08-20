@@ -432,6 +432,26 @@ describe("mixed-currency accounts refuse to pool money, rather than summing unli
     expect(statValue("Net P/L")).toBe("+$100.00");
   });
 
+  it("disables the mentor-pack export rather than silently pooling unlike currencies", async () => {
+    // The export button sits above the mixedCurrency render gate (it has to,
+    // to stay visible with an explanatory title rather than vanish) — so it
+    // needs its OWN guard, separate from the tile-hiding one. Unguarded, its
+    // `currency` falls back to "USD" and it would sum every trade in scope
+    // under that fake label.
+    render(<Dashboard trades={rowsOf(trades)} accounts={[USD_ACC, EUR_ACC]} todayKey="2026-06-03" timezone="America/New_York" />);
+    expect(screen.getByRole("button", { name: /export for claude/i })).toBeDisabled();
+  });
+
+  it("re-enables the export once narrowed to a single account", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<Dashboard trades={rowsOf(trades)} accounts={[USD_ACC, EUR_ACC]} todayKey="2026-06-03" timezone="America/New_York" />);
+
+    await user.click(accountSelect());
+    await user.click(await screen.findByRole("option", { name: "US Prop" }));
+
+    expect(screen.getByRole("button", { name: /export for claude/i })).not.toBeDisabled();
+  });
+
   it("two accounts in the SAME currency pool normally — this is not a two-account bug", () => {
     const USD_ACC2 = account({ id: "acc-usd2", name: "US Prop 2", currency: "USD" });
     const sameCurrencyTrades = [

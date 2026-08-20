@@ -1163,6 +1163,12 @@ export function Dashboard({
   );
 
   function handleExportMentorPack() {
+    // The trigger button is disabled in this state too — this is the same
+    // belt-and-suspenders the rest of the mixed-currency handling uses
+    // (`mixedCurrency`'s own comment above): `currency` falls back to "USD"
+    // here, and without this guard the pack would silently sum trades from
+    // accounts in different currencies under that one fake label.
+    if (mixedCurrency) return;
     let scoped =
       accountFilter === "all"
         ? trades
@@ -1376,7 +1382,12 @@ export function Dashboard({
                 variant="outline"
                 size="sm"
                 className="h-8"
-                title="Download a Markdown pack for the selected period to upload into Claude for mentor feedback"
+                disabled={mixedCurrency}
+                title={
+                  mixedCurrency
+                    ? "Accounts in scope use different currencies — pick one account to export"
+                    : "Download a Markdown pack for the selected period to upload into Claude for mentor feedback"
+                }
               >
                 <Download className="size-4" /> Export for Claude
               </Button>

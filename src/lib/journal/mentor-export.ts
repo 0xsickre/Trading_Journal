@@ -28,6 +28,7 @@ import { compareInstants } from "./time";
 import type { TradeRow } from "./types";
 import { groupInsights } from "./insights/types";
 import { OMITTED_RULES, type RunResult } from "./insights/registry";
+import { computeExcursionStats, excursionFromTrade } from "./excursion";
 
 // Fixed breakdowns. The user-defined fields are appended by `breakdownsFor`,
 // so a field added in Settings shows up in the mentor pack without an edit here.
@@ -101,6 +102,9 @@ function statsTable(
     exitEff.winnerCount > 0
       ? fmtExitEfficiencyPct(exitEff.avgWinnerPct)
       : "—";
+  const exc = computeExcursionStats(realized);
+  const excMae = exc.maeCount > 0 ? `${r2(exc.avgMaeR)}R (${exc.maeCount} trades)` : "—";
+  const excMfe = exc.mfeCount > 0 ? `${r2(exc.avgMfeR)}R (${exc.mfeCount} trades)` : "—";
   return [
     `| Metric | Value |`,
     `| --- | --- |`,
@@ -127,6 +131,8 @@ function statsTable(
     `| Total slippage (R) | ${slipTotal} |`,
     `| Target attainment | ${exitEffAvg} (${exitEff.count} closed trades) |`,
     `| Winner target attainment | ${exitEffWinner} (${exitEff.winnerCount} wins) |`,
+    `| Avg MAE (R) | ${excMae} |`,
+    `| Avg MFE (R) | ${excMfe} |`,
   ].join("\n");
 }
 
@@ -184,6 +190,18 @@ function tradeDetail(
     lines.push(
       `- **Target attainment:** ${fmtExitEfficiencyPct(exitEff.pct)} (${r2(exitEff.realizedR)}R / ${r2(exitEff.plannedRewardR)}R planned target)`,
     );
+  }
+  // MAE Price / MFE Price above (from `detailFields`) are the raw prices typed
+  // in from the chart — this is the same excursion converted to R, on the same
+  // basis realized_r uses (actual fill vs. planned risk distance), so it's
+  // actually comparable to every other R figure in this pack.
+  const exc = excursionFromTrade(t);
+  if (exc.maeR != null || exc.mfeR != null) {
+    const parts: string[] = [];
+    if (exc.maeR != null) parts.push(`MAE ${r2(exc.maeR)}R`);
+    if (exc.mfeR != null) parts.push(`MFE ${r2(exc.mfeR)}R`);
+    if (exc.capturePct != null) parts.push(`capture ${pct(exc.capturePct)}`);
+    lines.push(`- **MAE/MFE (R):** ${parts.join(" · ")}`);
   }
   return `${head}\n${lines.join("\n")}`;
 }
@@ -358,6 +376,10 @@ export function buildMentorPack(
   if (opts.startingBalance != null)
     context.push(`Početni balans: ${opts.startingBalance.toFixed(2)} ${ccy}`);
   if (opts.riskNote) context.push(opts.riskNote);
+  if (range.from !== 0 || range.to !== 0)
+    context.push(
+      `Breakeven pojas: ${range.from.toFixed(2)} do ${range.to.toFixed(2)} ${ccy}`,
+    );
   if (context.length > 0) out.push(`_${context.join(" · ")}_`);
   out.push("");
 
@@ -399,7 +421,8 @@ export function buildMentorPack(
       "- **Max drawdown** — najveći pad kapitala od vrha, u novcu (po izabranom net/gross modu).",
       "- **Entry slippage** — koliko je stvarni ulaz gori od planiranog, u **R** (negativno = trošak lošijeg ulaza).",
       "- **Target attainment (exit efficiency)** — realizovani R ÷ planirani reward R (koliko sam od plana ciljanog poteza zapravo uzeo).",
-      "- **MAE / MFE** — maksimalni nepovoljni / povoljni pomak tokom trejda, u R.",
+      "- **MAE / MFE (R)** — maksimalni nepovoljni / povoljni pomak tokom trejda, u R, na istoj osnovi kao realizovani R (stvarni ulaz naspram planiranog rizika). \"MAE Price\"/\"MFE Price\" ispod svakog trejda su SIROVE cene sa grafikona, ne R — MAE/MFE (R) red je prevod tih cena u R.",
+      "- **Sve R vrednosti (Total R, Avg R, Expectancy, MAE/MFE, slippage, target attainment) su uvek bruto (gross)** — kretanje cene, bez provizija/swap-a — bez obzira na net/gross mod. Samo novčani redovi (Net P/L, Avg win/loss u valuti, Max drawdown) su net. Pozitivan expectancy u R zato NE znači da troškovi ne jedu edge — to pokazuje samo Net P/L red.",
       "- Sve vrednosti su u valuti/TZ naloga; **net** = posle provizija i swap-a, **gross** = samo kretanje cene.",
     ].join("\n"),
   );
