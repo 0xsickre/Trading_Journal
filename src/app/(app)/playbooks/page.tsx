@@ -15,6 +15,7 @@ import { PlaybooksScreen } from "@/components/journal/playbooks-screen";
 import { PageHeader } from "@/components/app/page-header";
 import type { RealizedTrade } from "@/lib/journal/analytics";
 import { accountTimezoneResolver } from "@/lib/journal/time";
+import { getUserPrefs } from "@/lib/journal/user-prefs";
 
 /**
  * Playbooks: define them and judge them in the same place.
@@ -31,13 +32,14 @@ export default async function PlaybooksPage() {
   // the mistake `/reports` already had to fix.
   const positionRules = await getPositionRules();
 
-  const [accounts, trades, playbooks, library] = await Promise.all([
+  const [accounts, trades, playbooks, library, prefs] = await Promise.all([
     getAccounts(),
     getTradesWithStats(),
     // Retired rules included: a rule taken off the checklist still owns the
     // observations it collected, and a page about evidence must show them.
     getPlaybooks({ includeDeleted: true, positionRules }),
     getRuleLibrary({ includeDeleted: true }),
+    getUserPrefs(),
   ]);
 
   const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
@@ -77,6 +79,7 @@ export default async function PlaybooksPage() {
         lookup={lookup}
         currency={currency}
         breakevenRange={breakevenRange}
+        initialCollapsed={prefs.playbooksCollapsed}
       />
     </div>
   );

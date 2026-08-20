@@ -28,6 +28,12 @@ export type UserPrefs = {
    * "still matches" from "modified since". Null is the normal state.
    */
   dashboardTemplateId: string | null;
+  /**
+   * Playbook ids collapsed on /playbooks. Empty means every playbook is
+   * expanded — the state every account starts in, and the state a playbook
+   * created after this shipped is in until the trader touches it.
+   */
+  playbooksCollapsed: string[];
 };
 
 const EMPTY_PREFS: UserPrefs = {
@@ -35,6 +41,7 @@ const EMPTY_PREFS: UserPrefs = {
   dashboardHiddenWidgets: [],
   dashboardWidgetOrder: [],
   dashboardTemplateId: null,
+  playbooksCollapsed: [],
 };
 
 /** A stored array survives only if it is genuinely an array of strings. */
@@ -55,7 +62,7 @@ export async function getUserPrefs(): Promise<UserPrefs> {
   const { data } = await supabase
     .from("tj_user_prefs")
     .select(
-      "journal_hidden_columns, dashboard_hidden_widgets, dashboard_widget_order, dashboard_template_id",
+      "journal_hidden_columns, dashboard_hidden_widgets, dashboard_widget_order, dashboard_template_id, playbooks_collapsed",
     )
     .maybeSingle();
 
@@ -68,5 +75,6 @@ export async function getUserPrefs(): Promise<UserPrefs> {
       typeof data.dashboard_template_id === "string"
         ? data.dashboard_template_id
         : null,
+    playbooksCollapsed: stringArray(data.playbooks_collapsed),
   };
 }

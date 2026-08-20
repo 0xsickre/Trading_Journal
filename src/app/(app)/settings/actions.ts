@@ -295,6 +295,46 @@ export async function updateAccount(
     };
   }
 
+  const supabase = await createClient();
+
+  // Currency, once trades exist, is a historical fact too — more strictly than
+  // `starting_balance` below. `fx_rate_at_trade` is a SNAPSHOT resolved against
+  // whatever the account's currency was at the moment each trade was saved
+  // (`src/lib/journal/fx.ts`, and `tj_position_stats`'s own read of it); it is
+  // never recomputed. Swapping the account to a different currency does not
+  // touch that snapshot — every already-logged trade keeps its old fx_rate
+  // while the view relabels its money under the NEW currency, which is not a
+  // relabel at all: the number stops meaning what its symbol claims, silently,
+  // in every dashboard tile, drawdown figure and report that sums it. There is
+  // no safe reconversion to offer (this app does not store historical market
+  // FX rates), so the only honest move is to refuse the change once there is
+  // a trade it would corrupt.
+  //
+  // Compared against the CURRENT value, not just "has trades": the settings
+  // form always sends `currency` on every save (`account-settings.tsx`), so
+  // gating on presence alone would block ordinary saves of an account that
+  // already has trades, not just an actual currency change.
+  if (patch.currency != null) {
+    const { data: current } = await supabase
+      .from("tj_accounts")
+      .select("currency")
+      .eq("id", id)
+      .maybeSingle();
+    if (current && current.currency !== patch.currency) {
+      const { count } = await supabase
+        .from("tj_positions")
+        .select("id", { count: "exact", head: true })
+        .eq("account_id", id);
+      if ((count ?? 0) > 0) {
+        return {
+          ok: false,
+          error:
+            "Currency can't change once trades exist on this account — every logged trade's money was already converted and locked in against the old currency, and changing this would relabel it without reconverting. Create a new account instead.",
+        };
+      }
+    }
+  }
+
   // starting_balance is a historical fact, not a setting: it is the denominator
   // behind every drawdown percentage, the base of every FTMO threshold and the
   // opening point of the equity curve. Changing it silently re-bases all of
@@ -316,7 +356,6 @@ export async function updateAccount(
     return { ok: false, error: `Nepoznata vremenska zona: ${patch.timezone}` };
   }
 
-  const supabase = await createClient();
   const { error } = await supabase.from("tj_accounts").update(patch).eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidateAll();

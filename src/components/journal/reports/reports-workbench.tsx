@@ -10,8 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { toRealized } from "@/lib/journal/analytics";
 import { enrichTrades, type DailyReportLite, type FillCounts } from "@/lib/journal/enriched-trade";
+import { sharedCurrency } from "@/lib/journal/format";
 import {
   sharedBreakevenRange,
 } from "@/lib/journal/breakeven";
@@ -216,14 +218,33 @@ export function ReportsWorkbench({
     [accounts],
   );
 
+  const scopedAccounts = useMemo(
+    () =>
+      filters.accountIds?.length
+        ? accounts.filter((a) => filters.accountIds!.includes(a.id))
+        : accounts,
+    [accounts, filters.accountIds],
+  );
+
   // A single band only when every account in scope agrees; otherwise the same
   // P&L would be classified differently depending on where it came from.
-  const range = useMemo(() => {
-    const scoped = filters.accountIds?.length
-      ? accounts.filter((a) => filters.accountIds!.includes(a.id))
-      : accounts;
-    return sharedBreakevenRange(scoped);
-  }, [accounts, filters.accountIds]);
+  const range = useMemo(
+    () => sharedBreakevenRange(scopedAccounts),
+    [scopedAccounts],
+  );
+
+  /**
+   * Whether the accounts in scope disagree on currency. €500 and $300 summed
+   * as "$800" was silently wrong here — `currency` below used to resolve over
+   * EVERY account regardless of `filters.accountIds`, and `equityBase` pools
+   * `net_pl` across accounts with no currency check at all. There is no safe
+   * fallback number for money (unlike `range` above, which falls back to a
+   * conservative exact-zero band when accounts disagree) so the render gate
+   * near the bottom of this component replaces the report body with an
+   * explanation instead.
+   */
+  const mixedCurrency =
+    scopedAccounts.length > 1 && sharedCurrency(scopedAccounts) == null;
 
   const pnlOf = useCallback(
     (t: { net: number; gross: number }) =>
@@ -242,10 +263,13 @@ export function ReportsWorkbench({
     [trades, tzOf, range, pnlOf, fillCounts],
   );
 
-  const currency = useMemo(() => {
-    const set = new Set(accounts.map((a) => a.currency));
-    return set.size === 1 ? [...set][0] : "USD";
-  }, [accounts]);
+  // Scoped to the SAME `filters.accountIds` as `range` above — this used to
+  // read every account regardless of the filter, so narrowing to one EUR
+  // account while a USD account existed elsewhere still reported "USD".
+  const currency = useMemo(
+    () => sharedCurrency(scopedAccounts) ?? "USD",
+    [scopedAccounts],
+  );
 
   /**
    * Denominator for percentage mode.
@@ -267,6 +291,8 @@ export function ReportsWorkbench({
    * hand-rolled sum, so it cannot drift from the dashboard's equity curve.
    */
   const equityBase = useMemo(() => {
+    // Mixed currencies: no seed and no sum is safe here — see `mixedCurrency`.
+    if (mixedCurrency) return null;
     const ids = filters.accountIds;
     const inScope = (accountId: string | null) =>
       !ids?.length || (accountId != null && ids.includes(accountId));
@@ -284,7 +310,7 @@ export function ReportsWorkbench({
       ),
     );
     return base > 0 ? base : null;
-  }, [accounts, trades, cashEvents, filters.accountIds]);
+  }, [accounts, trades, cashEvents, filters.accountIds, mixedCurrency]);
 
   // Indexed once and shared by the insight context and the dimension context —
   // both join check-ins on the position id, and building the map twice per
@@ -593,6 +619,28 @@ export function ReportsWorkbench({
         accounts={accounts}
       />
 
+      {mixedCurrency ? (
+        /* Same refusal as `dashboard.tsx`'s own gate, same reason: no safe
+           pooled number exists once accounts in the account filter disagree
+           on currency, and every panel below (`BookOverviewPanel`,
+           `PerformanceSummaryPanel`, `ReportChart`, `ReportTable`,
+           `CrossAnalysis`, `CompareView`) reads `currency`/`equityBase`
+           somewhere. `FilterBar` stays visible above so narrowing to one
+           account is one click away. */
+        <Alert variant="destructive">
+          <AlertTitle>Accounts in scope use different currencies</AlertTitle>
+          <AlertDescription>
+            {scopedAccounts
+              .map((a) => a.currency)
+              .filter((c, i, arr) => arr.indexOf(c) === i)
+              .join(", ")}{" "}
+            — adding money across them would mean summing unlike units, so the
+            report is not shown while the account filter spans more than one
+            currency. Narrow the Accounts filter above to a single account.
+          </AlertDescription>
+        </Alert>
+      ) : (
+      <>
       {mode === "compare" ? (
         <CompareView
           trades={enriched}
@@ -722,6 +770,8 @@ export function ReportsWorkbench({
             )}
           </>
         )
+      )}
+      </>
       )}
 
       <div className="flex justify-end">

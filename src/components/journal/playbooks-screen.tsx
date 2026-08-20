@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { HEADER_METRICS, PlaybookCard } from "@/components/journal/playbook-card";
@@ -16,7 +16,10 @@ import {
 import type { Playbook, PlaybookRule } from "@/lib/journal/playbook-types";
 import type { EnrichedTrade } from "@/lib/journal/enriched-trade";
 import type { BreakevenRange } from "@/lib/journal/breakeven";
-import { addPlaybook } from "@/app/(app)/settings/playbook-actions";
+import {
+  addPlaybook,
+  setPlaybooksCollapsed,
+} from "@/app/(app)/settings/playbook-actions";
 
 export function PlaybooksScreen({
   playbooks,
@@ -25,6 +28,7 @@ export function PlaybooksScreen({
   lookup,
   currency,
   breakevenRange,
+  initialCollapsed,
 }: {
   playbooks: Playbook[];
   library: PlaybookRule[];
@@ -32,10 +36,63 @@ export function PlaybooksScreen({
   lookup: PlaybookLookup;
   currency: string;
   breakevenRange: BreakevenRange;
+  /** Playbook ids collapsed on load — from `tj_user_prefs`, empty by default. */
+  initialCollapsed: string[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [draft, setDraft] = useState("");
+
+  /**
+   * Which cards are collapsed, and the one piece of state on this page that
+   * survives a reload. Every write below is OPTIMISTIC WITH ROLLBACK, the same
+   * shape `dashboard.tsx` uses for `hiddenWidgets`: a picker that waits for a
+   * round trip before a card folds feels broken on a slow connection, and one
+   * that never rolls back lies to the trader when the write fails.
+   */
+  const [collapsed, setCollapsed] = useState<string[]>(initialCollapsed);
+  const collapsedIds = useMemo(() => new Set(collapsed), [collapsed]);
+
+  const persist = useCallback((next: string[], rollback: string[]) => {
+    void setPlaybooksCollapsed(next).then((res) => {
+      if (!res.ok) {
+        setCollapsed(rollback);
+        toast.error(res.error);
+      }
+    });
+  }, []);
+
+  const toggleCollapsed = useCallback(
+    (id: string) => {
+      setCollapsed((current) => {
+        const off = new Set(current);
+        if (off.has(id)) off.delete(id);
+        else off.add(id);
+        const next = [...off];
+        persist(next, current);
+        return next;
+      });
+    },
+    [persist],
+  );
+
+  function collapseAll() {
+    setCollapsed((current) => {
+      const next = playbooks.map((b) => b.id);
+      persist(next, current);
+      return next;
+    });
+  }
+
+  function expandAll() {
+    setCollapsed((current) => {
+      persist([], current);
+      return [];
+    });
+  }
+
+  const allCollapsed =
+    playbooks.length > 0 && playbooks.every((b) => collapsedIds.has(b.id));
 
   const metricCtx = useMemo<MetricContext>(
     () => ({
@@ -87,7 +144,7 @@ export function PlaybooksScreen({
         Removing a rule from a playbook is not deleting it.
       </p>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -107,6 +164,29 @@ export function PlaybooksScreen({
         >
           <Plus className="size-4" /> Add playbook
         </Button>
+
+        {/* Reaching a specific card in a long list is the whole problem this
+            solves, and a click beats guessing at a default. Hidden once there
+            is nothing to toggle rather than disabled — a control with no
+            useful state is noise, not affordance. */}
+        {playbooks.length > 1 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 ml-auto"
+            onClick={allCollapsed ? expandAll : collapseAll}
+          >
+            {allCollapsed ? (
+              <>
+                <ChevronsUpDown className="size-4" /> Expand all
+              </>
+            ) : (
+              <>
+                <ChevronsDownUp className="size-4" /> Collapse all
+              </>
+            )}
+          </Button>
+        )}
       </div>
 
       {playbooks.length === 0 ? (
@@ -125,6 +205,8 @@ export function PlaybooksScreen({
             lookup={lookup}
             computeCtx={metricCtx}
             currency={currency}
+            collapsed={collapsedIds.has(book.id)}
+            onToggleCollapsed={() => toggleCollapsed(book.id)}
           />
         ))
       )}

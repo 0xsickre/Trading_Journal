@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
 import {
@@ -456,5 +457,44 @@ export async function restorePlaybookRule(id: string): Promise<Result> {
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidateAll();
+  return { ok: true };
+}
+
+// --- View preference: which cards start collapsed --------------------------
+
+/**
+ * Playbook ids collapsed on /playbooks.
+ *
+ * Not validated against the caller's actual playbook list, for the same reason
+ * `setDashboardHiddenWidgets` does not check the widget registry: this table
+ * lives in `tj_playbooks`, is per-user, and changes constantly — a server-side
+ * membership check would mean reading it before every write for no real
+ * protection, since an id belonging to nothing is inert on the way back out
+ * (`PlaybooksScreen` only ever tests `collapsed.has(book.id)`). Size and shape
+ * are the only real risks, which is what this bounds.
+ */
+const collapsedSchema = z.array(z.string().min(1).max(64)).max(200);
+
+export async function setPlaybooksCollapsed(ids: string[]): Promise<Result> {
+  const parsed = collapsedSchema.safeParse(ids);
+  if (!parsed.success) return { ok: false, error: "Invalid playbook selection." };
+
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  // Deduped so a double toggle cannot grow the array without bound.
+  const collapsed = [...new Set(parsed.data)];
+
+  const { error } = await supabase.from("tj_user_prefs").upsert(
+    { user_id: user.id, playbooks_collapsed: collapsed },
+    { onConflict: "user_id" },
+  );
+  if (error) return { ok: false, error: error.message };
+
+  // Only this page reads it — the heavier `revalidateAll()` above exists for
+  // mutations that change what a rule or a playbook actually IS, which a
+  // client-side view preference never does.
+  revalidatePath("/playbooks");
   return { ok: true };
 }

@@ -402,3 +402,51 @@ describe("Max drawdown in Percentage mode: peak-relative, not today's-equity-rel
     expect(statValue("Avg daily DD")).toBe("•••");
   });
 });
+
+describe("mixed-currency accounts refuse to pool money, rather than summing unlike units", () => {
+  const USD_ACC = account({ id: "acc-usd", name: "US Prop", currency: "USD" });
+  const EUR_ACC = account({ id: "acc-eur", name: "EU Prop", currency: "EUR" });
+  const trades = [
+    mkTrade({ id: "u1", net: 100, accountId: "acc-usd", closedAt: "2026-06-01T18:00:00Z" }),
+    mkTrade({ id: "e1", net: 50, accountId: "acc-eur", closedAt: "2026-06-02T18:00:00Z" }),
+  ];
+
+  it("shows a warning and no money tile when 'All accounts' spans two currencies", async () => {
+    render(<Dashboard trades={rowsOf(trades)} accounts={[USD_ACC, EUR_ACC]} todayKey="2026-06-03" timezone="America/New_York" />);
+
+    expect(screen.getByText(/different currencies/i)).toBeInTheDocument();
+    // "Net P/L" is the label text; its own value tile must be entirely absent,
+    // not present-and-wrong — the whole money-dependent body is skipped.
+    expect(screen.queryByText("Net P/L")).not.toBeInTheDocument();
+    expect(screen.queryByText(/\$150\.00/)).not.toBeInTheDocument();
+  });
+
+  it("renders normally once narrowed to a single account", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<Dashboard trades={rowsOf(trades)} accounts={[USD_ACC, EUR_ACC]} todayKey="2026-06-03" timezone="America/New_York" />);
+
+    await user.click(accountSelect());
+    await user.click(await screen.findByRole("option", { name: "US Prop" }));
+
+    expect(screen.queryByText(/different currencies/i)).not.toBeInTheDocument();
+    expect(statValue("Net P/L")).toBe("+$100.00");
+  });
+
+  it("two accounts in the SAME currency pool normally — this is not a two-account bug", () => {
+    const USD_ACC2 = account({ id: "acc-usd2", name: "US Prop 2", currency: "USD" });
+    const sameCurrencyTrades = [
+      mkTrade({ id: "u1", net: 100, accountId: "acc-usd", closedAt: "2026-06-01T18:00:00Z" }),
+      mkTrade({ id: "u2", net: 50, accountId: "acc-usd2", closedAt: "2026-06-02T18:00:00Z" }),
+    ];
+    render(
+      <Dashboard
+        trades={rowsOf(sameCurrencyTrades)}
+        accounts={[USD_ACC, USD_ACC2]}
+        todayKey="2026-06-03"
+        timezone="America/New_York"
+      />,
+    );
+    expect(screen.queryByText(/different currencies/i)).not.toBeInTheDocument();
+    expect(statValue("Net P/L")).toBe("+$150.00");
+  });
+});

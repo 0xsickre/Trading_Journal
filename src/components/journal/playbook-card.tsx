@@ -208,11 +208,20 @@ function RuleRow({
             a gap; "one of the two sides is too thin to compare"; and "there is
             no contrast here at all" — a rule never broken, or never answered.
             The last one is an honest absence rather than a missing measurement,
-            so it gets the dash and the other gets words. */}
+            so it gets the dash and the other gets words.
+
+            The "too few" case carries its own count against the floor
+            (whichever side is thinner — that's the one holding the whole
+            comparison back) rather than a bare "too few" with no number behind
+            it. A book with one playbook per setup routinely sits at 20/30
+            for MOST of its rules at once, capped by that playbook's own total
+            trade count rather than by any one rule — seeing the same "X/30"
+            repeat down the column is what makes that legible without reading
+            the paragraph below or the source. */}
         {score?.gapPp != null
           ? `${score.gapPp > 0 ? "+" : ""}${score.gapPp.toFixed(0)} pp`
           : score && score.followed.n > 0 && score.broken.n > 0
-            ? "too few"
+            ? `too few (${Math.min(score.followed.n, score.broken.n)}/${RULE_SAMPLE.MIN})`
             : "—"}
       </td>
 
@@ -501,6 +510,8 @@ export function PlaybookCard({
   lookup,
   computeCtx,
   currency,
+  collapsed,
+  onToggleCollapsed,
 }: {
   book: Playbook;
   library: PlaybookRule[];
@@ -514,6 +525,9 @@ export function PlaybookCard({
    * own format context, and the currency belongs there.
    */
   currency: string;
+  /** Whether the body — inputs, headline metrics, the rule table — is hidden. */
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }) {
   const { pending, run } = useAction();
   const [name, setName] = useState(book.name);
@@ -549,10 +563,41 @@ export function PlaybookCard({
 
   const n = row?.n ?? 0;
 
+  // Compact enough to read on a COLLAPSED card, so folding a card never means
+  // losing the one thing worth scanning ten of these for. Reads the same `row`
+  // `HEADER_METRICS` renders below — not a second computation — but hand-formats
+  // it rather than routing through `formatMetric`: that formatter is tuned for
+  // the full-precision "62.0%" / "1.8" shape every other screen wants, and a
+  // dense one-line summary asks for the opposite (a whole-number percent, a
+  // ratio that keeps its trailing zero) — a second job, not a bug in the first.
+  const winRatePct = row?.values.win_rate;
+  const pf = row?.values.profit_factor;
+  const summary =
+    n > 0 && winRatePct != null && pf != null
+      ? `${Math.round(winRatePct)}% win · ${Number.isFinite(pf) ? pf.toFixed(2) : "∞"} PF`
+      : null;
+
   return (
     <Card className={cn(!book.is_active && "opacity-60")}>
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-center gap-2">
+          {/* The one control that always toggles the SAME thing regardless of
+              what else is in the header — kept first in this group, ahead of
+              archive/delete, so it is never one misclick away from a
+              destructive action. */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0"
+            onClick={onToggleCollapsed}
+            aria-label={collapsed ? "Expand playbook" : "Collapse playbook"}
+            aria-expanded={!collapsed}
+          >
+            <ChevronDown
+              className={cn("size-4 transition-transform", !collapsed && "rotate-180")}
+            />
+          </Button>
+
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -571,6 +616,7 @@ export function PlaybookCard({
           <span className="text-sm text-muted-foreground">
             {n} {n === 1 ? "trade" : "trades"} · {book.rules.length}{" "}
             {book.rules.length === 1 ? "rule" : "rules"}
+            {summary && <> · {summary}</>}
           </span>
 
           {n > 0 && n < RULE_SAMPLE.MIN && (
@@ -618,6 +664,12 @@ export function PlaybookCard({
         </div>
       </CardHeader>
 
+      {/* Compute above is never gated on `collapsed` — `scores`, `sections`
+          and `summary` all still run. Only the DOM is skipped, for the same
+          reason `dashboard.tsx` keeps its own render gate separate from
+          compute: re-expanding must not wait on a recompute, and the header
+          summary above needs these values whether or not the body is shown. */}
+      {!collapsed && (
       <CardContent className="space-y-4">
         {/* The operating model. A playbook that only lists rules does not say
             how much to risk or what earns an A+ — and an A+ grade that changes
@@ -735,6 +787,7 @@ export function PlaybookCard({
           </p>
         </div>
       </CardContent>
+      )}
     </Card>
   );
 }

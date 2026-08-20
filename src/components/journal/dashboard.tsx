@@ -174,7 +174,15 @@ import {
   setISOWeek,
   startOfISOWeek,
 } from "date-fns";
-import { fmtMoney, fmtR, fmtPct, fmtNum, pnlClass } from "@/lib/journal/format";
+import {
+  fmtMoney,
+  fmtR,
+  fmtPct,
+  fmtNum,
+  pnlClass,
+  sharedCurrency,
+} from "@/lib/journal/format";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   canRender,
   formatMetric,
@@ -660,18 +668,38 @@ export function Dashboard({
     [tzForAccount],
   );
 
+  /**
+   * "All accounts" pooling raw money across DIFFERENT currencies — €500 and
+   * $300 summed as "$800" — was silently wrong here and in `reports-workbench.tsx`
+   * before this guard existed: unreachable with one account, live the moment a
+   * second one in another currency exists. There is no safe number to show
+   * instead (unlike `sharedBreakevenRange`, which falls back to a conservative
+   * exact-zero band — money has no neutral fallback), so the page refuses to
+   * compute one at all. See the render gate near the bottom of this component,
+   * which replaces the entire money-dependent body with an explanation rather
+   * than risk missing one of the many tiles that touch `currency`/`startBalance`.
+   */
+  const mixedCurrency =
+    accountFilter === "all" &&
+    accounts.length > 1 &&
+    sharedCurrency(accounts) == null;
+
   const currency = useMemo(() => {
     if (accountFilter !== "all")
       return accounts.find((a) => a.id === accountFilter)?.currency ?? "USD";
-    const set = new Set(accounts.map((a) => a.currency));
-    return set.size === 1 ? [...set][0] : "USD";
+    return sharedCurrency(accounts) ?? "USD";
   }, [accountFilter, accounts]);
 
   const startBalance = useMemo(() => {
     if (accountFilter !== "all")
       return accounts.find((a) => a.id === accountFilter)?.starting_balance ?? 0;
+    // Mixed currencies: 0 rather than a cross-currency sum. Harmless either
+    // way once `mixedCurrency` is true — the render gate never shows a tile
+    // that would read this — but 0 is the honest "nothing safe to add" value
+    // if anything downstream ever reads it before that gate does.
+    if (mixedCurrency) return 0;
     return accounts.reduce((s, a) => s + (a.starting_balance ?? 0), 0);
-  }, [accountFilter, accounts]);
+  }, [accountFilter, accounts, mixedCurrency]);
 
   /**
    * Start of the selected window as epoch ms, or null for "all time".
@@ -756,6 +784,10 @@ export function Dashboard({
    * against, gross P&L is not.
    */
   const equityBase = useMemo(() => {
+    // `startBalance` is already 0 when mixed, but `realizedAll` here still
+    // pools every account's `net` regardless — summing it into a running
+    // total would still cross currencies even with a currency-safe seed.
+    if (mixedCurrency) return null;
     const base = currentEquity(
       buildBalanceTimeline(
         startBalance,
@@ -764,7 +796,7 @@ export function Dashboard({
       ),
     );
     return base > 0 ? base : null;
-  }, [startBalance, realizedAll, scopedCashEvents]);
+  }, [startBalance, realizedAll, scopedCashEvents, mixedCurrency]);
 
   const metricCtx: MetricContext = useMemo(
     () => ({ currency, equityBase }),
@@ -1492,6 +1524,26 @@ export function Dashboard({
         </div>
       </div>
 
+      {mixedCurrency ? (
+        /* No safe pooled number exists here — see `mixedCurrency`'s own
+           comment above. Everything from "THE HEADLINE SIX" down to the
+           final breakdown table reads `currency`/`startBalance`/`equityBase`
+           somewhere, directly or through `metricCtx`/`stats`/`drawdown`, so
+           replacing the whole body with an explanation is the only way to
+           guarantee none of them silently shows a cross-currency sum —
+           tile-by-tile gating would only be as safe as the least-audited tile. */
+        <Alert variant="destructive">
+          <AlertTitle>Accounts in scope use different currencies</AlertTitle>
+          <AlertDescription>
+            {accounts.map((a) => a.currency).filter((c, i, arr) => arr.indexOf(c) === i).join(", ")}{" "}
+            — adding money across them would mean summing unlike units, so
+            nothing on this page is shown while &quot;All accounts&quot; spans
+            more than one currency. Pick a single account above to see the
+            full dashboard again.
+          </AlertDescription>
+        </Alert>
+      ) : (
+      <>
       {/* THE HEADLINE SIX.
           Everything below used to sit in this one flat grid — thirty tiles at
           one size, no headings, so `Net P/L` and `Total swap` carried the same
@@ -2041,6 +2093,8 @@ export function Dashboard({
         ),
         },
         widgetOrder,
+      )}
+      </>
       )}
     </div>
   );

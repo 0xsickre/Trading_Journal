@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtMoney, fmtNum, fmtPct, fmtR, pnlClass } from "./format";
+import { fmtMoney, fmtNum, fmtPct, fmtR, pnlClass, sharedCurrency } from "./format";
 
 /**
  * The presentation layer for every number on screen, and it had no test.
@@ -62,5 +62,22 @@ describe("pnlClass", () => {
     for (const v of [0, null, undefined, Number.NaN]) {
       expect(pnlClass(v)).toBe("text-muted-foreground");
     }
+  });
+});
+
+describe("sharedCurrency", () => {
+  it("returns the one currency every account agrees on", () => {
+    expect(sharedCurrency([{ currency: "USD" }, { currency: "USD" }])).toBe("USD");
+    expect(sharedCurrency([{ currency: "EUR" }])).toBe("EUR");
+  });
+
+  it("returns null when accounts disagree — no safe number to sum money in", () => {
+    // This is the caller's cue to refuse a pooled dollar figure rather than
+    // add unlike units together — €500 + $300 is not $800.
+    expect(sharedCurrency([{ currency: "USD" }, { currency: "EUR" }])).toBeNull();
+  });
+
+  it("returns null for an empty scope — nothing to agree on, not a free pass", () => {
+    expect(sharedCurrency([])).toBeNull();
   });
 });

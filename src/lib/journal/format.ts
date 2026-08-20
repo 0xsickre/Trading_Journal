@@ -24,6 +24,26 @@ export function fmtMoney(
   return opts.sign && v > 0 ? `+${s}` : s;
 }
 
+/**
+ * The one currency every account in scope agrees on, or `null` when they
+ * don't.
+ *
+ * There is no safe fallback value to return instead — unlike a breakeven band
+ * (see `sharedBreakevenRange`, which falls back to an exact-zero band when
+ * accounts disagree, a conservative but still meaningful default), there is no
+ * "neutral" currency a caller can sum money in when the accounts in scope
+ * don't share one. `null` is the signal: a caller pooling money across
+ * accounts must check this before summing, or it will add unlike units
+ * together and call the result a number.
+ */
+export function sharedCurrency(
+  accounts: readonly { currency: string }[],
+): string | null {
+  if (accounts.length === 0) return null;
+  const set = new Set(accounts.map((a) => a.currency));
+  return set.size === 1 ? [...set][0] : null;
+}
+
 export function fmtNum(
   n: number | null | undefined,
   digits = 2,

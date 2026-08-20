@@ -5,6 +5,7 @@ import { PlaybookCard } from "./playbook-card";
 import { buildPlaybookLookup, RULE_SAMPLE } from "@/lib/journal/reports/playbook-dimensions";
 import { enrich, metricCtx, type TradeSpec } from "@/lib/journal/reports/test-helpers";
 import type { PositionRule, Playbook, PlaybookRule } from "@/lib/journal/playbook-types";
+import type { ReportRow } from "@/lib/journal/reports/engine";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -80,6 +81,7 @@ function renderCard(
   rules: PlaybookRule[],
   rows: { id: string; net: number; ruleId: string; followed: boolean }[],
   bookOverrides: Partial<Playbook> = {},
+  collapseOverrides: { collapsed?: boolean; onToggleCollapsed?: () => void } = {},
 ) {
   const byTrade = new Map<string, PositionRule[]>();
   for (const r of rows) {
@@ -102,6 +104,8 @@ function renderCard(
       lookup={lookup}
       computeCtx={{ ...metricCtx, rules: lookup.rules }}
       currency="USD"
+      collapsed={collapseOverrides.collapsed ?? false}
+      onToggleCollapsed={collapseOverrides.onToggleCollapsed ?? vi.fn()}
     />,
   );
   return b;
@@ -192,7 +196,9 @@ describe("PlaybookCard — what it refuses to claim", () => {
     const row = rowOf("Waited for the sweep");
     expect(within(row).getByText("n=14")).toBeInTheDocument();
     expect(within(row).getByText("n=18")).toBeInTheDocument();
-    expect(within(row).getByText("too few")).toBeInTheDocument();
+    // The count named is the THINNER side (14, not 18) — that's the one
+    // actually holding the comparison back.
+    expect(within(row).getByText(`too few (14/${RULE_SAMPLE.MIN})`)).toBeInTheDocument();
     expect(within(row).queryByText(/pp$/)).toBeNull();
   });
 
@@ -273,5 +279,77 @@ describe("PlaybookCard — reordering is scoped to the category", () => {
       within(rowOf("Waited for the sweep")).getByRole("button", { name: "Move down" }),
     );
     expect(actions.movePlaybookRule).toHaveBeenCalledWith(b.id, "e1", 1);
+  });
+});
+
+describe("PlaybookCard — collapsing hides the body, never the header", () => {
+  it("hides the rule table and the risk/A+ inputs when collapsed", () => {
+    renderCard(
+      [rule({ id: "r1", text: "Waited for the sweep" })],
+      [],
+      {},
+      { collapsed: true },
+    );
+
+    expect(screen.queryByDisplayValue("Waited for the sweep")).toBeNull();
+    expect(screen.queryByLabelText("Default risk %")).toBeNull();
+    // The header survives — it is what a scan of a long, collapsed list reads.
+    expect(screen.getByLabelText("Playbook name")).toBeInTheDocument();
+  });
+
+  it("shows the rule table when not collapsed", () => {
+    renderCard([rule({ id: "r1", text: "Waited for the sweep" })], []);
+    expect(screen.getByDisplayValue("Waited for the sweep")).toBeInTheDocument();
+  });
+
+  it("calls onToggleCollapsed, and does not also fire a save", async () => {
+    // The name Input sits right next to the toggle button in the header. If the
+    // toggle ever grew to wrap the whole row (a native <summary>, say) a click
+    // meant for the input would also fire it — exactly the trap this component
+    // avoids by using a plain button instead of `<details>`.
+    const user = userEvent.setup({ delay: null });
+    const onToggleCollapsed = vi.fn();
+    renderCard([rule({ id: "r1" })], [], {}, { onToggleCollapsed });
+
+    await user.click(screen.getByRole("button", { name: "Collapse playbook" }));
+    expect(onToggleCollapsed).toHaveBeenCalledTimes(1);
+    expect(actions.updatePlaybook).not.toHaveBeenCalled();
+  });
+
+  it("reports its expanded state through aria-expanded, not just an icon", () => {
+    renderCard([rule({ id: "r1" })], [], {}, { collapsed: true });
+    expect(
+      screen.getByRole("button", { name: "Expand playbook" }),
+    ).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("summarises win rate and profit factor in the header, collapsed or not", () => {
+    const row: ReportRow = {
+      bucket: "London Reversal",
+      n: 10,
+      belowSample: false,
+      trades: [],
+      values: { win_rate: 62, profit_factor: 1.8 },
+    };
+    render(
+      <PlaybookCard
+        book={book([])}
+        library={[]}
+        row={row}
+        trades={[]}
+        lookup={buildPlaybookLookup([{ id: "pb", name: "London Reversal", rules: [] }])}
+        computeCtx={metricCtx}
+        currency="USD"
+        collapsed
+        onToggleCollapsed={vi.fn()}
+      />,
+    );
+    // One header string, not a table — this is what a folded card is FOR.
+    expect(screen.getByText(/62% win · 1\.80 PF/)).toBeInTheDocument();
+  });
+
+  it("omits the summary for a playbook with no trades yet, rather than showing 0%", () => {
+    renderCard([rule({ id: "r1" })], [], {}, { collapsed: true });
+    expect(screen.queryByText(/win ·/)).toBeNull();
   });
 });
