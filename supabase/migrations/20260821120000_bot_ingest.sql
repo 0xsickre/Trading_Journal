@@ -374,7 +374,10 @@ BEGIN
    WHERE token_hash = pg_catalog.sha256(pg_catalog.convert_to(p_token, 'UTF8'))
      AND revoked_at IS NULL;
 
-  IF NOT FOUND THEN
+  -- Null test rather than FOUND, same as the position lookup below: FOUND is
+  -- reset by later statements and reads correctly only where nothing sits in
+  -- between. Keeping one habit means never having to check which case this is.
+  IF v_token.id IS NULL THEN
     RETURN jsonb_build_object('ok', false, 'retryable', false, 'error', 'unauthorized');
   END IF;
 
