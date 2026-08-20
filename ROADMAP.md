@@ -935,3 +935,67 @@ procena a ne merenje; migracije reprodukuju žive objekte ali nisu zapis istorij
 odvrteti.
 
 **Testovi: 1712 u 108 fajlova** (1090 → 1712 kroz rundu 4).
+
+---
+
+## Faza 11 — bot most: order → planirani trejd → aktivni trejd (avgust 2026.)
+
+**Povod.** Dnevnik je do sada dobijao svaki trejd rukom, uključujući i delove koje je broker već
+ustanovio: simbol, smer, limit cenu, stop i cenu po kojoj se fill stvarno desio. Prepisivanje nije
+prosuđivanje, a plaćalo se punom pažnjom. Uz to, dva podatka najkorisnija za ocenu izvršenja —
+planirana naspram stvarne ulazne cene — bila su i dva najpodložnija da budu zaokružena ili pogrešno
+zapamćena, jer su čitana sa grafikona satima kasnije.
+
+**Granica koja čuva pravilo.** README je „Broker sync" vodio kao svesno izostavljen, uz obrazloženje
+da ručni unos tera da se trejd pročita još jednom. To obrazloženje i dalje stoji — i zato bot piše
+**samo činjenice koje je broker već proizveo**. Plan, teza, psihologija, ocena setupa, playbook,
+`risk_pct` i `planned_rr` ostaju prazni i dalje se kucaju. Automatizovano je prepisivanje, ne
+prosuđivanje.
+
+**Tri odluke koje nose ostatak.**
+
+1. **Ne kroz `tj_save_trade`.** Ta funkcija je `SECURITY INVOKER` i upisuje `auth.uid()`, koji je pod
+   anon ključem `NULL`. Jedini način da se natera bio bi `set_config('request.jwt.claims', …)` —
+   falsifikovana sesija u funkciji dostupnoj `anon` ulozi, dakle jača verzija baš one rupe zbog koje
+   je šest funkcija ostalo bez `EXECUTE`. Odbijeno. Treći razlog je tiši i gori: njeno rukovanje
+   fill-ovima je puna zamena, pa bi u koraku sa izlazima obrisala ulazni fill.
+2. **Idempotencija je jedan constraint, ne logika u botu.** `UNIQUE (user_id, event_key)` nad
+   append-only `tj_bot_events`. Ponovljeno slanje, druga instanca bota i pražnjenje outbox-a posle
+   pada postaju bezopasni odjednom, u bazi. Bot i dalje vodi lokalnu dedup, ali kao brzinu, ne kao
+   garanciju — obrisan LocalStorage košta suvišna slanja, nikad dupli trejd.
+3. **Karantin umesto pogađanja.** Nemapiran nalog, nemapiran simbol, neupotrebljiv volumen → događaj
+   se zabeleži, trejd se **ne** upiše, razlog je vidljiv u Settings. Nema fallback-a na `accounts[0]`
+   i nema propuštanja nepoznatog simbola kao očišćenog ključa — to je ponašanje koje
+   `20260728120000` već imenuje kao failure mode za CSV put.
+
+**Najveći otvoreni rizik tačnosti: `units_per_qty`.** Dnevnik broji `qty` u lotovima/ugovorima,
+cTrader javlja bazne jedinice. Za FX i metale delilac je `Symbol.LotSize`; za FTMO index CFD-ove nije
+proverljiv bez žive konekcije, jer FTMO vrti sopstvenu cTrader instancu. Rešeno tako što bot šalje i
+`LotSize` i cTrader-ov sopstveni broj lotova, panel prikaže da li se delilac i brokerov broj
+poklapaju, a čovek potvrdi jednom po simbolu. Do potvrde — karantin. Konačna provera ostaje vezana za
+`ProtoOASymbolsListReq`, isti blocker kao Faza 8B § Deo 4.
+
+**Šta nije rešeno, i zna se da nije.**
+
+- **Rupa od restarta.** Ako je order i postavljen i ispunjen dok je bot bio ugašen, ništa u cAlgo
+  API-ju ih više ne povezuje — `Position.Id` nije `PendingOrder.Id`, a pozicija ne nosi id order-a.
+  Bot to ispiše u log i ne pošalje ništa. Heuristika po Label-u ili ceni bi pre ili kasnije zakačila
+  fill na pogrešan trejd, a tiho pogrešan trejd je gori od glasno nedostajućeg.
+- **Provizija i swap se upisuju kao 0.** Predznak i round-turn konvencija `Position.Commissions` nisu
+  provereni; sirove vrednosti putuju u `tj_bot_events.payload`. Mora se rešiti pre nego što izlazi
+  počnu da hrane neto P&L.
+- **Preklapanje sa uvozom.** FTMO izvod za period koji je bot već zabeležio može kroz
+  `tj_save_trade` da prepiše bot fill-ove. Ublažavanje: iz kandidata za spajanje izbaciti pozicije sa
+  `broker_position_id IS NOT NULL`, da duplikat bude vidljiv umesto da prepis bude tih.
+- **`partial` / `closed` još ne postoje na ovom putu.** To JESTE brojanje fill-ova, i kad izlazi
+  stignu, pravilo mora da živi na jednom mestu: `tj_status_from_executions(uuid)` u SQL-u koji zovu
+  oba pisca, a TS `computeStatus` svede na živi pregled u formi — isti oblik kao postojeći par
+  `tj_position_stats` / `position-stats.ts`.
+
+**Cloud je mrtav kraj, i to tiho.** cTrader Cloud ne šalje HTTP i ne prijavljuje grešku kad ne
+pošalje. Bot tamo izgleda zdravo a ne isporučuje ništa — pa otud heartbeat i linija „poslednje
+javljanje" u panelu: ćutanje mora da bude vidljivo sa strane dnevnika, ne samo iz terminala.
+
+**Testovi: 2123 u 132 fajla** (2074 → 2123). Guard koji je zaradio svoj postojanje u ovoj fazi:
+`reserved-keys.test.ts` je pao na četiri nove `broker*` kolone pre nego što je iko stigao da napravi
+korisničko polje koje bi ih trajno zaklonilo.

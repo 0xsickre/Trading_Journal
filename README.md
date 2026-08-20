@@ -1,8 +1,9 @@
 # Trading Journal
 
-Swing/ICT trading dnevnik za jednog trejdera. Ručni unos, bez broker sync-a, bez AI chat-a —
-disciplinovan zapis šta je odtrgovano i koliko je proces ispoštovan, i poštena aritmetika nad tim
-zapisom.
+Swing/ICT trading dnevnik za jednog trejdera. Ručni unos, bez AI chat-a — disciplinovan zapis šta
+je odtrgovano i koliko je proces ispoštovan, i poštena aritmetika nad tim zapisom. Jedini
+automatski upis je **bot most** (§ Bot most): on beleži isključivo ono što je broker već učinio,
+a sve što je procena i dalje se kuca rukom.
 
 Pravljen da metrikama, beleškama i izveštajima pokrije ono što TradeZella radi, minus delovi koji
 imaju smisla samo za višekorisnički SaaS. Gde se razlikuje, razlika je zapisana i obrazložena —
@@ -81,11 +82,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
 | `npm run dev` | Razvojni server |
 | `npm run build` | Produkcijski build — 14 ruta |
 | `npm run lint` | ESLint. **Očekuje se tačno jedno upozorenje** (vidi ispod) |
-| `npm test` | Vitest — 2074 testa u 130 fajlova, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
+| `npm test` | Vitest — 2123 testa u 132 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
 | `npm test -- --coverage` | Izveštaj o pokrivenosti |
 | `npx knip` | Mrtvi fajlovi, eksporti i zavisnosti |
 
-**Lint upozorenje je nosivo.** `journal-grid.tsx:642` prijavljuje *„Compilation Skipped: Use of
+**Lint upozorenje je nosivo.** `journal-grid.tsx:651` prijavljuje *„Compilation Skipped: Use of
 incompatible library"* — React Compiler odbija da memoizuje komponentu koja koristi
 `useReactTable` iz TanStack Table. Razumemo ga i prihvatamo. To što ih je **tačno 1** je kontrolna
 vrednost: svaki drugi broj znači da je neka izmena nešto uvela.
@@ -117,7 +118,7 @@ React 19.2.4, TypeScript 5, Tailwind 4, shadcn/ui, TanStack Table 8, Recharts 3,
 
 ## Model podataka
 
-25 tabela i 1 view, sve sa prefiksom `tj_`. **Row-level security je uključen na svih 25 tabela**,
+28 tabela i 1 view, sve sa prefiksom `tj_`. **Row-level security je uključen na svih 28 tabela**,
 svaka politika po istom vlasničkom obrascu:
 
 ```sql
@@ -157,6 +158,7 @@ Test drži oba nad istim ulazima.
 | **Playbook-ovi** | `tj_playbooks`, `tj_playbook_rules`, `tj_playbook_rule_links`, `tj_position_rules` |
 | **Notebook** | `tj_notes`, `tj_note_folders`, `tj_note_tags` |
 | **Uvoz** | `tj_import_batches`, `tj_import_rows` |
+| **Bot most** | `tj_bot_tokens`, `tj_bot_events`, `tj_broker_symbol_map` |
 
 ### Korisnički definisana polja
 
@@ -410,6 +412,53 @@ Svaka odbijena ćelija je imenovana na svom redu u pregledu (`nečitljivo: qty, 
 
 ---
 
+## Bot most
+
+Jedini automatski upis u dnevnik. cBot u cTrader-u
+([`TradingJournalBridge`](https://github.com/0xsickre/trading-charting/tree/master/ctrader/TradingJournalBridge))
+javlja dve činjenice, a dnevnik od njih pravi trejd:
+
+| Događaj kod brokera | Šta dnevnik upiše |
+|---|---|
+| Postavljen pending order | Nov trejd, `status = planned` |
+| Order se ispunio | Isti trejd → `status = open` + ulazni fill |
+
+**Šta bot NE piše.** Plan, tezu, psihologiju, ocenu setupa, playbook, `risk_pct` i `planned_rr`
+ostaju prazni. To je granica koja čuva pravilo iz § Svesno izostavljeno: automatizuje se
+prepisivanje, ne prosuđivanje. Trejd koji je upisao bot nosi `source = 'bot'` i vidljivu oznaku u
+tabeli — red koji nisi otkucao ne sme da izgleda kao red koji jesi, jer je njegova praznina „još
+nije napisano", a ne „nema šta da se kaže".
+
+**Kako bot sme da piše.** Preko `tj_bot_ingest`, `SECURITY DEFINER` funkcije dostupne `anon` ulozi i
+autorizovane **bot tokenom** — ne lozinkom i ne service-role ključem, kojih repo i dalje nema.
+Plaintext tokena se pravi u pregledaču i prikazuje jednom; na server ide samo njegov SHA-256.
+
+Funkcija namerno **ne zove `tj_save_trade`**. Ta funkcija je `SECURITY INVOKER` i upisuje
+`auth.uid()`, koji je pod anon ključem `NULL`; jedini način da se natera bio bi falsifikovanje JWT
+claim-a, što je jača verzija baš one rupe zbog koje je šest funkcija ostalo bez `EXECUTE` za
+`authenticated`. Uz to, njeno rukovanje fill-ovima je puna zamena, pa bi u koraku sa izlazima
+obrisala ulazni fill.
+
+**Idempotencija je jedan `UNIQUE (user_id, event_key)`** nad append-only logom `tj_bot_events`.
+Ponovljeno slanje, druga instanca bota i pražnjenje outbox-a posle pada su time bezopasni — u bazi,
+ne u pamćenju bota.
+
+**Karantin umesto pogađanja.** Nemapiran nalog, nemapiran simbol ili neupotrebljiv volumen ne
+proizvode trejd nego karantiniran događaj sa razlogom, vidljiv u **Settings → Bot most**. To je
+„Odbij umesto da pogađaš" primenjeno na mašinski feed.
+
+**Količina po lotu se potvrđuje, ne izvodi.** Dnevnik broji `qty` u lotovima/ugovorima, cTrader
+javlja `VolumeInUnits` u baznim jedinicama. Bot šalje i `Symbol.LotSize` i cTrader-ov sopstveni broj
+lotova, pa panel pokazuje da li delilac reprodukuje brokerov broj — i tek onda čovek potvrdi, jednom
+po simbolu. Kod index CFD-a „jedan lot" definiše broker, a pogrešan delilac je P&L pogrešan za redove
+veličine, prikazan kao činjenica.
+
+**Bot ne sme na cTrader Cloud.** Cloud instance ne šalju HTTP i ne prijavljuju grešku kad ne pošalju,
+pa bi most izgledao zdrav a ne bi isporučio ništa. Zato bot šalje heartbeat, a panel prikazuje kad se
+poslednji put javio: ćutanje mora da bude vidljivo sa ove strane.
+
+---
+
 ## Brisanje
 
 Dve operacije van uvoza koje brišu podatke, obe u `/settings` → Accounts, obe bez undo-a.
@@ -426,7 +475,7 @@ sa nalogom kojeg više nema da to objasni. Funkcija briše zavisne redove prvo, 
 Dokazano nad živom bazom u transakciji koja se rollback-uje: nalog sa 21 trejdom ostavlja **0
 osirotelih** pozicija, i 0 fill-ova, odgovora na pravila i slika.
 
-**Reset svega** (`tj_reset_my_data`). Briše svih 25 tabela za pozivaoca pa zove
+**Reset svega** (`tj_reset_my_data`). Briše svih 28 tabela za pozivaoca pa zove
 `tj_seed_my_defaults()` — istu seed funkciju koju dashboard vrti na praznom nalogu, pa „reset" i
 „prvo učitavanje ikad" završavaju u istom stanju. Traži da se ukuca `RESET EVERYTHING`.
 
@@ -460,7 +509,7 @@ Supabase-ove default privilegije dodele EXECUTE svakoj novoj funkciji u `public`
 
 ### Bezbednosni model
 
-- **RLS na svih 25 tabela**, vlasnički obrazac, provereno nad živom bazom.
+- **RLS na svih 28 tabela**, vlasnički obrazac, provereno nad živom bazom.
 - **`SECURITY DEFINER` + uuid argument je rupa**, jer svaki prijavljen korisnik može da je pozove sa
   tuđim id-em. Svih šest takvih funkcija ima oduzet `EXECUTE` od `authenticated`. Jedina koja ostaje
   pozivna je `tj_seed_my_defaults()`, koja ne prima argument i seed-uje samo podatke pozivaoca.
@@ -555,7 +604,7 @@ ovaj kontejner nema. Ostaje kao kasnija opcija, ne kao propust.
 | Nije napravljeno | Zašto |
 |---|---|
 | Backtesting i trade replay | Radi se direktno u TradingView-u. Embed ne pomaže: Bar Replay živi u njihovoj aplikaciji, a widget je crna kutija kroz koju kod ne može da korakne |
-| Broker sync | Ručni unos je izbor i prednost — tera da se trejd pročita još jednom |
+| Broker sync koji popunjava ceo trejd | Ručni unos je izbor i prednost — tera da se trejd pročita još jednom. Bot most (ispod) beleži samo ono što je broker već učinio; sve što je procena i dalje se kuca |
 | Spaces, mentor, leaderboard | Jednokorisnički sistem |
 | AI chat i agenti | Mentor pack izvoz i insight pravila daju isto bez API troška |
 | Opcije (DTE, strike, expiry) | Ne trguju se |

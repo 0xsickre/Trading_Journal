@@ -4,6 +4,28 @@
 > [ROADMAP.md](ROADMAP.md#faza-8--automatski-maemfe--polovina-a-isporučena-b-blokirana);
 > ovaj fajl je referenca kad se posao nastavi.
 
+> **⚠ KOORDINACIJA SA BOT MOSTOM — pročitati pre Dela 1 i Dela 4.**
+>
+> `20260821120000_bot_ingest.sql` je u međuvremenu isporučio bot most (cBot →
+> `tj_bot_ingest`) i sa njim **dva mehanizma koja se preklapaju sa ovim planom**:
+>
+> 1. **Mapiranje naloga.** Deo 1 ispod predlaže
+>    `tj_ctrader_connections.linked_tj_account_id`. To pitanje — „koji `tj_account`
+>    je cTrader 5100123?" — već ima odgovor u `tj_accounts.broker_account_id`.
+>    Dve kolone za jedno pitanje **će** se raziđi; kad 8B krene, ova kolona mora
+>    da se izvodi iz postojeće ili da ne postoji.
+> 2. **Mapiranje simbola.** Deo 4 planira verifikaciju simbola kroz
+>    `ProtoOASymbolsListReq`. Bot most je u međuvremenu uveo
+>    `tj_broker_symbol_map` (broker simbol → instrument + `units_per_qty`), koji
+>    je **merodavan**. Kad Open API konekcija proradi, ona je odlična prilika da
+>    se `units_per_qty` za FTMO index CFD-ove konačno **proveri** — to je i dalje
+>    najveći otvoreni rizik tačnosti u oba plana — ali rezultat ide u tu tabelu,
+>    ne u drugu.
+>
+> Ono što se NE preklapa i dalje stoji: bot most ne rešava MAE/MFE. On beleži
+> tick-precizne ekstreme samo dok radi, i to za trejdove od trenutka kad je
+> uključen; sveće preko Open API-ja ostaju jedini put za MAE/MFE nad istorijom.
+
 ## Kontekst
 
 ROADMAP.md je Fazu 8B (automatsko računanje MAE/MFE — koliko je trejd bio blizu
