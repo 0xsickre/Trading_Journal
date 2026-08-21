@@ -41,9 +41,17 @@ export default async function PlaybooksPage() {
     getPlaybooks({ includeDeleted: true, positionRules }),
     getRuleLibrary({ includeDeleted: true }),
     getUserPrefs(),
-    // Playbook sections come from `rule_category`, an ordinary option list the
-    // trader edits in Settings — they used to be five values fixed in code.
-    getOptionsMap(),
+    // Playbook sections come from `rule_category`, an ordinary option list —
+    // added, renamed, reordered and deleted on the playbook card itself. They
+    // used to be five values fixed in code, and the list now starts empty.
+    //
+    // `activeOnly = false`, unlike every other reader of this map. A section is
+    // deleted, not archived (see 20260822160000): switching one off would hide
+    // the heading from this card while its rules kept rendering under a label
+    // the list no longer supplied, and an archived EMPTY section would vanish
+    // with no way left to delete it. This page is where sections are managed,
+    // so it has to see all of them.
+    getOptionsMap(false),
   ]);
 
   const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;

@@ -82,7 +82,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
 | `npm run dev` | Razvojni server |
 | `npm run build` | Produkcijski build — 14 ruta |
 | `npm run lint` | ESLint. **Očekuje se tačno jedno upozorenje** (vidi ispod) |
-| `npm test` | Vitest — 2166 testova u 133 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
+| `npm test` | Vitest — 2177 testova u 133 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
 | `npm test -- --coverage` | Izveštaj o pokrivenosti |
 | `npx knip` | Mrtvi fajlovi, eksporti i zavisnosti |
 
@@ -368,15 +368,31 @@ za rizik" daje tri naslova koja je napisao i dva koja nije, trajno prazna, na sv
 Prazna sekcija tad prestaje da bude podsetnik i postaje forma koja ne pristaje.
 
 **Mehanizam je već postojao.** `tj_option_lists` je način na koji ovaj dnevnik oduvek drži skup koji
-pripada trejderu — zasejan, preimenljiv, prerasporediv, arhivabilan, uređuje se u Settings bez ijedne
-linije koda. `exit_reason`, `miss_reason` i `setup_grade` svi tako rade; kategorija je bila izuzetak
-jer je slučajno dodata kao enum. Sad je lista `rule_category`, zasejana istih pet pod istim ključevima
-— **ništa se ne pomera** dok je ne izmeniš.
+pripada trejderu — preimenljiv, prerasporediv, bez ijedne linije koda. `exit_reason`, `miss_reason` i
+`setup_grade` svi tako rade; kategorija je bila izuzetak jer je slučajno dodata kao enum. Sad je lista
+`rule_category`.
 
-**Arhivirano nije obrisano, i UI na tome počiva.** Isključi „No-trade" u Settings i prestaje da se
-nudi — ali pravilo koje je već pod njom **mora i dalje da se vidi**. Sakriti pravila zato što je
-naslov penzionisan bilo bi gubitak podataka prerušen u pospremanje, pa `rulesByCategory` dopisuje
-svaku sekciju koja drži pravila i kad je lista više ne nudi.
+**Uređuje se na kartici playbook-a, ne u Settings.** Prvo rešenje je bilo „lista kao svaka druga, meni
+u Settings" — i to je i dalje bila tuđa lista, samo preimenljiva. Trejder koji piše playbook ne treba
+da ga napusti, nađe pravi padajući spisak u podešavanjima, doda vrednost i vrati se. Zato na kartici:
+`+ Dodaj sekciju` na dnu tabele, a svaki naslov je polje za ime sa ↑ ↓ i kantom pored
+(`addPlaybookSection`, `renamePlaybookSection`, `movePlaybookSection`, `deletePlaybookSection`).
+Nova lista **kreće prazna** — sekcije se dobijaju tako što se napišu.
+
+**Preimenovanje dira samo `label`, nikad `value`.** Pravila pamte `value`, a `ruleCategoryLabel` ga
+prevodi u ime pri crtanju. Da rename prepisuje `value`, bio bi to UPDATE preko svih pravila svih
+playbook-ova, i svaki propušten red bi ispao iz svoje sekcije.
+
+**Brisanje je tvrdo, ali odbija dok je ijedno pravilo unutra.** `is_active` je zamena za brisanje koje
+nije postojalo; sad postoji. Sekcija je naslov nad pravilima koja se još pišu, pa poluspušteno stanje
+nema šta da radi: arhivirana sekcija sa pravilima krila je naslov a ostavljala pravila, a arhivirana
+**prazna** sekcija nestajala je sa kartice bez načina da se obriše. Zato se `rule_category` čita sa
+`activeOnly = false` (migracija `20260822160000`), a odbijanje imenuje broj — uključujući arhivirana
+pravila i ona koja žive samo u **drugim** playbook-ovima, koja se sa te kartice i ne vide.
+
+Sekcija koja je ipak ostala bez svog reda dok drži pravila **i dalje se crta**, bez kontrola:
+`rulesByCategory` dopisuje svaku takvu. Sakriti pravila zato što je naslov nestao bilo bi gubitak
+podataka prerušen u pospremanje.
 
 **Bazni `CHECK` ne postoji više i to je priznata cena, ne propust.** Dozvoljeni skup su sad redovi po
 korisniku, koje ograničenje kolone ne vidi. Vrednost je grupisanje za prikaz — nijedna metrika ne
@@ -697,7 +713,7 @@ P&L i drawdown izračunate nad delimičnim skupom, bez ijednog vidljivog simptom
 
 ## Testovi
 
-2166 testova u 133 fajla, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
+2177 testova u 133 fajla, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
 `*.test.ts`, 1763 testa u 89 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
 403 testa u 44 fajla). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
 plaćaju cenu DOM-a koji ne dodiruju.

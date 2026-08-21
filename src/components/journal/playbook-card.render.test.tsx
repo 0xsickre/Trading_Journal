@@ -23,6 +23,10 @@ const actions = vi.hoisted(() => ({
   restorePlaybookRule: vi.fn(async () => ({ ok: true as const })),
   linkRule: vi.fn(async () => ({ ok: true as const })),
   unlinkRule: vi.fn(async () => ({ ok: true as const })),
+  addPlaybookSection: vi.fn(async () => ({ ok: true as const })),
+  renamePlaybookSection: vi.fn(async () => ({ ok: true as const })),
+  movePlaybookSection: vi.fn(async () => ({ ok: true as const })),
+  deletePlaybookSection: vi.fn(async () => ({ ok: true as const })),
 }));
 vi.mock("@/app/(app)/settings/playbook-actions", () => actions);
 
@@ -83,6 +87,7 @@ function renderCard(
   rows: { id: string; net: number; ruleId: string; followed: boolean }[],
   bookOverrides: Partial<Playbook> = {},
   collapseOverrides: { collapsed?: boolean; onToggleCollapsed?: () => void } = {},
+  categoryOverrides?: typeof CATEGORIES,
 ) {
   const byTrade = new Map<string, PositionRule[]>();
   for (const r of rows) {
@@ -107,7 +112,7 @@ function renderCard(
       currency="USD"
       collapsed={collapseOverrides.collapsed ?? false}
       onToggleCollapsed={collapseOverrides.onToggleCollapsed ?? vi.fn()}
-      categories={CATEGORIES}
+      categories={categoryOverrides ?? CATEGORIES}
     />,
   );
   return b;
@@ -376,5 +381,91 @@ describe("PlaybookCard — collapsing hides the body, never the header", () => {
   it("omits the summary for a playbook with no trades yet, rather than showing 0%", () => {
     renderCard([rule({ id: "r1" })], [], {}, { collapsed: true });
     expect(screen.queryByText(/win ·/)).toBeNull();
+  });
+});
+
+/**
+ * Sections are the trader's, and they are managed where they are used.
+ *
+ * These headings used to be five values in a `CHECK` constraint, drawn on every
+ * playbook whether the method had five phases or two. The tests below are about
+ * the part that replaced them: the card is the editor.
+ */
+describe("PlaybookCard — the sections are the trader's own", () => {
+  it("adds a section from the card, not from Settings", async () => {
+    const user = userEvent.setup();
+    renderCard([rule({ id: "r1", text: "Waited for the sweep" })], []);
+
+    await user.type(
+      screen.getByLabelText("New playbook section"),
+      "Risk",
+    );
+    await user.click(screen.getByRole("button", { name: "Add section" }));
+
+    expect(actions.addPlaybookSection).toHaveBeenCalledWith("Risk");
+  });
+
+  it("renames the section by its option row, never by its value", async () => {
+    // The rules store the VALUE. Renaming has to move the label alone, or every
+    // rule under the old value would fall out of its own section.
+    const user = userEvent.setup();
+    renderCard([rule({ id: "r1", text: "Waited for the sweep" })], []);
+
+    const heading = screen.getAllByLabelText("Section name")[0];
+    await user.clear(heading);
+    await user.type(heading, "Trigger");
+    await user.tab();
+
+    expect(actions.renamePlaybookSection).toHaveBeenCalledWith("oc1", "Trigger");
+  });
+
+  it("moves a section, and clamps the arrows at both ends", async () => {
+    const user = userEvent.setup();
+    renderCard([rule({ id: "r1", text: "Waited for the sweep" })], []);
+
+    const up = screen.getAllByLabelText("Move section up");
+    const down = screen.getAllByLabelText("Move section down");
+    expect(up[0]).toBeDisabled();
+    expect(down[down.length - 1]).toBeDisabled();
+
+    await user.click(down[0]);
+    expect(actions.movePlaybookSection).toHaveBeenCalledWith("oc1", 1);
+  });
+
+  it("offers a hard delete on every section", async () => {
+    // The refusal when rules are still filed here lives in the action, which is
+    // the only place that can count rules in the trader's OTHER playbooks.
+    const user = userEvent.setup();
+    renderCard([rule({ id: "r1", text: "Waited for the sweep" })], []);
+
+    await user.click(screen.getAllByLabelText("Delete section")[0]);
+    expect(actions.deletePlaybookSection).toHaveBeenCalledWith("oc1");
+  });
+
+  it("still draws a section that left the list while it holds rules", () => {
+    // Data loss by presentation is the failure mode here: the heading is gone
+    // from the list, the rules are not, and hiding them to tidy the table would
+    // make them unreachable. Drawn — but with no controls, since there is no
+    // row left to rename, move or delete.
+    renderCard(
+      [
+        rule({ id: "r1", text: "Waited for the sweep", category: "entry" }),
+        rule({ id: "r2", text: "Trailed behind structure", category: "management" }),
+      ],
+      [],
+    );
+
+    expect(screen.getByDisplayValue("Trailed behind structure")).toBeInTheDocument();
+    expect(screen.getByText("Management")).toBeInTheDocument();
+    // Two sections on the list, two sets of controls — the orphan gets none.
+    expect(screen.getAllByLabelText("Delete section")).toHaveLength(2);
+  });
+
+  it("starts a book with no sections at all and says so", () => {
+    renderCard([], [], {}, {}, []);
+
+    expect(screen.getByText(/No sections yet/)).toBeInTheDocument();
+    // The way out is on the screen, not in Settings.
+    expect(screen.getByLabelText("New playbook section")).toBeInTheDocument();
   });
 });

@@ -59,3 +59,31 @@ export function moveRuleWithinCategory(
   [next[slots[from]], next[slots[to]]] = [next[slots[to]], next[slots[from]]];
   return next;
 }
+
+/**
+ * The full order after moving one id one place. Null when nothing moves.
+ *
+ * Deliberately NOT `moveRuleWithinCategory` with the category argument dropped.
+ * That one exists because rule links share one flat ordinal across sections and
+ * a "next" link may belong to a different section; a section list has no such
+ * interleaving, so the honest implementation is a plain adjacent swap and
+ * pretending otherwise would import a subtlety that does not apply here.
+ *
+ * Returns the whole array, matching the three siblings in this codebase: the
+ * caller writes ordinals from indices, so a list that already holds duplicate
+ * `sort_order` values comes out normalised instead of staying ambiguous.
+ * Clamped at both ends, never wrapping.
+ */
+export function moveInOrder(
+  ids: readonly string[],
+  id: string,
+  direction: -1 | 1,
+): string[] | null {
+  const from = ids.indexOf(id);
+  if (from < 0) return null;
+  const to = from + direction;
+  if (to < 0 || to >= ids.length) return null;
+  const next = [...ids];
+  [next[from], next[to]] = [next[to], next[from]];
+  return next;
+}

@@ -9,7 +9,7 @@ import {
   type RuleCategory,
   type ShowWhen,
 } from "@/lib/journal/playbook-types";
-import { moveRuleWithinCategory } from "@/lib/journal/playbook-order";
+import { moveInOrder, moveRuleWithinCategory } from "@/lib/journal/playbook-order";
 
 function revalidateAll() {
   revalidatePath("/settings");
@@ -393,7 +393,7 @@ async function unknownCategory(category: string): Promise<Result | null> {
   if (data) return null;
   return {
     ok: false,
-    error: `"${clean}" is not one of your playbook sections. Add it under Settings → Dropdown Lists → Playbook Sections first.`,
+    error: `"${clean}" is not one of your playbook sections. Add the section first, then write rules under it.`,
   };
 }
 
@@ -562,5 +562,209 @@ export async function setPlaybooksCollapsed(ids: string[]): Promise<Result> {
   // mutations that change what a rule or a playbook actually IS, which a
   // client-side view preference never does.
   revalidatePath("/playbooks");
+  return { ok: true };
+}
+
+// --- Sections ---------------------------------------------------------------
+//
+// A section is a row in the user's `rule_category` option list, and these four
+// actions are the whole of its lifecycle. They live HERE rather than beside
+// `addOption` / `renameOption` in `settings/actions.ts` — which can already edit
+// any list generically — because the generic editor is not where sections are
+// used. A trader writing a playbook should not have to leave the playbook, find
+// the right dropdown list in Settings, add a value, and come back.
+//
+// The generic actions still work on this list and are not replaced. What these
+// add is the part the generic ones cannot know: `value` must never change once
+// rules point at it, a duplicate value would silently split one section in two,
+// and deletion has to answer for the rules filed under it.
+
+/** The `rule_category` list, created on first use. */
+async function ruleCategoryListId(): Promise<
+  { id: string } | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+  const { data: existing, error } = await supabase
+    .from("tj_option_lists")
+    .select("id")
+    .eq("key", "rule_category")
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (existing) return { id: existing.id };
+
+  // Created lazily rather than in `tj_seed_defaults`, and that is the point: an
+  // account starting with zero sections is the intended state. The trader names
+  // the first one when they write their first rule, instead of being handed
+  // five headings out of somebody else's method.
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  const { data: created, error: createError } = await supabase
+    .from("tj_option_lists")
+    .insert({
+      user_id: user.id,
+      key: "rule_category",
+      label: "Playbook Sections",
+      category: "ICT Setup",
+      sort_order: 17,
+    })
+    .select("id")
+    .single();
+  if (createError) return { ok: false, error: createError.message };
+  return { id: created.id };
+}
+
+const sectionLabelSchema = z.string().trim().min(1).max(60);
+
+export async function addPlaybookSection(rawLabel: string): Promise<Result> {
+  const parsed = sectionLabelSchema.safeParse(rawLabel);
+  if (!parsed.success) {
+    return { ok: false, error: "A section needs a name, up to 60 characters." };
+  }
+  const label = parsed.data;
+
+  const list = await ruleCategoryListId();
+  if ("ok" in list) return list;
+
+  const supabase = await createClient();
+
+  // Checked before the insert because there is no unique index behind it. Two
+  // sections sharing a `value` would not error — they would draw two headings
+  // over the SAME rules, and every edit under one would appear under both.
+  const { data: clash } = await supabase
+    .from("tj_option_items")
+    .select("id")
+    .eq("list_id", list.id)
+    .eq("value", label)
+    .maybeSingle();
+  if (clash) return { ok: false, error: `You already have a "${label}" section.` };
+
+  // Through the RPC, not a plain insert: it computes the next ordinal inside the
+  // statement, so two quick adds cannot both read the same maximum.
+  const { error } = await supabase.rpc("tj_add_option_item", {
+    p_list_id: list.id,
+    p_label: label,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidateAll();
+  return { ok: true };
+}
+
+/**
+ * Rename a section — the LABEL only.
+ *
+ * `tj_playbook_rules.category` stores the `value`, and `ruleCategoryLabel`
+ * resolves value to label at render time. So a rename touches no rule and cannot
+ * orphan one. Rewriting the value instead would mean an UPDATE across every rule
+ * of every playbook, and any row missed would drop out of its own section.
+ */
+export async function renamePlaybookSection(
+  id: string,
+  rawLabel: string,
+): Promise<Result> {
+  const parsed = sectionLabelSchema.safeParse(rawLabel);
+  if (!parsed.success) {
+    return { ok: false, error: "A section needs a name, up to 60 characters." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tj_option_items")
+    .update({ label: parsed.data })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidateAll();
+  return { ok: true };
+}
+
+/** Move a section one place in the order the trader put them in. */
+export async function movePlaybookSection(
+  id: string,
+  direction: -1 | 1,
+): Promise<Result> {
+  const supabase = await createClient();
+  const { data: items, error } = await supabase
+    .from("tj_option_items")
+    .select("id, sort_order, tj_option_lists!inner(key)")
+    .eq("tj_option_lists.key", "rule_category")
+    .order("sort_order")
+    .order("id");
+  if (error) return { ok: false, error: error.message };
+  if (!items?.length) return { ok: false, error: "No sections yet." };
+
+  const ordered = moveInOrder(
+    items.map((i) => i.id),
+    id,
+    direction,
+  );
+  // Already at the end, or not a section. Reported as success because nothing
+  // failed and nothing should change — same as `movePlaybookRule`.
+  if (!ordered) return { ok: true };
+
+  const ordinalOf = new Map(items.map((i) => [i.id, i.sort_order]));
+  const writes = ordered
+    .map((itemId, ordinal) => ({ itemId, ordinal }))
+    .filter(({ itemId, ordinal }) => ordinalOf.get(itemId) !== ordinal);
+
+  const results = await Promise.all(
+    writes.map(({ itemId, ordinal }) =>
+      supabase.from("tj_option_items").update({ sort_order: ordinal }).eq("id", itemId),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { ok: false, error: failed.error.message };
+
+  revalidateAll();
+  return { ok: true };
+}
+
+/**
+ * Delete a section outright — and refuse while any rule still sits in it.
+ *
+ * A HARD delete, unlike `toggleOptionActive`, and that is what was asked for: a
+ * list you can only ever archive from is still a list you do not own. It is safe
+ * to make hard precisely because the section is presentation — no metric groups
+ * by it, no denominator counts it, and `follow_rate` and the setup score both
+ * ignore it entirely.
+ *
+ * The refusal is the part that matters. Deleting the row would not delete the
+ * rules; their `category` would keep the old value and they would go on
+ * rendering under a heading with no label and no way to reach it, because the
+ * list no longer offers it. Naming the count instead — which includes archived
+ * rules and rules linked only into OTHER playbooks, the ones invisible from the
+ * card being looked at — turns a silent constraint into an instruction.
+ */
+export async function deletePlaybookSection(id: string): Promise<Result> {
+  const supabase = await createClient();
+  const { data: item, error: readError } = await supabase
+    .from("tj_option_items")
+    .select("value, tj_option_lists!inner(key)")
+    .eq("id", id)
+    .eq("tj_option_lists.key", "rule_category")
+    .maybeSingle();
+  if (readError) return { ok: false, error: readError.message };
+  if (!item) return { ok: false, error: "Section not found." };
+
+  const { count, error: countError } = await supabase
+    .from("tj_playbook_rules")
+    .select("id", { count: "exact", head: true })
+    .eq("category", item.value);
+  if (countError) return { ok: false, error: countError.message };
+
+  if (count && count > 0) {
+    return {
+      ok: false,
+      error:
+        `${count} ${count === 1 ? "rule is" : "rules are"} still in this section, ` +
+        `counting archived ones and any in other playbooks. Move or delete them ` +
+        `first, then the section can go.`,
+    };
+  }
+
+  const { error } = await supabase.from("tj_option_items").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidateAll();
   return { ok: true };
 }

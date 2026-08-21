@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moveRuleWithinCategory, type RuleLink } from "./playbook-order";
+import { moveInOrder, moveRuleWithinCategory, type RuleLink } from "./playbook-order";
 
 /** Compact fixture: "a:entry" → { ruleId: "a", category: "entry" }. */
 const links = (...spec: string[]): RuleLink[] =>
@@ -89,5 +89,38 @@ describe("moveRuleWithinCategory", () => {
     const next = moveRuleWithinCategory(order, "a", 1)!;
     expect(next).toHaveLength(order.length);
     expect([...next].sort()).toEqual(["a", "b", "c", "d"]);
+  });
+});
+
+describe("moveInOrder", () => {
+  const ids = ["a", "b", "c"];
+
+  it("swaps with the neighbour in the given direction", () => {
+    expect(moveInOrder(ids, "b", -1)).toEqual(["b", "a", "c"]);
+    expect(moveInOrder(ids, "b", 1)).toEqual(["a", "c", "b"]);
+  });
+
+  it("returns the whole order, not just the pair that moved", () => {
+    // The caller writes ordinals from indices. Handing back two positions would
+    // leave a list that already holds duplicate `sort_order` values ambiguous;
+    // handing back all of it normalises them on the way through.
+    expect(moveInOrder(ids, "a", 1)).toHaveLength(3);
+  });
+
+  it("clamps at both ends instead of wrapping", () => {
+    // Null, not a copy: it lets the action skip the write entirely, and it is
+    // what disables the arrow rather than making it silently do nothing.
+    expect(moveInOrder(ids, "a", -1)).toBeNull();
+    expect(moveInOrder(ids, "c", 1)).toBeNull();
+  });
+
+  it("is null for an id that is not in the list", () => {
+    expect(moveInOrder(ids, "zzz", 1)).toBeNull();
+  });
+
+  it("leaves the input untouched", () => {
+    const original = [...ids];
+    moveInOrder(ids, "b", 1);
+    expect(ids).toEqual(original);
   });
 });

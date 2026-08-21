@@ -57,10 +57,14 @@ import type { EnrichedTrade } from "@/lib/journal/enriched-trade";
 import type { OptionItem } from "@/lib/journal/types";
 import {
   addPlaybookRule,
+  addPlaybookSection,
   deletePlaybook,
   deletePlaybookRule,
+  deletePlaybookSection,
   linkRule,
   movePlaybookRule,
+  movePlaybookSection,
+  renamePlaybookSection,
   restorePlaybookRule,
   unlinkRule,
   updatePlaybook,
@@ -477,21 +481,90 @@ function ReuseRow({
   );
 }
 
+/**
+ * The "+ Add section" row, at the very bottom of the table.
+ *
+ * Sections are edited HERE and not only in Settings because this is where they
+ * are used. A playbook starts with none: you name the first heading — "Entry" —
+ * write its rules, then name the next. Which is what the five built-in headings
+ * used to prevent, by arriving already written.
+ */
+function AddSectionRow() {
+  const { pending, run } = useAction();
+  const [draft, setDraft] = useState("");
+
+  function add() {
+    if (!draft.trim()) return;
+    run(async () => {
+      const res = await addPlaybookSection(draft);
+      if (res.ok) setDraft("");
+      return res;
+    });
+  }
+
+  return (
+    <tr>
+      <td colSpan={RULE_COLUMNS} className="pt-4">
+        <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+          <Input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") add();
+            }}
+            placeholder="New section, e.g. Entry"
+            aria-label="New playbook section"
+            className="h-8 w-56"
+            disabled={pending}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8"
+            onClick={add}
+            disabled={pending}
+            /* Said out loud because the list is shared and the card is not:
+               a section added from one playbook is available to all of them,
+               the same way the rule library is. */
+            title="Sections are shared across your playbooks, like the rule library."
+          >
+            <Plus className="size-3.5" /> Add section
+          </Button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function CategorySection({
   book,
   category,
+  item,
   rules,
   library,
   scoreById,
   categories,
+  canUp,
+  canDown,
 }: {
   book: Playbook;
   category: RuleCategory;
+  /**
+   * The row behind this heading, absent when the section is no longer on the
+   * list but rules are still filed under it. Those cannot be renamed, moved or
+   * deleted from here — there is nothing left to edit — but they are still
+   * drawn, because hiding rules to tidy a heading is data loss by presentation.
+   */
+  item: OptionItem | undefined;
   rules: PlaybookRule[];
   library: PlaybookRule[];
   scoreById: Map<string, RuleScore>;
   categories: readonly OptionItem[];
+  canUp: boolean;
+  canDown: boolean;
 }) {
+  const { pending, run } = useAction();
+  const [label, setLabel] = useState(item?.label ?? "");
   const linked = new Set(rules.map((r) => r.id));
   const available = library.filter(
     (r) => r.category === category && !linked.has(r.id) && r.deleted_at == null,
@@ -500,15 +573,76 @@ function CategorySection({
   return (
     <>
       <tr>
-        <td
-          colSpan={RULE_COLUMNS}
-          className="pt-4 pb-1 text-xs font-semibold text-muted-foreground"
-        >
-          {ruleCategoryLabel(category, categories)}{" "}
-          {/* The hint rides along deliberately: it is what makes an empty
-              No-trade section a prompt to write the missing rule rather than a
-              gap in the table. */}
-          <span className="font-normal">{RULE_CATEGORY_HINTS[category]}</span>
+        <td colSpan={RULE_COLUMNS} className="pt-4 pb-1">
+          <div className="flex flex-wrap items-center gap-1">
+            {item ? (
+              <Input
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                onBlur={() => {
+                  if (label.trim() && label !== item.label)
+                    run(() => renamePlaybookSection(item.id, label));
+                }}
+                className="h-7 w-48 text-xs font-semibold"
+                aria-label="Section name"
+                disabled={pending}
+              />
+            ) : (
+              <span className="text-xs font-semibold text-muted-foreground">
+                {ruleCategoryLabel(category, categories)}
+              </span>
+            )}
+
+            {item && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  disabled={pending || !canUp}
+                  aria-label="Move section up"
+                  onClick={() => run(() => movePlaybookSection(item.id, -1))}
+                >
+                  <ChevronUp className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  disabled={pending || !canDown}
+                  aria-label="Move section down"
+                  onClick={() => run(() => movePlaybookSection(item.id, 1))}
+                >
+                  <ChevronDown className="size-3.5" />
+                </Button>
+                {/* Hard delete, and it refuses while rules are still filed
+                    here — the count comes back in the message, including rules
+                    that live only in your other playbooks and so are not on
+                    this card at all. */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  disabled={pending}
+                  aria-label="Delete section"
+                  title="Deletes the section. Only possible once no rule is left in it."
+                  onClick={() => run(() => deletePlaybookSection(item.id))}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </>
+            )}
+
+            {/* Only the headings this repo seeded carry one. A section you
+                named yourself gets none — a sentence explaining what "Risk"
+                means to the person who just typed "Risk" is this journal
+                lecturing you about your own method. */}
+            {RULE_CATEGORY_HINTS[category] && (
+              <span className="text-xs text-muted-foreground">
+                {RULE_CATEGORY_HINTS[category]}
+              </span>
+            )}
+          </div>
         </td>
       </tr>
 
@@ -590,21 +724,29 @@ export function PlaybookCard({
 
   /**
    * Every section the trader HAS, populated or not — plus any that a rule still
-   * uses after being archived.
+   * uses after the section left the list.
    *
    * An empty section is a prompt to write the rule that is missing, which is why
    * empties are put back after `rulesByCategory` drops them. That was the
    * argument for showing all five built-ins too, and it only held while the five
-   * were the right five. Now the list is the trader's, so an empty heading is
-   * one they asked for.
+   * were the right five. Now every heading is one the trader typed, so an empty
+   * one is a heading they asked for.
+   *
+   * `canUp` / `canDown` are scoped to the LIST, not to this array: the appended
+   * orphans have no row to reorder, so the last listed section is the last one
+   * that can move down even when orphans are drawn below it.
    */
   const sections = useMemo(() => {
     const keys = categories.map((c) => c.value);
     const byCategory = rulesByCategory(book.rules, keys);
     const all = [...keys];
     for (const g of byCategory) if (!all.includes(g.category)) all.push(g.category);
-    return all.map((category) => ({
+    const itemOf = new Map(categories.map((c) => [c.value, c]));
+    return all.map((category, i) => ({
       category,
+      item: itemOf.get(category),
+      canUp: i > 0,
+      canDown: i < categories.length - 1,
       rules: byCategory.find((g) => g.category === category)?.rules ?? [],
     }));
   }, [book.rules, categories]);
@@ -794,10 +936,16 @@ export function PlaybookCard({
             the merge was for; `show_when` is a setting touched once and then
             left alone, so it is the right thing to push out of view.
           */}
-          <table className="w-full min-w-[52rem] text-sm">
+          {/* 68rem, not the 52 this started at. The `grade` checkbox added a
+              SEVENTH column without the minimum growing to make room, and every
+              other column carries a fixed width — so the only flexible one, the
+              rule text itself, absorbed the whole shortfall and collapsed to
+              26 px. Measured on this machine, not guessed: the rule you were
+              editing was a two-character slit. */}
+          <table className="w-full min-w-[68rem] text-sm">
             <thead className="text-muted-foreground">
               <tr className="border-b text-xs">
-                <th className="py-2 pr-3 text-left font-medium">Rule</th>
+                <th className="w-64 py-2 pr-3 text-left font-medium">Rule</th>
                 <th className="w-12 py-2 pl-3 text-right font-medium">n</th>
                 <th className="w-20 py-2 pl-3 text-right font-medium">Followed</th>
                 <th className="w-20 py-2 pl-3 text-right font-medium">Broken</th>
@@ -809,17 +957,32 @@ export function PlaybookCard({
               </tr>
             </thead>
             <tbody>
-              {sections.map(({ category, rules }) => (
+              {sections.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={RULE_COLUMNS}
+                    className="pt-4 text-sm text-muted-foreground"
+                  >
+                    No sections yet. Add one below — name it after a decision you
+                    actually make, then write the rules under it.
+                  </td>
+                </tr>
+              )}
+              {sections.map(({ category, item, rules, canUp, canDown }) => (
                 <CategorySection
                   key={category}
                   book={book}
                   category={category}
+                  item={item}
                   rules={rules}
                   library={library}
                   categories={categories}
                   scoreById={scoreById}
+                  canUp={canUp}
+                  canDown={canDown}
                 />
               ))}
+              <AddSectionRow />
             </tbody>
           </table>
 

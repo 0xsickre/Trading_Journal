@@ -14,11 +14,13 @@ import { addDaysToDayKey, isoWeekdayOfDayKey } from "./time";
  * Six values became five, which is a narrowing, and it was only safe because no
  * week had ever been graded. With data present, "does D become 2 or 1" has no
  * honest answer.
- */
-export const WEEK_GRADES = [1, 2, 3, 4, 5] as const;
-
-/**
- * Plain `number`, not the literal union `1|2|3|4|5`.
+ *
+ * No exported list of the five. `WEEK_GRADES` was one, briefly, and nothing ever
+ * read it: `StarRating` takes a count, not a set of values, and the range is
+ * enforced by a zod check and a database CHECK. An array kept only so the scale
+ * has something to point at is a second place for the scale to be wrong.
+ *
+ * PLAIN `number`, not the literal union `1|2|3|4|5`.
  *
  * The union looks stricter and buys nothing here: the value arrives from a
  * five-button component and passes a zod range check and a database CHECK
