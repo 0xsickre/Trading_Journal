@@ -3,12 +3,18 @@ import { getAccounts } from "@/lib/journal/accounts";
 import { getFieldDefs } from "@/lib/journal/field-defs";
 import { getUserPrefs } from "@/lib/journal/user-prefs";
 import { getOptionsMap } from "@/lib/journal/options";
+import { getPlaybooks, getPositionRules } from "@/lib/journal/playbooks";
 import { JournalGrid } from "@/components/journal/journal-grid";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
 
 export default async function JournalPage() {
-  const [trades, accounts, fieldDefs, prefs, optionsMap] = await Promise.all([
+  // Answers first: `getPlaybooks` needs them to report per-rule statistics, and
+  // the grid needs both to derive the setup grade. Same two-step the dashboard
+  // page does, for the same reason.
+  const positionRules = await getPositionRules();
+
+  const [trades, accounts, fieldDefs, prefs, optionsMap, playbooks] = await Promise.all([
     getTradesWithStats(),
     getAccounts(),
     // All defs: the grid READS history, and a retired field's values are still
@@ -19,6 +25,9 @@ export default async function JournalPage() {
     // per-trade form uses, so a bulk-applied value is never one the form
     // wouldn't also offer.
     getOptionsMap(),
+    // Retired rules included: the grid READS history, and a trade graded under
+    // a rule since withdrawn still earned that grade.
+    getPlaybooks({ includeDeleted: true, positionRules }),
   ]);
 
   return (
@@ -34,6 +43,8 @@ export default async function JournalPage() {
         fieldDefs={fieldDefs}
         hiddenColumns={prefs.journalHiddenColumns}
         optionsMap={optionsMap}
+        playbooks={playbooks}
+        positionRules={positionRules}
       />
     </div>
   );

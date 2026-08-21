@@ -82,11 +82,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
 | `npm run dev` | Razvojni server |
 | `npm run build` | Produkcijski build — 14 ruta |
 | `npm run lint` | ESLint. **Očekuje se tačno jedno upozorenje** (vidi ispod) |
-| `npm test` | Vitest — 2145 testova u 132 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
+| `npm test` | Vitest — 2162 testa u 133 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
 | `npm test -- --coverage` | Izveštaj o pokrivenosti |
 | `npx knip` | Mrtvi fajlovi, eksporti i zavisnosti |
 
-**Lint upozorenje je nosivo.** `journal-grid.tsx:693` prijavljuje *„Compilation Skipped: Use of
+**Lint upozorenje je nosivo.** `journal-grid.tsx:727` prijavljuje *„Compilation Skipped: Use of
 incompatible library"* — React Compiler odbija da memoizuje komponentu koja koristi
 `useReactTable` iz TanStack Table. Razumemo ga i prihvatamo. To što ih je **tačno 1** je kontrolna
 vrednost: svaki drugi broj znači da je neka izmena nešto uvela.
@@ -353,6 +353,44 @@ gubitaka. Knjiga od samih breakeven scratch-eva ima putanju za merenje i nema od
 
 Četiri kalibracione konstante su zaključane vrednošću u `sickre-score.test.ts`. Menjanje bilo koje
 pomera svaki skor koji je ikad prikazan, pa sad mora da menja i test.
+
+---
+
+## Ocena setupa se izvodi, ne procenjuje
+
+`setup_grade` je bilo otkucano slovo (A+/A/B/C) — i **jedino polje koje je bilo pogrešno, ne samo
+sporo**. Popunjavalo se pošto se zna ishod, pa gubitnik postane B a dobitnik A+. To je dimenzija po
+kojoj dashboard podrazumevano razlaže rezultat, pa je ocena „objašnjavala" performans etiketom koja
+je delom **izvedena iz** performansa. Kružno, i nevidljivo dok se dešava.
+
+Sve za zamenu je već postojalo: biblioteka pravila, odgovori po trejdu, `follow_rate` i
+`ruleScorecard`. Falila je samo oznaka **koja pravila definišu kvalitet setupa** —
+`tj_playbook_rules.is_setup_criterion`.
+
+**Ocena = udeo ispunjenih kriterijuma.** Sve → A+, ≥80 % → A, ≥60 % → B, ispod → C. A+ traži baš
+sve: oznaka znači „ovo je setup koji sam čekao", a setup kome fali jedan od sopstvenih uslova je
+drugi setup.
+
+**`CHECK (is_setup_criterion = false OR show_when = 'always')` je suština, ne dekoracija.**
+Kriterijum vezan za pobednike bio bi **hindsight po konstrukciji** — ocenjivao bi setup pitanjem koje
+se postavlja tek kad znaš rezultat. Baza tu kombinaciju odbija umesto da veruje da je UI neće
+ponuditi.
+
+**Ne ocenjuje se dok ček-lista nije cela odgovorena**, i tu se namerno razilazi sa `computeFollowRate`,
+koji neodgovorena pravila izbacuje iz brojioca *i* imenioca. To je ispravno za *stopu* i rupa za
+*ocenu*: odgovoriš jedan kriterijum, ispuniš ga, i pokupiš A+. Zato se broji prema onome što playbook
+**definiše**, ne prema odgovorima koji postoje — neodgovoreno pravilo nema red, pa bi brojanje redova
+tri od četiri kriterijuma pročitalo kao tri od tri.
+
+**Šta ovo NE rešava:** ne postaje objektivno. Čekiranje „MSS with displacement" je i dalje procena.
+Dobija se dekompozicija (nekoliko malih pitanja umesto jednog velikog), doslednost, proverivost — i
+prava dobit, **testabilnost**: `ruleScorecard` već meri win rate kad je pravilo ispoštovano naspram
+prekršenog, pa se kriterijum koji ništa ne predviđa može naći i izbaciti. Slovo to nikad ne može, jer
+ne zna *koji* deo onog „A+" je radio posao.
+
+Kolona `tj_positions.setup_grade` ostaje i **nosi istoriju** ručno ocenjenih trejdova — izvedena
+vrednost ima prednost, kolona je rezerva. Isti obrazac prvenstva koji `plannedRewardFromTrade` već
+dokumentuje, samo obrnutim redom, jer je ovde izvedeno bolje a kolona nasleđe.
 
 ---
 
@@ -630,8 +668,8 @@ P&L i drawdown izračunate nad delimičnim skupom, bez ijednog vidljivog simptom
 
 ## Testovi
 
-2145 testova u 132 fajla, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
-`*.test.ts`, 1742 testa u 88 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
+2162 testa u 133 fajla, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
+`*.test.ts`, 1759 testova u 89 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
 403 testa u 44 fajla). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
 plaćaju cenu DOM-a koji ne dodiruju.
 

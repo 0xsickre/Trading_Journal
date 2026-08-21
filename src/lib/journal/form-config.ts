@@ -184,7 +184,15 @@ const BASE_TABS: FormTab[] = [
         id: "setup",
         title: "Setup",
         fields: [
-          { name: "setup_grade", label: "Setup Grade", type: "select", listKey: "setup_grade" },
+          // `setup_grade` USED TO BE ASKED HERE, as a dropdown of A+/A/B/C.
+          // It is gone because it was answered after the outcome was known —
+          // a loser remembered as a B, a winner as an A+ — and it is the
+          // dimension the dashboard groups by default, so the grade explained
+          // performance with a label partly taken from performance.
+          //
+          // It is now DERIVED from the playbook criteria ticked below, in
+          // `setup-score.ts`. The column survives to carry the trades graded by
+          // hand before this, and nothing writes it any more.
           {
             name: "technical_tags",
             label: "Technical Tags",

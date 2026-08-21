@@ -28,6 +28,9 @@ function lookup(
   return {
     text: new Map(rules.map((r) => [r.id, r.text])),
     showWhen: new Map(rules.map((r) => [r.id, r.show_when ?? "always"])),
+    // Follow rate counts every rule, criterion or not, so these fixtures need
+    // none — the setup grade is scored in `setup-score.test.ts`.
+    criteriaByPlaybook: new Map(),
     answersByTrade,
   };
 }

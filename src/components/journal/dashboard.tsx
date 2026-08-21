@@ -981,6 +981,15 @@ export function Dashboard({
   );
   const dailyDd = useMemo(() => computeDailyDrawdown(dayPoints), [dayPoints]);
 
+  // Built once and shared: the insight rules need it for the derived setup
+  // grade, and the process-adherence score needs it for the follow rate. Two
+  // constructions would be two chances for them to disagree about which rules
+  // exist.
+  const playbookLookup = useMemo(
+    () => buildPlaybookLookup(playbooks, positionRules),
+    [playbooks, positionRules],
+  );
+
   const insightResult = useMemo(
     () =>
       runInsights(
@@ -996,6 +1005,7 @@ export function Dashboard({
           pnlOf,
           currency,
           fillCounts,
+          rules: playbookLookup.rules,
         }),
       ),
     [
@@ -1009,6 +1019,7 @@ export function Dashboard({
       pnlOf,
       currency,
       fillCounts,
+      playbookLookup.rules,
     ],
   );
 
@@ -1072,10 +1083,9 @@ export function Dashboard({
       trackerSeries.filter((d) => d.date >= from),
     );
 
-    const lookup = buildPlaybookLookup(playbooks, positionRules);
     const followRatePct = computeFollowRate(
       enrichTrades(realized, { tzOf, range: breakevenRange, pnlOf, fillCounts }),
-      lookup.rules,
+      playbookLookup.rules,
     );
 
     return processAdherence({ trackerPct, followRatePct });
@@ -1083,8 +1093,7 @@ export function Dashboard({
     trackerSeries,
     period,
     todayKey,
-    playbooks,
-    positionRules,
+    playbookLookup.rules,
     realized,
     tzOf,
     breakevenRange,
@@ -1213,10 +1222,12 @@ export function Dashboard({
         pnlOf,
         currency,
         fillCounts,
+        rules: playbookLookup.rules,
       }),
     );
 
     const md = buildMentorPack(scoped, {
+      rules: playbookLookup.rules,
       insights: scopedInsights,
       currency,
       scopeLabel,

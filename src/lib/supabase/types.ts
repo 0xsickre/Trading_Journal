@@ -898,6 +898,7 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           id: string
+          is_setup_criterion: boolean
           show_when: string
           sort_order: number
           text: string
@@ -909,6 +910,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           id?: string
+          is_setup_criterion?: boolean
           show_when?: string
           sort_order?: number
           text: string
@@ -920,6 +922,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           id?: string
+          is_setup_criterion?: boolean
           show_when?: string
           sort_order?: number
           text?: string

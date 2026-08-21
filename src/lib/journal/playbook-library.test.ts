@@ -18,6 +18,7 @@ function rule(
     category,
     text,
     show_when: "always",
+  is_setup_criterion: false,
     sort_order: 0,
     deleted_at: null,
     answerCount: 0,

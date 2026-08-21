@@ -11,6 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { gradeFromPct } from "@/lib/journal/setup-score";
 import { cn } from "@/lib/utils";
 import {
   RULE_CATEGORY_LABELS,
@@ -81,6 +83,23 @@ export function PlaybookChecklist({
   const answered = visible.filter((r) => answers[r.id] !== undefined);
   const followed = answered.filter((r) => answers[r.id]).length;
   const broken = answered.length - followed;
+
+  /**
+   * The setup grade, live, from the criteria on this playbook.
+   *
+   * Computed here rather than read from the trade because the trade has not
+   * been saved yet — the point is to see the grade move as you tick, while the
+   * decision to take the trade is still open. `setupScoreFromTrade` owns the
+   * bands and the refusals; this only assembles the answers it reads, so the
+   * number shown here and the number the reports group by cannot diverge.
+   */
+  const criteria = visible.filter((r) => r.is_setup_criterion);
+  const criteriaAnswered = criteria.filter((r) => answers[r.id] !== undefined);
+  const criteriaMet = criteriaAnswered.filter((r) => answers[r.id]).length;
+  const setupComplete =
+    criteria.length > 0 && criteriaAnswered.length === criteria.length;
+  const setupPct = setupComplete ? (criteriaMet / criteria.length) * 100 : null;
+  const setupGrade = setupPct == null ? null : gradeFromPct(setupPct);
 
   /**
    * What "check remaining" is allowed to touch.
@@ -193,6 +212,28 @@ export function PlaybookChecklist({
                 the honest encoding — and is why there is no ui/progress.tsx to
                 reach for.
               */}
+              {criteria.length > 0 && (
+                <Badge
+                  variant="outline"
+                  className="shrink-0 tabular-nums"
+                  title={
+                    setupGrade
+                      ? `${criteriaMet} of ${criteria.length} setup criteria met`
+                      : `${criteriaAnswered.length} of ${criteria.length} setup criteria answered — the grade needs all of them`
+                  }
+                >
+                  {/* An em dash until every criterion is answered, never a
+                      provisional letter: a grade computed from half a checklist
+                      would be a verdict on a setup nobody finished judging. */}
+                  Setup {setupGrade ?? "—"}
+                  {setupGrade && (
+                    <span className="ml-1 text-muted-foreground">
+                      {criteriaMet}/{criteria.length}
+                    </span>
+                  )}
+                </Badge>
+              )}
+
               <div
                 className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-muted"
                 aria-hidden="true"

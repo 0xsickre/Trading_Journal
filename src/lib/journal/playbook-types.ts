@@ -64,6 +64,13 @@ export type PlaybookRule = {
   category: RuleCategory;
   text: string;
   show_when: ShowWhen;
+  /**
+   * Does this rule define SETUP QUALITY, as opposed to process?
+   *
+   * The derived setup grade is the share of these that were met. Constrained by
+   * the database to `show_when = 'always'` — see 20260822110000.
+   */
+  is_setup_criterion: boolean;
   sort_order: number;
   /** Set when the rule was retired. Never shown on a form, always kept in stats. */
   deleted_at: string | null;

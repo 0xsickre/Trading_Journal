@@ -9,8 +9,10 @@
 
 import { stringFieldValue } from "../field-values";
 import { winRateOf } from "../analytics";
+import { scorable, setupScoreFromTrade } from "../setup-score";
 import { fmtMoney } from "../format";
 import { isInterference, TOUCHED_LABELS } from "../position-checkin";
+import type { TradeRow } from "../types";
 import type { InsightContext } from "./context";
 import type { Insight, InsightRule } from "./types";
 
@@ -55,8 +57,8 @@ export const micromanagedASetup: Rule = {
   evaluate: (ctx) => {
     const out: Insight[] = [];
     for (const e of ctx.trades) {
-      const grade = norm(strField(e.trade.row, "setup_grade"));
-      if (!grade.startsWith("a")) continue;
+      if (!isASetup(e.trade.row, ctx.rules ? setupScoreFromTrade(scorable(e), ctx.rules) : null))
+        continue;
 
       const touchedOn = (ctx.checkinsByPosition.get(e.id) ?? []).find((c) =>
         isInterference(c.touched),
@@ -169,14 +171,36 @@ export const lowMentalTempEntry: Rule = {
 };
 
 /** A-grade setups that were planned and never taken. */
+/**
+ * Is this an A-setup?
+ *
+ * The derived grade wins when it exists; the hand-typed column is the fallback
+ * for trades graded before criteria existed. Both are compared against a closed
+ * set rather than by prefix, which is how it used to be done — `startsWith("a")`
+ * also matched anything a person typed into the editable option list, "Awful"
+ * included.
+ */
+function isASetup(
+  row: TradeRow,
+  scored: { grade: string } | null,
+): boolean {
+  const grade = scored?.grade ?? strField(row, "setup_grade") ?? "";
+  return grade === "A+" || grade === "A";
+}
+
 export const missedASetup: Rule = {
   id: "missed_a_setup",
   level: "portfolio",
   minSample: 0,
   description: "A-setups marked as missed.",
   evaluate: (ctx) => {
+    // Missed trades are read from `allRows`, which are raw rows rather than
+    // enriched trades, so the derived grade is not reachable here. The hand-typed
+    // column is all there is — and a trade that was never taken has no outcome to
+    // be graded with hindsight, which is the defect deriving exists to avoid. So
+    // this one keeps reading the column, deliberately.
     const missed = ctx.allRows.filter(
-      (r) => r.status === "missed" && norm(strField(r, "setup_grade")).startsWith("a"),
+      (r) => r.status === "missed" && isASetup(r, null),
     );
     if (missed.length === 0) return [];
     return [

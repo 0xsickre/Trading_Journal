@@ -16,6 +16,7 @@ type RuleRow = {
   category: string;
   text: string;
   show_when: string;
+  is_setup_criterion: boolean;
   sort_order: number;
   deleted_at: string | null;
 };
@@ -71,7 +72,7 @@ export async function getPlaybooks(
     selectAllPages<RuleRow>((from, to) =>
       supabase
         .from("tj_playbook_rules")
-        .select("id,category,text,show_when,sort_order,deleted_at")
+        .select("id,category,text,show_when,is_setup_criterion,sort_order,deleted_at")
         .order("sort_order")
         .order("id")
         .range(from, to),
@@ -88,6 +89,7 @@ export async function getPlaybooks(
       category: r.category as RuleCategory,
       text: r.text,
       show_when: r.show_when as ShowWhen,
+      is_setup_criterion: r.is_setup_criterion,
       sort_order: r.sort_order,
       deleted_at: r.deleted_at,
       answerCount: counts.get(r.id) ?? 0,
@@ -129,7 +131,7 @@ export async function getRuleLibrary(
     selectAllPages<RuleRow>((from, to) =>
       supabase
         .from("tj_playbook_rules")
-        .select("id,category,text,show_when,sort_order,deleted_at")
+        .select("id,category,text,show_when,is_setup_criterion,sort_order,deleted_at")
         .order("sort_order")
         .order("id")
         .range(from, to),
@@ -144,6 +146,7 @@ export async function getRuleLibrary(
       category: r.category as RuleCategory,
       text: r.text,
       show_when: r.show_when as ShowWhen,
+      is_setup_criterion: r.is_setup_criterion,
       sort_order: r.sort_order,
       deleted_at: r.deleted_at,
       answerCount: counts.get(r.id) ?? 0,

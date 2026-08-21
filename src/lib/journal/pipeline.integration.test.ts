@@ -57,7 +57,7 @@ describe("one trade, from form values to a report row", () => {
     stop_price: "2390",
     target_price: "2430",
     risk_pct: "1",
-    setup_grade: "A",
+    exit_reason: "TP hit",
     technical_tags: ["FVG", "Liquidity Sweep"],
     max_drawdown_price: "2395",
     max_profit_price: "2425",
@@ -182,7 +182,7 @@ describe("one trade, from form values to a report row", () => {
   // ---- 5. The report the trader actually reads ---------------------------
   const report = runReport({
     trades: [enriched],
-    dimension: rawFieldDimension("setup_grade"),
+    dimension: rawFieldDimension("exit_reason"),
     metricKeys: ["net_pnl", "trade_count", "win_rate", "avg_r", "expectancy"],
     dimensionContext: { reportByDate: new Map() },
     metricContext: { pnlBasis: "net", range },
@@ -194,7 +194,10 @@ describe("one trade, from form values to a report row", () => {
     // `computeStats`, or the enrichment stops carrying `pnl`, this diverges
     // from the assertions above and the two halves of the app disagree.
     expect(report).not.toBeNull();
-    const grade = report!.rows.find((r) => r.bucket === "A");
+    // Grouped on `exit_reason` rather than `setup_grade`: the grade is no
+    // longer a form value at all, it is derived from the playbook criteria, so
+    // it can no longer stand for "a field the form hands over end to end".
+    const grade = report!.rows.find((r) => r.bucket === "TP hit");
     expect(grade).toBeDefined();
     expect(grade!.n).toBe(1);
     expect(grade!.values.net_pnl).toBeCloseTo(34, 10);
@@ -208,7 +211,7 @@ describe("one trade, from form values to a report row", () => {
     // finding, and the report has to say so.
     const guarded = runReport({
       trades: [enriched],
-      dimension: rawFieldDimension("setup_grade"),
+      dimension: rawFieldDimension("exit_reason"),
       metricKeys: ["net_pnl"],
       dimensionContext: { reportByDate: new Map() },
       metricContext: { pnlBasis: "net", range },

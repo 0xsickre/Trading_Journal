@@ -19,6 +19,7 @@ import {
   type FillCounts,
 } from "../enriched-trade";
 import type { PositionCheckin } from "../position-checkin";
+import type { RuleLookup } from "../reports/rule-lookup";
 import type { TradeRow } from "../types";
 
 // Re-exported because the definitions live in `enriched-trade.ts` — the report
@@ -87,6 +88,14 @@ export type InsightContext = {
   checkinsByPosition: Map<string, PositionCheckin[]>;
   baseline: InsightBaseline;
   currency: string;
+  /**
+   * Rules and their answers, for the DERIVED setup grade.
+   *
+   * Optional: a caller without playbooks loaded still gets every other rule.
+   * The two A-setup rules fall back to the hand-typed column when it is absent,
+   * which is what keeps them working on trades graded before criteria existed.
+   */
+  rules?: RuleLookup;
 };
 
 export type BuildContextInput = {
@@ -101,6 +110,7 @@ export type BuildContextInput = {
   fillCounts?: FillCounts;
   /** Per-position daily check-ins, flat; bucketed by position id here. */
   checkins?: PositionCheckin[];
+  rules?: RuleLookup;
 };
 
 export function buildInsightContext(input: BuildContextInput): InsightContext {
@@ -114,6 +124,7 @@ export function buildInsightContext(input: BuildContextInput): InsightContext {
     currency = "USD",
     fillCounts,
     checkins = [],
+    rules,
   } = input;
 
   const enriched = enrichTrades(trades, { tzOf, range, pnlOf, fillCounts });
@@ -204,5 +215,6 @@ export function buildInsightContext(input: BuildContextInput): InsightContext {
     checkinsByPosition,
     baseline,
     currency,
+    rules,
   };
 }

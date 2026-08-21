@@ -29,6 +29,7 @@ import type { TradeRow } from "./types";
 import { groupInsights } from "./insights/types";
 import { OMITTED_RULES, type RunResult } from "./insights/registry";
 import { computeExcursionStats, excursionFromTrade } from "./excursion";
+import type { RuleLookup } from "./reports/rule-lookup";
 
 // Fixed breakdowns. The user-defined fields are appended by `breakdownsFor`,
 // so a field added in Settings shows up in the mentor pack without an edit here.
@@ -140,8 +141,9 @@ function breakdownTable(
   realized: RealizedTrade[],
   field: string,
   range: BreakevenRange,
+  rules?: RuleLookup,
 ): string {
-  const rows = breakdownByField(realized, field, range).filter(
+  const rows = breakdownByField(realized, field, range, rules).filter(
     (r) => r.key !== "—" && r.count > 0,
   );
   if (rows.length === 0) return "_no data_";
@@ -300,6 +302,8 @@ export function resolveCalendarRange(
 
 export type MentorPackOpts = {
   currency?: string;
+  /** Playbook rules and their answers, for the derived Setup Grade table. */
+  rules?: RuleLookup;
   /** Safety cap on trades expanded in full detail (period already bounds it). */
   detailCap?: number;
   /** Label describing the account scope, e.g. account name or "All accounts". */
@@ -339,6 +343,7 @@ export function buildMentorPack(
   const rangeText = opts.rangeText ?? "sve vreme";
   const range = opts.breakevenRange ?? EXACT_ZERO_RANGE;
   const defs = opts.fieldDefs ?? [];
+  const rules = opts.rules;
   const detailFields = detailFieldsFor(defs);
 
   // Derived once. statsTable and each of the ten breakdown tables used to call
@@ -474,7 +479,7 @@ export function buildMentorPack(
   out.push(`## Performanse po kategorijama`);
   for (const b of breakdownsFor(defs)) {
     out.push(`### ${b.label}`);
-    out.push(breakdownTable(realized, b.field, range));
+    out.push(breakdownTable(realized, b.field, range, rules));
     out.push("");
   }
 

@@ -25,10 +25,10 @@ const DEFS: FieldDef[] = [
 describe("buildPositionPatch", () => {
   it("routes defined fields to the bag and real columns to columns", () => {
     const patch = buildPositionPatch(
-      { instrument: "NQ", setup_grade: "A", macro_align: "Uz bias" },
+      { instrument: "NQ", exit_reason: "TP hit", macro_align: "Uz bias" },
       DEFS,
     );
-    expect(patch.columns).toMatchObject({ instrument: "NQ", setup_grade: "A" });
+    expect(patch.columns).toMatchObject({ instrument: "NQ", exit_reason: "TP hit" });
     expect(patch.columns.macro_align).toBeUndefined();
     expect(patch.custom).toEqual({ macro_align: "Uz bias" });
   });
@@ -174,7 +174,7 @@ describe("form → save → reload round trip", () => {
   it("returns exactly what was submitted, custom fields included", () => {
     const submitted = {
       instrument: "NQ",
-      setup_grade: "A+",
+      exit_reason: "TP hit",
       technical_tags: ["FVG"],
       macro_align: "Uz bias",
       confluences: ["OTE", "SMT"],
@@ -201,7 +201,7 @@ describe("form → save → reload round trip", () => {
 
     expect(fields).toEqual({
       instrument: "NQ",
-      setup_grade: "A+",
+      exit_reason: "TP hit",
       technical_tags: ["FVG"],
       macro_align: "Uz bias",
       confluences: ["OTE", "SMT"],

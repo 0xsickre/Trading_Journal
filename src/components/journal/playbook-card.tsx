@@ -14,6 +14,7 @@ import {
   Unlink,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -252,6 +253,31 @@ function RuleRow({
             ))}
           </SelectContent>
         </Select>
+      </td>
+
+      {/* Marks a rule as one of the conditions the SETUP GRADE is computed from.
+          Only offered for a rule that shows on every trade: a criterion asked
+          just of winners would judge the setup already knowing the outcome, and
+          the database refuses that combination outright. */}
+      <td className="py-1.5 pl-4">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Checkbox
+            checked={rule.is_setup_criterion}
+            disabled={pending || retired || rule.show_when !== "always"}
+            onCheckedChange={(v: boolean | "indeterminate") =>
+              run(() =>
+                updatePlaybookRule(rule.id, { is_setup_criterion: v === true }),
+              )
+            }
+            aria-label="Counts toward the setup grade"
+            title={
+              rule.show_when !== "always"
+                ? "Only a rule that shows on every trade can grade the setup — otherwise it would judge with hindsight."
+                : undefined
+            }
+          />
+          grade
+        </label>
       </td>
 
       <td className="py-1.5 pl-3 whitespace-nowrap text-right">

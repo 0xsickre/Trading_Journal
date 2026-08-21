@@ -73,6 +73,12 @@ describe("field inventory", () => {
     // Reordering the form must never silently drop a column: `positionFieldNames`
     // is the allowlist the server saves by, so a field missing here stops being
     // written at all.
+    //
+    // `setup_grade` LEFT THIS LIST ON PURPOSE. It is no longer asked for — the
+    // grade is derived from the playbook criteria in `setup-score.ts` — and the
+    // column staying unwritten is the point rather than an oversight. It is
+    // named here so the removal reads as a decision to the next person who
+    // wonders where it went.
     for (const key of [
       "instrument",
       "entry_price",
@@ -82,7 +88,6 @@ describe("field inventory", () => {
       "position_size",
       "target_price",
       "planned_rr",
-      "setup_grade",
       "technical_tags",
       "miss_reason",
       "exit_reason",

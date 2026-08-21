@@ -73,6 +73,9 @@ import {
 } from "@/lib/journal/breakeven";
 import { Badge } from "@/components/ui/badge";
 import { moneyProvenance } from "@/lib/journal/money-provenance";
+import { buildPlaybookLookup } from "@/lib/journal/reports/rule-lookup";
+import { setupScoreFromTrade } from "@/lib/journal/setup-score";
+import type { Playbook, PositionRule } from "@/lib/journal/playbook-types";
 import { cn } from "@/lib/utils";
 import type { Account, OptionsMap, TradeRow } from "@/lib/journal/types";
 import { fmtInTz } from "@/lib/journal/time";
@@ -246,6 +249,8 @@ export function JournalGrid({
   fieldDefs = [],
   hiddenColumns = [],
   optionsMap = {},
+  playbooks = [],
+  positionRules,
 }: {
   trades: TradeRow[];
   accounts: Account[];
@@ -255,6 +260,10 @@ export function JournalGrid({
   hiddenColumns?: string[];
   /** Option-list values, keyed by list key — powers the bulk "Add tag" picker. */
   optionsMap?: OptionsMap;
+  /** Playbooks and their rules, for the derived setup grade. */
+  playbooks?: Playbook[];
+  /** Recorded rule answers, the other half of that grade. */
+  positionRules?: Map<string, PositionRule[]>;
 }) {
   const router = useRouter();
   const tzByAccount = useMemo(() => {
@@ -352,6 +361,30 @@ export function JournalGrid({
     [rangeByAccount],
   );
 
+  const ruleLookup = useMemo(
+    () => buildPlaybookLookup(playbooks, positionRules).rules,
+    [playbooks, positionRules],
+  );
+
+  /**
+   * The grade shown, filtered on and searched.
+   *
+   * Derived from the criteria when they were answered, and the hand-typed
+   * column otherwise. One reader for all three uses: a column that says B while
+   * the filter disagrees about which rows are B is the kind of split this repo
+   * spends its comments warning about.
+   */
+  const gradeOf = useCallback(
+    (t: TradeRow): string | null => {
+      const scored = setupScoreFromTrade(
+        { id: t.id, outcome: outcomeOf(t), row: t },
+        ruleLookup,
+      );
+      return scored?.grade ?? (t.setup_grade as string) ?? null;
+    },
+    [ruleLookup, outcomeOf],
+  );
+
   const filtered = useMemo(() => {
     return trades.filter((t) => {
       if (accountFilter !== "all" && t.account_id !== accountFilter) return false;
@@ -377,7 +410,7 @@ export function JournalGrid({
           t.instrument,
           t.trade_journal_notes,
           t.ict_entry_model,
-          t.setup_grade,
+          gradeOf(t),
           ...tagHay,
         ]
           .filter((x) => typeof x === "string")
@@ -387,7 +420,7 @@ export function JournalGrid({
       }
       return true;
     });
-  }, [trades, accountFilter, filters, search, outcomeOf]);
+  }, [trades, accountFilter, filters, search, outcomeOf, gradeOf]);
 
   const tzOf = useCallback(
     (t: TradeRow) =>
@@ -495,9 +528,10 @@ export function JournalGrid({
         },
       },
       {
-        accessorKey: "setup_grade",
+        id: "setup_grade",
+        accessorFn: (r) => gradeOf(r),
         header: COLUMN_LABELS.setup_grade,
-        cell: ({ row }) => (row.original.setup_grade as string) ?? "—",
+        cell: ({ row }) => gradeOf(row.original) ?? "—",
       },
       // The plan, as opposed to what happened. Separate from `avg_entry` on
       // purpose: that column is the average FILL, so a trade still waiting shows
@@ -687,7 +721,7 @@ export function JournalGrid({
         ),
       },
     ],
-    [tzOf, curOf, router],
+    [tzOf, curOf, router, gradeOf],
   );
 
   const table = useReactTable({

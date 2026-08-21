@@ -17,6 +17,7 @@ function rule(over: Partial<PlaybookRule> & { id: string }): PlaybookRule {
     category: "entry",
     text: over.id,
     show_when: "always",
+  is_setup_criterion: false,
     sort_order: 0,
     deleted_at: null,
     answerCount: 0,

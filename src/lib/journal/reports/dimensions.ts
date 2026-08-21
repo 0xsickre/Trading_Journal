@@ -14,6 +14,8 @@
 import { DURATION_BUCKETS, durationBucket } from "../hold-time";
 import { arrayFieldValue, stringFieldValue } from "../field-values";
 import { isShortDirection } from "../plan-calculations";
+import { SETUP_GRADES, scorable, setupScoreFromTrade } from "../setup-score";
+import type { RuleLookup } from "./rule-lookup";
 import {
   THESIS_STATES,
   TOUCHED_STATES,
@@ -48,6 +50,16 @@ export type DimensionContext = {
    * would be paying for the whole review to draw a bucket label.
    */
   weekGradeByWeek?: Map<string, number>;
+  /**
+   * Rules and their answers, for the DERIVED setup grade.
+   *
+   * Optional because not every caller loads playbooks. Absent, the setup grade
+   * falls back to the old hand-typed column rather than disappearing — the same
+   * stored-wins-or-derived precedence `plannedRewardFromTrade` documents, with
+   * the order reversed here because derived is the better answer and the column
+   * is the legacy one.
+   */
+  rules?: RuleLookup;
   /** rule ids that fired per trade id, for the insight dimension. */
   insightsByTrade?: Map<string, string[]>;
   /** Account id → display name. */
@@ -277,7 +289,24 @@ const tradeDimensions: Dimension[] = [
     order: ["Long", "Short"],
     valueOf: (t) => (isShortDirection(str(t, "direction")) ? "Short" : "Long"),
   },
-  column("setup_grade", "Setup Grade", "setup_grade"),
+  {
+    key: "setup_grade",
+    label: "Setup Grade",
+    group: "trade",
+    listKey: "setup_grade",
+    // The old `column()` helper set no order, so grades sorted by whichever
+    // metric was chosen — A+ could land under C. A closed set of labels finally
+    // makes a fixed order possible.
+    order: SETUP_GRADES,
+    valueOf: (t, ctx) => {
+      // Derived first. The typed letter was chosen AFTER the outcome was known,
+      // which is what made this dimension explain performance with a label
+      // partly taken from performance.
+      const scored = ctx.rules ? setupScoreFromTrade(scorable(t), ctx.rules) : null;
+      if (scored) return scored.grade;
+      return str(t, "setup_grade") ?? EMPTY_BUCKET;
+    },
+  },
   // macro_align / cot_filter / htf_bias / entry_tf are no longer listed here:
   // they became user-defined fields in Phase 4a and arrive through
   // `customFieldDimensions`. ict_entry_model became the playbook.

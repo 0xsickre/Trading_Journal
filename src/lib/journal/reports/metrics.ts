@@ -32,6 +32,7 @@ import {
 import type { BreakevenRange } from "../breakeven";
 import type { EnrichedTrade } from "../enriched-trade";
 import type { MetricUnit } from "../units";
+import { scorable, setupScoreFromTrade } from "../setup-score";
 import { computeFollowRate, type RuleLookup } from "./playbook-dimensions";
 
 export type MetricContext = {
@@ -411,6 +412,31 @@ export const METRICS: ReportMetric[] = [
     unit: "count",
     higherIsBetter: false,
     compute: (g, ctx) => statsOf(g, ctx).breakeven,
+  },
+  {
+    key: "setup_score",
+    label: "Setup score",
+    unit: "pct",
+    hint:
+      "Share of the playbook's SETUP CRITERIA that were met, averaged over the " +
+      "trades that have a complete checklist. A trade with any criterion left " +
+      "unanswered has no score and counts in neither half.",
+    higherIsBetter: true,
+    // Null rather than 0 when no playbook data is loaded, and null again when
+    // no trade in the group carries a full checklist: a zero here would read as
+    // "every setup failed every criterion", which is a finding, not a gap.
+    compute: (group, ctx) => {
+      if (!ctx.rules) return null;
+      let sum = 0;
+      let n = 0;
+      for (const t of group) {
+        const s = setupScoreFromTrade(scorable(t), ctx.rules);
+        if (s == null) continue;
+        sum += s.pct;
+        n++;
+      }
+      return n === 0 ? null : sum / n;
+    },
   },
   {
     key: "follow_rate",

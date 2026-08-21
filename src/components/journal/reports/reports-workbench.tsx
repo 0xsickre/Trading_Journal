@@ -340,6 +340,7 @@ export function ReportsWorkbench({
       currency,
       fillCounts,
       checkins: positionCheckins,
+      rules: playbookLookup.rules,
     });
     const map = new Map<string, string[]>();
     for (const i of runInsights(ctx).insights) {
@@ -351,6 +352,7 @@ export function ReportsWorkbench({
     trades,
     dailyReports,
     positionCheckins,
+    playbookLookup.rules,
     tzOf,
     range,
     pnlOf,
@@ -363,6 +365,10 @@ export function ReportsWorkbench({
       reportByDate: new Map(dailyReports.map((r) => [r.report_date, r])),
       checkinsByPosition,
       weekGradeByWeek: weekGrades,
+      // Feeds the DERIVED setup grade. Without it that dimension silently falls
+      // back to the hand-typed column, which is the value this change exists to
+      // stop trusting.
+      rules: playbookLookup.rules,
       insightsByTrade,
       accountNames: new Map(accounts.map((a) => [a.id, a.name])),
       // Tag splits, custom fields and playbook rules all resolve by key

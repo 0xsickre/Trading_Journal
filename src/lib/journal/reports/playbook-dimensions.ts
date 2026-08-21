@@ -15,43 +15,17 @@
  */
 
 import { EMPTY_BUCKET, type Dimension } from "./dimensions";
-import { ruleAppliesTo, type PositionRule, type ShowWhen } from "../playbook-types";
+// Re-exported so every existing import keeps working: the definitions moved
+// upstream to break a cycle, which is a structural change and not an API one.
+export {
+  applicableAnswers,
+  buildPlaybookLookup,
+  type PlaybookLookup,
+  type RuleLookup,
+} from "./rule-lookup";
+import { applicableAnswers, type PlaybookLookup, type RuleLookup } from "./rule-lookup";
 import { stringFieldValue } from "../field-values";
 import type { EnrichedTrade } from "../enriched-trade";
-
-export type RuleLookup = {
-  /** Rule id → display text, including retired rules. */
-  text: Map<string, string>;
-  /** Rule id → when it applies, so stats and form agree on the population. */
-  showWhen: Map<string, ShowWhen>;
-  /** Trade id → recorded answers. */
-  answersByTrade: Map<string, PositionRule[]>;
-};
-
-export type PlaybookLookup = {
-  /** Playbook id → name. */
-  names: Map<string, string>;
-  rules: RuleLookup;
-};
-
-/**
- * Answers that count for a trade.
- *
- * A rule whose `show_when` does not match the outcome is excluded even if an
- * answer exists — the outcome may have changed after the checklist was filled
- * in, and counting a winner-only rule against a trade that ended red would put
- * an observation in a population it was never asked about.
- */
-export function applicableAnswers(
-  t: EnrichedTrade,
-  rules: RuleLookup,
-): PositionRule[] {
-  const answers = rules.answersByTrade.get(t.id) ?? [];
-  return answers.filter((a) => {
-    const when = rules.showWhen.get(a.rule_id);
-    return when == null || ruleAppliesTo(when, t.outcome);
-  });
-}
 
 /**
  * Group by individual playbook rule.
@@ -164,43 +138,6 @@ function ruleIdsByText(rules: RuleLookup): Map<string, Set<string>> {
   return index;
 }
 
-/**
- * Build the lookup from loaded playbooks and recorded answers.
- *
- * Rule text is indexed across ALL rules, retired ones included: a retired rule's
- * historical answers are real observations, and losing its name would turn them
- * into rows labelled by a uuid. Pass the library, not just the linked rules,
- * when the caller has it — a rule unlinked from every playbook still names its
- * own history.
- *
- * Lives here rather than in the reports screen because the dashboard needs the
- * same lookup for the follow rate that feeds Process Adherence, and two copies
- * of this walk would be two places for the retired-rule rule to be forgotten.
- */
-export function buildPlaybookLookup(
-  playbooks: readonly {
-    id: string;
-    name: string;
-    rules: readonly { id: string; text: string; show_when: ShowWhen }[];
-  }[],
-  answersByTrade?: Map<string, PositionRule[]>,
-): PlaybookLookup {
-  const text = new Map<string, string>();
-  const showWhen = new Map<string, ShowWhen>();
-  // One pass over links, and a rule shared by two playbooks is simply seen
-  // twice with the same id — which is the point of the library. Before, the
-  // same wording under two books carried two ids and its statistics split.
-  for (const book of playbooks) {
-    for (const rule of book.rules) {
-      text.set(rule.id, rule.text);
-      showWhen.set(rule.id, rule.show_when);
-    }
-  }
-  return {
-    names: new Map(playbooks.map((p) => [p.id, p.name])),
-    rules: { text, showWhen, answersByTrade: answersByTrade ?? new Map() },
-  };
-}
 
 /** Every playbook-derived dimension, for the registry. */
 export function playbookDimensions(lookup: PlaybookLookup): Dimension[] {

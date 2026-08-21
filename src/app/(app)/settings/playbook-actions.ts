@@ -368,9 +368,19 @@ export async function addPlaybookRule(input: {
  */
 export async function updatePlaybookRule(
   id: string,
-  patch: { text?: string; show_when?: ShowWhen; category?: RuleCategory },
+  patch: {
+    text?: string;
+    show_when?: ShowWhen;
+    category?: RuleCategory;
+    is_setup_criterion?: boolean;
+  },
 ): Promise<Result> {
-  const next: { text?: string; show_when?: ShowWhen; category?: RuleCategory } = {};
+  const next: {
+    text?: string;
+    show_when?: ShowWhen;
+    category?: RuleCategory;
+    is_setup_criterion?: boolean;
+  } = {};
   if (patch.text != null) {
     const clean = patch.text.trim();
     if (!clean) return { ok: false, error: "The rule cannot be empty." };
@@ -387,6 +397,30 @@ export async function updatePlaybookRule(
   }
 
   const supabase = await createClient();
+
+  if (patch.is_setup_criterion != null) {
+    // The database refuses a criterion that is not `show_when = 'always'`, and
+    // a raw constraint violation would surface as an unreadable Postgres error.
+    // Checked here so the refusal explains itself — and still enforced there,
+    // because this is the readable half, not the real one.
+    if (patch.is_setup_criterion) {
+      const { data: current } = await supabase
+        .from("tj_playbook_rules")
+        .select("show_when")
+        .eq("id", id)
+        .maybeSingle();
+
+      const nextShowWhen = patch.show_when ?? current?.show_when;
+      if (nextShowWhen !== "always") {
+        return {
+          ok: false,
+          error:
+            "Only a rule that shows on every trade can grade the setup. A criterion asked just of winners would judge the setup already knowing the outcome, which is the whole thing the grade is meant to avoid.",
+        };
+      }
+    }
+    next.is_setup_criterion = patch.is_setup_criterion;
+  }
 
   if (patch.show_when != null) {
     if (!SHOW_WHEN_VALUES.includes(patch.show_when))

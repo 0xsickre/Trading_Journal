@@ -6,7 +6,8 @@ import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breake
 import { buildBalanceTimeline, computeDrawdown } from "./balance";
 import { enrichTrades } from "./enriched-trade";
 import { runReport } from "./reports/engine";
-import { rawFieldDimension } from "./reports/dimensions";
+import { getDimension, rawFieldDimension } from "./reports/dimensions";
+import type { RuleLookup } from "./reports/rule-lookup";
 
 export type PnlMode = "net" | "gross";
 
@@ -358,6 +359,9 @@ export function breakdownByField(
   trades: RealizedTrade[],
   field: string,
   range: BreakevenRange = EXACT_ZERO_RANGE,
+  // Only the derived setup grade needs this. Optional so every other caller is
+  // untouched, and absent it the grade simply falls back to the stored column.
+  rules?: RuleLookup,
 ): BreakdownRow[] {
   // Timezone is irrelevant here: this function only ever groups by trade
   // columns, never by a day- or process-based dimension.
@@ -365,9 +369,16 @@ export function breakdownByField(
 
   const result = runReport({
     trades: enriched,
-    dimension: rawFieldDimension(field),
+    // `setup_grade` is the one field here that is no longer a column you can
+    // read: it is derived from the playbook criteria that were ticked. Reading
+    // the raw column would make the mentor pack the only surface still showing
+    // the hand-typed guess this change exists to retire.
+    dimension:
+      field === "setup_grade"
+        ? (getDimension("setup_grade") ?? rawFieldDimension(field))
+        : rawFieldDimension(field),
     metricKeys: ["net_pnl", "win_rate", "total_r", "avg_r"],
-    dimensionContext: { reportByDate: new Map() },
+    dimensionContext: { reportByDate: new Map(), rules },
     // Bez valute, i to je tačno umesto zakucanog `"USD"` koje je ovde stajalo.
     // `metricContext.currency` služi FORMATIRANJU, a ova funkcija vraća sirove
     // brojeve (`r.values.*`) koje pozivalac formatira u valuti svog naloga.
