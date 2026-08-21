@@ -1,9 +1,10 @@
 import { numberFieldValue as numField } from "./field-values";
 import type { TradeRow } from "./types";
 import {
-  computePlannedRewardR,
+  blendedPlannedRewardR,
   parsePlannedRewardR,
 } from "./plan-calculations";
+import { parseScaleOutLevels } from "./scale-out";
 
 export type ExitEfficiencyResult = {
   plannedRewardR: number;
@@ -36,18 +37,29 @@ const MIN_PLANNED_REWARD_R = 0.1;
  * target would move its own grading baseline, and a trader could flatter their
  * discipline score by lowering a target after the fact.
  *
- * The price fallback covers rows that never captured a plan — imports, and
- * trades saved before the target was filled in.
+ * The price fallback covers rows that never captured a plan — imports, trades
+ * saved before the target was filled in, and every trade the bot writes, since
+ * the bot reports what the broker holds and never a plan figure.
+ *
+ * That fallback WEIGHS THE SCALE-OUT. Entry-to-target is the whole plan only
+ * when the whole position leaves at one price; with pieces it is the furthest
+ * price and therefore too generous, and this value is the denominator of Target
+ * attainment, so a too-generous plan reads as a poor exit. Left uncorrected the
+ * metric would mark you down for scaling out. `blendedPlannedRewardR` is the
+ * same function for both shapes: with no levels it IS entry-to-target.
  */
 export function plannedRewardFromTrade(row: TradeRow): number | null {
   const parsed = parsePlannedRewardR(row.planned_rr as string | null);
   if (parsed != null) return parsed;
 
-  return computePlannedRewardR({
+  return blendedPlannedRewardR({
     direction: (row.direction as string) ?? null,
     entry: numField(row, "entry_price"),
     stop: numField(row, "stop_price"),
     target: numField(row, "target_price"),
+    levels: parseScaleOutLevels(
+      (row as { scale_out_levels?: unknown }).scale_out_levels,
+    ),
   });
 }
 

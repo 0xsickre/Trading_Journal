@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  blendedPlannedRewardR,
   computePlannedRewardR,
   computePositionSize,
   formatPlannedRewardR,
@@ -364,5 +365,107 @@ describe("matchRiskOption", () => {
   it("offers nothing for a playbook with no default", () => {
     expect(matchRiskOption(OPTIONS, null)).toBeNull();
     expect(matchRiskOption(OPTIONS, undefined)).toBeNull();
+  });
+});
+
+describe("blendedPlannedRewardR", () => {
+  // Long from 100 with the stop at 90: one R is 10 points.
+  const LONG = { direction: "Long", entry: 100, stop: 90 };
+
+  it("is entry-to-target when nothing is scaled out", () => {
+    expect(blendedPlannedRewardR({ ...LONG, target: 130, levels: [] })).toBe(3);
+  });
+
+  /**
+   * The case that motivated this. 30 % at 1R, 30 % at 2R, the remaining 40 % at
+   * 3R is a plan worth 0.3 + 0.6 + 1.2 = 2.1R. Reading the furthest level alone
+   * would call it 3R and, because this is the DENOMINATOR of Target attainment,
+   * mark the trader down for scaling out.
+   */
+  it("weighs each piece by the share of the position it closes", () => {
+    const r = blendedPlannedRewardR({
+      ...LONG,
+      target: 130,
+      levels: [
+        { pct: 30, price: 110 },
+        { pct: 30, price: 120 },
+      ],
+    });
+    expect(r).toBeCloseTo(2.1, 10);
+  });
+
+  it("is neither the nearest nor the furthest level", () => {
+    const r = blendedPlannedRewardR({
+      ...LONG,
+      target: 130,
+      levels: [{ pct: 50, price: 110 }],
+    })!;
+    expect(r).toBeGreaterThan(1); // not the nearest
+    expect(r).toBeLessThan(3); // not the furthest
+    expect(r).toBeCloseTo(2, 10); // 0.5x1 + 0.5x3
+  });
+
+  it("needs no target when the levels close the whole position", () => {
+    const r = blendedPlannedRewardR({
+      ...LONG,
+      target: null,
+      levels: [
+        { pct: 50, price: 110 },
+        { pct: 50, price: 120 },
+      ],
+    });
+    expect(r).toBeCloseTo(1.5, 10);
+  });
+
+  it("refuses when a remainder is left with nowhere to exit", () => {
+    // 40 % of the position is unaccounted for and no target says where it goes.
+    // A blend over the 60 % that IS known would silently describe a different,
+    // smaller trade.
+    expect(
+      blendedPlannedRewardR({ ...LONG, target: null, levels: [{ pct: 60, price: 110 }] }),
+    ).toBeNull();
+  });
+
+  it("refuses a level priced on the losing side of entry", () => {
+    // 95 is below a long's entry: that is not a take profit, and blending it as
+    // a negative reward would produce a number that looks like an answer.
+    expect(
+      blendedPlannedRewardR({ ...LONG, target: 130, levels: [{ pct: 30, price: 95 }] }),
+    ).toBeNull();
+  });
+
+  it("refuses percentages that add up to more than the position", () => {
+    expect(
+      blendedPlannedRewardR({
+        ...LONG,
+        target: 130,
+        levels: [
+          { pct: 70, price: 110 },
+          { pct: 50, price: 120 },
+        ],
+      }),
+    ).toBeNull();
+  });
+
+  it("weighs a short the same way", () => {
+    // Short from 100, stop 110: one R is still 10 points, in the other direction.
+    const r = blendedPlannedRewardR({
+      direction: "Short",
+      entry: 100,
+      stop: 110,
+      target: 70,
+      levels: [
+        { pct: 30, price: 90 },
+        { pct: 30, price: 80 },
+      ],
+    });
+    expect(r).toBeCloseTo(2.1, 10);
+  });
+
+  it("stays null when the trade has no usable geometry at all", () => {
+    expect(blendedPlannedRewardR({ ...LONG, target: null, levels: [] })).toBeNull();
+    expect(
+      blendedPlannedRewardR({ direction: "Long", entry: null, stop: 90, target: 130, levels: [] }),
+    ).toBeNull();
   });
 });

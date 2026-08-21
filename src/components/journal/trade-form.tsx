@@ -548,6 +548,11 @@ export function TradeForm({
       entry_price: pe,
       stop_price: stop,
       target_price: pt,
+      // The scale-out belongs to the plan being graded: entry-to-target is the
+      // whole plan only when the whole position leaves at one price. Without
+      // this the form would print a planned reward the reports disagree with,
+      // for the same trade, on the same screen.
+      scale_out_levels: scaleOutRowsToLevels(scaleOutRows),
       stats: { realized_r: r },
     } as unknown as TradeRow;
     const targetAttainment = exitEfficiencyFromTrade(attainmentRow);
@@ -585,7 +590,10 @@ export function TradeForm({
     // `fx.rate` je primitiv i menja se sa instrumentom — bez njega u listi
     // pregled bi zadržao novac izračunat po starom kursu posle promene simbola,
     // što je tačno ona klasa greške koju Faza 10 zove „broj izračunat dvaput".
-  }, [execs, fields, pointValue, fx.rate, account, accountEquity]);
+    // scaleOutRows is a dependency because the planned reward now weighs it:
+    // without it the figure would freeze at whatever the levels were when some
+    // other field last changed.
+  }, [execs, fields, pointValue, fx.rate, account, accountEquity, scaleOutRows]);
 
   /**
    * Answers to rules the checklist is currently OFFERING.

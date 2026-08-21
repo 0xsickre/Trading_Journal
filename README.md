@@ -82,7 +82,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
 | `npm run dev` | Razvojni server |
 | `npm run build` | Produkcijski build — 14 ruta |
 | `npm run lint` | ESLint. **Očekuje se tačno jedno upozorenje** (vidi ispod) |
-| `npm test` | Vitest — 2135 testova u 132 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
+| `npm test` | Vitest — 2144 testa u 132 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
 | `npm test -- --coverage` | Izveštaj o pokrivenosti |
 | `npx knip` | Mrtvi fajlovi, eksporti i zavisnosti |
 
@@ -248,6 +248,15 @@ jedinici. Isti nalozi u istoj valuti se i dalje normalno sabiraju.
 | Calmar | `godišnji prinos / max drawdown` | Recovery factor podeljen vremenom koje mu je trebalo |
 | Consistency | `100 − cv × 20`, gde je `cv = σ / \|prosek\|` | 0 za knjigu koja gubi |
 | Avg MAE u R | Prosek koliko su trejdovi išli protiv pozicije | Prosečava se samo nad trejdovima koji *imaju* MAE |
+
+**Planirani reward se PONDERIŠE kad se izlazi u delovima.** Ulaz-do-targeta je ceo plan samo kad
+cela pozicija izlazi na jednoj ceni. Skini 30 % na 1R, 30 % na 2R i ostatak na 3R i plan vredi
+`0.3×1 + 0.3×2 + 0.4×3 = 2.1R`, ne 3R. Pošto je taj broj **imenilac** Target attainment-a,
+precenjivanje stiže kao nizak rezultat — metrika bi te kažnjavala baš zato što skaliraš izlaz.
+Najbliži nivo je ista greška u ogledalu (1R, pa naduvan rezultat); nijedan pojedinačan nivo ne
+odgovara na to pitanje, samo ponderisan plan. `blendedPlannedRewardR` je ista funkcija za oba
+oblika: bez nivoa ona JESTE ulaz-do-targeta. Ovo nije botova stvar — ručno ukucan scale-out je
+oduvek imao istu aritmetiku i isti pogrešan odgovor.
 
 **Godišnja skala se meri, ne pretpostavlja.** `periodsPerYear = (dana trgovanja × 365) /
 kalendarskih dana raspona` — izvedeno iz podataka umesto zakucano na 252. Swing trejder sa 40 dana
@@ -579,8 +588,8 @@ P&L i drawdown izračunate nad delimičnim skupom, bez ijednog vidljivog simptom
 
 ## Testovi
 
-2135 testova u 132 fajla, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
-`*.test.ts`, 1733 testa u 88 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
+2144 testa u 132 fajla, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
+`*.test.ts`, 1742 testa u 88 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
 402 testa u 44 fajla). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
 plaćaju cenu DOM-a koji ne dodiruju.
 

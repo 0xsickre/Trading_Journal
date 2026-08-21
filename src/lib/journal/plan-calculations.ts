@@ -239,3 +239,74 @@ export function thesisGroupVisible(
 ): boolean {
   return entry != null && stop != null;
 }
+
+/**
+ * Planned reward R for a plan that EXITS IN PIECES.
+ *
+ * THE ERROR THIS REPLACES. `computePlannedRewardR` measures one distance: entry
+ * to target. That is the whole plan only when the whole position leaves at one
+ * price. Scale out 30 % at 1R, 30 % at 2R and the rest at 3R and the plan is
+ * worth 0.3x1 + 0.3x2 + 0.4x3 = 2.1R — not 3R. Reading the furthest level as
+ * "the" planned reward overstates it, and because that number is the DENOMINATOR
+ * of Target attainment, the overstatement lands as a low score. The metric would
+ * have quietly punished scaling out, which is the opposite of what it is for.
+ *
+ * (Taking the NEAREST level instead is the same mistake mirrored: 1R here, and
+ * an attainment score flattered rather than punished. There is no single level
+ * that answers this; only the weighted plan does.)
+ *
+ * WHY IT LIVES HERE and not in the bot that reports the levels: R divides by the
+ * PLANNED risk, and that convention is the journal's. A bot computing its own R
+ * would be a second implementation of it, free to drift. The bot sends prices
+ * and percentages — facts — and the arithmetic stays in one place.
+ *
+ * It is not a bot feature either. A hand-typed scale-out plan has always had the
+ * same arithmetic and the same wrong answer; this fixes both at once.
+ *
+ * REFUSES RATHER THAN GUESSES, in three cases, each of which is a broken plan
+ * rather than an absent one:
+ *   - a level that cannot be expressed in R (priced on the wrong side of entry)
+ *   - percentages summing above 100
+ *   - a remainder left over with no target price to exit it at
+ * Each answers null, which renders as an em dash. Blending around a broken level
+ * would produce a number that looks like an answer.
+ */
+export function blendedPlannedRewardR(params: {
+  direction: string | null;
+  entry: number | null;
+  stop: number | null;
+  target: number | null;
+  levels: readonly { pct: number; price: number }[];
+}): number | null {
+  const { direction, entry, stop, target, levels } = params;
+
+  const finalR = computePlannedRewardR({ direction, entry, stop, target });
+
+  // No pieces: the plan is one exit, and this is the original question.
+  if (levels.length === 0) return finalR;
+
+  let weighted = 0;
+  let pctUsed = 0;
+
+  for (const level of levels) {
+    if (!(level.pct > 0)) return null;
+
+    const levelR = computePlannedRewardR({ direction, entry, stop, target: level.price });
+    if (levelR == null) return null;
+
+    weighted += level.pct * levelR;
+    pctUsed += level.pct;
+  }
+
+  if (pctUsed > 100) return null;
+
+  const remainder = 100 - pctUsed;
+  if (remainder > 0) {
+    // The rest of the position has to leave somewhere, and only `target` says
+    // where. Without it the plan is incomplete, not merely unstated.
+    if (finalR == null) return null;
+    weighted += remainder * finalR;
+  }
+
+  return weighted / 100;
+}
