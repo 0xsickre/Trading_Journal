@@ -95,6 +95,7 @@ describe("reason labels", () => {
   it("explains the applied reasons that change what the row means", () => {
     expect(appliedReasonLabel("was_missed")).toContain("propušten");
     expect(appliedReasonLabel("fill_without_placement")).toContain("fill");
+    expect(appliedReasonLabel("already_missed")).toContain("propušten");
     expect(appliedReasonLabel("unknown_note")).toBe("unknown_note");
   });
 

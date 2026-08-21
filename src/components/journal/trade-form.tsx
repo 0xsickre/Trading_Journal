@@ -297,7 +297,6 @@ export function TradeForm({
     : NO_COST_DEFAULTS;
 
   // Ne `useState`: broj dodeljuje baza pri upisu i forma ga ne menja.
-  const tradeNo = initial?.trade_no != null ? String(initial.trade_no) : "";
   const [fields, setFields] = useState<Record<string, FieldValue>>(
     initial?.fields ?? {},
   );
@@ -955,8 +954,6 @@ export function TradeForm({
                       accounts={accounts}
                       onAccountChange={setAccountId}
                       showAccount={tab.id === "plan" && group.id === "meta"}
-                      tradeNo={tradeNo}
-                      showTradeNo={tab.id === "plan" && group.id === "meta"}
                       tradePhase={tradePhase}
                       isMissed={isMissed}
                       computedDisplay={
@@ -1385,8 +1382,6 @@ function FormGroupSection({
   isMissed,
   computedDisplay,
   fieldHints,
-  tradeNo,
-  showTradeNo,
   riskNote,
   groupNote,
   scaleOut,
@@ -1407,8 +1402,6 @@ function FormGroupSection({
   isMissed?: boolean;
   computedDisplay?: Record<string, string>;
   fieldHints?: Record<string, string>;
-  tradeNo?: string;
-  showTradeNo?: boolean;
   /** What the chosen risk % is worth in money — the number that makes you look twice. */
   riskNote?: string | null;
   /** A line of context for the whole group, shown under its fields. */
@@ -1480,23 +1473,6 @@ function FormGroupSection({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-        )}
-        {/*
-          Redni broj se ne kuca. `tj_positions_assign_trade_no` ga dodeljuje pri
-          upisu, po nalogu, pod advisory lock-om — vidi 20260815170000. Ovde
-          stoji samo da se vidi šta je trejd dobio; za nov trejd još ne postoji.
-        */}
-        {showTradeNo && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Trade #</Label>
-            <Input
-              readOnly
-              tabIndex={-1}
-              aria-readonly
-              className="bg-muted text-muted-foreground"
-              value={tradeNo ? `#${tradeNo}` : "assigned on save"}
-            />
           </div>
         )}
         {fieldsToRender.map((field) => (

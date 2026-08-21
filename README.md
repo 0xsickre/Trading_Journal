@@ -425,7 +425,7 @@ Svaka odbijena ćelija je imenovana na svom redu u pregledu (`nečitljivo: qty, 
 
 Jedini automatski upis u dnevnik. cBot u cTrader-u
 ([`TradingJournalBridge`](https://github.com/0xsickre/trading-charting/tree/master/ctrader/TradingJournalBridge))
-javlja pet činjenica, a dnevnik od njih pravi trejd:
+javlja šest činjenica, a dnevnik od njih pravi trejd:
 
 | Događaj kod brokera | Šta dnevnik upiše |
 |---|---|
@@ -434,12 +434,21 @@ javlja pet činjenica, a dnevnik od njih pravi trejd:
 | Order se ispunio | Isti trejd → `status = open` + ulazni fill |
 | Take profit pomeren posle ulaska | Isti trejd → nov `target_price`. **Stop se ne dira** |
 | Cena išla protiv i u smeru trejda | Isti trejd → **MAE i MFE** cene |
+| Limit obrisan bez ispunjenja | Isti trejd → `status = missed` |
 
 **Planiran trejd pokazuje svoj plan.** Svaka brojčana kolona u `/journal` čita iz `tj_position_stats`,
 a taj view se gradi iz fill-ova — pa je trejd koji još čeka bio red samih crtica, i stop i target koje
 je most upravo doneo nisu se videli nigde u tabeli. Zato postoje kolone **Plan / Stop / Target**, i
 zato se cene formatiraju po `tick_size_at_trade` a ne na dve decimale: na dve, EURUSD stop 1.16101 i
 target 1.16453 postaju isto „1.16" — jedna pogrešna činjenica tamo gde su tri različite.
+
+**Otkazan order postaje `missed`, ali BEZ razloga.** cTrader kaže KAKO se order završio (otkazan,
+istekao); lista `miss_reason` u dnevniku pita ZAŠTO trejd nije uzet („Setup invalidated", „Price ran
+away", „Discretion"). To su dva različita pitanja i na drugo odgovara samo čovek — popuniti ga iz
+prvog značilo bi upisati odgovor koji niko nije dao u polje koje nedeljni pregled čita kao procenu.
+Brokerova reč putuje u payload-u, gde je dokaz a ne odgovor, a `needs_review` se diže da prazno polje
+bude podsetnik. Trejd koji je ispunjen se **ne može** označiti kao propušten — to brani
+`tj_position_missed_guard` još od `20260730140000`.
 
 **MAE/MFE više ne moraš da prepisuješ sa grafikona.** `max_drawdown_price` i `max_profit_price` postoje od `20260719101135`, a `excursion.ts` iz njih računa `maeR`, `mfeR` i **capture %** — sve je stajalo mrtvo jer je zavisilo od dva broja koja čovek prepiše po trejdu, a to niko ne radi. Isti oblik kao `scale_out_levels`: analiza napisana i testirana, pa gladovala.
 

@@ -57,6 +57,7 @@ const APPLIED_REASONS: Record<string, string> = {
   was_missed: "Bio označen kao propušten, pa se ipak ispunio — razlog propuštanja je sačuvan",
   fill_without_placement: "Bot nije video postavljanje ordera, samo fill",
   already_present: "Order je već bio u dnevniku — ništa nije prepisano",
+  already_missed: "Order je već bio označen kao propušten — ništa nije promenjeno",
   manual_kept:
     "MAE/MFE si uneo ručno, pa botova mera nije upisana — ručni unos pobeđuje. " +
     "Obriši ta dva polja na trejdu ako hoćeš da bot preuzme nazad",
