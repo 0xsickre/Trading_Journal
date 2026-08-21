@@ -42,6 +42,10 @@ describe("reason labels", () => {
     // The one whose label has to teach, not just name: refusing an edit after the
     // fill looks like a bug until you know it protects R.
     expect(quarantineReasonLabel("not_pending")).toContain("plana");
+
+    // The label has to say what to DO: a bot measurement that was declined in
+    // favour of a typed one looks like a failure until you know it was a choice.
+    expect(appliedReasonLabel("manual_kept")).toContain("ručni unos pobeđuje");
   });
 
   /**
@@ -66,6 +70,8 @@ describe("reason labels", () => {
       // 20260821180000_bot_position_modified
       "unknown_position",
       "not_open",
+      // 20260821200000_bot_excursion
+      "malformed_excursion",
     ];
     for (const reason of fromSql) {
       expect(quarantineReasonLabel(reason), reason).not.toBe(reason);

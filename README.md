@@ -416,7 +416,7 @@ Svaka odbijena ćelija je imenovana na svom redu u pregledu (`nečitljivo: qty, 
 
 Jedini automatski upis u dnevnik. cBot u cTrader-u
 ([`TradingJournalBridge`](https://github.com/0xsickre/trading-charting/tree/master/ctrader/TradingJournalBridge))
-javlja četiri činjenice, a dnevnik od njih pravi trejd:
+javlja pet činjenica, a dnevnik od njih pravi trejd:
 
 | Događaj kod brokera | Šta dnevnik upiše |
 |---|---|
@@ -424,12 +424,19 @@ javlja četiri činjenice, a dnevnik od njih pravi trejd:
 | Order izmenjen dok još čeka | Isti trejd → nove cene i veličina |
 | Order se ispunio | Isti trejd → `status = open` + ulazni fill |
 | Take profit pomeren posle ulaska | Isti trejd → nov `target_price`. **Stop se ne dira** |
+| Cena išla protiv i u smeru trejda | Isti trejd → **MAE i MFE** cene |
 
 **Planiran trejd pokazuje svoj plan.** Svaka brojčana kolona u `/journal` čita iz `tj_position_stats`,
 a taj view se gradi iz fill-ova — pa je trejd koji još čeka bio red samih crtica, i stop i target koje
 je most upravo doneo nisu se videli nigde u tabeli. Zato postoje kolone **Plan / Stop / Target**, i
 zato se cene formatiraju po `tick_size_at_trade` a ne na dve decimale: na dve, EURUSD stop 1.16101 i
 target 1.16453 postaju isto „1.16" — jedna pogrešna činjenica tamo gde su tri različite.
+
+**MAE/MFE više ne moraš da prepisuješ sa grafikona.** `max_drawdown_price` i `max_profit_price` postoje od `20260719101135`, a `excursion.ts` iz njih računa `maeR`, `mfeR` i **capture %** — sve je stajalo mrtvo jer je zavisilo od dva broja koja čovek prepiše po trejdu, a to niko ne radi. Isti oblik kao `scale_out_levels`: analiza napisana i testirana, pa gladovala.
+
+Bot meri na svaki tick i šalje checkpoint retko, pa ovde stiže tick-rezolucija po ceni par redova po trejdu.
+
+**Ručni unos pobeđuje, i to čuva TRIGER a ne provera u ingest funkciji.** `tj_save_trade`, forma i svaki budući uvoznik pišu iste dve kolone, pa bi svaki morao da pamti isto pravilo — a repo je već zapisao gde to vodi: *„Baza je čuvar, ne akcija."* Zato odluka živi na jednom mestu kroz koje svaki upis prolazi: `tj_excursion_source_guard` čita zastavicu koju `tj_bot_ingest` diže oko **tačno jednog** `UPDATE`-a i odmah spušta. Upis bez te zastavice je, po definiciji, čovekov. Botov pokušaj nad ručno unetim trejdom **vraća vrednosti nazad** umesto da baci grešku — greška bi poništila i upis u `tj_bot_events`, pa bi događaj nestao i bot bi zauvek ponavljao isti odbijeni upis.
 
 **Posle ulaska stop se zamrzava, take profit ne.** To su dva različita čina koja u API-ju izgledaju
 isto. Povlačenje stopa na breakeven ne znači da nisi rizikovao ništa — znači da si prestao da rizikuješ

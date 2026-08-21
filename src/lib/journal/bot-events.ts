@@ -49,6 +49,7 @@ const QUARANTINE_REASONS: Record<string, string> = {
     "je vođenje trejda, a ne promena plana",
   unknown_position: "Izmena pozicije koju dnevnik nikad nije video — ništa nije napravljeno od nje",
   not_open: "Trejd nije otvoren — izmena take profita nije primenjena",
+  malformed_excursion: "Bot nije poslao nijednu upotrebljivu MAE/MFE cenu",
 };
 
 /** Notes on events that DID apply, where the outcome deserves a word. */
@@ -56,6 +57,9 @@ const APPLIED_REASONS: Record<string, string> = {
   was_missed: "Bio označen kao propušten, pa se ipak ispunio — razlog propuštanja je sačuvan",
   fill_without_placement: "Bot nije video postavljanje ordera, samo fill",
   already_present: "Order je već bio u dnevniku — ništa nije prepisano",
+  manual_kept:
+    "MAE/MFE si uneo ručno, pa botova mera nije upisana — ručni unos pobeđuje. " +
+    "Obriši ta dva polja na trejdu ako hoćeš da bot preuzme nazad",
 };
 
 export function quarantineReasonLabel(reason: string | null): string {
