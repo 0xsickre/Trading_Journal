@@ -12,6 +12,40 @@
 -- ('manual','import') -> ('manual','import','bot'), so no existing row can fail
 -- the new constraint. Run as one transaction.
 --
+-- APPLIED 2026-08-21 to hjwvhzcszhjhpocfjatm, in two halves, recorded as
+-- `bot_ingest_schema` (20260821050108) and `bot_ingest_function`
+-- (20260821050221). Split only to isolate a failure to one half; this file is
+-- the single record of both. (Repo filenames have never matched the recorded
+-- versions in this project — only the names do.)
+--
+-- VERIFIED against the live database, in a transaction that was rolled back.
+-- Measured, not assumed:
+--
+--   token too short / unknown        -> {"ok":false,"retryable":false,
+--                                        "error":"unauthorized"}, 0 events written
+--   order_placed                     -> status=planned, source=bot,
+--                                       direction=Long, entry 1.0850, stop 1.0800,
+--                                       target 1.0950, position_size 1
+--                                       (100000 units / 100000 per lot),
+--                                       quote_currency_at_trade=USD,
+--                                       fx_rate_at_trade=1, needs_review=true,
+--                                       trade_no=1 assigned by the trigger
+--   same event_key replayed          -> {"result":"duplicate"}, no second row
+--   order_filled                     -> status=open, broker_position_id=223344,
+--                                       exactly 1 entry fill @1.08497, qty 1,
+--                                       source=bot
+--   unmapped symbol / account        -> quarantined, no position written
+--   "volume_in_units":"abc"          -> quarantined 'malformed_volume' -- NOT an
+--                                       exception, which is the whole point of
+--                                       reading jsonb_typeof before casting
+--   heartbeat                        -> ok, writes no event row
+--   final                            -> 1 bot position, 5 events, 3 quarantined
+--
+-- Grants confirmed on the live database: tj_bot_ingest is SECURITY DEFINER with
+-- EXECUTE granted to `anon` and NOT to `authenticated`; tj_reset_my_data is
+-- SECURITY INVOKER with EXECUTE granted to `authenticated` and NOT to `anon`.
+-- RLS is enabled on all three new tables.
+--
 -- WHAT WAS WRONG
 -- Every trade was typed by hand, including the parts the broker had already
 -- established: the symbol, the direction, the limit price, the stop, and the
