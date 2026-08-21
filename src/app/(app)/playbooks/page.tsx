@@ -17,6 +17,7 @@ import type { RealizedTrade } from "@/lib/journal/analytics";
 import { accountTimezoneResolver } from "@/lib/journal/time";
 import { getUserPrefs } from "@/lib/journal/user-prefs";
 import { getOptionsMap } from "@/lib/journal/options";
+import { stringFieldValue } from "@/lib/journal/field-values";
 
 /**
  * Playbooks: define them and judge them in the same place.
@@ -70,6 +71,21 @@ export default async function PlaybooksPage() {
     range: breakevenRange,
   });
 
+  // Missed-trade counts, from the RAW rows before `toRealized` drops them.
+  // `toRealized` keeps only closed trades with a net P&L — a missed trade has
+  // neither, so it never reaches `enriched` and this has to read `trades`
+  // itself. A plain `Record`, not a `Map`: this crosses the server/client
+  // boundary as a prop, and every other cross-boundary lookup here (like
+  // `OptionsMap`) is already a `Record` rather than something the RSC
+  // serializer has to be trusted with.
+  const missedByPlaybook: Record<string, number> = {};
+  for (const t of trades) {
+    if (t.status !== "missed") continue;
+    const id = stringFieldValue(t, "playbook_id");
+    if (!id) continue;
+    missedByPlaybook[id] = (missedByPlaybook[id] ?? 0) + 1;
+  }
+
   // Built from the LIBRARY, not from the linked rules: a rule unlinked from
   // every playbook still names its own history.
   const lookup = buildPlaybookLookup(
@@ -91,8 +107,9 @@ export default async function PlaybooksPage() {
         lookup={lookup}
         currency={currency}
         breakevenRange={breakevenRange}
-        initialCollapsed={prefs.playbooksCollapsed}
+        initialExpanded={prefs.playbooksExpanded}
         categories={optionsMap.rule_category ?? []}
+        missedByPlaybook={missedByPlaybook}
       />
     </div>
   );

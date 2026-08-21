@@ -88,6 +88,7 @@ function renderCard(
   bookOverrides: Partial<Playbook> = {},
   collapseOverrides: { collapsed?: boolean; onToggleCollapsed?: () => void } = {},
   categoryOverrides?: typeof CATEGORIES,
+  missedCount = 0,
 ) {
   const byTrade = new Map<string, PositionRule[]>();
   for (const r of rows) {
@@ -113,6 +114,7 @@ function renderCard(
       collapsed={collapseOverrides.collapsed ?? false}
       onToggleCollapsed={collapseOverrides.onToggleCollapsed ?? vi.fn()}
       categories={categoryOverrides ?? CATEGORIES}
+      missedCount={missedCount}
     />,
   );
   return b;
@@ -352,13 +354,17 @@ describe("PlaybookCard — collapsing hides the body, never the header", () => {
     ).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("summarises win rate and profit factor in the header, collapsed or not", () => {
+  it("shows trades, net P&L, win rate and missed count as separate columns, collapsed or not", () => {
+    // Discrete grid columns replaced one hand-formatted sentence — this is the
+    // test that used to read "62% win \u00b7 1.80 PF" out of a single `<span>`.
+    // Profit Factor moved out of the header entirely (still in the expanded
+    // metrics grid); the column set here matches what the list needs scanned.
     const row: ReportRow = {
       bucket: "London Reversal",
       n: 10,
       belowSample: false,
       trades: [],
-      values: { win_rate: 62, profit_factor: 1.8 },
+      values: { win_rate: 62, net_pnl: 4200, expectancy: 0.42 },
     };
     render(
       <PlaybookCard
@@ -372,15 +378,22 @@ describe("PlaybookCard — collapsing hides the body, never the header", () => {
         collapsed
         onToggleCollapsed={vi.fn()}
         categories={CATEGORIES}
+        missedCount={3}
       />,
     );
-    // One header string, not a table — this is what a folded card is FOR.
-    expect(screen.getByText(/62% win · 1\.80 PF/)).toBeInTheDocument();
+    expect(screen.getByText("10")).toBeInTheDocument();
+    expect(screen.getByText("$4,200.00")).toBeInTheDocument();
+    expect(screen.getByText("62.0%")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("+0.42R")).toBeInTheDocument();
   });
 
-  it("omits the summary for a playbook with no trades yet, rather than showing 0%", () => {
+  it("shows a dash in every numeric column for a playbook with no trades yet", () => {
+    // Collapsed, so every dash on the screen belongs to the header row's
+    // numeric columns — no bespoke "no summary" branch, just the same dash
+    // `formatMetric` already produces for every missing value everywhere.
     renderCard([rule({ id: "r1" })], [], {}, { collapsed: true });
-    expect(screen.queryByText(/win ·/)).toBeNull();
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
   });
 });
 

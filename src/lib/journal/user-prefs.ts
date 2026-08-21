@@ -29,11 +29,13 @@ export type UserPrefs = {
    */
   dashboardTemplateId: string | null;
   /**
-   * Playbook ids collapsed on /playbooks. Empty means every playbook is
-   * expanded — the state every account starts in, and the state a playbook
-   * created after this shipped is in until the trader touches it.
+   * Playbook ids EXPANDED on /playbooks. Empty means every playbook is
+   * collapsed — the state every account starts in, and the state a playbook
+   * created after this shipped is in until the trader touches it. The list
+   * itself is a compact table now, so a card opening is a deliberate act, not
+   * the default view.
    */
-  playbooksCollapsed: string[];
+  playbooksExpanded: string[];
 };
 
 const EMPTY_PREFS: UserPrefs = {
@@ -41,7 +43,7 @@ const EMPTY_PREFS: UserPrefs = {
   dashboardHiddenWidgets: [],
   dashboardWidgetOrder: [],
   dashboardTemplateId: null,
-  playbooksCollapsed: [],
+  playbooksExpanded: [],
 };
 
 /** A stored array survives only if it is genuinely an array of strings. */
@@ -62,7 +64,7 @@ export async function getUserPrefs(): Promise<UserPrefs> {
   const { data } = await supabase
     .from("tj_user_prefs")
     .select(
-      "journal_hidden_columns, dashboard_hidden_widgets, dashboard_widget_order, dashboard_template_id, playbooks_collapsed",
+      "journal_hidden_columns, dashboard_hidden_widgets, dashboard_widget_order, dashboard_template_id, playbooks_expanded",
     )
     .maybeSingle();
 
@@ -75,6 +77,6 @@ export async function getUserPrefs(): Promise<UserPrefs> {
       typeof data.dashboard_template_id === "string"
         ? data.dashboard_template_id
         : null,
-    playbooksCollapsed: stringArray(data.playbooks_collapsed),
+    playbooksExpanded: stringArray(data.playbooks_expanded),
   };
 }

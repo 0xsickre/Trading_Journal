@@ -22,9 +22,19 @@ function revalidateAll() {
 
 type Result = { ok: true } | { ok: false; error: string };
 
+/**
+ * `addPlaybook`'s own result, not the shared `Result`: the caller needs the
+ * new row's id to open it expanded (`playbooks-screen.tsx`'s create dialog)
+ * — the one thing a plain success/failure result cannot carry.
+ */
+type AddPlaybookResult = { ok: true; id: string } | { ok: false; error: string };
+
 // --- Playbooks --------------------------------------------------------------
 
-export async function addPlaybook(name: string): Promise<Result> {
+export async function addPlaybook(
+  name: string,
+  description?: string | null,
+): Promise<AddPlaybookResult> {
   const clean = name.trim();
   if (!clean) return { ok: false, error: "The name cannot be empty." };
 
@@ -44,6 +54,7 @@ export async function addPlaybook(name: string): Promise<Result> {
     .insert({
       user_id: user.id,
       name: clean,
+      description: description?.trim() || null,
       sort_order: (last?.sort_order ?? -1) + 1,
     })
     .select("id")
@@ -61,7 +72,7 @@ export async function addPlaybook(name: string): Promise<Result> {
   // No starter groups any more. A rule carries its own category, so an empty
   // playbook is a playbook with nothing linked yet — not a dead end.
   revalidateAll();
-  return { ok: true };
+  return { ok: true, id: book.id };
 }
 
 export async function updatePlaybook(
@@ -526,23 +537,31 @@ export async function restorePlaybookRule(id: string): Promise<Result> {
   return { ok: true };
 }
 
-// --- View preference: which cards start collapsed --------------------------
+// --- View preference: which cards start expanded ----------------------------
 
 /**
- * Playbook ids collapsed on /playbooks.
+ * Playbook ids EXPANDED on /playbooks.
+ *
+ * Was the collapsed set (see 20260822170000) until the list became a compact
+ * table: every number worth a glance at is visible collapsed now, so opening a
+ * card is a deliberate action and the untouched default flipped to collapsed.
+ * The stored list flipped with it, by the same "absent means the default"
+ * idiom `dashboard_hidden_widgets` already uses — an id belonging to a
+ * playbook created after this shipped is absent, and absent must mean
+ * collapsed, not expanded.
  *
  * Not validated against the caller's actual playbook list, for the same reason
  * `setDashboardHiddenWidgets` does not check the widget registry: this table
  * lives in `tj_playbooks`, is per-user, and changes constantly — a server-side
  * membership check would mean reading it before every write for no real
  * protection, since an id belonging to nothing is inert on the way back out
- * (`PlaybooksScreen` only ever tests `collapsed.has(book.id)`). Size and shape
+ * (`PlaybooksScreen` only ever tests `expanded.has(book.id)`). Size and shape
  * are the only real risks, which is what this bounds.
  */
-const collapsedSchema = z.array(z.string().min(1).max(64)).max(200);
+const expandedSchema = z.array(z.string().min(1).max(64)).max(200);
 
-export async function setPlaybooksCollapsed(ids: string[]): Promise<Result> {
-  const parsed = collapsedSchema.safeParse(ids);
+export async function setPlaybooksExpanded(ids: string[]): Promise<Result> {
+  const parsed = expandedSchema.safeParse(ids);
   if (!parsed.success) return { ok: false, error: "Invalid playbook selection." };
 
   const supabase = await createClient();
@@ -550,10 +569,10 @@ export async function setPlaybooksCollapsed(ids: string[]): Promise<Result> {
   if (!user) return { ok: false, error: "Not signed in." };
 
   // Deduped so a double toggle cannot grow the array without bound.
-  const collapsed = [...new Set(parsed.data)];
+  const expanded = [...new Set(parsed.data)];
 
   const { error } = await supabase.from("tj_user_prefs").upsert(
-    { user_id: user.id, playbooks_collapsed: collapsed },
+    { user_id: user.id, playbooks_expanded: expanded },
     { onConflict: "user_id" },
   );
   if (error) return { ok: false, error: error.message };

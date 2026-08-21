@@ -401,6 +401,49 @@ ključa po njoj, `follow_rate` i ocena setupa je oboje ignorišu — pa greška 
 
 ---
 
+## Lista playbook-ova je tabela, ne niz razvijenih kartica
+
+Deset playbook-ova je do sada značilo deset potpuno razvijenih kartica — svaka sa punim uređivačem
+pravila — pa je i pronalaženje jednog imena bilo skrolovanje pored devet drugih. Zaglavlje kartice sad
+deli jedan CSS grid raspored (`PLAYBOOK_ROW_GRID`, izvezen iz `playbook-card.tsx`) sa redom naslova
+kolona iznad liste, pa je „Trades / Net P&L / Win Rate / Missed / Expectancy" poravnato niz čitavu
+listu bez da su te dve stringove ikad ukucane na dva mesta. Razmatran je i pravi `<table>` koji bi to
+poravnanje garantovao besplatno, ali bi značio da uređivač pravila (sam iznutra već `<table>`) postane
+`<td colSpan>` sadržaj ugnježden u veći — dodatan rizik oko collapse/expand logike koja već radi, bez
+prave koristi nad deljenom klasom.
+
+Missed kolona se ne može pročitati iz istog `row`-a kao ostale: `runReport` računa nad realizovanim
+(zatvorenim) trejdovima, a promašen trejd nikad nema neto P&L pa nikad ne uđe u taj skup. Zato se broji
+posebno u `page.tsx`, nad sirovim redovima pre `toRealized`, grupisano po `playbook_id`
+(`stringFieldValue`) — i prosleđuje kao običan `Record<string, number>`, ne `Map`: to je oblik koji
+svaki drugi prop preko server/client granice u ovoj aplikaciji već koristi (`OptionsMap` među njima).
+
+**Kreiranje ide kroz dijalog, ne kroz inline input.** „+ Create Playbook" otvara `Dialog` sa Ime +
+Opis; nema drugog koraka za pravila kao kod TradeZella-e, jer bi to duplikovalo uređivač sekcija koji
+kartica već ima. `addPlaybook` sad vraća novi `id` (ne samo `{ ok: true }`) — dijalog ga odmah dodaje u
+listu razvijenih, pa trejder sleti pravo na uređivač sekcija/pravila.
+
+**Podrazumevano stanje je obrnuto.** Kolona `tj_user_prefs.playbooks_collapsed` je preimenovana u
+`playbooks_expanded` (migracija `20260822170000`) — dok je lista bila niz razvijenih kartica, prazan
+spisak je značio „sve razvijeno", ispravan podrazumevani prikaz za karticu koju trejder još nije
+dirao. Sad kad je lista tabela, sav koristan broj se već vidi kolabirano, pa je razvijanje namerna
+radnja — i prazan spisak sad znači „sve kolabirano". Preimenovanje, ne prepisivanje vrednosti: nalog
+tada nije imao nijedan red u `tj_user_prefs`, pa nema šta da se invertuje.
+
+**Bag koji je ova promena otkrila, ne izazvala.** `persist(next, current)` se pozivao IZNUTRA
+`setExpanded(current => {...})` updater funkcije — obrazac koji je ova stranica imala i pre ove
+izmene. React sme da pozove tu funkciju tokom faze renderovanja (Strict Mode to namerno duplira), pa
+je efekat sa strane — poziv server akcije, ili `startTransition` koji ga uvija — mogao da se izvrši
+„tokom renderovanja" umesto posle klika koji ga je pokrenuo. React je to prijavljivao kao „Cannot
+update a component (Router) while rendering PlaybooksScreen". Nikad ranije primećeno jer je stara
+verzija zvala akciju golim `.then()`-om, koji tu proveru nema — dodavanje `startTransition` (ispravan
+potez, isti obrazac kao `useAction`/`run` u `playbook-card.tsx`) je otkrilo propust, ne napravilo ga.
+Ispravka: `toggleExpanded`, `markExpanded`, `expandAll` i `collapseAll` sad čitaju `expanded` direktno
+iz zatvaranja i zovu `setExpanded(next)` pa `persist(next, expanded)` kao dva odvojena, obična poziva
+— nikad `persist` ugnježden unutar updater-a.
+
+---
+
 ## Ocena setupa se izvodi, ne procenjuje
 
 `setup_grade` je bilo otkucano slovo (A+/A/B/C) — i **jedino polje koje je bilo pogrešno, ne samo

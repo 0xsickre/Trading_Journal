@@ -90,6 +90,21 @@ export const HEADER_METRICS = [
  */
 const RULE_COLUMNS = 7;
 
+/**
+ * The column layout shared by the list's header row (`playbooks-screen.tsx`)
+ * and every card's own header row below it — one string, so the two can never
+ * drift the way two independently-typed `grid-template-columns` would.
+ *
+ * A `<table>` would guarantee this for free, and was considered: it would mean
+ * the rule editor (`CardContent`, itself built from a `<table>` already)
+ * becomes `<td colSpan>` content inside a bigger one — nested tables around
+ * collapse/expand state that works today, for no gain over a shared class.
+ * Exported rather than local, since the list needs the identical string for
+ * its own header labels to land under the right column.
+ */
+export const PLAYBOOK_ROW_GRID =
+  "grid grid-cols-[minmax(9rem,1fr)_3.5rem_6rem_4.5rem_4rem_5.5rem_4.5rem] items-center gap-2";
+
 function useAction() {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -683,6 +698,7 @@ export function PlaybookCard({
   collapsed,
   onToggleCollapsed,
   categories,
+  missedCount,
 }: {
   book: Playbook;
   library: PlaybookRule[];
@@ -701,6 +717,12 @@ export function PlaybookCard({
   onToggleCollapsed: () => void;
   /** The trader's own playbook sections, in their order, from `rule_category`. */
   categories: readonly OptionItem[];
+  /**
+   * Trades marked `missed` under this playbook. Computed by the page from the
+   * raw trade rows, not from `row` — `row` comes from `runReport` over the
+   * REALIZED trade set, which a missed trade (no net P&L, ever) never enters.
+   */
+  missedCount: number;
 }) {
   const { pending, run } = useAction();
   const [name, setName] = useState(book.name);
@@ -753,71 +775,90 @@ export function PlaybookCard({
 
   const n = row?.n ?? 0;
 
-  // Compact enough to read on a COLLAPSED card, so folding a card never means
-  // losing the one thing worth scanning ten of these for. Reads the same `row`
-  // `HEADER_METRICS` renders below — not a second computation — but hand-formats
-  // it rather than routing through `formatMetric`: that formatter is tuned for
-  // the full-precision "62.0%" / "1.8" shape every other screen wants, and a
-  // dense one-line summary asks for the opposite (a whole-number percent, a
-  // ratio that keeps its trailing zero) — a second job, not a bug in the first.
-  const winRatePct = row?.values.win_rate;
-  const pf = row?.values.profit_factor;
-  const summary =
-    n > 0 && winRatePct != null && pf != null
-      ? `${Math.round(winRatePct)}% win · ${Number.isFinite(pf) ? pf.toFixed(2) : "∞"} PF`
-      : null;
-
   return (
     <Card className={cn(!book.is_active && "opacity-60")}>
       <CardHeader className="pb-2">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* The one control that always toggles the SAME thing regardless of
-              what else is in the header — kept first in this group, ahead of
-              archive/delete, so it is never one misclick away from a
-              destructive action. */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 shrink-0"
-            onClick={onToggleCollapsed}
-            aria-label={collapsed ? "Expand playbook" : "Collapse playbook"}
-            aria-expanded={!collapsed}
-          >
-            <ChevronDown
-              className={cn("size-4 transition-transform", !collapsed && "rotate-180")}
+        <div className={PLAYBOOK_ROW_GRID}>
+          {/* Column 1: identity. Flexible width — everything else is a fixed
+              number column, and this is the one that has to make room for
+              names of every length plus the sample-size badges. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {/* The one control that always toggles the SAME thing regardless
+                of what else is in the header — kept first, ahead of
+                archive/delete, so it is never one misclick away from a
+                destructive action. */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 shrink-0"
+              onClick={onToggleCollapsed}
+              aria-label={collapsed ? "Expand playbook" : "Collapse playbook"}
+              aria-expanded={!collapsed}
+            >
+              <ChevronDown
+                className={cn("size-4 transition-transform", !collapsed && "rotate-180")}
+              />
+            </Button>
+
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={() => {
+                if (name.trim() && name !== book.name)
+                  run(() => updatePlaybook(book.id, { name }));
+              }}
+              // `shrink-0`, not decoration: this Input sits in a flex row
+              // nested inside a grid column, and a flex child's default
+              // `min-width: auto` still lets it shrink below `w-48` toward its
+              // near-zero text-input min-content — measured at 26px before
+              // this class, the same collapse the rule-text column hit earlier
+              // for the identical reason.
+              className="h-9 w-48 shrink-0 font-semibold"
+              aria-label="Playbook name"
+              disabled={pending}
             />
-          </Button>
+            {/* Not decoration: the input above has no accessible name of its
+                own once it is empty, and this is what the card is findable
+                by. */}
+            <CardTitle className="sr-only">{book.name}</CardTitle>
 
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={() => {
-              if (name.trim() && name !== book.name)
-                run(() => updatePlaybook(book.id, { name }));
-            }}
-            className="h-9 w-56 font-semibold"
-            aria-label="Playbook name"
-            disabled={pending}
-          />
-          {/* Not decoration: the input above has no accessible name of its own
-              once it is empty, and this is what the card is findable by. */}
-          <CardTitle className="sr-only">{book.name}</CardTitle>
+            {n > 0 && n < RULE_SAMPLE.MIN && (
+              <Badge variant="secondary">counts only</Badge>
+            )}
+            {n >= RULE_SAMPLE.MIN && n < RULE_SAMPLE.USABLE && (
+              <Badge variant="secondary">provisional</Badge>
+            )}
+            {!book.is_active && <Badge variant="outline">inactive</Badge>}
+          </div>
 
-          <span className="text-sm text-muted-foreground">
-            {n} {n === 1 ? "trade" : "trades"} · {book.rules.length}{" "}
-            {book.rules.length === 1 ? "rule" : "rules"}
-            {summary && <> · {summary}</>}
+          {/* Columns 2-6: the same values `HEADER_METRICS` renders in the
+              expanded grid below, read from the identical `row` — never a
+              second computation, just a second place to look at it. Profit
+              Factor and Follow Rate stay expanded-only; five columns here
+              matches what the list needs to be scanned, not everything the
+              card knows. */}
+          <span className="text-right text-sm tabular-nums">
+            {formatMetric(mkMetric(n > 0 ? n : null, "count"))}
+          </span>
+          <span
+            className={cn(
+              "text-right text-sm tabular-nums",
+              pnlClass(row?.values.net_pnl),
+            )}
+          >
+            {formatMetric(mkMetric(row?.values.net_pnl ?? null, "money", { currency }))}
+          </span>
+          <span className="text-right text-sm tabular-nums">
+            {formatMetric(mkMetric(row?.values.win_rate ?? null, "pct"))}
+          </span>
+          <span className="text-right text-sm tabular-nums">
+            {formatMetric(mkMetric(missedCount > 0 ? missedCount : null, "count"))}
+          </span>
+          <span className="text-right text-sm tabular-nums">
+            {formatMetric(mkMetric(row?.values.expectancy ?? null, "r"))}
           </span>
 
-          {n > 0 && n < RULE_SAMPLE.MIN && (
-            <Badge variant="secondary">counts only</Badge>
-          )}
-          {n >= RULE_SAMPLE.MIN && n < RULE_SAMPLE.USABLE && (
-            <Badge variant="secondary">provisional</Badge>
-          )}
-          {!book.is_active && <Badge variant="outline">inactive</Badge>}
-
-          <div className="ml-auto flex items-center gap-1">
+          <div className="flex items-center justify-end gap-1">
             <Button
               variant="ghost"
               size="icon"

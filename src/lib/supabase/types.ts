@@ -1389,7 +1389,7 @@ export type Database = {
           dashboard_template_id: string | null
           dashboard_widget_order: string[]
           journal_hidden_columns: string[]
-          playbooks_collapsed: string[]
+          playbooks_expanded: string[]
           updated_at: string
           user_id: string
         }
@@ -1399,7 +1399,7 @@ export type Database = {
           dashboard_template_id?: string | null
           dashboard_widget_order?: string[]
           journal_hidden_columns?: string[]
-          playbooks_collapsed?: string[]
+          playbooks_expanded?: string[]
           updated_at?: string
           user_id: string
         }
@@ -1409,7 +1409,7 @@ export type Database = {
           dashboard_template_id?: string | null
           dashboard_widget_order?: string[]
           journal_hidden_columns?: string[]
-          playbooks_collapsed?: string[]
+          playbooks_expanded?: string[]
           updated_at?: string
           user_id?: string
         }
