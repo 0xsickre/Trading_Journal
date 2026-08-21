@@ -484,6 +484,10 @@ lotova, pa panel pokazuje da li delilac reprodukuje brokerov broj — i tek onda
 po simbolu. Kod index CFD-a „jedan lot" definiše broker, a pogrešan delilac je P&L pogrešan za redove
 veličine, prikazan kao činjenica.
 
+**Obrisan bot trejd se ne vraća.** Idempotencija je po `event_key`, a on je već potrošen — ponovno slanje istog događaja dobija odgovor „duplikat" i ne pravi red ponovo. Brisanje je zato konačno: order i dalje postoji u cTrader-u, ali u dnevniku ga nema dok ga ne ukucaš rukom. To je namerno — kad bi se vraćao, obrisao bi trejd i on bi se ponovo pojavio.
+
+**`tj_bot_events` je append-only i raste.** Jedan order sa nekoliko izmena pravi pet do deset redova. To je audit log i tako je zamišljen; panel čita samo karantinirane i to sa granicom, pa dužina loga ne utiče na ekran.
+
 **Bot ne sme na cTrader Cloud.** Cloud instance ne šalju HTTP i ne prijavljuju grešku kad ne pošalju,
 pa bi most izgledao zdrav a ne bi isporučio ništa. Zato bot šalje heartbeat, a panel prikazuje kad se
 poslednji put javio: ćutanje mora da bude vidljivo sa ove strane.
