@@ -164,10 +164,15 @@ const BASE_TABS: FormTab[] = [
             placeholder: "The level, the close, the event that ends this…",
           },
           {
+            // The placeholder used to describe only the intention, which made
+            // the field look inert: nothing happens on THIS screen when you
+            // fill it in, and its two effects live on other pages. Naming them
+            // here is the difference between a field that does nothing and a
+            // field whose work you have not seen yet.
             name: "time_stop_days",
             label: "Time stop (days)",
             type: "number",
-            placeholder: "Exit flat if unresolved after N days",
+            placeholder: "N days → Daily check-in shows „day 3 of N\" and warns past it",
           },
         ],
       },
