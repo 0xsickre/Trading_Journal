@@ -234,7 +234,8 @@ describe("the column picker refuses to empty the grid", () => {
   // Every hideable column but "net" already hidden — "net" is the last one
   // standing.
   const ALL_BUT_NET = [
-    "trade_no", "date", "instrument", "direction", "setup_grade", "size",
+    "trade_no", "date", "instrument", "direction", "setup_grade",
+    "plan_entry", "stop_price", "target_price", "size",
     "avg_entry", "slippage_r", "avg_exit", "r", "exit_eff", "capture",
     "gross", "status", "chart",
   ];
@@ -519,5 +520,56 @@ describe("provenance badge", () => {
 
     rerender(<JournalGrid trades={[{ ...manual, source: "import" }]} accounts={[ACCOUNT]} />);
     expect(screen.queryByTitle("Zabeležio bot most iz cTrader-a")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The bot writes trades that have a plan and no fills yet. Every value column
+ * in this grid reads from `stats`, which is built from fills — so before this
+ * existed, a planned trade rendered as a row of em dashes and the stop and
+ * target the bridge had just delivered were not visible anywhere in the table.
+ */
+describe("a planned trade shows its plan", () => {
+  const ACCOUNT = account({ id: "acc-1" });
+
+  function plannedRow(): TradeRow {
+    return {
+      ...mkTrade({ id: "p1" }).row,
+      status: "planned",
+      entry_price: 1.1631,
+      stop_price: 1.16101,
+      target_price: 1.16453,
+      tick_size_at_trade: 0.00001,
+      // No fills yet — this is what makes every stats-derived column empty.
+      stats: null,
+    };
+  }
+
+  it("renders entry, stop and target at the instrument's precision", () => {
+    render(<JournalGrid trades={[plannedRow()]} accounts={[ACCOUNT]} />);
+
+    // Two decimals would print all three as "1.16" — one wrong fact where
+    // there are three different ones.
+    expect(screen.getByRole("cell", { name: "1.16310" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "1.16101" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "1.16453" })).toBeInTheDocument();
+  });
+
+  it("still renders the fill-derived columns as em dashes, not zeros", () => {
+    render(<JournalGrid trades={[plannedRow()]} accounts={[ACCOUNT]} />);
+
+    // A trade that has not filled has no size and no average entry. Showing 0
+    // would be the "null is not zero" mistake one column to the left.
+    const cells = screen.getAllByRole("cell").map((c) => c.textContent);
+    expect(cells).toContain("—");
+    expect(cells).not.toContain("0.00");
+  });
+
+  it("has a column heading for each of the three plan fields", () => {
+    render(<JournalGrid trades={[plannedRow()]} accounts={[ACCOUNT]} />);
+
+    expect(screen.getByRole("columnheader", { name: "Plan" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Stop" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Target" })).toBeInTheDocument();
   });
 });

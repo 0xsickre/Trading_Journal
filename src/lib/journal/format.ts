@@ -55,6 +55,45 @@ export function fmtNum(
   }).format(n);
 }
 
+/**
+ * Decimal places implied by an instrument's tick size.
+ *
+ * Counted off the decimal representation rather than derived with log10,
+ * because tick sizes are not all powers of ten: ES ticks at 0.25, and
+ * `-log10(0.25)` rounds to 1, which would print 5000.25 as 5000.3.
+ */
+export function priceDigits(tickSize: number | null | undefined): number {
+  if (tickSize == null || Number.isNaN(tickSize) || !(tickSize > 0)) return 2;
+
+  const s = String(tickSize);
+  const exp = s.match(/e-(\d+)$/i);
+  if (exp) return Math.min(10, Number(exp[1]));
+
+  const dot = s.indexOf(".");
+  return dot < 0 ? 0 : Math.min(10, s.length - dot - 1);
+}
+
+/**
+ * A price at the precision its instrument actually quotes.
+ *
+ * `fmtNum(x, 2)` is right for money and wrong for a price: it renders a EURUSD
+ * stop of 1.16101 and a target of 1.16453 as the same "1.16", which is not a
+ * rounded number but two different facts collapsed into one wrong one. Prices
+ * therefore format against `tick_size_at_trade`, the value frozen on the trade
+ * when it was written.
+ */
+export function fmtPrice(
+  n: number | null | undefined,
+  tickSize: number | null | undefined,
+): string {
+  if (n == null || Number.isNaN(n)) return "—";
+  const digits = priceDigits(tickSize);
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(n);
+}
+
 export function fmtR(n: number | null | undefined): string {
   if (n == null || Number.isNaN(n)) return "—";
   const v = roundForDisplay(n, 2);

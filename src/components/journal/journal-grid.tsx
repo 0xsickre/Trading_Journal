@@ -76,7 +76,7 @@ import { moneyProvenance } from "@/lib/journal/money-provenance";
 import { cn } from "@/lib/utils";
 import type { Account, OptionsMap, TradeRow } from "@/lib/journal/types";
 import { fmtInTz } from "@/lib/journal/time";
-import { fmtMoney, fmtNum, fmtR, pnlClass } from "@/lib/journal/format";
+import { fmtMoney, fmtNum, fmtPrice, fmtR, pnlClass } from "@/lib/journal/format";
 import { fmtSlippageR, slippageFromTrade } from "@/lib/journal/entry-slippage";
 import {
   exitEfficiencyFromTrade,
@@ -89,6 +89,7 @@ import type { FieldDef } from "@/lib/journal/field-def-types";
 import {
   arrayFieldValue,
   displayFieldValue,
+  numberFieldValue,
   stringFieldValue,
 } from "@/lib/journal/field-values";
 import {
@@ -204,6 +205,9 @@ const COLUMN_LABELS: Record<string, string> = {
   instrument: "Instrument",
   direction: "Dir",
   setup_grade: "Grade",
+  plan_entry: "Plan",
+  stop_price: "Stop",
+  target_price: "Target",
   size: "Size",
   avg_entry: "Entry",
   slippage_r: "Slip R",
@@ -494,6 +498,44 @@ export function JournalGrid({
         accessorKey: "setup_grade",
         header: COLUMN_LABELS.setup_grade,
         cell: ({ row }) => (row.original.setup_grade as string) ?? "—",
+      },
+      // The plan, as opposed to what happened. Separate from `avg_entry` on
+      // purpose: that column is the average FILL, so a trade still waiting shows
+      // an em dash there and would otherwise show nothing anywhere — which is
+      // how a bot-written planned trade ends up as a row of dashes.
+      //
+      // Prices format against the trade's own frozen tick size, because two
+      // decimals turns a EURUSD stop of 1.16101 and a target of 1.16453 into the
+      // same "1.16".
+      {
+        id: "plan_entry",
+        header: COLUMN_LABELS.plan_entry,
+        accessorFn: (r) => numberFieldValue(r, "entry_price"),
+        cell: ({ row }) =>
+          fmtPrice(
+            numberFieldValue(row.original, "entry_price"),
+            numberFieldValue(row.original, "tick_size_at_trade"),
+          ),
+      },
+      {
+        id: "stop_price",
+        header: COLUMN_LABELS.stop_price,
+        accessorFn: (r) => numberFieldValue(r, "stop_price"),
+        cell: ({ row }) =>
+          fmtPrice(
+            numberFieldValue(row.original, "stop_price"),
+            numberFieldValue(row.original, "tick_size_at_trade"),
+          ),
+      },
+      {
+        id: "target_price",
+        header: COLUMN_LABELS.target_price,
+        accessorFn: (r) => numberFieldValue(r, "target_price"),
+        cell: ({ row }) =>
+          fmtPrice(
+            numberFieldValue(row.original, "target_price"),
+            numberFieldValue(row.original, "tick_size_at_trade"),
+          ),
       },
       {
         id: "size",

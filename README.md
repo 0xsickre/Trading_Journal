@@ -82,7 +82,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
 | `npm run dev` | Razvojni server |
 | `npm run build` | Produkcijski build — 14 ruta |
 | `npm run lint` | ESLint. **Očekuje se tačno jedno upozorenje** (vidi ispod) |
-| `npm test` | Vitest — 2124 testa u 132 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
+| `npm test` | Vitest — 2135 testova u 132 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
 | `npm test -- --coverage` | Izveštaj o pokrivenosti |
 | `npx knip` | Mrtvi fajlovi, eksporti i zavisnosti |
 
@@ -424,6 +424,12 @@ javlja tri činjenice, a dnevnik od njih pravi trejd:
 | Order izmenjen dok još čeka | Isti trejd → nove cene i veličina |
 | Order se ispunio | Isti trejd → `status = open` + ulazni fill |
 
+**Planiran trejd pokazuje svoj plan.** Svaka brojčana kolona u `/journal` čita iz `tj_position_stats`,
+a taj view se gradi iz fill-ova — pa je trejd koji još čeka bio red samih crtica, i stop i target koje
+je most upravo doneo nisu se videli nigde u tabeli. Zato postoje kolone **Plan / Stop / Target**, i
+zato se cene formatiraju po `tick_size_at_trade` a ne na dve decimale: na dve, EURUSD stop 1.16101 i
+target 1.16453 postaju isto „1.16" — jedna pogrešna činjenica tamo gde su tri različite.
+
 **Izmena važi samo dok order čeka, i to je cela poenta.** Pre ulaska, pomeranje stopa **menja plan** —
 trejd nije počeo, rizik koji tek preuzimaš je sad drugi, i `stop_price` mora da ga prati ili planirani
 R:R opisuje order koji nisi postavio. Posle ulaska, pomeranje stopa je **vođenje trejda**: povlačenje
@@ -552,9 +558,9 @@ P&L i drawdown izračunate nad delimičnim skupom, bez ijednog vidljivog simptom
 
 ## Testovi
 
-2124 testa u 132 fajla, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
-`*.test.ts`, 1725 testova u 88 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
-399 testova u 44 fajla). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
+2135 testova u 132 fajla, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
+`*.test.ts`, 1733 testa u 88 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
+402 testa u 44 fajla). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
 plaćaju cenu DOM-a koji ne dodiruju.
 
 `vitest.config.ts` nosi **podove** pokrivenosti, ne ciljeve — stoje na onome što paket trenutno

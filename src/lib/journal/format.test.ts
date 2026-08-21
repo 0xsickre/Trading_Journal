@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { fmtMoney, fmtNum, fmtPct, fmtR, pnlClass, sharedCurrency } from "./format";
+import {
+  fmtMoney,
+  fmtNum,
+  fmtPct,
+  fmtPrice,
+  fmtR,
+  pnlClass,
+  priceDigits,
+  sharedCurrency,
+} from "./format";
 
 /**
  * The presentation layer for every number on screen, and it had no test.
@@ -79,5 +88,62 @@ describe("sharedCurrency", () => {
 
   it("returns null for an empty scope — nothing to agree on, not a free pass", () => {
     expect(sharedCurrency([])).toBeNull();
+  });
+});
+
+describe("priceDigits", () => {
+  it("counts the decimals a tick size actually has", () => {
+    expect(priceDigits(0.00001)).toBe(5); // EURUSD
+    expect(priceDigits(0.001)).toBe(3); // USDJPY
+    expect(priceDigits(0.01)).toBe(2);
+    expect(priceDigits(1)).toBe(0); // index CFD quoted in whole points
+  });
+
+  it("is not fooled by a tick size that is not a power of ten", () => {
+    // The reason this is not written with log10: -log10(0.25) rounds to 1, and
+    // ES at 5000.25 would print as 5000.3.
+    expect(priceDigits(0.25)).toBe(2);
+    expect(priceDigits(0.5)).toBe(1);
+  });
+
+  it("reads an exponential representation", () => {
+    // JS renders anything below 1e-6 in exponent form, so the string path has
+    // to cope: (0.0000001).toString() === "1e-7".
+    expect(priceDigits(0.0000001)).toBe(7);
+  });
+
+  it("falls back to 2 rather than throwing on a missing or absurd tick", () => {
+    expect(priceDigits(null)).toBe(2);
+    expect(priceDigits(undefined)).toBe(2);
+    expect(priceDigits(0)).toBe(2);
+    expect(priceDigits(-1)).toBe(2);
+    expect(priceDigits(Number.NaN)).toBe(2);
+  });
+});
+
+describe("fmtPrice", () => {
+  /**
+   * The bug this exists to prevent: at two decimals a EURUSD stop and target
+   * render as the same "1.16", which reads as one fact where there are two.
+   */
+  it("keeps two nearby FX prices distinguishable", () => {
+    expect(fmtPrice(1.16101, 0.00001)).toBe("1.16101");
+    expect(fmtPrice(1.16453, 0.00001)).toBe("1.16453");
+  });
+
+  it("pads to the instrument's precision instead of trimming", () => {
+    // 1.163 is a real EURUSD price; showing it as "1.163" next to "1.16101"
+    // makes it look like a different instrument.
+    expect(fmtPrice(1.163, 0.00001)).toBe("1.16300");
+  });
+
+  it("renders absent as an em dash, never as zero", () => {
+    expect(fmtPrice(null, 0.00001)).toBe("—");
+    expect(fmtPrice(undefined, 0.00001)).toBe("—");
+    expect(fmtPrice(Number.NaN, 0.00001)).toBe("—");
+  });
+
+  it("still prints a price when the tick size was never recorded", () => {
+    expect(fmtPrice(1.16101, null)).toBe("1.16");
   });
 });
