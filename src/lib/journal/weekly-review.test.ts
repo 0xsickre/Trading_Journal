@@ -95,7 +95,7 @@ describe("formatWeekRange", () => {
 
 describe("isWeekComplete", () => {
   const full = {
-    week_grade: "B" as const,
+    week_grade: 4 as const,
     one_pattern: "Held two losers past the time stop",
     one_change: "Close anything past its time stop on sight",
   };

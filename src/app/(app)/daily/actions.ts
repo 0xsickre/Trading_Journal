@@ -10,7 +10,7 @@ import { THESIS_STATES, TOUCHED_STATES } from "@/lib/journal/position-checkin";
 // review (the grade and the debrief prose). What stayed is what a day mid-hold
 // can honestly answer.
 const dailyReportSchema = z.object({
-  mental_temp: z.number().int().min(1).max(10).nullable(),
+  mental_temp: z.number().int().min(1).max(5).nullable(),
   macro_note: z.string().nullable(),
   impulse_fomo: z.boolean(),
   impulse_fear: z.boolean(),

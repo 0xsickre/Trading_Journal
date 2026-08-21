@@ -14,7 +14,7 @@ import type { PeriodRow } from "@/lib/journal/period-stats";
 
 const journal = (over: Partial<DailyReportListRow> = {}): DailyReportListRow => ({
   report_date: "2026-04-07",
-  mental_temp: 6,
+  mental_temp: 3,
   no_trade_day: false,
   impulse_fomo: false,
   impulse_fear: false,
@@ -50,7 +50,7 @@ describe("MonthDayList", () => {
     const row = screen.getByRole("listitem");
     expect(within(row).getByText(/\+\$250/)).toBeInTheDocument();
     expect(within(row).getByText("2t")).toBeInTheDocument();
-    expect(within(row).getByText("temp 6")).toBeInTheDocument();
+    expect(within(row).getByText("temp 3/5")).toBeInTheDocument();
     expect(within(row).getByText("80%")).toBeInTheDocument();
   });
 

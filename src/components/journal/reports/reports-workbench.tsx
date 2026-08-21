@@ -99,7 +99,7 @@ export function ReportsWorkbench({
   /** Per-position daily check-ins — what `touched` and `thesis_state` group on. */
   positionCheckins?: PositionCheckin[];
   /** Week start → that week's review grade, for the `week_grade` dimension. */
-  weekGrades?: Map<string, string>;
+  weekGrades?: Map<string, number>;
   fillCounts?: FillCounts;
   cashEvents?: CashEvent[];
   /** User-defined fields — each becomes a groupable dimension on its own. */

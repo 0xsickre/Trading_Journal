@@ -161,6 +161,13 @@ export type Database = {
             foreignKeyName: "tj_bot_events_position_id_fkey"
             columns: ["position_id"]
             isOneToOne: false
+            referencedRelation: "tj_position_stats"
+            referencedColumns: ["position_id"]
+          },
+          {
+            foreignKeyName: "tj_bot_events_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
             referencedRelation: "tj_positions"
             referencedColumns: ["id"]
           },
@@ -234,7 +241,15 @@ export type Database = {
           units_per_qty?: number
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tj_broker_symbol_map_instrument_fkey"
+            columns: ["user_id", "instrument"]
+            isOneToOne: false
+            referencedRelation: "tj_instruments"
+            referencedColumns: ["user_id", "symbol"]
+          },
+        ]
       }
       tj_cash_events: {
         Row: {
@@ -311,7 +326,7 @@ export type Database = {
           no_trade_day?: boolean
           report_date: string
           updated_at?: string
-          user_id?: string
+          user_id: string
         }
         Update: {
           created_at?: string
@@ -415,6 +430,51 @@ export type Database = {
           },
         ]
       }
+      tj_field_defs: {
+        Row: {
+          created_at: string
+          field_type: string
+          group_id: string
+          id: string
+          is_active: boolean
+          key: string
+          label: string
+          list_key: string | null
+          show_when: string
+          sort_order: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          field_type?: string
+          group_id?: string
+          id?: string
+          is_active?: boolean
+          key: string
+          label: string
+          list_key?: string | null
+          show_when?: string
+          sort_order?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          field_type?: string
+          group_id?: string
+          id?: string
+          is_active?: boolean
+          key?: string
+          label?: string
+          list_key?: string | null
+          show_when?: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tj_focus_goals: {
         Row: {
           created_at: string
@@ -434,7 +494,7 @@ export type Database = {
           is_active?: boolean
           started_at?: string
           updated_at?: string
-          user_id?: string
+          user_id: string
         }
         Update: {
           created_at?: string
@@ -551,11 +611,11 @@ export type Database = {
         Row: {
           asset_class: string | null
           created_at: string
-          quote_currency: string
           id: string
           is_active: boolean
           name: string | null
           point_value: number
+          quote_currency: string
           sort_order: number
           symbol: string
           tick_size: number | null
@@ -565,11 +625,11 @@ export type Database = {
         Insert: {
           asset_class?: string | null
           created_at?: string
-          quote_currency?: string
           id?: string
           is_active?: boolean
           name?: string | null
           point_value?: number
+          quote_currency?: string
           sort_order?: number
           symbol: string
           tick_size?: number | null
@@ -579,11 +639,11 @@ export type Database = {
         Update: {
           asset_class?: string | null
           created_at?: string
-          quote_currency?: string
           id?: string
           is_active?: boolean
           name?: string | null
           point_value?: number
+          quote_currency?: string
           sort_order?: number
           symbol?: string
           tick_size?: number | null
@@ -591,50 +651,6 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
-      }
-      tj_option_items: {
-        Row: {
-          color: string | null
-          created_at: string
-          id: string
-          is_active: boolean
-          label: string
-          list_id: string
-          sort_order: number
-          user_id: string
-          value: string
-        }
-        Insert: {
-          color?: string | null
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          label: string
-          list_id: string
-          sort_order?: number
-          user_id?: string
-          value: string
-        }
-        Update: {
-          color?: string | null
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          label?: string
-          list_id?: string
-          sort_order?: number
-          user_id?: string
-          value?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tj_option_items_list_id_fkey"
-            columns: ["list_id"]
-            isOneToOne: false
-            referencedRelation: "tj_option_lists"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       tj_note_folders: {
         Row: {
@@ -748,48 +764,58 @@ export type Database = {
             foreignKeyName: "tj_notes_position_id_fkey"
             columns: ["position_id"]
             isOneToOne: false
+            referencedRelation: "tj_position_stats"
+            referencedColumns: ["position_id"]
+          },
+          {
+            foreignKeyName: "tj_notes_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
             referencedRelation: "tj_positions"
             referencedColumns: ["id"]
           },
         ]
       }
-      tj_user_prefs: {
+      tj_option_items: {
         Row: {
+          color: string | null
           created_at: string
-          dashboard_hidden_widgets: string[]
-          dashboard_template_id: string | null
-          dashboard_widget_order: string[]
-          journal_hidden_columns: string[]
-          playbooks_collapsed: string[]
-          updated_at: string
+          id: string
+          is_active: boolean
+          label: string
+          list_id: string
+          sort_order: number
           user_id: string
+          value: string
         }
         Insert: {
+          color?: string | null
           created_at?: string
-          dashboard_hidden_widgets?: string[]
-          dashboard_template_id?: string | null
-          dashboard_widget_order?: string[]
-          journal_hidden_columns?: string[]
-          playbooks_collapsed?: string[]
-          updated_at?: string
-          user_id: string
+          id?: string
+          is_active?: boolean
+          label: string
+          list_id: string
+          sort_order?: number
+          user_id?: string
+          value: string
         }
         Update: {
+          color?: string | null
           created_at?: string
-          dashboard_hidden_widgets?: string[]
-          dashboard_template_id?: string | null
-          dashboard_widget_order?: string[]
-          journal_hidden_columns?: string[]
-          playbooks_collapsed?: string[]
-          updated_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          list_id?: string
+          sort_order?: number
           user_id?: string
+          value?: string
         }
         Relationships: [
           {
-            foreignKeyName: "tj_user_prefs_dashboard_template_id_fkey"
-            columns: ["dashboard_template_id"]
+            foreignKeyName: "tj_option_items_list_id_fkey"
+            columns: ["list_id"]
             isOneToOne: false
-            referencedRelation: "tj_dashboard_templates"
+            referencedRelation: "tj_option_lists"
             referencedColumns: ["id"]
           },
         ]
@@ -820,51 +846,6 @@ export type Database = {
           key?: string
           label?: string
           sort_order?: number
-          user_id?: string
-        }
-        Relationships: []
-      }
-      tj_field_defs: {
-        Row: {
-          created_at: string
-          field_type: string
-          group_id: string
-          id: string
-          is_active: boolean
-          key: string
-          label: string
-          list_key: string | null
-          show_when: string
-          sort_order: number
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          field_type?: string
-          group_id?: string
-          id?: string
-          is_active?: boolean
-          key: string
-          label: string
-          list_key?: string | null
-          show_when?: string
-          sort_order?: number
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          field_type?: string
-          group_id?: string
-          id?: string
-          is_active?: boolean
-          key?: string
-          label?: string
-          list_key?: string | null
-          show_when?: string
-          sort_order?: number
-          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -1076,6 +1057,13 @@ export type Database = {
             foreignKeyName: "tj_position_rules_position_id_fkey"
             columns: ["position_id"]
             isOneToOne: false
+            referencedRelation: "tj_position_stats"
+            referencedColumns: ["position_id"]
+          },
+          {
+            foreignKeyName: "tj_position_rules_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
             referencedRelation: "tj_positions"
             referencedColumns: ["id"]
           },
@@ -1100,17 +1088,20 @@ export type Database = {
           custom: Json
           direction: string | null
           entry_price: number | null
+          excursion_source: string | null
           execution_rating: number | null
           exit_reason: string | null
+          fx_rate_at_trade: number | null
+          gross_pnl_override: number | null
           id: string
           import_batch_id: string | null
           instrument: string | null
           invalidation: string | null
           max_drawdown_price: number | null
           max_profit_price: number | null
-          mistake: string[]
           miss_reason: string | null
           missed_at: string | null
+          mistake: string[]
           needs_review: boolean
           planned_rr: string | null
           playbook_id: string | null
@@ -1118,8 +1109,6 @@ export type Database = {
           position_size: number | null
           psychology_tags: string[]
           quote_currency_at_trade: string | null
-          fx_rate_at_trade: number | null
-          gross_pnl_override: number | null
           risk_pct: string | null
           scale_out_levels: Json
           scale_out_plan: string | null
@@ -1148,17 +1137,20 @@ export type Database = {
           custom?: Json
           direction?: string | null
           entry_price?: number | null
+          excursion_source?: string | null
           execution_rating?: number | null
           exit_reason?: string | null
+          fx_rate_at_trade?: number | null
+          gross_pnl_override?: number | null
           id?: string
           import_batch_id?: string | null
           instrument?: string | null
           invalidation?: string | null
           max_drawdown_price?: number | null
           max_profit_price?: number | null
-          mistake?: string[]
           miss_reason?: string | null
           missed_at?: string | null
+          mistake?: string[]
           needs_review?: boolean
           planned_rr?: string | null
           playbook_id?: string | null
@@ -1166,8 +1158,6 @@ export type Database = {
           position_size?: number | null
           psychology_tags?: string[]
           quote_currency_at_trade?: string | null
-          fx_rate_at_trade?: number | null
-          gross_pnl_override?: number | null
           risk_pct?: string | null
           scale_out_levels?: Json
           scale_out_plan?: string | null
@@ -1196,17 +1186,20 @@ export type Database = {
           custom?: Json
           direction?: string | null
           entry_price?: number | null
+          excursion_source?: string | null
           execution_rating?: number | null
           exit_reason?: string | null
+          fx_rate_at_trade?: number | null
+          gross_pnl_override?: number | null
           id?: string
           import_batch_id?: string | null
           instrument?: string | null
           invalidation?: string | null
           max_drawdown_price?: number | null
           max_profit_price?: number | null
-          mistake?: string[]
           miss_reason?: string | null
           missed_at?: string | null
+          mistake?: string[]
           needs_review?: boolean
           planned_rr?: string | null
           playbook_id?: string | null
@@ -1214,8 +1207,6 @@ export type Database = {
           position_size?: number | null
           psychology_tags?: string[]
           quote_currency_at_trade?: string | null
-          fx_rate_at_trade?: number | null
-          gross_pnl_override?: number | null
           risk_pct?: string | null
           scale_out_levels?: Json
           scale_out_plan?: string | null
@@ -1253,51 +1244,6 @@ export type Database = {
             columns: ["playbook_id"]
             isOneToOne: false
             referencedRelation: "tj_playbooks"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      tj_trade_images: {
-        Row: {
-          caption: string | null
-          created_at: string
-          id: string
-          image_url: string
-          kind: string
-          position_id: string
-          user_id: string
-        }
-        Insert: {
-          caption?: string | null
-          created_at?: string
-          id?: string
-          image_url: string
-          kind?: string
-          position_id: string
-          user_id?: string
-        }
-        Update: {
-          caption?: string | null
-          created_at?: string
-          id?: string
-          image_url?: string
-          kind?: string
-          position_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tj_trade_images_position_id_fkey"
-            columns: ["position_id"]
-            isOneToOne: false
-            referencedRelation: "tj_position_stats"
-            referencedColumns: ["position_id"]
-          },
-          {
-            foreignKeyName: "tj_trade_images_position_id_fkey"
-            columns: ["position_id"]
-            isOneToOne: false
-            referencedRelation: "tj_positions"
             referencedColumns: ["id"]
           },
         ]
@@ -1342,51 +1288,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      tj_weekly_reviews: {
-        Row: {
-          created_at: string
-          id: string
-          locked_at: string | null
-          next_week_catalysts: string | null
-          one_change: string | null
-          one_pattern: string | null
-          updated_at: string
-          user_id: string
-          week_grade: string | null
-          week_start: string
-          went_badly: string | null
-          went_well: string | null
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          locked_at?: string | null
-          next_week_catalysts?: string | null
-          one_change?: string | null
-          one_pattern?: string | null
-          updated_at?: string
-          user_id: string
-          week_grade?: string | null
-          week_start: string
-          went_badly?: string | null
-          went_well?: string | null
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          locked_at?: string | null
-          next_week_catalysts?: string | null
-          one_change?: string | null
-          one_pattern?: string | null
-          updated_at?: string
-          user_id?: string
-          week_grade?: string | null
-          week_start?: string
-          went_badly?: string | null
-          went_well?: string | null
-        }
-        Relationships: []
       }
       tj_tracker_rules: {
         Row: {
@@ -1433,10 +1334,142 @@ export type Database = {
         }
         Relationships: []
       }
+      tj_trade_images: {
+        Row: {
+          caption: string | null
+          created_at: string
+          id: string
+          image_url: string
+          kind: string
+          position_id: string
+          user_id: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          image_url: string
+          kind?: string
+          position_id: string
+          user_id?: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          image_url?: string
+          kind?: string
+          position_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tj_trade_images_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "tj_position_stats"
+            referencedColumns: ["position_id"]
+          },
+          {
+            foreignKeyName: "tj_trade_images_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "tj_positions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tj_user_prefs: {
+        Row: {
+          created_at: string
+          dashboard_hidden_widgets: string[]
+          dashboard_template_id: string | null
+          dashboard_widget_order: string[]
+          journal_hidden_columns: string[]
+          playbooks_collapsed: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dashboard_hidden_widgets?: string[]
+          dashboard_template_id?: string | null
+          dashboard_widget_order?: string[]
+          journal_hidden_columns?: string[]
+          playbooks_collapsed?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dashboard_hidden_widgets?: string[]
+          dashboard_template_id?: string | null
+          dashboard_widget_order?: string[]
+          journal_hidden_columns?: string[]
+          playbooks_collapsed?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tj_user_prefs_dashboard_template_id_fkey"
+            columns: ["dashboard_template_id"]
+            isOneToOne: false
+            referencedRelation: "tj_dashboard_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tj_weekly_reviews: {
+        Row: {
+          created_at: string
+          id: string
+          locked_at: string | null
+          next_week_catalysts: string | null
+          one_change: string | null
+          one_pattern: string | null
+          updated_at: string
+          user_id: string
+          week_grade: number | null
+          week_start: string
+          went_badly: string | null
+          went_well: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          locked_at?: string | null
+          next_week_catalysts?: string | null
+          one_change?: string | null
+          one_pattern?: string | null
+          updated_at?: string
+          user_id: string
+          week_grade?: number | null
+          week_start: string
+          went_badly?: string | null
+          went_well?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          locked_at?: string | null
+          next_week_catalysts?: string | null
+          one_change?: string | null
+          one_pattern?: string | null
+          updated_at?: string
+          user_id?: string
+          week_grade?: number | null
+          week_start?: string
+          went_badly?: string | null
+          went_well?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       tj_position_stats: {
         Row: {
+          account_currency: string | null
           account_id: string | null
           avg_entry: number | null
           avg_exit: number | null
@@ -1446,15 +1479,14 @@ export type Database = {
           duration_seconds: number | null
           entry_qty: number | null
           exit_qty: number | null
+          fx_rate: number | null
+          fx_rate_source: string | null
           gross_pl: number | null
           gross_points: number | null
           instrument: string | null
           money_overridden: boolean | null
           net_pl: number | null
           opened_at: string | null
-          account_currency: string | null
-          fx_rate: number | null
-          fx_rate_source: string | null
           point_value: number | null
           point_value_source: string | null
           position_id: string | null
@@ -1480,61 +1512,85 @@ export type Database = {
     }
     Functions: {
       tj_add_option_item: {
-        Args: { p_list_id: string; p_label: string }
-        Returns: Database["public"]["Tables"]["tj_option_items"]["Row"]
+        Args: { p_label: string; p_list_id: string }
+        Returns: {
+          color: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          list_id: string
+          sort_order: number
+          user_id: string
+          value: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tj_option_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       tj_add_option_list: {
-        Args: { p_key: string; p_label: string; p_category?: string | null }
-        Returns: Database["public"]["Tables"]["tj_option_lists"]["Row"]
-      }
-      tj_bot_ingest: {
-        Args: { p_token: string; p_event: Json }
-        Returns: Json
-      }
-      tj_lock_day: {
-        Args: { p_date: string; p_auto?: Json }
-        Returns: undefined
-      }
-      tj_replace_executions: {
-        Args: { p_position_id: string; p_executions: Json }
-        Returns: number
-      }
-      tj_replace_position_rules: {
-        Args: { p_position_id: string; p_rules: Json }
-        Returns: number
-      }
-      tj_undo_import_batch: {
-        Args: {
-          p_batch_id: string
-          p_restore?: Json
-          p_delete_ids?: string[]
+        Args: { p_category?: string; p_key: string; p_label: string }
+        Returns: {
+          category: string | null
+          created_at: string
+          id: string
+          key: string
+          label: string
+          sort_order: number
+          user_id: string
         }
-        Returns: undefined
-      }
-      tj_save_trade: {
-        Args: {
-          p_id?: string
-          p_position?: Json
-          p_executions?: Json
-          p_rules?: Json
-          p_images?: Json
+        SetofOptions: {
+          from: "*"
+          to: "tj_option_lists"
+          isOneToOne: true
+          isSetofReturn: false
         }
-        Returns: string
       }
+      tj_bot_ingest: { Args: { p_event: Json; p_token: string }; Returns: Json }
       tj_bulk_add_tag: {
         Args: { p_ids: string[]; p_kind: string; p_values: string[] }
         Returns: undefined
       }
       tj_delete_account: { Args: { p_account_id: string }; Returns: undefined }
+      tj_lock_day: {
+        Args: { p_auto?: Json; p_date: string }
+        Returns: undefined
+      }
+      tj_replace_executions: {
+        Args: { p_executions?: Json; p_position_id: string }
+        Returns: number
+      }
+      tj_replace_position_rules: {
+        Args: { p_position_id: string; p_rules?: Json }
+        Returns: number
+      }
       tj_reset_my_data: { Args: never; Returns: undefined }
+      tj_save_trade: {
+        Args: {
+          p_executions?: Json
+          p_id?: string
+          p_images?: Json
+          p_position?: Json
+          p_rules?: Json
+        }
+        Returns: string
+      }
       tj_seed_defaults: { Args: { target: string }; Returns: undefined }
-      tj_seed_note_folders: { Args: { target: string }; Returns: undefined }
       tj_seed_instruments_defaults: {
         Args: { target: string }
         Returns: undefined
       }
       tj_seed_my_defaults: { Args: never; Returns: undefined }
+      tj_seed_note_folders: { Args: { target: string }; Returns: undefined }
       tj_seed_playbooks: { Args: { target: string }; Returns: undefined }
+      tj_seed_tracker_rules: { Args: { target: string }; Returns: undefined }
+      tj_undo_import_batch: {
+        Args: { p_batch_id: string; p_delete_ids?: string[]; p_restore?: Json }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

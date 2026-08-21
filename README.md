@@ -82,11 +82,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
 | `npm run dev` | Razvojni server |
 | `npm run build` | Produkcijski build — 14 ruta |
 | `npm run lint` | ESLint. **Očekuje se tačno jedno upozorenje** (vidi ispod) |
-| `npm test` | Vitest — 2144 testa u 132 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
+| `npm test` | Vitest — 2145 testova u 132 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
 | `npm test -- --coverage` | Izveštaj o pokrivenosti |
 | `npx knip` | Mrtvi fajlovi, eksporti i zavisnosti |
 
-**Lint upozorenje je nosivo.** `journal-grid.tsx:651` prijavljuje *„Compilation Skipped: Use of
+**Lint upozorenje je nosivo.** `journal-grid.tsx:693` prijavljuje *„Compilation Skipped: Use of
 incompatible library"* — React Compiler odbija da memoizuje komponentu koja koristi
 `useReactTable` iz TanStack Table. Razumemo ga i prihvatamo. To što ih je **tačno 1** je kontrolna
 vrednost: svaki drugi broj znači da je neka izmena nešto uvela.
@@ -356,6 +356,39 @@ pomera svaki skor koji je ikad prikazan, pa sad mora da menja i test.
 
 ---
 
+## Ocene se biraju klikom, u jednoj jedinici
+
+Četiri polja tražila su da se kuca ono što se bira, i tri različite skale za isto pitanje.
+
+| Polje | Bilo | Sad |
+|---|---|---|
+| Time stop | slobodan broj, **bez gornje granice u bazi** | pet dugmadi 1–5, `CHECK` do 5 |
+| Mental temperature | `Select` 1–10 | **5 zvezdica** |
+| Week rating | `A–F` | **5 zvezdica** |
+| Execution rating, conviction | 5 zvezdica / 1–5 | nepromenjeno |
+
+**Deset nivoa je preciznost koju čovek nema o sopstvenoj glavi.** Tražena svakog jutra, daje šum
+koji posle hrani dimenziju izveštaja i `low_mental_temp_entry` pravilo kao da je signal. Pet zvezdica
+je i brže i poštenije, a usput je i jedina jedinica u kojoj dnevnik sad traži procenu — pre ovoga su
+postojale tri.
+
+**Postojeća vrednost je PREVEDENA, ne zadržana.** Na skali 1–10 petica je ispod proseka; na 1–5 ista
+cifra je maksimum. Zadržati je značilo bi obrnuti joj značenje a ostaviti je da izgleda netaknuto.
+`ceil(staro / 2)` čuva relativan položaj — sredina stare skale pada u sredinu nove. Prvi nacrt te
+migracije delio je prevod na tri `UPDATE`-a po opsegu i bio je pogrešan dvaput: devetka bi u prvom
+prolazu postala 5 pa je drugi prolaz („= 5") spustio na 3, dok 2 i 3 nijedan prolaz nije ni dodirnuo.
+Jedan `UPDATE` čita originalnu vrednost svakog reda tačno jednom, pa nijedan od ta dva kvara nije ni
+izraziv.
+
+**Time stop nisu zvezdice, i to je namerno.** Zvezdice su monotone — tri popunjene čitaju kao „tri
+od pet dobrote". To je tačno za ocenu i pogrešno za količinu: „3 dana" nije bolje ni gore od „5 dana",
+to je drugi broj. Zato `NumberChoice` iscrtava cifre i boji samo izabranu.
+
+**Klik na već izabranu vrednost je briše.** Bez puta nazad do `null`, prvi promašen klik ostao bi
+zauvek kao vrednost koju niko nije mislio, a „nije upisano" i „1" su različiti odgovori.
+
+---
+
 ## Praćenje procesa
 
 **Tracker pravila** su dnevne obaveze, po danu u nedelji. Četiri se ocenjuju automatski iz podataka
@@ -597,9 +630,9 @@ P&L i drawdown izračunate nad delimičnim skupom, bez ijednog vidljivog simptom
 
 ## Testovi
 
-2144 testa u 132 fajla, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
+2145 testova u 132 fajla, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
 `*.test.ts`, 1742 testa u 88 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
-402 testa u 44 fajla). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
+403 testa u 44 fajla). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
 plaćaju cenu DOM-a koji ne dodiruju.
 
 `vitest.config.ts` nosi **podove** pokrivenosti, ne ciljeve — stoje na onome što paket trenutno

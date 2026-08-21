@@ -16,7 +16,7 @@ import type { Insight, InsightRule } from "./types";
 
 const P = {
   /** Mental temperature below which entries are flagged. */
-  LOW_MENTAL_TEMP: 5,
+  LOW_MENTAL_TEMP: 3,
   /** Swap above this share of gross P&L has eaten the trade. */
   SWAP_SHARE_OF_GROSS: 0.15,
   /** Days a plan may sit unexecuted before it is stale. */
@@ -157,7 +157,7 @@ export const lowMentalTempEntry: Rule = {
         level: "trade",
         severity: e.outcome === "loss" ? "critical" : "warning",
         title: "Entry on a poor mental rating",
-        detail: `On the entry day you rated your mental temperature ${temp}/10. Outcome: ${
+        detail: `On the entry day you rated your mental temperature ${temp}/5. Outcome: ${
           e.r != null ? `${e.r.toFixed(2)}R` : fmtMoney(e.pnl, ctx.currency)
         }.`,
         subjectId: e.id,

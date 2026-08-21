@@ -21,10 +21,15 @@ export function StarRating({
   value,
   onChange,
   disabled,
+  // Podrazumevano ostaje ono što je bilo tvrdo kodirano dok je ovo merilo samo
+  // izvršenje. Sad isto merilo nosi i mentalno stanje i ocenu nedelje, pa bi
+  // fiksna oznaka čitaču ekrana javljala pogrešnu stvar na dva od tri mesta.
+  label = "Execution rating",
 }: {
   value: number | null;
   onChange: (next: number | null) => void;
   disabled?: boolean;
+  label?: string;
 }) {
   // Pregled pri prelasku mišem. Lokalno stanje, jer se ništa izvan ove
   // komponente ne menja dok se ne klikne.
@@ -34,7 +39,7 @@ export function StarRating({
   return (
     <div
       role="radiogroup"
-      aria-label="Execution rating"
+      aria-label={label}
       className="flex items-center gap-1"
       onMouseLeave={() => setHover(null)}
     >

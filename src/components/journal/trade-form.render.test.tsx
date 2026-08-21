@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TradeForm, type TradeFormInitial } from "./trade-form";
 import type { Account, Instrument } from "@/lib/journal/types";
@@ -575,6 +575,40 @@ describe("the plan reveals one decision at a time", () => {
     expect(screen.getByText("Why this trade")).toBeInTheDocument();
     expect(screen.getByText("Thesis")).toBeInTheDocument();
     expect(screen.getByText("Time stop (days)")).toBeInTheDocument();
+  });
+
+  /**
+   * The time stop is five buttons, not a free number.
+   *
+   * Two things are asserted rather than one, and the second is the one that
+   * matters: clicking the SAME value again clears it. Without that path back to
+   * `null`, a mis-click would be permanent, and the journal would fill with time
+   * stops nobody meant — the same reason `StarRating` and `TriButton` both
+   * behave this way.
+   */
+  it("offers exactly 1..5 as buttons, and a mis-click can be taken back", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        initial={baseInitial({ status: "planned" })}
+      />,
+    );
+
+    const group = screen.getByRole("radiogroup", { name: "Time stop (days)" });
+    const days = within(group).getAllByRole("radio");
+    expect(days.map((b) => b.textContent)).toEqual(["1", "2", "3", "4", "5"]);
+    // Nothing is preselected: "no time stop" is a real answer and must not be
+    // spelled as "1 day".
+    expect(days.every((b) => b.getAttribute("aria-checked") === "false")).toBe(true);
+
+    await user.click(days[2]);
+    expect(days[2]).toHaveAttribute("aria-checked", "true");
+
+    await user.click(days[2]);
+    expect(days[2]).toHaveAttribute("aria-checked", "false");
   });
 
   it("the scale-out plan waits for a target", async () => {

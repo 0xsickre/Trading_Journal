@@ -47,7 +47,7 @@ export type DimensionContext = {
    * and shipping five paragraphs per week to the browser to render one letter
    * would be paying for the whole review to draw a bucket label.
    */
-  weekGradeByWeek?: Map<string, string>;
+  weekGradeByWeek?: Map<string, number>;
   /** rule ids that fired per trade id, for the insight dimension. */
   insightsByTrade?: Map<string, string[]>;
   /** Account id → display name. */
@@ -479,14 +479,14 @@ const mentalTempDimension: Dimension = {
   key: "mental_temp",
   label: "Mental temperature",
   group: "process",
-  order: ["1–3 (poor)", "4–5 (below average)", "6–7 (good)", "8–10 (excellent)"],
+  // One bucket per star. The old scale needed banding because ten levels split
+  // into ten rows nobody could read; five is already the readable size, and
+  // banding it further would throw away the only resolution the scale has.
+  order: ["★1", "★2", "★3", "★4", "★5"],
   valueOf: (t, ctx) => {
     const v = ctx.reportByDate.get(t.openDay)?.mental_temp;
-    if (v == null) return null;
-    if (v <= 3) return "1–3 (poor)";
-    if (v <= 5) return "4–5 (below average)";
-    if (v <= 7) return "6–7 (good)";
-    return "8–10 (excellent)";
+    if (v == null || v < 1 || v > 5) return null;
+    return `★${Math.round(v)}`;
   },
 };
 
@@ -529,8 +529,12 @@ const weekGradeDimension: Dimension = {
   key: "week_grade",
   label: "Week rating",
   group: "process",
-  order: ["A", "B", "C", "D", "E", "F"],
-  valueOf: (t, ctx) => ctx.weekGradeByWeek?.get(t.closeWeek) ?? null,
+  order: ["★1", "★2", "★3", "★4", "★5"],
+  valueOf: (t, ctx) => {
+    const v = ctx.weekGradeByWeek?.get(t.closeWeek);
+    if (v == null || v < 1 || v > 5) return null;
+    return `★${Math.round(v)}`;
+  },
 };
 
 const processDimensions: Dimension[] = [

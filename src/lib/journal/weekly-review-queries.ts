@@ -21,17 +21,17 @@ export async function getWeeklyReview(
  *
  * Two columns and no prose. The review's five text answers are written to be
  * read, not grouped on; shipping them to the browser so a report can print one
- * letter per row would be paying for the whole review to draw a bucket label.
+ * star count per row would be paying for the whole review to draw a bucket label.
  *
  * Ungraded weeks are skipped rather than stored as null — the dimension excludes
  * a trade whose week has no grade, and an entry mapping to null would have to be
  * unwound at every read.
  */
-export async function getWeekGrades(): Promise<Map<string, string>> {
+export async function getWeekGrades(): Promise<Map<string, number>> {
   const supabase = await createClient();
   const rows = await selectAllPages<{
     week_start: string;
-    week_grade: string | null;
+    week_grade: number | null;
   }>((from, to) =>
     supabase
       .from("tj_weekly_reviews")
@@ -40,9 +40,12 @@ export async function getWeekGrades(): Promise<Map<string, string>> {
       .range(from, to),
   );
 
-  const out = new Map<string, string>();
+  // The NUMBER, not a bucket label. Formatting "★3" here would put the report's
+  // presentation inside a query module, and the dimension is the one place that
+  // already owns bucket names.
+  const out = new Map<string, number>();
   for (const r of rows) {
-    if (r.week_grade) out.set(r.week_start, r.week_grade);
+    if (r.week_grade != null) out.set(r.week_start, r.week_grade);
   }
   return out;
 }

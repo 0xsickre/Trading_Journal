@@ -1,15 +1,32 @@
 import { addDaysToDayKey, isoWeekdayOfDayKey } from "./time";
 
 /**
- * The same six-point scale the day used before the grade moved here.
+ * Five stars, the unit the rest of the journal already judges in.
  *
- * Kept rather than re-based: the trader has been reading this scale for months,
- * and a new one would make every old habit of judgement misfire against the new
- * numbers. What changed is not the scale, it is what is being graded — a week
- * that is over, instead of a day that is not.
+ * THE OLD REASONING EXPIRED RATHER THAN BEING WRONG. This was six letters,
+ * A..F, kept deliberately because "the trader has been reading this scale for
+ * months" and re-basing would make old habits of judgement misfire. That held
+ * while the letters were the only such scale. They no longer are: execution
+ * rating and conviction are five stars, mental temperature became five stars,
+ * and the week was the last place asking the same question in a different
+ * alphabet — which is its own way of making judgement misfire.
+ *
+ * Six values became five, which is a narrowing, and it was only safe because no
+ * week had ever been graded. With data present, "does D become 2 or 1" has no
+ * honest answer.
  */
-export const WEEK_GRADES = ["A", "B", "C", "D", "E", "F"] as const;
-export type WeekGrade = (typeof WEEK_GRADES)[number];
+export const WEEK_GRADES = [1, 2, 3, 4, 5] as const;
+
+/**
+ * Plain `number`, not the literal union `1|2|3|4|5`.
+ *
+ * The union looks stricter and buys nothing here: the value arrives from a
+ * five-button component and passes a zod range check and a database CHECK
+ * before it is ever stored. What it would cost is a narrowing cast at every
+ * boundary. `mental_temp`, `execution_rating` and `conviction` are all typed
+ * this way for the same reason.
+ */
+export type WeekGrade = number;
 
 export type WeeklyReview = {
   id: string;

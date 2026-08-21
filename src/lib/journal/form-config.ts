@@ -27,6 +27,8 @@ export type FieldType =
   | "url"
   | "tags"
   | "rating"
+  /** Jedan broj iz kratkog raspona, biran klikom. Cifre, ne zvezdice — vidi `NumberChoice`. */
+  | "days"
   | "computed";
 
 export type FieldConfig = {
@@ -164,15 +166,17 @@ const BASE_TABS: FormTab[] = [
             placeholder: "The level, the close, the event that ends this…",
           },
           {
-            // The placeholder used to describe only the intention, which made
-            // the field look inert: nothing happens on THIS screen when you
-            // fill it in, and its two effects live on other pages. Naming them
-            // here is the difference between a field that does nothing and a
-            // field whose work you have not seen yet.
+            // Five buttons, not a free number: holds longer than a week are no
+            // longer taken, so anything the input could accept beyond 5 was a
+            // typo waiting to happen. The database now refuses those too.
+            //
+            // The hint names where the number does its work. Nothing happens on
+            // THIS screen when you set it, and both effects live on other pages
+            // — without saying so the field reads as decoration.
             name: "time_stop_days",
             label: "Time stop (days)",
-            type: "number",
-            placeholder: "N days → Daily check-in shows „day 3 of N\" and warns past it",
+            type: "days",
+            placeholder: "Daily check-in shows „day 3 of N\" and warns past it",
           },
         ],
       },
@@ -421,10 +425,10 @@ export function positionFieldNames(defs: readonly FieldDef[] = []): string[] {
 export function numericFieldNames(defs: readonly FieldDef[] = []): Set<string> {
   return new Set([
     ...getAllFormFields(defs)
-      // `rating` is numeric too — five buttons write a number into a `smallint`
-      // column. Left out, it would fall through to the string branch of
-      // `buildPositionPatch` and send "4" to Postgres as text.
-      .filter((f) => f.type === "number" || f.type === "rating")
+      // `rating` and `days` are numeric too — their buttons write a number into
+      // a `smallint` column. Left out, either would fall through to the string
+      // branch of `buildPositionPatch` and send "4" to Postgres as text.
+      .filter((f) => f.type === "number" || f.type === "rating" || f.type === "days")
       .map((f) => f.name),
     "position_size",
   ]);

@@ -7,12 +7,11 @@ import { getPrimaryAccount } from "@/lib/journal/accounts";
 import { todayInTz } from "@/lib/journal/daily-report";
 import { DEFAULT_TZ } from "@/lib/journal/time";
 import {
-  WEEK_GRADES,
   weekStartOfDayKey,
 } from "@/lib/journal/weekly-review";
 
 const weeklyReviewSchema = z.object({
-  week_grade: z.enum(WEEK_GRADES).nullable(),
+  week_grade: z.number().int().min(1).max(5).nullable(),
   went_well: z.string().nullable(),
   went_badly: z.string().nullable(),
   one_pattern: z.string().nullable(),

@@ -137,20 +137,20 @@ function DayRow({
           {row ? `${row.trades}t` : ""}
         </span>
 
-        {/* Mental temperature, on the 1–10 scale the check-in asks for. Under 5
-            is the threshold that page already warns at, so it is the one worth
-            colouring here too. */}
+        {/* Mental temperature, on the five-star scale the check-in asks for.
+            Under 3 is the threshold that page already warns at, so it is the
+            one worth colouring here too. */}
         <span className="w-20 shrink-0 text-xs tabular-nums">
           {journal?.mental_temp == null ? (
             <span className="text-muted-foreground">—</span>
           ) : (
             <span
               className={cn(
-                journal.mental_temp < 5 && "text-[var(--loss)]",
-                journal.mental_temp >= 8 && "text-[var(--profit)]",
+                journal.mental_temp < 3 && "text-[var(--loss)]",
+                journal.mental_temp >= 4 && "text-[var(--profit)]",
               )}
             >
-              temp {journal.mental_temp}
+              temp {journal.mental_temp}/5
             </span>
           )}
         </span>

@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StarRating } from "@/components/journal/star-rating";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -28,7 +29,6 @@ import {
   emptyWeeklyReview,
   formatWeekRange,
   isWeekComplete,
-  WEEK_GRADES,
   type WeeklyReview,
 } from "@/lib/journal/weekly-review";
 import type { WeekRecap } from "@/lib/journal/week-recap";
@@ -202,30 +202,15 @@ export function WeeklyReviewForm({
             </p>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {WEEK_GRADES.map((g) => (
-                <Button
-                  key={g}
-                  type="button"
-                  size="sm"
-                  variant={form.week_grade === g ? "default" : "outline"}
-                  className="w-10"
-                  onClick={() => patch("week_grade", g)}
-                >
-                  {g}
-                </Button>
-              ))}
-              {form.week_grade && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => patch("week_grade", null)}
-                >
-                  Clear
-                </Button>
-              )}
-            </div>
+            {/* Zvezdice umesto A–F: ista jedinica kojom se već ocenjuju
+                izvršenje, conviction i mentalno stanje. `StarRating` nosi i
+                svoj „Clear", pa dugme koje je ovde stajalo posebno više ne
+                treba. */}
+            <StarRating
+              label="Week rating"
+              value={form.week_grade}
+              onChange={(next) => patch("week_grade", next)}
+            />
           </CardContent>
         </Card>
 

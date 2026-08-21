@@ -153,7 +153,9 @@ export async function addList(
   const { error } = await supabase.rpc("tj_add_option_list", {
     p_key: cleanKey,
     p_label: label.trim(),
-    p_category: category,
+    // `?? undefined`, not `category`: the RPC declares the argument optional,
+    // and an explicit null would be sent as a value rather than omitted.
+    p_category: category ?? undefined,
   });
   if (error) return { ok: false, error: error.message };
   revalidateAll();

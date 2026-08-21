@@ -162,11 +162,11 @@ describe("process dimensions", () => {
   it("reads mental temperature from the OPEN day — the entry decision", () => {
     const t = one([held]);
     const ctx = dimCtx([
-      mkReport("2026-01-05", { mental_temp: 3 }),
-      mkReport("2026-01-09", { mental_temp: 9 }),
+      mkReport("2026-01-05", { mental_temp: 2 }),
+      mkReport("2026-01-09", { mental_temp: 5 }),
     ]);
     expect(bucketsOf(getDimension("mental_temp")!, t, ctx)).toEqual([
-      "1–3 (poor)",
+      "★2",
     ]);
   });
 
@@ -260,11 +260,11 @@ describe("process dimensions", () => {
     const t = one([held]); // closes Fri 2026-01-09, week of Mon 2026-01-05
     const ctx = dimCtx([], {
       weekGradeByWeek: new Map([
-        ["2025-12-29", "F"],
-        ["2026-01-05", "B"],
+        ["2025-12-29", 1],
+        ["2026-01-05", 4],
       ]),
     });
-    expect(bucketsOf(getDimension("week_grade")!, t, ctx)).toEqual(["B"]);
+    expect(bucketsOf(getDimension("week_grade")!, t, ctx)).toEqual(["★4"]);
   });
 
   it("excludes a trade whose week was never reviewed", () => {
@@ -490,14 +490,14 @@ describe("every dimension buckets without throwing", () => {
   // duration, no account, no custom values.
   const bare = one([{ net: 0, r: null, durationSeconds: null, size: null, accountId: null }]);
 
-  const ctx = dimCtx([mkReport("2026-01-09", { mental_temp: 6 })], {
+  const ctx = dimCtx([mkReport("2026-01-09", { mental_temp: 3 })], {
     checkinsByPosition: byPosition([
       mkCheckin("rich", "2026-01-09", {
         thesis_state: "weakened",
         touched: "partial_exit",
       }),
     ]),
-    weekGradeByWeek: new Map([["2026-01-05", "B"]]),
+    weekGradeByWeek: new Map([["2026-01-05", 4]]),
   });
 
   const all = [...DIMENSIONS, ...customFieldDimensions(TEST_FIELD_DEFS)];

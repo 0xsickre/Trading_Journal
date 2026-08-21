@@ -169,7 +169,7 @@ describe("lowMentalTempEntry", () => {
           r: -1,
         }),
       ],
-      { reports: [mkReport("2026-01-05", { mental_temp: 3 })] },
+      { reports: [mkReport("2026-01-05", { mental_temp: 2 })] },
     );
     expect(fired(lowMentalTempEntry, ctx)).toEqual(["a"]);
   });
@@ -183,7 +183,7 @@ describe("lowMentalTempEntry", () => {
           closedAt: "2026-01-20T09:00:00Z",
         }),
       ],
-      { reports: [mkReport("2026-01-20", { mental_temp: 3 })] },
+      { reports: [mkReport("2026-01-20", { mental_temp: 2 })] },
     );
     expect(fired(lowMentalTempEntry, ctx)).toEqual([]);
   });
@@ -191,7 +191,7 @@ describe("lowMentalTempEntry", () => {
   it("does not fire at or above the threshold", () => {
     const ctx = ctxOf(
       [mkTrade({ id: "a", openedAt: "2026-01-05T09:00:00Z" })],
-      { reports: [mkReport("2026-01-05", { mental_temp: 5 })] },
+      { reports: [mkReport("2026-01-05", { mental_temp: 3 })] },
     );
     expect(fired(lowMentalTempEntry, ctx)).toEqual([]);
   });

@@ -21,13 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { StarRating } from "@/components/journal/star-rating";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
@@ -134,7 +128,7 @@ export function DailyReportForm({
   );
 
   const isToday = reportDate === today;
-  const lowMental = form.mental_temp != null && form.mental_temp < 5;
+  const lowMental = form.mental_temp != null && form.mental_temp < 3;
   const lockedAt = report?.locked_at
     ? format(new Date(report.locked_at), "d MMM yyyy, HH:mm")
     : null;
@@ -286,29 +280,22 @@ export function DailyReportForm({
           {lowMental && (
             <Alert>
               <AlertDescription>
-                Mental temperature below 5 — consider smaller size, or sitting out
+                Mental temperature below 3 stars — consider smaller size, or sitting out
                 until you feel readier.
               </AlertDescription>
             </Alert>
           )}
 
           <div className="space-y-2">
-            <Label>Mental temperature (1–10)</Label>
-            <Select
-              value={form.mental_temp?.toString() ?? ""}
-              onValueChange={(v) => patch("mental_temp", v ? Number(v) : null)}
-            >
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue placeholder="Pick…" />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    {n}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Mental temperature</Label>
+            {/* Zvezdice, ne 1–10. Deset nivoa je preciznost koju čovek nema o
+                sopstvenoj glavi; tražena, daje šum koji posle hrani dimenziju
+                izveštaja i insight pravilo kao da je signal. */}
+            <StarRating
+              label="Mental temperature"
+              value={form.mental_temp}
+              onChange={(next) => patch("mental_temp", next)}
+            />
           </div>
 
           {/* Same column as the old "macro events today", asked differently on

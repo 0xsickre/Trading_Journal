@@ -44,6 +44,7 @@ import {
   type ScaleOutRow,
 } from "@/lib/journal/scale-out";
 import { PlaybookChecklist } from "@/components/journal/playbook-checklist";
+import { NumberChoice } from "@/components/journal/number-choice";
 import { StarRating } from "@/components/journal/star-rating";
 import { ScaleOutEditor } from "@/components/journal/scale-out-editor";
 import {
@@ -1672,6 +1673,25 @@ function FieldRenderer({
           value={n != null && Number.isFinite(n) ? n : null}
           onChange={(next) => onChange(next == null ? "" : String(next))}
         />
+      </div>
+    );
+  }
+
+  if (field.type === "days") {
+    // Isto hvatanje praznog pre konverzije kao kod `rating`: `Number("")` je 0,
+    // a nula dana ovde ne postoji — prazno znači „bez roka".
+    const n = value === "" || value == null ? null : Number(value);
+    return (
+      <div className={`space-y-1.5 ${colSpan}`}>
+        <Label className="text-xs">{field.label}</Label>
+        <NumberChoice
+          label={field.label}
+          value={n != null && Number.isFinite(n) ? n : null}
+          onChange={(next) => onChange(next == null ? "" : String(next))}
+        />
+        {field.placeholder && (
+          <p className="text-xs text-muted-foreground">{field.placeholder}</p>
+        )}
       </div>
     );
   }

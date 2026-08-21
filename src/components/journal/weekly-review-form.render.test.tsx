@@ -155,19 +155,23 @@ describe("Complete means the grade plus both singular answers", () => {
     );
     expect(screen.getByText("Draft")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "B" }));
+    // Zvezdice nose `role="radio"` i ime „N of 5" — ocena je izbor iz skupa,
+    // ne pet nezavisnih dugmadi.
+    await user.click(screen.getByRole("radio", { name: "4 of 5" }));
 
     expect(screen.getByText("Complete")).toBeInTheDocument();
   });
 });
 
 describe("a locked week", () => {
-  it("hides Save and Lock, and disables the grade buttons", () => {
+  it("hides Save and Lock, and disables the rating stars", () => {
     render(form({ review: review({ locked_at: "2026-01-12T20:00:00Z" }) }));
     expect(screen.queryByRole("button", { name: /Save review/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Lock week/ })).not.toBeInTheDocument();
     expect(screen.getByText("Week is locked")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "A" })).toBeDisabled();
+    // Onemogućava ih `<fieldset disabled>` oko cele forme, ne prop na
+    // komponenti — zato ovo i dalje važi posle prelaska na zvezdice.
+    expect(screen.getByRole("radio", { name: "5 of 5" })).toBeDisabled();
   });
 });
 

@@ -11,8 +11,9 @@
  * `time_stop_days` i `scale_out_plan` (dodate 13.08.), pa zatim
  * `quote_currency_at_trade`, `fx_rate_at_trade` i `gross_pnl_override` (15.08.).
  * `reserved-keys.test.ts` sada čita kolone iz generisanog `types.ts` i pada ako
- * lista opet zaostane za migracijom — i jeste pala, na `broker*` kolonama
- * (21.08.), pre nego što je iko stigao da napravi polje koje bi ih zaklonilo.
+ * lista opet zaostane za migracijom — i jeste pala dvaput: na `broker*`
+ * kolonama i na `excursion_source` (21.08.), oba puta pre nego što je iko
+ * stigao da napravi polje koje bi ih zaklonilo.
  */
 export const RESERVED_KEYS = new Set([
   "id",
@@ -61,4 +62,5 @@ export const RESERVED_KEYS = new Set([
   "broker_account",
   "broker_order_id",
   "broker_position_id",
+  "excursion_source",
 ]);
