@@ -82,7 +82,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
 | `npm run dev` | Razvojni server |
 | `npm run build` | Produkcijski build — 14 ruta |
 | `npm run lint` | ESLint. **Očekuje se tačno jedno upozorenje** (vidi ispod) |
-| `npm test` | Vitest — 2162 testa u 133 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
+| `npm test` | Vitest — 2166 testova u 133 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
 | `npm test -- --coverage` | Izveštaj o pokrivenosti |
 | `npx knip` | Mrtvi fajlovi, eksporti i zavisnosti |
 
@@ -353,6 +353,35 @@ gubitaka. Knjiga od samih breakeven scratch-eva ima putanju za merenje i nema od
 
 Četiri kalibracione konstante su zaključane vrednošću u `sickre-score.test.ts`. Menjanje bilo koje
 pomera svaki skor koji je ikad prikazan, pa sad mora da menja i test.
+
+---
+
+## Sekcije playbook-a bira trejder, ne repo
+
+`tj_playbook_rules.category` je nosio `CHECK IN ('context','entry','management','exit','no_trade')`,
+a kartica playbook-a je crtala **svih pet** sekcija bez obzira da li ih knjiga koristi — namerno, uz
+komentar da je prazna „No-trade" sekcija podsetnik da pravilo fali. Taj argument je pretpostavljao da
+je tih pet **pravih** pet.
+
+To je tuđa taksonomija. Trejderu čiji je metod „ovo su uslovi da uđem, ovo da izađem, i jedno pravilo
+za rizik" daje tri naslova koja je napisao i dva koja nije, trajno prazna, na svakom playbook-u.
+Prazna sekcija tad prestaje da bude podsetnik i postaje forma koja ne pristaje.
+
+**Mehanizam je već postojao.** `tj_option_lists` je način na koji ovaj dnevnik oduvek drži skup koji
+pripada trejderu — zasejan, preimenljiv, prerasporediv, arhivabilan, uređuje se u Settings bez ijedne
+linije koda. `exit_reason`, `miss_reason` i `setup_grade` svi tako rade; kategorija je bila izuzetak
+jer je slučajno dodata kao enum. Sad je lista `rule_category`, zasejana istih pet pod istim ključevima
+— **ništa se ne pomera** dok je ne izmeniš.
+
+**Arhivirano nije obrisano, i UI na tome počiva.** Isključi „No-trade" u Settings i prestaje da se
+nudi — ali pravilo koje je već pod njom **mora i dalje da se vidi**. Sakriti pravila zato što je
+naslov penzionisan bilo bi gubitak podataka prerušen u pospremanje, pa `rulesByCategory` dopisuje
+svaku sekciju koja drži pravila i kad je lista više ne nudi.
+
+**Bazni `CHECK` ne postoji više i to je priznata cena, ne propust.** Dozvoljeni skup su sad redovi po
+korisniku, koje ograničenje kolone ne vidi. Vrednost je grupisanje za prikaz — nijedna metrika ne
+ključa po njoj, `follow_rate` i ocena setupa je oboje ignorišu — pa greška u kucanju daje sekciju sa
+čudnim imenom, ne pogrešan broj. Zato provera živi u server akciji, gde poruka može da se pročita.
 
 ---
 
@@ -668,8 +697,8 @@ P&L i drawdown izračunate nad delimičnim skupom, bez ijednog vidljivog simptom
 
 ## Testovi
 
-2162 testa u 133 fajla, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
-`*.test.ts`, 1759 testova u 89 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
+2166 testova u 133 fajla, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
+`*.test.ts`, 1763 testa u 89 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
 403 testa u 44 fajla). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
 plaćaju cenu DOM-a koji ne dodiruju.
 

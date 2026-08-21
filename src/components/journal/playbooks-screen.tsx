@@ -15,6 +15,7 @@ import {
 } from "@/lib/journal/reports/playbook-dimensions";
 import type { Playbook, PlaybookRule } from "@/lib/journal/playbook-types";
 import type { EnrichedTrade } from "@/lib/journal/enriched-trade";
+import type { OptionItem } from "@/lib/journal/types";
 import type { BreakevenRange } from "@/lib/journal/breakeven";
 import {
   addPlaybook,
@@ -29,6 +30,7 @@ export function PlaybooksScreen({
   currency,
   breakevenRange,
   initialCollapsed,
+  categories,
 }: {
   playbooks: Playbook[];
   library: PlaybookRule[];
@@ -38,6 +40,8 @@ export function PlaybooksScreen({
   breakevenRange: BreakevenRange;
   /** Playbook ids collapsed on load — from `tj_user_prefs`, empty by default. */
   initialCollapsed: string[];
+  /** The trader's own playbook sections, from the `rule_category` option list. */
+  categories: OptionItem[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -205,7 +209,8 @@ export function PlaybooksScreen({
             lookup={lookup}
             computeCtx={metricCtx}
             currency={currency}
-            collapsed={collapsedIds.has(book.id)}
+            categories={categories}
+          collapsed={collapsedIds.has(book.id)}
             onToggleCollapsed={() => toggleCollapsed(book.id)}
           />
         ))

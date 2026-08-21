@@ -12,10 +12,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import type { OptionItem } from "@/lib/journal/types";
 import { gradeFromPct } from "@/lib/journal/setup-score";
 import { cn } from "@/lib/utils";
 import {
-  RULE_CATEGORY_LABELS,
+  ruleCategoryLabel,
   ruleAppliesTo,
   rulesByCategory,
   type Playbook,
@@ -42,6 +43,7 @@ export function PlaybookChecklist({
   answers,
   onAnswerChange,
   netPl,
+  categories = [],
 }: {
   playbooks: Playbook[];
   playbookId: string | null;
@@ -52,6 +54,8 @@ export function PlaybookChecklist({
   onAnswerChange: (ruleId: string, followed: boolean | null) => void;
   /** Live net P&L, or null while the trade is still a plan. */
   netPl: number | null;
+  /** The trader's own playbook sections, from the `rule_category` option list. */
+  categories?: readonly OptionItem[];
 }) {
   const book = playbooks.find((p) => p.id === playbookId) ?? null;
 
@@ -72,8 +76,9 @@ export function PlaybookChecklist({
     () =>
       rulesByCategory(
         (book?.rules ?? []).filter((r) => ruleAppliesTo(r.show_when, outcome)),
+        categories.map((c) => c.value),
       ),
-    [book, outcome],
+    [book, outcome, categories],
   );
 
   const visible = useMemo(
@@ -282,7 +287,7 @@ export function PlaybookChecklist({
           {visibleGroups.map((group) => (
             <div key={group.category} className="space-y-1.5">
               <h4 className="text-xs font-semibold text-muted-foreground">
-                {RULE_CATEGORY_LABELS[group.category]}
+                {ruleCategoryLabel(group.category, categories)}
               </h4>
               {group.rules.map((rule) => {
                 const value = answers[rule.id];

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  RULE_CATEGORIES,
+  DEFAULT_RULE_CATEGORIES,
   RULE_CATEGORY_LABELS,
+  ruleCategoryLabel,
   rulesByCategory,
   type PlaybookRule,
   type RuleCategory,
@@ -99,17 +100,51 @@ describe("rulesByCategory", () => {
   });
 
   it("keeps every rule — no category silently swallows one", () => {
-    const rules = RULE_CATEGORIES.map((c, i) => rule(`r${i}`, `Rule ${i}`, c));
+    const rules = DEFAULT_RULE_CATEGORIES.map((c, i) => rule(`r${i}`, `Rule ${i}`, c));
     const out = rulesByCategory(rules);
     expect(out.flatMap((g) => g.rules)).toHaveLength(rules.length);
+  });
+
+  it("orders sections the way the trader's list does", () => {
+    const rules = [rule("a", "Get out", "exit"), rule("b", "Get in", "entry")];
+    const out = rulesByCategory(rules, ["exit", "entry"]);
+    expect(out.map((g) => g.category)).toEqual(["exit", "entry"]);
+  });
+
+  /**
+   * The failure mode archiving would otherwise cause.
+   *
+   * Switch a section off in Settings and it should stop being OFFERED — but the
+   * rules already filed under it must still be drawn. Dropping them would be
+   * data loss dressed as tidying: the rule still exists, still owns its
+   * statistics, and would simply have vanished from the page.
+   */
+  it("still shows rules whose section was archived out of the list", () => {
+    const rules = [rule("a", "Get in", "entry"), rule("b", "Stand aside", "no_trade")];
+    const out = rulesByCategory(rules, ["entry"]);
+    expect(out.map((g) => g.category)).toEqual(["entry", "no_trade"]);
+    expect(out.flatMap((g) => g.rules)).toHaveLength(2);
   });
 });
 
 describe("category labels", () => {
-  it("names every category in the closed set", () => {
+  it("names every category this journal ships with", () => {
     // A missing label would render an empty heading rather than fail loudly.
-    for (const c of RULE_CATEGORIES) {
+    for (const c of DEFAULT_RULE_CATEGORIES) {
       expect(RULE_CATEGORY_LABELS[c]).toBeTruthy();
     }
+  });
+
+  it("prefers the trader's own name over the shipped one", () => {
+    const own = [{ value: "entry", label: "Ulaz" }];
+    expect(ruleCategoryLabel("entry", own)).toBe("Ulaz");
+    expect(ruleCategoryLabel("entry")).toBe("Entry");
+  });
+
+  it("falls back to the key rather than rendering an empty heading", () => {
+    // A section the trader invented has no shipped label, and a blank heading
+    // would read as a rendering bug rather than as their own name.
+    expect(ruleCategoryLabel("risk")).toBe("risk");
+    expect(ruleCategoryLabel("risk", [{ value: "risk", label: "Rizik" }])).toBe("Rizik");
   });
 });

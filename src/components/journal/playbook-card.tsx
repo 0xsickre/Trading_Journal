@@ -43,9 +43,8 @@ import {
 } from "@/lib/journal/reports/playbook-dimensions";
 import { ruleScorecard, type RuleScore } from "@/lib/journal/reports/rule-scorecard";
 import {
-  RULE_CATEGORIES,
+  ruleCategoryLabel,
   RULE_CATEGORY_HINTS,
-  RULE_CATEGORY_LABELS,
   SHOW_WHEN_LABELS,
   SHOW_WHEN_VALUES,
   rulesByCategory,
@@ -55,6 +54,7 @@ import {
   type ShowWhen,
 } from "@/lib/journal/playbook-types";
 import type { EnrichedTrade } from "@/lib/journal/enriched-trade";
+import type { OptionItem } from "@/lib/journal/types";
 import {
   addPlaybookRule,
   deletePlaybook,
@@ -378,10 +378,18 @@ function RuleRow({
  * The "write a new rule here" row.
  *
  * Its own component because the draft text and the pending `show_when` are
- * local to ONE category. Hoisting them into the card would give all five
- * categories a single draft, so typing under Entry would appear under Exit.
+ * local to ONE section. Hoisting them into the card would give every section a
+ * single draft, so typing under Entry would appear under Exit.
  */
-function AddRuleRow({ book, category }: { book: Playbook; category: RuleCategory }) {
+function AddRuleRow({
+  book,
+  category,
+  categories,
+}: {
+  book: Playbook;
+  category: RuleCategory;
+  categories: readonly OptionItem[];
+}) {
   const { pending, run } = useAction();
   const [draft, setDraft] = useState("");
   const [showWhen, setShowWhen] = useState<ShowWhen>("always");
@@ -411,7 +419,7 @@ function AddRuleRow({ book, category }: { book: Playbook; category: RuleCategory
               if (e.key === "Enter") addRule();
             }}
             placeholder="New rule, e.g. Wait for the sweep, then MSS"
-            aria-label={`New ${RULE_CATEGORY_LABELS[category]} rule`}
+            aria-label={`New ${ruleCategoryLabel(category, categories)} rule`}
             className="h-8 min-w-0 flex-1"
             disabled={pending}
           />
@@ -475,12 +483,14 @@ function CategorySection({
   rules,
   library,
   scoreById,
+  categories,
 }: {
   book: Playbook;
   category: RuleCategory;
   rules: PlaybookRule[];
   library: PlaybookRule[];
   scoreById: Map<string, RuleScore>;
+  categories: readonly OptionItem[];
 }) {
   const linked = new Set(rules.map((r) => r.id));
   const available = library.filter(
@@ -494,7 +504,7 @@ function CategorySection({
           colSpan={RULE_COLUMNS}
           className="pt-4 pb-1 text-xs font-semibold text-muted-foreground"
         >
-          {RULE_CATEGORY_LABELS[category]}{" "}
+          {ruleCategoryLabel(category, categories)}{" "}
           {/* The hint rides along deliberately: it is what makes an empty
               No-trade section a prompt to write the missing rule rather than a
               gap in the table. */}
@@ -513,7 +523,7 @@ function CategorySection({
         />
       ))}
 
-      <AddRuleRow book={book} category={category} />
+      <AddRuleRow book={book} category={category} categories={categories} />
       {available.length > 0 && <ReuseRow book={book} available={available} />}
     </>
   );
@@ -538,6 +548,7 @@ export function PlaybookCard({
   currency,
   collapsed,
   onToggleCollapsed,
+  categories,
 }: {
   book: Playbook;
   library: PlaybookRule[];
@@ -554,6 +565,8 @@ export function PlaybookCard({
   /** Whether the body — inputs, headline metrics, the rule table — is hidden. */
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  /** The trader's own playbook sections, in their order, from `rule_category`. */
+  categories: readonly OptionItem[];
 }) {
   const { pending, run } = useAction();
   const [name, setName] = useState(book.name);
@@ -575,17 +588,26 @@ export function PlaybookCard({
     [scores],
   );
 
-  // Every category, not only the populated ones: an empty No-trade section is
-  // the prompt to write the rule that is missing, and it is the one most books
-  // never get around to. `rulesByCategory` does the bucketing and drops empties;
-  // mapping over `RULE_CATEGORIES` puts them back.
+  /**
+   * Every section the trader HAS, populated or not — plus any that a rule still
+   * uses after being archived.
+   *
+   * An empty section is a prompt to write the rule that is missing, which is why
+   * empties are put back after `rulesByCategory` drops them. That was the
+   * argument for showing all five built-ins too, and it only held while the five
+   * were the right five. Now the list is the trader's, so an empty heading is
+   * one they asked for.
+   */
   const sections = useMemo(() => {
-    const byCategory = rulesByCategory(book.rules);
-    return RULE_CATEGORIES.map((category) => ({
+    const keys = categories.map((c) => c.value);
+    const byCategory = rulesByCategory(book.rules, keys);
+    const all = [...keys];
+    for (const g of byCategory) if (!all.includes(g.category)) all.push(g.category);
+    return all.map((category) => ({
       category,
       rules: byCategory.find((g) => g.category === category)?.rules ?? [],
     }));
-  }, [book.rules]);
+  }, [book.rules, categories]);
 
   const n = row?.n ?? 0;
 
@@ -794,6 +816,7 @@ export function PlaybookCard({
                   category={category}
                   rules={rules}
                   library={library}
+                  categories={categories}
                   scoreById={scoreById}
                 />
               ))}

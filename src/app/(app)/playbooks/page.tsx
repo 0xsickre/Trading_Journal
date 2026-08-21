@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/app/page-header";
 import type { RealizedTrade } from "@/lib/journal/analytics";
 import { accountTimezoneResolver } from "@/lib/journal/time";
 import { getUserPrefs } from "@/lib/journal/user-prefs";
+import { getOptionsMap } from "@/lib/journal/options";
 
 /**
  * Playbooks: define them and judge them in the same place.
@@ -32,7 +33,7 @@ export default async function PlaybooksPage() {
   // the mistake `/reports` already had to fix.
   const positionRules = await getPositionRules();
 
-  const [accounts, trades, playbooks, library, prefs] = await Promise.all([
+  const [accounts, trades, playbooks, library, prefs, optionsMap] = await Promise.all([
     getAccounts(),
     getTradesWithStats(),
     // Retired rules included: a rule taken off the checklist still owns the
@@ -40,6 +41,9 @@ export default async function PlaybooksPage() {
     getPlaybooks({ includeDeleted: true, positionRules }),
     getRuleLibrary({ includeDeleted: true }),
     getUserPrefs(),
+    // Playbook sections come from `rule_category`, an ordinary option list the
+    // trader edits in Settings — they used to be five values fixed in code.
+    getOptionsMap(),
   ]);
 
   const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
@@ -80,6 +84,7 @@ export default async function PlaybooksPage() {
         currency={currency}
         breakevenRange={breakevenRange}
         initialCollapsed={prefs.playbooksCollapsed}
+        categories={optionsMap.rule_category ?? []}
       />
     </div>
   );

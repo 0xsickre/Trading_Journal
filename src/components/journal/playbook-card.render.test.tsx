@@ -107,10 +107,23 @@ function renderCard(
       currency="USD"
       collapsed={collapseOverrides.collapsed ?? false}
       onToggleCollapsed={collapseOverrides.onToggleCollapsed ?? vi.fn()}
+      categories={CATEGORIES}
     />,
   );
   return b;
 }
+
+/**
+ * The sections the trader has, as the option list gives them.
+ *
+ * Two, not the old five: the point of making them configurable is that a book
+ * shows the headings its owner wrote, so the fixture exercises a shorter list
+ * than the seeded default.
+ */
+const CATEGORIES = [
+  { id: "oc1", value: "entry", label: "Entry", color: null, is_active: true, sort_order: 0 },
+  { id: "oc2", value: "exit", label: "Exit", color: null, is_active: true, sort_order: 1 },
+];
 
 /** The row a rule's editable text input lives in. */
 const rowOf = (text: string) => screen.getByDisplayValue(text).closest("tr")!;
@@ -219,16 +232,26 @@ describe("PlaybookCard — what it refuses to claim", () => {
 });
 
 describe("PlaybookCard — the table is also the way you build a playbook", () => {
-  it("offers an add-rule row for EVERY category, including the empty ones", () => {
-    // `rulesByCategory` drops empty categories; the card puts them back on
-    // purpose. An empty No-trade section is the prompt to write the rule that is
-    // missing, and it is the one most books never get around to.
+  it("offers an add-rule row for every section the TRADER has, and no others", () => {
+    // `rulesByCategory` drops empty sections; the card puts them back, because an
+    // empty heading is the prompt to write the rule that is missing.
+    //
+    // What changed is WHICH headings. This used to assert all five values fixed
+    // in code, which is precisely the complaint: a trader whose method is "get
+    // in, get out" was given Management and No-trade on every book, permanently
+    // empty. The sections now come from the trader's own `rule_category` list —
+    // this fixture has two — so an empty section is one they asked for.
     renderCard([rule({ id: "r1", text: "Waited for the sweep" })], []);
 
-    for (const label of ["Context", "Entry", "Management", "Exit", "No-trade"]) {
+    for (const label of ["Entry", "Exit"]) {
       expect(
         screen.getByRole("textbox", { name: `New ${label} rule` }),
       ).toBeInTheDocument();
+    }
+    for (const label of ["Context", "Management", "No-trade"]) {
+      expect(
+        screen.queryByRole("textbox", { name: `New ${label} rule` }),
+      ).not.toBeInTheDocument();
     }
   });
 
@@ -343,6 +366,7 @@ describe("PlaybookCard — collapsing hides the body, never the header", () => {
         currency="USD"
         collapsed
         onToggleCollapsed={vi.fn()}
+        categories={CATEGORIES}
       />,
     );
     // One header string, not a table — this is what a folded card is FOR.

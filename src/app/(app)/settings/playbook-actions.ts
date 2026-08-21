@@ -5,7 +5,6 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
 import {
-  RULE_CATEGORIES,
   SHOW_WHEN_VALUES,
   type RuleCategory,
   type ShowWhen,
@@ -318,8 +317,8 @@ export async function addPlaybookRule(input: {
   const showWhen = input.show_when ?? "always";
   if (!SHOW_WHEN_VALUES.includes(showWhen))
     return { ok: false, error: "Unknown value for \"when it shows\"." };
-  if (!RULE_CATEGORIES.includes(input.category))
-    return { ok: false, error: "Unknown rule category." };
+  const badCategory = await unknownCategory(input.category);
+  if (badCategory) return badCategory;
 
   const supabase = await createClient();
   const user = await getCurrentUser();
@@ -366,6 +365,39 @@ export async function addPlaybookRule(input: {
  * so every historical number would silently shift. The DB enforces this too —
  * this check exists to produce a sentence instead of a constraint violation.
  */
+/**
+ * Is this section one the trader actually has?
+ *
+ * The old `CHECK IN (...)` is gone — the permitted set is now per-user rows in
+ * `tj_option_items`, which a column constraint cannot see. Checked here rather
+ * than by a trigger because the value is a display grouping: no metric keys on
+ * it, so the worst a bad one does is draw a heading with an odd name. That
+ * deserves a readable refusal, not a Postgres error.
+ *
+ * An ARCHIVED section is accepted. Switching one off in Settings stops it being
+ * offered for new rules, and must not stop an existing rule from being edited or
+ * moved back.
+ */
+async function unknownCategory(category: string): Promise<Result | null> {
+  const clean = category.trim();
+  if (!clean) return { ok: false, error: "A rule needs a section." };
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("tj_option_items")
+    .select("value, tj_option_lists!inner(key)")
+    .eq("value", clean)
+    .eq("tj_option_lists.key", "rule_category")
+    .maybeSingle();
+
+  if (data) return null;
+  return {
+    ok: false,
+    error: `"${clean}" is not one of your playbook sections. Add it under Settings → Dropdown Lists → Playbook Sections first.`,
+  };
+}
+
+
 export async function updatePlaybookRule(
   id: string,
   patch: {
@@ -391,8 +423,8 @@ export async function updatePlaybookRule(
   // so moving "waited for the sweep" from entry to context changes nothing that
   // was already measured.
   if (patch.category != null) {
-    if (!RULE_CATEGORIES.includes(patch.category))
-      return { ok: false, error: "Unknown rule category." };
+    const bad = await unknownCategory(patch.category);
+    if (bad) return bad;
     next.category = patch.category;
   }
 

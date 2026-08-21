@@ -1067,6 +1067,7 @@ export function TradeForm({
                     answers={ruleAnswers}
                     onAnswerChange={setRuleAnswer}
                     netPl={metrics.netPl}
+                    categories={optionsMap.rule_category ?? []}
                   />
                 )}
 
