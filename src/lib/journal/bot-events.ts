@@ -43,6 +43,10 @@ const QUARANTINE_REASONS: Record<string, string> = {
   malformed_fill: "Fill nema upotrebljivu cenu ili vreme",
   unexpected_status: "Trejd nije bio ni planiran ni propušten — fill nije upisan",
   already_has_fills: "Trejd već ima ulazni fill — drugi nije upisan",
+  unknown_order: "Izmena ordera koji dnevnik nikad nije video — ništa nije napravljeno od nje",
+  not_pending:
+    "Order je već ispunjen ili otkazan — izmena nije primenjena, jer posle ulaska pomeranje stopa " +
+    "je vođenje trejda, a ne promena plana",
 };
 
 /** Notes on events that DID apply, where the outcome deserves a word. */

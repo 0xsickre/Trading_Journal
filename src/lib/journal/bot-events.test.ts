@@ -39,6 +39,9 @@ describe("reason labels", () => {
     expect(quarantineReasonLabel("unmapped_account")).toContain("nalog");
     expect(quarantineReasonLabel("already_has_fills")).toContain("fill");
     expect(quarantineReasonLabel("malformed_price")).toContain("cenu");
+    // The one whose label has to teach, not just name: refusing an edit after the
+    // fill looks like a bug until you know it protects R.
+    expect(quarantineReasonLabel("not_pending")).toContain("plana");
   });
 
   /**
@@ -57,6 +60,9 @@ describe("reason labels", () => {
       "malformed_fill",
       "unexpected_status",
       "already_has_fills",
+      // 20260821140000_bot_order_modified
+      "unknown_order",
+      "not_pending",
     ];
     for (const reason of fromSql) {
       expect(quarantineReasonLabel(reason), reason).not.toBe(reason);

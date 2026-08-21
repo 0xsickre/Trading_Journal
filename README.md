@@ -82,7 +82,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
 | `npm run dev` | Razvojni server |
 | `npm run build` | Produkcijski build — 14 ruta |
 | `npm run lint` | ESLint. **Očekuje se tačno jedno upozorenje** (vidi ispod) |
-| `npm test` | Vitest — 2123 testa u 132 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
+| `npm test` | Vitest — 2124 testa u 132 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
 | `npm test -- --coverage` | Izveštaj o pokrivenosti |
 | `npx knip` | Mrtvi fajlovi, eksporti i zavisnosti |
 
@@ -416,12 +416,27 @@ Svaka odbijena ćelija je imenovana na svom redu u pregledu (`nečitljivo: qty, 
 
 Jedini automatski upis u dnevnik. cBot u cTrader-u
 ([`TradingJournalBridge`](https://github.com/0xsickre/trading-charting/tree/master/ctrader/TradingJournalBridge))
-javlja dve činjenice, a dnevnik od njih pravi trejd:
+javlja tri činjenice, a dnevnik od njih pravi trejd:
 
 | Događaj kod brokera | Šta dnevnik upiše |
 |---|---|
 | Postavljen pending order | Nov trejd, `status = planned` |
+| Order izmenjen dok još čeka | Isti trejd → nove cene i veličina |
 | Order se ispunio | Isti trejd → `status = open` + ulazni fill |
+
+**Izmena važi samo dok order čeka, i to je cela poenta.** Pre ulaska, pomeranje stopa **menja plan** —
+trejd nije počeo, rizik koji tek preuzimaš je sad drugi, i `stop_price` mora da ga prati ili planirani
+R:R opisuje order koji nisi postavio. Posle ulaska, pomeranje stopa je **vođenje trejda**: povlačenje
+na breakeven ne znači da nisi rizikovao ništa. Kad bi to ušlo u `stop_price`, R bi se rušio ka nuli
+baš na trejdovima koji su najbolje vođeni, i svaka R metrika u knjizi bi tiho nagrađivala pomeranje
+stopa. Zato `order_modified` odbija sve što više nije `planned`.
+
+**Prazno nije brisanje.** Bot pobeđuje na četiri polja — ulazna cena, stop, target, veličina — ali
+`stop_loss` koji cTrader javlja kao prazan znači „bot nema šta da kaže", ne „stopa nema". Zato se stop
+i target spajaju preko `COALESCE`, pa izmena ne može da obriše stop koji si ti ukucao rukom. Cena
+koju to nosi, priznata umesto sakrivena: **brisanje** zaštite u platformi se ne prenosi i skida se
+ručno. Zastareo stop je vidljiv na trejdu i jedan klik od ispravke; tiho obrisan primetiš tek kad je
+neka R metrika već mesec dana pogrešna.
 
 **Šta bot NE piše.** Plan, tezu, psihologiju, ocenu setupa, playbook, `risk_pct` i `planned_rr`
 ostaju prazni. To je granica koja čuva pravilo iz § Svesno izostavljeno: automatizuje se
@@ -456,6 +471,13 @@ veličine, prikazan kao činjenica.
 **Bot ne sme na cTrader Cloud.** Cloud instance ne šalju HTTP i ne prijavljuju grešku kad ne pošalju,
 pa bi most izgledao zdrav a ne bi isporučio ništa. Zato bot šalje heartbeat, a panel prikazuje kad se
 poslednji put javio: ćutanje mora da bude vidljivo sa ove strane.
+
+**Još nije pokriveno, i meri se pre nego što se gradi: više TP nivoa.** cTrader-ova napredna zaštita
+dozvoljava do pet take-profit nivoa na jednom orderu, svaki zatvara deo pozicije. `PendingOrder.TakeProfit`
+u Algo API-ju je **jedna** vrednost i nijedan niz nivoa nije dokumentovan, pa se odavde ne može znati
+koji od pet je vidljiv — prvi, poslednji ili nijedan. Bot zato loguje šta API vrati za takav order
+(`Order placed | … | TP=…` u Žurnal tabu), i oblik se gradi tek kad taj log postoji. Odredište nije
+sporno: `tj_positions.scale_out_levels` (`[{"pct","price"}]`) već čeka, samo izvor nije poznat.
 
 ---
 
@@ -530,9 +552,9 @@ P&L i drawdown izračunate nad delimičnim skupom, bez ijednog vidljivog simptom
 
 ## Testovi
 
-2074 testa u 130 fajlova, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
-`*.test.ts`, 1694 testova u 87 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
-380 testova u 43 fajla). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
+2124 testa u 132 fajla, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
+`*.test.ts`, 1725 testova u 88 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
+399 testova u 44 fajla). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
 plaćaju cenu DOM-a koji ne dodiruju.
 
 `vitest.config.ts` nosi **podove** pokrivenosti, ne ciljeve — stoje na onome što paket trenutno
