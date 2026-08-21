@@ -416,19 +416,29 @@ Svaka odbijena ćelija je imenovana na svom redu u pregledu (`nečitljivo: qty, 
 
 Jedini automatski upis u dnevnik. cBot u cTrader-u
 ([`TradingJournalBridge`](https://github.com/0xsickre/trading-charting/tree/master/ctrader/TradingJournalBridge))
-javlja tri činjenice, a dnevnik od njih pravi trejd:
+javlja četiri činjenice, a dnevnik od njih pravi trejd:
 
 | Događaj kod brokera | Šta dnevnik upiše |
 |---|---|
 | Postavljen pending order | Nov trejd, `status = planned` |
 | Order izmenjen dok još čeka | Isti trejd → nove cene i veličina |
 | Order se ispunio | Isti trejd → `status = open` + ulazni fill |
+| Take profit pomeren posle ulaska | Isti trejd → nov `target_price`. **Stop se ne dira** |
 
 **Planiran trejd pokazuje svoj plan.** Svaka brojčana kolona u `/journal` čita iz `tj_position_stats`,
 a taj view se gradi iz fill-ova — pa je trejd koji još čeka bio red samih crtica, i stop i target koje
 je most upravo doneo nisu se videli nigde u tabeli. Zato postoje kolone **Plan / Stop / Target**, i
 zato se cene formatiraju po `tick_size_at_trade` a ne na dve decimale: na dve, EURUSD stop 1.16101 i
 target 1.16453 postaju isto „1.16" — jedna pogrešna činjenica tamo gde su tri različite.
+
+**Posle ulaska stop se zamrzava, take profit ne.** To su dva različita čina koja u API-ju izgledaju
+isto. Povlačenje stopa na breakeven ne znači da nisi rizikovao ništa — znači da si prestao da rizikuješ
+ono što je već uloženo. Pošto je `stop_price` imenilac R-a, kad bi to prošlo, R bi delio nečim blizu nule
+baš na trejdovima koje si najbolje vodio, i expectancy, target attainment, MAE/MFE u R i skor bi tiho
+**nagrađivali pomeranje stopa**. Stop u trenutku fill-a je rizik koji je stvarno preuzet i to je broj koji
+dnevnik čuva. Take profit nije ista stvar — on kaže gde trejd sad treba da se završi, ništa u R-u ne
+zavisi od njega, pa se prati. Bot stop ne stavlja ni u otisak izmene, tako da BE povlačenje ne pošalje
+nijedan događaj umesto da pošalje jedan koji dnevnik mora da odbaci.
 
 **Izmena važi samo dok order čeka, i to je cela poenta.** Pre ulaska, pomeranje stopa **menja plan** —
 trejd nije počeo, rizik koji tek preuzimaš je sad drugi, i `stop_price` mora da ga prati ili planirani

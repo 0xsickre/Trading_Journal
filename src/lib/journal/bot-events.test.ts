@@ -63,6 +63,9 @@ describe("reason labels", () => {
       // 20260821140000_bot_order_modified
       "unknown_order",
       "not_pending",
+      // 20260821180000_bot_position_modified
+      "unknown_position",
+      "not_open",
     ];
     for (const reason of fromSql) {
       expect(quarantineReasonLabel(reason), reason).not.toBe(reason);

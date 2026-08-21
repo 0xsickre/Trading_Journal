@@ -47,6 +47,8 @@ const QUARANTINE_REASONS: Record<string, string> = {
   not_pending:
     "Order je već ispunjen ili otkazan — izmena nije primenjena, jer posle ulaska pomeranje stopa " +
     "je vođenje trejda, a ne promena plana",
+  unknown_position: "Izmena pozicije koju dnevnik nikad nije video — ništa nije napravljeno od nje",
+  not_open: "Trejd nije otvoren — izmena take profita nije primenjena",
 };
 
 /** Notes on events that DID apply, where the outcome deserves a word. */
