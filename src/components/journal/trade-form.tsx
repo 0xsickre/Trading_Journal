@@ -57,6 +57,8 @@ import type {
   FieldDef,
   FieldDefPhase,
 } from "@/lib/journal/field-def-types";
+import { Grip, useDragOrder } from "@/components/journal/drag-order";
+import { reorderCategoriesByKey } from "@/app/(app)/settings/actions";
 import { ruleAppliesTo, type Playbook } from "@/lib/journal/playbook-types";
 import type { Account, Instrument, OptionsMap, TradeRow } from "@/lib/journal/types";
 import {
@@ -1438,6 +1440,51 @@ function FormGroupSection({
             )
           : group.fields;
 
+  /**
+   * Reorder the categories from the form itself.
+   *
+   * Settings can do this too, and both write the same two ordinals — but this
+   * is the screen where the order is felt, because this is where the trader
+   * fills them in. Having to leave, drag in a table, and come back to see the
+   * effect is the version that does not get used.
+   *
+   * Keyed by `listKey`: a rendered field knows which category it draws from,
+   * and that is what the ordinal belongs to. A field with no `listKey`, or one
+   * the form declares itself rather than reading from `tj_field_defs`, has no
+   * ordinal to move and is left where it is.
+   */
+  const dragKeyOf = (field: FieldConfig) =>
+    group.id === TAGS_GROUP_ID && field.custom ? (field.listKey ?? null) : null;
+
+  const dragKeys = fieldsToRender
+    .map(dragKeyOf)
+    .filter((k): k is string => k != null);
+
+  const {
+    order: keyOrder,
+    target: dragTarget,
+    handle: dragHandle,
+  } = useDragOrder(dragKeys, reorderCategoriesByKey);
+
+  /**
+   * The fields in the order the drag preview says, with the undraggable ones
+   * left exactly where the config put them.
+   *
+   * Rebuilt by walking the original list and pulling the next dragged key off a
+   * queue whenever a draggable slot comes up — so `technical_tags` keeps its
+   * position at the top while the four below it slide past one another.
+   */
+  const queue = [...keyOrder];
+  const byKey = new Map(
+    fieldsToRender.flatMap((f) => {
+      const k = dragKeyOf(f);
+      return k ? ([[k, f]] as [string, FieldConfig][]) : [];
+    }),
+  );
+  const ordered = fieldsToRender.map((f) =>
+    dragKeyOf(f) ? (byKey.get(queue.shift() ?? "") ?? f) : f,
+  );
+
   // Gated as a whole, not field by field — see `thesisGroupVisible`. Rendering
   // nothing rather than an empty heading: a title over no inputs reads like the
   // form failed to load.
@@ -1466,18 +1513,41 @@ function FormGroupSection({
             </Select>
           </div>
         )}
-        {fieldsToRender.map((field) => (
-          <FieldRenderer
-            key={field.name}
-            field={field}
-            value={fields[field.name]}
-            onChange={(v) => setField(field.name, v)}
-            optionsMap={optionsMap}
-            instruments={instruments}
-            computedDisplay={computedDisplay?.[field.name]}
-            fieldHint={fieldHints?.[field.name]}
-          />
-        ))}
+        {ordered.map((field) => {
+          // Only the trader's own categories move. `technical_tags` is declared
+          // in the form config rather than in `tj_field_defs`, so it has no
+          // ordinal of its own to write — it keeps its place, and shows no grip
+          // rather than a grip that would do nothing.
+          const drag = dragKeyOf(field);
+          return (
+            <div
+              key={field.name}
+              {...(drag ? dragTarget(drag) : {})}
+              data-drag-row
+              className={cn(
+                "relative",
+                field.colSpan === 2 && "sm:col-span-2",
+                drag && "data-[dragging]:opacity-40",
+              )}
+            >
+              {drag && (
+                <Grip
+                  {...dragHandle(drag)}
+                  className="absolute -left-5 top-1 hidden sm:inline-flex"
+                />
+              )}
+              <FieldRenderer
+                field={field}
+                value={fields[field.name]}
+                onChange={(v) => setField(field.name, v)}
+                optionsMap={optionsMap}
+                instruments={instruments}
+                computedDisplay={computedDisplay?.[field.name]}
+                fieldHint={fieldHints?.[field.name]}
+              />
+            </div>
+          );
+        })}
       </div>
       {/* Behind the SAME gate as `scale_out_plan` — reuses
           `riskPlanFieldVisible` instead of inventing a name, so
