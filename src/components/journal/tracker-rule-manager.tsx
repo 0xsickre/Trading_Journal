@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
-  AUTO_RULES_NEEDING_AMOUNT,
+  AUTO_RULES_NEEDING_PCT,
   ISO_WEEKDAYS,
   STAGE_LABELS,
   TRACKER_STAGES,
@@ -28,7 +28,7 @@ import {
 } from "@/lib/journal/tracker-types";
 import {
   addTrackerRule,
-  clearTrackerRuleAmount,
+  clearTrackerRuleLimit,
   deleteTrackerRule,
   moveTrackerRule,
   restoreTrackerRule,
@@ -86,22 +86,22 @@ function DayToggles({
   );
 }
 
-function RuleRow({ rule, currency }: { rule: TrackerRule; currency: string }) {
+function RuleRow({ rule }: { rule: TrackerRule }) {
   const { pending, run } = useAction();
   const [text, setText] = useState(rule.text);
-  const [amount, setAmount] = useState(
-    rule.config.amount != null ? String(rule.config.amount) : "",
+  const [pct, setPct] = useState(
+    rule.config.pct != null ? String(rule.config.pct) : "",
   );
 
   const retired = rule.deleted_at != null;
   const isAuto = rule.auto_key != null;
-  const needsAmount = rule.auto_key != null && AUTO_RULES_NEEDING_AMOUNT.has(rule.auto_key);
-  const unconfigured = needsAmount && rule.config.amount == null;
+  const needsPct = rule.auto_key != null && AUTO_RULES_NEEDING_PCT.has(rule.auto_key);
+  const unconfigured = needsPct && rule.config.pct == null;
 
-  function saveAmount() {
-    const raw = amount.trim();
+  function savePct() {
+    const raw = pct.trim();
     if (raw === "") {
-      if (rule.config.amount != null) run(() => clearTrackerRuleAmount(rule.id));
+      if (rule.config.pct != null) run(() => clearTrackerRuleLimit(rule.id));
       return;
     }
     const n = Number(raw);
@@ -109,8 +109,14 @@ function RuleRow({ rule, currency }: { rule: TrackerRule; currency: string }) {
       toast.error("The limit must be a positive number.");
       return;
     }
-    if (n === rule.config.amount) return;
-    run(() => updateTrackerRule(rule.id, { config: { amount: n } }));
+    // Mirrors the server schema. Said here too so a typo is caught before a
+    // round trip, and said in the same words so the two never disagree.
+    if (n > 100) {
+      toast.error("A limit above 100 % of equity is not a limit.");
+      return;
+    }
+    if (n === rule.config.pct) return;
+    run(() => updateTrackerRule(rule.id, { config: { pct: n } }));
   }
 
   return (
@@ -138,21 +144,24 @@ function RuleRow({ rule, currency }: { rule: TrackerRule; currency: string }) {
         </Badge>
       )}
 
-      {needsAmount && (
+      {needsPct && (
         <div className="flex shrink-0 items-center gap-1">
           <Input
             inputMode="decimal"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            onBlur={saveAmount}
+            value={pct}
+            onChange={(e) => setPct(e.target.value)}
+            onBlur={savePct}
             onKeyDown={(e) => {
               if (e.key === "Enter") e.currentTarget.blur();
             }}
             placeholder="limit"
-            className={cn("h-8 w-24", unconfigured && "border-amber-500/60")}
+            className={cn("h-8 w-20", unconfigured && "border-amber-500/60")}
             disabled={pending || retired}
           />
-          <span className="text-xs text-muted-foreground">{currency}</span>
+          {/* "% of equity", not just "%": the number is meaningless without its
+              basis, and the basis is the balance the DAY OPENED with — see
+              `equity-ladder.ts`. */}
+          <span className="text-xs text-muted-foreground">% of equity</span>
         </div>
       )}
 
@@ -274,17 +283,15 @@ function AddRuleForm({ stage }: { stage: TrackerStage }) {
  *   - `auto_key` is not editable at all. It picks which evaluator runs, so
  *     changing it would re-interpret every check-in already recorded.
  */
-export function TrackerRuleManager({
-  rules,
-  currency = "USD",
-}: {
-  rules: TrackerRule[];
-  currency?: string;
-}) {
+// No `currency` any more: the limits are percentages of equity, so this screen
+// no longer states an amount in money. The figure a percentage works out to on
+// a given day is shown where it means something — on the daily checklist, from
+// the evaluator that knows that day's opening balance.
+export function TrackerRuleManager({ rules }: { rules: TrackerRule[] }) {
   const live = rules.filter((r) => r.deleted_at == null);
   const retired = rules.filter((r) => r.deleted_at != null);
   const unconfigured = live.filter(
-    (r) => r.auto_key != null && AUTO_RULES_NEEDING_AMOUNT.has(r.auto_key) && r.config.amount == null,
+    (r) => r.auto_key != null && AUTO_RULES_NEEDING_PCT.has(r.auto_key) && r.config.pct == null,
   ).length;
 
   return (
@@ -326,7 +333,7 @@ export function TrackerRuleManager({
                 </p>
               )}
               {inStage.map((rule) => (
-                <RuleRow key={rule.id} rule={rule} currency={currency} />
+                <RuleRow key={rule.id} rule={rule} />
               ))}
               <AddRuleForm stage={stage} />
             </CardContent>
@@ -346,7 +353,7 @@ export function TrackerRuleManager({
           </CardHeader>
           <CardContent className="space-y-2">
             {retired.map((rule) => (
-              <RuleRow key={rule.id} rule={rule} currency={currency} />
+              <RuleRow key={rule.id} rule={rule} />
             ))}
           </CardContent>
         </Card>

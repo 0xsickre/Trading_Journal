@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
 import { getCurrentUser } from "@/lib/supabase/user";
 import {
-  AUTO_RULES_NEEDING_AMOUNT,
+  AUTO_RULES_NEEDING_PCT,
   TRACKER_STAGES,
   type AutoRuleKey,
   type TrackerStage,
@@ -28,14 +28,19 @@ type Result = { ok: true } | { ok: false; error: string };
  * ignored. A manual rule has nothing to configure at all, which the DB also
  * enforces.
  */
-const amountConfig = z
-  .object({ amount: z.number().finite().positive().optional() })
+/**
+ * Capped at 100: a limit of "lose more than all of it" is not a limit, and a
+ * stray keypress turning 2 into 200 would silently switch the rule off rather
+ * than tighten it.
+ */
+const pctConfig = z
+  .object({ pct: z.number().finite().positive().max(100).optional() })
   .strict();
 const emptyConfig = z.object({}).strict();
 
 function configSchema(autoKey: AutoRuleKey | null) {
   if (autoKey == null) return emptyConfig;
-  return AUTO_RULES_NEEDING_AMOUNT.has(autoKey) ? amountConfig : emptyConfig;
+  return AUTO_RULES_NEEDING_PCT.has(autoKey) ? pctConfig : emptyConfig;
 }
 
 /**
@@ -175,7 +180,7 @@ export async function updateTrackerRule(
 }
 
 /** Clear a money limit, which puts the rule back to "not applicable". */
-export async function clearTrackerRuleAmount(id: string): Promise<Result> {
+export async function clearTrackerRuleLimit(id: string): Promise<Result> {
   const supabase = await createClient();
   const { error } = await supabase
     .from("tj_tracker_rules")

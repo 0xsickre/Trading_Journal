@@ -6,6 +6,10 @@ import { RESERVED_KEYS } from "@/lib/journal/reserved-keys";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { EMPTY_USAGE, usageIsEmpty } from "@/lib/journal/account-usage";
 import { getAccountUsage } from "@/lib/journal/account-usage-queries";
+import {
+  getOptionFieldTargets,
+  getOptionUsage,
+} from "@/lib/journal/option-usage-queries";
 import { RESET_PHRASE } from "@/lib/journal/reset-phrase";
 import { isValidTimeZone, DEFAULT_TZ } from "@/lib/journal/time";
 import {
@@ -77,14 +81,104 @@ export async function addOption(
   };
 }
 
+/**
+ * Rename an option, and carry the trades that hold it along.
+ *
+ * A trade stores the option's VALUE as text, not a reference to its row. So
+ * this used to update the option and stop, leaving every trade tagged with the
+ * old string pointing at something no list supplied any more — the report
+ * dimension dropped them out of its bucket order and the history split in two,
+ * silently. A rename means "the same thing, under a new name", so the trades
+ * come with it.
+ *
+ * The rewrite runs FIRST. If it fails the option keeps its old name and nothing
+ * has drifted; the other order would leave the list renamed and the trades
+ * behind, which is the exact state this function exists to prevent.
+ */
 export async function renameOption(id: string, label: string) {
   const supabase = await createClient();
   const trimmed = label.trim();
   if (!trimmed) return { ok: false, error: "Empty label." };
+
+  // The list key, so the cascade knows which fields could be carrying it, and
+  // the old value, which is what the trades actually hold.
+  const { data: current, error: readError } = await supabase
+    .from("tj_option_items")
+    .select("value, tj_option_lists!inner(key)")
+    .eq("id", id)
+    .maybeSingle();
+  if (readError) return { ok: false, error: readError.message };
+  if (!current) return { ok: false, error: "Option not found." };
+
+  const oldValue = current.value;
+  const listKey = (current.tj_option_lists as unknown as { key: string }).key;
+
+  if (oldValue !== trimmed) {
+    const targets = await getOptionFieldTargets(listKey);
+    if (targets.length > 0) {
+      const { error: cascadeError } = await supabase.rpc(
+        "tj_rename_option_value",
+        { p_targets: targets, p_old: oldValue, p_new: trimmed },
+      );
+      if (cascadeError) return { ok: false, error: cascadeError.message };
+    }
+  }
+
   const { error } = await supabase
     .from("tj_option_items")
     .update({ label: trimmed, value: trimmed })
     .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidateAll();
+  return { ok: true };
+}
+
+/**
+ * How many trades hold this option, for the dialog that is about to change it.
+ *
+ * Read on demand rather than with the page. `AccountSettings` counts its usage
+ * eagerly and argues for it — a dialog that fetches on open shows an empty list
+ * first and the truth a beat later — but that is three accounts. This screen
+ * carries a hundred-odd options, and a hundred head counts on every Settings
+ * load to serve the one popover that gets opened is the wrong trade. The
+ * controls that depend on the number stay disabled until it lands, so the
+ * failure mode the eager read exists to prevent — acting on a number that is
+ * not there yet — cannot happen here either.
+ */
+export async function countOptionUsage(
+  id: string,
+): Promise<{ ok: true; trades: number } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tj_option_items")
+    .select("value, tj_option_lists!inner(key)")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "Option not found." };
+
+  const listKey = (data.tj_option_lists as unknown as { key: string }).key;
+  const usage = await getOptionUsage(listKey, [data.value]);
+  return { ok: true, trades: usage[data.value]?.trades ?? 0 };
+}
+
+/**
+ * Delete an option outright.
+ *
+ * The trades that carry it KEEP their text — the value lives on the trade as a
+ * string, so removing the row it came from takes it out of the dropdown, the
+ * colour coding and the dimension's bucket order, and touches no history. That
+ * is what the dialog promises, and it is why this can be offered at all rather
+ * than only archiving.
+ *
+ * Archiving still exists beside it and still has a job: `exit_reason` should
+ * stop being offered long before the trades that closed for it stop needing a
+ * label. Delete is for the option that was a mistake; archive is for the one
+ * that had its day.
+ */
+export async function deleteOption(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("tj_option_items").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidateAll();
   return { ok: true };

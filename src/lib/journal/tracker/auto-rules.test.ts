@@ -6,7 +6,7 @@ import {
   type AutoConfigs,
 } from "./auto-rules";
 import type { TradeRow } from "../types";
-import { AUTO_RULE_KEYS, AUTO_RULES_NEEDING_AMOUNT } from "../tracker-types";
+import { AUTO_RULE_KEYS, AUTO_RULES_NEEDING_PCT } from "../tracker-types";
 
 type Spec = {
   id: string;
@@ -56,13 +56,24 @@ function mkRow(s: Spec): TradeRow {
 const index = (specs: Spec[], tz = "UTC") =>
   buildTradeDayIndex(specs.map(mkRow), () => tz);
 
+/**
+ * A flat book, so the percentages resolve to round money.
+ *
+ * The limits below are stated as shares of it and work out to exactly the -400
+ * and -200 these tests were written against, which is why every assertion in
+ * this file still reads the same after the move from money to percentages.
+ */
+const EQUITY = 10_000;
+const flatEquity = () => EQUITY;
+
 const LIMITS: AutoConfigs = {
-  max_loss_per_day: { amount: 400 },
-  max_loss_per_trade: { amount: 200 },
+  max_loss_per_day: { pct: 4 },
+  max_loss_per_trade: { pct: 2 },
+  max_loss_per_week: { pct: 6 },
 };
 
 const evalDay = (day: string, specs: Spec[], configs: AutoConfigs = LIMITS, tz = "UTC") =>
-  evaluateAutoRulesForDay(day, index(specs, tz), configs);
+  evaluateAutoRulesForDay(day, index(specs, tz), configs, flatEquity);
 
 describe("day attribution", () => {
   const swing: Spec = {
@@ -240,10 +251,10 @@ describe("configuration", () => {
 
   it("reads limits off the rule rows", () => {
     const cfg = configsFromRules([
-      { auto_key: "max_loss_per_day", config: { amount: 400 } },
+      { auto_key: "max_loss_per_day", config: { pct: 4 } },
       { auto_key: null, config: {} },
     ]);
-    expect(cfg.max_loss_per_day).toEqual({ amount: 400 });
+    expect(cfg.max_loss_per_day).toEqual({ pct: 4 });
     expect(cfg.max_loss_per_trade).toBeUndefined();
   });
 });
@@ -274,7 +285,7 @@ describe("boundaries", () => {
   });
 
   it("tolerates a limit stored with the wrong sign", () => {
-    const d = evalDay(day, [at("a", -500)], { max_loss_per_day: { amount: -400 } });
+    const d = evalDay(day, [at("a", -500)], { max_loss_per_day: { pct: -4 } });
     expect(d.max_loss_per_day.verdict).toBe("fail");
   });
 
@@ -330,17 +341,82 @@ describe("the closed set of auto rules", () => {
   });
 
   it("asks for a limit on the money rules and only on those", () => {
-    expect([...AUTO_RULES_NEEDING_AMOUNT].sort()).toEqual([
+    expect([...AUTO_RULES_NEEDING_PCT].sort()).toEqual([
       "max_loss_per_day",
       "max_loss_per_trade",
+      "max_loss_per_week",
     ]);
     // With no config and no trades, a money rule cannot answer for want of a
-    // limit; the other two cannot answer for want of trades. Two different
+    // limit; the flag rules cannot answer for want of trades. Two different
     // reasons, and the checklist shows each of them to the user.
     for (const key of AUTO_RULE_KEYS) {
       expect(verdicts()[key].reason, key).toBe(
-        AUTO_RULES_NEEDING_AMOUNT.has(key) ? "unconfigured" : "no_trades",
+        AUTO_RULES_NEEDING_PCT.has(key) ? "unconfigured" : "no_trades",
       );
     }
+  });
+});
+
+describe("max loss per week", () => {
+  const at = (id: string, day: string, net: number) => ({
+    id,
+    opened: `${day}T09:00:00Z`,
+    closed: `${day}T15:00:00Z`,
+    net,
+  });
+
+  // 6 % of 10 000 = -600.
+  const MON = "2026-03-02";
+  const TUE = "2026-03-03";
+  const WED = "2026-03-04";
+  const SUN = "2026-03-08";
+  const NEXT_MON = "2026-03-09";
+
+  it("sums the week SO FAR, so a mid-week day can already be over budget", () => {
+    // The reason it is scored daily rather than on Sunday: Wednesday is the day
+    // that can still tell you the week is spent.
+    const specs = [at("a", MON, -300), at("b", TUE, -400)];
+    expect(evalDay(TUE, specs).max_loss_per_week.verdict).toBe("fail");
+    expect(evalDay(TUE, specs).max_loss_per_week.observed).toBe(-700);
+  });
+
+  it("passes while the running total is still inside the limit", () => {
+    const specs = [at("a", MON, -300), at("b", TUE, -200)];
+    expect(evalDay(TUE, specs).max_loss_per_week.verdict).toBe("pass");
+  });
+
+  it("keeps failing on the days after the breach — the budget stayed blown", () => {
+    const specs = [at("a", MON, -700), at("b", WED, 100)];
+    expect(evalDay(WED, specs).max_loss_per_week.verdict).toBe("fail");
+  });
+
+  it("does not reach back into the previous week", () => {
+    // Monday starts a new budget. Carrying last week's loss over would make the
+    // rule a rolling seven days, which is not what a weekly limit means.
+    const specs = [at("a", SUN, -900), at("b", NEXT_MON, -100)];
+    expect(evalDay(NEXT_MON, specs).max_loss_per_week.verdict).toBe("pass");
+    expect(evalDay(SUN, specs).max_loss_per_week.verdict).toBe("fail");
+  });
+
+  it("is not scored when the week has no closed trade yet", () => {
+    expect(evalDay(MON, []).max_loss_per_week.reason).toBe("no_trades");
+  });
+
+  it("is not scored when the equity basis is unknown", () => {
+    // A configured limit with no balance to take a percentage of is a different
+    // state from an unset limit, and says so.
+    const d = evaluateAutoRulesForDay(
+      TUE,
+      index([at("a", MON, -900)]),
+      LIMITS,
+      () => null,
+    );
+    expect(d.max_loss_per_week.reason).toBe("no_equity");
+    expect(d.max_loss_per_day.reason).toBe("no_equity");
+  });
+
+  it("reports the money the percentage worked out to", () => {
+    const d = evalDay(TUE, [at("a", MON, -700)]);
+    expect(d.max_loss_per_week.limit).toBe(-600);
   });
 });

@@ -22,10 +22,16 @@ type RuleRow = {
 };
 
 /** jsonb comes back as `unknown`; only a numeric `amount` is meaningful. */
-function parseConfig(raw: unknown): { amount?: number } {
+/**
+ * `pct` only. A row still carrying the old money `amount` reads as
+ * unconfigured, which is what the migration to percentages leaves behind on
+ * purpose: a limit whose unit changed under it must be re-stated by the trader,
+ * not reinterpreted by the reader.
+ */
+function parseConfig(raw: unknown): { pct?: number } {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-  const amount = (raw as Record<string, unknown>).amount;
-  return typeof amount === "number" && Number.isFinite(amount) ? { amount } : {};
+  const pct = (raw as Record<string, unknown>).pct;
+  return typeof pct === "number" && Number.isFinite(pct) ? { pct } : {};
 }
 
 function toRule(r: RuleRow): TrackerRule {

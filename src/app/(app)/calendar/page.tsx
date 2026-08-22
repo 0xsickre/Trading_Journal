@@ -10,6 +10,8 @@ import {
   resolveAutoResults,
   rulesLiveOn,
 } from "@/lib/journal/tracker/compliance";
+import { bookEquityLadder } from "@/lib/journal/tracker/equity-ladder";
+import { getCashEvents } from "@/lib/journal/cash-events";
 import {
   buildTradeDayIndex,
   configsFromRules,
@@ -46,10 +48,11 @@ export default async function CalendarPage({
   // shown, so a truncated or mistyped link opens the familiar view.
   const view = viewParam === "list" ? "list" : "grid";
 
-  const [accounts, trades, loggedDates] = await Promise.all([
+  const [accounts, trades, loggedDates, cashEvents] = await Promise.all([
     getAccounts(),
     getTradesWithStats(),
     getDailyReportDates(),
+    getCashEvents(),
   ]);
 
   const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
@@ -123,6 +126,7 @@ export default async function CalendarPage({
     const checkinsByDay = await getCheckins(from, to);
 
     const index = buildTradeDayIndex(trades, tzOfRow);
+    const equityOf = bookEquityLadder(index, accounts, cashEvents, tzFor);
     const series = computeComplianceSeries(
       days,
       rules,
@@ -131,7 +135,7 @@ export default async function CalendarPage({
         const live = rulesLiveOn(rules, d);
         return resolveAutoResults(
           live,
-          evaluateAutoRulesForDay(d, index, configsFromRules(live)),
+          evaluateAutoRulesForDay(d, index, configsFromRules(live), equityOf),
           checkinsByDay.get(d) ?? new Map(),
         );
       },

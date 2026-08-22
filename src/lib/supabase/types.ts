@@ -1562,6 +1562,10 @@ export type Database = {
         Args: { p_auto?: Json; p_date: string }
         Returns: undefined
       }
+      tj_rename_option_value: {
+        Args: { p_new: string; p_old: string; p_targets: Json }
+        Returns: number
+      }
       tj_replace_executions: {
         Args: { p_executions?: Json; p_position_id: string }
         Returns: number

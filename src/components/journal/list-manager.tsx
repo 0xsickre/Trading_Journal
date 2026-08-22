@@ -8,8 +8,10 @@ import {
   Archive,
   ChevronDown,
   ChevronUp,
+  Loader2,
   Pencil,
   Plus,
+  Trash2,
 } from "lucide-react";
 import {
   Popover,
@@ -29,11 +31,26 @@ import { cn } from "@/lib/utils";
 import type { OptionItem, OptionList } from "@/lib/journal/types";
 import {
   addOption,
+  countOptionUsage,
+  deleteOption,
   renameOption,
   setOptionColor,
   toggleOptionActive,
   reorderOptions,
 } from "@/app/(app)/settings/actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  optionUsageIsUnknown,
+  type OptionUsage,
+} from "@/lib/journal/option-usage";
+import { editableLists } from "@/lib/journal/settings-lists";
 
 const PALETTE = [
   "#22c55e",
@@ -46,6 +63,43 @@ const PALETTE = [
   "#ec4899",
   "#64748b",
 ];
+
+/**
+ * What an option is holding, counted when the popover opens.
+ *
+ * `null` means "not asked yet" and is what keeps the destructive controls
+ * disabled: a delete button that is live before the count arrives is a delete
+ * button that can be pressed on a number the user never saw. The three states
+ * are therefore distinct and all three are rendered — unasked, counting, known.
+ */
+type UsageState = { usage: OptionUsage } | "loading" | null;
+
+function UsageLine({ state }: { state: UsageState }) {
+  if (state === null) return null;
+  if (state === "loading") {
+    return (
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Loader2 className="size-3 animate-spin" />
+        Counting trades…
+      </p>
+    );
+  }
+  if (optionUsageIsUnknown(state.usage)) {
+    return (
+      <p className="text-xs text-amber-600 dark:text-amber-500">
+        Could not count the trades using this.
+      </p>
+    );
+  }
+  const n = state.usage.trades;
+  return (
+    <p className="text-xs text-muted-foreground">
+      {n === 0
+        ? "No trade uses this."
+        : `Used by ${n} ${n === 1 ? "trade" : "trades"}.`}
+    </p>
+  );
+}
 
 function ItemRow({
   item,
@@ -62,6 +116,8 @@ function ItemRow({
   const [pending, start] = useTransition();
   const [name, setName] = useState(item.label);
   const [open, setOpen] = useState(false);
+  const [usage, setUsage] = useState<UsageState>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     start(async () => {
@@ -71,6 +127,23 @@ function ItemRow({
     });
   }
 
+  // Counted on open, not with the page: this screen carries a hundred-odd
+  // options and only the opened one needs a number. Re-counted on every open so
+  // a popover reopened after an edit does not quote a stale figure.
+  function onOpenChange(next: boolean) {
+    setOpen(next);
+    if (!next) return;
+    setUsage("loading");
+    start(async () => {
+      const res = await countOptionUsage(item.id);
+      setUsage({ usage: { trades: res.ok ? res.trades : -1 } });
+    });
+  }
+
+  const known = usage !== null && usage !== "loading" ? usage.usage : null;
+  const inUse = known != null && known.trades > 0;
+  const countReady = known != null;
+
   return (
     <div
       className={cn(
@@ -78,7 +151,7 @@ function ItemRow({
         !item.is_active && "opacity-60",
       )}
     >
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
           <button
             type="button"
@@ -87,7 +160,9 @@ function ItemRow({
             title="Edit option"
           />
         </PopoverTrigger>
-        <PopoverContent className="w-64 space-y-3" align="start">
+        <PopoverContent className="w-72 space-y-3" align="start">
+          <UsageLine state={usage} />
+
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">
               Rename
@@ -107,7 +182,20 @@ function ItemRow({
                 Save
               </Button>
             </div>
+            {/* Said before the rename, not after: the trades come along, and a
+                user who expected the old tag to stay put deserves to know that
+                while they can still change their mind. */}
+            {inUse && (
+              <p className="text-xs text-muted-foreground">
+                Renaming also rewrites this on{" "}
+                <strong>
+                  {known.trades} {known.trades === 1 ? "trade" : "trades"}
+                </strong>
+                , so the history stays together.
+              </p>
+            )}
           </div>
+
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">
               Color
@@ -135,6 +223,7 @@ function ItemRow({
               </button>
             </div>
           </div>
+
           <Button
             variant="outline"
             size="sm"
@@ -153,6 +242,26 @@ function ItemRow({
                 <ArchiveRestore className="size-4" /> Restore
               </>
             )}
+          </Button>
+
+          {/* Delete sits below archive and reads as the heavier of the two,
+              because it is: archive keeps the option resolvable, delete takes
+              it out of the dropdown for good. It stays disabled until the count
+              lands — see `UsageState`. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
+            disabled={pending || !countReady}
+            onClick={() => {
+              // Nothing uses it: there is nothing to warn about, and a
+              // confirmation for a free action only teaches people to click
+              // through confirmations.
+              if (!inUse) run(() => deleteOption(item.id));
+              else setConfirmDelete(true);
+            }}
+          >
+            <Trash2 className="size-4" /> Delete
           </Button>
         </PopoverContent>
       </Popover>
@@ -184,6 +293,56 @@ function ItemRow({
           <ChevronDown className="size-4" />
         </Button>
       </div>
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete &ldquo;{item.label}&rdquo;?</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                <p>
+                  <strong>
+                    {known?.trades} {known?.trades === 1 ? "trade" : "trades"}
+                  </strong>{" "}
+                  {known?.trades === 1 ? "carries" : "carry"} this value, and{" "}
+                  {known?.trades === 1 ? "it keeps it" : "they keep it"}. The
+                  value is stored on the trade as text, so nothing is lost from
+                  your history.
+                </p>
+                <p>
+                  What goes is the option itself: it stops being offered when you
+                  log a trade, loses its colour, and drops out of the fixed order
+                  reports group by.
+                </p>
+                <p className="text-muted-foreground">
+                  To stop offering it while keeping all of that, archive it
+                  instead.
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmDelete(false)}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={pending}
+              onClick={() => {
+                setConfirmDelete(false);
+                setOpen(false);
+                run(() => deleteOption(item.id));
+              }}
+            >
+              <Trash2 className="size-4" /> Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -293,10 +452,14 @@ export function ListManager({ lists }: { lists: OptionList[] }) {
     "Psychology",
     null,
   ];
+  // Filtered once, before the categories are walked, so a category left with
+  // nothing but hidden lists disappears with them rather than rendering an
+  // empty heading.
+  const shown = editableLists(lists);
   return (
     <div className="space-y-8">
       {categories.map((cat) => {
-        const group = lists.filter((l) => (l.category ?? null) === cat);
+        const group = shown.filter((l) => (l.category ?? null) === cat);
         if (group.length === 0) return null;
         return (
           <section key={cat ?? "other"} className="space-y-3">

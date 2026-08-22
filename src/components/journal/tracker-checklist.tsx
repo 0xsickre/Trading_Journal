@@ -40,11 +40,18 @@ const STATUS_LABELS: Record<DayStatus, string> = {
 function autoReasonText(
   res: AutoRuleResult,
   currency: string,
-  limit: number | undefined,
+  pct: number | undefined,
 ): string {
+  // The limit the percentage worked out to on THIS day, from the evaluator —
+  // the component cannot recompute it, because only the evaluator knows the
+  // balance the day opened with.
+  const limit = res.limit ?? null;
+
   switch (res.reason) {
     case "unconfigured":
       return "Limit nije podešen — podesi ga u Settings › Tracker da bi pravilo počelo da se ocenjuje.";
+    case "no_equity":
+      return "Nema equity-ja od kog bi se procenat računao — upiši početni balans naloga u Settings › Accounts.";
     case "no_trades":
       return "Nema trejdova po kojima bi se ovo pravilo ocenilo ovog dana.";
     case "unpriced":
@@ -52,8 +59,10 @@ function autoReasonText(
     case "frozen":
       return "Zamrznuto kad je dan zaključan. Ispravka trejda pomera P&L, ali ne i ocenu ovog dana.";
     case "violated":
+      // Both numbers, and the percentage that produced the second one: "2 %"
+      // alone does not tell you how much room today had.
       return res.observed != null && limit != null
-        ? `Prekršeno: ${fmtMoney(res.observed, currency)} od dozvoljenih ${fmtMoney(-Math.abs(limit), currency)}.`
+        ? `Prekršeno: ${fmtMoney(res.observed, currency)} od dozvoljenih ${fmtMoney(limit, currency)}${pct != null ? ` (${pct} % equity-ja)` : ""}.`
         : "Prekršeno.";
     case "ok":
       return res.observed != null
@@ -219,7 +228,7 @@ function AutoRow({
           </p>
           {res && (
             <p className="text-xs text-muted-foreground">
-              {autoReasonText(res, currency, rule.config.amount)}
+              {autoReasonText(res, currency, rule.config.pct)}
             </p>
           )}
         </div>

@@ -295,48 +295,48 @@ describe("rulesLiveOn is what every per-day computation starts from", () => {
     // so a retired rule and its replacement coexist under one key.
     // `configsFromRules` lets the last one win, and the order is `sort_order`,
     // which the user can drag around. Built once for a whole span, the dead
-    // 400 limit was scoring days the 1000 limit governs.
+    // 4 % limit was scoring days the 10 % limit governs.
     const retired = rule({
       id: "old",
       auto_key: "max_loss_per_day",
-      config: { amount: 400 },
+      config: { pct: 4 },
       deleted_at: "2026-06-01T00:00:00Z",
       sort_order: 9,
     });
     const live = rule({
       id: "new",
       auto_key: "max_loss_per_day",
-      config: { amount: 1000 },
+      config: { pct: 10 },
       created_at: "2026-06-01T00:00:00Z",
       sort_order: 1,
     });
     const both = [live, retired]; // as `sort_order` would order them
 
-    expect(configsFromRules(both).max_loss_per_day).toEqual({ amount: 400 });
+    expect(configsFromRules(both).max_loss_per_day).toEqual({ pct: 4 });
     expect(
       configsFromRules(rulesLiveOn(both, TODAY)).max_loss_per_day,
-    ).toEqual({ amount: 1000 });
+    ).toEqual({ pct: 10 });
   });
 
   it("still answers with the OLD limit for a day the old rule governed", () => {
-    // Not merely "prefer the live rule": a day in May was lived under the 400
+    // Not merely "prefer the live rule": a day in May was lived under the 4 %
     // limit and must keep being scored against it.
     const retired = rule({
       id: "old",
       auto_key: "max_loss_per_day",
-      config: { amount: 400 },
+      config: { pct: 4 },
       created_at: "2026-01-01T00:00:00Z",
       deleted_at: "2026-06-01T00:00:00Z",
     });
     const live = rule({
       id: "new",
       auto_key: "max_loss_per_day",
-      config: { amount: 1000 },
+      config: { pct: 10 },
       created_at: "2026-06-01T00:00:00Z",
     });
     expect(
       configsFromRules(rulesLiveOn([live, retired], "2026-05-20")).max_loss_per_day,
-    ).toEqual({ amount: 400 });
+    ).toEqual({ pct: 4 });
   });
 });
 

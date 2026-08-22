@@ -39,6 +39,7 @@ import {
 import { StatGroup } from "@/components/journal/stat-group";
 import { CalendarHeatmap } from "@/components/journal/calendar-heatmap";
 import { TrackerStreakCard } from "@/components/journal/tracker-streak-card";
+import { bookEquityLadder } from "@/lib/journal/tracker/equity-ladder";
 import {
   buildTradeDayIndex,
   configsFromRules,
@@ -1040,6 +1041,16 @@ export function Dashboard({
     const index = buildTradeDayIndex(scoped, (row) =>
       tzForAccount(row.account_id),
     );
+    // Scoped to the same accounts and cash the rest of this panel is scoped to,
+    // so a filtered dashboard judges the limits against the filtered book.
+    const equityOf = bookEquityLadder(
+      index,
+      accountFilter === "all"
+        ? accounts
+        : accounts.filter((a) => a.id === accountFilter),
+      scopedCashEvents,
+      tzForAccount,
+    );
 
     const byDate = new Map<string, Map<string, TrackerCheckin>>();
     for (const c of checkins) {
@@ -1060,11 +1071,25 @@ export function Dashboard({
         // Configs are resolved PER DAY: a retired rule and its replacement share
         // one `auto_key`, so a set built once for the whole span can hand a dead
         // limit to every day in it.
-        evaluateAutoRulesForDay(d, index, configsFromRules(rulesLiveOn(trackerRules, d))),
+        evaluateAutoRulesForDay(
+          d,
+          index,
+          configsFromRules(rulesLiveOn(trackerRules, d)),
+          equityOf,
+        ),
         byDate.get(d) ?? new Map(),
       ),
     todayKey);
-  }, [trackerRules, checkins, trades, accountFilter, tzForAccount, todayKey]);
+  }, [
+    trackerRules,
+    checkins,
+    trades,
+    accounts,
+    scopedCashEvents,
+    accountFilter,
+    tzForAccount,
+    todayKey,
+  ]);
 
   /**
    * Process adherence for the score, over the SAME window as the other six

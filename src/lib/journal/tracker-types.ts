@@ -18,16 +18,29 @@ export const STAGE_LABELS: Record<TrackerStage, string> = {
 export const AUTO_RULE_KEYS = [
   "max_loss_per_trade",
   "max_loss_per_day",
+  "max_loss_per_week",
   "playbook_linked",
   "stop_loss_set",
   "thesis_written",
 ] as const;
 export type AutoRuleKey = (typeof AUTO_RULE_KEYS)[number];
 
-/** Auto rules that need a money limit before they can say anything. */
-export const AUTO_RULES_NEEDING_AMOUNT: ReadonlySet<AutoRuleKey> = new Set([
+/**
+ * Auto rules that need a percentage before they can say anything.
+ *
+ * A PERCENTAGE OF EQUITY, not an amount of money, and the change is not
+ * cosmetic. A fixed 200 EUR limit is a different rule at a 5 000 account than
+ * at a 50 000 one, so a limit set once stops describing the trader's risk the
+ * moment the account grows — and the number that has to be re-typed to stay
+ * honest is the number nobody re-types. A percentage keeps its meaning.
+ *
+ * The basis is the day's OPENING equity; see `equity-ladder.ts` for why it is
+ * not the live figure.
+ */
+export const AUTO_RULES_NEEDING_PCT: ReadonlySet<AutoRuleKey> = new Set([
   "max_loss_per_trade",
   "max_loss_per_day",
+  "max_loss_per_week",
 ]);
 
 /** ISO weekday numbering, 1=Mon … 7=Sun — never `Date#getDay`'s 0=Sun. */
@@ -51,7 +64,7 @@ export type TrackerRule = {
   active_days: number[];
   /** NULL for a manual rule. */
   auto_key: AutoRuleKey | null;
-  config: { amount?: number };
+  config: { pct?: number };
   is_mandatory: boolean;
   sort_order: number;
   /**

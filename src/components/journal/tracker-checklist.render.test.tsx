@@ -170,7 +170,7 @@ describe("auto rules show a verdict but never a manual control", () => {
         id: "r1",
         text: "Max loss per trade",
         auto_key: "max_loss_per_trade",
-        config: { amount: 500 },
+        config: { pct: 5 },
       }),
     ];
     render(
@@ -184,6 +184,10 @@ describe("auto rules show a verdict but never a manual control", () => {
               verdict: "fail",
               reason: "violated",
               observed: -620,
+              // The money the percentage worked out to on this day. It comes
+              // from the evaluator now, not from the rule's config: only the
+              // evaluator knows the balance the day opened with.
+              limit: -500,
               offenders: ["trade-1"],
             },
           },
@@ -192,7 +196,11 @@ describe("auto rules show a verdict but never a manual control", () => {
       />,
     );
     expect(screen.getByText("prekršeno")).toBeInTheDocument();
-    expect(screen.getByText(/-\$620\.00.*-\$500\.00/)).toBeInTheDocument();
+    // Both figures, and the percentage behind the second — "5 %" alone would
+    // not tell the reader how much room the day actually had.
+    expect(
+      screen.getByText(/-\$620\.00.*-\$500\.00.*5 % equity-ja/),
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "#12 EURUSD" })).toHaveAttribute(
       "href",
       "/trades/trade-1/edit",

@@ -9,6 +9,8 @@ import { todayInTz } from "@/lib/journal/daily-report";
 import { DEFAULT_TZ } from "@/lib/journal/time";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getTrackerRules } from "@/lib/journal/tracker/queries";
+import { bookEquityLadder } from "@/lib/journal/tracker/equity-ladder";
+import { getCashEvents } from "@/lib/journal/cash-events";
 import {
   buildTradeDayIndex,
   configsFromRules,
@@ -130,10 +132,11 @@ export async function lockDay(reportDate: string): Promise<Result> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Nisi prijavljen." };
 
-  const [accounts, rules, trades] = await Promise.all([
+  const [accounts, rules, trades, cashEvents] = await Promise.all([
     getAccounts(),
     getTrackerRules({ includeRetired: true }),
     getTradesWithStats(),
+    getCashEvents(),
   ]);
 
   const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
@@ -141,15 +144,21 @@ export async function lockDay(reportDate: string): Promise<Result> {
   if (reportDate > todayInTz(timezone))
     return { ok: false, error: "Budući dan se ne može zaključati." };
 
-  const index = buildTradeDayIndex(
-    trades,
-    (row) => accounts.find((a) => a.id === row.account_id)?.timezone ?? timezone,
-  );
+  // Widened to accept null because a trade row's `account_id` is nullable; a
+  // cash event's is not, so the ladder's stricter signature is still satisfied.
+  const tzOf = (accountId: string | null) =>
+    accounts.find((a) => a.id === accountId)?.timezone ?? timezone;
+  const index = buildTradeDayIndex(trades, (row) => tzOf(row.account_id));
+  // The same ladder the page used to show these verdicts. Locking freezes what
+  // was on screen, so a different basis here would seal a number the trader
+  // never saw.
+  const equityOf = bookEquityLadder(index, accounts, cashEvents, tzOf);
   // The limits in force ON THIS DAY, not whatever a retired rule still carries.
   const auto = evaluateAutoRulesForDay(
     reportDate,
     index,
     configsFromRules(rulesLiveOn(rules, reportDate)),
+    equityOf,
   );
 
   const { error } = await supabase.rpc("tj_lock_day", {

@@ -14,7 +14,9 @@
  */
 
 import { stringFieldValue } from "../field-values";
-import { zonedDateKey } from "../time";
+import { addDaysToDayKey, zonedDateKey } from "../time";
+import { weekStartOfDayKey } from "../weekly-review";
+import type { EquityLadder } from "./equity-ladder";
 import type { AutoRuleKey } from "../tracker-types";
 import type { TradeRow } from "../types";
 
@@ -31,6 +33,15 @@ export type AutoReason =
   | "no_trades"
   /** A contributing trade has no price, so the answer is unknown. */
   | "unpriced"
+  /**
+   * No opening equity to take a percentage of.
+   *
+   * Distinct from `unconfigured`, which is the trader not having set a limit.
+   * This is the limit being set and the BASIS being missing — no starting
+   * balance recorded, or an unpriced trade earlier in the book that makes every
+   * later balance unknowable. Different sentence, different fix.
+   */
+  | "no_equity"
   /** The day is locked; the verdict is the one frozen at lock time. */
   | "frozen";
 
@@ -42,6 +53,16 @@ export type AutoRuleResult = {
   offenders: string[];
   /** Worst observed money for the loss rules; null otherwise. */
   observed: number | null;
+  /**
+   * The money the percentage worked out to on this day. Negative; null for
+   * rules that are not money limits, or when the basis was unknown.
+   *
+   * Stored rather than recomputed in the UI because a percentage alone tells
+   * the trader nothing about the day in front of them — "2 %" has to be said as
+   * "240 EUR" against the balance the day actually opened with, and only the
+   * evaluator knows what that balance was.
+   */
+  limit?: number | null;
 };
 
 /** Everything the evaluators need, and nothing else. */
@@ -68,7 +89,7 @@ export type TradeDayIndex = {
   byCloseDay: Map<string, TrackerTrade[]>;
 };
 
-export type AutoConfigs = Partial<Record<AutoRuleKey, { amount?: number }>>;
+export type AutoConfigs = Partial<Record<AutoRuleKey, { pct?: number }>>;
 
 /**
  * Positions that count as executed discipline.
@@ -143,20 +164,36 @@ const na = (key: AutoRuleKey, reason: AutoReason): AutoRuleResult => ({
   reason,
   offenders: [],
   observed: null,
+  limit: null,
 });
+
+/**
+ * The money a percentage limit allows to be lost on a given day.
+ *
+ * Negative, because every comparison below is against a loss. `null` when
+ * either half of the question is missing — no percentage configured, or an
+ * opening equity that cannot be known — and the caller turns that into a rule
+ * that is not scored rather than one that passes.
+ */
+function limitFor(pct: number | undefined, equity: number | null): number | null {
+  if (pct == null || equity == null || equity <= 0) return null;
+  return -(equity * Math.abs(pct)) / 100;
+}
 
 /**
  * Net max loss for the whole day, over trades CLOSED that day.
  *
- * Boundary is inclusive (`net <= -amount`), matching `evaluateFtmo`: a day
+ * Boundary is inclusive (`net <= limit`), matching `evaluateFtmo`: a day
  * exactly at your limit is a day you hit your limit.
  */
 function evalMaxLossPerDay(
   trades: TrackerTrade[],
-  amount: number | undefined,
+  pct: number | undefined,
+  equity: number | null,
 ): AutoRuleResult {
   const key: AutoRuleKey = "max_loss_per_day";
-  if (amount == null) return na(key, "unconfigured");
+  const limit = limitFor(pct, equity);
+  if (limit == null) return na(key, pct == null ? "unconfigured" : "no_equity");
   if (trades.length === 0) return na(key, "no_trades");
 
   // Any unpriced trade makes the SUM unknown. The tempting shortcut — "if the
@@ -166,13 +203,59 @@ function evalMaxLossPerDay(
   if (trades.some((t) => t.netPl == null)) return na(key, "unpriced");
 
   const net = trades.reduce((s, t) => s + (t.netPl ?? 0), 0);
-  const breached = net <= -Math.abs(amount);
+  const breached = net <= limit;
   return {
     key,
     verdict: breached ? "fail" : "pass",
     reason: breached ? "violated" : "ok",
     offenders: breached ? trades.map((t) => t.id) : [],
     observed: net,
+    limit,
+  };
+}
+
+/**
+ * Net max loss over the ISO week the day belongs to, up to and including it.
+ *
+ * SCORED EVERY DAY, not once on Sunday, and cumulatively from Monday. A weekly
+ * budget you only hear about after the week is over is a report, not a limit —
+ * the point is that Thursday can tell you the week is already spent. The same
+ * week therefore fails on every day from the breach onwards, which is the
+ * honest reading: the budget stayed blown.
+ *
+ * The week runs Monday–Sunday, the same one `/weekly` reviews, so the number
+ * here and the number on the review page describe the same seven days.
+ */
+function evalMaxLossPerWeek(
+  day: string,
+  index: TradeDayIndex,
+  pct: number | undefined,
+  equity: number | null,
+): AutoRuleResult {
+  const key: AutoRuleKey = "max_loss_per_week";
+  const limit = limitFor(pct, equity);
+  if (limit == null) return na(key, pct == null ? "unconfigured" : "no_equity");
+
+  const weekStart = weekStartOfDayKey(day);
+  if (!weekStart) return na(key, "no_trades");
+
+  const soFar: TrackerTrade[] = [];
+  for (let d = weekStart; d <= day; d = addDaysToDayKey(d, 1)) {
+    for (const t of index.byCloseDay.get(d) ?? []) soFar.push(t);
+  }
+
+  if (soFar.length === 0) return na(key, "no_trades");
+  if (soFar.some((t) => t.netPl == null)) return na(key, "unpriced");
+
+  const net = soFar.reduce((s, t) => s + (t.netPl ?? 0), 0);
+  const breached = net <= limit;
+  return {
+    key,
+    verdict: breached ? "fail" : "pass",
+    reason: breached ? "violated" : "ok",
+    offenders: breached ? soFar.map((t) => t.id) : [],
+    observed: net,
+    limit,
   };
 }
 
@@ -185,13 +268,14 @@ function evalMaxLossPerDay(
  */
 function evalMaxLossPerTrade(
   trades: TrackerTrade[],
-  amount: number | undefined,
+  pct: number | undefined,
+  equity: number | null,
 ): AutoRuleResult {
   const key: AutoRuleKey = "max_loss_per_trade";
-  if (amount == null) return na(key, "unconfigured");
+  const limit = limitFor(pct, equity);
+  if (limit == null) return na(key, pct == null ? "unconfigured" : "no_equity");
   if (trades.length === 0) return na(key, "no_trades");
 
-  const limit = -Math.abs(amount);
   const priced = trades.filter((t) => t.netPl != null);
   const offenders = priced.filter((t) => (t.netPl as number) <= limit);
 
@@ -202,6 +286,7 @@ function evalMaxLossPerTrade(
       reason: "violated",
       offenders: offenders.map((t) => t.id),
       observed: Math.min(...offenders.map((t) => t.netPl as number)),
+      limit,
     };
   }
   // No priced trade breached, but an unpriced one might have.
@@ -212,7 +297,9 @@ function evalMaxLossPerTrade(
     verdict: "pass",
     reason: "ok",
     offenders: [],
-    observed: priced.length > 0 ? Math.min(...priced.map((t) => t.netPl as number)) : null,
+    observed:
+      priced.length > 0 ? Math.min(...priced.map((t) => t.netPl as number)) : null,
+    limit,
   };
 }
 
@@ -247,15 +334,36 @@ export function evaluateAutoRulesForDay(
   day: string,
   index: TradeDayIndex,
   configs: AutoConfigs,
+  /**
+   * Equity the day opened with, for the percentage limits.
+   *
+   * Defaulted so the flag rules — which have no basis to speak of — can still
+   * be evaluated by a caller that has no balance in hand. The money rules then
+   * report `no_equity`, which is the truthful answer rather than a silent pass.
+   */
+  equityOf: EquityLadder = () => null,
 ): Record<AutoRuleKey, AutoRuleResult> {
   const closed = index.byCloseDay.get(day) ?? [];
   const opened = index.byOpenDay.get(day) ?? [];
+  const equity = equityOf(day);
 
   return {
-    max_loss_per_day: evalMaxLossPerDay(closed, configs.max_loss_per_day?.amount),
+    max_loss_per_day: evalMaxLossPerDay(
+      closed,
+      configs.max_loss_per_day?.pct,
+      equity,
+    ),
     max_loss_per_trade: evalMaxLossPerTrade(
       closed,
-      configs.max_loss_per_trade?.amount,
+      configs.max_loss_per_trade?.pct,
+      equity,
+    ),
+    // The whole week to date, not just this day — see `evalMaxLossPerWeek`.
+    max_loss_per_week: evalMaxLossPerWeek(
+      day,
+      index,
+      configs.max_loss_per_week?.pct,
+      equity,
     ),
     // Open day, not close day. Decisive counter-case: on close-day attribution a
     // still-open trade is INVISIBLE to the rule, so ten unlinked open trades
@@ -274,7 +382,7 @@ export function evaluateAutoRulesForDay(
 
 /** Configs keyed by `auto_key`, for the evaluator. */
 export function configsFromRules(
-  rules: readonly { auto_key: AutoRuleKey | null; config: { amount?: number } }[],
+  rules: readonly { auto_key: AutoRuleKey | null; config: { pct?: number } }[],
 ): AutoConfigs {
   const out: AutoConfigs = {};
   for (const r of rules) {

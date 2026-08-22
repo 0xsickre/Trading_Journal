@@ -50,10 +50,6 @@ export default async function SettingsPage() {
       countQuarantinedEvents(),
     ]);
 
-  // Same choice as getPrimaryAccount, made from the list already in hand rather
-  // than with a second round trip. Only the currency label needs it.
-  const primaryAccount = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
-
   // Counted here rather than when the delete dialog opens: the confirmation has
   // to state what it is about to destroy at the moment it is read, and a dialog
   // that fetches on open shows an empty list first and the truth a beat later.
@@ -105,10 +101,7 @@ export default async function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="tracker">
-          <TrackerRuleManager
-            rules={trackerRules}
-            currency={primaryAccount?.currency ?? "USD"}
-          />
+          <TrackerRuleManager rules={trackerRules} />
         </TabsContent>
 
         <TabsContent value="instruments">
