@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ListManager } from "./list-manager";
 import { usageKey } from "@/lib/journal/option-usage";
@@ -19,6 +19,7 @@ const moveOptionToList = vi.fn();
 const setListColor = vi.fn();
 const setOptionColor = vi.fn();
 const reorderOptions = vi.fn();
+const reorderLists = vi.fn();
 const addOption = vi.fn();
 
 vi.mock("@/app/(app)/settings/actions", () => ({
@@ -31,6 +32,7 @@ vi.mock("@/app/(app)/settings/actions", () => ({
   moveOptionToList: (...a: unknown[]) => moveOptionToList(...a),
   renameList: (...a: unknown[]) => renameList(...a),
   renameOption: (...a: unknown[]) => renameOption(...a),
+  reorderLists: (...a: unknown[]) => reorderLists(...a),
   reorderOptions: (...a: unknown[]) => reorderOptions(...a),
   setListColor: (...a: unknown[]) => setListColor(...a),
   setOptionColor: (...a: unknown[]) => setOptionColor(...a),
@@ -84,6 +86,7 @@ beforeEach(() => {
     setListColor,
     setOptionColor,
     reorderOptions,
+    reorderLists,
     addOption,
   ]) {
     m.mockReset();
@@ -94,6 +97,7 @@ beforeEach(() => {
   });
   countOptionUsage.mockResolvedValue({ ok: true, trades: 0 });
   reorderOptions.mockResolvedValue({ ok: true });
+  reorderLists.mockResolvedValue({ ok: true });
 });
 
 describe("the two tabs", () => {
@@ -166,6 +170,73 @@ describe("the two tabs", () => {
     );
     expect(screen.getByText("COT Filter")).toBeInTheDocument();
     expect(screen.queryByText("Setup Grade")).not.toBeInTheDocument();
+  });
+});
+
+describe("reordering categories by dragging", () => {
+  const TWO = [
+    list({ id: "l1", key: "cot_filter", label: "COT Filter" }),
+    list({ id: "l2", key: "mistake", label: "Mistake" }),
+  ];
+
+  /**
+   * jsdom fires no real drag, and `DataTransfer` does not exist in it — so the
+   * three events the hook listens to are dispatched by hand, with the smallest
+   * stub that satisfies the handlers.
+   */
+  const dt = () => ({
+    effectAllowed: "",
+    dropEffect: "",
+    setData: vi.fn(),
+    getData: vi.fn(),
+    setDragImage: vi.fn(),
+  });
+
+  function dragOnto(fromLabel: string, toLabel: string) {
+    const rowOf = (label: string) => screen.getByText(label).closest("tr")!;
+    const from = rowOf(fromLabel);
+    const to = rowOf(toLabel);
+    const grip = within(from).getByTitle("Drag to reorder");
+    const shared = dt();
+
+    fireEvent.dragStart(grip, { dataTransfer: shared });
+    fireEvent.dragOver(to, { dataTransfer: shared });
+    fireEvent.drop(to, { dataTransfer: shared });
+  }
+
+  it("commits the new order, and to the ids rather than the labels", async () => {
+    render(<ListManager lists={TWO} usage={{}} />);
+    dragOnto("Mistake", "COT Filter");
+    await waitFor(() =>
+      expect(reorderLists).toHaveBeenCalledWith(["l2", "l1"]),
+    );
+  });
+
+  it("offers no handle while the table is filtered", async () => {
+    // A drop under a filter would write an order derived from rows the trader
+    // cannot see — so the gesture is simply not offered.
+    const user = userEvent.setup();
+    render(<ListManager lists={TWO} usage={{}} />);
+    expect(screen.getAllByTitle("Drag to reorder")).toHaveLength(2);
+
+    await user.type(screen.getByPlaceholderText("Search categories"), "cot");
+    expect(screen.queryByTitle("Drag to reorder")).not.toBeInTheDocument();
+  });
+
+  it("puts the rows back when the write is refused", async () => {
+    reorderLists.mockResolvedValueOnce({ ok: false, error: "nope" });
+    render(<ListManager lists={TWO} usage={{}} />);
+    dragOnto("Mistake", "COT Filter");
+
+    // The optimistic preview showed Mistake first; once the server refuses, the
+    // order it sent has to win back.
+    await waitFor(() => {
+      const names = screen
+        .getAllByRole("row")
+        .slice(1)
+        .map((r) => r.querySelectorAll("td")[1]?.textContent?.trim());
+      expect(names).toEqual(["COT Filter", "Mistake"]);
+    });
   });
 });
 

@@ -295,6 +295,66 @@ export async function addList(
 }
 
 /**
+ * The order the trader dragged the categories into.
+ *
+ * WRITES TWO TABLES, and it has to. The Settings table reads
+ * `tj_option_lists.sort_order`; the trade form reads
+ * `tj_field_defs.sort_order`, because that is the row that decides where the
+ * field renders. They are the same intent stored twice, and before this they
+ * could disagree — the categories screen said one order, the form drew another,
+ * with nothing to reconcile them.
+ *
+ * Dragging is the one gesture that means "this is the order", so it settles
+ * both. A category the form does not render by field def — `exit_reason` and
+ * the rest, wired in by code — simply matches no row in the second write, which
+ * is correct: its place on the form is not an ordinal.
+ *
+ * Dispatched in parallel like `reorderOptions`, and like it every result is
+ * inspected: a half-applied reorder that reported success would snap back on
+ * the next load with nothing anywhere saying why.
+ */
+export async function reorderLists(orderedIds: string[]) {
+  if (orderedIds.length === 0) return { ok: true as const };
+  const supabase = await createClient();
+
+  const { data: lists, error: readError } = await supabase
+    .from("tj_option_lists")
+    .select("id,key")
+    .in("id", orderedIds);
+  if (readError) return { ok: false as const, error: readError.message };
+
+  const keyById = new Map((lists ?? []).map((l) => [l.id, l.key]));
+
+  // Two batches rather than one array: the builders carry their table's row
+  // type, so a mixed array has no common type to be inspected through. Both are
+  // still dispatched together — the ordinals are independent.
+  const [listResults, defResults] = await Promise.all([
+    Promise.all(
+      orderedIds.map((id, i) =>
+        supabase.from("tj_option_lists").update({ sort_order: i }).eq("id", id),
+      ),
+    ),
+    Promise.all(
+      orderedIds.map((id, i) => {
+        const key = keyById.get(id);
+        return supabase
+          .from("tj_field_defs")
+          .update({ sort_order: i })
+          // A category with no key matches nothing, which is the same no-op as
+          // one the form wires in by code.
+          .eq("list_key", key ?? "");
+      }),
+    ),
+  ]);
+
+  const failed =
+    listResults.find((r) => r.error) ?? defResults.find((r) => r.error);
+  if (failed?.error) return { ok: false as const, error: failed.error.message };
+  revalidateOptions();
+  return { ok: true as const };
+}
+
+/**
  * When the trade form asks for this category.
  *
  * Stored on the FIELD, not the list: the list is a set of values, and the same

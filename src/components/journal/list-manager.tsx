@@ -41,6 +41,7 @@ import {
   moveOptionToList,
   renameList,
   renameOption,
+  reorderLists,
   reorderOptions,
   setListColor,
   setListPhase,
@@ -49,6 +50,12 @@ import {
   type ListUsage,
 } from "@/app/(app)/settings/actions";
 import { editableLists } from "@/lib/journal/settings-lists";
+import {
+  Grip,
+  useDragOrder,
+  type DragHandleProps,
+  type DragTargetProps,
+} from "@/components/journal/drag-order";
 import {
   FIELD_DEF_PHASE_LABELS,
   FIELD_DEF_PHASES,
@@ -182,7 +189,14 @@ function useAction() {
 
 /* ── Categories ──────────────────────────────────────────────────────────── */
 
-function CategoryRow({ list }: { list: OptionList }) {
+function CategoryRow({
+  list,
+  drag,
+}: {
+  list: OptionList;
+  /** Absent while the table is filtered — see `draggable` in `CategoriesTab`. */
+  drag?: { target: DragTargetProps; handle: DragHandleProps };
+}) {
   const { pending, run } = useAction();
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -232,7 +246,14 @@ function CategoryRow({ list }: { list: OptionList }) {
   const blocked = usage?.builtIn === true;
 
   return (
-    <tr className="border-b last:border-0">
+    <tr
+      {...drag?.target}
+      data-drag-row
+      className="border-b last:border-0 data-[dragging]:opacity-40"
+    >
+      <td className="px-3 py-2.5">
+        {drag && <Grip {...drag.handle} className="inline-flex" />}
+      </td>
       <td className="px-3 py-2.5 text-sm">{list.label}</td>
       <td className="px-3 py-2.5">
         <ColorDot color={list.color} />
@@ -479,9 +500,23 @@ function NewCategoryDialog() {
 
 function CategoriesTab({ lists }: { lists: OptionList[] }) {
   const [query, setQuery] = useState("");
-  const shown = lists.filter((l) =>
-    l.label.toLowerCase().includes(query.trim().toLowerCase()),
+
+  // The order is the trader's, and dragging is how they set it — the same
+  // gesture, and the same hook, as the playbook's rules.
+  const { order, target, handle } = useDragOrder(
+    lists.map((l) => l.id),
+    reorderLists,
   );
+  const byId = new Map(lists.map((l) => [l.id, l]));
+  const ordered = order
+    .map((id) => byId.get(id))
+    .filter((l): l is OptionList => l != null);
+
+  const q = query.trim().toLowerCase();
+  const shown = ordered.filter((l) => l.label.toLowerCase().includes(q));
+  // Dropping onto a filtered list would write an order derived from rows the
+  // trader cannot see, so the handle only appears on the whole list.
+  const draggable = q === "";
 
   return (
     <div className="space-y-4">
@@ -507,6 +542,7 @@ function CategoriesTab({ lists }: { lists: OptionList[] }) {
         <table className="w-full min-w-md">
           <thead>
             <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+              <th className="w-8 px-3 py-2" />
               <th className="px-3 py-2 font-medium">Category name</th>
               <th className="px-3 py-2 font-medium">Colour</th>
               <th className="px-3 py-2 text-right font-medium">Tags</th>
@@ -516,12 +552,22 @@ function CategoriesTab({ lists }: { lists: OptionList[] }) {
           <tbody>
             {shown.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                <td colSpan={5} className="px-3 py-6 text-center text-sm text-muted-foreground">
                   No categories match.
                 </td>
               </tr>
             ) : (
-              shown.map((l) => <CategoryRow key={l.id} list={l} />)
+              shown.map((l) => (
+                <CategoryRow
+                  key={l.id}
+                  list={l}
+                  drag={
+                    draggable
+                      ? { target: target(l.id), handle: handle(l.id) }
+                      : undefined
+                  }
+                />
+              ))
             )}
           </tbody>
         </table>
