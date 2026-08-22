@@ -60,7 +60,7 @@ export default async function SettingsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Settings"
-        description="Manage your categories, instruments and accounts. Deleting a category or option is safe — trades that used it keep the text. Archiving hides an option from entry forms without deleting it."
+        description="Manage your tag categories, instruments and accounts. Deleting a category or a tag is safe — trades that used it keep the text. Archiving hides a tag from entry forms without deleting it."
       />
 
       <Tabs defaultValue="lists">
