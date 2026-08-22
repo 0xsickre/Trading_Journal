@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  useTransition,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { AlertTriangle, Download } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -42,6 +48,9 @@ import { bookEquityLadder } from "@/lib/journal/tracker/equity-ladder";
  * `ChartShell`, which is NOT lazy — so the layout is correct and stable while
  * the plot inside is still arriving, and nothing below it jumps.
  */
+/** What `insightResult` answers while its panel is switched off. */
+const EMPTY_INSIGHTS = { insights: [], skipped: [] };
+
 const chartLoading = () => (
   <div className="h-full w-full animate-pulse rounded-md bg-muted/40" />
 );
@@ -614,13 +623,53 @@ export function Dashboard({
     });
   }, []);
 
-  /** Render gate. Compute is NEVER gated — see the note above `sickreScore`. */
+  /**
+   * Render gate — and, for five memos below, a compute gate too.
+   *
+   * A hook cannot be called conditionally, so nothing here skips `useMemo`.
+   * What the gated ones skip is the WORK INSIDE it, returning an empty value
+   * when their widget is switched off.
+   *
+   * Only memos read by exactly ONE hideable widget qualify, and each is
+   * verified as such: `insightResult`, `hist`, `ddSeries`, `weeklySlip`,
+   * `weeklyExitEff`. `trackerSeries` and `processAdherencePct` look like
+   * candidates and are NOT gated — both feed the Sickre score, and returning a
+   * placeholder for them would not hide a number, it would silently change one.
+   * That is the line: gating may cost a widget its content, never a figure its
+   * meaning.
+   */
   const visible = useMemo(() => visibleWidgets(hiddenWidgets), [hiddenWidgets]);
   const show = useCallback((id: string) => visible.has(id), [visible]);
 
   const [accountFilter, setAccountFilter] = useState("all");
   const [period, setPeriod] = useState("90");
   const [mode, setMode] = useState<PnlMode>("net");
+
+  /**
+   * The three controls that invalidate almost everything.
+   *
+   * Flipping net/gross re-runs roughly seventeen memos, each a full pass over
+   * the book; period and account filter are comparable. Done synchronously the
+   * browser cannot paint until all of them finish, so the button appears not to
+   * respond to the click that started the work.
+   *
+   * `startTransition` marks the recompute as interruptible: the pressed state
+   * lands immediately, the figures follow, and `recomputing` dims them in
+   * between so the reader can tell a stale number from a settled one.
+   */
+  const [recomputing, startRecompute] = useTransition();
+  const setModeDeferred = useCallback(
+    (next: PnlMode) => startRecompute(() => setMode(next)),
+    [],
+  );
+  const setPeriodDeferred = useCallback(
+    (next: string) => startRecompute(() => setPeriod(next)),
+    [],
+  );
+  const setAccountFilterDeferred = useCallback(
+    (next: string) => startRecompute(() => setAccountFilter(next)),
+    [],
+  );
   // Dollars/%/Privacy/R/Ticks/Pips/Points — the same switcher `/reports`
   // already built (`units.ts`). A plain `useState` like every other control on
   // this bar (`period`, `accountFilter`, `mode`), not URL-synced: nothing else
@@ -911,8 +960,8 @@ export function Dashboard({
     [balanceTimeline],
   );
   const ddSeries = useMemo(
-    () => drawdownSeries(balanceTimeline),
-    [balanceTimeline],
+    () => (show("drawdown") ? drawdownSeries(balanceTimeline) : []),
+    [show, balanceTimeline],
   );
 
   const pnlOf = useCallback(
@@ -1030,7 +1079,9 @@ export function Dashboard({
 
   const insightResult = useMemo(
     () =>
-      runInsights(
+      !show("insights")
+        ? EMPTY_INSIGHTS
+        : runInsights(
         buildInsightContext({
           trades: realized,
           allRows: accountFilter === "all"
@@ -1047,6 +1098,7 @@ export function Dashboard({
         }),
       ),
     [
+      show,
       realized,
       trades,
       accountFilter,
@@ -1215,7 +1267,10 @@ export function Dashboard({
         : buildEquity(realized, mode, "money", windowed.openingEquity),
     [equity, equityMetric, realized, mode, windowed],
   );
-  const hist = useMemo(() => rHistogram(realized), [realized]);
+  const hist = useMemo(
+    () => (show("r-distribution") ? rHistogram(realized) : []),
+    [show, realized],
+  );
   const daily = useMemo(
     () => dailyPnl(realized, mode, tzOf),
     [realized, mode, tzOf],
@@ -1225,12 +1280,12 @@ export function Dashboard({
     [realized, breakdownField, breakevenRange],
   );
   const weeklySlip = useMemo(
-    () => weeklySlippageR(realized, tzOf),
-    [realized, tzOf],
+    () => (show("execution-quality") ? weeklySlippageR(realized, tzOf) : []),
+    [show, realized, tzOf],
   );
   const weeklyExitEff = useMemo(
-    () => weeklyExitEfficiency(realized, tzOf),
-    [realized, tzOf],
+    () => (show("execution-quality") ? weeklyExitEfficiency(realized, tzOf) : []),
+    [show, realized, tzOf],
   );
 
   function handleExportMentorPack() {
@@ -1357,7 +1412,7 @@ export function Dashboard({
           bar the reader has to learn instead of read. */}
       <div className="flex flex-wrap items-center gap-2">
         {accounts.length > 1 && (
-          <Select value={accountFilter} onValueChange={setAccountFilter}>
+          <Select value={accountFilter} onValueChange={setAccountFilterDeferred}>
             <SelectTrigger className="h-9 w-40">
               <SelectValue />
             </SelectTrigger>
@@ -1378,7 +1433,7 @@ export function Dashboard({
               variant={period === p.value ? "secondary" : "ghost"}
               size="sm"
               className="h-7"
-              onClick={() => setPeriod(p.value)}
+              onClick={() => setPeriodDeferred(p.value)}
             >
               {p.label}
             </Button>
@@ -1391,7 +1446,7 @@ export function Dashboard({
               variant={mode === m ? "secondary" : "ghost"}
               size="sm"
               className="h-7 capitalize"
-              onClick={() => setMode(m)}
+              onClick={() => setModeDeferred(m)}
             >
               {m}
             </Button>
@@ -1741,6 +1796,16 @@ export function Dashboard({
           stored fold preference, and `stat-group.tsx` documents that renaming
           one re-opens that group — a reader who folded this block away should
           not find it open again because the heading above it was reworded. */}
+      {/* Dimmed while a control's recompute is still in flight. The numbers on
+          screen are the PREVIOUS filter's until it lands, and saying so is the
+          difference between "still working" and "these are your figures". */}
+      <div
+        className={cn(
+          "space-y-5 transition-opacity",
+          recomputing && "pointer-events-none opacity-60",
+        )}
+        aria-busy={recomputing}
+      >
       {renderRows(
         {
         "detail-tiles": show("detail-tiles") && (
@@ -2040,6 +2105,7 @@ export function Dashboard({
         },
         widgetOrder,
       )}
+      </div>
       </>
       )}
     </div>

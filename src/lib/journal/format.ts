@@ -9,6 +9,38 @@ function roundForDisplay(n: number, digits: number): number {
   return Number(n.toFixed(digits)) || 0;
 }
 
+/**
+ * Formatters are built once per shape and reused.
+ *
+ * `new Intl.NumberFormat(...)` is roughly an order of magnitude more expensive
+ * than calling `.format()` on one that already exists, and these three
+ * functions are what every grid cell, every stat tile and every chart tooltip
+ * goes through. Constructed inline, a thousand-row book at twenty-one columns
+ * built tens of thousands of formatters per render, all of them identical.
+ *
+ * The key is the full option set, so a EUR account and a USD one never share an
+ * instance. Unbounded on purpose: the number of distinct shapes is the number
+ * of currencies in use times the handful of digit counts, a few dozen at the
+ * very most, and every entry stays useful. Same idiom as `TZ_CACHE` in
+ * `time.ts`.
+ */
+const NUMBER_FORMATS = new Map<string, Intl.NumberFormat>();
+
+function numberFormat(opts: Intl.NumberFormatOptions): Intl.NumberFormat {
+  const key = [
+    opts.style ?? "",
+    opts.currency ?? "",
+    opts.minimumFractionDigits ?? "",
+    opts.maximumFractionDigits ?? "",
+  ].join("|");
+  let hit = NUMBER_FORMATS.get(key);
+  if (!hit) {
+    hit = new Intl.NumberFormat("en-US", opts);
+    NUMBER_FORMATS.set(key, hit);
+  }
+  return hit;
+}
+
 export function fmtMoney(
   n: number | null | undefined,
   currency = "USD",
@@ -16,7 +48,7 @@ export function fmtMoney(
 ): string {
   if (n == null || Number.isNaN(n)) return "—";
   const v = roundForDisplay(n, 2);
-  const s = new Intl.NumberFormat("en-US", {
+  const s = numberFormat({
     style: "currency",
     currency,
     maximumFractionDigits: 2,
@@ -49,7 +81,7 @@ export function fmtNum(
   digits = 2,
 ): string {
   if (n == null || Number.isNaN(n)) return "—";
-  return new Intl.NumberFormat("en-US", {
+  return numberFormat({
     minimumFractionDigits: 0,
     maximumFractionDigits: digits,
   }).format(n);
@@ -88,7 +120,7 @@ export function fmtPrice(
 ): string {
   if (n == null || Number.isNaN(n)) return "—";
   const digits = priceDigits(tickSize);
-  return new Intl.NumberFormat("en-US", {
+  return numberFormat({
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(n);

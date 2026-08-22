@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -278,6 +284,19 @@ export function JournalGrid({
   }, [accounts]);
 
   const [search, setSearch] = useState("");
+  /**
+   * The value the FILTER reads, one render behind the box.
+   *
+   * `filtered` scans every trade and, for a search term, builds a lowercased
+   * haystack per trade — including `gradeOf`, which scores the trade against
+   * the whole rule library. Driving that straight off `search` ran the entire
+   * pass on every keystroke and the input visibly stuttered on a large book.
+   *
+   * `useDeferredValue` and not a timeout: React keeps the typed character
+   * responsive and re-runs the scan at lower priority, so nothing is dropped
+   * and no delay has to be guessed at.
+   */
+  const deferredSearch = useDeferredValue(search);
   const [accountFilter, setAccountFilter] = useState<string>("all");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -396,8 +415,8 @@ export function JournalGrid({
         }
         if (!fieldMatchesFilter(t, k, v)) return false;
       }
-      if (search.trim()) {
-        const q = search.toLowerCase();
+      if (deferredSearch.trim()) {
+        const q = deferredSearch.toLowerCase();
         // `mistake` je ovde od kad je `text[]`. Ranije nije bio pretraživ ni kao
         // tekst — propust koji se video tek kad je postao niz kao ostali tagovi.
         const tagHay = ["technical_tags", "psychology_tags", "mistake"]
@@ -420,7 +439,7 @@ export function JournalGrid({
       }
       return true;
     });
-  }, [trades, accountFilter, filters, search, outcomeOf, gradeOf]);
+  }, [trades, accountFilter, filters, deferredSearch, outcomeOf, gradeOf]);
 
   const tzOf = useCallback(
     (t: TradeRow) =>
@@ -742,7 +761,17 @@ export function JournalGrid({
     getSortedRowModel: getSortedRowModel(),
   });
 
-  const selectedIds = table.getSelectedRowModel().rows.map((r) => r.original.id);
+  // Memoized on the selection itself. This used to run on every render — every
+  // keystroke in the search box included — walking the row model to rebuild an
+  // array that only changes when a checkbox is ticked.
+  const selectedIds = useMemo(
+    () => table.getSelectedRowModel().rows.map((r) => r.original.id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `table` is a new
+    // object every render (TanStack's builder is not memoizable), so depending
+    // on it would defeat the memo. The selection state is what actually decides
+    // this value, and it is what the table reads to answer.
+    [rowSelection],
+  );
 
   function exportData(kind: "csv" | "xlsx") {
     const rows = filtered.map((t) => {
