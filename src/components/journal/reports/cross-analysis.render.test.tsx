@@ -71,6 +71,22 @@ describe("CrossAnalysis — real pivot output, on screen", () => {
     expect(screen.getByText("$270.00")).toBeInTheDocument();
   });
 
+  it("colors cells by value — profit tint for the top, loss tint for the bottom", () => {
+    const book = enrich([
+      { setupGrade: "A", macroAlign: "Uz bias", net: 300 },
+      { setupGrade: "A", macroAlign: "Protiv bias", net: 50 },
+      { setupGrade: "B", macroAlign: "Uz bias", net: -100 },
+      { setupGrade: "B", macroAlign: "Protiv bias", net: 20 },
+    ]);
+    const result = run(book, "setup_grade", "macro_align");
+    render(<CrossAnalysis result={result} viewMode="dollars" currency="USD" equityBase={null} />);
+
+    const bestCell = firstMatch("$300.00").closest("td")! as HTMLElement;
+    expect(bestCell.style.backgroundColor).toContain("--profit");
+    const worstCell = firstMatch("-$100.00").closest("td")! as HTMLElement;
+    expect(worstCell.style.backgroundColor).toContain("--loss");
+  });
+
   it("empty axes show the no-intersection sentence instead of an empty grid", () => {
     const result = run(enrich([]), "setup_grade", "macro_align");
     render(<CrossAnalysis result={result} viewMode="dollars" currency="USD" equityBase={null} />);

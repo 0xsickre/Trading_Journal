@@ -164,3 +164,49 @@ export function sparkPoints(
 function round(n: number): number {
   return Math.round(n * 100) / 100;
 }
+
+export type ExcursionBarLayout = {
+  /** Where entry (0) sits as a % of the bar's width — the left edge is
+   *  −maeR, the right edge is +mfeR. */
+  zeroPct: number;
+  /** Where the realized R sits as a % of the bar's width, already clamped
+   *  to [0,100]. Null means no realized R yet (an open trade) — draw the
+   *  range, but no marker. */
+  markerPct: number | null;
+  /** True when the realized R fell outside [−maeR, +mfeR] before clamping
+   *  — rare (MFE/MAE price captured after the true extreme), but real, and
+   *  the caller may want to draw the marker flush with the edge rather
+   *  than pretend it landed mid-bar. */
+  clipped: boolean;
+};
+
+/**
+ * Layout for a trade's excursion bar: adverse move on one side of entry,
+ * favourable move on the other, realized result marked somewhere between.
+ *
+ * `maeR`/`mfeR` are magnitudes (≥0) in opposite directions from entry, not a
+ * 0…100 scale like `fraction` assumes — so the bar's own zero is wherever
+ * `maeR` and `mfeR` balance, not a fixed midpoint. That zero moves with the
+ * ratio: a trade that went far offside and barely favourable draws mostly
+ * red, not a bar split down the middle regardless of what happened.
+ */
+export function excursionBarLayout(
+  maeR: number | null,
+  mfeR: number | null,
+  realizedR: number | null,
+): ExcursionBarLayout | null {
+  if (maeR == null || mfeR == null || !(maeR >= 0) || !(mfeR >= 0)) return null;
+  const span = maeR + mfeR;
+  // A trade that never moved either way has no range to place anything on.
+  if (!(span > 0)) return null;
+  const zeroPct = (maeR / span) * 100;
+  if (realizedR == null || Number.isNaN(realizedR)) {
+    return { zeroPct, markerPct: null, clipped: false };
+  }
+  const raw = ((realizedR + maeR) / span) * 100;
+  return {
+    zeroPct,
+    markerPct: Math.max(0, Math.min(100, raw)),
+    clipped: raw < 0 || raw > 100,
+  };
+}

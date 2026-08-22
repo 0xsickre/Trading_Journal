@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   dashArc,
+  excursionBarLayout,
   fraction,
   semiArc,
   sparkPoints,
@@ -159,5 +160,44 @@ describe("sparkPoints", () => {
   it("insets so a stroke at the extremes is not clipped", () => {
     // With inset 2 the range is 2…18 rather than 0…20.
     expect(sparkPoints([0, 10], 100, 20, 2)).toBe("0,18 100,2");
+  });
+});
+
+describe("excursionBarLayout", () => {
+  it("answers null when either magnitude is missing", () => {
+    expect(excursionBarLayout(null, 3, 1)).toBeNull();
+    expect(excursionBarLayout(1, null, 1)).toBeNull();
+  });
+
+  it("answers null for a trade that never moved either way", () => {
+    expect(excursionBarLayout(0, 0, 0)).toBeNull();
+  });
+
+  it("places zero where mae and mfe balance, and the marker inside that range", () => {
+    // span = 4, zero sits at 1/4 of the width, realized 1.5R lands at (1.5+1)/4 = 62.5%.
+    expect(excursionBarLayout(1, 3, 1.5)).toEqual({
+      zeroPct: 25,
+      markerPct: 62.5,
+      clipped: false,
+    });
+  });
+
+  it("draws no marker for an open trade — realizedR null", () => {
+    const layout = excursionBarLayout(1, 3, null);
+    expect(layout).not.toBeNull();
+    expect(layout!.markerPct).toBeNull();
+    expect(layout!.clipped).toBe(false);
+  });
+
+  it("clamps and flags a realized R that beat the recorded MFE", () => {
+    const layout = excursionBarLayout(1, 3, 5);
+    expect(layout!.markerPct).toBe(100);
+    expect(layout!.clipped).toBe(true);
+  });
+
+  it("clamps and flags a realized R worse than the recorded MAE", () => {
+    const layout = excursionBarLayout(1, 3, -2);
+    expect(layout!.markerPct).toBe(0);
+    expect(layout!.clipped).toBe(true);
   });
 });

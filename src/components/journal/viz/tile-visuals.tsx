@@ -3,6 +3,7 @@
 import { useId } from "react";
 import {
   dashArc,
+  excursionBarLayout,
   fraction,
   semiArc,
   sparkPoints,
@@ -320,6 +321,64 @@ export function ScoreBar({ score }: { score: number | null }) {
         fill="var(--foreground)"
         data-viz-marker=""
       />
+    </svg>
+  );
+}
+
+/**
+ * Sickre Scale — one trade's excursion, drawn as a range.
+ *
+ * −maeR on the left, +mfeR on the right, entry at wherever those two balance
+ * (not the bar's midpoint — a trade that ran hard offside and only barely
+ * favourable draws mostly red, not a bar split down the middle regardless of
+ * what happened). The marker is the realized result inside that range: deep
+ * in the green side means most of the favourable move was kept, near the red
+ * edge means it gave most of it back.
+ *
+ * Renders nothing without both maeR and mfeR — see `excursionBarLayout`.
+ */
+export function ExcursionBar({
+  maeR,
+  mfeR,
+  realizedR,
+}: {
+  maeR: number | null;
+  mfeR: number | null;
+  realizedR: number | null;
+}) {
+  const layout = excursionBarLayout(maeR, mfeR, realizedR);
+  if (layout == null) return null;
+
+  return (
+    <svg
+      viewBox="0 0 100 8"
+      preserveAspectRatio="none"
+      className="h-2 w-full"
+      data-viz="excursion-bar"
+    >
+      <rect x="0" y="2" width={layout.zeroPct} height="4" rx="2" fill="var(--loss)" opacity="0.5" />
+      <rect
+        x={layout.zeroPct}
+        y="2"
+        width={100 - layout.zeroPct}
+        height="4"
+        rx="2"
+        fill="var(--profit)"
+        opacity="0.5"
+      />
+      {/* Entry reference line. */}
+      <rect x={layout.zeroPct - 0.25} y="0" width="0.5" height="8" fill="var(--muted-foreground)" />
+      {layout.markerPct != null && (
+        <rect
+          x={layout.markerPct - 0.5}
+          y="0"
+          width="1"
+          height="8"
+          rx="0.5"
+          fill="var(--foreground)"
+          data-viz-marker=""
+        />
+      )}
     </svg>
   );
 }

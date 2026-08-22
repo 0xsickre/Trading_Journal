@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import {
   DonutRing,
+  ExcursionBar,
   PROFIT_FACTOR_FULL,
   ScoreBar,
   SemiGauge,
@@ -35,6 +36,7 @@ describe("the visuals contribute no text", () => {
         <SplitBar left={300} right={-100} />
         <Sparkline values={[1, 2, 3]} />
         <ScoreBar score={64} />
+        <ExcursionBar maeR={1} mfeR={3} realizedR={1.5} />
       </>,
     );
     expect(container.textContent).toBe("");
@@ -83,6 +85,27 @@ describe("ScoreBar", () => {
     );
     expect(ids).toHaveLength(2);
     expect(ids[0]).not.toBe(ids[1]);
+  });
+});
+
+describe("ExcursionBar", () => {
+  it("marks the realized result inside the mae↔mfe range", () => {
+    // span = 4, marker at (1.5+1)/4 = 62.5% ⇒ rect x = 62.
+    const { container } = render(<ExcursionBar maeR={1} mfeR={3} realizedR={1.5} />);
+    expect(container.querySelector('[data-viz-marker]')?.getAttribute("x")).toBe(
+      "62",
+    );
+  });
+
+  it("renders the range but no marker for an open trade", () => {
+    const { container } = render(<ExcursionBar maeR={1} mfeR={3} realizedR={null} />);
+    expect(container.querySelector('[data-viz="excursion-bar"]')).toBeTruthy();
+    expect(container.querySelector('[data-viz-marker]')).toBeNull();
+  });
+
+  it("renders nothing when mae or mfe is missing", () => {
+    const { container } = render(<ExcursionBar maeR={null} mfeR={3} realizedR={1} />);
+    expect(container.querySelector('[data-viz="excursion-bar"]')).toBeNull();
   });
 });
 

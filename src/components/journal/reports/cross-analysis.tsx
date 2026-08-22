@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMetric, metric, type ViewMode } from "@/lib/journal/units";
 import { getCell, type PivotResult } from "@/lib/journal/reports/pivot";
+import { pivotCellColor, pivotExtent } from "@/lib/journal/reports/pivot-color";
 
 /**
  * Cross-analysis grid.
@@ -29,6 +30,7 @@ export function CrossAnalysis({
 }) {
   const fmt = (v: number | null) =>
     formatMetric(metric(v, result.metric.unit, { currency, equityBase }), viewMode);
+  const extent = pivotExtent(result);
 
   if (result.rowKeys.length === 0 || result.colKeys.length === 0) {
     return (
@@ -53,7 +55,8 @@ export function CrossAnalysis({
         </CardTitle>
         <p className="text-xs text-muted-foreground">
           {result.metric.label} · {result.grandTotal.n} trades · cells below{" "}
-          {result.minSample} trades are dimmed
+          {result.minSample} trades are dimmed · color = intensity relative
+          to the rest of the table
         </p>
         {result.multiValue && (
           <p className="text-xs text-[var(--chart-4)]">
@@ -87,6 +90,13 @@ export function CrossAnalysis({
                         className={`px-3 py-2 text-right tabular-nums ${
                           cell?.belowSample ? "opacity-40" : ""
                         }`}
+                        style={{
+                          backgroundColor: pivotCellColor(
+                            cell?.value ?? null,
+                            result.metric.unit,
+                            extent,
+                          ),
+                        }}
                         title={
                           cell
                             ? `${cell.n} trejdova${

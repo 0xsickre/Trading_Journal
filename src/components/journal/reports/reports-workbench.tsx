@@ -576,7 +576,7 @@ export function ReportsWorkbench({
                       ? `${m.label} does not work here — the report groups trades across several instruments, so there is neither a single point value nor a per-trade risk. This used to be shown silently in dollars.`
                       : m.value === "privacy"
                         ? "Hide money amounts"
-                        : `Show in ${m.label}`
+                        : `Show in ${m.label} — ${m.note}`
                   }
                 >
                   {m.label}

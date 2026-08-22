@@ -1377,6 +1377,7 @@ export function Dashboard({
               size="sm"
               className="h-7"
               disabled={!viewModeRenderable[vm.value]}
+              title={vm.note}
               onClick={() => setViewMode(vm.value)}
             >
               {vm.label}

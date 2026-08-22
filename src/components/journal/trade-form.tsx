@@ -66,6 +66,7 @@ import {
   plannedRewardFromTrade,
 } from "@/lib/journal/exit-efficiency";
 import { excursionFromTrade } from "@/lib/journal/excursion";
+import { ExcursionBar } from "@/components/journal/viz/tile-visuals";
 import { fmtMoney, fmtR, pnlClass } from "@/lib/journal/format";
 import {
   computePlannedRewardR,
@@ -1224,14 +1225,19 @@ export function TradeForm({
                   cls={pnlClass(metrics.netPl)}
                 />
                 <Metric label="R" value={fmtR(metrics.r)} cls={pnlClass(metrics.r)} />
-                <Metric
-                  label="MAE"
-                  value={metrics.maeR != null ? `−${metrics.maeR.toFixed(2)}R` : "—"}
-                />
-                <Metric
-                  label="MFE"
-                  value={metrics.mfeR != null ? `+${metrics.mfeR.toFixed(2)}R` : "—"}
-                />
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-xs text-muted-foreground">MAE / MFE</span>
+                    <span className="font-semibold">
+                      {metrics.maeR != null ? `−${metrics.maeR.toFixed(2)}R` : "—"}
+                      {" … "}
+                      {metrics.mfeR != null ? `+${metrics.mfeR.toFixed(2)}R` : "—"}
+                    </span>
+                  </div>
+                  <div className="w-28" title="Sickre Scale — adverse ↔ favorable excursion, realized result marked">
+                    <ExcursionBar maeR={metrics.maeR} mfeR={metrics.mfeR} realizedR={metrics.r} />
+                  </div>
+                </div>
                 <Metric
                   label="Capture"
                   value={metrics.capturePct != null ? `${metrics.capturePct.toFixed(0)}%` : "—"}

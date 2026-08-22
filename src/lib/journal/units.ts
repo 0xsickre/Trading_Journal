@@ -36,14 +36,14 @@ export type ViewMode =
   | "points"
   | "privacy";
 
-export const VIEW_MODES: { value: ViewMode; label: string }[] = [
-  { value: "dollars", label: "$" },
-  { value: "percentage", label: "%" },
-  { value: "r", label: "R" },
-  { value: "points", label: "Points" },
-  { value: "ticks", label: "Ticks" },
-  { value: "pips", label: "Pips" },
-  { value: "privacy", label: "Privacy" },
+export const VIEW_MODES: { value: ViewMode; label: string; note: string }[] = [
+  { value: "dollars", label: "$", note: "Account's own currency — always available." },
+  { value: "percentage", label: "%", note: "% of account equity — needs a known equity base." },
+  { value: "r", label: "R", note: "Multiples of planned risk — needs a risk amount in money." },
+  { value: "points", label: "Points", note: "Instrument points — needs the instrument's point value." },
+  { value: "ticks", label: "Ticks", note: "Needs the instrument's point value and tick size." },
+  { value: "pips", label: "Pips", note: "Forex instruments only — needs tick size on a forex instrument." },
+  { value: "privacy", label: "Privacy", note: "Hides money amounts." },
 ];
 
 export type InstrumentContext = {

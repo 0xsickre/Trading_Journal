@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  VIEW_MODES,
   canRender,
   formatDuration,
   formatMetric,
@@ -20,6 +21,14 @@ const future = {
   point_value: 10,
   tick_size: 0.1,
 };
+
+describe("VIEW_MODES", () => {
+  it("carries a non-empty note for every mode", () => {
+    for (const mode of VIEW_MODES) {
+      expect(mode.note.length).toBeGreaterThan(0);
+    }
+  });
+});
 
 describe("formatMetric — money", () => {
   it("renders dollars by default", () => {
