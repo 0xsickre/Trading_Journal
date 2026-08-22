@@ -1,43 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import {
-  ArchiveRestore,
-  Archive,
-  ChevronDown,
-  ChevronUp,
-  Loader2,
-  Pencil,
-  Plus,
-  Trash2,
-} from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { MoreHorizontal, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import type { OptionItem, OptionList } from "@/lib/journal/types";
-import {
-  addOption,
-  countOptionUsage,
-  deleteOption,
-  renameOption,
-  setOptionColor,
-  toggleOptionActive,
-  reorderOptions,
-} from "@/app/(app)/settings/actions";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -47,10 +17,36 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  optionUsageIsUnknown,
-  type OptionUsage,
-} from "@/lib/journal/option-usage";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import type { OptionItem, OptionList } from "@/lib/journal/types";
+import {
+  addList,
+  addOption,
+  countListUsage,
+  countOptionUsage,
+  deleteList,
+  deleteOption,
+  moveOptionToList,
+  renameList,
+  renameOption,
+  setListColor,
+  toggleOptionActive,
+  type ListUsage,
+} from "@/app/(app)/settings/actions";
 import { editableLists } from "@/lib/journal/settings-lists";
+import { usageKey } from "@/lib/journal/option-usage";
 
 const PALETTE = [
   "#22c55e",
@@ -64,417 +60,822 @@ const PALETTE = [
   "#64748b",
 ];
 
-/**
- * What an option is holding, counted when the popover opens.
- *
- * `null` means "not asked yet" and is what keeps the destructive controls
- * disabled: a delete button that is live before the count arrives is a delete
- * button that can be pressed on a number the user never saw. The three states
- * are therefore distinct and all three are rendered — unasked, counting, known.
- */
-type UsageState = { usage: OptionUsage } | "loading" | null;
-
-function UsageLine({ state }: { state: UsageState }) {
-  if (state === null) return null;
-  if (state === "loading") {
-    return (
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Loader2 className="size-3 animate-spin" />
-        Counting trades…
-      </p>
-    );
-  }
-  if (optionUsageIsUnknown(state.usage)) {
-    return (
-      <p className="text-xs text-amber-600 dark:text-amber-500">
-        Could not count the trades using this.
-      </p>
-    );
-  }
-  const n = state.usage.trades;
+/** The neutral dot for a category that has not been given a colour. */
+function ColorDot({ color, className }: { color: string | null; className?: string }) {
   return (
-    <p className="text-xs text-muted-foreground">
-      {n === 0
-        ? "No trade uses this."
-        : `Used by ${n} ${n === 1 ? "trade" : "trades"}.`}
-    </p>
+    <span
+      className={cn(
+        "inline-block size-3 shrink-0 rounded-full",
+        color ? "" : "border border-muted-foreground/40",
+        className,
+      )}
+      style={color ? { backgroundColor: color } : undefined}
+    />
   );
 }
 
-function ItemRow({
-  item,
-  canUp,
-  canDown,
-  onMove,
+function ColorPicker({
+  value,
+  onPick,
+  disabled,
 }: {
-  item: OptionItem;
-  canUp: boolean;
-  canDown: boolean;
-  onMove: (dir: -1 | 1) => void;
+  value: string | null;
+  onPick: (c: string | null) => void;
+  disabled?: boolean;
 }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {PALETTE.map((c) => (
+        <button
+          key={c}
+          type="button"
+          disabled={disabled}
+          className={cn(
+            "size-6 rounded-full border",
+            value === c && "ring-2 ring-ring",
+          )}
+          style={{ backgroundColor: c }}
+          aria-label={`Colour ${c}`}
+          onClick={() => onPick(c)}
+        />
+      ))}
+      <button
+        type="button"
+        disabled={disabled}
+        className="size-6 rounded-full border bg-transparent text-[10px] text-muted-foreground"
+        aria-label="No colour"
+        onClick={() => onPick(null)}
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function useAction() {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [name, setName] = useState(item.label);
-  const [open, setOpen] = useState(false);
-  const [usage, setUsage] = useState<UsageState>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
-  function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
+  function run(
+    fn: () => Promise<{ ok: boolean; error?: string }>,
+    after?: () => void,
+  ) {
     start(async () => {
       const res = await fn();
-      if (!res.ok) toast.error(res.error ?? "Failed");
-      else router.refresh();
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed");
+        return;
+      }
+      after?.();
+      router.refresh();
+    });
+  }
+  return { pending, run };
+}
+
+/* ── Categories ──────────────────────────────────────────────────────────── */
+
+function CategoryRow({ list }: { list: OptionList }) {
+  const { pending, run } = useAction();
+  const [editOpen, setEditOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [name, setName] = useState(list.label);
+  const [color, setColor] = useState<string | null>(list.color);
+  const [usage, setUsage] = useState<ListUsage | null>(null);
+  const [, startCount] = useTransition();
+
+  function openDelete() {
+    setUsage(null);
+    setConfirmOpen(true);
+    startCount(async () => {
+      const res = await countListUsage(list.id);
+      setUsage(
+        res.ok ? res.usage : { trades: -1, builtIn: false, customFieldLabels: [] },
+      );
     });
   }
 
-  // Counted on open, not with the page: this screen carries a hundred-odd
-  // options and only the opened one needs a number. Re-counted on every open so
-  // a popover reopened after an edit does not quote a stale figure.
-  function onOpenChange(next: boolean) {
-    setOpen(next);
-    if (!next) return;
-    setUsage("loading");
-    start(async () => {
-      const res = await countOptionUsage(item.id);
-      setUsage({ usage: { trades: res.ok ? res.trades : -1 } });
-    });
+  function save() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    // Two writes because they are two columns with two server actions; the
+    // rename is the one that can fail on validation, so it goes first and the
+    // colour only follows a rename that stuck.
+    run(
+      async () => {
+        if (trimmed !== list.label) {
+          const res = await renameList(list.id, trimmed);
+          if (!res.ok) return res;
+        }
+        if (color !== list.color) return setListColor(list.id, color);
+        return { ok: true as const };
+      },
+      () => setEditOpen(false),
+    );
   }
 
-  const known = usage !== null && usage !== "loading" ? usage.usage : null;
-  const inUse = known != null && known.trades > 0;
-  const countReady = known != null;
+  const blocked = usage?.builtIn === true;
 
   return (
-    <div
-      className={cn(
-        "flex items-center gap-2 rounded-md border px-2 py-1.5",
-        !item.is_active && "opacity-60",
-      )}
-    >
-      <Popover open={open} onOpenChange={onOpenChange}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="size-4 shrink-0 rounded-full border"
-            style={{ backgroundColor: item.color ?? "transparent" }}
-            title="Edit option"
-          />
-        </PopoverTrigger>
-        <PopoverContent className="w-72 space-y-3" align="start">
-          <UsageLine state={usage} />
+    <tr className="border-b last:border-0">
+      <td className="px-3 py-2.5 text-sm">{list.label}</td>
+      <td className="px-3 py-2.5">
+        <ColorDot color={list.color} />
+      </td>
+      <td className="px-3 py-2.5 text-right text-sm tabular-nums text-muted-foreground">
+        {list.items.length}
+      </td>
+      <td className="w-10 px-3 py-2.5 text-right">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 text-muted-foreground"
+              aria-label={`Options for ${list.label}`}
+            >
+              <MoreHorizontal className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onSelect={() => {
+                setName(list.label);
+                setColor(list.color);
+                setEditOpen(true);
+              }}
+            >
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onSelect={openDelete}>
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </td>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">
-              Rename
-            </label>
-            <div className="flex gap-2">
+      {/* Rendered from a `<td>` so the row stays valid HTML; the dialog itself
+          portals out of the table either way. */}
+      <td className="hidden">
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit category</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Name</label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") save();
+                  }}
+                  disabled={pending}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Colour</label>
+                <ColorPicker value={color} onPick={setColor} disabled={pending} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                onClick={() => setEditOpen(false)}
+                disabled={pending}
+              >
+                Cancel
+              </Button>
+              <Button onClick={save} disabled={pending || !name.trim()}>
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {blocked
+                  ? `"${list.label}" can't be deleted`
+                  : `Delete "${list.label}"?`}
+              </DialogTitle>
+              <DialogDescription asChild>
+                <div className="space-y-3 text-sm">
+                  {usage == null ? (
+                    <p className="text-muted-foreground">Checking what uses it…</p>
+                  ) : blocked ? (
+                    <p>
+                      A built-in field on the trade form reads this category.
+                      There is no other list to point it at, so deleting would
+                      leave that field&apos;s dropdown empty.
+                    </p>
+                  ) : (
+                    <>
+                      {usage.trades !== 0 && (
+                        <p>
+                          {usage.trades < 0 ? (
+                            "Could not count how many trades use a tag from this category."
+                          ) : (
+                            <>
+                              <strong>
+                                {usage.trades}{" "}
+                                {usage.trades === 1 ? "trade" : "trades"}
+                              </strong>{" "}
+                              {usage.trades === 1 ? "uses" : "use"} a tag from
+                              this category, and{" "}
+                              {usage.trades === 1 ? "keeps" : "keep"} it as text
+                              — nothing is lost from your history.
+                            </>
+                          )}
+                        </p>
+                      )}
+                      {usage.customFieldLabels.length > 0 && (
+                        <p>
+                          Your own field
+                          {usage.customFieldLabels.length === 1 ? "" : "s"}{" "}
+                          <strong>{usage.customFieldLabels.join(", ")}</strong>{" "}
+                          {usage.customFieldLabels.length === 1
+                            ? "reads"
+                            : "read"}{" "}
+                          this category and{" "}
+                          {usage.customFieldLabels.length === 1 ? "is" : "are"}{" "}
+                          deleted along with it.
+                        </p>
+                      )}
+                      <p>
+                        This <strong>cannot be undone</strong>. Every tag in the
+                        category goes with it.
+                      </p>
+                    </>
+                  )}
+                </div>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                onClick={() => setConfirmOpen(false)}
+                disabled={pending}
+              >
+                {blocked ? "Close" : "Cancel"}
+              </Button>
+              {!blocked && (
+                <Button
+                  variant="destructive"
+                  disabled={pending || usage == null}
+                  onClick={() =>
+                    run(() => deleteList(list.id), () => setConfirmOpen(false))
+                  }
+                >
+                  Delete
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </td>
+    </tr>
+  );
+}
+
+function NewCategoryDialog() {
+  const { pending, run } = useAction();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [color, setColor] = useState<string | null>(PALETTE[0]);
+
+  function create() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    run(
+      async () => {
+        const res = await addList(trimmed, trimmed, null);
+        return res;
+      },
+      () => {
+        setName("");
+        setOpen(false);
+        toast.success("Category created");
+      },
+    );
+  }
+
+  return (
+    <>
+      <Button size="sm" onClick={() => setOpen(true)}>
+        <Plus className="size-4" /> Add category
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New category</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Name</label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="h-8"
+                placeholder="Name your category"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") create();
+                }}
+                disabled={pending}
               />
-              <Button
-                size="sm"
-                className="h-8"
-                disabled={pending || name.trim() === item.label}
-                onClick={() => run(() => renameOption(item.id, name))}
-              >
-                Save
-              </Button>
             </div>
-            {/* Said before the rename, not after: the trades come along, and a
-                user who expected the old tag to stay put deserves to know that
-                while they can still change their mind. */}
-            {inUse && (
-              <p className="text-xs text-muted-foreground">
-                Renaming also rewrites this on{" "}
-                <strong>
-                  {known.trades} {known.trades === 1 ? "trade" : "trades"}
-                </strong>
-                , so the history stays together.
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">
-              Color
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {PALETTE.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className={cn(
-                    "size-5 rounded-full border",
-                    item.color === c && "ring-2 ring-ring",
-                  )}
-                  style={{ backgroundColor: c }}
-                  onClick={() => run(() => setOptionColor(item.id, c))}
-                />
-              ))}
-              <button
-                type="button"
-                className="size-5 rounded-full border bg-transparent text-[10px] text-muted-foreground"
-                title="No color"
-                onClick={() => run(() => setOptionColor(item.id, null))}
-              >
-                ✕
-              </button>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Colour</label>
+              <ColorPicker value={color} onPick={setColor} disabled={pending} />
             </div>
           </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full"
-            disabled={pending}
-            onClick={() =>
-              run(() => toggleOptionActive(item.id, !item.is_active))
-            }
-          >
-            {item.is_active ? (
-              <>
-                <Archive className="size-4" /> Archive (hide from forms)
-              </>
-            ) : (
-              <>
-                <ArchiveRestore className="size-4" /> Restore
-              </>
-            )}
-          </Button>
-
-          {/* Delete sits below archive and reads as the heavier of the two,
-              because it is: archive keeps the option resolvable, delete takes
-              it out of the dropdown for good. It stays disabled until the count
-              lands — see `UsageState`. */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
-            disabled={pending || !countReady}
-            onClick={() => {
-              // Nothing uses it: there is nothing to warn about, and a
-              // confirmation for a free action only teaches people to click
-              // through confirmations.
-              if (!inUse) run(() => deleteOption(item.id));
-              else setConfirmDelete(true);
-            }}
-          >
-            <Trash2 className="size-4" /> Delete
-          </Button>
-        </PopoverContent>
-      </Popover>
-
-      <span className="flex-1 truncate text-sm">{item.label}</span>
-      {!item.is_active && (
-        <Badge variant="secondary" className="text-[10px]">
-          archived
-        </Badge>
-      )}
-
-      <div className="flex">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7 text-muted-foreground"
-          disabled={!canUp || pending}
-          onClick={() => onMove(-1)}
-        >
-          <ChevronUp className="size-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7 text-muted-foreground"
-          disabled={!canDown || pending}
-          onClick={() => onMove(1)}
-        >
-          <ChevronDown className="size-4" />
-        </Button>
-      </div>
-
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete &ldquo;{item.label}&rdquo;?</DialogTitle>
-            <DialogDescription asChild>
-              <div className="space-y-3 text-sm">
-                <p>
-                  <strong>
-                    {known?.trades} {known?.trades === 1 ? "trade" : "trades"}
-                  </strong>{" "}
-                  {known?.trades === 1 ? "carries" : "carry"} this value, and{" "}
-                  {known?.trades === 1 ? "it keeps it" : "they keep it"}. The
-                  value is stored on the trade as text, so nothing is lost from
-                  your history.
-                </p>
-                <p>
-                  What goes is the option itself: it stops being offered when you
-                  log a trade, loses its colour, and drops out of the fixed order
-                  reports group by.
-                </p>
-                <p className="text-muted-foreground">
-                  To stop offering it while keeping all of that, archive it
-                  instead.
-                </p>
-              </div>
-            </DialogDescription>
-          </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setConfirmDelete(false)}
-              disabled={pending}
-            >
+            <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              disabled={pending}
-              onClick={() => {
-                setConfirmDelete(false);
-                setOpen(false);
-                run(() => deleteOption(item.id));
-              }}
-            >
-              <Trash2 className="size-4" /> Delete
+            <Button onClick={create} disabled={pending || !name.trim()}>
+              Create
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+function CategoriesTab({ lists }: { lists: OptionList[] }) {
+  const [query, setQuery] = useState("");
+  const shown = lists.filter((l) =>
+    l.label.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        A category groups tags. Deleting one is safe for your history — trades
+        that used its tags keep the text.
+      </p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <NewCategoryDialog />
+        <div className="relative min-w-52 flex-1">
+          <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search categories"
+            className="h-9 pl-8"
+          />
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-md border">
+        <table className="w-full min-w-md">
+          <thead>
+            <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+              <th className="px-3 py-2 font-medium">Category name</th>
+              <th className="px-3 py-2 font-medium">Colour</th>
+              <th className="px-3 py-2 text-right font-medium">Tags</th>
+              <th className="w-10 px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {shown.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  No categories match.
+                </td>
+              </tr>
+            ) : (
+              shown.map((l) => <CategoryRow key={l.id} list={l} />)
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-function ListCard({ list }: { list: OptionList }) {
-  const router = useRouter();
-  const [draft, setDraft] = useState("");
-  const [pending, start] = useTransition();
-  const [showArchived, setShowArchived] = useState(false);
+/* ── Tags ────────────────────────────────────────────────────────────────── */
 
-  const visible = list.items.filter((i) => i.is_active || showArchived);
-  const archivedCount = list.items.filter((i) => !i.is_active).length;
+type TagRowData = { item: OptionItem; list: OptionList };
 
-  function add() {
-    const label = draft.trim();
-    if (!label) return;
-    start(async () => {
-      const res = await addOption(list.key, label);
-      if (!res.ok) toast.error(res.error);
-      else {
-        setDraft("");
-        router.refresh();
-      }
+function TagRow({
+  row,
+  lists,
+  used,
+}: {
+  row: TagRowData;
+  lists: OptionList[];
+  used: number;
+}) {
+  const { pending, run } = useAction();
+  const [editOpen, setEditOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [name, setName] = useState(row.item.label);
+  const [listId, setListId] = useState(row.list.id);
+  const [usedNow, setUsedNow] = useState<number | null>(null);
+  const [, startCount] = useTransition();
+
+  function openDelete() {
+    setUsedNow(null);
+    setConfirmOpen(true);
+    // Re-counted head-on for the decision, rather than trusting the table's
+    // in-memory tally — see `getAllOptionUsage` on why that one can undercount.
+    startCount(async () => {
+      const res = await countOptionUsage(row.item.id);
+      setUsedNow(res.ok ? res.trades : -1);
     });
   }
 
-  function move(index: number, dir: -1 | 1) {
-    const active = list.items.filter((i) => i.is_active || showArchived);
-    const target = index + dir;
-    if (target < 0 || target >= active.length) return;
-    const ids = active.map((i) => i.id);
-    [ids[index], ids[target]] = [ids[target], ids[index]];
-    start(async () => {
-      // The result is read. `reorderOptions` reports a partial write since the
-      // round-3 server pass; throwing it away here would keep that invisible —
-      // the refresh below snaps the list back to whatever actually persisted,
-      // which without a message reads as the drag simply not working.
-      const res = await reorderOptions(ids);
-      if (!res.ok) toast.error(res.error);
-      router.refresh();
-    });
+  function save() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    run(
+      async () => {
+        if (trimmed !== row.item.label) {
+          const res = await renameOption(row.item.id, trimmed);
+          if (!res.ok) return res;
+        }
+        if (listId !== row.list.id) return moveOptionToList(row.item.id, listId);
+        return { ok: true as const };
+      },
+      () => setEditOpen(false),
+    );
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base">{list.label}</CardTitle>
-          <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-            {list.key}
-          </code>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <div className="flex gap-2">
-          <Input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Add option…"
-            className="h-9"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                add();
+    <tr className={cn("border-b last:border-0", !row.item.is_active && "opacity-60")}>
+      <td className="px-3 py-2.5 text-sm">
+        <span className="flex items-center gap-2">
+          {row.item.label}
+          {!row.item.is_active && (
+            <Badge variant="secondary" className="text-[10px]">
+              archived
+            </Badge>
+          )}
+        </span>
+      </td>
+      <td className="px-3 py-2.5 text-sm">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <ColorDot color={row.list.color ?? row.item.color} />
+          {row.list.label}
+        </span>
+      </td>
+      <td className="px-3 py-2.5 text-right text-sm tabular-nums text-muted-foreground">
+        {used}
+      </td>
+      <td className="w-10 px-3 py-2.5 text-right">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 text-muted-foreground"
+              aria-label={`Options for ${row.item.label}`}
+            >
+              <MoreHorizontal className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onSelect={() => {
+                setName(row.item.label);
+                setListId(row.list.id);
+                setEditOpen(true);
+              }}
+            >
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() =>
+                run(() => toggleOptionActive(row.item.id, !row.item.is_active))
               }
-            }}
-          />
-          <Button size="icon" className="size-9" disabled={pending} onClick={add}>
-            <Plus className="size-4" />
-          </Button>
-        </div>
+            >
+              {row.item.is_active ? "Archive" : "Restore"}
+            </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onSelect={openDelete}>
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </td>
 
-        <div className="space-y-1.5">
-          {visible.map((item, i) => (
-            <ItemRow
-              key={item.id}
-              item={item}
-              canUp={i > 0}
-              canDown={i < visible.length - 1}
-              onMove={(dir) => move(i, dir)}
-            />
-          ))}
-        </div>
+      <td className="hidden">
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit tag</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Tag name</label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") save();
+                  }}
+                  disabled={pending}
+                />
+                {/* Said before the rename, not after: the trades come along, and
+                    a user who expected the old tag to stay put deserves to know
+                    that while they can still change their mind. */}
+                {used > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Renaming also rewrites this on{" "}
+                    <strong>
+                      {used} {used === 1 ? "trade" : "trades"}
+                    </strong>
+                    , so the history stays together.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Category</label>
+                <Select value={listId} onValueChange={setListId} disabled={pending}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {lists.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                onClick={() => setEditOpen(false)}
+                disabled={pending}
+              >
+                Cancel
+              </Button>
+              <Button onClick={save} disabled={pending || !name.trim()}>
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-        {archivedCount > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full text-muted-foreground"
-            onClick={() => setShowArchived((s) => !s)}
-          >
-            {showArchived
-              ? "Hide archived"
-              : `Show ${archivedCount} archived`}
-          </Button>
-        )}
-      </CardContent>
-    </Card>
+        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete &ldquo;{row.item.label}&rdquo;?</DialogTitle>
+              <DialogDescription asChild>
+                <div className="space-y-3 text-sm">
+                  {usedNow == null ? (
+                    <p className="text-muted-foreground">Counting trades…</p>
+                  ) : usedNow < 0 ? (
+                    <p>Could not count the trades using this tag.</p>
+                  ) : usedNow === 0 ? (
+                    <p>No trade uses this tag.</p>
+                  ) : (
+                    <p>
+                      <strong>
+                        {usedNow} {usedNow === 1 ? "trade" : "trades"}
+                      </strong>{" "}
+                      {usedNow === 1 ? "carries" : "carry"} this value, and{" "}
+                      {usedNow === 1 ? "it keeps it" : "they keep it"}. The value
+                      is stored on the trade as text, so nothing is lost from
+                      your history.
+                    </p>
+                  )}
+                  <p className="text-muted-foreground">
+                    To stop offering it on new trades while keeping its colour
+                    and its place in reports, archive it instead.
+                  </p>
+                </div>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                onClick={() => setConfirmOpen(false)}
+                disabled={pending}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={pending || usedNow == null}
+                onClick={() =>
+                  run(() => deleteOption(row.item.id), () => setConfirmOpen(false))
+                }
+              >
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </td>
+    </tr>
   );
 }
 
-export function ListManager({ lists }: { lists: OptionList[] }) {
-  const categories = [
-    "Context",
-    "ICT Setup",
-    "Risk",
-    "Psychology",
-    null,
-  ];
-  // Filtered once, before the categories are walked, so a category left with
-  // nothing but hidden lists disappears with them rather than rendering an
-  // empty heading.
+function NewTagDialog({ lists }: { lists: OptionList[] }) {
+  const { pending, run } = useAction();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [listId, setListId] = useState(lists[0]?.id ?? "");
+
+  function create() {
+    const trimmed = name.trim();
+    const list = lists.find((l) => l.id === listId);
+    if (!trimmed || !list) return;
+    run(
+      () => addOption(list.key, trimmed),
+      () => {
+        setName("");
+        setOpen(false);
+        toast.success("Tag created");
+      },
+    );
+  }
+
+  return (
+    <>
+      <Button size="sm" onClick={() => setOpen(true)} disabled={lists.length === 0}>
+        <Plus className="size-4" /> Add tag
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New tag</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Tag name</label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Name your tag"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") create();
+                }}
+                disabled={pending}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Category</label>
+              <Select value={listId} onValueChange={setListId} disabled={pending}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Pick a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {lists.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
+              Cancel
+            </Button>
+            <Button onClick={create} disabled={pending || !name.trim() || !listId}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+const ALL = "__all__";
+
+function TagsTab({
+  lists,
+  usage,
+}: {
+  lists: OptionList[];
+  usage: Record<string, number>;
+}) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState(ALL);
+
+  const rows = useMemo(() => {
+    const out: TagRowData[] = [];
+    for (const list of lists) {
+      for (const item of list.items) out.push({ item, list });
+    }
+    return out.sort((a, b) => a.item.label.localeCompare(b.item.label));
+  }, [lists]);
+
+  const shown = rows.filter(
+    (r) =>
+      (filter === ALL || r.list.id === filter) &&
+      r.item.label.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Every tag you can pick on a trade, and the category it belongs to.
+        Renaming one carries the trades that already use it along with it.
+      </p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <NewTagDialog lists={lists} />
+        <Select value={filter} onValueChange={setFilter}>
+          <SelectTrigger className="h-9 w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>All categories</SelectItem>
+            {lists.map((l) => (
+              <SelectItem key={l.id} value={l.id}>
+                {l.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="relative min-w-52 flex-1">
+          <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search tags"
+            className="h-9 pl-8"
+          />
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-md border">
+        <table className="w-full min-w-lg">
+          <thead>
+            <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+              <th className="px-3 py-2 font-medium">Tag name</th>
+              <th className="px-3 py-2 font-medium">Category</th>
+              <th className="px-3 py-2 text-right font-medium">Used</th>
+              <th className="w-10 px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {shown.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  No tags match.
+                </td>
+              </tr>
+            ) : (
+              shown.map((r) => (
+                <TagRow
+                  key={r.item.id}
+                  row={r}
+                  lists={lists}
+                  used={usage[`${r.list.key} ${r.item.value}`] ?? 0}
+                />
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ── Screen ──────────────────────────────────────────────────────────────── */
+
+/**
+ * Tags management: categories and tags, each in its own table.
+ *
+ * Two tabs rather than one screen of expanded cards. A card per category with
+ * its tags spelled out inside reads fine at four categories and becomes a wall
+ * at eleven — and it gives no answer at all to "where is this tag filed", which
+ * is the question the Tags tab exists for. The storage `key` is deliberately
+ * not shown anywhere: it is how the database finds the row, not something the
+ * trader chose or can change.
+ */
+export function ListManager({
+  lists,
+  usage,
+}: {
+  lists: OptionList[];
+  usage: Record<string, number>;
+}) {
   const shown = editableLists(lists);
   return (
-    <div className="space-y-8">
-      {categories.map((cat) => {
-        const group = shown.filter((l) => (l.category ?? null) === cat);
-        if (group.length === 0) return null;
-        return (
-          <section key={cat ?? "other"} className="space-y-3">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-              <Pencil className="size-3.5" />
-              {cat ?? "Other"}
-            </h3>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {group.map((list) => (
-                <ListCard key={list.id} list={list} />
-              ))}
-            </div>
-          </section>
-        );
-      })}
-    </div>
+    <Tabs defaultValue="categories" className="space-y-4">
+      <TabsList>
+        <TabsTrigger value="categories">Categories</TabsTrigger>
+        <TabsTrigger value="tags">Tags</TabsTrigger>
+      </TabsList>
+      <TabsContent value="categories">
+        <CategoriesTab lists={shown} />
+      </TabsContent>
+      <TabsContent value="tags">
+        <TagsTab lists={shown} usage={usage} />
+      </TabsContent>
+    </Tabs>
   );
 }

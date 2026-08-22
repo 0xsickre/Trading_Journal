@@ -3,7 +3,15 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Archive, ArchiveRestore, ChevronDown, ChevronUp, Plus } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronDown,
+  ChevronUp,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -27,10 +35,26 @@ import {
 } from "@/lib/journal/field-def-types";
 import {
   addFieldDef,
+  countFieldDefUsage,
+  deleteFieldDef,
   moveFieldDef,
   toggleFieldDefActive,
   updateFieldDef,
 } from "@/app/(app)/settings/actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { OptionList } from "@/lib/journal/types";
 
 const TYPE_LABELS: Record<FieldDefType, string> = {
@@ -43,6 +67,124 @@ const TYPE_LABELS: Record<FieldDefType, string> = {
 };
 
 const NEEDS_LIST = (t: FieldDefType) => t === "select" || t === "tags";
+
+/**
+ * A field's usage, for the delete dialog. `null` = not asked yet, which keeps
+ * Delete disabled until the count lands — same shape as `UsageState` on the
+ * option/list level.
+ */
+type FieldUsageState = { trades: number } | "loading" | null;
+
+function DeleteFieldMenu({ def }: { def: FieldDef }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [usage, setUsage] = useState<FieldUsageState>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  function onMenuOpenChange(next: boolean) {
+    setMenuOpen(next);
+    if (!next) return;
+    setUsage("loading");
+    start(async () => {
+      const res = await countFieldDefUsage(def.id);
+      setUsage({ trades: res.ok ? res.trades : -1 });
+    });
+  }
+
+  function runDelete() {
+    start(async () => {
+      const res = await deleteFieldDef(def.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  const countReady = usage !== null && usage !== "loading";
+  const trades = countReady ? (usage as { trades: number }).trades : 0;
+
+  return (
+    <>
+      <DropdownMenu open={menuOpen} onOpenChange={onMenuOpenChange}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground"
+            aria-label="More"
+          >
+            <MoreHorizontal className="size-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            disabled={!countReady}
+            variant="destructive"
+            onSelect={(e) => {
+              e.preventDefault();
+              setConfirmOpen(true);
+            }}
+          >
+            <Trash2 className="size-3.5" /> Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete &ldquo;{def.label}&rdquo;?</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                {trades < 0 ? (
+                  <p>Could not count how many trades recorded this field.</p>
+                ) : trades > 0 ? (
+                  <p>
+                    <strong>
+                      {trades} {trades === 1 ? "trade" : "trades"}
+                    </strong>{" "}
+                    recorded a value here. The value stays in your data, but
+                    without this definition nothing in the app can find or
+                    label it again — it will not appear in reports, exports or
+                    the trade form.
+                  </p>
+                ) : (
+                  <p>No trade has recorded a value here yet.</p>
+                )}
+                <p className="text-muted-foreground">
+                  To stop offering it on new trades while keeping past values
+                  fully readable, archive it instead.
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmOpen(false)}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={pending}
+              onClick={() => {
+                setConfirmOpen(false);
+                runDelete();
+              }}
+            >
+              <Trash2 className="size-4" /> Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 function FieldRow({
   def,
@@ -189,6 +331,7 @@ function FieldRow({
             <ArchiveRestore className="size-3.5" />
           )}
         </Button>
+        <DeleteFieldMenu def={def} />
       </div>
     </div>
   );

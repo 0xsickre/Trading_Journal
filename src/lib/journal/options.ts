@@ -16,7 +16,7 @@ export async function getListsWithItems(
     // reshuffle between two identical page loads.
     supabase
       .from("tj_option_lists")
-      .select("id,key,label,category,sort_order")
+      .select("id,key,label,category,color,sort_order")
       .order("sort_order")
       .order("id"),
     supabase

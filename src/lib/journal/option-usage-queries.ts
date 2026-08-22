@@ -4,6 +4,7 @@ import { getFieldDefs } from "./field-defs";
 import { getAllFormFields } from "./form-config";
 import {
   optionFieldTargets,
+  usageKey,
   type OptionFieldTarget,
   type OptionUsage,
 } from "./option-usage";
@@ -116,6 +117,76 @@ export async function getOptionUsage(
       out[value] = { trades: total };
     }),
   );
+
+  return out;
+}
+
+/**
+ * Usage for EVERY option at once, keyed `listKey + "\u0000" + value`.
+ *
+ * The Tags table shows a "Used" number on every row, and the per-value head
+ * count `getOptionUsage` does would mean one round trip per option — a hundred
+ * of them on a screen that has to render in one go. This reads the relevant
+ * columns of the trade table ONCE and tallies in memory instead.
+ *
+ * Reading rows rather than counting them does reintroduce PostgREST's 1000-row
+ * cap, and that is the deliberate trade: this is a single-trader journal, and
+ * an undercount in a table column is a cosmetically stale number, not a
+ * destructive decision. The delete dialogs still call `getOptionUsage`, which
+ * is head-counted and has no ceiling — the number that gates a destructive
+ * action is never the one from here.
+ */
+export async function getAllOptionUsage(
+  listKeys: readonly string[],
+): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  if (listKeys.length === 0) return out;
+
+  const defs = await getFieldDefs(false);
+  const fields = getAllFormFields(defs);
+
+  // Which columns to read, and which list each one answers for. A column can
+  // serve several lists (psychology merges two), so this is a list of pairs
+  // rather than a map.
+  const pairs: { listKey: string; target: OptionFieldTarget }[] = [];
+  for (const listKey of listKeys) {
+    for (const target of optionFieldTargets(fields, listKey)) {
+      pairs.push({ listKey, target });
+    }
+  }
+  if (pairs.length === 0) return out;
+
+  const columns = new Set<string>();
+  for (const { target } of pairs) {
+    columns.add(target.custom ? "custom" : target.key);
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tj_positions")
+    .select([...columns].join(","));
+  if (error || !data) return out;
+
+  const bump = (listKey: string, value: string) => {
+    const k = `${listKey}\u0000${value}`;
+    out[k] = (out[k] ?? 0) + 1;
+  };
+
+  for (const row of data as unknown as Record<string, unknown>[]) {
+    for (const { listKey, target } of pairs) {
+      const bag = target.custom
+        ? (row.custom as Record<string, unknown> | null)
+        : row;
+      const raw = bag?.[target.key];
+      if (raw == null) continue;
+      if (target.array) {
+        if (!Array.isArray(raw)) continue;
+        for (const v of raw) if (typeof v === "string" && v) bump(listKey, v);
+      } else if (typeof raw === "string" && raw) {
+        bump(listKey, raw);
+      }
+    }
+  }
 
   return out;
 }

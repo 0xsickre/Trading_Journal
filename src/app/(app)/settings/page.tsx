@@ -1,5 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getListsWithItems } from "@/lib/journal/options";
+import { getAllOptionUsage } from "@/lib/journal/option-usage-queries";
 import { getInstruments } from "@/lib/journal/instruments";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getCashEvents } from "@/lib/journal/cash-events";
@@ -9,7 +10,6 @@ import { AccountSettings } from "@/components/journal/account-settings";
 import { DangerZone } from "@/components/journal/danger-zone";
 import { getAccountUsage } from "@/lib/journal/account-usage-queries";
 import { CashEventsManager } from "@/components/journal/cash-events-manager";
-import { NewListForm } from "@/components/journal/new-list-form";
 import { FieldDefManager } from "@/components/journal/field-def-manager";
 import { getFieldDefs } from "@/lib/journal/field-defs";
 import { TrackerRuleManager } from "@/components/journal/tracker-rule-manager";
@@ -55,11 +55,17 @@ export default async function SettingsPage() {
   // that fetches on open shows an empty list first and the truth a beat later.
   const accountUsage = await getAccountUsage(accounts.map((a) => a.id));
 
+  // The Tags table shows a "Used" count on every row, so it has to be there
+  // when the table first paints — one batched read rather than a head count per
+  // tag. The delete dialogs re-count head-on before they act; see
+  // `getAllOptionUsage` for why the two differ.
+  const optionUsage = await getAllOptionUsage(lists.map((l) => l.key));
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Settings"
-        description="Manage your dropdown lists, instruments and accounts. Archiving an option hides it from entry forms but keeps it filterable in history."
+        description="Manage your categories, instruments and accounts. Deleting a category or option is safe — trades that used it keep the text. Archiving hides an option from entry forms without deleting it."
       />
 
       <Tabs defaultValue="lists">
@@ -67,7 +73,7 @@ export default async function SettingsPage() {
             whitespace-nowrap — scroll the strip instead of overflowing the page. */}
         <TabsList className="flex w-full max-w-full justify-start overflow-x-auto sm:w-fit">
           <TabsTrigger value="lists" className="flex-none">
-            Dropdown Lists
+            Categories
           </TabsTrigger>
           <TabsTrigger value="fields" className="flex-none">
             My fields
@@ -90,10 +96,7 @@ export default async function SettingsPage() {
         </TabsList>
 
         <TabsContent value="lists" className="space-y-4">
-          <div className="flex justify-end">
-            <NewListForm />
-          </div>
-          <ListManager lists={lists} />
+          <ListManager lists={lists} usage={optionUsage} />
         </TabsContent>
 
         <TabsContent value="fields">

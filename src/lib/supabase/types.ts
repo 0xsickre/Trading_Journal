@@ -823,6 +823,7 @@ export type Database = {
       tj_option_lists: {
         Row: {
           category: string | null
+          color: string | null
           created_at: string
           id: string
           key: string
@@ -832,6 +833,7 @@ export type Database = {
         }
         Insert: {
           category?: string | null
+          color?: string | null
           created_at?: string
           id?: string
           key: string
@@ -841,6 +843,7 @@ export type Database = {
         }
         Update: {
           category?: string | null
+          color?: string | null
           created_at?: string
           id?: string
           key?: string
@@ -1538,6 +1541,7 @@ export type Database = {
         Args: { p_category?: string; p_key: string; p_label: string }
         Returns: {
           category: string | null
+          color: string | null
           created_at: string
           id: string
           key: string

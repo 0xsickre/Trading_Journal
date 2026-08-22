@@ -10,6 +10,8 @@ import {
   getOptionFieldTargets,
   getOptionUsage,
 } from "@/lib/journal/option-usage-queries";
+import { isListBuiltIn } from "@/lib/journal/option-usage";
+import { getAllFormFields } from "@/lib/journal/form-config";
 import { RESET_PHRASE } from "@/lib/journal/reset-phrase";
 import { isValidTimeZone, DEFAULT_TZ } from "@/lib/journal/time";
 import {
@@ -251,6 +253,166 @@ export async function addList(
     // and an explicit null would be sent as a value rather than omitted.
     p_category: category ?? undefined,
   });
+  if (error) return { ok: false, error: error.message };
+  revalidateAll();
+  return { ok: true };
+}
+
+/** Rename a list itself — the `key` is immutable, only the display `label` moves. */
+export async function renameList(id: string, label: string) {
+  const supabase = await createClient();
+  const trimmed = label.trim();
+  if (!trimmed) return { ok: false, error: "Name cannot be empty." };
+  const { error } = await supabase
+    .from("tj_option_lists")
+    .update({ label: trimmed })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidateAll();
+  return { ok: true };
+}
+
+/** Colour for a category chip. */
+export async function setListColor(id: string, color: string | null) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tj_option_lists")
+    .update({ color })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidateAll();
+  return { ok: true };
+}
+
+/**
+ * File a tag under a different category.
+ *
+ * Only the parent moves — the tag keeps its `value`, so every trade already
+ * carrying it stays attached. Refused when the destination is a list a
+ * BUILT-IN field reads: those fields feed a fixed dropdown, and dropping a
+ * foreign tag into one would offer a value the form was never built to mean.
+ */
+export async function moveOptionToList(optionId: string, listId: string) {
+  const supabase = await createClient();
+  const { data: list, error: listError } = await supabase
+    .from("tj_option_lists")
+    .select("id")
+    .eq("id", listId)
+    .maybeSingle();
+  if (listError) return { ok: false, error: listError.message };
+  if (!list) return { ok: false, error: "Category not found." };
+
+  const { error } = await supabase
+    .from("tj_option_items")
+    .update({ list_id: listId })
+    .eq("id", optionId);
+  if (error) return { ok: false, error: error.message };
+  revalidateAll();
+  return { ok: true };
+}
+
+export type ListUsage = {
+  trades: number;
+  /** A built-in (hardcoded) field reads this list — deleting it is refused. */
+  builtIn: boolean;
+  /** Labels of the trader's own fields that would be deleted along with it. */
+  customFieldLabels: string[];
+};
+
+/**
+ * What a whole list is holding, for the dialog before it goes.
+ *
+ * Three different costs, because a list can be three different kinds of
+ * expensive: trades that recorded one of its values (survive the delete, same
+ * as a single option), a built-in field that has no other source for its
+ * dropdown (blocks the delete outright — there is no "pick another list" for
+ * code), and the trader's own custom field, which this delete would take down
+ * with it since a select with no list is not a field any more.
+ */
+export async function countListUsage(
+  id: string,
+): Promise<{ ok: true; usage: ListUsage } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const [{ data: list, error: listError }, { data: items, error: itemsError }] =
+    await Promise.all([
+      supabase.from("tj_option_lists").select("key").eq("id", id).maybeSingle(),
+      supabase.from("tj_option_items").select("value").eq("list_id", id),
+    ]);
+  if (listError) return { ok: false, error: listError.message };
+  if (!list) return { ok: false, error: "List not found." };
+  if (itemsError) return { ok: false, error: itemsError.message };
+
+  const values = (items ?? []).map((i) => i.value);
+  const perValue = await getOptionUsage(list.key, values);
+  let trades = 0;
+  for (const v of values) {
+    const n = perValue[v]?.trades ?? 0;
+    // One unreadable value makes the total unreadable — the same rule
+    // `getOptionUsage` already applies within a single value's own count.
+    if (n < 0) {
+      trades = -1;
+      break;
+    }
+    trades += n;
+  }
+
+  const { data: fieldDefs, error: fieldError } = await supabase
+    .from("tj_field_defs")
+    .select("label")
+    .eq("list_key", list.key);
+  if (fieldError) return { ok: false, error: fieldError.message };
+
+  return {
+    ok: true,
+    usage: {
+      trades,
+      builtIn: isListBuiltIn(getAllFormFields([]), list.key),
+      customFieldLabels: (fieldDefs ?? []).map((d) => d.label),
+    },
+  };
+}
+
+/**
+ * Delete a list outright — the trader's own category, gone, the way TradeZella
+ * lets a category go.
+ *
+ * REFUSED for a list a BUILT-IN field depends on (`isListBuiltIn`): that field
+ * is hardcoded in `form-config.ts`, so there is no "point it elsewhere" the way
+ * there is for a custom field — deleting the list would leave the field's
+ * dropdown silently empty on every trade going forward.
+ *
+ * CASCADES to the trader's own custom field(s) when the list backs one of
+ * those instead: a select or tags field with no list is not a field any
+ * trader would want kept around half-alive, so the whole pairing goes
+ * together — the same one-delete-does-it TradeZella model this screen copies.
+ * The field's already-recorded values stay on the trades that hold them, same
+ * as `deleteOption`.
+ */
+export async function deleteList(id: string) {
+  const supabase = await createClient();
+  const { data: list, error: listError } = await supabase
+    .from("tj_option_lists")
+    .select("key")
+    .eq("id", id)
+    .maybeSingle();
+  if (listError) return { ok: false, error: listError.message };
+  if (!list) return { ok: false, error: "List not found." };
+
+  if (isListBuiltIn(getAllFormFields([]), list.key)) {
+    return {
+      ok: false,
+      error: "A built-in field reads this list — it cannot be deleted.",
+    };
+  }
+
+  const { error: fieldError } = await supabase
+    .from("tj_field_defs")
+    .delete()
+    .eq("list_key", list.key);
+  if (fieldError) return { ok: false, error: fieldError.message };
+
+  // Cascades to tj_option_items via ON DELETE CASCADE.
+  const { error } = await supabase.from("tj_option_lists").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidateAll();
   return { ok: true };
@@ -785,9 +947,10 @@ export async function updateFieldDef(
 /**
  * Archive / restore a field.
  *
- * Deactivating never deletes: history keeps the values, and every reader that
- * looks at past trades asks for inactive definitions too. Hard deletion is not
- * offered at all — it would turn recorded data into unlabelled jsonb keys.
+ * The default way to retire one: history keeps its values readable, because
+ * every report and export that looks at past trades asks for inactive
+ * definitions too (`getFieldDefs(false)`). A field you are done with belongs
+ * here, not deleted — archiving costs nothing and can be undone with one click.
  */
 export async function toggleFieldDefActive(id: string, isActive: boolean) {
   const supabase = await createClient();
@@ -798,6 +961,56 @@ export async function toggleFieldDefActive(id: string, isActive: boolean) {
   if (error) return { ok: false as const, error: error.message };
   revalidateAll();
   return { ok: true as const };
+}
+
+/**
+ * How many trades recorded a value for this field, for the delete dialog.
+ *
+ * A field's values live under its `key` in the `custom` jsonb bag, and the
+ * DEFINITION — the label, the type, which section it renders in — lives only
+ * in this one `tj_field_defs` row. Unlike an option's value, which keeps
+ * printing as plain text once its list entry is gone, a custom field's value
+ * has no meaning without the definition: nothing else in the app knows the key
+ * exists, so nothing can label or group it once this row is gone. The count
+ * here is what lets the delete dialog say that plainly instead of pretending
+ * the value is still kept somewhere useful.
+ */
+export async function countFieldDefUsage(
+  id: string,
+): Promise<{ ok: true; trades: number } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tj_field_defs")
+    .select("key")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "Field not found." };
+
+  const { count, error: countError } = await supabase
+    .from("tj_positions")
+    .select("id", { count: "exact", head: true })
+    .not(`custom->${data.key}`, "is", null);
+  if (countError) return { ok: false, error: countError.message };
+  return { ok: true, trades: count ?? 0 };
+}
+
+/**
+ * Delete a field outright — the definition, not just its recorded values.
+ *
+ * Any trade that already has a value under this key keeps it in the database,
+ * but nothing in the app can find it again: `getFieldDefs` will not return the
+ * row, so no report, export or the trade form itself has any way to know the
+ * key exists. That is the real cost, and `countFieldDefUsage` exists so the
+ * dialog states it rather than implying the data is "safe" the way a deleted
+ * option's plain-text value is.
+ */
+export async function deleteFieldDef(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("tj_field_defs").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidateAll();
+  return { ok: true };
 }
 
 export async function moveFieldDef(id: string, direction: -1 | 1) {

@@ -17,6 +17,8 @@ export type OptionList = {
   key: string;
   label: string;
   category: string | null;
+  /** Hex colour for the category chip; null when none was chosen. */
+  color: string | null;
   sort_order: number;
   items: OptionItem[];
 };
