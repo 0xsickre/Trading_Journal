@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateDaily } from "@/lib/journal/revalidate";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
@@ -15,7 +16,7 @@ import {
 function revalidateAll() {
   revalidatePath("/settings");
   revalidatePath("/daily");
-  revalidatePath("/", "layout");
+  revalidateDaily();
 }
 
 type Result = { ok: true } | { ok: false; error: string };

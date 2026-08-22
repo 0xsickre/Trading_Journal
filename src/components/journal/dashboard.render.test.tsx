@@ -105,9 +105,17 @@ function statValue(label: string): string {
   return labelEl?.parentElement?.children[1]?.textContent ?? "";
 }
 
-/** The Sickre Score headline, found by the `/ 100` that always sits beside it. */
-function scoreHeadline(): string {
-  return screen.getByText("/ 100").previousElementSibling?.textContent ?? "";
+/**
+ * The Sickre Score headline, found by the `/ 100` that always sits beside it.
+ *
+ * Async because the card is behind a `next/dynamic` boundary — recharts is
+ * ~840 KB and the dashboard is the `/` route, so the radar chart is fetched
+ * rather than bundled. `findByText` waits for that import the way the browser
+ * does; a synchronous `getByText` would only ever see the loading placeholder.
+ */
+async function scoreHeadline(): Promise<string> {
+  const marker = await screen.findByText("/ 100");
+  return marker.previousElementSibling?.textContent ?? "";
 }
 
 describe("the book, on screen — same figures the paper already proved", () => {
@@ -144,9 +152,9 @@ describe("the book, on screen — same figures the paper already proved", () => 
     expect(statValue("Win rate")).toBe("55.6%");
   });
 
-  it("shows the Sickre Score the paper works out to 60.62, rounded to 61", () => {
+  it("shows the Sickre Score the paper works out to 60.62, rounded to 61", async () => {
     renderDashboard(rowsOf(BOOK));
-    expect(scoreHeadline()).toBe("61");
+    expect(await scoreHeadline()).toBe("61");
     // Ten trades: real, and thin — labelled so, with the count beside it.
     // Asserted as ONE string rather than two lookups: "10 trades" on its own
     // now also matches the Hold time card's "10 trades with a known duration",
@@ -191,23 +199,23 @@ describe("Week win %, the same guard on a different denominator", () => {
 });
 
 describe("the shapes a book can take, on screen", () => {
-  it("EMPTY — no crash, and the score says there is nothing to score yet", () => {
+  it("EMPTY — no crash, and the score says there is nothing to score yet", async () => {
     // The reported bug itself, rendered: before the round-3 fix this screen
     // read 33 with "Max drawdown: 100" on exactly this input.
     renderDashboard([]);
     expect(statValue("Trades")).toBe("0");
     expect(statValue("Net P/L")).toBe("$0.00");
-    expect(scoreHeadline()).toBe("—");
+    expect(await scoreHeadline()).toBe("—");
     expect(screen.getByText(/5 more/)).toBeInTheDocument();
   });
 
-  it("ONE WINNER — the score withholds rather than reading 100", () => {
+  it("ONE WINNER — the score withholds rather than reading 100", async () => {
     renderDashboard(rowsOf(shapedBook([250])));
     expect(statValue("Trades")).toBe("1");
-    expect(scoreHeadline()).toBe("—");
+    expect(await scoreHeadline()).toBe("—");
   });
 
-  it("ALL LOSERS — the score is low, and drawdown does not read as flawless", () => {
+  it("ALL LOSERS — the score is low, and drawdown does not read as flawless", async () => {
     // `S3`, on screen: a losing streak's drawdown percentage has no positive
     // peak to divide by. Before the fix that read 0, and the card scored a
     // straight-down book 100 for risk management.
@@ -217,7 +225,7 @@ describe("the shapes a book can take, on screen", () => {
     expect(statValue("Net P/L")).toBe("-$700.00");
   });
 
-  it("ALL BREAKEVEN — win rate has no decisions to divide by, and says so", () => {
+  it("ALL BREAKEVEN — win rate has no decisions to divide by, and says so", async () => {
     // A genuine finding from this render test, not an invented case: before
     // this step's fix, `stats.winRate` answered `0` for zero decided trades —
     // correct for the STATISTIC (nothing to divide), wrong read as a
@@ -226,6 +234,6 @@ describe("the shapes a book can take, on screen", () => {
     renderDashboard(rowsOf(shapedBook([0, 0, 0, 0, 0, 0])));
     expect(statValue("Trades")).toBe("6");
     expect(statValue("Win rate")).toBe("—");
-    expect(scoreHeadline()).toBe("—");
+    expect(await scoreHeadline()).toBe("—");
   });
 });

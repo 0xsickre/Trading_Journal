@@ -18,14 +18,12 @@ import {
   AXIS_PROPS,
   ChartShell,
   GRID_PROPS,
+  MAX_CHART_METRICS,
   SERIES_COLORS,
   TOOLTIP_STYLE,
 } from "@/components/journal/chart-shell";
 import { formatMetric, metric, type ViewMode } from "@/lib/journal/units";
 import type { ReportResult } from "@/lib/journal/reports/engine";
-
-/** Up to three metrics at once, per the spec. */
-export const MAX_CHART_METRICS = 3;
 
 export function ReportChart({
   result,

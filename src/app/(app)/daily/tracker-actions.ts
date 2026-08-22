@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateDaily } from "@/lib/journal/revalidate";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
 import { getCurrentUser } from "@/lib/supabase/user";
@@ -103,8 +103,7 @@ export async function setCheckin(
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/daily");
-  revalidatePath("/");
+  revalidateDaily();
   return { ok: true };
 }
 
@@ -173,7 +172,6 @@ export async function lockDay(reportDate: string): Promise<Result> {
   });
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/daily");
-  revalidatePath("/");
+  revalidateDaily();
   return { ok: true };
 }

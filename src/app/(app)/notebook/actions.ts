@@ -18,7 +18,7 @@ type Result<T = unknown> =
 
 function revalidateNotes() {
   revalidatePath("/notebook");
-  revalidatePath("/", "layout");
+  revalidatePath("/notebook");
 }
 
 /**

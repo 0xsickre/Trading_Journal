@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateTrades } from "@/lib/journal/revalidate";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
@@ -256,7 +257,7 @@ export async function commitImport(input: CommitInput) {
     .eq("id", batch.id);
 
   revalidatePath("/journal");
-  revalidatePath("/", "layout");
+  revalidateTrades();
   return { ok: true as const, created, merged, skipped, failed, errors };
 }
 
@@ -407,7 +408,7 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
 
   revalidatePath("/journal");
   revalidatePath("/import");
-  revalidatePath("/", "layout");
+  revalidateTrades();
 
   return {
     ok: true,

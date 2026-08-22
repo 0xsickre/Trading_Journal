@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateOptions } from "@/lib/journal/revalidate";
 import { createClient } from "@/lib/supabase/server";
 import { RESERVED_KEYS } from "@/lib/journal/reserved-keys";
 import { getCurrentUser } from "@/lib/supabase/user";
@@ -41,12 +41,7 @@ export type AddOptionResult =
     }
   | { ok: false; error: string };
 
-function revalidateAll() {
-  revalidatePath("/settings");
-  revalidatePath("/trades/new");
-  revalidatePath("/journal");
-  revalidatePath("/", "layout");
-}
+const revalidateAll = revalidateOptions;
 
 /** Add a new option to a list identified by its `key` (used by inline "+ Add"). */
 export async function addOption(
@@ -786,7 +781,7 @@ export async function resetAllData(confirmPhrase: string) {
   // Every route reads something this just deleted, so the whole tree goes —
   // revalidating only /settings would leave the dashboard drawing a book that
   // no longer exists.
-  revalidatePath("/", "layout");
+  revalidateOptions();
   return { ok: true as const };
 }
 

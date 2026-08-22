@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateOptions } from "@/lib/journal/revalidate";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { cleanBrokerSymbol, TOKEN_PREFIX } from "@/lib/journal/bot-events";
@@ -8,7 +9,7 @@ import { cleanBrokerSymbol, TOKEN_PREFIX } from "@/lib/journal/bot-events";
 function revalidateAll() {
   revalidatePath("/settings");
   revalidatePath("/journal");
-  revalidatePath("/", "layout");
+  revalidateOptions();
 }
 
 type Result = { ok: true } | { ok: false; error: string };

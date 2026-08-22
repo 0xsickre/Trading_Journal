@@ -30,7 +30,6 @@ import {
 import { cn } from "@/lib/utils";
 import { MarkdownView } from "@/components/journal/markdown-view";
 import { parseMarkdown } from "@/lib/journal/notes/markdown";
-import { renderNoteToPdf } from "@/lib/journal/notes/markdown-pdf";
 import { tradeLinkPatch, type Note, type NoteFolder } from "@/lib/journal/notes/note-types";
 import {
   deleteNote,
@@ -293,7 +292,14 @@ export function NoteEditor({
             variant="ghost"
             size="icon"
             className="size-8"
-            onClick={() => {
+            onClick={async () => {
+              // Loaded on the click, not with the page. jspdf is ~440 KB and
+              // this module pulled it into the Notebook chunk for everyone,
+              // including the readers who never export anything — the same
+              // reason `xlsx` and `papaparse` are already imported this way.
+              const { renderNoteToPdf } = await import(
+                "@/lib/journal/notes/markdown-pdf"
+              );
               const doc = renderNoteToPdf(title, parseMarkdown(content));
               doc.save(`${(title || "note").trim()}.pdf`);
             }}

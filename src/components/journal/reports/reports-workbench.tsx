@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { MAX_CHART_METRICS } from "@/components/journal/chart-shell";
 import { toRealized } from "@/lib/journal/analytics";
 import { enrichTrades, type DailyReportLite, type FillCounts } from "@/lib/journal/enriched-trade";
 import { sharedCurrency } from "@/lib/journal/format";
@@ -52,7 +53,25 @@ import {
 import { BookOverviewPanel } from "@/components/journal/reports/book-overview";
 import { FilterBar } from "@/components/journal/reports/filter-bar";
 import { PerformanceSummaryPanel } from "@/components/journal/reports/performance-summary";
-import { ReportChart, MAX_CHART_METRICS } from "@/components/journal/reports/report-chart";
+import dynamic from "next/dynamic";
+
+/**
+ * Lazy for the same reason the dashboard's plots are: recharts is ~840 KB and
+ * this workbench renders a table by default — the chart is one of several view
+ * modes, and the ones that are not charts should not pay for the library.
+ */
+const ReportChart = dynamic(
+  () =>
+    import("@/components/journal/reports/report-chart").then(
+      (m) => m.ReportChart,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-64 w-full animate-pulse rounded-md bg-muted/40" />
+    ),
+  },
+);
 import { ReportTable } from "@/components/journal/reports/report-table";
 import { CrossAnalysis } from "@/components/journal/reports/cross-analysis";
 import { CompareView } from "@/components/journal/reports/compare-view";

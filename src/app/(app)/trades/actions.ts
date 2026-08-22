@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateTrades } from "@/lib/journal/revalidate";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
 import { getFieldDefs } from "@/lib/journal/field-defs";
@@ -250,8 +251,7 @@ export async function createTrade(input: TradeInput) {
     return { ok: false as const, error: error?.message ?? "Insert failed" };
   }
 
-  revalidatePath("/journal");
-  revalidatePath("/", "layout");
+  revalidateTrades();
   return { ok: true as const, id };
 }
 
@@ -368,9 +368,8 @@ export async function updateTrade(id: string, input: TradeInput) {
   });
   if (saveErr) return { ok: false as const, error: saveErr.message };
 
-  revalidatePath("/journal");
   revalidatePath(`/trades/${id}`);
-  revalidatePath("/", "layout");
+  revalidateTrades();
   return { ok: true as const, id };
 }
 
@@ -429,9 +428,8 @@ export async function markTradeMissed(
     return { ok: false as const, error: "Trade changed — refresh the page" };
   }
 
-  revalidatePath("/journal");
   revalidatePath(`/trades/${id}`);
-  revalidatePath("/", "layout");
+  revalidateTrades();
   return { ok: true as const, id };
 }
 
@@ -470,9 +468,8 @@ export async function restoreTradeToPlanned(id: string) {
     return { ok: false as const, error: "Trade changed — refresh the page" };
   }
 
-  revalidatePath("/journal");
   revalidatePath(`/trades/${id}`);
-  revalidatePath("/", "layout");
+  revalidateTrades();
   return { ok: true as const, id };
 }
 
@@ -511,9 +508,8 @@ export async function activateTrade(id: string) {
     return { ok: false as const, error: "Trade changed — refresh the page" };
   }
 
-  revalidatePath("/journal");
   revalidatePath(`/trades/${id}`);
-  revalidatePath("/", "layout");
+  revalidateTrades();
   return { ok: true as const, id };
 }
 
@@ -521,8 +517,7 @@ export async function deleteTrade(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("tj_positions").delete().eq("id", id);
   if (error) return { ok: false as const, error: error.message };
-  revalidatePath("/journal");
-  revalidatePath("/", "layout");
+  revalidateTrades();
   return { ok: true as const };
 }
 
@@ -535,8 +530,7 @@ export async function bulkDeleteTrades(ids: string[]) {
     .delete({ count: "exact" })
     .in("id", ids);
   if (error) return { ok: false as const, error: error.message };
-  revalidatePath("/journal");
-  revalidatePath("/", "layout");
+  revalidateTrades();
   return { ok: true as const, deleted: count ?? ids.length };
 }
 
@@ -556,7 +550,6 @@ export async function bulkAddTag(ids: string[], kind: BulkTagKind, values: strin
     p_values: values,
   });
   if (error) return { ok: false as const, error: error.message };
-  revalidatePath("/journal");
-  revalidatePath("/", "layout");
+  revalidateTrades();
   return { ok: true as const };
 }

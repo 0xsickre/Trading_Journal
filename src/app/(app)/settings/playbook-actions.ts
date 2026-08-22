@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateTrades } from "@/lib/journal/revalidate";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
@@ -17,7 +18,7 @@ function revalidateAll() {
   revalidatePath("/trades/new");
   revalidatePath("/journal");
   revalidatePath("/reports");
-  revalidatePath("/", "layout");
+  revalidateTrades();
 }
 
 type Result = { ok: true } | { ok: false; error: string };

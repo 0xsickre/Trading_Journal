@@ -3,19 +3,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { AlertTriangle, Download } from "lucide-react";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ReferenceLine,
-  Cell,
-} from "recharts";
+import dynamic from "next/dynamic";
 import {
   Select,
   SelectContent,
@@ -40,6 +28,57 @@ import { StatGroup } from "@/components/journal/stat-group";
 import { CalendarHeatmap } from "@/components/journal/calendar-heatmap";
 import { TrackerStreakCard } from "@/components/journal/tracker-streak-card";
 import { bookEquityLadder } from "@/lib/journal/tracker/equity-ladder";
+
+/**
+ * Every recharts plot on this page, behind a lazy boundary.
+ *
+ * recharts is ~840 KB in the production build and this component IS the `/`
+ * route, so importing it directly put the whole library in the first bundle
+ * every visitor parses — even one who has switched all the chart widgets off.
+ *
+ * `ssr: false` because these draw into a measured container: rendering them on
+ * the server produces markup for a box whose size is not known yet, which the
+ * client then throws away. The card, its title and its height come from
+ * `ChartShell`, which is NOT lazy — so the layout is correct and stable while
+ * the plot inside is still arriving, and nothing below it jumps.
+ */
+const chartLoading = () => (
+  <div className="h-full w-full animate-pulse rounded-md bg-muted/40" />
+);
+
+const DrawdownChart = dynamic(
+  () => import("@/components/journal/drawdown-chart").then((m) => m.DrawdownChart),
+  { ssr: false, loading: chartLoading },
+);
+const SickreScoreCard = dynamic(
+  () =>
+    import("@/components/journal/sickre-score-card").then(
+      (m) => m.SickreScoreCard,
+    ),
+  { ssr: false, loading: chartLoading },
+);
+const EquityChart = dynamic(
+  () => import("@/components/journal/dashboard-charts").then((m) => m.EquityChart),
+  { ssr: false, loading: chartLoading },
+);
+const RDistributionChart = dynamic(
+  () =>
+    import("@/components/journal/dashboard-charts").then(
+      (m) => m.RDistributionChart,
+    ),
+  { ssr: false, loading: chartLoading },
+);
+const SlippageChart = dynamic(
+  () => import("@/components/journal/dashboard-charts").then((m) => m.SlippageChart),
+  { ssr: false, loading: chartLoading },
+);
+const ExitEfficiencyChart = dynamic(
+  () =>
+    import("@/components/journal/dashboard-charts").then(
+      (m) => m.ExitEfficiencyChart,
+    ),
+  { ssr: false, loading: chartLoading },
+);
 import {
   buildTradeDayIndex,
   configsFromRules,
@@ -96,8 +135,6 @@ import { buildInsightContext, type DailyReportLite } from "@/lib/journal/insight
 import type { PositionCheckin } from "@/lib/journal/position-checkin";
 import { runInsights } from "@/lib/journal/insights/registry";
 import { InsightsPanel } from "@/components/journal/insights-panel";
-import { DrawdownChart } from "@/components/journal/drawdown-chart";
-import { SickreScoreCard } from "@/components/journal/sickre-score-card";
 import {
   DonutRing,
   PROFIT_FACTOR_FULL,
@@ -1844,34 +1881,7 @@ export function Dashboard({
           // its own narrower copy of the same idea.
           title={`Equity curve (${mode}, ${equityMetric === "money" ? currency : "R"})`}
         >
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={equity} margin={{ left: 4, right: 8, top: 8 }}>
-              <defs>
-                <linearGradient id="eq" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.4} />
-                  <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid {...GRID_PROPS} />
-              <XAxis dataKey="i" {...AXIS_PROPS} />
-              <YAxis {...AXIS_PROPS} width={56} />
-              <Tooltip
-                contentStyle={TOOLTIP_STYLE}
-                formatter={(v) =>
-                  equityMetric === "money"
-                    ? fmtMoney(Number(v), currency)
-                    : `${Number(v)}R`
-                }
-              />
-              <Area
-                type="monotone"
-                dataKey="value"
-                stroke="var(--chart-1)"
-                strokeWidth={2}
-                fill="url(#eq)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          <EquityChart data={equity} metric={equityMetric} currency={currency} />
         </ChartShell>
         ),
         score: show("score") && <SickreScoreCard score={sickreScore} />,
@@ -1917,27 +1927,7 @@ export function Dashboard({
         ),
         "r-distribution": show("r-distribution") && (
         <ChartShell title="R-multiple distribution">
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={hist} margin={{ left: 4, right: 8, top: 8 }}>
-              <CartesianGrid {...GRID_PROPS} />
-              <XAxis dataKey="bucket" {...AXIS_PROPS} tick={{ fontSize: 10 }} />
-              <YAxis allowDecimals={false} {...AXIS_PROPS} width={28} />
-              <ReferenceLine x="-1..0" stroke="var(--border)" />
-              <Tooltip contentStyle={TOOLTIP_STYLE} />
-              <Bar dataKey="count" radius={[3, 3, 0, 0]}>
-                {hist.map((b, i) => (
-                  <Cell
-                    key={i}
-                    fill={
-                      b.bucket.startsWith("-") || b.bucket === "<-3"
-                        ? "var(--loss)"
-                        : "var(--profit)"
-                    }
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <RDistributionChart data={hist} />
         </ChartShell>
         ),
 
@@ -1975,53 +1965,7 @@ export function Dashboard({
               title="Entry slippage by week"
               subtitle="Planned entry vs avg fill, in R (vs planned stop). Includes spread when planned was mid and fill was ask/bid."
             >
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart
-                  data={weeklySlip.map((w) => ({
-                    week: w.week.slice(5),
-                    avgDisplayR: -w.avgSlipR,
-                    tradeCount: w.tradeCount,
-                  }))}
-                  margin={{ left: 4, right: 8, top: 8 }}
-                >
-                  <CartesianGrid {...GRID_PROPS} />
-                  <XAxis dataKey="week" {...AXIS_PROPS} tick={{ fontSize: 10 }} />
-                  <YAxis
-                    {...AXIS_PROPS}
-                    width={40}
-                    tickFormatter={(v) => `${Number(v).toFixed(2)}R`}
-                  />
-                  <ReferenceLine y={0} stroke="var(--border)" />
-                  <Tooltip
-                    contentStyle={TOOLTIP_STYLE}
-                    formatter={(v, _name, item) => {
-                      const payload = item.payload as {
-                        avgDisplayR: number;
-                        tradeCount: number;
-                      };
-                      return [
-                        `${Number(v).toFixed(2)}R avg (${payload.tradeCount} trades)`,
-                        "Slippage",
-                      ];
-                    }}
-                    labelFormatter={(label) => `Week ${label}`}
-                  />
-                  <Bar dataKey="avgDisplayR" radius={[3, 3, 0, 0]}>
-                    {weeklySlip.map((w, i) => (
-                      <Cell
-                        key={i}
-                        fill={
-                          w.avgSlipR > 0
-                            ? "var(--loss)"
-                            : w.avgSlipR < 0
-                              ? "var(--profit)"
-                              : "var(--muted-foreground)"
-                        }
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              <SlippageChart weeks={weeklySlip} />
             </ChartShell>
           )}
 
@@ -2030,53 +1974,7 @@ export function Dashboard({
               title="Target attainment by week"
               subtitle="Realized R vs planned target R. Not the same as Capture % (realized / MFE)."
             >
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart
-                  data={weeklyExitEff.map((w) => ({
-                    week: w.week.slice(5),
-                    avgPct: w.avgPct,
-                    tradeCount: w.tradeCount,
-                  }))}
-                  margin={{ left: 4, right: 8, top: 8 }}
-                >
-                  <CartesianGrid {...GRID_PROPS} />
-                  <XAxis dataKey="week" {...AXIS_PROPS} tick={{ fontSize: 10 }} />
-                  <YAxis
-                    {...AXIS_PROPS}
-                    width={44}
-                    tickFormatter={(v) => `${Number(v).toFixed(0)}%`}
-                  />
-                  <ReferenceLine y={50} stroke="var(--border)" strokeDasharray="4 4" />
-                  <Tooltip
-                    contentStyle={TOOLTIP_STYLE}
-                    formatter={(v, _name, item) => {
-                      const payload = item.payload as {
-                        avgPct: number;
-                        tradeCount: number;
-                      };
-                      return [
-                        `${Number(v).toFixed(0)}% avg (${payload.tradeCount} trades)`,
-                        "Target attainment",
-                      ];
-                    }}
-                    labelFormatter={(label) => `Week ${label}`}
-                  />
-                  <Bar dataKey="avgPct" radius={[3, 3, 0, 0]}>
-                    {weeklyExitEff.map((w, i) => (
-                      <Cell
-                        key={i}
-                        fill={
-                          w.avgPct >= 50
-                            ? "var(--profit)"
-                            : w.avgPct >= 0
-                              ? "var(--chart-4)"
-                              : "var(--loss)"
-                        }
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              <ExitEfficiencyChart weeks={weeklyExitEff} />
             </ChartShell>
           )}
         </div>
