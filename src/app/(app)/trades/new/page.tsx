@@ -1,4 +1,4 @@
-import { getOptionsMap } from "@/lib/journal/options";
+import { getCategoryOrder, getOptionsMap } from "@/lib/journal/options";
 import { getInstruments } from "@/lib/journal/instruments";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getFailedFtmoAccountIds } from "@/lib/journal/ftmo-status";
@@ -8,7 +8,7 @@ import { getPlaybooks } from "@/lib/journal/playbooks";
 import { TradeForm } from "@/components/journal/trade-form";
 
 export default async function NewTradePage() {
-  const [optionsMap, instruments, accounts, failedFtmo, accountEquity, fieldDefs, playbooks] =
+  const [optionsMap, instruments, accounts, failedFtmo, accountEquity, fieldDefs, playbooks, categoryOrder] =
     await Promise.all([
       getOptionsMap(true),
       getInstruments(true),
@@ -19,6 +19,8 @@ export default async function NewTradePage() {
       getFieldDefs(true),
       // Active only: a retired playbook must not be offered for a NEW trade.
       getPlaybooks({ activeOnly: true }),
+      // The order the trader dragged the categories into.
+      getCategoryOrder(),
     ]);
 
   return (
@@ -30,6 +32,7 @@ export default async function NewTradePage() {
       playbooks={playbooks}
       ftmoFailedAccountIds={[...failedFtmo]}
       accountEquity={accountEquity}
+      categoryOrder={categoryOrder}
     />
   );
 }

@@ -66,3 +66,26 @@ export async function getOptionsMap(activeOnly = true): Promise<OptionsMap> {
   for (const l of lists) map[l.key] = l.items;
   return map;
 }
+
+/**
+ * Category key → the ordinal the trader dragged it to.
+ *
+ * Its own tiny read rather than a slice of `getListsWithItems`: the trade form
+ * needs the ORDER and nothing else, and that heavier call drags every option
+ * item and every field def along with it.
+ *
+ * This is what lets `technical_tags` take part in the ordering. That field is
+ * declared in `form-config.ts` rather than in `tj_field_defs`, so it has no
+ * field ordinal — but the category behind it is an ordinary row with an
+ * ordinary `sort_order`, and ordering the group by the CATEGORY rather than by
+ * the field is what puts every one of them on the same footing.
+ */
+export async function getCategoryOrder(): Promise<Record<string, number>> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("tj_option_lists")
+    .select("key,sort_order");
+  const out: Record<string, number> = {};
+  for (const l of data ?? []) out[l.key] = l.sort_order;
+  return out;
+}

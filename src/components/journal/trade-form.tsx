@@ -200,11 +200,12 @@ export function TradeForm({
   initial,
   ftmoFailedAccountIds = [],
   accountEquity = {},
+  categoryOrder,
 }: {
   optionsMap: OptionsMap;
   instruments: Instrument[];
   accounts: Account[];
-  /** User-defined fields, appended to their methodology group. */
+  /** The trader's own categories, rendered as the flat group. */
   fieldDefs?: FieldDef[];
   /** Playbooks with their rule checklists. */
   playbooks?: Playbook[];
@@ -217,6 +218,14 @@ export function TradeForm({
    * opened with.
    */
   accountEquity?: Record<string, number>;
+  /**
+   * Category key → the ordinal the trader dragged it to.
+   *
+   * The form renders the categories in this order, and dragging one writes
+   * back into it. Optional so a caller that only wants the fields — a test, a
+   * preview — need not read it; without it the config order stands.
+   */
+  categoryOrder?: Record<string, number>;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -243,8 +252,8 @@ export function TradeForm({
       ? "active"
       : "planned";
   const formTabs = useMemo(
-    () => buildFormTabs(fieldDefs, defPhase),
-    [fieldDefs, defPhase],
+    () => buildFormTabs(fieldDefs, defPhase, categoryOrder),
+    [fieldDefs, defPhase, categoryOrder],
   );
 
   // Playbook state. Its own group rather than a field def: the checklist has
@@ -1449,12 +1458,15 @@ function FormGroupSection({
    * effect is the version that does not get used.
    *
    * Keyed by `listKey`: a rendered field knows which category it draws from,
-   * and that is what the ordinal belongs to. A field with no `listKey`, or one
-   * the form declares itself rather than reading from `tj_field_defs`, has no
-   * ordinal to move and is left where it is.
+   * and that is what the ordinal belongs to — the CATEGORY's, not the field's.
+   * That is what lets `technical_tags` drag like the rest. It is declared in
+   * the form config rather than in `tj_field_defs` and so has no field ordinal,
+   * but the category behind it is an ordinary row with an ordinary
+   * `sort_order`. Ordering the group by the category rather than by the field
+   * is what put every one of them on the same footing.
    */
   const dragKeyOf = (field: FieldConfig) =>
-    group.id === TAGS_GROUP_ID && field.custom ? (field.listKey ?? null) : null;
+    group.id === TAGS_GROUP_ID ? (field.listKey ?? null) : null;
 
   const dragKeys = fieldsToRender
     .map(dragKeyOf)

@@ -219,7 +219,11 @@ const BASE_TABS: FormTab[] = [
             label: "Technical Tags",
             type: "tags",
             listKey: "technical_tag",
-            colSpan: 2,
+            // One column, like every other category beside it. It used to span
+            // both, from when it sat alone under a "Setup" heading — in a grid
+            // of categories that made it the one row of a different size, and
+            // once it could be dragged anywhere in that grid the odd width
+            // followed it around.
             placeholder: "Sweep, MSS, FVG, OB, OTE, SMT…",
           },
         ],
@@ -360,7 +364,10 @@ function toFieldConfig(def: FieldDef): FieldConfig {
     label: def.label,
     type: def.field_type,
     listKey: def.list_key ?? undefined,
-    colSpan: def.field_type === "textarea" || def.field_type === "tags" ? 2 : 1,
+    // Categories are one column each, so the group reads as an even grid. A
+    // textarea is the exception and keeps both: it is prose, and half a row is
+    // not enough of it to be worth writing in.
+    colSpan: def.field_type === "textarea" ? 2 : 1,
     custom: true,
   };
 }
@@ -383,6 +390,7 @@ function toFieldConfig(def: FieldDef): FieldConfig {
 export function buildFormTabs(
   defs: readonly FieldDef[] = [],
   phase?: Exclude<FieldDefPhase, "always">,
+  categoryOrder?: Readonly<Record<string, number>>,
 ): FormTab[] {
   const extra = [...defs]
     .filter((d) => phase == null || fieldAppliesToPhase(d.show_phase, phase))
@@ -394,13 +402,47 @@ export function buildFormTabs(
     groups: tab.groups
       .map((group) =>
         group.id === TAGS_GROUP_ID
-          ? { ...group, fields: [...group.fields, ...extra] }
+          ? { ...group, fields: orderCategories([...group.fields, ...extra], categoryOrder) }
           : group,
       )
       // A group with no fields is a heading over nothing — and the categories
       // group has no heading at all, so an empty one would be a blank gap.
       .filter((group) => group.fields.length > 0),
   }));
+}
+
+/**
+ * The categories group, in the order the trader dragged them into.
+ *
+ * Ordered by the CATEGORY rather than by the field, and that is the whole
+ * point. `technical_tags` is declared in `BASE_TABS` rather than in
+ * `tj_field_defs`, so it has no field ordinal of its own — it used to be
+ * pinned at the top for that reason alone, the one row in the group that could
+ * not be moved. The category behind it is an ordinary row with an ordinary
+ * `sort_order`, so keying off that puts every category on the same footing.
+ *
+ * Without `categoryOrder` nothing is reordered: the readers that call this to
+ * enumerate fields — the CSV export, the report dimensions, the save
+ * allowlist — care about the SET, not the sequence, and should not pay for a
+ * read they have no use for.
+ *
+ * A field with no `listKey` sorts last rather than first. There are none today;
+ * a future one would be a plain input among the categories, and the bottom is
+ * the safer place to put something this function knows nothing about.
+ */
+function orderCategories(
+  fields: FieldConfig[],
+  categoryOrder?: Readonly<Record<string, number>>,
+): FieldConfig[] {
+  if (!categoryOrder) return fields;
+  const rank = (f: FieldConfig) =>
+    f.listKey != null ? (categoryOrder[f.listKey] ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
+  // Index breaks ties so the sort stays stable for two categories that somehow
+  // share an ordinal — the same tiebreak every ordered read in this app uses.
+  return fields
+    .map((f, i) => ({ f, i }))
+    .sort((a, b) => rank(a.f) - rank(b.f) || a.i - b.i)
+    .map(({ f }) => f);
 }
 
 /** Every distinct field in the form, in render order. */

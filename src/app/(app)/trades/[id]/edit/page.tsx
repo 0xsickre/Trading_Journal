@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getOptionsMap } from "@/lib/journal/options";
+import { getCategoryOrder, getOptionsMap } from "@/lib/journal/options";
 import { getInstruments } from "@/lib/journal/instruments";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getTradeForEdit } from "@/lib/journal/trades";
@@ -14,7 +14,7 @@ export default async function EditTradePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [optionsMap, instruments, accounts, initial, accountEquity, fieldDefs, playbooks] =
+  const [optionsMap, instruments, accounts, initial, accountEquity, fieldDefs, playbooks, categoryOrder] =
     await Promise.all([
       getOptionsMap(true),
       getInstruments(true),
@@ -27,6 +27,8 @@ export default async function EditTradePage({
       // Everything, including retired rules: this trade may have answered one,
       // and the form must show that answer rather than silently drop it on save.
       getPlaybooks({ activeOnly: false, includeDeleted: true }),
+      // The order the trader dragged the categories into.
+      getCategoryOrder(),
     ]);
 
   if (!initial) notFound();
@@ -40,6 +42,7 @@ export default async function EditTradePage({
       playbooks={playbooks}
       initial={initial}
       accountEquity={accountEquity}
+      categoryOrder={categoryOrder}
     />
   );
 }
