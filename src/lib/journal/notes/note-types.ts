@@ -22,6 +22,8 @@ export type Note = {
   content: string;
   /** Set when the note is attached to a trade. */
   position_id: string | null;
+  /** Set when the note is attached to a playbook. */
+  playbook_id: string | null;
   report_date: string | null;
   tags: string[];
   pinned: boolean;

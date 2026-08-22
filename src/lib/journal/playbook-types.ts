@@ -111,6 +111,16 @@ export type PlaybookRule = {
   answerCount: number;
 };
 
+/** Header metrics per playbook — the TradeZella set, computed by our engine. */
+export const HEADER_METRICS = [
+  "trade_count",
+  "win_rate",
+  "expectancy",
+  "profit_factor",
+  "avg_r",
+  "follow_rate",
+] as const;
+
 export type Playbook = {
   id: string;
   name: string;

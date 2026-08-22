@@ -60,7 +60,7 @@ export async function getNotes(): Promise<Note[]> {
     supabase
       .from("tj_notes")
       .select(
-        "id, folder_id, title, content, position_id, report_date, tags, pinned, deleted_at, created_at, updated_at",
+        "id, folder_id, title, content, position_id, playbook_id, report_date, tags, pinned, deleted_at, created_at, updated_at",
       )
       // Pinned first, then most recently touched — the order the list renders in,
       // done here so the client never re-sorts a paged result.
@@ -70,6 +70,28 @@ export async function getNotes(): Promise<Note[]> {
       .range(from, to),
   );
   return rows;
+}
+
+/**
+ * Live notes anchored to one playbook.
+ *
+ * Not paged like `getNotes()`: one playbook's note count is bounded, unlike the
+ * whole vault. Deleted notes are excluded — this panel is not a second
+ * Recently Deleted UI; recovering one happens from `/notebook`.
+ */
+export async function getNotesForPlaybook(playbookId: string): Promise<Note[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("tj_notes")
+    .select(
+      "id, folder_id, title, content, position_id, playbook_id, report_date, tags, pinned, deleted_at, created_at, updated_at",
+    )
+    .eq("playbook_id", playbookId)
+    .is("deleted_at", null)
+    .order("pinned", { ascending: false })
+    .order("updated_at", { ascending: false })
+    .order("id");
+  return (data ?? []) as Note[];
 }
 
 /** The tag vocabulary. Separate from tj_option_items, deliberately. */

@@ -51,6 +51,7 @@ const noteSchema = z
     content: z.string().optional(),
     folder_id: z.uuid().nullable().optional(),
     position_id: z.uuid().nullable().optional(),
+    playbook_id: z.uuid().nullable().optional(),
     report_date: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -113,6 +114,7 @@ export async function createNote(
       title: parsed.data.title?.trim() ?? "",
       content,
       position_id: parsed.data.position_id ?? null,
+      playbook_id: parsed.data.playbook_id ?? null,
       report_date: parsed.data.report_date ?? null,
       tags,
       pinned: parsed.data.pinned ?? false,
@@ -142,6 +144,8 @@ export async function updateNote(
   if (parsed.data.folder_id !== undefined) next.folder_id = parsed.data.folder_id;
   if (parsed.data.position_id !== undefined)
     next.position_id = parsed.data.position_id;
+  if (parsed.data.playbook_id !== undefined)
+    next.playbook_id = parsed.data.playbook_id;
   if (parsed.data.report_date !== undefined)
     next.report_date = parsed.data.report_date;
   if (parsed.data.pinned !== undefined) next.pinned = parsed.data.pinned;

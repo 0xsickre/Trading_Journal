@@ -61,6 +61,73 @@ export function moveRuleWithinCategory(
 }
 
 /**
+ * The order after dragging `fromId` onto `toId`'s place.
+ *
+ * The drop target's index is where the dragged item LANDS, computed after the
+ * dragged item has been lifted out — which is what makes a downward drag behave
+ * the way the pointer implies. Splice out first, then insert at the target's
+ * index in the shortened array: dragging item 0 onto item 3 puts it after the
+ * three that were above it, and dragging item 3 onto item 0 puts it first.
+ * Taking the index before removal would leave a downward drag one place short
+ * of the row it was dropped on.
+ *
+ * Null when nothing moves — same id, unknown id, or a drop that would rebuild
+ * the identical array — so the caller can skip the write entirely.
+ */
+export function moveToIndex(
+  ids: readonly string[],
+  fromId: string,
+  toId: string,
+): string[] | null {
+  if (fromId === toId) return null;
+  const from = ids.indexOf(fromId);
+  const to = ids.indexOf(toId);
+  if (from < 0 || to < 0) return null;
+
+  const next = [...ids];
+  next.splice(from, 1);
+  next.splice(next.indexOf(toId) + (from < to ? 1 : 0), 0, fromId);
+  return next.every((id, i) => id === ids[i]) ? null : next;
+}
+
+/**
+ * The full link order after reordering ONE category's rules wholesale.
+ *
+ * The drag-and-drop counterpart to `moveRuleWithinCategory`, and it inherits
+ * that function's whole reason for existing: a playbook's links carry one flat
+ * `sort_order` across every category, and rules of different categories
+ * interleave freely in it. So a category's rules occupy a set of ABSOLUTE SLOTS
+ * scattered through the flat order, and reordering them means refilling those
+ * same slots in the new order. Every rule of every other category keeps its
+ * exact index.
+ *
+ * `ordered` is that category's rule ids in their new order. Ids it does not
+ * name — and ids belonging to other categories — are left exactly where they
+ * are, so a stale client array can never drop a rule out of the playbook.
+ * Null when the result matches what is already stored.
+ */
+export function reorderWithinCategory(
+  links: readonly RuleLink[],
+  category: RuleCategory,
+  ordered: readonly string[],
+): string[] | null {
+  const slots = links.flatMap((l, i) => (l.category === category ? [i] : []));
+  // Only the ids actually in this category, in the order given, with any the
+  // caller forgot appended in their current order.
+  const inCategory = slots.map((i) => links[i].ruleId);
+  const wanted = ordered.filter((id) => inCategory.includes(id));
+  const rest = inCategory.filter((id) => !wanted.includes(id));
+  const filled = [...wanted, ...rest];
+  if (filled.length !== slots.length) return null;
+
+  const next = links.map((l) => l.ruleId);
+  slots.forEach((slot, i) => {
+    next[slot] = filled[i];
+  });
+  return next.every((id, i) => id === links[i].ruleId) ? null : next;
+}
+
+/**
  * The full order after moving one id one place. Null when nothing moves.
  *
  * Deliberately NOT `moveRuleWithinCategory` with the category argument dropped.

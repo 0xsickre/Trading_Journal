@@ -717,6 +717,7 @@ export type Database = {
           folder_id: string | null
           id: string
           pinned: boolean
+          playbook_id: string | null
           position_id: string | null
           report_date: string | null
           tags: string[]
@@ -731,6 +732,7 @@ export type Database = {
           folder_id?: string | null
           id?: string
           pinned?: boolean
+          playbook_id?: string | null
           position_id?: string | null
           report_date?: string | null
           tags?: string[]
@@ -745,6 +747,7 @@ export type Database = {
           folder_id?: string | null
           id?: string
           pinned?: boolean
+          playbook_id?: string | null
           position_id?: string | null
           report_date?: string | null
           tags?: string[]
@@ -758,6 +761,13 @@ export type Database = {
             columns: ["folder_id"]
             isOneToOne: false
             referencedRelation: "tj_note_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tj_notes_playbook_id_fkey"
+            columns: ["playbook_id"]
+            isOneToOne: false
+            referencedRelation: "tj_playbooks"
             referencedColumns: ["id"]
           },
           {
@@ -780,6 +790,7 @@ export type Database = {
         Row: {
           color: string | null
           created_at: string
+          description: string | null
           id: string
           is_active: boolean
           label: string
@@ -791,6 +802,7 @@ export type Database = {
         Insert: {
           color?: string | null
           created_at?: string
+          description?: string | null
           id?: string
           is_active?: boolean
           label: string
@@ -802,6 +814,7 @@ export type Database = {
         Update: {
           color?: string | null
           created_at?: string
+          description?: string | null
           id?: string
           is_active?: boolean
           label?: string
@@ -1522,6 +1535,7 @@ export type Database = {
         Returns: {
           color: string | null
           created_at: string
+          description: string | null
           id: string
           is_active: boolean
           label: string

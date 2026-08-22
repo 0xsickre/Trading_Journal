@@ -26,19 +26,13 @@ import {
   type FieldDefGroup,
   type FieldDefType,
 } from "@/lib/journal/field-def-types";
+import type { OptionItem } from "@/lib/journal/types";
 
+// `OptionItem` itself rather than a structural copy of it: the copy was already
+// a second place to remember every column, and it drifted the moment one was
+// added — the callers assign this straight into `OptionItem[]` state.
 export type AddOptionResult =
-  | {
-      ok: true;
-      item: {
-        id: string;
-        value: string;
-        label: string;
-        color: string | null;
-        is_active: boolean;
-        sort_order: number;
-      };
-    }
+  | { ok: true; item: OptionItem }
   | { ok: false; error: string };
 
 const revalidateAll = revalidateOptions;
@@ -77,6 +71,7 @@ export async function addOption(
       value: data.value,
       label: data.label,
       color: data.color,
+      description: data.description,
       is_active: data.is_active,
       sort_order: data.sort_order,
     },

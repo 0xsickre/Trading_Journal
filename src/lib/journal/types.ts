@@ -8,6 +8,12 @@ export type OptionItem = {
   value: string;
   label: string;
   color: string | null;
+  /**
+   * One-line explanation shown under the item. Null means "no line of its own"
+   * — playbook sections then fall back to the built-in hint for the values this
+   * repo seeds, and show nothing for a section the trader invented.
+   */
+  description: string | null;
   is_active: boolean;
   sort_order: number;
 };

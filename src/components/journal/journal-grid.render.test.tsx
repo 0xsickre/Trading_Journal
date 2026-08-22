@@ -107,7 +107,15 @@ const rowsOf = (trades: ReturnType<typeof mkTrade>[]): TradeRow[] => trades.map(
 
 const OPTIONS_MAP: OptionsMap = {
   technical_tag: [
-    { id: "o1", value: "FVG", label: "FVG", color: null, is_active: true, sort_order: 0 },
+    {
+      id: "o1",
+      value: "FVG",
+      label: "FVG",
+      color: null,
+      description: null,
+      is_active: true,
+      sort_order: 0,
+    },
   ],
 };
 

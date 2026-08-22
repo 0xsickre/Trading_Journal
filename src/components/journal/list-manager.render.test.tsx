@@ -48,6 +48,7 @@ function item(over: Partial<OptionItem> = {}): OptionItem {
     value: "Bullish",
     label: "Bullish",
     color: null,
+    description: null,
     is_active: true,
     sort_order: 0,
     ...over,

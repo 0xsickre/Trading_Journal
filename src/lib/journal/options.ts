@@ -21,7 +21,7 @@ export async function getListsWithItems(
       .order("id"),
     supabase
       .from("tj_option_items")
-      .select("id,list_id,value,label,color,is_active,sort_order")
+      .select("id,list_id,value,label,color,description,is_active,sort_order")
       .order("sort_order")
       .order("id"),
   ]);
@@ -35,6 +35,7 @@ export async function getListsWithItems(
       value: it.value,
       label: it.label,
       color: it.color,
+      description: it.description,
       is_active: it.is_active,
       sort_order: it.sort_order,
     });

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { moveInOrder, moveRuleWithinCategory, type RuleLink } from "./playbook-order";
+import {
+  moveInOrder,
+  moveRuleWithinCategory,
+  moveToIndex,
+  reorderWithinCategory,
+  type RuleLink,
+} from "./playbook-order";
 
 /** Compact fixture: "a:entry" → { ruleId: "a", category: "entry" }. */
 const links = (...spec: string[]): RuleLink[] =>
@@ -122,5 +128,94 @@ describe("moveInOrder", () => {
     const original = [...ids];
     moveInOrder(ids, "b", 1);
     expect(ids).toEqual(original);
+  });
+});
+
+describe("moveToIndex", () => {
+  it("drops a row below the one it was dragged onto", () => {
+    // The direction that is easy to get wrong. Dragging `a` onto `c` must put
+    // `a` AFTER `c` — taking c's index before removing `a` would leave it at
+    // index 1, one place short of where the pointer was released.
+    expect(moveToIndex(["a", "b", "c", "d"], "a", "c")).toEqual([
+      "b",
+      "c",
+      "a",
+      "d",
+    ]);
+  });
+
+  it("drops a row above the one it was dragged onto, going up", () => {
+    expect(moveToIndex(["a", "b", "c", "d"], "d", "b")).toEqual([
+      "a",
+      "d",
+      "b",
+      "c",
+    ]);
+  });
+
+  it("moves to the very front and the very back", () => {
+    expect(moveToIndex(["a", "b", "c"], "c", "a")).toEqual(["c", "a", "b"]);
+    expect(moveToIndex(["a", "b", "c"], "a", "c")).toEqual(["b", "c", "a"]);
+  });
+
+  it("returns null when nothing would move, so the caller can skip the write", () => {
+    expect(moveToIndex(["a", "b", "c"], "a", "a")).toBeNull();
+    expect(moveToIndex(["a", "b", "c"], "a", "zz")).toBeNull();
+    expect(moveToIndex(["a", "b", "c"], "zz", "a")).toBeNull();
+  });
+
+  it("moving onto the neighbour below is a plain swap", () => {
+    expect(moveToIndex(["a", "b", "c"], "a", "b")).toEqual(["b", "a", "c"]);
+  });
+});
+
+describe("reorderWithinCategory", () => {
+  it("refills the category's own slots and leaves every other index alone", () => {
+    // Entry occupies slots 1, 3, 5. Reversing Entry must not move `x`, `y` or
+    // `z` off their indices — nothing on screen draws the flat order, and the
+    // other categories' cards must not reshuffle because this one was dragged.
+    const order = links(
+      "x:context",
+      "a:entry",
+      "y:exit",
+      "b:entry",
+      "z:context",
+      "c:entry",
+    );
+    expect(reorderWithinCategory(order, "entry", ["c", "b", "a"])).toEqual([
+      "x",
+      "c",
+      "y",
+      "b",
+      "z",
+      "a",
+    ]);
+  });
+
+  it("keeps a rule the client forgot to name, rather than dropping it", () => {
+    // A stale client array is the realistic failure — a rule added in another
+    // tab. It must keep its place in the category rather than vanish from the
+    // playbook, so unnamed ids are appended in their current order.
+    const order = links("a:entry", "b:entry", "c:entry");
+    expect(reorderWithinCategory(order, "entry", ["c", "a"])).toEqual([
+      "c",
+      "a",
+      "b",
+    ]);
+  });
+
+  it("ignores ids belonging to another category", () => {
+    const order = links("a:entry", "b:context");
+    expect(reorderWithinCategory(order, "entry", ["b", "a"])).toBeNull();
+  });
+
+  it("returns null when the result matches what is already stored", () => {
+    const order = links("a:entry", "b:entry");
+    expect(reorderWithinCategory(order, "entry", ["a", "b"])).toBeNull();
+  });
+
+  it("returns null for a category with no rules", () => {
+    const order = links("a:entry");
+    expect(reorderWithinCategory(order, "exit", [])).toBeNull();
   });
 });

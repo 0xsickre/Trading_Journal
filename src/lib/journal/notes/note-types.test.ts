@@ -17,6 +17,7 @@ const note = (over: Partial<Note> = {}): Note => ({
   title: "t",
   content: "",
   position_id: null,
+  playbook_id: null,
   report_date: null,
   tags: [],
   pinned: false,

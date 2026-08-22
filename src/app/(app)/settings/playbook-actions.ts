@@ -10,7 +10,11 @@ import {
   type RuleCategory,
   type ShowWhen,
 } from "@/lib/journal/playbook-types";
-import { moveInOrder, moveRuleWithinCategory } from "@/lib/journal/playbook-order";
+import {
+  moveInOrder,
+  moveRuleWithinCategory,
+  reorderWithinCategory,
+} from "@/lib/journal/playbook-order";
 
 function revalidateAll() {
   revalidatePath("/settings");
@@ -635,7 +639,23 @@ async function ruleCategoryListId(): Promise<
 
 const sectionLabelSchema = z.string().trim().min(1).max(60);
 
-export async function addPlaybookSection(rawLabel: string): Promise<Result> {
+/**
+ * `addPlaybookSection`'s own result, not the shared `Result`.
+ *
+ * The caller may need to write rules INTO the section it just created — the
+ * "Add rule group" dialog names a group and its first rules in one step — and
+ * `addPlaybookRule` takes the section's `value`. Returning it closes the gap
+ * that would otherwise be bridged by assuming value === label: true today
+ * (`tj_add_option_item` writes the trimmed label into both), but an assumption
+ * the caller has no business encoding.
+ */
+type AddSectionResult =
+  | { ok: true; value: string; id: string }
+  | { ok: false; error: string };
+
+export async function addPlaybookSection(
+  rawLabel: string,
+): Promise<AddSectionResult> {
   const parsed = sectionLabelSchema.safeParse(rawLabel);
   if (!parsed.success) {
     return { ok: false, error: "A section needs a name, up to 60 characters." };
@@ -660,10 +680,63 @@ export async function addPlaybookSection(rawLabel: string): Promise<Result> {
 
   // Through the RPC, not a plain insert: it computes the next ordinal inside the
   // statement, so two quick adds cannot both read the same maximum.
-  const { error } = await supabase.rpc("tj_add_option_item", {
+  const { data: created, error } = await supabase.rpc("tj_add_option_item", {
     p_list_id: list.id,
     p_label: label,
   });
+  if (error) return { ok: false, error: error.message };
+
+  // The row comes back from the RPC (`RETURNS public.tj_option_items`). Read
+  // back rather than assumed, except for `value`, whose fallback is the label —
+  // that is exactly what the function writes into it.
+  if (!created?.id) {
+    return { ok: false, error: "The section was not created." };
+  }
+
+  revalidateAll();
+  return { ok: true, value: created.value ?? label, id: created.id };
+}
+
+/**
+ * Edit a section's name and the line under it — never its `value`.
+ *
+ * `tj_playbook_rules.category` stores the `value`, and `ruleCategoryLabel`
+ * resolves value to label at render time. So a rename touches no rule and cannot
+ * orphan one. Rewriting the value instead would mean an UPDATE across every rule
+ * of every playbook, and any row missed would drop out of its own section.
+ *
+ * `description` is the line beside the heading. It used to be `RULE_CATEGORY_HINTS`
+ * — a constant keyed by the five seeded values — so renaming "Context" to "Bias"
+ * kept a sentence written for a word you no longer use, and a section you
+ * invented had no line at all. An empty string clears it back to null, which is
+ * what makes the built-in hint reappear for a seeded section.
+ */
+export async function updatePlaybookSection(
+  id: string,
+  patch: { label?: string; description?: string | null },
+): Promise<Result> {
+  const next: { label?: string; description?: string | null } = {};
+
+  if (patch.label !== undefined) {
+    const parsed = sectionLabelSchema.safeParse(patch.label);
+    if (!parsed.success) {
+      return { ok: false, error: "A section needs a name, up to 60 characters." };
+    }
+    next.label = parsed.data;
+  }
+
+  if (patch.description !== undefined) {
+    const description = patch.description?.trim() ?? "";
+    if (description.length > 200) {
+      return { ok: false, error: "The description can be up to 200 characters." };
+    }
+    next.description = description || null;
+  }
+
+  if (Object.keys(next).length === 0) return { ok: true };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("tj_option_items").update(next).eq("id", id);
   if (error) return { ok: false, error: error.message };
 
   revalidateAll();
@@ -671,28 +744,113 @@ export async function addPlaybookSection(rawLabel: string): Promise<Result> {
 }
 
 /**
- * Rename a section — the LABEL only.
+ * Put one category's rules in an explicit order — the drag-and-drop write.
  *
- * `tj_playbook_rules.category` stores the `value`, and `ruleCategoryLabel`
- * resolves value to label at render time. So a rename touches no rule and cannot
- * orphan one. Rewriting the value instead would mean an UPDATE across every rule
- * of every playbook, and any row missed would drop out of its own section.
+ * `movePlaybookRule` moves one rule one place and is still what the keyboard
+ * path uses; this takes the finished order in one go, because a drag across six
+ * rows is one gesture and replaying it as five adjacent swaps would be five
+ * round trips and five chances to half-apply.
+ *
+ * The slot arithmetic — a category's rules occupy scattered absolute positions
+ * in the playbook's single flat link order — lives in `reorderWithinCategory`,
+ * pure and tested. This reads, delegates, and writes back only the ordinals that
+ * actually changed.
  */
-export async function renamePlaybookSection(
-  id: string,
-  rawLabel: string,
+export async function reorderPlaybookRules(
+  playbookId: string,
+  category: string,
+  orderedRuleIds: string[],
 ): Promise<Result> {
-  const parsed = sectionLabelSchema.safeParse(rawLabel);
-  if (!parsed.success) {
-    return { ok: false, error: "A section needs a name, up to 60 characters." };
-  }
-
   const supabase = await createClient();
-  const { error } = await supabase
+
+  const { data: links, error: linkError } = await supabase
+    .from("tj_playbook_rule_links")
+    .select("id,rule_id,sort_order")
+    .eq("playbook_id", playbookId)
+    .order("sort_order")
+    .order("id");
+  if (linkError) return { ok: false, error: linkError.message };
+  if (!links?.length) return { ok: false, error: "Playbook not found." };
+
+  const { data: rules, error: ruleError } = await supabase
+    .from("tj_playbook_rules")
+    .select("id,category")
+    .in("id", links.map((l) => l.rule_id));
+  if (ruleError) return { ok: false, error: ruleError.message };
+
+  const categoryOf = new Map(
+    (rules ?? []).map((r) => [r.id, r.category as RuleCategory]),
+  );
+  const ordered = reorderWithinCategory(
+    links.flatMap((l) => {
+      const c = categoryOf.get(l.rule_id);
+      return c ? [{ ruleId: l.rule_id, category: c }] : [];
+    }),
+    category,
+    orderedRuleIds,
+  );
+  // Nothing to do: the drop landed where the rule already was, or the client
+  // sent an order this playbook cannot satisfy. Success, because nothing failed.
+  if (!ordered) return { ok: true };
+
+  const linkOf = new Map(links.map((l) => [l.rule_id, l]));
+  const writes = ordered
+    .map((rid, ordinal) => ({ link: linkOf.get(rid)!, ordinal }))
+    .filter(({ link, ordinal }) => link.sort_order !== ordinal);
+
+  const results = await Promise.all(
+    writes.map(({ link, ordinal }) =>
+      supabase
+        .from("tj_playbook_rule_links")
+        .update({ sort_order: ordinal })
+        .eq("id", link.id),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { ok: false, error: failed.error.message };
+
+  revalidateAll();
+  return { ok: true };
+}
+
+/**
+ * Put the sections in an explicit order — the drag-and-drop write for the cards.
+ *
+ * Scoped to `rule_category` by the read below, so an id from some other option
+ * list is simply absent from `known` and never gets an ordinal written to it.
+ */
+export async function reorderPlaybookSections(
+  orderedItemIds: string[],
+): Promise<Result> {
+  const supabase = await createClient();
+  const { data: items, error } = await supabase
     .from("tj_option_items")
-    .update({ label: parsed.data })
-    .eq("id", id);
+    .select("id, sort_order, tj_option_lists!inner(key)")
+    .eq("tj_option_lists.key", "rule_category")
+    .order("sort_order")
+    .order("id");
   if (error) return { ok: false, error: error.message };
+  if (!items?.length) return { ok: false, error: "No sections yet." };
+
+  const known = new Map(items.map((i) => [i.id, i.sort_order]));
+  const wanted = orderedItemIds.filter((id) => known.has(id));
+  // Anything the client did not name keeps its place at the end, in the order
+  // the database already has — a stale list must not silently drop a section.
+  const rest = items.map((i) => i.id).filter((id) => !wanted.includes(id));
+  const ordered = [...wanted, ...rest];
+
+  const writes = ordered
+    .map((id, ordinal) => ({ id, ordinal }))
+    .filter(({ id, ordinal }) => known.get(id) !== ordinal);
+  if (writes.length === 0) return { ok: true };
+
+  const results = await Promise.all(
+    writes.map(({ id, ordinal }) =>
+      supabase.from("tj_option_items").update({ sort_order: ordinal }).eq("id", id),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { ok: false, error: failed.error.message };
 
   revalidateAll();
   return { ok: true };
