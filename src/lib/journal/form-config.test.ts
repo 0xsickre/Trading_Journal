@@ -157,10 +157,9 @@ describe("mistake is a tags field, not a select", () => {
 
 describe("execution rating is a first-class form field, not a bespoke one", () => {
   it("SITS IN numericFieldNames, which is what coerces it for a smallint column", () => {
-    // `conviction` takes a bespoke path and pays for it — it is missing from the
-    // mentor pack because it is not a form-config field. Going through the
-    // config buys write permission, coercion and export ordering for free; this
-    // asserts the coercion half, without which "4" reaches Postgres as text.
+    // Going through the config buys write permission, coercion and export
+    // ordering for free; this asserts the coercion half, without which "4"
+    // reaches Postgres as text.
     expect(numericFieldNames()).toContain("execution_rating");
   });
 

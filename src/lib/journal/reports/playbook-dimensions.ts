@@ -63,18 +63,6 @@ export function playbookDimension(names: Map<string, string>): Dimension {
   };
 }
 
-/** Conviction rating recorded at entry, 1–5. */
-export const convictionDimension: Dimension = {
-  key: "conviction",
-  label: "Conviction (1–5)",
-  group: "trade",
-  order: ["1", "2", "3", "4", "5"],
-  valueOf: (t) => {
-    const v = t.trade.row.conviction;
-    return typeof v === "number" && v >= 1 && v <= 5 ? String(v) : null;
-  },
-};
-
 /**
  * Share of applicable answers that were "followed".
  *
@@ -143,7 +131,6 @@ function ruleIdsByText(rules: RuleLookup): Map<string, Set<string>> {
 export function playbookDimensions(lookup: PlaybookLookup): Dimension[] {
   return [
     playbookDimension(lookup.names),
-    convictionDimension,
     playbookRuleDimension(lookup.rules),
   ];
 }

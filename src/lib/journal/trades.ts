@@ -135,7 +135,6 @@ export async function getTradeForEdit(
     status: (pos as RawPosition & { status?: string }).status ?? "planned",
     missed_at: (pos as RawPosition & { missed_at?: string | null }).missed_at ?? null,
     playbook_id: (pos as RawPosition & { playbook_id?: string | null }).playbook_id ?? null,
-    conviction: (pos as RawPosition & { conviction?: number | null }).conviction ?? null,
     scale_out_levels: (pos as RawPosition & { scale_out_levels?: unknown }).scale_out_levels ?? [],
     rule_answers: ruleAnswers,
     fields,

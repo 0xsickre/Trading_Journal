@@ -163,17 +163,15 @@ describe("struktura submisije", () => {
     );
   });
 
-  it("ubeđenost van 1–5 se ODBIJA umesto da se tiho svede na null", () => {
-    // `playbookPatch` je vrednost van opsega gutao. Razlika između „nisam
-    // ocenio" i „ocena je odbačena" se nije videla nigde.
-    expect(tradeInputSchema.safeParse(input({ conviction: 3 })).success).toBe(true);
-    expect(tradeInputSchema.safeParse(input({ conviction: 9 })).success).toBe(false);
-    expect(tradeInputSchema.safeParse(input({ conviction: 2.5 })).success).toBe(
-      false,
-    );
-    expect(tradeInputSchema.safeParse(input({ conviction: null })).success).toBe(
-      true,
-    );
+  it("ubeđenost više ne postoji kao polje i ne stiže do baze", () => {
+    // Ocena 1–5 pre ulaza je uklonjena: isti setap je istog dana dobijao 3, a
+    // sutradan 5, pa je grupisanje izveštaja po njoj merilo raspoloženje a ne
+    // trejd. Šema nije `.strict()`, pa stari klijent koji je i dalje šalje ne
+    // dobija grešku — vrednost prosto ispada iz parsiranog rezultata i nikada
+    // se ne upiše.
+    const parsed = tradeInputSchema.safeParse(input({ conviction: 3 }));
+    expect(parsed.success).toBe(true);
+    expect(parsed.data).not.toHaveProperty("conviction");
   });
 
   it("trade_no je pozitivan ceo broj ili null", () => {

@@ -57,8 +57,6 @@ function renderChecklist(
       playbooks={[book(rules)]}
       playbookId="pb1"
       onPlaybookChange={vi.fn()}
-      conviction={null}
-      onConvictionChange={vi.fn()}
       answers={answers}
       onAnswerChange={onAnswerChange}
       netPl={opts.netPl ?? 100}

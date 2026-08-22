@@ -40,7 +40,6 @@ export type TradeInput = {
   trade_phase?: "planned" | "active" | null;
   current_status?: string | null;
   playbook_id?: string | null;
-  conviction?: number | null;
   /** Planned scale-out levels: `[{pct, price}]`. Validated in `scaleOutPatch`. */
   scale_out_levels?: unknown;
   /** Rule id → followed. Absent key means the rule was not answered. */
@@ -64,14 +63,7 @@ export type TradeInput = {
  * real columns.
  */
 function playbookPatch(input: TradeInput) {
-  const conviction =
-    input.conviction != null &&
-    Number.isInteger(input.conviction) &&
-    input.conviction >= 1 &&
-    input.conviction <= 5
-      ? input.conviction
-      : null;
-  return { playbook_id: input.playbook_id || null, conviction };
+  return { playbook_id: input.playbook_id || null };
 }
 
 /**

@@ -150,7 +150,6 @@ export const tradeInputSchema = z.object({
    * je trejder zaista uneo nestajala bi bez ijedne poruke. Sada se odbija, pa
    * se razlika između „nisam ocenio" i „ocena je odbačena" vidi.
    */
-  conviction: z.number().int().min(1).max(5).nullable().optional(),
   rule_answers: z.record(z.uuid(), z.boolean()).optional(),
   images: z
     .array(

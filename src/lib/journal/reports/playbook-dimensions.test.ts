@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   applicableAnswers,
   computeFollowRate,
-  convictionDimension,
   playbookDimension,
   playbookRuleDimension,
   type RuleLookup,
@@ -280,7 +279,7 @@ describe("playbook_rule dimension", () => {
   });
 });
 
-describe("playbook and conviction dimensions", () => {
+describe("playbook dimension", () => {
   it("resolves a playbook id to its name", () => {
     const dim = playbookDimension(new Map([["pb-1", "Silver Bullet"]]));
     const t = enrich([{ custom: {} }])[0];
@@ -293,16 +292,5 @@ describe("playbook and conviction dimensions", () => {
     expect(bucketsOf(dim, enrich([{}])[0], dimCtx())).toEqual([EMPTY_BUCKET]);
   });
 
-  it("buckets conviction and excludes it when unrated", () => {
-    const rated = enrich([{}])[0];
-    (rated.trade.row as Record<string, unknown>).conviction = 4;
-    expect(bucketsOf(convictionDimension, rated, dimCtx())).toEqual(["4"]);
-    expect(bucketsOf(convictionDimension, enrich([{}])[0], dimCtx())).toEqual([]);
-  });
 
-  it("rejects a conviction outside 1–5 rather than inventing a bucket", () => {
-    const bad = enrich([{}])[0];
-    (bad.trade.row as Record<string, unknown>).conviction = 9;
-    expect(bucketsOf(convictionDimension, bad, dimCtx())).toEqual([]);
-  });
 });

@@ -45,8 +45,6 @@ export function PlaybookChecklist({
   playbooks,
   playbookId,
   onPlaybookChange,
-  conviction,
-  onConvictionChange,
   answers,
   onAnswerChange,
   netPl,
@@ -55,8 +53,6 @@ export function PlaybookChecklist({
   playbooks: Playbook[];
   playbookId: string | null;
   onPlaybookChange: (id: string | null) => void;
-  conviction: number | null;
-  onConvictionChange: (v: number | null) => void;
   answers: Record<string, boolean>;
   onAnswerChange: (ruleId: string, followed: boolean | null) => void;
   /** Live net P&L, or null while the trade is still a plan. */
@@ -152,50 +148,26 @@ export function PlaybookChecklist({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label className="text-xs">Playbook</Label>
-          <Select
-            value={playbookId ?? "none"}
-            onValueChange={(v) => onPlaybookChange(v === "none" ? null : v)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="No playbook" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No playbook</SelectItem>
-              {playbooks
-                .filter((p) => p.is_active || p.id === playbookId)
-                .map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs">Conviction (1–5)</Label>
-          <Select
-            value={conviction != null ? String(conviction) : "none"}
-            onValueChange={(v) =>
-              onConvictionChange(v === "none" ? null : Number(v))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Not rated" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Not rated</SelectItem>
-              {[1, 2, 3, 4, 5].map((v) => (
-                <SelectItem key={v} value={String(v)}>
-                  {v}
+      <div className="space-y-1.5 sm:max-w-xs">
+        <Label className="text-xs">Playbook</Label>
+        <Select
+          value={playbookId ?? "none"}
+          onValueChange={(v) => onPlaybookChange(v === "none" ? null : v)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="No playbook" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">No playbook</SelectItem>
+            {playbooks
+              .filter((p) => p.is_active || p.id === playbookId)
+              .map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
                 </SelectItem>
               ))}
-            </SelectContent>
-          </Select>
-        </div>
+          </SelectContent>
+        </Select>
       </div>
 
       {book == null ? (

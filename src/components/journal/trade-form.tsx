@@ -146,7 +146,6 @@ export type TradeFormInitial = {
   status?: string;
   missed_at?: string | null;
   playbook_id?: string | null;
-  conviction?: number | null;
   scale_out_levels?: unknown;
   /** Rule id → followed, for rules answered on this trade. */
   rule_answers?: Record<string, boolean>;
@@ -233,9 +232,6 @@ export function TradeForm({
   // definition cannot express.
   const [playbookId, setPlaybookId] = useState<string | null>(
     initial?.playbook_id ?? null,
-  );
-  const [conviction, setConviction] = useState<number | null>(
-    initial?.conviction ?? null,
   );
   const [scaleOutRows, setScaleOutRows] = useState<ScaleOutRow[]>(() =>
     levelsToScaleOutRows(parseScaleOutLevels(initial?.scale_out_levels)),
@@ -789,7 +785,6 @@ export function TradeForm({
       trade_phase: hasValidEntryFill ? "active" : tradePhase,
       current_status: isMissed ? "missed" : null,
       playbook_id: playbookId,
-      conviction,
       scale_out_levels: scaleOutRowsToLevels(scaleOutRows),
       // Only on create. An existing trade's images are owned by `TradeImages`,
       // which writes them directly — sending them here too would give one row
@@ -1068,8 +1063,6 @@ export function TradeForm({
                     playbooks={playbooks}
                     playbookId={playbookId}
                     onPlaybookChange={pickPlaybook}
-                    conviction={conviction}
-                    onConvictionChange={setConviction}
                     answers={ruleAnswers}
                     onAnswerChange={setRuleAnswer}
                     netPl={metrics.netPl}

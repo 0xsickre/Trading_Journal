@@ -320,15 +320,13 @@ const BASE_TABS: FormTab[] = [
           },
           {
             // Koliko je trejd dobro ODIGRAN — ne koliko je bio profitabilan.
-            // `conviction` je vera PRE ulaza, `setup_grade` je kvalitet setapa;
-            // ovo je jedino polje koje sudi izvršenju, i sudi mu POSLE izlaska.
-            // Gubitnik odigran po planu zaslužuje 5.
+            // `setup_grade` je kvalitet setapa; ovo je jedino polje koje sudi
+            // izvršenju, i sudi mu POSLE izlaska. Gubitnik odigran po planu
+            // zaslužuje 5.
             //
-            // Config-driven, ne bespoke kao `conviction`: nema ponašanja, jedna
-            // vrednost, jedna grupa. Zato besplatno dobija dozvolu za upis
-            // (`positionFieldNames`), koerciju (`numericFieldNames`) i mesto u
-            // mentor paketu po redosledu forme — a `conviction` tamo baš zato
-            // i nedostaje.
+            // Config-driven: nema ponašanja, jedna vrednost, jedna grupa. Zato
+            // besplatno dobija dozvolu za upis (`positionFieldNames`), koerciju
+            // (`numericFieldNames`) i mesto u mentor paketu po redosledu forme.
             name: "execution_rating",
             label: "Execution rating",
             type: "rating",
