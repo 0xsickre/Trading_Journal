@@ -239,7 +239,7 @@ function TokenSection({ tokens }: { tokens: BotToken[] }) {
         ) : null}
 
         {tokens.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Još nema nijednog tokena.</p>
+          <p className="text-sm text-muted-foreground">No token yet.</p>
         ) : (
           <ul className="divide-y">
             {tokens.map((t) => (
@@ -328,7 +328,7 @@ function AccountMapping({ accounts, orphans }: { accounts: Account[]; orphans: s
                       })
                     }
                   >
-                    Sačuvaj
+                    Save
                   </Button>
                 ) : null}
               </li>
@@ -368,7 +368,7 @@ function SymbolMapping({
         <NewSymbolMapForm instruments={instruments} />
 
         {maps.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Još nema nijednog mapiranja.</p>
+          <p className="text-sm text-muted-foreground">No mapping yet.</p>
         ) : (
           <ul className="divide-y">
             {maps.map((m) => (

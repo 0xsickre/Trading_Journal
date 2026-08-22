@@ -99,7 +99,7 @@ export function CrossAnalysis({
                         }}
                         title={
                           cell
-                            ? `${cell.n} trejdova${
+                            ? `${cell.n} trades${
                                 cell.belowSample ? " — below the threshold" : ""
                               }`
                             : "No trade in this intersection"

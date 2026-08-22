@@ -306,9 +306,10 @@ export function TrackerRuleManager({ rules }: { rules: TrackerRule[] }) {
       {unconfigured > 0 && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-sm text-amber-700 dark:text-amber-400">
           {unconfigured}{" "}
-          {unconfigured === 1 ? "rule has no" : "rules have no"} limit set
-          i zato se ne ocenjuje. Namerno nije seed-ovan podrazumevani iznos —
-          a limit you did not choose yourself is a limit you will pass without noticing.
+          {unconfigured === 1 ? "rule has no" : "rules have no"} limit set, so{" "}
+          {unconfigured === 1 ? "it is" : "they are"} not scored. No default is
+          seeded on purpose — a limit you did not choose yourself is a limit you
+          will pass without noticing.
         </p>
       )}
 

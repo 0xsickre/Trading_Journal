@@ -97,13 +97,6 @@ export const DASHBOARD_WIDGETS: DashboardWidget[] = [
   { id: "tag-breakdown", label: "Performance by tag", group: "detail", span: 4, hideable: true },
 ];
 
-export const WIDGET_GROUP_LABELS: Record<WidgetGroup, string> = {
-  headline: "Always on",
-  detail: "Detail",
-  charts: "Charts",
-  process: "Process",
-};
-
 /** Registry order, which is also the order the page renders in. */
 export const WIDGET_IDS: string[] = DASHBOARD_WIDGETS.map((w) => w.id);
 

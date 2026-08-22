@@ -17,6 +17,8 @@ const renameList = vi.fn();
 const renameOption = vi.fn();
 const moveOptionToList = vi.fn();
 const setListColor = vi.fn();
+const setOptionColor = vi.fn();
+const reorderOptions = vi.fn();
 const addOption = vi.fn();
 
 vi.mock("@/app/(app)/settings/actions", () => ({
@@ -29,7 +31,9 @@ vi.mock("@/app/(app)/settings/actions", () => ({
   moveOptionToList: (...a: unknown[]) => moveOptionToList(...a),
   renameList: (...a: unknown[]) => renameList(...a),
   renameOption: (...a: unknown[]) => renameOption(...a),
+  reorderOptions: (...a: unknown[]) => reorderOptions(...a),
   setListColor: (...a: unknown[]) => setListColor(...a),
+  setOptionColor: (...a: unknown[]) => setOptionColor(...a),
   toggleOptionActive: vi.fn(async () => ({ ok: true as const })),
 }));
 
@@ -76,6 +80,8 @@ beforeEach(() => {
     renameOption,
     moveOptionToList,
     setListColor,
+    setOptionColor,
+    reorderOptions,
     addOption,
   ]) {
     m.mockReset();
@@ -85,6 +91,7 @@ beforeEach(() => {
     usage: { trades: 0, builtIn: false, customFieldLabels: [] },
   });
   countOptionUsage.mockResolvedValue({ ok: true, trades: 0 });
+  reorderOptions.mockResolvedValue({ ok: true });
 });
 
 describe("the two tabs", () => {
@@ -258,6 +265,61 @@ describe("deleting a category", () => {
 
     await user.click(confirm);
     expect(deleteList).toHaveBeenCalledWith("l1");
+  });
+});
+
+describe("tag order", () => {
+  const tf = (over: Partial<OptionList> = {}) =>
+    list({
+      id: "l9",
+      key: "entry_tf",
+      label: "Entry TF",
+      items: [
+        item({ id: "t1", value: "1m", label: "1m", sort_order: 0 }),
+        item({ id: "t2", value: "5m", label: "5m", sort_order: 1 }),
+        item({ id: "t3", value: "15m", label: "15m", sort_order: 2 }),
+        item({ id: "t4", value: "1D", label: "1D", sort_order: 3 }),
+      ],
+      ...over,
+    });
+
+  it("shows tags in the trader's order, NOT alphabetically", async () => {
+    // Sorted by name this reads "1D, 15m, 1m, 5m" — not a timeframe list any
+    // more. The trade form renders the same `sort_order`, so the table has to
+    // agree with the dropdown the trader will actually pick from.
+    const user = userEvent.setup();
+    render(<ListManager lists={[tf()]} usage={{}} />);
+    await openTagsTab(user);
+
+    const names = screen
+      .getAllByRole("row")
+      .slice(1)
+      .map((r) => r.querySelector("td")!.textContent!.trim());
+    expect(names).toEqual(["1m", "5m", "15m", "1D"]);
+  });
+
+  it("moves a tag within its own category", async () => {
+    const user = userEvent.setup();
+    render(<ListManager lists={[tf()]} usage={{}} />);
+    await openTagsTab(user);
+
+    await user.click(screen.getByRole("button", { name: "Options for 5m" }));
+    await user.click(await screen.findByText("Move up"));
+
+    // The swapped ordinals are written for the whole category, in its own
+    // order — not for the rows the table happens to be showing.
+    expect(reorderOptions).toHaveBeenCalledWith(["t2", "t1", "t3", "t4"]);
+  });
+
+  it("cannot move the first tag up or the last one down", async () => {
+    const user = userEvent.setup();
+    render(<ListManager lists={[tf()]} usage={{}} />);
+    await openTagsTab(user);
+
+    await user.click(screen.getByRole("button", { name: "Options for 1m" }));
+    expect(
+      (await screen.findByText("Move up")).closest('[role="menuitem"]'),
+    ).toHaveAttribute("data-disabled");
   });
 });
 

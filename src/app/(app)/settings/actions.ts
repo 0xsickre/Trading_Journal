@@ -254,6 +254,29 @@ export async function addList(
     p_category: category ?? undefined,
   });
   if (error) return { ok: false, error: error.message };
+
+  // A NEW CATEGORY IS A NEW FIELD ON THE TRADE FORM. That is the whole point of
+  // making one — a category nothing can be tagged with is a list of words. The
+  // definition used to be a second, separate step on a "My fields" screen, and
+  // the two could drift: a category with no field never appeared anywhere, and
+  // the screen gave no hint that a step was missing.
+  //
+  // `tags` rather than `select`, because a category is a set you pick SEVERAL
+  // of — the shape TradeZella's tag pickers have and the shape the built-in
+  // `technical_tag` and `mistake` already use.
+  //
+  // Failure here is reported but does not undo the list: the category exists
+  // and is usable, and a retry is a click away, whereas rolling back would
+  // throw away work over a second write the trader never asked about.
+  const fieldRes = await addFieldDef({
+    label: label.trim(),
+    field_type: "tags",
+    group_id: "setup",
+    list_key: cleanKey,
+    key: cleanKey,
+  });
+  if (!fieldRes.ok) return { ok: false, error: fieldRes.error };
+
   revalidateAll();
   return { ok: true };
 }
@@ -893,157 +916,6 @@ export async function addFieldDef(input: {
       ok: false as const,
       error: error.code === "23505" ? "A field with that key already exists." : error.message,
     };
-  }
-  revalidateAll();
-  return { ok: true as const };
-}
-
-/**
- * Rename / regroup / retype a field.
- *
- * `key` is deliberately absent: it is where the values are stored, so changing
- * it would orphan every value already written under the old one.
- */
-export async function updateFieldDef(
-  id: string,
-  patch: {
-    label?: string;
-    field_type?: FieldDefType;
-    group_id?: FieldDefGroup;
-    list_key?: string | null;
-  },
-) {
-  const next: {
-    label?: string;
-    field_type?: string;
-    group_id?: string;
-    list_key?: string | null;
-  } = {};
-  if (patch.label != null) {
-    const label = patch.label.trim();
-    if (!label) return { ok: false as const, error: "The name cannot be empty." };
-    next.label = label;
-  }
-  if (patch.field_type != null) {
-    if (!FIELD_DEF_TYPES.includes(patch.field_type))
-      return { ok: false as const, error: "Unknown field type." };
-    next.field_type = patch.field_type;
-  }
-  if (patch.group_id != null) {
-    if (!FIELD_DEF_GROUPS.includes(patch.group_id))
-      return { ok: false as const, error: "Unknown group." };
-    next.group_id = patch.group_id;
-  }
-  if (patch.list_key !== undefined) next.list_key = patch.list_key?.trim() || null;
-  if (Object.keys(next).length === 0) return { ok: true as const };
-
-  const supabase = await createClient();
-  const { error } = await supabase.from("tj_field_defs").update(next).eq("id", id);
-  if (error) return { ok: false as const, error: error.message };
-  revalidateAll();
-  return { ok: true as const };
-}
-
-/**
- * Archive / restore a field.
- *
- * The default way to retire one: history keeps its values readable, because
- * every report and export that looks at past trades asks for inactive
- * definitions too (`getFieldDefs(false)`). A field you are done with belongs
- * here, not deleted — archiving costs nothing and can be undone with one click.
- */
-export async function toggleFieldDefActive(id: string, isActive: boolean) {
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("tj_field_defs")
-    .update({ is_active: isActive })
-    .eq("id", id);
-  if (error) return { ok: false as const, error: error.message };
-  revalidateAll();
-  return { ok: true as const };
-}
-
-/**
- * How many trades recorded a value for this field, for the delete dialog.
- *
- * A field's values live under its `key` in the `custom` jsonb bag, and the
- * DEFINITION — the label, the type, which section it renders in — lives only
- * in this one `tj_field_defs` row. Unlike an option's value, which keeps
- * printing as plain text once its list entry is gone, a custom field's value
- * has no meaning without the definition: nothing else in the app knows the key
- * exists, so nothing can label or group it once this row is gone. The count
- * here is what lets the delete dialog say that plainly instead of pretending
- * the value is still kept somewhere useful.
- */
-export async function countFieldDefUsage(
-  id: string,
-): Promise<{ ok: true; trades: number } | { ok: false; error: string }> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("tj_field_defs")
-    .select("key")
-    .eq("id", id)
-    .maybeSingle();
-  if (error) return { ok: false, error: error.message };
-  if (!data) return { ok: false, error: "Field not found." };
-
-  const { count, error: countError } = await supabase
-    .from("tj_positions")
-    .select("id", { count: "exact", head: true })
-    .not(`custom->${data.key}`, "is", null);
-  if (countError) return { ok: false, error: countError.message };
-  return { ok: true, trades: count ?? 0 };
-}
-
-/**
- * Delete a field outright — the definition, not just its recorded values.
- *
- * Any trade that already has a value under this key keeps it in the database,
- * but nothing in the app can find it again: `getFieldDefs` will not return the
- * row, so no report, export or the trade form itself has any way to know the
- * key exists. That is the real cost, and `countFieldDefUsage` exists so the
- * dialog states it rather than implying the data is "safe" the way a deleted
- * option's plain-text value is.
- */
-export async function deleteFieldDef(id: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("tj_field_defs").delete().eq("id", id);
-  if (error) return { ok: false, error: error.message };
-  revalidateAll();
-  return { ok: true };
-}
-
-export async function moveFieldDef(id: string, direction: -1 | 1) {
-  const supabase = await createClient();
-  const { data: self } = await supabase
-    .from("tj_field_defs")
-    .select("id, group_id, sort_order")
-    .eq("id", id)
-    .maybeSingle();
-  if (!self) return { ok: false as const, error: "Field not found." };
-
-  const { data: siblings } = await supabase
-    .from("tj_field_defs")
-    .select("id, sort_order")
-    .eq("group_id", self.group_id)
-    .order("sort_order")
-    .order("id");
-  if (!siblings) return { ok: false as const, error: "Read failed." };
-
-  const i = siblings.findIndex((s) => s.id === id);
-  const j = i + direction;
-  if (i < 0 || j < 0 || j >= siblings.length) return { ok: true as const };
-
-  // Rewrite the whole group's ordinals from the reordered array. Swapping two
-  // sort_order values instead would deadlock whenever rows already share one.
-  const reordered = [...siblings];
-  [reordered[i], reordered[j]] = [reordered[j], reordered[i]];
-  for (const [ord, row] of reordered.entries()) {
-    const { error } = await supabase
-      .from("tj_field_defs")
-      .update({ sort_order: ord })
-      .eq("id", row.id);
-    if (error) return { ok: false as const, error: error.message };
   }
   revalidateAll();
   return { ok: true as const };

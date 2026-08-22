@@ -41,7 +41,9 @@ import {
   moveOptionToList,
   renameList,
   renameOption,
+  reorderOptions,
   setListColor,
+  setOptionColor,
   toggleOptionActive,
   type ListUsage,
 } from "@/app/(app)/settings/actions";
@@ -465,16 +467,23 @@ function TagRow({
   row,
   lists,
   used,
+  canUp,
+  canDown,
+  onMove,
 }: {
   row: TagRowData;
   lists: OptionList[];
   used: number;
+  canUp: boolean;
+  canDown: boolean;
+  onMove: (dir: -1 | 1) => void;
 }) {
   const { pending, run } = useAction();
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [name, setName] = useState(row.item.label);
   const [listId, setListId] = useState(row.list.id);
+  const [color, setColor] = useState<string | null>(row.item.color);
   const [usedNow, setUsedNow] = useState<number | null>(null);
   const [, startCount] = useTransition();
 
@@ -496,6 +505,10 @@ function TagRow({
       async () => {
         if (trimmed !== row.item.label) {
           const res = await renameOption(row.item.id, trimmed);
+          if (!res.ok) return res;
+        }
+        if (color !== row.item.color) {
+          const res = await setOptionColor(row.item.id, color);
           if (!res.ok) return res;
         }
         if (listId !== row.list.id) return moveOptionToList(row.item.id, listId);
@@ -543,10 +556,20 @@ function TagRow({
               onSelect={() => {
                 setName(row.item.label);
                 setListId(row.list.id);
+                setColor(row.item.color);
                 setEditOpen(true);
               }}
             >
               Edit
+            </DropdownMenuItem>
+            {/* Order is a real setting, not decoration: the trade form renders
+                this same `sort_order`, so moving a tag here moves it in the
+                dropdown the trader picks from. */}
+            <DropdownMenuItem disabled={!canUp} onSelect={() => onMove(-1)}>
+              Move up
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={!canDown} onSelect={() => onMove(1)}>
+              Move down
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() =>
@@ -606,6 +629,16 @@ function TagRow({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Colour</label>
+                <ColorPicker value={color} onPick={setColor} disabled={pending} />
+                {/* Optional, and separate from the category's: the dropdown on
+                    the trade form shows a tag's own colour when it has one.
+                    Left unset, the row falls back to the category's. */}
+                <p className="text-xs text-muted-foreground">
+                  Leave unset to use the category&apos;s colour.
+                </p>
               </div>
             </div>
             <DialogFooter>
@@ -763,13 +796,60 @@ function TagsTab({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState(ALL);
 
+  // Category first, then the order the trader PUT them in — never alphabetical.
+  // `Entry TF` reads 1m, 5m, 15m, 1h, 4h, 1D; sorted by name it reads
+  // "1D, 15m, 1h, 1m, 4h, 5m", which is not a timeframe list any more. The
+  // dropdown on the trade form renders this same `sort_order`, so the table has
+  // to show what the form will show.
   const rows = useMemo(() => {
     const out: TagRowData[] = [];
     for (const list of lists) {
       for (const item of list.items) out.push({ item, list });
     }
-    return out.sort((a, b) => a.item.label.localeCompare(b.item.label));
+    return out.sort(
+      (a, b) =>
+        a.list.label.localeCompare(b.list.label) ||
+        a.item.sort_order - b.item.sort_order,
+    );
   }, [lists]);
+
+  const router = useRouter();
+  const [, startMove] = useTransition();
+
+  /**
+   * Move a tag within ITS OWN category.
+   *
+   * Ordinals are per-list, so the swap is computed against that list's items
+   * rather than against the visible table — which may be filtered, searched, or
+   * interleaving several categories. Reordering what you can see would write
+   * ordinals derived from a view the database knows nothing about.
+   */
+  function move(row: TagRowData, dir: -1 | 1) {
+    const siblings = [...row.list.items].sort(
+      (a, b) => a.sort_order - b.sort_order,
+    );
+    const i = siblings.findIndex((it) => it.id === row.item.id);
+    const target = i + dir;
+    if (i < 0 || target < 0 || target >= siblings.length) return;
+    const ids = siblings.map((it) => it.id);
+    [ids[i], ids[target]] = [ids[target], ids[i]];
+    startMove(async () => {
+      const res = await reorderOptions(ids);
+      if (!res.ok) toast.error(res.error);
+      router.refresh();
+    });
+  }
+
+  /** Where a tag sits inside its own category, for the move-up/down guards. */
+  function positionIn(row: TagRowData) {
+    const siblings = [...row.list.items].sort(
+      (a, b) => a.sort_order - b.sort_order,
+    );
+    return {
+      index: siblings.findIndex((it) => it.id === row.item.id),
+      total: siblings.length,
+    };
+  }
 
   const shown = rows.filter(
     (r) =>
@@ -828,14 +908,20 @@ function TagsTab({
                 </td>
               </tr>
             ) : (
-              shown.map((r) => (
-                <TagRow
-                  key={r.item.id}
-                  row={r}
-                  lists={lists}
-                  used={usage[`${r.list.key} ${r.item.value}`] ?? 0}
-                />
-              ))
+              shown.map((r) => {
+                const { index, total } = positionIn(r);
+                return (
+                  <TagRow
+                    key={r.item.id}
+                    row={r}
+                    lists={lists}
+                    used={usage[usageKey(r.list.key, r.item.value)] ?? 0}
+                    canUp={index > 0}
+                    canDown={index >= 0 && index < total - 1}
+                    onMove={(dir) => move(r, dir)}
+                  />
+                );
+              })
             )}
           </tbody>
         </table>

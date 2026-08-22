@@ -10,8 +10,6 @@ import { AccountSettings } from "@/components/journal/account-settings";
 import { DangerZone } from "@/components/journal/danger-zone";
 import { getAccountUsage } from "@/lib/journal/account-usage-queries";
 import { CashEventsManager } from "@/components/journal/cash-events-manager";
-import { FieldDefManager } from "@/components/journal/field-def-manager";
-import { getFieldDefs } from "@/lib/journal/field-defs";
 import { TrackerRuleManager } from "@/components/journal/tracker-rule-manager";
 import { getTrackerRules } from "@/lib/journal/tracker/queries";
 import { PageHeader } from "@/components/app/page-header";
@@ -29,7 +27,6 @@ export default async function SettingsPage() {
     instruments,
     accounts,
     cashEvents,
-    fieldDefs,
     trackerRules,
     botTokens,
     symbolMaps,
@@ -40,8 +37,6 @@ export default async function SettingsPage() {
       getInstruments(false),
       getAccounts(),
       getCashEvents(),
-      // Archived defs included — this screen is where you un-archive them.
-      getFieldDefs(false),
       // Retired rules included, for the same reason.
       getTrackerRules({ includeRetired: true }),
       getBotTokens(),
@@ -75,9 +70,6 @@ export default async function SettingsPage() {
           <TabsTrigger value="lists" className="flex-none">
             Categories
           </TabsTrigger>
-          <TabsTrigger value="fields" className="flex-none">
-            My fields
-          </TabsTrigger>
           <TabsTrigger value="tracker" className="flex-none">
             Tracker
           </TabsTrigger>
@@ -97,10 +89,6 @@ export default async function SettingsPage() {
 
         <TabsContent value="lists" className="space-y-4">
           <ListManager lists={lists} usage={optionUsage} />
-        </TabsContent>
-
-        <TabsContent value="fields">
-          <FieldDefManager defs={fieldDefs} lists={lists} />
         </TabsContent>
 
         <TabsContent value="tracker">

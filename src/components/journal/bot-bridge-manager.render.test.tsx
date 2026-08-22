@@ -209,9 +209,9 @@ describe("account mapping", () => {
     const user = userEvent.setup({ delay: null });
     renderPanel({ accounts: [account({ broker_account_id: "5100123" })] });
 
-    expect(screen.queryByRole("button", { name: "Sačuvaj" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
     await user.type(screen.getByPlaceholderText(/broj cTrader naloga/), "4");
-    expect(screen.getByRole("button", { name: "Sačuvaj" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
   });
 
   it("names a broker account the bot reported that no journal account claims", () => {

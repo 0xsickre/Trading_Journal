@@ -47,7 +47,7 @@ export function ReportTable({
       <CardHeader className="pb-2">
         <CardTitle className="text-base">{result.dimension.label}</CardTitle>
         <p className="text-xs text-muted-foreground">
-          {result.rows.length} grupa · {result.totalTrades} trejdova
+          {result.rows.length} groups · {result.totalTrades} trades
           {result.excluded > 0 && (
             <>
               {" "}
