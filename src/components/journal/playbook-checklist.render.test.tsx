@@ -102,6 +102,26 @@ describe("PlaybookChecklist — the bar says only what was answered", () => {
     expect(screen.getByText(/Followed 1 of 2 answered/)).toBeInTheDocument();
     expect(screen.getByText(/1 not answered/)).toBeInTheDocument();
   });
+
+  it("shows adherence as a percentage of what was ANSWERED", () => {
+    // 3 followed, 1 broken, 4 untouched. 75 %, not 37.5 %: the denominator is
+    // the answered rules, the same one `computeFollowRate` reports against.
+    // Counting the untouched four as broken would invent a discipline problem
+    // out of a half-filled form.
+    renderChecklist(
+      Array.from({ length: 8 }, (_, i) => rule({ id: `r${i}` })),
+      { r0: true, r1: true, r2: true, r3: false },
+    );
+
+    expect(screen.getByText("75%")).toBeInTheDocument();
+    expect(screen.getByTitle("3 of 4 answered rules followed")).toBeInTheDocument();
+  });
+
+  it("shows no percentage at all before anything is answered", () => {
+    // 0 % would be a verdict, and there is nothing yet to have a verdict about.
+    renderChecklist([rule({ id: "a" }), rule({ id: "b" })], {});
+    expect(screen.queryByText(/^\d+%$/)).toBeNull();
+  });
 });
 
 describe("PlaybookChecklist — check remaining", () => {

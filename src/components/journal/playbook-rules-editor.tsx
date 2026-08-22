@@ -21,10 +21,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuRadioGroup,
@@ -74,7 +72,6 @@ import {
   reorderPlaybookSections,
   restorePlaybookRule,
   unlinkRule,
-  updatePlaybook,
   updatePlaybookRule,
 } from "@/app/(app)/settings/playbook-actions";
 
@@ -90,7 +87,7 @@ import {
  * own menu, and what is left fits without a horizontal scrollbar.
  */
 const RULE_GRID =
-  "grid grid-cols-[minmax(10rem,1fr)_3rem_5.5rem_5.5rem_6.5rem_2.25rem] items-center gap-2";
+  "grid grid-cols-[minmax(10rem,1fr)_4rem_5.5rem_5.5rem_6.5rem_2.25rem] items-center gap-2";
 
 function useAction() {
   const router = useRouter();
@@ -231,7 +228,16 @@ function Side({
 }) {
   if (n === 0) return <span className="text-muted-foreground">—</span>;
   if (n < RULE_SAMPLE.MIN || winRate == null) {
-    return <span className="text-muted-foreground">n={n}</span>;
+    // The bare count, with the reason in the title. It used to read `n=14`,
+    // which is statistician's shorthand for a screen nobody reads as a paper.
+    return (
+      <span
+        className="text-muted-foreground"
+        title={`Answered ${n} ${n === 1 ? "time" : "times"} — under ${RULE_SAMPLE.MIN}, too few for a win rate`}
+      >
+        {n}
+      </span>
+    );
   }
   return (
     <>
@@ -336,7 +342,12 @@ function RuleRow({
         "data-[drop-target]:bg-accent/60",
       )}
     >
-      <div className="flex min-w-0 items-center gap-1.5">
+      {/* Indented inside the FIRST CELL rather than by padding the row, which
+          is what keeps every number under the header it belongs to: padding the
+          row would shrink its content box and drag the fixed-width columns left
+          of the strip above. The step is only wide enough to read as "under the
+          heading", since a rule is a child of its group, not a sibling. */}
+      <div className="flex min-w-0 items-center gap-1.5 ps-5">
         <Grip {...dragHandle} />
         {editing ? (
           <Input
@@ -385,15 +396,43 @@ function RuleRow({
             archived
           </Badge>
         )}
-        {rule.is_setup_criterion && (
-          <Badge
-            variant="secondary"
-            className="shrink-0"
-            title="Counts toward the setup grade"
-          >
-            grade
-          </Badge>
-        )}
+        {/* On/off in place, not a checkbox two clicks deep in the menu. Whether
+            a rule grades the setup is a property worth SEEING down the list —
+            grey says "not counted", green says "counted" — and the thing you
+            look at should be the thing you press.
+
+            Offered only for a rule that shows on every trade: a criterion asked
+            just of winners would judge the setup already knowing the outcome,
+            and the database refuses that combination outright. */}
+        <button
+          type="button"
+          onClick={() =>
+            run(() =>
+              updatePlaybookRule(rule.id, {
+                is_setup_criterion: !rule.is_setup_criterion,
+              }),
+            )
+          }
+          disabled={pending || retired || rule.show_when !== "always"}
+          aria-pressed={rule.is_setup_criterion}
+          aria-label="Counts toward the setup grade"
+          title={
+            rule.show_when !== "always"
+              ? "Only a rule that shows on every trade can grade the setup — otherwise it would judge with hindsight."
+              : rule.is_setup_criterion
+                ? "Counts toward the setup grade. Click to stop counting it."
+                : "Not counted toward the setup grade. Click to count it."
+          }
+          className={cn(
+            "shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
+            rule.is_setup_criterion
+              ? "border-[var(--profit)]/40 bg-[var(--profit)]/15 text-[var(--profit)]"
+              : "border-transparent bg-muted text-muted-foreground",
+            !retired && rule.show_when === "always" && "hover:brightness-125",
+          )}
+        >
+          grade
+        </button>
         {rule.show_when !== "always" && (
           <Badge variant="secondary" className="shrink-0">
             {SHOW_WHEN_LABELS[rule.show_when]}
@@ -469,24 +508,8 @@ function RuleRow({
             </DropdownMenuSubContent>
           </DropdownMenuSub>
 
-          {/* Only offered for a rule that shows on every trade: a criterion
-              asked just of winners would judge the setup already knowing the
-              outcome, and the database refuses that combination outright. */}
-          <DropdownMenuCheckboxItem
-            checked={rule.is_setup_criterion}
-            disabled={retired || rule.show_when !== "always"}
-            onCheckedChange={(v) =>
-              run(() => updatePlaybookRule(rule.id, { is_setup_criterion: v === true }))
-            }
-            title={
-              rule.show_when !== "always"
-                ? "Only a rule that shows on every trade can grade the setup — otherwise it would judge with hindsight."
-                : undefined
-            }
-          >
-            Counts toward the setup grade
-          </DropdownMenuCheckboxItem>
-
+          {/* No "counts toward the grade" item here: it is the `grade` pill on
+              the row itself, which is both the state and the switch. */}
           <DropdownMenuSeparator />
 
           {/* The keyboard path for what the grip does with a pointer. Scoped to
@@ -777,12 +800,8 @@ export function PlaybookRulesEditor({
   /** The trader's own playbook sections, in their order, from `rule_category`. */
   categories: readonly OptionItem[];
 }) {
-  const { pending, run } = useAction();
+  const { run } = useAction();
   const [addOpen, setAddOpen] = useState(false);
-  const [risk, setRisk] = useState(
-    book.default_risk_pct != null ? String(book.default_risk_pct) : "",
-  );
-  const [aPlus, setAPlus] = useState(book.a_plus_criteria ?? "");
 
   const scores = useMemo(
     () => ruleScorecard(trades, lookup.rules, computeCtx, book.rules.map((r) => r.id)),
@@ -837,43 +856,6 @@ export function PlaybookRulesEditor({
 
   return (
     <div className="space-y-4">
-      {/* The operating model. A playbook that only lists rules does not say how
-          much to risk or what earns an A+ — and an A+ grade that changes
-          nothing about size or management is decoration. */}
-      <div className="grid gap-3 sm:grid-cols-[10rem_1fr]">
-        <div className="space-y-1.5">
-          <Label className="text-xs">Default risk %</Label>
-          <Input
-            value={risk}
-            inputMode="decimal"
-            placeholder="e.g. 1"
-            disabled={pending}
-            onChange={(e) => setRisk(e.target.value)}
-            onBlur={() => {
-              const raw = risk.trim();
-              const next = raw === "" ? null : Number(raw);
-              if (next !== (book.default_risk_pct ?? null))
-                run(() => updatePlaybook(book.id, { default_risk_pct: next }));
-            }}
-            className="h-8"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">What earns an A+ here</Label>
-          <Input
-            value={aPlus}
-            placeholder="The conditions that justify full size"
-            disabled={pending}
-            onChange={(e) => setAPlus(e.target.value)}
-            onBlur={() => {
-              if (aPlus.trim() !== (book.a_plus_criteria ?? ""))
-                run(() => updatePlaybook(book.id, { a_plus_criteria: aPlus }));
-            }}
-            className="h-8"
-          />
-        </div>
-      </div>
-
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
           A group is a heading with its rules under it. Drag the grip to reorder
@@ -900,7 +882,10 @@ export function PlaybookRulesEditor({
             )}
           >
             <span>Rule</span>
-            <span className="text-right">n</span>
+            {/* "Trades", not the "n" it used to say. `n` is what a statistician
+                calls a sample size and what nobody else calls anything — and
+                the quantity really is "how many trades answered this rule". */}
+            <span className="text-right">Trades</span>
             <span className="text-right">Followed</span>
             <span className="text-right">Broken</span>
             <span className="text-right">Difference</span>

@@ -225,8 +225,12 @@ describe("PlaybookRulesEditor — expectancy under the win rate", () => {
 
     const row = rowOf("Waited for the sweep");
     // A single-observation side shows its count, not a win rate or an R line —
-    // and with no broken side at all, the row has no R text anywhere.
-    expect(within(row).getByText("n=1")).toBeInTheDocument();
+    // and with no broken side at all, the row has no R text anywhere. Asserted
+    // through the title, which is unambiguous: the bare "1" also appears in the
+    // Trades column.
+    expect(
+      within(row).getByTitle(`Answered 1 time — under ${RULE_SAMPLE.MIN}, too few for a win rate`),
+    ).toBeInTheDocument();
     expect(within(row).queryByText(/R$/)).toBeNull();
   });
 });
@@ -245,8 +249,12 @@ describe("PlaybookRulesEditor — what it refuses to claim", () => {
     );
 
     const row = rowOf("Waited for the sweep");
-    expect(within(row).getByText("n=14")).toBeInTheDocument();
-    expect(within(row).getByText("n=18")).toBeInTheDocument();
+    expect(
+      within(row).getByTitle(`Answered 14 times — under ${RULE_SAMPLE.MIN}, too few for a win rate`),
+    ).toBeInTheDocument();
+    expect(
+      within(row).getByTitle(`Answered 18 times — under ${RULE_SAMPLE.MIN}, too few for a win rate`),
+    ).toBeInTheDocument();
     // The count named is the THINNER side (14, not 18) — that's the one
     // actually holding the comparison back.
     expect(within(row).getByText(`too few (14/${RULE_SAMPLE.MIN})`)).toBeInTheDocument();
@@ -326,6 +334,58 @@ describe("PlaybookRulesEditor — the row menu holds what the columns used to", 
 
     expect(actions.updatePlaybookRule).not.toHaveBeenCalled();
     expect(screen.getByText("Waited for the sweep")).toBeInTheDocument();
+  });
+});
+
+describe("PlaybookRulesEditor — the grade switch is on the row", () => {
+  it("toggles straight from the row, without opening a menu", async () => {
+    const user = userEvent.setup();
+    renderEditor([rule({ id: "r1", text: "Waited for the sweep" })], []);
+
+    await user.click(
+      screen.getByRole("button", { name: "Counts toward the setup grade" }),
+    );
+
+    expect(actions.updatePlaybookRule).toHaveBeenCalledWith("r1", {
+      is_setup_criterion: true,
+    });
+  });
+
+  it("reports its state through aria-pressed, not only through colour", () => {
+    // The state has to survive a reader who cannot see green.
+    renderEditor(
+      [
+        rule({ id: "r1", text: "Counted", is_setup_criterion: true }),
+        rule({ id: "r2", text: "Not counted", is_setup_criterion: false }),
+      ],
+      [],
+    );
+
+    expect(
+      within(rowOf("Counted")).getByRole("button", {
+        name: "Counts toward the setup grade",
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(rowOf("Not counted")).getByRole("button", {
+        name: "Counts toward the setup grade",
+      }),
+    ).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("refuses to grade a rule that does not show on every trade", () => {
+    // A criterion asked only of winners would judge the setup already knowing
+    // the outcome — the database refuses it, so the switch must not offer it.
+    renderEditor(
+      [rule({ id: "r1", text: "Let the winner run", show_when: "winner" })],
+      [],
+    );
+
+    const toggle = within(rowOf("Let the winner run")).getByRole("button", {
+      name: "Counts toward the setup grade",
+    });
+    expect(toggle).toBeDisabled();
+    expect(toggle).toHaveAttribute("title", expect.stringContaining("hindsight"));
   });
 });
 

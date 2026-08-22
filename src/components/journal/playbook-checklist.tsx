@@ -90,6 +90,21 @@ export function PlaybookChecklist({
   const broken = answered.length - followed;
 
   /**
+   * Adherence, as one number.
+   *
+   * Over ANSWERED rules, not over every rule on the checklist — the same
+   * denominator `computeFollowRate` uses for the statistics, so the figure here
+   * and the follow rate in a report cannot disagree. Counting unanswered rules
+   * as broken would read as a discipline problem invented out of a half-filled
+   * form, which is the one claim this journal must not make.
+   *
+   * Null before anything is answered: 0 % would be a verdict, and there is
+   * nothing yet to have a verdict about.
+   */
+  const followPct =
+    answered.length > 0 ? Math.round((followed / answered.length) * 100) : null;
+
+  /**
    * The setup grade, live, from the criteria on this playbook.
    *
    * Computed here rather than read from the trade because the trade has not
@@ -237,6 +252,17 @@ export function PlaybookChecklist({
                     </span>
                   )}
                 </Badge>
+              )}
+
+              {/* The number the bar is drawing, said out loud. The bar shows
+                  the split; this is what you actually quote to yourself. */}
+              {followPct != null && (
+                <span
+                  className="shrink-0 text-sm font-semibold tabular-nums"
+                  title={`${followed} of ${answered.length} answered rules followed`}
+                >
+                  {followPct}%
+                </span>
               )}
 
               <div
