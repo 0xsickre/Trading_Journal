@@ -599,9 +599,14 @@ sastavljen po dimenziji). Ne zameniti naš — dodati par unapred sastavljenih p
 
 ## Srednji prioritet — jasno, ali traži novi koncept
 
-**6. Tagovanje trejdova** (Setups / Mistakes / Custom + korisničke kategorije)
-Mi tagovanje kao koncept nemamo — samo playbook + custom polja. „Mistakes" seed lista (fomo,
-revenge trading, overtrade, not in plan, chased, bored…) je primenjiva i za ICT/forex.
+**6. Tagovanje trejdova** (Setups / Mistakes / Custom + korisničke kategorije) — ✅ URAĐENO
+(`34041d4`, `78cf78d`, na osnovu plumbing-a iz `b953f8e`). Settings → Categories/Tags daje pun
+CRUD (ime, boja, broj upotreba, premeštanje taga između kategorija, pravo brisanje sa
+upozorenjem), a `TagMultiSelect`/`EditableSelect` čitaju/pišu isti `OptionItem`/`addOption`
+mehanizam. `technical_tags`, `mistake`, `psychology_tags` su rezervisana `type: "tags"` polja
+(`form-config.ts`) mapirana na `text[]` kolone; kreiranje kategorije sad automatski kreira i
+njeno polje na formi. Ovo je bio taj isti mehanizam koji smo već koristili za sekcije playbook-a
+— korisnik ga je proširio na tagove nezavisno od ovog dokumenta.
 
 **7. Template biblioteka za beleške**
 Par gotovih struktura sa imenovanim pitanjima + „Select template" modal. Ne traži AI ni spoljne
