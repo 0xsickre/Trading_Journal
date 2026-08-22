@@ -24,21 +24,21 @@ const goal = (over: Partial<FocusGoal> = {}): FocusGoal => ({
 describe("FocusGoalCard — real daysOnActiveGoal, no wall-clock read", () => {
   it("no goal yet prompts to set one, not a zeroed day count", () => {
     render(<FocusGoalCard goal={null} reportDate="2026-04-10" />);
-    expect(screen.getByText(/Set a focus goal first/)).toBeInTheDocument();
-    expect(screen.queryByText(/Active focus/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Prvo postavi fokus cilj/)).toBeInTheDocument();
+    expect(screen.queryByText(/Aktivan fokus/)).not.toBeInTheDocument();
   });
 
   it("day count comes from reportDate, matching the real lib function exactly", () => {
     const g = goal({ started_at: "2026-04-01T00:00:00Z" });
     const expected = daysOnActiveGoal(g, "2026-04-10");
     render(<FocusGoalCard goal={g} reportDate="2026-04-10" />);
-    expect(screen.getByText(`Active focus · day ${expected}`)).toBeInTheDocument();
+    expect(screen.getByText(`Aktivan fokus · dan ${expected}`)).toBeInTheDocument();
     expect(screen.getByText(g.goal_text)).toBeInTheDocument();
   });
 
   it("day 1 on the goal's own start date, not day 0", () => {
     const g = goal({ started_at: "2026-04-10T00:00:00Z" });
     render(<FocusGoalCard goal={g} reportDate="2026-04-10" />);
-    expect(screen.getByText("Active focus · day 1")).toBeInTheDocument();
+    expect(screen.getByText("Aktivan fokus · dan 1")).toBeInTheDocument();
   });
 });

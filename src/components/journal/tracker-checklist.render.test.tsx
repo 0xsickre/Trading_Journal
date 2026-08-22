@@ -92,9 +92,9 @@ describe("a locked day removes the control, not just disables it", () => {
         data={data({ rules: R, answers: { r1: true }, locked: true })}
       />,
     );
-    expect(screen.getByText("met")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Met" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Not met" })).not.toBeInTheDocument();
+    expect(screen.getByText("ispunjeno")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ispunjeno" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Nije ispunjeno" })).not.toBeInTheDocument();
   });
 
   it("unlocked: the same rule offers real, clickable answer buttons", () => {
@@ -104,8 +104,8 @@ describe("a locked day removes the control, not just disables it", () => {
         data={data({ rules: R, answers: {}, locked: false })}
       />,
     );
-    expect(screen.getByRole("button", { name: "Met" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Not met" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Ispunjeno" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Nije ispunjeno" })).toBeEnabled();
   });
 
   it("clicking Met while unlocked actually saves, and clicking it again clears the answer", async () => {
@@ -116,7 +116,7 @@ describe("a locked day removes the control, not just disables it", () => {
         data={data({ rules: R, answers: {}, locked: false })}
       />,
     );
-    const met = () => screen.getByRole("button", { name: "Met" });
+    const met = () => screen.getByRole("button", { name: "Ispunjeno" });
 
     await user.click(met());
     expect(setCheckinMock).toHaveBeenCalledWith("r1", "2026-04-06", true);
@@ -142,7 +142,7 @@ describe("a locked day removes the control, not just disables it", () => {
         data={data({ rules: R, answers: {}, locked: false })}
       />,
     );
-    const btn = screen.getByRole("button", { name: "Met" });
+    const btn = screen.getByRole("button", { name: "Ispunjeno" });
     await user.click(btn);
     // The optimistic press reverts once the server action reports failure —
     // an answer that LOOKS saved but was actually rejected is worse than a
@@ -191,7 +191,7 @@ describe("auto rules show a verdict but never a manual control", () => {
         })}
       />,
     );
-    expect(screen.getByText("broken")).toBeInTheDocument();
+    expect(screen.getByText("prekršeno")).toBeInTheDocument();
     expect(screen.getByText(/-\$620\.00.*-\$500\.00/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "#12 EURUSD" })).toHaveAttribute(
       "href",
@@ -219,8 +219,8 @@ describe("auto rules show a verdict but never a manual control", () => {
         })}
       />,
     );
-    expect(screen.getByText("not scored")).toBeInTheDocument();
-    expect(screen.getByText(/No limit set/)).toBeInTheDocument();
+    expect(screen.getByText("nije ocenjeno")).toBeInTheDocument();
+    expect(screen.getByText(/Limit nije podešen/)).toBeInTheDocument();
   });
 });
 
@@ -235,9 +235,9 @@ describe("each stage names itself", () => {
     data({ rules: [rule({ id: `r-${stage}`, text: `Rule for ${stage}`, stage })] });
 
   it.each([
-    ["prepare", "Prepare"],
-    ["trade", "Trade"],
-    ["reflect", "Reflect"],
+    ["prepare", "Priprema"],
+    ["trade", "Trgovanje"],
+    ["reflect", "Osvrt"],
   ] as const)("labels the %s stage %s", (stage, heading) => {
     render(<TrackerStageSection stage={stage} data={ofStage(stage)} />);
     expect(screen.getByText(heading)).toBeInTheDocument();
@@ -248,7 +248,7 @@ describe("each stage names itself", () => {
     // The whole point of splitting `title` into `boxed`: a caller can no longer
     // hand one stage another stage's name, or two stages the same name.
     render(<TrackerStageSection stage="trade" data={ofStage("trade")} boxed />);
-    expect(screen.getByText("Trade")).toBeInTheDocument();
+    expect(screen.getByText("Trgovanje")).toBeInTheDocument();
   });
 
   it("renders nothing at all for a stage with no rules", () => {

@@ -116,29 +116,29 @@ describe("the facts come before the questions", () => {
     render(form());
     expect(screen.getByText("5 / 7")).toBeInTheDocument(); // journalled days
     expect(screen.getByText("3 / 1")).toBeInTheDocument(); // won / lost
-    expect(screen.getByText("Touched")).toBeInTheDocument();
-    expect(screen.getByText("Thesis slipped")).toBeInTheDocument();
+    expect(screen.getByText("Dirano")).toBeInTheDocument();
+    expect(screen.getByText("Teza oslabila")).toBeInTheDocument();
   });
 
   it("names the week by its range, not by a raw key", () => {
     render(form());
-    expect(screen.getByText("5–11 Jan 2026")).toBeInTheDocument();
+    expect(screen.getByText("5–11. jan 2026.")).toBeInTheDocument();
   });
 });
 
 describe("a week that is still running", () => {
   it("cannot be sealed, and says why", () => {
     render(form({ weekStart: THIS }));
-    expect(screen.queryByRole("button", { name: /Lock week/ })).not.toBeInTheDocument();
-    expect(screen.getByText(/This week is not over/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Zaključaj nedelju/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/Ova nedelja nije završena/)).toBeInTheDocument();
     // Still writable — notes taken during the week are not the problem; a
     // permanent seal over a moving week is.
-    expect(screen.getByRole("button", { name: /Save review/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Sačuvaj osvrt/ })).toBeEnabled();
   });
 
   it("a finished week can be sealed", () => {
     render(form());
-    expect(screen.getByRole("button", { name: /Lock week/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Zaključaj nedelju/ })).toBeEnabled();
   });
 });
 
@@ -153,22 +153,22 @@ describe("Complete means the grade plus both singular answers", () => {
         }),
       }),
     );
-    expect(screen.getByText("Draft")).toBeInTheDocument();
+    expect(screen.getByText("Nacrt")).toBeInTheDocument();
 
     // Zvezdice nose `role="radio"` i ime „N of 5" — ocena je izbor iz skupa,
     // ne pet nezavisnih dugmadi.
     await user.click(screen.getByRole("radio", { name: "4 of 5" }));
 
-    expect(screen.getByText("Complete")).toBeInTheDocument();
+    expect(screen.getByText("Završeno")).toBeInTheDocument();
   });
 });
 
 describe("a locked week", () => {
   it("hides Save and Lock, and disables the rating stars", () => {
     render(form({ review: review({ locked_at: "2026-01-12T20:00:00Z" }) }));
-    expect(screen.queryByRole("button", { name: /Save review/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Lock week/ })).not.toBeInTheDocument();
-    expect(screen.getByText("Week is locked")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sačuvaj osvrt/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Zaključaj nedelju/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Nedelja je zaključana")).toBeInTheDocument();
     // Onemogućava ih `<fieldset disabled>` oko cele forme, ne prop na
     // komponenti — zato ovo i dalje važi posle prelaska na zvezdice.
     expect(screen.getByRole("radio", { name: "5 of 5" })).toBeDisabled();
@@ -189,8 +189,8 @@ describe("locking saves first, so it never seals unsaved text", () => {
     });
 
     render(form());
-    await user.click(screen.getByRole("button", { name: /Lock week/ }));
-    await user.click(screen.getByRole("button", { name: "Lock" }));
+    await user.click(screen.getByRole("button", { name: /Zaključaj nedelju/ }));
+    await user.click(screen.getByRole("button", { name: "Zaključaj" }));
 
     await vi.waitFor(() => expect(lockWeekMock).toHaveBeenCalled());
     expect(order).toEqual(["save", "lock"]);
@@ -201,8 +201,8 @@ describe("locking saves first, so it never seals unsaved text", () => {
     saveWeeklyReviewMock.mockResolvedValue({ ok: false, error: "network failed" });
 
     render(form());
-    await user.click(screen.getByRole("button", { name: /Lock week/ }));
-    await user.click(screen.getByRole("button", { name: "Lock" }));
+    await user.click(screen.getByRole("button", { name: /Zaključaj nedelju/ }));
+    await user.click(screen.getByRole("button", { name: "Zaključaj" }));
 
     await vi.waitFor(() => expect(saveWeeklyReviewMock).toHaveBeenCalled());
     expect(lockWeekMock).not.toHaveBeenCalled();

@@ -38,9 +38,9 @@ function emptyToNull(s: string | null): string | null {
  * two keys, with the unique constraint powerless to notice.
  */
 function invalidWeek(weekStart: string): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) return "Invalid week.";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) return "Neispravna nedelja.";
   if (weekStartOfDayKey(weekStart) !== weekStart)
-    return "A week starts on a Monday.";
+    return "Nedelja počinje ponedeljkom.";
   return null;
 }
 
@@ -53,14 +53,14 @@ export async function saveWeeklyReview(
 
   const parsed = weeklyReviewSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Neispravan unos." };
   }
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "You are not signed in." };
+  if (!user) return { ok: false, error: "Nisi prijavljen." };
 
   // Checked so the user reads this sentence rather than the trigger's. The
   // trigger stays the real guard — PostgREST with the user's JWT is a live
@@ -71,7 +71,7 @@ export async function saveWeeklyReview(
     .eq("week_start", weekStart)
     .maybeSingle();
   if (existing?.locked_at != null)
-    return { ok: false, error: "This week is locked and no longer changes." };
+    return { ok: false, error: "Ova nedelja je zaključana i više se ne menja." };
 
   const { data, error } = await supabase
     .from("tj_weekly_reviews")
@@ -119,14 +119,14 @@ export async function lockWeek(weekStart: string): Promise<Result> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "You are not signed in." };
+  if (!user) return { ok: false, error: "Nisi prijavljen." };
 
   const account = await getPrimaryAccount();
   const today = todayInTz(account?.timezone ?? DEFAULT_TZ);
   if (weekStartOfDayKey(today) === weekStart)
-    return { ok: false, error: "This week is not over yet." };
+    return { ok: false, error: "Ova nedelja još nije završena." };
   if (weekStart > today)
-    return { ok: false, error: "That week has not started yet." };
+    return { ok: false, error: "Ta nedelja još nije počela." };
 
   const { data: existing } = await supabase
     .from("tj_weekly_reviews")
@@ -134,9 +134,9 @@ export async function lockWeek(weekStart: string): Promise<Result> {
     .eq("week_start", weekStart)
     .maybeSingle();
 
-  if (!existing) return { ok: false, error: "Save the review before locking it." };
+  if (!existing) return { ok: false, error: "Sačuvaj osvrt pre zaključavanja." };
   if (existing.locked_at != null)
-    return { ok: false, error: "This week is already locked." };
+    return { ok: false, error: "Ova nedelja je već zaključana." };
 
   const { error } = await supabase
     .from("tj_weekly_reviews")

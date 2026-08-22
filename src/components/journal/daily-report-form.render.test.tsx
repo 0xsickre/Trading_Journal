@@ -134,9 +134,9 @@ describe("a locked day disables everything, including the embedded tracker check
         tracker={trackerData({ locked: true, answers: { r1: true } })}
       />,
     );
-    expect(screen.queryByRole("button", { name: /Save report/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Lock day/ })).not.toBeInTheDocument();
-    expect(screen.getByText("Day is locked")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sačuvaj izveštaj/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Zaključaj dan/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Dan je zaključan")).toBeInTheDocument();
   });
 
   it("the position check-in buttons are genuinely disabled", () => {
@@ -155,8 +155,8 @@ describe("a locked day disables everything, including the embedded tracker check
     // AND sit inside the disabled fieldset — a check-in writes through its own
     // server action rather than the form's Save, so if the fieldset were ever
     // restructured the lock would otherwise leak on this control alone.
-    expect(screen.getByRole("button", { name: "Intact" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Moved stop" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Netaknuta" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Pomerio stop" })).toBeDisabled();
   });
 
   it("the embedded tracker rule shows a Lock badge, not clickable answer buttons", () => {
@@ -171,8 +171,8 @@ describe("a locked day disables everything, including the embedded tracker check
         tracker={trackerData({ locked: true, answers: { r1: true } })}
       />,
     );
-    expect(screen.getByText("met")).toBeInTheDocument(); // the lock badge's own state text
-    expect(screen.queryByRole("button", { name: "Met" })).not.toBeInTheDocument();
+    expect(screen.getByText("ispunjeno")).toBeInTheDocument(); // the lock badge's own state text
+    expect(screen.queryByRole("button", { name: "Ispunjeno" })).not.toBeInTheDocument();
   });
 
   it("an UNLOCKED day keeps every one of those controls live", () => {
@@ -187,9 +187,9 @@ describe("a locked day disables everything, including the embedded tracker check
         tracker={trackerData({ locked: false })}
       />,
     );
-    expect(screen.getByRole("button", { name: "Intact" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: /Lock day/ })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Met" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Netaknuta" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Zaključaj dan/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Ispunjeno" })).toBeEnabled();
   });
 });
 
@@ -207,17 +207,17 @@ describe("no-trade-day clears the impulse fields it hides", () => {
         tracker={trackerData()}
       />,
     );
-    expect(screen.getByText("Impulse control")).toBeInTheDocument();
+    expect(screen.getByText("Kontrola impulsa")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("checkbox", { name: /No new entry today/ }));
+    await user.click(screen.getByRole("checkbox", { name: /Danas bez novog ulaska/ }));
 
-    expect(screen.queryByText("Impulse control")).not.toBeInTheDocument();
+    expect(screen.queryByText("Kontrola impulsa")).not.toBeInTheDocument();
     // The point of the reworded label. "No new entry" is not "no exposure": a
     // swing book's quietest days are the ones spent holding, and hiding the
     // check-in on them would drop the journal on exactly the days it is the
     // only thing being decided.
     expect(screen.getByText("#12 XAUUSD")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Intact" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Netaknuta" })).toBeInTheDocument();
   });
 });
 
@@ -239,7 +239,7 @@ describe("the daily page asks about positions, not about the day", () => {
         tracker={trackerData()}
       />,
     );
-    expect(screen.getByText(/day 3 of 5/)).toBeInTheDocument();
+    expect(screen.getByText(/dan 3 od 5/)).toBeInTheDocument();
     expect(screen.getByText("Dollar weakness into CPI")).toBeInTheDocument();
     expect(screen.getByText("Daily close back under 2340")).toBeInTheDocument();
   });
@@ -256,7 +256,7 @@ describe("the daily page asks about positions, not about the day", () => {
         tracker={trackerData()}
       />,
     );
-    expect(screen.queryByText("Past time stop")).not.toBeInTheDocument();
+    expect(screen.queryByText("Prošao time stop")).not.toBeInTheDocument();
 
     rerender(
       <DailyReportForm
@@ -269,7 +269,7 @@ describe("the daily page asks about positions, not about the day", () => {
         tracker={trackerData()}
       />,
     );
-    expect(screen.getByText("Past time stop")).toBeInTheDocument();
+    expect(screen.getByText("Prošao time stop")).toBeInTheDocument();
   });
 
   it("saves a check-in the moment it is answered, without pressing Save", async () => {
@@ -286,7 +286,7 @@ describe("the daily page asks about positions, not about the day", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Weakened" }));
+    await user.click(screen.getByRole("button", { name: "Oslabljena" }));
 
     await vi.waitFor(() => expect(savePositionCheckinMock).toHaveBeenCalled());
     expect(savePositionCheckinMock).toHaveBeenCalledWith("2026-04-02", {
@@ -325,7 +325,7 @@ describe("the daily page asks about positions, not about the day", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Moved stop" }));
+    await user.click(screen.getByRole("button", { name: "Pomerio stop" }));
 
     await vi.waitFor(() => expect(savePositionCheckinMock).toHaveBeenCalled());
     // The upsert writes all three columns. A patch-shaped payload would clear
@@ -350,7 +350,7 @@ describe("the daily page asks about positions, not about the day", () => {
         tracker={trackerData()}
       />,
     );
-    expect(screen.getByText(/Nothing was open on this day/)).toBeInTheDocument();
+    expect(screen.getByText(/Ništa nije bilo otvoreno ovog dana/)).toBeInTheDocument();
   });
 });
 
@@ -378,8 +378,8 @@ describe("locking saves the report first, so it never seals empty text", () => {
         tracker={trackerData()}
       />,
     );
-    await user.click(screen.getByRole("button", { name: /Lock day/ }));
-    await user.click(screen.getByRole("button", { name: "Lock" }));
+    await user.click(screen.getByRole("button", { name: /Zaključaj dan/ }));
+    await user.click(screen.getByRole("button", { name: "Zaključaj" }));
 
     await vi.waitFor(() => expect(lockDayMock).toHaveBeenCalled());
     expect(order).toEqual(["save", "lock"]);
@@ -400,8 +400,8 @@ describe("locking saves the report first, so it never seals empty text", () => {
         tracker={trackerData()}
       />,
     );
-    await user.click(screen.getByRole("button", { name: /Lock day/ }));
-    await user.click(screen.getByRole("button", { name: "Lock" }));
+    await user.click(screen.getByRole("button", { name: /Zaključaj dan/ }));
+    await user.click(screen.getByRole("button", { name: "Zaključaj" }));
 
     await vi.waitFor(() => expect(saveDailyReportMock).toHaveBeenCalled());
     expect(lockDayMock).not.toHaveBeenCalled();

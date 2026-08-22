@@ -48,24 +48,24 @@ const draw = (positions: OpenPositionView[], locked = false) =>
 describe("brojanje dana", () => {
   it("ispisuje koji je dan držanja", () => {
     draw([pos({ daysInTrade: 3 })]);
-    expect(screen.getByText(/day 3/)).toBeInTheDocument();
+    expect(screen.getByText(/dan 3/)).toBeInTheDocument();
   });
 
   it("sa vremenskim stopom kaze dan N od M", () => {
     draw([pos({ daysInTrade: 3, timeStopDays: 5 })]);
-    expect(screen.getByText(/day 3 of 5/)).toBeInTheDocument();
+    expect(screen.getByText(/dan 3 od 5/)).toBeInTheDocument();
   });
 
   it("bez vremenskog stopa ne izmišlja gornju granicu", () => {
     draw([pos({ daysInTrade: 3, timeStopDays: null })]);
-    expect(screen.getByText(/day 3/).textContent).toBe("day 3");
+    expect(screen.getByText(/dan 3/).textContent).toBe("dan 3");
   });
 
   it("prvi dan je 1, ne 0 — brojač je 1-bazan", () => {
     // `daysBetweenKeys` broji dan otvaranja kao prvu sesiju. Nula bi značila da
     // pozicija još nije ni otvorena.
     draw([pos({ daysInTrade: 1 })]);
-    expect(screen.getByText(/day 1/)).toBeInTheDocument();
+    expect(screen.getByText(/dan 1/)).toBeInTheDocument();
   });
 });
 
@@ -74,20 +74,20 @@ describe("prekoračen vremenski stop", () => {
     const { container } = draw([
       pos({ daysInTrade: 7, timeStopDays: 5, pastTimeStop: true }),
     ]);
-    expect(screen.getByText("Past time stop")).toBeInTheDocument();
+    expect(screen.getByText("Prošao time stop")).toBeInTheDocument();
     expect(container.querySelector(".border-amber-500\\/60")).toBeTruthy();
   });
 
   it("pozicija u roku nema ni upozorenje ni okvir", () => {
     draw([pos({ daysInTrade: 3, timeStopDays: 5, pastTimeStop: false })]);
-    expect(screen.queryByText("Past time stop")).not.toBeInTheDocument();
+    expect(screen.queryByText("Prošao time stop")).not.toBeInTheDocument();
   });
 });
 
 describe("odgovoreno naspram ćutanja", () => {
   it("pozicija bez odgovora nema kvačicu", () => {
     draw([pos({ checkin: null })]);
-    expect(screen.queryByLabelText("Checked in")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Prijavljeno")).not.toBeInTheDocument();
   });
 
   it("odgovorena pozicija nosi kvačicu", () => {
@@ -102,7 +102,7 @@ describe("odgovoreno naspram ćutanja", () => {
         } as OpenPositionView["checkin"],
       }),
     ]);
-    expect(screen.getByLabelText("Checked in")).toBeInTheDocument();
+    expect(screen.getByLabelText("Prijavljeno")).toBeInTheDocument();
   });
 
   it("sam `touched` bez teze NIJE odgovoreno", () => {
@@ -119,7 +119,7 @@ describe("odgovoreno naspram ćutanja", () => {
         } as OpenPositionView["checkin"],
       }),
     ]);
-    expect(screen.queryByLabelText("Checked in")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Prijavljeno")).not.toBeInTheDocument();
   });
 });
 
@@ -133,8 +133,8 @@ describe("više pozicija", () => {
       ?.parentElement as HTMLElement;
     const fx = container.querySelector<HTMLElement>('a[href="/trades/b"]')
       ?.parentElement as HTMLElement;
-    expect(within(es).getByText(/day 2/)).toBeInTheDocument();
-    expect(within(fx).getByText(/day 9 of 10/)).toBeInTheDocument();
+    expect(within(es).getByText(/dan 2/)).toBeInTheDocument();
+    expect(within(fx).getByText(/dan 9 od 10/)).toBeInTheDocument();
   });
 
   it("svaka vodi na svoj trejd", () => {

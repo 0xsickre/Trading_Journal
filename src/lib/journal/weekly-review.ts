@@ -130,12 +130,12 @@ export function defaultWeekStart(todayKey: string): string {
 }
 
 const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  "jan", "feb", "mar", "apr", "maj", "jun",
+  "jul", "avg", "sep", "okt", "nov", "dec",
 ];
 
 /**
- * "5–11 Jan 2026", collapsing the parts both ends share.
+ * "5–11. jan 2026.", collapsing the parts both ends share.
  *
  * Formatted from the key's own digits rather than through a `Date`: these are
  * account-zone day keys, and `new Date("2026-01-05")` parses as UTC midnight,
@@ -149,11 +149,11 @@ export function formatWeekRange(weekStart: string): string {
 
   const from =
     y1 !== y2
-      ? `${d1} ${MONTHS[m1 - 1]} ${y1}`
+      ? `${d1}. ${MONTHS[m1 - 1]} ${y1}.`
       : m1 !== m2
-        ? `${d1} ${MONTHS[m1 - 1]}`
+        ? `${d1}. ${MONTHS[m1 - 1]}`
         : `${d1}`;
-  return `${from}–${d2} ${MONTHS[m2 - 1]} ${y2}`;
+  return `${from}–${d2}. ${MONTHS[m2 - 1]} ${y2}.`;
 }
 
 /**

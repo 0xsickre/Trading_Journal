@@ -44,31 +44,31 @@ export async function setCheckin(
   reportDate: string,
   checked: boolean | null,
 ): Promise<Result> {
-  if (!DAY_RE.test(reportDate)) return { ok: false, error: "Invalid date." };
+  if (!DAY_RE.test(reportDate)) return { ok: false, error: "Neispravan datum." };
 
   const supabase = await createClient();
   const user = await getCurrentUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  if (!user) return { ok: false, error: "Nisi prijavljen." };
 
   const account = await getPrimaryAccount();
   const today = todayInTz(account?.timezone ?? DEFAULT_TZ);
   if (reportDate > today)
-    return { ok: false, error: "A future day has not started yet." };
+    return { ok: false, error: "Budući dan još nije počeo." };
 
   const { data: rule } = await supabase
     .from("tj_tracker_rules")
     .select("id, auto_key, deleted_at")
     .eq("id", ruleId)
     .maybeSingle();
-  if (!rule) return { ok: false, error: "Rule not found." };
+  if (!rule) return { ok: false, error: "Pravilo nije pronađeno." };
 
   // An auto rule is answered by the evaluator, and by tj_lock_day at freeze
   // time. A hand-written row would be ignored by the read path on an unlocked
   // day and then overwritten at lock time — dead data that reads as an answer.
   if (rule.auto_key != null)
-    return { ok: false, error: "An automatic rule is not ticked by hand." };
+    return { ok: false, error: "Automatsko pravilo se ne čekira ručno." };
   if (rule.deleted_at != null)
-    return { ok: false, error: "The rule is retired." };
+    return { ok: false, error: "Pravilo je povučeno iz upotrebe." };
 
   // Checked before writing so the user sees this sentence instead of the
   // trigger's. The trigger stays the actual guard: PostgREST with the user's JWT
@@ -79,7 +79,7 @@ export async function setCheckin(
     .eq("report_date", reportDate)
     .maybeSingle();
   if (report?.locked_at != null)
-    return { ok: false, error: "The day is locked — ticking is frozen." };
+    return { ok: false, error: "Dan je zaključan — čekiranje je zamrznuto." };
 
   const { error } =
     checked == null
@@ -124,11 +124,11 @@ export async function setCheckin(
  * the one rule in this phase most easily got wrong.
  */
 export async function lockDay(reportDate: string): Promise<Result> {
-  if (!DAY_RE.test(reportDate)) return { ok: false, error: "Invalid date." };
+  if (!DAY_RE.test(reportDate)) return { ok: false, error: "Neispravan datum." };
 
   const supabase = await createClient();
   const user = await getCurrentUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  if (!user) return { ok: false, error: "Nisi prijavljen." };
 
   const [accounts, rules, trades] = await Promise.all([
     getAccounts(),
@@ -139,7 +139,7 @@ export async function lockDay(reportDate: string): Promise<Result> {
   const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
   const timezone = primary?.timezone ?? DEFAULT_TZ;
   if (reportDate > todayInTz(timezone))
-    return { ok: false, error: "A future day cannot be locked." };
+    return { ok: false, error: "Budući dan se ne može zaključati." };
 
   const index = buildTradeDayIndex(
     trades,

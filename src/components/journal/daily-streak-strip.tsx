@@ -41,13 +41,13 @@ export function DailyStreakStrip({
         <Flame className="size-4 shrink-0 self-center text-muted-foreground" />
         <span className="text-xl font-semibold tabular-nums">{current}</span>
         <span className="text-sm text-muted-foreground">
-          {current === 1 ? "day in a row" : "days in a row"}
+          {current === 1 ? "dan zaredom" : "dana zaredom"}
         </span>
       </div>
 
       <div className="flex items-center gap-3">
         <div className="text-right">
-          <div className="text-xs text-muted-foreground">Consistency</div>
+          <div className="text-xs text-muted-foreground">Doslednost</div>
           {/* `null` prints an em dash rather than 0 %, matching the empty arc
               beside it: a window with nothing scored has no average, and
               writing 0 % would report a verdict nobody earned. */}
@@ -63,8 +63,8 @@ export function DailyStreakStrip({
 
       <span className="sr-only">
         {scoredDays === 0
-          ? "No days scored yet."
-          : `Averaged over ${scoredDays} scored days.`}
+          ? "Još nijedan dan nije ocenjen."
+          : `Prosek preko ${scoredDays} ocenjenih dana.`}
       </span>
     </div>
   );

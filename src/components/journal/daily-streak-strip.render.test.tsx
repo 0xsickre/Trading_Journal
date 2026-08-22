@@ -14,7 +14,7 @@ describe("DailyStreakStrip", () => {
   it("reads the run and the consistency together", () => {
     render(<DailyStreakStrip {...base} current={5} meanPct={82} scoredDays={20} />);
     expect(screen.getByText("5")).toBeInTheDocument();
-    expect(screen.getByText("days in a row")).toBeInTheDocument();
+    expect(screen.getByText("dana zaredom")).toBeInTheDocument();
     expect(screen.getByText("82%")).toBeInTheDocument();
   });
 
@@ -49,7 +49,7 @@ describe("DailyStreakStrip", () => {
 
   it("uses the singular for a one-day run", () => {
     render(<DailyStreakStrip {...base} current={1} />);
-    expect(screen.getByText("day in a row")).toBeInTheDocument();
+    expect(screen.getByText("dan zaredom")).toBeInTheDocument();
   });
 
   it("RENDERS NOTHING BEFORE ANY RULE EXISTS, which is not a broken streak", () => {

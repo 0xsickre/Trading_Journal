@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
+import { srLatn } from "date-fns/locale/sr-Latn";
 import { ChevronLeft, ChevronRight, Lock, Save } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -130,7 +131,7 @@ export function DailyReportForm({
   const isToday = reportDate === today;
   const lowMental = form.mental_temp != null && form.mental_temp < 3;
   const lockedAt = report?.locked_at
-    ? format(new Date(report.locked_at), "d MMM yyyy, HH:mm")
+    ? format(new Date(report.locked_at), "d. MMM yyyy. HH:mm", { locale: srLatn })
     : null;
 
   function patch<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -160,7 +161,7 @@ export function DailyReportForm({
       return false;
     }
     if (res.warnNoFocusGoal) {
-      toast.warning("Set a focus goal — it is what the day is measured against.");
+      toast.warning("Postavi fokus cilj — u odnosu na njega se meri dan.");
     }
     setLastSaved(res.updated_at);
     return true;
@@ -169,7 +170,7 @@ export function DailyReportForm({
   function save() {
     start(async () => {
       if (!(await persist())) return;
-      toast.success("Daily report saved");
+      toast.success("Dnevni izveštaj sačuvan");
       router.refresh();
     });
   }
@@ -185,7 +186,7 @@ export function DailyReportForm({
           </Button>
           <div className="min-w-[10rem] text-center">
             <p className="text-lg font-semibold">
-              {format(parseISO(reportDate), "EEE, d MMM yyyy")}
+              {format(parseISO(reportDate), "EEE, d. MMM yyyy.", { locale: srLatn })}
             </p>
             {!isToday && (
               <p className="text-xs text-muted-foreground">{timezone}</p>
@@ -211,7 +212,7 @@ export function DailyReportForm({
           </Button>
           {!isToday && (
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/daily">Today</Link>
+              <Link href="/daily">Danas</Link>
             </Button>
           )}
         </div>
@@ -221,7 +222,7 @@ export function DailyReportForm({
             locked={tracker.locked}
           />
           <Badge variant={complete ? "default" : "secondary"}>
-            {complete ? "Complete" : "Draft"}
+            {complete ? "Završeno" : "Nacrt"}
           </Badge>
         </div>
       </div>
@@ -241,10 +242,10 @@ export function DailyReportForm({
               {/* Explicit `{" "}` — see the same banner in
                   `weekly-review-form.tsx`: the plain space written here did not
                   reach the DOM and the sentence ran together at the bracket. */}
-              This day is locked {lockedAt && `(${lockedAt})`}{" "}
-              and its journal no longer changes. Trades stay editable —
-              correcting P&amp;L is still correcting a fact, but it does not move
-              this day&apos;s rating.
+              Ovaj dan je zaključan {lockedAt && `(${lockedAt})`}{" "}
+              i njegov dnevnik se više ne menja. Trejdovi ostaju izmenjivi —
+              ispravka P&amp;L-a je i dalje ispravka činjenice, ali ne pomera
+              ocenu ovog dana.
             </AlertDescription>
           </Alert>
         )}
@@ -270,29 +271,29 @@ export function DailyReportForm({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Before you enter</CardTitle>
+          <CardTitle className="text-base">Pre nego što uđeš</CardTitle>
           <p className="text-sm text-muted-foreground">
-            A gate, not a diary. Both questions are about what you are about to
-            do, which is why they sit below the positions and not above them.
+            Filter, ne dnevnik. Oba pitanja su o tome šta ćeš tek uraditi, zato
+            stoje ispod pozicija, a ne iznad njih.
           </p>
         </CardHeader>
         <CardContent className="space-y-5">
           {lowMental && (
             <Alert>
               <AlertDescription>
-                Mental temperature below 3 stars — consider smaller size, or sitting out
-                until you feel readier.
+                Mentalno stanje ispod 3 zvezdice — razmisli o manjoj veličini
+                pozicije, ili ostani po strani dok se ne osetiš spremnije.
               </AlertDescription>
             </Alert>
           )}
 
           <div className="space-y-2">
-            <Label>Mental temperature</Label>
+            <Label>Mentalno stanje</Label>
             {/* Zvezdice, ne 1–10. Deset nivoa je preciznost koju čovek nema o
                 sopstvenoj glavi; tražena, daje šum koji posle hrani dimenziju
                 izveštaja i insight pravilo kao da je signal. */}
             <StarRating
-              label="Mental temperature"
+              label="Mentalno stanje"
               value={form.mental_temp}
               onChange={(next) => patch("mental_temp", next)}
             />
@@ -303,11 +304,11 @@ export function DailyReportForm({
               Thursday is exposed to Thursday's release whether or not it lands
               in this session. */}
           <div className="space-y-2">
-            <Label>Catalysts before my planned exit</Label>
+            <Label>Katalizatori pre planiranog izlaska</Label>
             <Textarea
               value={form.macro_note ?? ""}
               onChange={(e) => patch("macro_note", e.target.value || null)}
-              placeholder="What lands between now and when I expect to be out — releases, earnings, the weekend…"
+              placeholder="Šta se dešava između sada i trenutka kad očekujem da izađem — objave, earnings, vikend…"
               rows={2}
             />
           </div>
@@ -324,11 +325,11 @@ export function DailyReportForm({
                 htmlFor="no_trade_day"
                 className="cursor-pointer text-sm font-medium"
               >
-                No new entry today
+                Danas bez novog ulaska
               </label>
               <p className="text-xs text-muted-foreground">
-                I opened nothing new. Open positions above are still checked —
-                holding is a decision too.
+                Nisam otvorio ništa novo. Otvorene pozicije iznad su i dalje
+                prijavljene — držanje je takođe odluka.
               </p>
             </div>
           </div>
@@ -338,26 +339,29 @@ export function DailyReportForm({
       {!form.no_trade_day && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Impulse control</CardTitle>
+            <CardTitle className="text-base">Kontrola impulsa</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Catch bad habits before they pile up.
+              Uhvati loše navike pre nego što se nagomilaju.
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Impulses today (Douglas&apos; fears)</Label>
+              <Label>Impulsi danas (Daglasovi strahovi)</Label>
               <div className="grid gap-2 sm:grid-cols-2">
                 {(
                   [
-                    ["impulse_fomo", "FOMO — chased without an edge"],
-                    ["impulse_fear", "Fear of losing — hesitated or exited early"],
+                    ["impulse_fomo", "FOMO — jurio bez edge-a"],
+                    [
+                      "impulse_fear",
+                      "Strah od gubitka — oklevao ili izašao prerano",
+                    ],
                     [
                       "impulse_fear_wrong",
-                      "Fear of being wrong — moved the stop / averaged down",
+                      "Strah da nisam u pravu — pomerio stop / usrednjavao naniže",
                     ],
                     [
                       "impulse_greed",
-                      "Fear of leaving money — took profit too early",
+                      "Strah da ostavljam novac — uzeo profit prerano",
                     ],
                   ] as const
                 ).map(([key, label]) => (
@@ -376,7 +380,7 @@ export function DailyReportForm({
             </div>
 
             <div className="space-y-2">
-              <Label>Note</Label>
+              <Label>Beleška</Label>
               <Textarea
                 value={form.impulse_note ?? ""}
                 onChange={(e) => patch("impulse_note", e.target.value || null)}
@@ -405,10 +409,10 @@ export function DailyReportForm({
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
             {tracker.locked
-              ? "Day is locked"
+              ? "Dan je zaključan"
               : lastSaved
-                ? `Last saved ${format(new Date(lastSaved), "HH:mm")}`
-                : "Not saved yet"}
+                ? `Poslednje čuvanje ${format(new Date(lastSaved), "HH:mm")}`
+                : "Još nije sačuvano"}
           </p>
           {!tracker.locked && (
             <div className="flex items-center gap-2">
@@ -421,7 +425,7 @@ export function DailyReportForm({
               />
               <Button onClick={save} disabled={pending}>
                 <Save className="mr-2 size-4" />
-                Save report
+                Sačuvaj izveštaj
               </Button>
             </div>
           )}
@@ -470,7 +474,7 @@ function LockDayButton({
         return;
       }
       setOpen(false);
-      toast.success("Day locked.");
+      toast.success("Dan zaključan.");
       router.refresh();
     });
   }
@@ -480,29 +484,30 @@ function LockDayButton({
       <DialogTrigger asChild>
         <Button variant="outline" disabled={disabled}>
           <Lock className="mr-2 size-4" />
-          Lock day
+          Zaključaj dan
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Lock {reportDate}?</DialogTitle>
+          <DialogTitle>Zaključati {reportDate}?</DialogTitle>
           <DialogDescription asChild>
             <div className="space-y-3 text-sm">
               <p>
-                This <b>cannot be undone</b>. The daily report and checklist for this
-                day freeze exactly as they are now
+                Ovo se <b>ne može poništiti</b>. Dnevni izveštaj i čeklista za ovaj
+                dan se zamrzavaju tačno ovakvi kakvi su sada
                 {compliance.pct != null &&
-                  ` — ${Math.round(compliance.pct)}%, ${compliance.satisfied} of ${compliance.applicable} rules`}
+                  ` — ${Math.round(compliance.pct)}%, ${compliance.satisfied} od ${compliance.applicable} pravila`}
                 .
               </p>
               <p>
-                Trades <b>stay editable</b>. You can still correct a mistyped price
-                and P&amp;L will move — but this day&apos;s rating will not, because
-                the automatic rules freeze now.
+                Trejdovi <b>ostaju izmenjivi</b>. Možeš i dalje ispraviti pogrešno
+                unetu cenu i P&amp;L će se pomeriti — ali ocena ovog dana neće,
+                jer se automatska pravila sada zamrzavaju.
               </p>
               {isToday && (
                 <p className="text-amber-600 dark:text-amber-500">
-                  The day is still running. Unanswered rules freeze as unmet.
+                  Dan je još u toku. Neodgovorena pravila se zamrzavaju kao
+                  neispunjena.
                 </p>
               )}
             </div>
@@ -510,11 +515,11 @@ function LockDayButton({
         </DialogHeader>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
-            Cancel
+            Otkaži
           </Button>
           <Button onClick={confirm} disabled={pending}>
             <Lock className="mr-2 size-4" />
-            Lock
+            Zaključaj
           </Button>
         </DialogFooter>
       </DialogContent>

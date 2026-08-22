@@ -6,6 +6,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Lock, Save } from "lucide-react";
 import { format } from "date-fns";
+import { srLatn } from "date-fns/locale/sr-Latn";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -93,7 +94,7 @@ export function WeeklyReviewForm({
   const locked = review?.locked_at != null;
   const isRunningWeek = weekStart === currentWeekStart;
   const lockedAt = review?.locked_at
-    ? format(new Date(review.locked_at), "d MMM yyyy, HH:mm")
+    ? format(new Date(review.locked_at), "d. MMM yyyy. HH:mm", { locale: srLatn })
     : null;
 
   function patch<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -114,7 +115,7 @@ export function WeeklyReviewForm({
   function save() {
     start(async () => {
       if (!(await persist())) return;
-      toast.success("Weekly review saved");
+      toast.success("Nedeljni osvrt sačuvan");
       router.refresh();
     });
   }
@@ -131,7 +132,7 @@ export function WeeklyReviewForm({
           <div className="min-w-[11rem] text-center">
             <p className="text-lg font-semibold">{formatWeekRange(weekStart)}</p>
             {isRunningWeek && (
-              <p className="text-xs text-muted-foreground">still running</p>
+              <p className="text-xs text-muted-foreground">još u toku</p>
             )}
           </div>
           <Button
@@ -154,7 +155,7 @@ export function WeeklyReviewForm({
           </Button>
         </div>
         <Badge variant={complete ? "default" : "secondary"}>
-          {complete ? "Complete" : "Draft"}
+          {complete ? "Završeno" : "Nacrt"}
         </Badge>
       </div>
 
@@ -163,8 +164,9 @@ export function WeeklyReviewForm({
       {isRunningWeek && (
         <Alert>
           <AlertDescription>
-            This week is not over. You can write notes now, but the numbers above
-            will keep moving and the review cannot be sealed until it ends.
+            Ova nedelja nije završena. Možeš pisati beleške sada, ali brojke
+            iznad će se i dalje menjati i osvrt se ne može zapečatiti dok se
+            nedelja ne završi.
           </AlertDescription>
         </Alert>
       )}
@@ -185,20 +187,20 @@ export function WeeklyReviewForm({
                   banner read "…22:00)and no longer changes". Explicit is the
                   only spelling that survives both the JSX whitespace rules and
                   a reformat. */}
-              This week is locked {lockedAt && `(${lockedAt})`}{" "}
-              and no longer changes. Trades stay editable — correcting P&amp;L is
-              still correcting a fact, but it does not move what you concluded
-              here.
+              Ova nedelja je zaključana {lockedAt && `(${lockedAt})`}{" "}
+              i više se ne menja. Trejdovi ostaju izmenjivi — ispravka P&amp;L-a
+              je i dalje ispravka činjenice, ali ne pomera ono što si ovde
+              zaključio.
             </AlertDescription>
           </Alert>
         )}
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Week rating</CardTitle>
+            <CardTitle className="text-base">Ocena nedelje</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Rate the PROCESS, not the P&amp;L. A week you followed to the letter
-              and lost money on is an A.
+              Ocenjuj PROCES, ne P&amp;L. Nedelja u kojoj si se strogo držao
+              plana, a ipak izgubio novac, zaslužuje pet zvezdica.
             </p>
           </CardHeader>
           <CardContent>
@@ -207,7 +209,7 @@ export function WeeklyReviewForm({
                 svoj „Clear", pa dugme koje je ovde stajalo posebno više ne
                 treba. */}
             <StarRating
-              label="Week rating"
+              label="Ocena nedelje"
               value={form.week_grade}
               onChange={(next) => patch("week_grade", next)}
             />
@@ -216,42 +218,42 @@ export function WeeklyReviewForm({
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">The week, in five answers</CardTitle>
+            <CardTitle className="text-base">Nedelja, u pet odgovora</CardTitle>
             <p className="text-sm text-muted-foreground">
-              These used to be asked every evening, mid-hold. Once a week they
-              have the outcome behind them.
+              Ovo se nekad pitalo svako veče, usred držanja pozicije. Jednom
+              nedeljno iza njih stoji ishod.
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
             <Field
-              label="What went well"
+              label="Šta je išlo dobro"
               value={form.went_well}
               onChange={(v) => patch("went_well", v)}
-              hint="Process, discipline, a decision you would make again — not the size of a win."
+              hint="Proces, disciplina, odluka koju bi ponovo doneo — ne veličina dobitka."
             />
             <Field
-              label="What went badly"
+              label="Šta je išlo loše"
               value={form.went_badly}
               onChange={(v) => patch("went_badly", v)}
-              hint="Including the rules you broke. A losing trade taken correctly does not belong here."
+              hint="Uključujući pravila koja si prekršio. Gubitnički trejd odrađen ispravno ne spada ovde."
             />
             <Field
-              label="The one pattern I can see"
+              label="Jedan obrazac koji vidim"
               value={form.one_pattern}
               onChange={(v) => patch("one_pattern", v)}
-              hint="One. A review that names six patterns produces no change at all."
+              hint="Jedan. Osvrt koji nabraja šest obrazaca ne donosi nikakvu promenu."
             />
             <Field
-              label="The one thing I change next week"
+              label="Jedna stvar koju menjam sledeće nedelje"
               value={form.one_change}
               onChange={(v) => patch("one_change", v)}
-              hint="Concrete enough to become a tracker rule. If it cannot be ticked, it is a wish."
+              hint="Dovoljno konkretno da postane tracker pravilo. Ako se ne može čekirati, to je želja."
             />
             <Field
-              label="What is on next week's calendar"
+              label="Šta je na kalendaru sledeće nedelje"
               value={form.next_week_catalysts}
               onChange={(v) => patch("next_week_catalysts", v)}
-              hint="Releases, earnings, holidays — a holding window is exposed to all of it."
+              hint="Objave, earnings, praznici — prozor držanja je izložen svemu tome."
             />
           </CardContent>
         </Card>
@@ -266,10 +268,10 @@ export function WeeklyReviewForm({
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
             {locked
-              ? "Week is locked"
+              ? "Nedelja je zaključana"
               : lastSaved
-                ? `Last saved ${format(new Date(lastSaved), "HH:mm")}`
-                : "Not saved yet"}
+                ? `Poslednje čuvanje ${format(new Date(lastSaved), "HH:mm")}`
+                : "Još nije sačuvano"}
           </p>
           {!locked && (
             <div className="flex items-center gap-2">
@@ -282,7 +284,7 @@ export function WeeklyReviewForm({
               )}
               <Button onClick={save} disabled={pending}>
                 <Save className="mr-2 size-4" />
-                Save review
+                Sačuvaj osvrt
               </Button>
             </div>
           )}
@@ -313,22 +315,22 @@ function WeekRecapCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">What happened</CardTitle>
+        <CardTitle className="text-base">Šta se desilo</CardTitle>
       </CardHeader>
       <CardContent>
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Stat label="Closed" value={String(recap.closed)} />
+          <Stat label="Zatvoreno" value={String(recap.closed)} />
           <Stat
             label="Net"
             value={fmtMoney(recap.net, currency)}
             tone={recap.net > 0 ? "up" : recap.net < 0 ? "down" : undefined}
           />
-          <Stat label="Won / lost" value={`${recap.wins} / ${recap.losses}`} />
-          <Stat label="Journalled" value={`${recap.journalledDays} / 7`} />
-          <Stat label="Positions checked" value={String(recap.checkedPositions)} />
-          <Stat label="Touched" value={String(recap.interferedPositions)} />
-          <Stat label="Thesis slipped" value={String(recap.thesisSlippedPositions)} />
-          <Stat label="Held over a weekend" value={String(recap.weekendHolds)} />
+          <Stat label="Dobitni / gubitni" value={`${recap.wins} / ${recap.losses}`} />
+          <Stat label="Zabeleženo dana" value={`${recap.journalledDays} / 7`} />
+          <Stat label="Proverenih pozicija" value={String(recap.checkedPositions)} />
+          <Stat label="Dirano" value={String(recap.interferedPositions)} />
+          <Stat label="Teza oslabila" value={String(recap.thesisSlippedPositions)} />
+          <Stat label="Držano preko vikenda" value={String(recap.weekendHolds)} />
 
           {/* Measurements, not verdicts — see the note on `WeekRecap`. Every one
               reads "—" rather than a zero when the week gave it nothing to
@@ -409,7 +411,7 @@ function WeekDayStrip({
             {row == null ? "—" : fmtMoney(row.net, currency)}
           </div>
           <div className="text-[10px] text-muted-foreground">
-            {row == null ? "" : row.trades === 1 ? "1 trade" : `${row.trades} trades`}
+            {row == null ? "" : tradeCountLabel(row.trades)}
           </div>
         </div>
       ))}
@@ -417,8 +419,20 @@ function WeekDayStrip({
   );
 }
 
+/**
+ * Srpski ima tri oblika za brojivo: 1 trejd, 2–4 trejda, 0 i 5+ trejdova.
+ * `n % 100` izbacuje 11–14 iz "2–4" grane — 11 trejdova, ne 11 trejda.
+ */
+function tradeCountLabel(n: number): string {
+  if (n === 1) return "1 trejd";
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return `${n} trejdova`;
+  const mod10 = n % 10;
+  return mod10 >= 2 && mod10 <= 4 ? `${n} trejda` : `${n} trejdova`;
+}
+
 /** Monday-first, matching `weekDayKeys`. */
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+const DAY_LABELS = ["pon", "uto", "sre", "čet", "pet", "sub", "ned"] as const;
 
 function Stat({
   label,
@@ -475,7 +489,7 @@ function LockWeekButton({
         return;
       }
       setOpen(false);
-      toast.success("Week locked.");
+      toast.success("Nedelja zaključana.");
       router.refresh();
     });
   }
@@ -485,33 +499,33 @@ function LockWeekButton({
       <DialogTrigger asChild>
         <Button variant="outline" disabled={disabled}>
           <Lock className="mr-2 size-4" />
-          Lock week
+          Zaključaj nedelju
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Lock {formatWeekRange(weekStart)}?</DialogTitle>
+          <DialogTitle>Zaključati {formatWeekRange(weekStart)}?</DialogTitle>
           <DialogDescription asChild>
             <div className="space-y-3 text-sm">
               <p>
-                This <b>cannot be undone</b>. The review freezes exactly as it is
-                now.
+                Ovo se <b>ne može poništiti</b>. Osvrt se zamrzava tačno onakav
+                kakav je sada.
               </p>
               <p>
-                Trades and daily entries <b>stay editable</b>. Sealing a week
-                seals what you concluded about it, not the record it was drawn
-                from.
+                Trejdovi i dnevni unosi <b>ostaju izmenjivi</b>. Pečaćenje
+                nedelje pečati ono što si o njoj zaključio, ne zapis iz kog je
+                izveden.
               </p>
             </div>
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
-            Cancel
+            Otkaži
           </Button>
           <Button onClick={confirm} disabled={pending}>
             <Lock className="mr-2 size-4" />
-            Lock
+            Zaključaj
           </Button>
         </DialogFooter>
       </DialogContent>

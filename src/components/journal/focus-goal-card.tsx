@@ -40,7 +40,7 @@ export function FocusGoalCard({
         toast.error(res.error);
         return;
       }
-      toast.success("Focus goal saved");
+      toast.success("Fokus cilj sačuvan");
       setEditOpen(false);
       router.refresh();
     });
@@ -53,7 +53,7 @@ export function FocusGoalCard({
         toast.error(res.error);
         return;
       }
-      toast.success("Goal completed — set a new one when you are ready");
+      toast.success("Cilj završen — postavi novi kad budeš spreman");
       setDraft("");
       setEditOpen(true);
       router.refresh();
@@ -66,13 +66,13 @@ export function FocusGoalCard({
         <div className="flex items-start gap-3">
           <Target className="mt-0.5 size-5 text-amber-600" />
           <div className="flex-1 space-y-2">
-            <p className="text-sm font-medium">Set a focus goal first</p>
+            <p className="text-sm font-medium">Prvo postavi fokus cilj</p>
             <p className="text-sm text-muted-foreground">
-              One goal at a time, for weeks. The day rating measures progress toward
-              that goal — never P&amp;L.
+              Jedan cilj u jednom trenutku, kroz nedelje. Ocena dana meri
+              napredak ka tom cilju — nikad P&amp;L.
             </p>
             <Button size="sm" onClick={openEdit}>
-              Set focus goal
+              Postavi fokus cilj
             </Button>
           </div>
         </div>
@@ -83,7 +83,7 @@ export function FocusGoalCard({
           onDraftChange={setDraft}
           onSave={save}
           pending={pending}
-          title="New focus goal"
+          title="Novi fokus cilj"
         />
       </div>
     );
@@ -98,12 +98,12 @@ export function FocusGoalCard({
           <Target className="mt-0.5 size-5 text-primary" />
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Active focus · day {dayNum}
+              Aktivan fokus · dan {dayNum}
             </p>
             <p className="mt-1 text-sm font-medium">{goal.goal_text}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              One goal at a time. Change it when it is no longer your biggest
-              improvement.
+              Jedan cilj u jednom trenutku. Promeni ga kad više nije tvoje
+              najveće poboljšanje.
             </p>
           </div>
         </div>
@@ -116,7 +116,7 @@ export function FocusGoalCard({
             disabled={pending}
           >
             <Pencil className="mr-1.5 size-3.5" />
-            Edit goal
+            Izmeni cilj
           </Button>
           <Button
             variant="ghost"
@@ -125,7 +125,7 @@ export function FocusGoalCard({
             onClick={graduate}
             disabled={pending}
           >
-            Complete and set a new one
+            Završi i postavi novi
           </Button>
         </div>
       </div>
@@ -136,7 +136,7 @@ export function FocusGoalCard({
         onDraftChange={setDraft}
         onSave={save}
         pending={pending}
-        title={goal ? "Edit focus goal" : "New focus goal"}
+        title={goal ? "Izmeni fokus cilj" : "Novi fokus cilj"}
       />
     </div>
   );
@@ -168,15 +168,15 @@ function GoalDialog({
         <Textarea
           value={draft}
           onChange={(e) => onDraftChange(e.target.value)}
-          placeholder='e.g. "No new positions when mental temp is below 5"'
+          placeholder='npr. "Bez novih pozicija kad je mentalno stanje ispod 5"'
           rows={3}
         />
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            Otkaži
           </Button>
           <Button onClick={onSave} disabled={pending || !draft.trim()}>
-            Save goal
+            Sačuvaj cilj
           </Button>
         </DialogFooter>
       </DialogContent>

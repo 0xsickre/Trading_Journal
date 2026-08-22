@@ -67,7 +67,7 @@ export function OpenPositionsCard({
     <Card>
       <CardHeader>
         <CardTitle className="text-base">
-          Open positions
+          Otvorene pozicije
           {positions.length > 0 && (
             <span className="ml-2 text-sm font-normal text-muted-foreground">
               {positions.length}
@@ -75,14 +75,14 @@ export function OpenPositionsCard({
           )}
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Did the reason for holding survive today, and did you touch it. Two
-          questions per position — the rest of the day is not a swing question.
+          Da li je razlog za držanje preživeo današnji dan i da li si je dirao.
+          Dva pitanja po poziciji — ostatak dana nije swing pitanje.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
         {positions.length === 0 ? (
           <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-            Nothing was open on this day. There is nothing to check in on.
+            Ništa nije bilo otvoreno ovog dana. Nema šta da se proverava.
           </p>
         ) : (
           positions.map((p) => (
@@ -185,17 +185,17 @@ function PositionRow({
             {position.label}
           </Link>
           <span className="text-sm text-muted-foreground">
-            day {position.daysInTrade}
-            {position.timeStopDays != null && ` of ${position.timeStopDays}`}
+            dan {position.daysInTrade}
+            {position.timeStopDays != null && ` od ${position.timeStopDays}`}
           </span>
           {answered && (
-            <Check className="size-4 text-muted-foreground" aria-label="Checked in" />
+            <Check className="size-4 text-muted-foreground" aria-label="Prijavljeno" />
           )}
         </div>
         {position.pastTimeStop && (
           <Badge variant="outline" className="gap-1 border-amber-500/60">
             <AlertTriangle className="size-3" />
-            Past time stop
+            Prošao time stop
           </Badge>
         )}
       </div>
@@ -207,13 +207,13 @@ function PositionRow({
         <dl className="space-y-1 rounded-md bg-muted/40 p-3 text-sm">
           {position.thesis && (
             <div className="flex gap-2">
-              <dt className="shrink-0 text-muted-foreground">Thesis</dt>
+              <dt className="shrink-0 text-muted-foreground">Teza</dt>
               <dd>{position.thesis}</dd>
             </div>
           )}
           {position.invalidation && (
             <div className="flex gap-2">
-              <dt className="shrink-0 text-muted-foreground">Invalidated if</dt>
+              <dt className="shrink-0 text-muted-foreground">Poništeno ako</dt>
               <dd>{position.invalidation}</dd>
             </div>
           )}
@@ -221,7 +221,7 @@ function PositionRow({
       )}
 
       <div className="space-y-2">
-        <Label>Thesis today</Label>
+        <Label>Teza danas</Label>
         <div className="flex flex-wrap gap-2">
           {THESIS_STATES.map((s) => (
             <Button
@@ -245,7 +245,7 @@ function PositionRow({
       </div>
 
       <div className="space-y-2">
-        <Label>Touched it</Label>
+        <Label>Dirao sam je</Label>
         <div className="flex flex-wrap gap-2">
           {TOUCHED_STATES.map((s) => (
             <Button
@@ -263,7 +263,7 @@ function PositionRow({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor={`note-${position.id}`}>Note (optional)</Label>
+        <Label htmlFor={`note-${position.id}`}>Beleška (opciono)</Label>
         <Textarea
           id={`note-${position.id}`}
           value={note}

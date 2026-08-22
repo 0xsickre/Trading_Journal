@@ -74,22 +74,22 @@ describe("defaultWeekStart", () => {
 
 describe("formatWeekRange", () => {
   it("collapses the month and year both ends share", () => {
-    expect(formatWeekRange(MON)).toBe("5–11 Jan 2026");
+    expect(formatWeekRange(MON)).toBe("5–11. jan 2026.");
   });
 
   it("keeps the month when the week spans two", () => {
-    expect(formatWeekRange("2026-01-26")).toBe("26 Jan–1 Feb 2026");
+    expect(formatWeekRange("2026-01-26")).toBe("26. jan–1. feb 2026.");
   });
 
   it("keeps the year when the week spans two", () => {
-    expect(formatWeekRange("2025-12-29")).toBe("29 Dec 2025–4 Jan 2026");
+    expect(formatWeekRange("2025-12-29")).toBe("29. dec 2025.–4. jan 2026.");
   });
 
   it("does not shift the date west of Greenwich", () => {
     // The trap this function exists to avoid: `new Date("2026-01-05")` is UTC
     // midnight, which renders as the 4th in every American timezone. These are
     // account-zone day keys and must format from their own digits.
-    expect(formatWeekRange(MON).startsWith("5–")).toBe(true);
+    expect(formatWeekRange(MON).startsWith("5")).toBe(true);
   });
 });
 

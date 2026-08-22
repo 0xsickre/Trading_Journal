@@ -15,9 +15,9 @@ export const THESIS_STATES = ["intact", "weakened", "invalidated"] as const;
 export type ThesisState = (typeof THESIS_STATES)[number];
 
 export const THESIS_STATE_LABELS: Record<ThesisState, string> = {
-  intact: "Intact",
-  weakened: "Weakened",
-  invalidated: "Invalidated",
+  intact: "Netaknuta",
+  weakened: "Oslabljena",
+  invalidated: "Poništena",
 };
 
 /**
@@ -37,10 +37,10 @@ export const TOUCHED_STATES = [
 export type TouchedState = (typeof TOUCHED_STATES)[number];
 
 export const TOUCHED_LABELS: Record<TouchedState, string> = {
-  untouched: "Did not touch",
-  stop_moved: "Moved stop",
-  partial_exit: "Partial exit",
-  added: "Added",
+  untouched: "Nisam dirao",
+  stop_moved: "Pomerio stop",
+  partial_exit: "Delimičan izlazak",
+  added: "Dodao",
 };
 
 export type PositionCheckin = {

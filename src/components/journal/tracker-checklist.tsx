@@ -10,7 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { fmtMoney } from "@/lib/journal/format";
-import type { TrackerRule, TrackerStage } from "@/lib/journal/tracker-types";
+import {
+  STAGE_LABELS,
+  type TrackerRule,
+  type TrackerStage,
+} from "@/lib/journal/tracker-types";
 import type { AutoRuleResult } from "@/lib/journal/tracker/auto-rules";
 import type {
   AutoResults,
@@ -20,10 +24,10 @@ import type {
 import { setCheckin } from "@/app/(app)/daily/tracker-actions";
 
 const STATUS_LABELS: Record<DayStatus, string> = {
-  compliant: "Day met",
-  broken: "Day broken",
-  skipped: "No rules for this day",
-  pending: "Day in progress",
+  compliant: "Dan ispunjen",
+  broken: "Dan prekršen",
+  skipped: "Nema pravila za ovaj dan",
+  pending: "Dan u toku",
 };
 
 /**
@@ -40,21 +44,21 @@ function autoReasonText(
 ): string {
   switch (res.reason) {
     case "unconfigured":
-      return "No limit set — set one in Settings › Tracker so the rule starts being scored.";
+      return "Limit nije podešen — podesi ga u Settings › Tracker da bi pravilo počelo da se ocenjuje.";
     case "no_trades":
-      return "No trades for this rule to score on this day.";
+      return "Nema trejdova po kojima bi se ovo pravilo ocenilo ovog dana.";
     case "unpriced":
-      return "A trade without a point value — the result is unknown, so the day is not scored on this rule.";
+      return "Trejd bez vrednosti poena — rezultat je nepoznat, pa se dan po ovom pravilu ne ocenjuje.";
     case "frozen":
-      return "Frozen when the day was locked. Correcting a trade moves P&L, but not this day's rating.";
+      return "Zamrznuto kad je dan zaključan. Ispravka trejda pomera P&L, ali ne i ocenu ovog dana.";
     case "violated":
       return res.observed != null && limit != null
-        ? `Breached: ${fmtMoney(res.observed, currency)} of the allowed ${fmtMoney(-Math.abs(limit), currency)}.`
-        : "Broken.";
+        ? `Prekršeno: ${fmtMoney(res.observed, currency)} od dozvoljenih ${fmtMoney(-Math.abs(limit), currency)}.`
+        : "Prekršeno.";
     case "ok":
       return res.observed != null
-        ? `Within limits — worst ${fmtMoney(res.observed, currency)}.`
-        : "Met on every trade this day.";
+        ? `U okviru limita — najgori ${fmtMoney(res.observed, currency)}.`
+        : "Ispunjeno na svakom trejdu ovog dana.";
   }
 }
 
@@ -62,18 +66,18 @@ function VerdictBadge({ res }: { res: AutoRuleResult }) {
   if (res.verdict === "pass")
     return (
       <Badge className="gap-1 shrink-0">
-        <Check className="size-3" /> met
+        <Check className="size-3" /> ispunjeno
       </Badge>
     );
   if (res.verdict === "fail")
     return (
       <Badge variant="destructive" className="gap-1 shrink-0">
-        <X className="size-3" /> broken
+        <X className="size-3" /> prekršeno
       </Badge>
     );
   return (
     <Badge variant="outline" className="gap-1 shrink-0 text-muted-foreground">
-      <Minus className="size-3" /> not scored
+      <Minus className="size-3" /> nije ocenjeno
     </Badge>
   );
 }
@@ -104,8 +108,8 @@ function AnswerButtons({
         className="size-8"
         disabled={disabled}
         aria-pressed={value === true}
-        aria-label="Met"
-        title={value === true ? "Click again to clear the answer" : "Met"}
+        aria-label="Ispunjeno"
+        title={value === true ? "Klikni ponovo da obrišeš odgovor" : "Ispunjeno"}
         onClick={() => onSet(value === true ? null : true)}
       >
         <Check className="size-4" />
@@ -117,9 +121,9 @@ function AnswerButtons({
         className="size-8"
         disabled={disabled}
         aria-pressed={value === false}
-        aria-label="Not met"
+        aria-label="Nije ispunjeno"
         title={
-          value === false ? "Click again to clear the answer" : "Not met"
+          value === false ? "Klikni ponovo da obrišeš odgovor" : "Nije ispunjeno"
         }
         onClick={() => onSet(value === false ? null : false)}
       >
@@ -172,7 +176,11 @@ function ManualRow({
       {locked ? (
         <Badge variant="outline" className="gap-1 shrink-0">
           <Lock className="size-3" />
-          {local === true ? "met" : local === false ? "broken" : "no answer"}
+          {local === true
+            ? "ispunjeno"
+            : local === false
+              ? "prekršeno"
+              : "bez odgovora"}
         </Badge>
       ) : (
         <AnswerButtons value={local} disabled={pending} onSet={set} />
@@ -206,7 +214,7 @@ function AutoRow({
             {rule.text}
             <Zap
               className="size-3 shrink-0 text-muted-foreground"
-              aria-label="Automatic rule"
+              aria-label="Automatsko pravilo"
             />
           </p>
           {res && (
@@ -220,7 +228,7 @@ function AutoRow({
 
       {res && res.offenders.length > 0 && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">Trades:</span>
+          <span className="text-xs text-muted-foreground">Trejdovi:</span>
           {res.offenders.map((id) => (
             <Link
               key={id}
@@ -247,23 +255,6 @@ export type TrackerDayData = {
   currency: string;
   tradeLabels: Record<string, string>;
   locked: boolean;
-};
-
-/**
- * Headings for the three stages on the daily check-in.
- *
- * Deliberately NOT `STAGE_LABELS` from `tracker-types.ts`. Those read
- * "Priprema" / "Trgovanje" / "Osvrt" and serve the Settings screen, where the
- * rules themselves are written in Serbian. This page's chrome is English
- * ("Before you enter", "Impulse control", "How it exited"), and a Serbian
- * heading over an English section reads as a bug rather than as bilingualism.
- * Two maps because there are two audiences — if you ever merge them, merge the
- * screens' languages first.
- */
-const STAGE_HEADINGS: Record<TrackerStage, string> = {
-  prepare: "Prepare",
-  trade: "Trade",
-  reflect: "Reflect",
 };
 
 /**
@@ -329,7 +320,7 @@ export function TrackerStageSection({
     return (
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">{STAGE_HEADINGS[stage]}</CardTitle>
+          <CardTitle className="text-base">{STAGE_LABELS[stage]}</CardTitle>
         </CardHeader>
         <CardContent>{rows}</CardContent>
       </Card>
@@ -338,7 +329,7 @@ export function TrackerStageSection({
 
   return (
     <div className="space-y-2 border-t pt-4">
-      <p className="text-sm font-medium">{STAGE_HEADINGS[stage]}</p>
+      <p className="text-sm font-medium">{STAGE_LABELS[stage]}</p>
       {rows}
     </div>
   );
@@ -356,7 +347,7 @@ export function TrackerDayBadge({
     <span className="flex items-center gap-2">
       {locked && (
         <Badge variant="outline" className="gap-1">
-          <Lock className="size-3" /> locked
+          <Lock className="size-3" /> zaključano
         </Badge>
       )}
       <Badge
@@ -369,8 +360,8 @@ export function TrackerDayBadge({
         }
         title={
           compliance.applicable === 0
-            ? "No rule applies to this day."
-            : "A day counts as met only at 100%. Rules that are not scored stay out of both the numerator and the denominator."
+            ? "Nijedno pravilo se ne odnosi na ovaj dan."
+            : "Dan se broji kao ispunjen samo na 100%. Pravila koja nisu ocenjena ne ulaze ni u brojilac ni u imenilac."
         }
       >
         {STATUS_LABELS[compliance.status]}

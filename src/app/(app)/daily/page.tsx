@@ -224,8 +224,8 @@ export default async function DailyPage({
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
-        title="Daily Check-in"
-        description="Did the reason for holding each position survive today, and did you touch it. The review of how the week went is on the weekly page."
+        title="Dnevna prijava"
+        description="Da li je razlog za držanje svake pozicije preživeo današnji dan i da li si je dirao. Osvrt na to kako je nedelja prošla je na nedeljnoj stranici."
       />
 
       <FocusGoalCard goal={activeGoal} reportDate={reportDate} />

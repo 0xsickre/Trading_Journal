@@ -11,10 +11,24 @@ import { stringFieldValue } from "../field-values";
 import { winRateOf } from "../analytics";
 import { scorable, setupScoreFromTrade } from "../setup-score";
 import { fmtMoney } from "../format";
-import { isInterference, TOUCHED_LABELS } from "../position-checkin";
+import { isInterference, type TouchedState } from "../position-checkin";
 import type { TradeRow } from "../types";
 import type { InsightContext } from "./context";
 import type { Insight, InsightRule } from "./types";
+
+/**
+ * English copy for `TouchedState`, kept apart from `TOUCHED_LABELS` in
+ * `position-checkin.ts` on purpose. That map now reads in Serbian for the
+ * `/daily` check-in card, but this insight's sentence renders on the (English)
+ * Reports page — importing the Serbian map would leave the sentence
+ * half-translated.
+ */
+const TOUCHED_LABELS_EN: Record<TouchedState, string> = {
+  untouched: "did not touch",
+  stop_moved: "moved stop",
+  partial_exit: "partial exit",
+  added: "added",
+};
 
 const P = {
   /** Mental temperature below which entries are flagged. */
@@ -71,7 +85,7 @@ export const micromanagedASetup: Rule = {
         level: "trade",
         severity: "critical",
         title: "Micromanaged an A-setup",
-        detail: `On ${touchedOn.report_date} you recorded "${TOUCHED_LABELS[touchedOn.touched].toLowerCase()}" on this A-setup. Outcome: ${rPart}.`,
+        detail: `On ${touchedOn.report_date} you recorded "${TOUCHED_LABELS_EN[touchedOn.touched]}" on this A-setup. Outcome: ${rPart}.`,
         subjectId: e.id,
         subjectLabel: e.label,
       });

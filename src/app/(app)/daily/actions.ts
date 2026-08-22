@@ -44,14 +44,14 @@ export async function saveDailyReport(
 > {
   const parsed = dailyReportSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Neispravan unos." };
   }
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "You are not signed in." };
+  if (!user) return { ok: false, error: "Nisi prijavljen." };
 
   const { data: activeGoal } = await supabase
     .from("tj_focus_goals")
@@ -73,7 +73,7 @@ export async function saveDailyReport(
     .eq("report_date", reportDate)
     .maybeSingle();
   if (existing?.locked_at != null)
-    return { ok: false, error: "This day is locked and no longer changes." };
+    return { ok: false, error: "Ovaj dan je zaključan i više se ne menja." };
 
   const row = {
     user_id: user.id,
@@ -113,14 +113,14 @@ export async function savePositionCheckin(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const parsed = positionCheckinSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Neispravan unos." };
   }
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "You are not signed in." };
+  if (!user) return { ok: false, error: "Nisi prijavljen." };
 
   const { data: existing } = await supabase
     .from("tj_daily_reports")
@@ -128,7 +128,7 @@ export async function savePositionCheckin(
     .eq("report_date", reportDate)
     .maybeSingle();
   if (existing?.locked_at != null)
-    return { ok: false, error: "This day is locked and no longer changes." };
+    return { ok: false, error: "Ovaj dan je zaključan i više se ne menja." };
 
   const { error } = await supabase.from("tj_position_checkins").upsert(
     {
@@ -157,13 +157,13 @@ export async function saveFocusGoal(
   goalText: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const text = goalText.trim();
-  if (!text) return { ok: false, error: "The focus goal cannot be empty." };
+  if (!text) return { ok: false, error: "Fokus cilj ne može biti prazan." };
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "You are not signed in." };
+  if (!user) return { ok: false, error: "Nisi prijavljen." };
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -209,7 +209,7 @@ export async function endFocusGoal(): Promise<
     .eq("is_active", true)
     .maybeSingle();
 
-  if (!current) return { ok: false, error: "No active focus goal." };
+  if (!current) return { ok: false, error: "Nema aktivnog fokus cilja." };
 
   const { error } = await supabase
     .from("tj_focus_goals")

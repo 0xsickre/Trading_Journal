@@ -25,7 +25,7 @@ describe("DayStatsCard — the day's numbers, real stats through a real card", (
         currency="USD"
       />,
     );
-    expect(screen.getByText(/No trade closed on this day/)).toBeInTheDocument();
+    expect(screen.getByText(/Nijedan trejd nije zatvoren ovog dana/)).toBeInTheDocument();
   });
 
   it("an all-breakeven day reads Win rate as '—', matching the guard already fixed on Dashboard (W1)", () => {
@@ -77,7 +77,7 @@ describe("DayStatsCard — the day's numbers, real stats through a real card", (
       />,
     );
     expect(screen.queryByText("EURUSD")).not.toBeInTheDocument(); // collapsed by default
-    fireEvent.click(screen.getByRole("button", { name: /Show trades/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Prikaži trejdove/ }));
     expect(screen.getByText("EURUSD")).toBeInTheDocument();
   });
 });

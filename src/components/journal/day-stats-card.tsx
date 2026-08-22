@@ -67,8 +67,8 @@ export function DayStatsCard({
     return (
       <Card>
         <CardContent className="py-4 text-sm text-muted-foreground">
-          No trade closed on this day. The journal below is still worth writing —
-          discipline is measured on days without trading too.
+          Nijedan trejd nije zatvoren ovog dana. Dnevnik ispod i dalje vredi
+          pisati — disciplina se meri i na dane kada se ne trguje.
         </CardContent>
       </Card>
     );
@@ -78,7 +78,7 @@ export function DayStatsCard({
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-          <span>The day in numbers</span>
+          <span>Dan u brojkama</span>
           <span className={cn("tabular-nums", pnlClass(stats.netSum))}>
             {fmtMoney(stats.netSum, currency, { sign: true })}
           </span>
@@ -97,7 +97,7 @@ export function DayStatsCard({
             value={fmtMoney(stats.grossSum, currency, { sign: true })}
             cls={pnlClass(stats.grossSum)}
           />
-          <Figure label="Trades" value={String(stats.count)} />
+          <Figure label="Trejdovi" value={String(stats.count)} />
           <Figure
             label="Win rate"
             value={
@@ -124,26 +124,26 @@ export function DayStatsCard({
             }
           />
           <Figure
-            label="Winners"
+            label="Dobitni"
             value={String(stats.wins)}
             cls="text-[var(--profit)]"
           />
           <Figure
-            label="Losers"
+            label="Gubitni"
             value={String(stats.losses)}
             cls="text-[var(--loss)]"
           />
-          <Figure label="Volume" value={fmtNum(volume, 2)} hint="contracts" />
+          <Figure label="Volumen" value={fmtNum(volume, 2)} hint="kontrakata" />
           <Figure
-            label="Commissions"
+            label="Provizije"
             value={fmtMoney(costs.totalFees, currency)}
             // Without this a day of trades logged with no fee data shows a
             // confident $0 and implies the trading was free.
             hint={
               costs.withCostData === 0
-                ? "no trade carries the data"
+                ? "nijedan trejd ne nosi taj podatak"
                 : costs.withCostData < stats.count
-                  ? `${costs.withCostData} of ${stats.count} trades`
+                  ? `${costs.withCostData} od ${stats.count} trejdova`
                   : undefined
             }
           />
@@ -170,7 +170,7 @@ export function DayStatsCard({
             ) : (
               <ChevronRight className="size-3.5" />
             )}
-            {open ? "Hide" : "Show"} trades closed on this day
+            {open ? "Sakrij" : "Prikaži"} trejdove zatvorene ovog dana
           </button>
 
           {open && (

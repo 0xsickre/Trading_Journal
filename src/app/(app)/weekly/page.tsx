@@ -87,8 +87,8 @@ export default async function WeeklyPage({
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
-        title="Weekly Review"
-        description="The questions that need an outcome behind them. Asked once the week is over, not every evening mid-hold."
+        title="Nedeljni osvrt"
+        description="Pitanja iza kojih stoji ishod. Postavljaju se kada se nedelja završi, a ne svako veče usred držanja pozicije."
       />
 
       <WeeklyReviewForm
