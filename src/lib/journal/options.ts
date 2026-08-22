@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { OptionItem, OptionList, OptionsMap } from "./types";
+import type { FieldDefPhase } from "./field-def-types";
 
 export type { OptionList, OptionsMap } from "./types";
 
@@ -9,7 +10,7 @@ export async function getListsWithItems(
   activeOnly = false,
 ): Promise<OptionList[]> {
   const supabase = await createClient();
-  const [{ data: lists }, { data: items }] = await Promise.all([
+  const [{ data: lists }, { data: items }, { data: defs }] = await Promise.all([
     // `id` breaks ties: sort_order is not unique, and rows written before the
     // ordinal was allocated atomically can share one. Without a tiebreak those
     // rows come back in whatever order the planner picks, so a list could
@@ -24,7 +25,16 @@ export async function getListsWithItems(
       .select("id,list_id,value,label,color,description,is_active,sort_order")
       .order("sort_order")
       .order("id"),
+    // When each category is asked for. It is stored on the FIELD that renders
+    // the list, because that is what the form reads — the list itself is only a
+    // set of values. Joined here so Settings can show and edit it in one place.
+    supabase.from("tj_field_defs").select("list_key,show_phase"),
   ]);
+
+  const phaseByKey = new Map<string, FieldDefPhase>();
+  for (const d of defs ?? []) {
+    if (d.list_key) phaseByKey.set(d.list_key, d.show_phase as FieldDefPhase);
+  }
 
   const byList = new Map<string, OptionItem[]>();
   for (const it of items ?? []) {
@@ -44,6 +54,7 @@ export async function getListsWithItems(
 
   return (lists ?? []).map((l) => ({
     ...l,
+    show_phase: phaseByKey.get(l.key) ?? null,
     items: byList.get(l.id) ?? [],
   }));
 }

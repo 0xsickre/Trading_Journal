@@ -434,12 +434,12 @@ export type Database = {
         Row: {
           created_at: string
           field_type: string
-          group_id: string
           id: string
           is_active: boolean
           key: string
           label: string
           list_key: string | null
+          show_phase: string
           show_when: string
           sort_order: number
           updated_at: string
@@ -448,12 +448,12 @@ export type Database = {
         Insert: {
           created_at?: string
           field_type?: string
-          group_id?: string
           id?: string
           is_active?: boolean
           key: string
           label: string
           list_key?: string | null
+          show_phase?: string
           show_when?: string
           sort_order?: number
           updated_at?: string
@@ -462,12 +462,12 @@ export type Database = {
         Update: {
           created_at?: string
           field_type?: string
-          group_id?: string
           id?: string
           is_active?: boolean
           key?: string
           label?: string
           list_key?: string | null
+          show_phase?: string
           show_when?: string
           sort_order?: number
           updated_at?: string

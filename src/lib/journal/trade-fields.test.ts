@@ -8,7 +8,7 @@ const def = (over: Partial<FieldDef> & { key: string }): FieldDef => ({
   label: over.key,
   field_type: "select",
   list_key: null,
-  group_id: "setup",
+  show_phase: "always",
   sort_order: 0,
   is_active: true,
   show_when: "always",

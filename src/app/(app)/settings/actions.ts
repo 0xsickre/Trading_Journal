@@ -20,10 +20,10 @@ import { getAllFormFields } from "@/lib/journal/form-config";
 import { RESET_PHRASE } from "@/lib/journal/reset-phrase";
 import { isValidTimeZone, DEFAULT_TZ } from "@/lib/journal/time";
 import {
-  FIELD_DEF_GROUPS,
+  FIELD_DEF_PHASES,
   FIELD_DEF_TYPES,
   slugifyFieldKey,
-  type FieldDefGroup,
+  type FieldDefPhase,
   type FieldDefType,
 } from "@/lib/journal/field-def-types";
 import type { OptionItem } from "@/lib/journal/types";
@@ -246,6 +246,8 @@ export async function addList(
   key: string,
   label: string,
   category: string | null,
+  /** When the trade form asks for it. Defaults to every phase. */
+  showPhase: FieldDefPhase = "always",
 ) {
   const supabase = await createClient();
   const cleanKey = key
@@ -282,13 +284,51 @@ export async function addList(
   const fieldRes = await addFieldDef({
     label: label.trim(),
     field_type: "tags",
-    group_id: "setup",
+    show_phase: showPhase,
     list_key: cleanKey,
     key: cleanKey,
   });
   if (!fieldRes.ok) return { ok: false, error: fieldRes.error };
 
   revalidateAll();
+  return { ok: true };
+}
+
+/**
+ * When the trade form asks for this category.
+ *
+ * Stored on the FIELD, not the list: the list is a set of values, and the same
+ * set could in principle feed more than one field. `addList` pairs the two by
+ * key, so this finds the field by the list's key.
+ */
+export async function setListPhase(id: string, phase: FieldDefPhase) {
+  if (!FIELD_DEF_PHASES.includes(phase))
+    return { ok: false, error: "Unknown phase." };
+
+  const supabase = await createClient();
+  const { data: list, error: readError } = await supabase
+    .from("tj_option_lists")
+    .select("key")
+    .eq("id", id)
+    .maybeSingle();
+  if (readError) return { ok: false, error: readError.message };
+  if (!list) return { ok: false, error: "Category not found." };
+
+  // `select` so a write that matched nothing is reported rather than passing
+  // for a success. No row means the form renders this category by code, and the
+  // phase it would have set is not a thing the trader can move.
+  const { data: touched, error } = await supabase
+    .from("tj_field_defs")
+    .update({ show_phase: phase })
+    .eq("list_key", list.key)
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+  if (!touched || touched.length === 0)
+    return {
+      ok: false,
+      error: "Where this category appears is fixed by the form.",
+    };
+  revalidateOptions();
   return { ok: true };
 }
 
@@ -859,7 +899,8 @@ const KEY_RE = /^[a-z][a-z0-9_]{0,48}$/;
 export async function addFieldDef(input: {
   label: string;
   field_type: FieldDefType;
-  group_id: FieldDefGroup;
+  /** When the trade form asks for it. Defaults to every phase. */
+  show_phase?: FieldDefPhase;
   list_key?: string | null;
   key?: string;
 }) {
@@ -867,8 +908,9 @@ export async function addFieldDef(input: {
   if (!label) return { ok: false as const, error: "The name cannot be empty." };
   if (!FIELD_DEF_TYPES.includes(input.field_type))
     return { ok: false as const, error: "Unknown field type." };
-  if (!FIELD_DEF_GROUPS.includes(input.group_id))
-    return { ok: false as const, error: "Unknown group." };
+  const showPhase = input.show_phase ?? "always";
+  if (!FIELD_DEF_PHASES.includes(showPhase))
+    return { ok: false as const, error: "Unknown phase." };
 
   // A label with no letter or digit in it has no key to derive. `slugifyFieldKey`
   // strips punctuation, finds nothing left, and falls back to the bare `f` —
@@ -899,11 +941,12 @@ export async function addFieldDef(input: {
   const user = await getCurrentUser();
   if (!user) return { ok: false as const, error: "Not signed in." };
 
-  // Append to the end of its group.
+  // Append to the end of the trader's list. One ordering now that the four
+  // groups are gone — the ordinal used to be unique only within a group, and
+  // reading the max across all of them would have collided.
   const { data: last } = await supabase
     .from("tj_field_defs")
     .select("sort_order")
-    .eq("group_id", input.group_id)
     .order("sort_order", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -919,7 +962,7 @@ export async function addFieldDef(input: {
       input.field_type === "select" || input.field_type === "tags"
         ? (input.list_key?.trim() || key)
         : null,
-    group_id: input.group_id,
+    show_phase: showPhase,
     sort_order: (last?.sort_order ?? -1) + 1,
   });
   if (error) {

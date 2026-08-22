@@ -1,37 +1,46 @@
 // Client-safe types for user-defined trade fields (no server-only imports).
 
 /**
- * Form groups a custom field may be placed in.
+ * When a category is asked for.
  *
- * Deliberately a closed set of METHODOLOGY groups. The rest of the form — the
- * risk plan with its progressive reveal, the outcome block, the missed-setup
- * review — is behaviour, not a field list, and letting a custom field land
- * there would mean the form's logic no longer matches what it renders.
+ * This replaced `group_id`, which put every category into one of four groups
+ * fixed in code — "Setup", "Context", two "Advanced". Those groups carried a
+ * heading and a description nobody could rename, delete or add to: the only
+ * structure on the form the trader looked at and could not touch. The form
+ * shows a flat list now, and the question a group was standing in for turns out
+ * to be this one — not "which box does it live in" but "when do I need it".
  */
-export const FIELD_DEF_GROUPS = [
-  "macro",
-  "setup",
-  "plan_advanced",
-  "execution_advanced",
+export const FIELD_DEF_PHASES = [
+  "always",
+  "planned",
+  "active",
+  "missed",
 ] as const;
 
-export type FieldDefGroup = (typeof FIELD_DEF_GROUPS)[number];
+export type FieldDefPhase = (typeof FIELD_DEF_PHASES)[number];
+
+/** Names shown in Settings when choosing when a category appears. */
+export const FIELD_DEF_PHASE_LABELS: Record<FieldDefPhase, string> = {
+  always: "Always",
+  planned: "Only while planned",
+  active: "Only once active",
+  missed: "Only on a missed setup",
+};
 
 /**
- * Names shown in Settings when picking where a field goes.
+ * Does a category apply to the trade as it stands?
  *
- * Must read the same as the group headings in the form — the picker and the
- * form are two views of one placement, and calling it "Macro (vault)" in one
- * place and "Context" in the other makes the user guess whether they are the
- * same group. The tab is named too, because "Setup" alone does not say which of
- * the two tabs it lands on.
+ * `always` is the default and the answer for most: a tag you want on every
+ * trade. The other three are the phases the form itself already branches on, so
+ * a category can be asked for exactly where it makes sense — a miss reason only
+ * on a missed setup, a management note only once the position is live.
  */
-export const FIELD_DEF_GROUP_LABELS: Record<FieldDefGroup, string> = {
-  macro: "Plan — Context",
-  setup: "Plan — Setup",
-  plan_advanced: "Plan — Advanced",
-  execution_advanced: "Execution — Advanced",
-};
+export function fieldAppliesToPhase(
+  showPhase: FieldDefPhase,
+  phase: Exclude<FieldDefPhase, "always">,
+): boolean {
+  return showPhase === "always" || showPhase === phase;
+}
 
 export const FIELD_DEF_TYPES = [
   "select",
@@ -52,7 +61,8 @@ export type FieldDef = {
   field_type: FieldDefType;
   /** Option list key backing a select / tags field. */
   list_key: string | null;
-  group_id: FieldDefGroup;
+  /** Which phase of a trade asks for this category. */
+  show_phase: FieldDefPhase;
   sort_order: number;
   is_active: boolean;
   show_when: "always" | "winner" | "loser" | "breakeven";

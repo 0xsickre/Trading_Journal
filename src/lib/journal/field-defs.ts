@@ -25,7 +25,7 @@ export const getFieldDefs = cache(async function getFieldDefs(
   const supabase = await createClient();
   const { data } = await supabase
     .from("tj_field_defs")
-    .select("id,key,label,field_type,list_key,group_id,sort_order,is_active,show_when")
+    .select("id,key,label,field_type,list_key,show_phase,sort_order,is_active,show_when")
     // `id` breaks ties — sort_order is not unique, and without a tiebreak two
     // fields sharing an ordinal reshuffle between identical page loads.
     .order("sort_order")
@@ -39,7 +39,7 @@ export const getFieldDefs = cache(async function getFieldDefs(
       label: d.label,
       field_type: d.field_type as FieldDef["field_type"],
       list_key: d.list_key,
-      group_id: d.group_id as FieldDef["group_id"],
+      show_phase: d.show_phase as FieldDef["show_phase"],
       sort_order: d.sort_order,
       is_active: d.is_active,
       show_when: d.show_when as FieldDef["show_when"],

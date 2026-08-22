@@ -43,11 +43,17 @@ import {
   renameOption,
   reorderOptions,
   setListColor,
+  setListPhase,
   setOptionColor,
   toggleOptionActive,
   type ListUsage,
 } from "@/app/(app)/settings/actions";
 import { editableLists } from "@/lib/journal/settings-lists";
+import {
+  FIELD_DEF_PHASE_LABELS,
+  FIELD_DEF_PHASES,
+  type FieldDefPhase,
+} from "@/lib/journal/field-def-types";
 import { usageKey } from "@/lib/journal/option-usage";
 
 const PALETTE = [
@@ -73,6 +79,46 @@ function ColorDot({ color, className }: { color: string | null; className?: stri
       )}
       style={color ? { backgroundColor: color } : undefined}
     />
+  );
+}
+
+/**
+ * When the trade form asks for this category.
+ *
+ * This is what replaced the four fixed groups. Those answered "which box does
+ * it live in", which was never a question the trader had — every box was one
+ * they could not rename or remove. The question they actually have is when they
+ * want to be asked, and unlike the group, this one is theirs to set.
+ */
+function PhasePicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: FieldDefPhase;
+  onChange: (next: FieldDefPhase) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium">Ask for it</label>
+      <Select
+        value={value}
+        onValueChange={(v) => onChange(v as FieldDefPhase)}
+        disabled={disabled}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {FIELD_DEF_PHASES.map((p) => (
+            <SelectItem key={p} value={p}>
+              {FIELD_DEF_PHASE_LABELS[p]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 
@@ -142,6 +188,7 @@ function CategoryRow({ list }: { list: OptionList }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [name, setName] = useState(list.label);
   const [color, setColor] = useState<string | null>(list.color);
+  const [phase, setPhase] = useState<FieldDefPhase>(list.show_phase ?? "always");
   const [usage, setUsage] = useState<ListUsage | null>(null);
   const [, startCount] = useTransition();
 
@@ -168,7 +215,14 @@ function CategoryRow({ list }: { list: OptionList }) {
           const res = await renameList(list.id, trimmed);
           if (!res.ok) return res;
         }
-        if (color !== list.color) return setListColor(list.id, color);
+        if (color !== list.color) {
+          const res = await setListColor(list.id, color);
+          if (!res.ok) return res;
+        }
+        // Only when a field actually reads this list; `show_phase` is null
+        // for the categories the form wires in by code.
+        if (list.show_phase != null && phase !== list.show_phase)
+          return setListPhase(list.id, phase);
         return { ok: true as const };
       },
       () => setEditOpen(false),
@@ -203,6 +257,7 @@ function CategoryRow({ list }: { list: OptionList }) {
               onSelect={() => {
                 setName(list.label);
                 setColor(list.color);
+                setPhase(list.show_phase ?? "always");
                 setEditOpen(true);
               }}
             >
@@ -239,6 +294,19 @@ function CategoryRow({ list }: { list: OptionList }) {
                 <label className="text-sm font-medium">Colour</label>
                 <ColorPicker value={color} onPick={setColor} disabled={pending} />
               </div>
+              {list.show_phase == null ? (
+                <p className="text-xs text-muted-foreground">
+                  Where this one appears is part of the form — the exit reason
+                  sits with the exit, the miss reason only on a missed setup.
+                  Categories you add yourself choose their own.
+                </p>
+              ) : (
+                <PhasePicker
+                  value={phase}
+                  onChange={setPhase}
+                  disabled={pending}
+                />
+              )}
             </div>
             <DialogFooter>
               <Button
@@ -347,17 +415,19 @@ function NewCategoryDialog() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [color, setColor] = useState<string | null>(PALETTE[0]);
+  const [phase, setPhase] = useState<FieldDefPhase>("always");
 
   function create() {
     const trimmed = name.trim();
     if (!trimmed) return;
     run(
       async () => {
-        const res = await addList(trimmed, trimmed, null);
+        const res = await addList(trimmed, trimmed, null, phase);
         return res;
       },
       () => {
         setName("");
+        setPhase("always");
         setOpen(false);
         toast.success("Category created");
       },
@@ -391,6 +461,7 @@ function NewCategoryDialog() {
               <label className="text-sm font-medium">Colour</label>
               <ColorPicker value={color} onPick={setColor} disabled={pending} />
             </div>
+            <PhasePicker value={phase} onChange={setPhase} disabled={pending} />
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>

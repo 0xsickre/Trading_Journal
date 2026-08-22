@@ -6,14 +6,15 @@ import {
   numericFieldNames,
   positionFieldNames,
 } from "./form-config";
-import { FIELD_DEF_GROUPS, type FieldDef } from "./field-def-types";
+import { TAGS_GROUP_ID } from "./form-config";
+import type { FieldDef } from "./field-def-types";
 
 const def = (over: Partial<FieldDef> & { key: string }): FieldDef => ({
   id: over.key,
   label: over.key,
   field_type: "select",
   list_key: null,
-  group_id: "setup",
+  show_phase: "always",
   sort_order: 0,
   is_active: true,
   show_when: "always",
@@ -23,46 +24,67 @@ const def = (over: Partial<FieldDef> & { key: string }): FieldDef => ({
 describe("form skeleton", () => {
   const tabs = buildFormTabs();
 
-  it("delivers a user field assigned to ANY legal group to the form", () => {
-    // The trap this exists to catch: `buildFormTabs` SKIPS a definition whose
-    // group does not exist, while the DB CHECK on group_id happily stores it.
-    // Drop a group from the skeleton and every user field in it disappears from
-    // the form with no error anywhere — the values stay in `custom`, unreachable.
-    //
-    // Tested WITH a field in each group rather than against the bare skeleton,
-    // because an empty group is filtered out on purpose and would fail a naive
-    // check for the wrong reason.
-    for (const id of FIELD_DEF_GROUPS) {
-      const built = buildFormTabs([def({ key: `probe_${id}`, group_id: id })]);
-      const rendered = built
+  it("delivers every user category to the form, in one flat group", () => {
+    // The trap this replaced: `buildFormTabs` used to SKIP a definition whose
+    // `group_id` named a group the skeleton did not declare, while the DB CHECK
+    // happily stored it — the values stayed in `custom`, unreachable, with no
+    // error anywhere. There is no group to name any more, so there is nothing
+    // left to mismatch.
+    const built = buildFormTabs([def({ key: "probe_a" }), def({ key: "probe_b" })]);
+    const rendered = built
+      .flatMap((t) => t.groups)
+      .flatMap((g) => g.fields)
+      .map((f) => f.name);
+    expect(rendered).toContain("probe_a");
+    expect(rendered).toContain("probe_b");
+  });
+
+  it("renders the categories group with no heading of its own", () => {
+    // The four fixed headings were the only text on this form the trader could
+    // not rename or delete. A category carries its own label; the block it sits
+    // in needs none.
+    const group = buildFormTabs([def({ key: "probe" })])
+      .flatMap((t) => t.groups)
+      .find((g) => g.id === TAGS_GROUP_ID)!;
+    expect(group.title).toBeUndefined();
+    expect(group.description).toBeUndefined();
+  });
+
+  it("orders categories by the trader's sort_order, not by key", () => {
+    const built = buildFormTabs([
+      def({ key: "zulu", sort_order: 0 }),
+      def({ key: "alpha", sort_order: 1 }),
+    ]);
+    const names = built
+      .flatMap((t) => t.groups)
+      .find((g) => g.id === TAGS_GROUP_ID)!
+      .fields.map((f) => f.name);
+    expect(names.indexOf("zulu")).toBeLessThan(names.indexOf("alpha"));
+  });
+
+  it("filters by phase — and shows everything when no phase is given", () => {
+    const defs = [
+      def({ key: "everywhere", show_phase: "always" }),
+      def({ key: "only_missed", show_phase: "missed" }),
+    ];
+    const namesIn = (phase?: "planned" | "active" | "missed") =>
+      buildFormTabs(defs, phase)
         .flatMap((t) => t.groups)
         .flatMap((g) => g.fields)
         .map((f) => f.name);
-      expect(rendered).toContain(`probe_${id}`);
+
+    expect(namesIn("planned")).toContain("everywhere");
+    expect(namesIn("planned")).not.toContain("only_missed");
+    expect(namesIn("missed")).toContain("only_missed");
+    // No phase is what the readers pass — the export and the report dimensions
+    // describe trades across every phase at once, so nothing may be filtered.
+    expect(namesIn()).toContain("only_missed");
+  });
+
+  it("drops a group that ends up empty rather than rendering a bare gap", () => {
+    for (const g of tabs.flatMap((t) => t.groups)) {
+      expect(g.fields.length).toBeGreaterThan(0);
     }
-  });
-
-  it("keeps a user field even in a group with no fixed fields of its own", () => {
-    // `execution_advanced` has no built-in fields any more. It must still carry
-    // definitions assigned to it.
-    const withDef = buildFormTabs([
-      def({ key: "my_field", group_id: "execution_advanced" }),
-    ]);
-    expect(getAllFormFields([
-      def({ key: "my_field", group_id: "execution_advanced" }),
-    ]).map((f) => f.name)).toContain("my_field");
-    expect(
-      withDef
-        .flatMap((t) => t.groups)
-        .find((g) => g.id === "execution_advanced")?.fields,
-    ).toHaveLength(1);
-  });
-
-  it("drops a group that ends up empty rather than rendering a bare heading", () => {
-    const advanced = tabs
-      .flatMap((t) => t.groups)
-      .filter((g) => g.advanced);
-    for (const g of advanced) expect(g.fields.length).toBeGreaterThan(0);
   });
 });
 

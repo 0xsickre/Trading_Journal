@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  FIELD_DEF_GROUPS,
-  FIELD_DEF_GROUP_LABELS,
+  fieldAppliesToPhase,
+  FIELD_DEF_PHASE_LABELS,
+  FIELD_DEF_PHASES,
   FIELD_DEF_TYPES,
   slugifyFieldKey,
 } from "./field-def-types";
@@ -85,16 +86,16 @@ describe("slugifyFieldKey produces a key the database will accept", () => {
   });
 });
 
-describe("group metadata is complete", () => {
-  it("labels every group the DB CHECK allows", () => {
-    // `tj_field_defs.group_id` is checked against exactly these four. A group
+describe("phase metadata is complete", () => {
+  it("labels every phase the DB CHECK allows", () => {
+    // `tj_field_defs.show_phase` is checked against exactly these four. One
     // added to the constant without a label would render as `undefined` in the
     // Settings picker.
-    for (const g of FIELD_DEF_GROUPS) {
-      expect(FIELD_DEF_GROUP_LABELS[g]).toBeTruthy();
+    for (const p of FIELD_DEF_PHASES) {
+      expect(FIELD_DEF_PHASE_LABELS[p]).toBeTruthy();
     }
-    expect(Object.keys(FIELD_DEF_GROUP_LABELS).sort()).toEqual(
-      [...FIELD_DEF_GROUPS].sort(),
+    expect(Object.keys(FIELD_DEF_PHASE_LABELS).sort()).toEqual(
+      [...FIELD_DEF_PHASES].sort(),
     );
   });
 
@@ -102,5 +103,24 @@ describe("group metadata is complete", () => {
     expect([...FIELD_DEF_TYPES].sort()).toEqual(
       ["number", "select", "tags", "text", "textarea", "url"].sort(),
     );
+  });
+});
+
+describe("fieldAppliesToPhase", () => {
+  const PHASES = ["planned", "active", "missed"] as const;
+
+  it("shows an `always` category in every phase", () => {
+    for (const p of PHASES) expect(fieldAppliesToPhase("always", p)).toBe(true);
+  });
+
+  it("shows a pinned category only in its own phase", () => {
+    for (const pinned of PHASES) {
+      for (const p of PHASES) {
+        expect(
+          fieldAppliesToPhase(pinned, p),
+          `${pinned} in ${p}`,
+        ).toBe(pinned === p);
+      }
+    }
   });
 });

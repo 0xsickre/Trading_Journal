@@ -16,7 +16,11 @@
 // Values for def-driven fields are stored in `tj_positions.custom` — see
 // lib/journal/field-values.ts, which is the only place that knows that.
 
-import { FIELD_DEF_GROUPS, type FieldDef, type FieldDefGroup } from "./field-def-types";
+import {
+  fieldAppliesToPhase,
+  type FieldDef,
+  type FieldDefPhase,
+} from "./field-def-types";
 
 export type FieldType =
   | "select"
@@ -45,21 +49,20 @@ export type FieldConfig = {
 
 export type FormGroup = {
   id: string;
-  title: string;
+  /**
+   * Optional, and absent for exactly one group: the trader's own categories.
+   *
+   * The structural groups below name a STAGE of the form — the risk plan, the
+   * thesis, how it exited — and those names come with behaviour the group
+   * cannot be understood without. A heading over the trader's categories names
+   * nothing: each category already carries its own label, and the four fixed
+   * headings that used to sit there ("Setup", "Context", two "Advanced") were
+   * the only structure on this screen the trader could not rename, reorder or
+   * delete. They are gone; the fields stand on their own.
+   */
+  title?: string;
   description?: string;
   fields: FieldConfig[];
-  advanced?: boolean;
-  /**
-   * Rendered behind its own disclosure, open on demand.
-   *
-   * Distinct from `advanced`, which sweeps every such group into one shared
-   * "Advanced" box at the bottom of the tab. A collapsed group keeps its own
-   * heading and its own place in the order — it is not demoted, it is folded.
-   * The difference matters for a group you consult on some trades and skip on
-   * most: buried under "Advanced" it reads as rarely-useful, folded in place it
-   * reads as one click away.
-   */
-  collapsed?: boolean;
 };
 
 export type FormTab = {
@@ -70,8 +73,17 @@ export type FormTab = {
 };
 
 /**
- * The form skeleton. Methodology groups start empty and are filled from the
- * field defs by `buildFormTabs`; every other group is fixed.
+ * The one group the trader's categories land in.
+ *
+ * Named rather than inlined because `buildFormTabs` has to find it to append to
+ * it, and the trade form checks the same id when it decides whether a group
+ * gets a heading.
+ */
+export const TAGS_GROUP_ID = "tags";
+
+/**
+ * The form skeleton. The categories group starts with `technical_tags` and is
+ * filled from the field defs by `buildFormTabs`; every other group is fixed.
  */
 const BASE_TABS: FormTab[] = [
   {
@@ -181,8 +193,17 @@ const BASE_TABS: FormTab[] = [
         ],
       },
       {
-        id: "setup",
-        title: "Setup",
+        // The trader's own categories, flat and unheaded — `TAGS_GROUP_ID`.
+        //
+        // `technical_tags` is declared here rather than in a group of its own
+        // because it IS one of these: a tags field over the `technical_tag`
+        // category, the same shape as every category the trader adds in
+        // Settings. It kept a hardcoded "Setup" heading only for historical
+        // reasons, and that heading was one of the four nobody could edit.
+        //
+        // Everything else in this group is appended by `buildFormTabs` from
+        // `tj_field_defs`, in the trader's own `sort_order`.
+        id: TAGS_GROUP_ID,
         fields: [
           // `setup_grade` USED TO BE ASKED HERE, as a dropdown of A+/A/B/C.
           // It is gone because it was answered after the outcome was known —
@@ -202,19 +223,6 @@ const BASE_TABS: FormTab[] = [
             placeholder: "Sweep, MSS, FVG, OB, OTE, SMT…",
           },
         ],
-      },
-      {
-        // Folded by default. These are standing conditions rather than a
-        // per-trade decision — the macro read does not change between two
-        // trades taken the same morning — so they cost attention on every entry
-        // while earning it on few. Folded in place rather than pushed into
-        // "Advanced": one click away, still in the order the trade is thought
-        // through.
-        id: "macro",
-        title: "Context",
-        description: "Direction and entry quality — the standing read.",
-        collapsed: true,
-        fields: [],
       },
       // The `notes` group stood here: one `trade_journal_notes` textarea,
       // placeholder "Why I am entering, stop and target logic…", the same
@@ -240,12 +248,6 @@ const BASE_TABS: FormTab[] = [
             listKey: "miss_reason",
           },
         ],
-      },
-      {
-        id: "plan_advanced",
-        title: "Advanced",
-        advanced: true,
-        fields: [],
       },
     ],
   },
@@ -348,22 +350,9 @@ const BASE_TABS: FormTab[] = [
           },
         ],
       },
-      {
-        // No fixed fields left, but the group stays declared: `execution_advanced`
-        // is one of FIELD_DEF_GROUPS, so removing it would make `buildFormTabs`
-        // silently drop any user field assigned to it. Empty groups are filtered
-        // out at render.
-        id: "execution_advanced",
-        title: "Advanced",
-        advanced: true,
-        fields: [],
-      },
     ],
   },
 ];
-
-/** Structural groups a field def may be placed in — mirrors the DB CHECK. */
-const DEF_GROUP_IDS: ReadonlySet<string> = new Set<string>(FIELD_DEF_GROUPS);
 
 function toFieldConfig(def: FieldDef): FieldConfig {
   return {
@@ -377,32 +366,39 @@ function toFieldConfig(def: FieldDef): FieldConfig {
 }
 
 /**
- * The form config for a given set of user-defined fields.
+ * The form config for a given set of user-defined categories.
  *
- * Definitions are appended to their group in `sort_order`, after that group's
- * fixed fields. A def naming a group that does not exist is skipped rather than
- * creating one: the group set is closed on purpose (see FIELD_DEF_GROUPS).
+ * Every definition lands in one place — the flat categories group — in the
+ * trader's own `sort_order`. There is no longer a group to name: `group_id` and
+ * the four headings it chose between are gone, and a definition can no longer
+ * be silently dropped for pointing at a group that does not exist.
+ *
+ * `phase` is the trade's own lifecycle state, and it filters. A category set to
+ * "only on a missed setup" is not rendered disabled or greyed on a live trade —
+ * it is not there, the same way `plan_review` and `thesis` are simply absent
+ * when they do not apply. Omitting the argument shows everything, which is what
+ * the readers want: the CSV export, the report dimensions and the mentor pack
+ * all describe trades across every phase at once.
  */
-export function buildFormTabs(defs: readonly FieldDef[] = []): FormTab[] {
-  const byGroup = new Map<FieldDefGroup, FieldConfig[]>();
-  for (const def of defs) {
-    if (!DEF_GROUP_IDS.has(def.group_id)) continue;
-    const bucket = byGroup.get(def.group_id) ?? [];
-    bucket.push(toFieldConfig(def));
-    byGroup.set(def.group_id, bucket);
-  }
+export function buildFormTabs(
+  defs: readonly FieldDef[] = [],
+  phase?: Exclude<FieldDefPhase, "always">,
+): FormTab[] {
+  const extra = [...defs]
+    .filter((d) => phase == null || fieldAppliesToPhase(d.show_phase, phase))
+    .sort((a, b) => a.sort_order - b.sort_order || a.key.localeCompare(b.key))
+    .map(toFieldConfig);
 
   return BASE_TABS.map((tab) => ({
     ...tab,
     groups: tab.groups
-      .map((group) => {
-        const extra = byGroup.get(group.id as FieldDefGroup) ?? [];
-        return extra.length > 0
+      .map((group) =>
+        group.id === TAGS_GROUP_ID
           ? { ...group, fields: [...group.fields, ...extra] }
-          : group;
-      })
-      // An advanced group with nothing in it is a disclosure triangle that
-      // opens onto nothing — drop it rather than render an empty box.
+          : group,
+      )
+      // A group with no fields is a heading over nothing — and the categories
+      // group has no heading at all, so an empty one would be a blank gap.
       .filter((group) => group.fields.length > 0),
   }));
 }

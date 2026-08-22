@@ -62,6 +62,7 @@ function list(over: Partial<OptionList> = {}): OptionList {
     label: "COT Filter",
     category: "Context",
     color: "#22c55e",
+    show_phase: "always",
     sort_order: 0,
     items: [item()],
     ...over,

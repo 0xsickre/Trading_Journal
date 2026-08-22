@@ -2,6 +2,7 @@
 
 import type { Database } from "@/lib/supabase/types";
 import type { TradeImageKind } from "./tradingview-snapshot";
+import type { FieldDefPhase } from "./field-def-types";
 
 export type OptionItem = {
   id: string;
@@ -25,6 +26,18 @@ export type OptionList = {
   category: string | null;
   /** Hex colour for the category chip; null when none was chosen. */
   color: string | null;
+  /**
+   * Which phase of a trade asks for this category, joined from the field that
+   * renders it.
+   *
+   * `null` when NO field def reads the list, and that is a real distinction
+   * rather than a missing value: those categories are wired into the form by
+   * code — `exit_reason` on the outcome block, `miss_reason` only on a missed
+   * setup, `risk_pct` inside the risk plan's progressive reveal. Their place is
+   * behaviour, not a setting, and offering a phase picker for them would be a
+   * control that silently does nothing.
+   */
+  show_phase: FieldDefPhase | null;
   sort_order: number;
   items: OptionItem[];
 };

@@ -8,7 +8,7 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   ExternalLink,
-  ChevronDown,
+
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,10 +49,14 @@ import { StarRating } from "@/components/journal/star-rating";
 import { ScaleOutEditor } from "@/components/journal/scale-out-editor";
 import {
   buildFormTabs,
+  TAGS_GROUP_ID,
   type FieldConfig,
   type FormGroup,
 } from "@/lib/journal/form-config";
-import type { FieldDef } from "@/lib/journal/field-def-types";
+import type {
+  FieldDef,
+  FieldDefPhase,
+} from "@/lib/journal/field-def-types";
 import { ruleAppliesTo, type Playbook } from "@/lib/journal/playbook-types";
 import type { Account, Instrument, OptionsMap, TradeRow } from "@/lib/journal/types";
 import {
@@ -224,8 +228,22 @@ export function TradeForm({
     () => initial?.status === "missed",
   );
 
-  // Structure is fixed; the methodology groups are filled from the DB.
-  const formTabs = useMemo(() => buildFormTabs(fieldDefs), [fieldDefs]);
+  // Structure is fixed; the trader's categories are filled from the DB.
+  //
+  // The phase is part of the key because a category can be asked for only while
+  // the trade is planned, only once it is active, or only on a missed setup —
+  // so moving the trade through its lifecycle changes which ones the form
+  // renders. `missed` wins over the phase select: a missed setup was never
+  // opened, so "once active" cannot be true of it.
+  const defPhase: Exclude<FieldDefPhase, "always"> = isMissed
+    ? "missed"
+    : tradePhase === "active"
+      ? "active"
+      : "planned";
+  const formTabs = useMemo(
+    () => buildFormTabs(fieldDefs, defPhase),
+    [fieldDefs, defPhase],
+  );
 
   // Playbook state. Its own group rather than a field def: the checklist has
   // behaviour (outcome-scoped rules, three-state answers) that a field
@@ -939,7 +957,6 @@ export function TradeForm({
                 )}
 
                 {tab.groups
-                  .filter((g) => !g.advanced)
                   // The miss reason only exists for a missed setup; on every
                   // other trade the group would be a heading over one dead
                   // select.
@@ -985,7 +1002,7 @@ export function TradeForm({
                       // against what the exit delivered.
                       groupNote={
                         tab.id === "plan" &&
-                        group.id === "setup" &&
+                        group.id === TAGS_GROUP_ID &&
                         activeBook?.a_plus_criteria ? (
                           `A+ for ${activeBook.name}: ${activeBook.a_plus_criteria}`
                         ) : tab.id === "execution" && group.id === "outcome" ? (
@@ -1068,26 +1085,6 @@ export function TradeForm({
                     netPl={metrics.netPl}
                     categories={optionsMap.rule_category ?? []}
                   />
-                )}
-
-                {tab.groups.some((g) => g.advanced) && (
-                  <AdvancedSection>
-                    {tab.groups
-                      .filter((g) => g.advanced)
-                      .map((group) => (
-                        <FormGroupSection
-                          key={group.id}
-                          group={group}
-                          fields={fields}
-                          setField={setField}
-                          optionsMap={optionsMap}
-                          instruments={instruments}
-                          tradePhase={tradePhase}
-                          isMissed={isMissed}
-                          nested
-                        />
-                      ))}
-                  </AdvancedSection>
                 )}
 
                 {/* Lifecycle, at the bottom and on its own.
@@ -1361,18 +1358,6 @@ function PlanVsRealized({
   );
 }
 
-function AdvancedSection({ children }: { children: ReactNode }) {
-  return (
-    <details className="group rounded-lg border bg-muted/20">
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
-        <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
-        Advanced
-      </summary>
-      <div className="space-y-6 border-t px-4 py-4">{children}</div>
-    </details>
-  );
-}
-
 function FormGroupSection({
   group,
   fields,
@@ -1525,28 +1510,13 @@ function FormGroupSection({
     </>
   );
 
-  if (group.collapsed && !nested) {
-    return (
-      <details className="rounded-md border">
-        <summary className="cursor-pointer list-none px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">
-          <span className="inline-flex items-center gap-1.5">
-            <ChevronDown className="size-4 transition-transform [details[open]_&]:rotate-180" />
-            {group.title}
-          </span>
-        </summary>
-        <div className="space-y-4 border-t p-3">
-          {group.description && (
-            <p className="text-sm text-muted-foreground">{group.description}</p>
-          )}
-          {body}
-        </div>
-      </details>
-    );
-  }
-
   return (
     <div className="space-y-4">
-      {!nested && (
+      {/* No heading when the group has no title — that is the trader's own
+          categories, which name themselves. A heading there would be the one
+          piece of text on this form nobody could edit, which is exactly what
+          the four fixed group names used to be. */}
+      {!nested && group.title && (
         <div>
           <h3 className="text-sm font-semibold">{group.title}</h3>
           {group.description && (
@@ -1576,7 +1546,20 @@ function FieldRenderer({
   computedDisplay?: string;
   fieldHint?: string;
 }) {
-  const colSpan = field.colSpan === 2 ? "sm:col-span-2" : "";
+  /**
+   * Anything backed by an option list takes the full row.
+   *
+   * Forced here rather than left to each field's `colSpan`, because the rule is
+   * about a KIND of field, not about individual ones: every option list on this
+   * form is the same thing to the person filling it, and they were reading as
+   * two different controls — the multi-valued ones full width, the single-valued
+   * ones paired two to a row and half as wide. Declaring it per field would mean
+   * remembering it on each new list, and a def-driven field (`toFieldConfig`)
+   * has no config line to declare it on at all.
+   */
+  const listBacked =
+    field.type === "tags" || (field.type === "select" && field.listKey != null);
+  const colSpan = field.colSpan === 2 || listBacked ? "sm:col-span-2" : "";
 
   if (field.type === "computed") {
     return (
