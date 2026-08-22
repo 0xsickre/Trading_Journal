@@ -8,8 +8,8 @@ import type { Playbook, PlaybookRule } from "@/lib/journal/playbook-types";
  * The checklist, driven directly rather than through `TradeForm`.
  *
  * Deliberate: the form mounts one `PlaybookChecklist` per tab, so a test that
- * went through it would find two "Check remaining" buttons and have to
- * disambiguate — noise that says nothing about this component.
+ * went through it would find two "Check all" buttons and have to disambiguate —
+ * noise that says nothing about this component.
  */
 
 function rule(over: Partial<PlaybookRule> & { id: string }): PlaybookRule {
@@ -17,7 +17,7 @@ function rule(over: Partial<PlaybookRule> & { id: string }): PlaybookRule {
     category: "entry",
     text: over.id,
     show_when: "always",
-  is_setup_criterion: false,
+    is_setup_criterion: false,
     sort_order: 0,
     deleted_at: null,
     answerCount: 0,
@@ -67,85 +67,92 @@ function renderChecklist(
   return onAnswerChange;
 }
 
-describe("PlaybookChecklist — the bar says only what was answered", () => {
-  it("paints followed and broken, and nothing at all for unanswered", () => {
-    // 3 followed, 1 broken, 4 untouched → denominator 8.
+describe("PlaybookChecklist — one tick is the whole answer", () => {
+  it("measures adherence against EVERY rule that applied, not just the ticked ones", () => {
+    // The bug this replaced: with one box ticked and seven untouched, the old
+    // followed-over-answered ratio read 100 %. One of eight kept is 13 %.
     renderChecklist(
       Array.from({ length: 8 }, (_, i) => rule({ id: `r${i}` })),
-      { r0: true, r1: true, r2: true, r3: false },
+      { r0: true },
+    );
+
+    expect(screen.getByText("13%")).toBeInTheDocument();
+    expect(screen.getByTitle("1 of 8 rules followed")).toBeInTheDocument();
+  });
+
+  it("paints the unticked share red instead of leaving it bare", () => {
+    // There is no third quantity any more, so the two fills cover the track.
+    renderChecklist(
+      Array.from({ length: 8 }, (_, i) => rule({ id: `r${i}` })),
+      { r0: true, r1: true, r2: true },
     );
 
     const [green, red] = fills();
-    // Exactly two fills. A third would mean somebody started drawing the
-    // unanswered share, which is the one thing this bar must never do.
-    expect(fills()).toHaveLength(2);
-    expect(green).toHaveStyle({ width: "37.5%" }); // 3/8
-    expect(red).toHaveStyle({ width: "12.5%" }); // 1/8
-    // 50 % of the track is left bare — that is the unanswered half, and it is
-    // the absence of paint rather than a colour.
+    expect(green).toHaveStyle({ width: "37.5%" }); // 3/8 kept
+    expect(red).toHaveStyle({ width: "62.5%" }); // 5/8 not kept
   });
 
-  it("an untouched checklist is an empty track, not a red one", () => {
+  it("reads 0 % on an untouched checklist, because nothing was kept", () => {
     renderChecklist([rule({ id: "a" }), rule({ id: "b" })], {});
-
-    for (const fill of fills()) expect(fill).toHaveStyle({ width: "0%" });
-    expect(
-      screen.getByText(/unanswered does not count toward the statistics/),
-    ).toBeInTheDocument();
+    expect(screen.getByText("0%")).toBeInTheDocument();
+    expect(screen.getByText(/Followed 0 of 2/)).toBeInTheDocument();
   });
 
-  it("states all three counts in words", () => {
+  it("states both counts in words", () => {
     renderChecklist(
       [rule({ id: "a" }), rule({ id: "b" }), rule({ id: "c" })],
-      { a: true, b: false },
+      { a: true },
     );
-    expect(screen.getByText(/Followed 1 of 2 answered/)).toBeInTheDocument();
-    expect(screen.getByText(/1 not answered/)).toBeInTheDocument();
+    expect(screen.getByText(/Followed 1 of 3/)).toBeInTheDocument();
+    expect(screen.getByText(/2 not followed/)).toBeInTheDocument();
   });
 
-  it("shows adherence as a percentage of what was ANSWERED", () => {
-    // 3 followed, 1 broken, 4 untouched. 75 %, not 37.5 %: the denominator is
-    // the answered rules, the same one `computeFollowRate` reports against.
-    // Counting the untouched four as broken would invent a discipline problem
-    // out of a half-filled form.
-    renderChecklist(
-      Array.from({ length: 8 }, (_, i) => rule({ id: `r${i}` })),
-      { r0: true, r1: true, r2: true, r3: false },
-    );
+  it("offers one checkbox per rule — no third state to reach for", async () => {
+    const user = userEvent.setup({ delay: null });
+    const onAnswerChange = renderChecklist([rule({ id: "a", text: "Waited" })], {});
 
-    expect(screen.getByText("75%")).toBeInTheDocument();
-    expect(screen.getByTitle("3 of 4 answered rules followed")).toBeInTheDocument();
+    const box = screen.getByRole("checkbox");
+    expect(box).not.toBeChecked();
+    await user.click(box);
+    expect(onAnswerChange).toHaveBeenCalledWith("a", true);
   });
 
-  it("shows no percentage at all before anything is answered", () => {
-    // 0 % would be a verdict, and there is nothing yet to have a verdict about.
-    renderChecklist([rule({ id: "a" }), rule({ id: "b" })], {});
-    expect(screen.queryByText(/^\d+%$/)).toBeNull();
+  it("unticking answers `not followed` rather than clearing the answer", async () => {
+    // A boolean, never null: with one box per rule, unticking IS an answer.
+    const user = userEvent.setup({ delay: null });
+    const onAnswerChange = renderChecklist([rule({ id: "a", text: "Waited" })], {
+      a: true,
+    });
+
+    await user.click(screen.getByRole("checkbox"));
+    expect(onAnswerChange).toHaveBeenCalledWith("a", false);
   });
 });
 
-describe("PlaybookChecklist — check remaining", () => {
-  it("fills the unanswered and never overwrites an explicit ✗", async () => {
+describe("PlaybookChecklist — check all", () => {
+  it("ticks everything that is not ticked yet", async () => {
     const user = userEvent.setup({ delay: null });
     const onAnswerChange = renderChecklist(
-      [rule({ id: "kept" }), rule({ id: "broken" }), rule({ id: "blank" })],
-      { kept: true, broken: false },
+      [rule({ id: "kept" }), rule({ id: "notKept" }), rule({ id: "blank" })],
+      { kept: true, notKept: false },
     );
 
-    await user.click(screen.getByRole("button", { name: /Check remaining \(1\)/ }));
+    await user.click(screen.getByRole("button", { name: /Check all \(2\)/ }));
 
-    expect(onAnswerChange).toHaveBeenCalledTimes(1);
+    expect(onAnswerChange).toHaveBeenCalledWith("notKept", true);
     expect(onAnswerChange).toHaveBeenCalledWith("blank", true);
-    // The load-bearing assertion: the rule answered "broken" is not touched.
-    expect(onAnswerChange).not.toHaveBeenCalledWith("broken", expect.anything());
+    // The one already ticked is left alone — nothing to do to it.
+    expect(onAnswerChange).not.toHaveBeenCalledWith("kept", expect.anything());
   });
 
-  it("is absent when there is nothing left to fill", () => {
-    renderChecklist([rule({ id: "a" }), rule({ id: "b" })], { a: true, b: false });
-    expect(screen.queryByRole("button", { name: /Check remaining/ })).toBeNull();
+  it("is absent when everything is already ticked", () => {
+    renderChecklist([rule({ id: "a" }), rule({ id: "b" })], { a: true, b: true });
+    expect(screen.queryByRole("button", { name: /Check all/ })).toBeNull();
   });
 
   it("ignores a rule the outcome hides, rather than answering it unseen", async () => {
+    // A winner-only rule ticked on a losing trade is an observation from a
+    // population it was never asked about.
     const user = userEvent.setup({ delay: null });
     const onAnswerChange = renderChecklist(
       [rule({ id: "always" }), rule({ id: "onlyWinners", show_when: "winner" })],
@@ -154,14 +161,31 @@ describe("PlaybookChecklist — check remaining", () => {
     );
 
     expect(screen.queryByText("onlyWinners")).toBeNull();
-    await user.click(screen.getByRole("button", { name: /Check remaining \(1\)/ }));
+    await user.click(screen.getByRole("button", { name: /Check all \(1\)/ }));
     expect(onAnswerChange).toHaveBeenCalledWith("always", true);
     expect(onAnswerChange).not.toHaveBeenCalledWith("onlyWinners", expect.anything());
   });
+});
 
-  it("skips a retired rule, and leaves it out of the bar it could never fill", async () => {
-    const user = userEvent.setup({ delay: null });
+describe("PlaybookChecklist — a retired rule is not judged", () => {
+  it("leaves an unanswered retired rule out of the denominator entirely", () => {
     // The edit form loads retired rules, so they really do reach this screen.
+    // Counting one as "not kept" would mint a fresh observation for a rule
+    // retired precisely to stop collecting them.
+    renderChecklist(
+      [
+        rule({ id: "live" }),
+        rule({ id: "retired", deleted_at: "2026-08-01T00:00:00Z" }),
+      ],
+      { live: true },
+    );
+
+    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.getByText(/Followed 1 of 1/)).toBeInTheDocument();
+  });
+
+  it("never sweeps a retired rule into an answer", async () => {
+    const user = userEvent.setup({ delay: null });
     const onAnswerChange = renderChecklist(
       [
         rule({ id: "live" }),
@@ -170,10 +194,9 @@ describe("PlaybookChecklist — check remaining", () => {
       {},
     );
 
-    await user.click(screen.getByRole("button", { name: /Check remaining \(1\)/ }));
+    await user.click(screen.getByRole("button", { name: /Check all \(1\)/ }));
     expect(onAnswerChange).toHaveBeenCalledTimes(1);
     expect(onAnswerChange).toHaveBeenCalledWith("live", true);
-    expect(onAnswerChange).not.toHaveBeenCalledWith("retired", expect.anything());
   });
 
   it("counts a retired rule once it HAS been answered", () => {
@@ -188,5 +211,35 @@ describe("PlaybookChecklist — check remaining", () => {
     );
     const [green] = fills();
     expect(green).toHaveStyle({ width: "100%" });
+  });
+});
+
+describe("PlaybookChecklist — the setup grade", () => {
+  it("grades on the criteria alone", () => {
+    renderChecklist(
+      [
+        rule({ id: "c1", is_setup_criterion: true }),
+        rule({ id: "c2", is_setup_criterion: true }),
+        rule({ id: "plain" }),
+      ],
+      { c1: true, c2: true },
+    );
+
+    // The third rule is process, not setup quality, and must not move the grade.
+    expect(screen.getByTitle("2 of 2 setup criteria met")).toBeInTheDocument();
+  });
+
+  it("needs no `all answered` gate — every box always has an answer now", () => {
+    renderChecklist(
+      [
+        rule({ id: "c1", is_setup_criterion: true }),
+        rule({ id: "c2", is_setup_criterion: true }),
+      ],
+      { c1: true },
+    );
+
+    // Half the criteria met, and the grade says so instead of holding out for
+    // answers that can no longer be missing.
+    expect(screen.getByTitle("1 of 2 setup criteria met")).toBeInTheDocument();
   });
 });

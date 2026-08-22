@@ -621,7 +621,12 @@ export function TradeForm({
     for (const rule of book.rules) {
       if (!ruleAppliesTo(rule.show_when, outcome)) continue;
       const v = ruleAnswers[rule.id];
-      if (v !== undefined) out[rule.id] = v;
+      // A retired rule nobody ticked is left unanswered. Everything else gets
+      // an explicit true or false, because the checklist has one tick per rule
+      // and an untouched box IS the answer "not kept" — writing nothing would
+      // leave the screen saying 3 of 8 while the statistics counted 3 of 3.
+      if (rule.deleted_at != null && v === undefined) continue;
+      out[rule.id] = v === true;
     }
     return out;
   }, [playbooks, playbookId, ruleAnswers, metrics.netPl]);

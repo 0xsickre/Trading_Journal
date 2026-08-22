@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import type { ComponentProps, DragEvent, HTMLAttributes } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -105,43 +105,86 @@ function useAction() {
  * Reorder-by-dragging for a list of ids.
  *
  * Native HTML5 drag events, no library: the two lists here are short, flat and
- * same-axis, which is the case the native API handles without help. `commit`
- * receives the finished order and is expected to persist it.
+ * same-axis, which is the case the native API handles without help.
+ *
+ * THE LIST MOVES WHILE YOU DRAG, and it stays moved the moment you let go.
+ * Both halves of that matter, and the first version had neither: it only tinted
+ * the row under the cursor, so nothing appeared to happen until the drop, and
+ * then the new order waited on a server round trip plus `router.refresh()`
+ * before it was drawn. Dragging something and watching it not move is the whole
+ * of what made it feel broken.
+ *
+ * So `order` is what the caller renders, and it comes from a local PREVIEW
+ * while a drag is in flight: every `dragover` recomputes it, so rows slide past
+ * one another under the pointer. On drop the preview simply stays — it is
+ * already the answer — while the write goes out behind it. This is the
+ * optimistic-with-rollback shape `dashboard.tsx` and `playbooks-screen.tsx`
+ * already use for their own view state: on failure the preview is dropped and
+ * the server's order snaps back with a toast, so the UI can never keep an order
+ * the database refused.
  *
  * The pointer path is deliberately NOT the only one. Dragging cannot be done
- * from a keyboard, so both lists keep Move up / Move down in their menus — the
- * handle is the fast way, not the sole way.
+ * from a keyboard, so both lists keep Move up / Move down in their menus.
  */
-function useDragOrder(ids: string[], commit: (ordered: string[]) => void) {
+function useDragOrder(
+  ids: string[],
+  commit: (ordered: string[]) => Promise<{ ok: boolean; error?: string }>,
+) {
+  const router = useRouter();
+  const [, start] = useTransition();
   const [dragId, setDragId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string[] | null>(null);
+  // Set by `onDrop`, read by `onDragEnd` — which fires afterwards, and would
+  // otherwise throw away the preview a completed drop just committed.
+  const dropped = useRef(false);
 
-  function drop(targetId: string) {
-    const from = dragId;
-    setDragId(null);
-    setOverId(null);
-    if (!from) return;
-    const next = moveToIndex(ids, from, targetId);
-    if (next) commit(next);
-  }
+  /**
+   * The preview is used only while it still describes the SAME SET of ids the
+   * server sent. Once it does not — a rule added in the dialog, one removed in
+   * another tab — it is stale and the server's order wins.
+   *
+   * Checked rather than cleared, and that is deliberate: clearing it would mean
+   * a `setState` in an effect, which cascades a second render for something
+   * that is a pure comparison. A preview that has become equal to `ids` renders
+   * identically anyway, so there is nothing to clean up — the next drag
+   * overwrites it, and a failure drops it explicitly.
+   */
+  const previewUsable =
+    preview != null &&
+    preview.length === ids.length &&
+    ids.every((id) => preview.includes(id));
+  const order = previewUsable ? preview : ids;
 
   /** Props for the element that RECEIVES a drop — the whole row or card. */
   function target(id: string): DragTargetProps {
     return {
       onDragOver: (e: DragEvent) => {
         if (!dragId) return;
-        // Without preventDefault the browser refuses the drop outright.
+        // Without preventDefault the browser refuses the drop outright — and it
+        // is called even over the dragged row itself, so the cursor keeps
+        // saying "move" across the whole list rather than flickering to "no".
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
-        if (overId !== id) setOverId(id);
+        if (dragId === id) return;
+        setPreview((cur) => moveToIndex(cur ?? order, dragId, id) ?? cur ?? order);
       },
-      onDragLeave: () => setOverId((cur) => (cur === id ? null : cur)),
       onDrop: (e: DragEvent) => {
         e.preventDefault();
-        drop(id);
+        dropped.current = true;
+        setDragId(null);
+        const next = previewUsable ? preview : null;
+        if (!next) return;
+        start(async () => {
+          const res = await commit(next);
+          if (!res.ok) {
+            setPreview(null);
+            toast.error(res.error ?? "Failed");
+            return;
+          }
+          router.refresh();
+        });
       },
       "data-dragging": dragId === id ? "" : undefined,
-      "data-drop-target": overId === id && dragId !== id ? "" : undefined,
     };
   }
 
@@ -169,16 +212,20 @@ function useDragOrder(ids: string[], commit: (ordered: string[]) => void) {
           "[data-drag-row]",
         );
         if (row) e.dataTransfer.setDragImage(row, 16, 16);
+        dropped.current = false;
         setDragId(id);
       },
       onDragEnd: () => {
         setDragId(null);
-        setOverId(null);
+        // A drag abandoned outside the list — Escape, or a drop on nothing —
+        // must put the rows back where they were.
+        if (!dropped.current) setPreview(null);
+        dropped.current = false;
       },
     };
   }
 
-  return { target, handle };
+  return { order, target, handle };
 }
 
 /** The two data attributes the CSS below keys off, alongside the drop handlers. */
@@ -662,8 +709,18 @@ function CategorySection({
 
   const ruleIds = rules.map((r) => r.id);
   const ruleDrag = useDragOrder(ruleIds, (ordered) =>
-    run(() => reorderPlaybookRules(book.id, category, ordered)),
+    reorderPlaybookRules(book.id, category, ordered),
   );
+  // Rendered from the drag order, not from the prop: while a drag is in flight
+  // that order is the preview, which is what makes the rows move under the
+  // pointer instead of after the drop.
+  const orderedRules = useMemo(() => {
+    const byId = new Map(rules.map((r) => [r.id, r]));
+    return ruleDrag.order.flatMap((id) => {
+      const r = byId.get(id);
+      return r ? [r] : [];
+    });
+  }, [rules, ruleDrag.order]);
 
   return (
     // Plain divs inside the Card rather than CardHeader/CardContent: those carry
@@ -731,19 +788,19 @@ function CategorySection({
       </div>
 
       <div>
-        {rules.length === 0 ? (
+        {orderedRules.length === 0 ? (
           <p className="px-3 py-3 text-sm text-muted-foreground">
             No rules here yet.
           </p>
         ) : (
-          rules.map((rule, i) => (
+          orderedRules.map((rule, i) => (
             <RuleRow
               key={rule.id}
               rule={rule}
               playbookId={book.id}
               score={scoreById.get(rule.id)}
               canUp={i > 0}
-              canDown={i < rules.length - 1}
+              canDown={i < orderedRules.length - 1}
               dragTarget={ruleDrag.target(rule.id)}
               dragHandle={ruleDrag.handle(rule.id)}
             />
@@ -800,7 +857,9 @@ export function PlaybookRulesEditor({
   /** The trader's own playbook sections, in their order, from `rule_category`. */
   categories: readonly OptionItem[];
 }) {
-  const { run } = useAction();
+  // No `useAction` here any more: the drag hook owns its own transition, and
+  // nothing else on this level writes.
+
   const [addOpen, setAddOpen] = useState(false);
 
   const scores = useMemo(
@@ -850,9 +909,31 @@ export function PlaybookRulesEditor({
   // Only the sections that still have an option row can be reordered — an
   // orphan heading has no ordinal to write.
   const sectionDrag = useDragOrder(
-    sections.flatMap((s) => (s.item ? [s.item.id] : [])),
-    (ordered) => run(() => reorderPlaybookSections(ordered)),
+    useMemo(() => sections.flatMap((s) => (s.item ? [s.item.id] : [])), [sections]),
+    reorderPlaybookSections,
   );
+
+  /**
+   * The cards in the order they are drawn.
+   *
+   * Listed sections follow the drag order; orphans keep their place at the end,
+   * where `sections` already appends them — they have no ordinal, so there is
+   * nothing to drag them into.
+   */
+  const displaySections = useMemo(() => {
+    const listed = sections.filter((s) => s.item);
+    const orphans = sections.filter((s) => !s.item);
+    const byItemId = new Map(listed.map((s) => [s.item!.id, s]));
+    const ordered = sectionDrag.order.flatMap((id) => {
+      const s = byItemId.get(id);
+      return s ? [s] : [];
+    });
+    return [...ordered, ...orphans].map((s, i) => ({
+      ...s,
+      canUp: s.item != null && i > 0,
+      canDown: s.item != null && i < ordered.length - 1,
+    }));
+  }, [sections, sectionDrag.order]);
 
   return (
     <div className="space-y-4">
@@ -893,7 +974,7 @@ export function PlaybookRulesEditor({
           </div>
 
           <div className="space-y-3">
-            {sections.map(({ category, item, hint, rules, canUp, canDown }) => (
+            {displaySections.map(({ category, item, hint, rules, canUp, canDown }) => (
               <CategorySection
                 key={category}
                 book={book}
