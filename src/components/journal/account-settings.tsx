@@ -34,6 +34,7 @@ import type { Account } from "@/lib/journal/types";
 import {
   updateAccount,
   addAccount,
+  countAccountUsage,
   deleteAccount,
 } from "@/app/(app)/settings/actions";
 
@@ -170,16 +171,29 @@ function DeleteAccountDialog({
 
 function AccountCard({
   account,
-  usage,
   canDelete,
 }: {
   account: Account;
-  usage: AccountUsage;
   canDelete: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // Counted when the dialog opens, not with the page. `UNKNOWN_USAGE` until it
+  // lands, which `usageIsEmpty` treats as non-empty — so the dialog shows the
+  // careful path first and relaxes only once the real numbers are in, never the
+  // other way round.
+  const [usage, setUsage] = useState<AccountUsage>(UNKNOWN_USAGE);
+  const [, startCount] = useTransition();
+
+  function openDelete() {
+    setUsage(UNKNOWN_USAGE);
+    setConfirmOpen(true);
+    startCount(async () => {
+      const res = await countAccountUsage(account.id);
+      if (res.ok) setUsage(res.usage);
+    });
+  }
   const [name, setName] = useState(account.name);
   const [tz, setTz] = useState(account.timezone);
   const [currency, setCurrency] = useState(account.currency);
@@ -463,7 +477,7 @@ function AccountCard({
               variant="ghost"
               size="sm"
               className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => setConfirmOpen(true)}
+              onClick={openDelete}
             >
               <Trash2 className="size-4" /> Delete
             </Button>
@@ -524,13 +538,7 @@ function FtmoRule({
   );
 }
 
-export function AccountSettings({
-  accounts,
-  usage,
-}: {
-  accounts: Account[];
-  usage: Record<string, AccountUsage>;
-}) {
+export function AccountSettings({ accounts }: { accounts: Account[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
 
@@ -549,9 +557,6 @@ export function AccountSettings({
           <AccountCard
             key={a.id}
             account={a}
-            // An account whose count never arrived is treated as non-empty by
-            // usageIsEmpty, which is the safe direction.
-            usage={usage[a.id] ?? UNKNOWN_USAGE}
             canDelete={accounts.length > 1}
           />
         ))}

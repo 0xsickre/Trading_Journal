@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { RESERVED_KEYS } from "@/lib/journal/reserved-keys";
 import { getCurrentUser } from "@/lib/supabase/user";
-import { EMPTY_USAGE, usageIsEmpty } from "@/lib/journal/account-usage";
+import {
+  EMPTY_USAGE,
+  UNKNOWN_USAGE,
+  usageIsEmpty,
+  type AccountUsage,
+} from "@/lib/journal/account-usage";
 import { getAccountUsage } from "@/lib/journal/account-usage-queries";
 import {
   getOptionFieldTargets,
@@ -133,6 +138,22 @@ export async function renameOption(id: string, label: string) {
   if (error) return { ok: false, error: error.message };
   revalidateAll();
   return { ok: true };
+}
+
+/**
+ * What one account is holding, read when its delete dialog opens.
+ *
+ * Was loaded for EVERY account with the Settings page — three head counts each,
+ * so five accounts meant fifteen queries on every visit, to fill in a number in
+ * a confirmation nobody had opened. The counts are exact and the dialog still
+ * refuses to enable Delete until they land; the only thing that changed is
+ * when they are asked for.
+ */
+export async function countAccountUsage(
+  accountId: string,
+): Promise<{ ok: true; usage: AccountUsage } | { ok: false; error: string }> {
+  const usage = await getAccountUsage([accountId]);
+  return { ok: true, usage: usage[accountId] ?? UNKNOWN_USAGE };
 }
 
 /**

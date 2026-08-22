@@ -17,19 +17,31 @@ import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
 
 export default async function DashboardPage() {
-  // Fallback seed for legacy users / missed signup trigger — runs on the landing
-  // page only (must finish before we read accounts on a brand-new user).
-  await ensureDefaults();
+  // ONE round trip before the rest, and only because the day key depends on it.
+  // `getCheckins` needs the account's timezone to know which 182 days to ask
+  // for, so accounts genuinely has to land first. Everything else below waits
+  // on nothing and goes in one parallel batch.
+  const accounts = await getAccounts();
+
+  // The account's day, not the browser's — every day key in the tracker is in
+  // account time, and the heatmap grid is anchored to this.
+  const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
+  const todayKey = todayInTz(primary?.timezone ?? DEFAULT_TZ);
+
   // `tj_position_rules` is drained ONCE, and the per-rule counts are derived
   // from the result inside `getPlaybooks`. Both reads used to sit in this
   // Promise.all, draining the same table — one row per rule per trade, the
-  // fastest-growing in the schema — twice on every render of the route. One
-  // extra await costs a round trip; the second drain cost the whole table.
-  const positionRules = await getPositionRules();
+  // fastest-growing in the schema — twice on every render of the route.
+  //
+  // It used to be awaited alone, ahead of everything, to keep that single
+  // drain. It still is a single drain: `getPlaybooks` is simply given the
+  // promise instead of the resolved array, so it can start its own reads
+  // immediately and await the rules only where it needs them. The round trip
+  // that separate await cost is gone.
+  const positionRulesPromise = getPositionRules();
 
   const [
     trades,
-    accounts,
     cashEvents,
     loggedDates,
     dailyReports,
@@ -40,9 +52,10 @@ export default async function DashboardPage() {
     positionCheckins,
     userPrefs,
     dashboardTemplates,
+    checkinsByDay,
+    positionRules,
   ] = await Promise.all([
     getTradesWithStats(),
-    getAccounts(),
     getCashEvents(),
     getDailyReportDates(),
     getDailyReportsLite(),
@@ -54,7 +67,7 @@ export default async function DashboardPage() {
     getTrackerRules({ includeRetired: true }),
     // Follow rate is 40 % of process adherence, and a retired rule's answers are
     // real observations — same reason the reports screen loads them all.
-    getPlaybooks({ includeDeleted: true, positionRules }),
+    getPlaybooks({ includeDeleted: true, positionRules: positionRulesPromise }),
     // Unbounded, unlike the tracker check-ins below: those fill a 28-week
     // heatmap, while these are joined to trades by position id and a trade in
     // range can carry answers given outside it.
@@ -65,21 +78,20 @@ export default async function DashboardPage() {
     getUserPrefs(),
     // The saved arrangements themselves. Small, per user, and scoped by RLS.
     getDashboardTemplates(),
+    getCheckins(addDaysToDayKey(todayKey, -(TRACKER_SPAN_DAYS - 1)), todayKey),
+    positionRulesPromise,
   ]);
 
-  // The account's day, not the browser's — every day key in the tracker is in
-  // account time, and the heatmap grid is anchored to this.
-  const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
-  const todayKey = todayInTz(primary?.timezone ?? DEFAULT_TZ);
+  // Fallback seed for legacy users / a missed signup trigger. It used to be the
+  // first `await` on this page, which made every dashboard render pay a round
+  // trip for a no-op RPC — the seeding it covers has been done for months for
+  // anyone whose accounts exist. An empty `accounts` is the only state that can
+  // still need it, and it is exactly the state a brand-new user arrives in.
+  if (accounts.length === 0) await ensureDefaults();
 
-  const checkinsByDay = await getCheckins(
-    addDaysToDayKey(todayKey, -(TRACKER_SPAN_DAYS - 1)),
-    todayKey,
-  );
   // Flattened for the client boundary: a flat array is smaller on the wire than
   // a nested Map and the dashboard rebuilds the index it wants anyway.
   const checkins = [...checkinsByDay.values()].flatMap((day) => [...day.values()]);
-
   return (
     <div className="space-y-5">
       <PageHeader

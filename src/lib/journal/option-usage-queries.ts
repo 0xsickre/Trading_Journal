@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { selectAllPages } from "@/lib/supabase/paginate";
 import { getFieldDefs } from "./field-defs";
 import { getAllFormFields } from "./form-config";
 import {
@@ -129,12 +130,12 @@ export async function getOptionUsage(
  * of them on a screen that has to render in one go. This reads the relevant
  * columns of the trade table ONCE and tallies in memory instead.
  *
- * Reading rows rather than counting them does reintroduce PostgREST's 1000-row
- * cap, and that is the deliberate trade: this is a single-trader journal, and
- * an undercount in a table column is a cosmetically stale number, not a
- * destructive decision. The delete dialogs still call `getOptionUsage`, which
- * is head-counted and has no ceiling — the number that gates a destructive
- * action is never the one from here.
+ * Paginated, so PostgREST's 1000-row cap does not silently truncate the tally
+ * on a book that has outgrown it — an undercount here is cosmetic rather than
+ * destructive, but a column that quietly stops counting past a threshold is
+ * worse than one that costs an extra round trip. The delete dialogs call
+ * `getOptionUsage` regardless, which is head-counted: the number that gates a
+ * destructive action is never the one from here.
  */
 export async function getAllOptionUsage(
   listKeys: readonly string[],
@@ -162,17 +163,36 @@ export async function getAllOptionUsage(
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("tj_positions")
-    .select([...columns].join(","));
-  if (error || !data) return out;
+  // `id` in the projection and in the order: a paginated read needs a stable
+  // sort or rows repeat and skip between pages, and `id` is the only column
+  // here guaranteed to be unique.
+  const projection = ["id", ...columns].join(",");
+  let rows: Record<string, unknown>[];
+  try {
+    rows = await selectAllPages<Record<string, unknown>>(
+      (from, to) =>
+        // Cast because the projection is built at runtime from the field
+        // registry, so PostgREST's typed inference cannot check it and falls
+        // back to an error shape. The keys are read defensively below.
+        supabase
+          .from("tj_positions")
+          .select(projection)
+          .order("id")
+          .range(from, to) as unknown as PromiseLike<{
+          data: Record<string, unknown>[] | null;
+          error: { message: string } | null;
+        }>,
+    );
+  } catch {
+    return out;
+  }
 
   const bump = (listKey: string, value: string) => {
     const k = `${listKey}\u0000${value}`;
     out[k] = (out[k] ?? 0) + 1;
   };
 
-  for (const row of data as unknown as Record<string, unknown>[]) {
+  for (const row of rows) {
     for (const { listKey, target } of pairs) {
       const bag = target.custom
         ? (row.custom as Record<string, unknown> | null)

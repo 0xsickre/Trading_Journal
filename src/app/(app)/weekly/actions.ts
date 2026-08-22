@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/user";
 import { getPrimaryAccount } from "@/lib/journal/accounts";
 import { todayInTz } from "@/lib/journal/daily-report";
 import { DEFAULT_TZ } from "@/lib/journal/time";
@@ -57,9 +58,7 @@ export async function saveWeeklyReview(
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Nisi prijavljen." };
 
   // Checked so the user reads this sentence rather than the trigger's. The
@@ -116,9 +115,7 @@ export async function lockWeek(weekStart: string): Promise<Result> {
   if (bad) return { ok: false, error: bad };
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Nisi prijavljen." };
 
   const account = await getPrimaryAccount();

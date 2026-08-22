@@ -116,14 +116,17 @@ export default async function CalendarPage({
     const from = days[0];
     const to = days[days.length - 1];
 
-    const [reports, rules] = await Promise.all([
+    const [reports, rules, checkinsByDay] = await Promise.all([
       getDailyReportsInRange(from, to),
       // Retired rules included, and `rulesLiveOn` filters per day — a rule that
       // was live in March still judged March, and dropping it would raise that
       // month's compliance after the fact.
       getTrackerRules({ includeRetired: true }),
+      // Joins the batch rather than following it: this depends only on the
+      // date range, which was computed above, so awaiting it separately bought
+      // nothing but a round trip.
+      getCheckins(from, to),
     ]);
-    const checkinsByDay = await getCheckins(from, to);
 
     const index = buildTradeDayIndex(trades, tzOfRow);
     const equityOf = bookEquityLadder(index, accounts, cashEvents, tzFor);

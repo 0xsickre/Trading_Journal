@@ -17,10 +17,12 @@ import type { AccountUsage } from "@/lib/journal/account-usage";
  */
 
 const deleteAccountMock = vi.fn();
+const countAccountUsageMock = vi.fn();
 vi.mock("@/app/(app)/settings/actions", () => ({
   updateAccount: vi.fn(),
   addAccount: vi.fn(),
   deleteAccount: (...a: unknown[]) => deleteAccountMock(...a),
+  countAccountUsage: (...a: unknown[]) => countAccountUsageMock(...a),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -66,18 +68,21 @@ const usage = (o: Partial<AccountUsage> = {}): AccountUsage => ({
 
 const TWO = [account(), account({ id: "acc-2", name: "New Account" })];
 
+/** The counts now arrive when the dialog opens, so each test states its own. */
+const willCount = (u: AccountUsage) =>
+  countAccountUsageMock.mockResolvedValue({ ok: true, usage: u });
+
 beforeEach(() => {
   deleteAccountMock.mockReset();
   deleteAccountMock.mockResolvedValue({ ok: true });
+  countAccountUsageMock.mockReset();
+  willCount(usage());
 });
 
 describe("the last account cannot be deleted from the screen", () => {
   it("offers no Delete button when only one account exists", () => {
     render(
-      <AccountSettings
-        accounts={[account()]}
-        usage={{ "acc-1": usage() }}
-      />,
+      <AccountSettings accounts={[account()]} />,
     );
     expect(
       screen.queryByRole("button", { name: /^Delete$/ }),
@@ -86,10 +91,7 @@ describe("the last account cannot be deleted from the screen", () => {
 
   it("offers one per account once there are two", () => {
     render(
-      <AccountSettings
-        accounts={TWO}
-        usage={{ "acc-1": usage(), "acc-2": usage() }}
-      />,
+      <AccountSettings accounts={TWO} />,
     );
     expect(screen.getAllByRole("button", { name: /^Delete$/ })).toHaveLength(2);
   });
@@ -99,10 +101,7 @@ describe("an empty account is a tidy-up, a full one is a decision", () => {
   it("an empty account asks for no typing", async () => {
     const user = userEvent.setup();
     render(
-      <AccountSettings
-        accounts={TWO}
-        usage={{ "acc-1": usage(), "acc-2": usage() }}
-      />,
+      <AccountSettings accounts={TWO} />,
     );
     await user.click(screen.getAllByRole("button", { name: /^Delete$/ })[1]);
 
@@ -116,15 +115,10 @@ describe("an empty account is a tidy-up, a full one is a decision", () => {
   });
 
   it("an account with trades prints the counts and locks the button", async () => {
+    willCount(usage({ trades: 21, cashEvents: 2, importBatches: 1 }));
     const user = userEvent.setup();
     render(
-      <AccountSettings
-        accounts={TWO}
-        usage={{
-          "acc-1": usage({ trades: 21, cashEvents: 2, importBatches: 1 }),
-          "acc-2": usage(),
-        }}
-      />,
+      <AccountSettings accounts={TWO} />,
     );
     await user.click(screen.getAllByRole("button", { name: /^Delete$/ })[0]);
 
@@ -148,16 +142,11 @@ describe("an empty account is a tidy-up, a full one is a decision", () => {
   });
 
   it("a count that failed to read takes the careful path, not the empty one", async () => {
+    // -1 is the sentinel getAccountUsage returns for a failed count.
+    willCount(usage({ trades: -1, cashEvents: -1, importBatches: -1 }));
     const user = userEvent.setup();
     render(
-      <AccountSettings
-        accounts={TWO}
-        usage={{
-          // -1 is the sentinel getAccountUsage returns for a failed count.
-          "acc-1": usage({ trades: -1, cashEvents: -1, importBatches: -1 }),
-          "acc-2": usage(),
-        }}
-      />,
+      <AccountSettings accounts={TWO} />,
     );
     await user.click(screen.getAllByRole("button", { name: /^Delete$/ })[0]);
 
@@ -167,9 +156,12 @@ describe("an empty account is a tidy-up, a full one is a decision", () => {
     expect(screen.getByRole("button", { name: /Delete account/ })).toBeDisabled();
   });
 
-  it("an account missing from the usage map is treated as unknown, not empty", async () => {
+  it("a count that never comes back is treated as unknown, not empty", async () => {
+    // The state the dialog is in for its first frame, every time: asked, not
+    // yet answered. It must read as "unknown", never as "empty".
+    countAccountUsageMock.mockReturnValue(new Promise(() => {}));
     const user = userEvent.setup();
-    render(<AccountSettings accounts={TWO} usage={{}} />);
+    render(<AccountSettings accounts={TWO} />);
     await user.click(screen.getAllByRole("button", { name: /^Delete$/ })[0]);
 
     expect(screen.getByText(/could not be counted/)).toBeInTheDocument();

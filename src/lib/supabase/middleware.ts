@@ -5,6 +5,18 @@ import type { Database } from "./types";
 /**
  * Refreshes the Supabase auth session on every request and guards routes.
  * Unauthenticated users are redirected to /login (except for public paths).
+ *
+ * The check is `getClaims()`, not `getUser()`, and that is the single biggest
+ * latency decision in the app. This runs on EVERY request the matcher lets
+ * through — every navigation, every server action, and every RSC prefetch Next
+ * fires when a sidebar link is hovered. `getUser()` made each of those a round
+ * trip to Supabase's auth server: measured at 150–250 ms, before Next had even
+ * begun to render. `getClaims()` verifies the JWT signature against the
+ * project's public key locally.
+ *
+ * Safe because the project signs with an asymmetric key (ES256) — see the long
+ * note in `user.ts` for why this is verification rather than a naive decode,
+ * and for the one thing it gives up (a token stays valid until it expires).
  */
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -30,10 +42,10 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // IMPORTANT: do not run code between createServerClient and getUser().
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // IMPORTANT: do not run code between createServerClient and the auth call —
+  // the cookie plumbing above has to be the last thing that touched the client.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims?.sub ? data.claims : null;
 
   const { pathname } = request.nextUrl;
   const isPublic =

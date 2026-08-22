@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { FieldDef } from "./field-def-types";
 
@@ -7,13 +8,20 @@ export type { FieldDef } from "./field-def-types";
 /**
  * User-defined trade fields, in render order.
  *
+ * Memoized per request with React `cache`: `activeOnly` is part of the key, so
+ * the two callers that ask for the same value in one render — the Settings page
+ * and `getAllOptionUsage` inside it — share a single read instead of each
+ * making its own.
+ *
  * `activeOnly` is what the FORM wants: a deactivated field must not be offered
  * for new input. Everything that READS history — reports, the mentor pack, the
  * CSV export — must pass `false`, because trades taken while the field was
  * active still carry its values and hiding the definition would turn recorded
  * data into an unlabelled key.
  */
-export async function getFieldDefs(activeOnly = true): Promise<FieldDef[]> {
+export const getFieldDefs = cache(async function getFieldDefs(
+  activeOnly = true,
+): Promise<FieldDef[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("tj_field_defs")
@@ -36,4 +44,4 @@ export async function getFieldDefs(activeOnly = true): Promise<FieldDef[]> {
       is_active: d.is_active,
       show_when: d.show_when as FieldDef["show_when"],
     }));
-}
+});

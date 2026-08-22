@@ -8,7 +8,6 @@ import { ListManager } from "@/components/journal/list-manager";
 import { InstrumentManager } from "@/components/journal/instrument-manager";
 import { AccountSettings } from "@/components/journal/account-settings";
 import { DangerZone } from "@/components/journal/danger-zone";
-import { getAccountUsage } from "@/lib/journal/account-usage-queries";
 import { CashEventsManager } from "@/components/journal/cash-events-manager";
 import { TrackerRuleManager } from "@/components/journal/tracker-rule-manager";
 import { getTrackerRules } from "@/lib/journal/tracker/queries";
@@ -45,10 +44,6 @@ export default async function SettingsPage() {
       countQuarantinedEvents(),
     ]);
 
-  // Counted here rather than when the delete dialog opens: the confirmation has
-  // to state what it is about to destroy at the moment it is read, and a dialog
-  // that fetches on open shows an empty list first and the truth a beat later.
-  const accountUsage = await getAccountUsage(accounts.map((a) => a.id));
 
   // The Tags table shows a "Used" count on every row, so it has to be there
   // when the table first paints — one batched read rather than a head count per
@@ -114,7 +109,7 @@ export default async function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="accounts" className="space-y-6">
-          <AccountSettings accounts={accounts} usage={accountUsage} />
+          <AccountSettings accounts={accounts} />
           {/* On the Accounts tab, not a seventh one: this is where someone
               already is when they discover they cannot remove what they made. */}
           <DangerZone />

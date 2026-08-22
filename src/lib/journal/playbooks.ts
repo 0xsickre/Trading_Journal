@@ -41,15 +41,25 @@ export async function getPlaybooks(
     includeDeleted?: boolean;
     activeOnly?: boolean;
     /**
-     * Answers the caller has already loaded.
+     * Answers the caller has already loaded, or the promise of them.
      *
      * `tj_position_rules` holds one row per rule per trade and is the
      * fastest-growing table in the schema. `/reports` and the dashboard both
      * need the raw answers AND the per-rule counts, and used to drain the whole
      * table twice per render — once here and once through `getPositionRules`.
      * Handing the map in derives the counts from rows already in memory.
+     *
+     * A PROMISE is accepted so the caller does not have to await first. It used
+     * to: the dashboard held `await getPositionRules()` alone above its
+     * `Promise.all` purely to have a map to pass here, which bought the single
+     * drain at the price of a serial round trip. Passing the unresolved promise
+     * keeps the single drain and lets this function's own three reads start
+     * immediately — the await lands inside the `Promise.all` below, where it
+     * costs nothing.
      */
-    positionRules?: Map<string, PositionRule[]>;
+    positionRules?:
+      | Map<string, PositionRule[]>
+      | Promise<Map<string, PositionRule[]>>;
   } = {},
 ): Promise<Playbook[]> {
   const supabase = await createClient();
@@ -77,7 +87,9 @@ export async function getPlaybooks(
         .order("id")
         .range(from, to),
     ),
-    positionRules ? countAnswersByRule(positionRules) : ruleAnswerCounts(),
+    positionRules
+      ? Promise.resolve(positionRules).then(countAnswersByRule)
+      : ruleAnswerCounts(),
   ]);
 
   const byId = new Map<string, PlaybookRule>();

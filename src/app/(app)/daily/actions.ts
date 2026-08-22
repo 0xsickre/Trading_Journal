@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/supabase/user";
 import { THESIS_STATES, TOUCHED_STATES } from "@/lib/journal/position-checkin";
 
 // Eight fields, down from twenty-one. What left did not move here — it moved to
@@ -48,9 +49,7 @@ export async function saveDailyReport(
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Nisi prijavljen." };
 
   const { data: activeGoal } = await supabase
@@ -117,9 +116,7 @@ export async function savePositionCheckin(
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Nisi prijavljen." };
 
   const { data: existing } = await supabase
@@ -160,9 +157,7 @@ export async function saveFocusGoal(
   if (!text) return { ok: false, error: "Fokus cilj ne može biti prazan." };
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Nisi prijavljen." };
 
   const today = new Date().toISOString().slice(0, 10);
