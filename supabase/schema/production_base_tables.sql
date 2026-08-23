@@ -22,14 +22,25 @@
 --
 -- Ovaj fajl opisuje tabele kakve su DANAS — sa svim kolonama koje su kasnije
 -- migracije dodale. Postavljen kao prva migracija, sudarao bi se sa svakim
--- kasnijim `ADD COLUMN` pri svežem podizanju baze. Vraćanje unazad do stanja
--- pre prve migracije nije moguće pošteno: dvadesetak kolona koje su usput
--- obrisane više nema nigde, pa im se tipovi ne mogu utvrditi, samo pogoditi.
+-- kasnijim `ADD COLUMN` pri svežem podizanju baze.
+--
+-- Ovde je ranije pisalo i da vraćanje unazad, do stanja pre prve migracije,
+-- nije moguće pošteno — jer kolonama koje su usput obrisane nema traga. Ispalo
+-- je da ima: produkcija čuva DDL svake migracije u
+-- `supabase_migrations.schema_migrations`, uključujući i onih šest koje su
+-- prethodile repou. Odatle je doslovno preuzet
+-- `20260719100000_baseline_schema.sql`, pa nijedan tip nije pogođen.
 --
 -- Zato je ovo `schema/`, a ne `migrations/`: **merodavan zapis** onoga što
 -- migracije ne pokrivaju, sinhronizovan sa produkcijom introspekcijom, a ne
--- korak koji se pušta. Za podizanje nove baze koristi Supabase branch, koji
--- kopira šemu produkcije.
+-- korak koji se pušta.
+--
+-- Za podizanje nove baze Supabase branch VIŠE NIJE POTREBAN:
+-- `20260719100000_baseline_schema.sql` sada pravi ovih deset tabela pre svih
+-- ostalih migracija, pa `supabase/migrations/` po redu podiže praznu bazu do
+-- današnje šeme. Taj fajl opisuje stanje PRE prve migracije u repou, a ovaj
+-- opisuje stanje DANAS — zato oba postoje i zato se ne mogu zameniti jedan
+-- drugim.
 --
 -- Izvučeno iz projekta `hjwvhzcszhjhpocfjatm` (Trading Journal), PostgreSQL 17.6.
 -- Ako se bazna tabela ikad izmeni, izmeni se i ovde — i to više nije samo
