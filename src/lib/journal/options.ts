@@ -1,7 +1,12 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { OptionItem, OptionList, OptionsMap } from "./types";
-import type { FieldDefPhase } from "./field-def-types";
+import {
+  selectionOfFieldType,
+  type CategorySelection,
+  type FieldDefPhase,
+  type FieldDefType,
+} from "./field-def-types";
 
 export type { OptionList, OptionsMap } from "./types";
 
@@ -28,12 +33,18 @@ export async function getListsWithItems(
     // When each category is asked for. It is stored on the FIELD that renders
     // the list, because that is what the form reads — the list itself is only a
     // set of values. Joined here so Settings can show and edit it in one place.
-    supabase.from("tj_field_defs").select("list_key,show_phase"),
+    supabase.from("tj_field_defs").select("list_key,show_phase,field_type"),
   ]);
 
   const phaseByKey = new Map<string, FieldDefPhase>();
+  const selectionByKey = new Map<string, CategorySelection | null>();
   for (const d of defs ?? []) {
-    if (d.list_key) phaseByKey.set(d.list_key, d.show_phase as FieldDefPhase);
+    if (!d.list_key) continue;
+    phaseByKey.set(d.list_key, d.show_phase as FieldDefPhase);
+    selectionByKey.set(
+      d.list_key,
+      selectionOfFieldType(d.field_type as FieldDefType),
+    );
   }
 
   const byList = new Map<string, OptionItem[]>();
@@ -55,6 +66,7 @@ export async function getListsWithItems(
   return (lists ?? []).map((l) => ({
     ...l,
     show_phase: phaseByKey.get(l.key) ?? null,
+    selection: selectionByKey.get(l.key) ?? null,
     items: byList.get(l.id) ?? [],
   }));
 }

@@ -45,6 +45,7 @@ import {
   reorderOptions,
   setListColor,
   setListPhase,
+  setListSelection,
   setOptionColor,
   toggleOptionActive,
   type ListUsage,
@@ -57,8 +58,10 @@ import {
   type DragTargetProps,
 } from "@/components/journal/drag-order";
 import {
+  CATEGORY_SELECTION_LABELS,
   FIELD_DEF_PHASE_LABELS,
   FIELD_DEF_PHASES,
+  type CategorySelection,
   type FieldDefPhase,
 } from "@/lib/journal/field-def-types";
 import { usageKey } from "@/lib/journal/option-usage";
@@ -97,6 +100,51 @@ function ColorDot({ color, className }: { color: string | null; className?: stri
  * they could not rename or remove. The question they actually have is when they
  * want to be asked, and unlike the group, this one is theirs to set.
  */
+/**
+ * One tag at a time, or several.
+ *
+ * Worded as the trader sees it rather than as it is stored. Underneath this is
+ * the field's type — `tags` or `select` — but "select" and "tags" are names for
+ * two React components, not for a decision anybody makes about their own
+ * method. The decision is whether a trade can carry two of these at once.
+ */
+function SelectionPicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: CategorySelection;
+  onChange: (next: CategorySelection) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium">Pick</label>
+      <Select
+        value={value}
+        onValueChange={(v) => onChange(v as CategorySelection)}
+        disabled={disabled}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {(["multi", "single"] as const).map((m) => (
+            <SelectItem key={m} value={m}>
+              {CATEGORY_SELECTION_LABELS[m]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-muted-foreground">
+        {value === "multi"
+          ? "The list stays open and every row carries a tick, so several can be chosen in one go."
+          : "One click closes the list — for values that exclude each other, like a bias."}
+      </p>
+    </div>
+  );
+}
+
 function PhasePicker({
   value,
   onChange,
@@ -203,6 +251,9 @@ function CategoryRow({
   const [name, setName] = useState(list.label);
   const [color, setColor] = useState<string | null>(list.color);
   const [phase, setPhase] = useState<FieldDefPhase>(list.show_phase ?? "always");
+  const [selection, setSelection] = useState<CategorySelection>(
+    list.selection ?? "multi",
+  );
   const [usage, setUsage] = useState<ListUsage | null>(null);
   const [, startCount] = useTransition();
 
@@ -235,8 +286,14 @@ function CategoryRow({
         }
         // Only when a field actually reads this list; `show_phase` is null
         // for the categories the form wires in by code.
-        if (list.show_phase != null && phase !== list.show_phase)
-          return setListPhase(list.id, phase);
+        if (list.show_phase != null && phase !== list.show_phase) {
+          const res = await setListPhase(list.id, phase);
+          if (!res.ok) return res;
+        }
+        // Same guard as the phase: `null` means the form picks this category
+        // itself, and there is no field row to change.
+        if (list.selection != null && selection !== list.selection)
+          return setListSelection(list.id, selection);
         return { ok: true as const };
       },
       () => setEditOpen(false),
@@ -279,6 +336,7 @@ function CategoryRow({
                 setName(list.label);
                 setColor(list.color);
                 setPhase(list.show_phase ?? "always");
+                setSelection(list.selection ?? "multi");
                 setEditOpen(true);
               }}
             >
@@ -317,16 +375,24 @@ function CategoryRow({
               </div>
               {list.show_phase == null ? (
                 <p className="text-xs text-muted-foreground">
-                  Where this one appears is part of the form — the exit reason
-                  sits with the exit, the miss reason only on a missed setup.
-                  Categories you add yourself choose their own.
+                  Where this one appears, and how it is picked, are part of the
+                  form — the exit reason sits with the exit, the miss reason only
+                  on a missed setup. Categories you add yourself choose their
+                  own.
                 </p>
               ) : (
-                <PhasePicker
-                  value={phase}
-                  onChange={setPhase}
-                  disabled={pending}
-                />
+                <>
+                  <SelectionPicker
+                    value={selection}
+                    onChange={setSelection}
+                    disabled={pending}
+                  />
+                  <PhasePicker
+                    value={phase}
+                    onChange={setPhase}
+                    disabled={pending}
+                  />
+                </>
               )}
             </div>
             <DialogFooter>
@@ -437,18 +503,20 @@ function NewCategoryDialog() {
   const [name, setName] = useState("");
   const [color, setColor] = useState<string | null>(PALETTE[0]);
   const [phase, setPhase] = useState<FieldDefPhase>("always");
+  const [selection, setSelection] = useState<CategorySelection>("multi");
 
   function create() {
     const trimmed = name.trim();
     if (!trimmed) return;
     run(
       async () => {
-        const res = await addList(trimmed, trimmed, null, phase);
+        const res = await addList(trimmed, trimmed, null, phase, selection);
         return res;
       },
       () => {
         setName("");
         setPhase("always");
+        setSelection("multi");
         setOpen(false);
         toast.success("Category created");
       },
@@ -482,6 +550,11 @@ function NewCategoryDialog() {
               <label className="text-sm font-medium">Colour</label>
               <ColorPicker value={color} onPick={setColor} disabled={pending} />
             </div>
+            <SelectionPicker
+              value={selection}
+              onChange={setSelection}
+              disabled={pending}
+            />
             <PhasePicker value={phase} onChange={setPhase} disabled={pending} />
           </div>
           <DialogFooter>

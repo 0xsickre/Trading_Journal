@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
-import type { ComponentProps, DragEvent, HTMLAttributes } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -9,7 +8,6 @@ import {
   ArchiveRestore,
   ChevronDown,
   ChevronUp,
-  GripVertical,
   Lock,
   MoreVertical,
   Pencil,

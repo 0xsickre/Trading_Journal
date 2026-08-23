@@ -170,6 +170,22 @@ export function PlaybookChecklist({
         </Select>
       </div>
 
+      {/* The playbook's own definition of an A+ setup, under the picker.
+          It lived on the trade form as a note on the tag group, and that made
+          it disappear the moment the trader had no plan-phase category left —
+          the categories are their own rows now, so that group is only drawn
+          when one exists. It belongs here regardless: this is where the book is
+          chosen and where the grade it defines is shown, and it reads before
+          the rules rather than beside a picker three groups away.
+
+          Above the "no rules yet" line deliberately — a book can define what
+          A+ means before it has a single rule linked. */}
+      {book?.a_plus_criteria && (
+        <p className="text-sm text-muted-foreground">
+          {`A+ for ${book.name}: ${book.a_plus_criteria}`}
+        </p>
+      )}
+
       {book == null ? (
         <p className="text-sm text-muted-foreground">
           Pick a playbook to get the checklist of its rules. Every rule carries

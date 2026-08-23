@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildPositionPatch, mergeCustom } from "./trade-fields";
 import { flattenCustom } from "./field-values";
 import type { FieldDef } from "./field-def-types";
+import { SEEDED_FIELD_DEFS } from "./field-defs.fixture";
 
 const def = (over: Partial<FieldDef> & { key: string }): FieldDef => ({
   id: over.key,
@@ -20,6 +21,10 @@ const DEFS: FieldDef[] = [
   def({ key: "confluences", field_type: "tags" }),
   def({ key: "conviction_note", field_type: "textarea" }),
   def({ key: "atr_at_entry", field_type: "number" }),
+  // The seeded categories that own a real column. They are definition rows like
+  // any other now, and the routing test below is precisely about the fact that
+  // being a definition no longer implies living in the `custom` bag.
+  ...SEEDED_FIELD_DEFS,
 ];
 
 describe("buildPositionPatch", () => {

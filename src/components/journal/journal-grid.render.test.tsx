@@ -488,13 +488,20 @@ describe("bulk add tag", () => {
     const user = userEvent.setup({ delay: null });
     await selectAllAndOpenTagDialog(user);
 
+    // Read the CHIP, not any "FVG" on screen. The list stays open after a pick
+    // now — that is what makes it a multi-select — so the tag is on screen
+    // twice, once as the chip and once as the ticked row behind it.
+    const chip = () =>
+      screen.queryAllByText("FVG").find((el) => el.closest("[data-slot='badge']"));
+
     await user.type(screen.getByPlaceholderText(/Type to search/), "FVG");
     await user.click(await screen.findByRole("option", { name: "FVG" }));
-    expect(screen.getByText("FVG")).toBeInTheDocument();
+    expect(chip()).toBeDefined();
 
     await user.click(screen.getByRole("combobox"));
     await user.click(await screen.findByRole("option", { name: "Mistake" }));
 
+    expect(chip()).toBeUndefined();
     expect(screen.queryByText("FVG")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
   });

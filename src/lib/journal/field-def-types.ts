@@ -88,3 +88,34 @@ export function slugifyFieldKey(label: string): string {
   // otherwise produce a key the insert rejects.
   return /^[a-z]/.test(base) ? base : `f_${base}`.replace(/_+$/, "").slice(0, 49);
 }
+
+/**
+ * How many tags a category lets you pick.
+ *
+ * Stored as the field's `field_type` — `tags` for several, `select` for one —
+ * because that is what the form already branches on to choose a picker. This
+ * is the same fact under a name the trader recognises: Settings asks "one or
+ * several", not "select or tags".
+ */
+export type CategorySelection = "single" | "multi";
+
+export const CATEGORY_SELECTION_LABELS: Record<CategorySelection, string> = {
+  single: "One at a time",
+  multi: "Several at once",
+};
+
+/** The field type a selection mode is stored as. */
+export function fieldTypeForSelection(mode: CategorySelection): FieldDefType {
+  return mode === "multi" ? "tags" : "select";
+}
+
+/** …and back, for the picker that has to show what is stored. */
+export function selectionOfFieldType(
+  type: FieldDefType,
+): CategorySelection | null {
+  if (type === "tags") return "multi";
+  if (type === "select") return "single";
+  // A textarea, a number, a URL — a category that is not a picker at all, and
+  // not a thing this control can speak for.
+  return null;
+}

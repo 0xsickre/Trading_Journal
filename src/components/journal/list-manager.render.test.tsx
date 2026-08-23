@@ -35,6 +35,8 @@ vi.mock("@/app/(app)/settings/actions", () => ({
   reorderLists: (...a: unknown[]) => reorderLists(...a),
   reorderOptions: (...a: unknown[]) => reorderOptions(...a),
   setListColor: (...a: unknown[]) => setListColor(...a),
+  setListPhase: vi.fn(async () => ({ ok: true as const })),
+  setListSelection: vi.fn(async () => ({ ok: true as const })),
   setOptionColor: (...a: unknown[]) => setOptionColor(...a),
   toggleOptionActive: vi.fn(async () => ({ ok: true as const })),
 }));
@@ -65,6 +67,7 @@ function list(over: Partial<OptionList> = {}): OptionList {
     category: "Context",
     color: "#22c55e",
     show_phase: "always",
+    selection: "multi",
     sort_order: 0,
     items: [item()],
     ...over,

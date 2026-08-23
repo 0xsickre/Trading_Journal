@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   Popover,
@@ -80,7 +80,16 @@ export function TagMultiSelect({
   }
 
   const selected = value ?? [];
-  const available = items.filter((o) => !selected.includes(o.value));
+  /**
+   * EVERY option, chosen or not.
+   *
+   * The chosen ones used to be filtered out, which is what a picker that closes
+   * on each pick wants — you never see the list again to notice they are gone.
+   * A list that stays open has to show the whole set with the chosen ones
+   * TICKED, or the trader cannot tell what is already on the trade, cannot
+   * un-tick from here, and watches rows silently vanish as they click.
+   */
+  const available = items;
   const q = query.trim().toLowerCase();
   const filtered = q
     ? available.filter(
@@ -94,6 +103,10 @@ export function TagMultiSelect({
   );
   const canCreate = q.length > 0 && !exactMatch && !selected.some((t) => t.toLowerCase() === q);
 
+  /**
+   * Add a tag and close, for the paths that finish a thought: typing a name and
+   * pressing Enter, or creating one that did not exist.
+   */
   function addTag(tag: string) {
     const t = tag.trim();
     if (!t || selected.includes(t)) return;
@@ -102,13 +115,35 @@ export function TagMultiSelect({
     setOpen(false);
   }
 
+  /**
+   * Ticking an option in the open list — add or remove, and STAY OPEN.
+   *
+   * This is the whole difference between a multi-select and a single one, and
+   * the list used to close on every pick like a single-select. Choosing three
+   * tags meant opening the same list three times, and nothing on screen said
+   * which were already chosen once it was open: picking one that was already on
+   * the trade did nothing at all, silently.
+   *
+   * So it toggles, and every row carries a tick. The query is cleared because
+   * the filter has done its job, and focus goes back to the input so typing
+   * narrows the list again without a click.
+   */
+  function toggleOption(opt: OptionItem) {
+    const t = opt.value.trim();
+    if (!t) return;
+    onChange(
+      selected.includes(t) ? selected.filter((x) => x !== t) : [...selected, t],
+    );
+    setQuery("");
+    inputRef.current?.focus();
+  }
+
   function removeTag(tag: string) {
     onChange(selected.filter((t) => t !== tag));
   }
 
   function selectOption(opt: OptionItem) {
-    addTag(opt.value);
-    inputRef.current?.focus();
+    toggleOption(opt);
   }
 
   function createTag(label: string) {
@@ -213,6 +248,12 @@ export function TagMultiSelect({
           className="w-[var(--radix-popover-trigger-width)] p-0"
           align="start"
           onOpenAutoFocus={(e) => e.preventDefault()}
+          // Ticking a row puts focus back on the input so typing keeps
+          // narrowing the list — but the input is the popover's ANCHOR, which
+          // sits outside its content, so Radix read that as focus leaving and
+          // closed the list on every tick. It closes on a click outside or on
+          // Escape, both of which are pointer/key paths and unaffected.
+          onFocusOutside={(e) => e.preventDefault()}
         >
           <Command shouldFilter={false}>
             <CommandList>
@@ -227,6 +268,17 @@ export function TagMultiSelect({
                       value={opt.value}
                       onSelect={() => selectOption(opt)}
                     >
+                      {/* Always rendered, visible only when chosen: an icon
+                          that appears and disappears would shift every label
+                          beside it as the list is ticked through. */}
+                      <Check
+                        className={cn(
+                          "mr-2 size-4 shrink-0",
+                          selected.includes(opt.value)
+                            ? "opacity-100"
+                            : "opacity-0",
+                        )}
+                      />
                       {opt.label}
                     </CommandItem>
                   ))}

@@ -2,7 +2,10 @@
 
 import type { Database } from "@/lib/supabase/types";
 import type { TradeImageKind } from "./tradingview-snapshot";
-import type { FieldDefPhase } from "./field-def-types";
+import type {
+  CategorySelection,
+  FieldDefPhase,
+} from "./field-def-types";
 
 export type OptionItem = {
   id: string;
@@ -38,6 +41,11 @@ export type OptionList = {
    * control that silently does nothing.
    */
   show_phase: FieldDefPhase | null;
+  /**
+   * One tag at a time, or several — `null` for the same reason `show_phase` is:
+   * no field def reads the list, so the form's own picker decides.
+   */
+  selection: CategorySelection | null;
   sort_order: number;
   items: OptionItem[];
 };

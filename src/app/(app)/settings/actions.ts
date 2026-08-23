@@ -20,9 +20,11 @@ import { getAllFormFields } from "@/lib/journal/form-config";
 import { RESET_PHRASE } from "@/lib/journal/reset-phrase";
 import { isValidTimeZone, DEFAULT_TZ } from "@/lib/journal/time";
 import {
+  fieldTypeForSelection,
   FIELD_DEF_PHASES,
   FIELD_DEF_TYPES,
   slugifyFieldKey,
+  type CategorySelection,
   type FieldDefPhase,
   type FieldDefType,
 } from "@/lib/journal/field-def-types";
@@ -248,6 +250,8 @@ export async function addList(
   category: string | null,
   /** When the trade form asks for it. Defaults to every phase. */
   showPhase: FieldDefPhase = "always",
+  /** One tag at a time, or several. Several is the common case for a tag. */
+  selection: CategorySelection = "multi",
 ) {
   const supabase = await createClient();
   const cleanKey = key
@@ -274,16 +278,17 @@ export async function addList(
   // the two could drift: a category with no field never appeared anywhere, and
   // the screen gave no hint that a step was missing.
   //
-  // `tags` rather than `select`, because a category is a set you pick SEVERAL
-  // of — the shape TradeZella's tag pickers have and the shape the built-in
-  // `technical_tag` and `mistake` already use.
+  // The trader's choice, defaulting to several: a category is usually a set you
+  // pick more than one of, which is the shape `technical_tag` and `mistake`
+  // already have. One at a time is the right answer for a category whose values
+  // are mutually exclusive — a bias is bullish or bearish, not both.
   //
   // Failure here is reported but does not undo the list: the category exists
   // and is usable, and a retry is a click away, whereas rolling back would
   // throw away work over a second write the trader never asked about.
   const fieldRes = await addFieldDef({
     label: label.trim(),
-    field_type: "tags",
+    field_type: fieldTypeForSelection(selection),
     show_phase: showPhase,
     list_key: cleanKey,
     key: cleanKey,
@@ -391,6 +396,45 @@ export async function reorderLists(orderedIds: string[]) {
   if (failed?.error) return { ok: false as const, error: failed.error.message };
   revalidateOptions();
   return { ok: true as const };
+}
+
+/**
+ * One tag at a time, or several.
+ *
+ * Only the picker changes — the values already on trades are untouched, and
+ * that is worth stating because the two are stored differently. A `tags`
+ * category writes an ARRAY, a `select` writes a single string, so a category
+ * switched from several to one leaves old trades carrying more than one value.
+ * They keep them: the history recorded what it recorded, and rewriting it to
+ * fit a setting made later would be inventing a past. The form simply stops
+ * offering a second tag from here on.
+ */
+export async function setListSelection(
+  id: string,
+  selection: CategorySelection,
+) {
+  const supabase = await createClient();
+  const { data: list, error: readError } = await supabase
+    .from("tj_option_lists")
+    .select("key")
+    .eq("id", id)
+    .maybeSingle();
+  if (readError) return { ok: false, error: readError.message };
+  if (!list) return { ok: false, error: "Category not found." };
+
+  const { data: touched, error } = await supabase
+    .from("tj_field_defs")
+    .update({ field_type: fieldTypeForSelection(selection) })
+    .eq("list_key", list.key)
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+  if (!touched || touched.length === 0)
+    return {
+      ok: false,
+      error: "How this category is picked is fixed by the form.",
+    };
+  revalidateOptions();
+  return { ok: true };
 }
 
 /**

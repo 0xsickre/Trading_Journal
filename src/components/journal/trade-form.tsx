@@ -269,7 +269,6 @@ export function TradeForm({
     initial?.rule_answers ?? {},
   );
 
-  const activeBook = playbooks.find((p) => p.id === playbookId) ?? null;
 
   /**
    * Picking a playbook offers its default risk — into an EMPTY field only.
@@ -968,10 +967,6 @@ export function TradeForm({
                 )}
 
                 {tab.groups
-                  // The miss reason only exists for a missed setup; on every
-                  // other trade the group would be a heading over one dead
-                  // select.
-                  .filter((g) => g.id !== "plan_review" || isMissed)
                   .map((group) => (
                     <FormGroupSection
                       key={group.id}
@@ -1004,19 +999,18 @@ export function TradeForm({
                             }
                           : undefined
                       }
-                      // Two notes, one slot. On the plan tab: the playbook's own
-                      // A+ definition, next to the grade it grades. An A+ label
-                      // that changes nothing about size or management is
-                      // decoration; having the criterion in front of you while
-                      // you pick the grade is what makes it a judgement instead
-                      // of a mood. On the execution tab: what the plan promised
-                      // against what the exit delivered.
+                      // What the plan promised against what the exit
+                      // delivered, on the outcome group where both are read.
+                      //
+                      // The plan tab used to put the playbook's A+ definition
+                      // in this slot, hung on the tag group. That group is
+                      // built from the trader's own categories now, so it is
+                      // absent whenever none of them shows in the plan phase —
+                      // and the criterion went with it. It sits in
+                      // `PlaybookChecklist` instead, under the picker and above
+                      // the grade it defines.
                       groupNote={
-                        tab.id === "plan" &&
-                        group.id === TAGS_GROUP_ID &&
-                        activeBook?.a_plus_criteria ? (
-                          `A+ for ${activeBook.name}: ${activeBook.a_plus_criteria}`
-                        ) : tab.id === "execution" && group.id === "outcome" ? (
+                        tab.id === "execution" && group.id === "outcome" ? (
                           <PlanVsRealized
                             planned={metrics.plannedReward}
                             realized={metrics.r}

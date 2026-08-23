@@ -11,6 +11,7 @@ import { getMetric } from "./reports/metrics";
 import { excursionFromTrade } from "./excursion";
 import type { PositionStat, TradeRow } from "./types";
 import type { Account } from "./types";
+import { SEEDED_FIELD_DEFS } from "./field-defs.fixture";
 
 /**
  * ONE TRADE, ALL THE WAY THROUGH.
@@ -64,7 +65,10 @@ describe("one trade, from form values to a report row", () => {
     trade_journal_notes: "  sweep into FVG  ",
   };
 
-  const patch = buildPositionPatch(formValues);
+  // With the seeded categories, because `exit_reason` and `technical_tags` are
+  // definition rows now — without them the save path has never heard of either
+  // key and drops both, which is not what a real account does.
+  const patch = buildPositionPatch(formValues, SEEDED_FIELD_DEFS);
 
   it("coerces the form's strings into numbers exactly once", () => {
     // The form works in strings because inputs do. Everything downstream does

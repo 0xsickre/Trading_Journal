@@ -8,6 +8,7 @@ import {
 } from "./form-config";
 import { TAGS_GROUP_ID } from "./form-config";
 import type { FieldDef } from "./field-def-types";
+import { SEEDED_FIELD_DEFS } from "./field-defs.fixture";
 
 const def = (over: Partial<FieldDef> & { key: string }): FieldDef => ({
   id: over.key,
@@ -22,7 +23,7 @@ const def = (over: Partial<FieldDef> & { key: string }): FieldDef => ({
 });
 
 describe("form skeleton", () => {
-  const tabs = buildFormTabs();
+  const tabs = buildFormTabs(SEEDED_FIELD_DEFS);
 
   it("delivers every user category to the form, in one flat group", () => {
     // The trap this replaced: `buildFormTabs` used to SKIP a definition whose
@@ -89,7 +90,7 @@ describe("form skeleton", () => {
 });
 
 describe("field inventory", () => {
-  const names = positionFieldNames();
+  const names = positionFieldNames(SEEDED_FIELD_DEFS);
 
   it("still carries every field the save path and the export rely on", () => {
     // Reordering the form must never silently drop a column: `positionFieldNames`
@@ -141,7 +142,7 @@ describe("field inventory", () => {
 });
 
 describe("risk plan reads as the arithmetic", () => {
-  const riskPlan = buildFormTabs()
+  const riskPlan = buildFormTabs(SEEDED_FIELD_DEFS)
     .find((t) => t.id === "plan")!
     .groups.find((g) => g.id === "risk_plan")!
     .fields.map((f) => f.name);
@@ -167,13 +168,17 @@ describe("mistake is a tags field, not a select", () => {
     // downstream — `buildPositionPatch` trimming into an array, the reports
     // dimension splitting it, the grid searching it — follows from membership
     // in this set. Asserting the set is asserting the route.
-    expect(arrayFieldNames()).toContain("mistake");
+    expect(arrayFieldNames(SEEDED_FIELD_DEFS)).toContain("mistake");
   });
 
-  it("spans both columns so the picker has room for several chips", () => {
-    const mistake = getAllFormFields().find((f) => f.name === "mistake")!;
+  it("is one column wide, like every category beside it", () => {
+    // It used to span both, from when it was declared in the form config and
+    // sat in a group of its own. As an ordinary category it shares the grid,
+    // and a single wide row among narrow ones is the thing that made
+    // `technical_tags` look out of place before it moved too.
+    const mistake = getAllFormFields(SEEDED_FIELD_DEFS).find((f) => f.name === "mistake")!;
     expect(mistake.type).toBe("tags");
-    expect(mistake.colSpan).toBe(2);
+    expect(mistake.colSpan).toBe(1);
   });
 });
 
@@ -182,10 +187,43 @@ describe("execution rating is a first-class form field, not a bespoke one", () =
     // Going through the config buys write permission, coercion and export
     // ordering for free; this asserts the coercion half, without which "4"
     // reaches Postgres as text.
-    expect(numericFieldNames()).toContain("execution_rating");
+    expect(numericFieldNames(SEEDED_FIELD_DEFS)).toContain("execution_rating");
   });
 
   it("is writable to its own column", () => {
-    expect(positionFieldNames()).toContain("execution_rating");
+    expect(positionFieldNames(SEEDED_FIELD_DEFS)).toContain("execution_rating");
+  });
+});
+
+describe("which tab a category is asked on", () => {
+  const namesIn = (tabId: "plan" | "execution", phase?: "planned" | "active" | "missed") =>
+    buildFormTabs(SEEDED_FIELD_DEFS, phase)
+      .find((t) => t.id === tabId)
+      ?.groups.find((g) => g.id === TAGS_GROUP_ID)
+      ?.fields.map((f) => f.name) ?? [];
+
+  it("asks the review questions on the review tab", () => {
+    // `active` means "answerable only once you are in the trade", and that is
+    // a review question. All three sat on Execution & Review before they became
+    // ordinary categories; when every category landed on Plan & Setup instead,
+    // the review tab asked for none of the things you review.
+    expect(namesIn("execution", "active")).toEqual(
+      expect.arrayContaining(["exit_reason", "mistake", "psychology_tags"]),
+    );
+    expect(namesIn("plan", "active")).not.toContain("exit_reason");
+  });
+
+  it("asks the setup questions on the setup tab", () => {
+    expect(namesIn("plan", "active")).toContain("technical_tags");
+    expect(namesIn("plan", "missed")).toContain("miss_reason");
+  });
+
+  it("never asks the same category twice", () => {
+    // Two inputs bound to one value is a way to type into one and watch the
+    // other. Asserted across every phase, since the split is phase-driven.
+    for (const phase of ["planned", "active", "missed"] as const) {
+      const all = [...namesIn("plan", phase), ...namesIn("execution", phase)];
+      expect(new Set(all).size).toBe(all.length);
+    }
   });
 });

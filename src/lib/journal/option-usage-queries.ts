@@ -188,7 +188,7 @@ export async function getAllOptionUsage(
   }
 
   const bump = (listKey: string, value: string) => {
-    const k = `${listKey}\u0000${value}`;
+    const k = usageKey(listKey, value);
     out[k] = (out[k] ?? 0) + 1;
   };
 

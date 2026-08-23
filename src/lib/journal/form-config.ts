@@ -17,6 +17,10 @@
 // lib/journal/field-values.ts, which is the only place that knows that.
 
 import {
+  isColumnBackedCategory,
+  MERGED_CATEGORY_LISTS,
+} from "./column-backed-fields";
+import {
   fieldAppliesToPhase,
   type FieldDef,
   type FieldDefPhase,
@@ -195,38 +199,13 @@ const BASE_TABS: FormTab[] = [
       {
         // The trader's own categories, flat and unheaded — `TAGS_GROUP_ID`.
         //
-        // `technical_tags` is declared here rather than in a group of its own
-        // because it IS one of these: a tags field over the `technical_tag`
-        // category, the same shape as every category the trader adds in
-        // Settings. It kept a hardcoded "Setup" heading only for historical
-        // reasons, and that heading was one of the four nobody could edit.
-        //
-        // Everything else in this group is appended by `buildFormTabs` from
-        // `tj_field_defs`, in the trader's own `sort_order`.
+        // Declared EMPTY. Every category in it, `technical_tags` included, now
+        // comes from `tj_field_defs` through `buildFormTabs`, in the trader's
+        // own order. It used to hold `technical_tags` as a hardcoded field, and
+        // that is exactly what made that one category unconfigurable: no phase,
+        // no single/multi, nothing in Settings but a rename.
         id: TAGS_GROUP_ID,
-        fields: [
-          // `setup_grade` USED TO BE ASKED HERE, as a dropdown of A+/A/B/C.
-          // It is gone because it was answered after the outcome was known —
-          // a loser remembered as a B, a winner as an A+ — and it is the
-          // dimension the dashboard groups by default, so the grade explained
-          // performance with a label partly taken from performance.
-          //
-          // It is now DERIVED from the playbook criteria ticked below, in
-          // `setup-score.ts`. The column survives to carry the trades graded by
-          // hand before this, and nothing writes it any more.
-          {
-            name: "technical_tags",
-            label: "Technical Tags",
-            type: "tags",
-            listKey: "technical_tag",
-            // One column, like every other category beside it. It used to span
-            // both, from when it sat alone under a "Setup" heading — in a grid
-            // of categories that made it the one row of a different size, and
-            // once it could be dragged anywhere in that grid the odd width
-            // followed it around.
-            placeholder: "Sweep, MSS, FVG, OB, OTE, SMT…",
-          },
-        ],
+        fields: [],
       },
       // The `notes` group stood here: one `trade_journal_notes` textarea,
       // placeholder "Why I am entering, stop and target logic…", the same
@@ -238,21 +217,6 @@ const BASE_TABS: FormTab[] = [
       // `thesis` wins that job: it is the field the daily position check-in
       // reads. The note keeps the Execution tab, where the same column means
       // the lesson AFTER the outcome — one question, one place.
-      {
-        // Rendered only for a missed setup, right above the lifecycle buttons
-        // that produced that state — the reason belongs next to the act.
-        id: "plan_review",
-        title: "Missed setup",
-        description: "Why the plan was never opened.",
-        fields: [
-          {
-            name: "miss_reason",
-            label: "Miss Reason",
-            type: "select",
-            listKey: "miss_reason",
-          },
-        ],
-      },
     ],
   },
   {
@@ -268,7 +232,6 @@ const BASE_TABS: FormTab[] = [
         id: "outcome",
         title: "How it exited",
         fields: [
-          { name: "exit_reason", label: "Exit Reason", type: "select", listKey: "exit_reason" },
           {
             // Rezultat prepisan sa brokerovog izvoda, umesto izvedenog iz cena.
             //
@@ -303,27 +266,24 @@ const BASE_TABS: FormTab[] = [
         ],
       },
       {
-        // `mistake` moved up out of Advanced. Of everything on this tab it is
-        // among the two or three fields the journal exists to collect; behind a
-        // disclosure triangle it was the one field nobody fills.
+        // The trader's own categories again, on the review side.
+        //
+        // Empty like its twin on the plan tab. Which of the two a category
+        // lands in follows from its PHASE and nothing else: `active` means the
+        // question is answerable only once you are in the trade — Exit Reason,
+        // Mistake, Psychology — and that is a review question, so it is asked
+        // on the review tab. See `tabForPhase`.
+        id: TAGS_GROUP_ID,
+        fields: [],
+      },
+      {
+        // What is LEFT here after `mistake` and `psychology_tags` became
+        // ordinary categories: the execution rating and the note. Both are
+        // judgements on the trade rather than tags drawn from a list, which is
+        // why neither followed them out.
         id: "psychology_notes",
         title: "Review",
         fields: [
-          {
-            // Više grešaka po trejdu. Jedan loš trejd retko ima jednu: ušlo se
-            // kasno JER se jurilo, pa se pomerio stop. Izbor između njih baca
-            // baš ono zbog čega polje postoji — koja se greška PONAVLJA.
-            //
-            // „None" se više ne nudi (deaktivirano u migraciji): prazan izbor
-            // već znači „bez greške", a chip „None" pored chipa „Late entry" je
-            // protivrečnost koju picker ne bi mogao da spreči.
-            name: "mistake",
-            label: "Mistake",
-            type: "tags",
-            listKey: "mistake",
-            colSpan: 2,
-            placeholder: "Late entry, Moved stop…",
-          },
           {
             // Koliko je trejd dobro ODIGRAN — ne koliko je bio profitabilan.
             // `setup_grade` je kvalitet setapa; ovo je jedino polje koje sudi
@@ -336,14 +296,6 @@ const BASE_TABS: FormTab[] = [
             name: "execution_rating",
             label: "Execution rating",
             type: "rating",
-          },
-          {
-            name: "psychology_tags",
-            label: "Psychology tags",
-            type: "tags",
-            listKeys: ["emotion", "discipline"],
-            colSpan: 2,
-            placeholder: "FOMO, Followed plan, Moved stop…",
           },
           {
             name: "trade_journal_notes",
@@ -364,11 +316,19 @@ function toFieldConfig(def: FieldDef): FieldConfig {
     label: def.label,
     type: def.field_type,
     listKey: def.list_key ?? undefined,
+    // The picker merges several lists for the one category that needs it.
+    listKeys: MERGED_CATEGORY_LISTS[def.key]
+      ? [...MERGED_CATEGORY_LISTS[def.key]]
+      : undefined,
     // Categories are one column each, so the group reads as an even grid. A
     // textarea is the exception and keeps both: it is prose, and half a row is
     // not enough of it to be worth writing in.
     colSpan: def.field_type === "textarea" ? 2 : 1,
-    custom: true,
+    // `false` for the five that own a real column on `tj_positions`. A
+    // definition normally means "the value lives in the `custom` bag", but
+    // `fieldValue` reads a column BEFORE the bag — so writing one of these to
+    // the bag would make it permanently invisible. See `column-backed-fields.ts`.
+    custom: !isColumnBackedCategory(def.key),
   };
 }
 
@@ -392,23 +352,49 @@ export function buildFormTabs(
   phase?: Exclude<FieldDefPhase, "always">,
   categoryOrder?: Readonly<Record<string, number>>,
 ): FormTab[] {
-  const extra = [...defs]
+  const applicable = [...defs]
     .filter((d) => phase == null || fieldAppliesToPhase(d.show_phase, phase))
-    .sort((a, b) => a.sort_order - b.sort_order || a.key.localeCompare(b.key))
-    .map(toFieldConfig);
+    .sort((a, b) => a.sort_order - b.sort_order || a.key.localeCompare(b.key));
+
+  const extraFor = (tabId: FormTab["id"]) =>
+    applicable.filter((d) => tabForPhase(d.show_phase) === tabId).map(toFieldConfig);
 
   return BASE_TABS.map((tab) => ({
     ...tab,
     groups: tab.groups
       .map((group) =>
         group.id === TAGS_GROUP_ID
-          ? { ...group, fields: orderCategories([...group.fields, ...extra], categoryOrder) }
+          ? {
+              ...group,
+              fields: orderCategories([...group.fields, ...extraFor(tab.id)], categoryOrder),
+            }
           : group,
       )
       // A group with no fields is a heading over nothing — and the categories
       // group has no heading at all, so an empty one would be a blank gap.
       .filter((group) => group.fields.length > 0),
   }));
+}
+
+/**
+ * Which tab a category is asked on, from its phase alone.
+ *
+ * `active` is the only one that moves. It means "answerable only once you are
+ * in the trade" — Exit Reason, Mistake, Psychology — and those are review
+ * questions, so they belong beside the realized numbers on Execution & Review.
+ * Everything else is asked while the trade is still being set up.
+ *
+ * This restores where those three sat before they became ordinary categories:
+ * `exit_reason` in the outcome group, `mistake` and `psychology_tags` beside
+ * the review notes. Without it every category landed on Plan & Setup, and the
+ * review tab asked for none of the things you review.
+ *
+ * A category is never on BOTH tabs. Two inputs bound to one value is a way to
+ * type into one and watch the other, and `always` categories are asked at plan
+ * time because that is when they are decided.
+ */
+function tabForPhase(showPhase: FieldDefPhase): FormTab["id"] {
+  return showPhase === "active" ? "execution" : "plan";
 }
 
 /**

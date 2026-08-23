@@ -5,6 +5,7 @@ import {
   optionUsageIsUnknown,
 } from "./option-usage";
 import { getAllFormFields } from "./form-config";
+import { SEEDED_FIELD_DEFS } from "./field-defs.fixture";
 
 describe("optionUsageIsEmpty / optionUsageIsUnknown", () => {
   it("treats a failed count as NOT empty", () => {
@@ -65,11 +66,17 @@ describe("optionFieldTargets — where a list's values land on a trade", () => {
     expect(optionFieldTargets(fields, "nothing_reads_this")).toEqual([]);
   });
 
-  it("finds the real built-in fields, not just the fixture", () => {
-    // Guards the mapping against `form-config.ts` drifting: if `exit_reason`
-    // ever stops being a select on its own column, the usage count and the
-    // rename cascade both go quietly blind and this is what notices.
-    const real = getAllFormFields([]);
+  it("finds the real seeded fields, not just the fixture", () => {
+    // Guards the mapping against the seed drifting: if `exit_reason` ever stops
+    // being a select on its own column, the usage count and the rename cascade
+    // both go quietly blind and this is what notices.
+    //
+    // These come from `tj_field_defs` now rather than from `form-config.ts`, so
+    // what is really under test is that the definition and
+    // `COLUMN_BACKED_CATEGORY_KEYS` still agree about where the value lands. If
+    // they ever disagree, the value is written to one place and counted in the
+    // other.
+    const real = getAllFormFields(SEEDED_FIELD_DEFS);
     expect(optionFieldTargets(real, "exit_reason")).toContainEqual({
       key: "exit_reason",
       custom: false,
@@ -85,7 +92,7 @@ describe("optionFieldTargets — where a list's values land on a trade", () => {
   it("finds nothing for the lists Settings hides, which is why they are dead", () => {
     // `direction` is computed and `setup_grade` is derived; neither is read
     // from a list any more. If either comes back, `settings-lists.ts` is lying.
-    const real = getAllFormFields([]);
+    const real = getAllFormFields(SEEDED_FIELD_DEFS);
     expect(optionFieldTargets(real, "direction")).toEqual([]);
     expect(optionFieldTargets(real, "setup_grade")).toEqual([]);
   });
