@@ -2,8 +2,5 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "next": true,
   "vitest": true,
-  "ignore": [
-    "src/lib/supabase/types.ts"
-  ],
   "ignoreExportsUsedInFile": true
 }

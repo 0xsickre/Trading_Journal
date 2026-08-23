@@ -743,6 +743,12 @@ export function JournalGrid({
     [tzOf, curOf, router, gradeOf],
   );
 
+  // React Compiler cannot memoize a `useReactTable` result: the builder hands
+  // back fresh functions every render by design, so the compiler skips this
+  // component rather than optimising it. Nothing here to fix — TanStack's API
+  // is what it is — and an unsilenced warning on a permanent condition is how a
+  // real one goes unread.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: filtered,
     columns,
@@ -766,10 +772,16 @@ export function JournalGrid({
   // array that only changes when a checkbox is ticked.
   const selectedIds = useMemo(
     () => table.getSelectedRowModel().rows.map((r) => r.original.id),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `table` is a new
-    // object every render (TanStack's builder is not memoizable), so depending
-    // on it would defeat the memo. The selection state is what actually decides
-    // this value, and it is what the table reads to answer.
+    // `table` is a new object every render (TanStack's builder is not
+    // memoizable), so depending on it would defeat the memo. The selection
+    // state is what actually decides this value, and it is what the table reads
+    // to answer.
+    //
+    // The directive sits on its own line directly above the array: written as a
+    // `-- reason` suffix, the continuation lines pushed it away from the line
+    // the rule actually reports, and eslint called the directive unused while
+    // still reporting the dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rowSelection],
   );
 

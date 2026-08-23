@@ -24,12 +24,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import {
-  AXIS_PROPS,
-  ChartShell,
-  GRID_PROPS,
-  TOOLTIP_STYLE,
-} from "@/components/journal/chart-shell";
+import { ChartShell } from "@/components/journal/chart-shell";
 import { StatGroup } from "@/components/journal/stat-group";
 import { CalendarHeatmap } from "@/components/journal/calendar-heatmap";
 import { TrackerStreakCard } from "@/components/journal/tracker-streak-card";
