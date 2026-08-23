@@ -870,24 +870,30 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_setup_criterion: boolean
           playbook_id: string
           rule_id: string
+          section_id: string
           sort_order: number
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
+          is_setup_criterion?: boolean
           playbook_id: string
           rule_id: string
+          section_id: string
           sort_order?: number
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
+          is_setup_criterion?: boolean
           playbook_id?: string
           rule_id?: string
+          section_id?: string
           sort_order?: number
           user_id?: string
         }
@@ -906,15 +912,20 @@ export type Database = {
             referencedRelation: "tj_playbook_rules"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "tj_playbook_rule_links_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "tj_playbook_sections"
+            referencedColumns: ["id"]
+          },
         ]
       }
       tj_playbook_rules: {
         Row: {
-          category: string
           created_at: string
           deleted_at: string | null
           id: string
-          is_setup_criterion: boolean
           show_when: string
           sort_order: number
           text: string
@@ -922,11 +933,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          category?: string
           created_at?: string
           deleted_at?: string | null
           id?: string
-          is_setup_criterion?: boolean
           show_when?: string
           sort_order?: number
           text: string
@@ -934,11 +943,9 @@ export type Database = {
           user_id: string
         }
         Update: {
-          category?: string
           created_at?: string
           deleted_at?: string | null
           id?: string
-          is_setup_criterion?: boolean
           show_when?: string
           sort_order?: number
           text?: string
@@ -946,6 +953,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      tj_playbook_sections: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          label: string
+          playbook_id: string
+          sort_order: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          label: string
+          playbook_id: string
+          sort_order?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          label?: string
+          playbook_id?: string
+          sort_order?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tj_playbook_sections_playbook_id_fkey"
+            columns: ["playbook_id"]
+            isOneToOne: false
+            referencedRelation: "tj_playbooks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tj_playbooks: {
         Row: {

@@ -2,8 +2,12 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RuleGroupDialog } from "./rule-group-dialog";
-import type { Playbook, PlaybookRule } from "@/lib/journal/playbook-types";
-import type { OptionItem } from "@/lib/journal/types";
+import type {
+  LinkedRule,
+  Playbook,
+  PlaybookSection,
+} from "@/lib/journal/playbook-types";
+
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -13,13 +17,9 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 const actions = vi.hoisted(() => ({
   addPlaybookRule: vi.fn(async () => ({ ok: true as const })),
-  addPlaybookSection: vi.fn(async () => ({
-    ok: true as const,
-    // Deliberately NOT the label typed in the test: the dialog must write rules
-    // under the value the server assigned, never under what was typed.
-    value: "entry_criteria_value",
-    id: "sec-new",
-  })),
+  // Deliberately NOT an id the test could guess: the dialog must file rules
+  // under the id the server assigned, never under one it derived from the label.
+  addPlaybookSection: vi.fn(async () => ({ ok: true as const, id: "sec-new" })),
   unlinkRule: vi.fn(async () => ({ ok: true as const })),
   updatePlaybookRule: vi.fn(async () => ({ ok: true as const })),
   updatePlaybookSection: vi.fn(async () => ({ ok: true as const })),
@@ -38,48 +38,42 @@ const BOOK: Playbook = {
   sort_order: 0,
   default_risk_pct: 1,
   a_plus_criteria: null,
+  sections: [],
   rules: [],
 };
 
-const ITEM: OptionItem = {
-  id: "oc1",
-  value: "entry",
+const SECTION: PlaybookSection = {
+  id: "sec-entry",
   label: "Entry criteria",
-  color: null,
-  description: null,
-  is_active: true,
+  description: "What has to be true at the moment you take it.",
   sort_order: 0,
 };
 
-function rule(over: Partial<PlaybookRule> & { id: string }): PlaybookRule {
+function rule(over: Partial<LinkedRule> & { id: string }): LinkedRule {
   return {
-    category: "entry",
     text: over.id,
     show_when: "always",
-    is_setup_criterion: false,
     sort_order: 0,
     deleted_at: null,
     answerCount: 0,
+    link_id: `link-${over.id}`,
+    section_id: SECTION.id,
+    is_setup_criterion: false,
+    link_sort: 0,
     ...over,
   };
 }
 
 function renderEdit(
-  rules: PlaybookRule[],
-  over: { item?: Partial<OptionItem>; hint?: string } = {},
+  rules: LinkedRule[],
+  over: { section?: Partial<PlaybookSection> } = {},
 ) {
   const onOpenChange = vi.fn();
   render(
     <RuleGroupDialog
       book={BOOK}
-      section={{
-        item: { ...ITEM, ...over.item },
-        category: "entry",
-        rules,
-        // What the CARD is currently showing — the built-in hint for a seeded
-        // section, or the section's own description once it has one.
-        hint: over.hint ?? "What has to be true at the moment you take it.",
-      }}
+      section={{ ...SECTION, ...over.section }}
+      rules={rules}
       open
       onOpenChange={onOpenChange}
     />,
@@ -109,10 +103,9 @@ describe("RuleGroupDialog — editing an existing group", () => {
   });
 
   it("writes nothing at all when Save is pressed with nothing touched", async () => {
-    // The trap worth a test: the description field is SEEDED with the built-in
-    // hint while the column is still null. Comparing the field to the column
-    // instead of to what it was seeded with would write that constant into the
-    // database the first time anyone opened this dialog and saved.
+    // A Save that reissued every field would bump `updated_at` on rows nobody
+    // edited, and would resend `show_when` on locked rules — which the action
+    // refuses. Untouched has to mean untouched.
     const user = userEvent.setup();
     const { onOpenChange } = renderEdit([rule({ id: "r1", text: "Price at HTF POI" })]);
 
@@ -134,10 +127,10 @@ describe("RuleGroupDialog — editing an existing group", () => {
     await save(user);
 
     expect(actions.addPlaybookRule).toHaveBeenCalledWith({
-      category: "entry",
       text: "Enter inside OTE",
       show_when: "always",
       playbook_id: "pb",
+      section_id: "sec-entry",
     });
   });
 
@@ -198,22 +191,22 @@ describe("RuleGroupDialog — editing an existing group", () => {
     await user.type(hint, "Only what I can see on the daily.");
     await save(user);
 
-    expect(actions.updatePlaybookSection).toHaveBeenCalledWith("oc1", {
+    expect(actions.updatePlaybookSection).toHaveBeenCalledWith("sec-entry", {
       label: "Trigger",
       description: "Only what I can see on the daily.",
     });
   });
 
   it("clears the line back to null when the field is emptied", async () => {
-    // Null is what makes the built-in hint reappear for a seeded section, so
-    // "delete the sentence" has to reach the database as null, not "".
+    // An absence is what "I deleted the sentence" means, so it has to reach the
+    // database as null rather than as "".
     const user = userEvent.setup();
-    renderEdit([], { hint: "My own words." });
+    renderEdit([], { section: { description: "My own words." } });
 
     await user.clear(screen.getByLabelText("Group description"));
     await save(user);
 
-    expect(actions.updatePlaybookSection).toHaveBeenCalledWith("oc1", {
+    expect(actions.updatePlaybookSection).toHaveBeenCalledWith("sec-entry", {
       description: null,
     });
   });
@@ -253,10 +246,10 @@ describe("RuleGroupDialog — creating a group", () => {
     expect(screen.getByLabelText("Rule 1")).toHaveValue("");
   });
 
-  it("creates the group, then writes its rules under the value the server gave", async () => {
-    // Not the typed label. `tj_add_option_item` writes the trimmed label into
-    // `value` today, but the dialog has no business encoding that — it uses
-    // what came back.
+  it("creates the section IN THIS BOOK, then writes its rules under the id it returned", async () => {
+    // Two things at once. The section is scoped to `book.id`, so the same
+    // heading in another playbook is a different row and is not touched — and
+    // the rules go under the id that came BACK, not one the dialog guessed.
     const user = userEvent.setup();
     renderAdd();
 
@@ -264,12 +257,12 @@ describe("RuleGroupDialog — creating a group", () => {
     await user.type(screen.getByLabelText("Rule 1"), "Price at HTF POI");
     await save(user);
 
-    expect(actions.addPlaybookSection).toHaveBeenCalledWith("Entry criteria");
+    expect(actions.addPlaybookSection).toHaveBeenCalledWith("pb", "Entry criteria");
     expect(actions.addPlaybookRule).toHaveBeenCalledWith({
-      category: "entry_criteria_value",
       text: "Price at HTF POI",
       show_when: "always",
       playbook_id: "pb",
+      section_id: "sec-new",
     });
   });
 

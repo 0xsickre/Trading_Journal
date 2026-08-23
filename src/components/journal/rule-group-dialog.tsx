@@ -24,12 +24,12 @@ import {
 import {
   SHOW_WHEN_LABELS,
   SHOW_WHEN_VALUES,
+  type LinkedRule,
   type Playbook,
   type PlaybookRule,
-  type RuleCategory,
+  type PlaybookSection,
   type ShowWhen,
 } from "@/lib/journal/playbook-types";
-import type { OptionItem } from "@/lib/journal/types";
 import {
   addPlaybookRule,
   addPlaybookSection,
@@ -69,20 +69,6 @@ function draftFrom(rule: PlaybookRule): DraftRule {
   };
 }
 
-export type RuleGroupSection = {
-  item: OptionItem;
-  category: RuleCategory;
-  /** Every rule of this section that this playbook links, in display order. */
-  rules: PlaybookRule[];
-  /**
-   * The line currently shown under the heading, whether it comes from the
-   * item's own `description` or from the built-in hint for a seeded value.
-   * Seeding the field with the built-in text is what lets a trader edit that
-   * sentence instead of only being able to add one where there was none.
-   */
-  hint: string;
-};
-
 /**
  * Name a group and write its rules in one place.
  *
@@ -101,12 +87,15 @@ export type RuleGroupSection = {
 export function RuleGroupDialog({
   book,
   section,
+  rules: sectionRules = [],
   open,
   onOpenChange,
 }: {
   book: Playbook;
-  /** The section to edit. Absent means this creates a new one. */
-  section?: RuleGroupSection;
+  /** The section to edit. Absent means this creates a new one, in this book. */
+  section?: PlaybookSection;
+  /** Every rule this playbook files under that section, in display order. */
+  rules?: readonly LinkedRule[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -115,10 +104,10 @@ export function RuleGroupDialog({
   const idPrefix = useId();
   const [seq, setSeq] = useState(0);
 
-  const [name, setName] = useState(section?.item.label ?? "");
-  const [hint, setHint] = useState(section?.hint ?? "");
+  const [name, setName] = useState(section?.label ?? "");
+  const [hint, setHint] = useState(section?.description ?? "");
   const [rules, setRules] = useState<DraftRule[]>(() =>
-    section ? section.rules.map(draftFrom) : [blankRule(`${idPrefix}-0`)],
+    section ? sectionRules.map(draftFrom) : [blankRule(`${idPrefix}-0`)],
   );
   /** Existing rules the trader removed with ✕ — unlinked on Save, not before. */
   const [removed, setRemoved] = useState<string[]>([]);
@@ -173,32 +162,28 @@ export function RuleGroupDialog({
     if (!label) return;
 
     start(async () => {
-      let category: string;
+      let sectionId: string;
       const description = hint.trim();
 
       if (section) {
-        category = section.category;
+        sectionId = section.id;
         const patch: { label?: string; description?: string | null } = {};
-        if (label !== section.item.label) patch.label = label;
-        // Compared against what the field was SEEDED with, not against
-        // `item.description`: for a seeded section those differ — the field
-        // starts holding the built-in hint while the column is still null — and
-        // comparing to the column would write that constant into the database
-        // the first time the dialog was opened and saved with nothing touched.
-        // `|| null`, not the empty string: null is what makes the built-in hint
-        // reappear for a seeded section, so "I deleted the sentence" has to
-        // reach the database as an absence. The action normalises "" the same
-        // way, but the wire should say what it means.
-        if (description !== section.hint.trim())
+        if (label !== section.label) patch.label = label;
+        // `|| null`, not the empty string: an absence is what "I deleted the
+        // sentence" means, and the action normalises "" the same way — but the
+        // wire should say what it means.
+        if (description !== (section.description ?? "").trim())
           patch.description = description || null;
         if (Object.keys(patch).length > 0) {
-          const res = await updatePlaybookSection(section.item.id, patch);
+          const res = await updatePlaybookSection(section.id, patch);
           if (!res.ok) return fail(res.error);
         }
       } else {
-        const res = await addPlaybookSection(label);
+        // Created IN THIS BOOK. The same heading in another playbook is a
+        // different row and is not touched — which is the whole change.
+        const res = await addPlaybookSection(book.id, label);
         if (!res.ok) return fail(res.error);
-        category = res.value;
+        sectionId = res.id;
         if (description) {
           const described = await updatePlaybookSection(res.id, { description });
           if (!described.ok) return fail(described.error);
@@ -228,10 +213,10 @@ export function RuleGroupDialog({
           if (!res.ok) return fail(res.error);
         } else {
           const res = await addPlaybookRule({
-            category,
             text,
             show_when: row.showWhen,
             playbook_id: book.id,
+            section_id: sectionId,
           });
           if (!res.ok) return fail(res.error);
         }

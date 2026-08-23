@@ -2,10 +2,11 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { selectAllPages } from "@/lib/supabase/paginate";
 import type {
+  LinkedRule,
   Playbook,
   PlaybookRule,
+  PlaybookSection,
   PositionRule,
-  RuleCategory,
   ShowWhen,
 } from "./playbook-types";
 
@@ -13,15 +14,30 @@ export type { Playbook, PositionRule } from "./playbook-types";
 
 type RuleRow = {
   id: string;
-  category: string;
   text: string;
   show_when: string;
-  is_setup_criterion: boolean;
   sort_order: number;
   deleted_at: string | null;
 };
 
-type LinkRow = { playbook_id: string; rule_id: string; sort_order: number };
+type LinkRow = {
+  id: string;
+  playbook_id: string;
+  rule_id: string;
+  section_id: string;
+  is_setup_criterion: boolean;
+  sort_order: number;
+};
+
+type SectionRow = {
+  id: string;
+  playbook_id: string;
+  label: string;
+  description: string | null;
+  sort_order: number;
+};
+
+const RULE_COLUMNS = "id,text,show_when,sort_order,deleted_at";
 
 /**
  * Playbooks with their groups and rules.
@@ -64,67 +80,102 @@ export async function getPlaybooks(
 ): Promise<Playbook[]> {
   const supabase = await createClient();
 
-  const [{ data: books }, { data: links }, rules, counts] = await Promise.all([
-    supabase
-      .from("tj_playbooks")
-      .select(
-        "id,name,description,color,icon,is_active,sort_order,default_risk_pct,a_plus_criteria",
-      )
-      .order("sort_order")
-      .order("id"),
-    supabase
-      .from("tj_playbook_rule_links")
-      .select("playbook_id,rule_id,sort_order")
-      .order("sort_order")
-      .order("id"),
-    // The LIBRARY, not one book's rules: every rule the user has written, so the
-    // manager can offer them for linking and the lookup can name a retired one.
-    selectAllPages<RuleRow>((from, to) =>
+  const [{ data: books }, { data: links }, { data: sections }, rules, counts] =
+    await Promise.all([
       supabase
-        .from("tj_playbook_rules")
-        .select("id,category,text,show_when,is_setup_criterion,sort_order,deleted_at")
+        .from("tj_playbooks")
+        .select(
+          "id,name,description,color,icon,is_active,sort_order,default_risk_pct,a_plus_criteria",
+        )
         .order("sort_order")
-        .order("id")
-        .range(from, to),
-    ),
-    positionRules
-      ? Promise.resolve(positionRules).then(countAnswersByRule)
-      : ruleAnswerCounts(),
-  ]);
+        .order("id"),
+      supabase
+        .from("tj_playbook_rule_links")
+        .select("id,playbook_id,rule_id,section_id,is_setup_criterion,sort_order")
+        .order("sort_order")
+        .order("id"),
+      // A fifth read rather than a join, and it costs no round trip: it lands in
+      // the `Promise.all` that was already here. A book's sections have to come
+      // back even when the book links no rule at all — a join through the links
+      // would drop exactly the empty section that is a prompt to write one.
+      supabase
+        .from("tj_playbook_sections")
+        .select("id,playbook_id,label,description,sort_order")
+        .order("sort_order")
+        .order("id"),
+      // The LIBRARY, not one book's rules: every rule the user has written, so the
+      // manager can offer them for linking and the lookup can name a retired one.
+      selectAllPages<RuleRow>((from, to) =>
+        supabase
+          .from("tj_playbook_rules")
+          .select(RULE_COLUMNS)
+          .order("sort_order")
+          .order("id")
+          .range(from, to),
+      ),
+      positionRules
+        ? Promise.resolve(positionRules).then(countAnswersByRule)
+        : ruleAnswerCounts(),
+    ]);
 
   const byId = new Map<string, PlaybookRule>();
-  const library: PlaybookRule[] = [];
   for (const r of rules) {
     if (!includeDeleted && r.deleted_at != null) continue;
-    const rule: PlaybookRule = {
-      id: r.id,
-      category: r.category as RuleCategory,
-      text: r.text,
-      show_when: r.show_when as ShowWhen,
-      is_setup_criterion: r.is_setup_criterion,
-      sort_order: r.sort_order,
-      deleted_at: r.deleted_at,
-      answerCount: counts.get(r.id) ?? 0,
-    };
-    byId.set(r.id, rule);
-    library.push(rule);
+    byId.set(r.id, toLibraryRule(r, counts));
+  }
+
+  const sectionsByBook = new Map<string, PlaybookSection[]>();
+  for (const s of (sections ?? []) as SectionRow[]) {
+    const bucket = sectionsByBook.get(s.playbook_id) ?? [];
+    bucket.push({
+      id: s.id,
+      label: s.label,
+      description: s.description,
+      sort_order: s.sort_order,
+    });
+    sectionsByBook.set(s.playbook_id, bucket);
   }
 
   // A link to a rule filtered out above (retired, with includeDeleted false) is
   // skipped rather than left as a hole — the checklist must not offer it, and a
   // placeholder row would be a rule with no text.
-  const rulesByBook = new Map<string, PlaybookRule[]>();
+  const rulesByBook = new Map<string, LinkedRule[]>();
   for (const l of (links ?? []) as LinkRow[]) {
     const rule = byId.get(l.rule_id);
     if (!rule) continue;
     const bucket = rulesByBook.get(l.playbook_id) ?? [];
-    bucket.push(rule);
+    // The library row plus what the LINK says. Spread in this order on purpose:
+    // the link owns `section_id` and `is_setup_criterion`, and the same library
+    // row is shared by every book that links it, so it must never be mutated.
+    bucket.push({
+      ...rule,
+      link_id: l.id,
+      section_id: l.section_id,
+      is_setup_criterion: l.is_setup_criterion,
+      link_sort: l.sort_order,
+    });
     rulesByBook.set(l.playbook_id, bucket);
   }
 
   return (books ?? [])
     .filter((b) => !activeOnly || b.is_active)
-    .map((b) => ({ ...b, rules: rulesByBook.get(b.id) ?? [] }));
+    .map((b) => ({
+      ...b,
+      sections: sectionsByBook.get(b.id) ?? [],
+      rules: rulesByBook.get(b.id) ?? [],
+    }));
+}
+
+/** One `tj_playbook_rules` row as the library sees it. */
+function toLibraryRule(r: RuleRow, counts: Map<string, number>): PlaybookRule {
+  return {
+    id: r.id,
+    text: r.text,
+    show_when: r.show_when as ShowWhen,
+    sort_order: r.sort_order,
+    deleted_at: r.deleted_at,
+    answerCount: counts.get(r.id) ?? 0,
+  };
 }
 
 /**
@@ -143,7 +194,7 @@ export async function getRuleLibrary(
     selectAllPages<RuleRow>((from, to) =>
       supabase
         .from("tj_playbook_rules")
-        .select("id,category,text,show_when,is_setup_criterion,sort_order,deleted_at")
+        .select(RULE_COLUMNS)
         .order("sort_order")
         .order("id")
         .range(from, to),
@@ -153,16 +204,7 @@ export async function getRuleLibrary(
 
   return rules
     .filter((r) => includeDeleted || r.deleted_at == null)
-    .map((r) => ({
-      id: r.id,
-      category: r.category as RuleCategory,
-      text: r.text,
-      show_when: r.show_when as ShowWhen,
-      is_setup_criterion: r.is_setup_criterion,
-      sort_order: r.sort_order,
-      deleted_at: r.deleted_at,
-      answerCount: counts.get(r.id) ?? 0,
-    }));
+    .map((r) => toLibraryRule(r, counts));
 }
 
 /** Per-rule answer counts from answers already in hand. No query. */

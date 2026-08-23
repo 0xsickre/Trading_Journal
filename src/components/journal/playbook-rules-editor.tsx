@@ -8,6 +8,7 @@ import {
   ArchiveRestore,
   ChevronDown,
   ChevronUp,
+  Library,
   Lock,
   MoreVertical,
   Pencil,
@@ -52,28 +53,28 @@ import {
   type DragTargetProps,
 } from "@/components/journal/drag-order";
 import {
-  ruleCategoryLabel,
-  RULE_CATEGORY_HINTS,
   SHOW_WHEN_LABELS,
   SHOW_WHEN_VALUES,
-  rulesByCategory,
+  rulesBySection,
+  type LinkedRule,
   type Playbook,
   type PlaybookRule,
-  type RuleCategory,
+  type PlaybookSection,
   type ShowWhen,
 } from "@/lib/journal/playbook-types";
 import { RuleGroupDialog } from "@/components/journal/rule-group-dialog";
+import { RuleLibraryDialog } from "@/components/journal/rule-library-dialog";
+import { SectionDeleteDialog } from "@/components/journal/section-delete-dialog";
 import type { EnrichedTrade } from "@/lib/journal/enriched-trade";
-import type { OptionItem } from "@/lib/journal/types";
 import {
   deletePlaybookRule,
-  deletePlaybookSection,
-  linkRule,
   movePlaybookRule,
   movePlaybookSection,
+  moveRuleToSection,
   reorderPlaybookRules,
   reorderPlaybookSections,
   restorePlaybookRule,
+  setRuleCriterion,
   unlinkRule,
   updatePlaybookRule,
 } from "@/app/(app)/settings/playbook-actions";
@@ -200,9 +201,12 @@ function RuleRow({
   canDown,
   dragTarget,
   dragHandle,
+  sections,
 }: {
-  rule: PlaybookRule;
+  rule: LinkedRule;
   playbookId: string;
+  /** Every section of THIS book, for the "move to" submenu. */
+  sections: readonly PlaybookSection[];
   score: RuleScore | undefined;
   canUp: boolean;
   canDown: boolean;
@@ -298,15 +302,16 @@ function RuleRow({
 
             Offered only for a rule that shows on every trade: a criterion asked
             just of winners would judge the setup already knowing the outcome,
-            and the database refuses that combination outright. */}
+            and the database refuses that combination outright.
+
+            Per PLAYBOOK. The flag lives on the link, so the same rule can decide
+            the grade in a swing book and count as ordinary process in a scalp
+            one — which is what `criteriaByPlaybook` in the reports lookup was
+            already computing, from a flag that could not vary. */}
         <button
           type="button"
           onClick={() =>
-            run(() =>
-              updatePlaybookRule(rule.id, {
-                is_setup_criterion: !rule.is_setup_criterion,
-              }),
-            )
+            run(() => setRuleCriterion(playbookId, rule.id, !rule.is_setup_criterion))
           }
           disabled={pending || retired || rule.show_when !== "always"}
           aria-pressed={rule.is_setup_criterion}
@@ -424,6 +429,29 @@ function RuleRow({
             <ChevronDown className="size-3.5" /> Move down
           </DropdownMenuItem>
 
+          {/* Refiles it IN THIS BOOK ONLY, which is the move the old schema
+              could not express: the section was a property of the rule, so
+              moving it here moved it in every playbook at once. */}
+          {sections.length > 1 && !retired && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>Move to section</DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuRadioGroup
+                  value={rule.section_id}
+                  onValueChange={(v) =>
+                    run(() => moveRuleToSection(playbookId, rule.id, v))
+                  }
+                >
+                  {sections.map((s) => (
+                    <DropdownMenuRadioItem key={s.id} value={s.id}>
+                      {s.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
+
           <DropdownMenuSeparator />
 
           {/* Unlink ≠ delete, and the difference is the whole reason the library
@@ -473,35 +501,6 @@ function RuleRow({
   );
 }
 
-/** Rules already written in this category and not yet in this book. */
-function ReuseRow({
-  book,
-  available,
-}: {
-  book: Playbook;
-  available: PlaybookRule[];
-}) {
-  const { pending, run } = useAction();
-  return (
-    <div className="flex flex-wrap items-center gap-1.5 border-t px-3 py-2">
-      <span className="text-xs text-muted-foreground">Or reuse:</span>
-      {available.map((r) => (
-        <Button
-          key={r.id}
-          variant="outline"
-          size="sm"
-          className="h-7"
-          disabled={pending}
-          onClick={() => run(() => linkRule(book.id, r.id))}
-          title="Links the existing rule — it keeps its id, and its statistics keep accumulating under it."
-        >
-          <Plus className="size-3" /> {r.text}
-        </Button>
-      ))}
-    </div>
-  );
-}
-
 /**
  * One section: a card holding its rules.
  *
@@ -514,35 +513,31 @@ function ReuseRow({
  * already in the group, and the dialog is the only view that puts the existing
  * ones in front of you while you type the new one.
  */
-function CategorySection({
+function SectionCard({
   book,
-  category,
-  item,
-  hint,
+  section,
   rules,
   library,
   scoreById,
-  categories,
   canUp,
   canDown,
   dragTarget,
   dragHandle,
 }: {
   book: Playbook;
-  category: RuleCategory;
   /**
-   * The row behind this heading, absent when the section is no longer on the
-   * list but rules are still filed under it. Those cannot be renamed, moved or
-   * deleted from here — there is nothing left to edit — but they are still
-   * drawn, because hiding rules to tidy a heading is data loss by presentation.
+   * The heading itself — a row of THIS playbook.
+   *
+   * Never optional any more. It used to be, because a section was a value in a
+   * shared list and a rule could go on pointing at one that had been archived
+   * or deleted: the card drew with no row behind it and no way to rename, move
+   * or delete it. The link's FK cascades now, so a rule cannot outlive its
+   * heading and every card has something to edit.
    */
-  item: OptionItem | undefined;
-  /** The line under the heading: the trader's own, or the built-in fallback. */
-  hint: string;
-  rules: PlaybookRule[];
+  section: PlaybookSection;
+  rules: LinkedRule[];
   library: PlaybookRule[];
   scoreById: Map<string, RuleScore>;
-  categories: readonly OptionItem[];
   canUp: boolean;
   canDown: boolean;
   dragTarget: DragTargetProps;
@@ -550,14 +545,26 @@ function CategorySection({
 }) {
   const { pending, run } = useAction();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const linked = new Set(rules.map((r) => r.id));
-  const available = library.filter(
-    (r) => r.category === category && !linked.has(r.id) && r.deleted_at == null,
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  // Everything the trader has written that this BOOK does not already use —
+  // NOT filtered by section. The old filter was `rule.category === category`,
+  // so the library could only ever offer a rule back into the heading it was
+  // already filed under, which is the restriction being removed: any rule into
+  // any section.
+  const linkedInBook = useMemo(
+    () => new Set(book.rules.map((r) => r.id)),
+    [book.rules],
+  );
+  const available = useMemo(
+    () => library.filter((r) => !linkedInBook.has(r.id) && r.deleted_at == null),
+    [library, linkedInBook],
   );
 
   const ruleIds = rules.map((r) => r.id);
   const ruleDrag = useDragOrder(ruleIds, (ordered) =>
-    reorderPlaybookRules(book.id, category, ordered),
+    reorderPlaybookRules(book.id, section.id, ordered),
   );
   // Rendered from the drag order, not from the prop: while a drag is in flight
   // that order is the preview, which is what makes the rows move under the
@@ -584,13 +591,14 @@ function CategorySection({
       )}
     >
       <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2.5">
-        {item && <Grip {...dragHandle} />}
-        <h3 className="font-semibold">{ruleCategoryLabel(category, categories)}</h3>
+        <Grip {...dragHandle} />
+        <h3 className="font-semibold">{section.label}</h3>
 
-        {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
+        {section.description && (
+          <span className="text-xs text-muted-foreground">{section.description}</span>
+        )}
 
-        {item && (
-          <DropdownMenu>
+        <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
@@ -608,31 +616,31 @@ function CategorySection({
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={!canUp}
-                onSelect={() => run(() => movePlaybookSection(item.id, -1))}
+                onSelect={() => run(() => movePlaybookSection(book.id, section.id, -1))}
               >
                 <ChevronUp className="size-3.5" /> Move up
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={!canDown}
-                onSelect={() => run(() => movePlaybookSection(item.id, 1))}
+                onSelect={() => run(() => movePlaybookSection(book.id, section.id, 1))}
               >
                 <ChevronDown className="size-3.5" /> Move down
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {/* Hard delete, and it refuses while rules are still filed here —
-                  the count comes back in the message, including rules that live
-                  only in your other playbooks and so are not on this card at
-                  all. */}
+              {/* Never refused. The dialog says how many rules leave THIS
+                  playbook and that they stay in the library — which is what the
+                  cascade does: it drops links, not rules. It used to refuse
+                  whenever any rule in the account sat under the same heading,
+                  including ones in other playbooks that were not on this card
+                  at all. */}
               <DropdownMenuItem
                 variant="destructive"
-                onSelect={() => run(() => deletePlaybookSection(item.id))}
-                title="Deletes the section. Only possible once no rule is left in it."
+                onSelect={() => setDeleteOpen(true)}
               >
                 <Trash2 className="size-3.5" /> Delete section
               </DropdownMenuItem>
             </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        </DropdownMenu>
       </div>
 
       <div>
@@ -646,6 +654,7 @@ function CategorySection({
               key={rule.id}
               rule={rule}
               playbookId={book.id}
+              sections={book.sections}
               score={scoreById.get(rule.id)}
               canUp={i > 0}
               canDown={i < orderedRules.length - 1}
@@ -655,32 +664,60 @@ function CategorySection({
           ))
         )}
 
-        {item && (
+        <div className="flex flex-wrap gap-1 p-1">
           <Button
             variant="ghost"
             size="sm"
-            className="m-1 h-8 text-muted-foreground"
+            className="h-8 text-muted-foreground"
             onClick={() => setDialogOpen(true)}
           >
             <Plus className="size-3.5" /> Add rule
           </Button>
-        )}
-        {available.length > 0 && <ReuseRow book={book} available={available} />}
+          {/* A dialog rather than the row of buttons this used to be. That row
+              listed only the library rules already filed under this heading,
+              which kept it short — and was exactly the restriction being
+              removed. The unfiltered list is long enough to want a search box. */}
+          {available.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-muted-foreground"
+              onClick={() => setLibraryOpen(true)}
+              title="Link a rule you have already written. It keeps its id, so its statistics keep accumulating under it."
+            >
+              <Library className="size-3.5" /> Reuse a rule ({available.length})
+            </Button>
+          )}
+        </div>
       </div>
 
-      {item && (
-        <RuleGroupDialog
-          book={book}
-          section={{ item, category, rules, hint }}
-          open={dialogOpen}
-          // Keyed on the open flag so each opening starts from the section as it
-          // is NOW. The dialog seeds its draft in `useState` initialisers, which
-          // a re-render alone would not revisit — so without this, a group
-          // edited, saved and reopened would show the draft it had last time.
-          key={dialogOpen ? "open" : "closed"}
-          onOpenChange={setDialogOpen}
-        />
-      )}
+      <RuleGroupDialog
+        book={book}
+        section={section}
+        rules={rules}
+        open={dialogOpen}
+        // Keyed on the open flag so each opening starts from the section as it
+        // is NOW. The dialog seeds its draft in `useState` initialisers, which
+        // a re-render alone would not revisit — so without this, a group
+        // edited, saved and reopened would show the draft it had last time.
+        key={dialogOpen ? "open" : "closed"}
+        onOpenChange={setDialogOpen}
+      />
+
+      <RuleLibraryDialog
+        playbookId={book.id}
+        section={section}
+        available={available}
+        open={libraryOpen}
+        onOpenChange={setLibraryOpen}
+      />
+
+      <SectionDeleteDialog
+        section={section}
+        ruleCount={rules.length}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+      />
     </Card>
   );
 }
@@ -695,15 +732,12 @@ export function PlaybookRulesEditor({
   trades,
   lookup,
   computeCtx,
-  categories,
 }: {
   book: Playbook;
   library: PlaybookRule[];
   trades: EnrichedTrade[];
   lookup: PlaybookLookup;
   computeCtx: ComputeContext;
-  /** The trader's own playbook sections, in their order, from `rule_category`. */
-  categories: readonly OptionItem[];
 }) {
   // No `useAction` here any more: the drag hook owns its own transition, and
   // nothing else on this level writes.
@@ -720,66 +754,41 @@ export function PlaybookRulesEditor({
   );
 
   /**
-   * Every section the trader HAS, populated or not — plus any that a rule still
-   * uses after the section left the list.
+   * This book's own sections, populated or not.
    *
-   * An empty section is a prompt to write the rule that is missing, which is why
-   * empties are put back after `rulesByCategory` drops them.
-   *
-   * `canUp` / `canDown` are scoped to the LIST, not to this array: the appended
-   * orphans have no row to reorder, so the last listed section is the last one
-   * that can move down even when orphans are drawn below it.
-   *
-   * `hint` prefers the section's own description and falls back to the built-in
-   * text for the values this repo seeds — so a heading nobody has edited still
-   * reads the way it always did, and one that HAS been edited never has the
-   * constant put back over it.
+   * EMPTIES ARE KEPT: an empty section is a prompt to write the rule that is
+   * missing. That is only true now that a section exists because someone
+   * created it IN THIS BOOK — the list used to be one per account, so a
+   * playbook that used one heading still drew every other as a card over
+   * nothing, which is what "a new playbook gives me all the categories" was.
    */
-  const sections = useMemo(() => {
-    const keys = categories.map((c) => c.value);
-    const byCategory = rulesByCategory(book.rules, keys);
-    const all = [...keys];
-    for (const g of byCategory) if (!all.includes(g.category)) all.push(g.category);
-    const itemOf = new Map(categories.map((c) => [c.value, c]));
-    return all.map((category, i) => {
-      const item = itemOf.get(category);
-      return {
-        category,
-        item,
-        hint: item?.description ?? RULE_CATEGORY_HINTS[category] ?? "",
-        canUp: i > 0,
-        canDown: i < categories.length - 1,
-        rules: byCategory.find((g) => g.category === category)?.rules ?? [],
-      };
-    });
-  }, [book.rules, categories]);
+  const sections = useMemo(
+    () => rulesBySection(book.sections, book.rules),
+    [book.sections, book.rules],
+  );
 
-  // Only the sections that still have an option row can be reordered — an
-  // orphan heading has no ordinal to write.
   const sectionDrag = useDragOrder(
-    useMemo(() => sections.flatMap((s) => (s.item ? [s.item.id] : [])), [sections]),
-    reorderPlaybookSections,
+    useMemo(() => sections.map((s) => s.section.id), [sections]),
+    (ordered) => reorderPlaybookSections(book.id, ordered),
   );
 
   /**
    * The cards in the order they are drawn.
    *
-   * Listed sections follow the drag order; orphans keep their place at the end,
-   * where `sections` already appends them — they have no ordinal, so there is
-   * nothing to drag them into.
+   * Rendered from the drag order rather than the prop, so a card follows the
+   * pointer instead of jumping after the drop. No orphan branch any more: the
+   * link's FK cascades, so a rule cannot point at a section that is gone.
    */
   const displaySections = useMemo(() => {
-    const listed = sections.filter((s) => s.item);
-    const orphans = sections.filter((s) => !s.item);
-    const byItemId = new Map(listed.map((s) => [s.item!.id, s]));
+    const byId = new Map(sections.map((s) => [s.section.id, s]));
     const ordered = sectionDrag.order.flatMap((id) => {
-      const s = byItemId.get(id);
+      const s = byId.get(id);
       return s ? [s] : [];
     });
-    return [...ordered, ...orphans].map((s, i) => ({
+    return ordered.map((s, i) => ({
       ...s,
-      canUp: s.item != null && i > 0,
-      canDown: s.item != null && i < ordered.length - 1,
+      canUp: i > 0,
+      canDown: i < ordered.length - 1,
     }));
   }, [sections, sectionDrag.order]);
 
@@ -787,8 +796,8 @@ export function PlaybookRulesEditor({
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          A group is a heading with its rules under it. Drag the grip to reorder
-          — groups, or rules inside one.
+          A group is a heading with its rules under it, in THIS playbook. Drag
+          the grip to reorder — groups, or rules inside one.
         </p>
         <Button size="sm" className="h-9 shrink-0" onClick={() => setAddOpen(true)}>
           <Plus className="size-4" /> Add rule group
@@ -797,8 +806,9 @@ export function PlaybookRulesEditor({
 
       {sections.length === 0 ? (
         <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-          No groups yet. Add one above — name it after a decision you actually
-          make, then write the rules under it.
+          Nothing here yet — this playbook starts empty, on purpose. Add a group
+          above, name it after a decision you actually make, then write its
+          rules or reuse ones you have already written.
         </p>
       ) : (
         <>
@@ -822,21 +832,18 @@ export function PlaybookRulesEditor({
           </div>
 
           <div className="space-y-3">
-            {displaySections.map(({ category, item, hint, rules, canUp, canDown }) => (
-              <CategorySection
-                key={category}
+            {displaySections.map(({ section, rules, canUp, canDown }) => (
+              <SectionCard
+                key={section.id}
                 book={book}
-                category={category}
-                item={item}
-                hint={hint}
+                section={section}
                 rules={rules}
                 library={library}
-                categories={categories}
                 scoreById={scoreById}
                 canUp={canUp}
                 canDown={canDown}
-                dragTarget={item ? sectionDrag.target(item.id) : {}}
-                dragHandle={item ? sectionDrag.handle(item.id) : {}}
+                dragTarget={sectionDrag.target(section.id)}
+                dragHandle={sectionDrag.handle(section.id)}
               />
             ))}
           </div>

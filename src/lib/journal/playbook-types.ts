@@ -8,6 +8,10 @@
  * trades only. Because the denominator depends on this value, it is frozen once
  * the rule has been answered even once; see the DB trigger in
  * 20260729130000_playbook.sql.
+ *
+ * Stays on the RULE rather than on the link, unlike the section and the setup
+ * criterion. Answers are recorded against `rule_id`, so a per-playbook
+ * `show_when` would give one set of answers two different denominators.
  */
 export const SHOW_WHEN_VALUES = ["always", "winner", "loser", "breakeven"] as const;
 
@@ -21,86 +25,37 @@ export const SHOW_WHEN_LABELS: Record<ShowWhen, string> = {
 };
 
 /**
- * Where a rule sits in the sequence of a trade.
+ * A heading inside ONE playbook.
  *
- * This replaces the per-playbook group. A group was a name owned by ONE
- * playbook, so "Entry" under OTE and "Entry" under Order Block were two
- * unrelated rows — and a rule could only ever belong to one of them. The
- * category belongs to the RULE, which is what lets the same rule be linked into
- * several playbooks and keep one id, and therefore one set of answers.
+ * It used to be a row in a single `rule_category` option list shared by the
+ * whole account, and all three complaints about playbooks came out of that: a
+ * new playbook drew every section the account had, empty or not; a section
+ * could not be deleted because some rule in ANOTHER book sat under the same
+ * name; and one rule was in the same section everywhere.
  *
- * Closed set, mirroring the DB CHECK, in the order a trade is actually thought
- * through. `no_trade` is the one with no predecessor in the old schema: nothing
- * could express "this is when I stand aside", which is the decision a playbook
- * most needs to make explicit.
+ * A section belongs to a playbook now, so a book has exactly the headings its
+ * owner gave it. Identity is the `id`, not the text, which is what makes
+ * renaming free — nothing points at the label.
  */
-/**
- * The five sections this journal ships with.
- *
- * NOT A CLOSED SET ANY MORE. They are the seed of the user's `rule_category`
- * option list — renameable, reorderable, archivable in Settings like every other
- * list here. Kept in code only as the fallback for a caller that has no options
- * loaded, and as the keys the hints below are written against.
- *
- * The old `CHECK` on the column is gone (20260822140000): a trader whose method
- * is "conditions to get in, conditions to get out, and one risk rule" was given
- * three headings they wrote and two they did not, empty on every playbook.
- */
-export const DEFAULT_RULE_CATEGORIES = [
-  "context",
-  "entry",
-  "management",
-  "exit",
-  "no_trade",
-] as const;
-
-/** A section key. Free text, because the trader owns the list. */
-export type RuleCategory = string;
-
-export const RULE_CATEGORY_LABELS: Record<string, string> = {
-  context: "Context",
-  entry: "Entry",
-  management: "Management",
-  exit: "Exit",
-  no_trade: "No-trade",
+export type PlaybookSection = {
+  id: string;
+  label: string;
+  /** The line beside the heading. Written by the trader, or absent. */
+  description: string | null;
+  sort_order: number;
 };
 
 /**
- * Guidance under each default heading.
+ * A rule as it exists in the LIBRARY: one row, one id, one set of answers.
  *
- * Only the seeded five have one, and a custom section shows none — a sentence
- * explaining what "Risk" means to a trader who just named it "Risk" would be
- * this repo telling them about their own method.
+ * Knows nothing about any section. That is deliberate — the library is the
+ * trader's whole vocabulary of rules, and where a rule is filed is a fact about
+ * a playbook using it, not about the rule.
  */
-export const RULE_CATEGORY_HINTS: Record<string, string> = {
-  context: "The standing read, before you look for an entry.",
-  entry: "What has to be true at the moment you take it.",
-  management: "What you do — and do not do — while it runs.",
-  exit: "How the position comes off.",
-  no_trade: "When you stand aside. Answered false on a trade you took anyway.",
-};
-
-/** Label for a section key: the user's own if they set one, else the seeded name, else the key. */
-export function ruleCategoryLabel(
-  category: string,
-  options?: readonly { value: string; label: string }[],
-): string {
-  const own = options?.find((o) => o.value === category);
-  return own?.label ?? RULE_CATEGORY_LABELS[category] ?? category;
-}
-
 export type PlaybookRule = {
   id: string;
-  category: RuleCategory;
   text: string;
   show_when: ShowWhen;
-  /**
-   * Does this rule define SETUP QUALITY, as opposed to process?
-   *
-   * The derived setup grade is the share of these that were met. Constrained by
-   * the database to `show_when = 'always'` — see 20260822110000.
-   */
-  is_setup_criterion: boolean;
   sort_order: number;
   /** Set when the rule was retired. Never shown on a form, always kept in stats. */
   deleted_at: string | null;
@@ -109,6 +64,23 @@ export type PlaybookRule = {
    * `show_when` is locked and deletion must stay soft.
    */
   answerCount: number;
+};
+
+/**
+ * A rule as ONE playbook uses it: the library row plus everything the link says.
+ *
+ * The three link-owned fields are the whole point of the split. `section_id`
+ * lets the same rule sit under "Entry" in one book and "Exit" in another;
+ * `is_setup_criterion` lets it grade the setup in a swing book and count as
+ * plain process in a scalp one — which is what `criteriaByPlaybook` in
+ * `reports/rule-lookup.ts` was already computing per playbook, from a flag that
+ * could not vary; and `link_sort` orders it within this book only.
+ */
+export type LinkedRule = PlaybookRule & {
+  link_id: string;
+  section_id: string;
+  is_setup_criterion: boolean;
+  link_sort: number;
 };
 
 /** Header metrics per playbook — the TradeZella set, computed by our engine. */
@@ -134,35 +106,53 @@ export type Playbook = {
    * field — a deliberate 0.5 % on a marginal setup is never overwritten.
    */
   default_risk_pct: number | null;
-  /** What earns an A+ grade here. Shown beside `setup_grade` on the form. */
+  /** What earns an A+ grade here. Shown beside the grade on the checklist. */
   a_plus_criteria: string | null;
-  /** The rules linked into this playbook, in link order within each category. */
-  rules: PlaybookRule[];
+  /** This book's own headings, in the trader's order. Empty on a new playbook. */
+  sections: PlaybookSection[];
+  /** The rules linked into this playbook, in link order. */
+  rules: LinkedRule[];
 };
 
 /**
- * Rules bucketed by section, in the order the user's list gives, empties dropped.
+ * Rules bucketed by this playbook's own sections, in the trader's order.
  *
- * A category with rules but NOT in the list is appended rather than dropped.
- * That is the case archiving creates: switch off "No-trade" in Settings and the
- * heading should stop being offered, but the rules already filed under it must
- * still be visible. Hiding them because a heading was retired would be data
- * loss dressed as tidying.
+ * EMPTIES ARE KEPT, which is the opposite of what the old `rulesByCategory`
+ * did. It dropped them because the section list was shared: an account with
+ * five headings drew five cards on a playbook that used one, four of them a
+ * heading over nothing. A section exists now only because someone created it
+ * IN THIS BOOK, so an empty one is a prompt to write the rule that is missing.
+ *
+ * A rule whose `section_id` matches no section is appended under its own
+ * bucket rather than dropped — that state is unreachable through the UI (the
+ * FK cascades), but silently losing a rule is the wrong way to find out
+ * otherwise.
  */
-export function rulesByCategory(
-  rules: readonly PlaybookRule[],
-  categories: readonly string[] = DEFAULT_RULE_CATEGORIES,
-): { category: RuleCategory; rules: PlaybookRule[] }[] {
-  const ordered = [...categories];
-  for (const r of rules) {
-    if (!ordered.includes(r.category)) ordered.push(r.category);
+export function rulesBySection(
+  sections: readonly PlaybookSection[],
+  rules: readonly LinkedRule[],
+): { section: PlaybookSection; rules: LinkedRule[] }[] {
+  const out = [...sections]
+    .sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label))
+    .map((section) => ({
+      section,
+      rules: rules.filter((r) => r.section_id === section.id),
+    }));
+
+  const known = new Set(sections.map((s) => s.id));
+  const orphans = rules.filter((r) => !known.has(r.section_id));
+  if (orphans.length > 0) {
+    out.push({
+      section: {
+        id: orphans[0]!.section_id,
+        label: "Unfiled",
+        description: null,
+        sort_order: Number.MAX_SAFE_INTEGER,
+      },
+      rules: orphans,
+    });
   }
-  return ordered
-    .map((category) => ({
-      category,
-      rules: rules.filter((r) => r.category === category),
-    }))
-    .filter((g) => g.rules.length > 0);
+  return out;
 }
 
 /** One trade's answer for one rule. `followed: null` means "not answered". */

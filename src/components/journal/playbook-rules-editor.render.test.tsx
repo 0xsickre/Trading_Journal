@@ -1,11 +1,15 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PlaybookRulesEditor } from "./playbook-rules-editor";
 import { buildPlaybookLookup, RULE_SAMPLE } from "@/lib/journal/reports/playbook-dimensions";
 import { enrich, metricCtx, type TradeSpec } from "@/lib/journal/reports/test-helpers";
-import type { PositionRule, Playbook, PlaybookRule } from "@/lib/journal/playbook-types";
-import type { OptionItem } from "@/lib/journal/types";
+import type {
+  LinkedRule,
+  Playbook,
+  PlaybookSection,
+  PositionRule,
+} from "@/lib/journal/playbook-types";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -21,13 +25,15 @@ const actions = vi.hoisted(() => ({
   updatePlaybook: vi.fn(async () => ({ ok: true as const })),
   updatePlaybookSection: vi.fn(async () => ({ ok: true as const })),
   addPlaybookRule: vi.fn(async () => ({ ok: true as const })),
-  addPlaybookSection: vi.fn(async () => ({ ok: true as const, value: "x", id: "x" })),
+  addPlaybookSection: vi.fn(async () => ({ ok: true as const, id: "x" })),
   deletePlaybookRule: vi.fn(async () => ({ ok: true as const })),
   restorePlaybookRule: vi.fn(async () => ({ ok: true as const })),
   linkRule: vi.fn(async () => ({ ok: true as const })),
   unlinkRule: vi.fn(async () => ({ ok: true as const })),
   movePlaybookSection: vi.fn(async () => ({ ok: true as const })),
   deletePlaybookSection: vi.fn(async () => ({ ok: true as const })),
+  moveRuleToSection: vi.fn(async () => ({ ok: true as const })),
+  setRuleCriterion: vi.fn(async () => ({ ok: true as const })),
 }));
 vi.mock("@/app/(app)/settings/playbook-actions", () => actions);
 
@@ -39,20 +45,22 @@ beforeEach(() => vi.clearAllMocks());
  * into the fixture; they are whatever the library computes from these trades.
  */
 
-function rule(over: Partial<PlaybookRule> & { id: string }): PlaybookRule {
+function rule(over: Partial<LinkedRule> & { id: string }): LinkedRule {
   return {
-    category: "entry",
     text: over.id,
     show_when: "always",
-    is_setup_criterion: false,
     sort_order: 0,
     deleted_at: null,
     answerCount: 0,
+    link_id: `link-${over.id}`,
+    section_id: "sec-entry",
+    is_setup_criterion: false,
+    link_sort: 0,
     ...over,
   };
 }
 
-function book(rules: PlaybookRule[]): Playbook {
+function book(rules: LinkedRule[], sections: PlaybookSection[]): Playbook {
   return {
     id: "pb",
     name: "London Reversal",
@@ -63,6 +71,7 @@ function book(rules: PlaybookRule[]): Playbook {
     sort_order: 0,
     default_risk_pct: 1,
     a_plus_criteria: null,
+    sections,
     rules,
   };
 }
@@ -84,39 +93,22 @@ function answers(
 }
 
 /**
- * The sections the trader has, as the option list gives them.
+ * The sections THIS BOOK has.
  *
- * Two, not the old five: the point of making them configurable is that a book
- * shows the headings its owner wrote, so the fixture exercises a shorter list
- * than the seeded default. Both use a SEEDED value (`entry`, `exit`) with a null
- * description, which is the combination the built-in hint fallback is for.
+ * Two, not the old five, and they belong to the playbook rather than to the
+ * account: that is the change these tests are about. A book shows the headings
+ * its own owner wrote in it, and nothing else.
  */
-const CATEGORIES: OptionItem[] = [
-  {
-    id: "oc1",
-    value: "entry",
-    label: "Entry",
-    color: null,
-    description: null,
-    is_active: true,
-    sort_order: 0,
-  },
-  {
-    id: "oc2",
-    value: "exit",
-    label: "Exit",
-    color: null,
-    description: null,
-    is_active: true,
-    sort_order: 1,
-  },
+const SECTIONS: PlaybookSection[] = [
+  { id: "sec-entry", label: "Entry", description: null, sort_order: 0 },
+  { id: "sec-exit", label: "Exit", description: null, sort_order: 1 },
 ];
 
 function renderEditor(
-  rules: PlaybookRule[],
+  rules: LinkedRule[],
   rows: { id: string; net: number; ruleId: string; followed: boolean }[],
   bookOverrides: Partial<Playbook> = {},
-  categoryOverrides?: OptionItem[],
+  sectionOverrides?: PlaybookSection[],
 ) {
   const byTrade = new Map<string, PositionRule[]>();
   for (const r of rows) {
@@ -124,7 +116,7 @@ function renderEditor(
     list.push({ position_id: r.id, rule_id: r.ruleId, followed: r.followed });
     byTrade.set(r.id, list);
   }
-  const b = { ...book(rules), ...bookOverrides };
+  const b = { ...book(rules, sectionOverrides ?? SECTIONS), ...bookOverrides };
   const lookup = buildPlaybookLookup([{ id: b.id, name: b.name, rules }], byTrade);
   const trades = enrich(
     rows.map((r): TradeSpec => ({ id: r.id, net: r.net, r: r.net / 100 })),
@@ -137,7 +129,6 @@ function renderEditor(
       trades={trades}
       lookup={lookup}
       computeCtx={{ ...metricCtx, rules: lookup.rules }}
-      categories={categoryOverrides ?? CATEGORIES}
     />,
   );
   return b;
@@ -346,9 +337,9 @@ describe("PlaybookRulesEditor — the grade switch is on the row", () => {
       screen.getByRole("button", { name: "Counts toward the setup grade" }),
     );
 
-    expect(actions.updatePlaybookRule).toHaveBeenCalledWith("r1", {
-      is_setup_criterion: true,
-    });
+    // The playbook is named, because the flag is per book: the same rule can
+    // grade the setup here and be plain process in another playbook.
+    expect(actions.setRuleCriterion).toHaveBeenCalledWith("pb", "r1", true);
   });
 
   it("reports its state through aria-pressed, not only through colour", () => {
@@ -389,11 +380,11 @@ describe("PlaybookRulesEditor — the grade switch is on the row", () => {
   });
 });
 
-describe("PlaybookRulesEditor — reordering is scoped to the category", () => {
+describe("PlaybookRulesEditor — reordering is scoped to the section", () => {
   const RULES = [
-    rule({ id: "e1", text: "Waited for the sweep", category: "entry" }),
-    rule({ id: "e2", text: "Entry confirmed on M5", category: "entry" }),
-    rule({ id: "x1", text: "Out at the opposing level", category: "exit" }),
+    rule({ id: "e1", text: "Waited for the sweep", section_id: "sec-entry" }),
+    rule({ id: "e2", text: "Entry confirmed on M5", section_id: "sec-entry" }),
+    rule({ id: "x1", text: "Out at the opposing level", section_id: "sec-exit" }),
   ];
 
   it("keeps Move up / Move down as the keyboard path, clamped per section", async () => {
@@ -426,75 +417,72 @@ describe("PlaybookRulesEditor — reordering is scoped to the category", () => {
     // The pointer path the arrows are the fallback for.
     renderEditor(RULES, []);
     expect(screen.getAllByTitle("Drag to reorder").length).toBe(
-      // one per rule, plus one per listed section
-      RULES.length + CATEGORIES.length,
+      // one per rule, plus one per section
+      RULES.length + SECTIONS.length,
     );
   });
 });
 
 describe("PlaybookRulesEditor — the line under a heading is the trader's", () => {
-  it("falls back to the built-in hint for a seeded section nobody has edited", () => {
-    renderEditor([rule({ id: "r1", text: "Waited for the sweep" })], []);
-    expect(
-      screen.getByText("What has to be true at the moment you take it."),
-    ).toBeInTheDocument();
-  });
-
-  it("prefers the section's own description over the built-in text", () => {
-    // The complaint this fixed: renaming "Context" to "Bias" left a sentence
-    // written for a word the trader no longer uses, with no way to change it.
+  it("shows the section's own description", () => {
     renderEditor([rule({ id: "r1", text: "Waited for the sweep" })], [], {}, [
-      { ...CATEGORIES[0], description: "Only what I can see on the daily." },
-      CATEGORIES[1],
+      { ...SECTIONS[0], description: "Only what I can see on the daily." },
+      SECTIONS[1],
     ]);
 
     expect(screen.getByText("Only what I can see on the daily.")).toBeInTheDocument();
-    expect(
-      screen.queryByText("What has to be true at the moment you take it."),
-    ).toBeNull();
   });
 
-  it("shows no line at all for a section the trader invented and left blank", () => {
-    // A sentence explaining what "Risk" means to the person who just typed
-    // "Risk" is this journal lecturing them about their own method.
-    renderEditor([rule({ id: "r1", text: "Sized to 1R", category: "risk" })], [], {}, [
-      {
-        id: "oc9",
-        value: "risk",
-        label: "Risk",
-        color: null,
-        description: null,
-        is_active: true,
-        sort_order: 0,
-      },
+  it("shows no line at all when the trader wrote none", () => {
+    // There is no built-in text left to fall back to, and that is the point: a
+    // sentence explaining what "Risk" means to the person who just typed "Risk"
+    // is this journal lecturing them about their own method. The old constant
+    // was keyed by the five values this repo used to seed, so an invented
+    // section got nothing and a renamed one kept a sentence for a word its
+    // owner no longer used.
+    renderEditor([rule({ id: "r1", text: "Sized to 1R", section_id: "sec-risk" })], [], {}, [
+      { id: "sec-risk", label: "Risk", description: null, sort_order: 0 },
     ]);
 
-    expect(screen.getByText("Risk")).toBeInTheDocument();
-    expect(screen.queryByText(/What has to be true/)).toBeNull();
+    const heading = screen.getByText("Risk");
+    expect(heading).toBeInTheDocument();
+    // The heading is alone in its row: nothing but the grip and the ⋮ beside it.
+    expect(heading.parentElement!.textContent).toBe("Risk");
   });
 });
 
-describe("PlaybookRulesEditor — sections the trader owns", () => {
-  it("still draws a section that left the list while it holds rules", () => {
-    // Data loss by presentation is the failure mode here: the heading is gone
-    // from the list, the rules are not, and hiding them to tidy the table would
-    // make them unreachable. Drawn — but with no controls, since there is no
-    // row left to rename, move or delete.
-    renderEditor(
-      [
-        rule({ id: "r1", text: "Waited for the sweep", category: "entry" }),
-        rule({ id: "r2", text: "Trailed behind structure", category: "management" }),
-      ],
-      [],
-    );
+describe("PlaybookRulesEditor — sections belong to THIS playbook", () => {
+  /**
+   * The complaint this whole change answers.
+   *
+   * The section list used to be one per ACCOUNT, so every playbook drew every
+   * heading whether or not it used it — "a new playbook gives me all the
+   * categories again". A book now shows its own sections and no others.
+   */
+  it("draws only the sections this book has", () => {
+    renderEditor([rule({ id: "r1", text: "Waited for the sweep" })], [], {}, [
+      SECTIONS[0],
+    ]);
 
-    expect(screen.getByText("Trailed behind structure")).toBeInTheDocument();
-    expect(screen.getByText("Management")).toBeInTheDocument();
-    // Two sections on the list, two sets of controls — the orphan gets none.
-    expect(screen.getAllByRole("button", { name: "Section actions" })).toHaveLength(2);
+    expect(screen.getByText("Entry")).toBeInTheDocument();
+    expect(screen.queryByText("Exit")).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Section actions" })).toHaveLength(1);
   });
 
-  it("deletes a section from its own menu", async () => {
+  it("KEEPS an empty section, because someone created it here", () => {
+    // The opposite of the old behaviour, and correct for the same reason: an
+    // empty heading used to be somebody else's, and is now the trader's own
+    // prompt to write the rule that is missing.
+    renderEditor([rule({ id: "r1", text: "Waited for the sweep" })], []);
+
+    expect(screen.getByText("Exit")).toBeInTheDocument();
+    expect(screen.getByText("No rules here yet.")).toBeInTheDocument();
+  });
+
+  it("asks before deleting a section, and says what leaves the playbook", async () => {
+    // Never refused any more. The old action counted every rule in the ACCOUNT
+    // under that heading — including ones in other playbooks, invisible from
+    // this card — and used the number to refuse.
     const user = userEvent.setup();
     renderEditor([rule({ id: "r1", text: "Waited for the sweep" })], []);
 
@@ -503,13 +491,35 @@ describe("PlaybookRulesEditor — sections the trader owns", () => {
       within(screen.getByRole("menu")).getByRole("menuitem", { name: "Delete section" }),
     );
 
-    expect(actions.deletePlaybookSection).toHaveBeenCalledWith("oc1");
+    expect(screen.getByRole("dialog")).toHaveTextContent(/stay in your library/);
+    await user.click(screen.getByRole("button", { name: "Delete section" }));
+    expect(actions.deletePlaybookSection).toHaveBeenCalledWith("sec-entry");
+  });
+
+  it("moves a rule into another section of this book only", async () => {
+    const user = userEvent.setup();
+    renderEditor([rule({ id: "r1", text: "Waited for the sweep" })], []);
+
+    const menu = await openRuleMenu(user, "Waited for the sweep");
+    // Hovered, not clicked: a Radix submenu opens on pointer-enter, and a click
+    // on the trigger alone leaves it closed in jsdom.
+    await user.hover(within(menu).getByRole("menuitem", { name: "Move to section" }));
+    // `fireEvent`, not `user.click`: Radix selects a radio item from the
+    // pointerup it captures on the submenu, and userEvent's synthetic sequence
+    // does not reach it through the portal in jsdom. Same reason the drag tests
+    // in this repo use `fireEvent`.
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "Exit" }));
+
+    await vi.waitFor(() =>
+      expect(actions.moveRuleToSection).toHaveBeenCalledWith("pb", "r1", "sec-exit"),
+    );
   });
 
   it("starts a book with no sections at all and says so", () => {
+    // What a brand-new playbook is: an empty page, not a form to fill.
     renderEditor([], [], {}, []);
 
-    expect(screen.getByText(/No groups yet/)).toBeInTheDocument();
+    expect(screen.getByText(/this playbook starts empty/)).toBeInTheDocument();
     // The way out is on the screen, not in Settings.
     expect(
       screen.getByRole("button", { name: /Add rule group/ }),

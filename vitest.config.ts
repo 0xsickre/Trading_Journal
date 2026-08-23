@@ -69,6 +69,18 @@ export default defineConfig({
           environment: "jsdom",
           include: ["src/**/*.{test,spec}.tsx"],
           setupFiles: ["./vitest.setup.ts"],
+          /**
+           * Longer than the 5 s default, to stay clear of the async-util budget
+           * raised in `vitest.setup.ts`.
+           *
+           * A test that awaits three `findBy*` calls has to be allowed to spend
+           * three of those budgets before Vitest steps in — otherwise the
+           * timeout that fires is this one, whose message is "test timed out"
+           * rather than Testing Library's, which prints the query and the DOM
+           * it searched. The number is a ceiling on how long a FAILING test
+           * takes to report; a passing one never approaches it.
+           */
+          testTimeout: 20_000,
         },
       },
     ],

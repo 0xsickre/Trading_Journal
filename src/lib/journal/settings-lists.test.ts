@@ -8,12 +8,13 @@ describe("editableLists", () => {
   const lists = [
     { key: "exit_reason" },
     { key: "setup_grade" },
-    { key: "rule_category" },
+    // `rule_category` used to sit here. The list itself is gone — playbook
+    // sections are per-playbook rows now — so there is nothing left to hide.
     { key: "direction" },
     { key: "technical_tag" },
   ];
 
-  it("drops the three lists that have no working editor here", () => {
+  it("drops the lists that have no working editor here", () => {
     expect(editableLists(lists).map((l) => l.key)).toEqual([
       "exit_reason",
       "technical_tag",

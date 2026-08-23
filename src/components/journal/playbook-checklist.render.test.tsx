@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PlaybookChecklist } from "./playbook-checklist";
-import type { Playbook, PlaybookRule } from "@/lib/journal/playbook-types";
+import type { LinkedRule, Playbook } from "@/lib/journal/playbook-types";
 
 /**
  * The checklist, driven directly rather than through `TradeForm`.
@@ -12,20 +12,24 @@ import type { Playbook, PlaybookRule } from "@/lib/journal/playbook-types";
  * noise that says nothing about this component.
  */
 
-function rule(over: Partial<PlaybookRule> & { id: string }): PlaybookRule {
+const SECTION = { id: "s-entry", label: "Entry", description: null, sort_order: 0 };
+
+function rule(over: Partial<LinkedRule> & { id: string }): LinkedRule {
   return {
-    category: "entry",
     text: over.id,
     show_when: "always",
-    is_setup_criterion: false,
     sort_order: 0,
     deleted_at: null,
     answerCount: 0,
+    link_id: `link-${over.id}`,
+    section_id: SECTION.id,
+    is_setup_criterion: false,
+    link_sort: 0,
     ...over,
   };
 }
 
-function book(rules: PlaybookRule[]): Playbook {
+function book(rules: LinkedRule[]): Playbook {
   return {
     id: "pb1",
     name: "London Reversal",
@@ -36,6 +40,9 @@ function book(rules: PlaybookRule[]): Playbook {
     sort_order: 0,
     default_risk_pct: null,
     a_plus_criteria: null,
+    // Every rule below files under this one heading unless it says otherwise.
+    // The section list is the BOOK's now, so a fixture has to supply it.
+    sections: [SECTION],
     rules,
   };
 }
@@ -47,7 +54,7 @@ function fills(): HTMLElement[] {
 }
 
 function renderChecklist(
-  rules: PlaybookRule[],
+  rules: LinkedRule[],
   answers: Record<string, boolean>,
   opts: { netPl?: number | null } = {},
 ) {

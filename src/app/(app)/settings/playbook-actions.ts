@@ -5,15 +5,11 @@ import { revalidateTrades } from "@/lib/journal/revalidate";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
-import {
-  SHOW_WHEN_VALUES,
-  type RuleCategory,
-  type ShowWhen,
-} from "@/lib/journal/playbook-types";
+import { SHOW_WHEN_VALUES, type ShowWhen } from "@/lib/journal/playbook-types";
 import {
   moveInOrder,
-  moveRuleWithinCategory,
-  reorderWithinCategory,
+  moveRuleWithinSection,
+  reorderWithinSection,
 } from "@/lib/journal/playbook-order";
 
 function revalidateAll() {
@@ -74,8 +70,10 @@ export async function addPlaybook(
     };
   }
 
-  // No starter groups any more. A rule carries its own category, so an empty
-  // playbook is a playbook with nothing linked yet — not a dead end.
+  // Nothing is created alongside it: no sections, no rules. A playbook is a
+  // statement of how THIS setup is traded, and handing over five headings from
+  // somebody else's method — which is what the shared section list did — made
+  // every new book start as a form to fill rather than a page to write.
   revalidateAll();
   return { ok: true, id: book.id };
 }
@@ -152,18 +150,288 @@ export async function deletePlaybook(id: string): Promise<Result> {
   return { ok: true };
 }
 
-// --- Links: which rules a playbook uses -------------------------------------
+// --- Sections: the headings ONE playbook has --------------------------------
+//
+// A section is a row in `tj_playbook_sections`, owned by a single playbook.
+//
+// It used to be a value in one `rule_category` option list shared by the whole
+// account, and every complaint about playbooks came out of that: a new book drew
+// every heading the account had, a heading could not be deleted while a rule in
+// ANOTHER book sat under it, and one rule was filed the same way everywhere.
+//
+// Because identity is now the row's `id` and not its text, most of the old
+// caution here is gone with it. There is no `value` that must never change, no
+// duplicate that would silently split one heading in two across books, and no
+// lazily-created list to find first.
+
+/** Does this section exist, in this playbook, for this user? */
+async function sectionInBook(
+  playbookId: string,
+  sectionId: string,
+): Promise<Result | null> {
+  const supabase = await createClient();
+  // No `user_id` filter: `tj_playbook_sections_owner` scopes the read to the
+  // caller, so another user's section id simply comes back empty.
+  const { data } = await supabase
+    .from("tj_playbook_sections")
+    .select("id")
+    .eq("id", sectionId)
+    .eq("playbook_id", playbookId)
+    .maybeSingle();
+
+  if (data) return null;
+  return {
+    ok: false,
+    error: "That section is not in this playbook.",
+  };
+}
+
+const sectionLabelSchema = z.string().trim().min(1).max(60);
+
+/**
+ * `addPlaybookSection`'s own result, not the shared `Result`.
+ *
+ * The caller may need to write rules INTO the section it just created — the
+ * "Add rule group" dialog names a group and its first rules in one step — and
+ * `addPlaybookRule` takes the section's id.
+ */
+type AddSectionResult = { ok: true; id: string } | { ok: false; error: string };
+
+export async function addPlaybookSection(
+  playbookId: string,
+  rawLabel: string,
+): Promise<AddSectionResult> {
+  const parsed = sectionLabelSchema.safeParse(rawLabel);
+  if (!parsed.success) {
+    return { ok: false, error: "A section needs a name, up to 60 characters." };
+  }
+  const label = parsed.data;
+
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const { data: last } = await supabase
+    .from("tj_playbook_sections")
+    .select("sort_order")
+    .eq("playbook_id", playbookId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data: created, error } = await supabase
+    .from("tj_playbook_sections")
+    .insert({
+      user_id: user.id,
+      playbook_id: playbookId,
+      label,
+      sort_order: (last?.sort_order ?? -1) + 1,
+    })
+    .select("id")
+    .single();
+
+  if (error || !created) {
+    // Scoped to the playbook by `tj_playbook_sections_book_label_idx`, so the
+    // same heading in a DIFFERENT book is fine — which is the whole point.
+    return {
+      ok: false,
+      error:
+        error?.code === "23505"
+          ? `This playbook already has a "${label}" section.`
+          : (error?.message ?? "Insert failed"),
+    };
+  }
+
+  revalidateAll();
+  return { ok: true, id: created.id };
+}
+
+/**
+ * Edit a section's name and the line under it.
+ *
+ * A rename touches nothing else: links point at the row's `id`. The old version
+ * of this had to refuse to change the stored `value`, because rules carried it
+ * as text and any row missed by the UPDATE would drop out of its own section.
+ */
+export async function updatePlaybookSection(
+  id: string,
+  patch: { label?: string; description?: string | null },
+): Promise<Result> {
+  const next: { label?: string; description?: string | null } = {};
+
+  if (patch.label !== undefined) {
+    const parsed = sectionLabelSchema.safeParse(patch.label);
+    if (!parsed.success) {
+      return { ok: false, error: "A section needs a name, up to 60 characters." };
+    }
+    next.label = parsed.data;
+  }
+
+  if (patch.description !== undefined) {
+    const description = patch.description?.trim() ?? "";
+    if (description.length > 200) {
+      return { ok: false, error: "The description can be up to 200 characters." };
+    }
+    next.description = description || null;
+  }
+
+  if (Object.keys(next).length === 0) return { ok: true };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tj_playbook_sections")
+    .update(next)
+    .eq("id", id);
+  if (error) {
+    return {
+      ok: false,
+      error:
+        error.code === "23505"
+          ? "This playbook already has a section with that name."
+          : error.message,
+    };
+  }
+
+  revalidateAll();
+  return { ok: true };
+}
+
+/**
+ * Delete a section from ONE playbook, and let its rules go with it.
+ *
+ * Never refuses. `ON DELETE CASCADE` on `section_id` removes the LINKS, not the
+ * rules: every rule stays in the library with every answer it ever collected,
+ * and every other playbook linking it is untouched. Deleting a section is an
+ * unlink of several rules at once, and unlink has never been destructive here.
+ *
+ * The caller confirms first, naming the rules it can already see on the card —
+ * no round trip for a count, because the card holds exactly the links this
+ * would remove. That is where the caution belongs: in a sentence the trader
+ * reads, not in a refusal they cannot act on.
+ */
+export async function deletePlaybookSection(id: string): Promise<Result> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tj_playbook_sections")
+    .delete()
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidateAll();
+  return { ok: true };
+}
+
+/**
+ * Put this playbook's sections in an explicit order — the drag-and-drop write.
+ *
+ * Scoped to one book by the read, so a section id from another playbook is
+ * simply absent from `known` and never gets an ordinal written to it.
+ */
+export async function reorderPlaybookSections(
+  playbookId: string,
+  orderedIds: string[],
+): Promise<Result> {
+  const supabase = await createClient();
+  const { data: sections, error } = await supabase
+    .from("tj_playbook_sections")
+    .select("id, sort_order")
+    .eq("playbook_id", playbookId)
+    .order("sort_order")
+    .order("id");
+  if (error) return { ok: false, error: error.message };
+  if (!sections?.length) return { ok: false, error: "No sections yet." };
+
+  const known = new Map(sections.map((s) => [s.id, s.sort_order]));
+  const wanted = orderedIds.filter((id) => known.has(id));
+  // Anything the client did not name keeps its place at the end, in the order
+  // the database already has — a stale list must not silently drop a section.
+  const rest = sections.map((s) => s.id).filter((id) => !wanted.includes(id));
+  const ordered = [...wanted, ...rest];
+
+  const writes = ordered
+    .map((id, ordinal) => ({ id, ordinal }))
+    .filter(({ id, ordinal }) => known.get(id) !== ordinal);
+  if (writes.length === 0) return { ok: true };
+
+  const results = await Promise.all(
+    writes.map(({ id, ordinal }) =>
+      supabase
+        .from("tj_playbook_sections")
+        .update({ sort_order: ordinal })
+        .eq("id", id),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { ok: false, error: failed.error.message };
+
+  revalidateAll();
+  return { ok: true };
+}
+
+/** Move a section one place — the keyboard path for what the grip does. */
+export async function movePlaybookSection(
+  playbookId: string,
+  id: string,
+  direction: -1 | 1,
+): Promise<Result> {
+  const supabase = await createClient();
+  const { data: sections, error } = await supabase
+    .from("tj_playbook_sections")
+    .select("id, sort_order")
+    .eq("playbook_id", playbookId)
+    .order("sort_order")
+    .order("id");
+  if (error) return { ok: false, error: error.message };
+  if (!sections?.length) return { ok: false, error: "No sections yet." };
+
+  const ordered = moveInOrder(
+    sections.map((s) => s.id),
+    id,
+    direction,
+  );
+  // Already at the end, or not in this book. Reported as success because
+  // nothing failed and nothing should change — same as `movePlaybookRule`.
+  if (!ordered) return { ok: true };
+
+  const ordinalOf = new Map(sections.map((s) => [s.id, s.sort_order]));
+  const writes = ordered
+    .map((sectionId, ordinal) => ({ sectionId, ordinal }))
+    .filter(({ sectionId, ordinal }) => ordinalOf.get(sectionId) !== ordinal);
+
+  const results = await Promise.all(
+    writes.map(({ sectionId, ordinal }) =>
+      supabase
+        .from("tj_playbook_sections")
+        .update({ sort_order: ordinal })
+        .eq("id", sectionId),
+    ),
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { ok: false, error: failed.error.message };
+
+  revalidateAll();
+  return { ok: true };
+}
+
+// --- Links: which rules a playbook uses, and where it files them ------------
 //
 // This replaces the group actions. A group was a name owned by ONE playbook and
 // rules cascaded from it, so removing a rule from a book destroyed the rule and
 // its recorded answers. A link is the opposite: severing it says "this book no
 // longer uses that rule" and leaves the rule, and every answer ever given to
 // it, exactly where they were.
+//
+// The link carries the section and the setup-criterion flag, which is what lets
+// one rule be an Entry criterion in one book and plain Exit process in another.
 
 export async function linkRule(
   playbookId: string,
   ruleId: string,
+  sectionId: string,
 ): Promise<Result> {
+  const bad = await sectionInBook(playbookId, sectionId);
+  if (bad) return bad;
+
   const supabase = await createClient();
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Not signed in." };
@@ -180,6 +448,7 @@ export async function linkRule(
     user_id: user.id,
     playbook_id: playbookId,
     rule_id: ruleId,
+    section_id: sectionId,
     sort_order: (last?.sort_order ?? -1) + 1,
   });
   if (error) {
@@ -219,15 +488,102 @@ export async function unlinkRule(
 }
 
 /**
- * Move a rule one place within its category, inside ONE playbook.
+ * File a rule under a different section OF THIS PLAYBOOK.
+ *
+ * The move the old schema could not express. `updatePlaybookRule({ category })`
+ * used to do this job by rewriting the rule itself, which moved it in every
+ * playbook at once — so a rule that is "Entry" in the swing book could not be
+ * "Exit" in the scalp book without being copied, and a copy is a second id with
+ * its own separate statistics.
+ *
+ * Appended at the end of the target section: a drop from a menu names no
+ * position, and the grip is there for the trader who wants one.
+ */
+export async function moveRuleToSection(
+  playbookId: string,
+  ruleId: string,
+  sectionId: string,
+): Promise<Result> {
+  const bad = await sectionInBook(playbookId, sectionId);
+  if (bad) return bad;
+
+  const supabase = await createClient();
+  const { data: last } = await supabase
+    .from("tj_playbook_rule_links")
+    .select("sort_order")
+    .eq("playbook_id", playbookId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { error } = await supabase
+    .from("tj_playbook_rule_links")
+    .update({ section_id: sectionId, sort_order: (last?.sort_order ?? -1) + 1 })
+    .eq("playbook_id", playbookId)
+    .eq("rule_id", ruleId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidateAll();
+  return { ok: true };
+}
+
+/**
+ * Does this rule grade the setup IN THIS PLAYBOOK?
+ *
+ * Per link, because the derived grade is per playbook — `criteriaByPlaybook` in
+ * `reports/rule-lookup.ts` was already keyed that way and only ever read a flag
+ * that could not vary. "Sweep of a daily level" can decide the grade in a swing
+ * book and be ordinary process in a scalp one.
+ *
+ * The database refuses a criterion whose rule is not `show_when = 'always'`; a
+ * raw trigger message would be unreadable, so the reason is spelled out here
+ * and still enforced there.
+ */
+export async function setRuleCriterion(
+  playbookId: string,
+  ruleId: string,
+  on: boolean,
+): Promise<Result> {
+  const supabase = await createClient();
+
+  if (on) {
+    const { data: rule } = await supabase
+      .from("tj_playbook_rules")
+      .select("show_when")
+      .eq("id", ruleId)
+      .maybeSingle();
+    if (rule && rule.show_when !== "always") {
+      return {
+        ok: false,
+        error:
+          "Only a rule that shows on every trade can grade the setup. A criterion asked just of winners would judge the setup already knowing the outcome, which is the whole thing the grade is meant to avoid.",
+      };
+    }
+  }
+
+  const { error } = await supabase
+    .from("tj_playbook_rule_links")
+    .update({ is_setup_criterion: on })
+    .eq("playbook_id", playbookId)
+    .eq("rule_id", ruleId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidateAll();
+  return { ok: true };
+}
+
+/**
+ * Move a rule one place within its section, inside ONE playbook.
  *
  * The ordinal lives on the LINK, not on the rule, and that is the entire reason
  * this is possible: a rule linked into three books can sit third in one and
  * first in another, and reordering here must not disturb the other two. Every
  * statement below is scoped to `playbookId` for that reason.
  *
- * The ordering itself is `moveRuleWithinCategory`, which is pure and tested —
- * this function only reads, delegates, and writes back.
+ * The ordering itself is `moveRuleWithinSection`, which is pure and tested —
+ * this function only reads, delegates, and writes back. It used to take a
+ * SECOND read of `tj_playbook_rules` just to learn each rule's section; the
+ * section is on the link now, so one read answers everything.
  *
  * WHY IT REWRITES ORDINALS FROM AN ARRAY
  *
@@ -252,38 +608,79 @@ export async function movePlaybookRule(
   // playbook id comes back with zero links and stops at the guard below.
   const { data: links, error: linkError } = await supabase
     .from("tj_playbook_rule_links")
-    .select("id,rule_id,sort_order")
+    .select("id,rule_id,section_id,sort_order")
     .eq("playbook_id", playbookId)
     .order("sort_order")
     .order("id");
   if (linkError) return { ok: false, error: linkError.message };
   if (!links?.length) return { ok: false, error: "Playbook not found." };
 
-  // The category is on the rule, not the link, so it takes a second read. Only
-  // the rules this book actually links.
-  const { data: rules, error: ruleError } = await supabase
-    .from("tj_playbook_rules")
-    .select("id,category")
-    .in("id", links.map((l) => l.rule_id));
-  if (ruleError) return { ok: false, error: ruleError.message };
-
-  const categoryOf = new Map((rules ?? []).map((r) => [r.id, r.category as RuleCategory]));
-  const ordered = moveRuleWithinCategory(
-    links.flatMap((l) => {
-      const category = categoryOf.get(l.rule_id);
-      // A link whose rule vanished would otherwise become an `undefined`
-      // category that groups with every other orphan. Dropped instead — it is
-      // not drawn either.
-      return category ? [{ ruleId: l.rule_id, category }] : [];
-    }),
+  const ordered = moveRuleWithinSection(
+    links.map((l) => ({ ruleId: l.rule_id, sectionId: l.section_id })),
     ruleId,
     direction,
   );
-  // Already at the end of its category, or not in this book. Reported as
-  // success because nothing failed and nothing should change — same as
-  // `moveFieldDef`.
+  // Already at the end of its section, or not in this book. Reported as success
+  // because nothing failed and nothing should change — same as `moveFieldDef`.
   if (!ordered) return { ok: true };
 
+  return writeLinkOrder(links, ordered);
+}
+
+/**
+ * Put one section's rules in an explicit order — the drag-and-drop write.
+ *
+ * `movePlaybookRule` moves one rule one place and is still what the keyboard
+ * path uses; this takes the finished order in one go, because a drag across six
+ * rows is one gesture and replaying it as five adjacent swaps would be five
+ * round trips and five chances to half-apply.
+ *
+ * The slot arithmetic — a section's rules occupy scattered absolute positions
+ * in the playbook's single flat link order — lives in `reorderWithinSection`,
+ * pure and tested.
+ */
+export async function reorderPlaybookRules(
+  playbookId: string,
+  sectionId: string,
+  orderedRuleIds: string[],
+): Promise<Result> {
+  const supabase = await createClient();
+
+  const { data: links, error: linkError } = await supabase
+    .from("tj_playbook_rule_links")
+    .select("id,rule_id,section_id,sort_order")
+    .eq("playbook_id", playbookId)
+    .order("sort_order")
+    .order("id");
+  if (linkError) return { ok: false, error: linkError.message };
+  if (!links?.length) return { ok: false, error: "Playbook not found." };
+
+  const ordered = reorderWithinSection(
+    links.map((l) => ({ ruleId: l.rule_id, sectionId: l.section_id })),
+    sectionId,
+    orderedRuleIds,
+  );
+  // Nothing to do: the drop landed where the rule already was, or the client
+  // sent an order this playbook cannot satisfy. Success, because nothing failed.
+  if (!ordered) return { ok: true };
+
+  return writeLinkOrder(links, ordered);
+}
+
+/**
+ * Write a finished link order back, touching only the rows that moved.
+ *
+ * Shared by both reorder paths, which read the same shape and differ only in
+ * which pure function produced the array. Dispatched together: the ordinals are
+ * independent and there is no unique index to collide with. Every result is
+ * inspected, per `reorderOptions` — a half-applied reorder that reported success
+ * would snap back on the next load with nothing saying why.
+ */
+async function writeLinkOrder(
+  links: readonly { id: string; rule_id: string; sort_order: number }[],
+  ordered: readonly string[],
+): Promise<Result> {
+  const supabase = await createClient();
   const linkOf = new Map(links.map((l) => [l.rule_id, l]));
   const writes = ordered
     .map((rid, ordinal) => ({ link: linkOf.get(rid)!, ordinal }))
@@ -291,12 +688,8 @@ export async function movePlaybookRule(
     // sequentially; on a thirty-rule playbook that is thirty round trips for a
     // swap of two. The normalising effect above is kept — a duplicate ordinal
     // differs from its new index, so it is in this list.
-    .filter(({ link, ordinal }) => link.sort_order !== ordinal);
+    .filter(({ link, ordinal }) => link && link.sort_order !== ordinal);
 
-  // Dispatched together: the ordinals are independent and there is no unique
-  // index to collide with. Every result is inspected, per `reorderOptions` —
-  // a half-applied reorder that reported success would snap back on the next
-  // load with nothing saying why.
   const results = await Promise.all(
     writes.map(({ link, ordinal }) =>
       supabase
@@ -317,33 +710,40 @@ export async function movePlaybookRule(
 /**
  * Write a rule into the library, and optionally link it into a playbook.
  *
- * `playbook_id` is optional because the two acts are genuinely separate now: a
- * rule can be written once and linked into three books, or written from inside
- * one book and linked immediately. Writing it takes the same shape either way,
- * which is what keeps a rule reused from becoming a rule retyped.
+ * `playbook_id` / `section_id` are optional because the two acts are genuinely
+ * separate: a rule can be written once and linked into three books under three
+ * different headings, or written from inside one section and filed there
+ * immediately. The rule itself is the same row either way, which is what keeps
+ * a rule reused from becoming a rule retyped.
  */
 export async function addPlaybookRule(input: {
-  category: RuleCategory;
   text: string;
   show_when?: ShowWhen;
   playbook_id?: string;
+  section_id?: string;
 }): Promise<Result> {
   const clean = input.text.trim();
   if (!clean) return { ok: false, error: "The rule cannot be empty." };
   const showWhen = input.show_when ?? "always";
   if (!SHOW_WHEN_VALUES.includes(showWhen))
     return { ok: false, error: "Unknown value for \"when it shows\"." };
-  const badCategory = await unknownCategory(input.category);
-  if (badCategory) return badCategory;
+  if ((input.playbook_id == null) !== (input.section_id == null)) {
+    return {
+      ok: false,
+      error: "A rule is filed into a playbook AND a section, or into neither.",
+    };
+  }
 
   const supabase = await createClient();
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Not signed in." };
 
+  // Across the whole library now. The ordinal used to be scoped to the rule's
+  // category, which no longer exists — and which is why the library's own order
+  // was ambiguous whenever two categories reached the same count.
   const { data: last } = await supabase
     .from("tj_playbook_rules")
     .select("sort_order")
-    .eq("category", input.category)
     .order("sort_order", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -352,7 +752,6 @@ export async function addPlaybookRule(input: {
     .from("tj_playbook_rules")
     .insert({
       user_id: user.id,
-      category: input.category,
       text: clean,
       show_when: showWhen,
       sort_order: (last?.sort_order ?? -1) + 1,
@@ -363,8 +762,8 @@ export async function addPlaybookRule(input: {
     return { ok: false, error: error?.message ?? "Insert failed" };
   }
 
-  if (input.playbook_id) {
-    const link = await linkRule(input.playbook_id, rule.id);
+  if (input.playbook_id && input.section_id) {
+    const link = await linkRule(input.playbook_id, rule.id, input.section_id);
     if (!link.ok) return link;
   }
 
@@ -373,7 +772,11 @@ export async function addPlaybookRule(input: {
 }
 
 /**
- * Edit a rule.
+ * Edit a rule, in the library — so in every playbook that links it.
+ *
+ * Only the two fields that genuinely belong to the rule are here. Where it is
+ * filed and whether it grades the setup moved to the link, and are set by
+ * `moveRuleToSection` and `setRuleCriterion`.
  *
  * `show_when` is refused once the rule has been answered on any trade. The
  * follow rate for a `winner` rule is measured against winning trades; flipping
@@ -381,94 +784,18 @@ export async function addPlaybookRule(input: {
  * so every historical number would silently shift. The DB enforces this too —
  * this check exists to produce a sentence instead of a constraint violation.
  */
-/**
- * Is this section one the trader actually has?
- *
- * The old `CHECK IN (...)` is gone — the permitted set is now per-user rows in
- * `tj_option_items`, which a column constraint cannot see. Checked here rather
- * than by a trigger because the value is a display grouping: no metric keys on
- * it, so the worst a bad one does is draw a heading with an odd name. That
- * deserves a readable refusal, not a Postgres error.
- *
- * An ARCHIVED section is accepted. Switching one off in Settings stops it being
- * offered for new rules, and must not stop an existing rule from being edited or
- * moved back.
- */
-async function unknownCategory(category: string): Promise<Result | null> {
-  const clean = category.trim();
-  if (!clean) return { ok: false, error: "A rule needs a section." };
-
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("tj_option_items")
-    .select("value, tj_option_lists!inner(key)")
-    .eq("value", clean)
-    .eq("tj_option_lists.key", "rule_category")
-    .maybeSingle();
-
-  if (data) return null;
-  return {
-    ok: false,
-    error: `"${clean}" is not one of your playbook sections. Add the section first, then write rules under it.`,
-  };
-}
-
-
 export async function updatePlaybookRule(
   id: string,
-  patch: {
-    text?: string;
-    show_when?: ShowWhen;
-    category?: RuleCategory;
-    is_setup_criterion?: boolean;
-  },
+  patch: { text?: string; show_when?: ShowWhen },
 ): Promise<Result> {
-  const next: {
-    text?: string;
-    show_when?: ShowWhen;
-    category?: RuleCategory;
-    is_setup_criterion?: boolean;
-  } = {};
+  const next: { text?: string; show_when?: ShowWhen } = {};
   if (patch.text != null) {
     const clean = patch.text.trim();
     if (!clean) return { ok: false, error: "The rule cannot be empty." };
     next.text = clean;
   }
-  // Unlike `show_when`, the category is NOT frozen once answered. It only
-  // decides where the rule is drawn; no statistic counts a denominator from it,
-  // so moving "waited for the sweep" from entry to context changes nothing that
-  // was already measured.
-  if (patch.category != null) {
-    const bad = await unknownCategory(patch.category);
-    if (bad) return bad;
-    next.category = patch.category;
-  }
 
   const supabase = await createClient();
-
-  if (patch.is_setup_criterion != null) {
-    // The database refuses a criterion that is not `show_when = 'always'`, and
-    // a raw constraint violation would surface as an unreadable Postgres error.
-    // Checked here so the refusal explains itself — and still enforced there,
-    // because this is the readable half, not the real one.
-    if (patch.is_setup_criterion) {
-      const { data: current } = await supabase
-        .from("tj_playbook_rules")
-        .select("show_when")
-        .eq("id", id)
-        .maybeSingle();
-
-      const nextShowWhen = patch.show_when ?? current?.show_when;
-      if (nextShowWhen !== "always") {
-        return {
-          ok: false,
-          error:
-            "Only a rule that shows on every trade can grade the setup. A criterion asked just of winners would judge the setup already knowing the outcome, which is the whole thing the grade is meant to avoid.",
-        };
-      }
-    }
-    next.is_setup_criterion = patch.is_setup_criterion;
-  }
 
   if (patch.show_when != null) {
     if (!SHOW_WHEN_VALUES.includes(patch.show_when))
@@ -491,6 +818,25 @@ export async function updatePlaybookRule(
           error: `The rule is already answered on ${count} trades — "when it shows" is locked, because editing it would retroactively change the statistics. Create a new rule instead.`,
         };
       }
+
+      // The second half of the same rule the criterion trigger enforces: a
+      // criterion has to show on every trade, so a rule that grades the setup
+      // ANYWHERE cannot be narrowed to winners. Named here rather than left to
+      // the trigger, so the refusal says which playbooks are in the way.
+      if (patch.show_when !== "always") {
+        const { count: criteria } = await supabase
+          .from("tj_playbook_rule_links")
+          .select("id", { count: "exact", head: true })
+          .eq("rule_id", id)
+          .eq("is_setup_criterion", true);
+        if ((criteria ?? 0) > 0) {
+          return {
+            ok: false,
+            error: `This rule grades the setup in ${criteria} ${criteria === 1 ? "playbook" : "playbooks"}, so it has to show on every trade. Turn the grade pill off there first.`,
+          };
+        }
+      }
+
       next.show_when = patch.show_when;
     }
   }
@@ -586,363 +932,5 @@ export async function setPlaybooksExpanded(ids: string[]): Promise<Result> {
   // mutations that change what a rule or a playbook actually IS, which a
   // client-side view preference never does.
   revalidatePath("/playbooks");
-  return { ok: true };
-}
-
-// --- Sections ---------------------------------------------------------------
-//
-// A section is a row in the user's `rule_category` option list, and these four
-// actions are the whole of its lifecycle. They live HERE rather than beside
-// `addOption` / `renameOption` in `settings/actions.ts` — which can already edit
-// any list generically — because the generic editor is not where sections are
-// used. A trader writing a playbook should not have to leave the playbook, find
-// the right dropdown list in Settings, add a value, and come back.
-//
-// The generic actions still work on this list and are not replaced. What these
-// add is the part the generic ones cannot know: `value` must never change once
-// rules point at it, a duplicate value would silently split one section in two,
-// and deletion has to answer for the rules filed under it.
-
-/** The `rule_category` list, created on first use. */
-async function ruleCategoryListId(): Promise<
-  { id: string } | { ok: false; error: string }
-> {
-  const supabase = await createClient();
-  const { data: existing, error } = await supabase
-    .from("tj_option_lists")
-    .select("id")
-    .eq("key", "rule_category")
-    .maybeSingle();
-  if (error) return { ok: false, error: error.message };
-  if (existing) return { id: existing.id };
-
-  // Created lazily rather than in `tj_seed_defaults`, and that is the point: an
-  // account starting with zero sections is the intended state. The trader names
-  // the first one when they write their first rule, instead of being handed
-  // five headings out of somebody else's method.
-  const user = await getCurrentUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-  const { data: created, error: createError } = await supabase
-    .from("tj_option_lists")
-    .insert({
-      user_id: user.id,
-      key: "rule_category",
-      label: "Playbook Sections",
-      category: "ICT Setup",
-      sort_order: 17,
-    })
-    .select("id")
-    .single();
-  if (createError) return { ok: false, error: createError.message };
-  return { id: created.id };
-}
-
-const sectionLabelSchema = z.string().trim().min(1).max(60);
-
-/**
- * `addPlaybookSection`'s own result, not the shared `Result`.
- *
- * The caller may need to write rules INTO the section it just created — the
- * "Add rule group" dialog names a group and its first rules in one step — and
- * `addPlaybookRule` takes the section's `value`. Returning it closes the gap
- * that would otherwise be bridged by assuming value === label: true today
- * (`tj_add_option_item` writes the trimmed label into both), but an assumption
- * the caller has no business encoding.
- */
-type AddSectionResult =
-  | { ok: true; value: string; id: string }
-  | { ok: false; error: string };
-
-export async function addPlaybookSection(
-  rawLabel: string,
-): Promise<AddSectionResult> {
-  const parsed = sectionLabelSchema.safeParse(rawLabel);
-  if (!parsed.success) {
-    return { ok: false, error: "A section needs a name, up to 60 characters." };
-  }
-  const label = parsed.data;
-
-  const list = await ruleCategoryListId();
-  if ("ok" in list) return list;
-
-  const supabase = await createClient();
-
-  // Checked before the insert because there is no unique index behind it. Two
-  // sections sharing a `value` would not error — they would draw two headings
-  // over the SAME rules, and every edit under one would appear under both.
-  const { data: clash } = await supabase
-    .from("tj_option_items")
-    .select("id")
-    .eq("list_id", list.id)
-    .eq("value", label)
-    .maybeSingle();
-  if (clash) return { ok: false, error: `You already have a "${label}" section.` };
-
-  // Through the RPC, not a plain insert: it computes the next ordinal inside the
-  // statement, so two quick adds cannot both read the same maximum.
-  const { data: created, error } = await supabase.rpc("tj_add_option_item", {
-    p_list_id: list.id,
-    p_label: label,
-  });
-  if (error) return { ok: false, error: error.message };
-
-  // The row comes back from the RPC (`RETURNS public.tj_option_items`). Read
-  // back rather than assumed, except for `value`, whose fallback is the label —
-  // that is exactly what the function writes into it.
-  if (!created?.id) {
-    return { ok: false, error: "The section was not created." };
-  }
-
-  revalidateAll();
-  return { ok: true, value: created.value ?? label, id: created.id };
-}
-
-/**
- * Edit a section's name and the line under it — never its `value`.
- *
- * `tj_playbook_rules.category` stores the `value`, and `ruleCategoryLabel`
- * resolves value to label at render time. So a rename touches no rule and cannot
- * orphan one. Rewriting the value instead would mean an UPDATE across every rule
- * of every playbook, and any row missed would drop out of its own section.
- *
- * `description` is the line beside the heading. It used to be `RULE_CATEGORY_HINTS`
- * — a constant keyed by the five seeded values — so renaming "Context" to "Bias"
- * kept a sentence written for a word you no longer use, and a section you
- * invented had no line at all. An empty string clears it back to null, which is
- * what makes the built-in hint reappear for a seeded section.
- */
-export async function updatePlaybookSection(
-  id: string,
-  patch: { label?: string; description?: string | null },
-): Promise<Result> {
-  const next: { label?: string; description?: string | null } = {};
-
-  if (patch.label !== undefined) {
-    const parsed = sectionLabelSchema.safeParse(patch.label);
-    if (!parsed.success) {
-      return { ok: false, error: "A section needs a name, up to 60 characters." };
-    }
-    next.label = parsed.data;
-  }
-
-  if (patch.description !== undefined) {
-    const description = patch.description?.trim() ?? "";
-    if (description.length > 200) {
-      return { ok: false, error: "The description can be up to 200 characters." };
-    }
-    next.description = description || null;
-  }
-
-  if (Object.keys(next).length === 0) return { ok: true };
-
-  const supabase = await createClient();
-  const { error } = await supabase.from("tj_option_items").update(next).eq("id", id);
-  if (error) return { ok: false, error: error.message };
-
-  revalidateAll();
-  return { ok: true };
-}
-
-/**
- * Put one category's rules in an explicit order — the drag-and-drop write.
- *
- * `movePlaybookRule` moves one rule one place and is still what the keyboard
- * path uses; this takes the finished order in one go, because a drag across six
- * rows is one gesture and replaying it as five adjacent swaps would be five
- * round trips and five chances to half-apply.
- *
- * The slot arithmetic — a category's rules occupy scattered absolute positions
- * in the playbook's single flat link order — lives in `reorderWithinCategory`,
- * pure and tested. This reads, delegates, and writes back only the ordinals that
- * actually changed.
- */
-export async function reorderPlaybookRules(
-  playbookId: string,
-  category: string,
-  orderedRuleIds: string[],
-): Promise<Result> {
-  const supabase = await createClient();
-
-  const { data: links, error: linkError } = await supabase
-    .from("tj_playbook_rule_links")
-    .select("id,rule_id,sort_order")
-    .eq("playbook_id", playbookId)
-    .order("sort_order")
-    .order("id");
-  if (linkError) return { ok: false, error: linkError.message };
-  if (!links?.length) return { ok: false, error: "Playbook not found." };
-
-  const { data: rules, error: ruleError } = await supabase
-    .from("tj_playbook_rules")
-    .select("id,category")
-    .in("id", links.map((l) => l.rule_id));
-  if (ruleError) return { ok: false, error: ruleError.message };
-
-  const categoryOf = new Map(
-    (rules ?? []).map((r) => [r.id, r.category as RuleCategory]),
-  );
-  const ordered = reorderWithinCategory(
-    links.flatMap((l) => {
-      const c = categoryOf.get(l.rule_id);
-      return c ? [{ ruleId: l.rule_id, category: c }] : [];
-    }),
-    category,
-    orderedRuleIds,
-  );
-  // Nothing to do: the drop landed where the rule already was, or the client
-  // sent an order this playbook cannot satisfy. Success, because nothing failed.
-  if (!ordered) return { ok: true };
-
-  const linkOf = new Map(links.map((l) => [l.rule_id, l]));
-  const writes = ordered
-    .map((rid, ordinal) => ({ link: linkOf.get(rid)!, ordinal }))
-    .filter(({ link, ordinal }) => link.sort_order !== ordinal);
-
-  const results = await Promise.all(
-    writes.map(({ link, ordinal }) =>
-      supabase
-        .from("tj_playbook_rule_links")
-        .update({ sort_order: ordinal })
-        .eq("id", link.id),
-    ),
-  );
-  const failed = results.find((r) => r.error);
-  if (failed?.error) return { ok: false, error: failed.error.message };
-
-  revalidateAll();
-  return { ok: true };
-}
-
-/**
- * Put the sections in an explicit order — the drag-and-drop write for the cards.
- *
- * Scoped to `rule_category` by the read below, so an id from some other option
- * list is simply absent from `known` and never gets an ordinal written to it.
- */
-export async function reorderPlaybookSections(
-  orderedItemIds: string[],
-): Promise<Result> {
-  const supabase = await createClient();
-  const { data: items, error } = await supabase
-    .from("tj_option_items")
-    .select("id, sort_order, tj_option_lists!inner(key)")
-    .eq("tj_option_lists.key", "rule_category")
-    .order("sort_order")
-    .order("id");
-  if (error) return { ok: false, error: error.message };
-  if (!items?.length) return { ok: false, error: "No sections yet." };
-
-  const known = new Map(items.map((i) => [i.id, i.sort_order]));
-  const wanted = orderedItemIds.filter((id) => known.has(id));
-  // Anything the client did not name keeps its place at the end, in the order
-  // the database already has — a stale list must not silently drop a section.
-  const rest = items.map((i) => i.id).filter((id) => !wanted.includes(id));
-  const ordered = [...wanted, ...rest];
-
-  const writes = ordered
-    .map((id, ordinal) => ({ id, ordinal }))
-    .filter(({ id, ordinal }) => known.get(id) !== ordinal);
-  if (writes.length === 0) return { ok: true };
-
-  const results = await Promise.all(
-    writes.map(({ id, ordinal }) =>
-      supabase.from("tj_option_items").update({ sort_order: ordinal }).eq("id", id),
-    ),
-  );
-  const failed = results.find((r) => r.error);
-  if (failed?.error) return { ok: false, error: failed.error.message };
-
-  revalidateAll();
-  return { ok: true };
-}
-
-/** Move a section one place in the order the trader put them in. */
-export async function movePlaybookSection(
-  id: string,
-  direction: -1 | 1,
-): Promise<Result> {
-  const supabase = await createClient();
-  const { data: items, error } = await supabase
-    .from("tj_option_items")
-    .select("id, sort_order, tj_option_lists!inner(key)")
-    .eq("tj_option_lists.key", "rule_category")
-    .order("sort_order")
-    .order("id");
-  if (error) return { ok: false, error: error.message };
-  if (!items?.length) return { ok: false, error: "No sections yet." };
-
-  const ordered = moveInOrder(
-    items.map((i) => i.id),
-    id,
-    direction,
-  );
-  // Already at the end, or not a section. Reported as success because nothing
-  // failed and nothing should change — same as `movePlaybookRule`.
-  if (!ordered) return { ok: true };
-
-  const ordinalOf = new Map(items.map((i) => [i.id, i.sort_order]));
-  const writes = ordered
-    .map((itemId, ordinal) => ({ itemId, ordinal }))
-    .filter(({ itemId, ordinal }) => ordinalOf.get(itemId) !== ordinal);
-
-  const results = await Promise.all(
-    writes.map(({ itemId, ordinal }) =>
-      supabase.from("tj_option_items").update({ sort_order: ordinal }).eq("id", itemId),
-    ),
-  );
-  const failed = results.find((r) => r.error);
-  if (failed?.error) return { ok: false, error: failed.error.message };
-
-  revalidateAll();
-  return { ok: true };
-}
-
-/**
- * Delete a section outright — and refuse while any rule still sits in it.
- *
- * A HARD delete, unlike `toggleOptionActive`, and that is what was asked for: a
- * list you can only ever archive from is still a list you do not own. It is safe
- * to make hard precisely because the section is presentation — no metric groups
- * by it, no denominator counts it, and `follow_rate` and the setup score both
- * ignore it entirely.
- *
- * The refusal is the part that matters. Deleting the row would not delete the
- * rules; their `category` would keep the old value and they would go on
- * rendering under a heading with no label and no way to reach it, because the
- * list no longer offers it. Naming the count instead — which includes archived
- * rules and rules linked only into OTHER playbooks, the ones invisible from the
- * card being looked at — turns a silent constraint into an instruction.
- */
-export async function deletePlaybookSection(id: string): Promise<Result> {
-  const supabase = await createClient();
-  const { data: item, error: readError } = await supabase
-    .from("tj_option_items")
-    .select("value, tj_option_lists!inner(key)")
-    .eq("id", id)
-    .eq("tj_option_lists.key", "rule_category")
-    .maybeSingle();
-  if (readError) return { ok: false, error: readError.message };
-  if (!item) return { ok: false, error: "Section not found." };
-
-  const { count, error: countError } = await supabase
-    .from("tj_playbook_rules")
-    .select("id", { count: "exact", head: true })
-    .eq("category", item.value);
-  if (countError) return { ok: false, error: countError.message };
-
-  if (count && count > 0) {
-    return {
-      ok: false,
-      error:
-        `${count} ${count === 1 ? "rule is" : "rules are"} still in this section, ` +
-        `counting archived ones and any in other playbooks. Move or delete them ` +
-        `first, then the section can go.`,
-    };
-  }
-
-  const { error } = await supabase.from("tj_option_items").delete().eq("id", id);
-  if (error) return { ok: false, error: error.message };
-
-  revalidateAll();
   return { ok: true };
 }

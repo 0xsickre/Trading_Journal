@@ -6,24 +6,18 @@
  * trader can still fill in is worse than showing one they rarely touch, so a
  * key only earns a place here when editing it does nothing or does harm.
  *
- * HIDDEN, NOT DELETED. Two of the three still hold rows that other code reads
- * (`rule_category` powers the playbook sections; `setup_grade` and `direction`
- * carry the labels history was written with), and a screen that stops offering
- * an editor is reversible in a way that a `DELETE` is not. Removing the rows
- * would also put the seed and the app in disagreement for every existing user
- * until a data migration caught up.
+ * HIDDEN, NOT DELETED. Both still hold rows that other code reads —
+ * `setup_grade` and `direction` carry the labels history was written with — and
+ * a screen that stops offering an editor is reversible in a way that a `DELETE`
+ * is not. Removing the rows would also put the seed and the app in disagreement
+ * for every existing user until a data migration caught up.
+ *
+ * `rule_category` used to be the third. It is gone rather than hidden: playbook
+ * sections are rows of `tj_playbook_sections`, owned by one playbook each, and
+ * `20260824100000` dropped the list along with the account-wide heading it
+ * stood for.
  */
 export const LISTS_HIDDEN_FROM_SETTINGS: Record<string, string> = {
-  /**
-   * Edited on `/playbooks`, on the card that owns the sections.
-   *
-   * Two editors for one list is how a section ends up archived from here while
-   * the playbook card goes on rendering its rules under a heading this screen
-   * thinks is switched off — the exact split
-   * `20260822160000_sections_are_deleted_not_archived.sql` had to repair.
-   */
-  rule_category: "Playbook sections are managed on the Playbooks page.",
-
   /**
    * Derived from the playbook criteria, never typed.
    *

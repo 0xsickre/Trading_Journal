@@ -757,6 +757,8 @@ describe("the playbook offers its risk, and never argues with you", () => {
     sort_order: 0,
     default_risk_pct: 1,
     a_plus_criteria: "Sweep of a daily level, MSS with displacement",
+    // A book with no sections and no rules — which is what a new playbook is.
+    sections: [],
     rules: [],
   };
   const RISK_OPTIONS = {

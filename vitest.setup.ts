@@ -1,6 +1,23 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
+
+/**
+ * How long `findBy*` and `waitFor` are given, up from the 1 s default.
+ *
+ * The dashboard's heavy cards sit behind `next/dynamic` boundaries — recharts
+ * is ~840 KB and `/` is the route it would otherwise be bundled into — so the
+ * tests that read a number off one of them wait on a real dynamic import.
+ * Under a full-suite run, with every jsdom file competing for the same event
+ * loop, one second was not always enough: `dashboard.render` and
+ * `dashboard.controls.render` failed together in a full run and passed in
+ * isolation, which is the signature of a budget rather than a bug.
+ *
+ * Costs nothing in the passing case. This is the ceiling a query waits before
+ * giving up, so only a test that was going to FAIL spends it — and a suite that
+ * fails at random is worse than one that reports slowly.
+ */
+configure({ asyncUtilTimeout: 5_000 });
 
 /**
  * Browser APIs jsdom does not implement, and who actually needs each one.

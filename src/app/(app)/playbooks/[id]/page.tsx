@@ -93,8 +93,6 @@ export default async function PlaybookDetailPage({
     positionRulesForBook,
   );
 
-  const categories = optionsMap.rule_category ?? [];
-
   const computeCtx = {
     pnlBasis: "net" as const,
     range: breakevenRange,
@@ -130,7 +128,6 @@ export default async function PlaybookDetailPage({
             trades={enrichedBookTrades}
             lookup={lookup}
             computeCtx={computeCtx}
-            categories={categories}
           />
         </TabsContent>
 

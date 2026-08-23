@@ -12,13 +12,11 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { OptionItem } from "@/lib/journal/types";
 import { gradeFromPct } from "@/lib/journal/setup-score";
 import { cn } from "@/lib/utils";
 import {
-  ruleCategoryLabel,
   ruleAppliesTo,
-  rulesByCategory,
+  rulesBySection,
   type Playbook,
 } from "@/lib/journal/playbook-types";
 
@@ -48,7 +46,6 @@ export function PlaybookChecklist({
   answers,
   onAnswerChange,
   netPl,
-  categories = [],
 }: {
   playbooks: Playbook[];
   playbookId: string | null;
@@ -57,8 +54,6 @@ export function PlaybookChecklist({
   onAnswerChange: (ruleId: string, followed: boolean | null) => void;
   /** Live net P&L, or null while the trade is still a plan. */
   netPl: number | null;
-  /** The trader's own playbook sections, from the `rule_category` option list. */
-  categories?: readonly OptionItem[];
 }) {
   const book = playbooks.find((p) => p.id === playbookId) ?? null;
 
@@ -72,16 +67,20 @@ export function PlaybookChecklist({
     return "breakeven";
   }, [netPl]);
 
-  // Bucketed by the rule's own category rather than by a group owned by this
-  // playbook. Same reading order every time — context, entry, management, exit,
-  // no-trade — so a rule sits in the same place whichever book it is linked in.
+  // Bucketed by THIS book's own sections, in the order its owner put them in.
+  // The sections used to come from one account-wide list, which is why the
+  // reading order was the same in every playbook whether or not it made sense
+  // there — and why a rule sat under the same heading in all of them.
+  //
+  // Empty sections are dropped HERE, unlike in the editor: a heading with no
+  // applicable rule is nothing to tick, and this screen is for ticking.
   const visibleGroups = useMemo(
     () =>
-      rulesByCategory(
+      rulesBySection(
+        book?.sections ?? [],
         (book?.rules ?? []).filter((r) => ruleAppliesTo(r.show_when, outcome)),
-        categories.map((c) => c.value),
-      ),
-    [book, outcome, categories],
+      ).filter((g) => g.rules.length > 0),
+    [book, outcome],
   );
 
   const visible = useMemo(
@@ -282,9 +281,9 @@ export function PlaybookChecklist({
           </div>
 
           {visibleGroups.map((group) => (
-            <div key={group.category} className="space-y-1.5">
+            <div key={group.section.id} className="space-y-1.5">
               <h4 className="text-xs font-semibold text-muted-foreground">
-                {ruleCategoryLabel(group.category, categories)}
+                {group.section.label}
               </h4>
               {group.rules.map((rule) => {
                 const checked = answers[rule.id] === true;

@@ -1,40 +1,40 @@
 import { describe, expect, it } from "vitest";
 import {
   moveInOrder,
-  moveRuleWithinCategory,
+  moveRuleWithinSection,
   moveToIndex,
-  reorderWithinCategory,
+  reorderWithinSection,
   type RuleLink,
 } from "./playbook-order";
 
-/** Compact fixture: "a:entry" → { ruleId: "a", category: "entry" }. */
+/** Compact fixture: "a:entry" → { ruleId: "a", sectionId: "entry" }. */
 const links = (...spec: string[]): RuleLink[] =>
   spec.map((s) => {
-    const [ruleId, category] = s.split(":");
-    return { ruleId, category: category as RuleLink["category"] };
+    const [ruleId, sectionId] = s.split(":");
+    return { ruleId, sectionId: sectionId as RuleLink["sectionId"] };
   });
 
-describe("moveRuleWithinCategory", () => {
-  it("swaps with the next rule of the same category", () => {
+describe("moveRuleWithinSection", () => {
+  it("swaps with the next rule of the same section", () => {
     const order = links("a:entry", "b:entry", "c:entry");
-    expect(moveRuleWithinCategory(order, "a", 1)).toEqual(["b", "a", "c"]);
+    expect(moveRuleWithinSection(order, "a", 1)).toEqual(["b", "a", "c"]);
   });
 
   it("swaps with the previous one going up", () => {
     const order = links("a:entry", "b:entry", "c:entry");
-    expect(moveRuleWithinCategory(order, "c", -1)).toEqual(["a", "c", "b"]);
+    expect(moveRuleWithinSection(order, "c", -1)).toEqual(["a", "c", "b"]);
   });
 
-  it("steps over a rule of another category, leaving it exactly where it was", () => {
-    // The case this function exists for. `b` is a Context rule that happens to
-    // sit between two Entry rules in the flat link order. Moving `a` down must
+  it("steps over a rule of another section, leaving it exactly where it was", () => {
+    // The case this function exists for. `b` is a rule of another section that happens to
+    // sit between two of them in the flat link order. Moving `a` down must
     // trade places with `c` — the next ENTRY rule — and `b` must not budge from
     // index 1, because nothing on screen draws the flat order.
     const order = links("a:entry", "b:context", "c:entry");
-    expect(moveRuleWithinCategory(order, "a", 1)).toEqual(["c", "b", "a"]);
+    expect(moveRuleWithinSection(order, "a", 1)).toEqual(["c", "b", "a"]);
   });
 
-  it("handles a category whose members are scattered through the order", () => {
+  it("handles a section whose members are scattered through the order", () => {
     const order = links(
       "x:context",
       "a:entry",
@@ -45,7 +45,7 @@ describe("moveRuleWithinCategory", () => {
     );
     // Entry occupies slots 1, 3, 5. Moving `b` (middle) down puts `c` in slot 3
     // and `b` in slot 5; everything else keeps its index.
-    expect(moveRuleWithinCategory(order, "b", 1)).toEqual([
+    expect(moveRuleWithinSection(order, "b", 1)).toEqual([
       "x",
       "a",
       "y",
@@ -55,36 +55,36 @@ describe("moveRuleWithinCategory", () => {
     ]);
   });
 
-  it("refuses to move past the end of its own category", () => {
+  it("refuses to move past the end of its own section", () => {
     // `a` is last among Entry rules even though two links follow it.
     const order = links("b:entry", "a:entry", "z:exit", "y:context");
-    expect(moveRuleWithinCategory(order, "a", 1)).toBeNull();
+    expect(moveRuleWithinSection(order, "a", 1)).toBeNull();
   });
 
-  it("refuses to move above the start of its own category", () => {
-    // `a` is first among Entry rules even though a Context rule precedes it.
+  it("refuses to move above the start of its own section", () => {
+    // `a` is first among Entry rules even though a rule of another section precedes it.
     const order = links("x:context", "a:entry", "b:entry");
-    expect(moveRuleWithinCategory(order, "a", -1)).toBeNull();
+    expect(moveRuleWithinSection(order, "a", -1)).toBeNull();
   });
 
-  it("returns null for a lone rule in its category, in both directions", () => {
+  it("returns null for a lone rule in its section, in both directions", () => {
     const order = links("x:context", "solo:no_trade", "y:context");
-    expect(moveRuleWithinCategory(order, "solo", 1)).toBeNull();
-    expect(moveRuleWithinCategory(order, "solo", -1)).toBeNull();
+    expect(moveRuleWithinSection(order, "solo", 1)).toBeNull();
+    expect(moveRuleWithinSection(order, "solo", -1)).toBeNull();
   });
 
   it("returns null for a rule that is not linked at all", () => {
-    expect(moveRuleWithinCategory(links("a:entry"), "ghost", 1)).toBeNull();
+    expect(moveRuleWithinSection(links("a:entry"), "ghost", 1)).toBeNull();
   });
 
   it("returns null for an empty playbook", () => {
-    expect(moveRuleWithinCategory([], "a", 1)).toBeNull();
+    expect(moveRuleWithinSection([], "a", 1)).toBeNull();
   });
 
   it("never mutates the input", () => {
     const order = links("a:entry", "b:entry");
     const before = JSON.stringify(order);
-    moveRuleWithinCategory(order, "a", 1);
+    moveRuleWithinSection(order, "a", 1);
     expect(JSON.stringify(order)).toBe(before);
   });
 
@@ -92,7 +92,7 @@ describe("moveRuleWithinCategory", () => {
     // The action numbers the result 0..n-1. A short array would silently drop
     // links off the end of the playbook.
     const order = links("a:entry", "b:context", "c:exit", "d:entry");
-    const next = moveRuleWithinCategory(order, "a", 1)!;
+    const next = moveRuleWithinSection(order, "a", 1)!;
     expect(next).toHaveLength(order.length);
     expect([...next].sort()).toEqual(["a", "b", "c", "d"]);
   });
@@ -169,11 +169,11 @@ describe("moveToIndex", () => {
   });
 });
 
-describe("reorderWithinCategory", () => {
-  it("refills the category's own slots and leaves every other index alone", () => {
+describe("reorderWithinSection", () => {
+  it("refills the section's own slots and leaves every other index alone", () => {
     // Entry occupies slots 1, 3, 5. Reversing Entry must not move `x`, `y` or
     // `z` off their indices — nothing on screen draws the flat order, and the
-    // other categories' cards must not reshuffle because this one was dragged.
+    // other sections' cards must not reshuffle because this one was dragged.
     const order = links(
       "x:context",
       "a:entry",
@@ -182,7 +182,7 @@ describe("reorderWithinCategory", () => {
       "z:context",
       "c:entry",
     );
-    expect(reorderWithinCategory(order, "entry", ["c", "b", "a"])).toEqual([
+    expect(reorderWithinSection(order, "entry", ["c", "b", "a"])).toEqual([
       "x",
       "c",
       "y",
@@ -194,28 +194,28 @@ describe("reorderWithinCategory", () => {
 
   it("keeps a rule the client forgot to name, rather than dropping it", () => {
     // A stale client array is the realistic failure — a rule added in another
-    // tab. It must keep its place in the category rather than vanish from the
+    // tab. It must keep its place in the section rather than vanish from the
     // playbook, so unnamed ids are appended in their current order.
     const order = links("a:entry", "b:entry", "c:entry");
-    expect(reorderWithinCategory(order, "entry", ["c", "a"])).toEqual([
+    expect(reorderWithinSection(order, "entry", ["c", "a"])).toEqual([
       "c",
       "a",
       "b",
     ]);
   });
 
-  it("ignores ids belonging to another category", () => {
+  it("ignores ids belonging to another section", () => {
     const order = links("a:entry", "b:context");
-    expect(reorderWithinCategory(order, "entry", ["b", "a"])).toBeNull();
+    expect(reorderWithinSection(order, "entry", ["b", "a"])).toBeNull();
   });
 
   it("returns null when the result matches what is already stored", () => {
     const order = links("a:entry", "b:entry");
-    expect(reorderWithinCategory(order, "entry", ["a", "b"])).toBeNull();
+    expect(reorderWithinSection(order, "entry", ["a", "b"])).toBeNull();
   });
 
-  it("returns null for a category with no rules", () => {
+  it("returns null for a section with no rules", () => {
     const order = links("a:entry");
-    expect(reorderWithinCategory(order, "exit", [])).toBeNull();
+    expect(reorderWithinSection(order, "exit", [])).toBeNull();
   });
 });
