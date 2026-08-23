@@ -426,6 +426,18 @@ describe("blendedPlannedRewardR", () => {
     ).toBeNull();
   });
 
+  it("refuses a level that closes none of the position", () => {
+    // A level at 0 % (or below) takes nothing off, so it contributes nothing to
+    // the blend while still claiming to be part of the plan. Weighting it would
+    // quietly drop it; refusing says the plan is broken.
+    expect(
+      blendedPlannedRewardR({ ...LONG, target: 130, levels: [{ pct: 0, price: 110 }] }),
+    ).toBeNull();
+    expect(
+      blendedPlannedRewardR({ ...LONG, target: 130, levels: [{ pct: -10, price: 110 }] }),
+    ).toBeNull();
+  });
+
   it("refuses a level priced on the losing side of entry", () => {
     // 95 is below a long's entry: that is not a take profit, and blending it as
     // a negative reward would produce a number that looks like an answer.

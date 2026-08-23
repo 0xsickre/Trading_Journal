@@ -250,3 +250,38 @@ describe("date bounds use the account timezone, not UTC", () => {
     expect(ids(applyFilters(b, f, dimCtx()))).toEqual(["x"]);
   });
 });
+
+describe("between reaches every numeric field, not just R", () => {
+  // Each field in `NUMERIC_FIELDS` is its own accessor into a different corner
+  // of the enriched trade — money, size, and the two excursion figures each
+  // come from a different place. Only `r` and `duration_days` were exercised,
+  // so an accessor wired to the wrong property would have filtered on the wrong
+  // number with nothing to say so.
+  const book = () =>
+    enrich([
+      { id: "a", net: 200, size: 1, mae: 95, mfe: 130 },
+      { id: "b", net: -100, size: 5, mae: 80, mfe: 105 },
+      { id: "c", net: 50, size: 10 },
+    ]);
+
+  const kept = (field: string, min?: number, max?: number) =>
+    ids(applyFilters(book(), { clauses: [{ field, op: "between", min, max }] }, dimCtx()));
+
+  it("filters on money", () => {
+    expect(kept("pnl", 0)).toEqual(["a", "c"]);
+    expect(kept("pnl", undefined, 0)).toEqual(["b"]);
+  });
+
+  it("filters on position size", () => {
+    expect(kept("size", 2, 10)).toEqual(["b", "c"]);
+  });
+
+  it("filters on the excursion figures", () => {
+    // `c` carries no chart prices at all, so it has no MAE and no MFE — and a
+    // trade with no value must be dropped by a range filter rather than counted
+    // as zero, which would put it inside almost any band.
+    expect(kept("mae_r")).toEqual(["a", "b"]);
+    expect(kept("mfe_r")).toEqual(["a", "b"]);
+    expect(kept("mfe_r", 2)).toEqual(["a"]);
+  });
+});

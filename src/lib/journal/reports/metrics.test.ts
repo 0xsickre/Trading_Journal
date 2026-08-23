@@ -318,3 +318,85 @@ describe("execution metrics relocated from the dashboard", () => {
     expect(val("winner_target_attainment", [])).toBeNull();
   });
 });
+
+describe("setup_score — the grade derived from criteria, not typed after the fact", () => {
+  /**
+   * Two criteria on one playbook. A trade scores only when BOTH were answered:
+   * an unanswered criterion is stored as no row at all, so counting the answers
+   * alone would score three of four as three of three — a grade that goes up
+   * the less of the checklist you fill in.
+   */
+  const lookup = (answers: Map<string, { position_id: string; rule_id: string; followed: boolean }[]>) =>
+    buildPlaybookLookup(
+      [
+        {
+          id: "pb",
+          name: "Book",
+          rules: [
+            { id: "c1", text: "Swept liquidity", show_when: "always", is_setup_criterion: true },
+            { id: "c2", text: "Displacement", show_when: "always", is_setup_criterion: true },
+            { id: "r3", text: "Sized to plan", show_when: "always" },
+          ],
+        },
+      ],
+      answers,
+    );
+
+  const answer = (tradeId: string, followed: [string, boolean][]) =>
+    [tradeId, followed.map(([rule_id, f]) => ({ position_id: tradeId, rule_id, followed: f }))] as const;
+
+  const score = (
+    trades: ReturnType<typeof enrich>,
+    answers: Map<string, { position_id: string; rule_id: string; followed: boolean }[]>,
+  ) =>
+    getMetric("setup_score")!.compute(trades, { ...metricCtx, rules: lookup(answers).rules });
+
+  it("answers null when no playbook data is loaded", () => {
+    // The same reasoning as `follow_rate`: a zero here would read as "every
+    // setup failed every criterion", which is a finding rather than a gap.
+    const book = enrich([{ id: "a", playbookId: "pb" }]);
+    expect(getMetric("setup_score")!.compute(book, metricCtx)).toBeNull();
+  });
+
+  it("averages the share of criteria met over the trades that have a full checklist", () => {
+    const book = enrich([
+      { id: "a", playbookId: "pb" },
+      { id: "b", playbookId: "pb" },
+    ]);
+    const answers = new Map([
+      answer("a", [["c1", true], ["c2", true]]), // 100 %
+      answer("b", [["c1", true], ["c2", false]]), // 50 %
+    ]);
+    expect(score(book, answers)).toBeCloseTo(75, 10);
+  });
+
+  it("leaves an incomplete checklist out of BOTH halves of the average", () => {
+    // `b` answered one of two criteria. Scoring it 50 % would invent an answer
+    // to a question nobody asked; scoring it 0 % would invent a failure. It has
+    // no score, so it must not move the average of the trades that do.
+    const book = enrich([
+      { id: "a", playbookId: "pb" },
+      { id: "b", playbookId: "pb" },
+    ]);
+    const answers = new Map([
+      answer("a", [["c1", true], ["c2", true]]),
+      answer("b", [["c1", true]]),
+    ]);
+    expect(score(book, answers)).toBeCloseTo(100, 10);
+  });
+
+  it("answers null when no trade in the group carries a complete checklist", () => {
+    const book = enrich([{ id: "a", playbookId: "pb" }]);
+    expect(score(book, new Map([answer("a", [["c1", true]])]))).toBeNull();
+  });
+
+  it("ignores a trade taken from no playbook at all", () => {
+    // Nothing to grade it against: there is no criteria list without a book.
+    const book = enrich([
+      { id: "a", playbookId: "pb" },
+      { id: "free", playbookId: null },
+    ]);
+    const answers = new Map([answer("a", [["c1", true], ["c2", false]])]);
+    expect(score(book, answers)).toBeCloseTo(50, 10);
+  });
+});

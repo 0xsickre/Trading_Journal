@@ -36,6 +36,8 @@ export type TradeSpec = {
   timeStopDays?: number | null;
   /** The reason for the trade, in writing. */
   thesis?: string | null;
+  /** The playbook the trade was taken from — what a setup score is graded against. */
+  playbookId?: string | null;
   /** Values for user-defined fields, as they are actually stored. */
   custom?: Record<string, unknown>;
 };
@@ -111,6 +113,7 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     planned_rr: spec.plannedRr ?? null,
     time_stop_days: spec.timeStopDays ?? null,
     thesis: spec.thesis ?? null,
+    playbook_id: spec.playbookId ?? null,
     stats,
   } as unknown as TradeRow;
 

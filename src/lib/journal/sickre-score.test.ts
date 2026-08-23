@@ -450,3 +450,31 @@ describe("the calibration knobs, pinned", () => {
     expect(r.score).toBe(0);
   });
 });
+
+describe("scoreFromBands on a band table with finite edges", () => {
+  /**
+   * The shipped tables all cap the top band at a single score and floor the
+   * bottom one at `-Infinity`, so two arms of the interpolation never run
+   * against them. They are still the arms that decide what a caller-supplied
+   * table does at its own edges, and both must answer a number rather than
+   * `undefined` or `NaN` — a score is rendered straight onto the dashboard.
+   */
+  const BANDS = [
+    { min: 2, scoreMin: 80, scoreMax: 100 },
+    { min: 1, scoreMin: 40, scoreMax: 79 },
+  ];
+
+  it("awards the top of an open-ended top band rather than interpolating to infinity", () => {
+    // There is no band above this one, so the upper edge is infinite and the
+    // fraction through the band is meaningless. The best score is the answer.
+    expect(scoreFromBands(2, BANDS)).toBe(100);
+    expect(scoreFromBands(1000, BANDS)).toBe(100);
+  });
+
+  it("floors a value that falls below every band", () => {
+    // 0.5 is under the lowest floor. The loop matches nothing, and the answer
+    // is the worst score in the table — not null, which would drop the
+    // component and quietly raise the composite.
+    expect(scoreFromBands(0.5, BANDS)).toBe(40);
+  });
+});

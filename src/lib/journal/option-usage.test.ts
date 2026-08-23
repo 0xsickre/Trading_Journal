@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isListBuiltIn,
   optionFieldTargets,
   optionUsageIsEmpty,
   optionUsageIsUnknown,
@@ -95,5 +96,23 @@ describe("optionFieldTargets — where a list's values land on a trade", () => {
     const real = getAllFormFields(SEEDED_FIELD_DEFS);
     expect(optionFieldTargets(real, "direction")).toEqual([]);
     expect(optionFieldTargets(real, "setup_grade")).toEqual([]);
+  });
+});
+
+describe("isListBuiltIn — whether deleting the list would empty a form control", () => {
+  const fields = getAllFormFields(SEEDED_FIELD_DEFS);
+
+  it("is true for a list a seeded category reads from", () => {
+    // `exit_reason` is a category every account starts with. Deleting its list
+    // would leave that dropdown on the trade form silently empty, so the delete
+    // has to be refused rather than merely warned about.
+    expect(isListBuiltIn(fields, "exit_reason")).toBe(true);
+    expect(isListBuiltIn(fields, "technical_tag")).toBe(true);
+  });
+
+  it("is false for a list nothing on the form points at", () => {
+    // A list backing only a field the trader made themselves has no such
+    // problem — deleting it can take the field down with it.
+    expect(isListBuiltIn(fields, "a_list_no_field_uses")).toBe(false);
   });
 });

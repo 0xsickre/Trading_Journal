@@ -227,3 +227,40 @@ describe("which tab a category is asked on", () => {
     }
   });
 });
+
+describe("the order the trader dragged the categories into", () => {
+  // The categories group on the review tab, which holds three of the five
+  // seeded categories: exit_reason, mistake, psychology_tags. `categoryOrder`
+  // is keyed by the CATEGORY (the field's `listKey`), not by the field key.
+  const reviewNames = (categoryOrder?: Record<string, number>) =>
+    buildFormTabs(SEEDED_FIELD_DEFS, undefined, categoryOrder)
+      .find((t) => t.id === "execution")!
+      .groups.find((g) => g.id === TAGS_GROUP_ID)!
+      .fields.map((f) => f.name);
+
+  it("leaves the fields alone when no order is given", () => {
+    // The readers that call this to ENUMERATE fields — the CSV export, the
+    // report dimensions, the save allowlist — care about the set, not the
+    // sequence, and pass nothing. They must get back the `sort_order` sequence
+    // untouched rather than pay for a reordering they have no use for.
+    expect(reviewNames()).toEqual(["exit_reason", "mistake", "psychology_tags"]);
+  });
+
+  it("puts the categories in the order the trader chose", () => {
+    expect(
+      reviewNames({ mistake: 0, emotion: 1, exit_reason: 2 }),
+    ).toEqual(["mistake", "psychology_tags", "exit_reason"]);
+  });
+
+  it("sorts a category the order says nothing about to the END, not the front", () => {
+    // A field this function knows nothing about belongs at the bottom: it is
+    // the safer place for something unranked, and the alternative — a missing
+    // key reading as ordinal 0 — would jump it above every category the trader
+    // deliberately placed.
+    expect(reviewNames({ emotion: 0, mistake: 1 })).toEqual([
+      "psychology_tags",
+      "mistake",
+      "exit_reason",
+    ]);
+  });
+});

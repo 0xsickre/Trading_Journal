@@ -200,6 +200,23 @@ describe("ordering", () => {
     expect(last.bucket).toBe("UNPLANNED");
     expect(last.values.target_attainment).toBeNull();
   });
+
+  it("falls back to the bucket name when there is no metric to sort by", () => {
+    // A report can legitimately ask for no metrics — the pivot builder runs the
+    // engine purely for its grouping. With no metric there is no ranking, and
+    // the alternative to a name sort is Map insertion order, which is the order
+    // the trades happened to arrive in and changes when one is edited.
+    const r = run(
+      enrich([
+        { instrument: "CCC", net: 10 },
+        { instrument: "AAA", net: 900 },
+        { instrument: "BBB", net: -300 },
+      ]),
+      "instrument",
+      { metricKeys: [] },
+    )!;
+    expect(r.rows.map((x) => x.bucket)).toEqual(["AAA", "BBB", "CCC"]);
+  });
 });
 
 describe("filters", () => {

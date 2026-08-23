@@ -4,6 +4,8 @@ import {
   FIELD_DEF_PHASE_LABELS,
   FIELD_DEF_PHASES,
   FIELD_DEF_TYPES,
+  fieldTypeForSelection,
+  selectionOfFieldType,
   slugifyFieldKey,
 } from "./field-def-types";
 
@@ -121,6 +123,36 @@ describe("fieldAppliesToPhase", () => {
           `${pinned} in ${p}`,
         ).toBe(pinned === p);
       }
+    }
+  });
+});
+
+describe("selection mode and field type are the same fact, two names", () => {
+  it("stores 'several at once' as tags and 'one at a time' as select", () => {
+    expect(fieldTypeForSelection("multi")).toBe("tags");
+    expect(fieldTypeForSelection("single")).toBe("select");
+  });
+
+  it("reads a stored type back as the mode the picker shows", () => {
+    expect(selectionOfFieldType("tags")).toBe("multi");
+    expect(selectionOfFieldType("select")).toBe("single");
+  });
+
+  it("round-trips every mode", () => {
+    // The two halves have to agree, or Settings would show a mode the save path
+    // then writes as a different `field_type`.
+    for (const mode of ["single", "multi"] as const) {
+      expect(selectionOfFieldType(fieldTypeForSelection(mode))).toBe(mode);
+    }
+  });
+
+  it("speaks for no mode at all on a field type that is not a picker", () => {
+    // A text box, a textarea, a number, a URL — none of them offer a choice, so
+    // there is no "one or several" to answer. `null` is what the control reads
+    // as "this question does not apply", rather than defaulting to `single` and
+    // rendering a picker over a field that has nothing to pick from.
+    for (const type of ["text", "textarea", "number", "url"] as const) {
+      expect(selectionOfFieldType(type), type).toBeNull();
     }
   });
 });

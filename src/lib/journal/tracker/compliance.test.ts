@@ -700,3 +700,52 @@ describe("monthGridDays", () => {
     expect(monthGridDays("2026-12")).toContain("2027-01-03");
   });
 });
+
+describe("an auto rule is scored by its evaluator, never by a checkin", () => {
+  // The auto branch of `computeDayCompliance` had no test. It is the branch that
+  // decides whether a machine-checked rule — "no day worse than −2 %" — counts
+  // as kept, and it deliberately ignores `checkins`: a box the trader ticked
+  // must not be able to overrule what the trades actually did.
+  const auto = rule({ id: "auto", auto_key: "max_loss_per_day" });
+  const manual = rule({ id: "manual" });
+
+  it("counts a passing verdict as satisfied", () => {
+    const d = day("2026-07-29", [auto], new Map(), autoOf({ max_loss_per_day: "pass" }));
+    expect(d.applicable).toBe(1);
+    expect(d.satisfied).toBe(1);
+    expect(d.missedRuleIds).toEqual([]);
+  });
+
+  it("counts a failing verdict as missed, and never as merely unanswered", () => {
+    // `unansweredRuleIds` drives the "today is still running" grace period. An
+    // auto rule the evaluator already failed is a decided fact, so letting it
+    // land there would hold a broken day at "pending" until midnight.
+    const d = day("2026-07-29", [auto], new Map(), autoOf({ max_loss_per_day: "fail" }));
+    expect(d.missedRuleIds).toEqual(["auto"]);
+    expect(d.unansweredRuleIds).toEqual([]);
+    expect(d.status).toBe("broken");
+  });
+
+  it("ignores a checkin that disagrees with the evaluator", () => {
+    const d = day(
+      "2026-07-29",
+      [auto],
+      checkins([["auto", true]]),
+      autoOf({ max_loss_per_day: "fail" }),
+    );
+    expect(d.satisfied).toBe(0);
+    expect(d.missedRuleIds).toEqual(["auto"]);
+  });
+
+  it("scores auto and manual rules side by side in one day", () => {
+    const d = day(
+      "2026-07-29",
+      [auto, manual],
+      checkins([["manual", true]]),
+      autoOf({ max_loss_per_day: "pass" }),
+    );
+    expect(d.applicable).toBe(2);
+    expect(d.satisfied).toBe(2);
+    expect(d.pct).toBe(100);
+  });
+});

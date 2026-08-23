@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   emptyDailyReport,
   isDayComplete,
   isFriday,
   nextReportDate,
   prevReportDate,
+  todayInTz,
 } from "./daily-report";
 import { daysOnActiveGoal } from "./focus-goal";
 
@@ -64,5 +65,23 @@ describe("daysOnActiveGoal", () => {
   it("is 1-based on start day", () => {
     expect(daysOnActiveGoal(goal, "2026-07-20")).toBe(1);
     expect(daysOnActiveGoal(goal, "2026-07-22")).toBe(3);
+  });
+});
+
+describe("todayInTz", () => {
+  it("answers the account's calendar day, not UTC's", () => {
+    // 01:30 UTC is still the previous evening in New York and already mid-morning
+    // in Tokyo. Every day key in this app — the report date, the tracker heatmap,
+    // the FTMO daily limit — is the ACCOUNT's day, so reading `new Date()` and
+    // slicing the ISO string would file a late-evening report under tomorrow.
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-07-30T01:30:00Z"));
+      expect(todayInTz("UTC")).toBe("2026-07-30");
+      expect(todayInTz("America/New_York")).toBe("2026-07-29");
+      expect(todayInTz("Asia/Tokyo")).toBe("2026-07-30");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

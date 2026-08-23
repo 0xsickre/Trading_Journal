@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { evaluateFtmo, type FtmoConfig, type FtmoTrade } from "./ftmo";
+import {
+  evaluateFtmo,
+  ftmoConfigFromAccount,
+  type FtmoConfig,
+  type FtmoTrade,
+} from "./ftmo";
 
 const baseConfig = (over: Partial<FtmoConfig> = {}): FtmoConfig => ({
   enabled: true,
@@ -164,5 +169,60 @@ describe("instant comparison at the reset boundary", () => {
     // Both land on the same NY day: -1200 breaches the -1000 daily limit.
     expect(r.status).toBe("failed");
     expect(r.breaches[0].amount).toBe(-1200);
+  });
+});
+
+describe("ftmoConfigFromAccount", () => {
+  const account = {
+    id: "acc",
+    name: "Challenge",
+    broker: null,
+    broker_account_id: null,
+    currency: "USD",
+    starting_balance: 200_000,
+    default_asset_class: null,
+    timezone: "Europe/Belgrade",
+    is_active: true,
+    breakeven_from: 0,
+    breakeven_to: 0,
+    breakeven_unit: "currency" as const,
+    default_commission_per_unit: 0,
+    default_fee_fixed: 0,
+    default_swap_per_day: 0,
+    default_stop_pct: null,
+    default_target_pct: null,
+    ftmo_mode: true,
+    ftmo_daily_loss_enabled: true,
+    ftmo_daily_loss_pct: 4,
+    ftmo_daily_loss_basis: "prev_close" as const,
+    ftmo_max_loss_enabled: false,
+    ftmo_max_loss_pct: 8,
+    ftmo_profit_target_enabled: true,
+    ftmo_profit_target_pct: 9,
+    ftmo_min_days_enabled: false,
+    ftmo_min_days: 3,
+    ftmo_reset_at: "2026-07-01T00:00:00Z",
+  };
+
+  it("carries every limit across from the account row", () => {
+    // Nine numbers and five switches, flat on the row and nested in the config.
+    // A pair transposed here — max loss read into the daily limit — fails the
+    // challenge on the dashboard while the real account is fine, and nothing
+    // downstream can tell, because both values are plausible percentages.
+    expect(ftmoConfigFromAccount(account)).toEqual({
+      enabled: true,
+      startingBalance: 200_000,
+      timezone: "Europe/Belgrade",
+      dailyLoss: { enabled: true, pct: 4, basis: "prev_close" },
+      maxLoss: { enabled: false, pct: 8 },
+      profitTarget: { enabled: true, pct: 9 },
+      minDays: { enabled: false, days: 3 },
+      resetAt: "2026-07-01T00:00:00Z",
+    });
+  });
+
+  it("produces a config the evaluator reads as off when the account is not in challenge mode", () => {
+    const off = ftmoConfigFromAccount({ ...account, ftmo_mode: false });
+    expect(evaluateFtmo(off, [t("2026-07-02T12:00:00Z", -50_000)]).status).toBe("off");
   });
 });
