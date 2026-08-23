@@ -12,6 +12,7 @@ import {
   R_MULTIPLE_EDGES,
   tagSplitDimensions,
 } from "./dimensions";
+import { SEEDED_FIELD_DEFS } from "../field-defs.fixture";
 import {
   DAY,
   TEST_FIELD_DEFS,
@@ -336,6 +337,29 @@ describe("user-defined fields as dimensions", () => {
     expect(confluences.multiValue).toBe(true);
     const t = enrich([{ custom: { confluences: ["FVG", "OTE"] } }])[0];
     expect(bucketsOf(confluences, t, dimCtx())).toEqual(["FVG", "OTE"]);
+  });
+
+  it("SKIPS a key the registry already owns, so no picker offers it twice", () => {
+    // The five column-backed categories are built-in columns here AND rows in
+    // `tj_field_defs` — that is what gave them a phase and a single/multi in
+    // Settings. Every picker concatenates the two lists, so an unfiltered
+    // `customFieldDimensions` put each of them in the dropdown twice under one
+    // duplicated React key. Caught live on the dashboard's Breakdown select.
+    const dims = customFieldDimensions(SEEDED_FIELD_DEFS);
+    expect(dims).toEqual([]);
+
+    // And the registry still answers for every one of them — the point is that
+    // ONE side owns each key, not that the key disappears.
+    for (const def of SEEDED_FIELD_DEFS) {
+      expect(getDimension(def.key), def.key).toBeDefined();
+    }
+  });
+
+  it("keeps a definition whose key the registry does NOT own", () => {
+    // The filter must be a collision check, not a blanket refusal: a category
+    // the trader invented has no built-in and must still be groupable.
+    const mixed = customFieldDimensions([...SEEDED_FIELD_DEFS, ...DEFS]);
+    expect(mixed.map((d) => d.key)).toEqual(["session", "confluences"]);
   });
 
   it("resolves a custom key by name, the same way a built-in resolves", () => {

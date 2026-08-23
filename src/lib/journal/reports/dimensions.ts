@@ -610,21 +610,36 @@ export function getDimension(key: string): Dimension | undefined {
  * value is usually one row per trade, which is useless as a report but harmless,
  * and refusing to register it would make "add a field, group by it" a promise
  * with an asterisk.
+ *
+ * EXCEPT a key the registry above already owns. Five categories —
+ * `technical_tags`, `exit_reason`, `mistake`, `psychology_tags`, `miss_reason`
+ * — are both built-in columns here AND rows in `tj_field_defs`, since that is
+ * what gave them a phase and a single/multi in Settings. Every picker
+ * concatenates the two lists (`breakdownFields`, `allDimensions`), so without
+ * this filter each of the five is offered TWICE, under one duplicated key.
+ *
+ * The registry wins, and not by accident: its `technical_tags` is a
+ * `tagColumn` that knows the dimension is multi-valued and says so in the
+ * report, and `setup_grade` derives the grade rather than reading the typed
+ * letter. A definition row exists to make the category configurable on the
+ * FORM; how it groups in a report is knowledge this file already has.
  */
 export function customFieldDimensions(
   defs: readonly { key: string; label: string; field_type: string; list_key: string | null }[],
 ): Dimension[] {
-  return defs.map((def) => ({
-    key: def.key,
-    label: def.label,
-    group: "custom" as const,
-    listKey: def.list_key ?? undefined,
-    multiValue: def.field_type === "tags",
-    valueOf: (t: EnrichedTrade) =>
-      def.field_type === "tags"
-        ? (arr(t, def.key) ?? EMPTY_BUCKET)
-        : (str(t, def.key) ?? EMPTY_BUCKET),
-  }));
+  return defs
+    .filter((def) => !byKey.has(def.key))
+    .map((def) => ({
+      key: def.key,
+      label: def.label,
+      group: "custom" as const,
+      listKey: def.list_key ?? undefined,
+      multiValue: def.field_type === "tags",
+      valueOf: (t: EnrichedTrade) =>
+        def.field_type === "tags"
+          ? (arr(t, def.key) ?? EMPTY_BUCKET)
+          : (str(t, def.key) ?? EMPTY_BUCKET),
+    }));
 }
 
 /**
