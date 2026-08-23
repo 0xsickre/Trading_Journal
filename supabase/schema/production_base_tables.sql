@@ -2,7 +2,7 @@
 -- BAZNE TABELE — zapis stanja, ne migracija koja se pušta
 -- =============================================================================
 --
--- Deset tabela ispod je napravljeno direktno nad živim projektom, pre nego što
+-- Devet tabela ispod je napravljeno direktno nad živim projektom, pre nego što
 -- je `supabase/migrations/` uopšte postojao. Repo ih od tada samo ALTER-uje:
 -- najstarija migracija u njemu (`20260719120000_drop_analysis_module.sql`) je
 -- DROP, ne CREATE. Posledica je da `CREATE TABLE public.tj_positions` do sada
@@ -10,8 +10,8 @@
 --
 -- Šta to znači u praksi, i zašto je ovaj fajl morao da nastane:
 --
---   1. Baza se nije mogla rekonstruisati iz repoa. 26 tabela u produkciji, 17
---      sa `CREATE TABLE` u migracijama.
+--   1. Baza se nije mogla rekonstruisati iz repoa: tabele u produkciji koje
+--      nemaju `CREATE TABLE` nigde u migracijama.
 --   2. Ono što nije zapisano ne može se ni proveriti. Tačno tako je i nastao
 --      bag koji je popravljen u istom koraku: `tj_on_auth_user_created` je
 --      zvala `tj_seed_analysis_defaults`, a migracija koja je tu funkciju
@@ -32,7 +32,10 @@
 -- kopira šemu produkcije.
 --
 -- Izvučeno iz projekta `hjwvhzcszhjhpocfjatm` (Trading Journal), PostgreSQL 17.6.
--- Ako se bazna tabela ikad izmeni, izmeni se i ovde.
+-- Ako se bazna tabela ikad izmeni, izmeni se i ovde — i to više nije samo
+-- molba: `npm run schema:check` poredi ovaj fajl sa `src/lib/supabase/types.ts`,
+-- koji se generiše iz produkcije, i pada kad se raziđu. Prvi put pokrenut,
+-- našao je šest kolona koje fale i jednu tabelu koje nema.
 -- =============================================================================
 
 
@@ -73,6 +76,9 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   default_swap_per_day        numeric     NOT NULL DEFAULT 0,
   default_stop_pct            numeric,
   default_target_pct          numeric,
+  -- Od čega se meri dnevni gubitak: od početnog stanja ili od equity-ja na
+  -- početku dana (20260822144309).
+  ftmo_daily_loss_basis       text        NOT NULL DEFAULT 'starting_balance',
   CONSTRAINT tj_accounts_pkey PRIMARY KEY (id),
   CONSTRAINT tj_accounts_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -140,6 +146,16 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   time_stop_days       smallint,
   scale_out_plan       text,
   scale_out_levels     jsonb       NOT NULL DEFAULT '[]'::jsonb,
+  -- Valuta kotacije i kurs zamrznuti pri upisu, iz istog razloga kao
+  -- `point_value_at_trade`: kasnija izmena instrumenta ne sme da pomeri
+  -- istorijski P&L (20260815200219).
+  quote_currency_at_trade text,
+  fx_rate_at_trade     numeric,
+  -- Bruto rezultat prepisan sa brokerovog izvoda umesto izvedenog iz cena
+  -- (20260815210613). Vidi `money_overridden` u tj_position_stats.
+  gross_pnl_override   numeric,
+  -- Odakle su MAE/MFE cene: ručno, iz uvoza, ili sa bot mosta (20260821075003).
+  excursion_source     text,
   CONSTRAINT tj_positions_pkey PRIMARY KEY (id),
   CONSTRAINT tj_positions_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -305,6 +321,8 @@ CREATE TABLE IF NOT EXISTS public.tj_option_lists (
   category   text,
   sort_order integer     NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now(),
+  -- Boja kategorije; stavka bez svoje je nasleđuje (20260822154955).
+  color      text,
   CONSTRAINT tj_option_lists_pkey PRIMARY KEY (id),
   CONSTRAINT tj_option_lists_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -323,6 +341,8 @@ CREATE TABLE IF NOT EXISTS public.tj_option_items (
   sort_order integer     NOT NULL DEFAULT 0,
   is_active  boolean     NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now(),
+  -- Rečenica uz stavku, koju korisnik piše sam (20260822220814).
+  description text,
   CONSTRAINT tj_option_items_pkey PRIMARY KEY (id),
   CONSTRAINT tj_option_items_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -336,7 +356,11 @@ CREATE INDEX IF NOT EXISTS tj_option_items_list_idx
 
 
 -- -----------------------------------------------------------------------------
--- Uvoz: batch, redovi, i sačuvana mapiranja kolona
+-- Uvoz: batch i redovi
+--
+-- `tj_column_mappings` je stajala ovde do 20260816140000, koja ju je obrisala
+-- kao mrtvu šemu: RLS je bio na njoj, ali je nijedan red koda nije ni čitao ni
+-- pisao. Ovaj fajl ju je opisivao još pet dana posle toga.
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.tj_import_batches (
   id            uuid        NOT NULL DEFAULT gen_random_uuid(),
@@ -367,6 +391,9 @@ CREATE TABLE IF NOT EXISTS public.tj_import_rows (
   matched_position_id uuid,
   created_at          timestamptz NOT NULL DEFAULT now(),
   prev_executions     jsonb,
+  -- Bruto rezultat koji je merge zatekao, da ga `undoImportBatch` vrati
+  -- zajedno sa `prev_executions`.
+  prev_gross_pnl_override numeric,
   CONSTRAINT tj_import_rows_pkey PRIMARY KEY (id),
   CONSTRAINT tj_import_rows_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -388,24 +415,9 @@ COMMENT ON COLUMN public.tj_import_rows.prev_executions IS
   'Executions replaced by a merge decision, captured so undo can restore them. '
   'NULL for create/skip rows and for batches predating this column.';
 
--- Tabela postoji od početka, RLS je na njoj, ali je nijedan red koda ne čita
--- ni ne piše — čarobnjak za uvoz svaki put iznova izvodi mapiranje iz naslova
--- kolona. Zabeleženo kao mrtva šema, ne kao propuštena veza.
-CREATE TABLE IF NOT EXISTS public.tj_column_mappings (
-  id          uuid        NOT NULL DEFAULT gen_random_uuid(),
-  user_id     uuid        NOT NULL DEFAULT auth.uid(),
-  broker_name text        NOT NULL,
-  mapping     jsonb       NOT NULL,
-  created_at  timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT tj_column_mappings_pkey PRIMARY KEY (id),
-  CONSTRAINT tj_column_mappings_user_id_fkey FOREIGN KEY (user_id)
-    REFERENCES auth.users(id) ON DELETE CASCADE,
-  CONSTRAINT tj_column_mappings_user_id_broker_name_key UNIQUE (user_id, broker_name)
-);
-
 
 -- -----------------------------------------------------------------------------
--- Row-level security — isti vlasnički obrazac na svih deset
+-- Row-level security — isti vlasnički obrazac na svih devet
 --
 -- `(SELECT auth.uid())` a ne goli `auth.uid()`: potprogram u SELECT-u planer
 -- izvršava jednom po upitu umesto jednom po redu (20260720160000).
@@ -419,7 +431,6 @@ ALTER TABLE public.tj_option_lists    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tj_option_items    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tj_import_batches  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tj_import_rows     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.tj_column_mappings ENABLE ROW LEVEL SECURITY;
 
 -- tj_accounts        → tj_accounts_owner
 -- tj_positions       → tj_positions_owner
@@ -430,7 +441,6 @@ ALTER TABLE public.tj_column_mappings ENABLE ROW LEVEL SECURITY;
 -- tj_option_items    → tj_items_owner
 -- tj_import_batches  → tj_batches_owner
 -- tj_import_rows     → tj_rows_owner
--- tj_column_mappings → tj_mappings_owner
 --
 -- Svaka je istovetna:
 --   CREATE POLICY <ime> ON public.<tabela>

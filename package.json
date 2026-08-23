@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "scan": "node scripts/scan.mjs",
+    "schema:check": "node scripts/schema-check.mjs",
     "dead": "knip",
     "test": "vitest run",
     "test:watch": "vitest"
