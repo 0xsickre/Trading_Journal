@@ -167,6 +167,7 @@ describe("classification against existing trades", () => {
       totalSwap: 0,
       grossPl: 502.5,
       netPl: 500,
+      brokerPositionId: null,
     },
     {
       id: "pos-diff",
@@ -179,6 +180,7 @@ describe("classification against existing trades", () => {
       totalSwap: 0,
       grossPl: 200,
       netPl: 200,
+      brokerPositionId: null,
     },
   ];
 

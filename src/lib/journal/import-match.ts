@@ -44,6 +44,12 @@ export type MatchCandidate = {
   totalSwap: number | null;
   grossPl: number | null;
   netPl: number | null;
+  /**
+   * Broker id pozicije, kad je trejd upisao bot most.
+   *
+   * Postoji da bi `sameTrade` mogao da ga ODBIJE. Vidi tamo.
+   */
+  brokerPositionId: string | null;
 };
 
 /**
@@ -95,6 +101,19 @@ function sameTrade(
   row: ImportRowKey,
   instrumentsMatch: (a: string, b: string) => boolean,
 ): boolean {
+  // Trejd koji je upisao bot most se NE spaja, nikad.
+  //
+  // Merge poziva `tj_replace_executions`, koja je puna zamena: obrisala bi
+  // ulazni fill koji je most dobio od brokera u trenutku izvršenja i zamenila
+  // ga onim iz izvoda. Izvod je zaokružen izveštaj, a most ima cenu sa fill-a —
+  // pa bi spajanje zamenilo precizniji podatak grubljim, i to nevidljivo.
+  //
+  // Posledica je duplikat kad izvod pokrije period koji je most već zabeležio.
+  // To je namerno, i to je ista asimetrija koju `ambiguous` gore bira: višak
+  // trejda se briše u jednom potezu, a izgubljeni fill se ne vidi dok se ne
+  // potraži. ROADMAP § Faza 11 je ovu meru imenovao kao neophodnu; ovo je ona.
+  if (c.brokerPositionId != null) return false;
+
   if (!c.instrument || !row.instrument) return false;
   if (!instrumentsMatch(c.instrument, row.instrument)) return false;
   if ((c.direction ?? "").toLowerCase() !== (row.direction ?? "").toLowerCase()) {

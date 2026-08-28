@@ -28,6 +28,9 @@ const c = (over: Partial<MatchCandidate> = {}): MatchCandidate => ({
   totalSwap: 0,
   grossPl: 500,
   netPl: 496,
+  // Rucni trejd po podrazumevanom: bot trejd se ne spaja, pa bi ga svaki test
+  // ispod tiho pretvorio u "new".
+  brokerPositionId: null,
   ...over,
 });
 
@@ -156,5 +159,33 @@ describe("alias simbola i dalje radi kroz modul", () => {
     // se ovde koristi — inače bi test dokazivao izmišljeno pravilo.
     expect(instrumentsMatch("ES", "ES")).toBe(true);
     expect(match({ ...row, instrument: "es" }).status).toBe("match");
+  });
+});
+
+describe("trejd koji je upisao bot most", () => {
+  /**
+   * Merge poziva `tj_replace_executions`, puna zamena fill-ova. Most ima cenu sa
+   * samog fill-a, izvod ima zaokruzen izvestaj — pa bi spajanje zamenilo
+   * precizniji podatak grubljim, i to nevidljivo.
+   */
+  it("se NE spaja, iako se poklapa u svemu ostalom", () => {
+    const bot = c({ id: "bot1", brokerPositionId: "10558247" });
+    const out = match(row, [bot]);
+
+    expect(out.status).toBe("new");
+    expect(out.matched).toBeNull();
+    expect(out.candidates).toEqual([]);
+  });
+
+  it("ne skriva rucni trejd koji stoji pored njega", () => {
+    // Duplikat je vidljiv ishod i to je namerno; ono sto se ne sme desiti je da
+    // bot trejd povuce red na sebe i time sakrije da rucni postoji.
+    const bot = c({ id: "bot1", brokerPositionId: "10558247" });
+    const manual = c({ id: "man1" });
+
+    const out = match(row, [bot, manual]);
+
+    expect(out.status).toBe("match");
+    expect(out.matched?.id).toBe("man1");
   });
 });

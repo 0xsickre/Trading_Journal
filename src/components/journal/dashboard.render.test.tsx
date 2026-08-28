@@ -114,7 +114,24 @@ function statValue(label: string): string {
  * does; a synchronous `getByText` would only ever see the loading placeholder.
  */
 async function scoreHeadline(): Promise<string> {
-  const marker = await screen.findByText("/ 100");
+  // A far longer wait than the suite's default, and it is measured rather than
+  // guessed. This query sits behind TWO real costs, both of which are the
+  // product working as designed:
+  //
+  //   1. `next/dynamic` — the card is fetched, not bundled, because recharts is
+  //      ~840 KB and this is the `/` route.
+  //   2. the `recharts` mock at the top of this file calls `importOriginal()`,
+  //      which loads that same 840 KB for real so the chart components can be
+  //      spread over the one stub it replaces.
+  //
+  // So the promise this awaits genuinely has to parse recharts, inside a worker
+  // competing with forty-six other jsdom files. It fits comfortably in isolation
+  // and intermittently did not under a full parallel run — which is how this
+  // test came to fail perhaps one run in four while being perfectly correct.
+  //
+  // The ceiling only costs time when the query is going to FAIL; a passing run
+  // resolves as soon as the import lands.
+  const marker = await screen.findByText("/ 100", undefined, { timeout: 30_000 });
   return marker.previousElementSibling?.textContent ?? "";
 }
 
