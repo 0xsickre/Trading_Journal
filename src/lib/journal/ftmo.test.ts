@@ -120,6 +120,124 @@ describe("evaluateFtmo", () => {
   });
 });
 
+describe("headroom — how close the account came to being finished", () => {
+  /**
+   * THE CLOSEST APPROACH, NOT THE ROOM LEFT TODAY, and the difference is the
+   * whole reason the field exists. An account up 8 % that once sat at 4.5 %
+   * against a 5 % floor was one bad day from the end of its challenge. A
+   * "what can I still lose right now" reading scores that 100 the morning
+   * after, which is exactly the fact the Sickre Score had no way to see.
+   */
+  const room = (trades: FtmoTrade[], over: Partial<FtmoConfig> = {}) =>
+    evaluateFtmo(baseConfig(over), trades).headroomPct;
+
+  it("is null, never 100, for a challenge with nothing closed in its window", () => {
+    // THE S1 DEFECT, ONE MODULE UPSTREAM. A fresh challenge has approached no
+    // limit because it has done nothing, and scoring that as perfect risk
+    // management is a maximum awarded for never having taken a risk. Null, so
+    // `computeSickreScore` drops the component and renormalizes.
+    expect(room([])).toBeNull();
+    // Same for a window emptied by a reset: the trades exist, the challenge
+    // has not seen them.
+    expect(
+      room([t("2026-07-01T12:00:00Z", -4000)], {
+        resetAt: "2026-07-02T00:00:00Z",
+      }),
+    ).toBeNull();
+  });
+
+  it("is null when neither loss rule is enabled", () => {
+    // Nothing to be close to. Not 100 — there is no limit to have room against.
+    expect(
+      room([t("2026-07-01T12:00:00Z", -4000)], {
+        dailyLoss: { enabled: false, pct: 5, basis: "starting_balance" },
+        maxLoss: { enabled: false, pct: 10 },
+      }),
+    ).toBeNull();
+  });
+
+  it("reports the room left by the worse of the two rules", () => {
+    // -2500 in a day: half the 5000 daily allowance → 50 % daily room. Total
+    // drawdown 2.5 % of a 10 % floor → 75 % room there. The daily rule came
+    // nearer, so it decides. Max, not average: averaging lets a comfortable
+    // total drawdown paper over a day that nearly ended the challenge.
+    expect(room([t("2026-07-01T12:00:00Z", -2500)])).toBeCloseTo(50, 6);
+  });
+
+  it("scores the reported shape: 4.5 % against a 5 % floor leaves 10 %", () => {
+    // The example the component was added for — profitable overall, and one
+    // bad day from the end.
+    const trades = [
+      t("2026-07-01T12:00:00Z", -4500), // 4.5 % of the starting balance
+      t("2026-07-02T12:00:00Z", 12_500), // finishes up 8 %
+    ];
+    const r = evaluateFtmo(
+      baseConfig({
+        dailyLoss: { enabled: false, pct: 5, basis: "starting_balance" },
+        maxLoss: { enabled: true, pct: 5 },
+      }),
+      trades,
+    );
+    expect(r.profitPct).toBeCloseTo(8, 6);
+    expect(r.headroomPct).toBeCloseTo(10, 6);
+  });
+
+  it("is zero once a limit is touched or breached, not negative", () => {
+    const touched = room([t("2026-07-01T12:00:00Z", -5000)]); // exactly the daily limit
+    expect(touched).toBe(0);
+    const blown = evaluateFtmo(baseConfig(), [
+      t("2026-07-01T09:00:00Z", -8000),
+    ]);
+    expect(blown.status).toBe("failed");
+    expect(blown.headroomPct).toBe(0);
+  });
+
+  it("counts a winning day as using none of its allowance, not as no data", () => {
+    // Only the daily rule is on, and no day lost anything. That is full room,
+    // measured — distinct from the empty window above, which is no room known.
+    expect(
+      room([t("2026-07-01T12:00:00Z", 900)], {
+        maxLoss: { enabled: false, pct: 10 },
+      }),
+    ).toBe(100);
+  });
+
+  it("measures each day against THAT day's allowance on the rolling basis", () => {
+    // The reason this is computed inside the day loop instead of afterwards
+    // from `dailyLossLimit`, which only carries the allowance in force for the
+    // day after the last one traded.
+    //
+    // Day 1 wins 20_000, so day 2 opens at 120_000 and its 5 % allowance is
+    // 6000. Losing 3000 that day uses half of it → 50 % room. Dividing by the
+    // last limit (5 % of 117_000 = 5850) would have said 48.7 %, measuring the
+    // day against an allowance it never had.
+    const trades = [
+      t("2026-07-01T12:00:00Z", 20_000),
+      t("2026-07-02T12:00:00Z", -3000),
+    ];
+    expect(
+      room(trades, {
+        dailyLoss: { enabled: true, pct: 5, basis: "prev_close" },
+        maxLoss: { enabled: false, pct: 10 },
+        profitTarget: { enabled: false, pct: 10 },
+      }),
+    ).toBeCloseTo(50, 6);
+
+    // The same trades on the static basis measure day 2 against 5 % of the
+    // ORIGINAL 100_000, so 3000 of 5000 → 40 % room. Stricter, as it should be.
+    expect(
+      room(trades, {
+        maxLoss: { enabled: false, pct: 10 },
+        profitTarget: { enabled: false, pct: 10 },
+      }),
+    ).toBeCloseTo(40, 6);
+  });
+
+  it("is null on the off result, like every other figure there", () => {
+    expect(evaluateFtmo(baseConfig({ enabled: false }), []).headroomPct).toBeNull();
+  });
+});
+
 describe("instant comparison at the reset boundary", () => {
   // PostgREST hands back "+00:00"; resetFtmoChallenge writes ".000Z". Compared
   // as text these invert at an identical whole second, because '+' (0x2B) sorts

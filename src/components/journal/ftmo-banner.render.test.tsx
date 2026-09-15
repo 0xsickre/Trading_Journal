@@ -57,6 +57,7 @@ function result(over: Partial<FtmoResult>): FtmoResult {
     daysTraded: 0,
     targetReached: false,
     minDaysMet: false,
+    headroomPct: null,
     dailyLossLimit: null,
     maxLossFloor: null,
     profitTargetAmount: null,

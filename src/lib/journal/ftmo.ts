@@ -54,6 +54,24 @@ export type FtmoResult = {
   daysTraded: number;
   targetReached: boolean;
   minDaysMet: boolean;
+  /**
+   * Room left over from the CLOSEST the account ever came to an enabled limit,
+   * in % — 100 means it never approached one, 0 means it touched or breached.
+   *
+   * The closest approach, deliberately, and not the room left today. An account
+   * up 8 % that once dipped to 4.5 % against a 5 % floor was one bad day from
+   * the end of the challenge, and a "how much can I still lose right now"
+   * reading would score that 100 the morning after. What survived is not the
+   * same question as what was risked.
+   *
+   * `null` means no evidence, which is NOT the same as untouched room. A
+   * challenge with no closed trades in its window has approached nothing
+   * because it has done nothing, and scoring that 100 is the exact defect
+   * `sickre-score.ts` carries a sample gate to prevent: a maximum awarded for
+   * never having taken a risk. Also `null` when neither loss rule is enabled
+   * (nothing to be close to) or the starting balance is unusable.
+   */
+  headroomPct: number | null;
   // Display thresholds (money):
   dailyLossLimit: number | null;
   maxLossFloor: number | null;
@@ -98,6 +116,7 @@ const OFF_RESULT: FtmoResult = {
   daysTraded: 0,
   targetReached: false,
   minDaysMet: false,
+  headroomPct: null,
   dailyLossLimit: null,
   maxLossFloor: null,
   profitTargetAmount: null,
@@ -175,6 +194,13 @@ export function evaluateFtmo(
   // close-of-previous-day equity for the rolling basis.
   let dailyBreach: FtmoBreach | null = null;
   let dailyLossLimit: number | null = null;
+  // Worst fraction of a day's allowance any single day consumed, 0–1+.
+  //
+  // Accumulated HERE and not derived afterwards from `dailyLossLimit`, because
+  // under the `prev_close` basis the allowance is a different number every day
+  // and `dailyLossLimit` only carries the last one. Dividing the worst day by
+  // that would measure it against an allowance it never had.
+  let worstDailyUsage: number | null = null;
   if (dailyLossEnabled) {
     const orderedDays = [...dayNet.entries()].sort((a, b) =>
       a[0].localeCompare(b[0]),
@@ -184,6 +210,16 @@ export function evaluateFtmo(
       const limit = -(openingEquity * config.dailyLoss.pct) / 100;
       if (dailyBreach == null && net <= limit) {
         dailyBreach = { rule: "daily_loss", date, amount: net, limit };
+      }
+      // A winning day uses none of its allowance — 0, not "no data". Only a
+      // day with no allowance at all (0 %, or equity already underwater on the
+      // rolling basis) has nothing to be a fraction of.
+      const room = -limit;
+      if (room > 0) {
+        const usage = Math.max(0, -net) / room;
+        if (worstDailyUsage == null || usage > worstDailyUsage) {
+          worstDailyUsage = usage;
+        }
       }
       openingEquity =
         config.dailyLoss.basis === "prev_close" ? openingEquity + net : start;
@@ -203,6 +239,24 @@ export function evaluateFtmo(
     if (worstDay == null || net < worstDay.net) worstDay = { date, net };
   }
 
+  const maxDrawdownPct = start > 0 ? ((start - minEquity) / start) * 100 : 0;
+
+  // How close the account came to the two ways a challenge ends, each as a
+  // fraction of its own rule, then the worse of the two. Max, not average: the
+  // binding constraint is whichever one came nearest, and averaging them would
+  // let a comfortable total drawdown paper over a day that nearly ended it.
+  const maxLossUsage =
+    config.maxLoss.enabled && start > 0 && config.maxLoss.pct > 0
+      ? maxDrawdownPct / config.maxLoss.pct
+      : null;
+  const usages = [worstDailyUsage, maxLossUsage].filter(
+    (u): u is number => u != null,
+  );
+  const headroomPct =
+    window.length === 0 || usages.length === 0
+      ? null
+      : Math.max(0, Math.min(100, (1 - Math.max(...usages)) * 100));
+
   const daysTraded = dayNet.size;
   const targetReached =
     profitTargetAmount != null && peakEquity - start >= profitTargetAmount;
@@ -221,11 +275,12 @@ export function evaluateFtmo(
     profitPct: start > 0 ? (cum / start) * 100 : 0,
     currentEquity: equity,
     peakEquity,
-    maxDrawdownPct: start > 0 ? ((start - minEquity) / start) * 100 : 0,
+    maxDrawdownPct,
     worstDay,
     daysTraded,
     targetReached,
     minDaysMet,
+    headroomPct,
     dailyLossLimit,
     maxLossFloor,
     profitTargetAmount,
