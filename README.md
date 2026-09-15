@@ -9,7 +9,9 @@ Pravljen da metrikama, beleškama i izveštajima pokrije ono što TradeZella rad
 imaju smisla samo za višekorisnički SaaS. Gde se razlikuje, razlika je zapisana i obrazložena —
 ovde ili u `ROADMAP.md`.
 
-Interfejs je na srpskom. Kod, komentari i `CODE_REVIEW.md` su na engleskom.
+Interfejs je **pretežno na engleskom**. Srpski je ostao tamo gde tekst objašnjava a ne imenuje —
+rečenice pored polja, pitanja dnevnog i nedeljnog pregleda, poruke karantina bot mosta: oko 46 od
+nekih 1700 vidljivih stringova. Kod, komentari i `CODE_REVIEW.md` su na engleskom.
 
 Deploy: Vercel · Baza: Supabase Postgres (odvojen projekat od dashboard-a)
 
@@ -80,28 +82,37 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
 | Komanda | Šta radi |
 |---|---|
 | `npm run dev` | Razvojni server |
-| `npm run build` | Produkcijski build — 14 ruta |
-| `npm run lint` | ESLint. **Očekuje se tačno jedno upozorenje** (vidi ispod) |
-| `npm test` | Vitest — 2177 testova u 133 fajla, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
+| `npm run build` | Produkcijski build — 16 ruta (15 stranica + `/_not-found`) |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run scan` | Bajtovi, ne značenje: NUL, nevalidan JSON, `.only`/`.skip`, `console.log`, konflikt markeri |
+| `npm run schema:check` | Zapis baznih tabela (`supabase/schema/`) protiv generisanih tipova |
+| `npm run lint` | ESLint. **Očekuje se nula problema i nula upozorenja** |
+| `npm test` | Vitest — 2344 testa u 140 fajlova, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
 | `npm test -- --coverage` | Izveštaj o pokrivenosti |
-| `npx knip` | Mrtvi fajlovi, eksporti i zavisnosti |
+| `npm run dead` | knip: mrtvi fajlovi, eksporti i zavisnosti |
 
-**Lint upozorenje je nosivo.** `journal-grid.tsx:727` prijavljuje *„Compilation Skipped: Use of
-incompatible library"* — React Compiler odbija da memoizuje komponentu koja koristi
-`useReactTable` iz TanStack Table. Razumemo ga i prihvatamo. To što ih je **tačno 1** je kontrolna
-vrednost: svaki drugi broj znači da je neka izmena nešto uvela.
+**Prag lint-a je nula, i nekad nije bio.** `journal-grid.tsx` prijavljivao je *„Compilation Skipped:
+Use of incompatible library"* — React Compiler ne ume da memoizuje komponentu koja koristi
+`useReactTable` iz TanStack Table. Poruka je tačna i trajna, pa je **ućutkana na licu mesta, sa
+zapisanim razlogom**, umesto da se toleriše kao „tačno 1" u CI fajlu koji niko ne čita dok ne pukne.
+Izuzetak sad stoji pored koda na koji se odnosi.
 
 ### CI
 
-`.github/workflows/gate.yml` vrti tih pet provera na svakom push-u na `main` i na svakom pull
-request-u. Do runde 4 gate je postojao samo kao dogovor — vrteo se pred commit zato što je tako
-dogovoreno — a dogovor ne obara pull request.
+`.github/workflows/gate.yml` vrti **sedam** provera na svakom push-u na `main` i na svakom pull
+request-u, poređanih od najjeftinije ka najskupljoj: `typecheck` → `scan` → `schema:check` →
+`test --coverage` → `lint` → `build` → `dead`. Do runde 4 gate je postojao samo kao dogovor — vrteo
+se pred commit zato što je tako dogovoreno — a dogovor ne obara pull request. Runner je na Node 22.
 
-Dva koraka traže više od jedne komande, jer im alat sam po sebi ne čuva ništa:
+Jedan korak traži više od jedne komande, jer mu alat sam po sebi ne čuva ništa:
 
-- **lint** — ESLint izlazi sa 0 i na upozorenjima, pa se broj MERI i poredi sa jedinim prihvaćenim.
-- **knip** — izlazi sa 0 kad nađe samo neiskorišćene EXPORT-e (22 su re-export-i iz `shadcn/ui`).
-  Mrtav FAJL i mrtva ZAVISNOST se traže odvojeno i obaraju prolaz.
+- **lint** — ESLint izlazi sa 0 i na upozorenjima, pa se izlaz MERI. Prag je **nula problema**;
+  jedini poznati izuzetak (React Compiler nad TanStack Table) ućutkan je u samom fajlu.
+
+`knip` je na **nuli za sve tri vrste nalaza** — mrtav fajl, mrtva zavisnost i neiskorišćen export.
+Ranije je tolerisao 22 export-a (re-export-i iz `shadcn/ui` koje ništa ne uvozi); obrisani su, jer
+spisak koji uvek ima 22 stavke je spisak u koji se prestane gledati — i tako je 23. prošla
+neopaženo.
 
 Build traži `NEXT_PUBLIC_SUPABASE_URL` i `NEXT_PUBLIC_SUPABASE_ANON_KEY` kao **repo varijable**
 (Settings → Secrets and variables → Actions → Variables), ne kao tajne — obe su javne po dizajnu,
@@ -118,7 +129,7 @@ React 19.2.4, TypeScript 5, Tailwind 4, shadcn/ui, TanStack Table 8, Recharts 3,
 
 ## Model podataka
 
-28 tabela i 1 view, sve sa prefiksom `tj_`. **Row-level security je uključen na svih 28 tabela**,
+30 tabela i 1 view, sve sa prefiksom `tj_`. **Row-level security je uključen na svih 30 tabela**,
 svaka politika po istom vlasničkom obrascu:
 
 ```sql
@@ -151,11 +162,11 @@ Test drži oba nad istim ulazima.
 |---|---|
 | **Trejdovi** | `tj_positions`, `tj_executions`, `tj_trade_images` |
 | **Nalozi i novac** | `tj_accounts`, `tj_cash_events`, `tj_instruments` |
-| **Konfiguracija** | `tj_option_lists`, `tj_option_items`, `tj_field_defs`, `tj_user_prefs` |
+| **Konfiguracija** | `tj_option_lists`, `tj_option_items`, `tj_field_defs`, `tj_user_prefs`, `tj_dashboard_templates` |
 | **Dnevni proces** | `tj_daily_reports`, `tj_focus_goals`, `tj_position_checkins` |
 | **Nedeljni proces** | `tj_weekly_reviews` |
 | **Tracker** | `tj_tracker_rules`, `tj_tracker_checkins` |
-| **Playbook-ovi** | `tj_playbooks`, `tj_playbook_rules`, `tj_playbook_rule_links`, `tj_position_rules` |
+| **Playbook-ovi** | `tj_playbooks`, `tj_playbook_sections`, `tj_playbook_rules`, `tj_playbook_rule_links`, `tj_position_rules` |
 | **Notebook** | `tj_notes`, `tj_note_folders`, `tj_note_tags` |
 | **Uvoz** | `tj_import_batches`, `tj_import_rows` |
 | **Bot most** | `tj_bot_tokens`, `tj_bot_events`, `tj_broker_symbol_map` |
@@ -183,21 +194,23 @@ obrisano nevezanim snimanjem.
 | `/daily` | Dnevni izveštaj + tracker checklist za jedan dan; zaključavanje dana |
 | `/calendar` | Mesečna mreža P&L-a po danu, nedeljni zbirovi |
 | `/weekly` | Nedeljni pregled: ocena nedelje, pet pitanja, brojke nedelje (`week-recap.ts`) |
-| `/playbooks` | Definisanje playbook-a i dokaz na istom ekranu — pravila, per-rule scorecard, kartice se mogu skupiti/raširiti |
+| `/playbooks` | Spisak svih setup-ova kao tabela: Trades / Net P&L / Win Rate / Missed / Expectancy po redu |
+| `/playbooks/[id]` | Jedan playbook: identitet, Stats, Rules (uređivač sekcija i pravila), Trades, Notes |
 | `/reports` | Radni sto za izveštaje — bilo koja metrika protiv bilo koje dimenzije, plus pivot |
 | `/tracker` | Preusmerava na `/daily` (ostalo jer je tracker nekad živeo ovde) |
 | `/notebook` | Beleške, folderi, tagovi, markdown |
 | `/import` | Čarobnjak za CSV uvoz, istorija batch-eva, undo |
-| `/settings` | Nalozi, instrumenti, liste opcija, korisnička polja, playbook-ovi, tracker pravila, brisanje naloga i reset |
+| `/settings` | Šest tabova: Categories (liste opcija + korisnička polja, jedan potez pravi oboje), Tracker, Instruments, Accounts (uklj. FTMO), Deposits / withdrawals, Bot most. Brisanje naloga i reset su u Accounts |
 | `/login` | Supabase auth |
 
 ---
 
 ## Metrike
 
-33 metrike u jednom registru (`src/lib/journal/reports/metrics.ts`), 12 ugrađenih dimenzija plus po
-jedna za svako korisničko polje. Bilo koja metrika ide protiv bilo koje dimenzije — zato postoji
-jedan report engine umesto deset stranica sa izveštajima.
+34 metrike u jednom registru (`src/lib/journal/reports/metrics.ts`), 25 ugrađenih dimenzija u četiri
+grupe (11 sa trejda, 9 izvedenih, 4 procesne, 1 insight) plus po jedna za svako korisničko polje.
+Bilo koja metrika ide protiv bilo koje dimenzije — zato postoji jedan report engine umesto deset
+stranica sa izveštajima. Tabele ispod nabrajaju svih 34.
 
 **Registar je registar, ne druga implementacija.** Svaki unos delegira funkciji koja već postoji i
 već je testirana na drugom mestu. Metrika koja bi računala nešto u sebi razišla bi se sa modulom
@@ -209,7 +222,10 @@ koji to isto računa.
 |---|---|---|
 | Neto P&L | `Σ (bruto − provizije − swap)` | Datira se po danu **zatvaranja**, u zoni naloga |
 | Bruto P&L | `Σ (izlaz − ulaz) × količina × point_value × smer` | |
+| Trades | Broj zatvorenih trejdova u obuhvatu | |
 | Win rate | `dobici / (dobici + gubici) × 100` | **Breakeven trejdovi su van imenioca** |
+| Avg win / Avg loss | Prosečan novčani dobitak i gubitak, odvojeno | |
+| Avg win/loss | `avg win / \|avg loss\|` | Novčani racio, ne R — komponenta Sickre Score-a |
 | Profit factor | `bruto profit / bruto gubitak` | `Infinity` kad nema gubitka — stvarni maksimum, ne nedostatak podataka. `null` samo kad nema šta da se deli |
 | Expectancy | `winRate × avgWinR + (1 − winRate) × avgLossR` | Računa se samo nad R populacijom — samo trejd sa stopom ima R |
 | Najbolji / najgori | Najveći i najmanji pojedinačni neto rezultat | |
@@ -286,6 +302,10 @@ Dva različita imenioca za drawdown postoje namerno:
 | Avg planned R | Prosečan planirani reward, nad trejdovima koji ga imaju |
 | Planned vs realized R | `avg realized R − avg planned R`, nad **istim** trejdovima |
 | Target attainment | Realizovani R kao procenat planiranog reward-a |
+| Winner target attainment | Isto, **samo nad dobitnicima** — koliko je plana uzeto pre ranog izlaska |
+| Avg entry slip | Planirani ulaz naspram prosečnog fill-a, u R protiv planiranog stopa. Negativno = fill lošiji od plana |
+| Total slip R | Zbir svakog R-a ustupljenog na ulaznom slippage-u u periodu |
+| Setup score | Udeo ispunjenih setup kriterijuma (§ Ocena setupa se izvodi) |
 | Avg hold | Prosečno vreme držanja u sekundama |
 | Follow rate | Ispoštovana playbook pravila / **odgovorena** pravila × 100 |
 
@@ -368,9 +388,9 @@ popravke u rundi 3, sve tri ista greška na različitim dubinama:
 Zato skor sad nosi kapiju dokaza:
 
 - **Ispod 5 zatvorenih trejdova skora nema.** Kartica odbrojava do njega.
-- **Ispod 30 se prikazuje ZAJEDNO sa uzorkom**, označen kao privremen. Win rate nad pet odluka ima
-  interval poverenja širok četrdesetak poena, ali krijenje skora nedeljama je nepoštenje u drugom
-  smeru.
+- **Ispod 30 se prikazuje ZAJEDNO sa uzorkom**, označen kao privremen. Profit factor nad pet odluka
+  ume da skoči preko cele tablice bandova na jedan trejd, ali krijenje skora nedeljama je
+  nepoštenje u drugom smeru.
 - **Ispod 50 % pokrivenih pondera skora nema** — jedna komponenta pod naslovom sedmokomponentnog
   kompozita nije kompozit. Prazan nalog sa tracker istorijom pokriva process 30 + FTMO headroom 10
   = 40 od 110, i dalje ispod kapije.
@@ -382,7 +402,7 @@ gubitaka. Knjiga od samih breakeven scratch-eva ima putanju za merenje i nema od
 **Rebalans je oslabio kapiju pokrivenosti na jednom mestu, i to je zapisano a ne prećutano.** Dok je
 win % bio u skoru, komponente gejtovane po `decided` nosile su 60 od 100 pondera; bez njega nose 25
 od 70. Knjiga od samih breakeven trejdova zato sad prelazi prag sa drawdown-om i consistency-jem
-(40 od 70) i dobija skor umesto ćutanja — privremen, sa uzimom uz broj i sa „2 of 5 components" na
+(40 od 70) i dobija skor umesto ćutanja — privremen, sa uzorkom uz broj i sa „2 of 5 components" na
 kartici. Ograđeno testom u `book.fixture.test.ts`; ako je presudno da to i dalje ćuti, ručica je
 `MIN_COVERAGE_SHARE`, a ona pomera svaki skor u journalu.
 
@@ -391,91 +411,88 @@ svaki skor koji je ikad prikazan, pa sad mora da menja i test.
 
 ---
 
-## Sekcije playbook-a bira trejder, ne repo
+## Sekcija pripada PLAYBOOK-u, a ne nalogu
 
 `tj_playbook_rules.category` je nosio `CHECK IN ('context','entry','management','exit','no_trade')`,
-a kartica playbook-a je crtala **svih pet** sekcija bez obzira da li ih knjiga koristi — namerno, uz
-komentar da je prazna „No-trade" sekcija podsetnik da pravilo fali. Taj argument je pretpostavljao da
-je tih pet **pravih** pet.
+a kartica je crtala svih pet sekcija bez obzira da li ih knjiga koristi. To je bila tuđa taksonomija:
+trejderu čiji je metod „ovo su uslovi da uđem, ovo da izađem, i jedno pravilo za rizik" daje tri
+naslova koja je napisao i dva koja nije, trajno prazna. Prazna sekcija tad prestaje da bude
+podsetnik i postaje forma koja ne pristaje.
 
-To je tuđa taksonomija. Trejderu čiji je metod „ovo su uslovi da uđem, ovo da izađem, i jedno pravilo
-za rizik" daje tri naslova koja je napisao i dva koja nije, trajno prazna, na svakom playbook-u.
-Prazna sekcija tad prestaje da bude podsetnik i postaje forma koja ne pristaje.
+Prvo rešenje je sekciju pretvorilo u opcionu listu (`rule_category`) po **nalogu**. Popravilo je
+taksonomiju i ostavilo tri žalbe, sve tri iz istog korena — sekcija i veza pravila sa njom bile su
+**globalne**:
 
-**Mehanizam je već postojao.** `tj_option_lists` je način na koji ovaj dnevnik oduvek drži skup koji
-pripada trejderu — preimenljiv, prerasporediv, bez ijedne linije koda. `exit_reason`, `miss_reason` i
-`setup_grade` svi tako rade; kategorija je bila izuzetak jer je slučajno dodata kao enum. Sad je lista
-`rule_category`.
+- nov playbook je crtao sve sekcije koje nalog ima, prazne ili ne;
+- sekcija se nije mogla obrisati jer je pravilo iz **druge** knjige stajalo pod istim imenom;
+- isto pravilo je moralo da stoji u istoj sekciji u svakoj knjizi.
 
-**Uređuje se na kartici playbook-a, ne u Settings.** Prvo rešenje je bilo „lista kao svaka druga, meni
-u Settings" — i to je i dalje bila tuđa lista, samo preimenljiva. Trejder koji piše playbook ne treba
-da ga napusti, nađe pravi padajući spisak u podešavanjima, doda vrednost i vrati se. Zato na kartici:
-`+ Dodaj sekciju` na dnu tabele, a svaki naslov je polje za ime sa ↑ ↓ i kantom pored
-(`addPlaybookSection`, `renamePlaybookSection`, `movePlaybookSection`, `deletePlaybookSection`).
-Nova lista **kreće prazna** — sekcije se dobijaju tako što se napišu.
+**Sad je sekcija red u `tj_playbook_sections`, vezan za jedan playbook** (migracija
+`20260824100000`). Model veze je već bio tačan — pravilo je biblioteka sa jednim `id`-jem, veza je
+zaseban red, `sort_order` stoji na vezi pa isto pravilo može biti treće u jednoj knjizi i prvo u
+drugoj. Falila su mu dva stupca, i oba su se preselila na `tj_playbook_rule_links`:
 
-**Preimenovanje dira samo `label`, nikad `value`.** Pravila pamte `value`, a `ruleCategoryLabel` ga
-prevodi u ime pri crtanju. Da rename prepisuje `value`, bio bi to UPDATE preko svih pravila svih
-playbook-ova, i svaki propušten red bi ispao iz svoje sekcije.
+| Šta | Gde sad živi | Zašto |
+|---|---|---|
+| veza sa sekcijom | `tj_playbook_rule_links.section_id` (uuid) | sekcija je stvar knjige |
+| `is_setup_criterion` | `tj_playbook_rule_links` | koje pravilo ocenjuje setup je takođe stvar knjige — `criteriaByPlaybook` u `rule-lookup.ts` je to ionako već računao po knjizi, samo je izvodio iz globalne zastavice |
+| `show_when` | **ostaje na pravilu** | odgovori (`tj_position_rules`) vise o `rule_id`, a `show_when` određuje imenilac follow rate-a. Po knjizi bi isto pravilo imalo dva imenioca nad jednim skupom odgovora |
 
-**Brisanje je tvrdo, ali odbija dok je ijedno pravilo unutra.** `is_active` je zamena za brisanje koje
-nije postojalo; sad postoji. Sekcija je naslov nad pravilima koja se još pišu, pa poluspušteno stanje
-nema šta da radi: arhivirana sekcija sa pravilima krila je naslov a ostavljala pravila, a arhivirana
-**prazna** sekcija nestajala je sa kartice bez načina da se obriše. Zato se `rule_category` čita sa
-`activeOnly = false` (migracija `20260822160000`), a odbijanje imenuje broj — uključujući arhivirana
-pravila i ona koja žive samo u **drugim** playbook-ovima, koja se sa te kartice i ne vide.
+**Nema više stabilnog `value`, i to je poenta.** Veza pokazuje na `section_id`, pa je preimenovanje
+sekcije besplatno i ne dira nijedno pravilo — ranije je rename smeo da menja samo `label` baš zato
+što bi prepisivanje `value`-a bio UPDATE preko svih pravila svih playbook-ova, i svaki propušten red
+bi ispao iz svoje sekcije.
 
-Sekcija koja je ipak ostala bez svog reda dok drži pravila **i dalje se crta**, bez kontrola:
-`rulesByCategory` dopisuje svaku takvu. Sakriti pravila zato što je naslov nestao bilo bi gubitak
-podataka prerušen u pospremanje.
+**Uređuje se na stranici playbook-a, ne u Settings.** Trejder koji piše playbook ne treba da ga
+napusti, nađe pravi padajući spisak u podešavanjima, doda vrednost i vrati se. Akcije su
+`addPlaybookSection`, `updatePlaybookSection`, `deletePlaybookSection`, `movePlaybookSection` i
+`reorderPlaybookSections`, uz `moveRuleToSection` i `setRuleCriterion` za pravila. Nova knjiga
+**kreće prazna** — sekcije se dobijaju tako što se napišu.
 
-**Bazni `CHECK` ne postoji više i to je priznata cena, ne propust.** Dozvoljeni skup su sad redovi po
-korisniku, koje ograničenje kolone ne vidi. Vrednost je grupisanje za prikaz — nijedna metrika ne
-ključa po njoj, `follow_rate` i ocena setupa je oboje ignorišu — pa greška u kucanju daje sekciju sa
-čudnim imenom, ne pogrešan broj. Zato provera živi u server akciji, gde poruka može da se pročita.
+**Brisanje sekcije nikad ne odbija.** `ON DELETE CASCADE` na `section_id` uklanja **veze**, ne
+pravila: svako pravilo ostaje u biblioteci sa svakim odgovorom koji je ikad prikupilo, i svaki drugi
+playbook koji ga vezuje ostaje netaknut. Brisanje sekcije je odvezivanje više pravila odjednom, a
+odvezivanje ovde nikad nije bilo destruktivno. Opreznost stoji u rečenici koju trejder pročita pre
+potvrde — nabroji pravila koja kartica ionako već prikazuje — a ne u odbijanju na koje ne može da
+odgovori.
+
+**Dva naslova sa istim imenom u istoj knjizi su zabranjena u bazi**, preko unikatnog indeksa nad
+`(playbook_id, lower(btrim(label)))`: „Entry" i „entry " razlikuju se samo za mašinu, a crtale bi dve
+kartice nad istim pitanjem.
 
 ---
 
-## Lista playbook-ova je tabela, ne niz razvijenih kartica
+## Playbook je stranica, ne kartica u skrolu
 
-Deset playbook-ova je do sada značilo deset potpuno razvijenih kartica — svaka sa punim uređivačem
-pravila — pa je i pronalaženje jednog imena bilo skrolovanje pored devet drugih. Zaglavlje kartice sad
-deli jedan CSS grid raspored (`PLAYBOOK_ROW_GRID`, izvezen iz `playbook-card.tsx`) sa redom naslova
-kolona iznad liste, pa je „Trades / Net P&L / Win Rate / Missed / Expectancy" poravnato niz čitavu
-listu bez da su te dve stringove ikad ukucane na dva mesta. Razmatran je i pravi `<table>` koji bi to
-poravnanje garantovao besplatno, ali bi značio da uređivač pravila (sam iznutra već `<table>`) postane
-`<td colSpan>` sadržaj ugnježden u veći — dodatan rizik oko collapse/expand logike koja već radi, bez
-prave koristi nad deljenom klasom.
+Deset playbook-ova je nekad značilo deset razvijenih kartica na jednom ekranu — svaka sa punim
+uređivačem pravila — pa je i pronalaženje jednog imena bilo skrolovanje pored devet drugih. Prva
+popravka je karticu skupila u red tabele sa kontrolama za skupljanje i razvijanje. Druga je pitanje
+uklonila: **svaki setup sad ima svoju stranicu.**
 
-Missed kolona se ne može pročitati iz istog `row`-a kao ostale: `runReport` računa nad realizovanim
-(zatvorenim) trejdovima, a promašen trejd nikad nema neto P&L pa nikad ne uđe u taj skup. Zato se broji
-posebno u `page.tsx`, nad sirovim redovima pre `toRealized`, grupisano po `playbook_id`
-(`stringFieldValue`) — i prosleđuje kao običan `Record<string, number>`, ne `Map`: to je oblik koji
-svaki drugi prop preko server/client granice u ovoj aplikaciji već koristi (`OptionsMap` među njima).
+- `/playbooks` je samo indeks — tabela sa „Trades / Net P&L / Win Rate / Missed / Expectancy" po redu.
+- `/playbooks/[id]` je jedan playbook, u tabovima: **Stats**, **Rules** (uređivač sekcija i pravila),
+  **Trades** (isti `JournalGrid` kao `/journal`, sužen na tu knjigu) i **Notes**.
+
+Zato `tj_user_prefs.playbooks_expanded` više ne postoji — obrisana je migracijom `20260824110000`,
+pošto je niko nije ni pisao ni čitao od trenutka kad je razvijanje prestalo da bude stanje ekrana.
+
+**Missed kolona se ne može pročitati iz istog `row`-a kao ostale.** `runReport` računa nad
+realizovanim (zatvorenim) trejdovima, a promašen trejd nikad nema neto P&L pa nikad ne uđe u taj
+skup. Zato se broji posebno u `page.tsx`, nad sirovim redovima pre `toRealized`, grupisano po
+`playbook_id` (`stringFieldValue`) — i prosleđuje kao običan `Record<string, number>`, ne `Map`: to
+je oblik koji svaki drugi prop preko server/client granice u ovoj aplikaciji već koristi
+(`OptionsMap` među njima).
+
+**Spisak čita i penzionisana pravila** (`getPlaybooks({ includeDeleted: true })`). Pravilo skinuto sa
+ček-liste i dalje poseduje posmatranja koja je prikupilo, a stranica o dokazu mora da ih pokaže.
+
+**`tj_position_rules` se drenira jednom.** To je jedan red po pravilu po trejdu — najbrže rastuća
+tabela u šemi — pa se čita jednom i prosleđuje u `getPlaybooks`, koji iz istog niza izvodi broj
+odgovora po pravilu. Čitati je dvaput po renderu je greška koju je `/reports` već morao da ispravi.
 
 **Kreiranje ide kroz dijalog, ne kroz inline input.** „+ Create Playbook" otvara `Dialog` sa Ime +
 Opis; nema drugog koraka za pravila kao kod TradeZella-e, jer bi to duplikovalo uređivač sekcija koji
-kartica već ima. `addPlaybook` sad vraća novi `id` (ne samo `{ ok: true }`) — dijalog ga odmah dodaje u
-listu razvijenih, pa trejder sleti pravo na uređivač sekcija/pravila.
-
-**Podrazumevano stanje je obrnuto.** Kolona `tj_user_prefs.playbooks_collapsed` je preimenovana u
-`playbooks_expanded` (migracija `20260822170000`) — dok je lista bila niz razvijenih kartica, prazan
-spisak je značio „sve razvijeno", ispravan podrazumevani prikaz za karticu koju trejder još nije
-dirao. Sad kad je lista tabela, sav koristan broj se već vidi kolabirano, pa je razvijanje namerna
-radnja — i prazan spisak sad znači „sve kolabirano". Preimenovanje, ne prepisivanje vrednosti: nalog
-tada nije imao nijedan red u `tj_user_prefs`, pa nema šta da se invertuje.
-
-**Bag koji je ova promena otkrila, ne izazvala.** `persist(next, current)` se pozivao IZNUTRA
-`setExpanded(current => {...})` updater funkcije — obrazac koji je ova stranica imala i pre ove
-izmene. React sme da pozove tu funkciju tokom faze renderovanja (Strict Mode to namerno duplira), pa
-je efekat sa strane — poziv server akcije, ili `startTransition` koji ga uvija — mogao da se izvrši
-„tokom renderovanja" umesto posle klika koji ga je pokrenuo. React je to prijavljivao kao „Cannot
-update a component (Router) while rendering PlaybooksScreen". Nikad ranije primećeno jer je stara
-verzija zvala akciju golim `.then()`-om, koji tu proveru nema — dodavanje `startTransition` (ispravan
-potez, isti obrazac kao `useAction`/`run` u `playbook-card.tsx`) je otkrilo propust, ne napravilo ga.
-Ispravka: `toggleExpanded`, `markExpanded`, `expandAll` i `collapseAll` sad čitaju `expanded` direktno
-iz zatvaranja i zovu `setExpanded(next)` pa `persist(next, expanded)` kao dva odvojena, obična poziva
-— nikad `persist` ugnježden unutar updater-a.
+stranica playbook-a već ima. `addPlaybook` vraća novi `id`, pa dijalog vodi pravo na tu stranicu.
 
 ---
 
@@ -488,16 +505,23 @@ je delom **izvedena iz** performansa. Kružno, i nevidljivo dok se dešava.
 
 Sve za zamenu je već postojalo: biblioteka pravila, odgovori po trejdu, `follow_rate` i
 `ruleScorecard`. Falila je samo oznaka **koja pravila definišu kvalitet setupa** —
-`tj_playbook_rules.is_setup_criterion`.
+`is_setup_criterion`, koja od `20260824100000` stoji na **vezi** (`tj_playbook_rule_links`), ne na
+pravilu: koje pravilo ocenjuje setup je stvar knjige, pa isto pravilo sme da bude kriterijum u
+jednoj a običan podsetnik u drugoj.
 
 **Ocena = udeo ispunjenih kriterijuma.** Sve → A+, ≥80 % → A, ≥60 % → B, ispod → C. A+ traži baš
 sve: oznaka znači „ovo je setup koji sam čekao", a setup kome fali jedan od sopstvenih uslova je
 drugi setup.
 
-**`CHECK (is_setup_criterion = false OR show_when = 'always')` je suština, ne dekoracija.**
-Kriterijum vezan za pobednike bio bi **hindsight po konstrukciji** — ocenjivao bi setup pitanjem koje
-se postavlja tek kad znaš rezultat. Baza tu kombinaciju odbija umesto da veruje da je UI neće
-ponuditi.
+**„Kriterijum mora da se pita na svakom trejdu" je suština, ne dekoracija.** Kriterijum vezan za
+pobednike bio bi **hindsight po konstrukciji** — ocenjivao bi setup pitanjem koje se postavlja tek
+kad znaš rezultat. Baza tu kombinaciju odbija umesto da veruje da je UI neće ponuditi.
+
+Dok je zastavica stajala na pravilu, to je bio jedan `CHECK (is_setup_criterion = false OR show_when
+= 'always')`. Otkad stoji na vezi, uslov spaja dve tabele i `CHECK` ga ne vidi, pa ga drže **dva
+okidača, po jedan sa svake strane**: `tj_link_criterion_always` odbija označavanje veze čije pravilo
+nije `always`, a `tj_rule_show_when_vs_criterion` odbija menjanje `show_when` na pravilu koje je
+negde kriterijum. Ista zabrana, isto mesto — baza, ne UI.
 
 **Ne ocenjuje se dok ček-lista nije cela odgovorena**, i tu se namerno razilazi sa `computeFollowRate`,
 koji neodgovorena pravila izbacuje iz brojioca *i* imenioca. To je ispravno za *stopu* i rupa za
@@ -552,9 +576,14 @@ zauvek kao vrednost koju niko nije mislio, a „nije upisano" i „1" su različ
 
 ## Praćenje procesa
 
-**Tracker pravila** su dnevne obaveze, po danu u nedelji. Četiri se ocenjuju automatski iz podataka
-— max gubitak po trejdu, max gubitak po danu, svaki trejd vezan za playbook, svaki trejd ima stop —
-a ostala se čekiraju rukom.
+**Tracker pravila** su dnevne obaveze, po danu u nedelji. **Šest** se ocenjuje automatski iz
+podataka — max gubitak po trejdu, po danu i po nedelji, svaki trejd vezan za playbook, svaki trejd
+ima stop, svaki trejd ima napisanu tezu — a ostala se čekiraju rukom.
+
+Tri limita su **procenat dnevnog otvarajućeg equity-ja, ne iznos novca** (migracija
+`20260822190000`). Fiksnih 200 € je različito pravilo na nalogu od 5 000 i na onom od 50 000, pa
+limit postavljen jednom prestaje da opisuje rizik čim nalog poraste — a broj koji se mora ponovo
+ukucati da bi ostao pošten je broj koji niko ne kuca ponovo.
 
 Koja pravila su važila za dati dan odlučuje se poređenjem dana sa `created_at` i `deleted_at`
 pravila; zato su to vremenske oznake i zato tabela nema `is_active` boolean. Pravilo dodato danas ne
@@ -574,9 +603,10 @@ ispravi, a zamrznuti verdikti su ono što sprečava da compliance krene za njom.
 **Playbook-ovi** drže grupe pravila; odgovaranje na njihov checklist upisuje `tj_position_rules`,
 što hrani follow rate. Neodgovoreno pravilo ne broji se ni u brojiocu ni u imeniocu.
 
-**Insights** su 37 pravila u četiri familije (dan, nedelja, trejd, proces) koja čitaju iste
-obogaćene trejdove kao i izveštaji. Svako pravilo deklariše minimalni uzorak i nijedno ne okida na
-n=1.
+**Insights** su 37 pravila na četiri nivoa — trejd (24), dan (6), nedelja (3), portfolio (4) — koja
+čitaju iste obogaćene trejdove kao i izveštaji. Svako pravilo deklariše `minSample` i nijedno ne
+okida na n=1. Nijedan insight se ne čuva u bazi: pragovi se menjaju, a sačuvan insight bi zastareo
+naspram promenjenog praga dok i dalje izgleda merodavno.
 
 **FTMO režim** je po nalogu: dnevni gubitak, ukupni gubitak, profitni cilj i minimalni broj dana.
 Proboj pravila zamrzava nalog — nov trejd se ne može ni napraviti ni aktivirati dok se izazov ne
@@ -586,6 +616,10 @@ Dnevni limit ima **podesivu bazu**, jer se stvarni FTMO nalozi razlikuju po tome
 od početnog balansa, ceo izazov) za 2-Step tip, ili rolling (procenat od balansa na kraju
 prethodnog trgovinskog dana) za 1-Step tip. Ukupan gubitak (drawdown pod) ostaje uvek fiksan na
 početni balans — to je zajedničko oba tipa.
+
+`evaluateFtmo` uz verdikt vraća i `headroomPct` — koliko je prostora ostalo od **najbližeg prilaza**
+bilo kom uključenom limitu kroz ceo izazov. To je komponenta Sickre Score-a (§ Sickre Score), i
+jedini broj u aplikaciji koji razlikuje nalog koji je prošao od naloga koji je prošao za dlaku.
 
 ---
 
@@ -619,16 +653,37 @@ Svaka odbijena ćelija je imenovana na svom redu u pregledu (`nečitljivo: qty, 
 
 Jedini automatski upis u dnevnik. cBot u cTrader-u
 ([`TradingJournalBridge`](https://github.com/0xsickre/trading-charting/tree/master/ctrader/TradingJournalBridge))
-javlja šest činjenica, a dnevnik od njih pravi trejd:
+javlja **osam** činjenica plus heartbeat, a dnevnik od njih pravi trejd:
 
-| Događaj kod brokera | Šta dnevnik upiše |
-|---|---|
-| Postavljen pending order | Nov trejd, `status = planned` |
-| Order izmenjen dok još čeka | Isti trejd → nove cene i veličina |
-| Order se ispunio | Isti trejd → `status = open` + ulazni fill |
-| Take profit pomeren posle ulaska | Isti trejd → nov `target_price`. **Stop se ne dira** |
-| Cena išla protiv i u smeru trejda | Isti trejd → **MAE i MFE** cene |
-| Limit obrisan bez ispunjenja | Isti trejd → `status = missed` |
+| `kind` | Događaj kod brokera | Šta dnevnik upiše |
+|---|---|---|
+| `order_placed` | Postavljen pending order | Nov trejd, `status = planned` |
+| `order_modified` | Order izmenjen dok još čeka | Isti trejd → nove cene i veličina |
+| `order_filled` | Order se ispunio | Isti trejd → ulazni fill, status iz fill-ova |
+| `order_cancelled` | Limit obrisan bez ispunjenja | Isti trejd → `status = missed` |
+| `position_opened` | **Market order** — pozicija bez pending order-a | Nov trejd odmah sa ulaznim fill-om |
+| `position_modified` | Take profit pomeren posle ulaska | Isti trejd → nov `target_price` i TP nivoi. **Stop se ne dira** |
+| `position_excursion` | Cena išla protiv i u smeru trejda | Isti trejd → **MAE i MFE** cene |
+| `position_closed` | **Izlaz** (ceo ili delimičan) | Isti trejd → izlazni fill, status se preračuna |
+| `heartbeat` | Bot je živ | Ništa u trejd — samo vreme poslednjeg javljanja |
+
+**Poslednja dva reda su zatvorila dve rupe zbog kojih je „bot bagovao" (`20260828120000`).** Most je
+pratio samo pending order-e, pa market order nije proizvodio nijedan događaj — a `position_modified`
+koji bi zatim stigao odlazio bi u karantin kao `unknown_position`, jer dnevnik tu poziciju nikad nije
+video. Druga: izlaz se nije prijavljivao, status se izvodi iz fill-ova, pa je **svaki bot trejd
+zauvek ostajao `open`** — van `toRealized`, dakle van win rate-a, expectancy-ja, profit factor-a i
+svakog izveštaja.
+
+**Status ima jedno pravilo, u SQL-u.** `tj_status_from_executions(position_id, asserted)` sabira
+ulazne i izlazne količine i odatle vraća `planned` / `open` / `partial` / `closed`. Ogledalo je
+`computeStatus` iz `trade-lifecycle.ts` — isti par kao `tj_position_stats` / `position-stats.ts`:
+SQL je pisac, TypeScript je živi pregled u formi. Bez toga bi pravilo „exitQty < entryQty → partial"
+postojalo u dve implementacije slobodne da se raziđu. `asserted` nosi ono što se iz fill-ova ne može
+izvesti (`planned`, `missed`); čim fill postoji, brojanje pobeđuje tvrdnju.
+
+**Duplikat market ordera rešava baza, ne bot.** Pozicija nastala iz pending order-a javlja se dvaput
+— i `order_filled` i `position_opened` — pa oba prvo traže poziciju po `broker_position_id`, i koji
+god stigne drugi postaje `already_present`. Redosled dolaska time prestaje da bude pitanje.
 
 **Planiran trejd pokazuje svoj plan.** Svaka brojčana kolona u `/journal` čita iz `tj_position_stats`,
 a taj view se gradi iz fill-ova — pa je trejd koji još čeka bio red samih crtica, i stop i target koje
@@ -644,7 +699,7 @@ Brokerova reč putuje u payload-u, gde je dokaz a ne odgovor, a `needs_review` s
 bude podsetnik. Trejd koji je ispunjen se **ne može** označiti kao propušten — to brani
 `tj_position_missed_guard` još od `20260730140000`.
 
-**MAE/MFE više ne moraš da prepisuješ sa grafikona.** `max_drawdown_price` i `max_profit_price` postoje od `20260719101135`, a `excursion.ts` iz njih računa `maeR`, `mfeR` i **capture %** — sve je stajalo mrtvo jer je zavisilo od dva broja koja čovek prepiše po trejdu, a to niko ne radi. Isti oblik kao `scale_out_levels`: analiza napisana i testirana, pa gladovala.
+**MAE/MFE više ne moraš da prepisuješ sa grafikona.** `max_drawdown_price` i `max_profit_price` postoje od `20260720130000`, a `excursion.ts` iz njih računa `maeR`, `mfeR` i **capture %** — sve je stajalo mrtvo jer je zavisilo od dva broja koja čovek prepiše po trejdu, a to niko ne radi. Isti oblik kao `scale_out_levels`: analiza napisana i testirana, pa gladovala.
 
 Bot meri na svaki tick i šalje checkpoint retko, pa ovde stiže tick-rezolucija po ceni par redova po trejdu.
 
@@ -711,12 +766,15 @@ veličine, prikazan kao činjenica.
 pa bi most izgledao zdrav a ne bi isporučio ništa. Zato bot šalje heartbeat, a panel prikazuje kad se
 poslednji put javio: ćutanje mora da bude vidljivo sa ove strane.
 
-**Još nije pokriveno, i meri se pre nego što se gradi: više TP nivoa.** cTrader-ova napredna zaštita
-dozvoljava do pet take-profit nivoa na jednom orderu, svaki zatvara deo pozicije. `PendingOrder.TakeProfit`
-u Algo API-ju je **jedna** vrednost i nijedan niz nivoa nije dokumentovan, pa se odavde ne može znati
-koji od pet je vidljiv — prvi, poslednji ili nijedan. Bot zato loguje šta API vrati za takav order
-(`Order placed | … | TP=…` u Žurnal tabu), i oblik se gradi tek kad taj log postoji. Odredište nije
-sporno: `tj_positions.scale_out_levels` (`[{"pct","price"}]`) već čeka, samo izvor nije poznat.
+**Više TP nivoa je pokriveno.** cTrader-ova napredna zaštita dozvoljava do pet take-profit nivoa na
+jednom orderu, svaki zatvara deo pozicije. Bot šalje `take_profit_levels` (`[{"pct","price"}]`) uz
+`take_profit_final`, a ingest ih od `20260821160000` upisuje u `tj_positions.scale_out_levels`,
+sortirane po ceni, odbacujući svaki nivo kome `pct` ili `price` nije pozitivan broj. Isti put koriste
+`order_placed`, `order_modified`, `position_opened` i `position_modified`, pa se merdevine mogu
+promeniti i posle ulaska.
+
+To je i razlog zašto planirani reward mora da bude **ponderisan** (§ Rizik): merdevine koje stižu sa
+brokera imaju istu aritmetiku kao ručno ukucan scale-out, i isti pogrešan odgovor bez ponderisanja.
 
 ---
 
@@ -736,18 +794,26 @@ sa nalogom kojeg više nema da to objasni. Funkcija briše zavisne redove prvo, 
 Dokazano nad živom bazom u transakciji koja se rollback-uje: nalog sa 21 trejdom ostavlja **0
 osirotelih** pozicija, i 0 fill-ova, odgovora na pravila i slika.
 
-**Reset svega** (`tj_reset_my_data`). Briše svih 28 tabela za pozivaoca pa zove
+**Reset svega** (`tj_reset_my_data`). Briše **28 od 30** tabela za pozivaoca pa zove
 `tj_seed_my_defaults()` — istu seed funkciju koju dashboard vrti na praznom nalogu, pa „reset" i
 „prvo učitavanje ikad" završavaju u istom stanju. Traži da se ukuca `RESET EVERYTHING`.
 
-Izmereno šta se stvarno vraća, umesto pretpostavljeno iz imena seed-a: **1 Main Account, 91
-instrument, 13 lista sa 66 opcija, 7 tracker pravila, 4 korisnička polja, 3 note foldera.**
+Od dve koje nisu na spisku, `tj_playbook_sections` pada kroz `ON DELETE CASCADE` za `tj_playbooks`.
+**`tj_dashboard_templates` ne pada ni kroz šta** — vezuje se direktno za `auth.users`, a spisak u
+funkciji nije dopunjen kad je tabela dodata (`20260818120000`), pa sačuvani rasporedi dashboard-a
+preživljavaju „reset svega". Zapisano ovde jer je obećanje šire od onoga što funkcija radi, a ovaj
+README ne sme da tvrdi više od koda.
 
-**Šta se NE vraća: playbook-ovi.** `tj_seed_my_defaults` zove samo `tj_seed_defaults` i
-`tj_seed_instruments_defaults`; `tj_seed_playbooks` postoji ali nije zakačen na njega, pa reset
-završava sa nula playbook-ova i nula pravila bez obzira koliko ih je bilo napisano. Isto važi za
-sve dodato rukom — opcije, tracker pravila, naloge. Panel to piše na ekranu, jer nabrojati šta se
-vraća a prećutati šta ne znači reći tačnu polovinu.
+Izmereno šta se stvarno vraća, umesto pretpostavljeno iz imena seed-a: **1 Main Account, 91
+instrument, 13 lista sa 66 opcija, 8 tracker pravila, 9 korisničkih polja, 3 note foldera.**
+
+**Šta se NE vraća: playbook-ovi.** `tj_seed_defaults` **jeste** zakačen na `tj_seed_playbooks`, ali
+je ta funkcija **namerno prazna od `20260813200000`**: čuvala se sa `if exists (… ) then return`, što
+ne razlikuje novog korisnika od onog koji je svaki playbook svesno obrisao — oba imaju nula redova —
+pa se brisanje tiho poništavalo na sledećem učitavanju dashboard-a. Reset zato završava sa nula
+playbook-ova i nula pravila bez obzira koliko ih je bilo napisano. Isto važi za sve dodato rukom —
+opcije, tracker pravila, naloge. Panel to piše na ekranu, jer nabrojati šta se vraća a prećutati šta
+ne znači reći tačnu polovinu.
 
 Obe funkcije su **SECURITY INVOKER**, ne DEFINER: svaka tabela nosi
 `FOR ALL TO authenticated USING (user_id = auth.uid())`, pa RLS već ograničava svaki upit na
@@ -759,7 +825,7 @@ Supabase-ove default privilegije dodele EXECUTE svakoj novoj funkciji u `public`
 
 ## Migracije
 
-73 fajla u `supabase/migrations/`, imenovanih `YYYYMMDDHHMMSS_opis.sql`.
+100 fajlova u `supabase/migrations/`, imenovanih `YYYYMMDDHHMMSS_opis.sql`.
 
 - **Aditivne.** Nikad se ne menja primenjena migracija — piše se nova delta.
 - **Migracija objašnjava samu sebe.** Svaka počinje komentarom šta je bilo pogrešno i šta puca bez
@@ -770,10 +836,14 @@ Supabase-ove default privilegije dodele EXECUTE svakoj novoj funkciji u `public`
 
 ### Bezbednosni model
 
-- **RLS na svih 28 tabela**, vlasnički obrazac, provereno nad živom bazom.
+- **RLS na svih 30 tabela**, vlasnički obrazac, provereno nad živom bazom.
 - **`SECURITY DEFINER` + uuid argument je rupa**, jer svaki prijavljen korisnik može da je pozove sa
-  tuđim id-em. Svih šest takvih funkcija ima oduzet `EXECUTE` od `authenticated`. Jedina koja ostaje
-  pozivna je `tj_seed_my_defaults()`, koja ne prima argument i seed-uje samo podatke pozivaoca.
+  tuđim id-em. Svih pet seed funkcija tog oblika — `tj_seed_defaults`,
+  `tj_seed_instruments_defaults`, `tj_seed_playbooks`, `tj_seed_tracker_rules`,
+  `tj_seed_note_folders` — ima oduzet `EXECUTE` od `authenticated`. Jedina koja ostaje pozivna je
+  `tj_seed_my_defaults()`, koja ne prima argument i seed-uje samo podatke pozivaoca.
+  `tj_status_from_executions(uuid, text)` je šesta funkcija tog oblika i nije rupa iste vrste: čita
+  samo `tj_executions`, vraća `text`, i oduzeta je od `PUBLIC` i `anon`.
 - **Baza je čuvar, ne akcija.** PostgREST sa korisnikovim JWT-om je živi put za pisanje, pa je
   provera koja živi samo u TypeScript-u brava oko koje se može obići. Validacija u server akciji
   postoji da bi poruka bila čitljiva; CHECK ograničenje ili triger iza nje je ono što stvarno drži.
@@ -791,10 +861,10 @@ P&L i drawdown izračunate nad delimičnim skupom, bez ijednog vidljivog simptom
 
 ## Testovi
 
-2177 testova u 133 fajla, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
-`*.test.ts`, 1763 testa u 89 fajlova) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
-403 testa u 44 fajla). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela postoji da čisto aritmetički testovi ne
-plaćaju cenu DOM-a koji ne dodiruju.
+2344 testa u 140 fajlova, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
+`*.test.ts`, 1884 testa u 93 fajla) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
+460 testova u 47 fajlova). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela
+postoji da čisto aritmetički testovi ne plaćaju cenu DOM-a koji ne dodiruju.
 
 `vitest.config.ts` nosi **podove** pokrivenosti, ne ciljeve — stoje na onome što paket trenutno
 postiže, pa jedino što mogu je da padnu kad izmena spusti pokrivenost. Od Faze 10 postoje **dva
@@ -805,8 +875,13 @@ odvojena poda**, provereni nezavisno umesto stopljeni u jedan prosek:
 | `src/lib/**` | 95 % | 89 % | 96 % | 96 % |
 | `src/components/**` | 64 % | 64 % | 61 % | 65 % |
 
+Uz njih ide i **treći, po fajlu**: četrnaest modula koji računaju ili čuvaju novac (`MONEY_MODULES`
+u `vitest.config.ts` — `analytics.ts`, `balance.ts`, `costs.ts`, `position-stats.ts`,
+`risk-ratios.ts` i ostali) drže **100 % izraza i funkcija** pojedinačno. Prosek preko sloja sme da
+sakrije jedan takav fajl; pod po fajlu ne sme.
+
 Zašto dva, ne jedan: `src/lib` je čista aritmetika i drži se blizu 96 % od Faze 0. `src/components`
-je render sloj Faze 10 — 24 od 51 fajla ima **posvećen** render test, ostatak je dohvaćen samo
+je render sloj Faze 10 — 46 od 87 fajlova ima **posvećen** render test, ostatak je dohvaćen samo
 uzgredno, kroz ono što neka testirana komponenta uveze (mnogi `src/components/ui` primitivi
 izvoze pod-delove — `DropdownMenuRadioItem`, `PopoverTitle` — koje ništa u aplikaciji ne renderuje).
 Jedan stopljen broj bi ili povukao bibliotečki pod na nivo render sloja, ili slagao o tome koliko
@@ -817,7 +892,7 @@ ne opisuje nijedno.
 
 1. **`src/components`-ov pod nije „dobro testirano".** 64/64/61/65 je pošteno stanje sloja koji je
    ovu fazu počeo od nule i nije završen — Faza 10 pokriva komponente najvišeg rizika (Tier 1 i 2 u
-   `ROADMAP.md`), ne svih 42. Čitati ovaj pod kao „UI je 64 % tačan" ponavlja tačno grešku na koju
+   `ROADMAP.md`), ne svih 87. Čitati ovaj pod kao „UI je 64 % tačan" ponavlja tačno grešku na koju
    sledeća tačka upozorava, jedan sloj iznad.
 2. **Isključivanje mora biti `exclude`, ne `include`.** Ista greška je napravljena i zapisana:
    `include: ["src/lib/**"]` prebacuje v8 sa „fajlovi koje je test uvezao" na „svi fajlovi koji
@@ -828,9 +903,9 @@ ne opisuje nijedno.
    Sva tri nalaza runde 3 oko skora živela su u fajlovima na 100 % izraza i funkcija — i sva četiri
    nalaza Faze 10 (`W1`–`W4`) su nađena render testom koji je tvrdio da već pokriven kod daje
    POGREŠAN broj, ne time što je neka linija ostala neizvršena.
-4. **`src/app` (25 ruta) nema nijedan broj**, i „nema broj" nije „0 %" — to je „nije mereno". Rute
-   su server komponente čija je logika `await getCurrentUser()` pa `redirect()` pa prosleđivanje
-   propova; propovi se tvrde na drugoj strani, gde ih render test već čita.
+4. **`src/app` (15 stranica u 33 fajla) nema nijedan broj**, i „nema broj" nije „0 %" — to je „nije
+   mereno". Rute su server komponente čija je logika `await getCurrentUser()` pa `redirect()` pa
+   prosleđivanje propova; propovi se tvrde na drugoj strani, gde ih render test već čita.
 
 `src/lib/journal/book.fixture.test.ts` postoji baš zbog druge tačke. Fiksira jednu knjigu od deset
 trejdova, izvodi svaku glavnu brojku na papiru u komentarima — sa vidljivom aritmetikom — pa tvrdi
@@ -841,7 +916,7 @@ drawdown-a. Ista knjiga, iste brojke na papiru, postaju i propovi renderovanog D
 `dashboard.render.test.tsx` — papir → `lib/` → ekran, jedan skup brojeva tvrđen na sva tri sloja.
 
 **Render sloj se izvršava od Faze 10.** Osam koraka, svaki commit + push + `tsc` + `vitest` + `lint`
-+ `build` + `knip`, dokumentovano u `CODE_REVIEW.md`. Dashboard (najveći fajl, 48 `useMemo`),
++ `build` + `knip`, dokumentovano u `CODE_REVIEW.md`. Dashboard (najveći fajl, 50 `useMemo`),
 `journal-grid`, tri forme (`trade-form`, `daily-report-form`, `tracker-checklist`),
 `import-wizard`, i 14 čistih prezentacionih komponenti uključujući `markdown-view` — jedini
 renderer sa bezbednosnim značajem u aplikaciji (href allowlist na ekranu, ne samo u parseru).
@@ -853,8 +928,8 @@ sačuvanog i uživo izračunatog plana). `S1`, `S2`, `S3` i `P1` iz runde 3 — 
 testom — sada svaki ima svoj render test koji bi ih uhvatio da su se ponovili.
 
 **Šta i dalje nije utvrđeno**, rečeno otvoreno da ovde ništa ne tvrdi više nego što sme: dokazan je
-`lib/` lanac od realizovanih trejdova do skora, i render sloj za komponente najvišeg rizika. 25 ruta
-u `src/app` se i dalje ne izvršavaju ni u jednom testu — logika koja tamo živi je tanka
+`lib/` lanac od realizovanih trejdova do skora, i render sloj za komponente najvišeg rizika. 15 ruta
+u `src/app` se i dalje ne izvršava ni u jednom testu — logika koja tamo živi je tanka
 (dohvat + `redirect()`), a Playwright bi tražio pokrenutu aplikaciju i Supabase kredencijale kojih
 ovaj kontejner nema. Ostaje kao kasnija opcija, ne kao propust.
 
@@ -873,10 +948,16 @@ ovaj kontejner nema. Ostaje kao kasnija opcija, ne kao propust.
 | Ekonomski kalendar | Živi u vault repou |
 | Running P&L kriva po trejdu | Traži cenovni feed. Posledica: „most time in drawdown" otpada |
 
-**Blokirano, ne odbijeno:** automatski MAE/MFE iz sveća (Faza 8B). Logika skeniranja i biranje
-intervala su napisani i testirani — `excursion-scan.ts` bira 1m do 1h prema dužini držanja, a sveća
-se broji samo ako cela stane unutar prozora trejda. Fali samo OANDA adapter, i čeka praktični token.
-Ništa drugo nije potrebno.
+**Blokirano, ne odbijeno:** MAE/MFE **iz istorijskih sveća** (Faza 8B). Za trejdove koje vodi bot
+most ovo više ne treba — `position_excursion` ih donosi uživo, u tick rezoluciji. Ostaje za sve
+ostalo: ručno unete i uvezene trejdove, i sve odtrgovano pre nego što je most postojao.
+
+Logika skeniranja i biranje intervala su napisani i testirani — `excursion-scan.ts` bira 1m do 1h
+prema dužini držanja, a sveća se broji samo ako cela stane unutar prozora trejda. Fali samo adapter
+za feed. **Izvor je promenjen sa OANDA na cTrader Open API**: OANDA je 2017. ukinula v20 pristup za
+EU klijente, a pošto se ionako trguje preko cTrader-a, taj feed je doslovno isti onaj na kom se
+trguje. Aplikacija je registrovana i čeka Spotware KYC; pun plan je u
+[`FAZA_8B_PLAN.md`](FAZA_8B_PLAN.md).
 
 ---
 
@@ -886,7 +967,7 @@ Ništa drugo nije potrebno.
 |---|---|
 | **Ovaj README** | Šta postoji i kako radi |
 | [`ROADMAP.md`](ROADMAP.md) | Faze, odluke i njihova obrazloženja, šta je ostalo |
-| [`CODE_REVIEW.md`](CODE_REVIEW.md) | Tri runde revizije, svaki nalaz sa ishodom (engleski) |
+| [`CODE_REVIEW.md`](CODE_REVIEW.md) | Runde 2b, 3 i 4 plus izvršenje render sloja (Faza 10), svaki nalaz sa ishodom (engleski) |
 | [`PARITY.md`](PARITY.md) | Poređenje sa TradeZella-om, stavku po stavku |
 | [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md) | AI ulaz (Cursor / Claude Code) |
 | [trading-fundamental-vault](https://github.com/0xsickre/trading-fundamental-vault/blob/master/README.md) | F0–F5 ciklus, makro bias, COT filter |
