@@ -214,6 +214,16 @@ export function SickreScoreCard({ score }: { score: SickreScore }) {
             not the equity shown above. Two different denominators — this one is chosen
             so the score stays comparable with the same metric in other tools.
           </p>
+
+          {score.components.some((c) => c.key === "ftmoHeadroom") && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              FTMO headroom is the room left over from the{" "}
+              <strong>closest</strong> the account ever came to a daily or total
+              limit — not the room left today. It spans the whole challenge, so
+              it ignores the period filter above: a floor that was nearly
+              touched stays nearly touched.
+            </p>
+          )}
         </details>
       </CardContent>
     </Card>

@@ -168,13 +168,17 @@ describe("the book, scored", () => {
   /**
    * The Sickre Score over exactly the figures derived above.
    *
-   *   profit factor  2.20  → RATIO_BANDS floor 2.2      → 80      × 25 = 2000
-   *   avg win/loss   1.76  → below the 1.8 floor        → 20      × 20 =  400
-   *   max drawdown     40% → 100 − 40                   → 60      × 20 = 1200
-   *   win %         55.56% → 55.5556 / 60 × 100         → 92.5926 × 15 = 1388.89
-   *   recovery        3.00 → RECOVERY_BANDS floor 3.0   → 70      × 10 =  700
-   *   consistency    37.28 → carried through as-is      → 37.2837 × 10 =  372.84
-   *                                                        total  6061.73 / 100
+   *   max drawdown     40% → 100 − 40                   → 60      × 25 = 1500
+   *   profit factor  2.20  → RATIO_BANDS floor 2.2      → 80      × 20 = 1600
+   *   consistency    37.28 → carried through as-is      → 37.2837 × 15 =  559.26
+   *   avg win/loss   1.76  → below the 1.8 floor        → 20      ×  5 =  100
+   *   recovery        3.00 → RECOVERY_BANDS floor 3.0   → 70      ×  5 =  350
+   *                                                        total  4109.26 / 70
+   *
+   * Win % is not in this table any more, and the 55.56 % this book runs is the
+   * reason why: on the old scale it scored 92.59, the second-best component in
+   * a book whose actual edge was mediocre. The fixture has no FTMO account, so
+   * headroom is absent too and the coverage is the trade-derived 70.
    */
   const score = () => {
     const s = stats();
@@ -183,7 +187,6 @@ describe("the book, scored", () => {
       profitFactor: s.profitFactor,
       avgWinLossRatio: avgWinLossRatio(s.avgWinMoney, s.avgLossMoney),
       maxDrawdownPctOfPeakPnl: dd.maxPctOfPeakPnl,
-      winPct: s.winRate,
       recoveryFactor: recoveryFactor(s.netSum, dd.maxMoney),
       consistencyScore: consistencyScore(BOOK_NET).score,
       sample: { trades: s.count, decided: s.wins + s.losses },
@@ -197,14 +200,14 @@ describe("the book, scored", () => {
     expect(by.profitFactor).toBeCloseTo(80, 6);
     expect(by.avgWinLoss).toBeCloseTo(20, 6);
     expect(by.maxDrawdown).toBeCloseTo(60, 6);
-    expect(by.winPct).toBeCloseTo(92.5926, 3);
     expect(by.recovery).toBeCloseTo(70, 6);
     expect(by.consistency).toBeCloseTo(37.2837, 3);
+    expect(by.winPct).toBeUndefined();
   });
 
   it("weights them into the number on the card", () => {
-    expect(score().score).toBeCloseTo(60.62, 2);
-    expect(score().coverage).toBe(100);
+    expect(score().score).toBeCloseTo(58.7, 2);
+    expect(score().coverage).toBe(70);
   });
 
   it("calls a ten-trade sample provisional, and says so with the n", () => {
@@ -234,7 +237,6 @@ describe("the shapes a book can take", () => {
       profitFactor: s.profitFactor,
       avgWinLossRatio: avgWinLossRatio(s.avgWinMoney, s.avgLossMoney),
       maxDrawdownPctOfPeakPnl: dd.maxPctOfPeakPnl,
-      winPct: s.winRate,
       recoveryFactor: recoveryFactor(s.netSum, dd.maxMoney),
       consistencyScore: consistencyScore(nets).score,
       sample: { trades: s.count, decided: s.wins + s.losses },
@@ -305,7 +307,6 @@ describe("the shapes a book can take", () => {
     const r = scoreOf(shapedBook(nets), nets);
     const by = Object.fromEntries(r.components.map((c) => [c.key, c]));
     expect(by.profitFactor.score).toBe(20); // bottom band
-    expect(by.winPct.score).toBe(0);
     expect(by.consistency.score).toBe(0); // a losing book has no consistency
     expect(by.maxDrawdown.counted).toBe(false); // NOT 100
     expect(r.score!).toBeLessThan(20);
@@ -327,22 +328,34 @@ describe("the shapes a book can take", () => {
 
   it("ALL BREAKEVEN — trades to measure, no decisions to have won", () => {
     // The case that makes one sample count wrong: six trades, zero decided.
-    // Drawdown and consistency have a series to work on; win rate, profit
-    // factor and avg win/loss have no denominator and must drop.
+    // Drawdown and consistency have a series to work on; profit factor and avg
+    // win/loss have no denominator and must drop.
     const nets = [0, 0, 0, 0, 0, 0];
     const r = scoreOf(shapedBook(nets), nets);
     const by = Object.fromEntries(r.components.map((c) => [c.key, c]));
-    expect(by.winPct.counted).toBe(false);
     expect(by.profitFactor.counted).toBe(false);
     expect(by.avgWinLoss.counted).toBe(false);
     expect(by.maxDrawdown.counted).toBe(true);
-    // Six flat trades are not a composite of anything worth a headline.
-    expect(r.score).toBeNull();
-    expect(r.confidence).toEqual({
-      level: "withheld",
-      reason: "coverage",
-      tradesShort: 0,
-    });
+    expect(by.consistency.counted).toBe(true);
+
+    // BEHAVIOUR THE REBALANCE CHANGED, AND THE ONE PLACE IT IS VISIBLE.
+    //
+    // This used to be withheld for coverage. It no longer is, and the cause is
+    // arithmetic rather than judgement: the components gated on `decided` were
+    // 60 of 100 weights while win % was among them, and are 25 of 70 without
+    // it. So the two that survive an all-breakeven book — drawdown and
+    // consistency — now clear `MIN_COVERAGE_SHARE` on their own.
+    //
+    // Pinned rather than quietly accepted, because it is a real weakening of
+    // the coverage gate. What the card shows instead of nothing is a score
+    // labelled provisional, carrying its sample and "2 of 5 components", and
+    // the 100 inside it is drawdown honestly reporting that six flat trades
+    // lost nothing. If that reads as too generous, the knob is
+    // `MIN_COVERAGE_SHARE`, and moving it moves every score in the journal.
+    expect(r.coverage).toBe(40);
+    expect(r.maxCoverage).toBe(70);
+    expect(r.score).toBeCloseTo(62.5, 6);
+    expect(r.confidence).toEqual({ level: "provisional", trades: 6 });
   });
 
   it("OPEN POSITIONS ONLY — an unclosed trade is not a realized result", () => {

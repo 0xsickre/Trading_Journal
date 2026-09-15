@@ -23,7 +23,6 @@ const scoreOf = (over: Partial<Parameters<typeof computeSickreScore>[0]> = {}) =
     profitFactor: 2.2,
     avgWinLossRatio: 1.76,
     maxDrawdownPctOfPeakPnl: 40,
-    winPct: 55.5556,
     recoveryFactor: 3,
     consistencyScore: 68.64,
     sample: { trades: 40, decided: 40 },
@@ -44,10 +43,28 @@ function componentValue(label: string): string {
 describe("the score card renders what the score says", () => {
   it("shows the headline number rounded, and the weights", () => {
     render(<SickreScoreCard score={scoreOf()} />);
-    // 80×25 + 20×20 + 60×20 + 92.59×15 + 70×10 + 68.64×10 over 100 → 63.75.
-    expect(headline()).toBe("64");
+    // 60×25 + 80×20 + 68.64×15 + 20×5 + 70×5 over 70 → 65.42.
+    expect(headline()).toBe("65");
     expect(componentValue("Profit factor")).toBe("80");
     expect(componentValue("Max drawdown")).toBe("60");
+  });
+
+  it("explains the FTMO row only when there is an FTMO row", () => {
+    // The note says two things a reader would otherwise get wrong: that the
+    // number is the CLOSEST approach rather than today's room, and that it
+    // ignores the period filter the rest of the card obeys. Both are only worth
+    // saying when the component is actually on screen.
+    render(<SickreScoreCard score={scoreOf({ ftmoHeadroomPct: 35 })} />);
+    expect(componentValue("FTMO headroom")).toBe("35");
+    expect(screen.getByText(/ignores the period filter/)).toBeInTheDocument();
+  });
+
+  it("omits the FTMO row entirely when no account runs a challenge", () => {
+    // Absent, not "—" and not 0: a journal on a personal account is not failing
+    // at prop-firm risk management, it is not playing that game.
+    render(<SickreScoreCard score={scoreOf()} />);
+    expect(screen.queryByText("FTMO headroom")).not.toBeInTheDocument();
+    expect(screen.queryByText(/ignores the period filter/)).not.toBeInTheDocument();
   });
 
   it("shows an em dash for a component with no data, never a zero", () => {
@@ -66,21 +83,20 @@ describe("the score card renders what the score says", () => {
           avgWinLossRatio: null,
           recoveryFactor: null,
           maxDrawdownPctOfPeakPnl: 0,
-          winPct: 0,
           consistencyScore: 0,
           sample: { trades: 0, decided: 0 },
         })}
       />,
     );
-    // Every one of the seven components reads "—" here, which is why the
-    // headline has to be found by position rather than by its text.
+    // Every component reads "—" here, which is why the headline has to be
+    // found by position rather than by its text.
     expect(headline()).toBe("—");
     expect(screen.getByText(/5 more/)).toBeInTheDocument();
     expect(componentValue("Max drawdown")).toBe("—");
-    // Six components here, not seven: this fixture supplies no process
-    // adherence, so the card omits that row entirely rather than showing it
-    // empty. Six dashes plus the headline.
-    expect(screen.getAllByText("—")).toHaveLength(7);
+    // Five rows, not seven: this fixture supplies neither process adherence
+    // nor FTMO headroom, so the card omits both rows entirely rather than
+    // showing them empty. Five dashes plus the headline.
+    expect(screen.getAllByText("—")).toHaveLength(6);
   });
 
   it("marks a thin sample as provisional, with the count beside it", () => {
@@ -106,12 +122,12 @@ describe("the radar, and what the card says around it", () => {
     // A polygon missing two corners looks like a shape, not like a gap, unless
     // something says so.
     expect(
-      screen.getByText(/6 of 6 components · 100 of 100 weights/),
+      screen.getByText(/5 of 5 components · 70 of 70 weights/),
     ).toBeInTheDocument();
   });
 
   it("refuses the radar below four axes and says why", () => {
-    // Three components dropped, chosen so 65 of 100 weights survive — past
+    // Two components dropped, chosen so 50 of 70 weights survive — past
     // `MIN_COVERAGE_SHARE`, so the score is still stated and it is the AXIS
     // COUNT alone doing the refusing.
     render(
@@ -119,7 +135,6 @@ describe("the radar, and what the card says around it", () => {
         score={scoreOf({
           recoveryFactor: null,
           consistencyScore: null,
-          winPct: null,
         })}
       />,
     );
@@ -129,9 +144,9 @@ describe("the radar, and what the card says around it", () => {
 
   it("keeps the weights and the renormalization note, folded but present", () => {
     // The two facts a radar structurally cannot carry: that profit factor is a
-    // quarter of the score, and that a dropped component renormalizes the rest.
+    // fifth of the score, and that a dropped component renormalizes the rest.
     render(<SickreScoreCard score={scoreOf({ recoveryFactor: null })} />);
-    expect(screen.getByText("25%")).toBeInTheDocument();
+    expect(screen.getByText("20%")).toBeInTheDocument();
     expect(screen.getByText(/renormalized/)).toBeInTheDocument();
   });
 });

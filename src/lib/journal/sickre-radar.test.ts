@@ -19,7 +19,6 @@ const scoreOf = (over: Partial<Parameters<typeof computeSickreScore>[0]> = {}) =
     profitFactor: 2.2,
     avgWinLossRatio: 1.76,
     maxDrawdownPctOfPeakPnl: 40,
-    winPct: 55.5556,
     recoveryFactor: 3,
     consistencyScore: 68.64,
     sample: { trades: 40, decided: 40 },
@@ -29,21 +28,34 @@ const scoreOf = (over: Partial<Parameters<typeof computeSickreScore>[0]> = {}) =
 describe("radarAxes", () => {
   it("plots every component that has a score", () => {
     const axes = radarAxes(scoreOf());
-    expect(axes).toHaveLength(6);
+    expect(axes).toHaveLength(5);
     expect(axes.map((a) => a.key)).toEqual([
-      "profitFactor",
-      "avgWinLoss",
       "maxDrawdown",
-      "winPct",
-      "recovery",
+      "profitFactor",
       "consistency",
+      "avgWinLoss",
+      "recovery",
     ]);
   });
 
-  it("adds the seventh axis when process adherence is supplied", () => {
-    const axes = radarAxes(scoreOf({ processAdherencePct: 72 }));
-    expect(axes).toHaveLength(7);
-    expect(axes.at(-1)?.key).toBe("process");
+  it("puts the optional axes where their weight puts them, not at the end", () => {
+    // Process is the heaviest component, so it leads; FTMO headroom sits at 10,
+    // between consistency and avg win/loss. Appending them would have rotated
+    // the polygon whenever one happened to have data — the shape would then
+    // describe the data's availability rather than the trading.
+    const axes = radarAxes(
+      scoreOf({ processAdherencePct: 72, ftmoHeadroomPct: 55 }),
+    );
+    expect(axes.map((a) => a.key)).toEqual([
+      "process",
+      "maxDrawdown",
+      "profitFactor",
+      "consistency",
+      "ftmoHeadroom",
+      "avgWinLoss",
+      "recovery",
+    ]);
+    expect(axes.find((a) => a.key === "ftmoHeadroom")?.label).toBe("FTMO room");
   });
 
   it("OMITS a dropped component rather than plotting it at zero", () => {
@@ -51,7 +63,7 @@ describe("radarAxes", () => {
     // and terrible"; absence says "not measured". `sickre-score.ts` makes the
     // same distinction with "—" instead of 0 one level up.
     const axes = radarAxes(scoreOf({ recoveryFactor: null }));
-    expect(axes).toHaveLength(5);
+    expect(axes).toHaveLength(4);
     expect(axes.map((a) => a.key)).not.toContain("recovery");
   });
 
@@ -86,7 +98,6 @@ describe("radarAxes", () => {
       avgWinLossRatio: null,
       recoveryFactor: null,
       maxDrawdownPctOfPeakPnl: 0,
-      winPct: 0,
       consistencyScore: 0,
       sample: { trades: 0, decided: 0 },
     });
@@ -100,14 +111,16 @@ describe("canDrawRadar", () => {
   });
 
   it("refuses below the minimum — a triangle describes the gaps, not the book", () => {
-    // Four components dropped leaves two axes. Sample stays high so the refusal
-    // is the AXIS COUNT talking, not the evidence gate one level up.
+    // Three components dropped leaves two axes, worth 40 of 70 weights — past
+    // `MIN_COVERAGE_SHARE`, so the composite itself is stated. The refusal is
+    // the AXIS COUNT talking, not the evidence gate one level up, and the
+    // non-null score below is what proves that.
     const thin = scoreOf({
       profitFactor: null,
       avgWinLossRatio: null,
       recoveryFactor: null,
-      consistencyScore: null,
     });
+    expect(thin.score).not.toBeNull();
     expect(radarAxes(thin).length).toBeLessThan(MIN_RADAR_AXES);
     expect(canDrawRadar(thin)).toBe(false);
   });

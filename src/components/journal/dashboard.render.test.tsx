@@ -169,9 +169,9 @@ describe("the book, on screen — same figures the paper already proved", () => 
     expect(statValue("Win rate")).toBe("55.6%");
   });
 
-  it("shows the Sickre Score the paper works out to 60.62, rounded to 61", async () => {
+  it("shows the Sickre Score the paper works out to 58.70, rounded to 59", async () => {
     renderDashboard(rowsOf(BOOK));
-    expect(await scoreHeadline()).toBe("61");
+    expect(await scoreHeadline()).toBe("59");
     // Ten trades: real, and thin — labelled so, with the count beside it.
     // Asserted as ONE string rather than two lookups: "10 trades" on its own
     // now also matches the Hold time card's "10 trades with a known duration",
@@ -251,6 +251,11 @@ describe("the shapes a book can take, on screen", () => {
     renderDashboard(rowsOf(shapedBook([0, 0, 0, 0, 0, 0])));
     expect(statValue("Trades")).toBe("6");
     expect(statValue("Win rate")).toBe("—");
-    expect(await scoreHeadline()).toBe("—");
+    // The score DOES state a number here, and that is a change the weight
+    // rebalance made rather than a regression in this tile. Dropping win %
+    // shrank the weights gated on `decided` from 60 of 100 to 25 of 70, so
+    // drawdown and consistency now clear `MIN_COVERAGE_SHARE` between them.
+    // Worked through, and pinned, in `book.fixture.test.ts`.
+    expect(await scoreHeadline()).toBe("63");
   });
 });

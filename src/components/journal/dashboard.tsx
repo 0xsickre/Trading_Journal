@@ -1210,6 +1210,31 @@ export function Dashboard({
     fillCounts,
   ]);
 
+  /**
+   * Worst prop-firm headroom across the accounts running a challenge.
+   *
+   * MINIMUM, NOT AVERAGE. The constraint that ends a challenge is whichever
+   * account came nearest to its own floor, and averaging two accounts lets a
+   * comfortable one paper over the one that sat a fraction of a percent from
+   * the end. `null` — the component drops and the rest renormalize — when no
+   * account has FTMO mode on, or when every challenge window is still empty.
+   *
+   * DELIBERATELY OUTSIDE THE PERIOD FILTER, unlike every other component fed
+   * to the score, including `processAdherencePct` directly above, which is
+   * windowed precisely so the score does not mix timeframes. The exception is
+   * not an oversight: a challenge window is defined by its own `ftmo_reset_at`
+   * and a fixed starting balance, and 4.5 % of a 5 % floor does not stop having
+   * been touched because the reader switched the view to the last 30 days.
+   * Recomputing it over the dashboard period would produce a number no prop
+   * firm would recognise.
+   */
+  const ftmoHeadroomPct = useMemo(() => {
+    const rooms = ftmoStatuses
+      .map(({ result }) => result.headroomPct)
+      .filter((h): h is number => h != null);
+    return rooms.length === 0 ? null : Math.min(...rooms);
+  }, [ftmoStatuses]);
+
   const sickreScore = useMemo(
     () =>
       computeSickreScore({
@@ -1219,18 +1244,17 @@ export function Dashboard({
         // two have different denominators and only this one matches how
         // TradeZella computes it, which is what keeps the score comparable.
         maxDrawdownPctOfPeakPnl: drawdown.maxPctOfPeakPnl,
-        winPct: stats.winRate,
         recoveryFactor: recovery,
         consistencyScore: consistency.score,
         processAdherencePct,
-        // Drawdown, win % and consistency all answer 0 for an empty book, and a
-        // 0 drawdown scores 100. The counts let the score tell "no evidence"
+        ftmoHeadroomPct,
+        // Drawdown and consistency both answer 0 for an empty book, and a 0
+        // drawdown scores 100. The counts let the score tell "no evidence"
         // from "measured zero" and drop the component instead.
         sample: { trades: stats.count, decided: stats.wins + stats.losses },
       }),
     [
       stats.profitFactor,
-      stats.winRate,
       stats.count,
       stats.wins,
       stats.losses,
@@ -1239,6 +1263,7 @@ export function Dashboard({
       recovery,
       consistency.score,
       processAdherencePct,
+      ftmoHeadroomPct,
     ],
   );
   const equity = useMemo(

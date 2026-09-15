@@ -1,10 +1,37 @@
 /**
  * Sickre Score — composite, 0–100.
  *
- * Weights and band scales are transcribed from the TradeZella clone spec §2.6
- * so the number stays comparable with the tool it is measured against, but the
- * score is this journal's own: it carries a seventh component (process
- * adherence) that TradeZella has no equivalent for.
+ * The band TABLES are still transcribed from the TradeZella clone spec §2.6.
+ * The WEIGHTS are not, and stopped being so deliberately: that spec calibrates
+ * an intraday scalp book, and this journal keeps a swing book on a prop
+ * account — forty to seventy trades a year, a fixed target near three times
+ * the stop. Three components measured the wrong thing under that design.
+ *
+ *   - **Win % is gone from the score entirely.** Its scale, `win% / 60 × 100`,
+ *     encodes "higher is better". At a 3R target the mathematically expected
+ *     win rate is 35–45 %, so a book trading exactly to plan scored about 67
+ *     on the component — punished for its own design. Qullamaggie runs 25–35 %
+ *     on purpose, and this score would have marked him down for the thing that
+ *     makes the approach work. It stays on screen as a KPI tile and as a
+ *     `/reports` metric, where it is a fact rather than a verdict.
+ *   - **Avg win/loss fell to 5.** With a fixed target the ratio is settled by
+ *     the design, not by execution: it will sit near 3 whatever happens. A
+ *     constant with a weight of 20 was twenty points of nothing, and it
+ *     half-duplicated profit factor besides.
+ *   - **Max drawdown rose to 25.** On a funded account drawdown is not one of
+ *     seven concerns, it is the only one that ends the game.
+ *
+ * And **process adherence rose to 30, the heaviest component**, because it is
+ * the only one that does not depend on variance. Over forty trades a year the
+ * outcome components are measured on a sample too thin to trust; follow rate
+ * and tracker compliance measure behaviour, where n=40 already means
+ * something. The README's own thesis is "P&L is the consequence, process is
+ * the cause" — the old weights said the opposite, 15 of 115 to the cause and
+ * 100 of 115 to the consequence.
+ *
+ * The seventh component is new: **FTMO headroom**, how close the account came
+ * to the daily and overall limits. An account up 8 % that touched 4.5 % of a
+ * 5 % floor was one bad day from the end, and nothing else here could see that.
  *
  * Two things the source spec flags about itself are handled explicitly rather
  * than silently:
@@ -28,7 +55,8 @@
  * drawdown: 100" on the card, a claim about risk management made on the
  * strength of having never taken a risk. `sample` closes that: the counts come
  * in with the values, and a component with nothing behind it is dropped like
- * any other.
+ * any other. FTMO headroom is built to the same rule one level up: `ftmo.ts`
+ * hands over `null`, never 100, for a challenge with no trades in its window.
  */
 
 export type ScoreBand = { min: number; scoreMin: number; scoreMax: number };
@@ -53,9 +81,6 @@ export const RECOVERY_BANDS: ScoreBand[] = [
   { min: 1.0, scoreMin: 1, scoreMax: 29 },
   { min: -Infinity, scoreMin: 0, scoreMax: 0 },
 ];
-
-/** Win % that scores 100. The spec's documented default. */
-export const WIN_PCT_TOP_THRESHOLD = 60;
 
 /**
  * Sample thresholds.
@@ -95,6 +120,12 @@ export const RELIABLE_SAMPLE = 30;
  * that single component under the heading "Sickre Score". A score built from
  * 15 of 115 weights is not a composite of anything — it is one metric wearing
  * another metric's name.
+ *
+ * It still holds after the rebalance, which is worth stating because the
+ * rebalance made the components it guards much heavier. The two that can have
+ * data on a book with no trades are process (30) and FTMO headroom (10): 40 of
+ * 110 is 36 %, comfortably under the gate. Raising process to 30 did not buy a
+ * trackerless account a score.
  */
 export const MIN_COVERAGE_SHARE = 0.5;
 
@@ -141,27 +172,42 @@ export type ScoreInputs = {
   avgWinLossRatio: number | null;
   /** Drawdown over peak cumulative P&L — NOT the equity-based percentage. */
   maxDrawdownPctOfPeakPnl: number | null;
-  winPct: number | null;
   recoveryFactor: number | null;
   /** Already 0–100 from `consistencyScore`. */
   consistencyScore: number | null;
-  /** Optional seventh component; TradeZella has no equivalent. */
+  /** Optional; TradeZella has no equivalent. */
   processAdherencePct?: number | null;
+  /**
+   * Optional. Room left over from the closest approach to an enabled prop-firm
+   * limit, 0–100, straight from `evaluateFtmo`'s `headroomPct`.
+   *
+   * Ungated by `sample`, like `processAdherencePct` and for the same reason:
+   * the evidence rides with the producer. `ftmo.ts` answers `null` for a
+   * challenge with nothing closed in its window, so there is no "measured
+   * zero" here for this module to have to tell apart from an absence.
+   *
+   * It is also on a different clock from everything else in this type. The
+   * other components are computed over whatever period the dashboard is
+   * showing; a challenge window is fixed by its own reset and starting
+   * balance, and a limit that was nearly touched does not stop having been
+   * nearly touched because the reader switched to the last 30 days.
+   */
+  ftmoHeadroomPct?: number | null;
   /**
    * How many trades are behind the numbers above.
    *
-   * Required, and required for a reason. Three of the inputs answer `0` for an
+   * Required, and required for a reason. Two of the inputs answer `0` for an
    * empty book because zero is the honest value of the STATISTIC — a book with
-   * no trades has drawn down no money, won no trades and has no variance. But
+   * no trades has drawn down no money and has no variance. But
    * zero evidence is not zero performance, and the score has to tell those
    * apart: `100 - 0 = 100` scored a brand-new account as flawless risk
    * management on the strength of never having traded, which then dragged a
    * whole composite up on nothing.
    *
    * `profitFactor`, `avgWinLossRatio` and `recoveryFactor` already answer null
-   * on an empty book and drop themselves. These three cannot, because their
-   * zero is indistinguishable from a real one — so the count comes in beside
-   * them and this module does the distinguishing.
+   * on an empty book and drop themselves. Drawdown and consistency cannot,
+   * because their zero is indistinguishable from a real one — so the count
+   * comes in beside them and this module does the distinguishing.
    */
   sample: {
     /** Closed trades in scope. */
@@ -207,25 +253,30 @@ export type SickreScore = {
   /**
    * Sum of ALL weights in play, contributing or not.
    *
-   * Needed because the total is not a constant: it is 100 without the process
-   * component and 115 with it. A display that assumes 100 reads a partial
-   * 100-of-115 score as fully covered — which is exactly what the card did
-   * before the seventh component existed.
+   * Needed because the total is not a constant: 70 for the trade-derived
+   * components alone, 110 with both optional ones. A display that assumes 100
+   * reads a partial score as fully covered — which is exactly what the card did
+   * before the optional components existed.
    */
   maxCoverage: number;
 };
 
 const BASE_WEIGHTS = {
-  profitFactor: 25,
-  avgWinLoss: 20,
-  maxDrawdown: 20,
-  winPct: 15,
-  recovery: 10,
-  consistency: 10,
+  maxDrawdown: 25,
+  profitFactor: 20,
+  consistency: 15,
+  avgWinLoss: 5,
+  recovery: 5,
 } as const;
 
-/** Weight for the process component when it is supplied. */
-export const PROCESS_ADHERENCE_WEIGHT = 15;
+/**
+ * Weight for the process component when it is supplied — the heaviest in the
+ * score, and the only one that is not a measurement of outcome.
+ */
+export const PROCESS_ADHERENCE_WEIGHT = 30;
+
+/** Weight for the prop-firm headroom component when it is supplied. */
+export const FTMO_HEADROOM_WEIGHT = 10;
 
 export function computeSickreScore(inputs: ScoreInputs): SickreScore {
   // Evidence gate, before anything is scored. Every component derived from
@@ -239,7 +290,7 @@ export function computeSickreScore(inputs: ScoreInputs): SickreScore {
   // A gated component reports `value: null` as well as `score: null`, so the
   // card shows "—" rather than a 0 or a 100 the reader would take for a
   // measurement. That is the whole bug this section exists to prevent: on an
-  // empty book `100 - 0 = 100`, and on a single winning trade four separate
+  // empty book `100 - 0 = 100`, and on a single winning trade several separate
   // components sat at their maximum, every one of them an artifact of n=1.
   const enoughTrades = inputs.sample.trades >= MIN_SAMPLE;
   const enoughDecided = inputs.sample.decided >= MIN_SAMPLE;
@@ -248,7 +299,6 @@ export function computeSickreScore(inputs: ScoreInputs): SickreScore {
 
   const profitFactor = gate(inputs.profitFactor, enoughDecided);
   const winLossRatio = gate(inputs.avgWinLossRatio, enoughDecided);
-  const winPct = gate(inputs.winPct, enoughDecided);
   const drawdownPct = gate(inputs.maxDrawdownPctOfPeakPnl, enoughTrades);
   const recovery = gate(inputs.recoveryFactor, enoughTrades);
   const consistency = gate(inputs.consistencyScore, enoughTrades);
@@ -258,28 +308,25 @@ export function computeSickreScore(inputs: ScoreInputs): SickreScore {
       ? null
       : Math.max(0, Math.min(100, 100 - drawdownPct));
 
-  const winScore =
-    winPct == null
-      ? null
-      : Math.min(100, (winPct / WIN_PCT_TOP_THRESHOLD) * 100);
+  const pct = (v: number | null | undefined): number | null =>
+    v == null ? null : Math.max(0, Math.min(100, v));
 
-  const components: ScoreComponent[] = [
-    {
-      key: "profitFactor",
-      label: "Profit factor",
-      weight: BASE_WEIGHTS.profitFactor,
-      value: profitFactor,
-      score: scoreFromBands(profitFactor, RATIO_BANDS),
-      counted: false,
-    },
-    {
-      key: "avgWinLoss",
-      label: "Avg win/loss",
-      weight: BASE_WEIGHTS.avgWinLoss,
-      value: winLossRatio,
-      score: scoreFromBands(winLossRatio, RATIO_BANDS),
-      counted: false,
-    },
+  // HEAVIEST FIRST, INCLUDING THE OPTIONAL ONES, which is why they are built
+  // in place and filtered rather than appended. The radar inherits this order
+  // for its corners and its whole contract is that the same book draws the
+  // same shape every time; a component that jumps to the end of the list when
+  // it happens to have data would rotate the polygon on data availability.
+  const slots: (ScoreComponent | null)[] = [
+    inputs.processAdherencePct == null
+      ? null
+      : {
+          key: "process",
+          label: "Process adherence",
+          weight: PROCESS_ADHERENCE_WEIGHT,
+          value: inputs.processAdherencePct,
+          score: pct(inputs.processAdherencePct),
+          counted: false,
+        },
     {
       key: "maxDrawdown",
       label: "Max drawdown",
@@ -289,19 +336,11 @@ export function computeSickreScore(inputs: ScoreInputs): SickreScore {
       counted: false,
     },
     {
-      key: "winPct",
-      label: "Win %",
-      weight: BASE_WEIGHTS.winPct,
-      value: winPct,
-      score: winScore,
-      counted: false,
-    },
-    {
-      key: "recovery",
-      label: "Recovery factor",
-      weight: BASE_WEIGHTS.recovery,
-      value: recovery,
-      score: scoreFromBands(recovery, RECOVERY_BANDS),
+      key: "profitFactor",
+      label: "Profit factor",
+      weight: BASE_WEIGHTS.profitFactor,
+      value: profitFactor,
+      score: scoreFromBands(profitFactor, RATIO_BANDS),
       counted: false,
     },
     {
@@ -312,18 +351,34 @@ export function computeSickreScore(inputs: ScoreInputs): SickreScore {
       score: consistency,
       counted: false,
     },
-  ];
-
-  if (inputs.processAdherencePct != null) {
-    components.push({
-      key: "process",
-      label: "Process adherence",
-      weight: PROCESS_ADHERENCE_WEIGHT,
-      value: inputs.processAdherencePct,
-      score: Math.max(0, Math.min(100, inputs.processAdherencePct)),
+    inputs.ftmoHeadroomPct == null
+      ? null
+      : {
+          key: "ftmoHeadroom",
+          label: "FTMO headroom",
+          weight: FTMO_HEADROOM_WEIGHT,
+          value: inputs.ftmoHeadroomPct,
+          score: pct(inputs.ftmoHeadroomPct),
+          counted: false,
+        },
+    {
+      key: "avgWinLoss",
+      label: "Avg win/loss",
+      weight: BASE_WEIGHTS.avgWinLoss,
+      value: winLossRatio,
+      score: scoreFromBands(winLossRatio, RATIO_BANDS),
       counted: false,
-    });
-  }
+    },
+    {
+      key: "recovery",
+      label: "Recovery factor",
+      weight: BASE_WEIGHTS.recovery,
+      value: recovery,
+      score: scoreFromBands(recovery, RECOVERY_BANDS),
+      counted: false,
+    },
+  ];
+  const components: ScoreComponent[] = slots.filter((c) => c != null);
 
   let weighted = 0;
   let coverage = 0;

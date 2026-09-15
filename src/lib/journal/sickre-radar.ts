@@ -45,7 +45,7 @@ export type RadarAxis = {
  * trading rather than about the data's gaps.
  *
  * It also agrees with the gate one level up rather than fighting it. The four
- * heaviest components are 25 + 20 + 20 + 15 = 80 of 115 weights, comfortably
+ * heaviest components are 30 + 25 + 20 + 15 = 90 of 110 weights, comfortably
  * past `MIN_COVERAGE_SHARE`, so a score that survives `computeSickreScore` has
  * normally already earned enough axes to be drawn.
  */
@@ -64,7 +64,7 @@ const SHORT_LABELS: Record<string, string> = {
   profitFactor: "Profit f.",
   avgWinLoss: "Win/loss",
   maxDrawdown: "Drawdown",
-  winPct: "Win %",
+  ftmoHeadroom: "FTMO room",
   recovery: "Recovery",
   consistency: "Consistency",
   process: "Process",

@@ -310,31 +310,58 @@ Ako se ovo pogreši, ništa ne pukne — brojevi se prosto zavedu pod dane koje 
 
 ## Sickre Score
 
-Jedan kompozit, 0–100, preko sedam komponenti. Ponderi i tablice bandova su prepisani iz TradeZella
-specifikacije da bi broj ostao uporediv; sedma komponenta je sopstvena.
+Jedan kompozit, 0–100, preko sedam komponenti. **Tablice bandova** su prepisane iz TradeZella
+specifikacije. **Ponderi više nisu** — ta specifikacija kalibriše intraday scalp knjigu, a ovde se
+vodi swing knjiga na prop nalogu: 40–70 trejdova godišnje, fiksni target oko 3× stop.
 
 | Komponenta | Ponder | Boduje se po |
 |---|---|---|
-| Profit factor | 25 | Tablica bandova, 1.8 → 2.6 mapira na 20 → 100 |
-| Avg win/loss | 20 | Ista tablica, u novcu |
-| Max drawdown | 20 | `100 − maxPctOfPeakPnl` |
-| Win % | 15 | `win% / 60 × 100`, sa gornjim ograničenjem |
-| Recovery factor | 10 | Svoja tablica, 1.0 → 3.5 |
-| Consistency | 10 | Prosleđuje se kakav jeste |
-| **Process adherence** | 15 | 60 % tracker compliance + 40 % playbook follow rate |
+| **Process adherence** | **30** | 60 % tracker compliance + 40 % playbook follow rate |
+| Max drawdown | 25 | `100 − maxPctOfPeakPnl` |
+| Profit factor | 20 | Tablica bandova, 1.8 → 2.6 mapira na 20 → 100 |
+| Consistency | 15 | Prosleđuje se kakav jeste |
+| **FTMO headroom** | 10 | `100 − najbliži prilaz limitu`, u % |
+| Avg win/loss | 5 | Ista tablica kao profit factor, u novcu |
+| Recovery factor | 5 | Svoja tablica, 1.0 → 3.5 |
 
-Ukupan ponder je **115** sa procesnom komponentom i 100 bez nje, pa kartica deli stvarnim zbirom a
-ne zakucanom stotkom.
+Trgovinske komponente daju **70**; sa procesom je 100, sa oba opciona 110. Kartica deli stvarnim
+zbirom a ne zakucanom stotkom.
+
+### Zašto ovi ponderi, a ne prepisani
+
+**Win % je izbačen iz skora, ne samo prepondersan.** Njegova skala (`win% / 60 × 100`) kodira „viši
+je bolji". Kod targeta od 3R matematički očekivani win rate je 35–45 %, pa je knjiga koja trguje
+tačno po planu dobijala oko 67 na toj komponenti — kažnjena za sopstveni dizajn. Win rate ostaje
+kao KPI tajl na dashboard-u i kao metrika u `/reports`, gde je podatak a ne ocena.
+
+**Avg win/loss je pao sa 20 na 5.** Kod fiksnog targeta taj racio je određen dizajnom, ne
+izvršenjem — uvek će biti blizu 3. Dvadeset poena je merilo konstantu, i uz to delimično dubliralo
+profit factor.
+
+**Process adherence je najteža komponenta, sa 30.** Jedina je koja ne zavisi od varijanse. Na
+40–70 trejdova godišnje sve ostale mere ishod na uzorku premalom da bi bio pouzdan, dok follow rate
+i tracker compliance mere ponašanje, gde n=40 već nešto znači. Teza ovog README-a je „P&L je
+posledica, proces je uzrok"; stari ponderi su davali uzroku 15 od 115, a posledici 100 od 115.
+
+**FTMO headroom je nov.** Meri koliko je nalog bio blizu dnevnog ili ukupnog limita — i to
+**najbliži prilaz kroz ceo izazov**, ne koliko prostora ima danas. Nalog koji završi na +8 % ali je
+usput dodirnuo 4.5 % na 5 % limitu bio je jedan loš dan od kraja, a nijedna druga komponenta to nije
+videla. Zato je jedina komponenta koja namerno ignoriše period filter: prozor izazova definišu
+`ftmo_reset_at` i fiksni starting balance, a ne to šta korisnik trenutno gleda. Kad nijedan nalog
+nema FTMO mod, komponente nema — ne 100.
+
+Kad u prozoru izazova nema nijednog zatvorenog trejda, `evaluateFtmo` vraća `null` a ne 100. Svež
+nalog koji nikad nije rizikovao ne sme da dobije maksimum za upravljanje rizikom — to je ista
+greška kao nalaz 1 ispod, samo modul ranije.
 
 **Komponenta bez podataka se izbacuje a preostali ponderi renormalizuju**, da mlad track record ne
 bude kažnjen za aritmetiku koja nema šta da deli. Da bi to bilo tačno trebalo je tri odvojene
 popravke u rundi 3, sve tri ista greška na različitim dubinama:
 
-1. Drawdown, win % i consistency vraćaju `0` na praznoj knjizi — pošteno kao *statistike*, a
+1. Drawdown i consistency vraćaju `0` na praznoj knjizi — pošteno kao *statistike*, a
    `100 − 0 = 100` je „nikad nije trgovao" pretvorilo u besprekorno upravljanje rizikom.
 2. Jedan dobitnički trejd davao je **100/100**: beskonačan profit factor, nula drawdown-a jer nema
-   od čega da padne, 100 % win rate i nulta varijansa nad jednim uzorkom. Četiri maksimuma, svaki
-   artefakt n=1.
+   od čega da padne i nulta varijansa nad jednim uzorkom. Sve sami maksimumi, svaki artefakt n=1.
 3. Knjiga od šest uzastopnih gubitaka dobijala je **100 za upravljanje rizikom**, jer procenat
    drawdown-a nije imao pozitivan vrh da njime deli pa je vraćao `0`.
 
@@ -345,14 +372,22 @@ Zato skor sad nosi kapiju dokaza:
   interval poverenja širok četrdesetak poena, ali krijenje skora nedeljama je nepoštenje u drugom
   smeru.
 - **Ispod 50 % pokrivenih pondera skora nema** — jedna komponenta pod naslovom sedmokomponentnog
-  kompozita nije kompozit.
+  kompozita nije kompozit. Prazan nalog sa tracker istorijom pokriva process 30 + FTMO headroom 10
+  = 40 od 110, i dalje ispod kapije.
 
 Svaka kapija čita svoj imenilac: `trades` za statistike zavisne od putanje (drawdown hoda kroz niz,
 consistency je njegov rasap), `decided` (dobici + gubici) za one građene od dobitaka protiv
 gubitaka. Knjiga od samih breakeven scratch-eva ima putanju za merenje i nema odluka koje je dobila.
 
-Četiri kalibracione konstante su zaključane vrednošću u `sickre-score.test.ts`. Menjanje bilo koje
-pomera svaki skor koji je ikad prikazan, pa sad mora da menja i test.
+**Rebalans je oslabio kapiju pokrivenosti na jednom mestu, i to je zapisano a ne prećutano.** Dok je
+win % bio u skoru, komponente gejtovane po `decided` nosile su 60 od 100 pondera; bez njega nose 25
+od 70. Knjiga od samih breakeven trejdova zato sad prelazi prag sa drawdown-om i consistency-jem
+(40 od 70) i dobija skor umesto ćutanja — privremen, sa uzimom uz broj i sa „2 of 5 components" na
+kartici. Ograđeno testom u `book.fixture.test.ts`; ako je presudno da to i dalje ćuti, ručica je
+`MIN_COVERAGE_SHARE`, a ona pomera svaki skor u journalu.
+
+Kalibracione konstante su zaključane vrednošću u `sickre-score.test.ts`. Menjanje bilo koje pomera
+svaki skor koji je ikad prikazan, pa sad mora da menja i test.
 
 ---
 

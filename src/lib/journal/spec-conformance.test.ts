@@ -7,10 +7,10 @@ import { computeStats } from "./analytics";
 import { EXACT_ZERO_RANGE } from "./breakeven";
 import {
   computeSickreScore,
+  FTMO_HEADROOM_WEIGHT,
   PROCESS_ADHERENCE_WEIGHT,
   RATIO_BANDS,
   RECOVERY_BANDS,
-  WIN_PCT_TOP_THRESHOLD,
 } from "./sickre-score";
 
 /**
@@ -395,8 +395,8 @@ describe("getMetric", () => {
 
 describe("Sickre Score — README §Sickre Score", () => {
   it("ponderi su tačno oni iz tabele u README-u", () => {
-    // README: „Profit factor 25 | Avg win/loss 20 | Max drawdown 20 | Win % 15
-    // | Recovery factor 10 | Consistency 10", i sedma komponenta sa 15.
+    // README: „Process adherence 30 | Max drawdown 25 | Profit factor 20 |
+    // Consistency 15 | FTMO headroom 10 | Avg win/loss 5 | Recovery factor 5".
     //
     // Ponder je jedini broj u skoru koji ne pada ni na jedan drugi test: greška
     // ovde pomera SVAKI skor, a nijedna pojedinačna komponenta ne bi prijavila
@@ -405,28 +405,62 @@ describe("Sickre Score — README §Sickre Score", () => {
       profitFactor: 3,
       avgWinLossRatio: 3,
       maxDrawdownPctOfPeakPnl: 0,
-      winPct: 100,
       recoveryFactor: 5,
       consistencyScore: 100,
       processAdherencePct: 100,
+      ftmoHeadroomPct: 100,
       sample: { trades: 100, decided: 100 },
     });
     const w = Object.fromEntries(full.components.map((c) => [c.key, c.weight]));
     expect(w).toEqual({
-      profitFactor: 25,
-      avgWinLoss: 20,
-      maxDrawdown: 20,
-      winPct: 15,
-      recovery: 10,
-      consistency: 10,
       process: PROCESS_ADHERENCE_WEIGHT,
+      maxDrawdown: 25,
+      profitFactor: 20,
+      consistency: 15,
+      ftmoHeadroom: FTMO_HEADROOM_WEIGHT,
+      avgWinLoss: 5,
+      recovery: 5,
     });
-    expect(PROCESS_ADHERENCE_WEIGHT).toBe(15);
+    expect(PROCESS_ADHERENCE_WEIGHT).toBe(30);
+    expect(FTMO_HEADROOM_WEIGHT).toBe(10);
 
-    // Šest osnovnih pondera mora da da tačno 100; sedmi se dodaje preko toga i
-    // skor se renormalizuje po pokrivenosti.
-    const base = 25 + 20 + 20 + 15 + 10 + 10;
-    expect(base).toBe(100);
+    // README: „Trgovinske komponente daju 70; sa procesom je 100, sa oba
+    // opciona 110." Opcione se dodaju preko osnove i skor se renormalizuje po
+    // pokrivenosti.
+    expect(25 + 20 + 15 + 5 + 5).toBe(70);
+    expect(full.maxCoverage).toBe(110);
+  });
+
+  it("win % više ne postoji kao komponenta skora", () => {
+    // README: „Win % je izbačen iz skora, ne samo prepondersan… Win rate ostaje
+    // kao KPI tajl na dashboard-u i kao metrika u /reports."
+    const keys = computeSickreScore({
+      profitFactor: 3,
+      avgWinLossRatio: 3,
+      maxDrawdownPctOfPeakPnl: 0,
+      recoveryFactor: 5,
+      consistencyScore: 100,
+      sample: { trades: 100, decided: 100 },
+    }).components.map((c) => c.key);
+    expect(keys).not.toContain("winPct");
+  });
+
+  it("process adherence je najteža komponenta u kompozitu", () => {
+    // README: „Process adherence je najteža komponenta, sa 30. Jedina je koja
+    // ne zavisi od varijanse." Tvrdnja iz teksta, provereno na brojevima.
+    const r = computeSickreScore({
+      profitFactor: 3,
+      avgWinLossRatio: 3,
+      maxDrawdownPctOfPeakPnl: 0,
+      recoveryFactor: 5,
+      consistencyScore: 100,
+      processAdherencePct: 100,
+      ftmoHeadroomPct: 100,
+      sample: { trades: 100, decided: 100 },
+    });
+    expect(PROCESS_ADHERENCE_WEIGHT).toBe(
+      Math.max(...r.components.map((c) => c.weight)),
+    );
   });
 
   it("tablica racia počinje na 1.8 i završava na 2.6, kao što README kaže", () => {
@@ -449,20 +483,22 @@ describe("Sickre Score — README §Sickre Score", () => {
     expect(RECOVERY_BANDS.at(-1)!.scoreMax).toBe(0);
   });
 
-  it("win % se skalira na 60 i ograničava odozgo", () => {
-    // README: „`win% / 60 × 100`, sa gornjim ograničenjem"
-    expect(WIN_PCT_TOP_THRESHOLD).toBe(60);
-    const at = (winPct: number) =>
+  it("FTMO headroom je „100 − najbliži prilaz limitu“, i odsutan bez izazova", () => {
+    // README: „`100 − najbliži prilaz limitu`, u %"… „Kad nijedan nalog nema
+    // FTMO mod, komponente nema — ne 100."
+    const at = (ftmoHeadroomPct: number | null) =>
       computeSickreScore({
         profitFactor: 2, avgWinLossRatio: 2, maxDrawdownPctOfPeakPnl: 10,
-        winPct, recoveryFactor: 2, consistencyScore: 50,
+        recoveryFactor: 2, consistencyScore: 50, ftmoHeadroomPct,
         sample: { trades: 100, decided: 100 },
-      }).components.find((c) => c.key === "winPct")!.score;
+      }).components.find((c) => c.key === "ftmoHeadroom");
 
-    expect(at(30)).toBeCloseTo((30 / 60) * 100, 6);
-    expect(at(60)).toBeCloseTo(100, 6);
-    // Iznad praga ostaje 100 — bez ograničenja bi 90 % dalo 150.
-    expect(at(90)).toBeCloseTo(100, 6);
+    expect(at(90)!.score).toBeCloseTo(90, 6);
+    // Nula je merenje — nalog je stajao na limitu — i mora da se broji.
+    expect(at(0)!.score).toBe(0);
+    expect(at(0)!.counted).toBe(true);
+    // Bez izazova nema ni ose ni reda, pa se ostali ponderi renormalizuju.
+    expect(at(null)).toBeUndefined();
   });
 
   it("max drawdown je 100 − procenat, na osnovi vrha P&L-a", () => {
@@ -471,7 +507,7 @@ describe("Sickre Score — README §Sickre Score", () => {
     const at = (pct: number | null) =>
       computeSickreScore({
         profitFactor: 2, avgWinLossRatio: 2, maxDrawdownPctOfPeakPnl: pct,
-        winPct: 50, recoveryFactor: 2, consistencyScore: 50,
+        recoveryFactor: 2, consistencyScore: 50,
         sample: { trades: 100, decided: 100 },
       }).components.find((c) => c.key === "maxDrawdown");
 

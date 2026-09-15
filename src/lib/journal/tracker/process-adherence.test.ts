@@ -6,7 +6,6 @@ const base = {
   profitFactor: 2.0,
   avgWinLossRatio: 2.0,
   maxDrawdownPctOfPeakPnl: 20,
-  winPct: 50,
   recoveryFactor: 2.0,
   consistencyScore: 70,
   sample: { trades: 30, decided: 30 },
@@ -54,31 +53,31 @@ describe("processAdherence", () => {
   });
 });
 
-describe("the seventh component in the score", () => {
+describe("the heaviest component in the score", () => {
   it("is absent, and coverage complete, when nothing is supplied", () => {
     const r = computeSickreScore(base);
+    expect(r.components).toHaveLength(5);
+    expect(r.coverage).toBe(70);
+    expect(r.maxCoverage).toBe(70);
+  });
+
+  it("raises the maximum to 100 once supplied", () => {
+    const r = computeSickreScore({ ...base, processAdherencePct: 80 });
     expect(r.components).toHaveLength(6);
     expect(r.coverage).toBe(100);
     expect(r.maxCoverage).toBe(100);
   });
 
-  it("raises the maximum to 115 once supplied", () => {
-    const r = computeSickreScore({ ...base, processAdherencePct: 80 });
-    expect(r.components).toHaveLength(7);
-    expect(r.coverage).toBe(115);
-    expect(r.maxCoverage).toBe(115);
-  });
-
   it("reports a partial score as partial rather than as fully covered", () => {
     // The display bug this exists to prevent: with recovery missing the score
-    // covers 105 of 115, and a hardcoded 100 would have rendered it complete.
+    // covers 95 of 100, and a hardcoded total would have rendered it complete.
     const r = computeSickreScore({
       ...base,
       recoveryFactor: null,
       processAdherencePct: 80,
     });
-    expect(r.coverage).toBe(105);
-    expect(r.maxCoverage).toBe(115);
+    expect(r.coverage).toBe(95);
+    expect(r.maxCoverage).toBe(100);
     expect(r.coverage).toBeLessThan(r.maxCoverage);
   });
 
@@ -86,5 +85,17 @@ describe("the seventh component in the score", () => {
     const poor = computeSickreScore({ ...base, processAdherencePct: 0 });
     const great = computeSickreScore({ ...base, processAdherencePct: 100 });
     expect(great.score!).toBeGreaterThan(poor.score!);
+  });
+
+  it("carries more weight than any outcome component", () => {
+    // The rebalance, stated where the process component is defined. Over forty
+    // trades a year the outcome components are measured on a sample too thin to
+    // trust; tracker compliance and follow rate measure behaviour, where n=40
+    // already means something.
+    const r = computeSickreScore({ ...base, processAdherencePct: 80 });
+    const process = r.components.find((c) => c.key === "process")!;
+    for (const other of r.components.filter((c) => c.key !== "process")) {
+      expect(process.weight, other.key).toBeGreaterThan(other.weight);
+    }
   });
 });
