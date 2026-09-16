@@ -21,7 +21,7 @@ export type FxRateSource =
   | "same_currency"
   /** The trade has no account, so there is nothing to compare the quote currency against. */
   | "no_account"
-  /** Valute se razlikuju a kurs nije zapisan. Novac se NE prikazuje. */
+  /** The currencies differ and no rate was recorded. Money is NOT displayed. */
   | "missing";
 
 export type ResolvedFxRate = {

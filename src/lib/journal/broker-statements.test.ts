@@ -3,51 +3,52 @@ import { parseImportNumber } from "./import-number";
 import { parseImportTime } from "./time";
 
 /**
- * STVARNI IZVODI, NE IZMIŠLJENI.
+ * REAL STATEMENTS, NOT INVENTED ONES.
  *
- * `import-number.test.ts` i `time.test.ts` pokrivaju svaki svoju funkciju po
- * pravilima. Ovaj fajl radi drugu stvar: uzima OBLIK ćelije kakav pojedine
- * platforme zaista pišu i pušta ga kroz isti put kojim ide uvoz, jer je Korak 7
- * tražio provere „na stvarnim izvodima brokera".
+ * `import-number.test.ts` and `time.test.ts` each cover their own function by
+ * the rules. This file does something different: it takes the SHAPE of a cell
+ * as particular platforms actually write it and runs it down the same path the
+ * import takes, because Step 7 asked for checks "against real broker
+ * statements".
  *
- * Razlika nije kozmetička. Pravilo se testira na primeru koji ga ilustruje;
- * izvod donosi kombinacije koje niko ne bi izmislio — MT5 na srpskom
- * lokalitetu piše `2 345,67` sa razmakom kao separatorom hiljada, cTrader piše
- * ISO sa `Z`, TradeZella izvozi `$1,234.56` sa znakom valute u ćeliji, a
- * Interactive Brokers piše negativnu proviziju kao `-2.15` i datum kao
- * `2026-03-02, 14:00:00`.
+ * The difference is not cosmetic. A rule is tested on an example that
+ * illustrates it; a statement brings combinations nobody would invent — MT5 on
+ * a Serbian locale writes `2 345,67` with a space as the thousands separator,
+ * cTrader writes ISO with a `Z`, TradeZella exports `$1,234.56` with the
+ * currency symbol inside the cell, and Interactive Brokers writes a negative
+ * commission as `-2.15` and a date as `2026-03-02, 14:00:00`.
  *
- * Gde format NIJE čitljiv, test tvrdi `null`. To nije rupa nego politika ovog
- * uvoza: ćelija koja se ne može pročitati pošteno vidi se na ekranu kao red
- * koji neće ući, umesto da se pogodi.
+ * Where a format is NOT readable, the test asserts `null`. That is not a hole
+ * but this import's policy: a cell that cannot be read honestly shows up on
+ * screen as a row that will not go in, rather than being guessed.
  */
 
 const TZ = "Europe/Belgrade";
 
-describe("brojevi kako ih platforme pišu", () => {
+describe("numbers as the platforms write them", () => {
   const cases: [string, string, number | null][] = [
-    // MetaTrader 5, izvoz na engleskom lokalitetu
+    // MetaTrader 5, exported on an English locale
     ["MT5 / en", "1234.56", 1234.56],
-    ["MT5 / en, hiljade", "1 234.56", 1234.56],
-    // MetaTrader 5, srpski / nemački lokalitet — razlog zbog kojeg
-    // `import-number.ts` uopšte postoji: raniji kod je ovo čitao kao 234567.
+    ["MT5 / en, thousands", "1 234.56", 1234.56],
+    // MetaTrader 5, Serbian / German locale — the reason `import-number.ts`
+    // exists at all: earlier code read this as 234567.
     ["MT5 / sr", "2345,67", 2345.67],
-    ["MT5 / sr, hiljade", "1.234,56", 1234.56],
-    ["MT5 / sr, razmak", "1 234,56", 1234.56],
+    ["MT5 / sr, thousands", "1.234,56", 1234.56],
+    ["MT5 / sr, space", "1 234,56", 1234.56],
     ["MT5 / sr, NBSP", "1 234,56", 1234.56],
-    // TradeZella / TraderSync CSV — znak valute ostaje u ćeliji
+    // TradeZella / TraderSync CSV — the currency symbol stays in the cell
     ["TradeZella", "$1,234.56", 1234.56],
-    ["TradeZella, gubitak", "-$250.00", -250],
-    ["TradeZella, nula", "$0.00", 0],
-    // Interactive Brokers — negativna provizija, i računovodstveni minus
-    ["IBKR provizija", "-2.15", -2.15],
-    ["IBKR zagrade", "(1,234.56)", -1234.56],
-    // cTrader — količina u jedinicama, bez separatora
+    ["TradeZella, loss", "-$250.00", -250],
+    ["TradeZella, zero", "$0.00", 0],
+    // Interactive Brokers — a negative commission, and the accounting minus
+    ["IBKR commission", "-2.15", -2.15],
+    ["IBKR parentheses", "(1,234.56)", -1234.56],
+    // cTrader — quantity in units, with no separator
     ["cTrader units", "100000", 100000],
-    // Lot sa tri decimale
-    ["mikro lot", "0.010", 0.01],
-    // Fjučers cena sa 1/32 zapisom se NE tumači kao broj
-    ["ZB 32-inski zapis", "110'16", null],
+    // A lot with three decimals
+    ["micro lot", "0.010", 0.01],
+    // A futures price in 1/32 notation is NOT read as a number
+    ["ZB 32nds notation", "110'16", null],
   ];
 
   for (const [name, cell, want] of cases) {
@@ -56,79 +57,82 @@ describe("brojevi kako ih platforme pišu", () => {
     });
   }
 
-  it("`1,234` ostaje odbijeno i na stvarnom izvodu", () => {
-    // 1234 američkom brokeru, 1.234 nemačkom. Ništa u ćeliji ne odlučuje, a oba
-    // čitanja su verodostojne veličine i za cenu i za proviziju i za količinu.
-    // Ovo je jedina ćelija u celom skupu koja se odbija iako izgleda uredno, pa
-    // vredi da stoji zapisano zašto.
+  it("`1,234` stays refused on a real statement too", () => {
+    // 1234 to an American broker, 1.234 to a German one. Nothing in the cell
+    // decides, and both readings are plausible magnitudes for a price, a
+    // commission and a quantity alike. This is the only cell in the whole set
+    // that is refused although it looks perfectly healthy, so it is worth
+    // having the reason written down.
     expect(parseImportNumber("1,234")).toBeNull();
-    // Sa četiri cifre iza zareza više nije dvosmisleno — decimalni je.
+    // With four digits after the comma it is no longer ambiguous — it is decimal.
     expect(parseImportNumber("1,2345")).toBe(1.2345);
   });
 });
 
-describe("vremena kako ih platforme pišu", () => {
-  it("MT5: 2026.03.02 14:00:00 u zoni naloga", () => {
-    // MT5 piše tačku kao separator datuma i vreme u zoni servera. Uvoz ga čita
-    // kao zid-sat u zoni NALOGA, jer je to zona u kojoj trejder gleda svoj dan.
+describe("times as the platforms write them", () => {
+  it("MT5: 2026.03.02 14:00:00 in the account time zone", () => {
+    // MT5 writes a dot as the date separator and the time in the server's zone.
+    // The import reads it as wall-clock time in the ACCOUNT's zone, because
+    // that is the zone the trader looks at their day in.
     expect(parseImportTime("2026.03.02 14:00:00", TZ)).toBe(
       "2026-03-02T13:00:00.000Z",
     );
   });
 
-  it("cTrader / API: ISO sa Z je apsolutan trenutak", () => {
+  it("cTrader / API: an ISO stamp with Z is an absolute instant", () => {
     expect(parseImportTime("2026-03-02T14:00:00Z", TZ)).toBe(
       "2026-03-02T14:00:00.000Z",
     );
   });
 
-  it("ISO sa pomerajem se ne pomera dvaput", () => {
+  it("an ISO stamp with an offset is not shifted twice", () => {
     expect(parseImportTime("2026-03-02T14:00:00+01:00", TZ)).toBe(
       "2026-03-02T13:00:00.000Z",
     );
   });
 
   it("Interactive Brokers: 2026-03-02, 14:00:00", () => {
-    // Zarez između datuma i vremena. Ne pogađa ga ni jedan od regularnih
-    // izraza, pa pada na granu sa imenom meseca — koja ga pročita ispravno.
+    // A comma between date and time. None of the regular expressions match it,
+    // so it falls through to the month-name branch — which reads it correctly.
     expect(parseImportTime("2026-03-02, 14:00:00", TZ)).toBe(
       "2026-03-02T13:00:00.000Z",
     );
   });
 
-  it("samo datum se čita kao ponoć u zoni naloga", () => {
+  it("a bare date reads as midnight in the account's zone", () => {
     expect(parseImportTime("2026-03-02", TZ)).toBe("2026-03-01T23:00:00.000Z");
   });
 
-  it("letnje računanje vremena se poštuje", () => {
-    // 2026-07-01 je u Beogradu UTC+2, 2026-03-02 je UTC+1. Fiksni pomeraj bi
-    // ovde promašio za sat — a sat pomera trejd u drugi dan kad je blizu
-    // ponoći, pa i u drugu ćeliju kalendara.
+  it("daylight saving time is respected", () => {
+    // 2026-07-01 is UTC+2 in Belgrade, 2026-03-02 is UTC+1. A fixed offset
+    // would miss by an hour here — and an hour moves a trade into another day
+    // when it sits near midnight, and so into another calendar cell.
     expect(parseImportTime("2026-07-01 14:00:00", TZ)).toBe(
       "2026-07-01T12:00:00.000Z",
     );
   });
 
-  it("dd/mm/yyyy se ODBIJA, i to je politika a ne propust", () => {
-    // 02/03/2026 je 2. mart pola sveta a 3. februar drugoj polovini. Ništa u
-    // ćeliji ne odlučuje. Odbijen red se vidi na ekranu; pogođen red bi tiho
-    // seo mesec dana dalje, u pogrešan mesec izveštaja.
+  it("dd/mm/yyyy is REFUSED, and that is policy rather than an oversight", () => {
+    // 02/03/2026 is 2 March to half the world and 3 February to the other
+    // half. Nothing in the cell decides. A refused row is visible on screen; a
+    // guessed row would quietly land a month away, in the wrong report month.
     expect(parseImportTime("02/03/2026", TZ)).toBeNull();
     expect(parseImportTime("02/03/2026 14:00", TZ)).toBeNull();
     expect(parseImportTime("02-03-2026", TZ)).toBeNull();
-    // Ni pomeraj je ne razrešava — on određuje sat, nikad redosled polja.
+    // An offset does not resolve it either — it fixes the hour, never the field order.
     expect(parseImportTime("02/03/2026 14:00:00+01:00", TZ)).toBeNull();
   });
 
-  it("ime meseca je nedvosmisleno i zato prolazi", () => {
+  it("a month name is unambiguous and therefore passes", () => {
     expect(parseImportTime("2 Mar 2026 14:00:00", TZ)).toBe(
       "2026-03-02T13:00:00.000Z",
     );
   });
 
-  it("prazna i neprepoznatljiva celija daju null, ne sada", () => {
-    // `?? new Date()` je nekad zatvarao ovu granu i bio je najgori red u uvozu:
-    // trejd od pre tri meseca dobijao je TRENUTAK UVOZA i seo u današnji P&L.
+  it("an empty or unrecognisable cell gives null, not now", () => {
+    // `?? new Date()` used to close this branch and was the worst line in the
+    // import: a trade from three months ago got the MOMENT OF IMPORT and landed
+    // in today's P&L.
     expect(parseImportTime("", TZ)).toBeNull();
     expect(parseImportTime("   ", TZ)).toBeNull();
     expect(parseImportTime("n/a", TZ)).toBeNull();

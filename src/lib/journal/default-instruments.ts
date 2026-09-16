@@ -116,8 +116,8 @@ export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
   { symbol: "UKOIL", name: "Brent Crude Oil (spot CFD)", asset_class: "Energy CFD", point_value: 1_000, tick_size: 0.01, tick_value: null, quote_currency: "USD", is_active: true, sort_order: 211 },
   { symbol: "NATGAS", name: "Natural Gas (spot CFD)", asset_class: "Energy CFD", point_value: 10_000, tick_size: 0.001, tick_value: null, quote_currency: "USD", is_active: true, sort_order: 212 },
 
-  // ------------------------------------------------------------- Index CFD-ovi
-  // 1 ugovor = 1 jedinica valute kotacije po poenu indeksa.
+  // ---------------------------------------------------------------- Index CFDs
+  // 1 contract = 1 unit of the quote currency per index point.
   { symbol: "SP500", name: "S&P 500 (CFD)", asset_class: "Index CFD", point_value: 1, tick_size: 0.1, tick_value: null, quote_currency: "USD", is_active: true, sort_order: 300 },
   { symbol: "NAS100", name: "Nasdaq 100 (CFD)", asset_class: "Index CFD", point_value: 1, tick_size: 0.25, tick_value: null, quote_currency: "USD", is_active: true, sort_order: 301 },
   { symbol: "US30", name: "Dow Jones 30 (CFD)", asset_class: "Index CFD", point_value: 1, tick_size: 1, tick_value: null, quote_currency: "USD", is_active: true, sort_order: 302 },

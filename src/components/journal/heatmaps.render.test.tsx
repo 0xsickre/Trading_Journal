@@ -5,22 +5,23 @@ import { ComplianceHeatmap } from "./compliance-heatmap";
 import type { DayCompliance } from "@/lib/journal/tracker/compliance";
 
 /**
- * DVE MAPE, DVE NAMERNO RAZLIČITE SKALE.
+ * TWO HEATMAPS, TWO DELIBERATELY DIFFERENT SCALES.
  *
- * `heatmap-grid.render.test.tsx` pokriva mrežu — koliko kolona, koji dan je
- * poslednji. Ono što nije bilo pokriveno su BOJA i TOOLTIP, a to su jedina dva
- * mesta na kojima ove komponente kažu broj.
+ * `heatmap-grid.render.test.tsx` covers the grid — how many columns, which day
+ * is last. What was not covered is COLOUR and TOOLTIP, and those are the only
+ * two places these components state a number.
  *
- * Razlika između njih je suština i lako se izgubi pri izmeni:
+ * The difference between them is the substance and is easily lost in an edit:
  *
- *   novac      — skala relativna na najveći potez u prozoru; pitanje je „koji
- *                dani su pomerili nalog", ne „koliko apsolutno";
- *   disciplina — fiksna 0–100; 60 % mora da izgleda isto u dobrom i u lošem
- *                mesecu, inače bi mesec šezdesetica bio tamnozelen samo zato
- *                što se ništa bolje nije desilo.
+ *   money      — a scale relative to the largest move in the window; the
+ *                question is "which days moved the account", not "by how much
+ *                in absolute terms";
+ *   discipline — a fixed 0–100; 60 % has to look the same in a good month and
+ *                a bad one, or a month of sixties would be dark green purely
+ *                because nothing better happened.
  *
- * Test čita `title` atribute, jer je to tekst koji korisnik zaista vidi kad
- * pređe mišem — isti broj koji knjiga računa.
+ * The test reads `title` attributes, because that is the text a user actually
+ * sees on hover — the same number the book computes.
  */
 
 const END = "2026-03-06";
@@ -57,7 +58,7 @@ describe("CalendarHeatmap — novac", () => {
     ["2026-03-05", 150],
   ]);
 
-  it("tooltip nosi iznos sa znakom i valutom naloga", () => {
+  it("the tooltip carries the amount with its sign and the account currency", () => {
     const { container } = render(
       <CalendarHeatmap daily={daily} endDay={END} weeks={2} currency="EUR" />,
     );
@@ -65,28 +66,29 @@ describe("CalendarHeatmap — novac", () => {
     expect(titleFor(container, "2026-03-03")).toBe("2026-03-03: -€400.00");
   });
 
-  it("valuta nije zakucana na dolar", () => {
-    // `analytics.ts` je nekad zakucavao `currency: "USD"`. Ova komponenta prima
-    // valutu naloga, i to mora da ostane vidljivo u tekstu.
+  it("the currency is not hardcoded to dollars", () => {
+    // `analytics.ts` used to hardcode `currency: "USD"`. This component takes
+    // the account's currency, and that has to stay visible in the text.
     const { container } = render(
       <CalendarHeatmap daily={daily} endDay={END} weeks={2} currency="USD" />,
     );
     expect(titleFor(container, "2026-03-02")).toBe("2026-03-02: +$1,200.00");
   });
 
-  it("dan bez trgovanja nosi samo datum, ne nulu", () => {
-    // Razlika između „nisam trgovao" i „trgovao sam i izašao na nuli" je
-    // upravo ono što ceo projekat pazi da ne pomeša.
+  it("a day with no trading carries only the date, not a zero", () => {
+    // The difference between "I did not trade" and "I traded and finished flat"
+    // is precisely what this whole project takes care not to confuse.
     const { container } = render(
       <CalendarHeatmap daily={daily} endDay={END} weeks={2} />,
     );
     expect(titleFor(container, "2026-03-01")).toBe("2026-03-01");
-    // Trgovan dan koji je izašao na nuli NOSI iznos — i bez znaka, jer nula
-    // nije ni dobitak ni gubitak. `+$0.00` bi je svrstao na jednu stranu.
+    // A traded day that finished flat DOES carry an amount — and without a
+    // sign, because zero is neither a win nor a loss. `+$0.00` would file it
+    // on one side.
     expect(titleFor(container, "2026-03-04")).toBe("2026-03-04: $0.00");
   });
 
-  it("ravan dan je prigušen, ne zelen i ne crven", () => {
+  it("a flat day is muted, neither green nor red", () => {
     const { container } = render(
       <CalendarHeatmap daily={daily} endDay={END} weeks={2} />,
     );
@@ -94,7 +96,7 @@ describe("CalendarHeatmap — novac", () => {
     expect(bgFor(container, "2026-03-01")).toContain("--muted");
   });
 
-  it("dobitak vuče na profit, gubitak na loss", () => {
+  it("a win pulls towards profit, a loss towards loss", () => {
     const { container } = render(
       <CalendarHeatmap daily={daily} endDay={END} weeks={2} />,
     );
@@ -102,10 +104,10 @@ describe("CalendarHeatmap — novac", () => {
     expect(bgFor(container, "2026-03-03")).toContain("--loss");
   });
 
-  it("skala je RELATIVNA na najveći potez u prozoru", () => {
-    // Isti dan od +150 mora da bude tamniji kad je najveći potez manji. Da je
-    // skala apsolutna, tih mesec bi izgledao prazno.
-    const kroz = (max: number) =>
+  it("the scale is RELATIVE to the largest move in the window", () => {
+    // The same +150 day has to be darker when the largest move is smaller. Had
+    // the scale been absolute, a quiet month would look empty.
+    const at = (max: number) =>
       bgFor(
         render(
           <CalendarHeatmap
@@ -116,9 +118,9 @@ describe("CalendarHeatmap — novac", () => {
         ).container,
         "2026-03-05",
       );
-    const uzGlasanMesec = kroz(3000);
-    const uzTihMesec = kroz(200);
-    expect(uzTihMesec).not.toBe(uzGlasanMesec);
+    const inLoudMonth = at(3000);
+    const inQuietMonth = at(200);
+    expect(inQuietMonth).not.toBe(inLoudMonth);
   });
 });
 
@@ -130,7 +132,7 @@ describe("ComplianceHeatmap — disciplina", () => {
     { date: "2026-03-05", pct: null, satisfied: 0, applicable: 0 } as DayCompliance,
   ];
 
-  it("tooltip nosi procenat i razlomak iz kojeg je nastao", () => {
+  it("the tooltip carries the percentage and the fraction it came from", () => {
     const { container } = render(
       <ComplianceHeatmap series={series} endDay={END} weeks={2} />,
     );
@@ -138,7 +140,7 @@ describe("ComplianceHeatmap — disciplina", () => {
     expect(titleFor(container, "2026-03-03")).toBe("2026-03-03: 60% (3/5)");
   });
 
-  it("dan bez ijednog pravila kaze no rules, ne 0 %", () => {
+  it("a day with no rules at all says no rules, not 0 %", () => {
     const { container } = render(
       <ComplianceHeatmap series={series} endDay={END} weeks={2} />,
     );
@@ -146,9 +148,10 @@ describe("ComplianceHeatmap — disciplina", () => {
     expect(titleFor(container, "2026-03-01")).toBe("2026-03-01: no rules");
   });
 
-  it("SKALA JE FIKSNA — 60 % izgleda isto bez obzira na ostatak prozora", () => {
-    // Ovo je razlika zbog koje mapa discipline ne deli skalu sa mapom novca.
-    // Normalizacija bi mesec od samih šezdesetica prefarbala u tamno.
+  it("THE SCALE IS FIXED — 60 % looks the same whatever the rest of the window does", () => {
+    // This is the difference that stops the discipline heatmap sharing a scale
+    // with the money one. Normalising would repaint a month of straight
+    // sixties as dark.
     const uzSavrsenDan = bgFor(
       render(<ComplianceHeatmap series={series} endDay={END} weeks={2} />)
         .container,
@@ -167,8 +170,8 @@ describe("ComplianceHeatmap — disciplina", () => {
     expect(uzSavrsenDan).toBe(bezSavrsenogDana);
   });
 
-  it("nula procenata je vidljiva, ne prigušena", () => {
-    // Dan u kojem su prekršena sva pravila ne sme da izgleda kao slobodan dan.
+  it("zero percent is visible, not muted", () => {
+    // A day on which every rule was broken must not look like a day off.
     const { container } = render(
       <ComplianceHeatmap series={series} endDay={END} weeks={2} />,
     );
@@ -179,7 +182,7 @@ describe("ComplianceHeatmap — disciplina", () => {
     expect(nula).not.toBe(bezPodataka);
   });
 
-  it("ne koristi paletu novca — zeleno pored P&L kalendara bi se čitalo kao para", () => {
+  it("does not use the money palette — green beside a P&L calendar would read as cash", () => {
     const { container } = render(
       <ComplianceHeatmap series={series} endDay={END} weeks={2} />,
     );

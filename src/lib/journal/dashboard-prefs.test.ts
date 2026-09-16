@@ -6,11 +6,11 @@ import {
 } from "./dashboard-prefs";
 
 /**
- * SKLOPLJENE GRUPE NA DASHBOARD-U.
+ * COLLAPSED GROUPS ON THE DASHBOARD.
  *
- * Podešavanje koje pripada pregledaču, ne nalogu — i koje ne sme da obori
- * stranicu koju ukrašava. Modul ima tri odbrane (SSR, parsiranje, upis) i
- * nijedna nije bila proverena.
+ * A preference that belongs to the browser, not to the account — and that must
+ * not bring down the page it decorates. The module has three defences (SSR,
+ * parsing, writing) and none of them was checked.
  */
 
 const KEY = "tj:dashboard_prefs";
@@ -27,54 +27,55 @@ function fakeStorage() {
   } as unknown as Storage;
 }
 
-describe("bez browsera", () => {
-  it("čitanje na serveru vraća prazno umesto da padne", () => {
-    // `window` ne postoji u node okruženju ovog projekta, pa je ovo stvarno
-    // stanje pri renderu na serveru, a ne simulacija.
+describe("with no browser", () => {
+  it("reading on the server returns empty instead of throwing", () => {
+    // `window` does not exist in this project's node environment, so this is
+    // the real state during a server render, not a simulation.
     expect(typeof window).toBe("undefined");
     expect(getDashboardPrefs()).toEqual({});
   });
 
-  it("upis na serveru je bez efekta i bez greške", () => {
+  it("writing on the server has no effect and no error", () => {
     expect(() => setDashboardPrefs({ collapsedGroups: ["risk"] })).not.toThrow();
   });
 });
 
-describe("u browseru", () => {
+describe("in the browser", () => {
   beforeEach(() => {
     vi.stubGlobal("window", {} as Window & typeof globalThis);
     vi.stubGlobal("localStorage", fakeStorage());
   });
 
-  it("prazno skladište daje prazne postavke", () => {
+  it("an empty store gives empty preferences", () => {
     expect(getDashboardPrefs()).toEqual({});
   });
 
-  it("upisano se pročita nazad", () => {
+  it("what was written reads back", () => {
     setDashboardPrefs({ collapsedGroups: ["risk", "quality"] });
     expect(getDashboardPrefs()).toEqual({ collapsedGroups: ["risk", "quality"] });
   });
 
-  it("pokvaren JSON ne obara stranicu", () => {
+  it("broken JSON does not bring the page down", () => {
     localStorage.setItem(KEY, "{ ovo nije json");
     expect(getDashboardPrefs()).toEqual({});
   });
 
-  it("`collapsedGroups` koji nije niz se odbacuje", () => {
-    // Ovo je odbrana koja stvarno nešto sprečava: vrednost bi stigla do
-    // `.includes()` i panel bi pukao pri renderu — zbog podešavanja izgleda.
+  it("a `collapsedGroups` that is not an array is rejected", () => {
+    // This is the defence that really prevents something: the value would reach
+    // `.includes()` and the panel would blow up during render — over a display
+    // preference.
     localStorage.setItem(KEY, JSON.stringify({ collapsedGroups: "risk" }));
     expect(getDashboardPrefs()).toEqual({});
     localStorage.setItem(KEY, JSON.stringify({ collapsedGroups: 7 }));
     expect(getDashboardPrefs()).toEqual({});
   });
 
-  it("`null` upisan u skladište se čita kao prazno", () => {
+  it("a `null` written into the store reads as empty", () => {
     localStorage.setItem(KEY, "null");
     expect(getDashboardPrefs()).toEqual({});
   });
 
-  it("upis koji padne (kvota, privatni režim) se guta", () => {
+  it("a write that fails (quota, private mode) is swallowed", () => {
     vi.stubGlobal("localStorage", {
       ...fakeStorage(),
       setItem: () => {
@@ -86,46 +87,47 @@ describe("u browseru", () => {
 });
 
 describe("toggleCollapsed", () => {
-  it("dodaje kad nije unutra, uklanja kad jeste", () => {
+  it("adds when absent, removes when present", () => {
     expect(toggleCollapsed([], "risk")).toEqual(["risk"]);
     expect(toggleCollapsed(["risk"], "risk")).toEqual([]);
     expect(toggleCollapsed(["risk"], "quality")).toEqual(["risk", "quality"]);
   });
 
-  it("ne menja ulazni niz", () => {
+  it("does not mutate the input array", () => {
     const before = ["risk"];
     toggleCollapsed(before, "quality");
     expect(before).toEqual(["risk"]);
   });
 
-  it("čuva se SKLOPLJENI skup, pa nova grupa stiže otvorena", () => {
-    // Da se čuvao otvoreni skup, grupa dodata kasnije bi za svakog postojećeg
-    // korisnika bila sklopljena — metrika koja je tiho nestala sa ekrana.
+  it("the COLLAPSED set is the one stored, so a new group arrives open", () => {
+    // Had the open set been stored, a group added later would be collapsed for
+    // every existing user — a metric that quietly vanished from the screen.
     const stored = ["risk"];
-    const novaGrupa = "swing";
-    expect(stored.includes(novaGrupa)).toBe(false);
+    const newGroup = "swing";
+    expect(stored.includes(newGroup)).toBe(false);
   });
 });
 
-describe("čuvar gleda i ELEMENTE, ne samo da je niz", () => {
-  // Isti stabovi kao u „u browseru" bloku — bez njih `typeof window` je
-  // „undefined" i modul se, sasvim ispravno, ponaša kao na serveru.
+describe("the guard looks at the ELEMENTS too, not just at being an array", () => {
+  // The same stubs as in the "in the browser" block — without them
+  // `typeof window` is "undefined" and the module behaves, quite correctly,
+  // as it does on the server.
   beforeEach(() => {
     vi.stubGlobal("window", {} as Window & typeof globalThis);
     vi.stubGlobal("localStorage", fakeStorage());
   });
 
-  it("odbacuje niz koji nije niz stringova", () => {
-    // `.includes(id)` nad brojevima ne puca — samo nikad ništa ne nađe. Grupa
-    // bi ostala otvorena bez ijedne naznake da je preferenca pokvarena, pa je
-    // bolje da polje ne postoji nego da tiho ne radi.
+  it("rejects an array that is not an array of strings", () => {
+    // `.includes(id)` over numbers does not throw — it simply never finds
+    // anything. The group would stay open with no hint that the preference is
+    // broken, so it is better for the field not to exist than to fail silently.
     localStorage.setItem(KEY, JSON.stringify({ collapsedGroups: [1, 2] }));
     expect(getDashboardPrefs()).toEqual({});
   });
 
-  it("prihvata prazan niz kao vrednost, ne kao odsustvo", () => {
-    // Prazno znači „ništa nije sklopljeno", što je različito od „nema
-    // preference" samo za onoga ko upisuje — ali oba moraju da prežive čitanje.
+  it("accepts an empty array as a value, not as an absence", () => {
+    // Empty means "nothing is collapsed", which differs from "no preference"
+    // only for whoever writes it — but both have to survive a read.
     setDashboardPrefs({ collapsedGroups: [] });
     expect(getDashboardPrefs()).toEqual({ collapsedGroups: [] });
   });

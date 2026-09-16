@@ -11,22 +11,24 @@ import { buildPositionPatch } from "./trade-fields";
 import { computePositionStats } from "./position-stats";
 
 /**
- * OPSEG NA PUTU UPISA.
+ * RANGES ON THE WRITE PATH.
  *
- * Do Koraka 6 je jedina odbrana bila `buildPositionPatch`, koja proverava IMENA
- * kolona i tip. Broj koji je konačan prolazio je bez obzira na znak.
+ * Until Step 6 the only defence was `buildPositionPatch`, which checks column
+ * NAMES and types. A finite number passed regardless of its sign.
  *
- * Ovaj fajl počinje demonstracijom posledice — istim brojevima koji su izmereni
- * na živoj bazi — a tek onda tvrdi da su odbijeni. Redosled je namerno takav:
- * bez prvog testa drugi izgleda kao proizvoljna strogost.
+ * This file opens by demonstrating the consequence — with the same numbers
+ * measured against the live database — and only then asserts that they are
+ * refused. The order is deliberate: without the first test the second looks
+ * like arbitrary strictness.
  */
 
 const UUID = "3c5e07a9-8ad8-4e06-9343-60c316d4520f";
 
-describe("zašto uopšte: negativna cena daje ubedljivo pogrešan broj", () => {
-  it("omašen znak se ispisuje kao uredan dobitak, ne kao greška", () => {
-    // Isto što je izmereno u bazi pre popravke: ES, ulaz −5000, izlaz −4990,
-    // point_value 50 → gross_pl 500, realized_r 1.00. Ništa ne pada.
+describe("why at all: a negative price produces a convincingly wrong number", () => {
+  it("a missed sign prints as a healthy winner, not as an error", () => {
+    // The same thing measured in the database before the fix: ES, entry −5000,
+    // exit −4990, point_value 50 → gross_pl 500, realized_r 1.00. Nothing
+    // fails.
     const stats = computePositionStats({
       direction: "Long",
       entry_price: -5000,
@@ -40,16 +42,16 @@ describe("zašto uopšte: negativna cena daje ubedljivo pogrešan broj", () => {
     });
     expect(stats.gross_pl).toBeCloseTo(500, 10);
     expect(stats.realized_r).toBeCloseTo(1, 10);
-    // Nema nijedne oznake koja bi rekla da je nešto sumnjivo — zato provera
-    // mora da stoji PRE ovoga, na ulazu.
+    // There is no flag anywhere saying something is suspicious — which is why
+    // the check has to stand BEFORE this, at the input.
   });
 });
 
-describe("cene na poziciji", () => {
+describe("prices on a position", () => {
   const patchOf = (fields: Record<string, string | number | null>) =>
     buildPositionPatch(fields).columns;
 
-  it("negativna i nulta cena su odbijene, sa porukom koja imenuje polje", () => {
+  it("negative and zero prices are refused, with a message that names the field", () => {
     for (const key of [
       "entry_price",
       "stop_price",
@@ -64,50 +66,52 @@ describe("cene na poziciji", () => {
     }
   });
 
-  it("poruka kaže koje polje, ne samo da nešto ne valja", () => {
+  it("the message says which field, not merely that something is wrong", () => {
     expect(invalidTradeNumber(patchOf({ stop_price: -1 }))).toBe(
       "Stop price must be greater than zero.",
     );
   });
 
-  it("polje koje nije poslato se ne proverava", () => {
-    // Izmena jednog polja ne sme da traži da su sva ostala popunjena.
+  it("a field that was not sent is not checked", () => {
+    // Editing one field must not require every other field to be filled in.
     expect(invalidTradeNumber({})).toBeNull();
     expect(invalidTradeNumber({ entry_price: null })).toBeNull();
   });
 
-  it("gubitak u `gross_pnl_override` PROLAZI — to mu je ispravna vrednost", () => {
-    // Jedini broj na trejdu koji sme da bude negativan. Kad bi i on dobio
-    // granicu, journal ne bi mogao da zabeleži gubitak sa izvoda.
+  it("a loss in `gross_pnl_override` PASSES — that is a valid value for it", () => {
+    // The only number on a trade allowed to be negative. Give it a bound too
+    // and the journal could not record a loss off a statement.
     expect(invalidTradeNumber({ gross_pnl_override: -250 })).toBeNull();
     expect(invalidTradeNumber({ gross_pnl_override: 0 })).toBeNull();
   });
 
-  it("ali `gross_pnl_override` koji nije broj i dalje pada", () => {
-    // Kroz formular je ovo nedostižno: `buildPositionPatch` polje tipa `number`
-    // već svodi na broj ili null. Provera stoji jer je funkcija granica koja
-    // prima običan objekat, i jer je REZULTAT jedina kolona koju view uzima
-    // zdravo za gotovo — kad je postavljena, zaobilazi i specifikaciju i kurs.
+  it("but a `gross_pnl_override` that is not a number still fails", () => {
+    // Unreachable through the form: `buildPositionPatch` already collapses a
+    // `number` field to a number or null. The check stands because the function
+    // is a boundary taking a plain object, and because the RESULT is the one
+    // column the view takes on trust — when it is set, it bypasses both the
+    // contract spec and the rate.
     expect(invalidTradeNumber({ gross_pnl_override: "sto dolara" })).toBe(
       "Actual Gross P&L must be a number.",
     );
     expect(invalidTradeNumber({ gross_pnl_override: Number.NaN })).toBeTruthy();
   });
 
-  it("time_stop_days mora biti ceo broj veći od nule", () => {
+  it("time_stop_days has to be an integer greater than zero", () => {
     expect(invalidTradeNumber({ time_stop_days: 0 })).toBeTruthy();
     expect(invalidTradeNumber({ time_stop_days: -3 })).toBeTruthy();
     expect(invalidTradeNumber({ time_stop_days: 2.5 })).toBeTruthy();
     expect(invalidTradeNumber({ time_stop_days: 3 })).toBeNull();
   });
 
-  it("execution_rating mora biti ceo broj veći od nule", () => {
-    // Nula i polovina zvezdice nisu ocene. Gornju granicu (5) čuva DB CHECK i
-    // nedostižna je iz UI-ja sa tačno pet dugmadi, pa se ovde ne dokazuje.
+  it("execution_rating has to be an integer greater than zero", () => {
+    // Zero and half a star are not ratings. The upper bound (5) is held by the
+    // DB CHECK and is unreachable from a UI with exactly five buttons, so it is
+    // not proven here.
     expect(invalidTradeNumber({ execution_rating: 0 })).toBeTruthy();
     expect(invalidTradeNumber({ execution_rating: 2.5 })).toBeTruthy();
     expect(invalidTradeNumber({ execution_rating: 4 })).toBeNull();
-    // NULL je legitiman i čest: „nije ocenjeno" nije greška.
+    // NULL is legitimate and common: "not rated" is not an error.
     expect(invalidTradeNumber({ execution_rating: null })).toBeNull();
   });
 });
@@ -123,23 +127,23 @@ describe("fill", () => {
     ...over,
   });
 
-  it("cena mora biti pozitivna", () => {
+  it("a price has to be positive", () => {
     expect(executionSchema.safeParse(fill()).success).toBe(true);
     expect(executionSchema.safeParse(fill({ price: -5000 })).success).toBe(false);
     expect(executionSchema.safeParse(fill({ price: 0 })).success).toBe(false);
   });
 
-  it("neispravno vreme se ODBIJA umesto da red tiho ispadne", () => {
-    // `tj_replace_executions` je red sa neispravnim `executed_at` izostavljao
-    // kroz svoj WHERE i vraćao manji broj upisanih — a `updateTrade` tu
-    // vrednost nikad nije gledao. Trejd bi se sačuvao sa dva fill-a umesto tri
-    // i javio `ok`.
+  it("an invalid time is REFUSED rather than letting the row drop silently", () => {
+    // `tj_replace_executions` used to drop a row with an invalid `executed_at`
+    // through its WHERE and return a smaller written count — and `updateTrade`
+    // never looked at that value. The trade would save with two fills instead
+    // of three and report `ok`.
     expect(executionSchema.safeParse(fill({ executed_at: "juče" })).success).toBe(
       false,
     );
   });
 
-  it("provizija i swap smeju biti negativni — rabat je stvaran", () => {
+  it("commission and swap may be negative — a rebate is real", () => {
     expect(executionSchema.safeParse(fill({ fee: -0.25 })).success).toBe(true);
   });
 });
@@ -153,7 +157,7 @@ describe("struktura submisije", () => {
     ...over,
   });
 
-  it("account_id koji nije uuid pada ovde, ne u Postgres-u", () => {
+  it("an account_id that is not a uuid fails here, not in Postgres", () => {
     expect(tradeInputSchema.safeParse(input()).success).toBe(true);
     expect(tradeInputSchema.safeParse(input({ account_id: "prvi" })).success).toBe(
       false,
@@ -163,18 +167,18 @@ describe("struktura submisije", () => {
     );
   });
 
-  it("ubeđenost više ne postoji kao polje i ne stiže do baze", () => {
-    // Ocena 1–5 pre ulaza je uklonjena: isti setap je istog dana dobijao 3, a
-    // sutradan 5, pa je grupisanje izveštaja po njoj merilo raspoloženje a ne
-    // trejd. Šema nije `.strict()`, pa stari klijent koji je i dalje šalje ne
-    // dobija grešku — vrednost prosto ispada iz parsiranog rezultata i nikada
-    // se ne upiše.
+  it("conviction no longer exists as a field and never reaches the database", () => {
+    // The 1–5 pre-entry rating was removed: the same setup scored a 3 one day
+    // and a 5 the next, so grouping a report by it measured mood rather than
+    // the trade. The schema is not `.strict()`, so an older client still
+    // sending it gets no error — the value simply falls out of the parsed
+    // result and is never written.
     const parsed = tradeInputSchema.safeParse(input({ conviction: 3 }));
     expect(parsed.success).toBe(true);
     expect(parsed.data).not.toHaveProperty("conviction");
   });
 
-  it("trade_no je pozitivan ceo broj ili null", () => {
+  it("trade_no is a positive integer or null", () => {
     expect(tradeInputSchema.safeParse(input({ trade_no: 7 })).success).toBe(true);
     expect(tradeInputSchema.safeParse(input({ trade_no: 0 })).success).toBe(false);
     expect(tradeInputSchema.safeParse(input({ trade_no: -2 })).success).toBe(false);
@@ -193,7 +197,7 @@ describe("struktura submisije", () => {
     ).toBe(false);
   });
 
-  it("poruka nosi put do polja", () => {
+  it("the message carries the path to the field", () => {
     const res = tradeInputSchema.safeParse(
       input({ executions: [{ side: "entry", price: -1, qty: 1, executed_at: "2026-03-02T14:00:00Z", fee: 0, swap_funding: 0 }] }),
     );
@@ -205,9 +209,10 @@ describe("struktura submisije", () => {
 });
 
 describe("uvoz", () => {
-  it("omotač se proverava, redovi se NE proveravaju unapred", () => {
-    // Namerno: jedan pokvaren red ne sme da odbije fajl od tri stotine trejdova.
-    // Redove proverava `commitImport` u petlji, gde svaki ima svoj `try`.
+  it("the envelope is validated, the rows are NOT validated up front", () => {
+    // Deliberate: one broken row must not reject a file of three hundred
+    // trades. The rows are validated by `commitImport` in a loop, where each
+    // has its own `try`.
     const withBadRow = {
       account_id: UUID,
       filename: "izvod.csv",
@@ -220,10 +225,10 @@ describe("uvoz", () => {
     ).toBe(false);
   });
 
-  it("red sa negativnom cenom pada — pogrešno mapirana kolona", () => {
-    // Mapiranje koje profit spusti u kolonu cene daje negativne „cene". Izvod
-    // nije nepogrešiv izvor; nepogrešivo je samo mapiranje koje niko nije
-    // proverio.
+  it("a row with a negative price fails — a wrongly mapped column", () => {
+    // A mapping that drops profit into the price column produces negative
+    // "prices". A statement is not an infallible source; the only infallible
+    // thing is a mapping nobody has checked.
     const row = {
       decision: "create",
       match_status: "new",

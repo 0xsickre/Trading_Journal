@@ -1,33 +1,35 @@
 import type { PositionStatsInput } from "./position-stats";
 
 /**
- * DVADESET OBLIKA TREJDA, IZVEDENIH NA PAPIRU, ZA OBA MOTORA KOJI RAČUNAJU NOVAC.
+ * TWENTY TRADE SHAPES, WORKED OUT ON PAPER, FOR BOTH ENGINES THAT COMPUTE MONEY.
  *
- * `position-stats.ts` počinje rečenicom „must stay in sync with `tj_position_stats`
- * SQL view". Do ovog fajla to je bila samo rečenica: TS strana je imala testove,
- * SQL strana nijedan, a nijedan test nije poredio to dvoje. Novac koji aplikacija
- * pokazuje dolazi iz SQL-a; TS blizanac se koristi za pregled u formi pre snimanja.
- * Grešku u view-u nijedan `lib/` test nije mogao da vidi.
+ * `position-stats.ts` opens with the sentence "must stay in sync with
+ * `tj_position_stats` SQL view". Until this file that was only a sentence: the
+ * TS side had tests, the SQL side none, and no test compared the two. The money
+ * the application shows comes from SQL; the TS twin is used for the preview in
+ * the form before saving. No `lib/` test could see a defect in the view.
  *
- * Zato ovde stoje OČEKIVANE vrednosti izvedene na papiru, a ne izlaz nijednog od
- * dva motora. Fikstura je merilo; oba motora se mere prema njoj:
+ * So what stands here are the EXPECTED values worked out on paper, not the
+ * output of either engine. The fixture is the standard; both engines are
+ * measured against it:
  *
- *   - `position-stats.parity.test.ts` pušta `computePositionStats` kroz sve ove
- *     slučajeve pri svakom `vitest run`;
- *   - ista knjiga je puštena i kroz `tj_position_stats` nad živom bazom: 12
- *     osnovnih oblika × 9 kolona = 108 tvrdnji, plus 5 FX oblika × 7 kolona = 35,
- *     ukupno 143 — sve prošle. Postupak i rezultat su u `CODE_REVIEW.md`.
+ *   - `position-stats.parity.test.ts` runs `computePositionStats` through every
+ *     one of these cases on each `vitest run`;
+ *   - the same book was also run through `tj_position_stats` against the live
+ *     database: 12 base shapes × 9 columns = 108 assertions, plus 5 FX shapes ×
+ *     7 columns = 35, 143 in total — all passing. The procedure and the result
+ *     are in `CODE_REVIEW.md`.
  *
- * Dok obe strane gađaju iste brojeve sa papira, ne mogu da se raziđu a da bar
- * jedna ne padne. Snapshot testovi zaključavaju trenutno ponašanje uključujući
- * njegove bagove; ovaj zaključava ODGOVOR.
+ * While both sides aim at the same numbers off the paper, they cannot drift
+ * apart without at least one of them failing. Snapshot tests lock in current
+ * behaviour including its bugs; this one locks in the ANSWER.
  *
- * Brojevi su birani tako da se svaki proverava napamet.
+ * The numbers are chosen so that every one of them checks out in your head.
  */
 
 export type ParityCase = {
   name: string;
-  /** Šta ovaj oblik dokazuje — zašto je u skupu. */
+  /** What this shape proves — why it is in the set. */
   proves: string;
   input: PositionStatsInput;
   paper: {
@@ -44,8 +46,8 @@ export type ParityCase = {
 
 export const PARITY_CASES: ParityCase[] = [
   {
-    name: "T1 long, jedan fill",
-    proves: "osnovni slučaj: dir_mult = +1, gross_points = izlaz − ulaz",
+    name: "T1 long, one fill",
+    proves: "the base case: dir_mult = +1, gross_points = exit − entry",
     input: {
       direction: "Long",
       entry_price: 5000,
@@ -57,7 +59,7 @@ export const PARITY_CASES: ParityCase[] = [
         { side: "exit", price: 5030, qty: 1 },
       ],
     },
-    // rizik = |5000 − 4990| = 10 ; bruto = (5030 − 5000) × 1 = 30 ; R = 30 / (10 × 1)
+    // risk = |5000 − 4990| = 10 ; gross = (5030 − 5000) × 1 = 30 ; R = 30 / (10 × 1)
     paper: {
       avg_entry: 5000,
       avg_exit: 5030,
@@ -71,7 +73,7 @@ export const PARITY_CASES: ParityCase[] = [
   },
   {
     name: "T2 short",
-    proves: "dir_mult = −1: pad cene je dobitak",
+    proves: "dir_mult = −1: a falling price is a win",
     input: {
       direction: "Short",
       entry_price: 5000,
@@ -83,7 +85,7 @@ export const PARITY_CASES: ParityCase[] = [
         { side: "exit", price: 4970, qty: 1 },
       ],
     },
-    // bruto = (4970 − 5000) × (−1) = +30 ; rizik = |5000 − 5010| = 10
+    // gross = (4970 − 5000) × (−1) = +30 ; risk = |5000 − 5010| = 10
     paper: {
       avg_entry: 5000,
       avg_exit: 4970,
@@ -96,8 +98,8 @@ export const PARITY_CASES: ParityCase[] = [
     },
   },
   {
-    name: "T3 scale-in, dva ulazna fill-a",
-    proves: "avg_entry je ponderisan količinom, ne prosek cena",
+    name: "T3 scale-in, two entry fills",
+    proves: "avg_entry is quantity-weighted, not a mean of prices",
     input: {
       direction: "Long",
       entry_price: 5000,
@@ -110,8 +112,8 @@ export const PARITY_CASES: ParityCase[] = [
         { side: "exit", price: 5045, qty: 4 },
       ],
     },
-    // ulaz: (10000 + 10020) / 4 = 5005 ; bruto = 20180 − 5005×4 = 160
-    // rizik ide od PLANIRANOG ulaza 5000, ne od 5005 → 10 ; R = 160 / (10 × 4) = 4
+    // entry: (10000 + 10020) / 4 = 5005 ; gross = 20180 − 5005×4 = 160
+    // risk runs from the PLANNED entry 5000, not from 5005 → 10 ; R = 160 / (10 × 4) = 4
     paper: {
       avg_entry: 5005,
       avg_exit: 5045,
@@ -124,11 +126,11 @@ export const PARITY_CASES: ParityCase[] = [
     },
   },
   {
-    name: "T4 delimičan izlaz, 4 od 10",
+    name: "T4 partial exit, 4 of 10",
     proves:
-      "R se meri prema PREUZETOM riziku, ne prema zatvorenom delu — zatvoreni " +
-      "deo je išao punih 1.0 R, a trejd prijavljuje 0.4 R jer preostalih 6 " +
-      "jedinica i dalje stoji pod istim rizikom",
+      "R is measured against the risk TAKEN, not against the closed part — the " +
+      "closed part ran a full 1.0 R, and the trade reports 0.4 R because the " +
+      "remaining 6 units still stand under the same risk",
     input: {
       direction: "Long",
       entry_price: 100,
@@ -140,8 +142,8 @@ export const PARITY_CASES: ParityCase[] = [
         { side: "exit", price: 110, qty: 4 },
       ],
     },
-    // bruto pokriva samo zatvorene 4: (440 − 100×4) = 40
-    // imenilac pokriva svih 10: 10 × 10 = 100 → R = 0.4
+    // gross covers only the 4 that closed: (440 − 100×4) = 40
+    // the denominator covers all 10: 10 × 10 = 100 → R = 0.4
     paper: {
       avg_entry: 100,
       avg_exit: 110,
@@ -154,8 +156,8 @@ export const PARITY_CASES: ParityCase[] = [
     },
   },
   {
-    name: "T5 provizije i swap",
-    proves: "net = bruto − provizije − swap ; realized_r ostaje na BRUTO osnovi",
+    name: "T5 commissions and swap",
+    proves: "net = gross − commissions − swap ; realized_r stays on the GROSS basis",
     input: {
       direction: "Long",
       entry_price: 5000,
@@ -167,8 +169,8 @@ export const PARITY_CASES: ParityCase[] = [
         { side: "exit", price: 5030, qty: 1, fee: 2 },
       ],
     },
-    // bruto 30 ; troškovi 4 + 3 = 7 ; neto 23
-    // R = 30/10 = 3.0 (bruto) ; R_net = 23/10 = 2.3 — dve različite osnove, namerno
+    // gross 30 ; costs 4 + 3 = 7 ; net 23
+    // R = 30/10 = 3.0 (gross) ; R_net = 23/10 = 2.3 — two different bases, on purpose
     paper: {
       avg_entry: 5000,
       avg_exit: 5030,
@@ -181,11 +183,11 @@ export const PARITY_CASES: ParityCase[] = [
     },
   },
   {
-    name: "T6 bez point_value",
+    name: "T6 with no point_value",
     proves:
-      "novac je null a R preživi: R je odnos u prostoru CENA i ne traži " +
-      "ugovornu specifikaciju. Ovde je pao `COALESCE(point_value, 1)` — " +
-      "vidi 20260728120000_snapshot_instrument_spec.sql",
+      "money is null and R survives: R is a ratio in PRICE space and needs no " +
+      "contract spec. This is where `COALESCE(point_value, 1)` fell — see " +
+      "20260728120000_snapshot_instrument_spec.sql",
     input: {
       direction: "Long",
       entry_price: 100,
@@ -209,10 +211,10 @@ export const PARITY_CASES: ParityCase[] = [
     },
   },
   {
-    name: "T7 stop jednak ulazu",
+    name: "T7 stop equal to entry",
     proves:
-      "nulti rizik daje NEDEFINISAN R, ne beskonačan — `NULLIF(..., 0)` u " +
-      "view-u, `risk > 0 ? risk : null` u TS-u",
+      "zero risk gives an UNDEFINED R, not an infinite one — `NULLIF(..., 0)` in " +
+      "the view, `risk > 0 ? risk : null` in TS",
     input: {
       direction: "Long",
       entry_price: 5000,
@@ -236,8 +238,8 @@ export const PARITY_CASES: ParityCase[] = [
     },
   },
   {
-    name: "T8 otvorena pozicija",
-    proves: "bez izlaza nema realizovanog rezultata — null, ne nula",
+    name: "T8 open position",
+    proves: "with no exit there is no realized result — null, not zero",
     input: {
       direction: "Long",
       entry_price: 5000,
@@ -259,7 +261,7 @@ export const PARITY_CASES: ParityCase[] = [
   },
   {
     name: "T9 breakeven",
-    proves: "izlaz po ulaznoj ceni daje tačnu nulu, i ona je podatak a ne odsustvo",
+    proves: "an exit at the entry price gives exact zero, and that is data rather than an absence",
     input: {
       direction: "Long",
       entry_price: 5000,
@@ -283,8 +285,8 @@ export const PARITY_CASES: ParityCase[] = [
     },
   },
   {
-    name: "T10 dva izlazna fill-a",
-    proves: "avg_exit je takođe ponderisan količinom",
+    name: "T10 two exit fills",
+    proves: "avg_exit is quantity-weighted too",
     input: {
       direction: "Long",
       entry_price: 100,
@@ -297,7 +299,7 @@ export const PARITY_CASES: ParityCase[] = [
         { side: "exit", price: 120, qty: 2 },
       ],
     },
-    // izlaz: (220 + 240) / 4 = 115 ; bruto = 460 − 400 = 60 ; R = 60 / (10 × 4) = 1.5
+    // exit: (220 + 240) / 4 = 115 ; gross = 460 − 400 = 60 ; R = 60 / (10 × 4) = 1.5
     paper: {
       avg_entry: 100,
       avg_exit: 115,
@@ -312,8 +314,8 @@ export const PARITY_CASES: ParityCase[] = [
   {
     name: "T11 forex point_value",
     proves:
-      "poeni × 100 000: mali pomeraj cene je pravi novac. Ovo je razlika " +
-      "između $1000 i $0.01 ako ugovorna specifikacija otkaže",
+      "points × 100,000: a small price move is real money. This is the difference " +
+      "between $1000 and $0.01 if the contract spec fails",
     input: {
       direction: "Long",
       entry_price: 1.1,
@@ -325,7 +327,7 @@ export const PARITY_CASES: ParityCase[] = [
         { side: "exit", price: 1.11, qty: 1 },
       ],
     },
-    // bruto = 0.01 poena ; × 100 000 = $1000 ; rizik = 0.005 → R = 2
+    // gross = 0.01 points ; × 100,000 = $1000 ; risk = 0.005 → R = 2
     paper: {
       avg_entry: 1.1,
       avg_exit: 1.11,
@@ -338,9 +340,9 @@ export const PARITY_CASES: ParityCase[] = [
     },
   },
   {
-    name: "T12 bez planirane ulazne cene",
+    name: "T12 with no planned entry price",
     proves:
-      "rizik pada na PROSEČAN FILL kad plan ne postoji — `COALESCE(entry_price, avg_entry)`",
+      "risk falls back to the AVERAGE FILL when there is no plan — `COALESCE(entry_price, avg_entry)`",
     input: {
       direction: "Long",
       entry_price: null,
@@ -365,13 +367,13 @@ export const PARITY_CASES: ParityCase[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // FX — novac je do 20260815130000 bio u valuti KOTACIJE i sabirao se kao da nije.
+  // FX — until 20260815130000 money was in the QUOTE currency and was summed as if it were not.
   // ---------------------------------------------------------------------------
   {
-    name: "FX1 USDJPY, kurs snimljen",
+    name: "FX1 USDJPY, rate recorded",
     proves:
-      "bruto nastaje u JENIMA i mora kroz kurs. Bez konverzije ovaj trejd je " +
-      "prijavljivao 100 000 i ispisivao ih sa `$` — 149 puta previše",
+      "gross arises in YEN and has to go through the rate. Without conversion this " +
+      "trade reported 100,000 and printed it with a `$` — 149 times too much",
     input: {
       direction: "Long",
       entry_price: 150.0,
@@ -383,8 +385,8 @@ export const PARITY_CASES: ParityCase[] = [
         { side: "exit", price: 151.0, qty: 1 },
       ],
     },
-    // bruto = 1.00 poena × 100 000 = 100 000 JPY ; × 0.0067 = 670 USD
-    // rizik = 1.00 → R = 1.00 / (1.00 × 1) = 1 ; R_net = 670 / (1 × 1 × 100000 × 0.0067)
+    // gross = 1.00 points × 100,000 = 100,000 JPY ; × 0.0067 = 670 USD
+    // risk = 1.00 → R = 1.00 / (1.00 × 1) = 1 ; R_net = 670 / (1 × 1 × 100000 × 0.0067)
     paper: {
       avg_entry: 150.0,
       avg_exit: 151.0,
@@ -397,10 +399,11 @@ export const PARITY_CASES: ParityCase[] = [
     },
   },
   {
-    name: "FX2 USDCAD, provizija se NE konvertuje",
+    name: "FX2 USDCAD, the commission is NOT converted",
     proves:
-      "redosled: bruto × kurs − troškovi. Provizija je već u valuti naloga jer " +
-      "je brokeri tako i knjiže, pa bi drugi redosled naplatio $5 po kursu 0.73",
+      "the order: gross × rate − costs. The commission is already in the account's " +
+      "currency because that is how brokers book it, so the other order would " +
+      "charge $5 at a rate of 0.73",
     input: {
       direction: "Long",
       entry_price: 1.35,
@@ -412,8 +415,8 @@ export const PARITY_CASES: ParityCase[] = [
         { side: "exit", price: 1.36, qty: 1 },
       ],
     },
-    // bruto = 0.01 × 100 000 = 1000 CAD ; × 0.73 = 730 USD ; − 5 = 725
-    // rizik = 0.005 → R = 0.01 / 0.005 = 2 ; R_net = 725 / (0.005 × 100000 × 0.73) = 725/365
+    // gross = 0.01 × 100,000 = 1000 CAD ; × 0.73 = 730 USD ; − 5 = 725
+    // risk = 0.005 → R = 0.01 / 0.005 = 2 ; R_net = 725 / (0.005 × 100000 × 0.73) = 725/365
     paper: {
       avg_entry: 1.35,
       avg_exit: 1.36,
@@ -426,10 +429,11 @@ export const PARITY_CASES: ParityCase[] = [
     },
   },
   {
-    name: "FX3 kurs nepoznat",
+    name: "FX3 rate unknown",
     proves:
-      "nepoznat kurs nuluje NOVAC, ne trejd. Ista politika kao za point_value: " +
-      "kurs 1 kao fallback tiho bi izjednačio jen sa dolarom",
+      "an unknown rate nulls the MONEY, not the trade. The same policy as for " +
+      "point_value: a rate of 1 as a fallback would quietly equate a yen with a " +
+      "dollar",
     input: {
       direction: "Long",
       entry_price: 150.0,
@@ -453,8 +457,8 @@ export const PARITY_CASES: ParityCase[] = [
     },
   },
   {
-    name: "FX4 ista valuta, kurs 1",
-    proves: "USD instrument na USD nalogu prolazi nedirnut — konverzija je no-op",
+    name: "FX4 same currency, rate 1",
+    proves: "a USD instrument on a USD account passes untouched — the conversion is a no-op",
     input: {
       direction: "Long",
       entry_price: 1.1,
@@ -478,10 +482,10 @@ export const PARITY_CASES: ParityCase[] = [
     },
   },
   {
-    name: "FX5 kurs i point_value oba nepoznata",
+    name: "FX5 rate and point_value both unknown",
     proves:
-      "dva nezavisna razloga za isti ishod ne smeju da se ponište — R i dalje " +
-      "stoji, jer je odnos u prostoru cena i ne traži ni jedno ni drugo",
+      "two independent reasons for the same outcome must not cancel out — R still " +
+      "stands, because it is a ratio in price space and needs neither",
     input: {
       direction: "Long",
       entry_price: 1.1,
@@ -506,19 +510,20 @@ export const PARITY_CASES: ParityCase[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // OVERRIDE — rezultat unet direktno, umesto izveden iz cena.
+  // OVERRIDE — a result entered directly, instead of derived from prices.
   // ---------------------------------------------------------------------------
   {
-    name: "OV1 override zaobilazi cene i kurs",
+    name: "OV1 an override bypasses prices and rate",
     proves:
-      "unet rezultat pobeđuje izračunati. Cene i dalje daju gross_points i R, " +
-      "ali novac dolazi sa brokerovog izvoda gde je već konvertovan",
+      "an entered result beats a computed one. Prices still give gross_points and " +
+      "R, but the money comes off the broker's statement where it is already " +
+      "converted",
     input: {
       direction: "Long",
       entry_price: 150.0,
       stop_price: 149.0,
       point_value: 100_000,
-      // Kurs NIJE poznat — i to više ne smeta novcu.
+      // The rate is NOT known — and that no longer stops the money.
       fx_rate: null,
       gross_pnl_override: 642.18,
       executions: [
@@ -526,7 +531,7 @@ export const PARITY_CASES: ParityCase[] = [
         { side: "exit", price: 151.0, qty: 1 },
       ],
     },
-    // Izračunato bi bilo 100 000 JPY × nepoznat kurs = null. Uneto je 642.18.
+    // Computed it would be 100,000 JPY × an unknown rate = null. Entered: 642.18.
     paper: {
       avg_entry: 150.0,
       avg_exit: 151.0,
@@ -535,15 +540,16 @@ export const PARITY_CASES: ParityCase[] = [
       net_pl: 642.18,
       planned_risk_pts: 1,
       realized_r: 1,
-      // R U NOVCU i dalje traži imenilac iz cena × kurs, pa ostaje null.
+      // R IN MONEY still needs a denominator from prices × rate, so it stays null.
       realized_r_net: null,
     },
   },
   {
-    name: "OV2 override i dalje plaća troškove",
+    name: "OV2 an override still pays the costs",
     proves:
-      "net = override − provizije − swap. Override je BRUTO, ne neto — brokerov " +
-      "izvod ih vodi kao zasebne kolone i tako se i unose",
+      "net = override − commissions − swap. An override is GROSS, not net — the " +
+      "broker's statement keeps them as separate columns and that is how they " +
+      "are entered",
     input: {
       direction: "Long",
       entry_price: 100,
@@ -556,8 +562,8 @@ export const PARITY_CASES: ParityCase[] = [
         { side: "exit", price: 130, qty: 1 },
       ],
     },
-    // Izračunato bi bilo 30. Uneto 250 → neto 250 − 7 − 3 = 240.
-    // R ostaje 30/10 = 3.0 jer se meri iz CENA, ne iz unetog novca.
+    // Computed it would be 30. Entered 250 → net 250 − 7 − 3 = 240.
+    // R stays 30/10 = 3.0 because it is measured FROM PRICES, not from entered money.
     paper: {
       avg_entry: 100,
       avg_exit: 130,
@@ -570,8 +576,8 @@ export const PARITY_CASES: ParityCase[] = [
     },
   },
   {
-    name: "OV3 override može biti gubitak",
-    proves: "negativan unos prolazi; nula bi bila breakeven a ne odsustvo",
+    name: "OV3 an override can be a loss",
+    proves: "a negative entry passes; a zero would be breakeven rather than an absence",
     input: {
       direction: "Long",
       entry_price: 100,

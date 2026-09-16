@@ -155,8 +155,8 @@ describe("Complete means the grade plus both singular answers", () => {
     );
     expect(screen.getByText("Nacrt")).toBeInTheDocument();
 
-    // Zvezdice nose `role="radio"` i ime „N of 5" — ocena je izbor iz skupa,
-    // ne pet nezavisnih dugmadi.
+    // The stars carry `role="radio"` and the name "N of 5" — a rating is a choice
+    // out of a set, not five independent buttons.
     await user.click(screen.getByRole("radio", { name: "4 of 5" }));
 
     expect(screen.getByText("Završeno")).toBeInTheDocument();
@@ -169,8 +169,9 @@ describe("a locked week", () => {
     expect(screen.queryByRole("button", { name: /Sačuvaj osvrt/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Zaključaj nedelju/ })).not.toBeInTheDocument();
     expect(screen.getByText("Nedelja je zaključana")).toBeInTheDocument();
-    // Onemogućava ih `<fieldset disabled>` oko cele forme, ne prop na
-    // komponenti — zato ovo i dalje važi posle prelaska na zvezdice.
+    // They are disabled by the `<fieldset disabled>` around the whole form, not
+    // by a prop on the component — which is why this still holds after the move
+    // to stars.
     expect(screen.getByRole("radio", { name: "5 of 5" })).toBeDisabled();
   });
 });

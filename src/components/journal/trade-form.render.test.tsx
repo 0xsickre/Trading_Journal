@@ -91,9 +91,10 @@ const INSTRUMENT: Instrument = {
   point_value: 1,
   tick_size: null,
   tick_value: null,
-  // Ista valuta kao nalog, pa `resolveFxRate` daje 1 i preview pokazuje novac.
-  // Kad se ove dve razlikuju a kurs nije poznat, forma NAMERNO ne prikazuje
-  // iznose — vidi `fx.ts`. Zbog toga je ovo polje ovde load-bearing, ne dekor.
+  // The same currency as the account, so `resolveFxRate` gives 1 and the preview
+  // shows money. When the two differ and no rate is known, the form DELIBERATELY
+  // shows no amounts — see `fx.ts`. That makes this field load-bearing here, not
+  // decoration.
   quote_currency: "USD",
   is_active: true,
   sort_order: 0,
@@ -394,13 +395,15 @@ describe("Gross → Net (rejected candidate, verified correct — not W)", () =>
     expect(grossToNetLabel.textContent).toContain("$7.00");
   });
 
-  it("ne prikazuje novac kad kurs kotacija→nalog nije poznat", async () => {
-    // Instrument kotiran u jenima na dolarskom nalogu, bez snimljenog kursa.
-    // Do 20260815130000 forma bi ovde ispisala bruto u JENIMA sa `$` ispred —
-    // isti broj, pogrešna valuta, bez ijednog znaka da nešto ne valja.
+  it("shows no money when the quote→account rate is unknown", async () => {
+    // An instrument quoted in yen on a dollar account, with no recorded rate.
+    // Until 20260815130000 the form would print the gross in YEN with a `$` in
+    // front — the same number, the wrong currency, with no sign anything was
+    // wrong.
     //
-    // Očekivanje je odsustvo, ne nula: `resolveFxRate` vraća null, pa
-    // `computePositionStats` ne računa novac, pa blok nema šta da iscrta.
+    // The expectation is absence, not zero: `resolveFxRate` returns null, so
+    // `computePositionStats` computes no money, so the block has nothing to
+    // draw.
     const user = userEvent.setup({ delay: null });
     const jpy = { ...INSTRUMENT, symbol: "USDJPY", quote_currency: "JPY" };
     render(
@@ -418,9 +421,9 @@ describe("Gross → Net (rejected candidate, verified correct — not W)", () =>
 
     expect(screen.queryByText("Gross → Net")).toBeNull();
 
-    // R preživljava nepoznat kurs — odnos u prostoru cena ne traži valutu.
-    // Da ovaj deo nestane zajedno sa novcem, izgubila bi se jedina brojka koja
-    // je i dalje tačna.
+    // R survives an unknown rate — a ratio in price space needs no currency. If
+    // that part vanished along with the money, the one figure that is still
+    // correct would be lost.
     expect(screen.queryByText("Fees + Swap")).not.toBeNull();
   });
 });

@@ -5,16 +5,16 @@ import { narrowPositionStat } from "./types";
 type StatsViewRow = Database["public"]["Views"]["tj_position_stats"]["Row"];
 
 /**
- * GRANICA IZMEĐU VIEW-A I APLIKACIJE.
+ * THE BOUNDARY BETWEEN THE VIEW AND THE APPLICATION.
  *
- * `trades.ts` je red view-a primao kao `statRows as PositionStat[]` — tvrdnju
- * da je `position_id` ne-null i da su dva `*_source` polja zatvoreni skupovi.
- * PostgREST za view ne garantuje nijedno od to troje, i ništa tu tvrdnju nije
- * proveravalo.
+ * `trades.ts` took a view row as `statRows as PositionStat[]` — a claim that
+ * `position_id` is non-null and that the two `*_source` fields are closed sets.
+ * PostgREST guarantees none of those three for a view, and nothing was checking
+ * the claim.
  *
- * Sam TIP se sada izvodi iz generisanih tipova, pa razilaženje sa šemom obara
- * typecheck. Ovaj fajl pokriva ono što tip ne može: šta se dešava sa redom koji
- * stigne izvan očekivanog oblika.
+ * The TYPE itself is now derived from the generated types, so a divergence from
+ * the schema fails typecheck. This file covers what the type cannot: what
+ * happens to a row that arrives outside the expected shape.
  */
 
 const row = (over: Partial<StatsViewRow> = {}): StatsViewRow =>
@@ -52,7 +52,7 @@ const row = (over: Partial<StatsViewRow> = {}): StatsViewRow =>
   }) as StatsViewRow;
 
 describe("narrowPositionStat", () => {
-  it("uredan red prolazi sa sve novcem", () => {
+  it("a sound row passes, money and all", () => {
     const s = narrowPositionStat(row());
     expect(s?.position_id).toBe("p1");
     expect(s?.net_pl).toBe(992);
@@ -60,25 +60,26 @@ describe("narrowPositionStat", () => {
     expect(s?.fx_rate_source).toBe("same_currency");
   });
 
-  it("red bez `position_id` se odbacuje, ne popravlja", () => {
-    // Bez ključa se ne može spojiti ni sa jednom pozicijom. Prethodni kod je
-    // isto to radio (`if (s.position_id)`), ali posle cast-a koji je tvrdio da
-    // se to ne može desiti.
+  it("a row with no `position_id` is dropped, not repaired", () => {
+    // With no key it cannot be joined to any position. The previous code did the
+    // same thing (`if (s.position_id)`), but after a cast that claimed this
+    // could not happen.
     expect(narrowPositionStat(row({ position_id: null }))).toBeNull();
   });
 
-  it("nepoznato poreklo pada na `missing`, a ne na `snapshot`", () => {
-    // Smer je bitan. `missing` je oznaka koja u celom sistemu znači „novac ovde
-    // nije pouzdan"; obrnut izbor bi vrednost nepoznatog porekla predstavio kao
-    // proverenu, što je tačno greška koju ceo ovaj korak izbegava.
+  it("an unknown provenance falls back to `missing`, not to `snapshot`", () => {
+    // The direction matters. `missing` is the mark that means "the money here is
+    // not reliable" across the whole system; the opposite choice would present a
+    // value of unknown provenance as a checked one, which is exactly the mistake
+    // this whole step avoids.
     const s = narrowPositionStat(
-      row({ point_value_source: "nesto_novo", fx_rate_source: "nesto_novo" }),
+      row({ point_value_source: "something_new", fx_rate_source: "something_new" }),
     );
     expect(s?.point_value_source).toBe("missing");
     expect(s?.fx_rate_source).toBe("missing");
   });
 
-  it("null poreklo takođe pada na `missing`", () => {
+  it("a null provenance falls back to `missing` too", () => {
     const s = narrowPositionStat(
       row({ point_value_source: null, fx_rate_source: null }),
     );
@@ -86,7 +87,7 @@ describe("narrowPositionStat", () => {
     expect(s?.fx_rate_source).toBe("missing");
   });
 
-  it("svako dozvoljeno poreklo se propušta netaknuto", () => {
+  it("every allowed provenance passes through untouched", () => {
     for (const src of ["snapshot", "instrument", "missing"] as const) {
       expect(narrowPositionStat(row({ point_value_source: src }))?.point_value_source).toBe(src);
     }

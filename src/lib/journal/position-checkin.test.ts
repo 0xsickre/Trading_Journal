@@ -9,50 +9,50 @@ import {
 } from "./position-checkin";
 
 /**
- * DNEVNA PROVERA OTVORENE POZICIJE.
+ * THE DAILY CHECK-IN ON AN OPEN POSITION.
  *
- * Modul je stigao posle poslednje revizije i nije imao nijedan test, a
- * `worstTouched` odlučuje po čemu se sving trejdovi GRUPIŠU u izveštajima —
- * dakle koji broj stoji pored kog reda.
+ * The module arrived after the last review and had no test at all, while
+ * `worstTouched` decides what swing trades are GROUPED BY in the reports — that
+ * is, which number stands next to which row.
  */
 
-describe("worstTouched — najdalje od plana, ne najgori ishod", () => {
-  it("bez ijednog odgovora vraća null, ne `untouched`", () => {
-    // Razlika je stvarna: `untouched` znači „gledao sam i nisam dirao",
-    // null znači „nisam se javio". Prvo je disciplina, drugo je ćutanje, i
-    // izveštaj koji ih pomeša bi ćutanje ubrojao kao vrlinu.
+describe("worstTouched — furthest from the plan, not the worst outcome", () => {
+  it("with no answer at all it returns null, not `untouched`", () => {
+    // The difference is real: `untouched` means "I looked and did not touch it",
+    // null means "I never showed up". The first is discipline, the second is
+    // silence, and a report that mixes them would count silence as a virtue.
     expect(worstTouched([])).toBeNull();
     expect(worstTouched([null, null])).toBeNull();
   });
 
-  it("jedan dodir u pet dana je ono što se pamti", () => {
+  it("one touch in five days is what gets remembered", () => {
     expect(
       worstTouched(["untouched", "untouched", "stop_moved", "untouched"]),
     ).toBe("stop_moved");
   });
 
-  it("redosled je udaljenost od plana: added > stop_moved > partial_exit > untouched", () => {
+  it("the order is distance from the plan: added > stop_moved > partial_exit > untouched", () => {
     expect(worstTouched(["added", "stop_moved"])).toBe("added");
     expect(worstTouched(["stop_moved", "partial_exit"])).toBe("stop_moved");
     expect(worstTouched(["partial_exit", "untouched"])).toBe("partial_exit");
-    // Delimičan izlaz je odstupanje ka MANJEM riziku, pa stoji ispod pomeranja
-    // stopa — koji menja gubitak dogovoren pre ulaska.
+    // A partial exit is a deviation towards LESS risk, so it sits below moving
+    // the stop — which changes the loss agreed before entry.
     expect(TOUCHED_SEVERITY.partial_exit).toBeLessThan(
       TOUCHED_SEVERITY.stop_moved,
     );
   });
 
-  it("null vrednosti se preskaču a ne obaraju rezultat", () => {
+  it("null values are skipped and do not knock out the result", () => {
     expect(worstTouched([null, "partial_exit", null])).toBe("partial_exit");
   });
 
-  it("redosled ulaza ne menja odgovor", () => {
+  it("the order of the inputs does not change the answer", () => {
     const states: TouchedState[] = ["untouched", "added", "partial_exit"];
     expect(worstTouched(states)).toBe("added");
     expect(worstTouched([...states].reverse())).toBe("added");
   });
 
-  it("svako stanje ima težinu — nijedno ne pada na undefined", () => {
+  it("every state has a weight — none falls through to undefined", () => {
     for (const s of TOUCHED_STATES) {
       expect(TOUCHED_SEVERITY[s], s).toBeTypeOf("number");
     }
@@ -60,27 +60,27 @@ describe("worstTouched — najdalje od plana, ne najgori ishod", () => {
 });
 
 describe("isInterference", () => {
-  it("`untouched` nije mešanje, i ćutanje takođe nije", () => {
+  it("`untouched` is not interference, and neither is silence", () => {
     expect(isInterference("untouched")).toBe(false);
     expect(isInterference(null)).toBe(false);
   });
 
-  it("sve ostalo jeste", () => {
+  it("everything else is", () => {
     expect(isInterference("partial_exit")).toBe(true);
     expect(isInterference("stop_moved")).toBe(true);
     expect(isInterference("added")).toBe(true);
   });
 
-  it("slaže se sa težinom: mešanje je tačno ono što ima težinu iznad nule", () => {
+  it("agrees with the weight: interference is exactly what weighs above zero", () => {
     for (const s of TOUCHED_STATES) {
       expect(isInterference(s), s).toBe(TOUCHED_SEVERITY[s] > 0);
     }
   });
 });
 
-describe("zatvoreni skupovi prate CHECK u bazi", () => {
-  it("stanja teze i dodira su tačno ona koja baza prihvata", () => {
-    // Provereno protiv živog CHECK-a na `tj_position_checkins`.
+describe("the closed sets follow the CHECK in the database", () => {
+  it("the thesis and touch states are exactly the ones the database accepts", () => {
+    // Checked against the live CHECK on `tj_position_checkins`.
     expect([...THESIS_STATES].sort()).toEqual(
       ["intact", "invalidated", "weakened"].sort(),
     );
@@ -89,11 +89,12 @@ describe("zatvoreni skupovi prate CHECK u bazi", () => {
     );
   });
 
-  it("redosled DEKLARACIJE je redosled na ekranu, ne težina", () => {
-    // Vredi da stoji zapisano jer je zbunjujuće: lista je poređana kako se
-    // dugmad prikazuju (`untouched, stop_moved, partial_exit, added`), a
-    // udaljenost od plana je druga stvar i živi u `TOUCHED_SEVERITY`. Test koji
-    // ih pomeša pao bi na tačnom kodu — što se ovde i desilo pri pisanju.
+  it("the DECLARATION order is the order on screen, not the weight", () => {
+    // Worth writing down because it is confusing: the list is ordered the way
+    // the buttons are shown (`untouched, stop_moved, partial_exit, added`),
+    // while distance from the plan is another thing and lives in
+    // `TOUCHED_SEVERITY`. A test that mixes them would fail on correct code —
+    // which is what happened here while writing it.
     expect([...TOUCHED_STATES]).toEqual([
       "untouched",
       "stop_moved",

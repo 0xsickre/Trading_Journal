@@ -14,7 +14,7 @@
  */
 
 export type ScaleOutLevel = {
-  /** Deo pozicije koji se skida na ovoj ceni, u procentima (0–100]. */
+  /** The share of the position taken off at this price, in percent (0–100]. */
   pct: number;
   price: number;
 };
@@ -79,7 +79,7 @@ export function incompleteScaleOutRows(rows: readonly ScaleOutRow[]): number[] {
     .filter((i) => i >= 0);
 }
 
-/** Zbir procenata preko potpunih redova. Nepotpuni se ne broje — oni blokiraju. */
+/** The percentage total over complete rows. Incomplete ones do not count — they block. */
 export function totalScaleOutPct(rows: readonly ScaleOutRow[]): number {
   return rows.reduce((sum, r) => {
     const pct = num(r.pct);

@@ -5,8 +5,8 @@ import { TrackerStageSection, type TrackerDayData } from "./tracker-checklist";
 import type { TrackerRule } from "@/lib/journal/tracker-types";
 
 /**
- * "da zaključan dan zaista onemogući čekiranje" — the plan's own stated goal
- * for this step. `locked` has to remove the interactive control entirely,
+ * "a locked day really has to make ticking impossible" — the plan's own stated
+ * goal for this step. `locked` has to remove the interactive control entirely,
  * not just disable it, because a disabled-but-present button is a UI promise
  * the day can still be checked that the database will then refuse.
  */

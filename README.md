@@ -17,20 +17,35 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** 153 of 1,663
-human-readable strings in `src/` are Serbian, and they are not scattered:
+**The interface is deliberately half-and-half, and the line is nearly clean.** At least 191 of the
+2,191 human-readable string literals in `src/` outside tests are Serbian — about one in eleven — and
+184 of those sit in three places:
 
 | Surface | Serbian strings |
 |---|---|
-| Dashboard, `/reports`, journal grid, playbooks | **0** |
-| Daily / weekly / tracker / focus goal | 68 |
-| Bot bridge panel | 34 |
-| Mentor-export prompt | 28 |
+| Daily, weekly, tracker, focus goal | 115 |
+| Bot bridge panel and its actions | 40 |
+| Mentor-export prompt | 29 |
+| Dashboard, `/reports`, journal grid, playbooks | 7, and each one is a stray |
 
 The half that **measures** is English; the half the trader **writes into** is Serbian. That is the
-trader's own language for their own prose, and it stays. (An earlier version of this paragraph said
-"about 46 of some 1,700" — that count scanned only JSX text and a few attributes, and missed
-toasts, error messages and label maps. The number above is the corrected one.)
+trader's own language for their own prose, and it stays.
+
+The seven strays are named rather than rounded away, because a table that claimed a flat **0** would
+be the kind of confidently wrong number the next section is about: the bot tooltip on a bridge-written
+row in `journal-grid.tsx`; one reconcile-row message in `import-wizard.tsx`; the checked-in tick label
+in `open-positions-card.tsx`; the instrument-group fallback in `trade-form.tsx`, written `Ostalo` two
+lines under a comment that calls it "Other"; the `derived` group label `Izvedeno` among English ones in
+`reports/dimensions.ts`; and two insight sentences in `insights/day-rules.ts` and
+`insights/trade-rules.ts` that open in English and finish in Serbian.
+
+How the count was taken, since the claim is only worth as much as its method: every `.ts`/`.tsx`
+outside tests is lexed into comment / string / code regions, and the string regions are scored for
+Serbian by diacritics and by a word list. A single Serbian word carrying no diacritic can still slip
+past that, so **191 is a floor, not a ceiling**. Two earlier versions of this paragraph said "about 46
+of some 1,700" and then "153 of 1,663"; the first scanned only JSX text and a few attributes, the
+second missed short labels the word list did not know. Both were replaced rather than quietly
+corrected.
 
 Deploy: Vercel · Database: Supabase Postgres (a separate project from the dashboard's)
 

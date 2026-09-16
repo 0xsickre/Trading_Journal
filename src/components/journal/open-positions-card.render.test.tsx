@@ -11,17 +11,18 @@ vi.mock("@/app/(app)/daily/actions", () => ({
 }));
 
 /**
- * DNEVNA PROVERA OTVORENIH POZICIJA.
+ * THE DAILY CHECK-IN ON OPEN POSITIONS.
  *
- * Broj koji ova kartica pokazuje je `daysInTrade` — koji dan drži poziciju i
- * koliko joj je vremenski stop. To je jedini brojač u aplikaciji koji je
- * 1-BAZAN (dan otvaranja se broji kao prvi), i Korak 5 je oko te konvencije
- * uklonio drugu IMPLEMENTACIJU zadržavši razliku. Ovde se tvrdi da razlika
- * stiže do ekrana u obliku koji čovek čita.
+ * The number this card shows is `daysInTrade` — which day the position is being
+ * held on, and how long its time stop is. It is the only counter in the
+ * application that is 1-BASED (the day of opening counts as the first), and
+ * Step 5 removed the second IMPLEMENTATION around that convention while keeping
+ * the distinction. The claim here is that the distinction reaches the screen in
+ * a shape a human reads.
  *
- * Drugi deo je stanje bez odgovora. `null` u ovoj kartici znači „danas se nisam
- * javio", a ne „teza je netaknuta" — isto razlikovanje koje ceo projekat pazi
- * da ne pomeša, ovde na najvidljivijem mestu.
+ * The second part is the state with no answer. `null` in this card means "I did
+ * not show up today", not "the thesis is intact" — the same distinction the
+ * whole project is careful not to blur, here in the most visible place.
  */
 
 const pos = (over: Partial<OpenPositionView> = {}): OpenPositionView => ({
@@ -45,32 +46,32 @@ const draw = (positions: OpenPositionView[], locked = false) =>
     />,
   );
 
-describe("brojanje dana", () => {
-  it("ispisuje koji je dan držanja", () => {
+describe("counting days", () => {
+  it("prints which day of the hold it is", () => {
     draw([pos({ daysInTrade: 3 })]);
     expect(screen.getByText(/dan 3/)).toBeInTheDocument();
   });
 
-  it("sa vremenskim stopom kaze dan N od M", () => {
+  it("with a time stop it says day N of M", () => {
     draw([pos({ daysInTrade: 3, timeStopDays: 5 })]);
     expect(screen.getByText(/dan 3 od 5/)).toBeInTheDocument();
   });
 
-  it("bez vremenskog stopa ne izmišlja gornju granicu", () => {
+  it("with no time stop it does not invent an upper bound", () => {
     draw([pos({ daysInTrade: 3, timeStopDays: null })]);
     expect(screen.getByText(/dan 3/).textContent).toBe("dan 3");
   });
 
-  it("prvi dan je 1, ne 0 — brojač je 1-bazan", () => {
-    // `daysBetweenKeys` broji dan otvaranja kao prvu sesiju. Nula bi značila da
-    // pozicija još nije ni otvorena.
+  it("the first day is 1, not 0 — the counter is 1-based", () => {
+    // `daysBetweenKeys` counts the day of opening as the first session. A zero
+    // would mean the position had not been opened at all yet.
     draw([pos({ daysInTrade: 1 })]);
     expect(screen.getByText(/dan 1/)).toBeInTheDocument();
   });
 });
 
-describe("prekoračen vremenski stop", () => {
-  it("nosi upozorenje i naglašen okvir", () => {
+describe("a time stop that has run out", () => {
+  it("carries a warning and a highlighted border", () => {
     const { container } = draw([
       pos({ daysInTrade: 7, timeStopDays: 5, pastTimeStop: true }),
     ]);
@@ -78,19 +79,19 @@ describe("prekoračen vremenski stop", () => {
     expect(container.querySelector(".border-amber-500\\/60")).toBeTruthy();
   });
 
-  it("pozicija u roku nema ni upozorenje ni okvir", () => {
+  it("a position still inside its window has neither warning nor border", () => {
     draw([pos({ daysInTrade: 3, timeStopDays: 5, pastTimeStop: false })]);
     expect(screen.queryByText("Prošao time stop")).not.toBeInTheDocument();
   });
 });
 
-describe("odgovoreno naspram ćutanja", () => {
-  it("pozicija bez odgovora nema kvačicu", () => {
+describe("answered versus silent", () => {
+  it("a position with no answer has no tick", () => {
     draw([pos({ checkin: null })]);
     expect(screen.queryByLabelText("Prijavljeno")).not.toBeInTheDocument();
   });
 
-  it("odgovorena pozicija nosi kvačicu", () => {
+  it("an answered position carries a tick", () => {
     draw([
       pos({
         checkin: {
@@ -105,9 +106,10 @@ describe("odgovoreno naspram ćutanja", () => {
     expect(screen.getByLabelText("Prijavljeno")).toBeInTheDocument();
   });
 
-  it("sam `touched` bez teze NIJE odgovoreno", () => {
-    // Kvačica prati tezu, ne dodir. „Pomerio sam stop" bez ocene teze je pola
-    // odgovora, i kartica to ne sme da prikaže kao završen dan.
+  it("a bare `touched` with no thesis is NOT an answer", () => {
+    // The tick follows the thesis, not the touch. "I moved the stop" without a
+    // verdict on the thesis is half an answer, and the card must not show that
+    // as a finished day.
     draw([
       pos({
         checkin: {
@@ -123,8 +125,8 @@ describe("odgovoreno naspram ćutanja", () => {
   });
 });
 
-describe("više pozicija", () => {
-  it("svaka nosi svoj broj dana", () => {
+describe("several positions", () => {
+  it("each carries its own day count", () => {
     const { container } = draw([
       pos({ id: "a", label: "ES Long", daysInTrade: 2 }),
       pos({ id: "b", label: "EURUSD Short", daysInTrade: 9, timeStopDays: 10 }),
@@ -137,7 +139,7 @@ describe("više pozicija", () => {
     expect(within(fx).getByText(/dan 9 od 10/)).toBeInTheDocument();
   });
 
-  it("svaka vodi na svoj trejd", () => {
+  it("each links to its own trade", () => {
     const { container } = draw([
       pos({ id: "a", label: "ES Long" }),
       pos({ id: "b", label: "EURUSD Short" }),
@@ -147,15 +149,15 @@ describe("više pozicija", () => {
   });
 });
 
-describe("zaključan dan", () => {
-  it("dugmad su onemogućena kad je dan zaključan", () => {
+describe("a locked day", () => {
+  it("the buttons are disabled when the day is locked", () => {
     const { container } = draw([pos()], true);
     const buttons = [...container.querySelectorAll("button")];
     expect(buttons.length).toBeGreaterThan(0);
     expect(buttons.every((b) => b.hasAttribute("disabled"))).toBe(true);
   });
 
-  it("otključan dan ima upotrebljiva dugmad", () => {
+  it("an unlocked day has usable buttons", () => {
     const { container } = draw([pos()], false);
     const buttons = [...container.querySelectorAll("button")];
     expect(buttons.some((b) => !b.hasAttribute("disabled"))).toBe(true);

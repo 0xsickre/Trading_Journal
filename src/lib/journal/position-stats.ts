@@ -174,7 +174,7 @@ export function computePositionStats(
       const riskDenom = riskPts * entryQty;
       realizedR = grossPoints / riskDenom;
       if (pointValue != null && fxRate != null) {
-        // Neto R deli novac novcem, pa imenilac mora u istu valutu kao brojilac.
+        // Net R divides money by money, so the denominator has to be in the same currency as the numerator.
         //
         // It needs point_value and the rate even when `netPl` is known through an
         // override: risk in money is still derived from prices. That is why R IN

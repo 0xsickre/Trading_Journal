@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { TrackerStreakCard } from "./tracker-streak-card";
 import type { DayCompliance, DayStatus } from "@/lib/journal/tracker/compliance";
 
-/** The value under a `Stat` label — "Current streak"/"Najduži niz" can share
+/** The value under a `Stat` label — "Current streak"/"Longest streak" can share
  *  the same number, and "—" appears for more than one guard independently. */
 function statValue(label: string): string {
   return screen.getByText(label).nextElementSibling?.textContent ?? "";

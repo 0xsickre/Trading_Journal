@@ -9,12 +9,13 @@ import {
 import { instrumentsMatch } from "./instrument-aliases";
 
 /**
- * SPAJANJE JE OPERACIJA KOJA BRIŠE.
+ * A MERGE IS AN OPERATION THAT DELETES.
  *
- * `commitImport` na `decision: "merge"` poziva `tj_replace_executions`, koja
- * briše postojeće fill-ove i upisuje one iz izvoda. Zato je pitanje „koji je
- * ovo trejd" jedno od najozbiljnijih u sistemu — a do Koraka 7 je odgovor
- * živeo u petlji unutar komponente od 572 linije, bez ijednog testa.
+ * On `decision: "merge"` `commitImport` calls `tj_replace_executions`, which
+ * deletes the existing fills and writes the ones from the statement. That makes
+ * "which trade is this" one of the most serious questions in the system — and
+ * until Step 7 the answer lived in a loop inside a 572-line component, with no
+ * test at all.
  */
 
 const c = (over: Partial<MatchCandidate> = {}): MatchCandidate => ({
@@ -28,8 +29,8 @@ const c = (over: Partial<MatchCandidate> = {}): MatchCandidate => ({
   totalSwap: 0,
   grossPl: 500,
   netPl: 496,
-  // Rucni trejd po podrazumevanom: bot trejd se ne spaja, pa bi ga svaki test
-  // ispod tiho pretvorio u "new".
+  // A manual trade by default: a bot trade is never merged into, so every test
+  // below would quietly turn it into a "new".
   brokerPositionId: null,
   ...over,
 });
@@ -44,22 +45,22 @@ const row: ImportRowKey = {
 const match = (r = row, cands: MatchCandidate[] = [c()]) =>
   matchImportRow(r, cands, instrumentsMatch);
 
-describe("prepoznavanje već unetog trejda", () => {
-  it("isti instrument, smer, vreme i cena — spaja se", () => {
+describe("recognising a trade that is already entered", () => {
+  it("same instrument, direction, time and price — it merges", () => {
     const out = match();
     expect(out.status).toBe("match");
     expect(out.matched?.id).toBe("t1");
   });
 
-  it("nema kandidata — kreira se", () => {
+  it("no candidate — it is created", () => {
     expect(match(row, []).status).toBe("new");
   });
 
-  it("drugi smer nije isti trejd", () => {
+  it("a different direction is not the same trade", () => {
     expect(match(row, [c({ direction: "Short" })]).status).toBe("new");
   });
 
-  it("drugi instrument nije isti trejd", () => {
+  it("a different instrument is not the same trade", () => {
     expect(match(row, [c({ instrument: "NQ" })]).status).toBe("new");
   });
 });
@@ -67,106 +68,109 @@ describe("prepoznavanje već unetog trejda", () => {
 describe("prozor vremena", () => {
   const at = (iso: string) => ({ ...row, entryTime: iso });
 
-  it("devet minuta razlike je isti trejd", () => {
+  it("nine minutes apart is the same trade", () => {
     expect(match(at("2026-03-02T14:09:00Z")).status).toBe("match");
     expect(match(at("2026-03-02T13:51:00Z")).status).toBe("match");
   });
 
-  it("deset minuta i preko toga nije", () => {
-    // Granica je isključiva na obe strane, i to je ista granica koju je stari
-    // kod imao — ovde je samo prvi put zaključana testom.
+  it("ten minutes and beyond is not", () => {
+    // The bound is exclusive on both sides, and it is the same bound the old
+    // code had — here it is simply locked down by a test for the first time.
     expect(match(at("2026-03-02T14:10:00Z")).status).toBe("new");
     expect(match(at("2026-03-02T14:11:00Z")).status).toBe("new");
     expect(MERGE_TIME_WINDOW_MS).toBe(600_000);
   });
 
-  it("bez vremena na redu ili na kandidatu — ne spaja se", () => {
-    // Radije duplikat nego spajanje na osnovu same cene: isti nivo se trguje i
-    // u ponedeljak i u petak.
+  it("with no time on the row or on the candidate — no merge", () => {
+    // A duplicate is preferable to merging on price alone: the same level gets
+    // traded on a Monday and on a Friday.
     expect(match({ ...row, entryTime: null }).status).toBe("new");
     expect(match(row, [c({ openedAt: null })]).status).toBe("new");
   });
 
-  it("neispravno vreme se ne čita kao poklapanje", () => {
+  it("an invalid time does not read as a match", () => {
     expect(match({ ...row, entryTime: "juče" }).status).toBe("new");
   });
 });
 
-describe("prozor cene", () => {
-  it("tolerancija je 0,05 % ili 0,01 — šta je veće", () => {
+describe("the price window", () => {
+  it("the tolerance is 0.05 % or 0.01 — whichever is larger", () => {
     expect(mergePriceTolerance(5000)).toBeCloseTo(2.5, 10);
-    // EURUSD: 0,05 % od 1.0850 je 0.00054, pa donja granica od 0,01 preuzima.
+    // EURUSD: 0.05 % of 1.0850 is 0.00054, so the 0.01 floor takes over.
     expect(mergePriceTolerance(1.085)).toBeCloseTo(0.01, 10);
     expect(mergePriceTolerance(-5000)).toBeCloseTo(2.5, 10);
   });
 
-  it("ES unutar 2,5 poena je isti trejd, preko toga nije", () => {
+  it("ES within 2.5 points is the same trade, beyond it is not", () => {
     expect(match(row, [c({ avgEntry: 5002.5 })]).status).toBe("match");
     expect(match(row, [c({ avgEntry: 5002.6 })]).status).toBe("new");
   });
 
-  it("bez cene se ne spaja", () => {
+  it("with no price there is no merge", () => {
     expect(match({ ...row, entryPrice: null }).status).toBe("new");
     expect(match(row, [c({ avgEntry: null })]).status).toBe("new");
   });
 });
 
-describe("dvosmislenost — nalaz Koraka 7", () => {
-  it("dva trejda koja oba prolaze filter NE spajaju se ni sa jednim", () => {
-    // Skalper na ES-u: ulaz 5000.00 u 14:00, pa opet 5001.50 u 14:06. Oba su
-    // unutar deset minuta i unutar 2,5 poena, pa oba prolaze isti filter.
+describe("ambiguity — the Step 7 finding", () => {
+  it("two trades that both pass the filter merge into NEITHER", () => {
+    // A scalper on ES: entry at 5000.00 at 14:00, then again at 5001.50 at
+    // 14:06. Both are within ten minutes and within 2.5 points, so both pass
+    // the same filter.
     //
-    // Stari kod je radio `break` na PRVOM kandidatu, a kandidati stižu poređani
-    // po `created_at DESC` — po tome koji je trejd poslednji unet, što sa
-    // pitanjem „koji je ovo trejd" nema veze. Drugi red izvoda bi se spojio sa
-    // prvim trejdom i obrisao mu fill-ove.
+    // The old code did a `break` on the FIRST candidate, and candidates arrive
+    // ordered by `created_at DESC` — by which trade was entered last, which has
+    // nothing to do with "which trade is this". The second statement row would
+    // merge into the first trade and delete its fills.
     const out = match(row, [
-      c({ id: "kasnije-unet", avgEntry: 5001.5, openedAt: "2026-03-02T14:06:00Z" }),
-      c({ id: "ranije-unet", avgEntry: 5000, openedAt: "2026-03-02T14:00:00Z" }),
+      c({ id: "entered-later", avgEntry: 5001.5, openedAt: "2026-03-02T14:06:00Z" }),
+      c({ id: "entered-earlier", avgEntry: 5000, openedAt: "2026-03-02T14:00:00Z" }),
     ]);
     expect(out.status).toBe("ambiguous");
     expect(out.matched).toBeNull();
     expect(out.candidates).toHaveLength(2);
   });
 
-  it("dvosmislen red se KREIRA, ne spaja — asimetrija je namerna", () => {
-    // Višak trejda se briše u jednom potezu. Obrisani fill-ovi trejda koji je
-    // bio tačan se ne vraćaju, i ne vide se dok se ne potraže.
+  it("an ambiguous row is CREATED, not merged — the asymmetry is deliberate", () => {
+    // A spare trade is deleted in one move. The deleted fills of the trade that
+    // was right do not come back, and are invisible until somebody looks.
     const out = match(row, [c({ id: "a" }), c({ id: "b", avgEntry: 5001 })]);
     expect(out.matched).toBeNull();
   });
 
-  it("ne bira se najblizi kandidat", () => {
-    // Bliža cena ne znači da je to taj trejd — dva ulaza u istoj seansi mogu
-    // biti na bilo kom rasporedu. Biranje bi bilo pogađanje sa posledicom
-    // brisanja.
+  it("the closest candidate is not chosen", () => {
+    // A nearer price does not mean it is that trade — two entries in the same
+    // session can be laid out any way at all. Picking one would be guessing,
+    // with deletion as the consequence.
     const out = match(row, [
-      c({ id: "tacno-na-ceni", avgEntry: 5000 }),
-      c({ id: "malo-dalje", avgEntry: 5002 }),
+      c({ id: "exactly-on-price", avgEntry: 5000 }),
+      c({ id: "slightly-further", avgEntry: 5002 }),
     ]);
     expect(out.status).toBe("ambiguous");
     expect(out.matched).toBeNull();
   });
 
-  it("jedan kandidat i dalje daje spajanje — dvosmislenost nije postala paranoja", () => {
+  it("one candidate still produces a merge — the ambiguity did not become paranoia", () => {
     expect(match().matched?.id).toBe("t1");
   });
 });
 
-describe("alias simbola i dalje radi kroz modul", () => {
-  it("izvod koji piše ES a journal ESZ5 se prepoznaje", () => {
-    // `instrumentsMatch` se prosleđuje spolja da bi modul ostao čist, ali pravi
-    // se ovde koristi — inače bi test dokazivao izmišljeno pravilo.
+describe("symbol aliasing still works through the module", () => {
+  it("a statement writing ES against a journal holding ESZ5 is recognised", () => {
+    // `instrumentsMatch` is passed in from outside so the module stays pure, but
+    // the real one is used here — otherwise the test would prove an invented
+    // rule.
     expect(instrumentsMatch("ES", "ES")).toBe(true);
     expect(match({ ...row, instrument: "es" }).status).toBe("match");
   });
 });
 
-describe("trejd koji je upisao bot most", () => {
+describe("a trade written by the bot bridge", () => {
   /**
-   * Merge poziva `tj_replace_executions`, puna zamena fill-ova. Most ima cenu sa
-   * samog fill-a, izvod ima zaokruzen izvestaj — pa bi spajanje zamenilo
-   * precizniji podatak grubljim, i to nevidljivo.
+   * A merge calls `tj_replace_executions`, a full replacement of the fills. The
+   * bridge holds the price off the fill itself, the statement holds a rounded
+   * report — so merging would swap the more precise datum for the coarser one,
+   * invisibly.
    */
   it("se NE spaja, iako se poklapa u svemu ostalom", () => {
     const bot = c({ id: "bot1", brokerPositionId: "10558247" });
@@ -177,9 +181,10 @@ describe("trejd koji je upisao bot most", () => {
     expect(out.candidates).toEqual([]);
   });
 
-  it("ne skriva rucni trejd koji stoji pored njega", () => {
-    // Duplikat je vidljiv ishod i to je namerno; ono sto se ne sme desiti je da
-    // bot trejd povuce red na sebe i time sakrije da rucni postoji.
+  it("does not hide a manual trade standing beside it", () => {
+    // A duplicate is a visible outcome and that is deliberate; what must not
+    // happen is the bot trade pulling the row onto itself and thereby hiding
+    // that a manual one exists.
     const bot = c({ id: "bot1", brokerPositionId: "10558247" });
     const manual = c({ id: "man1" });
 

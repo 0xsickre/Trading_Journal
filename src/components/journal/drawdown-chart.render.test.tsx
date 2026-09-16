@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { DrawdownChart } from "./drawdown-chart";
 import { buildBalanceTimeline, computeDrawdown, drawdownSeries } from "@/lib/journal/balance";
 
-/** The value under a `Figure` label — "Max" and "Prosečan" can coincidentally
+/** The value under a `Figure` label — "Max" and "Average" can coincidentally
  *  show the same formatted money, so a bare `getByText` is ambiguous. */
 function figureValue(label: string): string {
   return screen.getByText(label).nextElementSibling?.textContent ?? "";
@@ -26,8 +26,8 @@ vi.mock("recharts", async (importOriginal) => {
  * `currentPctOfEquity` as `Math.abs(...)` — positive magnitudes — but the
  * component only negated one of the two before display. "Max 9.09%" sat
  * right next to "Current −7.27%" and read like a gain. `FIXED` alongside
- * this test, per the plan's own note ("popravlja se zajedno sa svojim
- * testom u koraku koji pokriva ovu komponentu").
+ * this test, per the plan's own note ("fixed together with its own test, in
+ * the step that covers this component").
  */
 describe("DrawdownChart — both percent figures read negative, like the money basis does", () => {
   // 10 000 start, peak after +1000 (day1) never exceeded again: 0 (day2),

@@ -3,18 +3,19 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { StatGroup } from "./stat-group";
 
 /**
- * BLOK KPI PLOČICA — I INVARIJANTA KOJA ŠTITI SVE OSTALE TESTOVE.
+ * THE KPI TILE BLOCK — AND THE INVARIANT THAT PROTECTS EVERY OTHER TEST.
  *
- * Komponenta izgleda kao ukras, ali nosi tvrdnju od koje zavisi pouzdanost
- * `dashboard.render.test.tsx`: BEZ SAČUVANOG PODEŠAVANJA GRUPA JE OTVORENA.
+ * The component looks like decoration, but it carries the claim the reliability
+ * of `dashboard.render.test.tsx` depends on: WITH NO SAVED PREFERENCE THE GROUP
+ * IS OPEN.
  *
- * Devet tvrdnji o KPI brojevima na dashboard-u traži tekst unutar ovih grupa.
- * Da je podrazumevano stanje sklopljeno — ili da se `localStorage` čitao pri
- * renderu umesto u efektu — headless render bi zatekao sklopljenu grupu i tiho
- * NE BI NAŠAO pločicu koja je zaista na stranici. Devet provera brojeva bi se
- * ugasilo bez ijednog crvenog testa.
+ * Nine claims about KPI numbers on the dashboard look for text inside these
+ * groups. If the default state were collapsed — or if `localStorage` were read
+ * during render instead of in an effect — a headless render would meet a
+ * collapsed group and quietly NOT FIND a tile that really is on the page. Nine
+ * checks on numbers would go dark without a single red test.
  *
- * Zato ovaj fajl proverava upravo to, a ne izgled.
+ * So this file checks exactly that, not the looks.
  */
 
 const KEY = "tj:dashboard_prefs";
@@ -32,55 +33,56 @@ const draw = (props: Partial<Parameters<typeof StatGroup>[0]> = {}) =>
     </StatGroup>,
   );
 
-describe("podrazumevano stanje je otvoreno", () => {
-  it("bez ijednog sačuvanog podešavanja sadržaj je u dokumentu", () => {
+describe("the default state is open", () => {
+  it("with no saved preference at all the content is in the document", () => {
     draw();
     expect(screen.getByText("Max DD")).toBeInTheDocument();
     expect(screen.getByText("Sortino")).toBeInTheDocument();
   });
 
-  it("dugme prijavlja otvoreno stanje pomoćnim tehnologijama", () => {
+  it("the button reports the open state to assistive technology", () => {
     draw();
     expect(screen.getByRole("button")).toHaveAttribute("aria-expanded", "true");
   });
 
-  it("PODEŠAVANJE ZA DRUGU GRUPU ne zatvara ovu", () => {
-    // Ovo je stvarna zaštita testova dashboard-a: jedna sklopljena grupa ne sme
-    // da povuče ostale sa sobom.
+  it("A PREFERENCE FOR ANOTHER GROUP does not close this one", () => {
+    // This is the real protection for the dashboard tests: one collapsed group
+    // must not drag the others down with it.
     localStorage.setItem(KEY, JSON.stringify({ collapsedGroups: ["quality"] }));
     draw({ id: "risk" });
     expect(screen.getByText("Max DD")).toBeInTheDocument();
   });
 
-  it("pokvareno podešavanje ostavlja grupu otvorenom", () => {
-    // Odbrana iz `dashboard-prefs.ts` mora da se vidi i ovde: neispravna
-    // vrednost ne sme da sakrije metriku.
+  it("a broken preference leaves the group open", () => {
+    // The defence from `dashboard-prefs.ts` has to show here too: an invalid
+    // value must not hide a metric.
     localStorage.setItem(KEY, "{ ovo nije json");
     draw();
     expect(screen.getByText("Max DD")).toBeInTheDocument();
   });
 
-  it("naslov i broj pločica stoje i kad je grupa otvorena", () => {
-    // Broj je tu da sklopljena grupa i dalje kaže šta drži. Ne sme da nestane
-    // kad je otvorena, inače bi ga korisnik video samo u jednom od dva stanja.
+  it("the title and the tile count stand while the group is open too", () => {
+    // The count is there so a collapsed group still says what it holds. It must
+    // not disappear when open, or the user would see it in only one of the two
+    // states.
     draw();
     expect(screen.getByText("Risk")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
   });
 });
 
-describe("sačuvano sklapanje", () => {
-  it("grupa zapamćena kao sklopljena se zatvori posle hidratacije", () => {
+describe("saved collapsing", () => {
+  it("a group remembered as collapsed closes after hydration", () => {
     localStorage.setItem(KEY, JSON.stringify({ collapsedGroups: ["risk"] }));
     draw({ id: "risk" });
     expect(screen.queryByText("Max DD")).not.toBeInTheDocument();
     expect(screen.getByRole("button")).toHaveAttribute("aria-expanded", "false");
-    // Naslov i broj ostaju — sklopljena grupa i dalje kaže šta drži.
+    // Title and count stay — a collapsed group still says what it holds.
     expect(screen.getByText("Risk")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
   });
 
-  it("klik sklapa i UPISUJE podešavanje", () => {
+  it("a click collapses and WRITES the preference", () => {
     draw();
     fireEvent.click(screen.getByRole("button"));
     expect(screen.queryByText("Max DD")).not.toBeInTheDocument();
@@ -89,7 +91,7 @@ describe("sačuvano sklapanje", () => {
     });
   });
 
-  it("ponovni klik otvara i UKLANJA podešavanje", () => {
+  it("a second click opens and REMOVES the preference", () => {
     localStorage.setItem(KEY, JSON.stringify({ collapsedGroups: ["risk"] }));
     draw();
     fireEvent.click(screen.getByRole("button"));
@@ -99,7 +101,7 @@ describe("sačuvano sklapanje", () => {
     });
   });
 
-  it("sklapanje jedne grupe ne dira drugu u istom skladištu", () => {
+  it("collapsing one group leaves another one in the same store alone", () => {
     localStorage.setItem(KEY, JSON.stringify({ collapsedGroups: ["quality"] }));
     draw({ id: "risk" });
     fireEvent.click(screen.getByRole("button"));
@@ -109,18 +111,18 @@ describe("sačuvano sklapanje", () => {
   });
 });
 
-describe("identitet grupe", () => {
-  it("preimenovan `id` ponovo otvara grupu", () => {
-    // Namerno: bolje otvorena nego pogrešno sklopljena pod tuđim ključem —
-    // metrika koja se ne vidi je gora od grupe koja se vidi bez potrebe.
+describe("group identity", () => {
+  it("a renamed `id` opens the group again", () => {
+    // Deliberate: better open than wrongly collapsed under someone else's key —
+    // a metric that cannot be seen is worse than a group shown needlessly.
     localStorage.setItem(KEY, JSON.stringify({ collapsedGroups: ["risk"] }));
     draw({ id: "risk-v2" });
     expect(screen.getByText("Max DD")).toBeInTheDocument();
   });
 
-  it("nula pločica je dozvoljena i ne obara render", () => {
+  it("zero tiles is allowed and does not break the render", () => {
     render(
-      <StatGroup id="prazna" title="Empty" count={0}>
+      <StatGroup id="empty" title="Empty" count={0}>
         {null}
       </StatGroup>,
     );

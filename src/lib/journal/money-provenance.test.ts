@@ -3,12 +3,13 @@ import { moneyProvenance, unpricedClosedCount } from "./money-provenance";
 import type { PositionStat } from "./types";
 
 /**
- * KAD NOVCA NEMA, EKRAN MORA DA KAŽE ZAŠTO.
+ * WHEN THE MONEY IS MISSING, THE SCREEN HAS TO SAY WHY.
  *
- * View od Koraka 3 nosi tri kolone o poreklu novca. Ekran je čitao samo jednu,
- * pa je cela FX polovina bila nevidljiva: trejd sa poznatim `point_value`-om a
- * bez kursa ima null novac i uredan `point_value_source = 'snapshot'`, što
- * znači crticu u koloni P/L i nijednu reč o tome šta korisnik može da uradi.
+ * The view from Step 3 carries three columns about where money comes from. The
+ * screen read only one of them, so the whole FX half was invisible: a trade with
+ * a known `point_value` but no rate has null money and a tidy
+ * `point_value_source = 'snapshot'`, which means a dash in the P/L column and not
+ * one word about what the user can do.
  */
 
 const s = (over: Partial<PositionStat> = {}) =>
@@ -20,7 +21,7 @@ const s = (over: Partial<PositionStat> = {}) =>
   }) as PositionStat;
 
 describe("moneyProvenance", () => {
-  it("uredan trejd nema značku", () => {
+  it("a sound trade carries no badge", () => {
     expect(moneyProvenance(s())).toEqual({
       label: null,
       title: null,
@@ -28,49 +29,51 @@ describe("moneyProvenance", () => {
     });
   });
 
-  it("bez stats-a nema značke, a ne pad", () => {
+  it("no stats means no badge, not a crash", () => {
     expect(moneyProvenance(null).label).toBeNull();
     expect(moneyProvenance(undefined).label).toBeNull();
   });
 
-  it("nepoznat instrument → `unpriced`, i to je kvar", () => {
+  it("unknown instrument → `unpriced`, and that is a fault", () => {
     const p = moneyProvenance(s({ point_value_source: "missing" }));
     expect(p.label).toBe("unpriced");
     expect(p.unpriced).toBe(true);
     expect(p.title).toContain("Settings");
   });
 
-  it("nepoznat kurs → `no FX` — RUPA KOJU JE OVAJ KORAK ZATVORIO", () => {
-    // Ovo je bio slučaj bez ijedne oznake. `point_value_source` je `snapshot`,
-    // pa stara provera nije reagovala, a novčane kolone su svejedno null.
+  it("unknown rate → `no FX` — THE HOLE THIS STEP CLOSED", () => {
+    // This was the case with no marking at all. `point_value_source` is
+    // `snapshot`, so the old check stayed quiet while the money columns were
+    // null anyway.
     const p = moneyProvenance(s({ fx_rate_source: "missing" }));
     expect(p.label).toBe("no FX");
     expect(p.unpriced).toBe(true);
     expect(p.title).toContain("rate");
   });
 
-  it("trejd bez naloga → `no account`", () => {
-    // Nastaje sam od sebe kad se nalog obriše (`ON DELETE SET NULL`). Bez
-    // valute naloga nema u šta da se konvertuje.
+  it("trade with no account → `no account`", () => {
+    // It arises on its own when an account is deleted (`ON DELETE SET NULL`).
+    // Without the account currency there is nothing to convert into.
     const p = moneyProvenance(s({ fx_rate_source: "no_account" }));
     expect(p.label).toBe("no account");
     expect(p.unpriced).toBe(true);
   });
 
-  it("rezultat sa izvoda → `broker`, i to NIJE kvar", () => {
-    // Razlika koju `unpriced` nosi: značka postoji, ali novac je tu i tačan je.
-    // Ekran koji boji problem crvenim mora da gleda `unpriced`, ne postojanje
-    // značke — inače bi najpouzdaniji broj u sistemu bio obojen kao greška.
+  it("a result from a statement → `broker`, and that is NOT a fault", () => {
+    // The distinction `unpriced` carries: the badge exists, but the money is
+    // here and it is correct. A screen that paints trouble red has to look at
+    // `unpriced`, not at the presence of a badge — otherwise the most reliable
+    // number in the system would be coloured as an error.
     const p = moneyProvenance(s({ money_overridden: true }));
     expect(p.label).toBe("broker");
     expect(p.unpriced).toBe(false);
     expect(p.title).toContain("R is still measured from prices");
   });
 
-  it("upisan rezultat pobeđuje i nad nepoznatim kursom i nad nepoznatom specifikacijom", () => {
-    // Redosled je redosled UZROKA. Kad bruto ne nastaje iz cena, ni
-    // specifikacija ni kurs mu nisu bili potrebni — pa njihovo odsustvo nije
-    // razlog za uzbunu.
+  it("a recorded result beats both an unknown rate and an unknown spec", () => {
+    // The order is the order of CAUSES. When gross does not come out of prices,
+    // neither the spec nor the rate was needed for it — so their absence is no
+    // reason for alarm.
     const p = moneyProvenance(
       s({
         money_overridden: true,
@@ -82,16 +85,16 @@ describe("moneyProvenance", () => {
     expect(p.unpriced).toBe(false);
   });
 
-  it("nedostatak specifikacije se prijavljuje pre nedostatka kursa", () => {
-    // Oba su tačna, ali `point_value` je prvi uslov i prva stvar koju korisnik
-    // popravlja. Dve značke na jednom redu ne bi rekle više.
+  it("a missing spec is reported before a missing rate", () => {
+    // Both are true, but `point_value` is the first condition and the first
+    // thing the user fixes. Two badges on one row would not say more.
     const p = moneyProvenance(
       s({ point_value_source: "missing", fx_rate_source: "missing" }),
     );
     expect(p.label).toBe("unpriced");
   });
 
-  it("svaka značka nosi rečenicu, nijedna nije gola oznaka", () => {
+  it("every badge carries a sentence, none is a bare label", () => {
     for (const stats of [
       s({ point_value_source: "missing" }),
       s({ fx_rate_source: "missing" }),
@@ -105,7 +108,7 @@ describe("moneyProvenance", () => {
   });
 });
 
-describe("unpricedClosedCount — nalaz Koraka 9", () => {
+describe("unpricedClosedCount — the Step 9 finding", () => {
   const t = (over: Record<string, unknown> = {}) =>
     ({
       id: "t",
@@ -114,7 +117,7 @@ describe("unpricedClosedCount — nalaz Koraka 9", () => {
       ...over,
     }) as unknown as Parameters<typeof unpricedClosedCount>[0][number];
 
-  it("broji zatvorene trejdove bez neto rezultata", () => {
+  it("counts closed trades with no net result", () => {
     expect(
       unpricedClosedCount([
         t(),
@@ -124,15 +127,15 @@ describe("unpricedClosedCount — nalaz Koraka 9", () => {
     ).toBe(2);
   });
 
-  it("cela knjiga vrednovana daje nulu", () => {
+  it("a fully priced book gives zero", () => {
     expect(unpricedClosedCount([t(), t(), t()])).toBe(0);
     expect(unpricedClosedCount([])).toBe(0);
   });
 
-  it("planiran, propušten i OTVOREN trejd nisu razmak", () => {
-    // Nijedan od njih nema realizovan rezultat koji bi statistika izostavila.
-    // Kad bi se brojali, traka bi stajala na svakoj knjizi sa jednom otvorenom
-    // pozicijom — i prestala bi da znači išta.
+  it("planned, missed and OPEN trades are not a gap", () => {
+    // None of them has a realized result that the statistics would leave out.
+    // If they counted, the banner would stand on every book with one open
+    // position — and would stop meaning anything.
     expect(
       unpricedClosedCount([
         t({ status: "planned", stats: null }),
@@ -143,19 +146,19 @@ describe("unpricedClosedCount — nalaz Koraka 9", () => {
     ).toBe(0);
   });
 
-  it("razmak je tačno ono što `toRealized` odbacuje na zatvorenim trejdovima", () => {
-    // Ista granica koju `toRealized` koristi (`stats.net_pl == null`), da broj u
-    // traci ne bi mogao da se raziđe sa brojem koji stranica prikazuje.
-    const knjiga = [
+  it("the gap is exactly what `toRealized` drops on closed trades", () => {
+    // The same boundary `toRealized` uses (`stats.net_pl == null`), so the
+    // number in the banner cannot diverge from the number the page shows.
+    const book = [
       t({ id: "a" }),
       t({ id: "b" }),
       t({ id: "c", stats: { net_pl: null } }),
     ];
-    const usli = knjiga.filter(
+    const kept = book.filter(
       (x) =>
         (x as { status: string }).status === "closed" &&
         (x as { stats: { net_pl: number | null } | null }).stats?.net_pl != null,
     ).length;
-    expect(usli + unpricedClosedCount(knjiga)).toBe(knjiga.length);
+    expect(kept + unpricedClosedCount(book)).toBe(book.length);
   });
 });

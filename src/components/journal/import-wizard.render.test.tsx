@@ -5,9 +5,9 @@ import { ImportWizard, type MatchCandidate } from "./import-wizard";
 import type { Account } from "@/lib/journal/types";
 
 /**
- * "Odbijene ćelije (nečitljivo: qty, fee) na ekranu, klasifikacija
- * create/merge/skip, i da se dvosmislen datum i `1,234` vide kao odbijeni a
- * ne kao pogođeni" — the plan's own stated goal for this step, verbatim.
+ * "Refused cells (unreadable: qty, fee) on screen, the create/merge/skip
+ * classification, and an ambiguous date and `1,234` shown as refused rather
+ * than as parsed" — the plan's own stated goal for this step.
  * `parseImportNumber`/`parseImportTime` are already proven in isolation;
  * this file proves the wizard actually SHOWS a refused cell rather than
  * quietly defaulting it to 0 or "now", which is the whole reason those two
@@ -221,10 +221,11 @@ describe("classification against existing trades", () => {
     expect(within(row).getByText(/exit 2,100.*2,050/)).toBeInTheDocument();
   });
 
-  it("izvod ispravlja profit i swap na trejdu koji je unet rukom", async () => {
-    // Ovo je provera zbog koje uvoz postoji i kad su trejdovi već uneti: broker
-    // je merodavan za novac, čovek za sve ostalo. Trejd u bazi nosi bruto 200 i
-    // swap 0; izvod kaže 214.30 i 1.25.
+  it("a statement corrects the profit and swap on a hand-entered trade", async () => {
+    // This is the check that makes the import worth having even when the trades
+    // are already entered: the broker is authoritative for money, the human for
+    // everything else. The trade in the database carries gross 200 and swap 0;
+    // the statement says 214.30 and 1.25.
     const user = userEvent.setup({ delay: null });
     render(<ImportWizard accounts={[ACCOUNT]} candidates={CANDIDATES} />);
     await upload(
@@ -238,18 +239,19 @@ describe("classification against existing trades", () => {
     await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
 
     const row = screen.getByText("XAUUSD").closest("tr")!;
-    // Izlazna cena se POKLAPA (2100), pa red ne bi bio 'match' da se novac ne
-    // poredi — bez ove dve provere bio bi 'duplicate' i preskočen.
+    // The exit price MATCHES (2100), so the row would not be a 'match' if money
+    // were not compared — without these two checks it would be 'duplicate' and
+    // skipped.
     expect(within(row).getByText("match")).toBeInTheDocument();
     expect(within(row).getByText("Merge")).toBeInTheDocument();
     expect(row.textContent).toContain("profit 200→214.3");
     expect(row.textContent).toContain("swap 0→1.25");
   });
 
-  it("provizija i swap se porede odvojeno, pa se ne poništavaju", async () => {
-    // Trejd nosi fee 2.50 i swap 0. Izvod kaže fee 0 i swap 2.50 — zbir je
-    // isti, pa je ranije poređenje (fee+swap kao jedan broj) ovo videlo kao
-    // savršeno poklapanje i preskočilo red.
+  it("fee and swap are compared separately, so they cannot cancel out", async () => {
+    // The trade carries fee 2.50 and swap 0. The statement says fee 0 and swap
+    // 2.50 — the sum is the same, so the earlier comparison (fee+swap as one
+    // number) saw this as a perfect match and skipped the row.
     const user = userEvent.setup({ delay: null });
     render(<ImportWizard accounts={[ACCOUNT]} candidates={CANDIDATES} />);
     await upload(

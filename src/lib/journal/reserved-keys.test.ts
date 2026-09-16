@@ -4,30 +4,32 @@ import { describe, expect, it } from "vitest";
 import { RESERVED_KEYS } from "./reserved-keys";
 
 /**
- * Lista rezervisanih imena mora da prati šemu, i to je do sada dvaput omanulo.
+ * The list of reserved names has to follow the schema, and that has failed twice
+ * already.
  *
- * Prvi put: `thesis`, `invalidation`, `time_stop_days`, `scale_out_plan` dodate
- * 13.08.2026, a lista je pisana pre toga. Drugi put: `quote_currency_at_trade`,
- * `fx_rate_at_trade` i `gross_pnl_override` dodate 15.08. — u istom nizu koraka
- * u kojem je prvi propust bio popravljen. Ista greška, dva puta, u razmaku od
- * dva dana; to više nije previd nego nedostatak provere.
+ * The first time: `thesis`, `invalidation`, `time_stop_days`, `scale_out_plan`
+ * added on 2026-08-13, with the list written before that. The second time:
+ * `quote_currency_at_trade`, `fx_rate_at_trade` and `gross_pnl_override` added on
+ * 08-15 — in the same run of steps in which the first omission was fixed. The
+ * same mistake, twice, two days apart; that is no longer an oversight but a
+ * missing check.
  *
- * Umesto da se lista opet ručno ažurira, ovaj test je čita iz GENERISANOG
- * `types.ts`, koji je odraz žive šeme. Sledeći `ADD COLUMN` obara test dok se
- * ime ne doda.
+ * Instead of updating the list by hand again, this test reads it from the
+ * GENERATED `types.ts`, which mirrors the live schema. The next `ADD COLUMN`
+ * fails the test until the name is added.
  *
- * Zašto parsiranje izvora a ne tip: `Database["public"]["Tables"]["tj_positions"]["Row"]`
- * postoji samo u vreme prevođenja. Ključevi mu se ne mogu nabrojati u toku rada,
- * pa je čitanje fajla jedini način da tvrdnja bude izvršiva.
+ * Why parse the source rather than the type: `Database["public"]["Tables"]["tj_positions"]["Row"]`
+ * exists only at compile time. Its keys cannot be enumerated at run time, so
+ * reading the file is the only way to make the claim executable.
  */
 function columnsFromGeneratedTypes(): string[] {
   const path = fileURLToPath(new URL("../supabase/types.ts", import.meta.url));
   const src = readFileSync(path, "utf8");
 
   const table = src.indexOf("      tj_positions: {");
-  expect(table, "tj_positions nije nađen u generisanim tipovima").toBeGreaterThan(-1);
+  expect(table, "tj_positions was not found in the generated types").toBeGreaterThan(-1);
 
-  // Prvi `Row: {` posle imena tabele, pa do njegove zatvarajuće zagrade.
+  // The first `Row: {` after the table name, up to its closing brace.
   const rowStart = src.indexOf("Row: {", table);
   const rowEnd = src.indexOf("\n        }", rowStart);
   expect(rowEnd).toBeGreaterThan(rowStart);
@@ -36,12 +38,12 @@ function columnsFromGeneratedTypes(): string[] {
   return [...body.matchAll(/^\s{10}([a-z_][a-z0-9_]*)\??:/gm)].map((m) => m[1]);
 }
 
-describe("RESERVED_KEYS prati šemu tj_positions", () => {
-  it("pokriva svaku kolonu iz generisanih tipova", () => {
+describe("RESERVED_KEYS follows the tj_positions schema", () => {
+  it("covers every column from the generated types", () => {
     const columns = columnsFromGeneratedTypes();
 
-    // Zdrav razum pre tvrdnje: ako parser vrati premalo imena, test bi prošao
-    // ne dokazavši ništa.
+    // Sanity before the claim: if the parser returned too few names, the test
+    // would pass having proven nothing.
     expect(columns.length).toBeGreaterThanOrEqual(35);
     expect(columns).toContain("gross_pnl_override");
     expect(columns).toContain("entry_price");
@@ -49,17 +51,17 @@ describe("RESERVED_KEYS prati šemu tj_positions", () => {
     const missing = columns.filter((c) => !RESERVED_KEYS.has(c));
     expect(
       missing,
-      `Kolone na tj_positions koje RESERVED_KEYS ne pokriva: ${missing.join(", ")}. ` +
-        "Korisničko polje sa tim ključem bilo bi upisano u `custom` a čitano iz " +
-        "kolone — trajno nevidljivo. Dodaj ih u src/lib/journal/reserved-keys.ts.",
+      `Columns on tj_positions that RESERVED_KEYS does not cover: ${missing.join(", ")}. ` +
+        "A user field with that key would be written into `custom` and read from " +
+        "the column — permanently invisible. Add them to src/lib/journal/reserved-keys.ts.",
     ).toEqual([]);
   });
 
-  it("ne rezerviše imena koja na tabeli ne postoje", () => {
-    // Suprotan smer: rezervisano ime bez kolone bez razloga zabranjuje korisniku
-    // ključ koji bi bio potpuno ispravan.
+  it("does not reserve names that do not exist on the table", () => {
+    // The opposite direction: a reserved name with no column forbids the user a
+    // key that would be perfectly valid, for no reason.
     const columns = new Set(columnsFromGeneratedTypes());
     const stale = [...RESERVED_KEYS].filter((k) => !columns.has(k));
-    expect(stale, `Rezervisana imena bez kolone: ${stale.join(", ")}`).toEqual([]);
+    expect(stale, `Reserved names with no column: ${stale.join(", ")}`).toEqual([]);
   });
 });

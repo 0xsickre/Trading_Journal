@@ -322,7 +322,7 @@ export function TradeForm({
       }
     : NO_COST_DEFAULTS;
 
-  // Ne `useState`: broj dodeljuje baza pri upisu i forma ga ne menja.
+  // Not `useState`: the database assigns the number on insert and the form never changes it.
   const [fields, setFields] = useState<Record<string, FieldValue>>(
     initial?.fields ?? {},
   );

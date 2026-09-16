@@ -106,8 +106,9 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     instrument: spec.instrument ?? "EURUSD",
     technical_tags: spec.technicalTags ?? [],
     psychology_tags: spec.psychologyTags ?? [],
-    // `text[] NOT NULL DEFAULT '{}'` od migracije `mistake_multi` — prazan niz
-    // je ono što baza vraća za trejd bez greške, nikad null.
+    // `text[] NOT NULL DEFAULT '{}'` since the `mistake_multi` migration — an
+    // empty array is what the database returns for a trade with no mistake,
+    // never null.
     mistake: spec.mistake ?? [],
     execution_rating: spec.executionRating ?? null,
     planned_rr: spec.plannedRr ?? null,

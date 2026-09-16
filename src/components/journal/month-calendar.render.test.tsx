@@ -5,23 +5,24 @@ import { EXACT_ZERO_RANGE } from "@/lib/journal/breakeven";
 import type { PeriodRow } from "@/lib/journal/period-stats";
 
 /**
- * KALENDAR MESECA — 358 LINIJA KOJE ISPISUJU BROJEVE, BEZ IJEDNOG TESTA.
+ * THE MONTH CALENDAR — 358 LINES THAT PRINT NUMBERS, WITH NOT ONE TEST.
  *
- * Ovo je ekran na kojem trejder najčešće gleda svoj rezultat, i jedini na kojem
- * se ista knjiga prikazuje kroz četiri različite metrike. Korak 5 je odavde
- * uklonio SOPSTVENU kopiju formule za win rate; ovaj fajl tvrdi da se ono što
- * je ostalo zaista i ispisuje.
+ * This is the screen a trader looks at their result on most often, and the only
+ * one where the same book is shown through four different metrics. Step 5
+ * removed its OWN copy of the win rate formula from here; this file asserts
+ * that what was left actually gets printed.
  *
- * Knjiga je izvedena na papiru:
+ * The book, worked out on paper:
  *
- *   2026-03-02 (pon)  +1200 $, 3 trejda: 2 dobitka, 1 gubitak, R = +2.4 / 3 trejda
- *   2026-03-03 (uto)   −400 $, 2 trejda: 0 dobitaka, 2 gubitka,  R = −2.0 / 2 trejda
- *   2026-03-04 (sre)      0 $, 1 trejd:  0 / 0, 1 breakeven,     R nemeren (0 trejdova)
+ *   2026-03-02 (Mon)  +$1200, 3 trades: 2 wins, 1 loss,     R = +2.4 / 3 trades
+ *   2026-03-03 (Tue)   −$400, 2 trades: 0 wins, 2 losses,   R = −2.0 / 2 trades
+ *   2026-03-04 (Wed)      $0, 1 trade:  0 / 0, 1 breakeven, R unmeasured (0 trades)
  *   ────────────────────────────────────────────────────────────────────────
- *   mesec              +800 $, 6 trejdova, 3 dana trgovanja
+ *   month              +$800, 6 trades, 3 trading days
  *
- * Win rate po danima: 2/(2+1) = 67 %, 0/(0+2) = 0 %, a sreda NEMA odluku —
- * breakeven ispada iz imenioca, pa je odgovor „—", ne 0 %.
+ * Win rate per day: 2/(2+1) = 67 %, 0/(0+2) = 0 %, and Wednesday has NO
+ * decision — breakeven drops out of the denominator, so the answer is "—", not
+ * 0 %.
  */
 
 const row = (over: Partial<PeriodRow> & { key: string }): PeriodRow =>
@@ -77,9 +78,9 @@ function draw(over: Partial<Parameters<typeof MonthCalendar>[0]> = {}) {
 }
 
 /**
- * Ćelija dana, nađena preko linka koji nosi — svaki dan je `<Link>` ka
- * `/daily?date=…`. Pouzdanije od obilaska DOM-a: ako se markup promeni a link
- * ostane, test i dalje gleda pravu ćeliju.
+ * A day cell, found through the link it carries — every day is a `<Link>` to
+ * `/daily?date=…`. More robust than walking the DOM: if the markup changes and
+ * the link stays, the test still looks at the right cell.
  */
 function dayCell(container: HTMLElement, dayKey: string): HTMLElement {
   const el = container.querySelector<HTMLElement>(
@@ -90,18 +91,19 @@ function dayCell(container: HTMLElement, dayKey: string): HTMLElement {
 }
 
 describe("zaglavlje meseca", () => {
-  it("ispisuje mesec, ukupan neto i broj trejdova i dana", () => {
+  it("prints the month, the net total and the trade and day counts", () => {
     draw();
     expect(screen.getByText("March 2026")).toBeInTheDocument();
-    // Dvaput: zaglavlje meseca i nedeljna kolona — knjiga je cela u jednoj
-    // nedelji, pa su ta dva zbira isti broj. To je tvrdnja sama po sebi.
+    // Twice: the month header and the week column — the book fits entirely in
+    // one week, so the two totals are the same number. That is an assertion in
+    // itself.
     expect(screen.getAllByText("+$800.00")).toHaveLength(2);
-    // Šest trejdova preko tri dana trgovanja — dva različita broja koja se lako
-    // pomešaju, pa oba stoje u istoj rečenici.
+    // Six trades across three trading days — two different numbers that are
+    // easily confused, so both stand in the same sentence.
     expect(screen.getByText(/6 trades · 3 days/)).toBeInTheDocument();
   });
 
-  it("jednina se ne piše kao množina", () => {
+  it("a singular is not written as a plural", () => {
     draw({
       byMonth: row({ key: "2026-03", net: 100, trades: 1 }),
       byDay: new Map([["2026-03-02", row({ key: "2026-03-02", net: 100, trades: 1, wins: 1 })]]),
@@ -109,22 +111,23 @@ describe("zaglavlje meseca", () => {
     expect(screen.getByText(/1 trade · 1 day/)).toBeInTheDocument();
   });
 
-  it("prazan mesec kaže nulu, a ne prazninu", () => {
-    // Mesec bez trejdova je stvarno stanje (odmor, pauza), i nula je tu tačan
-    // odgovor — za razliku od pojedinačnog dana, gde „nema odluke" nije nula.
+  it("an empty month says zero, not nothing", () => {
+    // A month with no trades is a real state (a holiday, a break), and zero is
+    // the right answer there — unlike a single day, where "no decision" is not
+    // a zero.
     draw({ byMonth: null, byDay: new Map(), byWeek: new Map() });
     expect(screen.getByText("$0.00")).toBeInTheDocument();
     expect(screen.getByText(/0 trades · 0 days/)).toBeInTheDocument();
   });
 
-  it("valuta naloga se poštuje", () => {
+  it("the account's currency is respected", () => {
     draw({ currency: "EUR" });
-    // Dvaput: jednom u zaglavlju meseca, jednom u nedeljnoj koloni — knjiga je
-    // cela u jednoj nedelji, pa su ta dva zbira isti broj.
+    // Twice: once in the month header, once in the week column — the book fits
+    // entirely in one week, so the two totals are the same number.
     expect(screen.getAllByText("+€800.00")).toHaveLength(2);
   });
 
-  it("napred se ne ide u budućnost", () => {
+  it("there is no stepping forward into the future", () => {
     draw();
     expect(screen.getByLabelText("Next month")).toHaveAttribute(
       "aria-disabled",
@@ -136,7 +139,7 @@ describe("zaglavlje meseca", () => {
     );
   });
 
-  it("iz prošlog meseca postoji povratak na danas", () => {
+  it("from a past month there is a way back to today", () => {
     draw({ monthKey: "2026-01" });
     expect(screen.getByText("Today")).toBeInTheDocument();
     expect(screen.getByLabelText("Next month")).toHaveAttribute(
@@ -146,34 +149,34 @@ describe("zaglavlje meseca", () => {
   });
 });
 
-describe("ćelije dana — novac", () => {
-  it("svaki dan nosi svoj iznos sa znakom", () => {
+describe("day cells — money", () => {
+  it("every day carries its amount with a sign", () => {
     draw();
     expect(screen.getByText("+$1,200.00")).toBeInTheDocument();
     expect(screen.getByText("-$400.00")).toBeInTheDocument();
   });
 
-  it("dan bez trgovanja ne ispisuje nulu", () => {
-    // 2026-03-05 nije u knjizi. Prazna ćelija i „$0.00" su dve različite
-    // tvrdnje, i samo jedna od njih je tačna.
+  it("a day with no trading does not print a zero", () => {
+    // 2026-03-05 is not in the book. An empty cell and "$0.00" are two
+    // different claims, and only one of them is true.
     const { container } = draw();
     const petak = dayCell(container, "2026-03-05");
     expect(petak.textContent).not.toContain("$");
     expect(petak.textContent).not.toContain("trade");
-    // Ćelija i dalje POSTOJI i nosi broj dana — nije sakrivena.
+    // The cell still EXISTS and carries its day number — it is not hidden.
     expect(petak.textContent).toContain("5");
   });
 
-  it("trgovan dan koji je izašao na nuli ISPISUJE nulu", () => {
-    // Sreda: jedan trejd, breakeven. To je stvarna nula i mora da se vidi —
-    // ovo je druga strana pravila iz prethodnog testa.
+  it("a traded day that finished flat DOES print a zero", () => {
+    // Wednesday: one trade, breakeven. That is a real zero and has to be
+    // visible — this is the other side of the previous test's rule.
     const { container } = draw();
     const sreda = dayCell(container, "2026-03-04");
     expect(sreda.textContent).toContain("$0.00");
     expect(sreda.textContent).toContain("1 trade");
   });
 
-  it("ishod boji ćeliju, i breakeven nije ni dobitak ni gubitak", () => {
+  it("the outcome colours the cell, and breakeven is neither a win nor a loss", () => {
     const { container } = draw();
     expect(dayCell(container, "2026-03-02").className).toContain("--profit");
     expect(dayCell(container, "2026-03-03").className).toContain("--loss");
@@ -183,23 +186,23 @@ describe("ćelije dana — novac", () => {
     expect(sreda).not.toContain("--loss");
   });
 
-  it("današnji dan nosi prsten, ostali ne", () => {
+  it("today carries a ring, the other days do not", () => {
     const { container } = draw();
     expect(dayCell(container, "2026-03-06").className).toContain("ring-primary");
     expect(dayCell(container, "2026-03-05").className).not.toContain("ring-primary");
   });
 
-  it("dan sa dnevnim izveštajem nosi oznaku", () => {
+  it("a day with a daily report carries a marker", () => {
     draw();
     expect(screen.getAllByLabelText("Day has a daily report")).toHaveLength(1);
   });
 });
 
-describe("prebacivanje metrike", () => {
-  it("R se ne prikazuje kao nula kad nije meren", () => {
-    // Sreda ima jedan trejd ali `rTrades = 0` — trejd bez stopa nema jedinicu
-    // rizika. „0.00R" bi tvrdilo da je trejd završio na nuli rizika, što je
-    // druga tvrdnja od „ne mogu da ga izrazim u R".
+describe("switching the metric", () => {
+  it("R is not displayed as zero when it was not measured", () => {
+    // Wednesday has one trade but `rTrades = 0` — a trade with no stop has no
+    // unit of risk. "0.00R" would claim the trade finished at zero risk, which
+    // is a different claim from "I cannot express it in R".
     const { container } = render(
       <MonthCalendar
         monthKey="2026-03"
@@ -213,20 +216,21 @@ describe("prebacivanje metrike", () => {
         currency="USD"
       />,
     );
-    // Metrika se bira kroz Radix Select, koji u jsdom ne otvara listu bez
-    // pravog pokazivača. Ono što se ovde tvrdi je da podaci NOSE razliku —
-    // `cellValue` je čista funkcija nad njima i grana po `rTrades === 0`.
+    // The metric is picked through a Radix Select, which does not open its list
+    // in jsdom without a real pointer. What is asserted here is that the data
+    // CARRIES the distinction — `cellValue` is a pure function over it and
+    // branches on `rTrades === 0`.
     expect(byDay.get("2026-03-04")?.rTrades).toBe(0);
     expect(byDay.get("2026-03-02")?.rTrades).toBe(3);
     expect(container).toBeTruthy();
   });
 });
 
-describe("nedeljna kolona", () => {
-  it("nedelja nosi zbir svojih dana", () => {
+describe("the week column", () => {
+  it("a week carries the sum of its days", () => {
     const { container } = draw();
-    // +1200 − 400 + 0 = +800, i to je isti broj kao mesečni, jer je knjiga
-    // cela u jednoj nedelji. Pojavljuje se tačno dvaput: zaglavlje i nedelja.
+    // +1200 − 400 + 0 = +800, the same number as the month's, because the book
+    // fits entirely in one week. It appears exactly twice: header and week.
     expect(within(container).getAllByText("+$800.00")).toHaveLength(2);
   });
 });
