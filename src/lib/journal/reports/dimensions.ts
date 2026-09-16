@@ -263,15 +263,15 @@ const WEEKDAYS = [
 ] as const;
 
 /**
- * Ime dana iz `yyyy-MM-dd` ključa, bez ponovnog razrešavanja zone.
+ * A weekday name from a `yyyy-MM-dd` key, without resolving the timezone again.
  *
- * Delegira `isoWeekdayOfDayKey`, koji vraća ISO numeraciju 1 = ponedeljak …
- * 7 = nedelja. `WEEKDAYS` počinje nedeljom, pa `iso % 7` preslikava 7 → 0.
+ * Delegates to `isoWeekdayOfDayKey`, which returns ISO numbering, 1 = Monday …
+ * 7 = Sunday. `WEEKDAYS` starts on Sunday, so `iso % 7` maps 7 → 0.
  *
- * Ranije je ovde stajao sopstveni `new Date(...Z).getUTCDay()` — tačan, ali
- * druga implementacija istog kalendarskog računa, sa drugom numeracijom (0–6).
- * Dve numeracije za isto pitanje su tačno onaj oblik koji se pomeša pri prvoj
- * izmeni.
+ * This used to hold its own `new Date(...Z).getUTCDay()` — correct, but a
+ * second implementation of the same calendar arithmetic, on a different
+ * numbering (0–6). Two numberings for one question are exactly the shape that
+ * gets confused at the first edit.
  */
 function weekdayOf(dayKey: string): string | null {
   const iso = isoWeekdayOfDayKey(dayKey);
@@ -314,19 +314,20 @@ const tradeDimensions: Dimension[] = [
   // the derived `outcome` dimension below, and could contradict it without any
   // report noticing. Group by "Ishod" instead.
   column("exit_reason", "Exit Reason", "exit_reason"),
-  // `text[]` od migracije `20260819120000_mistake_multi` — trejd sa dve greške
-  // stoji u oba reda, pa redovi NE sabiraju ukupan broj trejdova. Isto važi za
-  // tagove ispod i `tagColumn` je taj koji to saopštava.
+  // `text[]` since migration `20260819120000_mistake_multi` — a trade with two
+  // mistakes stands in both rows, so the rows do NOT sum to the total trade
+  // count. The same holds for the tags below, and `tagColumn` is what says so.
   tagColumn("mistake", "Mistake"),
   column("miss_reason", "Miss reason", "miss_reason"),
   column("status", "Status"),
   {
-    // Koliko je trejd dobro ODIGRAN, 1–5, uneto posle izlaska.
+    // How well the trade was PLAYED, 1–5, entered after the exit.
     //
-    // Neocenjen trejd vraća `null`, NE `EMPTY_BUCKET`, i to je namerno: ocena
-    // je subjektivna i popunjava se retko dok se navika ne stvori, pa bi red
-    // „—" mesecima bio najveći u tabeli i gurao pravih pet redova u podnožje.
-    // `null` ga izbacuje iz izveštaja umesto da mu da najglasniji red.
+    // An ungraded trade returns `null`, NOT `EMPTY_BUCKET`, and that is
+    // deliberate: the rating is subjective and gets filled in rarely until the
+    // habit forms, so a "—" row would be the largest in the table for months
+    // and push the five real rows into the footer. `null` drops it out of the
+    // report instead of giving it the loudest row.
     key: "execution_rating",
     label: "Execution rating (1–5)",
     group: "trade",

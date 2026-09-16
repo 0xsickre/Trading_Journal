@@ -39,17 +39,17 @@ export type MetricContext = {
   pnlBasis: PnlMode;
   range: BreakevenRange;
   /**
-   * `currency` je STAJALA ovde i nijedno mesto je nije čitalo.
+   * `currency` USED TO SIT here and nothing read it.
    *
-   * Nalaz Koraka 9. Nijedna od trideset metrika je nije dodirivala, ni engine,
-   * ni jedna komponenta — a bila je OBAVEZNA, pa je svaki pozivalac morao da
-   * smisli vrednost. `breakdownByField` je smislio `"USD"`, što je čitaocu
-   * govorilo da je razlaganje na dashboard-u dolarsko. Nije bilo: funkcija
-   * vraća sirove brojeve koje pozivalac formatira u valuti svog naloga.
+   * A Step 9 finding. None of the thirty metrics touched it, nor the engine,
+   * nor any component — and it was REQUIRED, so every caller had to invent a
+   * value. `breakdownByField` invented `"USD"`, which told the reader the
+   * dashboard's breakdown was in dollars. It was not: the function returns raw
+   * numbers the caller formats in its own account's currency.
    *
-   * Formatiranje ima svoj kontekst (`units.ts`, `FormatContext.currency`) i
-   * njega valuta zaista zanima. Dva konteksta sa istim imenom polja, od kojih
-   * jedno ne radi ništa, su tačno onaj oblik greške zbog kojeg Korak 5 postoji.
+   * Formatting has its own context (`units.ts`, `FormatContext.currency`) and
+   * that one genuinely cares about currency. Two contexts sharing a field name,
+   * one of which does nothing, are exactly the shape of error Step 5 exists for.
    */
   /**
    * Playbook rule answers, when loaded. Rides on the context for the same

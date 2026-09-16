@@ -12,14 +12,25 @@ sense for multi-user SaaS. Where it differs, the difference is written down and 
 `ROADMAP.md`.
 
 **On language**, counted rather than claimed, because this is the first thing a reader can check.
-Identifiers are English everywhere. This README and `CODE_REVIEW.md` are English; `ROADMAP.md`,
-`PARITY.md` and `docs/` are largely Serbian. The interface is mostly English — about 46 of some
-1,700 visible strings are Serbian, clustered where the text explains rather than names: the
-sentences beside fields, the daily and weekly review prompts, the bot bridge's quarantine messages.
-Comments are mixed: 61 of 386 source files carry some Serbian (665 lines), and 41 of 101 migrations
-do. Source comments are being converted as files are touched. Migrations are not, on purpose — an
-applied migration is never edited here, and the comment inside one is part of the record of the day
-it was written.
+Identifiers and code comments in `src/` are English. This README and `CODE_REVIEW.md` are English;
+`ROADMAP.md`, `PARITY.md` and `docs/` are largely Serbian. Migrations keep their Serbian comments on
+purpose — an applied migration is never edited here, and the comment inside one is part of the
+record of the day it was written.
+
+**The interface is deliberately half-and-half, and the line is a clean one.** 153 of 1,663
+human-readable strings in `src/` are Serbian, and they are not scattered:
+
+| Surface | Serbian strings |
+|---|---|
+| Dashboard, `/reports`, journal grid, playbooks | **0** |
+| Daily / weekly / tracker / focus goal | 68 |
+| Bot bridge panel | 34 |
+| Mentor-export prompt | 28 |
+
+The half that **measures** is English; the half the trader **writes into** is Serbian. That is the
+trader's own language for their own prose, and it stays. (An earlier version of this paragraph said
+"about 46 of some 1,700" — that count scanned only JSX text and a few attributes, and missed
+toasts, error messages and label maps. The number above is the corrected one.)
 
 Deploy: Vercel · Database: Supabase Postgres (a separate project from the dashboard's)
 

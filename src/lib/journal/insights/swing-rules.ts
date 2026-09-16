@@ -256,9 +256,10 @@ export const unplannedPartial: Rule = {
   evaluate: (ctx) => {
     const out: Insight[] = [];
     for (const e of ctx.trades) {
-      // „Plan napisan" sad znači rečenica ILI uneti nivoi. Smer širenja je
-      // bitan: predikat čini da pravilo okida REĐE, nikad češće — nijedan
-      // postojeći insight ne počinje da iznosi novu optužbu zbog ove izmene.
+      // "A plan was written" now means a sentence OR entered rungs. The
+      // direction of the widening matters: the predicate makes the rule fire
+      // LESS often, never more — no existing insight starts making a new
+      // accusation because of this change.
       const written =
         (stringFieldValue(e.trade.row, "scale_out_plan") ?? "").trim() !== "";
       const levelled =

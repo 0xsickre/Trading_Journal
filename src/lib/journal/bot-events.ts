@@ -29,7 +29,7 @@ export type BotEventRow = {
 /**
  * Why an event did not become a trade, in the language of the fix.
  *
- * Deliberately not a generic "greška": every one of these has a different
+ * Deliberately not a generic "error": every one of these has a different
  * remedy, and a quarantine list that cannot tell them apart is a list nobody
  * works through.
  */

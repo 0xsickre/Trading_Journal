@@ -1,40 +1,41 @@
 /**
- * Odakle broj u koloni novca — i kad ga tamo nema.
+ * Where a money column's number came from — and when it is not there at all.
  *
- * View već nosi tri kolone koje na to odgovaraju: `point_value_source`,
- * `fx_rate_source` i `money_overridden`. Do sada je ekran čitao SAMO prvu, i to
- * na jednom mestu (`journal-grid.tsx`, značka „unpriced").
+ * The view already carries three columns that answer this:
+ * `point_value_source`, `fx_rate_source` and `money_overridden`. Until now the
+ * screen read ONLY the first, and in one place (`journal-grid.tsx`, the
+ * "unpriced" badge).
  *
- * Posledica je bila rupa koju je Korak 3 primetio i odložio dovde: trejd na
- * instrumentu koji IMA `point_value`, ali kojem kurs nije poznat, ima sve
- * novčane kolone null — a `point_value_source` je uredno `snapshot`, pa značke
- * nema. Korisnik vidi golu crticu u koloni P/L i nema šta da uradi povodom nje,
- * jer ništa ne kaže da je razlog kurs.
+ * The consequence was a hole Step 3 spotted and deferred to here: a trade on an
+ * instrument that HAS a `point_value` but whose FX rate is unknown has every
+ * money column null — while `point_value_source` reads a perfectly healthy
+ * `snapshot`, so no badge appears. The user sees a bare dash in the P/L column
+ * and has nothing to do about it, because nothing says the reason is the rate.
  *
- * Obrnut slučaj je isto tako nevidljiv: `money_overridden` znači da bruto NIJE
- * izračunat iz cena nego prepisan sa izvoda ili unet rukom. Taj broj je često
- * TAČNIJI od izračunatog — platforma ga je konvertovala po kursu iz trenutka
- * izvršenja, koji se ne može ni saznati ni ponoviti. Ali je drugačije nastao, i
- * čitalac koji poredi P/L sa R-om treba da zna zašto se ne poklapaju: R se i
- * tada računa IZ CENA.
+ * The reverse case is just as invisible: `money_overridden` means gross was NOT
+ * computed from prices but transcribed from a statement or typed by hand. That
+ * number is often MORE accurate than the computed one — the platform converted
+ * it at the rate in force at execution, which can be neither recovered nor
+ * reproduced. But it came about differently, and a reader comparing P/L against
+ * R should know why they disagree: R is still computed FROM PRICES.
  *
- * Zato jedna funkcija, a ne tri uslova raštrkana po ekranima — ista lekcija kao
- * Korak 5.
+ * Hence one function, rather than three conditions scattered across screens —
+ * the same lesson as Step 5.
  */
 
 import type { PositionStat, TradeRow } from "./types";
 
 export type MoneyProvenance = {
-  /** Kratka oznaka za značku, ili null kad nema šta da se kaže. */
+  /** Short badge text, or null when there is nothing to say. */
   label: "unpriced" | "no FX" | "no account" | "broker" | null;
-  /** Rečenica koja kaže šta da se uradi, ili zašto je broj takav kakav je. */
+  /** A sentence saying what to do, or why the number is the way it is. */
   title: string | null;
   /**
-   * Da li su novčane kolone null ZBOG nedostatka podatka.
+   * Whether the money columns are null BECAUSE data is missing.
    *
-   * Razlikuje se od `label != null`: `broker` je oznaka porekla, ne kvara —
-   * novac postoji i tačan je. Ekran koji hoće da oboji problem crvenim mora da
-   * gleda ovo, ne postojanje značke.
+   * Different from `label != null`: `broker` marks provenance, not breakage —
+   * the money is there and it is correct. A screen that wants to colour a
+   * problem red has to read this, not the presence of a badge.
    */
   unpriced: boolean;
 };
@@ -42,13 +43,13 @@ export type MoneyProvenance = {
 const NONE: MoneyProvenance = { label: null, title: null, unpriced: false };
 
 /**
- * Poreklo novca za jedan trejd.
+ * Where one trade's money came from.
  *
- * Redosled provera je redosled UZROKA, ne važnosti. Kad je bruto prepisan, ni
- * specifikacija ni kurs mu nisu bili potrebni — pa nedostatak nijednog od njih
- * nije razlog za uzbunu i `broker` pobeđuje. Tek kad se broj RAČUNA iz cena,
- * `point_value` i kurs postaju uslovi, i tada nedostatak bilo kojeg znači da
- * novca nema.
+ * The order of the checks is the order of CAUSE, not of importance. When gross
+ * was transcribed, neither the contract spec nor the FX rate was needed — so
+ * the absence of either is no cause for alarm and `broker` wins. Only when the
+ * number is COMPUTED from prices do `point_value` and the rate become
+ * preconditions, and then the absence of either means there is no money figure.
  */
 export function moneyProvenance(
   stats: Pick<
@@ -98,34 +99,36 @@ export function moneyProvenance(
 }
 
 /**
- * Zatvoreni trejdovi koje nijedna statistika ne broji.
+ * Closed trades that no statistic counts.
  *
- * NALAZ KORAKA 9, i najozbiljnije mesto na kojem broj na ekranu može da bude
- * pogrešan a da niko ne primeti — jer nije pogrešan, nego NEPOTPUN.
+ * THE STEP 9 FINDING, and the most serious place a number on screen can be
+ * wrong without anyone noticing — because it is not wrong, it is INCOMPLETE.
  *
- * `toRealized` odbacuje svaki red čiji je `net_pl` null:
+ * `toRealized` discards every row whose `net_pl` is null:
  *
  *     if (!stats || stats.net_pl == null) return [];
  *
- * To je tačna odluka. Trejd koji se ne može vrednovati ne sme da uđe u zbir kao
- * nula, i ceo projekat je oko toga izgrađen. Ali odbačen red nestaje iz SVEGA
- * što se od `toRealized` gradi: broja trejdova, neto rezultata, profit factora,
- * expectancy, Sickre Score-a, kalendara, izveštaja i uvida.
+ * That is the right decision. A trade that cannot be valued must not enter a
+ * total as a zero, and this whole project is built around that. But a discarded
+ * row vanishes from EVERYTHING built on `toRealized`: the trade count, the net
+ * result, profit factor, expectancy, the Sickre Score, the calendar, the
+ * reports and the insights.
  *
- * Trejder sa deset zatvorenih trejdova, od kojih su tri na simbolu bez
- * instrumenta, vidi „7 trades" i neto koji izostavlja tri stvarna rezultata.
- * `/journal` od Koraka 8 nosi značku po redu, ali dashboard i izveštaji ne kažu
- * ništa — a to su ekrani na kojima se gleda ukupno stanje.
+ * A trader with ten closed trades, three of them on a symbol with no
+ * instrument, sees "7 trades" and a net that leaves out three real results.
+ * `/journal` has carried a per-row badge since Step 8, but the dashboard and
+ * the reports say nothing — and those are the screens where the overall state
+ * is read.
  *
- * Ova funkcija broji upravo taj razmak, da bi ekran mogao da ga prizna. NE
- * pokušava da ga popuni: procena bi bila izmišljanje, a to je greška od koje
- * sve ovo i beži.
+ * This function counts exactly that gap, so a screen can acknowledge it. It
+ * does NOT try to fill it: an estimate would be invention, and that is the
+ * error all of this exists to avoid.
  */
 export function unpricedClosedCount(trades: readonly TradeRow[]): number {
   let n = 0;
   for (const t of trades) {
-    // Samo zatvoreni. Planiran ili propušten trejd nema šta da vrednuje, a
-    // otvoren još nije ni realizovao rezultat — nijedan od njih nije razmak.
+    // Closed only. A planned or missed trade has nothing to value, and an open
+    // one has not realized a result yet — neither of them is part of the gap.
     if (t.status !== "closed") continue;
     if (t.stats?.net_pl == null) n++;
   }

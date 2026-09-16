@@ -60,7 +60,7 @@ export type Instrument = {
   point_value: number;
   tick_size: number | null;
   tick_value: number | null;
-  /** Valuta u kojoj je instrument KOTIRAN — valuta `point_value`, pa i bruto P&L-a pre konverzije. */
+  /** The currency the instrument is QUOTED in — the currency of `point_value`, and so of gross P&L before conversion. */
   quote_currency: string;
   is_active: boolean;
   sort_order: number;
@@ -112,9 +112,9 @@ export const POINT_VALUE_SOURCES = ["snapshot", "instrument", "missing"] as cons
 export type PointValueSource = (typeof POINT_VALUE_SOURCES)[number];
 
 /**
- * Odakle kurs. `missing` i `no_account` znače da su novčane kolone null — isto
- * pravilo kao `point_value_source`, i isti razlog: bolje ništa nego jen sabran
- * sa dolarom.
+ * Where the rate came from. `missing` and `no_account` mean the money columns
+ * are null — the same rule as `point_value_source`, and for the same reason:
+ * better nothing than a yen added to a dollar.
  */
 export const FX_RATE_SOURCES = [
   "snapshot",
@@ -127,29 +127,32 @@ export type FxRateSource = (typeof FX_RATE_SOURCES)[number];
 type StatsViewRow = Database["public"]["Views"]["tj_position_stats"]["Row"];
 
 /**
- * Jedan red `tj_position_stats` — IZVEDEN iz generisanog tipa, ne prepisan.
+ * One `tj_position_stats` row — DERIVED from the generated type, not transcribed.
  *
- * Ovo je do sada bio ručni spisak od 22 polja naspram 29 kolona view-a, pa je
- * `statRows as PositionStat[]` u `trades.ts` bio tvrdnja koju ništa nije
- * proveravalo: sedam kolona (`user_id`, `account_id`, `instrument`,
- * `direction`, `status`, `dir_mult`, `gross_points`) tip nije ni poznavao, a
- * `position_id` i dva `*_source` polja su bila sužena na ne-null iako
- * PostgREST za view ne garantuje ništa.
+ * This used to be a hand-written list of 22 fields against the view's 29
+ * columns, which made `statRows as PositionStat[]` in `trades.ts` an assertion
+ * nothing checked: seven columns (`user_id`, `account_id`, `instrument`,
+ * `direction`, `status`, `dir_mult`, `gross_points`) the type did not even know
+ * about, while `position_id` and the two `*_source` fields were narrowed to
+ * non-null even though PostgREST guarantees nothing for a view.
  *
- * Sada izmena view-a menja i ovaj tip. Kolona koja nestane ili promeni tip
- * obara typecheck ovde — što je tačno ono što ručni spisak nije mogao.
+ * Now a change to the view changes this type too. A column that disappears or
+ * changes type fails the typecheck here — exactly what a hand-written list
+ * could not do.
  *
- * `Pick`, a ne ceo red: view nosi i `user_id`, `account_id`, `instrument`,
- * `direction`, `status`, `dir_mult` i `gross_points`, koje aplikacija čita sa
- * SAME POZICIJE a ne odavde (provereno grep-om — nijedno mesto ne dodiruje
- * `stats.instrument` ni ostale). Projekcija je poštenija od `Omit`-a: govori
- * šta se zaista troši, a nova kolona u view-u ne postaje obaveza za svaki
- * fixture koji je nikad neće pročitati.
+ * `Pick`, not the whole row: the view also carries `user_id`, `account_id`,
+ * `instrument`, `direction`, `status`, `dir_mult` and `gross_points`, which the
+ * application reads off THE POSITION ITSELF rather than from here (verified by
+ * grep — nothing touches `stats.instrument` or the others). A projection is
+ * more honest than an `Omit`: it states what is actually consumed, and a new
+ * column in the view does not become an obligation for every fixture that will
+ * never read it.
  *
- * Tri sužavanja ostaju, i to su jedina tri:
- *   • `position_id` je `p.id`, primarni ključ — nikad null u praksi;
- *   • dva `*_source` polja su `CASE` sa `ELSE` granom, pa uvek vrate vrednost.
- * `narrowPositionStat` ih proverava u vreme izvršavanja, i to ne slepo.
+ * Three narrowings remain, and they are the only three:
+ *   • `position_id` is `p.id`, the primary key — never null in practice;
+ *   • the two `*_source` fields are a `CASE` with an `ELSE` arm, so they always
+ *     return a value.
+ * `narrowPositionStat` checks them at runtime, and not blindly.
  */
 export type PositionStat = Pick<
   StatsViewRow,
@@ -179,12 +182,14 @@ export type PositionStat = Pick<
 };
 
 /**
- * Suzi jedan red view-a u `PositionStat`, ili odbij red bez `position_id`.
+ * Narrow one view row into a `PositionStat`, or reject a row with no
+ * `position_id`.
  *
- * Nepoznata vrednost u `*_source` polju pada na `"missing"` — namerno u smeru
- * OPREZA: `missing` je oznaka koja kaže „novac ovde nije pouzdan", pa nepoznato
- * stanje čita kao neprocenjeno umesto da ga tiho prizna kao snimljeno. Obrnut
- * izbor bi vrednost nepoznatog porekla predstavio kao proverenu.
+ * An unknown value in a `*_source` field falls back to `"missing"` — leaning
+ * deliberately towards CAUTION: `missing` is the label that says "the money
+ * here is not trustworthy", so an unknown state reads as unvalued rather than
+ * being quietly accepted as recorded. The opposite choice would present a value
+ * of unknown provenance as a verified one.
  */
 export function narrowPositionStat(row: StatsViewRow): PositionStat | null {
   if (!row.position_id) return null;

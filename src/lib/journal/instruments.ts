@@ -8,7 +8,7 @@ import type { Instrument } from "./types";
 export type InstrumentSpec = {
   point_value: number | null;
   tick_size: number | null;
-  /** Valuta kotacije — valuta u kojoj `point_value` izražava novac. */
+  /** The quote currency — the currency `point_value` expresses money in. */
   quote_currency: string | null;
 };
 
@@ -96,9 +96,10 @@ export function instrumentSnapshot(
   symbol: string | null | undefined,
   specs: Map<string, InstrumentSpec>,
   /**
-   * Valuta naloga na koji trejd ide. Bez nje se ne zna da li je konverzija
-   * uopšte potrebna, pa se kurs ne snima — view tada javi `fx_rate_source`
-   * 'missing' ili 'no_account' umesto da vrednuje jene kao dolare.
+   * The currency of the account the trade goes to. Without it there is no way
+   * to know whether a conversion is needed at all, so no rate is recorded — the
+   * view then reports `fx_rate_source` 'missing' or 'no_account' instead of
+   * valuing yen as dollars.
    */
   accountCurrency?: string | null,
 ): {
@@ -109,7 +110,7 @@ export function instrumentSnapshot(
 } {
   const spec = symbol ? specs.get(symbol) : undefined;
   const quote = spec?.quote_currency ?? null;
-  // Isti izraz koji view ima u SQL-u, i koji forma koristi za pregled.
+  // The same expression the view has in SQL, and the form uses for its preview.
   const { rate } = resolveFxRate({
     quoteCurrency: quote,
     accountCurrency,

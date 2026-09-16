@@ -48,14 +48,15 @@ function numOrNull(v: unknown): number | null {
  */
 export function daysBetweenKeys(from: string, to: string): number {
   if (!from || !to || to < from) return 0;
-  // 1-bazno: dan otvaranja se broji kao prva sesija držanja, pa `from === to`
-  // daje 1 a ne 0. `daysBetweenDayKeys` je 0-bazna kalendarska razlika i tu
-  // razliku u konvenciji nosi ovo `+ 1` — jedino mesto gde stoji.
+  // 1-based: the open day counts as the first session held, so `from === to`
+  // gives 1 rather than 0. `daysBetweenDayKeys` is a 0-based calendar
+  // difference, and this `+ 1` carries that difference in convention — the only
+  // place it stands.
   //
-  // Ranije je ovo bila petlja koja je dodavala po jedan dan i brojala korake,
-  // sa gornjom granicom od 3650. Ista aritmetika, ali izvedena drugim putem od
-  // kanonske funkcije, pa su dve implementacije mogle da se raziđu oko prelaska
-  // preko prestupne godine ili promene vremena.
+  // This used to be a loop adding one day at a time and counting steps, capped
+  // at 3650. The same arithmetic, but arrived at by a different route than the
+  // canonical function, so the two implementations could drift apart over a
+  // leap year or a clock change.
   return daysBetweenDayKeys(from, to) + 1;
 }
 

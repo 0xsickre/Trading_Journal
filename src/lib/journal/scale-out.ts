@@ -1,16 +1,16 @@
 /**
- * Planirani nivoi izlaska — koliko procenata pozicije ide na kojoj ceni.
+ * Planned exit rungs — what percentage of the position leaves at which price.
  *
- * Namerno NIJE u `plan-calculations.ts`. Taj modul je MONEY_MODULE pod podom
- * pokrivenosti 100 % za statement-e i funkcije; svaka nova grana tamo košta
- * test koji mora da postoji zbog praga, a ne zbog tvrdnje. Ovo je zaseban
- * modul sa sopstvenim testom.
+ * Deliberately NOT in `plan-calculations.ts`. That module is a MONEY_MODULE
+ * under a 100 % floor for statements and functions; every new branch there
+ * costs a test that has to exist because of the threshold rather than because
+ * of an assertion. This is a separate module with its own test.
  *
- * CENA, NE R. Svaki drugi nivo na trejdu je cena — entry, stop, target — pa bi
- * jedan nivo u R-u tražio od čitaoca da drži dve jedinice u glavi na istom
- * ekranu. R se IZVODI, kroz postojeći `computePlannedRewardR`, i nigde se ne
- * čuva: čuvanje izvedene vrednosti je tačno ono što ovaj repo svuda odbija,
- * jer izmenjen stop tiho učini sačuvani R netačnim.
+ * PRICE, NOT R. Every other level on a trade is a price — entry, stop, target —
+ * so a single level in R would ask the reader to hold two units in their head
+ * on one screen. R is DERIVED, through the existing `computePlannedRewardR`,
+ * and stored nowhere: storing a derived value is exactly what this repo refuses
+ * everywhere, because a changed stop quietly makes a stored R untrue.
  */
 
 export type ScaleOutLevel = {
@@ -19,12 +19,12 @@ export type ScaleOutLevel = {
   price: number;
 };
 
-/** Red u editoru: oba polja su tekst dok se kucaju, i oba smeju biti prazna. */
+/** An editor row: both fields are text while being typed, and both may be empty. */
 export type ScaleOutRow = { pct: string; price: string };
 
 /**
- * Najveći dozvoljen zbir. Tačno 100 je legitiman pun stepenasti izlaz, pa
- * okidač ide na `> 100`, nikad na `>= 100`.
+ * The largest permitted total. Exactly 100 is a legitimate full scaled exit, so
+ * the trigger is `> 100`, never `>= 100`.
  */
 export const MAX_SCALE_OUT_PCT = 100;
 
@@ -36,12 +36,12 @@ function num(raw: string): number | null {
 }
 
 /**
- * Nivoi iz baze, očišćeni.
+ * The rungs out of the database, cleaned.
  *
- * `jsonb` kolona brani samo da je vrednost NIZ. Sve unutra je nepouzdano —
- * ručno pisan SQL, stariji klijent, uvoz — pa se svaki red proverava. Neispravan
- * red se ISPUŠTA umesto da obori stranicu: trejd sa jednim pokvarenim nivoom i
- * dalje mora da se otvori.
+ * A `jsonb` column only guarantees the value is an ARRAY. Everything inside is
+ * untrusted — hand-written SQL, an older client, an import — so every row is
+ * checked. An invalid row is DROPPED rather than failing the page: a trade with
+ * one broken rung still has to open.
  */
 export function parseScaleOutLevels(raw: unknown): ScaleOutLevel[] {
   if (!Array.isArray(raw)) return [];
@@ -57,14 +57,14 @@ export function parseScaleOutLevels(raw: unknown): ScaleOutLevel[] {
 }
 
 /**
- * Indeksi redova koje je korisnik započeo ali nije dovršio.
+ * The indices of rows the user started but did not finish.
  *
- * Ogledalo `incompleteExecRows()` u formi, i isti ugovor: nepotpun red BLOKIRA
- * snimanje sa numerisanom porukom, nikad se tiho ne ispušta. Red u kom je
- * upisano „60 %" bez cene je namera koja nije dovršena; progutati ga znači
- * slagati korisnika da je snimljena.
+ * A mirror of `incompleteExecRows()` in the form, and the same contract: an
+ * incomplete row BLOCKS the save with a numbered message, and is never dropped
+ * silently. A row holding "60 %" with no price is an intention that was not
+ * finished; swallowing it means lying to the user that it was saved.
  *
- * Potpuno prazan red NIJE nepotpun — to je samo prazan red editora.
+ * A completely empty row is NOT incomplete — it is just an empty editor row.
  */
 export function incompleteScaleOutRows(rows: readonly ScaleOutRow[]): number[] {
   return rows
@@ -89,7 +89,7 @@ export function totalScaleOutPct(rows: readonly ScaleOutRow[]): number {
   }, 0);
 }
 
-/** Redovi editora → ono što ide u kolonu. Prazni redovi otpadaju. */
+/** Editor rows → what goes into the column. Empty rows fall away. */
 export function scaleOutRowsToLevels(
   rows: readonly ScaleOutRow[],
 ): ScaleOutLevel[] {

@@ -35,7 +35,7 @@ export type FieldType =
   | "url"
   | "tags"
   | "rating"
-  /** Jedan broj iz kratkog raspona, biran klikom. Cifre, ne zvezdice — vidi `NumberChoice`. */
+  /** One number from a short range, picked by clicking. Digits, not stars — see `NumberChoice`. */
   | "days"
   | "computed";
 
@@ -233,19 +233,22 @@ const BASE_TABS: FormTab[] = [
         title: "How it exited",
         fields: [
           {
-            // Rezultat prepisan sa brokerovog izvoda, umesto izvedenog iz cena.
+            // A result transcribed off the broker's statement, instead of derived
+            // from prices.
             //
-            // Postoji zato što je broj koji broker prikazuje VEĆ konvertovan u
-            // valutu naloga, po kursu iz trenutka izvršenja koji se ne može ni
-            // saznati ni ponoviti. Za USDJPY, GER40 ili FDAX na dolarskom nalogu
-            // to je jedini način da rezultat bude tačan.
+            // It exists because the number a broker shows is ALREADY converted
+            // into the account's currency, at the rate in force at execution,
+            // which can be neither recovered nor reproduced. For USDJPY, GER40
+            // or FDAX on a dollar account this is the only way the result is
+            // correct.
             //
-            // Prazno = računaj iz cena, kao i do sada. Popunjeno = ovaj broj je
-            // BRUTO; provizije i swap se i dalje oduzimaju posebno, jer ih i
-            // brokerov izvod vodi kao zasebne kolone.
+            // Empty = compute from prices, as before. Filled in = this number is
+            // GROSS; commissions and swap are still subtracted separately,
+            // because the broker's statement keeps them as separate columns too.
             //
-            // R se NE menja: i dalje se meri iz cena, pa je i sa upisanim
-            // rezultatom R-multiple i dalje uporediv između trejdova.
+            // R does NOT change: it is still measured from prices, so even with
+            // a transcribed result the R-multiple stays comparable across
+            // trades.
             name: "gross_pnl_override",
             label: "Actual Gross P&L (broker)",
             type: "number",
@@ -285,14 +288,15 @@ const BASE_TABS: FormTab[] = [
         title: "Review",
         fields: [
           {
-            // Koliko je trejd dobro ODIGRAN — ne koliko je bio profitabilan.
-            // `setup_grade` je kvalitet setapa; ovo je jedino polje koje sudi
-            // izvršenju, i sudi mu POSLE izlaska. Gubitnik odigran po planu
-            // zaslužuje 5.
+            // How well the trade was PLAYED — not how profitable it was.
+            // `setup_grade` is the quality of the setup; this is the only field
+            // that judges execution, and it judges it AFTER the exit. A loser
+            // played to plan deserves a 5.
             //
-            // Config-driven: nema ponašanja, jedna vrednost, jedna grupa. Zato
-            // besplatno dobija dozvolu za upis (`positionFieldNames`), koerciju
-            // (`numericFieldNames`) i mesto u mentor paketu po redosledu forme.
+            // Config-driven: no behaviour, one value, one group. So it gets
+            // write permission (`positionFieldNames`), coercion
+            // (`numericFieldNames`) and a place in the mentor pack in form
+            // order, all for free.
             name: "execution_rating",
             label: "Execution rating",
             type: "rating",

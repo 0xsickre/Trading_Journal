@@ -102,19 +102,19 @@ export type Stats = {
  * to net P&L.
  */
 /**
- * Win rate nad ODLUČENIM trejdovima: dobici / (dobici + gubici) × 100.
+ * Win rate over DECIDED trades: wins / (wins + losses) × 100.
  *
- * Breakeven je van imenioca. Scratch od ±20 $ nije ni dobitak ni gubitak, i
- * računati ga kao gubitak potcenilo bi knjigu punu scratch-eva za nekoliko
- * poena — README §Money and counting.
+ * Breakeven is out of the denominator. A ±$20 scratch is neither a win nor a
+ * loss, and counting it as a loss would understate a book full of scratches by
+ * several points — README §Money and counting.
  *
- * Vraća `null` kad nijedan trejd nije odlučen, i to je jedina razlika između
- * ovog izraza i šest kopija koje su ga do sada nosile (`analytics`, `activity`,
- * `period-stats`, `month-calendar`, `insights/process-rules`,
- * `insights/day-rules`). Svaka je birala svoju rezervu — neka 0, neka „—" — pa
- * je odluka bila razasuta umesto donesena jednom. Sada je izbor vidljiv na
- * mestu poziva: `?? 0` gde je nula ugovor, sam `null` gde ekran treba da pokaže
- * odsustvo.
+ * Returns `null` when no trade was decided, and that is the only difference
+ * between this expression and the six copies that used to carry it
+ * (`analytics`, `activity`, `period-stats`, `month-calendar`,
+ * `insights/process-rules`, `insights/day-rules`). Each picked its own
+ * fallback — some 0, some "—" — so the decision was scattered rather than made
+ * once. Now the choice is visible at the call site: `?? 0` where zero is the
+ * contract, a bare `null` where the screen should show an absence.
  */
 export function winRateOf(wins: number, losses: number): number | null {
   const decided = wins + losses;
@@ -213,9 +213,10 @@ export function computeStats(
   // Win/loss is classified by realized money (p > 0 / p < 0), independent of the
   // user-entered `result` label. Breakeven (p === 0) is excluded from winRate's
   // denominator, so winRate + lossRate === 100 among decided trades only.
-  // `?? 0` je ugovor OVE funkcije: `Stats` je skup brojeva, a odluku „prikaži —"
-  // donosi prezentacioni sloj uz `wins`/`losses` koje nosi pored. To su popravke
-  // W1 i W2 utvrdile; vidi spec-conformance.test.ts §nula naspram null-a.
+  // `?? 0` is THIS function's contract: `Stats` is a set of numbers, and the
+  // decision to "show —" belongs to the presentation layer, which has the
+  // `wins`/`losses` carried alongside. Fixes W1 and W2 settled that; see
+  // spec-conformance.test.ts §zero versus null.
   const winRate = winRateOf(wins, losses) ?? 0;
   const avgR = rCount > 0 ? totalR / rCount : 0;
   const avgWinR = winRCount > 0 ? winRSum / winRCount : 0;
@@ -379,11 +380,12 @@ export function breakdownByField(
         : rawFieldDimension(field),
     metricKeys: ["net_pnl", "win_rate", "total_r", "avg_r"],
     dimensionContext: { reportByDate: new Map(), rules },
-    // Bez valute, i to je tačno umesto zakucanog `"USD"` koje je ovde stajalo.
-    // `metricContext.currency` služi FORMATIRANJU, a ova funkcija vraća sirove
-    // brojeve (`r.values.*`) koje pozivalac formatira u valuti svog naloga.
-    // Zakucan dolar nije proizvodio pogrešan broj, ali je čitaocu govorio da je
-    // razlaganje na dashboard-u dolarsko — što nije.
+    // No currency, and that is correct in place of the hardcoded `"USD"` that
+    // used to sit here. `metricContext.currency` serves FORMATTING, while this
+    // function returns raw numbers (`r.values.*`) that the caller formats in
+    // its own account's currency. A hardcoded dollar produced no wrong number,
+    // but it told the reader the dashboard's breakdown was in dollars — which
+    // it is not.
     metricContext: { pnlBasis: "net", range },
     sortBy: "net_pnl",
   });

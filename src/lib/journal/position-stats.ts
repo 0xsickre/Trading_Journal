@@ -22,26 +22,28 @@ export type PositionStatsInput = {
    */
   point_value?: number | null;
   /**
-   * Valuta kotacije → valuta naloga, snimljena pri upisu trejda.
+   * Quote currency → account currency, recorded when the trade was written.
    *
-   * 1 kad su valute iste. NULL znači da kurs nije poznat, i tada je novac null
-   * po istom pravilu kao za `point_value`: USDJPY vrednovan kursom 1 sabrao bi
-   * sto hiljada jena sa dolarima i ispisao ih sa `$`.
+   * 1 when the currencies match. NULL means the rate is unknown, and then money
+   * is null by the same rule as for `point_value`: a USDJPY trade valued at a
+   * rate of 1 would add a hundred thousand yen to dollars and print it with a
+   * `$`.
    *
-   * Snimljen, ne izračunat u trenutku čitanja — inače bi današnji kurs pomerao
-   * prošlogodišnji P&L pri svakom otvaranju stranice.
+   * Recorded, not computed at read time — otherwise today's rate would move
+   * last year's P&L every time the page opened.
    */
   fx_rate?: number | null;
   /**
-   * Bruto rezultat unet DIREKTNO, u valuti naloga.
+   * A gross result entered DIRECTLY, in the account's currency.
    *
-   * Kad postoji, zaobilazi `gross_points × point_value × fx_rate` u potpunosti —
-   * ni ugovorna specifikacija ni kurs mu nisu potrebni. Za to i postoji: ručni
-   * unos i brokerov CSV oba nose broj koji je platforma već konvertovala po
-   * kursu iz trenutka izvršenja, a taj kurs se ne može ni saznati ni ponoviti.
+   * When present it bypasses `gross_points × point_value × fx_rate` entirely —
+   * it needs neither the contract spec nor a rate. That is what it is for:
+   * manual entry and a broker's CSV both carry a number the platform already
+   * converted at the rate in force at execution, and that rate can be neither
+   * recovered nor reproduced.
    *
-   * `realized_r` ostaje računat IZ CENA i kad je ovo postavljeno. Novac i R su
-   * dva različita pitanja i ovo polje odgovara samo na prvo.
+   * `realized_r` is still computed FROM PRICES when this is set. Money and R
+   * are two different questions and this field answers only the first.
    */
   gross_pnl_override?: number | null;
   executions: ExecutionFill[];
@@ -62,7 +64,7 @@ export type ComputedPositionStats = {
   realized_r_net: number | null;
 };
 
-/** Znak smera: −1 za short, +1 inače. Predikat živi u `plan-calculations.ts`. */
+/** Direction sign: −1 for a short, +1 otherwise. The predicate lives in `plan-calculations.ts`. */
 export function tradeDirectionMultiplier(direction: string | null): 1 | -1 {
   return isShortDirection(direction) ? -1 : 1;
 }
@@ -135,9 +137,9 @@ export function computePositionStats(
     // Money is null without a point value OR without a rate; points and R are
     // price-space quantities and survive both, exactly as the SQL view has them.
     //
-    // Provizije i swap se NE množe kursom: brokeri ih knjiže u valuti depozita,
-    // a podrazumevane vrednosti iz kojih se popunjavaju stoje na nalogu. Zato
-    // `bruto × kurs − troškovi`, a ne `(bruto − troškovi) × kurs`.
+    // Commissions and swap are NOT multiplied by the rate: brokers book them in
+    // the deposit currency, and the defaults they are filled from sit on the
+    // account. Hence `gross × rate − costs`, not `(gross − costs) × rate`.
     if (hasOverride) {
       grossPl = override;
       netPl = grossPl - totalFees - totalSwap;
@@ -174,9 +176,10 @@ export function computePositionStats(
       if (pointValue != null && fxRate != null) {
         // Neto R deli novac novcem, pa imenilac mora u istu valutu kao brojilac.
         //
-        // Traži point_value i kurs čak i kad je `netPl` poznat preko override-a:
-        // rizik u novcu se i dalje izvodi iz cena. Zato R U NOVCU može ostati
-        // null dok su i neto rezultat i R U CENAMA poznati — razmak, ne bag.
+        // It needs point_value and the rate even when `netPl` is known through an
+        // override: risk in money is still derived from prices. That is why R IN
+        // MONEY can stay null while both the net result and R IN PRICE are
+        // known — a gap, not a bug.
         const riskMoney = riskDenom * pointValue * fxRate;
         if (riskMoney > 0 && netPl != null) {
           realizedRNet = netPl / riskMoney;

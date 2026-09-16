@@ -133,9 +133,10 @@ export function lifecycleStatusHint(status: string): string {
     case "partial":
       return "Partial exit.";
     case "closed":
-      // Bio je „Zatvoren trade." — jedina srpska rečenica među pet, i to na
-      // najčešćem statusu u knjizi. Ovaj tekst je `title` na svakoj značci u
-      // gridu, pa ga je korisnik viđao češće od bilo koje druge poruke ovde.
+      // This used to read "Zatvoren trade." — the one Serbian sentence among
+      // five, and on the most common status in the book. This text is the
+      // `title` on every badge in the grid, so the user saw it more often than
+      // any other message here.
       return "Closed trade — fully exited.";
     default:
       return "";

@@ -446,22 +446,24 @@ export function monthGridDays(monthKey: string): string[] {
 }
 
 /**
- * Zona u kojoj se trejd datira, po nalogu kome pripada.
+ * The timezone a trade is dated in, per the account it belongs to.
  *
- * Ovo je stajalo u pet kopija sa ČETIRI različita lanca rezervi:
+ * This stood in five copies with FOUR different fallback chains:
  *
- *   dashboard.tsx   ?? "America/New_York"                  ← bez naloga-primarnog
+ *   dashboard.tsx   ?? "America/New_York"            ← no primary-account step
  *   /daily          ?? primary.timezone
  *   /weekly         ?? primary.timezone
  *   /calendar       ?? primary?.timezone ?? DEFAULT_TZ
  *   /playbooks      ?? primary?.timezone ?? "America/New_York"
  *
- * Razlika nije kozmetička. Trejd bez `account_id` — a takav nastaje kad se nalog
- * obriše, jer je strani ključ `ON DELETE SET NULL` — Dashboard bi datirao po
- * njujorškom danu, a kalendar po zoni primarnog naloga. Za nalog u
- * `Europe/Berlin` to je razlika od jedne kolone u kalendaru, na istom trejdu.
+ * The difference is not cosmetic. A trade with no `account_id` — and one is
+ * created whenever an account is deleted, because the foreign key is
+ * `ON DELETE SET NULL` — would be dated by the Dashboard on a New York day and
+ * by the calendar in the primary account's zone. For an account in
+ * `Europe/Berlin` that is one column's difference in the calendar, on the same
+ * trade.
  *
- * Jedan lanac za sve: zona naloga → zona primarnog naloga → `DEFAULT_TZ`.
+ * One chain for everything: account zone → primary account zone → `DEFAULT_TZ`.
  */
 export function accountTimezoneResolver(
   accounts: readonly { id: string; timezone: string }[],

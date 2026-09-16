@@ -1,39 +1,40 @@
 /**
- * Opseg vrednosti na putu upisa trejda.
+ * Value ranges on the trade write path.
  *
- * `buildPositionPatch` je do sada bila jedina odbrana, i ona proverava IMENA
- * kolona i tip — ne opseg. Broj koji je konačan prolazi, pa je i −5000 prolazio.
+ * `buildPositionPatch` was the only defence until now, and it checks column
+ * NAMES and types — not ranges. A finite number passes, so −5000 passed too.
  *
- * Izmereno na živoj bazi pre ove izmene: ES, ulaz −5000, izlaz −4990,
- * `point_value` 50 → view ispisuje `gross_pl = 500`, `net_pl = 500`,
- * `realized_r = 1.00`. Ništa ne pada i ništa se ne označava — trejd izgleda kao
- * običan dobitak od 500 $. To je najgori mogući ishod za journal: ne greška,
- * nego SIGURAN pogrešan broj koji ulazi u profit factor, expectancy i Sickre
- * Score kao da je zarađen.
+ * Measured against the live database before this change: ES, entry −5000, exit
+ * −4990, `point_value` 50 → the view reports `gross_pl = 500`, `net_pl = 500`,
+ * `realized_r = 1.00`. Nothing fails and nothing is flagged — the trade looks
+ * like an ordinary $500 winner. That is the worst possible outcome for a
+ * journal: not an error, but a CONFIDENT wrong number entering profit factor,
+ * expectancy and the Sickre Score as if it had been earned.
  *
- * Zašto ovde, a ne samo CHECK u bazi: CHECK je i dodat (`20260816...`), i on je
- * taj koji zaustavlja i direktan PostgREST upis. Ova kopija postoji da bi
- * korisnik dobio rečenicu umesto teksta „violates check constraint
- * tj_positions_prices_positive". Isti dogovor koji `weekly/actions.ts` već
- * primenjuje na ponedeljak.
+ * Why here and not only a CHECK in the database: the CHECK was added too
+ * (`20260816...`), and it is the one that also stops a direct PostgREST write.
+ * This copy exists so the user gets a sentence instead of the text "violates
+ * check constraint tj_positions_prices_positive". The same bargain
+ * `weekly/actions.ts` already applies to Mondays.
  *
- * ODLUKA KOJU VREDI ZNATI: cena mora biti > 0. Postoji stvaran izuzetak —
- * WTI je 20.04.2020. namiren na −37,63 $. To je bila cena namirenja fjučersa u
- * jednom danu u istoriji, a ne popunjenje koje retail nalog vidi. Naspram toga
- * stoji svaki omašen znak, svaki „−" zalepljen iz izvoda i svaki minus otkucan
- * u polju cene. Odbijanje sa jasnom porukom je bolje od tihog prihvatanja, i
- * ako ikad zatreba, ovo je jedno mesto na kojem se pravilo menja.
+ * A DECISION WORTH KNOWING: a price must be > 0. There is a genuine exception —
+ * WTI settled at −$37.63 on 20 April 2020. That was a futures settlement price
+ * on one day in history, not a fill a retail account sees. Against it stands
+ * every missed sign, every "−" pasted out of a statement and every minus typed
+ * into a price field. Refusing with a clear message beats accepting silently,
+ * and if it is ever needed, this is the one place the rule changes.
  */
 
 import { z } from "zod";
 import { TRADE_IMAGE_KINDS } from "./tradingview-snapshot";
 
 /**
- * Kolone `tj_positions` koje nose CENU i zato moraju biti strogo pozitivne.
+ * The `tj_positions` columns that carry a PRICE and must therefore be strictly
+ * positive.
  *
- * `position_size` je ovde iako nije cena: količina od nula ili manje nije
- * pozicija. `gross_pnl_override` NIJE — gubitak je negativan broj i to je
- * njegova jedina ispravna vrednost kad se izgubi.
+ * `position_size` is here although it is not a price: a quantity of zero or
+ * less is not a position. `gross_pnl_override` is NOT — a loss is a negative
+ * number, and that is its only correct value when money was lost.
  */
 export const POSITIVE_TRADE_NUMBERS = [
   "entry_price",
@@ -44,14 +45,15 @@ export const POSITIVE_TRADE_NUMBERS = [
   "position_size",
 ] as const;
 
-/** Kolone koje moraju biti CEO pozitivan broj. Baza nosi isti CHECK. */
+/** Columns that must be a positive INTEGER. The database carries the same CHECK. */
 export const POSITIVE_TRADE_INTEGERS = [
   "time_stop_days",
-  // Donju granicu i celobrojnost hvata ova petlja; GORNJU (5) čuva DB CHECK i
-  // nedostižna je iz UI-ja sa tačno pet dugmadi. Ovde stoji, a ne kao sopstveni
-  // `z.number().int().min(1).max(5)`, zato što bi to bio nov statement u modulu
-  // koji nosi pod pokrivenosti 100 % — a ova petlja već postoji i već pokriva
-  // sve što se iz forme uopšte može poslati.
+  // The lower bound and integerness are caught by this loop; the UPPER bound (5)
+  // is held by the DB CHECK and is unreachable from a UI with exactly five
+  // buttons. It lives here rather than as its own
+  // `z.number().int().min(1).max(5)` because that would be a new statement in a
+  // module carrying a 100 % coverage floor — and this loop already exists and
+  // already covers everything the form can send at all.
   "execution_rating",
 ] as const;
 
@@ -67,15 +69,16 @@ const LABELS: Record<string, string> = {
 };
 
 /**
- * Proveri opseg brojeva u već očišćenom patch-u.
+ * Check the range of the numbers in an already-cleaned patch.
  *
- * Radi nad IZLAZOM `buildPositionPatch`, ne nad sirovim formularom: tamo je
- * koercija već obavljena, pa je ovde svaka vrednost ili broj ili null i provera
- * je o opsegu a ne o tipu. Vrednosti koje su prošle kroz `custom` bag se ne
- * diraju — one nemaju kolonu, pa ni značenje koje bi se moglo tvrditi.
+ * Runs over the OUTPUT of `buildPositionPatch`, not over the raw form: coercion
+ * has happened by then, so every value here is either a number or null and the
+ * check is about range rather than type. Values that went into the `custom` bag
+ * are left alone — they have no column, and therefore no meaning that could be
+ * asserted.
  *
- * Vraća poruku ili null. Prva greška, ne spisak: obrazac je isti kao kod
- * `validateTradingViewSnapshotUrl` i formular ionako prikazuje jednu.
+ * Returns a message or null. The first error, not a list: the same pattern as
+ * `validateTradingViewSnapshotUrl`, and the form shows one anyway.
  */
 export function invalidTradeNumber(
   columns: Record<string, unknown>,
@@ -102,16 +105,18 @@ export function invalidTradeNumber(
 }
 
 /**
- * Jedan fill.
+ * One fill.
  *
- * `price` je pozitivan iz istog razloga kao cene na poziciji, i to je ovde
- * jedina odbrana koja postoji: `tj_replace_executions` traži samo
- * `price IS NOT NULL AND qty > 0`, a `tj_executions` nosi CHECK samo na `qty`.
+ * `price` is positive for the same reason position prices are, and here it is
+ * the only defence there is: `tj_replace_executions` requires only
+ * `price IS NOT NULL AND qty > 0`, and `tj_executions` carries a CHECK on `qty`
+ * alone.
  *
- * `executed_at` mora biti vreme koje se da pročitati. RPC ga prima kao
- * `timestamptz` i red sa neispravnim vremenom TIHO ISPADA iz `WHERE` — funkcija
- * vrati manji broj upisanih redova, a `updateTrade` tu vrednost ni ne gleda.
- * Trejd se sačuva sa dva fill-a umesto tri i javi `ok`.
+ * `executed_at` has to be a time that can be read. The RPC takes it as a
+ * `timestamptz`, and a row with an invalid time DROPS SILENTLY out of the
+ * `WHERE` — the function returns a smaller number of written rows, and
+ * `updateTrade` never looks at that value. The trade saves with two fills
+ * instead of three and reports `ok`.
  */
 export const executionSchema = z.object({
   side: z.enum(["entry", "exit"]),
@@ -125,12 +130,12 @@ export const executionSchema = z.object({
 });
 
 /**
- * Strukturni deo submisije — sve osim dinamičkog `fields` bag-a.
+ * The structural half of a submission — everything but the dynamic `fields` bag.
  *
- * `fields` ostaje `unknown`-vrednosno namerno: njegov skup ključeva dolazi iz
- * `tj_field_defs`, pa bi zod shema nad njim bila druga definicija onoga što
- * `buildPositionPatch` već radi iz jednog izvora. Brojeve iz njega proverava
- * `invalidTradeNumber`, POSLE koercije.
+ * `fields` stays `unknown`-valued on purpose: its key set comes from
+ * `tj_field_defs`, so a zod schema over it would be a second definition of what
+ * `buildPositionPatch` already does from one source. Its numbers are checked by
+ * `invalidTradeNumber`, AFTER coercion.
  */
 export const tradeInputSchema = z.object({
   account_id: z.uuid().nullable(),
@@ -144,11 +149,12 @@ export const tradeInputSchema = z.object({
   current_status: z.string().nullable().optional(),
   playbook_id: z.uuid().nullable().optional(),
   /**
-   * 1–5, i strože nego što je bilo.
+   * 1–5, and stricter than it used to be.
    *
-   * `playbookPatch` je vrednost van opsega TIHO svodio na null — ubeđenost koju
-   * je trejder zaista uneo nestajala bi bez ijedne poruke. Sada se odbija, pa
-   * se razlika između „nisam ocenio" i „ocena je odbačena" vidi.
+   * `playbookPatch` SILENTLY collapsed an out-of-range value to null — the
+   * conviction the trader actually entered would vanish without a single
+   * message. It is refused now, so the difference between "I did not rate this"
+   * and "the rating was discarded" is visible.
    */
   rule_answers: z.record(z.uuid(), z.boolean()).optional(),
   images: z
@@ -162,13 +168,14 @@ export const tradeInputSchema = z.object({
 });
 
 /**
- * Jedan red uvoza.
+ * One import row.
  *
- * `gross_pnl_override` je jedini broj bez donje granice: gubitak sa izvoda je
- * negativan i to je njegova tačna vrednost. Cena fill-a nije — isto pravilo kao
- * na ručnom unosu, i isti razlog. Brokerov izvod nije nepogrešiv izvor: kolona
- * može biti pogrešno mapirana, a mapiranje koje pomeri cenu u kolonu profita
- * daje negativne „cene" koje bi inače prošle sve do view-a.
+ * `gross_pnl_override` is the only number with no lower bound: a loss on a
+ * statement is negative and that is its correct value. A fill price is not —
+ * the same rule as on manual entry, and for the same reason. A broker statement
+ * is not an infallible source: a column can be mapped wrongly, and a mapping
+ * that shifts price into the profit column produces negative "prices" that
+ * would otherwise travel all the way to the view.
  */
 export const importItemSchema = z.object({
   decision: z.enum(["create", "merge", "skip"]),
@@ -182,13 +189,13 @@ export const importItemSchema = z.object({
 });
 
 /**
- * Omotač uvoza — sve osim samih redova.
+ * The import envelope — everything but the rows themselves.
  *
- * Redovi se NAMERNO ne proveravaju ovde. `commitImport` već svaki red obrađuje
- * u svom `try`, broji `failed` i skuplja poruku po redu; provera cele liste
- * unapred bi jedan pokvaren red pretvorila u odbijen fajl. Izvod od tri stotine
- * trejdova sa jednom lošom ćelijom treba da uveze dvesta devedeset devet i da
- * kaže koji je red ostao.
+ * The rows are DELIBERATELY not validated here. `commitImport` already handles
+ * each row in its own `try`, counts `failed` and collects a per-row message;
+ * validating the whole list up front would turn one broken row into a rejected
+ * file. A statement of three hundred trades with one bad cell should import two
+ * hundred and ninety-nine and say which row was left.
  */
 export const commitImportSchema = z.object({
   account_id: z.uuid().nullable(),
@@ -197,11 +204,11 @@ export const commitImportSchema = z.object({
 });
 
 /**
- * Prva poruka iz zod izveštaja, sa imenom polja ispred nje.
+ * The first message out of a zod report, with the field name in front of it.
  *
- * Zod-ov podrazumevani tekst („Too small: expected number to be >0") je tačan
- * ali ne kaže GDE. Put do polja je ono što korisniku govori koji red da
- * popravi, pa se lepi ispred — `executions.0.price` postaje čitljivo mesto.
+ * Zod's default text ("Too small: expected number to be >0") is correct but
+ * does not say WHERE. The path to the field is what tells the user which row to
+ * fix, so it is prefixed — `executions.0.price` becomes a readable location.
  */
 export function firstIssue(error: z.ZodError): string {
   const issue = error.issues[0];

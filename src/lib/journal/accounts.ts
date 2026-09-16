@@ -20,14 +20,15 @@ export async function getPrimaryAccount(): Promise<Account | null> {
 }
 
 /**
- * Valuta jednog naloga, za snimanje kursa pri upisu trejda.
+ * One account's currency, for recording the FX rate when a trade is written.
  *
- * Sopstveni upit umesto `getAccounts()` zato što se zove na svakom upisu i
- * uvozu: povlačiti dvadeset šest kolona svih naloga da bi se pročitala jedna
- * troslovna oznaka je cena koja se plaća po redu uvoza.
+ * Its own query rather than `getAccounts()` because it is called on every write
+ * and every import: pulling twenty-six columns of every account to read one
+ * three-letter code is a cost paid per imported row.
  *
- * `null` kad naloga nema — trejd bez naloga se ne može konvertovati, i view to
- * prijavljuje kao `fx_rate_source = 'no_account'` umesto da pretpostavi dolare.
+ * `null` when there is no account — a trade without one cannot be converted,
+ * and the view reports that as `fx_rate_source = 'no_account'` instead of
+ * assuming dollars.
  */
 export async function getAccountCurrency(
   accountId: string | null | undefined,

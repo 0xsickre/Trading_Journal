@@ -63,13 +63,14 @@ export function nextReportDate(date: string): string {
 }
 
 /**
- * Petak, po ISO numeraciji (1 = ponedeljak … 5 = petak).
+ * Friday, in ISO numbering (1 = Monday … 5 = Friday).
  *
- * Ranije `parseISO(date).getDay() === 5`. To JESTE bilo tačno — `parseISO` na
- * datum-string daje lokalnu ponoć, pa je i čitanje u lokalnom vremenu bilo
- * dosledno — ali je tražilo da čitalac to zna, i `time.ts` je oko toga nosio
- * upozorenje da se taj obrazac ne kopira. Sada nema šta da se ne kopira: isti
- * `isoWeekdayOfDayKey` koji koriste tracker pravila i dimenzija dana u nedelji.
+ * This used to be `parseISO(date).getDay() === 5`. That WAS correct —
+ * `parseISO` on a date string gives local midnight, so reading it in local time
+ * was consistent — but it required the reader to know that, and `time.ts`
+ * carried a warning around it not to copy the pattern. Now there is nothing not
+ * to copy: the same `isoWeekdayOfDayKey` the tracker rules and the weekday
+ * dimension use.
  */
 export function isFriday(date: string): boolean {
   return isoWeekdayOfDayKey(date) === 5;

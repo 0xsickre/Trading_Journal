@@ -59,20 +59,21 @@ export function hasBreakevenBand(range: BreakevenRange): boolean {
 }
 
 /**
- * Jedan breakeven pojas za skup naloga.
+ * One breakeven band for a set of accounts.
  *
- * Isti blok od šest redova stajao je u pet kopija — `dashboard.tsx` i četiri
- * rute (`/daily`, `/calendar`, `/weekly`, `/playbooks`). Dok su identične,
- * dupliranje je samo trošak; problem je što bi izmena jedne tiho razišla ekrane,
- * a win rate na Dashboard-u i na kalendaru bi počeo da se razlikuje nad istim
- * trejdovima.
+ * The same six-line block stood in five copies — `dashboard.tsx` and four
+ * routes (`/daily`, `/calendar`, `/weekly`, `/playbooks`). While they are
+ * identical, duplication is merely a cost; the problem is that editing one
+ * would silently pull the screens apart, and the win rate on the Dashboard and
+ * on the calendar would start to differ over the same trades.
  *
- * Pravilo: pojas se primenjuje samo ako se SVI nalozi u opsegu slažu oko njega.
- * Kad se ne slažu, pada na tačnu nulu — jer trejd od +15 $ ne može istovremeno
- * biti breakeven na jednom nalogu i dobitak na drugom, a birati jedan od dva
- * pojasa značilo bi primeniti tuđe pravilo na tuđe trejdove.
+ * The rule: a band applies only if ALL accounts in scope agree on it. When they
+ * do not, it falls back to exact zero — because a +$15 trade cannot be
+ * breakeven on one account and a win on another at the same time, and picking
+ * one of the two bands would apply somebody's rule to somebody else's trades.
  *
- * Prazan skup takođe daje tačnu nulu: nema naloga čiji bi se pojas primenio.
+ * An empty set also gives exact zero: there is no account whose band would
+ * apply.
  */
 export function sharedBreakevenRange(
   accounts: readonly BreakevenConfig[],

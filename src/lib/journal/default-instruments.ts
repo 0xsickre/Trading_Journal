@@ -1,29 +1,30 @@
-// Katalog instrumenata — CFD i futures razdvojeni, sa stvarnim specifikacijama.
+// The instrument catalog — CFDs and futures kept apart, with real contract specs.
 //
-// point_value: novac u VALUTI KOTACIJE po 1.00 pomeraja cene, po 1 jedinici
-// izvršene količine. `qty` na fill-u se broji u tim istim jedinicama:
-// 1 standardni FX lot, 1 CFD ugovor, 1 futures ugovor.
+// point_value: money in the QUOTE CURRENCY per 1.00 of price movement, per 1
+// unit of executed quantity. A fill's `qty` is counted in those same units:
+// 1 standard FX lot, 1 CFD contract, 1 futures contract.
 //
-// quote_currency je valuta tog iznosa, i od 20260815130000 je view zaista i
-// koristi: bruto se množi kursom snimljenim na trejdu pre nego što uđe u zbir.
-// Zato GER40 (EUR), UK100 (GBP), JP225 (JPY) i AUS200 (AUD) ovde stoje sa svojim
-// valutama umesto da se svi pretvaraju da su dolarski.
+// quote_currency is the currency of that amount, and since 20260815130000 the
+// view genuinely uses it: gross is multiplied by the rate recorded on the trade
+// before it enters any total. That is why GER40 (EUR), UK100 (GBP), JP225 (JPY)
+// and AUS200 (AUD) sit here with their own currencies instead of all pretending
+// to be dollar-denominated.
 //
-// tick_value je popunjen svuda gde berza objavljuje vrednost tika — to jest za
-// sve futures ugovore. Odnos koji tada MORA da važi:
+// tick_value is filled in wherever the exchange publishes a tick value — that
+// is, for every futures contract. The relationship that MUST then hold:
 //
 //     point_value × tick_size = tick_value
 //
-// (ES: 50 × 0.25 = 12.50 ; ZB: 1000 × 1/32 = 31.25 ; 6J: 12 500 000 × 0.0000005
-// = 6.25). `default-instruments.test.ts` to tvrdi za svaki red — greška u
-// prepisivanju specifikacije je jedina vrsta greške koju ovaj fajl može da ima,
-// i to je način da se uhvati.
+// (ES: 50 × 0.25 = 12.50 ; ZB: 1000 × 1/32 = 31.25 ; 6J: 12,500,000 × 0.0000005
+// = 6.25). `default-instruments.test.ts` asserts that for every row — a
+// transcription error in a contract spec is the only kind of error this file
+// can have, and that is how it gets caught.
 //
-// CFD-ovi nemaju tick_value jer kod njih vrednost tika nije berzanski podatak
-// nego brokerska odluka. Ovde stoje po MT5 konvenciji koju drži većina brokera:
-// XAUUSD 1 lot = 100 unci, XAGUSD = 5 000 unci, nafta = 1 000 barela, indeksi
-// 1 jedinica valute po poenu. Ako se tvoj broker razlikuje, ispravlja se u
-// Settings-u — i od ove izmene ta ispravka OSTAJE (vidi 20260815150000).
+// CFDs have no tick_value because there the tick value is not exchange data but
+// a broker's decision. They sit here on the MT5 convention most brokers keep:
+// XAUUSD 1 lot = 100 ounces, XAGUSD = 5,000 ounces, oil = 1,000 barrels,
+// indices 1 currency unit per point. If your broker differs, it is corrected in
+// Settings — and since this change that correction STICKS (see 20260815150000).
 
 export type DefaultInstrument = {
   symbol: string;
@@ -32,25 +33,26 @@ export type DefaultInstrument = {
   point_value: number;
   tick_size: number | null;
   tick_value: number | null;
-  /** Valuta u kojoj point_value izražava novac. */
+  /** The currency point_value expresses money in. */
   quote_currency: string;
   /**
-   * Da li se nudi u formi za unos trejda. U katalogu je uvek `true`.
+   * Whether it is offered in the trade form. In the catalog it is always `true`.
    *
-   * Prva verzija je aktivirala samo jedanaest simbola, a ostalih osamdeset
-   * ostavljala ugašene „da padajuća lista ne naraste". To je bio pogrešan
-   * kompromis: katalog je i tražen zato da bude spreman za upotrebu, a rešenje
-   * za dugačku listu je grupisanje i pretraga, ne skrivanje. Lista u formi je
-   * sada grupisana po klasi instrumenta.
+   * The first version activated only eleven symbols and left the other eighty
+   * off "so the dropdown does not grow". That was the wrong trade-off: the
+   * catalog was asked for precisely so it would be ready to use, and the answer
+   * to a long list is grouping and search, not hiding. The list in the form is
+   * now grouped by instrument class.
    *
-   * Kolona ostaje jer je `getInstruments(true)` čita i jer korisnik može da
-   * obriše instrument koji ne trguje — ali se iz UI-ja ne pali i ne gasi.
+   * The column stays because `getInstruments(true)` reads it and because a user
+   * can delete an instrument they do not trade — but it is not toggled from the
+   * UI.
    */
   is_active: boolean;
   sort_order: number;
 };
 
-/** Skraćenje — većina redova deli isti oblik. */
+/** Shorthand — most rows share the same shape. */
 function fx(
   symbol: string,
   name: string,
@@ -62,7 +64,7 @@ function fx(
     name,
     asset_class: "Forex",
     point_value: 100_000,
-    // Pet decimala svuda osim kod JPY parova, koji se kotiraju na tri.
+    // Five decimals everywhere except JPY pairs, which are quoted to three.
     // `units.ts` iz ovoga izvodi pip kao deset tikova.
     tick_size: quote === "JPY" ? 0.001 : 0.00001,
     tick_value: null,
@@ -179,7 +181,7 @@ export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
   { symbol: "ZT", name: "2-Year T-Note Futures", asset_class: "Rates Futures", point_value: 2_000, tick_size: 0.00390625, tick_value: 7.8125, quote_currency: "USD", is_active: true, sort_order: 804 },
 
   // -------------------------------------------------------------- FX futures
-  // Kotirane u dolarima po jedinici strane valute, pa je quote uvek USD.
+  // Quoted in dollars per unit of the foreign currency, so quote is always USD.
   { symbol: "6E", name: "Euro FX Futures", asset_class: "FX Futures", point_value: 125_000, tick_size: 0.00005, tick_value: 6.25, quote_currency: "USD", is_active: true, sort_order: 900 },
   { symbol: "6B", name: "British Pound Futures", asset_class: "FX Futures", point_value: 62_500, tick_size: 0.0001, tick_value: 6.25, quote_currency: "USD", is_active: true, sort_order: 901 },
   { symbol: "6J", name: "Japanese Yen Futures", asset_class: "FX Futures", point_value: 12_500_000, tick_size: 0.0000005, tick_value: 6.25, quote_currency: "USD", is_active: true, sort_order: 902 },
@@ -189,21 +191,22 @@ export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
   { symbol: "6N", name: "New Zealand Dollar Futures", asset_class: "FX Futures", point_value: 100_000, tick_size: 0.0001, tick_value: 10, quote_currency: "USD", is_active: true, sort_order: 906 },
 ];
 
-/** Simboli koje seed nudi. Ne služi za brisanje — vidi 20260815150000. */
+/** The symbols the seed offers. Not used for deletion — see 20260815150000. */
 export const DEFAULT_INSTRUMENT_SYMBOLS = DEFAULT_INSTRUMENTS.map((i) => i.symbol);
 
 /**
- * Stara imena simbola koja se više ne seeduju.
+ * Old symbol names that are no longer seeded.
  *
- * Lista je skraćena kad je katalog proširen: `GBPJPY`, `EURJPY`, `USDCHF`,
- * `NZDUSD`, `EURGBP` i `AUDNZD` su nekad bili „arhivirani" zato što ih B6 radna
- * lista nije pokrivala — a ne zato što su pogrešni. Sada su regularni parovi u
- * katalogu, pa ih ovde nema.
+ * The list shrank when the catalog grew: `GBPJPY`, `EURJPY`, `USDCHF`,
+ * `NZDUSD`, `EURGBP` and `AUDNZD` were once "archived" because the B6 watchlist
+ * did not cover them — not because they were wrong. They are ordinary pairs in
+ * the catalog now, so they are gone from here.
  *
- * Ostaju samo prava dvojnička imena: ono što je isti instrument pod drugim
- * simbolom (`SPX500USD` za SP500, `NAS100USD` za NAS100, `XAG` za XAGUSD) i
- * `DXY`, koji se ne trguje direktno. Vrednost liste je u uvozu: broker koji
- * pošalje `SPX500USD` treba da se prepozna, ne da se zavede kao nov instrument.
+ * What remains is only genuine aliases: the same instrument under another
+ * symbol (`SPX500USD` for SP500, `NAS100USD` for NAS100, `XAG` for XAGUSD) and
+ * `DXY`, which is not traded directly. The list earns its keep on import: a
+ * broker sending `SPX500USD` should be recognised, not filed as a new
+ * instrument.
  */
 export const ARCHIVED_INSTRUMENT_SYMBOLS = [
   "DXY",

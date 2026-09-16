@@ -1,36 +1,36 @@
 /**
- * Koji već postojeći trejd je red iz izvoda.
+ * Which existing trade a statement row is.
  *
- * Ovo je bilo zakopano u petlji unutar `import-wizard.tsx` — 572 linija
- * komponente sa jednim render testom, pa odluka od koje zavisi da li se trejd
- * PREPISUJE nije imala nijedan test. A spajanje nije bezopasna operacija:
- * `commitImport` na merge poziva `tj_replace_executions`, što briše postojeće
- * fill-ove i upisuje one iz izvoda. Spojiti se sa pogrešnim trejdom znači
- * uništiti njegove fill-ove i pokvariti tuđe.
+ * This used to be buried in a loop inside `import-wizard.tsx` — a 572-line
+ * component with a single render test, so the decision that determines whether
+ * a trade gets OVERWRITTEN had no test at all. And merging is not a harmless
+ * operation: on a merge, `commitImport` calls `tj_replace_executions`, which
+ * deletes the existing fills and writes the ones from the statement. Merging
+ * into the wrong trade destroys its fills and corrupts somebody else's.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * NAĐENO: DVOSMISLENOST JE POSTOJALA U TIPU, ALI NE U KODU
+ * FOUND: THE AMBIGUITY EXISTED IN THE TYPE, BUT NOT IN THE CODE
  *
- * `ImportItem.match_status` od početka nabraja `"ambiguous"`. Nijedno mesto u
- * projektu tu vrednost nije proizvodilo. Petlja je radila `break` na PRVOM
- * kandidatu koji prođe, a kandidati stižu poređani po `created_at DESC` —
- * dakle po tome koji je trejd poslednji UNET, što sa pitanjem „koji je ovo
- * trejd" nema veze.
+ * `ImportItem.match_status` has listed `"ambiguous"` from the start. Nowhere in
+ * the project produced that value. The loop `break`s on the FIRST candidate
+ * that passes, and candidates arrive ordered by `created_at DESC` — that is, by
+ * which trade was ENTERED last, which has nothing to do with the question
+ * "which trade is this".
  *
- * Prozor spajanja je 10 minuta i cena unutar `max(0.05 %, 0.01)`. Za ES na
- * 5000 to je 2,5 poena; za EURUSD na 1.0850 oko 5 pipsa. Skalper koji uđe u ES
- * na 5000.00 pa opet na 5001.50 šest minuta kasnije ima DVA trejda koja oba
- * prolaze isti filter — i stari kod bi drugi red izvoda spojio sa prvim
- * trejdom, tiho.
+ * The merge window is 10 minutes and a price within `max(0.05 %, 0.01)`. For ES
+ * at 5000 that is 2.5 points; for EURUSD at 1.0850 about 5 pips. A scalper who
+ * enters ES at 5000.00 and again at 5001.50 six minutes later has TWO trades
+ * that both pass the same filter — and the old code would merge the second
+ * statement row into the first trade, silently.
  *
- * Rešenje NIJE stezanje praga. Svaki prag koji bih izabrao bio bi izmišljen, a
- * uz to bi promašaj u drugom smeru (ne prepozna svoj trejd) samo napravio
- * duplikat. Rešenje je da se dvosmislenost VIDI: kad prolazi više od jednog
- * kandidata, red se označava kao `ambiguous` i podrazumevano se KREIRA.
+ * The fix is NOT a tighter threshold. Any threshold I picked would be invented,
+ * and a miss in the other direction (failing to recognise your own trade) only
+ * creates a duplicate. The fix is to make the ambiguity VISIBLE: when more than
+ * one candidate passes, the row is marked `ambiguous` and defaults to CREATE.
  *
- * Asimetrija je namerna i vredi je zapisati. Pogrešno kreiranje daje višak
- * trejda koji se briše u jednom potezu. Pogrešno spajanje briše fill-ove
- * trejda koji je bio tačan, i taj gubitak se ne vidi dok se ne potraži.
+ * The asymmetry is deliberate and worth writing down. A wrong create leaves a
+ * spare trade that is deleted in one move. A wrong merge deletes the fills of
+ * the trade that was right, and that loss is invisible until somebody looks.
  */
 
 export type MatchCandidate = {
@@ -45,29 +45,30 @@ export type MatchCandidate = {
   grossPl: number | null;
   netPl: number | null;
   /**
-   * Broker id pozicije, kad je trejd upisao bot most.
+   * The broker's position id, when the trade was written by the bot bridge.
    *
-   * Postoji da bi `sameTrade` mogao da ga ODBIJE. Vidi tamo.
+   * It exists so that `sameTrade` can REFUSE it. See there.
    */
   brokerPositionId: string | null;
 };
 
 /**
- * Koliko sme da se razlikuje vreme ulaza da bi to bio isti trejd.
+ * How far the entry times may differ and still be the same trade.
  *
- * Deset minuta pokriva razliku između vremena koje je trejder zapisao rukom i
- * vremena izvršenja sa izvoda. Uže bi promašilo ručne unose zaokružene na pun
- * sat; šire bi počelo da hvata sledeći trejd u istoj seansi.
+ * Ten minutes covers the gap between a time the trader wrote down by hand and
+ * the execution time on the statement. Narrower would miss manual entries
+ * rounded to the hour; wider would start catching the next trade in the same
+ * session.
  */
 export const MERGE_TIME_WINDOW_MS = 10 * 60 * 1000;
 
 /**
- * Koliko sme da se razlikuje cena ulaza.
+ * How far the entry prices may differ.
  *
- * Relativno, jer apsolutna tolerancija ne može da važi i za EURUSD na 1.08 i za
- * ES na 5000. Donja granica od 0,01 postoji zbog instrumenata čija je cena
- * mala: 0,05 % od 1.0850 je 0.00054, a proklizavanje od jednog pipsa je
- * uobičajeno i ne znači drugi trejd.
+ * Relative, because one absolute tolerance cannot hold for both EURUSD at 1.08
+ * and ES at 5000. The 0.01 floor exists for low-priced instruments: 0.05 % of
+ * 1.0850 is 0.00054, and a one-pip slip is ordinary and does not mean a
+ * different trade.
  */
 export function mergePriceTolerance(price: number): number {
   return Math.max(0.0005 * Math.abs(price), 0.01);
@@ -77,41 +78,43 @@ export type ImportRowKey = {
   instrument: string | null;
   direction: string | null;
   entryPrice: number | null;
-  /** UTC ISO, ili null kad vreme nije pročitano. */
+  /** UTC ISO, or null when the time could not be read. */
   entryTime: string | null;
 };
 
 export type MatchOutcome = {
-  /** Kandidat sa kojim se spaja, ili null kad se kreira. */
+  /** The candidate to merge into, or null when creating. */
   matched: MatchCandidate | null;
   status: "new" | "match" | "ambiguous";
-  /** Svi kandidati koji su prošli filter — više od jednog je `ambiguous`. */
+  /** Every candidate that passed the filter — more than one is `ambiguous`. */
   candidates: MatchCandidate[];
 };
 
 /**
- * Da li kandidat i red izvoda mogu biti isti trejd.
+ * Whether a candidate and a statement row can be the same trade.
  *
- * Oba uslova, bez izuzetka. Vreme bez cene bi spojilo dva trejda otvorena u
- * istom minutu na istom instrumentu; cena bez vremena bi spojila isti nivo
- * trgovan u ponedeljak i u petak.
+ * Both conditions, without exception. Time without price would merge two trades
+ * opened in the same minute on the same instrument; price without time would
+ * merge the same level traded on Monday and on Friday.
  */
 function sameTrade(
   c: MatchCandidate,
   row: ImportRowKey,
   instrumentsMatch: (a: string, b: string) => boolean,
 ): boolean {
-  // Trejd koji je upisao bot most se NE spaja, nikad.
+  // A trade written by the bot bridge is NEVER merged into.
   //
-  // Merge poziva `tj_replace_executions`, koja je puna zamena: obrisala bi
-  // ulazni fill koji je most dobio od brokera u trenutku izvršenja i zamenila
-  // ga onim iz izvoda. Izvod je zaokružen izveštaj, a most ima cenu sa fill-a —
+  // A merge calls `tj_replace_executions`, which is a full replacement: it
+  // would delete the entry fill the bridge got from the broker at the moment of
+  // execution and swap in the one from the statement. A statement is a rounded
+  // report, while the bridge holds the price off the fill itself —
   // pa bi spajanje zamenilo precizniji podatak grubljim, i to nevidljivo.
   //
-  // Posledica je duplikat kad izvod pokrije period koji je most već zabeležio.
-  // To je namerno, i to je ista asimetrija koju `ambiguous` gore bira: višak
-  // trejda se briše u jednom potezu, a izgubljeni fill se ne vidi dok se ne
-  // potraži. ROADMAP § Faza 11 je ovu meru imenovao kao neophodnu; ovo je ona.
+  // The consequence is a duplicate when a statement covers a period the bridge
+  // already recorded. That is deliberate, and it is the same asymmetry
+  // `ambiguous` chooses above: a spare trade is deleted in one move, while a
+  // lost fill stays invisible until somebody looks. ROADMAP § Phase 11 named
+  // this measure as necessary; this is it.
   if (c.brokerPositionId != null) return false;
 
   if (!c.instrument || !row.instrument) return false;
@@ -133,11 +136,11 @@ function sameTrade(
 }
 
 /**
- * Nađi trejd sa kojim se red spaja.
+ * Find the trade a row merges into.
  *
- * `instrumentsMatch` se prosleđuje umesto da se uvozi, da bi modul ostao čist i
- * testabilan sa izmišljenim pravilom poklapanja simbola — pravi
- * `instrument-aliases` ima sopstveni test.
+ * `instrumentsMatch` is passed in rather than imported, so the module stays
+ * pure and testable with a made-up symbol-matching rule — the real
+ * `instrument-aliases` has its own test.
  */
 export function matchImportRow(
   row: ImportRowKey,
@@ -150,8 +153,8 @@ export function matchImportRow(
   if (hits.length === 1) {
     return { matched: hits[0], status: "match", candidates: hits };
   }
-  // Više od jednog. NE bira se „najbliži": bliža cena ne znači da je to taj
-  // trejd, a merge koji promaši briše fill-ove. Red se kreira, a oznaka kaže
-  // čoveku da pogleda.
+  // More than one. The "closest" is NOT chosen: a nearer price does not mean
+  // it is that trade, and a merge that misses deletes fills. The row is
+  // created, and the flag tells a human to look.
   return { matched: null, status: "ambiguous", candidates: hits };
 }

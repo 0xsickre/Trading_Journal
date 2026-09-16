@@ -1,19 +1,20 @@
 /**
- * Imena kolona na `tj_positions`. Korisničko polje ne sme da uzme nijedno.
+ * The column names on `tj_positions`. A custom field may take none of them.
  *
- * `fieldValue` čita kolone PRE `custom` bag-a, pa bi polje sa istim ključem bilo
- * upisano u bag a pročitano iz kolone — trajno nevidljivo. DB CHECK na
- * `tj_field_defs.key` proverava samo OBLIK ključa, ne i koliziju, pa je ovo
- * jedina odbrana.
+ * `fieldValue` reads columns BEFORE the `custom` bag, so a field with a
+ * colliding key would be written into the bag and read out of the column —
+ * permanently invisible. The DB CHECK on `tj_field_defs.key` validates only the
+ * SHAPE of the key, not collisions, so this is the only defence.
  *
- * Izdvojeno iz `settings/actions.ts` da bi moglo da se testira. Lista je već
- * dvaput odlutala od šeme: propustila je `thesis`, `invalidation`,
- * `time_stop_days` i `scale_out_plan` (dodate 13.08.), pa zatim
- * `quote_currency_at_trade`, `fx_rate_at_trade` i `gross_pnl_override` (15.08.).
- * `reserved-keys.test.ts` sada čita kolone iz generisanog `types.ts` i pada ako
- * lista opet zaostane za migracijom — i jeste pala dvaput: na `broker*`
- * kolonama i na `excursion_source` (21.08.), oba puta pre nego što je iko
- * stigao da napravi polje koje bi ih zaklonilo.
+ * Extracted out of `settings/actions.ts` so it could be tested. The list has
+ * already drifted from the schema twice: it missed `thesis`, `invalidation`,
+ * `time_stop_days` and `scale_out_plan` (added 13 Aug), and then
+ * `quote_currency_at_trade`, `fx_rate_at_trade` and `gross_pnl_override`
+ * (15 Aug). `reserved-keys.test.ts` now reads the columns out of the generated
+ * `types.ts` and fails when the list falls behind a migration again — and it
+ * has failed twice: on the `broker*` columns and on `excursion_source`
+ * (21 Aug), both times before anyone had made a field that would have masked
+ * them.
  */
 export const RESERVED_KEYS = new Set([
   "id",
