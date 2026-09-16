@@ -92,10 +92,11 @@ export default async function SettingsPage() {
 
         <TabsContent value="instruments">
           {/*
-            Katalog stiže popunjen i sve što je u njemu odmah stoji u formi za
-            unos trejda — ovde se ne „pali" ništa. Sekcija postoji zbog dve
-            stvari koje katalog ne može da pogodi: simbola kojeg nema, i
-            specifikacije koja se kod tvog brokera razlikuje.
+            The catalog arrives populated and everything in it is immediately
+            available in the trade form — nothing is "switched on" here. This
+            section exists for the two things the catalog cannot guess: a symbol
+            it does not carry, and a contract spec your broker defines
+            differently.
           */}
           <p className="mb-4 text-sm text-muted-foreground">
             Katalog od 91 instrumenta je već aktivan i vidljiv pri unosu trejda.

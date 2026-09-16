@@ -23,10 +23,11 @@ const MONEY_MODULES = [
   "src/lib/journal/position-stats.ts",
   "src/lib/journal/risk-metrics.ts",
   "src/lib/journal/risk-ratios.ts",
-  // Ne računa novac — ČUVA ga. Jedina provera koja stoji između omašenog znaka
-  // i `gross_pl`-a koji izgleda uredno (izmereno: ulaz −5000, izlaz −4990 na ES
-  // daje +500 $ i R = 1.00, bez ijedne oznake). Granica koja propusti jedan
-  // slučaj je granica koje nema, pa je i ona pod istim podom kao i računice.
+  // Does not compute money — GUARDS it. The only check standing between a
+  // missed sign and a `gross_pl` that looks perfectly healthy (measured: entry
+  // −5000, exit −4990 on ES gives +$500 and R = 1.00, with no flag anywhere). A
+  // boundary that lets one case through is no boundary, so it sits under the
+  // same floor as the arithmetic.
   "src/lib/journal/trade-input-schema.ts",
 ];
 

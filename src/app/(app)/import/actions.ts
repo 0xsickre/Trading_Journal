@@ -41,10 +41,11 @@ export type ImportItem = {
   direction: string | null;
   executions: ImportExec[];
   /**
-   * Bruto rezultat sa brokerovog izvoda, kad ga kolona nosi.
+   * The gross result off the broker's statement, when a column carries it.
    *
-   * `null` znači „nije mapirano" i ostavlja trejd da računa iz cena. Nula je
-   * stvarna nula i upisuje se — razlika je ono zbog čega ovde nema `?? 0`.
+   * `null` means "not mapped" and leaves the trade to compute from prices. A
+   * zero is a real zero and gets written — that difference is why there is no
+   * `?? 0` here.
    */
   gross_pnl_override: number | null;
   raw: Record<string, string>;
@@ -82,7 +83,7 @@ export async function commitImport(input: CommitInput) {
 
   // One lookup for the whole batch — the snapshot is per-position but the specs
   // are shared, and a per-row query would be a round trip per imported trade.
-  // Jednom po uvozu, ne po redu: valuta naloga je ista za ceo batch.
+  // Once per import, not per row: the account's currency is the same for the whole batch.
   const accountCurrency = await getAccountCurrency(input.account_id);
   const specs = await getInstrumentSpecs(
     input.items.map((i) => normalizeInstrumentSymbol(i.instrument)),
@@ -103,7 +104,7 @@ export async function commitImport(input: CommitInput) {
     let createdPositionId: string | null = null;
     // Fills this row displaced, kept so `undoImportBatch` can put them back.
     let replacedExecs: SnapshotExec[] | null = null;
-    // Rezultat koji je merge prepisao, za undo.
+    // The result the merge overwrote, kept for undo.
     let prevOverride: number | null = null;
     // Counted only once the audit row has landed too. The counters used to be
     // bumped inline, which was harmless while the audit insert could not fail —
@@ -162,10 +163,10 @@ export async function commitImport(input: CommitInput) {
           .eq("position_id", pid);
         replacedExecs = (prevExecs ?? []) as unknown as SnapshotExec[];
 
-        // Rezultat koji je stajao pre uvoza, da ga undo može vratiti. Isti
-        // razlog zbog kojeg `prev_executions` postoji od 20260727122000: merge
-        // TRAJNO gazi ono što je čovek uneo, pa undo bez snimka nije povratak
-        // nego druga izmena.
+        // The result that stood before the import, so undo can put it back. The
+        // same reason `prev_executions` has existed since 20260727122000: a
+        // merge PERMANENTLY overwrites what a human entered, so an undo without
+        // a snapshot is not a restore but a second edit.
         const { data: prevPos } = await supabase
           .from("tj_positions")
           .select("gross_pnl_override")
@@ -183,9 +184,9 @@ export async function commitImport(input: CommitInput) {
           .update({
             status: statusOf(item.executions),
             needs_review: item.executions.length === 0,
-            // Izvod je merodavan za novac. Kolona koja nije mapirana ostavlja
-            // postojeću vrednost na miru umesto da je obriše — uvoz bez kolone
-            // profita ne sme da poništi rezultat unet rukom.
+            // The statement is authoritative for money. A column that is not mapped
+            // leaves the existing value alone rather than clearing it — an
+            // import with no profit column must not wipe a hand-entered result.
             ...(item.gross_pnl_override != null
               ? { gross_pnl_override: item.gross_pnl_override }
               : {}),
@@ -348,15 +349,16 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
   const plan = planUndo<SnapshotExec>(rows, new Set(createdRows.map((p) => p.id)));
 
   /**
-   * Rezultat koji je merge prepisao, po poziciji.
+   * The result a merge overwrote, per position.
    *
-   * Ne kroz `planUndo`: ta funkcija je čista i testirana nad oblikom
-   * `{ matched_position_id, prev_executions }`, pa bi proširivanje njenog tipa
-   * značilo menjati potpis zbog podatka koji joj u odluci ne treba. Undo ionako
-   * ovde već ima `rows` pri ruci.
+   * Not through `planUndo`: that function is pure and tested against the shape
+   * `{ matched_position_id, prev_executions }`, so widening its type would mean
+   * changing a signature for data its decision does not need. Undo already has
+   * `rows` to hand here anyway.
    *
-   * `undefined` znači „ovaj red nije bio merge" i takva pozicija se ne dira.
-   * `null` znači „pre uvoza ovde nije bilo ničega" i to se VRAĆA kao null.
+   * `undefined` means "this row was not a merge" and such a position is left
+   * alone. `null` means "there was nothing here before the import", and that is
+   * RESTORED as null.
    */
   const prevOverrides = new Map<string, number | null>();
   for (const r of rows) {
@@ -365,29 +367,30 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
     }
   }
 
-  // JEDAN POZIV, JEDNA TRANSAKCIJA.
+  // ONE CALL, ONE TRANSACTION.
   //
-  // Ovo je bilo pet grupa odvojenih brisanja preko PostgREST-a — fill-ovi,
-  // slike, pozicije (sve troje u komadima), pa audit redovi, pa batch — i svaki
-  // od njih je mrežni poziv koji može da padne. Poništavanje koje stane na pola
-  // ostavlja knjigu u stanju koje niko nije birao, a korisnik čita grešku nad
-  // uvozom koji je delimično poništen.
+  // This used to be five groups of separate deletes over PostgREST — fills,
+  // images, positions (all three in chunks), then audit rows, then the batch —
+  // and each one is a network call that can fail. An undo that stops halfway
+  // leaves the book in a state nobody chose, and the user reads an error over
+  // an import that is partly undone.
   //
-  // Ručni redosled je bio opravdan komentarom da bi drugi „fails on a
-  // restrictive constraint". IZMERENO: nijedan strani ključ ka `tj_positions`
-  // ni ka `tj_import_batches` nije restriktivan — svi su CASCADE ili SET NULL.
-  // Baza je sve to brisala i sama, tačnije, bez komada i bez redosleda.
+  // The hand-written order was justified by a comment saying another one
+  // "fails on a restrictive constraint". MEASURED: not one foreign key to
+  // `tj_positions` or to `tj_import_batches` is restrictive — they are all
+  // CASCADE or SET NULL. The database was deleting all of it itself anyway,
+  // more accurately, without chunks and without an order.
   //
-  // `planUndo` ostaje ovde: ona odlučuje ŠTA se vraća i ima svoj test.
-  // Funkcija u bazi samo izvršava tu odluku.
+  // `planUndo` stays here: it decides WHAT is restored and has its own test.
+  // The database function only carries that decision out.
   const { error: undoErr } = await supabase.rpc("tj_undo_import_batch", {
     p_batch_id: batchId,
     p_restore: plan.restore.map(({ positionId, executions }) => ({
       position_id: positionId,
-      // `source` se nosi nazad. Snimak ga sadrži, a funkcija svodi odsutan na
-      // `manual` — pa bi nabrajanje ostalih šest polja rukom tiho preimenovalo
-      // svaki vraćen fill u ručno unet, uključujući i one koje je RANIJI uvoz
-      // tu ostavio.
+      // `source` is carried back. The snapshot holds it, and the function
+      // collapses an absent one to `manual` — so listing the other six fields by
+      // hand would quietly rename every restored fill as hand-entered,
+      // including the ones an EARLIER import left there.
       executions: executions.map((e) => ({
         side: e.side,
         price: e.price,
