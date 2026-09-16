@@ -1,5 +1,7 @@
 # Trading Journal
 
+[![gate](https://github.com/0xsickre/Trading_Journal/actions/workflows/gate.yml/badge.svg)](https://github.com/0xsickre/Trading_Journal/actions/workflows/gate.yml)
+
 A swing/ICT trading journal for a single trader. Manual entry, no AI chat — a disciplined record of
 what was traded and how well the process was followed, plus honest arithmetic over that record. The
 only automatic writer is the **bot bridge** (§ Bot bridge): it records strictly what the broker has
