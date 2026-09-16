@@ -106,7 +106,7 @@ export type Stats = {
  *
  * Breakeven je van imenioca. Scratch od ±20 $ nije ni dobitak ni gubitak, i
  * računati ga kao gubitak potcenilo bi knjigu punu scratch-eva za nekoliko
- * poena — README §Novac i brojanje.
+ * poena — README §Money and counting.
  *
  * Vraća `null` kad nijedan trejd nije odlučen, i to je jedina razlika između
  * ovog izraza i šest kopija koje su ga do sada nosile (`analytics`, `activity`,

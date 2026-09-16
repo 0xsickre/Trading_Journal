@@ -45,7 +45,7 @@ export const PRIMARY_ACTION: NavItem = {
  * record, configure the system.
  *
  * `/journal` is labelled "Trades" because that is what the screen is — a sortable
- * table of trades, and README describes it as exactly that ("Tabela trejdova").
+ * table of trades, and README describes it as exactly that ("Trade table").
  * Inside a section already called JOURNAL, an entry called "Journal" would have
  * the reader guessing which of the two was which.
  */

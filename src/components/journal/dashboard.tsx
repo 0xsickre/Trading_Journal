@@ -1711,9 +1711,9 @@ export function Dashboard({
           they came for. These six are the ones a session actually opens on.
 
           `Trades` is up here as sample size, not as a metric: README's rule is
-          "veličina uzorka putuje uz broj", and a win rate over four trades read
-          without its denominator is exactly the kind of confident-wrong figure
-          this project is built to refuse. */}
+          "sample size travels with the number", and a win rate over four trades
+          read without its denominator is exactly the kind of confident-wrong
+          figure this project is built to refuse. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Stat
           size="hero"
@@ -1839,7 +1839,7 @@ export function Dashboard({
               net/gross switch — that switch moves money only — and on a swing
               book held through carry the two can disagree on a single trade.
               Left undocumented, that reads as a bug rather than as the two
-              separate questions it is. See README § Novac i brojanje. */}
+              separate questions it is. See README § Money and counting. */}
           <Stat
             label="Total R"
             value={fmtR(stats.totalR)}
@@ -1975,8 +1975,9 @@ export function Dashboard({
         insights: show("insights") && <InsightsPanel result={insightResult} />,
 
         /* Process, high by default — not at the foot of the page. README:
-           "P&L je posledica, proces je uzrok." A discipline streak buried under
-           nine sections of money is the layout arguing the opposite. */
+           "P&L is the consequence, process is the cause." A discipline streak
+           buried under nine sections of money is the layout arguing the
+           opposite. */
         tracker: show("tracker") && (
           <TrackerStreakCard
             series={trackerSeries}

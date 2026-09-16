@@ -1,982 +1,1042 @@
 # Trading Journal
 
-Swing/ICT trading dnevnik za jednog trejdera. Ručni unos, bez AI chat-a — disciplinovan zapis šta
-je odtrgovano i koliko je proces ispoštovan, i poštena aritmetika nad tim zapisom. Jedini
-automatski upis je **bot most** (§ Bot most): on beleži isključivo ono što je broker već učinio,
-a sve što je procena i dalje se kuca rukom.
+A swing/ICT trading journal for a single trader. Manual entry, no AI chat — a disciplined record of
+what was traded and how well the process was followed, plus honest arithmetic over that record. The
+only automatic writer is the **bot bridge** (§ Bot bridge): it records strictly what the broker has
+already done, and everything that is a judgement is still typed by hand.
 
-Pravljen da metrikama, beleškama i izveštajima pokrije ono što TradeZella radi, minus delovi koji
-imaju smisla samo za višekorisnički SaaS. Gde se razlikuje, razlika je zapisana i obrazložena —
-ovde ili u `ROADMAP.md`.
+Built to cover what TradeZella does in metrics, notes and reports, minus the parts that only make
+sense for multi-user SaaS. Where it differs, the difference is written down and argued — here or in
+`ROADMAP.md`.
 
-Interfejs je **pretežno na engleskom**. Srpski je ostao tamo gde tekst objašnjava a ne imenuje —
-rečenice pored polja, pitanja dnevnog i nedeljnog pregleda, poruke karantina bot mosta: oko 46 od
-nekih 1700 vidljivih stringova. Kod, komentari i `CODE_REVIEW.md` su na engleskom.
+**On language**, counted rather than claimed, because this is the first thing a reader can check.
+Identifiers are English everywhere. This README and `CODE_REVIEW.md` are English; `ROADMAP.md`,
+`PARITY.md` and `docs/` are largely Serbian. The interface is mostly English — about 46 of some
+1,700 visible strings are Serbian, clustered where the text explains rather than names: the
+sentences beside fields, the daily and weekly review prompts, the bot bridge's quarantine messages.
+Comments are mixed: 61 of 386 source files carry some Serbian (665 lines), and 41 of 101 migrations
+do. Source comments are being converted as files are touched. Migrations are not, on purpose — an
+applied migration is never edited here, and the comment inside one is part of the record of the day
+it was written.
 
-Deploy: Vercel · Baza: Supabase Postgres (odvojen projekat od dashboard-a)
-
----
-
-## Jedno pravilo oko kojeg je sve građeno
-
-**Pogrešan broj prikazan kao činjenica gori je od pada aplikacije.**
-
-Pad je vidljiv i neko ga popravi. Win rate izračunat nad polovinom trejdova, drawdown od „0 %" na
-nalogu koji je samo gubio, Sickre Score 33 na nalogu bez ijednog trejda — to se prikaže kao
-činjenica, poveruje mu se, i promeni način na koji neko trguje.
-
-Sve konvencije ispod postoje zbog toga, i svaka je bar jednom bila stvarna greška zabeležena u
-`CODE_REVIEW.md`:
-
-- **Null nije nula.** Statistika bez podataka odgovara `null`, a prikaz pokazuje `—`. Sva tri
-  nalaza runde 3 oko skora (`S1`, `S2`, `S3`) bila su jedna `0` koja je stajala umesto „nema
-  dokaza".
-- **Odbij umesto da pogađaš.** Dvosmislen datum sa izvoda (`02-03-2026`) ili dvosmislen decimalni
-  zapis (`1,234`) se odbija, ne tumači. Odbijena ćelija se vidi u uvozu; pogođena je stostruko
-  pogrešna i tiha.
-- **Veličina uzorka putuje uz broj.** Red izveštaja nosi svoj `n`; kompozitni skor odbija da
-  postoji ispod pet trejdova i označen je kao privremen ispod trideset.
-- **Jedan odgovor po pitanju.** Dva parsera, dva prozora „poslednjih 90 dana" ili dva filtera za
-  životni vek pravila — razići će se, i jedan će biti pogrešan. Runda 3 je našla četiri takva para.
+Deploy: Vercel · Database: Supabase Postgres (a separate project from the dashboard's)
 
 ---
 
-## Gde ovo stoji
+## The one rule everything is built around
 
-Treći repo trading desk-a. **Nisu integrisani kodom** — nema deljene baze ni API poziva između
-njih. Veza je semantička.
+**A wrong number presented as fact is worse than a crash.**
 
-| Repo | Odgovara na | Smer podataka |
-|------|-------------|---------------|
-| [`trading-fundamental-vault`](https://github.com/0xsickre/trading-fundamental-vault) | Koji smer? Je li ulaz kvalitetan? | Write (agent, F1–F4) |
-| [`trading-dashboard`](https://github.com/0xsickre/trading-dashboard) | Gde je ciklus stao? Šta je spremno? | Read-only prikaz |
-| **`Trading_Journal`** (ovaj repo) | Šta sam odtrgovao i sa kakvom disciplinom? | Write (ti, posle F5) |
+A crash is visible and somebody fixes it. A win rate computed over half the trades, a "0 %" drawdown
+on an account that only ever lost, a Sickre Score of 33 on an account with no trades at all — those
+get shown as fact, believed, and they change how someone trades.
 
-Watchlist instrumenata je usklađen sa vault `instrument_registry`, a polja `macro_align` /
-`cot_filter` beleže vault odluku **u trenutku ulaska** — zapis odluke, ne njena rekonstrukcija. TA
-plan za F5 (entry trigger, timeframe, izvršenje) živi u Notion-u, van ovog repoa.
+Every convention below exists because of that, and each one was a real defect at least once,
+recorded in `CODE_REVIEW.md`:
 
-Teza: **P&L je posledica, proces je uzrok.** Zato dnevna ocena meri napredak na aktivnom procesnom
-cilju, nikad zaradu, a analitika razlaže rezultat po dimenzijama koje su pod tvojom kontrolom.
+- **Null is not zero.** A statistic with no data answers `null`, and the display shows `—`. All
+  three round-3 findings around the score (`S1`, `S2`, `S3`) were a single `0` standing in for "no
+  evidence".
+- **Refuse rather than guess.** An ambiguous statement date (`02-03-2026`) or an ambiguous decimal
+  (`1,234`) is refused, not interpreted. A refused cell is visible in the import; a guessed one is
+  wrong by a factor of a hundred, and silent.
+- **Sample size travels with the number.** A report row carries its own `n`; the composite score
+  refuses to exist below five trades and is labelled provisional below thirty.
+- **One answer per question.** Two parsers, two "last 90 days" windows or two filters for a rule's
+  lifetime will drift apart, and one of them will be wrong. Round 3 found four such pairs.
 
 ---
 
-## Pokretanje
+## Where this sits
 
-Traži Node 20.9+ (zahtev Next.js-a 16) i Supabase projekat.
+The third repo of a trading desk. **They are not integrated in code** — no shared database, no API
+calls between them. The link is semantic.
+
+| Repo | Answers | Data direction |
+|------|---------|----------------|
+| [`trading-fundamental-vault`](https://github.com/0xsickre/trading-fundamental-vault) | Which direction? Is the entry any good? | Write (agent, F1–F4) |
+| [`trading-dashboard`](https://github.com/0xsickre/trading-dashboard) | Where did the cycle stop? What is ready? | Read-only view |
+| **`Trading_Journal`** (this repo) | What did I trade, and with what discipline? | Write (you, after F5) |
+
+The instrument watchlist is kept in step with the vault's `instrument_registry`, and the
+`macro_align` / `cot_filter` fields record the vault's verdict **at the moment of entry** — a record
+of the decision, not a reconstruction of it. The TA plan for F5 (entry trigger, timeframe,
+execution) lives in Notion, outside this repo.
+
+The thesis: **P&L is the consequence, process is the cause.** So the daily rating measures progress
+on the active process goal, never earnings, and the analytics decompose the result along dimensions
+that are actually under your control.
+
+---
+
+## Running it
+
+Needs Node 20.9+ (Next.js 16's own requirement) and a Supabase project.
 
 ```bash
 npm install
-cp .env.example .env.local   # pa popuni dve vrednosti ispod
+cp .env.example .env.local   # then fill in the two values below
 npm run dev
 ```
 
-Dve env promenljive, obe javne po dizajnu — anon ključ je bezbedan u pregledaču zato što je svaka
-tabela zaštićena row-level security politikom, a ne tajnošću ključa:
+Two environment variables, both public by design — the anon key is safe in a browser because every
+table is protected by a row-level security policy, not by the key being secret:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon ključ>
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 ```
 
-| Komanda | Šta radi |
+| Command | What it does |
 |---|---|
-| `npm run dev` | Razvojni server |
-| `npm run build` | Produkcijski build — 16 ruta (15 stranica + `/_not-found`) |
+| `npm run dev` | Development server |
+| `npm run build` | Production build — 16 routes (15 pages + `/_not-found`) |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm run scan` | Bajtovi, ne značenje: NUL, nevalidan JSON, `.only`/`.skip`, `console.log`, konflikt markeri |
-| `npm run schema:check` | Zapis baznih tabela (`supabase/schema/`) protiv generisanih tipova |
-| `npm run lint` | ESLint. **Očekuje se nula problema i nula upozorenja** |
-| `npm test` | Vitest — 2344 testa u 140 fajlova, u dva projekta (`lib` u node-u, `components` u jsdom-u) |
-| `npm test -- --coverage` | Izveštaj o pokrivenosti |
-| `npm run dead` | knip: mrtvi fajlovi, eksporti i zavisnosti |
+| `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
+| `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
+| `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
+| `npm test` | Vitest — 2,344 tests across 140 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test -- --coverage` | Coverage report |
+| `npm run dead` | knip: dead files, exports and dependencies |
 
-**Prag lint-a je nula, i nekad nije bio.** `journal-grid.tsx` prijavljivao je *„Compilation Skipped:
-Use of incompatible library"* — React Compiler ne ume da memoizuje komponentu koja koristi
-`useReactTable` iz TanStack Table. Poruka je tačna i trajna, pa je **ućutkana na licu mesta, sa
-zapisanim razlogom**, umesto da se toleriše kao „tačno 1" u CI fajlu koji niko ne čita dok ne pukne.
-Izuzetak sad stoji pored koda na koji se odnosi.
+**The lint threshold is zero, and it did not used to be.** `journal-grid.tsx` reported *"Compilation
+Skipped: Use of incompatible library"* — the React Compiler cannot memoize a component that uses
+`useReactTable` from TanStack Table. The message is correct and permanent, so it is **silenced at
+the site, with the reason written down**, rather than tolerated as "exactly 1" in a CI file nobody
+reads until it breaks. The exception now sits next to the code it is about.
 
 ### CI
 
-`.github/workflows/gate.yml` vrti **sedam** provera na svakom push-u na `main` i na svakom pull
-request-u, poređanih od najjeftinije ka najskupljoj: `typecheck` → `scan` → `schema:check` →
-`test --coverage` → `lint` → `build` → `dead`. Do runde 4 gate je postojao samo kao dogovor — vrteo
-se pred commit zato što je tako dogovoreno — a dogovor ne obara pull request. Runner je na Node 22.
+`.github/workflows/gate.yml` runs **seven** checks on every push to `main` and every pull request,
+ordered cheapest to most expensive: `typecheck` → `scan` → `schema:check` → `test --coverage` →
+`lint` → `build` → `dead`. Until round 4 the gate existed only as an agreement — it ran before
+commits because that was the agreement — and an agreement cannot fail a pull request. The runner is
+on Node 22.
 
-Jedan korak traži više od jedne komande, jer mu alat sam po sebi ne čuva ništa:
+One step needs more than a single command, because the tool by itself enforces nothing:
 
-- **lint** — ESLint izlazi sa 0 i na upozorenjima, pa se izlaz MERI. Prag je **nula problema**;
-  jedini poznati izuzetak (React Compiler nad TanStack Table) ućutkan je u samom fajlu.
+- **lint** — ESLint exits 0 even on warnings, so the output is MEASURED. The threshold is **zero
+  problems**; the one known exception (React Compiler over TanStack Table) is silenced in the file
+  itself.
 
-`knip` je na **nuli za sve tri vrste nalaza** — mrtav fajl, mrtva zavisnost i neiskorišćen export.
-Ranije je tolerisao 22 export-a (re-export-i iz `shadcn/ui` koje ništa ne uvozi); obrisani su, jer
-spisak koji uvek ima 22 stavke je spisak u koji se prestane gledati — i tako je 23. prošla
-neopaženo.
+`knip` is at **zero for all three finding types** — dead file, dead dependency and unused export. It
+used to tolerate 22 exports (re-exports from `shadcn/ui` that nothing imports); they were deleted,
+because a list that always has 22 entries is a list people stop reading — and that is how the 23rd
+slipped through.
 
-Build traži `NEXT_PUBLIC_SUPABASE_URL` i `NEXT_PUBLIC_SUPABASE_ANON_KEY` kao **repo varijable**
-(Settings → Secrets and variables → Actions → Variables), ne kao tajne — obe su javne po dizajnu,
-jer anon ključ sam po sebi ne daje pristup nijednom redu iza RLS-a. Kad nisu podešene, korak to
-kaže rečenicom umesto da padne na nerazumljivoj grešci iz Next-a.
+The build needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` as **repo variables**
+(Settings → Secrets and variables → Actions → Variables), not secrets — both are public by design,
+since the anon key on its own grants access to no row behind RLS. When they are not set, the step
+says so in a sentence instead of failing on an unreadable error out of Next.
 
 ### Stack
 
-Next.js 16.2.9 (App Router, Server Components, Server Actions — **bez REST route handler-a**),
+Next.js 16.2.9 (App Router, Server Components, Server Actions — **no REST route handlers**),
 React 19.2.4, TypeScript 5, Tailwind 4, shadcn/ui, TanStack Table 8, Recharts 3, Zod 4, Supabase
 (PostgREST + RLS), Vitest 4.
 
 ---
 
-## Model podataka
+## Data model
 
-30 tabela i 1 view, sve sa prefiksom `tj_`. **Row-level security je uključen na svih 30 tabela**,
-svaka politika po istom vlasničkom obrascu:
+30 tables and 1 view, all prefixed `tj_`. **Row-level security is enabled on all 30 tables**, every
+policy following the same ownership pattern:
 
 ```sql
 CREATE POLICY ... FOR ALL TO authenticated
   USING (user_id = (SELECT auth.uid()));
 ```
 
-### Trejd nije jedan red
+### A trade is not one row
 
-Centralna odluka. Pozicija je parent red plus njeni fill-ovi:
+The central decision. A position is a parent row plus its fills:
 
 ```
-tj_positions  ──1:N──▶  tj_executions        ulazi i izlazi, svaki sa svojom cenom,
-     │                                        količinom, vremenom, provizijom i swap-om
-     └──────────────▶  tj_position_stats     VIEW koji izvodi prosečan ulaz/izlaz, bruto,
-                                              neto, R, trajanje — nikad se ne upisuje dvaput
+tj_positions  ──1:N──▶  tj_executions        entries and exits, each with its own price,
+     │                                        quantity, time, commission and swap
+     └──────────────▶  tj_position_stats     VIEW deriving average entry/exit, gross,
+                                              net, R, duration — never written twice
 ```
 
-Skaliranje unutra, skaliranje napolje i delimična zatvaranja time postaju obični podaci umesto
-specijalnih slučajeva, a nijedan izvedeni broj se ne upisuje u kolonu gde bi mogao da zastari.
+Scaling in, scaling out and partial closes become ordinary data instead of special cases, and no
+derived number is ever written into a column where it could go stale.
 
-`tj_position_stats` ima `security_invoker = on`, pa se filtrira RLS-om korisnika koji pita, a ne
-vlasnika view-a. Ima i **TypeScript blizanca**, `src/lib/journal/position-stats.ts`, koji mora da
-računa isto — SQL je ono što aplikacija čita, a TypeScript je ono što forma prikazuje pre snimanja.
-Test drži oba nad istim ulazima.
+`tj_position_stats` carries `security_invoker = on`, so it is filtered by the RLS of whoever asks,
+not of whoever owns the view. It also has a **TypeScript twin**, `src/lib/journal/position-stats.ts`,
+which has to compute the same thing — SQL is what the application reads, TypeScript is what the form
+shows before saving. A test holds both to the same inputs.
 
-### Tabele
+### Tables
 
-| Grupa | Tabele |
+| Group | Tables |
 |---|---|
-| **Trejdovi** | `tj_positions`, `tj_executions`, `tj_trade_images` |
-| **Nalozi i novac** | `tj_accounts`, `tj_cash_events`, `tj_instruments` |
-| **Konfiguracija** | `tj_option_lists`, `tj_option_items`, `tj_field_defs`, `tj_user_prefs`, `tj_dashboard_templates` |
-| **Dnevni proces** | `tj_daily_reports`, `tj_focus_goals`, `tj_position_checkins` |
-| **Nedeljni proces** | `tj_weekly_reviews` |
+| **Trades** | `tj_positions`, `tj_executions`, `tj_trade_images` |
+| **Accounts and money** | `tj_accounts`, `tj_cash_events`, `tj_instruments` |
+| **Configuration** | `tj_option_lists`, `tj_option_items`, `tj_field_defs`, `tj_user_prefs`, `tj_dashboard_templates` |
+| **Daily process** | `tj_daily_reports`, `tj_focus_goals`, `tj_position_checkins` |
+| **Weekly process** | `tj_weekly_reviews` |
 | **Tracker** | `tj_tracker_rules`, `tj_tracker_checkins` |
-| **Playbook-ovi** | `tj_playbooks`, `tj_playbook_sections`, `tj_playbook_rules`, `tj_playbook_rule_links`, `tj_position_rules` |
+| **Playbooks** | `tj_playbooks`, `tj_playbook_sections`, `tj_playbook_rules`, `tj_playbook_rule_links`, `tj_position_rules` |
 | **Notebook** | `tj_notes`, `tj_note_folders`, `tj_note_tags` |
-| **Uvoz** | `tj_import_batches`, `tj_import_rows` |
-| **Bot most** | `tj_bot_tokens`, `tj_bot_events`, `tj_broker_symbol_map` |
+| **Import** | `tj_import_batches`, `tj_import_rows` |
+| **Bot bridge** | `tj_bot_tokens`, `tj_bot_events`, `tj_broker_symbol_map` |
 
-### Korisnički definisana polja
+### User-defined fields
 
-`tj_field_defs` omogućava dodavanje polja bez migracije. Vrednosti idu u `tj_positions.custom`
-(jsonb) umesto u novu kolonu, i svako takvo polje automatski postaje dimenzija po kojoj se može
-grupisati izveštaj. Prave kolone ostaju prave kolone — `src/lib/journal/trade-fields.ts` deli
-podnesak između to dvoje.
+`tj_field_defs` allows adding a field without a migration. Values go into `tj_positions.custom`
+(jsonb) instead of a new column, and every such field automatically becomes a dimension a report can
+group by. Real columns stay real columns — `src/lib/journal/trade-fields.ts` splits the submission
+between the two.
 
-Upis u jsonb zamenjuje ceo dokument, pa izmena spaja preko prethodnog sadržaja umesto da ga dodeli.
-Inače bi svako polje koje forma nije iscrtala — uključujući ono deaktivirano prošlog meseca — bilo
-obrisano nevezanim snimanjem.
+A jsonb write replaces the whole document, so an edit merges over the previous contents rather than
+assigning them. Otherwise every field the form did not draw — including one deactivated last month —
+would be erased by an unrelated save.
 
 ---
 
-## Rute
+## Routes
 
-| Ruta | Šta je |
+| Route | What it is |
 |---|---|
-| `/` | Dashboard: KPI-jevi, equity kriva, drawdown, heatmap kalendari, breakdown-ovi, Sickre Score, insights |
-| `/journal` | Tabela trejdova — sortiranje, filtriranje, biranje kolona |
-| `/trades/new`, `/trades/[id]/edit` | Forma trejda: plan, fill-ovi, playbook checklist, psihologija, slike |
-| `/daily` | Dnevni izveštaj + tracker checklist za jedan dan; zaključavanje dana |
-| `/calendar` | Mesečna mreža P&L-a po danu, nedeljni zbirovi |
-| `/weekly` | Nedeljni pregled: ocena nedelje, pet pitanja, brojke nedelje (`week-recap.ts`) |
-| `/playbooks` | Spisak svih setup-ova kao tabela: Trades / Net P&L / Win Rate / Missed / Expectancy po redu |
-| `/playbooks/[id]` | Jedan playbook: identitet, Stats, Rules (uređivač sekcija i pravila), Trades, Notes |
-| `/reports` | Radni sto za izveštaje — bilo koja metrika protiv bilo koje dimenzije, plus pivot |
-| `/tracker` | Preusmerava na `/daily` (ostalo jer je tracker nekad živeo ovde) |
-| `/notebook` | Beleške, folderi, tagovi, markdown |
-| `/import` | Čarobnjak za CSV uvoz, istorija batch-eva, undo |
-| `/settings` | Šest tabova: Categories (liste opcija + korisnička polja, jedan potez pravi oboje), Tracker, Instruments, Accounts (uklj. FTMO), Deposits / withdrawals, Bot most. Brisanje naloga i reset su u Accounts |
+| `/` | Dashboard: KPIs, equity curve, drawdown, heatmap calendars, breakdowns, Sickre Score, insights |
+| `/journal` | Trade table — sorting, filtering, column picking |
+| `/trades/new`, `/trades/[id]/edit` | Trade form: plan, fills, playbook checklist, psychology, images |
+| `/daily` | Daily report + tracker checklist for one day; locking the day |
+| `/calendar` | Monthly P&L grid by day, weekly totals |
+| `/weekly` | Weekly review: week rating, five questions, the week's figures (`week-recap.ts`) |
+| `/playbooks` | Every setup as one table: Trades / Net P&L / Win Rate / Missed / Expectancy per row |
+| `/playbooks/[id]` | One playbook: identity, Stats, Rules (section and rule editor), Trades, Notes |
+| `/reports` | Report workbench — any metric against any dimension, plus a pivot |
+| `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
+| `/notebook` | Notes, folders, tags, markdown |
+| `/import` | CSV import wizard, batch history, undo |
+| `/settings` | Six tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments, Accounts (incl. FTMO), Deposits / withdrawals, Bot bridge. Account deletion and reset live under Accounts |
 | `/login` | Supabase auth |
 
 ---
 
-## Metrike
+## Metrics
 
-34 metrike u jednom registru (`src/lib/journal/reports/metrics.ts`), 25 ugrađenih dimenzija u četiri
-grupe (11 sa trejda, 9 izvedenih, 4 procesne, 1 insight) plus po jedna za svako korisničko polje.
-Bilo koja metrika ide protiv bilo koje dimenzije — zato postoji jedan report engine umesto deset
-stranica sa izveštajima. Tabele ispod nabrajaju svih 34.
+34 metrics in a single registry (`src/lib/journal/reports/metrics.ts`), 25 built-in dimensions across
+four groups (11 off the trade, 9 derived, 4 process, 1 insight) plus one per custom field. Any
+metric runs against any dimension — which is why there is one report engine instead of ten report
+pages. The tables below list all 34.
 
-**Registar je registar, ne druga implementacija.** Svaki unos delegira funkciji koja već postoji i
-već je testirana na drugom mestu. Metrika koja bi računala nešto u sebi razišla bi se sa modulom
-koji to isto računa.
+**A registry is a registry, not a second implementation.** Every entry delegates to a function that
+already exists and is already tested elsewhere. A metric that computed something inside itself would
+drift from the module computing the same thing.
 
-### Novac i brojanje
+### Money and counting
 
-| Metrika | Formula | Napomena |
+| Metric | Formula | Note |
 |---|---|---|
-| Neto P&L | `Σ (bruto − provizije − swap)` | Datira se po danu **zatvaranja**, u zoni naloga |
-| Bruto P&L | `Σ (izlaz − ulaz) × količina × point_value × smer` | |
-| Trades | Broj zatvorenih trejdova u obuhvatu | |
-| Win rate | `dobici / (dobici + gubici) × 100` | **Breakeven trejdovi su van imenioca** |
-| Avg win / Avg loss | Prosečan novčani dobitak i gubitak, odvojeno | |
-| Avg win/loss | `avg win / \|avg loss\|` | Novčani racio, ne R — komponenta Sickre Score-a |
-| Profit factor | `bruto profit / bruto gubitak` | `Infinity` kad nema gubitka — stvarni maksimum, ne nedostatak podataka. `null` samo kad nema šta da se deli |
-| Expectancy | `winRate × avgWinR + (1 − winRate) × avgLossR` | Računa se samo nad R populacijom — samo trejd sa stopom ima R |
-| Najbolji / najgori | Najveći i najmanji pojedinačni neto rezultat | |
-| Breakeven | Trejdovi unutar breakeven pojasa naloga | |
-| **R (svuda)** | `bruto poeni / (rizik u poenima × ulazna količina)` | **R je uvek BRUTO**, i ne prati net/gross prekidač — taj prekidač menja samo novac |
+| Net P&L | `Σ (gross − commissions − swap)` | Dated by the **close** day, in the account's timezone |
+| Gross P&L | `Σ (exit − entry) × qty × point_value × direction` | |
+| Trades | Closed trades in scope | |
+| Win rate | `wins / (wins + losses) × 100` | **Breakeven trades are out of the denominator** |
+| Avg win / Avg loss | Average winning and losing money, separately | |
+| Avg win/loss | `avg win / \|avg loss\|` | A money ratio, not R — a Sickre Score component |
+| Profit factor | `gross profit / gross loss` | `Infinity` when there is no loss — a real maximum, not missing data. `null` only when there is nothing to divide |
+| Expectancy | `winRate × avgWinR + (1 − winRate) × avgLossR` | Computed over the R population only — only a trade with a stop has an R |
+| Best / worst | Largest and smallest single net result | |
+| Breakeven | Trades inside the account's breakeven band | |
+| **R (everywhere)** | `gross points / (risk in points × entry qty)` | **R is always GROSS**, and does not follow the net/gross toggle — that toggle moves money only |
 
-**Zašto je R bruto, a novac može biti neto.** To su namerno dva različita pitanja. R meri **setup**: da
-li je cena otišla tamo gde je plan rekao, u odnosu na rizik koji je preuzet. Provizija i swap nisu
-svojstvo setupa nego cena držanja, i za swing knjigu su posebna stavka koju treba videti odvojeno —
-zato imaju svoj tajl (`Swap`) na `/reports` i zato postoji net/gross prekidač nad novcem.
+**Why R is gross while money can be net.** They are deliberately two different questions. R measures
+the **setup**: did price go where the plan said, relative to the risk taken. Commission and swap are
+not a property of the setup but the cost of holding, and for a swing book they are a separate line
+worth seeing on its own — hence their own tile (`Swap`) on `/reports`, and hence the net/gross
+toggle over money.
 
-Posledica koju treba znati čitajući ekran: **trejd može biti gubitak u novcu i pozitivan u R-u.**
-Držan tri dana, cena je otišla tvojim putem za +0.03R, a carry je pojeo i to — neto minus. To nije
-nesaglasnost nego dva tačna odgovora na dva pitanja: setup je odradio svoje, držanje se nije
-isplatilo. `tj_position_stats` računa i `realized_r_net` za slučaj da neto R ikad zatreba, ali ga
-nijedan ekran namerno ne čita — jedan R po knjizi, da dva ne bi počela da se razilaze.
+A consequence worth knowing while reading the screen: **a trade can be a loss in money and positive
+in R.** Held three days, price went your way by +0.03R, and carry ate even that — net negative. That
+is not an inconsistency but two correct answers to two questions: the setup did its job, the holding
+did not pay. `tj_position_stats` also computes `realized_r_net` in case a net R is ever needed, but
+no screen reads it on purpose — one R per book, so that two do not start to drift.
 
-**Breakeven pojas** je po nalogu (`breakeven_from`, `breakeven_to`, u valuti ili procentu). Scratch
-od ±20 $ nije ni dobitak ni gubitak, i izbacuje se iz win rate-a umesto da se broji kao gubitak —
-što bi knjigu punu scratch-eva potcenilo za nekoliko poena.
+**The breakeven band** is per account (`breakeven_from`, `breakeven_to`, in currency or percent). A
+±$20 scratch is neither a win nor a loss, and it is dropped from the win rate instead of being
+counted as a loss — which would understate a book full of scratches by several points.
 
-**„All accounts" ne sabira različite valute.** €500 i $300 nisu $800. Kad nalozi u obuhvatu nemaju
-zajedničku valutu, dashboard, `/reports` i „Export for Claude" odbijaju da izračunaju pooled novčanu
-figuru — ceo novčani deo ekrana se zamenjuje upozorenjem umesto da tiho pokaže broj u pogrešnoj
-jedinici. Isti nalozi u istoj valuti se i dalje normalno sabiraju.
+**"All accounts" does not add different currencies.** €500 and $300 are not $800. When the accounts
+in scope have no common currency, the dashboard, `/reports` and "Export for Claude" refuse to
+compute a pooled money figure — the whole money half of the screen is replaced by a warning instead
+of quietly showing a number in the wrong unit. Accounts sharing a currency still add up normally.
 
-### Rizik
+### Risk
 
-| Metrika | Formula | Napomena |
+| Metric | Formula | Note |
 |---|---|---|
-| Max drawdown | Najdublji pad od vrha do dna kumulativnog P&L-a | U novcu, unutar grupe |
-| Avg daily DD | Prosečan pad unutar dana, od dnevnog vrha | Dan bez pada ulazi kao 0 |
-| Recovery factor | `neto profit / max drawdown` | `null` dok kriva nikad nije pala |
-| Sharpe | `prosečan dnevni P&L / σ × √periodsPerYear` | |
-| Sortino | Isto, ali brojilac gleda samo padove ispod nule — imenilac i dalje broji **sve** dane, ne samo gubitaške | `null` kad nijedan dan nije bio u minusu — rast nije rizik |
-| Calmar | `godišnji prinos / max drawdown` | Recovery factor podeljen vremenom koje mu je trebalo |
-| Consistency | `100 − cv × 20`, gde je `cv = σ / \|prosek\|` | 0 za knjigu koja gubi |
-| Avg MAE u R | Prosek koliko su trejdovi išli protiv pozicije | Prosečava se samo nad trejdovima koji *imaju* MAE |
+| Max drawdown | Deepest peak-to-trough fall of cumulative P&L | In money, within the group |
+| Avg daily DD | Average intraday fall from that day's high | A day with no fall enters as 0 |
+| Recovery factor | `net profit / max drawdown` | `null` while the curve has never fallen |
+| Sharpe | `mean daily P&L / σ × √periodsPerYear` | |
+| Sortino | The same, but the numerator only looks at falls below zero — the denominator still counts **every** day, not just losing ones | `null` when no day was negative — growth is not risk |
+| Calmar | `annualised return / max drawdown` | Recovery factor divided by the time it took |
+| Consistency | `100 − cv × 20`, where `cv = σ / \|mean\|` | 0 for a losing book |
+| Avg MAE in R | Average of how far trades went against the position | Averaged only over trades that *have* an MAE |
 
-**Planirani reward se PONDERIŠE kad se izlazi u delovima.** Ulaz-do-targeta je ceo plan samo kad
-cela pozicija izlazi na jednoj ceni. Skini 30 % na 1R, 30 % na 2R i ostatak na 3R i plan vredi
-`0.3×1 + 0.3×2 + 0.4×3 = 2.1R`, ne 3R. Pošto je taj broj **imenilac** Target attainment-a,
-precenjivanje stiže kao nizak rezultat — metrika bi te kažnjavala baš zato što skaliraš izlaz.
-Najbliži nivo je ista greška u ogledalu (1R, pa naduvan rezultat); nijedan pojedinačan nivo ne
-odgovara na to pitanje, samo ponderisan plan. `blendedPlannedRewardR` je ista funkcija za oba
-oblika: bez nivoa ona JESTE ulaz-do-targeta. Ovo nije botova stvar — ručno ukucan scale-out je
-oduvek imao istu aritmetiku i isti pogrešan odgovor.
+**Planned reward is WEIGHTED when the exit is scaled.** Entry-to-target is the whole plan only when
+the entire position leaves at one price. Take 30 % at 1R, 30 % at 2R and the rest at 3R and the plan
+is worth `0.3×1 + 0.3×2 + 0.4×3 = 2.1R`, not 3R. Since that number is the **denominator** of Target
+attainment, overstating it arrives as a low result — the metric would punish you precisely for
+scaling out. The nearest rung is the same error mirrored (1R, and an inflated result); no single
+rung answers the question, only the weighted plan does. `blendedPlannedRewardR` is one function for
+both shapes: with no rungs it IS entry-to-target. This is not a bot concern — a hand-typed scale-out
+always had the same arithmetic and the same wrong answer.
 
-**Godišnja skala se meri, ne pretpostavlja.** `periodsPerYear = (dana trgovanja × 365) /
-kalendarskih dana raspona` — izvedeno iz podataka umesto zakucano na 252. Swing trejder sa 40 dana
-trgovanja preko 300 kalendarskih dana dobija svoj faktor; zakucanih 252 naduvalo bi svaki racio.
-Sva tri racija vraćaju `null` ispod `MIN_RATIO_DAYS` (5).
+**The annualisation factor is measured, not assumed.** `periodsPerYear = (trading days × 365) /
+calendar days spanned` — derived from the data instead of hardcoded at 252. A swing trader with 40
+trading days over 300 calendar days gets their own factor; a hardcoded 252 would inflate every
+ratio. All three ratios return `null` below `MIN_RATIO_DAYS` (5).
 
-**Consistency meri odnos prema proseku, ne prema sumi.** Prva verzija je delila σ sa *ukupnim*
-profitom — a ukupan profit raste sa brojem trejdova dok σ ne opada, pa je isti obrazac trgovanja
-posle godinu dana čitao doslednije nego posle meseca, bez ijedne stvarne promene u ponašanju. `cv`
-(koeficijent varijacije, σ prema proseku po trejdu) ne zavisi od veličine uzorka na taj način.
+**Consistency measures against the mean, not the sum.** The first version divided σ by *total*
+profit — and total profit grows with the number of trades while σ does not shrink, so the same
+trading pattern read as more consistent after a year than after a month, with no actual change in
+behaviour. `cv` (coefficient of variation, σ against the per-trade mean) does not depend on sample
+size that way.
 
-Dva različita imenioca za drawdown postoje namerno:
+Two different drawdown denominators exist on purpose:
 
-- **`maxPctOfEquity`** — nad vrhom equity-ja, uključujući uplate i isplate. To je broj koji se
-  pokazuje čoveku, jer uplata stvarno menja šta dati dolar gubitka znači.
-- **`maxPctOfPeakPnl`** — nad vrhom kumulativnog P&L-a, po TradeZella formuli, da bi kompozitni
-  skor ostao uporediv sa njihovim. **Nikad se ne prikazuje.** Vraća `null` — ne `0` — kad je kriva
-  pala sa vrha koji nikad nije bio iznad nule, jer knjiga koja je samo gubila nema vrh profita
-  prema kojem bi se pad izrazio.
+- **`maxPctOfEquity`** — against peak equity, including deposits and withdrawals. This is the number
+  shown to a human, because a deposit genuinely changes what a given dollar of loss means.
+- **`maxPctOfPeakPnl`** — against peak cumulative P&L, per TradeZella's formula, so the composite
+  score stays comparable with theirs. **Never displayed.** It returns `null` — not `0` — when the
+  curve fell from a peak that was never above zero, because a book that only lost has no profit peak
+  to express the fall against.
 
-### Troškovi, plan i izvršenje
+### Costs, plan and execution
 
-| Metrika | Formula |
+| Metric | Formula |
 |---|---|
-| Ukupne provizije / swap | Zbirovi po fill-ovima |
-| Trošak % bruta | `troškovi / bruto profit dobitnika × 100` |
-| Avg planned R | Prosečan planirani reward, nad trejdovima koji ga imaju |
-| Planned vs realized R | `avg realized R − avg planned R`, nad **istim** trejdovima |
-| Target attainment | Realizovani R kao procenat planiranog reward-a |
-| Winner target attainment | Isto, **samo nad dobitnicima** — koliko je plana uzeto pre ranog izlaska |
-| Avg entry slip | Planirani ulaz naspram prosečnog fill-a, u R protiv planiranog stopa. Negativno = fill lošiji od plana |
-| Total slip R | Zbir svakog R-a ustupljenog na ulaznom slippage-u u periodu |
-| Setup score | Udeo ispunjenih setup kriterijuma (§ Ocena setupa se izvodi) |
-| Avg hold | Prosečno vreme držanja u sekundama |
-| Follow rate | Ispoštovana playbook pravila / **odgovorena** pravila × 100 |
+| Total commissions / swap | Sums over fills |
+| Cost % of gross | `costs / gross profit of winners × 100` |
+| Avg planned R | Average planned reward, over trades that have one |
+| Planned vs realized R | `avg realized R − avg planned R`, over the **same** trades |
+| Target attainment | Realized R as a percentage of planned reward |
+| Winner target attainment | The same, **winners only** — how much of the plan was taken before exiting early |
+| Avg entry slip | Planned entry against average fill, in R against the planned stop. Negative means the fill was worse than planned |
+| Total slip R | Every R given up to entry slippage in the period, added together |
+| Setup score | Share of setup criteria met (§ The setup grade is derived) |
+| Avg hold | Average holding time in seconds |
+| Follow rate | Playbook rules kept / **answered** rules × 100 |
 
-`follow_rate` je jedina metrika čije značenje zavisi od toga u kom je bucket-u: na izveštaju po
-pravilu broji odgovore na *to* pravilo. Engine prosleđuje bucket svakoj metrici da bi to ostalo
-generično i da nijedan ključ dimenzije ne bi bio specijalan slučaj.
+`follow_rate` is the only metric whose meaning depends on which bucket it is in: on a per-rule report
+it counts answers to *that* rule. The engine passes the bucket to every metric so this stays generic
+and no dimension key becomes a special case.
 
-### Pripisivanje danima
+### Attributing to days
 
-Ako se ovo pogreši, ništa ne pukne — brojevi se prosto zavedu pod dane koje nisi živeo.
+Get this wrong and nothing breaks — the numbers simply file themselves under days you did not live.
 
-- **Novac se datira po danu ZATVARANJA.** Swing otvoren u ponedeljak a zatvoren u petak pripada
-  petku, jer je tad novac stigao.
-- **Odluke se datiraju po danu OTVARANJA.** „Da li je svaki trejd imao stop?" je pitanje o trenutku
-  ulaska. Na pripisivanju po zatvaranju, još otvoren trejd je tom pravilu nevidljiv, pa bi deset
-  nevezanih otvorenih trejdova prijavilo savršen dan.
-- **Dani su uvek u zoni NALOGA**, razrešeni na serveru. `new Date()` pročitan u pregledaču pomera
-  ceo kalendar za jednu kolonu svakome ko ne sedi u zoni naloga.
-- **ISO dani u nedelji, 1 = ponedeljak … 7 = nedelja.** Nikad `Date#getDay`.
+- **Money is dated by the CLOSE day.** A swing opened Monday and closed Friday belongs to Friday,
+  because that is when the money arrived.
+- **Decisions are dated by the OPEN day.** "Did every trade have a stop?" is a question about the
+  moment of entry. Under close-dating, a still-open trade is invisible to that rule, so ten unlinked
+  open trades would report a perfect day.
+- **Days are always in the ACCOUNT's timezone**, resolved on the server. A `new Date()` read in the
+  browser shifts the whole calendar by one column for anyone not sitting in the account's zone.
+- **ISO weekdays, 1 = Monday … 7 = Sunday.** Never `Date#getDay`.
 
 ---
 
 ## Sickre Score
 
-Jedan kompozit, 0–100, preko sedam komponenti. **Tablice bandova** su prepisane iz TradeZella
-specifikacije. **Ponderi više nisu** — ta specifikacija kalibriše intraday scalp knjigu, a ovde se
-vodi swing knjiga na prop nalogu: 40–70 trejdova godišnje, fiksni target oko 3× stop.
+One composite, 0–100, over seven components. The **band tables** are transcribed from the TradeZella
+spec. The **weights are not, any more** — that spec calibrates an intraday scalp book, and what is
+kept here is a swing book on a prop account: 40–70 trades a year, a fixed target near 3× the stop.
 
-| Komponenta | Ponder | Boduje se po |
+| Component | Weight | Scored by |
 |---|---|---|
 | **Process adherence** | **30** | 60 % tracker compliance + 40 % playbook follow rate |
 | Max drawdown | 25 | `100 − maxPctOfPeakPnl` |
-| Profit factor | 20 | Tablica bandova, 1.8 → 2.6 mapira na 20 → 100 |
-| Consistency | 15 | Prosleđuje se kakav jeste |
-| **FTMO headroom** | 10 | `100 − najbliži prilaz limitu`, u % |
-| Avg win/loss | 5 | Ista tablica kao profit factor, u novcu |
-| Recovery factor | 5 | Svoja tablica, 1.0 → 3.5 |
+| Profit factor | 20 | Band table, 1.8 → 2.6 maps to 20 → 100 |
+| Consistency | 15 | Passed through as-is |
+| **FTMO headroom** | 10 | `100 − closest approach to a limit`, in % |
+| Avg win/loss | 5 | The same table as profit factor, in money |
+| Recovery factor | 5 | Its own table, 1.0 → 3.5 |
 
-Trgovinske komponente daju **70**; sa procesom je 100, sa oba opciona 110. Kartica deli stvarnim
-zbirom a ne zakucanom stotkom.
+The trade-derived components total **70**; with process it is 100, with both optional ones 110. The
+card divides by the real total, never by a hardcoded hundred.
 
-### Zašto ovi ponderi, a ne prepisani
+### Why these weights, and not the transcribed ones
 
-**Win % je izbačen iz skora, ne samo prepondersan.** Njegova skala (`win% / 60 × 100`) kodira „viši
-je bolji". Kod targeta od 3R matematički očekivani win rate je 35–45 %, pa je knjiga koja trguje
-tačno po planu dobijala oko 67 na toj komponenti — kažnjena za sopstveni dizajn. Win rate ostaje
-kao KPI tajl na dashboard-u i kao metrika u `/reports`, gde je podatak a ne ocena.
+**Win % is out of the score entirely, not merely reweighted.** Its scale (`win% / 60 × 100`) encodes
+"higher is better". At a 3R target the mathematically expected win rate is 35–45 %, so a book
+trading exactly to plan scored about 67 on that component — punished for its own design.
+Qullamaggie runs 25–35 % on purpose. Win rate stays as a KPI tile on the dashboard and as a
+`/reports` metric, where it is a fact rather than a verdict.
 
-**Avg win/loss je pao sa 20 na 5.** Kod fiksnog targeta taj racio je određen dizajnom, ne
-izvršenjem — uvek će biti blizu 3. Dvadeset poena je merilo konstantu, i uz to delimično dubliralo
-profit factor.
+**Avg win/loss fell from 20 to 5.** With a fixed target the ratio is settled by design, not by
+execution — it will sit near 3 whatever happens. Twenty points were measuring a constant, and
+half-duplicating profit factor besides.
 
-**Process adherence je najteža komponenta, sa 30.** Jedina je koja ne zavisi od varijanse. Na
-40–70 trejdova godišnje sve ostale mere ishod na uzorku premalom da bi bio pouzdan, dok follow rate
-i tracker compliance mere ponašanje, gde n=40 već nešto znači. Teza ovog README-a je „P&L je
-posledica, proces je uzrok"; stari ponderi su davali uzroku 15 od 115, a posledici 100 od 115.
+**Process adherence is the heaviest component, at 30.** It is the only one that does not depend on
+variance. Over 40–70 trades a year every other component measures an outcome on a sample too thin to
+trust, while follow rate and tracker compliance measure behaviour, where n=40 already means
+something. This README's thesis is "P&L is the consequence, process is the cause"; the old weights
+gave the cause 15 of 115 and the consequence 100 of 115.
 
-**FTMO headroom je nov.** Meri koliko je nalog bio blizu dnevnog ili ukupnog limita — i to
-**najbliži prilaz kroz ceo izazov**, ne koliko prostora ima danas. Nalog koji završi na +8 % ali je
-usput dodirnuo 4.5 % na 5 % limitu bio je jedan loš dan od kraja, a nijedna druga komponenta to nije
-videla. Zato je jedina komponenta koja namerno ignoriše period filter: prozor izazova definišu
-`ftmo_reset_at` i fiksni starting balance, a ne to šta korisnik trenutno gleda. Kad nijedan nalog
-nema FTMO mod, komponente nema — ne 100.
+**FTMO headroom is new.** It measures how close the account came to the daily or the overall limit —
+and specifically the **closest approach across the whole challenge**, not how much room is left
+today. An account that finishes +8 % but touched 4.5 % against a 5 % floor was one bad day from the
+end, and no other component could see that. It is therefore the one component that deliberately
+ignores the period filter: a challenge window is defined by `ftmo_reset_at` and a fixed starting
+balance, not by what the reader happens to be looking at. When no account runs FTMO mode the
+component is absent — not 100.
 
-Kad u prozoru izazova nema nijednog zatvorenog trejda, `evaluateFtmo` vraća `null` a ne 100. Svež
-nalog koji nikad nije rizikovao ne sme da dobije maksimum za upravljanje rizikom — to je ista
-greška kao nalaz 1 ispod, samo modul ranije.
+When a challenge window holds no closed trade at all, `evaluateFtmo` returns `null` rather than 100.
+A fresh account that has never risked anything must not score a maximum for risk management — that is
+the same defect as finding 1 below, one module earlier.
 
-**Komponenta bez podataka se izbacuje a preostali ponderi renormalizuju**, da mlad track record ne
-bude kažnjen za aritmetiku koja nema šta da deli. Da bi to bilo tačno trebalo je tri odvojene
-popravke u rundi 3, sve tri ista greška na različitim dubinama:
+**A component with no data is dropped and the remaining weights renormalize**, so a young track
+record is not punished for arithmetic with nothing to divide. Getting that right took three separate
+fixes in round 3, all three the same error at different depths:
 
-1. Drawdown i consistency vraćaju `0` na praznoj knjizi — pošteno kao *statistike*, a
-   `100 − 0 = 100` je „nikad nije trgovao" pretvorilo u besprekorno upravljanje rizikom.
-2. Jedan dobitnički trejd davao je **100/100**: beskonačan profit factor, nula drawdown-a jer nema
-   od čega da padne i nulta varijansa nad jednim uzorkom. Sve sami maksimumi, svaki artefakt n=1.
-3. Knjiga od šest uzastopnih gubitaka dobijala je **100 za upravljanje rizikom**, jer procenat
-   drawdown-a nije imao pozitivan vrh da njime deli pa je vraćao `0`.
+1. Drawdown and consistency answer `0` on an empty book — honest as *statistics* — and `100 − 0 =
+   100` turned "never traded" into flawless risk management.
+2. A single winning trade scored **100/100**: infinite profit factor, zero drawdown because there
+   was nothing to fall from, and zero variance over one sample. Maxima all the way down, every one
+   an artifact of n=1.
+3. A book of six consecutive losses scored **100 for risk management**, because the drawdown
+   percentage had no positive peak to divide by and returned `0`.
 
-Zato skor sad nosi kapiju dokaza:
+So the score now carries an evidence gate:
 
-- **Ispod 5 zatvorenih trejdova skora nema.** Kartica odbrojava do njega.
-- **Ispod 30 se prikazuje ZAJEDNO sa uzorkom**, označen kao privremen. Profit factor nad pet odluka
-  ume da skoči preko cele tablice bandova na jedan trejd, ali krijenje skora nedeljama je
-  nepoštenje u drugom smeru.
-- **Ispod 50 % pokrivenih pondera skora nema** — jedna komponenta pod naslovom sedmokomponentnog
-  kompozita nije kompozit. Prazan nalog sa tracker istorijom pokriva process 30 + FTMO headroom 10
-  = 40 od 110, i dalje ispod kapije.
+- **Below 5 closed trades there is no score.** The card counts down to it.
+- **Below 30 it is shown WITH its sample**, labelled provisional. A profit factor over five
+  decisions can jump across the whole band table on one trade, but hiding the score for weeks is
+  dishonest in the other direction.
+- **Below 50 % of weights covered there is no score** — one component under the heading of a
+  seven-component composite is not a composite. An empty account with tracker history covers
+  process 30 + FTMO headroom 10 = 40 of 110, still under the gate.
 
-Svaka kapija čita svoj imenilac: `trades` za statistike zavisne od putanje (drawdown hoda kroz niz,
-consistency je njegov rasap), `decided` (dobici + gubici) za one građene od dobitaka protiv
-gubitaka. Knjiga od samih breakeven scratch-eva ima putanju za merenje i nema odluka koje je dobila.
+Each gate reads its own denominator: `trades` for the path-dependent statistics (drawdown walks the
+sequence, consistency is its dispersion), `decided` (wins + losses) for the ones built from wins
+against losses. A book of nothing but breakeven scratches has a path to measure and no decisions it
+could have won.
 
-**Rebalans je oslabio kapiju pokrivenosti na jednom mestu, i to je zapisano a ne prećutano.** Dok je
-win % bio u skoru, komponente gejtovane po `decided` nosile su 60 od 100 pondera; bez njega nose 25
-od 70. Knjiga od samih breakeven trejdova zato sad prelazi prag sa drawdown-om i consistency-jem
-(40 od 70) i dobija skor umesto ćutanja — privremen, sa uzorkom uz broj i sa „2 of 5 components" na
-kartici. Ograđeno testom u `book.fixture.test.ts`; ako je presudno da to i dalje ćuti, ručica je
-`MIN_COVERAGE_SHARE`, a ona pomera svaki skor u journalu.
+**The rebalance weakened the coverage gate in one place, and that is written down rather than
+swallowed.** While win % was in the score, the components gated on `decided` carried 60 of 100
+weights; without it they carry 25 of 70. A book of nothing but breakeven trades therefore now clears
+the threshold on drawdown and consistency alone (40 of 70) and gets a score instead of silence —
+provisional, with the sample beside it and "2 of 5 components" on the card. Pinned by a test in
+`book.fixture.test.ts`; if it matters that this stays silent, the knob is `MIN_COVERAGE_SHARE`, and
+it moves every score in the journal.
 
-Kalibracione konstante su zaključane vrednošću u `sickre-score.test.ts`. Menjanje bilo koje pomera
-svaki skor koji je ikad prikazan, pa sad mora da menja i test.
+The calibration constants are pinned by value in `sickre-score.test.ts`. Changing any one of them
+moves every score ever displayed, so it now has to change a test too.
 
 ---
 
-## Sekcija pripada PLAYBOOK-u, a ne nalogu
+## A section belongs to the PLAYBOOK, not to the account
 
-`tj_playbook_rules.category` je nosio `CHECK IN ('context','entry','management','exit','no_trade')`,
-a kartica je crtala svih pet sekcija bez obzira da li ih knjiga koristi. To je bila tuđa taksonomija:
-trejderu čiji je metod „ovo su uslovi da uđem, ovo da izađem, i jedno pravilo za rizik" daje tri
-naslova koja je napisao i dva koja nije, trajno prazna. Prazna sekcija tad prestaje da bude
-podsetnik i postaje forma koja ne pristaje.
+`tj_playbook_rules.category` used to carry `CHECK IN ('context','entry','management','exit',
+'no_trade')`, and the card drew all five sections whether or not the book used them. That was
+somebody else's taxonomy: a trader whose method is "these are the conditions to enter, these to
+exit, and one rule for risk" gets three headings they wrote and two they did not, permanently empty.
+An empty section then stops being a reminder and becomes a form that does not fit.
 
-Prvo rešenje je sekciju pretvorilo u opcionu listu (`rule_category`) po **nalogu**. Popravilo je
-taksonomiju i ostavilo tri žalbe, sve tri iz istog korena — sekcija i veza pravila sa njom bile su
-**globalne**:
+The first fix turned a section into an option list (`rule_category`) per **account**. It fixed the
+taxonomy and left three complaints, all three from one root — a section and a rule's link to it were
+**global**:
 
-- nov playbook je crtao sve sekcije koje nalog ima, prazne ili ne;
-- sekcija se nije mogla obrisati jer je pravilo iz **druge** knjige stajalo pod istim imenom;
-- isto pravilo je moralo da stoji u istoj sekciji u svakoj knjizi.
+- a new playbook drew every section the account had, empty or not;
+- a section could not be deleted because a rule from **another** book sat under the same name;
+- the same rule had to live in the same section in every book.
 
-**Sad je sekcija red u `tj_playbook_sections`, vezan za jedan playbook** (migracija
-`20260824100000`). Model veze je već bio tačan — pravilo je biblioteka sa jednim `id`-jem, veza je
-zaseban red, `sort_order` stoji na vezi pa isto pravilo može biti treće u jednoj knjizi i prvo u
-drugoj. Falila su mu dva stupca, i oba su se preselila na `tj_playbook_rule_links`:
+**A section is now a row in `tj_playbook_sections`, tied to one playbook** (migration
+`20260824100000`). The link model was already right — a rule is a library entry with one `id`, the
+link is its own row, `sort_order` lives on the link so the same rule can be third in one book and
+first in another. It was missing two columns, and both moved onto `tj_playbook_rule_links`:
 
-| Šta | Gde sad živi | Zašto |
+| What | Where it lives now | Why |
 |---|---|---|
-| veza sa sekcijom | `tj_playbook_rule_links.section_id` (uuid) | sekcija je stvar knjige |
-| `is_setup_criterion` | `tj_playbook_rule_links` | koje pravilo ocenjuje setup je takođe stvar knjige — `criteriaByPlaybook` u `rule-lookup.ts` je to ionako već računao po knjizi, samo je izvodio iz globalne zastavice |
-| `show_when` | **ostaje na pravilu** | odgovori (`tj_position_rules`) vise o `rule_id`, a `show_when` određuje imenilac follow rate-a. Po knjizi bi isto pravilo imalo dva imenioca nad jednim skupom odgovora |
+| link to the section | `tj_playbook_rule_links.section_id` (uuid) | a section is a property of the book |
+| `is_setup_criterion` | `tj_playbook_rule_links` | which rule grades the setup is also a property of the book — `criteriaByPlaybook` in `rule-lookup.ts` already computed it per book, it was just deriving it from a global flag |
+| `show_when` | **stays on the rule** | answers (`tj_position_rules`) hang off `rule_id`, and `show_when` decides the follow rate's denominator. Per book, the same rule would have two denominators over one set of answers |
 
-**Nema više stabilnog `value`, i to je poenta.** Veza pokazuje na `section_id`, pa je preimenovanje
-sekcije besplatno i ne dira nijedno pravilo — ranije je rename smeo da menja samo `label` baš zato
-što bi prepisivanje `value`-a bio UPDATE preko svih pravila svih playbook-ova, i svaki propušten red
-bi ispao iz svoje sekcije.
+**There is no stable `value` any more, and that is the point.** The link points at a `section_id`, so
+renaming a section is free and touches no rule — previously a rename was allowed to change only
+`label`, precisely because rewriting `value` would have been an UPDATE across every rule of every
+playbook, and any row missed would have dropped out of its section.
 
-**Uređuje se na stranici playbook-a, ne u Settings.** Trejder koji piše playbook ne treba da ga
-napusti, nađe pravi padajući spisak u podešavanjima, doda vrednost i vrati se. Akcije su
-`addPlaybookSection`, `updatePlaybookSection`, `deletePlaybookSection`, `movePlaybookSection` i
-`reorderPlaybookSections`, uz `moveRuleToSection` i `setRuleCriterion` za pravila. Nova knjiga
-**kreće prazna** — sekcije se dobijaju tako što se napišu.
+**It is edited on the playbook's page, not in Settings.** A trader writing a playbook should not have
+to leave it, find the right dropdown in settings, add a value and come back. The actions are
+`addPlaybookSection`, `updatePlaybookSection`, `deletePlaybookSection`, `movePlaybookSection` and
+`reorderPlaybookSections`, with `moveRuleToSection` and `setRuleCriterion` for the rules. A new book
+**starts empty** — you get sections by writing them.
 
-**Brisanje sekcije nikad ne odbija.** `ON DELETE CASCADE` na `section_id` uklanja **veze**, ne
-pravila: svako pravilo ostaje u biblioteci sa svakim odgovorom koji je ikad prikupilo, i svaki drugi
-playbook koji ga vezuje ostaje netaknut. Brisanje sekcije je odvezivanje više pravila odjednom, a
-odvezivanje ovde nikad nije bilo destruktivno. Opreznost stoji u rečenici koju trejder pročita pre
-potvrde — nabroji pravila koja kartica ionako već prikazuje — a ne u odbijanju na koje ne može da
-odgovori.
+**Deleting a section never refuses.** `ON DELETE CASCADE` on `section_id` removes the **links**, not
+the rules: every rule stays in the library with every answer it ever collected, and every other
+playbook linking it is untouched. Deleting a section is an unlink of several rules at once, and
+unlinking has never been destructive here. The caution belongs in the sentence the trader reads
+before confirming — naming the rules the card is already showing — not in a refusal they cannot act
+on.
 
-**Dva naslova sa istim imenom u istoj knjizi su zabranjena u bazi**, preko unikatnog indeksa nad
-`(playbook_id, lower(btrim(label)))`: „Entry" i „entry " razlikuju se samo za mašinu, a crtale bi dve
-kartice nad istim pitanjem.
-
----
-
-## Playbook je stranica, ne kartica u skrolu
-
-Deset playbook-ova je nekad značilo deset razvijenih kartica na jednom ekranu — svaka sa punim
-uređivačem pravila — pa je i pronalaženje jednog imena bilo skrolovanje pored devet drugih. Prva
-popravka je karticu skupila u red tabele sa kontrolama za skupljanje i razvijanje. Druga je pitanje
-uklonila: **svaki setup sad ima svoju stranicu.**
-
-- `/playbooks` je samo indeks — tabela sa „Trades / Net P&L / Win Rate / Missed / Expectancy" po redu.
-- `/playbooks/[id]` je jedan playbook, u tabovima: **Stats**, **Rules** (uređivač sekcija i pravila),
-  **Trades** (isti `JournalGrid` kao `/journal`, sužen na tu knjigu) i **Notes**.
-
-Zato `tj_user_prefs.playbooks_expanded` više ne postoji — obrisana je migracijom `20260824110000`,
-pošto je niko nije ni pisao ni čitao od trenutka kad je razvijanje prestalo da bude stanje ekrana.
-
-**Missed kolona se ne može pročitati iz istog `row`-a kao ostale.** `runReport` računa nad
-realizovanim (zatvorenim) trejdovima, a promašen trejd nikad nema neto P&L pa nikad ne uđe u taj
-skup. Zato se broji posebno u `page.tsx`, nad sirovim redovima pre `toRealized`, grupisano po
-`playbook_id` (`stringFieldValue`) — i prosleđuje kao običan `Record<string, number>`, ne `Map`: to
-je oblik koji svaki drugi prop preko server/client granice u ovoj aplikaciji već koristi
-(`OptionsMap` među njima).
-
-**Spisak čita i penzionisana pravila** (`getPlaybooks({ includeDeleted: true })`). Pravilo skinuto sa
-ček-liste i dalje poseduje posmatranja koja je prikupilo, a stranica o dokazu mora da ih pokaže.
-
-**`tj_position_rules` se drenira jednom.** To je jedan red po pravilu po trejdu — najbrže rastuća
-tabela u šemi — pa se čita jednom i prosleđuje u `getPlaybooks`, koji iz istog niza izvodi broj
-odgovora po pravilu. Čitati je dvaput po renderu je greška koju je `/reports` već morao da ispravi.
-
-**Kreiranje ide kroz dijalog, ne kroz inline input.** „+ Create Playbook" otvara `Dialog` sa Ime +
-Opis; nema drugog koraka za pravila kao kod TradeZella-e, jer bi to duplikovalo uređivač sekcija koji
-stranica playbook-a već ima. `addPlaybook` vraća novi `id`, pa dijalog vodi pravo na tu stranicu.
+**Two headings with the same name in one book are forbidden in the database**, by a unique index over
+`(playbook_id, lower(btrim(label)))`: "Entry" and "entry " differ only to a machine, and would draw
+two cards over one question.
 
 ---
 
-## Ocena setupa se izvodi, ne procenjuje
+## A playbook is a page, not a card in a scroll
 
-`setup_grade` je bilo otkucano slovo (A+/A/B/C) — i **jedino polje koje je bilo pogrešno, ne samo
-sporo**. Popunjavalo se pošto se zna ishod, pa gubitnik postane B a dobitnik A+. To je dimenzija po
-kojoj dashboard podrazumevano razlaže rezultat, pa je ocena „objašnjavala" performans etiketom koja
-je delom **izvedena iz** performansa. Kružno, i nevidljivo dok se dešava.
+Ten playbooks used to mean ten expanded cards on one screen — each with a full rule editor — so even
+finding one name meant scrolling past nine others. The first fix collapsed the card into a table row
+with expand/collapse controls. The second removed the question: **every setup now has its own page.**
 
-Sve za zamenu je već postojalo: biblioteka pravila, odgovori po trejdu, `follow_rate` i
-`ruleScorecard`. Falila je samo oznaka **koja pravila definišu kvalitet setupa** —
-`is_setup_criterion`, koja od `20260824100000` stoji na **vezi** (`tj_playbook_rule_links`), ne na
-pravilu: koje pravilo ocenjuje setup je stvar knjige, pa isto pravilo sme da bude kriterijum u
-jednoj a običan podsetnik u drugoj.
+- `/playbooks` is only the index — a table with "Trades / Net P&L / Win Rate / Missed / Expectancy"
+  per row.
+- `/playbooks/[id]` is one playbook, in tabs: **Stats**, **Rules** (the section and rule editor),
+  **Trades** (the same `JournalGrid` as `/journal`, narrowed to that book) and **Notes**.
 
-**Ocena = udeo ispunjenih kriterijuma.** Sve → A+, ≥80 % → A, ≥60 % → B, ispod → C. A+ traži baš
-sve: oznaka znači „ovo je setup koji sam čekao", a setup kome fali jedan od sopstvenih uslova je
-drugi setup.
+That is why `tj_user_prefs.playbooks_expanded` no longer exists — dropped by migration
+`20260824110000`, since nobody read or wrote it once expansion stopped being a state of the screen.
 
-**„Kriterijum mora da se pita na svakom trejdu" je suština, ne dekoracija.** Kriterijum vezan za
-pobednike bio bi **hindsight po konstrukciji** — ocenjivao bi setup pitanjem koje se postavlja tek
-kad znaš rezultat. Baza tu kombinaciju odbija umesto da veruje da je UI neće ponuditi.
+**The Missed column cannot be read from the same `row` as the others.** `runReport` computes over
+realized (closed) trades, and a missed trade never has a net P&L so it never enters that set. So it
+is counted separately in `page.tsx`, over the raw rows before `toRealized`, grouped by `playbook_id`
+(`stringFieldValue`) — and passed as a plain `Record<string, number>`, not a `Map`: that is the shape
+every other prop across the server/client boundary in this application already uses (`OptionsMap`
+among them).
 
-Dok je zastavica stajala na pravilu, to je bio jedan `CHECK (is_setup_criterion = false OR show_when
-= 'always')`. Otkad stoji na vezi, uslov spaja dve tabele i `CHECK` ga ne vidi, pa ga drže **dva
-okidača, po jedan sa svake strane**: `tj_link_criterion_always` odbija označavanje veze čije pravilo
-nije `always`, a `tj_rule_show_when_vs_criterion` odbija menjanje `show_when` na pravilu koje je
-negde kriterijum. Ista zabrana, isto mesto — baza, ne UI.
+**The list reads retired rules too** (`getPlaybooks({ includeDeleted: true })`). A rule taken off the
+checklist still owns the observations it collected, and a page about evidence has to show them.
 
-**Ne ocenjuje se dok ček-lista nije cela odgovorena**, i tu se namerno razilazi sa `computeFollowRate`,
-koji neodgovorena pravila izbacuje iz brojioca *i* imenioca. To je ispravno za *stopu* i rupa za
-*ocenu*: odgovoriš jedan kriterijum, ispuniš ga, i pokupiš A+. Zato se broji prema onome što playbook
-**definiše**, ne prema odgovorima koji postoje — neodgovoreno pravilo nema red, pa bi brojanje redova
-tri od četiri kriterijuma pročitalo kao tri od tri.
+**`tj_position_rules` is drained once.** It is one row per rule per trade — the fastest-growing table
+in the schema — so it is read once and handed to `getPlaybooks`, which derives the per-rule answer
+counts from the same array. Reading it twice per render is the mistake `/reports` already had to fix.
 
-**Šta ovo NE rešava:** ne postaje objektivno. Čekiranje „MSS with displacement" je i dalje procena.
-Dobija se dekompozicija (nekoliko malih pitanja umesto jednog velikog), doslednost, proverivost — i
-prava dobit, **testabilnost**: `ruleScorecard` već meri win rate kad je pravilo ispoštovano naspram
-prekršenog, pa se kriterijum koji ništa ne predviđa može naći i izbaciti. Slovo to nikad ne može, jer
-ne zna *koji* deo onog „A+" je radio posao.
-
-Kolona `tj_positions.setup_grade` ostaje i **nosi istoriju** ručno ocenjenih trejdova — izvedena
-vrednost ima prednost, kolona je rezerva. Isti obrazac prvenstva koji `plannedRewardFromTrade` već
-dokumentuje, samo obrnutim redom, jer je ovde izvedeno bolje a kolona nasleđe.
+**Creation goes through a dialog, not an inline input.** "+ Create Playbook" opens a `Dialog` with
+Name + Description; there is no second step for rules the way TradeZella has one, because it would
+duplicate the section editor the playbook's page already has. `addPlaybook` returns the new `id`, so
+the dialog lands straight on that page.
 
 ---
 
-## Ocene se biraju klikom, u jednoj jedinici
+## The setup grade is derived, not guessed
 
-Četiri polja tražila su da se kuca ono što se bira, i tri različite skale za isto pitanje.
+`setup_grade` used to be a typed letter (A+/A/B/C) — and **the one field that was wrong, not merely
+slow**. It was filled in once the outcome was known, so a loser became a B and a winner an A+. It is
+the dimension the dashboard decomposes by default, so the grade "explained" performance with a label
+partly **derived from** performance. Circular, and invisible while it happens.
 
-| Polje | Bilo | Sad |
+Everything needed to replace it already existed: the rule library, per-trade answers, `follow_rate`
+and `ruleScorecard`. The only thing missing was a marker for **which rules define setup quality** —
+`is_setup_criterion`, which since `20260824100000` lives on the **link**
+(`tj_playbook_rule_links`), not on the rule: which rule grades the setup is a property of the book,
+so the same rule may be a criterion in one and an ordinary reminder in another.
+
+**The grade is the share of criteria met.** All → A+, ≥80 % → A, ≥60 % → B, below → C. A+ demands
+all of them: the label means "this was the setup I was waiting for", and a setup missing one of its
+own defining conditions is a different setup.
+
+**"A criterion must be asked on every trade" is the substance, not decoration.** A criterion tied to
+winners would be **hindsight by construction** — it would grade the setup with a question only asked
+once the result is known. The database refuses that combination rather than trusting the UI not to
+offer it.
+
+While the flag sat on the rule, this was one `CHECK (is_setup_criterion = false OR show_when =
+'always')`. Now that it sits on the link, the condition spans two tables and a `CHECK` cannot see it,
+so **two triggers hold it, one from each side**: `tj_link_criterion_always` refuses to mark a link
+whose rule is not `always`, and `tj_rule_show_when_vs_criterion` refuses to change `show_when` on a
+rule that is a criterion somewhere. Same prohibition, same place — the database, not the UI.
+
+**Nothing is graded until the checklist is fully answered**, and here it deliberately diverges from
+`computeFollowRate`, which drops unanswered rules from both the numerator *and* the denominator.
+That is correct for a *rate* and a hole for a *grade*: answer one criterion, meet it, and collect an
+A+. So the count is against what the playbook **defines**, not against the answers that exist — an
+unanswered rule has no row, so counting rows would read three of four criteria as three of three.
+
+**What this does NOT solve:** it does not become objective. Ticking "MSS with displacement" is still
+a judgement. What you get is decomposition (several small questions instead of one big one),
+consistency, auditability — and the real prize, **testability**: `ruleScorecard` already measures win
+rate when a rule was kept against when it was broken, so a criterion that predicts nothing can be
+found and dropped. A letter can never do that, because it does not know *which* part of that "A+"
+was doing the work.
+
+The `tj_positions.setup_grade` column stays and **carries the history** of hand-graded trades — the
+derived value wins, the column is the fallback. The same precedence pattern `plannedRewardFromTrade`
+already documents, in reverse order, because here the derived value is the better one and the column
+is the legacy.
+
+---
+
+## Ratings are clicked, in one unit
+
+Four fields asked you to type what should be picked, across three different scales for the same kind
+of question.
+
+| Field | Was | Now |
 |---|---|---|
-| Time stop | slobodan broj, **bez gornje granice u bazi** | pet dugmadi 1–5, `CHECK` do 5 |
-| Mental temperature | `Select` 1–10 | **5 zvezdica** |
-| Week rating | `A–F` | **5 zvezdica** |
-| Execution rating, conviction | 5 zvezdica / 1–5 | nepromenjeno |
+| Time stop | free number, **no upper bound in the database** | five buttons 1–5, `CHECK` up to 5 |
+| Mental temperature | `Select` 1–10 | **5 stars** |
+| Week rating | `A–F` | **5 stars** |
+| Execution rating, conviction | 5 stars / 1–5 | unchanged |
 
-**Deset nivoa je preciznost koju čovek nema o sopstvenoj glavi.** Tražena svakog jutra, daje šum
-koji posle hrani dimenziju izveštaja i `low_mental_temp_entry` pravilo kao da je signal. Pet zvezdica
-je i brže i poštenije, a usput je i jedina jedinica u kojoj dnevnik sad traži procenu — pre ovoga su
-postojale tri.
+**Ten levels is a precision nobody has about their own head.** Asked every morning, it produces noise
+that then feeds a report dimension and the `low_mental_temp_entry` rule as if it were signal. Five
+stars is both faster and more honest, and it is now the only unit in which the journal asks for a
+judgement at all — there used to be three.
 
-**Postojeća vrednost je PREVEDENA, ne zadržana.** Na skali 1–10 petica je ispod proseka; na 1–5 ista
-cifra je maksimum. Zadržati je značilo bi obrnuti joj značenje a ostaviti je da izgleda netaknuto.
-`ceil(staro / 2)` čuva relativan položaj — sredina stare skale pada u sredinu nove. Prvi nacrt te
-migracije delio je prevod na tri `UPDATE`-a po opsegu i bio je pogrešan dvaput: devetka bi u prvom
-prolazu postala 5 pa je drugi prolaz („= 5") spustio na 3, dok 2 i 3 nijedan prolaz nije ni dodirnuo.
-Jedan `UPDATE` čita originalnu vrednost svakog reda tačno jednom, pa nijedan od ta dva kvara nije ni
-izraziv.
+**The existing value was TRANSLATED, not kept.** On a 1–10 scale a five is below average; on 1–5 the
+same digit is the maximum. Keeping it would have inverted its meaning while leaving it looking
+untouched. `ceil(old / 2)` preserves relative position — the middle of the old scale lands in the
+middle of the new one. The first draft of that migration split the translation into three `UPDATE`s
+by range and was wrong twice over: a nine would become 5 in the first pass and then be dropped to 3
+by the second ("= 5"), while 2 and 3 were never touched by any pass. One `UPDATE` reads each row's
+original value exactly once, so neither failure is even expressible.
 
-**Time stop nisu zvezdice, i to je namerno.** Zvezdice su monotone — tri popunjene čitaju kao „tri
-od pet dobrote". To je tačno za ocenu i pogrešno za količinu: „3 dana" nije bolje ni gore od „5 dana",
-to je drugi broj. Zato `NumberChoice` iscrtava cifre i boji samo izabranu.
+**Time stop is not stars, and that is deliberate.** Stars are monotonic — three filled reads as "three
+out of five of goodness". That is right for a rating and wrong for a quantity: "3 days" is neither
+better nor worse than "5 days", it is a different number. So `NumberChoice` draws digits and colours
+only the chosen one.
 
-**Klik na već izabranu vrednost je briše.** Bez puta nazad do `null`, prvi promašen klik ostao bi
-zauvek kao vrednost koju niko nije mislio, a „nije upisano" i „1" su različiti odgovori.
-
----
-
-## Praćenje procesa
-
-**Tracker pravila** su dnevne obaveze, po danu u nedelji. **Šest** se ocenjuje automatski iz
-podataka — max gubitak po trejdu, po danu i po nedelji, svaki trejd vezan za playbook, svaki trejd
-ima stop, svaki trejd ima napisanu tezu — a ostala se čekiraju rukom.
-
-Tri limita su **procenat dnevnog otvarajućeg equity-ja, ne iznos novca** (migracija
-`20260822190000`). Fiksnih 200 € je različito pravilo na nalogu od 5 000 i na onom od 50 000, pa
-limit postavljen jednom prestaje da opisuje rizik čim nalog poraste — a broj koji se mora ponovo
-ukucati da bi ostao pošten je broj koji niko ne kuca ponovo.
-
-Koja pravila su važila za dati dan odlučuje se poređenjem dana sa `created_at` i `deleted_at`
-pravila; zato su to vremenske oznake i zato tabela nema `is_active` boolean. Pravilo dodato danas ne
-sme da obori godinu prošlih dana; pravilo penzionisano sutra ne sme da podigne jučerašnji skor. Isto
-važi i za **konfiguraciju** pravila: dan u maju ostaje ocenjen limitom koji je važio u maju.
-
-**Dan bez trejdova je `na`, nikad `pass`.** „Nisam prekoračio max gubitak" je prazno tačno na dan
-kad nisi trgovao, i bodovanje toga kao prolaza omogućilo bi da se serija od 200 dana farma
-netrgovanjem. `na` ispada i iz brojioca i iz imenioca, pa disciplinovan dan bez trejdova i dalje
-nosi 100 % na pravilima na koja *je* mogao da odgovori.
-
-**Zaključavanje dana** zamrzava automatske verdikte u redove i nepovratno je — sprovodi ga triger
-koji puca na svaku izmenu zaključanog izveštaja, pa nema akcije za otključavanje koju bi trebalo
-napisati. Trejdovi sa zaključanog dana ostaju izmenljivi: P&L je činjenica koja mora da može da se
-ispravi, a zamrznuti verdikti su ono što sprečava da compliance krene za njom.
-
-**Playbook-ovi** drže grupe pravila; odgovaranje na njihov checklist upisuje `tj_position_rules`,
-što hrani follow rate. Neodgovoreno pravilo ne broji se ni u brojiocu ni u imeniocu.
-
-**Insights** su 37 pravila na četiri nivoa — trejd (24), dan (6), nedelja (3), portfolio (4) — koja
-čitaju iste obogaćene trejdove kao i izveštaji. Svako pravilo deklariše `minSample` i nijedno ne
-okida na n=1. Nijedan insight se ne čuva u bazi: pragovi se menjaju, a sačuvan insight bi zastareo
-naspram promenjenog praga dok i dalje izgleda merodavno.
-
-**FTMO režim** je po nalogu: dnevni gubitak, ukupni gubitak, profitni cilj i minimalni broj dana.
-Proboj pravila zamrzava nalog — nov trejd se ne može ni napraviti ni aktivirati dok se izazov ne
-resetuje u Settings.
-
-Dnevni limit ima **podesivu bazu**, jer se stvarni FTMO nalozi razlikuju po tome: fiksna (procenat
-od početnog balansa, ceo izazov) za 2-Step tip, ili rolling (procenat od balansa na kraju
-prethodnog trgovinskog dana) za 1-Step tip. Ukupan gubitak (drawdown pod) ostaje uvek fiksan na
-početni balans — to je zajedničko oba tipa.
-
-`evaluateFtmo` uz verdikt vraća i `headroomPct` — koliko je prostora ostalo od **najbližeg prilaza**
-bilo kom uključenom limitu kroz ceo izazov. To je komponenta Sickre Score-a (§ Sickre Score), i
-jedini broj u aplikaciji koji razlikuje nalog koji je prošao od naloga koji je prošao za dlaku.
+**Clicking the selected value clears it.** With no path back to `null`, the first mis-click would
+stay forever as a value nobody meant, and "not recorded" and "1" are different answers.
 
 ---
 
-## Uvoz
+## Process tracking
 
-CSV unutra, sa mapiranjem kolona, pregledom i odlukom create/merge/skip po redu.
+**Tracker rules** are daily obligations, per weekday. **Six** are scored automatically from data —
+max loss per trade, per day and per week, every trade linked to a playbook, every trade has a stop,
+every trade has a written thesis — and the rest are ticked by hand.
 
-**Merge menja samo objektivne fill-ove.** Plan, psihologija, ocena i beleške se ne diraju — uvoz ih
-nikad nije ni posedovao.
+The three limits are a **percentage of the day's opening equity, not an amount of money** (migration
+`20260822190000`). A fixed €200 is a different rule on a 5,000 account than on a 50,000 one, so a
+limit set once stops describing the trader's risk the moment the account grows — and the number that
+has to be re-typed to stay honest is the number nobody re-types.
 
-**Undo je jedina operacija uvoza koja briše podatke.** Uklanja pozicije koje je batch
-napravio, vraća fill-ove koje je istisnuo, pa briše batch i njegove audit redove.
-`tj_import_rows.prev_executions` je jedini primerak onoga što je merge istisnuo, i undo ga vraća
-polje po polje, zajedno sa poreklom — dokazano nad živom bazom u transakciji koja se rollback-uje.
+Which rules applied on a given day is decided by comparing the day against the rule's `created_at`
+and `deleted_at`; that is why those are timestamps and why the table has no `is_active` boolean. A
+rule added today must not knock down a year of past days; a rule retired tomorrow must not lift
+yesterday's score. The same holds for a rule's **configuration**: a day in May stays scored against
+the limit that applied in May.
 
-Dve stvari koje čarobnjak odbija umesto da pogađa, obe zato što je pogađanje tiho:
+**A day with no trades is `na`, never `pass`.** "I did not exceed max loss" is vacuously true on a day
+you did not trade, and scoring that as a pass would let a 200-day streak be farmed by not trading.
+`na` drops out of both numerator and denominator, so a disciplined day with no trades still carries
+100 % on the rules it *could* answer.
 
-- **Dvosmisleni datumi.** `02-03-2026` je 2. mart evropskom brokeru a 3. februar američkom. Odbija
-  se. Red čije vreme ne može da se pročita prikazuje se kao nečitljiv, nikad se ne pečatira
-  trenutkom uvoza — što je nekad tromesečni trejd zavodilo u današnji P&L, današnju ćeliju kalendara
-  i današnju nedelju.
-- **Dvosmisleni decimalni zapisi.** `1.234,56` i `1,234.56` se oba čitaju tačno, tako što se
-  poslednji separator uzima za decimalnu tačku. `1,234` se odbija: to je 1234 američkom brokeru a
-  1.234 nemačkom, i ništa u ćeliji ne odlučuje koje.
+**Locking a day** freezes the automatic verdicts into rows and is irreversible — enforced by a trigger
+that fires on any edit to a locked report, so there is no unlock action that would need writing.
+Trades from a locked day stay editable: P&L is a fact that must remain correctable, and the frozen
+verdicts are what stops compliance from following it.
 
-Svaka odbijena ćelija je imenovana na svom redu u pregledu (`nečitljivo: qty, fee`).
+**Playbooks** hold groups of rules; answering their checklist writes `tj_position_rules`, which feeds
+the follow rate. An unanswered rule counts in neither the numerator nor the denominator.
+
+**Insights** are 37 rules at four levels — trade (24), day (6), week (3), portfolio (4) — reading the
+same enriched trades the reports do. Every rule declares a `minSample` and none fires at n=1. No
+insight is stored in the database: thresholds change, and a stored insight would go stale against a
+changed threshold while still looking authoritative.
+
+**FTMO mode** is per account: daily loss, overall loss, profit target and minimum trading days.
+Breaching a rule freezes the account — a new trade can neither be created nor activated until the
+challenge is reset in Settings.
+
+The daily limit has a **configurable basis**, because real FTMO accounts differ on it: fixed (a
+percentage of the starting balance, for the whole challenge) for the 2-Step type, or rolling (a
+percentage of the previous trading day's closing balance) for the 1-Step type. The overall loss
+(drawdown floor) is always fixed to the starting balance — that part is common to both.
+
+Alongside the verdict, `evaluateFtmo` returns `headroomPct` — how much room is left from the
+**closest approach** to any enabled limit across the whole challenge. It is a Sickre Score component
+(§ Sickre Score), and the only number in the application that tells an account that passed apart
+from one that passed by a hair.
 
 ---
 
-## Bot most
+## Import
 
-Jedini automatski upis u dnevnik. cBot u cTrader-u
+CSV in, with column mapping, a preview, and a create/merge/skip decision per row.
+
+**A merge only changes objective fills.** Plan, psychology, grade and notes are untouched — the
+import never owned them in the first place.
+
+**Undo is the only import operation that deletes data.** It removes the positions the batch created,
+restores the fills it displaced, then deletes the batch and its audit rows.
+`tj_import_rows.prev_executions` is the only copy of what a merge displaced, and undo restores it
+field by field, provenance included — proven against a live database inside a transaction that is
+rolled back.
+
+Two things the wizard refuses rather than guesses, both because guessing is silent:
+
+- **Ambiguous dates.** `02-03-2026` is 2 March to a European broker and 3 February to an American
+  one. Refused. A row whose time cannot be read is shown as unreadable and never stamped with the
+  moment of import — which used to file a three-month-old trade into today's P&L, today's calendar
+  cell and today's week.
+- **Ambiguous decimals.** `1.234,56` and `1,234.56` are both read correctly, by taking the last
+  separator as the decimal point. `1,234` is refused: it is 1234 to an American broker and 1.234 to a
+  German one, and nothing in the cell decides which.
+
+Every refused cell is named on its own row in the preview (`unreadable: qty, fee`).
+
+---
+
+## Bot bridge
+
+The only automatic writer into the journal. A cBot inside cTrader
 ([`TradingJournalBridge`](https://github.com/0xsickre/trading-charting/tree/master/ctrader/TradingJournalBridge))
-javlja **osam** činjenica plus heartbeat, a dnevnik od njih pravi trejd:
+reports **eight** facts plus a heartbeat, and the journal builds a trade out of them:
 
-| `kind` | Događaj kod brokera | Šta dnevnik upiše |
+| `kind` | Event at the broker | What the journal writes |
 |---|---|---|
-| `order_placed` | Postavljen pending order | Nov trejd, `status = planned` |
-| `order_modified` | Order izmenjen dok još čeka | Isti trejd → nove cene i veličina |
-| `order_filled` | Order se ispunio | Isti trejd → ulazni fill, status iz fill-ova |
-| `order_cancelled` | Limit obrisan bez ispunjenja | Isti trejd → `status = missed` |
-| `position_opened` | **Market order** — pozicija bez pending order-a | Nov trejd odmah sa ulaznim fill-om |
-| `position_modified` | Take profit pomeren posle ulaska | Isti trejd → nov `target_price` i TP nivoi. **Stop se ne dira** |
-| `position_excursion` | Cena išla protiv i u smeru trejda | Isti trejd → **MAE i MFE** cene |
-| `position_closed` | **Izlaz** (ceo ili delimičan) | Isti trejd → izlazni fill, status se preračuna |
-| `heartbeat` | Bot je živ | Ništa u trejd — samo vreme poslednjeg javljanja |
+| `order_placed` | Pending order placed | New trade, `status = planned` |
+| `order_modified` | Order edited while still waiting | Same trade → new prices and size |
+| `order_filled` | Order filled | Same trade → entry fill, status derived from fills |
+| `order_cancelled` | Limit deleted without filling | Same trade → `status = missed` |
+| `position_opened` | **Market order** — a position with no pending order | New trade, entry fill included |
+| `position_modified` | Take profit moved after entry | Same trade → new `target_price` and TP rungs. **The stop is not touched** |
+| `position_excursion` | Price ran against and in favour of the trade | Same trade → **MAE and MFE** prices |
+| `position_closed` | **Exit** (full or partial) | Same trade → exit fill, status recomputed |
+| `heartbeat` | The bot is alive | Nothing on a trade — only the time it last reported |
 
-**Poslednja dva reda su zatvorila dve rupe zbog kojih je „bot bagovao" (`20260828120000`).** Most je
-pratio samo pending order-e, pa market order nije proizvodio nijedan događaj — a `position_modified`
-koji bi zatim stigao odlazio bi u karantin kao `unknown_position`, jer dnevnik tu poziciju nikad nije
-video. Druga: izlaz se nije prijavljivao, status se izvodi iz fill-ova, pa je **svaki bot trejd
-zauvek ostajao `open`** — van `toRealized`, dakle van win rate-a, expectancy-ja, profit factor-a i
-svakog izveštaja.
+**The last two rows closed the two holes behind "the bot is buggy" (`20260828120000`).** The bridge
+tracked pending orders only, so a market order produced no event at all — and the
+`position_modified` that arrived afterwards went to quarantine as `unknown_position`, because the
+journal had never seen that position. The second: exits were never reported, and status is derived
+from fills, so **every bot trade stayed `open` forever** — outside `toRealized`, and therefore
+outside win rate, expectancy, profit factor and every report.
 
-**Status ima jedno pravilo, u SQL-u.** `tj_status_from_executions(position_id, asserted)` sabira
-ulazne i izlazne količine i odatle vraća `planned` / `open` / `partial` / `closed`. Ogledalo je
-`computeStatus` iz `trade-lifecycle.ts` — isti par kao `tj_position_stats` / `position-stats.ts`:
-SQL je pisac, TypeScript je živi pregled u formi. Bez toga bi pravilo „exitQty < entryQty → partial"
-postojalo u dve implementacije slobodne da se raziđu. `asserted` nosi ono što se iz fill-ova ne može
-izvesti (`planned`, `missed`); čim fill postoji, brojanje pobeđuje tvrdnju.
+**Status has one rule, in SQL.** `tj_status_from_executions(position_id, asserted)` sums entry and
+exit quantities and returns `planned` / `open` / `partial` / `closed`. Its mirror is `computeStatus`
+in `trade-lifecycle.ts` — the same pairing as `tj_position_stats` / `position-stats.ts`: SQL is the
+writer, TypeScript is the live preview in the form. Without it, the rule "exitQty < entryQty →
+partial" would exist in two implementations free to drift. `asserted` carries what fills cannot
+derive (`planned`, `missed`); the moment a fill exists, counting beats assertion.
 
-**Duplikat market ordera rešava baza, ne bot.** Pozicija nastala iz pending order-a javlja se dvaput
-— i `order_filled` i `position_opened` — pa oba prvo traže poziciju po `broker_position_id`, i koji
-god stigne drugi postaje `already_present`. Redosled dolaska time prestaje da bude pitanje.
+**A duplicate market order is resolved by the database, not the bot.** A position created from a
+pending order reports twice — both `order_filled` and `position_opened` — so both first look the
+position up by `broker_position_id`, and whichever arrives second becomes `already_present`. Arrival
+order stops being a question.
 
-**Planiran trejd pokazuje svoj plan.** Svaka brojčana kolona u `/journal` čita iz `tj_position_stats`,
-a taj view se gradi iz fill-ova — pa je trejd koji još čeka bio red samih crtica, i stop i target koje
-je most upravo doneo nisu se videli nigde u tabeli. Zato postoje kolone **Plan / Stop / Target**, i
-zato se cene formatiraju po `tick_size_at_trade` a ne na dve decimale: na dve, EURUSD stop 1.16101 i
-target 1.16453 postaju isto „1.16" — jedna pogrešna činjenica tamo gde su tri različite.
+**A planned trade shows its plan.** Every numeric column in `/journal` reads from
+`tj_position_stats`, and that view is built from fills — so a trade still waiting was a row of
+dashes, and the stop and target the bridge had just delivered appeared nowhere in the table. Hence
+the **Plan / Stop / Target** columns, and hence prices formatted by `tick_size_at_trade` rather than
+to two decimals: at two, a EURUSD stop of 1.16101 and a target of 1.16453 both become "1.16" — one
+wrong fact where there were three different ones.
 
-**Otkazan order postaje `missed`, ali BEZ razloga.** cTrader kaže KAKO se order završio (otkazan,
-istekao); lista `miss_reason` u dnevniku pita ZAŠTO trejd nije uzet („Setup invalidated", „Price ran
-away", „Discretion"). To su dva različita pitanja i na drugo odgovara samo čovek — popuniti ga iz
-prvog značilo bi upisati odgovor koji niko nije dao u polje koje nedeljni pregled čita kao procenu.
-Brokerova reč putuje u payload-u, gde je dokaz a ne odgovor, a `needs_review` se diže da prazno polje
-bude podsetnik. Trejd koji je ispunjen se **ne može** označiti kao propušten — to brani
-`tj_position_missed_guard` još od `20260730140000`.
+**A cancelled order becomes `missed`, but WITHOUT a reason.** cTrader says HOW an order ended
+(cancelled, expired); the journal's `miss_reason` list asks WHY the trade was not taken ("Setup
+invalidated", "Price ran away", "Discretion"). Those are two different questions and only a human
+answers the second — filling it from the first would write an answer nobody gave into a field the
+weekly review reads as a judgement. The broker's word travels in the payload, where it is evidence
+rather than an answer, and `needs_review` is raised so the empty field is a reminder. A filled trade
+**cannot** be marked as missed — `tj_position_missed_guard` has forbidden that since `20260730140000`.
 
-**MAE/MFE više ne moraš da prepisuješ sa grafikona.** `max_drawdown_price` i `max_profit_price` postoje od `20260720130000`, a `excursion.ts` iz njih računa `maeR`, `mfeR` i **capture %** — sve je stajalo mrtvo jer je zavisilo od dva broja koja čovek prepiše po trejdu, a to niko ne radi. Isti oblik kao `scale_out_levels`: analiza napisana i testirana, pa gladovala.
+**MAE/MFE no longer has to be copied off a chart.** `max_drawdown_price` and `max_profit_price` have
+existed since `20260720130000`, and `excursion.ts` computes `maeR`, `mfeR` and **capture %** from
+them — all of it sat dead because it depended on two numbers a human would transcribe per trade, and
+nobody does that. The same shape as `scale_out_levels`: analysis written and tested, then starved.
 
-Bot meri na svaki tick i šalje checkpoint retko, pa ovde stiže tick-rezolucija po ceni par redova po trejdu.
+The bot measures on every tick and sends a checkpoint rarely, so tick resolution arrives here at the
+cost of a couple of rows per trade.
 
-**Ručni unos pobeđuje, i to čuva TRIGER a ne provera u ingest funkciji.** `tj_save_trade`, forma i svaki budući uvoznik pišu iste dve kolone, pa bi svaki morao da pamti isto pravilo — a repo je već zapisao gde to vodi: *„Baza je čuvar, ne akcija."* Zato odluka živi na jednom mestu kroz koje svaki upis prolazi: `tj_excursion_source_guard` čita zastavicu koju `tj_bot_ingest` diže oko **tačno jednog** `UPDATE`-a i odmah spušta. Upis bez te zastavice je, po definiciji, čovekov. Botov pokušaj nad ručno unetim trejdom **vraća vrednosti nazad** umesto da baci grešku — greška bi poništila i upis u `tj_bot_events`, pa bi događaj nestao i bot bi zauvek ponavljao isti odbijeni upis.
+**Manual entry wins, and a TRIGGER enforces it rather than a check inside the ingest function.**
+`tj_save_trade`, the form and every future importer write the same two columns, so each would have to
+remember the same rule — and the repo has already recorded where that leads: *"The database is the
+guard, not the action."* So the decision lives in one place every write passes through:
+`tj_excursion_source_guard` reads a flag `tj_bot_ingest` raises around **exactly one** `UPDATE` and
+lowers immediately. A write without that flag is, by definition, a human's. The bot's attempt on a
+hand-entered trade **puts the values back** instead of raising — an error would roll back the
+`tj_bot_events` insert too, so the event would vanish and the bot would retry the same rejected write
+forever.
 
-**Posle ulaska stop se zamrzava, take profit ne.** To su dva različita čina koja u API-ju izgledaju
-isto. Povlačenje stopa na breakeven ne znači da nisi rizikovao ništa — znači da si prestao da rizikuješ
-ono što je već uloženo. Pošto je `stop_price` imenilac R-a, kad bi to prošlo, R bi delio nečim blizu nule
-baš na trejdovima koje si najbolje vodio, i expectancy, target attainment, MAE/MFE u R i skor bi tiho
-**nagrađivali pomeranje stopa**. Stop u trenutku fill-a je rizik koji je stvarno preuzet i to je broj koji
-dnevnik čuva. Take profit nije ista stvar — on kaže gde trejd sad treba da se završi, ništa u R-u ne
-zavisi od njega, pa se prati. Bot stop ne stavlja ni u otisak izmene, tako da BE povlačenje ne pošalje
-nijedan događaj umesto da pošalje jedan koji dnevnik mora da odbaci.
+**After entry the stop is frozen, the take profit is not.** They are two different acts that look
+identical in the API. Pulling a stop to breakeven does not mean you risked nothing — it means you
+stopped risking what was already committed. Since `stop_price` is R's denominator, letting that
+through would make R divide by something near zero on precisely the trades you managed best, and
+expectancy, target attainment, MAE/MFE in R and the score would all quietly **reward moving the
+stop**. The stop at the moment of the fill is the risk actually taken, and that is the number the
+journal keeps. A take profit is not the same thing — it says where the trade should now end, nothing
+in R depends on it, so it is tracked. The bot does not even put the stop in the change fingerprint,
+so a BE pull sends no event rather than one the journal has to discard.
 
-**Izmena važi samo dok order čeka, i to je cela poenta.** Pre ulaska, pomeranje stopa **menja plan** —
-trejd nije počeo, rizik koji tek preuzimaš je sad drugi, i `stop_price` mora da ga prati ili planirani
-R:R opisuje order koji nisi postavio. Posle ulaska, pomeranje stopa je **vođenje trejda**: povlačenje
-na breakeven ne znači da nisi rizikovao ništa. Kad bi to ušlo u `stop_price`, R bi se rušio ka nuli
-baš na trejdovima koji su najbolje vođeni, i svaka R metrika u knjizi bi tiho nagrađivala pomeranje
-stopa. Zato `order_modified` odbija sve što više nije `planned`.
+**An edit only counts while the order is waiting, and that is the whole point.** Before entry, moving
+the stop **changes the plan** — the trade has not started, the risk you are about to take is now a
+different one, and `stop_price` has to follow it or the planned R:R describes an order you did not
+place. After entry, moving the stop is **managing the trade**. `order_modified` therefore refuses
+anything that is no longer `planned`.
 
-**Prazno nije brisanje.** Bot pobeđuje na četiri polja — ulazna cena, stop, target, veličina — ali
-`stop_loss` koji cTrader javlja kao prazan znači „bot nema šta da kaže", ne „stopa nema". Zato se stop
-i target spajaju preko `COALESCE`, pa izmena ne može da obriše stop koji si ti ukucao rukom. Cena
-koju to nosi, priznata umesto sakrivena: **brisanje** zaštite u platformi se ne prenosi i skida se
-ručno. Zastareo stop je vidljiv na trejdu i jedan klik od ispravke; tiho obrisan primetiš tek kad je
-neka R metrika već mesec dana pogrešna.
+**Empty is not deletion.** The bot wins on four fields — entry price, stop, target, size — but a
+`stop_loss` cTrader reports as empty means "the bot has nothing to say", not "there is no stop". So
+stop and target are merged through `COALESCE`, and an edit cannot erase a stop you typed by hand.
+The price of that, acknowledged rather than hidden: **removing** protection in the platform does not
+propagate and has to be cleared by hand. A stale stop is visible on the trade and one click from a
+fix; a silently deleted one you notice after some R metric has been wrong for a month.
 
-**Šta bot NE piše.** Plan, tezu, psihologiju, ocenu setupa, playbook, `risk_pct` i `planned_rr`
-ostaju prazni. To je granica koja čuva pravilo iz § Svesno izostavljeno: automatizuje se
-prepisivanje, ne prosuđivanje. Trejd koji je upisao bot nosi `source = 'bot'` i vidljivu oznaku u
-tabeli — red koji nisi otkucao ne sme da izgleda kao red koji jesi, jer je njegova praznina „još
-nije napisano", a ne „nema šta da se kaže".
+**What the bot does NOT write.** Plan, thesis, psychology, setup grade, playbook, `risk_pct` and
+`planned_rr` stay empty. That is the boundary keeping the rule from § Deliberately left out:
+transcription is automated, judgement is not. A trade the bot wrote carries `source = 'bot'` and a
+visible badge in the table — a row you did not type must not look like one you did, because its
+emptiness means "not written yet", not "nothing to say".
 
-**Kako bot sme da piše.** Preko `tj_bot_ingest`, `SECURITY DEFINER` funkcije dostupne `anon` ulozi i
-autorizovane **bot tokenom** — ne lozinkom i ne service-role ključem, kojih repo i dalje nema.
-Plaintext tokena se pravi u pregledaču i prikazuje jednom; na server ide samo njegov SHA-256.
+**How the bot is allowed to write.** Through `tj_bot_ingest`, a `SECURITY DEFINER` function exposed
+to the `anon` role and authorised by a **bot token** — not a password and not a service-role key,
+neither of which this repo has. The plaintext token is generated in the browser and shown once; only
+its SHA-256 reaches the server.
 
-Funkcija namerno **ne zove `tj_save_trade`**. Ta funkcija je `SECURITY INVOKER` i upisuje
-`auth.uid()`, koji je pod anon ključem `NULL`; jedini način da se natera bio bi falsifikovanje JWT
-claim-a, što je jača verzija baš one rupe zbog koje je šest funkcija ostalo bez `EXECUTE` za
-`authenticated`. Uz to, njeno rukovanje fill-ovima je puna zamena, pa bi u koraku sa izlazima
-obrisala ulazni fill.
+The function deliberately **does not call `tj_save_trade`**. That one is `SECURITY INVOKER` and writes
+`auth.uid()`, which is `NULL` under the anon key; the only way to force it would be forging a JWT
+claim, which is a stronger version of exactly the hole that cost six functions their `EXECUTE` for
+`authenticated`. On top of that, its fill handling is a full replacement, so on an exit step it
+would delete the entry fill.
 
-**Idempotencija je jedan `UNIQUE (user_id, event_key)`** nad append-only logom `tj_bot_events`.
-Ponovljeno slanje, druga instanca bota i pražnjenje outbox-a posle pada su time bezopasni — u bazi,
-ne u pamćenju bota.
+**Idempotency is one `UNIQUE (user_id, event_key)`** over the append-only `tj_bot_events` log. Resends,
+a second bot instance and draining the outbox after a crash are all harmless because of it — in the
+database, not in the bot's memory.
 
-**Karantin umesto pogađanja.** Nemapiran nalog, nemapiran simbol ili neupotrebljiv volumen ne
-proizvode trejd nego karantiniran događaj sa razlogom, vidljiv u **Settings → Bot most**. To je
-„Odbij umesto da pogađaš" primenjeno na mašinski feed.
+**Quarantine instead of guessing.** An unmapped account, an unmapped symbol or an unusable volume
+produce a quarantined event with a reason rather than a trade, visible in **Settings → Bot bridge**.
+That is "refuse rather than guess" applied to a machine feed.
 
-**Količina po lotu se potvrđuje, ne izvodi.** Dnevnik broji `qty` u lotovima/ugovorima, cTrader
-javlja `VolumeInUnits` u baznim jedinicama. Bot šalje i `Symbol.LotSize` i cTrader-ov sopstveni broj
-lotova, pa panel pokazuje da li delilac reprodukuje brokerov broj — i tek onda čovek potvrdi, jednom
-po simbolu. Kod index CFD-a „jedan lot" definiše broker, a pogrešan delilac je P&L pogrešan za redove
-veličine, prikazan kao činjenica.
+**Quantity per lot is confirmed, not derived.** The journal counts `qty` in lots/contracts, cTrader
+reports `VolumeInUnits` in base units. The bot sends both `Symbol.LotSize` and cTrader's own lot
+count, so the panel shows whether the divisor reproduces the broker's number — and only then does a
+human confirm it, once per symbol. On index CFDs the broker defines what "one lot" is, and a wrong
+divisor is a P&L wrong by orders of magnitude, presented as fact.
 
-**Obrisan bot trejd se ne vraća.** Idempotencija je po `event_key`, a on je već potrošen — ponovno slanje istog događaja dobija odgovor „duplikat" i ne pravi red ponovo. Brisanje je zato konačno: order i dalje postoji u cTrader-u, ali u dnevniku ga nema dok ga ne ukucaš rukom. To je namerno — kad bi se vraćao, obrisao bi trejd i on bi se ponovo pojavio.
+**A deleted bot trade does not come back.** Idempotency is keyed on `event_key`, and it is already
+spent — resending the same event answers "duplicate" and does not recreate the row. Deletion is
+therefore final: the order still exists in cTrader, but it is absent from the journal until typed in
+by hand. That is deliberate — if it came back, you would delete a trade and watch it reappear.
 
-**`tj_bot_events` je append-only i raste.** Jedan order sa nekoliko izmena pravi pet do deset redova. To je audit log i tako je zamišljen; panel čita samo karantinirane i to sa granicom, pa dužina loga ne utiče na ekran.
+**`tj_bot_events` is append-only and grows.** One order with a few edits makes five to ten rows. It is
+an audit log and was designed as one; the panel reads only quarantined events, and with a limit, so
+the log's length never reaches the screen.
 
-**Bot ne sme na cTrader Cloud.** Cloud instance ne šalju HTTP i ne prijavljuju grešku kad ne pošalju,
-pa bi most izgledao zdrav a ne bi isporučio ništa. Zato bot šalje heartbeat, a panel prikazuje kad se
-poslednji put javio: ćutanje mora da bude vidljivo sa ove strane.
+**The bot must not run on cTrader Cloud.** Cloud instances do not send HTTP and do not report an error
+when they fail to, so the bridge would look healthy and deliver nothing. Hence the heartbeat, and
+hence the panel showing when the bot last reported: silence has to be visible from this side.
 
-**Više TP nivoa je pokriveno.** cTrader-ova napredna zaštita dozvoljava do pet take-profit nivoa na
-jednom orderu, svaki zatvara deo pozicije. Bot šalje `take_profit_levels` (`[{"pct","price"}]`) uz
-`take_profit_final`, a ingest ih od `20260821160000` upisuje u `tj_positions.scale_out_levels`,
-sortirane po ceni, odbacujući svaki nivo kome `pct` ili `price` nije pozitivan broj. Isti put koriste
-`order_placed`, `order_modified`, `position_opened` i `position_modified`, pa se merdevine mogu
-promeniti i posle ulaska.
+**Multiple TP rungs are covered.** cTrader's advanced protection allows up to five take-profit levels
+on one order, each closing part of the position. The bot sends `take_profit_levels`
+(`[{"pct","price"}]`) alongside `take_profit_final`, and since `20260821160000` the ingest writes them
+into `tj_positions.scale_out_levels`, sorted by price, discarding any rung whose `pct` or `price` is
+not a positive number. `order_placed`, `order_modified`, `position_opened` and `position_modified`
+all use the same path, so the ladder can change after entry too.
 
-To je i razlog zašto planirani reward mora da bude **ponderisan** (§ Rizik): merdevine koje stižu sa
-brokera imaju istu aritmetiku kao ručno ukucan scale-out, i isti pogrešan odgovor bez ponderisanja.
-
----
-
-## Brisanje
-
-Dve operacije van uvoza koje brišu podatke, obe u `/settings` → Accounts, obe bez undo-a.
-
-**Brisanje naloga** (`tj_delete_account`). Nalog bez trejdova, uplata i uvoza briše se jednom
-potvrdom; nalog koji nešto drži traži da mu se ukuca ime i pre toga ispiše koliko trejdova,
-uplata i batch-eva nestaje. Poslednji nalog se ne može obrisati — odbija i akcija i baza, jer
-`accounts[0]` je izvor zone i valute u kojoj se datira svaki dan.
-
-Zašto funkcija a ne `DELETE`: `tj_positions.account_id` je **ON DELETE SET NULL**, isto i
-`tj_import_batches.account_id`. Običan delete kroz PostgREST bi sklonio nalog a **ostavio trejdove
-bez naloga** — i dalje u svim zbirovima, bez valute za konverziju (`fx_rate_source = 'no_account'`),
-sa nalogom kojeg više nema da to objasni. Funkcija briše zavisne redove prvo, u jednoj transakciji.
-Dokazano nad živom bazom u transakciji koja se rollback-uje: nalog sa 21 trejdom ostavlja **0
-osirotelih** pozicija, i 0 fill-ova, odgovora na pravila i slika.
-
-**Reset svega** (`tj_reset_my_data`). Briše **28 od 30** tabela za pozivaoca pa zove
-`tj_seed_my_defaults()` — istu seed funkciju koju dashboard vrti na praznom nalogu, pa „reset" i
-„prvo učitavanje ikad" završavaju u istom stanju. Traži da se ukuca `RESET EVERYTHING`.
-
-Od dve koje nisu na spisku, `tj_playbook_sections` pada kroz `ON DELETE CASCADE` za `tj_playbooks`.
-**`tj_dashboard_templates` ne pada ni kroz šta** — vezuje se direktno za `auth.users`, a spisak u
-funkciji nije dopunjen kad je tabela dodata (`20260818120000`), pa sačuvani rasporedi dashboard-a
-preživljavaju „reset svega". Zapisano ovde jer je obećanje šire od onoga što funkcija radi, a ovaj
-README ne sme da tvrdi više od koda.
-
-Izmereno šta se stvarno vraća, umesto pretpostavljeno iz imena seed-a: **1 Main Account, 91
-instrument, 13 lista sa 66 opcija, 8 tracker pravila, 9 korisničkih polja, 3 note foldera.**
-
-**Šta se NE vraća: playbook-ovi.** `tj_seed_defaults` **jeste** zakačen na `tj_seed_playbooks`, ali
-je ta funkcija **namerno prazna od `20260813200000`**: čuvala se sa `if exists (… ) then return`, što
-ne razlikuje novog korisnika od onog koji je svaki playbook svesno obrisao — oba imaju nula redova —
-pa se brisanje tiho poništavalo na sledećem učitavanju dashboard-a. Reset zato završava sa nula
-playbook-ova i nula pravila bez obzira koliko ih je bilo napisano. Isto važi za sve dodato rukom —
-opcije, tracker pravila, naloge. Panel to piše na ekranu, jer nabrojati šta se vraća a prećutati šta
-ne znači reći tačnu polovinu.
-
-Obe funkcije su **SECURITY INVOKER**, ne DEFINER: svaka tabela nosi
-`FOR ALL TO authenticated USING (user_id = auth.uid())`, pa RLS već ograničava svaki upit na
-pozivaoca, i nema šta da se izvodi ručno. `anon` je oduzet **imenom**, ne samo preko `PUBLIC` —
-Supabase-ove default privilegije dodele EXECUTE svakoj novoj funkciji u `public`, a
-`REVOKE ... FROM PUBLIC` ne skida eksplicitan grant na rolu. Provereno nad živim projektom.
+That is also why planned reward has to be **weighted** (§ Risk): a ladder arriving from the broker has
+the same arithmetic as a hand-typed scale-out, and the same wrong answer without weighting.
 
 ---
 
-## Migracije
+## Deletion
 
-100 fajlova u `supabase/migrations/`, imenovanih `YYYYMMDDHHMMSS_opis.sql`.
+Two operations outside import that delete data, both in `/settings` → Accounts, both without undo.
 
-- **Aditivne.** Nikad se ne menja primenjena migracija — piše se nova delta.
-- **Migracija objašnjava samu sebe.** Svaka počinje komentarom šta je bilo pogrešno i šta puca bez
-  te izmene. Ti fajlovi su jedini zapis zašto šema izgleda ovako.
-- **Brisanje kolone od koje zavisi view** znači `DROP VIEW` → `DROP COLUMN` → `CREATE VIEW` →
-  `ALTER VIEW ... SET (security_invoker = on)`. Zaboravljena poslednja linija tiho menja kao ko se
-  view filtrira.
+**Deleting an account** (`tj_delete_account`). An account with no trades, cash events or imports is
+deleted on one confirmation; an account holding something asks for its name to be typed, and first
+prints how many trades, cash events and batches will disappear. The last account cannot be deleted —
+refused by both the action and the database, because `accounts[0]` is the source of the timezone and
+currency every day is dated in.
 
-### Bezbednosni model
+Why a function rather than a `DELETE`: `tj_positions.account_id` is **ON DELETE SET NULL**, and so is
+`tj_import_batches.account_id`. A plain delete through PostgREST would remove the account and **leave
+the trades without one** — still in every total, with no currency to convert through
+(`fx_rate_source = 'no_account'`), and no account left to explain it. The function deletes dependent
+rows first, in one transaction. Proven against a live database inside a rolled-back transaction: an
+account with 21 trades leaves **0 orphaned** positions, and 0 fills, rule answers and images.
 
-- **RLS na svih 30 tabela**, vlasnički obrazac, provereno nad živom bazom.
-- **`SECURITY DEFINER` + uuid argument je rupa**, jer svaki prijavljen korisnik može da je pozove sa
-  tuđim id-em. Svih pet seed funkcija tog oblika — `tj_seed_defaults`,
+**Reset everything** (`tj_reset_my_data`). Deletes all 30 tables for the caller, then calls
+`tj_seed_my_defaults()` — the same seed the dashboard runs on an empty account, so "reset" and "first
+load ever" end in the same state. It asks for `RESET EVERYTHING` to be typed.
+
+The table list is maintained **by hand**, chosen over a catalog loop so that a table added later
+shows up as a visible omission rather than a silent survivor. That mechanism worked as designed right
+up to the point where nobody looked: `tj_dashboard_templates` (`20260818120000`) hangs off
+`auth.users` rather than off anything the reset deleted, so saved dashboard layouts outlived "reset
+everything" until `20260916100000` put it on the list. `tj_playbook_sections` was added in the same
+migration — it already fell through the cascade from `tj_playbooks`, but the list is the record of
+what "reset everything" means, and a reader should not have to trace foreign keys to believe it.
+
+What actually comes back, counted from the seed functions rather than assumed from their names:
+**1 Main Account, 91 instruments, 13 lists holding 66 options, 8 tracker rules, 9 custom fields,
+3 note folders.**
+
+**What does NOT come back: playbooks.** `tj_seed_defaults` **does** call `tj_seed_playbooks`, but that
+function has been a **deliberate no-op since `20260813200000`**: it used to guard itself with
+`if exists (…) then return`, which cannot tell a new user from one who deleted every playbook on
+purpose — both have zero rows — so deleting them appeared to work and then undid itself on the next
+dashboard load. A reset therefore ends with zero playbooks and zero playbook rules no matter how many
+were written. The same goes for anything added by hand — options, tracker rules, accounts. The panel
+says so on screen, because listing what comes back while staying quiet about what does not is telling
+the accurate half.
+
+Both functions are **SECURITY INVOKER**, not DEFINER: every table carries
+`FOR ALL TO authenticated USING (user_id = auth.uid())`, so RLS already scopes each statement to the
+caller and there is nothing to elevate. `anon` is revoked **by name**, not only through `PUBLIC` —
+Supabase's default privileges grant EXECUTE to every new function in `public`, and
+`REVOKE ... FROM PUBLIC` does not remove an explicit grant to a role. Verified against the live
+project.
+
+---
+
+## Migrations
+
+101 files in `supabase/migrations/`, named `YYYYMMDDHHMMSS_description.sql`.
+
+- **Additive.** An applied migration is never edited — a new delta is written instead.
+- **A migration explains itself.** Each one opens with a comment saying what was wrong and what
+  breaks without the change. Those files are the only record of why the schema looks the way it does.
+- **Dropping a column a view depends on** means `DROP VIEW` → `DROP COLUMN` → `CREATE VIEW` →
+  `ALTER VIEW ... SET (security_invoker = on)`. Forgetting that last line silently changes whose RLS
+  filters the view.
+
+### Security model
+
+- **RLS on all 30 tables**, ownership pattern, verified against the live database.
+- **`SECURITY DEFINER` plus a uuid argument is a hole**, because any signed-in user can call it with
+  somebody else's id. All five seed functions of that shape — `tj_seed_defaults`,
   `tj_seed_instruments_defaults`, `tj_seed_playbooks`, `tj_seed_tracker_rules`,
-  `tj_seed_note_folders` — ima oduzet `EXECUTE` od `authenticated`. Jedina koja ostaje pozivna je
-  `tj_seed_my_defaults()`, koja ne prima argument i seed-uje samo podatke pozivaoca.
-  `tj_status_from_executions(uuid, text)` je šesta funkcija tog oblika i nije rupa iste vrste: čita
-  samo `tj_executions`, vraća `text`, i oduzeta je od `PUBLIC` i `anon`.
-- **Baza je čuvar, ne akcija.** PostgREST sa korisnikovim JWT-om je živi put za pisanje, pa je
-  provera koja živi samo u TypeScript-u brava oko koje se može obići. Validacija u server akciji
-  postoji da bi poruka bila čitljiva; CHECK ograničenje ili triger iza nje je ono što stvarno drži.
+  `tj_seed_note_folders` — have `EXECUTE` revoked from `authenticated`. The only one that stays
+  callable is `tj_seed_my_defaults()`, which takes no argument and seeds only the caller's data.
+  `tj_status_from_executions(uuid, text)` is a sixth function of that shape and is not the same kind
+  of hole: it only reads `tj_executions`, returns `text`, and is revoked from `PUBLIC` and `anon`.
+- **The database is the guard, not the action.** PostgREST with the user's JWT is a live write path,
+  so a check living only in TypeScript is a lock you can walk around. Validation in a server action
+  exists to make the message readable; the CHECK constraint or trigger behind it is what actually
+  holds.
 
-### Čitanje preko 1000 redova
+### Reading past 1000 rows
 
-PostgREST seče odgovor na `db-max-rows` (1000) i vraća skraćenu stranu sa **HTTP 200 i bez greške**.
-Svako čitanje koje raste sa istorijom ide kroz `selectAllPages`, a svaki `.in()` filter kroz
-`selectAllByIds`, koji deli listu id-eva na po 500 da URL ne bi pukao.
+PostgREST truncates a response at `db-max-rows` (1000) and returns the shortened page with **HTTP 200
+and no error**. Every read that grows with history goes through `selectAllPages`, and every `.in()`
+filter through `selectAllByIds`, which splits the id list into chunks of 500 so the URL does not
+break.
 
-Ovo nije briga o performansama. Dnevnik preko hiljadu trejdova bi i dalje prikazivao win rate, neto
-P&L i drawdown izračunate nad delimičnim skupom, bez ijednog vidljivog simptoma.
+This is not a performance concern. A journal past a thousand trades would still display a win rate, a
+net P&L and a drawdown computed over a partial set, with no visible symptom at all.
 
 ---
 
-## Testovi
+## Tests
 
-2344 testa u 140 fajlova, podeljenih u **dva vitest projekta**: `lib` (okruženje `node`, fajlovi
-`*.test.ts`, 1884 testa u 93 fajla) i `components` (okruženje `jsdom`, fajlovi `*.test.tsx`,
-460 testova u 47 fajlova). Pravilo je ekstenzija, pa nijedan fajl ne može upasti u oba. Podela
-postoji da čisto aritmetički testovi ne plaćaju cenu DOM-a koji ne dodiruju.
+2,344 tests across 140 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 1,884 tests in 93 files) and `components` (environment `jsdom`, files `*.test.tsx`, 460
+tests in 47 files). The rule is the extension, so no file can land in both. The split exists so that
+purely arithmetic tests do not pay for a DOM they never touch.
 
-`vitest.config.ts` nosi **podove** pokrivenosti, ne ciljeve — stoje na onome što paket trenutno
-postiže, pa jedino što mogu je da padnu kad izmena spusti pokrivenost. Od Faze 10 postoje **dva
-odvojena poda**, provereni nezavisno umesto stopljeni u jedan prosek:
+`vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves
+today, so the only thing they can do is fail when a change lowers coverage. Since Phase 10 there are
+**two separate floors**, checked independently rather than blended into one average:
 
-| Sloj | Statements | Branch | Functions | Lines |
+| Layer | Statements | Branch | Functions | Lines |
 |---|---|---|---|---|
 | `src/lib/**` | 95 % | 89 % | 96 % | 96 % |
 | `src/components/**` | 64 % | 64 % | 61 % | 65 % |
 
-Uz njih ide i **treći, po fajlu**: četrnaest modula koji računaju ili čuvaju novac (`MONEY_MODULES`
-u `vitest.config.ts` — `analytics.ts`, `balance.ts`, `costs.ts`, `position-stats.ts`,
-`risk-ratios.ts` i ostali) drže **100 % izraza i funkcija** pojedinačno. Prosek preko sloja sme da
-sakrije jedan takav fajl; pod po fajlu ne sme.
+Alongside them sits a **third, per file**: fourteen modules that compute or guard money
+(`MONEY_MODULES` in `vitest.config.ts` — `analytics.ts`, `balance.ts`, `costs.ts`,
+`position-stats.ts`, `risk-ratios.ts` and the rest) hold **100 % of statements and functions**
+individually. A layer average is allowed to hide one such file; a per-file floor is not.
 
-Zašto dva, ne jedan: `src/lib` je čista aritmetika i drži se blizu 96 % od Faze 0. `src/components`
-je render sloj Faze 10 — 46 od 87 fajlova ima **posvećen** render test, ostatak je dohvaćen samo
-uzgredno, kroz ono što neka testirana komponenta uveze (mnogi `src/components/ui` primitivi
-izvoze pod-delove — `DropdownMenuRadioItem`, `PopoverTitle` — koje ništa u aplikaciji ne renderuje).
-Jedan stopljen broj bi ili povukao bibliotečki pod na nivo render sloja, ili slagao o tome koliko
-je render sloj zapravo pokriven; dva poda kažu obe stvari pošteno umesto da ih usrednje u broj koji
-ne opisuje nijedno.
+Why two floors and not one: `src/lib` is pure arithmetic and has stayed near 96 % since Phase 0.
+`src/components` is Phase 10's render layer — 46 of 87 files have a **dedicated** render test, and
+the rest are reached only incidentally, through whatever a tested component happens to import (many
+`src/components/ui` primitives export sub-parts — `DropdownMenuRadioItem`, `PopoverTitle` — that
+nothing in this app renders). A single blended number would either drag the library floor down to
+component-layer reality or lie about how tested the render layer actually is; two floors say both
+things honestly instead of averaging them into a number describing neither.
 
-Četiri stvari koje brojevi namerno **ne** tvrde:
+Four things the numbers deliberately do **not** claim:
 
-1. **`src/components`-ov pod nije „dobro testirano".** 64/64/61/65 je pošteno stanje sloja koji je
-   ovu fazu počeo od nule i nije završen — Faza 10 pokriva komponente najvišeg rizika (Tier 1 i 2 u
-   `ROADMAP.md`), ne svih 87. Čitati ovaj pod kao „UI je 64 % tačan" ponavlja tačno grešku na koju
-   sledeća tačka upozorava, jedan sloj iznad.
-2. **Isključivanje mora biti `exclude`, ne `include`.** Ista greška je napravljena i zapisana:
-   `include: ["src/lib/**"]` prebacuje v8 sa „fajlovi koje je test uvezao" na „svi fajlovi koji
-   odgovaraju", pa uvuče serverske upitne module koje nijedan unit test ne može dosegnuti i oceni
-   ih nulom. Broj padne sa 95,5 na 86 — što liči na nazadovanje a nije: metrika je počela da meri
-   drugo pod istim imenom.
-3. **100 % ne bi značilo tačno, ni na jednom podu.** Pokrivenost broji *izvršavanje*, ne *tvrdnju*.
-   Sva tri nalaza runde 3 oko skora živela su u fajlovima na 100 % izraza i funkcija — i sva četiri
-   nalaza Faze 10 (`W1`–`W4`) su nađena render testom koji je tvrdio da već pokriven kod daje
-   POGREŠAN broj, ne time što je neka linija ostala neizvršena.
-4. **`src/app` (15 stranica u 33 fajla) nema nijedan broj**, i „nema broj" nije „0 %" — to je „nije
-   mereno". Rute su server komponente čija je logika `await getCurrentUser()` pa `redirect()` pa
-   prosleđivanje propova; propovi se tvrde na drugoj strani, gde ih render test već čita.
+1. **`src/components`'s floor is not "well tested".** 64/64/61/65 is the honest state of a layer that
+   began this phase at zero and is not finished — Phase 10 covers the highest-risk components
+   (Tier 1 and 2 in `ROADMAP.md`), not all 87. Reading this floor as "the UI is 64 % correct" repeats
+   exactly the mistake the next point warns about, one layer up.
+2. **Exclusion has to be `exclude`, not `include`.** The same mistake was made and recorded:
+   `include: ["src/lib/**"]` switches v8 from "files a test imported" to "every file that matches",
+   which pulls in server-only query modules no unit test can reach and scores them zero. The number
+   drops from 95.5 to 86 — which looks like a regression and is not one: the metric started measuring
+   something else under the same name.
+3. **100 % would not mean correct, on either floor.** Coverage counts *execution*, not *assertion*.
+   All three round-3 score defects lived in files at 100 % statements and functions — and all four
+   Phase 10 findings (`W1`–`W4`) were found by a render test asserting that already-covered code
+   produced the WRONG number, not by a line going unexecuted.
+4. **`src/app` (15 pages across 33 files) has no number at all**, and "no number" is not "0 %" — it is
+   "not measured". Routes are server components whose logic is `await getCurrentUser()` then
+   `redirect()` then passing props along; the props are asserted on the other side, where a render
+   test already reads them.
 
-`src/lib/journal/book.fixture.test.ts` postoji baš zbog druge tačke. Fiksira jednu knjigu od deset
-trejdova, izvodi svaku glavnu brojku na papiru u komentarima — sa vidljivom aritmetikom — pa tvrdi
-kod prema papiru. Snapshot test zaključava trenutno ponašanje uključujući njegove bagove; ovaj
-zaključava odgovor. Druga polovina fajla prolazi *oblike* koje knjiga može imati (prazna, jedan
-trejd, sve dobitnici, sve gubitnici, sve breakeven, samo otvorene) — tako je nađen treći nalaz oko
-drawdown-a. Ista knjiga, iste brojke na papiru, postaju i propovi renderovanog Dashboard-a u
-`dashboard.render.test.tsx` — papir → `lib/` → ekran, jedan skup brojeva tvrđen na sva tri sloja.
+`src/lib/journal/book.fixture.test.ts` exists precisely because of the second point. It fixes one
+book of ten trades, works every major figure out on paper in the comments — with the arithmetic
+visible — and then asserts the code against the paper. A snapshot test locks in current behaviour
+including its bugs; this one locks in the answer. The second half of the file walks the *shapes* a
+book can take (empty, one trade, all winners, all losers, all breakeven, open only) — which is how
+the third drawdown finding was caught. The same book, the same figures on paper, then become the
+props of a rendered Dashboard in `dashboard.render.test.tsx`: paper → `lib/` → screen, one set of
+numbers asserted at all three layers.
 
-**Render sloj se izvršava od Faze 10.** Osam koraka, svaki commit + push + `tsc` + `vitest` + `lint`
-+ `build` + `knip`, dokumentovano u `CODE_REVIEW.md`. Dashboard (najveći fajl, 50 `useMemo`),
-`journal-grid`, tri forme (`trade-form`, `daily-report-form`, `tracker-checklist`),
-`import-wizard`, i 14 čistih prezentacionih komponenti uključujući `markdown-view` — jedini
-renderer sa bezbednosnim značajem u aplikaciji (href allowlist na ekranu, ne samo u parseru).
-Nađeno i popravljeno četvoro: `W1` (Win rate pločica čitala „0.0%" umesto „—" na nula odlučenih
-trejdova), `W2` (isti nalaz na drugom mestu, `PeriodPerformanceCard`), `W3` (privacy mod je
-maskirao tri od četiri polja u jednom panelu — četvrto je curilo pravi procenat), `W4` (Target
-attainment u formi za unos trejda računao bez donjeg praga i sa pogrešnim prioritetom između
-sačuvanog i uživo izračunatog plana). `S1`, `S2`, `S3` i `P1` iz runde 3 — svi nađeni čitanjem, ne
-testom — sada svaki ima svoj render test koji bi ih uhvatio da su se ponovili.
+**The render layer has been executed since Phase 10.** Eight steps, each one commit + push + `tsc` +
+`vitest` + `lint` + `build` + `knip`, documented in `CODE_REVIEW.md`. Dashboard (the largest file,
+50 `useMemo`), `journal-grid`, three forms (`trade-form`, `daily-report-form`, `tracker-checklist`),
+`import-wizard`, and 14 pure presentational components including `markdown-view` — the only renderer
+in the application with security significance (an href allowlist on screen, not just in the parser).
+Four defects found and fixed: `W1` (the Win rate tile read "0.0%" instead of "—" at zero decided
+trades), `W2` (the same finding elsewhere, `PeriodPerformanceCard`), `W3` (privacy mode masked three
+of four fields in one panel — the fourth leaked the real percentage), `W4` (Target attainment in the
+trade form computed without a floor and with the wrong precedence between the saved and the
+live-computed plan). `S1`, `S2`, `S3` and `P1` from round 3 — all found by reading, not by testing —
+each now have a render test that would have caught them had they recurred.
 
-**Šta i dalje nije utvrđeno**, rečeno otvoreno da ovde ništa ne tvrdi više nego što sme: dokazan je
-`lib/` lanac od realizovanih trejdova do skora, i render sloj za komponente najvišeg rizika. 15 ruta
-u `src/app` se i dalje ne izvršava ni u jednom testu — logika koja tamo živi je tanka
-(dohvat + `redirect()`), a Playwright bi tražio pokrenutu aplikaciju i Supabase kredencijale kojih
-ovaj kontejner nema. Ostaje kao kasnija opcija, ne kao propust.
+**What is still not established**, said plainly so nothing here claims more than it may: the `lib/`
+chain from realized trades to the score is proven, and so is the render layer for the highest-risk
+components. 15 routes in `src/app` are still executed by no test — the logic living there is thin
+(fetch + `redirect()`), and Playwright would need a running application and Supabase credentials this
+container does not have. It stays a later option, not an oversight.
 
 ---
 
-## Svesno izostavljeno
+## Deliberately left out
 
-| Nije napravljeno | Zašto |
+| Not built | Why |
 |---|---|
-| Backtesting i trade replay | Radi se direktno u TradingView-u. Embed ne pomaže: Bar Replay živi u njihovoj aplikaciji, a widget je crna kutija kroz koju kod ne može da korakne |
-| Broker sync koji popunjava ceo trejd | Ručni unos je izbor i prednost — tera da se trejd pročita još jednom. Bot most (ispod) beleži samo ono što je broker već učinio; sve što je procena i dalje se kuca |
-| Spaces, mentor, leaderboard | Jednokorisnički sistem |
-| AI chat i agenti | Mentor pack izvoz i insight pravila daju isto bez API troška |
-| Opcije (DTE, strike, expiry) | Ne trguju se |
-| Intraday dimenzije (entry time 5–30 min) | Day-trading artefakt |
-| Ekonomski kalendar | Živi u vault repou |
-| Running P&L kriva po trejdu | Traži cenovni feed. Posledica: „most time in drawdown" otpada |
+| Backtesting and trade replay | Done directly in TradingView. An embed does not help: Bar Replay lives in their application, and the widget is a black box the code cannot step through |
+| Broker sync that fills in a whole trade | Manual entry is a choice and an advantage — it forces the trade to be read once more. The bot bridge (above) records only what the broker already did; everything that is a judgement is still typed |
+| Spaces, mentor, leaderboard | Single-user system |
+| AI chat and agents | The mentor-pack export and the insight rules give the same thing without the API cost |
+| Options (DTE, strike, expiry) | Not traded |
+| Intraday dimensions (entry time 5–30 min) | A day-trading artifact |
+| Economic calendar | Lives in the vault repo |
+| Running P&L curve per trade | Needs a price feed. Consequence: "most time in drawdown" is off the table |
 
-**Blokirano, ne odbijeno:** MAE/MFE **iz istorijskih sveća** (Faza 8B). Za trejdove koje vodi bot
-most ovo više ne treba — `position_excursion` ih donosi uživo, u tick rezoluciji. Ostaje za sve
-ostalo: ručno unete i uvezene trejdove, i sve odtrgovano pre nego što je most postojao.
+**Blocked, not rejected:** MAE/MFE **from historical candles** (Phase 8B). For trades the bot bridge
+drives this is no longer needed — `position_excursion` delivers them live, at tick resolution. It
+remains for everything else: hand-entered and imported trades, and everything traded before the
+bridge existed.
 
-Logika skeniranja i biranje intervala su napisani i testirani — `excursion-scan.ts` bira 1m do 1h
-prema dužini držanja, a sveća se broji samo ako cela stane unutar prozora trejda. Fali samo adapter
-za feed. **Izvor je promenjen sa OANDA na cTrader Open API**: OANDA je 2017. ukinula v20 pristup za
-EU klijente, a pošto se ionako trguje preko cTrader-a, taj feed je doslovno isti onaj na kom se
-trguje. Aplikacija je registrovana i čeka Spotware KYC; pun plan je u
-[`FAZA_8B_PLAN.md`](FAZA_8B_PLAN.md).
+The scanning logic and the interval choice are written and tested — `excursion-scan.ts` picks 1m
+through 1h by holding time, and a candle only counts if it fits entirely inside the trade's window.
+All that is missing is an adapter for the feed. **The source changed from OANDA to the cTrader Open
+API**: OANDA withdrew v20 access for EU clients in 2017, and since the trading happens through
+cTrader anyway, that feed is literally the one being traded on. The application is registered and
+waiting on Spotware KYC; the full plan is in [`FAZA_8B_PLAN.md`](FAZA_8B_PLAN.md).
 
 ---
 
-## Dokumentacija
+## Documentation
 
-| Izvor | Za šta |
+| Source | For what |
 |---|---|
-| **Ovaj README** | Šta postoji i kako radi |
-| [`ROADMAP.md`](ROADMAP.md) | Faze, odluke i njihova obrazloženja, šta je ostalo |
-| [`CODE_REVIEW.md`](CODE_REVIEW.md) | Runde 2b, 3 i 4 plus izvršenje render sloja (Faza 10), svaki nalaz sa ishodom (engleski) |
-| [`PARITY.md`](PARITY.md) | Poređenje sa TradeZella-om, stavku po stavku |
-| [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md) | AI ulaz (Cursor / Claude Code) |
-| [trading-fundamental-vault](https://github.com/0xsickre/trading-fundamental-vault/blob/master/README.md) | F0–F5 ciklus, makro bias, COT filter |
-| [vault `workflow.md`](https://github.com/0xsickre/trading-fundamental-vault/blob/master/workflow.md) | Sedmični runbook (13 koraka) |
-| [trading-dashboard](https://github.com/0xsickre/trading-dashboard/blob/master/README.md) | Read-only prikaz nedeljne analize |
+| **This README** | What exists and how it works |
+| [`ROADMAP.md`](ROADMAP.md) | Phases, decisions and their reasoning, what is left (Serbian) |
+| [`CODE_REVIEW.md`](CODE_REVIEW.md) | Rounds 2b, 3 and 4 plus the render-layer execution (Phase 10), every finding with its outcome |
+| [`docs/formulas-audit.md`](docs/formulas-audit.md) | Every formula checked against outside practice, with a verdict each (Serbian) |
+| [`PARITY.md`](PARITY.md) | A comparison against TradeZella, item by item (Serbian) |
+| [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md) | AI entry point (Cursor / Claude Code) |
+| [trading-fundamental-vault](https://github.com/0xsickre/trading-fundamental-vault/blob/master/README.md) | The F0–F5 cycle, macro bias, COT filter |
+| [vault `workflow.md`](https://github.com/0xsickre/trading-fundamental-vault/blob/master/workflow.md) | The weekly runbook (13 steps) |
+| [trading-dashboard](https://github.com/0xsickre/trading-dashboard/blob/master/README.md) | Read-only view of the weekly analysis |
 
 ---
 
-## Napomena
+## Note
 
-Privatni repo — lična upotreba. Supabase projekat journal-a je **odvojen** od dashboard projekta; ne
-pokreći dashboard migracije ovde ni obrnuto. Sadržaj je lični trading zapis, ne investicioni savet.
+Private repo — personal use. The journal's Supabase project is **separate** from the dashboard's; do
+not run the dashboard's migrations here or the other way round. The contents are a personal trading
+record, not investment advice.
