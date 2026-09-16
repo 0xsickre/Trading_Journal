@@ -114,7 +114,7 @@ export const cleanHold: Rule = {
           title: "Clean hold",
           detail: `${r2(e.r!)}R of profit with only ${r2(
             e.excursion.maeR!,
-          )}R protiv — teza je radila skoro odmah.`,
+          )}R against it — the thesis worked almost at once.`,
         }),
       ),
 };

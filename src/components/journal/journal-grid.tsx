@@ -701,7 +701,7 @@ export function JournalGrid({
                   records broker facts only, so the rest of this trade is still
                   waiting to be written by hand. */}
               {t.source === "bot" && (
-                <span title="Zabeležio bot most iz cTrader-a">
+                <span title="Recorded by the bot bridge from cTrader">
                   <Bot className="size-3.5 text-muted-foreground" />
                 </span>
               )}

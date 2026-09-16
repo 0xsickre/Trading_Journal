@@ -137,7 +137,7 @@ export type FieldValue = string | number | string[] | null;
 function groupByAssetClass(instruments: Instrument[]): [string, Instrument[]][] {
   const groups = new Map<string, Instrument[]>();
   for (const i of instruments) {
-    const key = i.asset_class?.trim() || "Ostalo";
+    const key = i.asset_class?.trim() || "Other";
     const arr = groups.get(key);
     if (arr) arr.push(i);
     else groups.set(key, [i]);

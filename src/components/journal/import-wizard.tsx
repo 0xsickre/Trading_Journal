@@ -259,7 +259,7 @@ export function ImportWizard({
         // Visible, and created. If this row merged into the wrong trade,
         // `tj_replace_executions` would delete the fills of the right one.
         diff.push(
-          `${outcome.candidates.length} postojeća trejda odgovaraju — kreira se novi`,
+          `${outcome.candidates.length} existing trades match — a new one is created`,
         );
       }
       if (matched) {

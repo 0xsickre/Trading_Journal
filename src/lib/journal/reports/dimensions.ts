@@ -665,7 +665,7 @@ export function dimensionsByGroup(group: DimensionGroup): Dimension[] {
 
 export const DIMENSION_GROUP_LABELS: Record<DimensionGroup, string> = {
   trade: "Trade",
-  derived: "Izvedeno",
+  derived: "Derived",
   process: "Process",
   insight: "Insight",
   custom: "My fields",

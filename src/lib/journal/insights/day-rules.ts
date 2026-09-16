@@ -60,7 +60,7 @@ export const perfectDay: Rule = {
           detail: `${d.trades.length} trades, ${fmtMoney(
             d.net,
             ctx.currency,
-          )}, nijedan nije bio u minusu.`,
+          )}, and not one of them went red.`,
         }),
       ),
 };

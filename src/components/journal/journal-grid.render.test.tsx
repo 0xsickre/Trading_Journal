@@ -523,7 +523,7 @@ describe("provenance badge", () => {
     render(
       <JournalGrid trades={[{ ...bot, source: "bot" }]} accounts={[ACCOUNT]} />,
     );
-    expect(screen.getByTitle("Zabeležio bot most iz cTrader-a")).toBeInTheDocument();
+    expect(screen.getByTitle("Recorded by the bot bridge from cTrader")).toBeInTheDocument();
   });
 
   it("does not mark an imported or manual trade", () => {
@@ -531,10 +531,10 @@ describe("provenance badge", () => {
     const { rerender } = render(
       <JournalGrid trades={[{ ...manual, source: "manual" }]} accounts={[ACCOUNT]} />,
     );
-    expect(screen.queryByTitle("Zabeležio bot most iz cTrader-a")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Recorded by the bot bridge from cTrader")).not.toBeInTheDocument();
 
     rerender(<JournalGrid trades={[{ ...manual, source: "import" }]} accounts={[ACCOUNT]} />);
-    expect(screen.queryByTitle("Zabeležio bot most iz cTrader-a")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Recorded by the bot bridge from cTrader")).not.toBeInTheDocument();
   });
 });
 
