@@ -88,7 +88,8 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "html"],
       /**
-       * `src/app` (25 routes) stays out. They are server components whose logic
+       * `src/app` (15 pages across 33 files) stays out. They are server
+       * components whose logic
        * is `await getCurrentUser()` then `redirect()` then pass props along —
        * the props are what carry a number, and those are asserted on the other
        * side, at the component that renders them. Testing a route means a Next
@@ -110,8 +111,8 @@ export default defineConfig({
        *
        * They measure different things by design: `src/lib` is pure functions,
        * mostly arithmetic, and Phase 0–9 held it near 96%. `src/components` is
-       * Phase 10's render layer — 43 files, 14 with dedicated render tests as
-       * of Faza 10 and the rest reached only incidentally, through whatever a
+       * Phase 10's render layer — 87 files, 46 with dedicated render tests
+       * and the rest reached only incidentally, through whatever a
        * tested component happens to import (many `src/components/ui` primitives
        * export sub-parts — `DropdownMenuRadioItem`, `PopoverTitle` — that
        * nothing in this app renders at all). A single blended number would
@@ -127,7 +128,7 @@ export default defineConfig({
        *   1. **`src/components`'s floor is not "well tested".** 64/64/61/65 is
        *      the honest state of a layer that started this phase at zero and
        *      is not finished — Faza 10 covers the highest-risk components
-       *      (Tier 1 and 2 in `ROADMAP.md`), not all 43. Reading this floor as
+       *      (Tier 1 and 2 in `ROADMAP.md`), not all 87. Reading this floor as
        *      "the UI is 64% correct" repeats the exact mistake the `src/lib`
        *      floor's comment already warns against, one layer up.
        *

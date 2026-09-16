@@ -26,21 +26,23 @@ import { RESET_PHRASE } from "@/lib/journal/reset-phrase";
  * double confirmation are the same reflex twice. Typing is the only gate that
  * costs attention rather than time.
  *
- * WHAT ACTUALLY COMES BACK, measured against the live project rather than
- * assumed from the seed's name: one Main Account, 91 instruments, 13 dropdown
- * lists holding 66 options, 7 tracker rules, 4 custom fields and 3 note folders.
+ * WHAT ACTUALLY COMES BACK, counted from the seed functions rather than assumed
+ * from their names: one Main Account, 91 instruments, 13 dropdown lists holding
+ * 66 options, 8 tracker rules, 9 custom fields and 3 note folders.
  * `tj_reset_my_data` calls `tj_seed_my_defaults()`, which is exactly what a new
  * signup ends up with after its first dashboard load — so "reset" and "first
  * ever load" do land on the same state.
  *
  * WHAT DOES NOT COME BACK, and why the copy below says so out loud: playbooks.
- * `tj_seed_my_defaults` calls `tj_seed_defaults` and
- * `tj_seed_instruments_defaults` and nothing else — `tj_seed_playbooks` exists
- * but is not wired into it, so a reset ends with zero playbooks and zero
- * playbook rules no matter how many were written. Anything else added by hand
- * (extra options, extra tracker rules) is in the same position. Naming the
- * restore without naming that gap would be the same screen telling the truth
- * about the easy half.
+ * `tj_seed_defaults` DOES call `tj_seed_playbooks`, but that function has been a
+ * deliberate no-op since 20260813200000: it used to guard itself with
+ * `if exists (… ) then return`, which cannot tell a new user from one who
+ * deleted every playbook on purpose — both have zero rows — so deleting them
+ * appeared to work and then undid itself on the next dashboard load. A reset
+ * therefore ends with zero playbooks and zero playbook rules no matter how many
+ * were written. Anything else added by hand (extra options, extra tracker rules)
+ * is in the same position. Naming the restore without naming that gap would be
+ * the same screen telling the truth about the easy half.
  */
 export function DangerZone() {
   const router = useRouter();
@@ -85,7 +87,7 @@ export function DangerZone() {
           <p className="font-medium">Restored afterwards</p>
           <p className="text-muted-foreground">
             One Main Account, 91 instruments, 13 dropdown lists with 66 options,
-            7 tracker rules, 4 custom fields, 3 note folders.
+            8 tracker rules, 9 custom fields, 3 note folders.
           </p>
           <p className="mt-2 font-medium">Not restored</p>
           <p className="text-muted-foreground">
