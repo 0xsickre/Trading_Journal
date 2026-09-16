@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, type ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, LineChart, LogOut, Menu } from "lucide-react";
@@ -21,6 +21,48 @@ import { ThemeToggle } from "@/components/app/theme-toggle";
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(href + "/");
+}
+
+const REPO_URL = "https://github.com/0xsickre/Trading_Journal";
+
+/**
+ * AGPL § 13: a copy reached over a network owes its source to the people using
+ * it, and the offer has to be reachable from the app rather than merely true
+ * somewhere. Hence a link in the chrome, not a line in the README.
+ *
+ * Pinned to the DEPLOYED commit, not `main` — § 13 asks for the source of the
+ * version running, and `main` moves on within the hour.
+ *
+ * The `NEXT_PUBLIC_` prefix is load-bearing: both chromes are client
+ * components, so a bare `VERCEL_GIT_COMMIT_SHA` reads `undefined` in the
+ * browser and every link would quietly degrade to `main` — right-looking and
+ * wrong. Vercel exposes the prefixed one itself while "Automatically expose
+ * System Environment Variables" is on.
+ */
+const SOURCE_URL = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA
+  ? `${REPO_URL}/tree/${process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA}`
+  : REPO_URL;
+
+/**
+ * The rest of the props are forwarded because `DropdownMenuItem asChild` hands
+ * its child the `role`, the ref and its own handlers. Dropping them renders an
+ * anchor the menu cannot see — which is a link that is present and unreachable.
+ */
+function SourceLink({ className, ...props }: ComponentProps<"a">) {
+  return (
+    <a
+      {...props}
+      href={SOURCE_URL}
+      target="_blank"
+      rel="noreferrer"
+      className={cn(
+        "block text-xs text-muted-foreground transition-colors hover:text-foreground",
+        className,
+      )}
+    >
+      Source code (AGPL-3.0)
+    </a>
+  );
 }
 
 export function AppSidebar({ email }: { email: string | null }) {
@@ -91,6 +133,7 @@ export function AppSidebar({ email }: { email: string | null }) {
             Sign out
           </Button>
         </form>
+        <SourceLink className="px-3 pb-1" />
       </div>
     </aside>
   );
@@ -158,6 +201,13 @@ export function MobileTopbar() {
               })}
             </Fragment>
           ))}
+          {/* The sidebar is `hidden … md:flex`, so a link that lives only there
+              is nowhere on a phone — the exact shape of the bug that put
+              `app-sidebar.render.test.tsx` on disk. § 13 says "all users". */}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <SourceLink />
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 

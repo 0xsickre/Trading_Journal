@@ -48,6 +48,36 @@ describe("the theme switch is reachable on every breakpoint", () => {
   });
 });
 
+describe("the AGPL source offer is reachable on every breakpoint", () => {
+  /**
+   * Same invariant as the theme switch above, for a different reason: § 13
+   * requires the offer to reach ALL users, and the desktop sidebar is
+   * `hidden … md:flex`. A link placed only there satisfies the licence for
+   * nobody on a phone.
+   *
+   * Only the href is asserted, not the commit in it. Under test
+   * `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA` is unset, so the fallback is what
+   * renders; pinning is Vercel's half of it and cannot be proven from jsdom.
+   */
+  const REPO = "https://github.com/0xsickre/Trading_Journal";
+
+  it("the desktop sidebar carries the offer", () => {
+    render(<AppSidebar email="t@example.com" />);
+    expect(
+      screen.getByRole("link", { name: /Source code/ }),
+    ).toHaveAttribute("href", REPO);
+  });
+
+  it("the mobile menu carries it too", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<MobileTopbar />);
+    await user.click(screen.getByRole("button", { name: /Dashboard|Menu/ }));
+    expect(
+      screen.getByRole("menuitem", { name: /Source code/ }),
+    ).toHaveAttribute("href", REPO);
+  });
+});
+
 describe("both chromes render the whole menu", () => {
   /**
    * Every nav entry resolves to its own route, wherever the chrome puts it.
