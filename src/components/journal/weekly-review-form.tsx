@@ -204,10 +204,10 @@ export function WeeklyReviewForm({
             </p>
           </CardHeader>
           <CardContent>
-            {/* Zvezdice umesto A–F: ista jedinica kojom se već ocenjuju
-                izvršenje, conviction i mentalno stanje. `StarRating` nosi i
-                svoj „Clear", pa dugme koje je ovde stajalo posebno više ne
-                treba. */}
+            {/* Stars instead of A–F: the same unit execution, conviction and
+                mental state are already rated in. `StarRating` carries its own
+                "Clear" too, so the separate button that used to stand here is
+                no longer needed. */}
             <StarRating
               label="Ocena nedelje"
               value={form.week_grade}
@@ -420,8 +420,12 @@ function WeekDayStrip({
 }
 
 /**
- * Srpski ima tri oblika za brojivo: 1 trejd, 2–4 trejda, 0 i 5+ trejdova.
- * `n % 100` izbacuje 11–14 iz "2–4" grane — 11 trejdova, ne 11 trejda.
+ * Serbian has three plural forms for a count: 1 trejd, 2–4 trejda, 0 and 5+
+ * trejdova. The `n % 100` guard pulls 11–14 out of the "2–4" branch — it is
+ * 11 trejdova, not 11 trejda.
+ *
+ * The label is Serbian because the weekly review is where the trader writes
+ * their own prose; see README § On language.
  */
 function tradeCountLabel(n: number): string {
   if (n === 1) return "1 trejd";

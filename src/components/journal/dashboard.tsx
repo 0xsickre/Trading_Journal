@@ -728,17 +728,18 @@ export function Dashboard({
   );
 
   /**
-   * Zona po nalogu, sa istim lancem rezervi koji koriste rute.
+   * Timezone per account, on the same fallback chain the routes use.
    *
-   * Ovde je stajalo `?? "America/New_York"` bez rezerve na PRIMARNI nalog, dok
-   * su `/calendar` i `/playbooks` padale na `primary?.timezone`. Za trejd bez
-   * `account_id` — a takav nastaje kad se nalog obriše, jer je strani ključ
-   * `ON DELETE SET NULL` — Dashboard bi ga datirao po njujorškom danu a kalendar
-   * po zoni primarnog naloga. Na nalogu u `Europe/Berlin` to je isti trejd u dve
-   * različite kolone kalendara.
+   * This used to hold `?? "America/New_York"` with no fallback to the PRIMARY
+   * account, while `/calendar` and `/playbooks` fell back to
+   * `primary?.timezone`. For a trade with no `account_id` — and one is created
+   * whenever an account is deleted, because the foreign key is
+   * `ON DELETE SET NULL` — the Dashboard would date it on a New York day and
+   * the calendar in the primary account's zone. On an account in
+   * `Europe/Berlin` that is the same trade in two different calendar columns.
    *
-   * Primarni je „prvi aktivan, inače prvi" — isto pravilo koje `getPrimaryAccount`
-   * primenjuje na serveru.
+   * The primary is "first active, else first" — the same rule
+   * `getPrimaryAccount` applies on the server.
    */
   const tzForAccount = useMemo(() => {
     const primary = accounts.find((a) => a.is_active) ?? accounts[0];
@@ -838,10 +839,11 @@ export function Dashboard({
       accountFilter === "all"
         ? accounts
         : accounts.filter((a) => a.id === accountFilter);
-    // Isti izraz koji četiri rute koriste — razlika je samo u tome ŠTA se
-    // prosleđuje: Dashboard filtrira po izabranom nalogu, rute uzimaju sve.
-    // Ta razlika je namerna i ostaje; ono što je uklonjeno je pet kopija samog
-    // pravila „pojas važi samo ako se svi nalozi slažu".
+    // The same expression four routes use — the only difference is WHAT gets
+      // passed in: the Dashboard filters by the selected account, the routes take
+      // all of them. That difference is deliberate and stays; what was removed is
+      // five copies of the rule itself, "a band applies only if every account
+      // agrees".
     return sharedBreakevenRange(scoped);
   }, [accountFilter, accounts]);
 
@@ -1016,13 +1018,13 @@ export function Dashboard({
   );
 
   /**
-   * Zatvoreni trejdovi koje NIJEDAN broj na ovoj stranici ne uključuje.
+   * Closed trades that NO number on this page includes.
    *
-   * `toRealized` odbacuje svaki red bez `net_pl`, i to je tačno — trejd koji se
-   * ne može vrednovati ne sme da uđe u zbir kao nula. Ali odbačen red nestaje i
-   * iz broja trejdova, i iz neto rezultata, i iz svake metrike ispod. Dashboard
-   * je do sada o tome ćutao, pa je knjiga od deset trejdova sa tri
-   * nevrednovana pisala „7" bez ijedne reči.
+   * `toRealized` discards every row without a `net_pl`, and that is right — a
+   * trade that cannot be valued must not enter a total as a zero. But a
+   * discarded row also vanishes from the trade count, from the net result and
+   * from every metric below. The Dashboard used to say nothing about it, so a
+   * book of ten trades with three unvalued read "7" without a word.
    */
   const unpriced = useMemo(() => {
     const scoped =
@@ -1768,12 +1770,13 @@ export function Dashboard({
             <DonutRing value={stats.profitFactor} full={PROFIT_FACTOR_FULL} />
           }
         />
-        {/* ZAŠTO SE OVO RAZLIKUJE OD `Avg R`.
-            Isti R, dva imenioca — i bez ove rečenice to na ekranu izgleda kao
-            nesaglasnost. Expectancy je ponderisan win rate-om nad ODLUČENOM R
-            populacijom, pa breakeven trejd ispada; `Avg R` je običan prosek
-            preko svih koji imaju R. Na knjizi od 20 trejdova sa jednim
-            breakeven-om to je 12.84/19 = 0.68 naspram 12.84/20 = 0.64. */}
+        {/* WHY THIS DIFFERS FROM `Avg R`.
+            The same R, two denominators — and without this sentence it looks
+            like an inconsistency on screen. Expectancy is weighted by the win
+            rate over the DECIDED R population, so a breakeven trade drops out;
+            `Avg R` is a plain mean over everything that has an R. On a book of
+            20 trades with one breakeven that is 12.84/19 = 0.68 against
+            12.84/20 = 0.64. */}
         <Stat
           size="hero"
           label="Expectancy"

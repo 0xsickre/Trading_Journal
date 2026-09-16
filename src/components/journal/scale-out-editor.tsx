@@ -13,19 +13,21 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * Koliko pozicije se skida i na kojoj ceni.
+ * How much of the position comes off, and at what price.
  *
- * Trejd nosi JEDAN `target_price` — to je izlazak dnevnog trejdera: jedan
- * nivo, jedna popuna, gotovo. Pozicija koja se drži danima obično se skida u
- * delovima, a to do sada nije bilo izrazivo nigde osim u rečenici.
+ * A trade carries ONE `target_price` — that is a day trader's exit: one level,
+ * one fill, done. A position held for days usually comes off in pieces, and
+ * until now that was not expressible anywhere except in a sentence.
  *
- * R kolona je IZVEDENA i read-only. Unosi se cena, jer je svaki drugi nivo na
- * ovom ekranu cena; R se računa postojećim `computePlannedRewardR` iz entry i
- * stop-a. Da se R čuvao, izmenjen stop bi tiho učinio sačuvani broj netačnim.
+ * The R column is DERIVED and read-only. A price is entered, because every
+ * other level on this screen is a price; R is computed by the existing
+ * `computePlannedRewardR` from entry and stop. Had R been stored, a changed
+ * stop would silently make the stored number untrue.
  *
- * Zbir se prikazuje uvek, i crveni iznad 100 %. Sam prikaz ne blokira —
- * blokira `submit()` u formi — ali brojka mora da stoji pre nego što se klikne
- * „Update", inače se greška sazna tek kroz toast.
+ * The total is always shown, and turns red above 100 %. The display itself
+ * does not block — `submit()` in the form does — but the figure has to be on
+ * screen before "Update" is clicked, or the error is only learned through a
+ * toast.
  */
 export function ScaleOutEditor({
   rows,

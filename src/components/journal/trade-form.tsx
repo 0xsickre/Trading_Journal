@@ -127,12 +127,12 @@ type ExecRow = {
 export type FieldValue = string | number | string[] | null;
 
 /**
- * Instrumenti po klasi, redosledom kataloga.
+ * Instruments by class, in catalog order.
  *
- * `sort_order` je već grupisan po opsezima (Forex 0–120, CFD 200–312, futures
- * 400+), pa je dovoljno zadržati redosled u kom stižu iz `getInstruments` i
- * grupisati susedne. Sopstveni instrument koji korisnik doda bez klase pada u
- * „Ostalo" umesto da nestane iz liste.
+ * `sort_order` is already grouped into ranges (Forex 0–120, CFD 200–312,
+ * futures 400+), so it is enough to keep the order they arrive in from
+ * `getInstruments` and group the adjacent ones. A custom instrument the user
+ * adds without a class falls into "Other" instead of vanishing from the list.
  */
 function groupByAssetClass(instruments: Instrument[]): [string, Instrument[]][] {
   const groups = new Map<string, Instrument[]>();
@@ -449,13 +449,15 @@ export function TradeForm({
   const pointValue = instrument?.point_value ?? null;
 
   /**
-   * Kurs valute kotacije prema valuti naloga, razrešen istim redosledom koji
-   * `tj_position_stats` ima u SQL-u — `resolveFxRate` je jedini izraz za oba.
+   * The quote currency's rate against the account's, resolved in the same order
+   * `tj_position_stats` has in SQL — `resolveFxRate` is the one expression for
+   * both.
    *
-   * Trejd koji se tek unosi još nema snimljen kurs, pa se ovde odgovara na
-   * pitanje koje se može odgovoriti bez njega: da li je konverzija uopšte
-   * potrebna. Kad nije (instrument kotiran u valuti naloga) preview pokazuje
-   * novac; kad jeste, pokazuje prazno umesto broja u pogrešnoj valuti.
+   * A trade being entered has no recorded rate yet, so what is answered here is
+   * the question that can be answered without one: whether a conversion is
+   * needed at all. When it is not (the instrument is quoted in the account's
+   * currency) the preview shows money; when it is, it shows nothing rather than
+   * a number in the wrong currency.
    */
   const fx = resolveFxRate({
     quoteCurrency: instrument?.quote_currency,
@@ -484,8 +486,9 @@ export function TradeForm({
       stop_price: stop,
       point_value: pointValue,
       fx_rate: fx.rate,
-      // Prepisan rezultat pobeđuje cene — isto kao u view-u. Bez ovoga bi
-      // pregled u formi pokazivao izračunat broj, a lista trejdova upisan.
+      // A transcribed result beats prices — the same as in the view. Without
+          // this the form's preview would show the computed number while the trade
+          // list showed the entered one.
       gross_pnl_override: n(String(fields.gross_pnl_override ?? "")),
       executions: executionFills,
     });
@@ -612,9 +615,10 @@ export function TradeForm({
       targetAttainment,
       plannedReward,
     };
-    // `fx.rate` je primitiv i menja se sa instrumentom — bez njega u listi
-    // pregled bi zadržao novac izračunat po starom kursu posle promene simbola,
-    // što je tačno ona klasa greške koju Faza 10 zove „broj izračunat dvaput".
+    // `fx.rate` is a primitive and changes with the instrument — without it in
+          // the list the preview would keep money computed at the old rate after a
+          // symbol change, which is exactly the class of error Phase 10 calls "a
+          // number computed twice".
     // scaleOutRows is a dependency because the planned reward now weighs it:
     // without it the figure would freeze at whatever the levels were when some
     // other field last changed.
@@ -805,8 +809,8 @@ export function TradeForm({
 
     const payload = {
       account_id: accountId,
-      // NULL na upisu prepušta broj triggeru; na izmeni se postojeći ne dira
-      // jer ga trigger popunjava samo kad je NULL.
+      // NULL on insert leaves the number to the trigger; on an edit the existing
+      // one is left alone, because the trigger fills it only when it is NULL.
       trade_no: initial?.trade_no ?? null,
       fields: fieldsToSave,
       executions: buildExecInputs(),
@@ -883,7 +887,7 @@ export function TradeForm({
    *
    * On a new trade they were noise at best and broken at worst: the phase select
    * at the top already says planned or active, "Move to active" only repeated it,
-   * and "Označi kao miss" was offered but refused on click — `markTradeMissed`
+   * and "Mark as missed" was offered but refused on click — `markTradeMissed`
    * needs a row to mark, so it answered with an error toast. A button that is
    * shown and cannot work is worse than no button.
    *
@@ -1430,11 +1434,11 @@ function FormGroupSection({
         )
       : group.id === "psychology_notes" &&
             (isMissed || tradePhase === "planned")
-          ? // `execution_rating` ide kroz ISTU kapiju, a ne kroz novo ime: na
-            // planiranom ili propuštenom trejdu nema izvršenja koje bi se
-            // ocenilo, isto kao što nema ni beleške o njemu. Ponovna upotreba
-            // postojećeg predikata znači da nema novog imena koje bi propalo
-            // kroz neki `default: return true`.
+          ? // `execution_rating` goes through THE SAME gate rather than a new
+            // name: on a planned or missed trade there is no execution to rate,
+            // just as there is no note about one. Reusing the existing predicate
+            // means there is no new name that could fall out of step through
+            // some `default: return true`.
             group.fields.filter(
               (field) =>
                 field.name !== "trade_journal_notes" &&
@@ -1664,12 +1668,13 @@ function FieldRenderer({
           </SelectTrigger>
           <SelectContent>
             {/*
-              Grupisano po klasi, ne ravna lista od devedeset stavki.
-              Katalog nudi ceo univerzum (Forex, CFD, futures), pa je jedina
-              stvar koja tu listu čini upotrebljivom podela na blokove —
-              Radix uz to nosi kucanje-za-skok, pa se do simbola stiže odmah.
-              Prva verzija je umesto ovoga gasila 80 instrumenata da lista
-              ostane kratka; to je krilo katalog umesto da ga uredi.
+              Grouped by class, not a flat list of ninety entries.
+              The catalog offers the whole universe (Forex, CFD, futures), so the
+              one thing that makes such a list usable is splitting it into
+              blocks — and Radix carries type-to-jump on top, so a symbol is one
+              keystroke away. The first version instead switched 80 instruments
+              off to keep the list short; that hid the catalog rather than
+              organising it.
             */}
             {groupByAssetClass(instruments).map(([cls, list]) => (
               <SelectGroup key={cls}>
@@ -1724,9 +1729,9 @@ function FieldRenderer({
   }
 
   if (field.type === "rating") {
-    // `null` i `0` se namerno razlikuju: prazna vrednost je „nije ocenjeno",
-    // nikad nula zvezdica. `Number(value)` nad praznim stringom daje 0, pa se
-    // prazno hvata PRE konverzije.
+    // `null` and `0` differ on purpose: an empty value is "not rated", never
+    // zero stars. `Number(value)` on an empty string gives 0, so empty is
+    // caught BEFORE the conversion.
     const n =
       value === "" || value == null ? null : Number(value);
     return (
@@ -1741,8 +1746,8 @@ function FieldRenderer({
   }
 
   if (field.type === "days") {
-    // Isto hvatanje praznog pre konverzije kao kod `rating`: `Number("")` je 0,
-    // a nula dana ovde ne postoji — prazno znači „bez roka".
+    // The same catch-empty-before-converting as `rating`: `Number("")` is 0,
+    // and zero days does not exist here — empty means "no deadline".
     const n = value === "" || value == null ? null : Number(value);
     return (
       <div className={`space-y-1.5 ${colSpan}`}>

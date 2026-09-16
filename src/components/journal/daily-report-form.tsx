@@ -289,9 +289,9 @@ export function DailyReportForm({
 
           <div className="space-y-2">
             <Label>Mentalno stanje</Label>
-            {/* Zvezdice, ne 1–10. Deset nivoa je preciznost koju čovek nema o
-                sopstvenoj glavi; tražena, daje šum koji posle hrani dimenziju
-                izveštaja i insight pravilo kao da je signal. */}
+            {/* Stars, not 1–10. Ten levels is a precision nobody has about their
+                own head; asked for, it produces noise that then feeds a report
+                dimension and an insight rule as if it were signal. */}
             <StarRating
               label="Mentalno stanje"
               value={form.mental_temp}

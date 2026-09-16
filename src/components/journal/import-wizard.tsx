@@ -66,9 +66,10 @@ const KEYWORDS: Record<Canonical, string[]> = {
   exit_time: ["exit time", "close time", "closetime", "time out", "exit date", "close"],
   fee: ["commission", "fee", "comm", "fees"],
   swap: ["swap", "funding", "rollover"],
-  // Namerno posle `swap` u redosledu automatskog mapiranja: brokerski izvodi
-  // često imaju i "Swap" i "Profit", a `includes` bi na "profit" pogodio i
-  // kolonu "Gross profit". Redosled u CANONICAL odlučuje ko prvi uzme header.
+  // Deliberately after `swap` in the auto-mapping order: broker statements
+  // often carry both "Swap" and "Profit", and `includes` on "profit" would also
+  // hit a "Gross profit" column. The order in CANONICAL decides who claims a
+  // header first.
   profit: ["profit", "p/l", "pnl", "p&l", "net p", "gross p", "result", "realized"],
 };
 
@@ -187,16 +188,17 @@ export function ImportWizard({
         unreadable.push("exit time");
       const fee = (map.fee ? read(map.fee, "fee") : null) ?? 0;
       const swap = (map.swap ? read(map.swap, "swap") : null) ?? 0;
-      // Bez `?? 0`: nemapirana kolona profita znači „računaj iz cena", a nula
-      // bi značila „trejd je završio na nuli". Razlika je cela poenta polja.
+      // No `?? 0`: an unmapped profit column means "compute from prices", while
+      // a zero would mean "the trade finished flat". That difference is the
+      // whole point of the field.
       const profit = map.profit ? read(map.profit, "profit") : null;
 
-      // Količina od nule je isto što i neproččitana ćelija, i mora da se vidi
-      // kao takva. `read` je označavao samo ćeliju koju parser NIJE mogao da
-      // pročita; literalna „0" je prolazila kao stvarna vrednost, a onda
-      // `tj_save_trade` (kao i `tj_replace_executions` pre njega) odbacuje
-      // fill sa `qty <= 0` kroz svoj WHERE. Red bi se uvezao kao prazna
-      // pozicija, bez ijednog fill-a i bez ijedne reči o tome zašto.
+      // A quantity of zero is the same as an unread cell, and has to be seen as
+      // one. `read` flagged only a cell the parser COULD NOT read; a literal
+      // "0" passed as a real value, and then `tj_save_trade` (like
+      // `tj_replace_executions` before it) drops a fill with `qty <= 0` through
+      // its WHERE. The row would import as an empty position, with no fills and
+      // not a word about why.
       if (qty <= 0) unreadable.push("qty");
 
       const execs: ImportExec[] = [];
@@ -207,12 +209,12 @@ export function ImportWizard({
           price: entryPrice,
           qty,
           executed_at: entryTime,
-          // Troškovi idu na IZLAZ kad izlaz postoji, inače na ulaz.
+          // Costs go on the EXIT when there is an exit, otherwise on the entry.
           //
-          // Ranije su bezuslovno stajali na izlazu, pa je otvorena pozicija —
-          // red izvoda bez izlazne cene — gubila proviziju i swap u potpunosti.
-          // Nije bila greška koja se vidi: trejd se uveze, samo mu je neto
-          // rezultat previsok za iznos koji je stvarno plaćen.
+          // They used to sit on the exit unconditionally, so an open position —
+          // a statement row with no exit price — lost its commission and swap
+          // entirely. It was not a visible error: the trade imports, its net
+          // result is simply too high by the amount actually paid.
           fee: hasExit ? 0 : fee,
           swap_funding: hasExit ? 0 : swap,
         });
@@ -238,9 +240,9 @@ export function ImportWizard({
         });
       }
 
-      // Spajanje živi u `import-match.ts` — odluka od koje zavisi da li se
-      // postojeći trejd PREPISUJE ne sme da bude petlja bez testa unutar
-      // komponente od 572 linije.
+      // Matching lives in `import-match.ts` — the decision that determines
+      // whether an existing trade gets OVERWRITTEN must not be an untested loop
+      // inside a 572-line component.
       const outcome = matchImportRow(
         { instrument, direction, entryPrice, entryTime },
         candidates,
@@ -254,8 +256,8 @@ export function ImportWizard({
         : "new";
       let decision: ImportItem["decision"] = "create";
       if (outcome.status === "ambiguous") {
-        // Vidljivo, i kreira se. Ako se ovaj red spoji sa pogrešnim trejdom,
-        // `tj_replace_executions` briše fill-ove onog tačnog.
+        // Visible, and created. If this row merged into the wrong trade,
+        // `tj_replace_executions` would delete the fills of the right one.
         diff.push(
           `${outcome.candidates.length} postojeća trejda odgovaraju — kreira se novi`,
         );
@@ -267,16 +269,18 @@ export function ImportWizard({
           diff.push(`entry ${fmtNum(matched.avgEntry, 2)}→${fmtNum(entryPrice, 2)}`);
         if (exitPrice != null && matched.avgExit != null && Math.abs(matched.avgExit - exitPrice) > 1e-9)
           diff.push(`exit ${fmtNum(matched.avgExit, 2)}→${fmtNum(exitPrice, 2)}`);
-        // Provizija i swap se porede ODVOJENO. Ranije su sabirani u jedan broj,
-        // pa je izvod koji ispravlja swap a ne proviziju (ili obrnuto) prolazio
-        // kao „fees se poklapaju" kad god bi se razlike poništile.
+        // Commission and swap are compared SEPARATELY. They used to be summed
+        // into one number, so a statement correcting the swap but not the
+        // commission (or the other way round) passed as "fees match" whenever
+        // the two differences cancelled out.
         if (matched.totalFees != null && Math.abs(matched.totalFees - fee) > 1e-9)
           diff.push(`fee ${fmtNum(matched.totalFees, 2)}→${fmtNum(fee, 2)}`);
         if (matched.totalSwap != null && Math.abs(matched.totalSwap - swap) > 1e-9)
           diff.push(`swap ${fmtNum(matched.totalSwap, 2)}→${fmtNum(swap, 2)}`);
-        // Rezultat sa izvoda protiv onoga što trejd trenutno pokazuje. Ovo je
-        // provera zbog koje uvoz i postoji kad su trejdovi već uneti rukom:
-        // broker je merodavan za novac, čovek za sve ostalo.
+        // The statement's result against what the trade currently shows. This is
+        // the check that makes an import worth running when the trades were
+        // already entered by hand: the broker is authoritative for money, the
+        // human for everything else.
         if (profit != null && matched.grossPl != null && Math.abs(matched.grossPl - profit) > 1e-9)
           diff.push(`profit ${fmtNum(matched.grossPl, 2)}→${fmtNum(profit, 2)}`);
         else if (profit != null && matched.grossPl == null)

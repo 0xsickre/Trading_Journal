@@ -59,8 +59,9 @@ function cellValue(
       return String(row.trades);
     case "winrate": {
       // Breakeven days drop out of the denominator, matching how win rate is
-      // computed everywhere else in the app — `winRateOf` JE to „everywhere
-      // else". Vraća null bez ijedne odluke; „—" je izbor OVOG ekrana.
+      // computed everywhere else in the app — `winRateOf` IS that "everywhere
+      // else". It returns null without making a single decision; the "—" is
+      // THIS screen's choice.
       const pct = winRateOf(row.wins, row.losses);
       return pct == null ? "—" : `${fmtNum(pct, 0)}%`;
     }

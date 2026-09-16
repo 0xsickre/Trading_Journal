@@ -5,25 +5,27 @@ import { Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * Ocena izvršenja, pet zvezdica.
+ * An execution rating, five stars.
  *
- * „NIJE OCENJENO" NIJE „1 ZVEZDICA", i to je jedina stvar koju ova komponenta
- * mora da odbrani. Bez puta nazad do `null`, prvi promašen klik bi zauvek
- * ostao kao najniža ocena, a izveštaj bi imao gomilu jedinica koje niko nije
- * mislio. Zato klik na već postavljenu zvezdicu briše ocenu — isti `TriButton`
- * idiom iz `playbook-checklist.tsx`, gde odgovor na pravilo ima ista tri stanja.
+ * "NOT RATED" IS NOT "1 STAR", and that is the one thing this component has to
+ * defend. With no path back to `null`, the first mis-click would stay forever
+ * as the lowest rating, and the report would carry a pile of ones nobody meant.
+ * So clicking an already-set star clears the rating — the same `TriButton`
+ * idiom as `playbook-checklist.tsx`, where a rule's answer has the same three
+ * states.
  *
- * `radiogroup` a ne pet checkbox-ova: vrednosti se isključuju. Svaka zvezdica
- * nosi svoj `aria-label` sa brojem, pa čitač ekrana čita „3 of 5" umesto pet
- * bezimenih dugmadi.
+ * A `radiogroup` rather than five checkboxes: the values are mutually
+ * exclusive. Each star carries its own numbered `aria-label`, so a screen
+ * reader says "3 of 5" instead of five unnamed buttons.
  */
 export function StarRating({
   value,
   onChange,
   disabled,
-  // Podrazumevano ostaje ono što je bilo tvrdo kodirano dok je ovo merilo samo
-  // izvršenje. Sad isto merilo nosi i mentalno stanje i ocenu nedelje, pa bi
-  // fiksna oznaka čitaču ekrana javljala pogrešnu stvar na dva od tri mesta.
+  // The default stays what was hardcoded while this measured execution alone.
+  // The same control now carries mental state and the week rating too, so a
+  // fixed label would tell a screen reader the wrong thing in two places of
+  // three.
   label = "Execution rating",
 }: {
   value: number | null;
@@ -31,8 +33,8 @@ export function StarRating({
   disabled?: boolean;
   label?: string;
 }) {
-  // Pregled pri prelasku mišem. Lokalno stanje, jer se ništa izvan ove
-  // komponente ne menja dok se ne klikne.
+  // The hover preview. Local state, because nothing outside this component
+  // changes until a click.
   const [hover, setHover] = useState<number | null>(null);
   const shown = hover ?? value ?? 0;
 
@@ -51,8 +53,8 @@ export function StarRating({
           aria-checked={value === n}
           aria-label={`${n} of 5`}
           disabled={disabled}
-          // Klik na postavljenu vrednost je poništava. U `title` jer je to
-          // jedina poteza koju korisnik ne može da pogodi gledajući.
+          // Clicking the set value clears it. In the `title` because it is the
+          // one move a user cannot guess by looking.
           title={value === n ? "Click again to clear" : `${n} of 5`}
           onMouseEnter={() => setHover(n)}
           onFocus={() => setHover(n)}

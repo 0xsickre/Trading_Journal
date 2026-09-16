@@ -417,8 +417,9 @@ export function JournalGrid({
       }
       if (deferredSearch.trim()) {
         const q = deferredSearch.toLowerCase();
-        // `mistake` je ovde od kad je `text[]`. Ranije nije bio pretraživ ni kao
-        // tekst — propust koji se video tek kad je postao niz kao ostali tagovi.
+        // `mistake` has been here since it became `text[]`. Before that it was not
+        // searchable even as text — an oversight only visible once it turned
+        // into an array like the other tags.
         const tagHay = ["technical_tags", "psychology_tags", "mistake"]
           .flatMap((k) => {
             const v = t[k];

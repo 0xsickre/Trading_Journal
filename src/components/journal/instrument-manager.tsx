@@ -31,10 +31,10 @@ function InstrumentRow({ inst }: { inst: Instrument }) {
 
   function save() {
     start(async () => {
-      // Šalju se samo dva polja. Ime i klasa dolaze iz kataloga i menjati ih
-      // ne rešava nijedan problem koji korisnik ima; `$ / point` i `tick` rešavaju
-      // onaj jedan koji ima — broker čija se specifikacija razlikuje od
-      // podrazumevane.
+      // Only two fields are sent. Name and class come from the catalog, and
+      // editing them solves no problem the user has; `$ / point` and `tick`
+      // solve the one they do have — a broker whose contract spec differs from
+      // the default.
       const res = await updateInstrument(inst.id, {
         point_value: num(pointValue) ?? 1,
         tick_size: num(tickSize),

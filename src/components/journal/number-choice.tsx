@@ -4,20 +4,22 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * Izbor jednog broja iz kratkog raspona, klikom.
+ * Picking one number out of a short range, by clicking.
  *
- * ZAŠTO NE `StarRating`. Zvezdice su monotone — `n <= izabrano` se popunjava,
- * pa tri pune zvezdice čitaju kao „tri od pet dobrote". To je tačno za ocenu i
- * pogrešno za količinu: „3 dana" nije bolje ni gore od „5 dana", to je drugi
- * broj. Zato se ovde iscrtavaju CIFRE i boji se samo izabrana.
+ * WHY NOT `StarRating`. Stars are monotonic — everything `n <= selected` fills
+ * in, so three filled stars read as "three out of five of goodness". That is
+ * right for a rating and wrong for a quantity: "3 days" is neither better nor
+ * worse than "5 days", it is a different number. So this draws DIGITS and
+ * colours only the selected one.
  *
- * „NIJE UPISANO" NIJE „1", i to je jedina stvar koju ova komponenta mora da
- * odbrani. Klik na već izabran broj ga briše nazad na `null` — isti idiom kao
- * `StarRating` i `TriButton` u `playbook-checklist.tsx`. Bez puta nazad, prvi
- * promašen klik bi zauvek ostao kao vrednost koju niko nije mislio.
+ * "NOT RECORDED" IS NOT "1", and that is the one thing this component has to
+ * defend. Clicking an already-selected number clears it back to `null` — the
+ * same idiom as `StarRating` and `TriButton` in `playbook-checklist.tsx`. With
+ * no path back, the first mis-click would stay forever as a value nobody meant.
  *
- * `radiogroup` a ne dugmad bez uloge: vrednosti se međusobno isključuju, pa
- * čitač ekrana treba da ih čuje kao jedan izbor, ne kao pet nezavisnih akcija.
+ * A `radiogroup` rather than buttons with no role: the values are mutually
+ * exclusive, so a screen reader should hear them as one choice, not as five
+ * independent actions.
  */
 export function NumberChoice({
   value,
@@ -54,7 +56,7 @@ export function NumberChoice({
             variant="ghost"
             size="sm"
             disabled={disabled}
-            // U `title` jer je to jedini potez koji se ne može pogoditi gledajući.
+            // In the `title` because it is the one move that cannot be guessed by looking.
             title={active ? "Click again to clear" : undefined}
             onClick={() => onChange(active ? null : n)}
             className={cn(
