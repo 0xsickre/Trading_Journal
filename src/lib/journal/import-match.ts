@@ -31,6 +31,34 @@
  * The asymmetry is deliberate and worth writing down. A wrong create leaves a
  * spare trade that is deleted in one move. A wrong merge deletes the fills of
  * the trade that was right, and that loss is invisible until somebody looks.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THE TIME IS THE BROKER'S, THE TIME TYPED IS THE TYPIST'S
+ *
+ * `sameTrade` needs both the price and the time to agree, and that is right for
+ * a statement arriving the same day. It is useless for the case the journal is
+ * actually used in: a trade typed by hand while reading a backtest carries the
+ * moment it was TYPED, and the file carries the moment it was TRADED. Months
+ * apart, same trade — two positions, and nothing in the journal joins two
+ * positions afterwards.
+ *
+ * So a second, weaker question is asked when the strict one finds nothing:
+ * same account, same instrument, same direction, same entry price, same exit
+ * price, and then EITHER the same size OR the same money. Time is not consulted
+ * at all.
+ *
+ * Size OR money, rather than both, because the two sources disagree about size
+ * more often than they disagree about the trade: TradingView sizes a backtest
+ * off its own risk model and the trader types the lots they actually meant, so
+ * 1.00 and 1.73 lots can be the same trade — and their P&L then agrees to the
+ * cent because both describe the same price move. Requiring both would refuse
+ * exactly the case this exists for.
+ *
+ * The result is `suggested`, not `match`: it is offered with the trade named,
+ * and the reader can still create instead. More than one candidate is
+ * `ambiguous` here too — and unlike the strict path, an ambiguous row can be
+ * pointed at a specific trade in the wizard, because a wrong guess and a
+ * deliberate choice are different things.
  */
 
 export type MatchCandidate = {
@@ -44,6 +72,12 @@ export type MatchCandidate = {
   totalSwap: number | null;
   grossPl: number | null;
   netPl: number | null;
+  /** The account the trade is filed under; a suggestion never crosses accounts. */
+  accountId?: string | null;
+  /** Total entry quantity, for the size half of the weaker question. */
+  entryQty?: number | null;
+  /** The trade's number, so a suggestion can name it on screen. */
+  tradeNo?: number | null;
 };
 
 /**
@@ -74,15 +108,89 @@ export type ImportRowKey = {
   entryPrice: number | null;
   /** UTC ISO, or null when the time could not be read. */
   entryTime: string | null;
+  /** Total entry quantity as the file states it. */
+  entryQty?: number | null;
+  /** Size-weighted exit price, or null when the row closes nothing. */
+  exitPrice?: number | null;
+  /** The row's own result, net of its costs. Null when the file states none. */
+  pnl?: number | null;
+  /** The account this import is being committed into. */
+  accountId?: string | null;
 };
 
 export type MatchOutcome = {
   /** The candidate to merge into, or null when creating. */
   matched: MatchCandidate | null;
-  status: "new" | "match" | "ambiguous";
+  /**
+   * `match` — time and price agree; this is the same trade.
+   * `suggested` — the time does not agree but everything else does (see above).
+   * `ambiguous` — more than one candidate, on either path.
+   */
+  status: "new" | "match" | "suggested" | "ambiguous";
   /** Every candidate that passed the filter — more than one is `ambiguous`. */
   candidates: MatchCandidate[];
 };
+
+/**
+ * How far two sizes may differ and still be the same size.
+ *
+ * Relative, and tiny: this is a rounding allowance for a quantity that travelled
+ * through a text file, not a tolerance for two different sizes.
+ */
+function sameSize(a: number | null | undefined, b: number | null | undefined): boolean {
+  if (a == null || b == null) return false;
+  return Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(a));
+}
+
+/**
+ * How far two results may differ and still be the same result.
+ *
+ * The floor of 2 currency units carries the rounding in an exported cent and a
+ * commission the two sides state differently; 1 % carries the rest. Wider would
+ * start matching a different trade on the same instrument.
+ */
+function sameMoney(a: number | null | undefined, b: number | null | undefined): boolean {
+  if (a == null || b == null) return false;
+  return Math.abs(a - b) <= Math.max(2, 0.01 * Math.abs(b));
+}
+
+/**
+ * Whether a candidate and a row describe the same trade when the TIME cannot be
+ * used — the hand-typed case above.
+ */
+function sameTradeIgnoringTime(
+  c: MatchCandidate,
+  row: ImportRowKey,
+  instrumentsMatch: (a: string, b: string) => boolean,
+): boolean {
+  if (!c.instrument || !row.instrument) return false;
+  if (!instrumentsMatch(c.instrument, row.instrument)) return false;
+  if ((c.direction ?? "").toLowerCase() !== (row.direction ?? "").toLowerCase()) {
+    return false;
+  }
+  // Never across accounts. Two accounts are two books, and a trade in one is
+  // not the same trade as a trade in the other even when every number agrees.
+  if (row.accountId != null && c.accountId != null && row.accountId !== c.accountId) {
+    return false;
+  }
+  if (row.entryPrice == null || c.avgEntry == null) return false;
+  if (Math.abs(c.avgEntry - row.entryPrice) > mergePriceTolerance(row.entryPrice)) {
+    return false;
+  }
+
+  // An exit is part of the fingerprint when both sides have one. One side
+  // closed and the other still open is not the same trade as far as this can
+  // tell, and guessing there would merge a live trade into a finished one.
+  const rowClosed = row.exitPrice != null;
+  const candidateClosed = c.avgExit != null;
+  if (rowClosed !== candidateClosed) return false;
+  if (rowClosed && Math.abs(c.avgExit! - row.exitPrice!) > mergePriceTolerance(row.exitPrice!)) {
+    return false;
+  }
+
+  // Then size OR money. See the header for why it is not both.
+  return sameSize(row.entryQty, c.entryQty) || sameMoney(row.pnl, c.netPl ?? c.grossPl);
+}
 
 /**
  * Whether a candidate and a statement row can be the same trade.
@@ -128,12 +236,24 @@ export function matchImportRow(
 ): MatchOutcome {
   const hits = candidates.filter((c) => sameTrade(c, row, instrumentsMatch));
 
-  if (hits.length === 0) return { matched: null, status: "new", candidates: [] };
   if (hits.length === 1) {
     return { matched: hits[0], status: "match", candidates: hits };
   }
-  // More than one. The "closest" is NOT chosen: a nearer price does not mean
-  // it is that trade, and a merge that misses deletes fills. The row is
-  // created, and the flag tells a human to look.
-  return { matched: null, status: "ambiguous", candidates: hits };
+  if (hits.length > 1) {
+    // More than one. The "closest" is NOT chosen: a nearer price does not mean
+    // it is that trade, and a merge that misses deletes fills. The row is
+    // created, and the flag tells a human to look.
+    return { matched: null, status: "ambiguous", candidates: hits };
+  }
+
+  // Nothing agreed on the time. Ask the weaker question before giving up.
+  const suggested = candidates.filter((c) => sameTradeIgnoringTime(c, row, instrumentsMatch));
+  if (suggested.length === 1) {
+    return { matched: suggested[0], status: "suggested", candidates: suggested };
+  }
+  if (suggested.length > 1) {
+    return { matched: null, status: "ambiguous", candidates: suggested };
+  }
+
+  return { matched: null, status: "new", candidates: [] };
 }

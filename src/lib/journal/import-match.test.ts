@@ -161,3 +161,93 @@ describe("symbol aliasing still works through the module", () => {
     expect(match({ ...row, instrument: "es" }).status).toBe("match");
   });
 });
+
+/**
+ * The case the journal is actually used in: the trade was typed by hand while
+ * reading a backtest, so it carries the moment it was TYPED, and the file
+ * carries the moment it was TRADED. Months apart, same trade.
+ */
+describe("a hand-typed trade whose time is the typist's, not the broker's", () => {
+  // XAUUSD long, entered 1313.05 and closed 1317.62, typed on 18 September for
+  // a trade the file dates 7 March.
+  const typed = c({
+    id: "typed",
+    instrument: "XAUUSD",
+    avgEntry: 1327.45,
+    avgExit: 1317.62,
+    openedAt: "2026-09-18T21:10:00Z",
+    entryQty: 1,
+    grossPl: -983.4,
+    netPl: -983.4,
+    accountId: "acc-1",
+  });
+  const fromFile: ImportRowKey = {
+    instrument: "XAUUSD",
+    direction: "Long",
+    entryPrice: 1327.45,
+    entryTime: "2026-03-07T14:00:00Z",
+    entryQty: 1,
+    exitPrice: 1317.62,
+    pnl: -984.72,
+    accountId: "acc-1",
+  };
+
+  it("is suggested, with the trade named, when prices and size agree", () => {
+    const out = match(fromFile, [typed]);
+    expect(out.status).toBe("suggested");
+    expect(out.matched?.id).toBe("typed");
+  });
+
+  it("is suggested on the MONEY when the two sources sized the trade differently", () => {
+    // TradingView sized it 1.73 lots off its own risk model; the trader typed
+    // the 1.00 they meant. Same price move, so the result agrees to the cent.
+    const out = match(
+      { ...fromFile, entryQty: 1.73, pnl: -997.74 },
+      [c({ ...typed, entryQty: 1, netPl: -997.74, grossPl: -997.74 })],
+    );
+    expect(out.status).toBe("suggested");
+  });
+
+  it("is NOT suggested when neither the size nor the money agrees", () => {
+    const out = match({ ...fromFile, entryQty: 4, pnl: -4000 }, [typed]);
+    expect(out.status).toBe("new");
+  });
+
+  it("is NOT suggested when the exit price disagrees", () => {
+    const out = match({ ...fromFile, exitPrice: 1350 }, [typed]);
+    expect(out.status).toBe("new");
+  });
+
+  it("is NOT suggested when one side is still open and the other is closed", () => {
+    const out = match({ ...fromFile, exitPrice: null }, [typed]);
+    expect(out.status).toBe("new");
+  });
+
+  it("never crosses accounts, however well the numbers agree", () => {
+    const out = match(fromFile, [c({ ...typed, accountId: "acc-2" })]);
+    expect(out.status).toBe("new");
+  });
+
+  it("two equally good candidates are ambiguous, and both are offered", () => {
+    const out = match(fromFile, [typed, c({ ...typed, id: "typed2" })]);
+    expect(out.status).toBe("ambiguous");
+    expect(out.matched).toBeNull();
+    expect(out.candidates.map((x) => x.id)).toEqual(["typed", "typed2"]);
+  });
+
+  it("a trade whose TIME agrees still wins — the strict question is asked first", () => {
+    const sameMinute = c({
+      id: "strict",
+      instrument: "XAUUSD",
+      avgEntry: 1327.45,
+      avgExit: 1317.62,
+      openedAt: "2026-03-07T14:03:00Z",
+      entryQty: 9,
+      netPl: -1,
+      accountId: "acc-1",
+    });
+    const out = match(fromFile, [typed, sameMinute]);
+    expect(out.status).toBe("match");
+    expect(out.matched?.id).toBe("strict");
+  });
+});

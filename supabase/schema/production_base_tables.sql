@@ -395,6 +395,10 @@ CREATE TABLE IF NOT EXISTS public.tj_import_rows (
   -- Bruto rezultat koji je merge zatekao, da ga `undoImportBatch` vrati
   -- zajedno sa `prev_executions`.
   prev_gross_pnl_override numeric,
+  -- Da li je BAŠ OVAJ uvoz upisao target na trejd koji ga nije imao
+  -- (20260918140000). Undo ga tada vraća na NULL; target koji je trejder uneo
+  -- sam se ne dira, jer uvoz preko njega nikad ne piše.
+  target_written      boolean     NOT NULL DEFAULT false,
   CONSTRAINT tj_import_rows_pkey PRIMARY KEY (id),
   CONSTRAINT tj_import_rows_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -402,8 +406,10 @@ CREATE TABLE IF NOT EXISTS public.tj_import_rows (
     REFERENCES public.tj_import_batches(id) ON DELETE CASCADE,
   CONSTRAINT tj_import_rows_matched_position_id_fkey FOREIGN KEY (matched_position_id)
     REFERENCES public.tj_positions(id) ON DELETE SET NULL,
+  -- 'suggested' dodat u 20260918140000: red je prepoznat kao trejd koji već
+  -- postoji, ali bez vremena — v. `import-match.ts`.
   CONSTRAINT tj_import_rows_match_status_check CHECK (match_status = ANY (ARRAY[
-    'new'::text, 'match'::text, 'ambiguous'::text, 'duplicate'::text]))
+    'new'::text, 'match'::text, 'suggested'::text, 'ambiguous'::text, 'duplicate'::text]))
 );
 CREATE INDEX IF NOT EXISTS tj_import_rows_user_idx
   ON public.tj_import_rows USING btree (user_id);

@@ -491,3 +491,134 @@ describe("TradingView partial exits", () => {
     expect(exits.reduce((s, e) => s + e.qty, 0)).toBe(entries[0].qty);
   });
 });
+
+describe("a trade already typed by hand, recognised without the time", () => {
+  /**
+   * The case the journal is used in: the trade was typed while reading a
+   * backtest, so it carries 18 September — the day it was TYPED — and the file
+   * carries 7 March, the day it was traded. Before this, the two lived on as
+   * duplicates and nothing in the journal could join them.
+   */
+  const TYPED: MatchCandidate[] = [
+    {
+      id: "pos-typed",
+      instrument: "XAUUSD",
+      direction: "Long",
+      avgEntry: 1327.45,
+      avgExit: 1317.62,
+      openedAt: "2026-09-19T01:10:00Z", // 21:10 America/New_York on 18 Sep
+      totalFees: 0,
+      totalSwap: 0,
+      grossPl: -983.4,
+      netPl: -983.4,
+      accountId: "acc-1",
+      entryQty: 1,
+      tradeNo: 5,
+    },
+  ];
+
+  const FILE =
+    "Symbol,Direction,Qty,Entry Price,Entry Time,Exit Price,Exit Time,Profit\n" +
+    "XAUUSD,Buy,1,1327.45,2026-03-07 09:00,1317.62,2026-03-07 15:00,-983.40\n";
+
+  it("is offered as the same trade, with merge already chosen", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={TYPED} />);
+    await upload(user, csvFile("backtest.csv", FILE));
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+
+    const row = screen.getByText("XAUUSD").closest("tr")!;
+    expect(within(row).getByText("suggested")).toBeInTheDocument();
+    expect(within(row).getByText("Merge")).toBeInTheDocument();
+    // Named, so the reader recognises their own trade before committing.
+    expect(within(row).getByText(/same trade as #5/)).toBeInTheDocument();
+  });
+
+  it("says the time it is about to correct, which is what kept them apart", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={TYPED} />);
+    await upload(user, csvFile("backtest.csv", FILE));
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+
+    const row = screen.getByText("XAUUSD").closest("tr")!;
+    expect(within(row).getByText(/opened 09\/18 21:10→03\/07 09:00/)).toBeInTheDocument();
+  });
+
+  it("commits it as a merge into that trade", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={TYPED} />);
+    await upload(user, csvFile("backtest.csv", FILE));
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+
+    await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
+    const [item] = commitImportMock.mock.calls[0][0].items;
+    expect(item).toMatchObject({
+      decision: "merge",
+      match_status: "suggested",
+      matched_position_id: "pos-typed",
+    });
+    // The private review-only fields never travel to the server.
+    expect(item._candidates).toBeUndefined();
+    expect(item._diff).toBeUndefined();
+  });
+
+  it("two equally good candidates are pointed at one by hand, not guessed", async () => {
+    const user = userEvent.setup({ delay: null });
+    const twin = { ...TYPED[0], id: "pos-twin", tradeNo: 9 };
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={[...TYPED, twin]} />);
+    await upload(user, csvFile("backtest.csv", FILE));
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+
+    const row = screen.getByText("XAUUSD").closest("tr")!;
+    expect(within(row).getByText("ambiguous")).toBeInTheDocument();
+    // Defaults to create: a merge deletes the fills of whichever trade it lands on.
+    expect(within(row).getByText("Create new")).toBeInTheDocument();
+
+    // Two selects in the cell: the candidate picker first, the decision second.
+    await user.click(within(row).getAllByRole("combobox")[0]);
+    await user.click(await screen.findByText(/#9/));
+    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+
+    await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
+    const [item] = commitImportMock.mock.calls[0][0].items;
+    expect(item).toMatchObject({ decision: "merge", matched_position_id: "pos-twin" });
+  });
+
+  it("never crosses accounts: the same numbers on another account are a new trade", async () => {
+    const user = userEvent.setup({ delay: null });
+    const elsewhere = [{ ...TYPED[0], accountId: "acc-other" }];
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={elsewhere} />);
+    await upload(user, csvFile("backtest.csv", FILE));
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+
+    const row = screen.getByText("XAUUSD").closest("tr")!;
+    expect(within(row).getByText("new")).toBeInTheDocument();
+  });
+});
+
+describe("the target comes from the file, the stop never does", () => {
+  it("maps a T/P column and sends it with the row", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} />);
+    await upload(
+      user,
+      csvFile(
+        "mt5.csv",
+        "Symbol,Direction,Qty,Entry Price,Entry Time,S/L,T/P\n" +
+          "EURUSD,Buy,1,1.2000,2026-01-05 10:00,1.1950,1.2200\n",
+      ),
+    );
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+
+    await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
+    const [item] = commitImportMock.mock.calls[0][0].items;
+    expect(item.target_price).toBe(1.22);
+  });
+
+  it("has no stop column at all — a stop pulled to breakeven would rewrite the risk", () => {
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} />);
+    expect(screen.queryByText(/Stop/)).not.toBeInTheDocument();
+  });
+});

@@ -179,12 +179,19 @@ export const tradeInputSchema = z.object({
  */
 export const importItemSchema = z.object({
   decision: z.enum(["create", "merge", "skip"]),
-  match_status: z.enum(["new", "match", "duplicate", "ambiguous"]),
+  match_status: z.enum(["new", "match", "suggested", "duplicate", "ambiguous"]),
   matched_position_id: z.uuid().nullable(),
   instrument: z.string().nullable(),
   direction: z.string().nullable(),
   executions: z.array(executionSchema),
   gross_pnl_override: z.number().finite().nullable(),
+  /**
+   * Optional, not because it may be missing from a row the wizard built, but
+   * because a browser still holding the previous bundle posts rows without it —
+   * and a required field would fail EVERY row of that import rather than the
+   * one thing the field does. Absent and null mean the same: no target.
+   */
+  target_price: z.number().finite().positive().nullable().optional(),
   raw: z.record(z.string(), z.string()),
 });
 

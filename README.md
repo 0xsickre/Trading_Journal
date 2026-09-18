@@ -704,6 +704,46 @@ Two things the wizard refuses rather than guesses, both because guessing is sile
 
 Every refused cell is named on its own row in the preview (`unreadable: qty, fee`).
 
+### Recognising a trade you already typed
+
+`sameTrade` needs the entry time to agree within ten minutes, which is right for a statement arriving
+the same day and useless for the way this journal is used: a trade typed by hand while reading a
+backtest carries the moment it was **typed**, the file carries the moment it was **traded**. Months
+apart, same trade — two positions, and merging two positions afterwards is a separate operation
+(§ Merging two trades).
+
+So when the strict question finds nothing, a weaker one is asked, with the time left out of it
+entirely: same account, same instrument, same direction, same entry price, same exit price, and then
+**either** the same size **or** the same money. That row is marked `suggested`, names the trade it
+believes it is (`same trade as #5 · 09/18 21:10 · 1327.45→1317.62 · −983.40`), and arrives with
+**merge already chosen** — the review then says what the merge will change, starting with the time:
+`opened 09/18 21:10→03/07 09:00`.
+
+**Size OR money, not both**, because the two sources disagree about size more often than they
+disagree about the trade: TradingView sizes a backtest off its own risk model while the trader types
+the lots they meant, so 1.00 and 1.73 lots can be one trade — and the P&L then agrees to the cent,
+because both describe the same price move. Requiring both would refuse exactly the case this exists
+for.
+
+**More than one candidate is still `ambiguous` and still defaults to create**, but the row can now be
+pointed at a specific trade from a list that names each one. A wrong guess and a deliberate choice
+are different things; only the guess was ever the problem.
+
+### What the file may overwrite, and what it may not
+
+A merge replaces the fills — entry, exit, size, times, commission — because those are the broker's
+facts and the reason to import at all. Plan, grade, thesis, psychology and notes are never touched.
+
+Two levels sit between those categories, and they are treated differently:
+
+- **Target.** Mapped from a `T/P` column and written **only onto a trade that has none**. A target
+  already on the trade is the trader's plan; a missing one is simply not recorded yet. Undo empties
+  the ones this import wrote (`tj_import_rows.target_written`) and leaves the rest alone.
+- **Stop.** Not imported at all, and there is no column for it. A statement states the levels as they
+  stood **at the end**, and a stop pulled to breakeven mid-trade is the commonest thing a swing
+  trader does — importing that number would overwrite the stop the risk was actually taken with, and
+  every R on the trade would be recomputed against a stop nobody ever risked.
+
 ### TradingView backtests
 
 A Strategy Tester or Bar Replay export ("List of trades" → Excel) is recognised by its header and

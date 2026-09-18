@@ -51,7 +51,8 @@ type Canonical =
   | "exit_time"
   | "fee"
   | "swap"
-  | "profit";
+  | "profit"
+  | "target";
 
 const CANONICAL: { key: Canonical; label: string; required?: boolean }[] = [
   { key: "instrument", label: "Instrument", required: true },
@@ -64,6 +65,16 @@ const CANONICAL: { key: Canonical; label: string; required?: boolean }[] = [
   { key: "fee", label: "Fee / Commission" },
   { key: "swap", label: "Swap / Funding" },
   { key: "profit", label: "Profit / P&L (bruto)" },
+  // Target, and deliberately NOT stop loss.
+  //
+  // A statement states the stop AS IT STOOD AT THE END. A stop moved to
+  // breakeven during the trade is the commonest thing a swing trader does, and
+  // importing that number would overwrite the stop the risk was actually taken
+  // with — every R on the trade recomputed against a stop that was never risked.
+  // The target has no such trap: it is where the trade was aiming, and a trade
+  // that has none gains one from the file rather than losing one it had (see
+  // `commitImport`).
+  { key: "target", label: "Target / T/P" },
 ];
 
 const KEYWORDS: Record<Canonical, string[]> = {
@@ -81,6 +92,7 @@ const KEYWORDS: Record<Canonical, string[]> = {
   // hit a "Gross profit" column. The order in CANONICAL decides who claims a
   // header first.
   profit: ["profit", "p/l", "pnl", "p&l", "net p", "gross p", "result", "realized"],
+  target: ["t/p", "take profit", "takeprofit", "target"],
 };
 
 function autoMap(headers: string[]): Record<Canonical, string> {
@@ -109,8 +121,18 @@ const TV_MAP: Record<Canonical, string> = {
   // the account's rate, which the size check has just proven equal to
   // TradingView's own result. An override would also skip the FX conversion.
   profit: "",
+  // TradingView exports fills, not orders: there is no T/P column to map.
+  target: "",
 };
 const TV_ISSUE = "Issue";
+/**
+ * The row's own result, as a number the matcher can compare.
+ *
+ * Not the `profit` mapping: that one is a broker's GROSS figure and is written
+ * onto the trade. This is only ever read, to recognise a hand-typed trade whose
+ * size was stated differently — see `import-match.ts`.
+ */
+const NET_RESULT = "Net result";
 
 /**
  * The fills of a row whose source already knows them one by one — a position
@@ -160,7 +182,9 @@ export function ImportWizard({
   const [map, setMap] = useState<Record<Canonical, string>>(
     {} as Record<Canonical, string>,
   );
-  const [items, setItems] = useState<(ImportItem & { _diff?: string[] })[]>([]);
+  const [items, setItems] = useState<
+    (ImportItem & { _diff?: string[]; _candidates?: MatchCandidate[] })[]
+  >([]);
   // Set when the file is TradingView's list of trades; the column mapping is
   // then skipped, because the layout is known and a trade spans two rows.
   const [tv, setTv] = useState<{ symbol: string; data: TradingViewExport } | null>(null);
@@ -304,6 +328,13 @@ export function ImportWizard({
         "TradingView trade": pos.numbers.join(", "),
         "TradingView size": list((t) => t.size, pos.numbers),
         "TradingView net P&L": list((t) => t.netPnl, pos.numbers),
+        [NET_RESULT]: pos.exits.length > 0
+          ? String(
+              pos.numbers
+                .map((n) => byNumber.get(n)!.netPnl)
+                .reduce((sum: number, v) => sum + (v ?? 0), 0),
+            )
+          : "",
         "TradingView favorable excursion": list((t) => t.favorable, pos.numbers),
         "TradingView adverse excursion": list((t) => t.adverse, pos.numbers),
         [TV_ISSUE]: pos.problem ?? "",
@@ -311,6 +342,27 @@ export function ImportWizard({
       plans.push({ entryFee: pos.openCommission, exits });
     }
     return { rows, plans };
+  }
+
+  /**
+   * How an existing trade is named on screen.
+   *
+   * A suggestion asks the reader to recognise their own trade, so it has to
+   * carry what they would recognise it by: its number, when it was opened, the
+   * prices, and what it made.
+   */
+  function labelOf(cand: MatchCandidate): string {
+    const parts = [cand.tradeNo != null ? `#${cand.tradeNo}` : "a trade"];
+    if (cand.openedAt) parts.push(fmtInTz(cand.openedAt, tz, "MM/dd HH:mm"));
+    if (cand.avgEntry != null) {
+      parts.push(
+        cand.avgExit != null
+          ? `${fmtNum(cand.avgEntry, 2)}→${fmtNum(cand.avgExit, 2)}`
+          : String(fmtNum(cand.avgEntry, 2)),
+      );
+    }
+    if (cand.netPl != null) parts.push(String(fmtNum(cand.netPl, 2)));
+    return parts.join(" · ");
   }
 
   function buildItems() {
@@ -334,7 +386,8 @@ export function ImportWizard({
     issueCol: string | null,
     plans: FillPlan[] | null,
   ) {
-    const built: (ImportItem & { _diff?: string[] })[] = rows.map((row, index) => {
+    const built: (ImportItem & { _diff?: string[]; _candidates?: MatchCandidate[] })[] =
+      rows.map((row, index) => {
       const instrument =
         normalizeInstrumentSymbol(row[map.instrument] ?? "") ?? null;
       const direction = normDirection(row[map.direction]);
@@ -366,6 +419,8 @@ export function ImportWizard({
       // a zero would mean "the trade finished flat". That difference is the
       // whole point of the field.
       const profit = map.profit ? read(map.profit, "profit") : null;
+      // Written only onto a trade that has no target yet — see `commitImport`.
+      const target = map.target ? read(map.target, "target") : null;
 
       // A quantity of zero is the same as an unread cell, and has to be seen as
       // one. `read` flagged only a cell the parser COULD NOT read; a literal
@@ -440,8 +495,25 @@ export function ImportWizard({
       // Matching lives in `import-match.ts` — the decision that determines
       // whether an existing trade gets OVERWRITTEN must not be an untested loop
       // inside a 572-line component.
+      const exitQtyTotal = execs
+        .filter((e) => e.side === "exit")
+        .reduce((sum, e) => sum + e.qty, 0);
+      const avgExitPrice = exitQtyTotal > 0
+        ? execs
+            .filter((e) => e.side === "exit")
+            .reduce((sum, e) => sum + e.price * e.qty, 0) / exitQtyTotal
+        : null;
       const outcome = matchImportRow(
-        { instrument, direction, entryPrice, entryTime },
+        {
+          instrument,
+          direction,
+          entryPrice,
+          entryTime,
+          entryQty: qty > 0 ? qty : null,
+          exitPrice: avgExitPrice,
+          pnl: row[NET_RESULT] ? num(row[NET_RESULT]) : profit,
+          accountId,
+        },
         candidates,
         instrumentsMatch,
       );
@@ -453,15 +525,32 @@ export function ImportWizard({
         : "new";
       let decision: ImportItem["decision"] = "create";
       if (outcome.status === "ambiguous") {
-        // Visible, and created. If this row merged into the wrong trade,
-        // `tj_replace_executions` would delete the fills of the right one.
+        // Visible, and created by default. If this row merged into the wrong
+        // trade, `tj_replace_executions` would delete the fills of the right
+        // one — but the reader can now point it at one of the candidates, and a
+        // deliberate choice is not a guess.
         diff.push(
-          `${outcome.candidates.length} existing trades match — a new one is created`,
+          `${outcome.candidates.length} existing trades match — pick one or create`,
         );
       }
       if (matched) {
-        status = "match";
+        status = outcome.status === "suggested" ? "suggested" : "match";
         decision = "merge";
+        if (outcome.status === "suggested") {
+          // The whole reason this row is offered rather than created: it is the
+          // trade already typed by hand, and the file is about to correct its
+          // objective half — starting with the time, which is the thing that
+          // kept the two apart.
+          diff.push(`same trade as ${labelOf(matched)}`);
+          if (matched.openedAt && entryTime && matched.openedAt !== entryTime) {
+            diff.push(
+              `opened ${fmtInTz(matched.openedAt, tz, "MM/dd HH:mm")}→${fmtInTz(entryTime, tz, "MM/dd HH:mm")}`,
+            );
+          }
+          if (matched.entryQty != null && Math.abs(matched.entryQty - qty) > 1e-9) {
+            diff.push(`size ${fmtNum(matched.entryQty, 2)}→${fmtNum(qty, 2)}`);
+          }
+        }
         if (entryPrice != null && matched.avgEntry != null && Math.abs(matched.avgEntry - entryPrice) > 1e-9)
           diff.push(`entry ${fmtNum(matched.avgEntry, 2)}→${fmtNum(entryPrice, 2)}`);
         if (exitPrice != null && matched.avgExit != null && Math.abs(matched.avgExit - exitPrice) > 1e-9)
@@ -501,10 +590,16 @@ export function ImportWizard({
         decision,
         match_status: status,
         matched_position_id: matched?.id ?? null,
+        // Offered in the review when there is more than one: an ambiguous row
+        // used to be created and nothing else, with no way to say which trade
+        // it was. Pointing at one is a deliberate act, and that is the
+        // difference from guessing.
+        _candidates: outcome.candidates,
         instrument,
         direction,
         executions: execs,
         gross_pnl_override: profit,
+        target_price: target != null && target > 0 ? target : null,
         raw: row,
         // After the duplicate check above, so an unreadable cell never changes
         // how a row is MATCHED — it only makes sure the reader is told.
@@ -518,8 +613,11 @@ export function ImportWizard({
   }
 
   const counts = useMemo(() => {
-    const c = { create: 0, merge: 0, skip: 0 };
-    for (const it of items) c[it.decision]++;
+    const c = { create: 0, merge: 0, skip: 0, suggested: 0 };
+    for (const it of items) {
+      c[it.decision]++;
+      if (it.match_status === "suggested") c.suggested++;
+    }
     return c;
   }, [items]);
 
@@ -527,12 +625,33 @@ export function ImportWizard({
     setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, decision } : it)));
   }
 
+  /**
+   * Point a row at one of the trades it could be.
+   *
+   * Choosing a candidate also switches the row to merge: picking the trade and
+   * then being asked again what to do with it is one question too many, and the
+   * decision select is still there to take it back.
+   */
+  function setMergeTarget(i: number, positionId: string) {
+    setItems((prev) =>
+      prev.map((it, idx) =>
+        idx === i
+          ? {
+              ...it,
+              matched_position_id: positionId || null,
+              decision: positionId ? "merge" : "create",
+            }
+          : it,
+      ),
+    );
+  }
+
   function commit() {
     start(async () => {
       const res = await commitImport({
         account_id: accountId || null,
         filename,
-        items: items.map(({ _diff, ...it }) => it),
+        items: items.map(({ _diff, _candidates, ...it }) => it),
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -761,7 +880,32 @@ export function ImportWizard({
                             "—"
                           )}
                         </td>
-                        <td className="p-2">
+                        <td className="p-2 space-y-1">
+                          {/* More than one trade this row could be. Naming them
+                              and letting the reader choose is the only honest
+                              way out: the matcher refuses to guess, and until
+                              now that left the row with no way to be merged at
+                              all. */}
+                          {(it._candidates?.length ?? 0) > 1 && (
+                            <Select
+                              value={it.matched_position_id ?? "__none"}
+                              onValueChange={(v) =>
+                                setMergeTarget(i, v === "__none" ? "" : v)
+                              }
+                            >
+                              <SelectTrigger className="h-8 w-56">
+                                <SelectValue placeholder="Merge into…" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none">— none —</SelectItem>
+                                {it._candidates!.map((cand) => (
+                                  <SelectItem key={cand.id} value={cand.id}>
+                                    {labelOf(cand)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
                           <Select
                             value={it.decision}
                             onValueChange={(v) =>
@@ -792,6 +936,16 @@ export function ImportWizard({
             <p className="text-xs text-muted-foreground">
               Merge updates only objective numbers (prices, times, qty, fees) —
               your emotions, ICT model, grade and notes are kept.
+              {counts.suggested > 0 && (
+                <>
+                  {" "}
+                  <b>{counts.suggested}</b>{" "}
+                  {counts.suggested === 1 ? "row was" : "rows were"} recognised as a
+                  trade already in the journal, matched on prices and size rather
+                  than on the time — check the trade named on each before
+                  committing.
+                </>
+              )}
             </p>
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(1)}>
@@ -812,6 +966,7 @@ function StatusBadge({ status }: { status: ImportItem["match_status"] }) {
   const map: Record<string, string> = {
     new: "bg-[var(--chart-3)]/20 text-[var(--chart-3)]",
     match: "bg-[var(--chart-4)]/20 text-[var(--chart-4)]",
+    suggested: "bg-[var(--chart-4)]/20 text-[var(--chart-4)]",
     duplicate: "bg-muted text-muted-foreground",
     ambiguous: "bg-[var(--loss)]/20 text-[var(--loss)]",
   };

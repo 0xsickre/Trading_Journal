@@ -416,6 +416,7 @@ export type Database = {
           prev_executions: Json | null
           prev_gross_pnl_override: number | null
           raw: Json | null
+          target_written: boolean
           user_id: string
         }
         Insert: {
@@ -428,6 +429,7 @@ export type Database = {
           prev_executions?: Json | null
           prev_gross_pnl_override?: number | null
           raw?: Json | null
+          target_written?: boolean
           user_id?: string
         }
         Update: {
@@ -440,6 +442,7 @@ export type Database = {
           prev_executions?: Json | null
           prev_gross_pnl_override?: number | null
           raw?: Json | null
+          target_written?: boolean
           user_id?: string
         }
         Relationships: [

@@ -257,3 +257,43 @@ describe("uvoz", () => {
     ).toBe(true);
   });
 });
+
+describe("the target an import may fill in", () => {
+  const row = {
+    decision: "create" as const,
+    match_status: "suggested" as const,
+    matched_position_id: null,
+    instrument: "ES",
+    direction: "Long",
+    gross_pnl_override: null,
+    raw: { Symbol: "ES" },
+    executions: [
+      {
+        side: "entry" as const,
+        price: 5000,
+        qty: 1,
+        executed_at: "2026-03-02T14:00:00Z",
+        fee: 0,
+        swap_funding: 0,
+      },
+    ],
+  };
+
+  it("accepts a price, a null, and a row that does not mention it at all", () => {
+    // The third case is a browser on the previous bundle: absent must not fail
+    // the row, or a stale tab breaks the whole import rather than one field.
+    expect(importItemSchema.safeParse({ ...row, target_price: 5100 }).success).toBe(true);
+    expect(importItemSchema.safeParse({ ...row, target_price: null }).success).toBe(true);
+    expect(importItemSchema.safeParse(row).success).toBe(true);
+  });
+
+  it("refuses a target that is not a price — the same trap as a negative fill", () => {
+    expect(importItemSchema.safeParse({ ...row, target_price: 0 }).success).toBe(false);
+    expect(importItemSchema.safeParse({ ...row, target_price: -1 }).success).toBe(false);
+  });
+
+  it("knows 'suggested' — a match made without the time", () => {
+    expect(importItemSchema.safeParse({ ...row, match_status: "suggested" }).success).toBe(true);
+    expect(importItemSchema.safeParse({ ...row, match_status: "invented" }).success).toBe(false);
+  });
+});

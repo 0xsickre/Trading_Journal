@@ -35,7 +35,12 @@ type SnapshotExec = ImportExec & { source?: string | null };
 
 export type ImportItem = {
   decision: "create" | "merge" | "skip";
-  match_status: "new" | "match" | "duplicate" | "ambiguous";
+  /**
+   * `suggested` is a match made without the time: the trade was typed by hand
+   * while reading a backtest, so it carries the moment it was typed rather than
+   * the moment it was traded. See `import-match.ts`.
+   */
+  match_status: "new" | "match" | "suggested" | "duplicate" | "ambiguous";
   matched_position_id: string | null;
   instrument: string | null;
   direction: string | null;
@@ -48,6 +53,16 @@ export type ImportItem = {
    * `?? 0` here.
    */
   gross_pnl_override: number | null;
+  /**
+   * The target off the file, written only onto a trade that has none.
+   *
+   * Never overwriting is the difference between a target and a stop, and the
+   * reason there is no stop here at all: a statement states the levels AS THEY
+   * STOOD AT THE END, and a stop pulled to breakeven mid-trade would replace the
+   * stop the risk was taken with. A target that already exists is the trader's
+   * plan; one that is missing is simply not recorded yet.
+   */
+  target_price: number | null;
   raw: Record<string, string>;
 };
 
@@ -106,6 +121,8 @@ export async function commitImport(input: CommitInput) {
     let replacedExecs: SnapshotExec[] | null = null;
     // The result the merge overwrote, kept for undo.
     let prevOverride: number | null = null;
+    // Whether this row filled in an empty target, which undo has to empty again.
+    let targetWritten = false;
     // Counted only once the audit row has landed too. The counters used to be
     // bumped inline, which was harmless while the audit insert could not fail —
     // now that it throws, an inline bump would count the same row as merged AND
@@ -135,6 +152,7 @@ export async function commitImport(input: CommitInput) {
             needs_review: item.executions.length === 0,
             status: statusOf(item.executions),
             gross_pnl_override: item.gross_pnl_override,
+            ...(item.target_price != null ? { target_price: item.target_price } : {}),
             ...instrumentSnapshot(instrument, specs, accountCurrency),
           })
           .select("id")
@@ -169,10 +187,12 @@ export async function commitImport(input: CommitInput) {
         // a snapshot is not a restore but a second edit.
         const { data: prevPos } = await supabase
           .from("tj_positions")
-          .select("gross_pnl_override")
+          .select("gross_pnl_override, target_price")
           .eq("id", pid)
           .maybeSingle();
         prevOverride = prevPos?.gross_pnl_override ?? null;
+        // Only onto an empty target, and recorded so undo can empty it again.
+        targetWritten = item.target_price != null && prevPos?.target_price == null;
 
         const { error: exErr } = await supabase.rpc("tj_replace_executions", {
           p_position_id: pid,
@@ -190,6 +210,7 @@ export async function commitImport(input: CommitInput) {
             ...(item.gross_pnl_override != null
               ? { gross_pnl_override: item.gross_pnl_override }
               : {}),
+            ...(targetWritten ? { target_price: item.target_price } : {}),
           })
           .eq("id", pid);
         // Thrown, not ignored: the fills have already been replaced by the line
@@ -220,6 +241,7 @@ export async function commitImport(input: CommitInput) {
         matched_position_id: matchedId,
         prev_executions: replacedExecs,
         prev_gross_pnl_override: prevOverride,
+        target_written: targetWritten,
       });
       if (auditErr) throw new Error(auditErr.message);
 
@@ -317,6 +339,7 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
     matched_position_id: string | null;
     prev_executions: unknown;
     prev_gross_pnl_override?: number | null;
+    target_written?: boolean | null;
   }[];
   try {
     [createdRows, rows] = await Promise.all([
@@ -332,11 +355,14 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
         matched_position_id: string | null;
         prev_executions: unknown;
         prev_gross_pnl_override: number | null;
+        target_written: boolean | null;
       }>(
         (from, to) =>
           supabase
             .from("tj_import_rows")
-            .select("matched_position_id, prev_executions, prev_gross_pnl_override, id")
+            .select(
+              "matched_position_id, prev_executions, prev_gross_pnl_override, target_written, id",
+            )
             .eq("batch_id", batchId)
             .order("id")
             .range(from, to),
@@ -385,7 +411,7 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
   // The database function only carries that decision out.
   const { error: undoErr } = await supabase.rpc("tj_undo_import_batch", {
     p_batch_id: batchId,
-    p_restore: plan.restore.map(({ positionId, executions }) => ({
+    p_restore: plan.restore.map(({ positionId, executions, clearTarget }) => ({
       position_id: positionId,
       // `source` is carried back. The snapshot holds it, and the function
       // collapses an absent one to `manual` — so listing the other six fields by
@@ -404,6 +430,9 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
       needs_review: executions.length === 0,
       restore_override: prevOverrides.has(positionId),
       gross_pnl_override: prevOverrides.get(positionId) ?? null,
+      // Decided in `planUndo`, like everything else about what an undo puts
+      // back — this function only carries the decision out.
+      clear_target: clearTarget,
     })) as unknown as Json,
     p_delete_ids: plan.deleteIds,
   });

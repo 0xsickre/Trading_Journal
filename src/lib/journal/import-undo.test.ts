@@ -49,7 +49,9 @@ describe("planUndo", () => {
       { matched_position_id: "old-1", prev_executions: [] },
     ];
     const plan = planUndo(rows, []);
-    expect(plan.restore).toEqual([{ positionId: "old-1", executions: [] }]);
+    expect(plan.restore).toEqual([
+      { positionId: "old-1", executions: [], clearTarget: false },
+    ]);
     expect(plan.unrestorableIds).toEqual([]);
   });
 
@@ -89,5 +91,24 @@ describe("planUndo", () => {
     expect(plan.deleteIds).toEqual(["new-1"]);
     expect(plan.restore.map((r) => r.positionId)).toEqual(["old-1"]);
     expect(plan.unrestorableIds).toEqual(["old-2"]);
+  });
+});
+
+describe("a target the import filled in", () => {
+  it("is emptied again on undo, and only where this import wrote it", () => {
+    const plan = planUndo(
+      [
+        { matched_position_id: "p1", prev_executions: [], target_written: true },
+        { matched_position_id: "p2", prev_executions: [], target_written: false },
+        // Batches imported before the flag existed carry no field at all.
+        { matched_position_id: "p3", prev_executions: [] },
+      ],
+      [],
+    );
+    expect(plan.restore.map((r) => [r.positionId, r.clearTarget])).toEqual([
+      ["p1", true],
+      ["p2", false],
+      ["p3", false],
+    ]);
   });
 });

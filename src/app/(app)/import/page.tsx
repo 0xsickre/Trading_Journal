@@ -21,6 +21,12 @@ export default async function ImportPage() {
     id: t.id,
     instrument: (t.instrument as string) ?? null,
     direction: (t.direction as string) ?? null,
+    // For the weaker, time-blind question a suggestion is built on: the account
+    // it may not cross, the size it may agree on, and the number a human reads
+    // to recognise their own trade.
+    accountId: (t.account_id as string) ?? null,
+    entryQty: t.stats?.entry_qty ?? null,
+    tradeNo: (t.trade_no as number) ?? null,
     avgEntry: t.stats?.avg_entry ?? null,
     avgExit: t.stats?.avg_exit ?? null,
     openedAt: t.stats?.opened_at ?? null,
