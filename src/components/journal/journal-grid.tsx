@@ -27,6 +27,7 @@ import {
   Tag as TagIcon,
   Trash2,
   AlertTriangle,
+  Merge,
   ExternalLink,
   SlidersHorizontal,
 } from "lucide-react";
@@ -105,8 +106,15 @@ import {
   activateTrade,
   bulkDeleteTrades,
   bulkAddTag,
+  mergeTrades,
   type BulkTagKind,
 } from "@/app/(app)/trades/actions";
+import {
+  defaultMergeChoice,
+  describeSide,
+  mergeRefusal,
+  type MergeSide,
+} from "@/lib/journal/merge-positions";
 import { setJournalHiddenColumns } from "@/app/(app)/journal/actions";
 import {
   hiddenToVisibility,
@@ -314,6 +322,15 @@ export function JournalGrid({
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [tagKind, setTagKind] = useState<BulkTagKind>("technical");
   const [tagValues, setTagValues] = useState<string[]>([]);
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  /**
+   * Which of the two selected trades keeps its identity.
+   *
+   * `null` means "whatever `defaultMergeChoice` says" — the imported row gives
+   * up its fills, the typed one keeps its grade and plan. Swapping is one click,
+   * and the dialog reads back what will happen either way.
+   */
+  const [mergeKeepId, setMergeKeepId] = useState<string | null>(null);
 
   /**
    * How many of the dimension filters are actually narrowing the grid.
@@ -759,6 +776,43 @@ export function JournalGrid({
     getSortedRowModel: getSortedRowModel(),
   });
 
+  /**
+   * The two selected trades as the merge decision needs them.
+   *
+   * Only ever two: merging three rows is three decisions about which judgement
+   * survives, and a dialog that asks that is a dialog nobody reads.
+   */
+  const mergePair = useMemo((): [MergeSide, MergeSide] | null => {
+    const rows = table.getSelectedRowModel().rows.map((r) => r.original);
+    if (rows.length !== 2) return null;
+    const asSide = (t: TradeRow): MergeSide => ({
+      id: t.id,
+      tradeNo: (t.trade_no as number) ?? null,
+      instrument: (t.instrument as string) ?? null,
+      direction: (t.direction as string) ?? null,
+      accountId: (t.account_id as string) ?? null,
+      source: (t.source as string) ?? null,
+      createdAt: (t.created_at as string) ?? null,
+      openedAt: t.stats?.opened_at ?? null,
+      avgEntry: t.stats?.avg_entry ?? null,
+      avgExit: t.stats?.avg_exit ?? null,
+      entryQty: t.stats?.entry_qty ?? null,
+      netPl: t.stats?.net_pl ?? null,
+    });
+    return [asSide(rows[0]), asSide(rows[1])];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowSelection, trades]);
+
+  const mergeBlocked = mergePair ? mergeRefusal(mergePair[0], mergePair[1]) : null;
+  const mergeChoice = mergePair
+    ? (() => {
+        const fallback = defaultMergeChoice(mergePair[0], mergePair[1]);
+        if (!mergeKeepId) return fallback;
+        const other = mergePair.find((p) => p.id !== mergeKeepId);
+        return other ? { keepId: mergeKeepId, fillsFromId: other.id } : fallback;
+      })()
+    : null;
+
   // Memoized on the selection itself. This used to run on every render — every
   // keystroke in the search box included — walking the row model to rebuild an
   // array that only changes when a checkbox is ticked.
@@ -922,6 +976,18 @@ export function JournalGrid({
                   <DropdownMenuItem onClick={() => setTagDialogOpen(true)}>
                     <TagIcon className="size-4" /> Add tag…
                   </DropdownMenuItem>
+                  {/* Two rows that are the same trade. Shown only for a pair,
+                      because merging three is three decisions about whose
+                      judgement survives. */}
+                  <DropdownMenuItem
+                    disabled={!mergePair || mergeBlocked != null}
+                    onClick={() => {
+                      setMergeKeepId(null);
+                      setMergeDialogOpen(true);
+                    }}
+                  >
+                    <Merge className="size-4" /> Merge 2 trades…
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     className="text-destructive"
                     onClick={() => setDeleteDialogOpen(true)}
@@ -1048,6 +1114,85 @@ export function JournalGrid({
           mis-click deleting one trade is a mistake; a mis-click deleting
           however many are selected is a much larger one, and the size of the
           blast radius is exactly what a single-row delete does not have. */}
+      {/* Merge. The preview names both trades and says, in those words, that
+          it cannot be undone — the same contract as the delete dialog below,
+          because the outcome is the same for one of the two rows. */}
+      <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Merge two trades into one</DialogTitle>
+            <DialogDescription>
+              One trade keeps its number, grade, plan and notes; the other gives
+              up its fills and is deleted. Empty fields on the one that stays are
+              filled in from the other. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {mergePair && mergeChoice && (
+            <div className="space-y-3 text-sm">
+              <div className="space-y-2">
+                {mergePair.map((side) => {
+                  const keeps = side.id === mergeChoice.keepId;
+                  return (
+                    <button
+                      key={side.id}
+                      type="button"
+                      onClick={() => setMergeKeepId(side.id)}
+                      className={`w-full rounded-md border p-2 text-left ${
+                        keeps ? "border-foreground" : "border-border opacity-70"
+                      }`}
+                    >
+                      <div className="font-medium">
+                        {describeSide(side, (iso) => fmtInTz(iso, tzOf(trades[0]), "MM/dd HH:mm"))}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {keeps
+                          ? "stays — keeps its number, grade, plan and notes"
+                          : "gives up its fills, then is deleted"}
+                        {side.source === "import" ? " · imported" : " · typed"}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Click a trade to make it the one that stays.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setMergeDialogOpen(false)}
+              disabled={bulkPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={bulkPending || !mergeChoice}
+              onClick={() =>
+                startBulk(async () => {
+                  if (!mergeChoice) return;
+                  const res = await mergeTrades(
+                    mergeChoice.keepId,
+                    mergeChoice.fillsFromId,
+                  );
+                  if (!res.ok) {
+                    toast.error(res.error);
+                    return;
+                  }
+                  toast.success("Merged into one trade");
+                  setMergeDialogOpen(false);
+                  setRowSelection({});
+                  router.refresh();
+                })
+              }
+            >
+              Merge
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>

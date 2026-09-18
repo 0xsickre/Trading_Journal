@@ -33,10 +33,9 @@ trader's own language for their own prose, and it stays.
 
 That **0** was not always true, and it was not reached by rounding. Five strings sat on the English
 side and were moved across: one reconcile-row message in `import-wizard.tsx`; the instrument-group
-fallback in `trade-form.tsx`, which
-read `Ostalo` two lines under a comment calling it "Other"; the `derived` group label `Izvedeno` among
+fallback in `trade-form.tsx`, which read `Ostalo` two lines under a comment calling it "Other"; the `derived` group label `Izvedeno` among
 English ones in `reports/dimensions.ts`; and two insight sentences in `insights/day-rules.ts` and
-`insights/trade-rules.ts` that opened in English and finished in Serbian. A seventh, the check-in tick
+`insights/trade-rules.ts` that opened in English and finished in Serbian. A sixth, the check-in tick
 in `open-positions-card.tsx`, was miscounted rather than misplaced — that card renders inside the daily
 form, so it belongs to the Serbian half and stayed.
 
@@ -126,7 +125,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,344 tests across 140 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,370 tests across 141 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -772,6 +771,42 @@ refused. Times are the chart's wall clock and are read in the account's zone.
 TradingView's favorable/adverse excursion is **not** imported. It is money net of the entry
 commission and floored at zero, so no price can be recovered from it, and MAE/MFE are stored as
 prices. The values stay in the import row's `raw`.
+
+---
+
+## Merging two trades
+
+Two rows that are the same trade become one: `/journal` → tick both → **Bulk actions → Merge 2
+trades…**. It exists because the import's recognition (§ Recognising a trade you already typed) only
+helps at import time — a trade typed by hand and the same trade imported before that matcher existed
+sit in the journal as two rows, and every total counts the trade twice.
+
+**One trade keeps its identity, the other supplies the fills.** By default the imported row gives up
+its fills and is deleted, and the typed one stays: an import carries the broker's own numbers, while
+a typed trade carries the grade, the thesis and the plan that no import ever writes. With two of a
+kind the newer is treated as the correction. Either side can be made the survivor by clicking it in
+the dialog.
+
+| What | Where it comes from |
+|---|---|
+| Fills, status, `gross_pnl_override`, instrument snapshot | The trade the fills come from — **whole**, including a null override |
+| Plan, stop, target, grade, thesis, notes, playbook, MAE/MFE | The survivor's, and only its **empty** fields are filled in from the other |
+| Tags and mistakes | The union of both |
+| Custom fields | Merged key by key; the survivor's answer wins |
+| Images, rule answers, check-ins | Moved across where the survivor has no row for that key |
+
+**The fills are taken whole, never combined.** The two rows describe the same trade, not two halves
+of one; adding them together would double the size and invent a P&L nobody traded.
+
+**There is no undo, and the dialog says so in those words.** A merge is reversible by re-importing
+the file the fills came from, which is where they were read from in the first place — an undo would
+mean snapshotting a whole position and its children into a table that exists for nothing else.
+
+`tj_merge_positions` does it in one transaction; `merge-positions.ts` decides which side is which and
+refuses two instruments, a long against a short, or two accounts — refused again inside the function,
+because a client that skipped the dialog is not a reason to destroy a trade. A check-in on a **locked
+day** cannot move, and its guard raises rather than skipping: the transaction stops instead of
+half-merging.
 
 ---
 

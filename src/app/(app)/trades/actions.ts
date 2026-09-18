@@ -526,6 +526,29 @@ export async function bulkDeleteTrades(ids: string[]) {
   return { ok: true as const, deleted: count ?? ids.length };
 }
 
+/**
+ * Two rows that are the same trade become one.
+ *
+ * `keepId` keeps its identity — its number, grade, plan and notes — and
+ * `fillsFromId` supplies the fills, the money and the instrument snapshot, then
+ * disappears. What the survivor has no answer for is filled in from it; what it
+ * has is never overwritten. The decision of which side is which is made in
+ * `merge-positions.ts` and shown in the dialog before this is called.
+ *
+ * One RPC, one transaction: a merge that stopped halfway would leave fills on a
+ * row that no longer describes them. There is no undo, and the dialog says so.
+ */
+export async function mergeTrades(keepId: string, fillsFromId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("tj_merge_positions", {
+    p_keep: keepId,
+    p_fills_from: fillsFromId,
+  });
+  if (error) return { ok: false as const, error: error.message };
+  revalidateTrades();
+  return { ok: true as const };
+}
+
 export type BulkTagKind = "technical" | "psychology" | "mistake";
 
 /**

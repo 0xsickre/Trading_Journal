@@ -24,12 +24,15 @@ const deleteTradeMock = vi.fn();
 const activateTradeMock = vi.fn();
 const bulkDeleteTradesMock = vi.fn();
 const bulkAddTagMock = vi.fn();
+const mergeTradesMock = vi.fn();
 vi.mock("@/app/(app)/trades/actions", () => ({
   deleteTrade: (id: string) => deleteTradeMock(id),
   activateTrade: (id: string) => activateTradeMock(id),
   bulkDeleteTrades: (ids: string[]) => bulkDeleteTradesMock(ids),
   bulkAddTag: (ids: string[], kind: string, values: string[]) =>
     bulkAddTagMock(ids, kind, values),
+  mergeTrades: (keepId: string, fillsFromId: string) =>
+    mergeTradesMock(keepId, fillsFromId),
 }));
 
 // `TagMultiSelect` (used by the bulk "Add tag" dialog) imports this for its
@@ -126,6 +129,7 @@ beforeEach(() => {
   activateTradeMock.mockReset().mockResolvedValue({ ok: true });
   bulkDeleteTradesMock.mockReset().mockResolvedValue({ ok: true, deleted: 0 });
   bulkAddTagMock.mockReset().mockResolvedValue({ ok: true });
+  mergeTradesMock.mockReset().mockResolvedValue({ ok: true });
   setHiddenColumnsMock.mockReset().mockResolvedValue({ ok: true });
   unparseMock.mockClear();
   jsonToSheetMock.mockClear();
@@ -555,5 +559,82 @@ describe("a planned trade shows its plan", () => {
     expect(screen.getByRole("columnheader", { name: "Plan" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Stop" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Target" })).toBeInTheDocument();
+  });
+});
+
+describe("merging two rows that are the same trade", () => {
+  const ACCOUNT = account({ id: "acc-1" });
+
+  /**
+   * The pair this exists for: one trade typed by hand while reading a backtest,
+   * and the same trade imported afterwards. Both sit in the journal and every
+   * total counts the trade twice.
+   */
+  function pair(over: { typedSource?: string; importedInstrument?: string } = {}) {
+    const typed = mkTrade({ id: "typed", instrument: "XAUUSD" }).row;
+    const imported = mkTrade({
+      id: "imported",
+      instrument: over.importedInstrument ?? "XAUUSD",
+    }).row;
+    return rowsOf([]).concat([
+      { ...typed, source: over.typedSource ?? "manual", trade_no: 5 },
+      { ...imported, source: "import", trade_no: 7 },
+    ] as unknown as TradeRow[]);
+  }
+
+  const selectAll = async (user: ReturnType<typeof userEvent.setup>) => {
+    const boxes = screen.getAllByRole("checkbox");
+    // The first checkbox is the header's select-all.
+    await user.click(boxes[0]);
+  };
+
+  it("offers the merge only once two rows are selected", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<JournalGrid trades={pair()} accounts={[ACCOUNT]} />);
+
+    expect(screen.queryByText(/Bulk actions/)).not.toBeInTheDocument();
+    await selectAll(user);
+    await user.click(screen.getByRole("button", { name: /Bulk actions/ }));
+    expect(await screen.findByText(/Merge 2 trades/)).toBeInTheDocument();
+  });
+
+  it("keeps the typed trade and takes the fills from the imported one", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<JournalGrid trades={pair()} accounts={[ACCOUNT]} />);
+    await selectAll(user);
+    await user.click(screen.getByRole("button", { name: /Bulk actions/ }));
+    await user.click(await screen.findByText(/Merge 2 trades/));
+
+    // Said in words before anything happens.
+    expect(await screen.findByText(/cannot be undone/)).toBeInTheDocument();
+    expect(screen.getByText(/stays — keeps its number/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Merge" }));
+    await vi.waitFor(() => expect(mergeTradesMock).toHaveBeenCalled());
+    expect(mergeTradesMock).toHaveBeenCalledWith("typed", "imported");
+  });
+
+  it("the side that stays can be swapped in the dialog", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<JournalGrid trades={pair()} accounts={[ACCOUNT]} />);
+    await selectAll(user);
+    await user.click(screen.getByRole("button", { name: /Bulk actions/ }));
+    await user.click(await screen.findByText(/Merge 2 trades/));
+
+    await user.click(await screen.findByText(/#7/));
+    await user.click(screen.getByRole("button", { name: "Merge" }));
+
+    await vi.waitFor(() => expect(mergeTradesMock).toHaveBeenCalled());
+    expect(mergeTradesMock).toHaveBeenCalledWith("imported", "typed");
+  });
+
+  it("refuses two instruments — the item is there but cannot be used", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<JournalGrid trades={pair({ importedInstrument: "NAS100" })} accounts={[ACCOUNT]} />);
+    await selectAll(user);
+    await user.click(screen.getByRole("button", { name: /Bulk actions/ }));
+
+    const item = await screen.findByText(/Merge 2 trades/);
+    expect(item.closest("[role='menuitem']")).toHaveAttribute("aria-disabled", "true");
   });
 });
