@@ -350,3 +350,88 @@ describe("required-column guard and partial-failure reporting", () => {
     expect(opts.description).toContain("row 1 (EURUSD): missing account");
   });
 });
+
+describe("TradingView's list of trades", () => {
+  const HEADERS = [
+    "Trade number", "Type", "Date and time", "Signal", "Price USD", "Size (qty)",
+    "Size (value)", "Net PnL USD", "Return %", "Commission USD",
+    "Favorable excursion USD", "Favorable excursion %", "Adverse excursion USD",
+    "Adverse excursion %", "Cumulative PnL USD", "Cumulative PnL %", "Duration (bars)",
+  ];
+  const at = (h: number) => Date.UTC(2023, 8, 20, h) / 86_400_000 + 25569;
+  const XCU = [{ symbol: "XCUUSD", point_value: 100 }];
+
+  /** The real export's shape: a summary sheet first, the trades on "Trades", exit row first. */
+  async function tvFile(name = "Replay_Trading_OANDA_XCUUSD_2026-09-18_f1e45.xlsx"): Promise<File> {
+    const XLSX = await import("xlsx");
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([["", "All USD"], ["Net profit", -2994.8]]),
+      "Performance",
+    );
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([
+        HEADERS,
+        [1, "Exit long", at(15), "Bracket Stop Loss", 3.71195, 53610, 199997.466, -2994.8, -1.49, 1994.98, 0, 0, -1999.81, -0.99, -2994.8, -2.99, 1],
+        [1, "Entry long", at(14), "Buy limit order", 3.7306, 53610, 199997.466, -2994.8, -1.49, 1994.98, 0, 0, -1999.81, -0.99, -2994.8, -2.99, 1],
+      ]),
+      "Trades",
+    );
+    const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+    return new File([buf], name);
+  }
+
+  it("imports one trade per trade number, size in lots, times in the account's zone", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} instruments={XCU} />);
+    await upload(user, await tvFile());
+
+    expect(await screen.findByText(/TradingView export/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Reconcile/ }));
+    expect(screen.getAllByText("XCUUSD")).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+
+    await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
+    const [item] = commitImportMock.mock.calls[0][0].items;
+    expect(item).toMatchObject({ instrument: "XCUUSD", direction: "Long", decision: "create" });
+    // Not mapped: the money is derived, and the size check proved it equal.
+    expect(item.gross_pnl_override).toBeNull();
+    const entry = item.executions.find((e: { side: string }) => e.side === "entry");
+    const exit = item.executions.find((e: { side: string }) => e.side === "exit");
+    expect(entry).toMatchObject({ price: 3.7306, qty: 536.1, fee: 0, executed_at: "2023-09-20T18:00:00.000Z" });
+    expect(exit).toMatchObject({ price: 3.71195, qty: 536.1, fee: 1994.98, executed_at: "2023-09-20T19:00:00.000Z" });
+  });
+
+  it("refuses an instrument the catalog does not know — the size cannot be converted", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} instruments={[]} />);
+    await upload(user, await tvFile());
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+
+    expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining("not in the instrument catalog"));
+    expect(screen.queryByRole("button", { name: /Commit import/ })).not.toBeInTheDocument();
+  });
+
+  it("refuses an account in another currency than the export's money", async () => {
+    const user = userEvent.setup({ delay: null });
+    const eur = account({ id: "acc-eur", currency: "EUR" });
+    render(<ImportWizard accounts={[eur]} candidates={[]} instruments={XCU} />);
+    await upload(user, await tvFile());
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+
+    expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining("Pick a USD account"));
+  });
+
+  it("refuses a renamed file — the symbol is only in the name", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} instruments={XCU} />);
+    await upload(user, await tvFile("copper.xlsx"));
+
+    await vi.waitFor(() =>
+      expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining("symbol could not be read")),
+    );
+    expect(screen.queryByRole("button", { name: /Reconcile/ })).not.toBeInTheDocument();
+  });
+});

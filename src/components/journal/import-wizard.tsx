@@ -24,6 +24,15 @@ import {
 } from "@/lib/journal/instrument-aliases";
 import { matchImportRow, type MatchCandidate } from "@/lib/journal/import-match";
 import {
+  TRADINGVIEW_SHEET,
+  isTradingViewTrades,
+  readTradingViewExport,
+  resolveTradingViewScale,
+  symbolFromTradingViewFilename,
+  tradingViewPnlMismatch,
+  type TradingViewExport,
+} from "@/lib/journal/tradingview-export";
+import {
   commitImport,
   type ImportExec,
   type ImportItem,
@@ -84,6 +93,27 @@ function autoMap(headers: string[]): Record<Canonical, string> {
   return map;
 }
 
+/** Columns of the one-row-per-trade table a TradingView export is flattened into. */
+const TV_MAP: Record<Canonical, string> = {
+  instrument: "Symbol",
+  direction: "Side",
+  qty: "Qty",
+  entry_price: "Entry price",
+  entry_time: "Entry time",
+  exit_price: "Exit price",
+  exit_time: "Exit time",
+  fee: "Commission",
+  swap: "",
+  // Not mapped on purpose: the money is derived from prices × point value ×
+  // the account's rate, which the size check has just proven equal to
+  // TradingView's own result. An override would also skip the FX conversion.
+  profit: "",
+};
+const TV_ISSUE = "Issue";
+
+/** An instrument's point value, the one figure the TradingView size check needs. */
+export type ImportInstrument = { symbol: string; point_value: number | null };
+
 function normDirection(v: string | undefined): string | null {
   const s = (v ?? "").toLowerCase();
   if (!s) return null;
@@ -95,9 +125,11 @@ function normDirection(v: string | undefined): string | null {
 export function ImportWizard({
   accounts,
   candidates,
+  instruments = [],
 }: {
   accounts: Account[];
   candidates: MatchCandidate[];
+  instruments?: ImportInstrument[];
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -117,13 +149,21 @@ export function ImportWizard({
     {} as Record<Canonical, string>,
   );
   const [items, setItems] = useState<(ImportItem & { _diff?: string[] })[]>([]);
+  // Set when the file is TradingView's list of trades; the column mapping is
+  // then skipped, because the layout is known and a trade spans two rows.
+  const [tv, setTv] = useState<{ symbol: string; data: TradingViewExport } | null>(null);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setFilename(file.name);
+    setTv(null);
     try {
       let parsed: Record<string, string>[] = [];
+      // TradingView's rows, read with their raw cell values: its dates are
+      // Excel serials, and formatted as text they come out as "9/20/23 14:00",
+      // which the time parser rightly refuses as ambiguous.
+      let tvRows: Record<string, unknown>[] | null = null;
       if (file.name.toLowerCase().endsWith(".csv")) {
         const text = await file.text();
         const Papa = (await import("papaparse")).default;
@@ -132,12 +172,36 @@ export function ImportWizard({
           skipEmptyLines: true,
         });
         parsed = res.data;
+        if (parsed.length > 0 && isTradingViewTrades(Object.keys(parsed[0]))) tvRows = parsed;
       } else {
         const buf = await file.arrayBuffer();
         const XLSX = await import("xlsx");
         const wb = XLSX.read(buf, { type: "array" });
+        const tvSheet = wb.Sheets[TRADINGVIEW_SHEET];
+        if (tvSheet) {
+          const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(tvSheet, {
+            defval: "",
+            raw: true,
+          });
+          if (raw.length > 0 && isTradingViewTrades(Object.keys(raw[0]))) tvRows = raw;
+        }
         const ws = wb.Sheets[wb.SheetNames[0]];
         parsed = XLSX.utils.sheet_to_json(ws, { defval: "", raw: false });
+      }
+      if (tvRows) {
+        const symbol = symbolFromTradingViewFilename(file.name);
+        const data = readTradingViewExport(tvRows);
+        setHeaders([]);
+        setRows([]);
+        if (!symbol || !data) {
+          toast.error(
+            "TradingView export, but the symbol could not be read from the file name. " +
+              "Keep the name TradingView gave it (…_EXCHANGE_SYMBOL_date_….xlsx).",
+          );
+          return;
+        }
+        setTv({ symbol, data });
+        return;
       }
       if (parsed.length === 0) {
         toast.error("No rows found in file");
@@ -153,13 +217,73 @@ export function ImportWizard({
     }
   }
 
+  /**
+   * TradingView trades as the flat table the row builder reads, or `null`
+   * after saying why the file as a whole cannot be imported.
+   */
+  function tradingViewRows(): Record<string, string>[] | null {
+    if (!tv) return null;
+    const currency = tv.data.currency;
+    if (account && account.currency !== currency) {
+      toast.error(
+        `TradingView's money is in ${currency}, the account "${account.name}" is in ${account.currency}. ` +
+          `Pick a ${currency} account.`,
+      );
+      return null;
+    }
+    const instrument = normalizeInstrumentSymbol(tv.symbol);
+    const pointValue = instruments.find((i) => i.symbol === instrument)?.point_value ?? null;
+    if (pointValue == null) {
+      toast.error(
+        `${instrument ?? tv.symbol} is not in the instrument catalog. Add it in Settings → Instruments ` +
+          "with its contract size, then import again — the size cannot be converted without it.",
+      );
+      return null;
+    }
+    const scale = resolveTradingViewScale(tv.data.trades, pointValue);
+    if (!scale.ok) {
+      toast.error(`The size cannot be matched to ${instrument}: ${scale.error}.`);
+      return null;
+    }
+    const cell = (n: number | null) => (n == null ? "" : String(n));
+    return tv.data.trades.map((t) => ({
+      Symbol: tv.symbol,
+      Side: t.direction,
+      Qty: String(Number((t.size / scale.divisor).toFixed(8))),
+      "Entry price": String(t.entryPrice),
+      "Entry time": t.entryTime,
+      "Exit price": cell(t.exitPrice),
+      "Exit time": t.exitTime ?? "",
+      Commission: String(t.commission),
+      "TradingView trade": t.number,
+      "TradingView size": String(t.size),
+      "TradingView net P&L": cell(t.netPnl),
+      "TradingView favorable excursion": cell(t.favorable),
+      "TradingView adverse excursion": cell(t.adverse),
+      [TV_ISSUE]: t.problem ?? tradingViewPnlMismatch(t, scale, pointValue) ?? "",
+    }));
+  }
+
   function buildItems() {
+    if (tv) {
+      const flat = tradingViewRows();
+      if (flat) buildFrom(flat, TV_MAP, TV_ISSUE);
+      return;
+    }
     for (const req of ["instrument", "direction", "qty", "entry_price", "entry_time"] as Canonical[]) {
       if (!map[req]) {
         toast.error(`Map a column for "${req}"`);
         return;
       }
     }
+    buildFrom(rows, map, null);
+  }
+
+  function buildFrom(
+    rows: Record<string, string>[],
+    map: Record<Canonical, string>,
+    issueCol: string | null,
+  ) {
     const built: (ImportItem & { _diff?: string[] })[] = rows.map((row) => {
       const instrument =
         normalizeInstrumentSymbol(row[map.instrument] ?? "") ?? null;
@@ -291,6 +415,15 @@ export function ImportWizard({
         }
       }
 
+      // A row the source itself marked as not importable as read. Skipped by
+      // default and named first, so it is the first thing read on the row;
+      // the decision stays the reader's to change.
+      const issue = issueCol ? row[issueCol] : "";
+      if (issue) {
+        diff.unshift(issue);
+        decision = "skip";
+      }
+
       return {
         decision,
         match_status: status,
@@ -372,6 +505,7 @@ export function ImportWizard({
                 setRows([]);
                 setItems([]);
                 setFilename("");
+                setTv(null);
               }}
             >
               Import another
@@ -419,10 +553,32 @@ export function ImportWizard({
               </Button>
               {filename && (
                 <span className="text-sm text-muted-foreground">
-                  {filename} — {rows.length} rows
+                  {filename} — {tv ? `${tv.data.trades.length} trades` : `${rows.length} rows`}
                 </span>
               )}
             </div>
+
+            {tv && (
+              <>
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <p>
+                    TradingView export — <b>{tv.symbol}</b>, {tv.data.trades.length} trades,
+                    money in {tv.data.currency}. Entry and exit rows are joined into one
+                    trade, and the size is converted to lots and checked against each
+                    trade&apos;s own P&amp;L.
+                  </p>
+                  <p>
+                    Times are read as <b>{tz.replace("_", " ")}</b> wall-clock — the
+                    chart&apos;s timezone in TradingView must be the same.
+                  </p>
+                </div>
+                <div className="flex justify-end">
+                  <Button onClick={buildItems}>
+                    Reconcile <ArrowRight className="size-4" />
+                  </Button>
+                </div>
+              </>
+            )}
 
             {headers.length > 0 && (
               <>

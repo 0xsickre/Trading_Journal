@@ -703,6 +703,31 @@ Two things the wizard refuses rather than guesses, both because guessing is sile
 
 Every refused cell is named on its own row in the preview (`unreadable: qty, fee`).
 
+### TradingView backtests
+
+A Strategy Tester or Bar Replay export ("List of trades" → Excel) is recognised by its header and
+imported without column mapping (`lib/journal/tradingview-export.ts`). Import it into a separate
+account, so backtest numbers never mix with live ones. Three things about the export would each
+produce a confidently wrong trade through the generic mapping, and each is handled:
+
+- **A trade is two rows**, "Entry long" and "Exit long" under one trade number. They are joined into
+  one trade. A trade that does not pair cleanly is shown, named and skipped by default, never
+  dropped. An exit signalled `Open` is a mark at the last bar, so it is not imported as a fill.
+- **The trades are on the second sheet.** The first one, "Performance", is a summary.
+- **Size is in TradingView's units**: pounds of copper, ounces of gold, contracts for futures. A fill
+  here is counted in lots. The scale is read from the export's own money: gross result ÷ (move ×
+  size) is 1 when TradingView counts units, and the point value when it counts contracts. Every
+  trade is then held to that scale. An instrument missing from the catalog, an account in a
+  different currency from the export's, or a scale that is neither of the two is refused with the
+  figure found.
+
+The symbol exists only in the file name (`…_OANDA_XCUUSD_2026-09-18_….xlsx`), so a renamed file is
+refused. Times are the chart's wall clock and are read in the account's zone.
+
+TradingView's favorable/adverse excursion is **not** imported. It is money net of the entry
+commission and floored at zero, so no price can be recovered from it, and MAE/MFE are stored as
+prices. The values stay in the import row's `raw`.
+
 ---
 
 ## Bot bridge
@@ -1025,7 +1050,7 @@ container does not have. It stays a later option, not an oversight.
 
 | Not built | Why |
 |---|---|
-| Backtesting and trade replay | Done directly in TradingView. An embed does not help: Bar Replay lives in their application, and the widget is a black box the code cannot step through |
+| Backtesting and trade replay | Done directly in TradingView. An embed does not help: Bar Replay lives in their application, and the widget is a black box the code cannot step through. Its results come back through import (§ Import → TradingView backtests) |
 | Broker sync that fills in a whole trade | Manual entry is a choice and an advantage — it forces the trade to be read once more. The bot bridge (above) records only what the broker already did; everything that is a judgement is still typed |
 | Spaces, mentor, leaderboard | Single-user system |
 | AI chat and agents | The mentor-pack export and the insight rules give the same thing without the API cost |
