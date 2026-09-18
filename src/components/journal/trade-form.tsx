@@ -17,9 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -114,6 +112,7 @@ import {
   defaultRiskPctOption,
 } from "@/lib/journal/trade-form-prefs";
 import { cn } from "@/lib/utils";
+import { InstrumentSelect } from "@/components/journal/instrument-select";
 
 type ExecRow = {
   side: "entry" | "exit";
@@ -125,25 +124,6 @@ type ExecRow = {
 };
 
 export type FieldValue = string | number | string[] | null;
-
-/**
- * Instruments by class, in catalog order.
- *
- * `sort_order` is already grouped into ranges (Forex 0–120, CFD 200–312,
- * futures 400+), so it is enough to keep the order they arrive in from
- * `getInstruments` and group the adjacent ones. A custom instrument the user
- * adds without a class falls into "Other" instead of vanishing from the list.
- */
-function groupByAssetClass(instruments: Instrument[]): [string, Instrument[]][] {
-  const groups = new Map<string, Instrument[]>();
-  for (const i of instruments) {
-    const key = i.asset_class?.trim() || "Other";
-    const arr = groups.get(key);
-    if (arr) arr.push(i);
-    else groups.set(key, [i]);
-  }
-  return [...groups.entries()];
-}
 
 export type TradeFormInitial = {
   id: string;
@@ -1659,36 +1639,18 @@ function FieldRenderer({
     return (
       <div className={`space-y-1.5 ${colSpan}`}>
         <Label className="text-xs">{field.label}</Label>
-        <Select
-          value={(value as string) || undefined}
-          onValueChange={(v) => onChange(v)}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select instrument…" />
-          </SelectTrigger>
-          <SelectContent>
-            {/*
-              Grouped by class, not a flat list of ninety entries.
-              The catalog offers the whole universe (Forex, CFD, futures), so the
-              one thing that makes such a list usable is splitting it into
-              blocks — and Radix carries type-to-jump on top, so a symbol is one
-              keystroke away. The first version instead switched 80 instruments
-              off to keep the list short; that hid the catalog rather than
-              organising it.
-            */}
-            {groupByAssetClass(instruments).map(([cls, list]) => (
-              <SelectGroup key={cls}>
-                <SelectLabel>{cls}</SelectLabel>
-                {list.map((i) => (
-                  <SelectItem key={i.id} value={i.symbol}>
-                    {i.symbol}
-                    {i.name ? ` — ${i.name}` : ""}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            ))}
-          </SelectContent>
-        </Select>
+        {/*
+          Typed, not scrolled. The catalog is the whole universe (Forex, CFD,
+          futures) and a grouped list of ninety entries was still a list of
+          ninety entries: Radix's type-to-jump matches the start of a label, so
+          "gold" found nothing. `InstrumentSelect` filters on symbol AND name and
+          keeps the class grouping for when nothing is typed.
+        */}
+        <InstrumentSelect
+          instruments={instruments}
+          value={(value as string) ?? ""}
+          onChange={(v) => onChange(v)}
+        />
       </div>
     );
   }
