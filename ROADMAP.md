@@ -777,12 +777,13 @@ Dok se izvor ne izabere, `max_drawdown_price` i `max_profit_price` su polja koja
 — to je zapisano i u README § „Blocked, not rejected", da ne izgledaju kao polja koja je neko
 zaboravio.
 
-Ono što ostaje tačno iz originalnog plana: **ručno mora da pobedi automatski** (automatika piše samo
-kad je `excursion_source` prazan ili `'auto'`, isti obrazac kao frozen verdikti u trackeru F5), i
+Ono što ostaje tačno iz originalnog plana, kad god se izvor izabere: **ručno mora da pobedi
+automatski** (automatika piše samo tamo gde čovek nije uneo ništa — `excursion_source` koji je to
+ranije razlikovao je otišao sa bot mostom, pa će ta oznaka morati da se uvede ponovo uz izvor), i
 **keš je obavezan, ne optimizacija** (jednom povučene sveće rade zauvek, isti razlog zbog kog se
 `point_value_at_trade` već snima na poziciju).
 
-**Procena:** 1–2 sesije čim app postane "Active".
+**Procena:** ne procenjuje se dok se izvor ne izabere.
 
 ---
 
@@ -1009,3 +1010,51 @@ javljanje" u panelu: ćutanje mora da bude vidljivo sa strane dnevnika, ne samo 
 **Testovi: 2123 u 132 fajla** (2074 → 2123). Guard koji je zaradio svoj postojanje u ovoj fazi:
 `reserved-keys.test.ts` je pao na četiri nove `broker*` kolone pre nego što je iko stigao da napravi
 korisničko polje koje bi ih trajno zaklonilo.
+
+---
+
+## Faza 12 — uvoz prepoznaje ručni trejd, spajanje, i odlazak sa cTrader-a (18.09.2026.)
+
+**Povod.** Dva trejda u knjizi koja su isti trejd. Jedan je unet rukom dok se gledao backtest, drugi
+je stigao uvozom TradingView exporta — i sve je stajalo u dnevniku dvaput, u svakom zbiru.
+
+**Zašto se nisu spojili.** `sameTrade` traži da se vreme ulaza poklopi u okviru deset minuta. To je
+tačno za izvod koji stigne istog dana, a beskorisno za način na koji se dnevnik koristi: ručno unet
+trejd nosi trenutak kad je **ukucan**, fajl nosi trenutak kad je **odtrgovan**. Meseci razlike, isti
+trejd.
+
+**Rešeno u četiri koraka, svaki sa svojim gate-om i svojim commit-om:**
+
+1. **Bot most je uklonjen.** Govorio je samo cTrader, a trgovanje ide na MT4/MT5 — ostala bi površina
+   koju niko ne koristi: `tj_bot_ingest` izložen `anon` roli, tabela tokena i tri tabele stanja.
+   Nijedan trejd ni fill nije izgubljen; izgubljen je log događaja, koji se ne može rekonstruisati i
+   nije potreban da bi se ijedan trejd objasnio. **Cena koja ostaje otvorena: MAE/MFE.** Most ih je
+   davao besplatno, sada su ručni unos, a izvor za MT4/5 tek treba naći (v. Fazu 8B).
+   Uz to: `npm run lang:count` — brojanje srpskih stringova koje je README tri puta tvrdio, a niko
+   nije mogao da ponovi, sada je skripta.
+2. **Instrument se kuca, ne skroluje.** Katalog od 91 simbola je bio grupisani `Select`, a Radix-ov
+   type-to-jump hvata samo početak labele — „gold" nije nalazilo ništa. `instrument-select.tsx`
+   filtrira po simbolu, imenu i klasi.
+3. **Uvoz prepoznaje ručno unet trejd, bez vremena.** Kad strogo pitanje ne nađe ništa, postavlja se
+   slabije: isti nalog, instrument, smer, ulazna i izlazna cena, pa **ili ista veličina ili isti
+   novac**. Veličina ILI novac, jer TradingView sam računa veličinu po svom modelu rizika, a trejder
+   ukuca lotove koje je stvarno mislio — 1.00 i 1.73 lota mogu biti isti trejd, i P&L se tada slaže
+   u cent. Red se označi kao `suggested`, imenuje trejd za koji veruje da jeste, i dolazi sa već
+   izabranim merge-om. Dvosmislen red se sada može ručno uperiti u konkretan trejd.
+   Uz to: **T/P se uvozi samo na trejd koji nema target** (undo ga briše), a **SL se ne uvozi uopšte**
+   — izvod javlja nivoe kakvi su bili **na kraju**, pa bi stop pomeren na BE pregazio stop sa kojim je
+   rizik stvarno uzet.
+4. **Ručno spajanje dva postojeća trejda.** Jedan zadržava identitet, ocenu, plan i beleške; drugi
+   daje fill-ove, novac i snapshot instrumenta, pa se briše. Fill-ovi se uzimaju celi, nikad se ne
+   sabiraju: dva reda opisuju isti trejd, a sabiranje bi udvostručilo veličinu i izmislilo P&L.
+   Bez undo-a, i dijalog to kaže tim rečima.
+5. **Datumi i sat.** `dd/MM/yyyy` i 24h svuda na ekranu, tri oblika iz `lib/journal/time.ts`.
+   `MM/dd` nije stil nego drugi datum, pa `date-format-conformance.test.ts` obara build na njemu.
+   Mašinski čitani datumi (ključevi dana, vrednosti `datetime-local` polja, CSV/XLSX izvoz) ostaju
+   ISO namerno.
+
+**Migracije:** `20260918120000_remove_bot_bridge`, `20260918140000_import_suggested_and_target`,
+`20260918160000_merge_positions`. Sve tri primenjene na produkciju; treća je proverena na živoj bazi
+u transakciji koja je vraćena, i rezultat stoji u zaglavlju migracije.
+
+**Testovi: 2372 u 142 fajla** (2326 → 2372).

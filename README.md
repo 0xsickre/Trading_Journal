@@ -18,7 +18,7 @@ purpose — an applied migration is never edited here, and the comment inside on
 record of the day it was written.
 
 **The interface is deliberately half-and-half, and the line is a clean one.** At least 126 of the
-3,043 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+3,071 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into:
 
 | Surface | Serbian strings |
@@ -1029,6 +1029,7 @@ API for the handful of instruments actually traded. Recorded here rather than le
 | [`CODE_REVIEW.md`](CODE_REVIEW.md) | Rounds 2b, 3 and 4 plus the render-layer execution (Phase 10), every finding with its outcome |
 | [`docs/formulas-audit.md`](docs/formulas-audit.md) | Every formula checked against outside practice, with a verdict each (Serbian) |
 | [`PARITY.md`](PARITY.md) | A comparison against TradeZella, item by item (Serbian) |
+| [`FAZA_8B_PLAN.md`](FAZA_8B_PLAN.md) | Automatic MAE/MFE: why the cTrader plan was withdrawn and what the open question is (Serbian) |
 | [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md) | AI entry point (Cursor / Claude Code) |
 | [trading-fundamental-vault](https://github.com/0xsickre/trading-fundamental-vault/blob/master/README.md) | The F0–F5 cycle, macro bias, COT filter |
 | [vault `workflow.md`](https://github.com/0xsickre/trading-fundamental-vault/blob/master/workflow.md) | The weekly runbook (13 steps) |

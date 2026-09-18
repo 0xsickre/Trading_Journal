@@ -166,7 +166,11 @@ Iskreno i bez ublažavanja. Poređano po tome koliko stvarno menja svakodnevni r
    Tradovate, Rithmic, IBKR, Tradelocker…). Ovde je unos ručni ili preko CSV/XLSX importa. To je
    **najveća funkcionalna razlika u dnevnoj upotrebi**, iako je „integracija" a ne metrika.
 2. **Backtesting modul.** `/backtesting` je njihov drugi stub proizvoda — ručni backtest sa bar
-   replay-om, sesije, statistika backtesta odvojena od live knjige. **Ovde ne postoji ništa od toga.**
+   replay-om, sesije, statistika backtesta odvojena od live knjige. Ovde se backtest radi u
+   TradingView-u, a **rezultat ulazi kroz uvoz**: export „List of trades" se prepoznaje po zaglavlju,
+   spaja u jedan trejd po poziciji i veličina mu se proverava protiv njegovog sopstvenog P&L-a
+   (README § Import → TradingView backtests). Odvajanje od live knjige je pitanje naloga: backtest
+   ide na svoj nalog. **Ne postoji** sam bar replay niti sesije backtesta.
 3. **Trade replay.** Reprodukcija izvršenog trejda na grafikonu. Ovde postoje samo TradingView
    snapshot slike po trejdu.
 4. **Mentor mode.** Deljenje naloga sa mentorom uživo, i mentorov pogled na više učenika. Ovde
