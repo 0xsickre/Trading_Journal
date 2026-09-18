@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { MarkdownView } from "@/components/journal/markdown-view";
 import { parseMarkdown } from "@/lib/journal/notes/markdown";
 import { tradeLinkPatch, type Note, type NoteFolder } from "@/lib/journal/notes/note-types";
+import { DATE_TIME } from "@/lib/journal/time";
 import {
   deleteNote,
   purgeNote,
@@ -419,11 +420,11 @@ export function NoteEditor({
 
       <div className="border-t px-4 py-1.5 text-xs text-muted-foreground print:hidden">
         {deleted
-          ? `Deleted ${format(parseISO(note.deleted_at!), "d MMM yyyy, HH:mm")}`
+          ? `Deleted ${format(parseISO(note.deleted_at!), DATE_TIME)}`
           : dirty
             ? "Saving…"
             : savedAt
-              ? `Saved ${format(parseISO(savedAt), "d MMM yyyy, HH:mm")}`
+              ? `Saved ${format(parseISO(savedAt), DATE_TIME)}`
               : "Not saved"}
       </div>
     </div>

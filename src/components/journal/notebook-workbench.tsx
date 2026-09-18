@@ -38,6 +38,7 @@ import {
   type TradeOption,
 } from "@/components/journal/note-editor";
 import { FolderSettingsDialog } from "@/components/journal/folder-settings-dialog";
+import { DATE } from "@/lib/journal/time";
 import {
   createFolder,
   createNote,
@@ -389,7 +390,7 @@ export function NotebookWorkbench({
                     {preview || "Empty note"}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    {format(parseISO(n.updated_at), "d MMM yyyy")}
+                    {format(parseISO(n.updated_at), DATE)}
                     {n.tags.length > 0 && ` · ${n.tags.join(", ")}`}
                   </p>
                 </button>

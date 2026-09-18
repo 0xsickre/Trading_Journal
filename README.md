@@ -125,7 +125,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,370 tests across 141 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,372 tests across 142 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -366,6 +366,21 @@ Get this wrong and nothing breaks — the numbers simply file themselves under d
 - **Days are always in the ACCOUNT's timezone**, resolved on the server. A `new Date()` read in the
   browser shifts the whole calendar by one column for anyone not sitting in the account's zone.
 - **ISO weekdays, 1 = Monday … 7 = Sunday.** Never `Date#getDay`.
+- **Dates are written day-first, clocks are 24-hour**: `18/09/2026 21:10`, or `18/09 21:10` in table
+  columns where every row is the same season of trading. Three shapes, exported from
+  `lib/journal/time.ts` (`DATE`, `DATE_TIME`, `DAY_TIME`), because "what does a date look like here"
+  is one question — it used to have four answers, one of which was `MM/dd`. That one is not a style
+  but a different date: `03/07` is 7 March to the reader and 3 July to the format that wrote it, and
+  nothing on screen said which. `date-format-conformance.test.ts` fails the build on `MM/dd`, on a
+  12-hour clock and on a month name, because one such call added later looks ordinary in a diff and
+  the wrong date it prints looks ordinary on screen.
+- **Machine-read dates stay ISO**: day keys (`yyyy-MM-dd`), `<input type="datetime-local">` values,
+  and the CSV/XLSX export. An export that changes shape with a display preference breaks somebody's
+  spreadsheet, and a sort in a spreadsheet needs `yyyy-MM-dd` to be a sort at all.
+- **Native date pickers are the browser's**, not the journal's. `<input type="date">` and
+  `datetime-local` render in the browser's or the operating system's locale, so on a machine set to
+  US English those fields still show `MM/DD` and AM/PM while everything around them does not. Fixing
+  that means replacing the inputs, which is a separate piece of work and is not done.
 
 ---
 

@@ -13,6 +13,7 @@ import { MarkdownView } from "@/components/journal/markdown-view";
 import { plainText } from "@/lib/journal/notes/markdown";
 import { defaultNoteTitle, type Note } from "@/lib/journal/notes/note-types";
 import { createNote, deleteNote, updateNote } from "@/app/(app)/notebook/actions";
+import { DATE, DATE_TIME } from "@/lib/journal/time";
 
 const AUTOSAVE_MS = 1200;
 
@@ -119,7 +120,7 @@ function PlaybookNoteEditor({ note }: { note: Note }) {
         {dirty
           ? "Saving…"
           : savedAt
-            ? `Saved ${format(parseISO(savedAt), "d MMM yyyy, HH:mm")}`
+            ? `Saved ${format(parseISO(savedAt), DATE_TIME)}`
             : "Not saved"}
       </div>
     </div>
@@ -194,7 +195,7 @@ export function PlaybookNotesPanel({
                   {preview || "Empty note"}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
-                  {format(parseISO(n.updated_at), "d MMM yyyy")}
+                  {format(parseISO(n.updated_at), DATE)}
                 </p>
               </button>
             );

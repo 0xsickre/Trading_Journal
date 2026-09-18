@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Account } from "@/lib/journal/types";
-import { parseImportTime, fmtInTz, DEFAULT_TZ } from "@/lib/journal/time";
+import { parseImportTime, fmtInTz, DEFAULT_TZ, DAY_TIME } from "@/lib/journal/time";
 import { parseImportNumber as num } from "@/lib/journal/import-number";
 import { fmtNum } from "@/lib/journal/format";
 import {
@@ -353,7 +353,7 @@ export function ImportWizard({
    */
   function labelOf(cand: MatchCandidate): string {
     const parts = [cand.tradeNo != null ? `#${cand.tradeNo}` : "a trade"];
-    if (cand.openedAt) parts.push(fmtInTz(cand.openedAt, tz, "MM/dd HH:mm"));
+    if (cand.openedAt) parts.push(fmtInTz(cand.openedAt, tz, DAY_TIME));
     if (cand.avgEntry != null) {
       parts.push(
         cand.avgExit != null
@@ -544,7 +544,7 @@ export function ImportWizard({
           diff.push(`same trade as ${labelOf(matched)}`);
           if (matched.openedAt && entryTime && matched.openedAt !== entryTime) {
             diff.push(
-              `opened ${fmtInTz(matched.openedAt, tz, "MM/dd HH:mm")}→${fmtInTz(entryTime, tz, "MM/dd HH:mm")}`,
+              `opened ${fmtInTz(matched.openedAt, tz, DAY_TIME)}→${fmtInTz(entryTime, tz, DAY_TIME)}`,
             );
           }
           if (matched.entryQty != null && Math.abs(matched.entryQty - qty) > 1e-9) {
@@ -865,7 +865,7 @@ export function ImportWizard({
                           )}
                         </td>
                         <td className="p-2 whitespace-nowrap">
-                          {entry ? fmtInTz(entry.executed_at, tz, "MM/dd HH:mm") : "—"}
+                          {entry ? fmtInTz(entry.executed_at, tz, DAY_TIME) : "—"}
                         </td>
                         <td className="p-2">
                           <StatusBadge status={it.match_status} />

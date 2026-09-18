@@ -39,6 +39,7 @@ import {
 } from "@/app/(app)/daily/actions";
 import { lockDay } from "@/app/(app)/daily/tracker-actions";
 import type { DayCompliance } from "@/lib/journal/tracker/compliance";
+import { DATE, DATE_TIME } from "@/lib/journal/time";
 import {
   TrackerDayBadge,
   TrackerStageSection,
@@ -131,7 +132,7 @@ export function DailyReportForm({
   const isToday = reportDate === today;
   const lowMental = form.mental_temp != null && form.mental_temp < 3;
   const lockedAt = report?.locked_at
-    ? format(new Date(report.locked_at), "d. MMM yyyy. HH:mm", { locale: srLatn })
+    ? format(new Date(report.locked_at), DATE_TIME)
     : null;
 
   function patch<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -186,7 +187,7 @@ export function DailyReportForm({
           </Button>
           <div className="min-w-[10rem] text-center">
             <p className="text-lg font-semibold">
-              {format(parseISO(reportDate), "EEE, d. MMM yyyy.", { locale: srLatn })}
+              {format(parseISO(reportDate), `EEE, ${DATE}`, { locale: srLatn })}
             </p>
             {!isToday && (
               <p className="text-xs text-muted-foreground">{timezone}</p>

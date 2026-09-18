@@ -84,7 +84,7 @@ import { setupScoreFromTrade } from "@/lib/journal/setup-score";
 import type { Playbook, PositionRule } from "@/lib/journal/playbook-types";
 import { cn } from "@/lib/utils";
 import type { Account, OptionsMap, TradeRow } from "@/lib/journal/types";
-import { fmtInTz } from "@/lib/journal/time";
+import { fmtInTz, DAY_TIME } from "@/lib/journal/time";
 import { fmtMoney, fmtNum, fmtPrice, fmtR, pnlClass } from "@/lib/journal/format";
 import { fmtSlippageR, slippageFromTrade } from "@/lib/journal/entry-slippage";
 import {
@@ -509,7 +509,7 @@ export function JournalGrid({
           const d = t.stats?.opened_at ?? t.created_at;
           return (
             <span className="whitespace-nowrap">
-              {fmtInTz(d, tzOf(t), "MM/dd HH:mm")}
+              {fmtInTz(d, tzOf(t), DAY_TIME)}
             </span>
           );
         },
@@ -1142,7 +1142,7 @@ export function JournalGrid({
                       }`}
                     >
                       <div className="font-medium">
-                        {describeSide(side, (iso) => fmtInTz(iso, tzOf(trades[0]), "MM/dd HH:mm"))}
+                        {describeSide(side, (iso) => fmtInTz(iso, tzOf(trades[0]), DAY_TIME))}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {keeps

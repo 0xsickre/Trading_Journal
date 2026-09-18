@@ -6,7 +6,6 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Lock, Save } from "lucide-react";
 import { format } from "date-fns";
-import { srLatn } from "date-fns/locale/sr-Latn";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +33,7 @@ import {
 } from "@/lib/journal/weekly-review";
 import type { WeekRecap } from "@/lib/journal/week-recap";
 import type { PeriodRow } from "@/lib/journal/period-stats";
+import { DATE_TIME } from "@/lib/journal/time";
 import {
   lockWeek,
   saveWeeklyReview,
@@ -94,7 +94,7 @@ export function WeeklyReviewForm({
   const locked = review?.locked_at != null;
   const isRunningWeek = weekStart === currentWeekStart;
   const lockedAt = review?.locked_at
-    ? format(new Date(review.locked_at), "d. MMM yyyy. HH:mm", { locale: srLatn })
+    ? format(new Date(review.locked_at), DATE_TIME)
     : null;
 
   function patch<K extends keyof FormState>(key: K, value: FormState[K]) {

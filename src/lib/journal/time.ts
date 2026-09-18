@@ -47,6 +47,27 @@ export function isValidTimeZone(tz: string): boolean {
   return safeTz(tz) === tz;
 }
 
+/**
+ * How a date is written on screen: day first, and a 24-hour clock.
+ *
+ * One set of shapes rather than a format string at each call site, because
+ * "what does a date look like here" is one question. They were four different
+ * answers — `MM/dd HH:mm`, `d MMM yyyy`, `d. MMM yyyy.` and `yyyy-MM-dd HH:mm` —
+ * and the first of those is the American order, which reads as a different date
+ * rather than as a different style: 03/07 is 7 March here and 3 July there.
+ *
+ * `DAY_TIME` drops the year for table columns where every row is within the
+ * same season of trading and the width is worth more than the year.
+ *
+ * NOT these: day keys (`yyyy-MM-dd`), `<input type="datetime-local">` values and
+ * the CSV/XLSX export all stay ISO. Those are read by machines — a sort order
+ * and a parser — and an export that changes shape with a UI preference is an
+ * export that breaks somebody's spreadsheet.
+ */
+export const DATE = "dd/MM/yyyy";
+export const DATE_TIME = "dd/MM/yyyy HH:mm";
+export const DAY_TIME = "dd/MM HH:mm";
+
 /** Format a UTC timestamp in the account's timezone (e.g. "New York time"). */
 export function fmtInTz(
   iso: string | Date | null | undefined,

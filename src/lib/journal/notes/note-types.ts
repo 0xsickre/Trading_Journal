@@ -1,6 +1,7 @@
 // Client-safe note types, mirroring tracker-types.ts and playbook-types.ts.
 
 import { format, parseISO } from "date-fns";
+import { DATE } from "@/lib/journal/time";
 
 export type NoteFolder = {
   id: string;
@@ -78,7 +79,7 @@ export function parseScopeKey(key: string | null | undefined): NoteScope {
  * call the note list already makes to format `updated_at`.
  */
 export function defaultNoteTitle(dayKey: string): string {
-  return format(parseISO(dayKey), "d MMM yyyy");
+  return format(parseISO(dayKey), DATE);
 }
 
 /**

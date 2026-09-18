@@ -541,7 +541,7 @@ describe("a trade already typed by hand, recognised without the time", () => {
     await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
 
     const row = screen.getByText("XAUUSD").closest("tr")!;
-    expect(within(row).getByText(/opened 09\/18 21:10→03\/07 09:00/)).toBeInTheDocument();
+    expect(within(row).getByText(/opened 18\/09 21:10→07\/03 09:00/)).toBeInTheDocument();
   });
 
   it("commits it as a merge into that trade", async () => {

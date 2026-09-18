@@ -76,8 +76,8 @@ describe("noteInScope", () => {
 });
 
 describe("defaultNoteTitle", () => {
-  it("reads the day key in the same 'd MMM yyyy' style the note list already uses", () => {
-    expect(defaultNoteTitle("2026-08-19")).toBe("19 Aug 2026");
+  it("reads the day key in the journal's own day-first shape", () => {
+    expect(defaultNoteTitle("2026-08-19")).toBe("19/08/2026");
   });
 
   it("does NOT SHIFT A DAY through UTC parsing", () => {
@@ -86,8 +86,8 @@ describe("defaultNoteTitle", () => {
     // the day before — the exact bug `weekdayOf` and friends exist to avoid.
     // `parseISO` reads a date-only string as local midnight, so this must hold
     // regardless of the machine's own timezone.
-    expect(defaultNoteTitle("2026-01-01")).toBe("1 Jan 2026");
-    expect(defaultNoteTitle("2026-12-31")).toBe("31 Dec 2026");
+    expect(defaultNoteTitle("2026-01-01")).toBe("01/01/2026");
+    expect(defaultNoteTitle("2026-12-31")).toBe("31/12/2026");
   });
 });
 

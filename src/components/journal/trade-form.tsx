@@ -85,7 +85,7 @@ import {
 } from "@/lib/journal/plan-calculations";
 import { computePositionStats } from "@/lib/journal/position-stats";
 import { resolveFxRate } from "@/lib/journal/fx";
-import { utcToZonedInput, zonedInputToUtc, fmtInTz, DEFAULT_TZ } from "@/lib/journal/time";
+import { utcToZonedInput, zonedInputToUtc, fmtInTz, DEFAULT_TZ, DATE_TIME } from "@/lib/journal/time";
 import {
   NO_COST_DEFAULTS,
   nightsBetween,
@@ -894,7 +894,7 @@ export function TradeForm({
             {isMissed && missedAt && (
               <>
                 {" "}
-                · Missed {fmtInTz(missedAt, tz, "yyyy-MM-dd HH:mm")}
+                · Missed {fmtInTz(missedAt, tz, DATE_TIME)}
               </>
             )}
           </p>
