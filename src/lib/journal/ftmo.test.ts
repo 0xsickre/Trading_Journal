@@ -295,7 +295,6 @@ describe("ftmoConfigFromAccount", () => {
     id: "acc",
     name: "Challenge",
     broker: null,
-    broker_account_id: null,
     currency: "USD",
     starting_balance: 200_000,
     default_asset_class: null,

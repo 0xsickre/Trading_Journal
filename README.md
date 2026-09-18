@@ -3,9 +3,9 @@
 [![gate](https://github.com/0xsickre/Trading_Journal/actions/workflows/gate.yml/badge.svg)](https://github.com/0xsickre/Trading_Journal/actions/workflows/gate.yml)
 
 A swing/ICT trading journal for a single trader. Manual entry, no AI chat — a disciplined record of
-what was traded and how well the process was followed, plus honest arithmetic over that record. The
-only automatic writer is the **bot bridge** (§ Bot bridge): it records strictly what the broker has
-already done, and everything that is a judgement is still typed by hand.
+what was traded and how well the process was followed, plus honest arithmetic over that record.
+Every trade is typed by hand or imported from a file the broker or TradingView produced; nothing
+writes into the journal on its own.
 
 Built to cover what TradeZella does in metrics, notes and reports, minus the parts that only make
 sense for multi-user SaaS. Where it differs, the difference is written down and argued — here or in
@@ -17,36 +17,38 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 185 of the
-2,191 human-readable string literals in `src/` outside tests are Serbian — about one in twelve — and
-every one of them sits on a screen the trader writes into:
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 126 of the
+3,043 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+on a screen the trader writes into:
 
 | Surface | Serbian strings |
 |---|---|
-| Daily, weekly, tracker, focus goal | 116 |
-| Bot bridge panel and its actions | 40 |
-| Mentor-export prompt | 29 |
+| Daily, weekly, tracker, focus goal | 90 |
+| Mentor-export prompt | 33 |
+| TradingView snapshot helper, trade images | 3 |
 | Dashboard, `/reports`, journal grid, playbooks | **0** |
 
 The half that **measures** is English; the half the trader **writes into** is Serbian. That is the
 trader's own language for their own prose, and it stays.
 
-That **0** was not always true, and it was not reached by rounding. Six strings sat on the English
-side and were moved across: the bot tooltip on a bridge-written row in `journal-grid.tsx`; one
-reconcile-row message in `import-wizard.tsx`; the instrument-group fallback in `trade-form.tsx`, which
+That **0** was not always true, and it was not reached by rounding. Five strings sat on the English
+side and were moved across: one reconcile-row message in `import-wizard.tsx`; the instrument-group
+fallback in `trade-form.tsx`, which
 read `Ostalo` two lines under a comment calling it "Other"; the `derived` group label `Izvedeno` among
 English ones in `reports/dimensions.ts`; and two insight sentences in `insights/day-rules.ts` and
 `insights/trade-rules.ts` that opened in English and finished in Serbian. A seventh, the check-in tick
 in `open-positions-card.tsx`, was miscounted rather than misplaced — that card renders inside the daily
 form, so it belongs to the Serbian half and stayed.
 
-How the count was taken, since the claim is only worth as much as its method: every `.ts`/`.tsx`
-outside tests is lexed into comment / string / code regions, and the string regions are scored for
-Serbian by diacritics and by a word list. A single Serbian word carrying no diacritic can still slip
-past that, so **185 is a floor, not a ceiling**. Two earlier versions of this paragraph said "about 46
-of some 1,700" and then "153 of 1,663"; the first scanned only JSX text and a few attributes, the
-second missed short labels the word list did not know. Both were replaced rather than quietly
-corrected.
+How the count was taken, since the claim is only worth as much as its method: `npm run lang:count`
+lexes every `.ts`/`.tsx` outside tests into comment / string / code regions, keeps the string regions
+that read as prose rather than as machinery, and scores those for Serbian by diacritics and by a word
+list. A single Serbian word carrying no diacritic can still slip past that, so **126 is a floor, not a
+ceiling**. Three earlier versions of this paragraph said "about 46 of some 1,700", then "153 of
+1,663", then "185 of 2,191" — each counted by hand, and each had to be replaced rather than quietly
+corrected. That is why the method now ships as a script: a number nobody can re-run is a number
+nobody can check. The figure moved again when the bot bridge was removed, and this time by re-running
+it.
 
 Deploy: Vercel · Database: Supabase Postgres (a separate project from the dashboard's)
 
@@ -208,7 +210,6 @@ shows before saving. A test holds both to the same inputs.
 | **Playbooks** | `tj_playbooks`, `tj_playbook_sections`, `tj_playbook_rules`, `tj_playbook_rule_links`, `tj_position_rules` |
 | **Notebook** | `tj_notes`, `tj_note_folders`, `tj_note_tags` |
 | **Import** | `tj_import_batches`, `tj_import_rows` |
-| **Bot bridge** | `tj_bot_tokens`, `tj_bot_events`, `tj_broker_symbol_map` |
 
 ### User-defined fields
 
@@ -239,7 +240,7 @@ would be erased by an unrelated save.
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
-| `/settings` | Six tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments, Accounts (incl. FTMO), Deposits / withdrawals, Bot bridge. Account deletion and reset live under Accounts |
+| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments, Accounts (incl. FTMO), Deposits / withdrawals. Account deletion and reset live under Accounts |
 | `/login` | Supabase auth |
 
 ---
@@ -311,8 +312,8 @@ is worth `0.3×1 + 0.3×2 + 0.4×3 = 2.1R`, not 3R. Since that number is the **d
 attainment, overstating it arrives as a low result — the metric would punish you precisely for
 scaling out. The nearest rung is the same error mirrored (1R, and an inflated result); no single
 rung answers the question, only the weighted plan does. `blendedPlannedRewardR` is one function for
-both shapes: with no rungs it IS entry-to-target. This is not a bot concern — a hand-typed scale-out
-always had the same arithmetic and the same wrong answer.
+both shapes: with no rungs it IS entry-to-target. Nothing about this depends on where the ladder came
+from — a hand-typed scale-out has the same arithmetic and the same wrong answer without weighting.
 
 **The annualisation factor is measured, not assumed.** `periodsPerYear = (trading days × 365) /
 calendar days spanned` — derived from the data instead of hardcoded at 252. A swing trader with 40
@@ -734,155 +735,6 @@ prices. The values stay in the import row's `raw`.
 
 ---
 
-## Bot bridge
-
-The only automatic writer into the journal. A cBot inside cTrader
-([`TradingJournalBridge`](https://github.com/0xsickre/trading-charting/tree/master/ctrader/TradingJournalBridge))
-reports **eight** facts plus a heartbeat, and the journal builds a trade out of them:
-
-| `kind` | Event at the broker | What the journal writes |
-|---|---|---|
-| `order_placed` | Pending order placed | New trade, `status = planned` |
-| `order_modified` | Order edited while still waiting | Same trade → new prices and size |
-| `order_filled` | Order filled | Same trade → entry fill, status derived from fills |
-| `order_cancelled` | Limit deleted without filling | Same trade → `status = missed` |
-| `position_opened` | **Market order** — a position with no pending order | New trade, entry fill included |
-| `position_modified` | Take profit moved after entry | Same trade → new `target_price` and TP rungs. **The stop is not touched** |
-| `position_excursion` | Price ran against and in favour of the trade | Same trade → **MAE and MFE** prices |
-| `position_closed` | **Exit** (full or partial) | Same trade → exit fill, status recomputed |
-| `heartbeat` | The bot is alive | Nothing on a trade — only the time it last reported |
-
-**The last two rows closed the two holes behind "the bot is buggy" (`20260828120000`).** The bridge
-tracked pending orders only, so a market order produced no event at all — and the
-`position_modified` that arrived afterwards went to quarantine as `unknown_position`, because the
-journal had never seen that position. The second: exits were never reported, and status is derived
-from fills, so **every bot trade stayed `open` forever** — outside `toRealized`, and therefore
-outside win rate, expectancy, profit factor and every report.
-
-**Status has one rule, in SQL.** `tj_status_from_executions(position_id, asserted)` sums entry and
-exit quantities and returns `planned` / `open` / `partial` / `closed`. Its mirror is `computeStatus`
-in `trade-lifecycle.ts` — the same pairing as `tj_position_stats` / `position-stats.ts`: SQL is the
-writer, TypeScript is the live preview in the form. Without it, the rule "exitQty < entryQty →
-partial" would exist in two implementations free to drift. `asserted` carries what fills cannot
-derive (`planned`, `missed`); the moment a fill exists, counting beats assertion.
-
-**A duplicate market order is resolved by the database, not the bot.** A position created from a
-pending order reports twice — both `order_filled` and `position_opened` — so both first look the
-position up by `broker_position_id`, and whichever arrives second becomes `already_present`. Arrival
-order stops being a question.
-
-**A planned trade shows its plan.** Every numeric column in `/journal` reads from
-`tj_position_stats`, and that view is built from fills — so a trade still waiting was a row of
-dashes, and the stop and target the bridge had just delivered appeared nowhere in the table. Hence
-the **Plan / Stop / Target** columns, and hence prices formatted by `tick_size_at_trade` rather than
-to two decimals: at two, a EURUSD stop of 1.16101 and a target of 1.16453 both become "1.16" — one
-wrong fact where there were three different ones.
-
-**A cancelled order becomes `missed`, but WITHOUT a reason.** cTrader says HOW an order ended
-(cancelled, expired); the journal's `miss_reason` list asks WHY the trade was not taken ("Setup
-invalidated", "Price ran away", "Discretion"). Those are two different questions and only a human
-answers the second — filling it from the first would write an answer nobody gave into a field the
-weekly review reads as a judgement. The broker's word travels in the payload, where it is evidence
-rather than an answer, and `needs_review` is raised so the empty field is a reminder. A filled trade
-**cannot** be marked as missed — `tj_position_missed_guard` has forbidden that since `20260730140000`.
-
-**MAE/MFE no longer has to be copied off a chart.** `max_drawdown_price` and `max_profit_price` have
-existed since `20260720130000`, and `excursion.ts` computes `maeR`, `mfeR` and **capture %** from
-them — all of it sat dead because it depended on two numbers a human would transcribe per trade, and
-nobody does that. The same shape as `scale_out_levels`: analysis written and tested, then starved.
-
-The bot measures on every tick and sends a checkpoint rarely, so tick resolution arrives here at the
-cost of a couple of rows per trade.
-
-**Manual entry wins, and a TRIGGER enforces it rather than a check inside the ingest function.**
-`tj_save_trade`, the form and every future importer write the same two columns, so each would have to
-remember the same rule — and the repo has already recorded where that leads: *"The database is the
-guard, not the action."* So the decision lives in one place every write passes through:
-`tj_excursion_source_guard` reads a flag `tj_bot_ingest` raises around **exactly one** `UPDATE` and
-lowers immediately. A write without that flag is, by definition, a human's. The bot's attempt on a
-hand-entered trade **puts the values back** instead of raising — an error would roll back the
-`tj_bot_events` insert too, so the event would vanish and the bot would retry the same rejected write
-forever.
-
-**After entry the stop is frozen, the take profit is not.** They are two different acts that look
-identical in the API. Pulling a stop to breakeven does not mean you risked nothing — it means you
-stopped risking what was already committed. Since `stop_price` is R's denominator, letting that
-through would make R divide by something near zero on precisely the trades you managed best, and
-expectancy, target attainment, MAE/MFE in R and the score would all quietly **reward moving the
-stop**. The stop at the moment of the fill is the risk actually taken, and that is the number the
-journal keeps. A take profit is not the same thing — it says where the trade should now end, nothing
-in R depends on it, so it is tracked. The bot does not even put the stop in the change fingerprint,
-so a BE pull sends no event rather than one the journal has to discard.
-
-**An edit only counts while the order is waiting, and that is the whole point.** Before entry, moving
-the stop **changes the plan** — the trade has not started, the risk you are about to take is now a
-different one, and `stop_price` has to follow it or the planned R:R describes an order you did not
-place. After entry, moving the stop is **managing the trade**. `order_modified` therefore refuses
-anything that is no longer `planned`.
-
-**Empty is not deletion.** The bot wins on four fields — entry price, stop, target, size — but a
-`stop_loss` cTrader reports as empty means "the bot has nothing to say", not "there is no stop". So
-stop and target are merged through `COALESCE`, and an edit cannot erase a stop you typed by hand.
-The price of that, acknowledged rather than hidden: **removing** protection in the platform does not
-propagate and has to be cleared by hand. A stale stop is visible on the trade and one click from a
-fix; a silently deleted one you notice after some R metric has been wrong for a month.
-
-**What the bot does NOT write.** Plan, thesis, psychology, setup grade, playbook, `risk_pct` and
-`planned_rr` stay empty. That is the boundary keeping the rule from § Deliberately left out:
-transcription is automated, judgement is not. A trade the bot wrote carries `source = 'bot'` and a
-visible badge in the table — a row you did not type must not look like one you did, because its
-emptiness means "not written yet", not "nothing to say".
-
-**How the bot is allowed to write.** Through `tj_bot_ingest`, a `SECURITY DEFINER` function exposed
-to the `anon` role and authorised by a **bot token** — not a password and not a service-role key,
-neither of which this repo has. The plaintext token is generated in the browser and shown once; only
-its SHA-256 reaches the server.
-
-The function deliberately **does not call `tj_save_trade`**. That one is `SECURITY INVOKER` and writes
-`auth.uid()`, which is `NULL` under the anon key; the only way to force it would be forging a JWT
-claim, which is a stronger version of exactly the hole that cost six functions their `EXECUTE` for
-`authenticated`. On top of that, its fill handling is a full replacement, so on an exit step it
-would delete the entry fill.
-
-**Idempotency is one `UNIQUE (user_id, event_key)`** over the append-only `tj_bot_events` log. Resends,
-a second bot instance and draining the outbox after a crash are all harmless because of it — in the
-database, not in the bot's memory.
-
-**Quarantine instead of guessing.** An unmapped account, an unmapped symbol or an unusable volume
-produce a quarantined event with a reason rather than a trade, visible in **Settings → Bot bridge**.
-That is "refuse rather than guess" applied to a machine feed.
-
-**Quantity per lot is confirmed, not derived.** The journal counts `qty` in lots/contracts, cTrader
-reports `VolumeInUnits` in base units. The bot sends both `Symbol.LotSize` and cTrader's own lot
-count, so the panel shows whether the divisor reproduces the broker's number — and only then does a
-human confirm it, once per symbol. On index CFDs the broker defines what "one lot" is, and a wrong
-divisor is a P&L wrong by orders of magnitude, presented as fact.
-
-**A deleted bot trade does not come back.** Idempotency is keyed on `event_key`, and it is already
-spent — resending the same event answers "duplicate" and does not recreate the row. Deletion is
-therefore final: the order still exists in cTrader, but it is absent from the journal until typed in
-by hand. That is deliberate — if it came back, you would delete a trade and watch it reappear.
-
-**`tj_bot_events` is append-only and grows.** One order with a few edits makes five to ten rows. It is
-an audit log and was designed as one; the panel reads only quarantined events, and with a limit, so
-the log's length never reaches the screen.
-
-**The bot must not run on cTrader Cloud.** Cloud instances do not send HTTP and do not report an error
-when they fail to, so the bridge would look healthy and deliver nothing. Hence the heartbeat, and
-hence the panel showing when the bot last reported: silence has to be visible from this side.
-
-**Multiple TP rungs are covered.** cTrader's advanced protection allows up to five take-profit levels
-on one order, each closing part of the position. The bot sends `take_profit_levels`
-(`[{"pct","price"}]`) alongside `take_profit_final`, and since `20260821160000` the ingest writes them
-into `tj_positions.scale_out_levels`, sorted by price, discarding any rung whose `pct` or `price` is
-not a positive number. `order_placed`, `order_modified`, `position_opened` and `position_modified`
-all use the same path, so the ladder can change after entry too.
-
-That is also why planned reward has to be **weighted** (§ Risk): a ladder arriving from the broker has
-the same arithmetic as a hand-typed scale-out, and the same wrong answer without weighting.
-
----
-
 ## Deletion
 
 Two operations outside import that delete data, both in `/settings` → Accounts, both without undo.
@@ -900,7 +752,7 @@ the trades without one** — still in every total, with no currency to convert t
 rows first, in one transaction. Proven against a live database inside a rolled-back transaction: an
 account with 21 trades leaves **0 orphaned** positions, and 0 fills, rule answers and images.
 
-**Reset everything** (`tj_reset_my_data`). Deletes all 30 tables for the caller, then calls
+**Reset everything** (`tj_reset_my_data`). Deletes all 27 tables for the caller, then calls
 `tj_seed_my_defaults()` — the same seed the dashboard runs on an empty account, so "reset" and "first
 load ever" end in the same state. It asks for `RESET EVERYTHING` to be typed.
 
@@ -1055,7 +907,7 @@ container does not have. It stays a later option, not an oversight.
 | Not built | Why |
 |---|---|
 | Backtesting and trade replay | Done directly in TradingView. An embed does not help: Bar Replay lives in their application, and the widget is a black box the code cannot step through. Its results come back through import (§ Import → TradingView backtests) |
-| Broker sync that fills in a whole trade | Manual entry is a choice and an advantage — it forces the trade to be read once more. The bot bridge (above) records only what the broker already did; everything that is a judgement is still typed |
+| Broker sync that fills in a whole trade | Manual entry is a choice and an advantage — it forces the trade to be read once more. A statement import corrects the objective numbers afterwards; everything that is a judgement is still typed |
 | Spaces, mentor, leaderboard | Single-user system |
 | AI chat and agents | The mentor-pack export and the insight rules give the same thing without the API cost |
 | Options (DTE, strike, expiry) | Not traded |
@@ -1063,17 +915,18 @@ container does not have. It stays a later option, not an oversight.
 | Economic calendar | Lives in the vault repo |
 | Running P&L curve per trade | Needs a price feed. Consequence: "most time in drawdown" is off the table |
 
-**Blocked, not rejected:** MAE/MFE **from historical candles** (Phase 8B). For trades the bot bridge
-drives this is no longer needed — `position_excursion` delivers them live, at tick resolution. It
-remains for everything else: hand-entered and imported trades, and everything traded before the
-bridge existed.
+**Blocked, not rejected:** MAE/MFE **from historical candles** (Phase 8B). Today every MAE/MFE in the
+journal is typed by hand, on any trade that has one, and the fields carry nothing else.
 
 The scanning logic and the interval choice are written and tested — `excursion-scan.ts` picks 1m
 through 1h by holding time, and a candle only counts if it fits entirely inside the trade's window.
-All that is missing is an adapter for the feed. **The source changed from OANDA to the cTrader Open
-API**: OANDA withdrew v20 access for EU clients in 2017, and since the trading happens through
-cTrader anyway, that feed is literally the one being traded on. The application is registered and
-waiting on Spotware KYC; the full plan is in [`FAZA_8B_PLAN.md`](FAZA_8B_PLAN.md).
+It takes candles and never cared which broker they came from. **What is missing is the feed, and
+which feed it will be is now an open question.** The cTrader Open API was the answer while a cTrader
+bridge existed; with the move to MT4/MT5 that answer is gone, and nothing has replaced it yet. The
+candidates worth investigating, none of them chosen: an MT5 terminal export of the minutes around each
+trade, an Expert Advisor that records the extremes while a position is open, or any third-party candle
+API for the handful of instruments actually traded. Recorded here rather than left implicit, because
+`max_drawdown_price` and `max_profit_price` will otherwise look like fields somebody forgot to fill.
 
 ---
 

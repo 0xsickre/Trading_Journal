@@ -754,29 +754,28 @@ Dva pravila nose svaki broj, oba pinovana testom:
 Vraća se sirovi ekstrem, nikad odsečen na ulaznu cenu — `excursionFromTrade` već svodi ne-adverzni
 MAE na 0 i broji ga kao „nikad nije bio u minusu".
 
-#### Preostalo — polovina B (blokirana, čeka cTrader KYC) — **izvor promenjen sa OANDA na cTrader**
+#### Preostalo — polovina B: **izvor MAE/MFE je otvoreno pitanje (MT4/MT5)**
 
-**Izvor je promenjen.** Originalni plan (OANDA v20 REST) je mrtav: OANDA je 2017. ukinula v20 API
-pristup za EU klijente, a vlasnikov OANDA nalog je EU-regulisan (potvrđeno — nema API opcije nigde u
-nalogu, samo Dashboard/Manage Funds/Profile settings).
+**Stanje na 18.09.2026:** MAE/MFE se unosi isključivo rukom, na trejdu koji ga ima. Logika koja ih
+računa iz sveća je napisana i testirana (`excursion-scan.ts`: bira 1m–1h prema dužini držanja, sveća
+se broji samo ako cela staje u prozor trejda) i ne zavisi od izvora. **Nedostaje feed.**
 
-Pošto vlasnik trguje FTMO preko **cTrader** platforme, nova odluka je **cTrader Open API** —
-besplatan, zvaničan, OAuth2, i vraća doslovno isti feed na kom se trguje (tačnije od bilo koje treće
-strane, uključujući OANDA aproksimaciju iz starog plana). Za razliku od OANDA v20, cTrader sveće idu
-preko **Protobuf-preko-TLS TCP-a**, ne REST-a — to menja oblik adaptera, videti detaljan plan.
+**Dosadašnji izvori su otpali, oba:**
+- OANDA v20 REST — OANDA je 2017. ukinula v20 pristup za EU klijente, a vlasnikov nalog je
+  EU-regulisan (provereno u samom nalogu).
+- cTrader Open API — bio je odgovor dok je postojao cTrader bot most. Prelaskom na MT4/MT5 taj
+  odgovor otpada, a bot most je uklonjen (v. Fazu 11).
 
-**Trenutni status:** cTrader Open API aplikacija ("Trading Journal Price History Reader") je
-registrovana na openapi.ctrader.com, scope "Account info" (read-only), status **"Submitted"** —
-čeka Spotware KYC odobrenje (~3 radna dana, ni Sandbox test ne radi pre toga). Client ID/Secret su
-sačuvani u `.env.local`.
+**Kandidati koje tek treba ispitati, nijedan nije izabran:**
+1. MT5 terminal export minuta oko svakog trejda (bez mreže, ali ručni korak po trejdu).
+2. Expert Advisor koji dok je pozicija otvorena beleži ekstreme i šalje ih dnevniku — isti oblik kao
+   stari most, samo za MT4/5. Ako se ovo izabere, nauk iz Faze 11 važi: heartbeat, idempotentnost po
+   ključu događaja, i karantin umesto pogađanja naloga.
+3. Treći candle API za nekoliko instrumenata koji se stvarno trguju.
 
-**Blokada:** ništa se ne može testirati protiv prave cTrader konekcije dok app ne dobije status
-"Active". Deo posla (migracija, OAuth token exchange, skelet server akcije sa stub adapterom) se
-može graditi i testirati već sada, bez mreže.
-
-Pun plan — OAuth flow, šema migracije, dizajn adaptera (TCP/protobuf iz Vercel serverless funkcije),
-mapiranje simbola, server akcije, test strategija i tačna sekvenca (šta se gradi sada vs. šta čeka
-KYC) — je u [FAZA_8B_PLAN.md](FAZA_8B_PLAN.md).
+Dok se izvor ne izabere, `max_drawdown_price` i `max_profit_price` su polja koja se popunjavaju rukom
+— to je zapisano i u README § „Blocked, not rejected", da ne izgledaju kao polja koja je neko
+zaboravio.
 
 Ono što ostaje tačno iz originalnog plana: **ručno mora da pobedi automatski** (automatika piše samo
 kad je `excursion_source` prazan ili `'auto'`, isti obrazac kao frozen verdikti u trackeru F5), i
@@ -938,7 +937,18 @@ odvrteti.
 
 ---
 
-## Faza 11 — bot most: order → planirani trejd → aktivni trejd (avgust 2026.)
+## Faza 11 — bot most: order → planirani trejd → aktivni trejd (avgust 2026.) — **UKLONJENO 18.09.2026.**
+
+> **Ova faza više ne postoji u kodu.** Bot most je govorio samo cTrader, a trgovanje prelazi na
+> MT4/MT5, pa je ostao kao površina koju niko ne koristi: `tj_bot_ingest` izložen `anon` roli, tabela
+> tokena i tri tabele stanja koje moraju da budu tačne zbog brokera sa kojim dnevnik više ne priča.
+> Migracija `20260918120000_remove_bot_bridge.sql` briše tabele, funkcije i `broker*` kolone, a
+> trejdove koje je most upisao prebacuje na `source = 'manual'` — **nijedan trejd ni fill nije
+> izgubljen**, izgubljen je samo log događaja, koji se ne može rekonstruisati i nije potreban da bi
+> se ijedan trejd objasnio. Ono što je most davao besplatno, a sada nemamo, jesu MAE/MFE cene — v.
+> Fazu 8B ispod.
+>
+> Tekst faze ostaje kao zapis šta je bilo urađeno i zašto.
 
 **Povod.** Dnevnik je do sada dobijao svaki trejd rukom, uključujući i delove koje je broker već
 ustanovio: simbol, smer, limit cenu, stop i cenu po kojoj se fill stvarno desio. Prepisivanje nije

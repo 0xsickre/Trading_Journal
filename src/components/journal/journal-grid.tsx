@@ -27,7 +27,6 @@ import {
   Tag as TagIcon,
   Trash2,
   AlertTriangle,
-  Bot,
   ExternalLink,
   SlidersHorizontal,
 } from "lucide-react";
@@ -556,7 +555,7 @@ export function JournalGrid({
       // The plan, as opposed to what happened. Separate from `avg_entry` on
       // purpose: that column is the average FILL, so a trade still waiting shows
       // an em dash there and would otherwise show nothing anywhere — which is
-      // how a bot-written planned trade ends up as a row of dashes.
+      // how a planned trade ends up as a row of dashes.
       //
       // Prices format against the trade's own frozen tick size, because two
       // decimals turns a EURUSD stop of 1.16101 and a target of 1.16453 into the
@@ -695,14 +694,6 @@ export function JournalGrid({
               {t.needs_review && (
                 <span title="Needs review">
                   <AlertTriangle className="size-3.5 text-[var(--chart-4)]" />
-                </span>
-              )}
-              {/* A row nobody typed must not read as one they did. The bridge
-                  records broker facts only, so the rest of this trade is still
-                  waiting to be written by hand. */}
-              {t.source === "bot" && (
-                <span title="Recorded by the bot bridge from cTrader">
-                  <Bot className="size-3.5 text-muted-foreground" />
                 </span>
               )}
             </div>

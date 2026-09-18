@@ -70,10 +70,6 @@ export type Account = {
   id: string;
   name: string;
   broker: string | null;
-  /** Broker-side account number the bot bridge reports under, e.g. a cTrader
-   * Account.Number. Null until mapped in Settings; an unmapped number
-   * quarantines the bot's events rather than guessing an account. */
-  broker_account_id: string | null;
   currency: string;
   starting_balance: number;
   default_asset_class: string | null;

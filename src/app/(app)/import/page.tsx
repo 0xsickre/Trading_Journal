@@ -28,7 +28,6 @@ export default async function ImportPage() {
     totalSwap: t.stats?.total_swap ?? 0,
     grossPl: t.stats?.gross_pl ?? null,
     netPl: t.stats?.net_pl ?? null,
-    brokerPositionId: (t.broker_position_id as string) ?? null,
   }));
 
   return (

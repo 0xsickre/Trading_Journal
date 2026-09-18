@@ -12,36 +12,16 @@ import { CashEventsManager } from "@/components/journal/cash-events-manager";
 import { TrackerRuleManager } from "@/components/journal/tracker-rule-manager";
 import { getTrackerRules } from "@/lib/journal/tracker/queries";
 import { PageHeader } from "@/components/app/page-header";
-import { BotBridgeManager } from "@/components/journal/bot-bridge-manager";
-import {
-  countQuarantinedEvents,
-  getBotTokens,
-  getBrokerSymbolMaps,
-  getQuarantinedEvents,
-} from "@/lib/journal/bot-queries";
 
 export default async function SettingsPage() {
-  const [
-    lists,
-    instruments,
-    accounts,
-    cashEvents,
-    trackerRules,
-    botTokens,
-    symbolMaps,
-    quarantined,
-    quarantineTotal,
-  ] = await Promise.all([
+  const [lists, instruments, accounts, cashEvents, trackerRules] =
+    await Promise.all([
       getListsWithItems(false),
       getInstruments(false),
       getAccounts(),
       getCashEvents(),
       // Retired rules included, for the same reason.
       getTrackerRules({ includeRetired: true }),
-      getBotTokens(),
-      getBrokerSymbolMaps(),
-      getQuarantinedEvents(),
-      countQuarantinedEvents(),
     ]);
 
 
@@ -76,9 +56,6 @@ export default async function SettingsPage() {
           </TabsTrigger>
           <TabsTrigger value="cash" className="flex-none">
             Deposits / withdrawals
-          </TabsTrigger>
-          <TabsTrigger value="bot" className="flex-none">
-            Bot most
           </TabsTrigger>
         </TabsList>
 
@@ -118,22 +95,6 @@ export default async function SettingsPage() {
 
         <TabsContent value="cash">
           <CashEventsManager accounts={accounts} events={cashEvents} />
-        </TabsContent>
-
-        <TabsContent value="bot">
-          {/*
-            Instruments are passed as bare symbols: the mapping question is
-            "which instrument does this broker symbol mean", and the answer is
-            the symbol itself — the rest of the catalogue row is not part of it.
-          */}
-          <BotBridgeManager
-            accounts={accounts}
-            tokens={botTokens}
-            symbolMaps={symbolMaps}
-            quarantined={quarantined}
-            quarantineTotal={quarantineTotal}
-            instruments={instruments.map((i) => i.symbol)}
-          />
         </TabsContent>
       </Tabs>
     </div>

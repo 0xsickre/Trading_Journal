@@ -29,9 +29,6 @@ const c = (over: Partial<MatchCandidate> = {}): MatchCandidate => ({
   totalSwap: 0,
   grossPl: 500,
   netPl: 496,
-  // A manual trade by default: a bot trade is never merged into, so every test
-  // below would quietly turn it into a "new".
-  brokerPositionId: null,
   ...over,
 });
 
@@ -162,35 +159,5 @@ describe("symbol aliasing still works through the module", () => {
     // rule.
     expect(instrumentsMatch("ES", "ES")).toBe(true);
     expect(match({ ...row, instrument: "es" }).status).toBe("match");
-  });
-});
-
-describe("a trade written by the bot bridge", () => {
-  /**
-   * A merge calls `tj_replace_executions`, a full replacement of the fills. The
-   * bridge holds the price off the fill itself, the statement holds a rounded
-   * report — so merging would swap the more precise datum for the coarser one,
-   * invisibly.
-   */
-  it("se NE spaja, iako se poklapa u svemu ostalom", () => {
-    const bot = c({ id: "bot1", brokerPositionId: "10558247" });
-    const out = match(row, [bot]);
-
-    expect(out.status).toBe("new");
-    expect(out.matched).toBeNull();
-    expect(out.candidates).toEqual([]);
-  });
-
-  it("does not hide a manual trade standing beside it", () => {
-    // A duplicate is a visible outcome and that is deliberate; what must not
-    // happen is the bot trade pulling the row onto itself and thereby hiding
-    // that a manual one exists.
-    const bot = c({ id: "bot1", brokerPositionId: "10558247" });
-    const manual = c({ id: "man1" });
-
-    const out = match(row, [bot, manual]);
-
-    expect(out.status).toBe("match");
-    expect(out.matched?.id).toBe("man1");
   });
 });

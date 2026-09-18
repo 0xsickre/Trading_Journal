@@ -44,12 +44,6 @@ export type MatchCandidate = {
   totalSwap: number | null;
   grossPl: number | null;
   netPl: number | null;
-  /**
-   * The broker's position id, when the trade was written by the bot bridge.
-   *
-   * It exists so that `sameTrade` can REFUSE it. See there.
-   */
-  brokerPositionId: string | null;
 };
 
 /**
@@ -102,21 +96,6 @@ function sameTrade(
   row: ImportRowKey,
   instrumentsMatch: (a: string, b: string) => boolean,
 ): boolean {
-  // A trade written by the bot bridge is NEVER merged into.
-  //
-  // A merge calls `tj_replace_executions`, which is a full replacement: it
-  // would delete the entry fill the bridge got from the broker at the moment of
-  // execution and swap in the one from the statement. A statement is a rounded
-  // report, while the bridge holds the price off the fill itself —
-  // pa bi spajanje zamenilo precizniji podatak grubljim, i to nevidljivo.
-  //
-  // The consequence is a duplicate when a statement covers a period the bridge
-  // already recorded. That is deliberate, and it is the same asymmetry
-  // `ambiguous` chooses above: a spare trade is deleted in one move, while a
-  // lost fill stays invisible until somebody looks. ROADMAP § Phase 11 named
-  // this measure as necessary; this is it.
-  if (c.brokerPositionId != null) return false;
-
   if (!c.instrument || !row.instrument) return false;
   if (!instrumentsMatch(c.instrument, row.instrument)) return false;
   if ((c.direction ?? "").toLowerCase() !== (row.direction ?? "").toLowerCase()) {

@@ -14,7 +14,9 @@
  * `types.ts` and fails when the list falls behind a migration again — and it
  * has failed twice: on the `broker*` columns and on `excursion_source`
  * (21 Aug), both times before anyone had made a field that would have masked
- * them.
+ * them. Both of those columns went again with the bot bridge
+ * (20260918120000_remove_bot_bridge.sql), and the test is why this list shrank
+ * with them instead of keeping names the schema no longer has.
  */
 export const RESERVED_KEYS = new Set([
   "id",
@@ -59,9 +61,4 @@ export const RESERVED_KEYS = new Set([
   "invalidation",
   "time_stop_days",
   "scale_out_plan",
-  "broker",
-  "broker_account",
-  "broker_order_id",
-  "broker_position_id",
-  "excursion_source",
 ]);

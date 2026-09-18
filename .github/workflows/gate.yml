@@ -10,7 +10,7 @@
 #   typecheck     ~10 s   hvata najveći deo izmena koje ne stoje
 #   scan          ~2 s    bajtovi: NUL, nevalidan JSON, .only, console.log
 #   schema:check  ~1 s    zapis baznih tabela protiv generisanih tipova
-#   test          ~60 s   2344 tvrdnje, uključujući podove pokrivenosti
+#   test          ~60 s   2326 tvrdnji, uključujući podove pokrivenosti
 #   lint          ~20 s   nula problema, bez izuzetka
 #   build         ~60 s   jedino mesto koje izvršava Next-ov compiler
 #   dead (knip)   ~20 s   nula mrtvih fajlova, zavisnosti i export-a

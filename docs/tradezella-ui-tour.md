@@ -526,9 +526,9 @@ uneo. (Dokaz: moje izmišljene CSV cene od 1.087 dale su MAE/MFE od 1.16866/1.17
 tržišne cene EURUSD-a tog dana.) Ručno uneti trejd zato stoji na „Calculating…" — nema šta da se
 poveže.
 
-> **Zašto je ovo najvažniji nalaz za nas**: mi MAE/MFE već snimamo — direktno sa bota, iz stvarnog
-> brokerskog toka cena u stvarnom trenutku, što je **tačnije od rekonstrukcije iz feed-a**. Ono što
-> nemamo je OBLIK PRIKAZA. Ovaj ih daje gotov, na tri nivoa: traka po trejdu, „best exit" kolone u
+> **Zašto je ovo najvažniji nalaz za nas**: MAE/MFE kod nas trenutno stoji na ručnom unosu — bot
+> most koji ih je hvatao je uklonjen sa prelaskom na MT4/MT5, a izvor tek treba naći (README §
+> „Blocked, not rejected"). Ono što ovde dobijamo je OBLIK PRIKAZA, nezavisno od izvora. Ovaj ih daje gotov, na tri nivoa: traka po trejdu, „best exit" kolone u
 > gridu, i agregatna traka po danima.
 
 ## 2. Korisnik upravlja svojim kategorijama (bez izmene koda)
@@ -636,7 +636,8 @@ Ručna oznaka „pregledano", odvojena od postojanja beleške, sa filterom u gri
   poštovanje pravila STVARNO donelo bolji ishod. Naša podela to meri.
 - **Prilagodljiv dashboard** (Layout / Sections) — njihov je fiksan.
 - **Slobodan izbor dimenzije + metrike** u izveštajima — njihov je unapred sastavljen.
-- **MAE/MFE direktno sa bota** — tačnije od rekonstrukcije iz istorijskog feed-a.
+- **MAE/MFE** — kod njih iz rekonstrukcije feed-a, kod nas za sada ručni unos; izvor za MT4/MT5 je
+  otvoreno pitanje.
 
 ---
 

@@ -20,7 +20,6 @@ export type Database = {
           breakeven_to: number
           breakeven_unit: string
           broker: string | null
-          broker_account_id: string | null
           created_at: string
           currency: string
           default_asset_class: string | null
@@ -52,7 +51,6 @@ export type Database = {
           breakeven_to?: number
           breakeven_unit?: string
           broker?: string | null
-          broker_account_id?: string | null
           created_at?: string
           currency?: string
           default_asset_class?: string | null
@@ -84,7 +82,6 @@ export type Database = {
           breakeven_to?: number
           breakeven_unit?: string
           broker?: string | null
-          broker_account_id?: string | null
           created_at?: string
           currency?: string
           default_asset_class?: string | null
@@ -112,144 +109,6 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
-      }
-      tj_bot_events: {
-        Row: {
-          broker: string
-          broker_account: string
-          event_key: string
-          id: string
-          kind: string
-          payload: Json
-          position_id: string | null
-          reason: string | null
-          received_at: string
-          status: string
-          token_id: string | null
-          user_id: string
-        }
-        Insert: {
-          broker: string
-          broker_account: string
-          event_key: string
-          id?: string
-          kind: string
-          payload?: Json
-          position_id?: string | null
-          reason?: string | null
-          received_at?: string
-          status: string
-          token_id?: string | null
-          user_id: string
-        }
-        Update: {
-          broker?: string
-          broker_account?: string
-          event_key?: string
-          id?: string
-          kind?: string
-          payload?: Json
-          position_id?: string | null
-          reason?: string | null
-          received_at?: string
-          status?: string
-          token_id?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tj_bot_events_position_id_fkey"
-            columns: ["position_id"]
-            isOneToOne: false
-            referencedRelation: "tj_position_stats"
-            referencedColumns: ["position_id"]
-          },
-          {
-            foreignKeyName: "tj_bot_events_position_id_fkey"
-            columns: ["position_id"]
-            isOneToOne: false
-            referencedRelation: "tj_positions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tj_bot_events_token_id_fkey"
-            columns: ["token_id"]
-            isOneToOne: false
-            referencedRelation: "tj_bot_tokens"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      tj_bot_tokens: {
-        Row: {
-          created_at: string
-          id: string
-          label: string
-          last_used_at: string | null
-          revoked_at: string | null
-          token_hash: string
-          token_prefix: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          label: string
-          last_used_at?: string | null
-          revoked_at?: string | null
-          token_hash: string
-          token_prefix: string
-          user_id?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          label?: string
-          last_used_at?: string | null
-          revoked_at?: string | null
-          token_hash?: string
-          token_prefix?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      tj_broker_symbol_map: {
-        Row: {
-          broker: string
-          broker_symbol: string
-          created_at: string
-          id: string
-          instrument: string
-          units_per_qty: number
-          user_id: string
-        }
-        Insert: {
-          broker: string
-          broker_symbol: string
-          created_at?: string
-          id?: string
-          instrument: string
-          units_per_qty: number
-          user_id?: string
-        }
-        Update: {
-          broker?: string
-          broker_symbol?: string
-          created_at?: string
-          id?: string
-          instrument?: string
-          units_per_qty?: number
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tj_broker_symbol_map_instrument_fkey"
-            columns: ["user_id", "instrument"]
-            isOneToOne: false
-            referencedRelation: "tj_instruments"
-            referencedColumns: ["user_id", "symbol"]
-          },
-        ]
       }
       tj_cash_events: {
         Row: {
@@ -1143,16 +1002,11 @@ export type Database = {
       tj_positions: {
         Row: {
           account_id: string | null
-          broker: string | null
-          broker_account: string | null
-          broker_order_id: string | null
-          broker_position_id: string | null
           conviction: number | null
           created_at: string
           custom: Json
           direction: string | null
           entry_price: number | null
-          excursion_source: string | null
           execution_rating: number | null
           exit_reason: string | null
           fx_rate_at_trade: number | null
@@ -1192,16 +1046,11 @@ export type Database = {
         }
         Insert: {
           account_id?: string | null
-          broker?: string | null
-          broker_account?: string | null
-          broker_order_id?: string | null
-          broker_position_id?: string | null
           conviction?: number | null
           created_at?: string
           custom?: Json
           direction?: string | null
           entry_price?: number | null
-          excursion_source?: string | null
           execution_rating?: number | null
           exit_reason?: string | null
           fx_rate_at_trade?: number | null
@@ -1241,16 +1090,11 @@ export type Database = {
         }
         Update: {
           account_id?: string | null
-          broker?: string | null
-          broker_account?: string | null
-          broker_order_id?: string | null
-          broker_position_id?: string | null
           conviction?: number | null
           created_at?: string
           custom?: Json
           direction?: string | null
           entry_price?: number | null
-          excursion_source?: string | null
           execution_rating?: number | null
           exit_reason?: string | null
           fx_rate_at_trade?: number | null
@@ -1615,7 +1459,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      tj_bot_ingest: { Args: { p_event: Json; p_token: string }; Returns: Json }
       tj_bulk_add_tag: {
         Args: { p_ids: string[]; p_kind: string; p_values: string[] }
         Returns: undefined
