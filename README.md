@@ -707,12 +707,16 @@ Every refused cell is named on its own row in the preview (`unreadable: qty, fee
 
 A Strategy Tester or Bar Replay export ("List of trades" → Excel) is recognised by its header and
 imported without column mapping (`lib/journal/tradingview-export.ts`). Import it into a separate
-account, so backtest numbers never mix with live ones. Three things about the export would each
+account, so backtest numbers never mix with live ones. Four things about the export would each
 produce a confidently wrong trade through the generic mapping, and each is handled:
 
 - **A trade is two rows**, "Entry long" and "Exit long" under one trade number. They are joined into
   one trade. A trade that does not pair cleanly is shown, named and skipped by default, never
   dropped. An exit signalled `Open` is a mark at the last bar, so it is not imported as a fill.
+- **A partial exit is a separate trade.** A long closed in two parts is exported as two trade numbers,
+  each with its own entry row at the same time, price and order. They are joined into one position:
+  one entry for the whole size and one exit per part, each with its own time, size and commission.
+  A trade with a problem is never joined, so its problem stays on its own row.
 - **The trades are on the second sheet.** The first one, "Performance", is a summary.
 - **Size is in TradingView's units**: pounds of copper, ounces of gold, contracts for futures. A fill
   here is counted in lots. The scale is read from the export's own money: gross result ÷ (move ×

@@ -1,6 +1,6 @@
-// TradingView Strategy Tester / Bar Replay export → one import row per trade.
+// TradingView Strategy Tester / Bar Replay export → one import row per position.
 //
-// The export ("List of trades" → Excel) is not a broker statement, and three
+// The export ("List of trades" → Excel) is not a broker statement, and four
 // things about it would each import a confidently wrong trade through the
 // generic column mapping:
 //
@@ -12,6 +12,9 @@
 //      a CFD, contracts for futures — while a fill's `qty` here is counted in
 //      the instrument's own lots (see default-instruments.ts). 50 oz of gold
 //      would import as 50 lots: a hundred times the money.
+//   4. A position closed in parts is exported as one "trade" per exit, each
+//      with its own entry row at the same time and price. They are joined back
+//      into one position (`groupTradingViewPositions`).
 //
 // The third is not resolved by guessing the symbol's kind. The export carries
 // its own money, so the scale is READ from it: TradingView's gross result
@@ -140,6 +143,8 @@ export type TradingViewTrade = {
   size: number;
   entryPrice: number;
   entryTime: string;
+  /** The entry order's name, e.g. "Buy limit order" — part of what makes two trades one fill. */
+  entrySignal: string;
   exitPrice: number | null;
   exitTime: string | null;
   commission: number;
@@ -226,6 +231,7 @@ export function readTradingViewExport(rows: Record<string, unknown>[]): TradingV
       size: size ?? 0,
       entryPrice: entryPrice ?? 0,
       entryTime: entryTime ?? "",
+      entrySignal: textOf(entry[SIGNAL]),
       exitPrice,
       exitTime,
       commission: commission ?? 0,
@@ -311,4 +317,93 @@ export function tradingViewPnlMismatch(
   const tolerance = Math.max(0.05, Math.abs(gross) * 0.005);
   if (Math.abs(implied - gross) <= tolerance) return null;
   return `P&L ${round(gross)} ≠ size × move ${round(implied)}`;
+}
+
+/** One exit fill of a position — a TradingView trade that closed. */
+export type TradingViewExitLeg = {
+  number: string;
+  price: number;
+  time: string;
+  size: number;
+  commission: number;
+};
+
+/**
+ * What the journal calls one trade: one entry fill, and every exit taken out
+ * of it.
+ *
+ * TradingView splits a position into one "trade" per exit. A long of 1.65
+ * lots closed 0.5 at the first target and 1.15 at the second is exported as
+ * trades #1 and #2, each with its own entry row — same time, same price, same
+ * order — and each size cut to its exit. Imported as they stand they are two
+ * positions, and there is no operation that joins two positions afterwards.
+ */
+export type TradingViewPosition = {
+  /** TradingView's trade numbers this position is made of. */
+  numbers: string[];
+  direction: "Long" | "Short";
+  entryPrice: number;
+  entryTime: string;
+  /** The whole entry: the sum of every leg's size. */
+  size: number;
+  /** Closed legs, earliest first. A leg still open has no exit here. */
+  exits: TradingViewExitLeg[];
+  /** Commission of the legs still open — charged on the entry, since nothing closed them. */
+  openCommission: number;
+  /** Every leg's problem, named with its trade number. `null` when there is none. */
+  problem: string | null;
+};
+
+/**
+ * Joins the trades TradingView split off one entry back into one position.
+ *
+ * Trades are one entry when direction, entry time, entry price and entry order
+ * all agree. A trade with a problem is never joined: it stands alone, so the
+ * problem stays on the row it belongs to and cannot skip its neighbours.
+ */
+export function groupTradingViewPositions(trades: TradingViewTrade[]): TradingViewPosition[] {
+  const byEntry = new Map<string, TradingViewTrade[]>();
+  const order: TradingViewTrade[][] = [];
+  for (const t of trades) {
+    if (t.problem) {
+      order.push([t]);
+      continue;
+    }
+    const key = [t.direction, t.entryTime, t.entryPrice, t.entrySignal].join("|");
+    const group = byEntry.get(key);
+    if (group) {
+      group.push(t);
+    } else {
+      const fresh = [t];
+      byEntry.set(key, fresh);
+      order.push(fresh);
+    }
+  }
+
+  return order.map((legs) => {
+    const first = legs[0];
+    const exits: TradingViewExitLeg[] = [];
+    let openCommission = 0;
+    for (const t of legs) {
+      if (t.exitPrice != null && t.exitTime != null) {
+        exits.push({ number: t.number, price: t.exitPrice, time: t.exitTime, size: t.size, commission: t.commission });
+      } else {
+        openCommission += t.commission;
+      }
+    }
+    exits.sort((a, b) => a.time.localeCompare(b.time));
+    const problems = legs
+      .filter((t) => t.problem)
+      .map((t) => (legs.length > 1 ? `#${t.number}: ${t.problem}` : t.problem!));
+    return {
+      numbers: legs.map((t) => t.number),
+      direction: first.direction,
+      entryPrice: first.entryPrice,
+      entryTime: first.entryTime,
+      size: legs.reduce((s, t) => s + t.size, 0),
+      exits,
+      openCommission,
+      problem: problems.length > 0 ? problems.join("; ") : null,
+    };
+  });
 }

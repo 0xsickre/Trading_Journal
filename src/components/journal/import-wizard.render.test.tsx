@@ -435,3 +435,61 @@ describe("TradingView's list of trades", () => {
     expect(screen.queryByRole("button", { name: /Reconcile/ })).not.toBeInTheDocument();
   });
 });
+
+describe("TradingView partial exits", () => {
+  const HEADERS = [
+    "Trade number", "Type", "Date and time", "Signal", "Price USD", "Size (qty)",
+    "Net PnL USD", "Commission USD",
+  ];
+  const at = (h: number) => Date.UTC(2023, 1, 9, h) / 86_400_000 + 25569;
+
+  it("one entry closed in two parts imports as one position with two exits", async () => {
+    const XLSX = await import("xlsx");
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["", "All USD"]]), "Performance");
+    // 165 oz of gold at 1313.05, closed 50 oz at 1321.38 and 115 oz at 1351.12.
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([
+        HEADERS,
+        [1, "Exit long", at(11), "TP1", 1321.38, 50, 416.5 - 0.66, 0.66],
+        [1, "Entry long", at(9), "Long", 1313.05, 50, 416.5 - 0.66, 0.66],
+        [2, "Exit long", at(15), "TP2", 1351.12, 115, 4378.05 - 1.53, 1.53],
+        [2, "Entry long", at(9), "Long", 1313.05, 115, 4378.05 - 1.53, 1.53],
+      ]),
+      "Trades",
+    );
+    const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+    const file = new File([buf], "Replay_Trading_OANDA_XAUUSD_2026-09-18_a1b2c.xlsx");
+
+    const user = userEvent.setup({ delay: null });
+    render(
+      <ImportWizard
+        accounts={[ACCOUNT]}
+        candidates={[]}
+        instruments={[{ symbol: "XAUUSD", point_value: 100 }]}
+      />,
+    );
+    await upload(user, file);
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+
+    expect(screen.getAllByText("XAUUSD")).toHaveLength(1);
+    expect(screen.getByText(/2 exits/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+
+    await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
+    const items = commitImportMock.mock.calls[0][0].items;
+    expect(items).toHaveLength(1);
+    const execs = items[0].executions as { side: string; price: number; qty: number; fee: number; executed_at: string }[];
+    const entries = execs.filter((e) => e.side === "entry");
+    const exits = execs.filter((e) => e.side === "exit");
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ price: 1313.05, qty: 1.65, fee: 0, executed_at: "2023-02-09T14:00:00.000Z" });
+    expect(exits.map((e) => [e.price, e.qty, e.fee])).toEqual([
+      [1321.38, 0.5, 0.66],
+      [1351.12, 1.15, 1.53],
+    ]);
+    // Fully closed: the exits add up to the entry exactly, not to a rounding residue under it.
+    expect(exits.reduce((s, e) => s + e.qty, 0)).toBe(entries[0].qty);
+  });
+});

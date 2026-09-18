@@ -25,6 +25,7 @@ import {
 import { matchImportRow, type MatchCandidate } from "@/lib/journal/import-match";
 import {
   TRADINGVIEW_SHEET,
+  groupTradingViewPositions,
   isTradingViewTrades,
   readTradingViewExport,
   resolveTradingViewScale,
@@ -110,6 +111,17 @@ const TV_MAP: Record<Canonical, string> = {
   profit: "",
 };
 const TV_ISSUE = "Issue";
+
+/**
+ * The fills of a row whose source already knows them one by one — a position
+ * TradingView closed in several exits. The flat row cannot carry more than one
+ * exit, so these travel beside it, in the same order.
+ */
+type FillPlan = {
+  /** Commission of legs still open, charged on the entry. */
+  entryFee: number;
+  exits: { price: number; qty: number; time: string; fee: number }[];
+};
 
 /** An instrument's point value, the one figure the TradingView size check needs. */
 export type ImportInstrument = { symbol: string; point_value: number | null };
@@ -221,7 +233,7 @@ export function ImportWizard({
    * TradingView trades as the flat table the row builder reads, or `null`
    * after saying why the file as a whole cannot be imported.
    */
-  function tradingViewRows(): Record<string, string>[] | null {
+  function tradingViewRows(): { rows: Record<string, string>[]; plans: FillPlan[] } | null {
     if (!tv) return null;
     const currency = tv.data.currency;
     if (account && account.currency !== currency) {
@@ -245,29 +257,66 @@ export function ImportWizard({
       toast.error(`The size cannot be matched to ${instrument}: ${scale.error}.`);
       return null;
     }
-    const cell = (n: number | null) => (n == null ? "" : String(n));
-    return tv.data.trades.map((t) => ({
-      Symbol: tv.symbol,
-      Side: t.direction,
-      Qty: String(Number((t.size / scale.divisor).toFixed(8))),
-      "Entry price": String(t.entryPrice),
-      "Entry time": t.entryTime,
-      "Exit price": cell(t.exitPrice),
-      "Exit time": t.exitTime ?? "",
-      Commission: String(t.commission),
-      "TradingView trade": t.number,
-      "TradingView size": String(t.size),
-      "TradingView net P&L": cell(t.netPnl),
-      "TradingView favorable excursion": cell(t.favorable),
-      "TradingView adverse excursion": cell(t.adverse),
-      [TV_ISSUE]: t.problem ?? tradingViewPnlMismatch(t, scale, pointValue) ?? "",
+    // Each TradingView trade is held to the scale first, then the ones split
+    // off one entry are joined back into one position.
+    const checked = tv.data.trades.map((t) => ({
+      ...t,
+      problem: t.problem ?? tradingViewPnlMismatch(t, scale, pointValue),
     }));
+    const byNumber = new Map(checked.map((t) => [t.number, t]));
+    const lots = (size: number) => Number((size / scale.divisor).toFixed(8));
+    const list = (f: (t: (typeof checked)[number]) => number | null, numbers: string[]) =>
+      numbers.map((n) => f(byNumber.get(n)!)).map((v) => (v == null ? "" : String(v))).join(", ");
+
+    const rows: Record<string, string>[] = [];
+    const plans: FillPlan[] = [];
+    for (const pos of groupTradingViewPositions(checked)) {
+      const exits = pos.exits.map((e) => ({
+        price: e.price,
+        qty: lots(e.size),
+        time: e.time,
+        fee: e.commission,
+      }));
+      const openQty = pos.numbers
+        .map((n) => byNumber.get(n)!)
+        .filter((t) => t.exitPrice == null)
+        .reduce((sum, t) => sum + lots(t.size), 0);
+      // The entry is summed from the same rounded legs the exits carry, in the
+      // same order `computeStatus` sums them, so a fully closed position reads
+      // closed and not "partial" by a rounding residue.
+      const qty = exits.reduce((sum, e) => sum + e.qty, 0) + openQty;
+      const exitQty = exits.reduce((sum, e) => sum + e.qty, 0);
+      const avgExit = exitQty > 0
+        ? exits.reduce((sum, e) => sum + e.price * e.qty, 0) / exitQty
+        : null;
+      const fees = exits.reduce((sum, e) => sum + e.fee, 0) + pos.openCommission;
+      rows.push({
+        Symbol: tv.symbol,
+        Side: pos.direction,
+        Qty: String(qty),
+        "Entry price": String(pos.entryPrice),
+        "Entry time": pos.entryTime,
+        // Read by the row builder only for matching and the review's
+        // differences; the fills themselves come from the plan.
+        "Exit price": avgExit == null ? "" : String(avgExit),
+        "Exit time": exits.at(-1)?.time ?? "",
+        Commission: String(fees),
+        "TradingView trade": pos.numbers.join(", "),
+        "TradingView size": list((t) => t.size, pos.numbers),
+        "TradingView net P&L": list((t) => t.netPnl, pos.numbers),
+        "TradingView favorable excursion": list((t) => t.favorable, pos.numbers),
+        "TradingView adverse excursion": list((t) => t.adverse, pos.numbers),
+        [TV_ISSUE]: pos.problem ?? "",
+      });
+      plans.push({ entryFee: pos.openCommission, exits });
+    }
+    return { rows, plans };
   }
 
   function buildItems() {
     if (tv) {
       const flat = tradingViewRows();
-      if (flat) buildFrom(flat, TV_MAP, TV_ISSUE);
+      if (flat) buildFrom(flat.rows, TV_MAP, TV_ISSUE, flat.plans);
       return;
     }
     for (const req of ["instrument", "direction", "qty", "entry_price", "entry_time"] as Canonical[]) {
@@ -276,15 +325,16 @@ export function ImportWizard({
         return;
       }
     }
-    buildFrom(rows, map, null);
+    buildFrom(rows, map, null, null);
   }
 
   function buildFrom(
     rows: Record<string, string>[],
     map: Record<Canonical, string>,
     issueCol: string | null,
+    plans: FillPlan[] | null,
   ) {
-    const built: (ImportItem & { _diff?: string[] })[] = rows.map((row) => {
+    const built: (ImportItem & { _diff?: string[] })[] = rows.map((row, index) => {
       const instrument =
         normalizeInstrumentSymbol(row[map.instrument] ?? "") ?? null;
       const direction = normDirection(row[map.direction]);
@@ -326,8 +376,31 @@ export function ImportWizard({
       if (qty <= 0) unreadable.push("qty");
 
       const execs: ImportExec[] = [];
+      const plan = plans?.[index] ?? null;
+      if (plan) {
+        // Fills known one by one: the entry, then each exit with its own time,
+        // size and commission.
+        if (entryPrice != null && entryTime) {
+          execs.push({
+            side: "entry",
+            price: entryPrice,
+            qty,
+            executed_at: entryTime,
+            fee: plan.entryFee,
+            swap_funding: 0,
+          });
+        }
+        for (const leg of plan.exits) {
+          const at = parseImportTime(leg.time, tz);
+          if (!at) {
+            unreadable.push("exit time");
+            continue;
+          }
+          execs.push({ side: "exit", price: leg.price, qty: leg.qty, executed_at: at, fee: leg.fee, swap_funding: 0 });
+        }
+      }
       const hasExit = exitPrice != null && (exitTime ?? entryTime) != null;
-      if (entryPrice != null && entryTime) {
+      if (!plan && entryPrice != null && entryTime) {
         execs.push({
           side: "entry",
           price: entryPrice,
@@ -353,7 +426,7 @@ export function ImportWizard({
       // real observation about this trade, just a less precise one. Inventing
       // "now" is not an observation about anything.
       const exitAt = exitTime ?? entryTime;
-      if (exitPrice != null && exitAt) {
+      if (!plan && exitPrice != null && exitAt) {
         execs.push({
           side: "exit",
           price: exitPrice,
@@ -654,13 +727,24 @@ export function ImportWizard({
                 <tbody>
                   {items.map((it, i) => {
                     const entry = it.executions.find((e) => e.side === "entry");
-                    const exit = it.executions.find((e) => e.side === "exit");
+                    const exits = it.executions.filter((e) => e.side === "exit");
+                    const exitQty = exits.reduce((sum, e) => sum + e.qty, 0);
+                    // Size-weighted over every exit: a position closed in parts
+                    // shows where it was closed on average, not its first part.
+                    const exitAvg = exitQty > 0
+                      ? exits.reduce((sum, e) => sum + e.price * e.qty, 0) / exitQty
+                      : null;
                     return (
                       <tr key={i} className="border-t">
                         <td className="p-2 font-mono">{it.instrument ?? "—"}</td>
                         <td className="p-2">{it.direction ?? "—"}</td>
                         <td className="p-2">{fmtNum(entry?.price, 2)}</td>
-                        <td className="p-2">{exit ? fmtNum(exit.price, 2) : "—"}</td>
+                        <td className="p-2">
+                          {exitAvg == null ? "—" : fmtNum(exitAvg, 2)}
+                          {exits.length > 1 && (
+                            <span className="text-xs text-muted-foreground"> ({exits.length} exits)</span>
+                          )}
+                        </td>
                         <td className="p-2 whitespace-nowrap">
                           {entry ? fmtInTz(entry.executed_at, tz, "MM/dd HH:mm") : "—"}
                         </td>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   excelSerialToWallClock,
+  groupTradingViewPositions,
   isTradingViewTrades,
   readTradingViewExport,
   resolveTradingViewScale,
@@ -195,5 +196,66 @@ describe("every trade is held to the scale", () => {
   it("a trade whose P&L does not follow from its prices is named", () => {
     const off = { ...trades[0], netPnl: -5000 };
     expect(tradingViewPnlMismatch(off, scale, 100)).toMatch(/^P&L .* ≠ size × move/);
+  });
+});
+
+describe("partial exits are one position, not several", () => {
+  // Gold, long 165 oz (1.65 lots) at 1313.05, closed 50 oz at 1321.38 and 115 oz
+  // at 1351.12. TradingView exports that as trades #1 and #2, each with its own
+  // entry row at the same time and price.
+  const leg = (n: number, size: number, exit: number, exitHour: number, signal = "Long"): Row[] => {
+    const gross = (exit - 1313.05) * size;
+    return [
+      row({ "Trade number": n, Type: "Exit long", "Date and time": serial(2023, 2, 9, exitHour),
+        Signal: "TP", "Price USD": exit, "Size (qty)": size, "Net PnL USD": gross, "Commission USD": 0 }),
+      row({ "Trade number": n, Type: "Entry long", "Date and time": serial(2023, 2, 9, 9),
+        Signal: signal, "Price USD": 1313.05, "Size (qty)": size, "Net PnL USD": gross, "Commission USD": 0 }),
+    ];
+  };
+
+  it("joins trades cut from one entry into one position with an exit each", () => {
+    const trades = readTradingViewExport([...leg(1, 50, 1321.38, 11), ...leg(2, 115, 1351.12, 15)])!.trades;
+    const [pos, ...rest] = groupTradingViewPositions(trades);
+    expect(rest).toHaveLength(0);
+    expect(pos).toMatchObject({
+      numbers: ["1", "2"],
+      direction: "Long",
+      entryPrice: 1313.05,
+      entryTime: "2023-02-09 09:00:00",
+      size: 165,
+      problem: null,
+    });
+    expect(pos.exits.map((e) => [e.number, e.price, e.size])).toEqual([
+      ["1", 1321.38, 50],
+      ["2", 1351.12, 115],
+    ]);
+  });
+
+  it("orders exits by time, not by trade number", () => {
+    const trades = readTradingViewExport([...leg(1, 50, 1351.12, 15), ...leg(2, 115, 1321.38, 11)])!.trades;
+    expect(groupTradingViewPositions(trades)[0].exits.map((e) => e.number)).toEqual(["2", "1"]);
+  });
+
+  it("keeps entries from different orders apart, even at the same time and price", () => {
+    const trades = readTradingViewExport([...leg(1, 50, 1321.38, 11), ...leg(2, 115, 1351.12, 15, "Long 2")])!.trades;
+    expect(groupTradingViewPositions(trades)).toHaveLength(2);
+  });
+
+  it("never joins a trade with a problem, so the problem stays on its own row", () => {
+    const trades = readTradingViewExport([...leg(1, 50, 1321.38, 11), ...leg(2, 115, 1351.12, 15)])!.trades;
+    trades[1] = { ...trades[1], problem: "exit price" };
+    const positions = groupTradingViewPositions(trades);
+    expect(positions).toHaveLength(2);
+    expect(positions[1].problem).toBe("exit price");
+  });
+
+  it("a leg still open adds its size to the entry and its commission to the entry fee", () => {
+    const open: Row[] = leg(2, 115, 1351.12, 15).map((r) => ({ ...r, "Commission USD": 3 }));
+    open[0] = { ...open[0], Signal: "Open" };
+    const trades = readTradingViewExport([...leg(1, 50, 1321.38, 11), ...open])!.trades;
+    const [pos] = groupTradingViewPositions(trades);
+    expect(pos.size).toBe(165);
+    expect(pos.exits).toHaveLength(1);
+    expect(pos.openCommission).toBe(3);
   });
 });
