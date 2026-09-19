@@ -1,12 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { groupInsights, type InsightSeverity } from "@/lib/journal/insights/types";
 import type { RunResult } from "@/lib/journal/insights/registry";
 import { OMITTED_RULES } from "@/lib/journal/insights/registry";
+
+/** Position ids are UUIDs; every other subject is a day, week or rule key. */
+const TRADE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const SEVERITY_LABEL: Record<InsightSeverity, string> = {
   critical: "Critical",
@@ -69,10 +73,6 @@ export function InsightsPanel({ result }: { result: RunResult }) {
               ))}
           </div>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Deterministic rules over the data already here — no model, no guessing.
-          A rule without a large enough sample does not run.
-        </p>
       </CardHeader>
 
       <CardContent className="space-y-2">
@@ -113,9 +113,21 @@ export function InsightsPanel({ result }: { result: RunResult }) {
                   <div className="space-y-2 border-t px-3 py-2">
                     {g.insights.map((i, idx) => (
                       <div key={`${i.subjectId}-${idx}`} className="text-sm">
-                        <span className="text-muted-foreground">
-                          {i.subjectLabel ?? i.subjectId}
-                        </span>
+                        {/* A trade subject is a link to the trade — the finding
+                            is only useful if you can open what it is about.
+                            Days, weeks and rule-level findings stay text. */}
+                        {TRADE_ID.test(i.subjectId) ? (
+                          <Link
+                            href={`/trades/${i.subjectId}/edit`}
+                            className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                          >
+                            {i.subjectLabel ?? "Open trade"}
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {i.subjectLabel ?? i.subjectId}
+                          </span>
+                        )}
                         <span className="mx-1.5 text-muted-foreground">·</span>
                         <span>{i.detail}</span>
                         {i.sample != null && (

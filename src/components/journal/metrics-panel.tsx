@@ -10,6 +10,10 @@ import type { PlannedRStats } from "@/lib/journal/risk-metrics";
 import type { ExcursionStats } from "@/lib/journal/excursion";
 import type { DirectionSplit } from "@/lib/journal/activity";
 
+function sideWinPct(side: { wins: number; losses: number; winRate: number }): string {
+  return side.wins + side.losses === 0 ? "—" : fmtPct(side.winRate, 0);
+}
+
 function Row({
   label,
   value,
@@ -55,7 +59,7 @@ export function HoldTimeCard({ stats }: { stats: HoldTimeStats }) {
         <Row
           label="Average — breakeven"
           value={formatDuration(stats.avgBreakevenSeconds)}
-          hint="TradeZella calls this a 'scratch'. Empty until you set a breakeven range per account."
+          hint="Empty until you set a breakeven range per account in Settings."
         />
         <Row label="Longest" value={formatDuration(stats.longestSeconds)} />
         <Row
@@ -168,10 +172,9 @@ export function PlanVsRealityCard({
         />
         <Row
           label="Win % long / short"
-          value={`${fmtPct(direction.longs.winRate, 0)} / ${fmtPct(
-            direction.shorts.winRate,
-            0,
-          )}`}
+          // "—" for a side with nothing decided. `winRate` answers 0 there, and
+          // "0%" beside a book with no shorts read as every short lost.
+          value={`${sideWinPct(direction.longs)} / ${sideWinPct(direction.shorts)}`}
         />
       </CardContent>
     </Card>
@@ -192,7 +195,7 @@ export function PeriodPerformanceCard({
       <CardHeader className="pb-2">
         <CardTitle className="text-base">{label}</CardTitle>
         <p className="text-xs text-muted-foreground">
-          {summary.periods} periods · the swing replacement for Day Win %
+          {summary.periods} periods
         </p>
       </CardHeader>
       <CardContent>
@@ -222,7 +225,9 @@ export function PeriodPerformanceCard({
               ? `${summary.largest.key} · ${fmtMoney(summary.largestPnl, currency)}`
               : "—"
           }
-          cls="text-[var(--profit)]"
+          // By sign, not by position: in a losing stretch the BEST week can
+          // still be red, and painting it green said otherwise.
+          cls={pnlClass(summary.largestPnl)}
         />
         <Row
           label="Worst"
@@ -231,7 +236,7 @@ export function PeriodPerformanceCard({
               ? `${summary.smallest.key} · ${fmtMoney(summary.smallestPnl, currency)}`
               : "—"
           }
-          cls="text-[var(--loss)]"
+          cls={pnlClass(summary.smallestPnl)}
         />
         <Row
           label="Max streak W / L"

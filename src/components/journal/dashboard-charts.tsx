@@ -18,7 +18,7 @@ import {
   GRID_PROPS,
   TOOLTIP_STYLE,
 } from "@/components/journal/chart-shell";
-import { fmtMoney } from "@/lib/journal/format";
+import { fmtMoney, fmtR } from "@/lib/journal/format";
 
 /**
  * The dashboard's four recharts plots, moved out of `dashboard.tsx`.
@@ -70,7 +70,7 @@ export function EquityChart({
         <Tooltip
           contentStyle={TOOLTIP_STYLE}
           formatter={(v) =>
-            metric === "money" ? fmtMoney(Number(v), currency) : `${Number(v)}R`
+            metric === "money" ? fmtMoney(Number(v), currency) : fmtR(Number(v))
           }
         />
         <Area

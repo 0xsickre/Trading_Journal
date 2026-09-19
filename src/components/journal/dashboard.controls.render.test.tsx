@@ -1,4 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// The dashboard remembers its scope per tab; one test's account, period or
+// privacy mode must not carry into the next.
+beforeEach(() => window.sessionStorage.clear());
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Dashboard } from "./dashboard";
@@ -331,11 +335,25 @@ describe("the view-mode switcher reuses the /reports units layer, not a second d
     expect(statValue("Net P/L")).toBe("+$650.00");
   });
 
-  it("R, Points, Ticks and Pips are disabled — a portfolio tile has no single instrument or planned risk to convert against", () => {
+  it("offers no Points, Ticks or Pips — a portfolio has no single instrument to convert through", () => {
+    // They were always-disabled buttons here. R left the page switcher too: the
+    // equity card carries its own $/R toggle, the one place R has a meaning.
     renderIt();
-    for (const label of ["R", "Points", "Ticks", "Pips"]) {
-      expect(screen.getByRole("button", { name: label })).toBeDisabled();
+    for (const label of ["Points", "Ticks", "Pips"]) {
+      expect(screen.queryByRole("button", { name: label })).not.toBeInTheDocument();
     }
+    expect(screen.getAllByRole("button", { name: "R" })).toHaveLength(1);
+  });
+
+  it("the equity card's R toggle is live and switches the curve to R", async () => {
+    // Before, R was reachable only through the page switcher, whose R button
+    // could never be enabled on a portfolio — the R curve was dead code.
+    const user = userEvent.setup({ delay: null });
+    renderIt();
+    const r = screen.getByRole("button", { name: "R" });
+    expect(r).toBeEnabled();
+    await user.click(r);
+    expect(screen.getByText(/Equity curve \(net, R\)/)).toBeInTheDocument();
   });
 
   it("Max drawdown never gets a + sign, even in Dollars mode — it is a magnitude, not a signed P&L", () => {
@@ -475,5 +493,79 @@ describe("mixed-currency accounts refuse to pool money, rather than summing unli
     );
     expect(screen.queryByText(/different currencies/i)).not.toBeInTheDocument();
     expect(statValue("Net P/L")).toBe("+$150.00");
+  });
+});
+
+describe("the scope a trader works in", () => {
+  // Wednesday 8 April 2026. One trade closed this week (Monday), one last week.
+  const TODAY_KEY = "2026-04-08";
+  const ACCOUNT = account({ id: "acc-1" });
+  const book = [
+    mkTrade({ id: "this-week", net: 100, instrument: "NQ", closedAt: "2026-04-06T18:00:00Z" }),
+    mkTrade({ id: "last-week", net: -40, instrument: "ES", closedAt: "2026-04-02T18:00:00Z" }),
+  ];
+  const renderIt = (rows: TradeRow[] = rowsOf(book)) =>
+    render(
+      <Dashboard trades={rows} accounts={[ACCOUNT]} todayKey={TODAY_KEY} timezone={ACCOUNT.timezone} />,
+    );
+
+  it("has a Week period that starts on Monday in the account's zone", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderIt();
+    expect(statValue("Trades")).toBe("2");
+    await user.click(screen.getByRole("button", { name: "Week" }));
+    expect(statValue("Trades")).toBe("1");
+    expect(statValue("Net P/L")).toBe("+$100.00");
+  });
+
+  it("remembers the scope for the tab", async () => {
+    const user = userEvent.setup({ delay: null });
+    const { unmount } = renderIt();
+    await user.click(screen.getByRole("button", { name: "Week" }));
+    unmount();
+
+    renderIt();
+    await vi.waitFor(() => expect(statValue("Trades")).toBe("1"));
+  });
+
+  it("lists open positions, links each to its trade, and counts them on the Trades tile", () => {
+    const open = {
+      ...mkTrade({ id: "live", instrument: "GC", status: "open" }).row,
+      stats: { ...mkTrade({ id: "live" }).row.stats!, net_pl: null, exit_qty: 0, closed_at: null },
+    } as TradeRow;
+    renderIt([...rowsOf(book), open]);
+
+    expect(screen.getByText("+1 open")).toBeInTheDocument();
+    const card = screen.getByText("Open positions").closest("[data-slot='card']") as HTMLElement;
+    expect(within(card).getByRole("link", { name: /GC/ })).toHaveAttribute("href", "/trades/live/edit");
+  });
+
+  it("lists the recent closed trades newest first, each a link to the trade", () => {
+    renderIt();
+    const card = screen.getByText("Recent trades").closest("[data-slot='card']") as HTMLElement;
+    const links = within(card)
+      .getAllByRole("link")
+      .filter((a) => a.getAttribute("href")?.startsWith("/trades/"));
+    expect(links.map((a) => a.getAttribute("href"))).toEqual([
+      "/trades/this-week/edit",
+      "/trades/last-week/edit",
+    ]);
+  });
+
+  it("shows an em dash for Expectancy when no trade carries an R", () => {
+    renderIt(rowsOf([mkTrade({ id: "no-r", net: 50, r: null, closedAt: "2026-04-06T18:00:00Z" })]));
+    expect(statValue("Expectancy")).toBe("—");
+  });
+
+  it("does not warn about older trades while the period still has trades in it", () => {
+    renderIt();
+    // 90d covers both; switch to Week, which leaves one out.
+    return userEvent
+      .setup({ delay: null })
+      .click(screen.getByRole("button", { name: "Week" }))
+      .then(() => {
+        expect(screen.queryByText(/not in these figures/)).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /\+1 older outside this period/ })).toBeInTheDocument();
+      });
   });
 });

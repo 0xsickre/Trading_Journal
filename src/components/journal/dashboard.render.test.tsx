@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// The dashboard remembers its scope per tab; one test's account, period or
+// privacy mode must not carry into the next.
+beforeEach(() => window.sessionStorage.clear());
+import { render, screen, within } from "@testing-library/react";
 import { Dashboard } from "./dashboard";
 import { BOOK, shapedBook } from "@/lib/journal/book.fixture";
 import type { Account, TradeRow } from "@/lib/journal/types";
@@ -167,8 +171,8 @@ describe("the book, on screen — same figures the paper already proved", () => 
     // trade count. That is a claim which incidentally also proves breakeven
     // stands OUTSIDE the denominator rather than counting as a loss.
     renderDashboard(rowsOf(BOOK));
-    expect(statValue("Wins / Losses")).toBe("5 / 4");
-    expect(statValue("Breakeven")).toBe("1");
+    // One tile now, read left to right: wins, losses, breakeven.
+    expect(statValue("Wins / Losses / BE")).toBe("5 / 4 / 1");
 
     const wins = 5, losses = 4, breakeven = 1;
     expect(String(wins + losses + breakeven)).toBe(statValue("Trades"));
@@ -204,7 +208,7 @@ describe("the widget picker cannot start by hiding anything", () => {
     for (const label of [
       "Net P/L", "Trades", "Win rate", "Profit factor",
       "Gross P/L", "Total R", "Best", "Worst",
-      "Wins / Losses", "Breakeven", "Week win %",
+      "Wins / Losses / BE", "Avg hold", "Total costs",
     ]) {
       expect(statValue(label), `${label} nije na ekranu`).not.toBe("");
     }
@@ -216,9 +220,12 @@ describe("Week win %, the same guard on a different denominator", () => {
     // Two breakeven trades, both closing in the same ISO week (1–2 April
     // 2026 fall in the same week): one period, zero decided periods. Same
     // class of bug as the Win rate tile, on `PeriodSummary.winPct` instead of
-    // `Stats.winRate`.
+    // `Stats.winRate`. Read from the Weekly performance card — the tile that
+    // repeated it left the detail grid.
     renderDashboard(rowsOf(shapedBook([0, 0])));
-    expect(statValue("Week win %")).toBe("—");
+    const card = screen.getByText("Weekly performance").closest("[data-slot='card']")!;
+    const row = within(card as HTMLElement).getByText("Win %").parentElement!;
+    expect(row.children[1].textContent).toBe("—");
   });
 });
 

@@ -2,7 +2,9 @@
 
 import {
   useCallback,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
   type ReactNode,
@@ -236,6 +238,16 @@ import {
 import { DATE, fmtInTz, toEpoch, zonedDateKey } from "@/lib/journal/time";
 import { defaultDashboardPeriod, hiddenByPeriod } from "@/lib/journal/default-period";
 import {
+  DASHBOARD_PERIODS,
+  loadScope,
+  periodStartKey,
+  saveScope,
+  type DashboardPeriod,
+} from "@/lib/journal/dashboard-view";
+import { formatDuration } from "@/lib/journal/units";
+import { OpenPositionsWidget } from "@/components/journal/open-positions-widget";
+import { RecentTradesWidget } from "@/components/journal/recent-trades-widget";
+import {
   computeDailyDrawdown,
   type DayPnlPoint,
 } from "@/lib/journal/risk-ratios";
@@ -315,12 +327,14 @@ function renderRows(
   ));
 }
 
-const PERIODS = [
-  { value: "30", label: "30d" },
-  { value: "90", label: "90d" },
-  { value: "365", label: "1y" },
-  { value: "all", label: "All" },
-];
+/**
+ * The view modes offered here. `/reports` has seven; on a portfolio page R,
+ * points, ticks and pips have no single instrument or planned risk to convert
+ * through, so they were four buttons that were always disabled.
+ */
+const DASHBOARD_VIEW_MODES = VIEW_MODES.filter(
+  (m) => m.value === "dollars" || m.value === "percentage" || m.value === "privacy",
+);
 
 // Calendar granularities for the "Export for Claude" mentor pack.
 const GRANULARITIES: { value: Granularity; label: string }[] = [
@@ -333,7 +347,6 @@ const GRANULARITIES: { value: Granularity; label: string }[] = [
   { value: "all", label: "All" },
 ];
 
-const todayYMD = () => new Date().toISOString().slice(0, 10);
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
 /** anchor "YYYY-MM-DD" → `<input type="week">` value "YYYY-Www" (ISO week). */
@@ -640,7 +653,7 @@ export function Dashboard({
   const [accountFilter, setAccountFilter] = useState("all");
   // 90 days when anything closed within them, "all" when nothing did — a
   // backtest of 2018 otherwise opens on a page of zeros. See `default-period.ts`.
-  const [period, setPeriod] = useState<string>(() =>
+  const [period, setPeriod] = useState<DashboardPeriod>(() =>
     defaultDashboardPeriod(
       toRealized(trades).map((t) => toEpoch(t.closedAt)),
       // The same 90-day boundary `cutoffMs` draws below. An unresolvable day
@@ -669,7 +682,7 @@ export function Dashboard({
     [],
   );
   const setPeriodDeferred = useCallback(
-    (next: string) => startRecompute(() => setPeriod(next)),
+    (next: DashboardPeriod) => startRecompute(() => setPeriod(next)),
     [],
   );
   const setAccountFilterDeferred = useCallback(
@@ -681,11 +694,39 @@ export function Dashboard({
   // this bar (`period`, `accountFilter`, `mode`), not URL-synced: nothing else
   // here is either.
   const [viewMode, setViewMode] = useState<ViewMode>("dollars");
-  // The equity chart's old standalone $/R toggle is now just this switcher
-  // read narrowly — "r" picks the R-denominated series, anything else the
-  // money one. `buildEquity` still only knows those two, so the derived value
-  // keeps its original type instead of threading all seven modes into it.
-  const equityMetric: "money" | "r" = viewMode === "r" ? "r" : "money";
+  // The equity chart's own $/R toggle. It used to be the page switcher read
+  // narrowly, but that switcher could never enable R on a portfolio (there is
+  // no single planned risk to convert through), so the R curve was
+  // unreachable. The curve is built in R directly, trade by trade.
+  const [equityMetric, setEquityMetric] = useState<"money" | "r">("money");
+
+  // The scope is remembered for the tab: leave for a trade and come back to
+  // the same account, period and basis. Read after mount — sessionStorage does
+  // not exist on the server — and only fields that were stored override the
+  // defaults, since the default period depends on the book.
+  const scopeRestored = useRef(false);
+  useEffect(() => {
+    const stored = loadScope();
+    if (stored.account && (stored.account === "all" || accounts.some((a) => a.id === stored.account)))
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- external-store init
+      setAccountFilter(stored.account);
+    if (stored.period) setPeriod(stored.period);
+    if (stored.mode) setMode(stored.mode);
+    if (stored.viewMode) setViewMode(stored.viewMode);
+    scopeRestored.current = true;
+    // Mount only: the stored scope is read once, then this page owns it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!scopeRestored.current) return;
+    saveScope({
+      account: accountFilter,
+      period,
+      mode,
+      viewMode:
+        viewMode === "percentage" || viewMode === "privacy" ? viewMode : "dollars",
+    });
+  }, [accountFilter, period, mode, viewMode]);
   const [breakdownField, setBreakdownField] = useState("setup_grade");
   // The user's own fields are groupable here exactly like a built-in column.
   const breakdownOptions = useMemo(
@@ -693,9 +734,11 @@ export function Dashboard({
     [fieldDefs],
   );
   const [granularity, setGranularity] = useState<Granularity>("week");
-  const [anchor, setAnchor] = useState(todayYMD);
-  const [customFrom, setCustomFrom] = useState(todayYMD);
-  const [customTo, setCustomTo] = useState(todayYMD);
+  // The ACCOUNT's today, not UTC's: in the evening in New York, UTC is
+  // already tomorrow and the export would open on a day that has not started.
+  const [anchor, setAnchor] = useState(todayKey);
+  const [customFrom, setCustomFrom] = useState(todayKey);
+  const [customTo, setCustomTo] = useState(todayKey);
 
   // Years present in the data (newest first) for the Year/Quarter pickers.
   const yearOptions = useMemo(() => {
@@ -816,11 +859,11 @@ export function Dashboard({
    * `addDaysToDayKey(todayKey, -(period - 1))`. The two halves of the Sickre
    * Score were measuring windows a day apart.
    */
-  const cutoffMs = useMemo(() => {
-    if (period === "all") return null;
-    const from = addDaysToDayKey(todayKey, -(Number(period) - 1));
-    return dayKeyStartUtc(from, timezone);
-  }, [period, todayKey, timezone]);
+  const periodFrom = useMemo(() => periodStartKey(period, todayKey), [period, todayKey]);
+  const cutoffMs = useMemo(
+    () => (periodFrom == null ? null : dayKeyStartUtc(periodFrom, timezone)),
+    [periodFrom, timezone],
+  );
 
   /** Every realized trade in account scope, ignoring the period filter. */
   const realizedAll = useMemo(() => {
@@ -1027,17 +1070,27 @@ export function Dashboard({
 
   // Counted from raw rows, not realized trades: a position opened this week and
   // still running is a day the market was engaged.
+  //
+  // Both counted over the tracker's own window — the 26 weeks its heatmap
+  // draws above them. They were all-time counts beside a 26-week grid, so the
+  // two halves of one card described different spans.
+  const trackerFrom = useMemo(
+    () => addDaysToDayKey(todayKey, -(TRACKER_SPAN_DAYS - 1)),
+    [todayKey],
+  );
   const tradingDays = useMemo(() => {
     const scoped =
       accountFilter === "all"
         ? trades
         : trades.filter((t) => t.account_id === accountFilter);
-    return tradingDayKeysFromRows(scoped, (row) => tzForAccount(row.account_id))
-      .size;
-  }, [trades, accountFilter, tzForAccount]);
+    let n = 0;
+    for (const d of tradingDayKeysFromRows(scoped, (row) => tzForAccount(row.account_id)))
+      if (d >= trackerFrom && d <= todayKey) n++;
+    return n;
+  }, [trades, accountFilter, tzForAccount, trackerFrom, todayKey]);
   const loggedDays = useMemo(
-    () => countLoggedDays(loggedDates),
-    [loggedDates],
+    () => countLoggedDays(loggedDates.filter((d) => d >= trackerFrom && d <= todayKey)),
+    [loggedDates, trackerFrom, todayKey],
   );
 
   /**
@@ -1209,10 +1262,7 @@ export function Dashboard({
    * every check-in ever to move a 15 % component by a fraction.
    */
   const processAdherencePct = useMemo(() => {
-    const from =
-      period === "all"
-        ? ""
-        : addDaysToDayKey(todayKey, -(Number(period) - 1));
+    const from = periodFrom ?? "";
     const trackerPct = meanCompliance(
       trackerSeries.filter((d) => d.date >= from),
     );
@@ -1225,8 +1275,7 @@ export function Dashboard({
     return processAdherence({ trackerPct, followRatePct });
   }, [
     trackerSeries,
-    period,
-    todayKey,
+    periodFrom,
     playbookLookup.rules,
     realized,
     tzOf,
@@ -1316,9 +1365,12 @@ export function Dashboard({
     () => (show("r-distribution") ? rHistogram(realized) : []),
     [show, realized],
   );
+  // `realizedAll`, not `realized`: the calendar always draws 26 weeks, and fed
+  // the period-filtered set it showed a 30-day view as 22 empty weeks — as if
+  // nothing had been traded in them.
   const daily = useMemo(
-    () => dailyPnl(realized, mode, tzOf),
-    [realized, mode, tzOf],
+    () => dailyPnl(realizedAll, mode, tzOf),
+    [realizedAll, mode, tzOf],
   );
   const breakdown = useMemo(
     () => breakdownByField(realized, breakdownField, breakevenRange),
@@ -1331,6 +1383,19 @@ export function Dashboard({
   const weeklyExitEff = useMemo(
     () => (show("execution-quality") ? weeklyExitEfficiency(realized, tzOf) : []),
     [show, realized, tzOf],
+  );
+
+  /** Every row in account scope — the open-positions widget reads status, not money. */
+  const scopedRows = useMemo(
+    () =>
+      accountFilter === "all"
+        ? trades
+        : trades.filter((t) => t.account_id === accountFilter),
+    [trades, accountFilter],
+  );
+  const openCount = useMemo(
+    () => scopedRows.filter((t) => t.status === "open" || t.status === "partial").length,
+    [scopedRows],
   );
 
   function handleExportMentorPack() {
@@ -1357,17 +1422,19 @@ export function Dashboard({
       customFrom,
       customTo,
     );
-    // Reference date: when it closed, or when it was created if still open.
-    // Compared as instants: the bounds are generated as "...T00:00:00.000Z"
-    // while closed_at arrives as "...+00:00", and a text compare of the two
-    // inverts exactly at a midnight boundary — the one moment a range edge
-    // actually falls on.
-    const fromMs = fromISO ? toEpoch(fromISO) : null;
-    const toMs = toISO ? toEpoch(toISO) : null;
+    // Compared as DAYS in each trade's own account zone. The range comes back
+    // as UTC instants, and filtering on those cut a New York evening trade out
+    // of the day it was closed on — or into the next week. The day keys are
+    // what the range means; the instants were only its encoding.
+    const fromDay = fromISO ? fromISO.slice(0, 10) : null;
+    const toDay = toISO ? toISO.slice(0, 10) : null;
     scoped = scoped.filter((t) => {
-      const ref = toEpoch(t.stats?.closed_at ?? t.created_at ?? null);
-      if (fromMs != null && ref < fromMs) return false;
-      if (toMs != null && ref > toMs) return false;
+      const day = zonedDateKey(
+        t.stats?.closed_at ?? t.created_at ?? null,
+        tzForAccount(t.account_id),
+      );
+      if (fromDay != null && day < fromDay) return false;
+      if (toDay != null && day > toDay) return false;
       return true;
     });
 
@@ -1405,7 +1472,7 @@ export function Dashboard({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    const stamp = granularity === "all" ? todayYMD() : (fromISO ?? "").slice(0, 10);
+    const stamp = granularity === "all" ? todayKey : (fromISO ?? "").slice(0, 10);
     a.download = `mentor-pack-${label.toLowerCase()}-${stamp}.md`;
 
     // Firefox only dispatches a click on an anchor that is in the document, and
@@ -1451,7 +1518,12 @@ export function Dashboard({
         </div>
       )}
 
-      {outsidePeriod && (
+      {/* Only when the window is EMPTY while the book is not — then the notice
+          explains a page of zeros. Shown whenever older trades existed, it sat
+          on the page permanently for anyone trading longer than the window,
+          which made it furniture rather than a warning; that case is a quiet
+          line in the scope bar instead. */}
+      {outsidePeriod && realized.length === 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-[var(--chart-4)]/40 bg-[var(--chart-4)]/10 px-3 py-2 text-sm">
           <AlertTriangle className="size-4 text-[var(--chart-4)]" />
           <span>
@@ -1492,7 +1564,7 @@ export function Dashboard({
           </Select>
         )}
         <div className="flex rounded-md border p-0.5">
-          {PERIODS.map((p) => (
+          {DASHBOARD_PERIODS.map((p) => (
             <Button
               key={p.value}
               variant={period === p.value ? "secondary" : "ghost"}
@@ -1511,15 +1583,13 @@ export function Dashboard({
               variant={mode === m ? "secondary" : "ghost"}
               size="sm"
               className="h-7 capitalize"
+              title={m === "net" ? "After fees and swap" : "Price move only, before costs"}
               onClick={() => setModeDeferred(m)}
             >
               {m}
             </Button>
           ))}
         </div>
-        <span className="text-xs text-muted-foreground">
-          {mode === "net" ? "Net = after fees & swap" : "Gross = price move only"}
-        </span>
 
         {/* Dollars/%/Privacy/R/Ticks/Pips/Points — reuses `/reports`' own
             switcher (`units.ts`) rather than a second design for the same
@@ -1527,7 +1597,7 @@ export function Dashboard({
             (R/Points/Ticks/Pips on a multi-instrument portfolio view), so the
             reader sees the mode exists without it silently doing nothing. */}
         <div className="flex rounded-md border p-0.5">
-          {VIEW_MODES.map((vm) => (
+          {DASHBOARD_VIEW_MODES.map((vm) => (
             <Button
               key={vm.value}
               variant={viewMode === vm.value ? "secondary" : "ghost"}
@@ -1541,6 +1611,17 @@ export function Dashboard({
             </Button>
           ))}
         </div>
+
+        {outsidePeriod && realized.length > 0 && (
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+            onClick={() => setPeriodDeferred("all")}
+            title={`The oldest closed ${fmtInTz(new Date(outsidePeriod.oldestMs), timezone, DATE)}`}
+          >
+            +{outsidePeriod.count} older outside this period
+          </button>
+        )}
 
         {/* The export pickers used to sit here, inline: a granularity select,
             up to two date inputs or a quarter+year pair, a button, and a range
@@ -1774,7 +1855,13 @@ export function Dashboard({
             />
           }
         />
-        <Stat size="hero" label="Trades" value={String(stats.count)} />
+        <Stat
+          size="hero"
+          label="Trades"
+          value={String(stats.count)}
+          title="Closed trades in the period. Open positions are not counted until they close."
+          sub={openCount > 0 ? `+${openCount} open` : undefined}
+        />
         <Stat
           size="hero"
           label="Win rate"
@@ -1823,8 +1910,9 @@ export function Dashboard({
         <Stat
           size="hero"
           label="Expectancy"
-          value={fmtR(stats.expectancy)}
-          cls={pnlClass(stats.expectancy)}
+          // "—" with no R to average: "0.00R" read as a measured break-even edge.
+          value={stats.expectancySample > 0 ? fmtR(stats.expectancy) : "—"}
+          cls={stats.expectancySample > 0 ? pnlClass(stats.expectancy) : undefined}
           title={`Expected R per trade, weighted by win rate over the ${stats.expectancySample} decided trades that carry an R. Breakeven trades are excluded, which is why this can differ from Avg R — that one is a plain mean over every trade with an R.`}
         />
         <Stat
@@ -1907,7 +1995,7 @@ export function Dashboard({
           <Stat
             label="Avg win/loss"
             value={winLossRatio != null ? fmtNum(winLossRatio, 2) : "—"}
-            title="Average winning R divided by average losing R."
+            title="Average winning trade divided by average losing trade, in money."
             // The one place on this page where green and red are literally an
             // average win and an average loss, so the money colours are right
             // rather than a collision. Draws nothing until both sides exist.
@@ -1927,31 +2015,27 @@ export function Dashboard({
               `Trades`, and read together they show that breakeven sits OUTSIDE
               the win-rate denominator rather than being counted as a loss. */}
           <Stat
-            label="Wins / Losses"
-            value={`${stats.wins} / ${stats.losses}`}
-            title={`Win rate is ${stats.wins} of ${stats.wins + stats.losses} decided trades. Breakeven trades are excluded from both sides, so wins + losses + breakeven = ${stats.count}.`}
-          />
-          <Stat
-            label="Breakeven"
-            value={String(stats.breakeven)}
-            title={
+            label="Wins / Losses / BE"
+            value={`${stats.wins} / ${stats.losses} / ${stats.breakeven}`}
+            title={`Win rate is ${stats.wins} of ${stats.wins + stats.losses} decided trades; ${stats.breakeven} breakeven ${
               hasBreakevenBand(breakevenRange)
-                ? `Trades landing in ${fmtMoney(breakevenRange.from, currency)} … ${fmtMoney(breakevenRange.to, currency)}. Outside the win-rate denominator — neither a win nor a loss.`
-                : "No breakeven band configured — only an exact 0.00 counts, which almost never happens once fees are included. Set a range per account in Settings."
-            }
+                ? `(inside ${fmtMoney(breakevenRange.from, currency)} … ${fmtMoney(breakevenRange.to, currency)})`
+                : "(exactly 0.00 — set a breakeven range per account in Settings)"
+            } sit outside that denominator.`}
+          />
+          {/* Two figures that used to be reachable only inside their own cards.
+              "Week win %" left this grid: the Weekly performance card carries
+              the same number with its sample beside it. */}
+          <Stat
+            label="Avg hold"
+            value={formatDuration(holdTime.avgSeconds)}
+            title={`Average time in a trade, over ${holdTime.count} trades with a known duration.`}
           />
           <Stat
-            label="Week win %"
-            // Same guard, same reason: a book whose only week was flat (net
-            // exactly at the breakeven band) has `winning + losing === 0`, and
-            // `winPct` answers 0 for that — not "0% of weeks won" but "no week
-            // was won or lost at all".
-            value={
-              weekly.winning + weekly.losing === 0
-                ? "—"
-                : fmtPct(weekly.winPct)
-            }
-            title={`${weekly.winning} winning of ${weekly.periods} weeks. The swing replacement for Day Win %.`}
+            label="Total costs"
+            value={dashboardMoney(-costs.totalCosts, metricCtx, viewMode)}
+            cls={costs.totalCosts !== 0 ? "text-[var(--loss)]" : undefined}
+            title="Commissions, fees and swap over the period — what the gross result paid to become net."
           />
           {/* THE TWO DRAWDOWN TILES CLOSE THIS GRID RATHER THAN OPENING THEIR
               OWN. They were a `StatGroup` of their own for one round, and a
@@ -2011,11 +2095,40 @@ export function Dashboard({
           // above), so the chart reads the shared control instead of keeping
           // its own narrower copy of the same idea.
           title={`Equity curve (${mode}, ${equityMetric === "money" ? currency : "R"})`}
+          action={
+            <div className="flex rounded-md border p-0.5">
+              {(["money", "r"] as const).map((m) => (
+                <Button
+                  key={m}
+                  variant={equityMetric === m ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => setEquityMetric(m)}
+                >
+                  {m === "money" ? currency : "R"}
+                </Button>
+              ))}
+            </div>
+          }
         >
           <EquityChart data={equity} metric={equityMetric} currency={currency} />
         </ChartShell>
         ),
         score: show("score") && <SickreScoreCard score={sickreScore} />,
+        "open-positions": show("open-positions") && (
+          <OpenPositionsWidget
+            rows={scopedRows}
+            tzOf={(t) => tzForAccount(t.account_id)}
+          />
+        ),
+        "recent-trades": show("recent-trades") && (
+          <RecentTradesWidget
+            trades={realized}
+            mode={mode}
+            tzOf={tzOf}
+            money={(v) => dashboardMoney(v, metricCtx, viewMode)}
+          />
+        ),
 
         /* What the app has to say, before the reader digs for it themselves. */
         insights: show("insights") && <InsightsPanel result={insightResult} />,
@@ -2075,7 +2188,7 @@ export function Dashboard({
         calendar: show("calendar") && (
           <ChartShell
             title={`Daily P/L (${mode})`}
-            subtitle="Last 26 weeks — green = profit, red = loss (account days)."
+            subtitle="Last 26 weeks, whatever the period above — green = profit, red = loss (account days)."
           >
             <CalendarHeatmap
               daily={daily}
@@ -2211,6 +2324,7 @@ function Stat({
   title,
   size = "default",
   visual,
+  sub,
 }: {
   label: string;
   value: string;
@@ -2226,6 +2340,11 @@ function Stat({
    * 100" next to "55.6%" says the same thing twice, worse.
    */
   visual?: ReactNode;
+  /**
+   * A small line under the value. Rendered AFTER `CardContent`, never inside
+   * it, for the same reason as `visual`: the two-children contract above.
+   */
+  sub?: string;
 }) {
   const hero = size === "hero";
   return (
@@ -2258,6 +2377,11 @@ function Stat({
           {value}
         </div>
       </CardContent>
+      {sub && (
+        <div className={cn("-mt-3 text-xs text-muted-foreground", hero ? "px-4 pb-3" : "px-3 pb-2")}>
+          {sub}
+        </div>
+      )}
     </Card>
   );
 }
