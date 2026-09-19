@@ -46,6 +46,7 @@ import type { TrackerDayData } from "@/components/journal/tracker-checklist";
 import type { OpenPositionView } from "@/components/journal/open-positions-card";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
+import { sharedCurrency } from "@/lib/journal/format";
 import { accountTimezoneResolver } from "@/lib/journal/time";
 
 export default async function DailyPage({
@@ -105,7 +106,10 @@ export default async function DailyPage({
     ),
     dayPromise.then(({ reportDate }) => getPositionCheckinsForDay(reportDate)),
   ]);
-  const currency = primary?.currency ?? "USD";
+  // The day's money is summed across accounts, so it needs ONE currency;
+  // with two it is left unsummed rather than printed in the primary's.
+  const pooledCurrency = sharedCurrency(accounts);
+  const currency = pooledCurrency ?? primary?.currency ?? "USD";
 
   const checkins = checkinsByDay.get(reportDate) ?? new Map();
 
@@ -167,7 +171,9 @@ export default async function DailyPage({
   const dayTradeRows: DayTradeRow[] = dayTrades.map((t) => ({
     id: t.id,
     label: t.row.trade_no != null ? `#${t.row.trade_no}` : t.id.slice(0, 8),
-    symbol: typeof t.row.symbol === "string" ? t.row.symbol : null,
+    // `instrument`: a trade has no `symbol` column, so this read undefined and
+    // every row of the day's list printed a dash where the market should be.
+    symbol: stringFieldValue(t.row, "instrument"),
     net: t.net,
     r: t.r,
     qty: tradeVolume(t),
@@ -270,7 +276,7 @@ export default async function DailyPage({
         costs={dayCosts}
         volume={dayVolume}
         trades={dayTradeRows}
-        currency={currency}
+        currency={pooledCurrency}
       />
 
       <DailyReportForm

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { srLatn } from "date-fns/locale/sr-Latn";
@@ -39,7 +39,7 @@ import {
 } from "@/app/(app)/daily/actions";
 import { lockDay } from "@/app/(app)/daily/tracker-actions";
 import type { DayCompliance } from "@/lib/journal/tracker/compliance";
-import { DATE, DATE_TIME } from "@/lib/journal/time";
+import { DATE, DATE_TIME, fmtInTz } from "@/lib/journal/time";
 import {
   TrackerDayBadge,
   TrackerStageSection,
@@ -112,6 +112,24 @@ export function DailyReportForm({
     toFormState(report, reportDate),
   );
   const [lastSaved, setLastSaved] = useState(report?.updated_at ?? null);
+  /**
+   * Typed and not yet saved. The arrows and "Danas" move to another day, which
+   * remounts this form — everything unsaved was dropped without a word.
+   */
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  /** Stops a day change that would throw away unsaved text, unless confirmed. */
+  function guardLeave(e: MouseEvent) {
+    if (dirty && !window.confirm("Imaš nesačuvane izmene. Napusti ovaj dan bez čuvanja?"))
+      e.preventDefault();
+  }
 
   // Read off the positions rather than the form: the day's remaining work is
   // judging what was open, and the answers are saved on tap, so this counts
@@ -131,15 +149,19 @@ export function DailyReportForm({
 
   const isToday = reportDate === today;
   const lowMental = form.mental_temp != null && form.mental_temp < 3;
+  // In the ACCOUNT's zone, like every other time on this page. `format` read
+  // the browser's clock, so the server and the client could print two times.
   const lockedAt = report?.locked_at
-    ? format(new Date(report.locked_at), DATE_TIME)
+    ? fmtInTz(report.locked_at, timezone, DATE_TIME)
     : null;
 
   function patch<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setDirty(true);
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   function toggleNoTradeDay(checked: boolean) {
+    setDirty(true);
     setForm((prev) => ({
       ...prev,
       no_trade_day: checked,
@@ -165,6 +187,7 @@ export function DailyReportForm({
       toast.warning("Postavi fokus cilj — u odnosu na njega se meri dan.");
     }
     setLastSaved(res.updated_at);
+    setDirty(false);
     return true;
   }
 
@@ -181,7 +204,11 @@ export function DailyReportForm({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" className="size-8" asChild>
-            <Link href={`/daily?date=${prevReportDate(reportDate)}`}>
+            <Link
+              href={`/daily?date=${prevReportDate(reportDate)}`}
+              onClick={guardLeave}
+              aria-label="Prethodni dan"
+            >
               <ChevronLeft className="size-4" />
             </Link>
           </Button>
@@ -193,27 +220,34 @@ export function DailyReportForm({
               <p className="text-xs text-muted-foreground">{timezone}</p>
             )}
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8"
-            asChild
-            disabled={reportDate >= today}
-          >
-            <Link
-              href={
-                reportDate >= today
-                  ? `/daily?date=${reportDate}`
-                  : `/daily?date=${nextReportDate(reportDate)}`
-              }
-              aria-disabled={reportDate >= today}
+          {/* A real disabled button on today: `disabled` on a link does
+              nothing, and clicking it reloaded the same day. */}
+          {reportDate >= today ? (
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-8"
+              disabled
+              aria-label="Sledeći dan"
             >
               <ChevronRight className="size-4" />
-            </Link>
-          </Button>
+            </Button>
+          ) : (
+            <Button variant="outline" size="icon" className="size-8" asChild>
+              <Link
+                href={`/daily?date=${nextReportDate(reportDate)}`}
+                onClick={guardLeave}
+                aria-label="Sledeći dan"
+              >
+                <ChevronRight className="size-4" />
+              </Link>
+            </Button>
+          )}
           {!isToday && (
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/daily">Danas</Link>
+              <Link href="/daily" onClick={guardLeave}>
+                Danas
+              </Link>
             </Button>
           )}
         </div>
@@ -412,8 +446,10 @@ export function DailyReportForm({
             {tracker.locked
               ? "Dan je zaključan"
               : lastSaved
-                ? `Poslednje čuvanje ${format(new Date(lastSaved), "HH:mm")}`
-                : "Još nije sačuvano"}
+                ? `${dirty ? "Nesačuvane izmene · " : ""}Poslednje čuvanje ${fmtInTz(lastSaved, timezone, "HH:mm")}`
+                : dirty
+                  ? "Nesačuvane izmene"
+                  : "Još nije sačuvano"}
           </p>
           {!tracker.locked && (
             <div className="flex items-center gap-2">

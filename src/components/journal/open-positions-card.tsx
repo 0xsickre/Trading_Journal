@@ -179,7 +179,8 @@ function PositionRow({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            href={`/trades/${position.id}`}
+            // `/edit`: there is no `/trades/<id>` page, and this link was a 404.
+            href={`/trades/${position.id}/edit`}
             className="font-medium hover:underline"
           >
             {position.label}

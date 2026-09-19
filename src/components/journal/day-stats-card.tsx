@@ -59,9 +59,11 @@ export function DayStatsCard({
   costs: CostStats;
   volume: number;
   trades: DayTradeRow[];
-  currency: string;
+  /** Null when the accounts' currencies differ — money is then not summed. */
+  currency: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  const money = (v: number, sign = true) => (currency ? fmtMoney(v, currency, { sign }) : "—");
 
   if (stats.count === 0) {
     return (
@@ -79,23 +81,24 @@ export function DayStatsCard({
       <CardHeader className="pb-2">
         <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
           <span>Dan u brojkama</span>
-          <span className={cn("tabular-nums", pnlClass(stats.netSum))}>
-            {fmtMoney(stats.netSum, currency, { sign: true })}
+          <span className={cn("tabular-nums", currency && pnlClass(stats.netSum))}>
+            {money(stats.netSum)}
           </span>
         </CardTitle>
       </CardHeader>
 
       <CardContent className="space-y-4">
         <div className="grid grid-cols-3 gap-4 sm:grid-cols-5">
+          {/* Net sits in the heading above; it used to be repeated here as the
+              first figure. The slot shows the day's range of outcomes instead. */}
           <Figure
-            label="Net P&L"
-            value={fmtMoney(stats.netSum, currency, { sign: true })}
-            cls={pnlClass(stats.netSum)}
+            label="Najbolji / najgori"
+            value={stats.count > 0 ? `${money(stats.best)} / ${money(stats.worst)}` : "—"}
           />
           <Figure
             label="Gross"
-            value={fmtMoney(stats.grossSum, currency, { sign: true })}
-            cls={pnlClass(stats.grossSum)}
+            value={money(stats.grossSum)}
+            cls={currency ? pnlClass(stats.grossSum) : undefined}
           />
           <Figure label="Trejdovi" value={String(stats.count)} />
           <Figure
@@ -136,7 +139,7 @@ export function DayStatsCard({
           <Figure label="Volumen" value={fmtNum(volume, 2)} hint="kontrakata" />
           <Figure
             label="Provizije"
-            value={fmtMoney(costs.totalFees, currency)}
+            value={money(costs.totalFees, false)}
             // Without this a day of trades logged with no fee data shows a
             // confident $0 and implies the trading was free.
             hint={
@@ -157,6 +160,11 @@ export function DayStatsCard({
             }
           />
         </div>
+        {currency == null && (
+          <p className="text-xs text-muted-foreground">
+            Novac se ne sabira: nalozi su u različitim valutama.
+          </p>
+        )}
 
         <div>
           <button
@@ -199,7 +207,7 @@ export function DayStatsCard({
                       pnlClass(t.net),
                     )}
                   >
-                    {fmtMoney(t.net, currency, { sign: true })}
+                    {money(t.net)}
                   </span>
                 </Link>
               ))}

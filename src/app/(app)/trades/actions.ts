@@ -389,7 +389,7 @@ export async function updateTrade(id: string, input: TradeInput) {
   });
   if (saveErr) return { ok: false as const, error: saveErr.message };
 
-  revalidatePath(`/trades/${id}`);
+  revalidatePath(`/trades/${id}/edit`);
   revalidateTrades();
   return { ok: true as const, id };
 }
@@ -449,7 +449,7 @@ export async function markTradeMissed(
     return { ok: false as const, error: "Trade changed — refresh the page" };
   }
 
-  revalidatePath(`/trades/${id}`);
+  revalidatePath(`/trades/${id}/edit`);
   revalidateTrades();
   return { ok: true as const, id };
 }
@@ -489,7 +489,7 @@ export async function restoreTradeToPlanned(id: string) {
     return { ok: false as const, error: "Trade changed — refresh the page" };
   }
 
-  revalidatePath(`/trades/${id}`);
+  revalidatePath(`/trades/${id}/edit`);
   revalidateTrades();
   return { ok: true as const, id };
 }

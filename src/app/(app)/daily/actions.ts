@@ -5,6 +5,25 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { THESIS_STATES, TOUCHED_STATES } from "@/lib/journal/position-checkin";
+import { getPrimaryAccount } from "@/lib/journal/accounts";
+import { todayInTz } from "@/lib/journal/daily-report";
+import { DEFAULT_TZ, isValidDayKey } from "@/lib/journal/time";
+
+/**
+ * The day being written must exist and must have started.
+ *
+ * The tracker actions already refused a future day; these two did not, so a
+ * report or a position check-in could be saved against next week — or against
+ * "2026-02-30" — through a direct call. Same rule, same sentence, same clock:
+ * the primary account's today.
+ */
+async function dayError(reportDate: string): Promise<string | null> {
+  if (!isValidDayKey(reportDate)) return "Neispravan datum.";
+  const account = await getPrimaryAccount();
+  if (reportDate > todayInTz(account?.timezone ?? DEFAULT_TZ))
+    return "Budući dan još nije počeo.";
+  return null;
+}
 
 // Eight fields, down from twenty-one. What left did not move here — it moved to
 // the position (`micromanage`, now `savePositionCheckin` below) or to the weekly
@@ -47,6 +66,8 @@ export async function saveDailyReport(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Neispravan unos." };
   }
+  const badDay = await dayError(reportDate);
+  if (badDay) return { ok: false, error: badDay };
 
   const supabase = await createClient();
   const user = await getCurrentUser();
@@ -114,6 +135,8 @@ export async function savePositionCheckin(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Neispravan unos." };
   }
+  const badDay = await dayError(reportDate);
+  if (badDay) return { ok: false, error: badDay };
 
   const supabase = await createClient();
   const user = await getCurrentUser();

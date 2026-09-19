@@ -131,21 +131,21 @@ describe("several positions", () => {
       pos({ id: "a", label: "ES Long", daysInTrade: 2 }),
       pos({ id: "b", label: "EURUSD Short", daysInTrade: 9, timeStopDays: 10 }),
     ]);
-    const es = container.querySelector<HTMLElement>('a[href="/trades/a"]')
+    const es = container.querySelector<HTMLElement>('a[href="/trades/a/edit"]')
       ?.parentElement as HTMLElement;
-    const fx = container.querySelector<HTMLElement>('a[href="/trades/b"]')
+    const fx = container.querySelector<HTMLElement>('a[href="/trades/b/edit"]')
       ?.parentElement as HTMLElement;
     expect(within(es).getByText(/dan 2/)).toBeInTheDocument();
     expect(within(fx).getByText(/dan 9 od 10/)).toBeInTheDocument();
   });
 
-  it("each links to its own trade", () => {
+  it("each links to its own trade — the edit page, the only trade page there is", () => {
     const { container } = draw([
       pos({ id: "a", label: "ES Long" }),
       pos({ id: "b", label: "EURUSD Short" }),
     ]);
-    expect(container.querySelector('a[href="/trades/a"]')).toBeTruthy();
-    expect(container.querySelector('a[href="/trades/b"]')).toBeTruthy();
+    expect(container.querySelector('a[href="/trades/a/edit"]')).toBeTruthy();
+    expect(container.querySelector('a[href="/trades/b/edit"]')).toBeTruthy();
   });
 });
 

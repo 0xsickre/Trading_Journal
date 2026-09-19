@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DailyReportForm } from "./daily-report-form";
 import type { DailyReport } from "@/lib/journal/daily-report";
@@ -405,5 +405,53 @@ describe("locking saves the report first, so it never seals empty text", () => {
 
     await vi.waitFor(() => expect(saveDailyReportMock).toHaveBeenCalled());
     expect(lockDayMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("moving between days", () => {
+  const drawOn = (reportDate: string, today: string) =>
+    render(
+      <DailyReportForm
+        report={report()}
+        reportDate={reportDate}
+        today={today}
+        timezone="America/New_York"
+        activeGoal={null}
+        positions={[]}
+        tracker={trackerData()}
+      />,
+    );
+
+  it("on today, 'next day' is a disabled button, not a link back to the same day", () => {
+    drawOn("2026-04-02", "2026-04-02");
+    const next = screen.getByLabelText("Sledeći dan");
+    expect(next.tagName).toBe("BUTTON");
+    expect(next).toBeDisabled();
+  });
+
+  it("asks before leaving a day with unsaved text, and stays if told to", async () => {
+    // The form remounts per day: without this, typed text vanished on an arrow.
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    drawOn("2026-04-02", "2026-04-10");
+    const note = screen.getByPlaceholderText(/Šta se dešava između sada/);
+    fireEvent.change(note, { target: { value: "CPI u četvrtak" } });
+
+    const prev = screen.getByLabelText("Prethodni dan");
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    prev.dispatchEvent(click);
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(click.defaultPrevented).toBe(true);
+    expect(screen.getByText(/Nesačuvane izmene/)).toBeInTheDocument();
+    confirmSpy.mockRestore();
+  });
+
+  it("does not ask when nothing was typed", () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    drawOn("2026-04-02", "2026-04-10");
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    screen.getByLabelText("Prethodni dan").dispatchEvent(click);
+    expect(confirmSpy).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
   });
 });

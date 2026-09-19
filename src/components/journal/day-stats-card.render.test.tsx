@@ -60,7 +60,9 @@ describe("DayStatsCard — the day's numbers, real stats through a real card", (
       />,
     );
     expect(figureValue("Profit factor")).toBe("∞");
-    expect(figureValue("Net P&L")).toBe("+$150.00");
+    // Net is in the card's heading now, not repeated as a figure.
+    expect(screen.getByText("Dan u brojkama").parentElement?.textContent).toContain("+$150.00");
+    expect(screen.queryByText("Net P&L")).not.toBeInTheDocument();
   });
 
   it("closed trades listed under the toggle show each one's own R and net", () => {
