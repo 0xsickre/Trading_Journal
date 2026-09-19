@@ -283,6 +283,15 @@ export function zonedDateKey(
   return formatInTimeZone(iso, safeTz(tz), "yyyy-MM-dd");
 }
 
+/** Hour of day (0–23) of `iso` on the clock of `tz`; null when unknown. */
+export function zonedHour(
+  iso: string | Date | null | undefined,
+  tz: string = DEFAULT_TZ,
+): number | null {
+  if (!iso || !Number.isFinite(toEpoch(iso))) return null;
+  return Number(formatInTimeZone(iso, safeTz(tz), "H"));
+}
+
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
 /** Monday yyyy-MM-dd of the week containing `iso` in `tz` (ISO week, Mon start). */

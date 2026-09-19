@@ -5,6 +5,7 @@ import {
   parseImportTime,
   utcToZonedInput,
   zonedDateKey,
+  zonedHour,
   zonedInputToUtc,
   zonedWeekStartKey,
   isValidTimeZone,
@@ -325,5 +326,17 @@ describe("parseImportTime — a bare number is not a date", () => {
 
   it("still reads a dotted date, which is not a bare number", () => {
     expect(parseImportTime("2026.03.05 14:30:00", "UTC")).toBe("2026-03-05T14:30:00.000Z");
+  });
+});
+
+describe("zonedHour", () => {
+  it("reads the hour on the given clock, across a DST change", () => {
+    expect(zonedHour("2026-01-05T13:30:00Z", "America/New_York")).toBe(8);
+    expect(zonedHour("2026-07-06T13:30:00Z", "America/New_York")).toBe(9);
+    expect(zonedHour("2026-01-05T23:59:00Z", "UTC")).toBe(23);
+  });
+  it("is null for a missing or unreadable instant", () => {
+    expect(zonedHour(null)).toBeNull();
+    expect(zonedHour("garbage")).toBeNull();
   });
 });

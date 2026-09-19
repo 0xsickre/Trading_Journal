@@ -263,6 +263,12 @@ const SIZE_EDGES = [
 ] as const;
 
 /** Monday first, as every week in the journal starts (`closeWeek`, the weekly review). */
+/** "08:00–09:00" … one label per hour of the day, in clock order. */
+export const ENTRY_HOURS: readonly string[] = Array.from({ length: 24 }, (_, h) => {
+  const p = (n: number) => String(n % 24).padStart(2, "0");
+  return `${p(h)}:00–${p(h + 1)}:00`;
+});
+
 const WEEKDAYS = [
   "Monday",
   "Tuesday",
@@ -439,6 +445,16 @@ const derivedDimensions: Dimension[] = [
     group: "derived",
     order: WEEKDAYS,
     valueOf: (t) => weekdayOf(t.openDay),
+  },
+  {
+    // On the ACCOUNT's clock, one bucket per hour: "which hours pay" is a
+    // question about when the trader acts, and the account's zone is the one
+    // the rest of the journal already reads days in.
+    key: "entry_hour",
+    label: "Entry hour",
+    group: "derived",
+    order: ENTRY_HOURS,
+    valueOf: (t) => (t.openHour == null ? null : ENTRY_HOURS[t.openHour]),
   },
   {
     key: "dow_exit",

@@ -155,6 +155,16 @@ describe("derived bucket dimensions", () => {
       "Friday",
     ]);
   });
+
+  it("buckets the entry hour on the account's clock, and drops an unknown entry time", () => {
+    // 13:30 UTC is 08:30 in New York in January.
+    const t = enrich([{ openedAt: "2026-01-05T13:30:00Z" }], "America/New_York")[0];
+    expect(bucketsOf(getDimension("entry_hour")!, t, dimCtx())).toEqual(["08:00–09:00"]);
+    const late = one([{ openedAt: "2026-01-05T23:15:00Z" }]);
+    expect(bucketsOf(getDimension("entry_hour")!, late, dimCtx())).toEqual(["23:00–00:00"]);
+    const unknown = one([{ openedAt: "not a time" }]);
+    expect(bucketsOf(getDimension("entry_hour")!, unknown, dimCtx())).toEqual([]);
+  });
 });
 
 describe("process dimensions", () => {

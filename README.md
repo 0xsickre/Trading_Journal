@@ -88,9 +88,10 @@ calls between them. The link is semantic.
 | [`trading-dashboard`](https://github.com/0xsickre/trading-dashboard) | Where did the cycle stop? What is ready? | Read-only view |
 | **`Trading_Journal`** (this repo) | What did I trade, and with what discipline? | Write (you, after F5) |
 
-The instrument watchlist is kept in step with the vault's `instrument_registry`, and the
-`macro_align` / `cot_filter` fields record the vault's verdict **at the moment of entry** — a record
-of the decision, not a reconstruction of it. The TA plan for F5 (entry trigger, timeframe,
+The instrument watchlist is kept in step with the vault's `instrument_registry`. HTF Bias records
+the vault's direction call **at the moment of entry** — a record of the decision, not a
+reconstruction of it. (`macro_align` / `cot_filter` are no longer seeded; add them back as your own
+categories under Settings if you want them on the trade.) The TA plan for F5 (entry trigger, timeframe,
 execution) lives in Notion, outside this repo.
 
 The thesis: **P&L is the consequence, process is the cause.** So the daily rating measures progress
@@ -133,7 +134,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,562 tests across 157 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,565 tests across 157 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -326,8 +327,8 @@ no control goes back to the server.
 
 ## Metrics
 
-34 metrics in a single registry (`src/lib/journal/reports/metrics.ts`), 23 built-in dimensions across
-four groups (9 off the trade, 9 derived, 4 process, 1 insight) plus one per custom field. Any
+34 metrics in a single registry (`src/lib/journal/reports/metrics.ts`), 24 built-in dimensions across
+four groups (9 off the trade, 10 derived, 4 process, 1 insight) plus one per custom field. Any
 metric runs against any dimension — which is why there is one report engine instead of ten report
 pages. The tables below list all 34.
 
@@ -992,7 +993,7 @@ migration — it already fell through the cascade from `tj_playbooks`, but the l
 what "reset everything" means, and a reader should not have to trace foreign keys to believe it.
 
 What actually comes back, counted from the seed functions rather than assumed from their names:
-**1 Main Account, 91 instruments, 13 lists holding 66 options, 8 tracker rules, 9 custom fields,
+**1 Main Account, 91 instruments, 11 lists holding 55 options, 8 tracker rules, 7 custom fields,
 3 note folders.**
 
 **What does NOT come back: playbooks.** `tj_seed_defaults` **does** call `tj_seed_playbooks`, but that
@@ -1053,8 +1054,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,562 tests across 157 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,023 tests in 105 files) and `components` (environment `jsdom`, files `*.test.tsx`, 539
+2,565 tests across 157 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,026 tests in 105 files) and `components` (environment `jsdom`, files `*.test.tsx`, 539
 tests in 52 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
@@ -1138,7 +1139,7 @@ container does not have. It stays a later option, not an oversight.
 | Spaces, mentor, leaderboard | Single-user system |
 | AI chat and agents | The mentor-pack export and the insight rules give the same thing without the API cost |
 | Options (DTE, strike, expiry) | Not traded |
-| Intraday dimensions (entry time 5–30 min) | A day-trading artifact |
+| Intraday dimensions (entry time 5–30 min) | A day-trading artifact. The hour of entry (`Entry hour`, on the account's clock) is kept — with `Entry weekday` it answers when the trades that pay are opened |
 | Economic calendar | Lives in the vault repo |
 | Running P&L curve per trade | Needs a price feed. Consequence: "most time in drawdown" is off the table |
 

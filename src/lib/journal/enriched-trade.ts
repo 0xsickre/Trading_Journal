@@ -14,7 +14,7 @@ import { numberFieldValue as numField } from "./field-values";
 import { daysBetweenKeys } from "./open-positions";
 import { spansWeekend } from "./weekend-hold";
 import { excursionFromTrade, type Excursion } from "./excursion";
-import { zonedDateKey, zonedWeekStartKey } from "./time";
+import { zonedDateKey, zonedHour, zonedWeekStartKey } from "./time";
 
 /**
  * The journal fields downstream consumers join against — process, not prose.
@@ -48,6 +48,12 @@ export type EnrichedTrade = {
   closedAt: string | null;
   /** Day key of the OPEN, in account tz — the trading day. */
   openDay: string;
+  /**
+   * Hour of the entry (0–23) on the account's clock, or null when the entry
+   * time is unknown. Never falls back to the close the way `openDay` does: a
+   * day survives that substitution, an hour would be a different fact.
+   */
+  openHour: number | null;
   /** Day key of the CLOSE — where the money lands. */
   closeDay: string;
   closeWeek: string;
@@ -133,6 +139,7 @@ export function enrichTrades(
       openedAt: t.row.stats?.opened_at ?? null,
       closedAt: t.closedAt,
       openDay,
+      openHour: zonedHour(t.row.stats?.opened_at ?? null, tz),
       closeDay,
       closeWeek: zonedWeekStartKey(t.closedAt, tz),
       weekendHold: spansWeekend(t.row.stats?.opened_at ?? null, t.closedAt, tz),

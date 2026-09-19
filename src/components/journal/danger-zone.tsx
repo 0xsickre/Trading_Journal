@@ -27,8 +27,8 @@ import { RESET_PHRASE } from "@/lib/journal/reset-phrase";
  * costs attention rather than time.
  *
  * WHAT ACTUALLY COMES BACK, counted from the seed functions rather than assumed
- * from their names: one Main Account, 91 instruments, 13 dropdown lists holding
- * 66 options, 8 tracker rules, 9 custom fields and 3 note folders.
+ * from their names: one Main Account, 91 instruments, 11 dropdown lists holding
+ * 55 options, 8 tracker rules, 7 custom fields and 3 note folders.
  * `tj_reset_my_data` calls `tj_seed_my_defaults()`, which is exactly what a new
  * signup ends up with after its first dashboard load — so "reset" and "first
  * ever load" do land on the same state.
@@ -86,8 +86,8 @@ export function DangerZone() {
         <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
           <p className="font-medium">Restored afterwards</p>
           <p className="text-muted-foreground">
-            One Main Account, 91 instruments, 13 dropdown lists with 66 options,
-            8 tracker rules, 9 custom fields, 3 note folders.
+            One Main Account, 91 instruments, 11 dropdown lists with 55 options,
+            8 tracker rules, 7 custom fields, 3 note folders.
           </p>
           <p className="mt-2 font-medium">Not restored</p>
           <p className="text-muted-foreground">

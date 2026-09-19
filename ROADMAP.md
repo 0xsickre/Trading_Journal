@@ -1205,3 +1205,18 @@ Nastavak primopredaje `plan_ostatak.md` (obrisana kad je sve urađeno).
 - Početni balans je prvi, samo za čitanje, red liste (izveden, ne upisuje se — equity ga već sadrži).
 - Datumi dd/MM/yyyy u zoni naloga; „danas" je dan naloga, a unos se beleži u podne te zone.
 - Filter po nalogu, neto tok po valuti, brisanje uz potvrdu.
+
+### Kategorije i tagovi — samo ono što trejderu treba (19.09.2026.)
+
+Novi podrazumevani skup (seed za novog korisnika i posle „Delete all data"), migracija
+`20260919230000_must_have_categories.sql` (`tj_seed_categories`). Korisnik bez ijednog trejda dobija
+ga odmah; korisnik sa trejdovima zadržava svoje liste.
+
+- **Izbačeno:** Macro Align, COT Filter; BOS/CHoCH → MSS, Imbalance → FVG, Equal Highs/Lows (to je
+  likvidnost koju sweep uzima); izlazi „u profitu/minusu" (to kaže P&L); „Other".
+- **Swing:** Entry TF 15m / 1h / 4h / 1D; greška „Overmanaged" (HTF ideja vođena na LTF-u).
+- **Bez preklapanja:** Emotion = stanje, Discipline = šta je išlo dobro, Mistake = šta nije. „Revenge",
+  „Moved stop", „Oversized" više nisu u dve liste odjednom.
+- **Risk %:** 0.25 / 0.5 / 0.75 / 1.
+- **Vreme ulaza se prati samo:** nova dimenzija izveštaja „Entry hour" (sat ulaza u zoni naloga), uz
+  postojeći „Entry weekday" — koji dani i sati donose novac, bez ikakvog taga.
