@@ -17,16 +17,22 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 126 of the
-3,097 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 132 of the
+3,512 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into:
 
 | Surface | Serbian strings |
 |---|---|
-| Daily, weekly, tracker, focus goal | 90 |
+| Daily, weekly, tracker, focus goal | 91 |
 | Mentor-export prompt | 33 |
+| Daily and weekly insight sentences, open-position check-ins | 5 |
 | TradingView snapshot helper, trade images | 3 |
-| Dashboard, `/reports`, journal grid, playbooks | **0** |
+| Dashboard, `/reports`, journal grid, playbooks, **`/settings`** | **0** |
+
+Settings joined that last row on 20.09.2026. It had held the stage names of the daily checklist
+(`Priprema` / `Trgovanje` / `Osvrt`, which the checklist itself rendered), a paragraph of Serbian
+above the instrument catalog and two error messages from its server actions — a screen that measures,
+reading half in one language and half in the other.
 
 The half that **measures** is English; the half the trader **writes into** is Serbian. That is the
 trader's own language for their own prose, and it stays.
@@ -134,7 +140,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,565 tests across 157 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,613 tests across 161 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -195,7 +201,7 @@ changed:
   together:
   - the rule answers on `/journal`, `/reports` and `/playbooks`;
   - the accounts on the dashboard, `/daily` and `/weekly`, where only the day or week waits on them;
-  - the tag usage on `/settings`;
+  - the accounts and their trade counts on `/settings`;
   - the notebook's purge of expired notes.
 - **The shared reads are memoized per request** (React `cache`), so a page and its helpers asking for
   the same thing share one read: `getAccounts`, `getTradesWithStats`, `getFillCounts`, `getCashEvents`,
@@ -203,8 +209,12 @@ changed:
   everywhere, including `/playbooks`, which read it twice.
 - **No second render after an action.** Saving a trade and ticking a check-in rule no longer call
   `router.refresh()` on top of the action's own revalidation.
-- **Report filters stay in the browser.** Filters are written to the URL with `history.replaceState`
-  instead of a server navigation that re-read the whole book.
+- **A scan that only one tab shows is not on the page.** The "Used" count beside every tag reads the
+  tag columns of every trade. It used to run on each `/settings` load, so opening Accounts to rename
+  one waited for a tally of the whole book; it is now a server action the Tags table calls when it is
+  first opened (`getTagUsage`), and the rows paint before it answers.
+- **Report filters and the Settings tab stay in the browser.** Both are written to the URL with
+  `history.replaceState` instead of a server navigation that re-read the whole book.
 
 ## Data model
 
@@ -283,7 +293,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
-| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments, Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — type Live or Backtest, which decides where MAE/MFE comes from, currency locked once it has trades, FTMO rules and challenge restart), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion and reset live under Accounts |
+| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments, Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — type Live or Backtest, which decides where MAE/MFE comes from, currency locked once it has trades, FTMO rules and challenge restart), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion and reset live under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
 | `/login` | Supabase auth |
 
 ---
@@ -897,8 +907,43 @@ produce a confidently wrong trade through the generic mapping, and each is handl
   different currency from the export's, or a scale that is neither of the two is refused with the
   figure found.
 
+**Money converted into the chart's currency is refused, and named.** TradingView converts the RESULT
+into the currency of the chart and leaves the PRICES in the symbol's: gold on a EUR chart exports
+`Price USD` beside `Net PnL EUR`. Since the scale above is read by dividing money by a price move,
+such an export looks exactly like a wrong contract size — and was refused as one, with "P&L is 0.932
+per 1.00 per unit of size, which is neither 1 nor 1", a sentence that says nothing about the currency
+that caused it. The reader now keeps both currencies (`priceCurrency`), and the refusal says which is
+which and which setting fixes it. It is not converted: the rate is the day's, and neither the file nor
+the journal carries one.
+
 The symbol exists only in the file name (`…_OANDA_XCUUSD_2026-09-18_….xlsx`), so a renamed file is
 refused.
+
+### MetaTrader 5 statements
+
+MT5 does not export a table, it exports a **report**: a title, four lines about the account, then
+three tables stacked on one sheet — Positions, Orders, Deals — each under its own banner, each ending
+in a totals row, followed by a balance summary, a chart and the Results block. Read through the
+wizard's header-is-row-1 rule it arrived as `Trade History Report | __EMPTY | __EMPTY_1 | …` with
+28 rows of prose under it, and nothing to map.
+
+`lib/journal/mt5-statement.ts` reads it the way it is written:
+
+- **Only the Positions table**, found by its banner. Orders includes orders that never filled; Deals
+  is one row per fill plus a row for the deposit. Positions is one row per position, with the open
+  and the close on it.
+- **The header names `Time` and `Price` twice** — open and close. Columns are taken by their POSITION
+  in the header row: keyed by name, the second pair overwrites the first and every trade imports with
+  its exit as its entry.
+- **Costs change sign.** MT5 writes what it took off the account (`-3.50`), while `net_pl` here is
+  `gross - total_fees - total_swap`, so a cost is a positive number. Imported as written, every trade
+  would read better than it was. A credit stays a credit.
+- **The account's currency** comes from the `Account:` line (`1514682848 (EUR, FTMO-Demo, …)`) and has
+  to match the journal account, because the profit, commission and swap are all in it.
+- **The clock is the broker's server**, and the report does not say which zone that is. The review
+  asks, defaulting to EET (`Europe/Athens`) — what FTMO and most CFD servers run.
+- A row that cannot be read is shown with the reason, never dropped; a position with no close keeps
+  its entry and has no exit; the stop is not imported, for the reason given above.
 
 **The file's times are the CHART's wall clock, not the account's**, and the export says nothing about
 which zone that was — so the review asks, defaulting to New York. It used to read them in the
@@ -996,6 +1041,13 @@ What actually comes back, counted from the seed functions rather than assumed fr
 **1 Main Account, 91 instruments, 11 lists holding 55 options, 8 tracker rules, 7 custom fields,
 3 note folders.**
 
+**An instrument you delete stays deleted, since 20.09.2026.** `tj_seed_instruments_defaults` inserted
+the 91 rows on every call with `on conflict do nothing`, and `ensureDefaults()` calls it from the home
+page — so a symbol deleted in Settings was back on the next visit, and back with the CATALOG's
+contract spec rather than the corrected one. It is the same shape of bug as the playbook seed below,
+and it is now guarded the same way the account seed always was: the insert runs only when the user's
+catalog is empty. A reset still restores all 91, because it deletes them first.
+
 **What does NOT come back: playbooks.** `tj_seed_defaults` **does** call `tj_seed_playbooks`, but that
 function has been a **deliberate no-op since `20260813200000`**: it used to guard itself with
 `if exists (…) then return`, which cannot tell a new user from one who deleted every playbook on
@@ -1054,9 +1106,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,565 tests across 157 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,026 tests in 105 files) and `components` (environment `jsdom`, files `*.test.tsx`, 539
-tests in 52 files). The rule is the extension, so no file can land in both. The split exists so that
+2,613 tests across 161 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,052 tests in 107 files) and `components` (environment `jsdom`, files `*.test.tsx`, 561
+tests in 54 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves

@@ -12,6 +12,7 @@ import {
 } from "@/lib/journal/account-usage";
 import { getAccountUsage } from "@/lib/journal/account-usage-queries";
 import {
+  getAllOptionUsage,
   getOptionFieldTargets,
   getOptionUsage,
 } from "@/lib/journal/option-usage-queries";
@@ -349,7 +350,11 @@ export async function addList(
   showPhase: FieldDefPhase = "always",
   /** One tag at a time, or several. Several is the common case for a tag. */
   selection: CategorySelection = "multi",
+  /** The chip color picked in the dialog; it used to be dropped here. */
+  color: string | null = null,
 ) {
+  if (color != null && !/^#[0-9a-f]{6}$/i.test(color))
+    return { ok: false, error: "Color must be a hex code like #22c55e." };
   const supabase = await createClient();
 
   // The key is derived from the NAME with the same rules the field definition
@@ -396,6 +401,16 @@ export async function addList(
     // list with no field never appeared on the form and made every retry fail.
     await supabase.from("tj_option_lists").delete().eq("key", key);
     return { ok: false, error: fieldRes.error };
+  }
+
+  if (color) {
+    // After the field, so a failure here leaves a whole category without its
+    // color rather than a half-made one.
+    const { error: colorError } = await supabase
+      .from("tj_option_lists")
+      .update({ color })
+      .eq("key", key);
+    if (colorError) return { ok: false, error: colorError.message };
   }
 
   revalidateAll();
@@ -675,6 +690,25 @@ export async function moveOptionToList(optionId: string, listId: string) {
   return { ok: true };
 }
 
+/**
+ * The "Used" number on every row of the Tags table.
+ *
+ * An action rather than part of the page, because it reads the tag columns of
+ * EVERY trade while only one of the five tabs shows the result. On the page it
+ * cost that scan on every Settings load — opening Accounts to rename one waited
+ * for a tally of the whole book. Here it runs when the Tags table is first
+ * opened, and the rows paint before it answers.
+ *
+ * `null` is a failed scan, which the table shows as "—". It never gates
+ * anything destructive: the delete dialogs head-count for themselves.
+ */
+export async function getTagUsage(): Promise<Record<string, number> | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("tj_option_lists").select("key");
+  if (error) return null;
+  return getAllOptionUsage((data ?? []).map((l) => l.key));
+}
+
 export type ListUsage = {
   trades: number;
   /** A built-in (hardcoded) field reads this list — deleting it is refused. */
@@ -908,6 +942,28 @@ export async function updateInstrument(
   if (!updated || updated.length === 0) return { ok: false, error: "Instrument not found." };
   revalidateAll();
   return { ok: true };
+}
+
+/**
+ * How many trades are filed under this instrument's symbol, for the delete
+ * confirmation. Trades store the symbol as text, so they keep it either way —
+ * but they lose the contract spec that sizes a new trade on it.
+ */
+export async function countInstrumentUsage(id: string) {
+  const supabase = await createClient();
+  const { data: inst, error } = await supabase
+    .from("tj_instruments")
+    .select("symbol")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return { ok: false as const, error: error.message };
+  if (!inst) return { ok: false as const, error: "Instrument not found." };
+  const { count, error: countError } = await supabase
+    .from("tj_positions")
+    .select("id", { count: "exact", head: true })
+    .eq("instrument", inst.symbol);
+  if (countError) return { ok: false as const, error: countError.message };
+  return { ok: true as const, trades: count ?? 0 };
 }
 
 export async function deleteInstrument(id: string) {

@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -59,7 +58,6 @@ export function CashEventsManager({
   accounts: Account[];
   events: CashEvent[];
 }) {
-  const router = useRouter();
   const [pending, start] = useTransition();
 
   // New entries go only to accounts in use; the history still shows them all.
@@ -136,7 +134,6 @@ export function CashEventsManager({
       setAmount("");
       setNote("");
       toast.success("Recorded");
-      router.refresh();
     });
   }
 
@@ -149,7 +146,6 @@ export function CashEventsManager({
       }
       setConfirming(null);
       toast.success("Entry deleted");
-      router.refresh();
     });
   }
 
@@ -380,7 +376,7 @@ export function CashEventsManager({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirming(null)} disabled={pending}>
+            <Button variant="ghost" onClick={() => setConfirming(null)} disabled={pending}>
               Cancel
             </Button>
             <Button

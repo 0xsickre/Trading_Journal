@@ -1,12 +1,21 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { toast } from "sonner";
 import { MoreHorizontal, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -38,6 +47,7 @@ import {
   countOptionUsage,
   deleteList,
   deleteOption,
+  getTagUsage,
   moveOptionToList,
   renameList,
   renameOption,
@@ -66,6 +76,7 @@ import {
 } from "@/lib/journal/field-def-types";
 import { usageKey } from "@/lib/journal/option-usage";
 import { SEEDED_COLUMN_LISTS } from "@/lib/journal/settings-rules";
+import { replaceSettingsSearch, type CategorySubtab } from "@/lib/journal/settings-tabs";
 
 const PALETTE = [
   "#22c55e",
@@ -79,7 +90,7 @@ const PALETTE = [
   "#64748b",
 ];
 
-/** The neutral dot for a category that has not been given a colour. */
+/** The neutral dot for a category that has not been given a color. */
 function ColorDot({ color, className }: { color: string | null; className?: string }) {
   return (
     <span
@@ -118,15 +129,16 @@ function SelectionPicker({
   onChange: (next: CategorySelection) => void;
   disabled?: boolean;
 }) {
+  const id = useId();
   return (
     <div className="space-y-1.5">
-      <label className="text-sm font-medium">Pick</label>
+      <Label htmlFor={id}>Pick</Label>
       <Select
         value={value}
         onValueChange={(v) => onChange(v as CategorySelection)}
         disabled={disabled}
       >
-        <SelectTrigger className="w-full">
+        <SelectTrigger id={id} className="w-full">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -139,8 +151,8 @@ function SelectionPicker({
       </Select>
       <p className="text-xs text-muted-foreground">
         {value === "multi"
-          ? "The list stays open and every row carries a tick, so several can be chosen in one go."
-          : "One click closes the list — for values that exclude each other, like a bias."}
+          ? "A trade can carry several of these."
+          : "One per trade — for values that exclude each other, like a bias."}
       </p>
     </div>
   );
@@ -155,15 +167,16 @@ function PhasePicker({
   onChange: (next: FieldDefPhase) => void;
   disabled?: boolean;
 }) {
+  const id = useId();
   return (
     <div className="space-y-1.5">
-      <label className="text-sm font-medium">Ask for it</label>
+      <Label htmlFor={id}>Ask for it</Label>
       <Select
         value={value}
         onValueChange={(v) => onChange(v as FieldDefPhase)}
         disabled={disabled}
       >
-        <SelectTrigger className="w-full">
+        <SelectTrigger id={id} className="w-full">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -188,7 +201,7 @@ function ColorPicker({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Color">
       {PALETTE.map((c) => (
         <button
           key={c}
@@ -199,7 +212,8 @@ function ColorPicker({
             value === c && "ring-2 ring-ring",
           )}
           style={{ backgroundColor: c }}
-          aria-label={`Colour ${c}`}
+          aria-label={`Color ${c}`}
+          aria-pressed={value === c}
           onClick={() => onPick(c)}
         />
       ))}
@@ -207,7 +221,8 @@ function ColorPicker({
         type="button"
         disabled={disabled}
         className="size-6 rounded-full border bg-transparent text-[10px] text-muted-foreground"
-        aria-label="No colour"
+        aria-label="No color"
+        aria-pressed={value == null}
         onClick={() => onPick(null)}
       >
         ✕
@@ -217,7 +232,6 @@ function ColorPicker({
 }
 
 function useAction() {
-  const router = useRouter();
   const [pending, start] = useTransition();
   function run(
     fn: () => Promise<{ ok: boolean; error?: string }>,
@@ -230,7 +244,6 @@ function useAction() {
         return;
       }
       after?.();
-      router.refresh();
     });
   }
   return { pending, run };
@@ -241,12 +254,20 @@ function useAction() {
 function CategoryRow({
   list,
   drag,
+  canUp,
+  canDown,
+  onMove,
 }: {
   list: OptionList;
   /** Absent while the table is filtered — see `draggable` in `CategoriesTab`. */
   drag?: { target: DragTargetProps; handle: DragHandleProps };
+  canUp: boolean;
+  canDown: boolean;
+  /** The keyboard way to do what the drag handle does. */
+  onMove: (dir: -1 | 1) => void;
 }) {
   const { pending, run } = useAction();
+  const nameId = useId();
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [name, setName] = useState(list.label);
@@ -274,7 +295,7 @@ function CategoryRow({
     if (!trimmed) return;
     // Two writes because they are two columns with two server actions; the
     // rename is the one that can fail on validation, so it goes first and the
-    // colour only follows a rename that stuck.
+    // color only follows a rename that stuck.
     run(
       async () => {
         if (trimmed !== list.label) {
@@ -343,6 +364,12 @@ function CategoryRow({
             >
               Edit
             </DropdownMenuItem>
+            <DropdownMenuItem disabled={!canUp} onSelect={() => onMove(-1)}>
+              Move up
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={!canDown} onSelect={() => onMove(1)}>
+              Move down
+            </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" onSelect={openDelete}>
               Delete
             </DropdownMenuItem>
@@ -360,8 +387,9 @@ function CategoryRow({
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Name</label>
+                <Label htmlFor={nameId}>Name</Label>
                 <Input
+                  id={nameId}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => {
@@ -371,15 +399,12 @@ function CategoryRow({
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Colour</label>
+                <Label>Color</Label>
                 <ColorPicker value={color} onPick={setColor} disabled={pending} />
               </div>
               {list.show_phase == null ? (
                 <p className="text-xs text-muted-foreground">
-                  Where this one appears, and how it is picked, are part of the
-                  form — the exit reason sits with the exit, the miss reason only
-                  on a missed setup. Categories you add yourself choose their
-                  own.
+                  The trade form decides where this one appears.
                 </p>
               ) : (
                 <>
@@ -504,6 +529,7 @@ function CategoryRow({
 
 function NewCategoryDialog() {
   const { pending, run } = useAction();
+  const nameId = useId();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [color, setColor] = useState<string | null>(PALETTE[0]);
@@ -515,11 +541,12 @@ function NewCategoryDialog() {
     if (!trimmed) return;
     run(
       async () => {
-        const res = await addList(trimmed, trimmed, null, phase, selection);
+        const res = await addList(trimmed, trimmed, null, phase, selection, color);
         return res;
       },
       () => {
         setName("");
+        setColor(PALETTE[0]);
         setPhase("always");
         setSelection("multi");
         setOpen(false);
@@ -540,8 +567,9 @@ function NewCategoryDialog() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Name</label>
+              <Label htmlFor={nameId}>Name</Label>
               <Input
+                id={nameId}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Name your category"
@@ -552,7 +580,7 @@ function NewCategoryDialog() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Colour</label>
+              <Label>Color</Label>
               <ColorPicker value={color} onPick={setColor} disabled={pending} />
             </div>
             <SelectionPicker
@@ -585,6 +613,19 @@ function CategoriesTab({ lists }: { lists: OptionList[] }) {
     lists.map((l) => l.id),
     reorderLists,
   );
+  const [, startMove] = useTransition();
+
+  function move(id: string, dir: -1 | 1) {
+    const i = order.indexOf(id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    const ids = [...order];
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    startMove(async () => {
+      const res = await reorderLists(ids);
+      if (!res.ok) toast.error(res.error);
+    });
+  }
   const byId = new Map(lists.map((l) => [l.id, l]));
   const ordered = order
     .map((id) => byId.get(id))
@@ -599,8 +640,7 @@ function CategoriesTab({ lists }: { lists: OptionList[] }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        A category groups tags. Deleting one is safe for your history — trades
-        that used its tags keep the text.
+        A category groups tags. Deleting one keeps the text on past trades.
       </p>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -611,6 +651,7 @@ function CategoriesTab({ lists }: { lists: OptionList[] }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search categories"
+            aria-label="Search categories"
             className="h-9 pl-8"
           />
         </div>
@@ -622,7 +663,7 @@ function CategoriesTab({ lists }: { lists: OptionList[] }) {
             <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
               <th className="w-8 px-3 py-2" />
               <th className="px-3 py-2 font-medium">Category name</th>
-              <th className="px-3 py-2 font-medium">Colour</th>
+              <th className="px-3 py-2 font-medium">Color</th>
               <th className="px-3 py-2 text-right font-medium">Tags</th>
               <th className="w-10 px-3 py-2" />
             </tr>
@@ -639,6 +680,9 @@ function CategoriesTab({ lists }: { lists: OptionList[] }) {
                 <CategoryRow
                   key={l.id}
                   list={l}
+                  canUp={order.indexOf(l.id) > 0}
+                  canDown={order.indexOf(l.id) < order.length - 1}
+                  onMove={(dir) => move(l.id, dir)}
                   drag={
                     draggable
                       ? { target: target(l.id), handle: handle(l.id) }
@@ -668,8 +712,8 @@ function TagRow({
 }: {
   row: TagRowData;
   lists: OptionList[];
-  /** Trades carrying this tag, or null when the count could not be read. */
-  used: number | null;
+  /** Trades carrying this tag: undefined while counting, null when it failed. */
+  used: number | null | undefined;
   canUp: boolean;
   canDown: boolean;
   onMove: (dir: -1 | 1) => void;
@@ -682,6 +726,8 @@ function TagRow({
   const [color, setColor] = useState<string | null>(row.item.color);
   const [usedNow, setUsedNow] = useState<number | null>(null);
   const [, startCount] = useTransition();
+  const nameId = useId();
+  const listFieldId = useId();
 
   function openDelete() {
     setUsedNow(null);
@@ -721,20 +767,27 @@ function TagRow({
           {row.item.label}
           {!row.item.is_active && (
             <Badge variant="secondary" className="text-[10px]">
-              archived
+              Archived
             </Badge>
           )}
         </span>
       </td>
       <td className="px-3 py-2.5 text-sm">
         <span className="flex items-center gap-1.5 text-muted-foreground">
-          <ColorDot color={row.list.color ?? row.item.color} />
+          {/* The tag's own color when it has one — the dot the trade form shows. */}
+          <ColorDot color={row.item.color ?? row.list.color} />
           {row.list.label}
         </span>
       </td>
       <td className="px-3 py-2.5 text-right text-sm tabular-nums text-muted-foreground">
         {/* "—" when the scan failed: a 0 there would read as "safe to delete". */}
-        {used == null ? <span title="Count unavailable">—</span> : used}
+        {used === undefined ? (
+          <span className="text-muted-foreground">…</span>
+        ) : used === null ? (
+          <span title="Count unavailable">—</span>
+        ) : (
+          used
+        )}
       </td>
       <td className="w-10 px-3 py-2.5 text-right">
         <DropdownMenu>
@@ -790,8 +843,9 @@ function TagRow({
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Tag name</label>
+                <Label htmlFor={nameId}>Tag name</Label>
                 <Input
+                  id={nameId}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => {
@@ -813,9 +867,9 @@ function TagRow({
                 )}
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Category</label>
+                <Label htmlFor={listFieldId}>Category</Label>
                 <Select value={listId} onValueChange={setListId} disabled={pending}>
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger id={listFieldId} className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -828,13 +882,13 @@ function TagRow({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Colour</label>
+                <Label>Color</Label>
                 <ColorPicker value={color} onPick={setColor} disabled={pending} />
                 {/* Optional, and separate from the category's: the dropdown on
-                    the trade form shows a tag's own colour when it has one.
+                    the trade form shows a tag's own color when it has one.
                     Left unset, the row falls back to the category's. */}
                 <p className="text-xs text-muted-foreground">
-                  Leave unset to use the category&apos;s colour.
+                  Leave unset to use the category&apos;s color.
                 </p>
               </div>
             </div>
@@ -877,8 +931,8 @@ function TagRow({
                     </p>
                   )}
                   <p className="text-muted-foreground">
-                    To stop offering it on new trades while keeping its colour
-                    and its place in reports, archive it instead.
+                    To stop offering it on new trades but keep it in reports,
+                    archive it instead.
                   </p>
                 </div>
               </DialogDescription>
@@ -913,6 +967,8 @@ function NewTagDialog({ lists }: { lists: OptionList[] }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [listId, setListId] = useState(lists[0]?.id ?? "");
+  const nameId = useId();
+  const listFieldId = useId();
 
   function create() {
     const trimmed = name.trim();
@@ -940,8 +996,9 @@ function NewTagDialog({ lists }: { lists: OptionList[] }) {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Tag name</label>
+              <Label htmlFor={nameId}>Tag name</Label>
               <Input
+                id={nameId}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Name your tag"
@@ -952,9 +1009,9 @@ function NewTagDialog({ lists }: { lists: OptionList[] }) {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Category</label>
+              <Label htmlFor={listFieldId}>Category</Label>
               <Select value={listId} onValueChange={setListId} disabled={pending}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id={listFieldId} className="w-full">
                   <SelectValue placeholder="Pick a category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -972,7 +1029,7 @@ function NewTagDialog({ lists }: { lists: OptionList[] }) {
               Cancel
             </Button>
             <Button onClick={create} disabled={pending || !name.trim() || !listId}>
-              Save
+              Create
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -988,30 +1045,25 @@ function TagsTab({
   usage,
 }: {
   lists: OptionList[];
-  /** Null when the usage scan failed — every count then reads "unavailable". */
-  usage: Record<string, number> | null;
+  /** Undefined while the scan is running, null when it failed. */
+  usage: Record<string, number> | null | undefined;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState(ALL);
 
-  // Category first, then the order the trader PUT them in — never alphabetical.
-  // `Entry TF` reads 1m, 5m, 15m, 1h, 4h, 1D; sorted by name it reads
-  // "1D, 15m, 1h, 1m, 4h, 5m", which is not a timeframe list any more. The
-  // dropdown on the trade form renders this same `sort_order`, so the table has
-  // to show what the form will show.
+  // Categories in the order the trader put them in on the Categories tab, and
+  // each category's tags in theirs — never alphabetical. `Entry TF` reads 15m,
+  // 1h, 4h, 1D; sorted by name it reads "15m, 1D, 1h, 4h", which is not a
+  // timeframe list any more. The trade form renders these same orders, so the
+  // table shows what the form will show.
   const rows = useMemo(() => {
     const out: TagRowData[] = [];
     for (const list of lists) {
-      for (const item of list.items) out.push({ item, list });
+      const items = [...list.items].sort((a, b) => a.sort_order - b.sort_order);
+      for (const item of items) out.push({ item, list });
     }
-    return out.sort(
-      (a, b) =>
-        a.list.label.localeCompare(b.list.label) ||
-        a.item.sort_order - b.item.sort_order,
-    );
+    return out;
   }, [lists]);
-
-  const router = useRouter();
   const [, startMove] = useTransition();
 
   /**
@@ -1034,7 +1086,6 @@ function TagsTab({
     startMove(async () => {
       const res = await reorderOptions(ids);
       if (!res.ok) toast.error(res.error);
-      router.refresh();
     });
   }
 
@@ -1058,14 +1109,13 @@ function TagsTab({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Every tag you can pick on a trade, and the category it belongs to.
-        Renaming one carries the trades that already use it along with it.
+        Every tag you can pick on a trade. Renaming one renames it on past trades too.
       </p>
 
       <div className="flex flex-wrap items-center gap-2">
         <NewTagDialog lists={lists} />
         <Select value={filter} onValueChange={setFilter}>
-          <SelectTrigger className="h-9 w-44">
+          <SelectTrigger className="h-9 w-44" aria-label="Filter by category">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -1083,6 +1133,7 @@ function TagsTab({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search tags"
+            aria-label="Search tags"
             className="h-9 pl-8"
           />
         </div>
@@ -1113,7 +1164,7 @@ function TagsTab({
                     key={r.item.id}
                     row={r}
                     lists={lists}
-                    used={usage == null ? null : (usage[usageKey(r.list.key, r.item.value)] ?? 0)}
+                    used={usage == null ? usage : (usage[usageKey(r.list.key, r.item.value)] ?? 0)}
                     canUp={index > 0}
                     canDown={index >= 0 && index < total - 1}
                     onMove={(dir) => move(r, dir)}
@@ -1142,14 +1193,48 @@ function TagsTab({
  */
 export function ListManager({
   lists,
-  usage,
+  initialSub = "categories",
 }: {
   lists: OptionList[];
-  usage: Record<string, number> | null;
+  /** From `?sub=`, so a reload stays on Tags. */
+  initialSub?: CategorySubtab;
 }) {
   const shown = editableLists(lists);
+  const [sub, setSub] = useState<CategorySubtab>(initialSub);
+  // `undefined` while the tally has not answered yet, `null` when it failed.
+  // Fetched when the Tags table is first opened, not with the page: it reads
+  // the tag columns of every trade, and four of the five Settings tabs never
+  // show the result. The rows paint immediately and the counts fill in.
+  const [usage, setUsage] = useState<Record<string, number> | null | undefined>(
+    undefined,
+  );
+  const asked = useRef(false);
+
+  const loadUsage = useCallback(() => {
+    if (asked.current) return;
+    asked.current = true;
+    startTransition(async () => {
+      try {
+        setUsage(await getTagUsage());
+      } catch {
+        setUsage(null);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (sub === "tags") loadUsage();
+  }, [sub, loadUsage]);
+
   return (
-    <Tabs defaultValue="categories" className="space-y-4">
+    <Tabs
+      value={sub}
+      onValueChange={(v) => {
+        setSub(v as CategorySubtab);
+        replaceSettingsSearch({ sub: v as CategorySubtab });
+      }}
+      className="space-y-4"
+    >
       <TabsList>
         <TabsTrigger value="categories">Categories</TabsTrigger>
         <TabsTrigger value="tags">Tags</TabsTrigger>

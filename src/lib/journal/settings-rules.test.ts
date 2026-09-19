@@ -141,6 +141,11 @@ describe("parseSettingsNumber (A10)", () => {
     expect(parseSettingsNumber("1,500")).toEqual({ ok: false, error: "Ambiguous — write 1500 or 1.5." });
     expect(parseSettingsNumber("0.5")).toEqual({ ok: true, value: 0.5 });
   });
+  it("a zero in front is not a thousands group — a tick size of 0.001 saves", () => {
+    expect(parseSettingsNumber("0.001", { min: 0 })).toEqual({ ok: true, value: 0.001 });
+    expect(parseSettingsNumber("0,001", { min: 0 })).toEqual({ ok: true, value: 0.001 });
+    expect(parseSettingsNumber("0.250", { min: 0 })).toEqual({ ok: true, value: 0.25 });
+  });
   it("refuses instead of saving 0", () => {
     expect(parseSettingsNumber("")).toEqual({ ok: false, error: "Required." });
     expect(parseSettingsNumber("abc")).toEqual({ ok: false, error: "Not a number." });

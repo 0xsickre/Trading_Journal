@@ -231,14 +231,20 @@ export function parseSettingsNumber(
   if (raw.trim() === "") {
     return opts.allowEmpty ? { ok: true, value: null } : { ok: false, error: "Required." };
   }
+  const text = raw.trim();
+  // A zero in front decides the separator on its own: nothing groups thousands
+  // onto a zero, so "0.001" and "0,001" are both a thousandth. Both used to be
+  // refused — one as unreadable, the other as ambiguous, with the advice to
+  // "write 0001 or 0.001" — and a tick size of 0.001 could not be saved at all.
+  const zeroLed = /^([+-]?)0[.,](\d+)$/.exec(text);
   // "25.000" is twenty-five thousand to half the world and twenty-five to the
   // other half, and the import parser (rightly, for prices) reads it as 25.
   // On a balance or a fee that guess is a thousandfold error, so it is refused
   // with the two unambiguous ways to write it.
-  if (/^[+-]?\d{1,3}[.,]\d{3}$/.test(raw.trim()))
-    return { ok: false, error: `Ambiguous — write ${raw.trim().replace(/[.,]/, "")} or ${raw.trim().replace(",", ".").replace(/0+$/, "").replace(/\.$/, ".0")}.` };
-  const n = parseImportNumber(raw);
-  if (n == null) return { ok: false, error: "Not a number." };
+  if (!zeroLed && /^[+-]?\d{1,3}[.,]\d{3}$/.test(text))
+    return { ok: false, error: `Ambiguous — write ${text.replace(/[.,]/, "")} or ${text.replace(",", ".").replace(/0+$/, "").replace(/\.$/, ".0")}.` };
+  const n = zeroLed ? Number(`${zeroLed[1]}0.${zeroLed[2]}`) : parseImportNumber(raw);
+  if (n == null || !Number.isFinite(n)) return { ok: false, error: "Not a number." };
   if (opts.integer && !Number.isInteger(n)) return { ok: false, error: "Must be a whole number." };
   if (opts.min != null && n < opts.min) return { ok: false, error: `Must be at least ${opts.min}.` };
   if (opts.max != null && n > opts.max) return { ok: false, error: `Must be at most ${opts.max}.` };

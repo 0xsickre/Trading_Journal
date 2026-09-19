@@ -21,6 +21,7 @@ const setOptionColor = vi.fn();
 const reorderOptions = vi.fn();
 const reorderLists = vi.fn();
 const addOption = vi.fn();
+const getTagUsage = vi.fn();
 
 vi.mock("@/app/(app)/settings/actions", () => ({
   addList: vi.fn(async () => ({ ok: true as const })),
@@ -29,6 +30,7 @@ vi.mock("@/app/(app)/settings/actions", () => ({
   countOptionUsage: (...a: unknown[]) => countOptionUsage(...a),
   deleteList: (...a: unknown[]) => deleteList(...a),
   deleteOption: (...a: unknown[]) => deleteOption(...a),
+  getTagUsage: (...a: unknown[]) => getTagUsage(...a),
   moveOptionToList: (...a: unknown[]) => moveOptionToList(...a),
   renameList: (...a: unknown[]) => renameList(...a),
   renameOption: (...a: unknown[]) => renameOption(...a),
@@ -91,6 +93,7 @@ beforeEach(() => {
     reorderOptions,
     reorderLists,
     addOption,
+    getTagUsage,
   ]) {
     m.mockReset();
   }
@@ -101,11 +104,13 @@ beforeEach(() => {
   countOptionUsage.mockResolvedValue({ ok: true, trades: 0 });
   reorderOptions.mockResolvedValue({ ok: true });
   reorderLists.mockResolvedValue({ ok: true });
+  // The Tags table asks for the tally itself when it opens.
+  getTagUsage.mockResolvedValue({});
 });
 
 describe("the two tabs", () => {
   it("lists categories in a table, and never shows the storage key", () => {
-    render(<ListManager lists={[list()]} usage={{}} />);
+    render(<ListManager lists={[list()]} />);
     expect(
       screen.getByRole("columnheader", { name: "Category name" }),
     ).toBeInTheDocument();
@@ -128,7 +133,6 @@ describe("the two tabs", () => {
             items: [item({ id: "i2", value: "Chasing", label: "Chasing" })],
           }),
         ]}
-        usage={{}}
       />,
     );
     await openTagsTab(user);
@@ -140,24 +144,22 @@ describe("the two tabs", () => {
     expect(within(table).getByText("Mistake")).toBeInTheDocument();
   });
 
-  it("shows how many trades use each tag, straight away", async () => {
-    // The count is on the page from the first paint — no click, no spinner.
+  it("shows how many trades use each tag, once the tally answers", async () => {
+    // Asked for when the table opens, not with the page: it scans every trade,
+    // and the other four Settings tabs never show it.
     const user = userEvent.setup();
-    render(
-      <ListManager
-        lists={[list()]}
-        usage={{ [usageKey("cot_filter", "Bullish")]: 12 }}
-      />,
-    );
+    getTagUsage.mockResolvedValue({ [usageKey("cot_filter", "Bullish")]: 12 });
+    render(<ListManager lists={[list()]} />);
     await openTagsTab(user);
 
     const row = screen.getByText("Bullish").closest("tr")!;
-    expect(within(row).getByText("12")).toBeInTheDocument();
+    expect(await within(row).findByText("12")).toBeInTheDocument();
+    expect(getTagUsage).toHaveBeenCalledTimes(1);
   });
 
   it("reads zero for a tag no trade carries", async () => {
     const user = userEvent.setup();
-    render(<ListManager lists={[list()]} usage={{}} />);
+    render(<ListManager lists={[list()]} />);
     await openTagsTab(user);
 
     const row = screen.getByText("Bullish").closest("tr")!;
@@ -168,7 +170,6 @@ describe("the two tabs", () => {
     render(
       <ListManager
         lists={[list(), list({ id: "l2", key: "setup_grade", label: "Setup Grade" })]}
-        usage={{}}
       />,
     );
     expect(screen.getByText("COT Filter")).toBeInTheDocument();
@@ -208,7 +209,7 @@ describe("reordering categories by dragging", () => {
   }
 
   it("commits the new order, and to the ids rather than the labels", async () => {
-    render(<ListManager lists={TWO} usage={{}} />);
+    render(<ListManager lists={TWO} />);
     dragOnto("Mistake", "COT Filter");
     await waitFor(() =>
       expect(reorderLists).toHaveBeenCalledWith(["l2", "l1"]),
@@ -219,7 +220,7 @@ describe("reordering categories by dragging", () => {
     // A drop under a filter would write an order derived from rows the trader
     // cannot see — so the gesture is simply not offered.
     const user = userEvent.setup();
-    render(<ListManager lists={TWO} usage={{}} />);
+    render(<ListManager lists={TWO} />);
     expect(screen.getAllByTitle("Drag to reorder")).toHaveLength(2);
 
     await user.type(screen.getByPlaceholderText("Search categories"), "cot");
@@ -228,7 +229,7 @@ describe("reordering categories by dragging", () => {
 
   it("puts the rows back when the write is refused", async () => {
     reorderLists.mockResolvedValueOnce({ ok: false, error: "nope" });
-    render(<ListManager lists={TWO} usage={{}} />);
+    render(<ListManager lists={TWO} />);
     dragOnto("Mistake", "COT Filter");
 
     // The optimistic preview showed Mistake first; once the server refuses, the
@@ -249,7 +250,7 @@ describe("editing a category", () => {
     // and that shared a transition with the usage count so it rendered
     // disabled. A dialog has neither problem, and matches the real screen.
     const user = userEvent.setup();
-    render(<ListManager lists={[list()]} usage={{}} />);
+    render(<ListManager lists={[list()]} />);
 
     await user.click(screen.getByRole("button", { name: "Options for COT Filter" }));
     await user.click(await screen.findByText("Edit"));
@@ -261,7 +262,7 @@ describe("editing a category", () => {
   it("saves the new name", async () => {
     renameList.mockResolvedValueOnce({ ok: true });
     const user = userEvent.setup();
-    render(<ListManager lists={[list()]} usage={{}} />);
+    render(<ListManager lists={[list()]} />);
 
     await user.click(screen.getByRole("button", { name: "Options for COT Filter" }));
     await user.click(await screen.findByText("Edit"));
@@ -284,7 +285,6 @@ describe("deleting a category", () => {
     render(
       <ListManager
         lists={[list({ key: "exit_reason", label: "Exit Reason" })]}
-        usage={{}}
       />,
     );
 
@@ -307,7 +307,6 @@ describe("deleting a category", () => {
     render(
       <ListManager
         lists={[list({ key: "macro_align", label: "Macro Align" })]}
-        usage={{}}
       />,
     );
 
@@ -328,7 +327,7 @@ describe("deleting a category", () => {
     );
     deleteList.mockResolvedValueOnce({ ok: true });
     const user = userEvent.setup();
-    render(<ListManager lists={[list()]} usage={{}} />);
+    render(<ListManager lists={[list()]} />);
 
     await user.click(screen.getByRole("button", { name: "Options for COT Filter" }));
     await user.click(await screen.findByText("Delete"));
@@ -364,7 +363,7 @@ describe("tag order", () => {
     // more. The trade form renders the same `sort_order`, so the table has to
     // agree with the dropdown the trader will actually pick from.
     const user = userEvent.setup();
-    render(<ListManager lists={[tf()]} usage={{}} />);
+    render(<ListManager lists={[tf()]} />);
     await openTagsTab(user);
 
     const names = screen
@@ -376,7 +375,7 @@ describe("tag order", () => {
 
   it("moves a tag within its own category", async () => {
     const user = userEvent.setup();
-    render(<ListManager lists={[tf()]} usage={{}} />);
+    render(<ListManager lists={[tf()]} />);
     await openTagsTab(user);
 
     await user.click(screen.getByRole("button", { name: "Options for 5m" }));
@@ -389,7 +388,7 @@ describe("tag order", () => {
 
   it("cannot move the first tag up or the last one down", async () => {
     const user = userEvent.setup();
-    render(<ListManager lists={[tf()]} usage={{}} />);
+    render(<ListManager lists={[tf()]} />);
     await openTagsTab(user);
 
     await user.click(screen.getByRole("button", { name: "Options for 1m" }));
@@ -409,7 +408,6 @@ describe("editing a tag", () => {
           list(),
           list({ id: "l2", key: "mistake", label: "Mistake", items: [] }),
         ]}
-        usage={{}}
       />,
     );
     await openTagsTab(user);
@@ -426,12 +424,8 @@ describe("editing a tag", () => {
 
   it("warns that a rename rewrites the trades already carrying it", async () => {
     const user = userEvent.setup();
-    render(
-      <ListManager
-        lists={[list()]}
-        usage={{ [usageKey("cot_filter", "Bullish")]: 4 }}
-      />,
-    );
+    getTagUsage.mockResolvedValue({ [usageKey("cot_filter", "Bullish")]: 4 });
+    render(<ListManager lists={[list()]} />);
     await openTagsTab(user);
 
     await user.click(screen.getByRole("button", { name: "Options for Bullish" }));

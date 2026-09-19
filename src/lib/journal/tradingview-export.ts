@@ -58,6 +58,8 @@ type Columns = {
   adverse: string | null;
   /** The currency of the export's money — P&L and commission. */
   currency: string;
+  /** The currency the PRICES are quoted in: the symbol's, not the chart's. */
+  priceCurrency: string;
 };
 
 function columnsOf(headers: string[]): Columns | null {
@@ -76,6 +78,7 @@ function columnsOf(headers: string[]): Columns | null {
     favorable: currencyColumn(headers, "Favorable excursion")?.header ?? null,
     adverse: currencyColumn(headers, "Adverse excursion")?.header ?? null,
     currency: net.currency,
+    priceCurrency: price.currency,
   };
 }
 
@@ -160,8 +163,34 @@ export type TradingViewTrade = {
 
 export type TradingViewExport = {
   currency: string;
+  /** The currency of the prices, read from the "Price XXX" header. */
+  priceCurrency: string;
   trades: TradingViewTrade[];
 };
+
+/**
+ * Why an export whose money was converted cannot be imported, or `null`.
+ *
+ * TradingView converts the RESULT into the chart's currency and leaves the
+ * PRICES in the symbol's: gold on a EUR chart exports "Price USD" beside
+ * "Net PnL EUR". Every figure here is checked by dividing money by a price
+ * move, so a converted export looks exactly like a wrong contract size and was
+ * refused as one — "P&L is 0.932 per 1.00 per unit of size, which is neither 1
+ * nor 1" — which says nothing about the currency that caused it.
+ *
+ * It is refused rather than converted: the rate is the day's, and neither the
+ * file nor the journal carries one. Re-exporting in the symbol's currency is a
+ * setting in the Strategy Tester, and it keeps the prices and the money on one
+ * basis.
+ */
+export function tradingViewConvertedMoney(exp: TradingViewExport): string | null {
+  if (exp.currency === exp.priceCurrency) return null;
+  return (
+    `TradingView converted the money: the prices are in ${exp.priceCurrency}, the P&L in ` +
+    `${exp.currency}. Set the Strategy Tester's currency to ${exp.priceCurrency} and export again — ` +
+    "the journal will not convert at a rate the file does not carry."
+  );
+}
 
 /**
  * Pairs the export's entry and exit rows into trades.
@@ -247,7 +276,7 @@ export function readTradingViewExport(rows: Record<string, unknown>[]): TradingV
   }
 
   trades.sort((a, b) => Number(a.number) - Number(b.number));
-  return { currency: cols.currency, trades };
+  return { currency: cols.currency, priceCurrency: cols.priceCurrency, trades };
 }
 
 function priceMove(t: TradingViewTrade): number | null {

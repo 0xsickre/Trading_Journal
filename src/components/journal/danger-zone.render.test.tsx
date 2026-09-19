@@ -44,9 +44,9 @@ describe("DangerZone — the panel states what survives and what does not", () =
     render(<DangerZone />);
     expect(screen.getByText("Restored afterwards")).toBeInTheDocument();
     expect(screen.getByText("Not restored")).toBeInTheDocument();
-    expect(
-      screen.getByText(/Your playbooks and their rules\./),
-    ).toBeInTheDocument();
+    // The panel no longer counts what comes back (the counts went stale), but
+    // it still has to name the one thing that does not.
+    expect(screen.getByText("Your playbooks")).toBeInTheDocument();
   });
 });
 
@@ -56,7 +56,7 @@ describe("DangerZone — the phrase is the gate", () => {
     const confirm = screen.getByRole("button", { name: /Delete everything$/ });
     expect(confirm).toBeDisabled();
 
-    const box = screen.getByLabelText("Confirm reset phrase");
+    const box = screen.getByLabelText(/to confirm/);
 
     // Close, but not the phrase. The near-miss matters more than the empty
     // case: it is what a half-remembered phrase actually looks like.
@@ -70,7 +70,7 @@ describe("DangerZone — the phrase is the gate", () => {
   it("a lowercase phrase does not open the gate", async () => {
     const user = await openDialog();
     await user.type(
-      screen.getByLabelText("Confirm reset phrase"),
+      screen.getByLabelText(/to confirm/),
       RESET_PHRASE.toLowerCase(),
     );
     expect(
@@ -80,7 +80,7 @@ describe("DangerZone — the phrase is the gate", () => {
 
   it("nothing is called until the button is actually pressed", async () => {
     const user = await openDialog();
-    await user.type(screen.getByLabelText("Confirm reset phrase"), RESET_PHRASE);
+    await user.type(screen.getByLabelText(/to confirm/), RESET_PHRASE);
     expect(resetAllDataMock).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: /Delete everything$/ }));

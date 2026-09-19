@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { selectAllPages } from "@/lib/supabase/paginate";
 import type { OptionItem, OptionList, OptionsMap } from "./types";
 import {
   selectionOfFieldType,
@@ -11,12 +12,15 @@ import {
 
 export type { OptionList, OptionsMap } from "./types";
 
+/** One row of `tj_option_items`, as this module reads it. */
+type OptionItemRow = OptionItem & { list_id: string };
+
 /** All lists with their items. `activeOnly` filters soft-deleted options. */
 async function readListsWithItems(
   activeOnly = false,
 ): Promise<OptionList[]> {
   const supabase = await createClient();
-  const [{ data: lists }, { data: items }, { data: defs }] = await Promise.all([
+  const [{ data: lists }, items, { data: defs }] = await Promise.all([
     // `id` breaks ties: sort_order is not unique, and rows written before the
     // ordinal was allocated atomically can share one. Without a tiebreak those
     // rows come back in whatever order the planner picks, so a list could
@@ -26,11 +30,18 @@ async function readListsWithItems(
       .select("id,key,label,category,color,sort_order")
       .order("sort_order")
       .order("id"),
-    supabase
-      .from("tj_option_items")
-      .select("id,list_id,value,label,color,description,is_active,sort_order")
-      .order("sort_order")
-      .order("id"),
+    // Paginated, unlike the lists above: PostgREST caps a response at 1000 rows
+    // and returns the truncated page with a 200. A trader past a thousand tags
+    // would have lost the rest without a word — missing from the Tags table,
+    // and missing from the dropdowns on the trade form.
+    selectAllPages<OptionItemRow>((from, to) =>
+      supabase
+        .from("tj_option_items")
+        .select("id,list_id,value,label,color,description,is_active,sort_order")
+        .order("sort_order")
+        .order("id")
+        .range(from, to),
+    ),
     // When each category is asked for. It is stored on the FIELD that renders
     // the list, because that is what the form reads — the list itself is only a
     // set of values. Joined here so Settings can show and edit it in one place.
@@ -49,7 +60,7 @@ async function readListsWithItems(
   }
 
   const byList = new Map<string, OptionItem[]>();
-  for (const it of items ?? []) {
+  for (const it of items) {
     if (activeOnly && !it.is_active) continue;
     const arr = byList.get(it.list_id) ?? [];
     arr.push({

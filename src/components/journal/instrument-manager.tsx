@@ -1,74 +1,143 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useId, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { Instrument } from "@/lib/journal/types";
 import { parseSettingsNumber } from "@/lib/journal/settings-rules";
 import {
   addInstrument,
+  countInstrumentUsage,
   updateInstrument,
   deleteInstrument,
 } from "@/app/(app)/settings/actions";
 
+// Every instrument action revalidates /settings itself, so no router.refresh().
+
 /**
  * The two contract numbers, read the way a trader types them, or the reason
  * they cannot be. `Number()` turned "1,5" into NaN and then into the default 1
- * without a word, so a CFD saved with the wrong $ / point.
+ * without a word, so a CFD saved with the wrong point value.
  */
 function readSpec(
   pointValue: string,
   tickSize: string,
 ): { ok: true; point_value: number; tick_size: number | null } | { ok: false; error: string } {
   const pv = parseSettingsNumber(pointValue, { min: 0 });
-  if (!pv.ok) return { ok: false, error: `$ / point: ${pv.error}` };
-  if (pv.value === 0) return { ok: false, error: "$ / point: Must be greater than zero." };
+  if (!pv.ok) return { ok: false, error: `Point value: ${pv.error}` };
+  if (pv.value === 0) return { ok: false, error: "Point value: Must be greater than zero." };
   const ts = parseSettingsNumber(tickSize, { min: 0, allowEmpty: true });
   if (!ts.ok) return { ok: false, error: `Tick: ${ts.error}` };
   return { ok: true, point_value: pv.value!, tick_size: ts.value };
 }
 
-function InstrumentRow({ inst }: { inst: Instrument }) {
-  const router = useRouter();
+const CURRENCY_RE = /^[A-Za-z]{3}$/;
+
+function DeleteInstrumentDialog({
+  inst,
+  open,
+  onOpenChange,
+  trades,
+}: {
+  inst: Instrument;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Trades on the symbol: null while counting, -1 when the count failed. */
+  trades: number | null;
+}) {
   const [pending, start] = useTransition();
-  const [pointValue, setPointValue] = useState(String(inst.point_value));
-  const [tickSize, setTickSize] = useState(
-    inst.tick_size == null ? "" : String(inst.tick_size),
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete {inst.symbol}?</DialogTitle>
+          <DialogDescription>
+            {trades == null
+              ? "Checking which trades use it…"
+              : trades < 0
+                ? "Could not count the trades that use it."
+                : trades === 0
+                  ? "No trade uses it."
+                  : `${trades} ${trades === 1 ? "trade uses" : "trades use"} it. ${trades === 1 ? "It keeps" : "They keep"} the symbol, but new trades on it lose the contract spec.`}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={pending || trades == null}
+            onClick={() =>
+              start(async () => {
+                const res = await deleteInstrument(inst.id);
+                if (!res.ok) toast.error(res.error);
+                else {
+                  toast.success(`Deleted ${inst.symbol}`);
+                  onOpenChange(false);
+                }
+              })
+            }
+          >
+            Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
+}
+
+function InstrumentRow({ inst }: { inst: Instrument }) {
+  const [pending, start] = useTransition();
+  const id = useId();
+  const [pointValue, setPointValue] = useState(String(inst.point_value));
+  const [tickSize, setTickSize] = useState(inst.tick_size == null ? "" : String(inst.tick_size));
+  const [deleting, setDeleting] = useState(false);
+  const [trades, setTrades] = useState<number | null>(null);
+  const [, startCount] = useTransition();
+
+  function openDelete() {
+    // Re-counted on every opening, so a count from an earlier one is never shown.
+    setTrades(null);
+    setDeleting(true);
+    startCount(async () => {
+      const res = await countInstrumentUsage(inst.id);
+      setTrades(res.ok ? res.trades : -1);
+    });
+  }
+
+  const spec = readSpec(pointValue, tickSize);
+  const changed =
+    spec.ok && (spec.point_value !== inst.point_value || spec.tick_size !== inst.tick_size);
 
   function save() {
+    // Only two fields are sent. Name and class come from the catalog, and
+    // editing them solves no problem the user has; point value and tick solve
+    // the one they do have — a broker whose contract spec differs.
+    if (!spec.ok) {
+      toast.error(spec.error);
+      return;
+    }
     start(async () => {
-      // Only two fields are sent. Name and class come from the catalog, and
-      // editing them solves no problem the user has; `$ / point` and `tick`
-      // solve the one they do have — a broker whose contract spec differs from
-      // the default.
-      const spec = readSpec(pointValue, tickSize);
-      if (!spec.ok) {
-        toast.error(spec.error);
-        return;
-      }
       const res = await updateInstrument(inst.id, {
         point_value: spec.point_value,
         tick_size: spec.tick_size,
       });
       if (!res.ok) toast.error(res.error);
-      else {
-        toast.success(`Saved ${inst.symbol}`);
-        router.refresh();
-      }
-    });
-  }
-
-  function remove() {
-    start(async () => {
-      const res = await deleteInstrument(inst.id);
-      if (!res.ok) toast.error(res.error);
-      else router.refresh();
+      else toast.success(`Saved ${inst.symbol}`);
     });
   }
 
@@ -82,74 +151,95 @@ function InstrumentRow({ inst }: { inst: Instrument }) {
         </div>
       </div>
       <div className="col-span-4 sm:col-span-2">
-        <Label className="text-[11px] text-muted-foreground">$ / point</Label>
+        <Label htmlFor={`${id}-pv`} className="text-[11px] text-muted-foreground">
+          {inst.quote_currency} / point
+        </Label>
         <Input
+          id={`${id}-pv`}
           className="h-8"
           inputMode="decimal"
           value={pointValue}
+          aria-invalid={!spec.ok}
           onChange={(e) => setPointValue(e.target.value)}
         />
       </div>
       <div className="col-span-4 sm:col-span-2">
-        <Label className="text-[11px] text-muted-foreground">Tick</Label>
+        <Label htmlFor={`${id}-tick`} className="text-[11px] text-muted-foreground">
+          Tick
+        </Label>
         <Input
+          id={`${id}-tick`}
           className="h-8"
           inputMode="decimal"
           value={tickSize}
+          aria-invalid={!spec.ok}
           onChange={(e) => setTickSize(e.target.value)}
         />
       </div>
       <div className="col-span-4 flex gap-1 sm:col-span-3">
-        <Button
-          size="sm"
-          className="h-8 flex-1"
-          disabled={pending}
-          onClick={save}
-        >
-          <Save className="size-4" />
+        <Button size="sm" className="h-8 flex-1" disabled={pending || !changed} onClick={save}>
+          Save
         </Button>
         <Button
           size="sm"
           variant="outline"
           className="h-8"
           disabled={pending}
-          onClick={remove}
+          onClick={openDelete}
+          aria-label={`Delete ${inst.symbol}`}
         >
           <Trash2 className="size-4" />
         </Button>
       </div>
+      {!spec.ok && <p className="col-span-12 text-xs text-destructive">{spec.error}</p>}
+      <DeleteInstrumentDialog
+        inst={inst}
+        open={deleting}
+        onOpenChange={setDeleting}
+        trades={trades}
+      />
     </div>
   );
 }
 
-export function InstrumentManager({
-  instruments,
-}: {
-  instruments: Instrument[];
-}) {
-  const router = useRouter();
+export function InstrumentManager({ instruments }: { instruments: Instrument[] }) {
   const [pending, start] = useTransition();
+  const id = useId();
   const [symbol, setSymbol] = useState("");
   const [name, setName] = useState("");
   const [assetClass, setAssetClass] = useState("");
+  const [currency, setCurrency] = useState("USD");
   const [pointValue, setPointValue] = useState("1");
   const [tickSize, setTickSize] = useState("");
+  const [query, setQuery] = useState("");
+
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return instruments;
+    return instruments.filter((i) =>
+      [i.symbol, i.name ?? "", i.asset_class ?? ""].some((v) => v.toLowerCase().includes(q)),
+    );
+  }, [instruments, query]);
+
+  const currencyOk = CURRENCY_RE.test(currency.trim());
 
   function add() {
-    if (!symbol.trim()) {
-      toast.error("Symbol required");
+    if (!symbol.trim()) return;
+    const spec = readSpec(pointValue, tickSize);
+    if (!spec.ok) {
+      toast.error(spec.error);
+      return;
+    }
+    if (!currencyOk) {
+      toast.error("Currency is a three-letter code, like USD.");
       return;
     }
     start(async () => {
-      const spec = readSpec(pointValue, tickSize);
-      if (!spec.ok) {
-        toast.error(spec.error);
-        return;
-      }
       const res = await addInstrument({
         symbol,
         name,
         asset_class: assetClass,
+        quote_currency: currency.trim().toUpperCase(),
         point_value: spec.point_value,
         tick_size: spec.tick_size,
       });
@@ -158,21 +248,31 @@ export function InstrumentManager({
         setSymbol("");
         setName("");
         setAssetClass("");
+        setCurrency("USD");
         setPointValue("1");
         setTickSize("");
         toast.success("Instrument added");
-        router.refresh();
       }
     });
   }
 
+  const field = (suffix: string) => `${id}-${suffix}`;
+
   return (
     <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        The catalog is ready to use. Add a missing symbol, or correct the point value
+        and tick when your broker&apos;s contract differs.
+      </p>
+
       <Card>
         <CardContent className="grid grid-cols-12 items-end gap-2 pt-6">
           <div className="col-span-6 sm:col-span-2">
-            <Label className="text-[11px] text-muted-foreground">Symbol *</Label>
+            <Label htmlFor={field("symbol")} className="text-[11px] text-muted-foreground">
+              Symbol
+            </Label>
             <Input
+              id={field("symbol")}
               className="h-8"
               value={symbol}
               onChange={(e) => setSymbol(e.target.value)}
@@ -180,54 +280,90 @@ export function InstrumentManager({
             />
           </div>
           <div className="col-span-6 sm:col-span-3">
-            <Label className="text-[11px] text-muted-foreground">Name</Label>
+            <Label htmlFor={field("name")} className="text-[11px] text-muted-foreground">
+              Name
+            </Label>
             <Input
+              id={field("name")}
               className="h-8"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
-          <div className="col-span-6 sm:col-span-2">
-            <Label className="text-[11px] text-muted-foreground">
+          <div className="col-span-4 sm:col-span-2">
+            <Label htmlFor={field("class")} className="text-[11px] text-muted-foreground">
               Asset class
             </Label>
             <Input
+              id={field("class")}
               className="h-8"
               value={assetClass}
               onChange={(e) => setAssetClass(e.target.value)}
               placeholder="Futures"
             />
           </div>
-          <div className="col-span-3 sm:col-span-2">
-            <Label className="text-[11px] text-muted-foreground">$ / point</Label>
+          <div className="col-span-4 sm:col-span-1">
+            <Label htmlFor={field("ccy")} className="text-[11px] text-muted-foreground">
+              Currency
+            </Label>
             <Input
+              id={field("ccy")}
+              className="h-8 uppercase"
+              value={currency}
+              maxLength={3}
+              aria-invalid={!currencyOk}
+              onChange={(e) => setCurrency(e.target.value)}
+            />
+          </div>
+          <div className="col-span-4 sm:col-span-2">
+            <Label htmlFor={field("pv")} className="text-[11px] text-muted-foreground">
+              {currencyOk ? currency.trim().toUpperCase() : "Currency"} / point
+            </Label>
+            <Input
+              id={field("pv")}
               className="h-8"
               inputMode="decimal"
               value={pointValue}
               onChange={(e) => setPointValue(e.target.value)}
             />
           </div>
-          <div className="col-span-3 sm:col-span-1">
-            <Label className="text-[11px] text-muted-foreground">Tick</Label>
+          <div className="col-span-6 sm:col-span-1">
+            <Label htmlFor={field("tick")} className="text-[11px] text-muted-foreground">
+              Tick
+            </Label>
             <Input
+              id={field("tick")}
               className="h-8"
               inputMode="decimal"
               value={tickSize}
               onChange={(e) => setTickSize(e.target.value)}
             />
           </div>
-          <div className="col-span-6 sm:col-span-2">
-            <Button className="h-8 w-full" disabled={pending} onClick={add}>
+          <div className="col-span-6 sm:col-span-1">
+            <Button className="h-8 w-full" disabled={pending || !symbol.trim()} onClick={add}>
               <Plus className="size-4" /> Add
             </Button>
           </div>
         </CardContent>
       </Card>
 
+      <div className="relative">
+        <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search instruments"
+          aria-label="Search instruments"
+          className="h-9 pl-8"
+        />
+      </div>
+
       <div className="space-y-2">
-        {instruments.map((inst) => (
-          <InstrumentRow key={inst.id} inst={inst} />
-        ))}
+        {shown.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">No instruments match.</p>
+        ) : (
+          shown.map((inst) => <InstrumentRow key={inst.id} inst={inst} />)
+        )}
       </div>
     </div>
   );

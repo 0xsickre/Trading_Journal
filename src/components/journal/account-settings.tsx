@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Archive,
@@ -124,7 +123,6 @@ function DeleteAccountDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
-  const router = useRouter();
   const [pending, start] = useTransition();
   const [typed, setTyped] = useState("");
 
@@ -145,7 +143,6 @@ function DeleteAccountDialog({
       else {
         toast.success(`Account "${account.name}" deleted`);
         close(false);
-        router.refresh();
       }
     });
   }
@@ -207,7 +204,7 @@ function DeleteAccountDialog({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => close(false)} disabled={pending}>
+          <Button variant="ghost" onClick={() => close(false)} disabled={pending}>
             Cancel
           </Button>
           <Button
@@ -237,7 +234,6 @@ function CreateAccountDialog({
   /** The account being duplicated, or null for a blank new one. */
   source: Account | null;
 }) {
-  const router = useRouter();
   const [pending, start] = useTransition();
   const seed = source ? duplicateSettings(source) : null;
   const [name, setName] = useState(seed?.name ?? "");
@@ -265,7 +261,6 @@ function CreateAccountDialog({
       else {
         toast.success(source ? `Duplicated "${source.name}"` : "Account created");
         onOpenChange(false);
-        router.refresh();
       }
     });
   }
@@ -315,7 +310,7 @@ function CreateAccountDialog({
           <TimezoneField id="new-tz" value={tz} onChange={setTz} />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
             Cancel
           </Button>
           <Button onClick={create} disabled={pending || !canCreate}>
@@ -459,7 +454,6 @@ function EditAccountDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
-  const router = useRouter();
   const [pending, start] = useTransition();
   const [resetOpen, setResetOpen] = useState(false);
   const hasTrades = trades == null || trades > 0;
@@ -546,7 +540,6 @@ function EditAccountDialog({
       else {
         toast.success("Account saved");
         onOpenChange(false);
-        router.refresh();
       }
     });
   }
@@ -558,7 +551,6 @@ function EditAccountDialog({
       else {
         toast.success("Challenge restarted");
         setResetOpen(false);
-        router.refresh();
       }
     });
   }
@@ -712,7 +704,7 @@ function EditAccountDialog({
         </section>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
             Cancel
           </Button>
           <Button onClick={save} disabled={pending || invalid}>
@@ -731,7 +723,7 @@ function EditAccountDialog({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setResetOpen(false)} disabled={pending}>
+            <Button variant="ghost" onClick={() => setResetOpen(false)} disabled={pending}>
               Cancel
             </Button>
             <Button onClick={resetChallenge} disabled={pending}>
@@ -805,7 +797,6 @@ function AccountRow({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  const router = useRouter();
   const [pending, start] = useTransition();
   const archived = isArchived(account);
 
@@ -815,7 +806,6 @@ function AccountRow({
       if (!res.ok) toast.error(res.error);
       else {
         toast.success(archived ? `Restored "${account.name}"` : `Archived "${account.name}"`);
-        router.refresh();
       }
     });
   }

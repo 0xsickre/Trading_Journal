@@ -6,6 +6,7 @@ import {
   readTradingViewExport,
   resolveTradingViewScale,
   symbolFromTradingViewFilename,
+  tradingViewConvertedMoney,
   tradingViewExcursion,
   tradingViewPnlMismatch,
 } from "./tradingview-export";
@@ -58,6 +59,49 @@ describe("recognising the export", () => {
   it("rejects money in two currencies — the arithmetic would mix them", () => {
     const mixed = HEADERS.map((h) => (h === "Commission USD" ? "Commission EUR" : h));
     expect(isTradingViewTrades(mixed)).toBe(false);
+  });
+});
+
+describe("money converted into the chart's currency", () => {
+  // A real XAUUSD replay exported on a EUR chart: the prices stay in USD, the
+  // result comes out in EUR at the day's rate.
+  const eurRow = (over: Row): Row => ({
+    ...Object.fromEntries(HEADERS.map((h) => [h.replace(/ USD$/, " EUR").replace("Price EUR", "Price USD"), ""])),
+    ...over,
+  });
+  const EUR: Row[] = [
+    eurRow({
+      "Trade number": 1, Type: "Exit long", "Date and time": serial(2023, 2, 7, 19),
+      Signal: "Bracket Stop Loss", "Price USD": 1865.76, "Size (qty)": 168,
+      "Net PnL EUR": -931.58, "Commission EUR": 2.93,
+      "Favorable excursion EUR": 1405.21, "Adverse excursion EUR": -930.12,
+    }),
+    eurRow({
+      "Trade number": 1, Type: "Entry long", "Date and time": serial(2023, 2, 7, 18),
+      Signal: "Buy limit order", "Price USD": 1871.691, "Size (qty)": 168,
+      "Net PnL EUR": -931.58, "Commission EUR": 2.93,
+      "Favorable excursion EUR": 1405.21, "Adverse excursion EUR": -930.12,
+    }),
+  ];
+
+  it("is read, and named as a currency problem", () => {
+    const out = readTradingViewExport(EUR)!;
+    expect(out.currency).toBe("EUR");
+    expect(out.priceCurrency).toBe("USD");
+    const refusal = tradingViewConvertedMoney(out);
+    expect(refusal).toContain("prices are in USD");
+    expect(refusal).toContain("P&L in EUR");
+  });
+
+  it("says nothing when the prices and the money are on one basis", () => {
+    expect(tradingViewConvertedMoney(readTradingViewExport(REAL)!)).toBeNull();
+  });
+
+  it("is what made the size look wrong — the ratio is the FX rate", () => {
+    // Without the check above, this is all the user was told.
+    const scale = resolveTradingViewScale(readTradingViewExport(EUR)!.trades, 1);
+    expect(scale.ok).toBe(false);
+    if (!scale.ok) expect(scale.error).toContain("0.93");
   });
 });
 

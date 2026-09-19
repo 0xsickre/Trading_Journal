@@ -1220,3 +1220,68 @@ ga odmah; korisnik sa trejdovima zadržava svoje liste.
 - **Risk %:** 0.25 / 0.5 / 0.75 / 1.
 - **Vreme ulaza se prati samo:** nova dimenzija izveštaja „Entry hour" (sat ulaza u zoni naloga), uz
   postojeći „Entry weekday" — koji dani i sati donose novac, bez ikakvog taga.
+
+### Settings — jedan jezik, tab u adresi, brži ulazak (20.09.2026.)
+
+**Jezik.** Settings je poslednji ekran koji je merio, a govorio pola srpski. `STAGE_LABELS`
+(Priprema / Trgovanje / Osvrt → Prepare / Trade / Review, što menja i dnevnu čeklistu), pasus iznad
+kataloga instrumenata i dve poruke iz server akcija su na engleskom. `npm run lang:count`: 132 srpskih
+od 3.512 stringova, i `/settings` je sada 0.
+
+**Tab u adresi.** `?tab=accounts`, `&sub=tags` pod Categories, upisano sa `history.replaceState` —
+reload, link i dugme „nazad" pamte gde se stalo. Podrazumevani tab se ne piše u URL.
+
+**Brzina.** Broj „Used" pored svakog taga čita tag kolone svih trejdova. Radio se pri svakom otvaranju
+Settings-a, pa je otvaranje Accounts-a čekalo prebrojavanje cele knjige; sada je server akcija
+(`getTagUsage`) koju Tags tabela zove kad se prvi put otvori. Tagovi se čitaju kroz `selectAllPages`
+(PostgREST vraća najviše 1000 redova i status 200).
+
+**Sitnice koje su smetale:**
+- Boja nove kategorije se čuva (ranije se gubila).
+- Tačkica pored taga prvo uzima boju taga, pa tek onda kategorije — kao u formi za trejd.
+- Kategorije se pomeraju i sa tastature (Move up / Move down u meniju).
+- Tabela tagova prati redosled kategorija koji je trejder postavio, ne abecedu.
+- Tracker: ▲/▼ ugašeni na krajevima, poslednji dan ne može da se isključi, prazan tekst se vraća na
+  stari, povlačenje i vraćanje pravila pitaju za potvrdu.
+- Instrumenti: pretraga, oznaka „$ / point" nosi valutu instrumenta, Save radi samo kad ima izmene,
+  brisanje pita i kaže koliko trejdova koristi simbol.
+- „Delete all data" više ne nabraja brojke koje zastare; fraza za potvrdu se briše na Cancel.
+- Nema više `router.refresh()` posle akcija koje same revalidiraju.
+
+**Obrisan instrument ostaje obrisan.** `tj_seed_instruments_defaults` je unosio 91 red pri svakom
+pozivu (`on conflict do nothing`), a `ensureDefaults()` ga zove sa početne strane — obrisan simbol se
+vraćao pri sledećoj poseti, i to sa specifikacijom iz kataloga umesto sa ispravljenom. Migracija
+`20260920001500_seed_instruments_only_when_empty.sql`: seed radi samo nad praznim katalogom. Reset i
+dalje vraća svih 91, jer ih prvo obriše.
+
+**Tick 0.001 se čuva.** Pravilo protiv dvosmislenog „25.000" hvatalo je i „0.001" (i odbijalo „0,001"
+kao nečitljiv), pa tick zlata nije mogao da se unese. Nula ispred zareza ili tačke ne može biti
+hiljadarka, i sada se tako i čita.
+
+### Uvoz — TradingView u tuđoj valuti i MT5 izveštaj (20.09.2026.)
+
+**TradingView konvertuje novac, a cene ne.** Na EUR grafikonu izvoz ima `Price USD` pored
+`Net PnL EUR`. Pošto se veličina ugovora čita deljenjem novca sa pomerajem cene, takav izvoz izgleda
+kao pogrešna veličina i tako je i bio odbijan („P&L je 0.932 po 1.00 po jedinici, što nije ni 1 ni 1"
+— rečenica koja o valuti ne kaže ništa). Sada se čita i valuta cena, pa poruka kaže šta je u čemu i
+koje podešavanje to rešava. Ne konvertuje se: kurs je dnevni, a nema ga ni u fajlu ni u journal-u.
+
+**MT5 izveštaj ima svoj čitač** (`mt5-statement.ts`). MT5 ne izvozi tabelu nego izveštaj: naslov,
+četiri reda o nalogu, pa tri tabele jedna ispod druge (Positions, Orders, Deals). Kroz pravilo
+„zaglavlje je prvi red" to je stizalo kao `Trade History Report | __EMPTY | …` i nije se imalo šta
+mapirati.
+
+- Čita se samo **Positions** — jedan red po poziciji, sa otvaranjem i zatvaranjem.
+- Kolone se uzimaju po **poziciji u zaglavlju**, jer se „Time" i „Price" javljaju dvaput; po imenu bi
+  izlaz pregazio ulaz.
+- **Provizija i swap menjaju znak**: MT5 piše šta je skinuo (−3.50), a `net_pl` je
+  `bruto − fees − swap`. Kredit ostaje kredit.
+- Valuta naloga se čita iz reda `Account:` i mora da se poklopi sa journal nalogom.
+- Vreme je sat **servera**, a zona nije u fajlu: bira se u uvozu, podrazumevano EET (`Europe/Athens`),
+  kako rade FTMO serveri.
+- Red koji se ne može pročitati se prikazuje sa razlogom; otvorena pozicija zadržava ulaz i nema izlaz.
+
+Provereno na stvarnom izveštaju vlasnika (`ReportHistory-1514682848.xlsx`, FTMO demo, EUR): prepoznat,
+valuta i broj naloga pročitani, nula zatvorenih pozicija — nalog ih zaista nema. **Redove sa trejdovima
+treba još potvrditi na izveštaju koji ih ima.**
+

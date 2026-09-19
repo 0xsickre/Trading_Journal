@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,9 +25,8 @@ import { RESET_PHRASE } from "@/lib/journal/reset-phrase";
  * double confirmation are the same reflex twice. Typing is the only gate that
  * costs attention rather than time.
  *
- * WHAT ACTUALLY COMES BACK, counted from the seed functions rather than assumed
- * from their names: one Main Account, 91 instruments, 11 dropdown lists holding
- * 55 options, 8 tracker rules, 7 custom fields and 3 note folders.
+ * WHAT ACTUALLY COMES BACK is named by kind, not counted: the numbers change
+ * whenever the seed does, and a count written here was already wrong once.
  * `tj_reset_my_data` calls `tj_seed_my_defaults()`, which is exactly what a new
  * signup ends up with after its first dashboard load — so "reset" and "first
  * ever load" do land on the same state.
@@ -45,12 +43,17 @@ import { RESET_PHRASE } from "@/lib/journal/reset-phrase";
  * the same screen telling the truth about the easy half.
  */
 export function DangerZone() {
-  const router = useRouter();
   const [pending, start] = useTransition();
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
 
   const matches = typed.trim() === RESET_PHRASE;
+
+  // A phrase typed once must not still be there when the dialog is reopened.
+  function close(next: boolean) {
+    setOpen(next);
+    if (!next) setTyped("");
+  }
 
   function confirm() {
     start(async () => {
@@ -59,10 +62,9 @@ export function DangerZone() {
         toast.error(res.error);
         return;
       }
+      // The action revalidates the pages itself.
       toast.success("Everything deleted. Defaults restored.");
-      setOpen(false);
-      setTyped("");
-      router.refresh();
+      close(false);
     });
   }
 
@@ -77,24 +79,19 @@ export function DangerZone() {
         <div className="space-y-1">
           <div className="text-sm font-medium">Delete everything and start over</div>
           <p className="text-sm text-muted-foreground">
-            Removes every trade, fill, daily and weekly report, note, import,
-            deposit, playbook, tracker rule, custom field and account you own —
-            then puts back the defaults a new account starts with. There is no
-            undo, and no export is taken first.
+            Deletes every trade, report, note, import, deposit, playbook, rule,
+            category and account, then restores the defaults. There is no undo.
           </p>
         </div>
         <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
           <p className="font-medium">Restored afterwards</p>
           <p className="text-muted-foreground">
-            One Main Account, 91 instruments, 11 dropdown lists with 55 options,
-            8 tracker rules, 7 custom fields, 3 note folders.
+            One Main Account, the instrument catalog, the default categories and
+            tags, the default tracker rules and note folders.
           </p>
           <p className="mt-2 font-medium">Not restored</p>
           <p className="text-muted-foreground">
-            <strong>Your playbooks and their rules.</strong> Playbooks are not
-            part of the seeded defaults, so they are deleted and do not come
-            back. The same goes for any option, tracker rule or account you added
-            yourself.
+            <strong>Your playbooks</strong>, and anything else you added yourself.
           </p>
         </div>
         <Button variant="destructive" onClick={() => setOpen(true)}>
@@ -102,34 +99,32 @@ export function DangerZone() {
         </Button>
       </CardContent>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={close}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete everything?</DialogTitle>
             <DialogDescription>
-              This is irreversible. Every trade and every note you have written
-              is deleted, and the journal returns to the state it had on the day
-              you signed up — without the playbooks you have written since, which
-              are not part of the defaults and do not come back.
+              Every trade and note is deleted and the journal returns to its
+              first-day state, without your playbooks. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">
+            <Label htmlFor="reset-phrase" className="text-xs">
               Type <span className="font-mono">{RESET_PHRASE}</span> to confirm
             </Label>
             <Input
+              id="reset-phrase"
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               autoComplete="off"
-              aria-label="Confirm reset phrase"
             />
           </div>
 
           <DialogFooter>
             <Button
-              variant="outline"
-              onClick={() => setOpen(false)}
+              variant="ghost"
+              onClick={() => close(false)}
               disabled={pending}
             >
               Cancel

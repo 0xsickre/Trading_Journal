@@ -4,9 +4,9 @@ export const TRACKER_STAGES = ["prepare", "trade", "reflect"] as const;
 export type TrackerStage = (typeof TRACKER_STAGES)[number];
 
 export const STAGE_LABELS: Record<TrackerStage, string> = {
-  prepare: "Priprema",
-  trade: "Trgovanje",
-  reflect: "Osvrt",
+  prepare: "Prepare",
+  trade: "Trade",
+  reflect: "Review",
 };
 
 /**

@@ -243,9 +243,9 @@ describe("each stage names itself", () => {
     data({ rules: [rule({ id: `r-${stage}`, text: `Rule for ${stage}`, stage })] });
 
   it.each([
-    ["prepare", "Priprema"],
-    ["trade", "Trgovanje"],
-    ["reflect", "Osvrt"],
+    ["prepare", "Prepare"],
+    ["trade", "Trade"],
+    ["reflect", "Review"],
   ] as const)("labels the %s stage %s", (stage, heading) => {
     render(<TrackerStageSection stage={stage} data={ofStage(stage)} />);
     expect(screen.getByText(heading)).toBeInTheDocument();
@@ -256,7 +256,7 @@ describe("each stage names itself", () => {
     // The whole point of splitting `title` into `boxed`: a caller can no longer
     // hand one stage another stage's name, or two stages the same name.
     render(<TrackerStageSection stage="trade" data={ofStage("trade")} boxed />);
-    expect(screen.getByText("Trgovanje")).toBeInTheDocument();
+    expect(screen.getByText("Trade")).toBeInTheDocument();
   });
 
   it("renders nothing at all for a stage with no rules", () => {

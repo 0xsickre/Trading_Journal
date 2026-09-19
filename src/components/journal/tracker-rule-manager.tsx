@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArchiveRestore,
@@ -16,6 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
   AUTO_RULES_NEEDING_PCT,
@@ -35,19 +42,22 @@ import {
   updateTrackerRule,
 } from "@/app/(app)/settings/tracker-actions";
 
+// Every tracker action revalidates /settings itself, so no router.refresh().
 function useAction() {
-  const router = useRouter();
   const [pending, start] = useTransition();
-  const run = (fn: () => Promise<{ ok: boolean; error?: string }>) =>
+  const run = (fn: () => Promise<{ ok: boolean; error?: string }>, after?: () => void) =>
     start(async () => {
       const res = await fn();
       if (!res.ok) toast.error(res.error ?? "Failed");
-      else router.refresh();
+      else after?.();
     });
   return { pending, run };
 }
 
-/** Weekday toggles. Empty is refused by the action — a rule with no day is retired. */
+/**
+ * Weekday toggles. The last day on cannot be switched off: a rule with no day
+ * is a retired rule, and retiring has its own button and its own question.
+ */
 function DayToggles({
   days,
   disabled,
@@ -62,13 +72,15 @@ function DayToggles({
       {/* Monday to Friday only — nothing is scored at the weekend. */}
       {ISO_WEEKDAYS.filter((d) => d <= 5).map((d) => {
         const on = days.includes(d);
+        const last = on && days.length === 1;
         return (
           <button
             key={d}
             type="button"
-            disabled={disabled}
+            disabled={disabled || last}
             aria-pressed={on}
-            title={WEEKDAY_LABELS[d]}
+            aria-label={WEEKDAY_LABELS[d]}
+            title={last ? "A rule needs at least one day" : WEEKDAY_LABELS[d]}
             onClick={() =>
               onChange(on ? days.filter((x) => x !== d) : [...days, d].sort())
             }
@@ -87,9 +99,18 @@ function DayToggles({
   );
 }
 
-function RuleRow({ rule }: { rule: TrackerRule }) {
+function RuleRow({
+  rule,
+  isFirst = false,
+  isLast = false,
+}: {
+  rule: TrackerRule;
+  isFirst?: boolean;
+  isLast?: boolean;
+}) {
   const { pending, run } = useAction();
   const [text, setText] = useState(rule.text);
+  const [confirming, setConfirming] = useState(false);
   const [pct, setPct] = useState(
     rule.config.pct != null ? String(rule.config.pct) : "",
   );
@@ -129,10 +150,13 @@ function RuleRow({ rule }: { rule: TrackerRule }) {
     >
       <Input
         value={text}
+        aria-label="Rule"
         onChange={(e) => setText(e.target.value)}
         onBlur={() => {
-          if (text.trim() && text !== rule.text)
-            run(() => updateTrackerRule(rule.id, { text }));
+          // Emptied and left: the rule keeps its text rather than showing a
+          // blank box that was never saved.
+          if (!text.trim()) setText(rule.text);
+          else if (text !== rule.text) run(() => updateTrackerRule(rule.id, { text }));
         }}
         className="h-8 min-w-0 flex-1"
         disabled={pending || retired || isAuto}
@@ -141,7 +165,7 @@ function RuleRow({ rule }: { rule: TrackerRule }) {
 
       {isAuto && (
         <Badge variant="outline" className="gap-1 shrink-0">
-          <Zap className="size-3" /> auto
+          <Zap className="size-3" /> Auto
         </Badge>
       )}
 
@@ -155,7 +179,8 @@ function RuleRow({ rule }: { rule: TrackerRule }) {
             onKeyDown={(e) => {
               if (e.key === "Enter") e.currentTarget.blur();
             }}
-            placeholder="limit"
+            placeholder="Limit"
+            aria-label="Limit, % of equity"
             className={cn("h-8 w-20", unconfigured && "border-amber-500/60")}
             disabled={pending || retired}
           />
@@ -174,10 +199,10 @@ function RuleRow({ rule }: { rule: TrackerRule }) {
 
       {rule.is_mandatory && (
         <Badge variant="outline" className="gap-1 shrink-0">
-          <Lock className="size-3" /> required
+          <Lock className="size-3" /> Required
         </Badge>
       )}
-      {retired && <Badge variant="outline">retired</Badge>}
+      {retired && <Badge variant="outline">Retired</Badge>}
 
       <div className="ml-auto flex shrink-0 items-center gap-1">
         {!retired && (
@@ -186,7 +211,7 @@ function RuleRow({ rule }: { rule: TrackerRule }) {
               variant="ghost"
               size="icon"
               className="size-7"
-              disabled={pending}
+              disabled={pending || isFirst}
               onClick={() => run(() => moveTrackerRule(rule.id, -1))}
               aria-label="Move up"
             >
@@ -196,7 +221,7 @@ function RuleRow({ rule }: { rule: TrackerRule }) {
               variant="ghost"
               size="icon"
               className="size-7"
-              disabled={pending}
+              disabled={pending || isLast}
               onClick={() => run(() => moveTrackerRule(rule.id, 1))}
               aria-label="Move down"
             >
@@ -209,15 +234,9 @@ function RuleRow({ rule }: { rule: TrackerRule }) {
           size="icon"
           className="size-7"
           disabled={pending}
-          onClick={() =>
-            run(() => (retired ? restoreTrackerRule(rule.id) : deleteTrackerRule(rule.id)))
-          }
+          onClick={() => setConfirming(true)}
           aria-label={retired ? "Restore rule" : "Retire rule"}
-          title={
-            retired
-              ? "Restore to the checklist. Days it was retired for become scored again."
-              : "Removed from the checklist. Past days' consistency stays untouched."
-          }
+          title={retired ? "Restore rule" : "Retire rule"}
         >
           {retired ? (
             <ArchiveRestore className="size-3.5" />
@@ -229,10 +248,39 @@ function RuleRow({ rule }: { rule: TrackerRule }) {
 
       {unconfigured && (
         <p className="w-full text-xs text-amber-600 dark:text-amber-500">
-          Without a limit this rule is not scored — neither for nor against.
-          Set an amount to make it work.
+          Not scored until a limit is set.
         </p>
       )}
+
+      <Dialog open={confirming} onOpenChange={setConfirming}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{retired ? "Restore this rule?" : "Retire this rule?"}</DialogTitle>
+            <DialogDescription>
+              {retired
+                ? `"${rule.text}" goes back on the checklist, and the days it was retired for are scored again.`
+                : `"${rule.text}" leaves the checklist. Past days keep their score.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirming(false)} disabled={pending}>
+              Cancel
+            </Button>
+            <Button
+              variant={retired ? "default" : "destructive"}
+              disabled={pending}
+              onClick={() =>
+                run(
+                  () => (retired ? restoreTrackerRule(rule.id) : deleteTrackerRule(rule.id)),
+                  () => setConfirming(false),
+                )
+              }
+            >
+              {retired ? "Restore" : "Retire"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -244,11 +292,13 @@ function AddRuleForm({ stage }: { stage: TrackerStage }) {
 
   function submit() {
     if (!text.trim()) return;
-    run(async () => {
-      const res = await addTrackerRule({ text, stage, active_days: days });
-      if (res.ok) setText("");
-      return res;
-    });
+    run(
+      () => addTrackerRule({ text, stage, active_days: days }),
+      () => {
+        setText("");
+        setDays([1, 2, 3, 4, 5]);
+      },
+    );
   }
 
   return (
@@ -260,11 +310,12 @@ function AddRuleForm({ stage }: { stage: TrackerStage }) {
           if (e.key === "Enter") submit();
         }}
         placeholder="New rule…"
+        aria-label={`New ${STAGE_LABELS[stage].toLowerCase()} rule`}
         className="h-8 min-w-0 flex-1"
         disabled={pending}
       />
       <DayToggles days={days} disabled={pending} onChange={setDays} />
-      <Button size="sm" className="h-8" onClick={submit} disabled={pending}>
+      <Button size="sm" className="h-8" onClick={submit} disabled={pending || !text.trim()}>
         <Plus className="size-3.5" /> Add
       </Button>
     </div>
@@ -298,19 +349,14 @@ export function TrackerRuleManager({ rules }: { rules: TrackerRule[] }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Process rules by stage of the day. The ones marked <b>auto</b> are scored by
-        the database from the trades themselves — you do not tick those by hand.
-        Days decide when a rule applies; a weekend you exclude does not break the
-        streak.
+        Your daily rules, by stage. <b>Auto</b> rules are scored from your trades.
       </p>
 
       {unconfigured > 0 && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-sm text-amber-700 dark:text-amber-400">
           {unconfigured}{" "}
           {unconfigured === 1 ? "rule has no" : "rules have no"} limit set, so{" "}
-          {unconfigured === 1 ? "it is" : "they are"} not scored. No default is
-          seeded on purpose — a limit you did not choose yourself is a limit you
-          will pass without noticing.
+          {unconfigured === 1 ? "it is" : "they are"} not scored.
         </p>
       )}
 
@@ -329,13 +375,16 @@ export function TrackerRuleManager({ rules }: { rules: TrackerRule[] }) {
             <CardContent className="space-y-2">
               {inStage.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  {stage === "reflect"
-                    ? "No rules for the review stage. This is what you do after the close — day overview, note, rating."
-                    : "No rules in this stage."}
+                  No rules in this stage.
                 </p>
               )}
-              {inStage.map((rule) => (
-                <RuleRow key={rule.id} rule={rule} />
+              {inStage.map((rule, i) => (
+                <RuleRow
+                  key={rule.id}
+                  rule={rule}
+                  isFirst={i === 0}
+                  isLast={i === inStage.length - 1}
+                />
               ))}
               <AddRuleForm stage={stage} />
             </CardContent>
@@ -349,7 +398,7 @@ export function TrackerRuleManager({ rules }: { rules: TrackerRule[] }) {
             <CardTitle className="text-base">
               Retired rules
               <span className="ml-2 text-sm font-normal text-muted-foreground">
-                past days&apos; statistics stay untouched
+                {retired.length}
               </span>
             </CardTitle>
           </CardHeader>
