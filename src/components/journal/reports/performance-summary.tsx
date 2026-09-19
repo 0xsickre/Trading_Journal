@@ -2,19 +2,25 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { formatMetric, metric, type ViewMode } from "@/lib/journal/units";
+import { bucketLabel, type Dimension } from "@/lib/journal/reports/dimensions";
 import type { PerformanceSummary } from "@/lib/journal/reports/engine";
 import type { ReportMetric } from "@/lib/journal/reports/metrics";
 
 /**
- * Best / worst / most active / highest win rate.
+ * Best, worst and most traded group, on the metric the table is sorted by.
  *
- * Only categories at or above the sample threshold are eligible, which is the
- * whole point: crowning a three-trade category "best" is exactly the mistake
- * this layer exists to prevent. When nothing qualifies the panel says so
- * instead of quietly naming the least-thin option.
+ * Only groups at or above the sample threshold are eligible: crowning a
+ * three-trade group "best" is the mistake this layer exists to prevent. With
+ * fewer than two eligible groups there is nothing to rank, and it says so in
+ * one line rather than naming the only group best AND worst.
+ *
+ * The metric is always one of the table's columns, so the cards always have a
+ * value — they used to read a separate metric that could be absent from the
+ * rows and showed "—" for it.
  */
 export function PerformanceSummaryPanel({
   summary,
+  dimension,
   metric: selected,
   viewMode,
   currency,
@@ -22,113 +28,58 @@ export function PerformanceSummaryPanel({
   minSample,
 }: {
   summary: PerformanceSummary;
+  dimension: Dimension;
   metric: ReportMetric;
   viewMode: ViewMode;
   currency: string;
   equityBase: number | null;
   minSample: number;
 }) {
-  if (summary.qualifying === 0) {
+  if (summary.qualifying < 2) {
     return (
-      <Card>
-        <CardContent className="p-4 text-sm text-muted-foreground">
-          No category has at least {minSample} trades. While that holds,
-          calling one &quot;best&quot; would be guessing, so none is shown.
-        </CardContent>
-      </Card>
-    );
-  }
-
-  /**
-   * One qualifying category is not a ranking.
-   *
-   * With a single eligible row, `summarizeReport` hands back the SAME row as
-   * `best` and as `worst` — it sorted a list of one — and the four cards below
-   * would then state, of one bucket, that it is both the best and the worst
-   * while "most active" and "highest win rate" name it a third and fourth
-   * time. Every claim is technically derivable and not one of them is
-   * informative: "best of one" says nothing that "the only one" does not.
-   *
-   * Same principle as the `qualifying === 0` branch above, one step along: that
-   * one refuses to crown a thin category, this one refuses to crown an
-   * unopposed one.
-   */
-  if (summary.qualifying === 1) {
-    const only = summary.best ?? summary.mostActive;
-    return (
-      <Card>
-        <CardContent className="p-4 text-sm text-muted-foreground">
-          Only one category clears {minSample} trades
-          {only ? ` (${only.bucket}, n=${only.n})` : ""}, so there is nothing to
-          rank it against. Split the book a different way, or widen the date
-          range, to get a comparison.
-        </CardContent>
-      </Card>
+      <p className="text-sm text-muted-foreground">
+        Rankings need at least two groups with {minSample} or more trades.
+      </p>
     );
   }
 
   const fmt = (v: number | null | undefined) =>
-    formatMetric(
-      metric(v ?? null, selected.unit, { currency, equityBase }),
-      viewMode,
-    );
+    formatMetric(metric(v ?? null, selected.unit, { currency, equityBase }), viewMode);
+  const name = (b: string | undefined) => (b == null ? "—" : bucketLabel(dimension, b));
 
   const items = [
     {
-      label: `Best — ${selected.label}`,
-      bucket: summary.best?.bucket,
+      label: `Best ${selected.label.toLowerCase()}`,
+      row: summary.best,
       value: fmt(summary.best?.values[selected.key]),
-      n: summary.best?.n,
-      cls: "text-[var(--profit)]",
     },
     {
-      label: `Worst — ${selected.label}`,
-      bucket: summary.worst?.bucket,
+      label: `Worst ${selected.label.toLowerCase()}`,
+      row: summary.worst,
       value: fmt(summary.worst?.values[selected.key]),
-      n: summary.worst?.n,
-      cls: "text-[var(--loss)]",
     },
     {
-      label: "Most active",
-      bucket: summary.mostActive?.bucket,
+      label: "Most traded",
+      row: summary.mostActive,
       value: `${summary.mostActive?.n ?? 0} trades`,
-      n: summary.mostActive?.n,
-      cls: "",
-    },
-    {
-      label: "Highest win rate",
-      bucket: summary.highestWinRate?.bucket,
-      // Routed through `formatMetric` like every other value in this panel —
-      // a raw `.toFixed(1)` here used to ignore `viewMode` entirely, which
-      // meant privacy mode masked every other tile but still leaked the win
-      // rate in the clear.
-      value: formatMetric(
-        metric(summary.highestWinRate?.values.win_rate ?? null, "pct", {
-          currency,
-          equityBase,
-        }),
-        viewMode,
-      ),
-      n: summary.highestWinRate?.n,
-      cls: "",
     },
   ];
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-3 sm:grid-cols-3">
       {items.map((it) => (
         <Card key={it.label}>
-          <CardContent className="p-3">
+          <CardContent className="p-4">
             <div className="text-xs text-muted-foreground">{it.label}</div>
-            <div className="mt-1 truncate font-medium" title={it.bucket}>
-              {it.bucket ?? "—"}
+            <div className="mt-1 truncate font-medium" title={name(it.row?.bucket)}>
+              {name(it.row?.bucket)}
             </div>
-            <div className={`mt-0.5 text-lg font-semibold tabular-nums ${it.cls}`}>
-              {it.value}
+            <div className="mt-0.5 flex items-baseline justify-between gap-2">
+              <span className="text-lg font-semibold tabular-nums">{it.value}</span>
+              {it.row && it.label !== "Most traded" && (
+                <span className="text-xs text-muted-foreground">{it.row.n} trades</span>
+              )}
             </div>
-            {it.n != null && (
-              <div className="text-xs text-muted-foreground">n={it.n}</div>
-            )}
           </CardContent>
         </Card>
       ))}

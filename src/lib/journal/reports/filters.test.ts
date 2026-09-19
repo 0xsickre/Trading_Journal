@@ -280,8 +280,14 @@ describe("between reaches every numeric field, not just R", () => {
     // `c` carries no chart prices at all, so it has no MAE and no MFE — and a
     // trade with no value must be dropped by a range filter rather than counted
     // as zero, which would put it inside almost any band.
-    expect(kept("mae_r")).toEqual(["a", "b"]);
-    expect(kept("mfe_r")).toEqual(["a", "b"]);
+    expect(kept("mae_r", -100)).toEqual(["a", "b"]);
+    expect(kept("mfe_r", -100)).toEqual(["a", "b"]);
     expect(kept("mfe_r", 2)).toEqual(["a"]);
+  });
+
+  it("a range with neither bound filled in constrains nothing", () => {
+    // A row the reader has added and not filled in yet. It used to drop every
+    // trade with no value for the field — a filter nobody set.
+    expect(kept("mae_r")).toEqual(["a", "b", "c"]);
   });
 });

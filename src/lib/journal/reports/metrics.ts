@@ -102,15 +102,33 @@ function statsOf(group: EnrichedTrade[], ctx: MetricContext) {
   return computeStats(realized(group), ctx.pnlBasis, ctx.range);
 }
 
-/** Peak-to-trough of cumulative P&L inside the group, in money. Negative or 0. */
+/**
+ * Peak-to-trough of cumulative P&L inside the group, in money. Negative or 0.
+ *
+ * A trade with no close instant keys on its position, as `computeStats` does:
+ * `buildBalanceTimeline` drops a point with an empty `at`, which took such a
+ * trade out of the drawdown while it still counted in the group's P&L.
+ */
 function maxDrawdownOf(group: EnrichedTrade[]): number {
   return computeDrawdown(
     buildBalanceTimeline(
       0,
-      group.map((e) => ({ at: e.closedAt ?? "", pnl: e.pnl })),
+      group.map((e, i) => ({ at: e.closedAt || `#${i}`, pnl: e.pnl })),
     ),
   ).maxMoney;
 }
+
+/*
+ * "—", NOT 0, WHEN THERE IS NOTHING TO MEASURE.
+ *
+ * `computeStats` answers 0 for a win rate with no decided trade and for R
+ * averages with no trade carrying a stop — its contract, which the dashboard
+ * reads with the counts beside it. A report has no counts beside its cells: a
+ * bucket of breakeven scratches read "0.0%" win rate, and a bucket without
+ * stops read "+0.00R" expectancy, which then SORTED above every losing bucket
+ * and could be named best. These answer null instead, and nulls sort last.
+ */
+const whenSampled = (n: number, v: number): number | null => (n > 0 ? v : null);
 
 /**
  * Daily P&L points for the risk ratios.
@@ -151,7 +169,10 @@ export const METRICS: ReportMetric[] = [
     unit: "pct",
     hint: "Breakeven trades stay out of the denominator.",
     higherIsBetter: true,
-    compute: (g, ctx) => statsOf(g, ctx).winRate,
+    compute: (g, ctx) => {
+      const s = statsOf(g, ctx);
+      return whenSampled(s.wins + s.losses, s.winRate);
+    },
   },
   {
     key: "profit_factor",
@@ -170,35 +191,52 @@ export const METRICS: ReportMetric[] = [
     label: "Expectancy",
     unit: "r",
     higherIsBetter: true,
-    compute: (g, ctx) => statsOf(g, ctx).expectancy,
+    compute: (g, ctx) => {
+      const s = statsOf(g, ctx);
+      return whenSampled(s.expectancySample, s.expectancy);
+    },
   },
   {
     key: "avg_r",
     label: "Avg R",
     unit: "r",
     higherIsBetter: true,
-    compute: (g, ctx) => statsOf(g, ctx).avgR,
+    compute: (g, ctx) => {
+      const s = statsOf(g, ctx);
+      return whenSampled(s.rSample, s.avgR);
+    },
   },
   {
     key: "total_r",
     label: "Total R",
     unit: "r",
     higherIsBetter: true,
-    compute: (g, ctx) => statsOf(g, ctx).totalR,
+    // A SUM over no trades is honestly 0 (spec-conformance §zero versus null);
+    // over trades none of which carries a stop it is unmeasured, and "—".
+    compute: (g, ctx) => {
+      const s = statsOf(g, ctx);
+      return g.length === 0 ? 0 : whenSampled(s.rSample, s.totalR);
+    },
   },
   {
     key: "avg_win",
     label: "Avg win",
     unit: "r",
     higherIsBetter: true,
-    compute: (g, ctx) => statsOf(g, ctx).avgWinR,
+    compute: (g, ctx) => {
+      const s = statsOf(g, ctx);
+      return whenSampled(s.winRSample, s.avgWinR);
+    },
   },
   {
     key: "avg_loss",
     label: "Avg loss",
     unit: "r",
     higherIsBetter: true,
-    compute: (g, ctx) => statsOf(g, ctx).avgLossR,
+    compute: (g, ctx) => {
+      const s = statsOf(g, ctx);
+      return whenSampled(s.lossRSample, s.avgLossR);
+    },
   },
   {
     key: "avg_win_loss",
@@ -245,10 +283,18 @@ export const METRICS: ReportMetric[] = [
     key: "recovery_factor",
     label: "Recovery factor",
     unit: "ratio",
-    hint: "Net profit / max drawdown. Empty when there is no drawdown.",
+    hint: "Profit / max drawdown, both on the selected net or gross basis. Empty when there is no drawdown.",
     higherIsBetter: true,
-    compute: (g, ctx) =>
-      recoveryFactor(statsOf(g, ctx).netSum, maxDrawdownOf(g)),
+    // Both halves on the SAME basis. The drawdown follows the Net/Gross toggle
+    // (it is built from each trade's `pnl`); the numerator was always net, so
+    // on Gross it divided a net profit by a gross drawdown.
+    compute: (g, ctx) => {
+      const s = statsOf(g, ctx);
+      return recoveryFactor(
+        ctx.pnlBasis === "gross" ? s.grossSum : s.netSum,
+        maxDrawdownOf(g),
+      );
+    },
   },
   {
     key: "sharpe",
@@ -343,7 +389,7 @@ export const METRICS: ReportMetric[] = [
   },
   {
     key: "avg_mae_r",
-    label: "Avg MAE u R",
+    label: "Avg MAE (R)",
     unit: "r",
     hint: "How deep trades went against the position.",
     higherIsBetter: false,

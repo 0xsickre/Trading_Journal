@@ -351,7 +351,7 @@ Spec §5.1: *ne pisati 10 report stranica, pisati jednu.* Ovo je najveća ušted
   tag nizove, **deklarativne bucket-e** (hold duration, R-multiple, position size, mesec, dan u nedelji
   ulaska/izlaska) i **procesne dimenzije** (join `tj_daily_reports`: micromanage, ocena dana, mentalna
   temperatura, prekršeno pravilo, friday flat). Bucket-i su tabela definicija, ne `CASE WHEN` (spec §5.3).
-- `reports/engine.ts` — `runReport({ dimension, crossDimension, metrics, filters, pnlBasis, dateRange, accountIds })`.
+- `reports/engine.ts` — `runReport({ trades, dimension, metricKeys, filters, dimensionContext, metricContext, minSample, sortBy })`.
   `breakdownByField` postaje tanak omotač.
 - `reports/pivot.ts` — dimenzija × dimenzija, **`n` u svakoj ćeliji**, sivljenje ispod praga.
 - `reports/filters.ts` — **negacija (`Excluding`) po svakom polju od prvog dana** (spec §5.7:
@@ -1120,3 +1120,42 @@ aplikacija nije pamtila nijednu stranicu između klikova (Next podrazumevano: 0 
 - eksplicitne kolone i vremenski prozor u `getTradesWithStats`;
 - virtualizacija tabele trejdova;
 - `tj_position_stats` koji agregira sva izvršenja.
+
+### Reports — pojednostavljeno i bez poznatih grešaka (19.09.2026.)
+
+**Pregled** (tri nezavisne revizije: izgled, računanje, podaci) našao je:
+- oko 30 kontrola odjednom, 4 od 7 dugmadi za jedinice koja ovde nikad ne rade;
+- „Add filter" koji ne radi;
+- brojni filter koji ne prima `-` ni decimale;
+- Best/Worst kartice sa „—";
+- grafik koji crta 0 umesto „—" i otkriva iznose na osi u Privacy režimu;
+- mesece sortirane po P&L-u i dane od nedelje;
+- Compare koji gubi trejdove;
+- metrike koje daju 0 umesto „—" (pa „pobeđuju" u rangiranju);
+- recovery factor koji deli neto sa bruto;
+- backtest i live pomešane.
+
+**Urađeno:**
+- **Knjiga:** prekidač `Live | Backtest | All` (`scope.ts`) koji sam bira i pamti izbor. Valuta, %
+  osnova i breakeven se računaju samo nad nalozima u opsegu.
+- **Izbačeno:** R/Points/Ticks/Pips, Compare, linijski grafik i pivot (`pivot.ts`, `pivot-color.ts`,
+  `cross-analysis.tsx`, `compare-view.tsx`).
+- **Ekran:**
+  - Filteri se prave lokalno i upisuju tek kad nešto ograničavaju.
+  - `Columns` bira kolone.
+  - Sortiranje ide u oba smera (`key:asc|desc`) i resetuje se pri promeni grupisanja.
+  - Tabela ima Total red.
+  - Grafik prikazuje jednu metriku, formatiranu kao tabela.
+  - Postoji jedna poruka kada nema podataka.
+  - Dodat je skelet učitavanja.
+- **Računanje:**
+  - „—" umesto 0 za metrike bez uzorka.
+  - Recovery factor na izabranoj osnovi.
+  - Drawdown zadržava trejd bez vremena zatvaranja.
+  - Trejd se broji jednom po grupi.
+  - Trejd bez smera ide u „—".
+  - Oznaka „≥ 3R".
+  - Meseci idu hronološki, a nedelja počinje ponedeljkom.
+  - Istoimeni nalozi se razlikuju.
+- **Testovi:** svaka greška ima svoj test (`report-fixes.test.ts`, `scope.test.ts`, render testovi za
+  workbench i filtere).

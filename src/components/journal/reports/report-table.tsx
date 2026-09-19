@@ -3,17 +3,22 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMetric, metric, type ViewMode } from "@/lib/journal/units";
-import type { ReportResult } from "@/lib/journal/reports/engine";
+import { bucketLabel } from "@/lib/journal/reports/dimensions";
+import { parseSort, type ReportResult } from "@/lib/journal/reports/engine";
 
 /**
- * Summary table.
+ * The groups, one row each, with the whole book as a Total row.
  *
- * `n` sits in its own column, always. A category with three trades and a 100 %
- * win rate is not a finding, and a reader can only know that if the sample is
- * on screen next to the number — so thin rows are dimmed rather than dropped.
+ * The trade count sits beside every figure, always. A group of three trades
+ * with a 100 % win rate is not a finding, and a reader can only know that if
+ * the sample is on screen — so thin rows are dimmed, never dropped.
+ *
+ * A header click sorts by that column, better end first; a second click
+ * reverses it. The arrow shows the order actually in force.
  */
 export function ReportTable({
   result,
+  totals,
   viewMode,
   currency,
   equityBase,
@@ -21,118 +26,107 @@ export function ReportTable({
   onSort,
 }: {
   result: ReportResult;
+  /** The same metrics over every trade in the table; `null` hides the row. */
+  totals: Record<string, number | null> | null;
   viewMode: ViewMode;
   currency: string;
   equityBase: number | null;
   sortBy?: string;
-  onSort: (metricKey: string) => void;
+  onSort: (next: string) => void;
 }) {
-  if (result.rows.length === 0) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">{result.dimension.label}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="py-6 text-center text-sm text-muted-foreground">
-            No trades match the selected filters.
-          </p>
-        </CardContent>
-      </Card>
-    );
+  const sort = parseSort(sortBy);
+  const active = sort && result.metrics.some((m) => m.key === sort.key) ? sort : null;
+  const fmt = (v: number | null | undefined, unit: ReportResult["metrics"][number]["unit"]) =>
+    formatMetric(metric(v ?? null, unit, { currency, equityBase }), viewMode);
+
+  const notes: string[] = [];
+  if (result.rows.some((r) => r.belowSample)) {
+    notes.push(`Dimmed: fewer than ${result.minSample} trades`);
+  }
+  if (result.excluded > 0) {
+    notes.push(`${result.excluded} ${result.excluded === 1 ? "trade has" : "trades have"} no ${result.dimension.label.toLowerCase()} and ${result.excluded === 1 ? "is" : "are"} left out`);
+  }
+  if (result.multiValue) {
+    notes.push("A trade can sit in several rows, so rows do not add up to the book");
   }
 
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">{result.dimension.label}</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          {result.rows.length} groups · {result.totalTrades} trades
-          {result.excluded > 0 && (
-            <>
-              {" "}
-              · <span className="text-[var(--chart-4)]">
-                {result.excluded} without a value for this dimension, omitted
-              </span>
-            </>
-          )}
-        </p>
-        {result.multiValue && (
-          <p className="text-xs text-[var(--chart-4)]">
-            One trade can land in several rows, so the sum of the rows{" "}
-            is <strong>not</strong> the overall P&amp;L.
-          </p>
-        )}
+        <CardTitle className="text-base">By {result.dimension.label.toLowerCase()}</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
+        <div className="max-h-[32rem] overflow-auto">
           <table className="w-full text-sm">
-            <thead className="text-muted-foreground">
+            <thead className="sticky top-0 z-10 bg-card text-muted-foreground">
               <tr className="border-b">
-                <th className="py-2 pr-3 text-left font-medium">
+                <th className="sticky left-0 z-10 bg-card py-2 pr-3 text-left font-medium">
                   {result.dimension.label}
                 </th>
-                <th className="py-2 pr-3 text-right font-medium">n</th>
-                {result.metrics.map((m) => (
-                  <th key={m.key} className="py-2 pl-3 text-right font-medium">
-                    <button
-                      onClick={() => onSort(m.key)}
-                      title={m.hint}
-                      className="inline-flex items-center gap-1 hover:text-foreground"
+                <th className="py-2 pr-3 text-right font-medium">Trades</th>
+                {result.metrics.map((m) => {
+                  const on = active?.key === m.key;
+                  const betterFirst = m.higherIsBetter === false ? "asc" : "desc";
+                  const dir = on ? (active.dir ?? betterFirst) : null;
+                  const next = `${m.key}:${on ? (dir === "asc" ? "desc" : "asc") : betterFirst}`;
+                  return (
+                    <th
+                      key={m.key}
+                      className="py-2 pl-3 text-right font-medium"
+                      aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none"}
                     >
-                      {m.label}
-                      {sortBy === m.key &&
-                        (m.higherIsBetter ? (
-                          <ArrowDown className="size-3" />
-                        ) : (
-                          <ArrowUp className="size-3" />
-                        ))}
-                    </button>
-                  </th>
-                ))}
+                      <button
+                        type="button"
+                        onClick={() => onSort(next)}
+                        title={m.hint}
+                        className={`inline-flex items-center gap-1 hover:text-foreground ${on ? "text-foreground" : ""}`}
+                      >
+                        {m.label}
+                        {dir === "desc" && <ArrowDown className="size-3" />}
+                        {dir === "asc" && <ArrowUp className="size-3" />}
+                      </button>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {result.rows.map((row) => (
                 <tr
                   key={row.bucket}
-                  className={`border-b last:border-0 ${
-                    row.belowSample ? "opacity-45" : ""
-                  }`}
-                  title={
-                    row.belowSample
-                      ? `Only ${row.n} trades — below the threshold of ${result.minSample}. The numbers are shown, but do not trust them.`
-                      : undefined
-                  }
+                  className={`border-b last:border-0 ${row.belowSample ? "text-muted-foreground/70" : ""}`}
                 >
-                  <td className="py-2 pr-3">{row.bucket}</td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
-                    {row.n}
+                  <td className="sticky left-0 bg-card py-2 pr-3">
+                    {bucketLabel(result.dimension, row.bucket)}
                   </td>
+                  <td className="py-2 pr-3 text-right tabular-nums">{row.n}</td>
                   {result.metrics.map((m) => (
-                    <td
-                      key={m.key}
-                      className="py-2 pl-3 text-right tabular-nums"
-                    >
-                      {formatMetric(
-                        metric(row.values[m.key], m.unit, {
-                          currency,
-                          equityBase,
-                        }),
-                        viewMode,
-                      )}
+                    <td key={m.key} className="py-2 pl-3 text-right tabular-nums">
+                      {fmt(row.values[m.key], m.unit)}
                     </td>
                   ))}
                 </tr>
               ))}
             </tbody>
+            {totals && (
+              <tfoot>
+                <tr className="border-t-2 font-medium">
+                  <td className="sticky left-0 bg-card py-2 pr-3">Total</td>
+                  <td className="py-2 pr-3 text-right tabular-nums">
+                    {result.totalTrades - result.excluded}
+                  </td>
+                  {result.metrics.map((m) => (
+                    <td key={m.key} className="py-2 pl-3 text-right tabular-nums">
+                      {fmt(totals[m.key], m.unit)}
+                    </td>
+                  ))}
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
-
-        {result.rows.some((r) => r.belowSample) && (
-          <p className="mt-3 text-xs text-muted-foreground">
-            Dimmed rows have fewer than {result.minSample} trades.
-          </p>
+        {notes.length > 0 && (
+          <p className="mt-3 text-xs text-muted-foreground">{notes.join(" · ")}.</p>
         )}
       </CardContent>
     </Card>

@@ -51,8 +51,8 @@ export const NUMERIC_FIELD_LABELS: Record<string, string> = {
   pnl: "P&L",
   size: "Position size",
   duration_days: "Duration (days)",
-  mae_r: "MAE u R",
-  mfe_r: "MFE u R",
+  mae_r: "MAE (R)",
+  mfe_r: "MFE (R)",
 };
 
 function matchesClause(
@@ -63,6 +63,10 @@ function matchesClause(
   const numeric = NUMERIC_FIELDS[clause.field];
 
   if (clause.op === "between") {
+    // A range with neither bound constrains nothing — it is a row the reader
+    // has added and not filled in yet. It used to drop every trade with no
+    // value for the field, which is a filter nobody set.
+    if (clause.min == null && clause.max == null) return true;
     const v = numeric?.(t) ?? null;
     if (v == null) return false;
     if (clause.min != null && v < clause.min) return false;

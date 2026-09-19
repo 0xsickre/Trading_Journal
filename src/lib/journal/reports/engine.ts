@@ -58,9 +58,21 @@ export type RunReportInput = {
   dimensionContext: DimensionContext;
   metricContext: MetricContext;
   minSample?: number;
-  /** Metric key to sort rows by, descending. Falls back to the dimension order. */
+  /**
+   * `metric` or `metric:asc` / `metric:desc`. Without a direction the metric's
+   * better end comes first. Without a sort at all, an ordered dimension keeps
+   * its own order and the rest sort by the first metric.
+   */
   sortBy?: string;
 };
+
+/** `net_pnl:asc` → `{ key, dir }`; a missing or unknown direction is null. */
+export function parseSort(raw: string | undefined | null): { key: string; dir: "asc" | "desc" | null } | null {
+  if (!raw) return null;
+  const [key, dir] = raw.split(":");
+  if (!key) return null;
+  return { key, dir: dir === "asc" || dir === "desc" ? dir : null };
+}
 
 function toDimension(
   d: string | Dimension,
@@ -92,7 +104,10 @@ export function runReport(input: RunReportInput): ReportResult | null {
       excluded++;
       continue;
     }
-    for (const b of buckets) {
+    // Once per bucket. A tag stored twice on one trade (`["FOMO", "FOMO"]`), or
+    // two rules sharing their wording, put the same trade in the same row twice
+    // and doubled its n and its money there.
+    for (const b of new Set(buckets)) {
       const arr = groups.get(b) ?? [];
       arr.push(t);
       groups.set(b, arr);
@@ -133,9 +148,14 @@ function sortRows(
   sortBy: string | undefined,
   metrics: ReportMetric[],
 ): void {
+  const sort = parseSort(sortBy);
+  // A sort on a metric this report does not compute is no sort at all — it
+  // used to fall through to an alphabetical order nobody asked for.
+  const requested = sort && metrics.some((m) => m.key === sort.key) ? sort : null;
+
   // A dimension with a declared order is ordinal — sorting it by a metric would
   // destroy the meaning of the sequence (a duration ladder, a grade scale).
-  if (dimension.order && !sortBy) {
+  if (dimension.order && !requested) {
     const rank = new Map(dimension.order.map((k, i) => [k, i]));
     rows.sort((a, b) => {
       const ra = rank.get(a.bucket) ?? Number.MAX_SAFE_INTEGER;
@@ -144,14 +164,20 @@ function sortRows(
     });
     return;
   }
+  // Months: their own order, oldest first.
+  if (dimension.natural && !requested) {
+    rows.sort((a, b) => a.bucket.localeCompare(b.bucket));
+    return;
+  }
 
-  const key = sortBy ?? metrics[0]?.key;
+  const key = requested?.key ?? metrics[0]?.key;
   if (!key) {
     rows.sort((a, b) => a.bucket.localeCompare(b.bucket));
     return;
   }
   const metric = metrics.find((m) => m.key === key);
-  const dir = metric?.higherIsBetter === false ? 1 : -1;
+  const betterFirst = metric?.higherIsBetter === false ? "asc" : "desc";
+  const dir = (requested?.dir ?? betterFirst) === "asc" ? 1 : -1;
   rows.sort((a, b) => {
     const av = a.values[key];
     const bv = b.values[key];

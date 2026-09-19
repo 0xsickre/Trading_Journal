@@ -173,33 +173,3 @@ export function ruleSampleTier(n: number): RuleSampleTier {
   if (n < RULE_SAMPLE.USABLE) return "provisional";
   return "usable";
 }
-
-/**
- * Group by rule AND by whether it was followed.
- *
- * Splits what `playbookRuleDimension` merges. That one answers "how did trades
- * where this rule was in play do", which mixes the times you kept it with the
- * times you did not — a row that reads like a statement about the rule while
- * describing both sides of it at once.
- *
- * Multi-value for the same reason as its sibling: one trade answers several
- * rules, so it lands in several buckets and the rows do not sum to the
- * portfolio total.
- */
-export function ruleFollowedDimension(rules: RuleLookup): Dimension {
-  return {
-    key: "playbook_rule_followed",
-    label: "Playbook rule · followed",
-    group: "process",
-    multiValue: true,
-    valueOf: (t) => {
-      const buckets = applicableAnswers(t, rules)
-        .filter((a) => a.followed != null)
-        .map(
-          (a) =>
-            `${rules.text.get(a.rule_id) ?? a.rule_id} · ${a.followed ? "followed" : "broken"}`,
-        );
-      return buckets.length > 0 ? buckets : null;
-    },
-  };
-}

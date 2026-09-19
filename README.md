@@ -133,7 +133,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,407 tests across 145 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,483 tests across 153 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -278,7 +278,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/weekly` | Weekly review: week rating, five questions, the week's figures (`week-recap.ts`) |
 | `/playbooks` | Every setup as one table: Trades / Net P&L / Win Rate / Missed / Expectancy per row |
 | `/playbooks/[id]` | One playbook: identity, Stats, Rules (section and rule editor), Trades, Notes |
-| `/reports` | Report workbench — any metric against any dimension, plus a pivot |
+| `/reports` | How each group of trades did — by setup, instrument, day or any tag; Live and Backtest kept apart (§ Reports) |
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
@@ -287,10 +287,47 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 
 ---
 
+## Reports
+
+One page, one question: **how did each group of trades do?** Top to bottom:
+
+1. **The book.**
+   - `Live | Backtest | All`: backtests and live trading are separate books. The page opens on Live when
+     a live trade exists, otherwise on Backtest, and remembers the last choice (`scope.ts`,
+     `report-prefs.ts`).
+   - An account of that type, the dates, Net or Gross, `$` or `%`, and an eye that hides every amount.
+   - Everything pooled across accounts (currency, % base, breakeven band) is taken over the accounts in
+     scope only, so a EUR live account never blocks a USD backtest.
+2. **The question.** Group by any dimension, the table's columns, the minimum trades a group needs to
+   be ranked, and filters. A filter is built in the panel and added only once it constrains
+   something, and number bounds accept `-1.5`.
+3. **The book as a whole.** Six headline figures, then the risk and execution figures in a quieter
+   row.
+4. **Best, worst and most traded group**, ranked on the column the table is sorted by. It needs two
+   groups at the threshold before it ranks anything.
+5. **A bar chart of one metric.** It is formatted like the table, so Privacy and `%` apply to its axis
+   too. A group with no value has no bar, and an infinite profit factor stays out of the axis range.
+6. **The table.** Every group with its trade count; a header click sorts, and a second click reverses.
+   A **Total** row appears whenever every trade sits in exactly one row. Thin groups are dimmed, not
+   hidden, and that is explained once.
+
+**"—" is not 0.** A win rate over breakeven scratches only, or R figures over trades without a stop,
+read "—" in a report and sort last. They used to read 0, and that fake zero could be named the best
+group. The dashboard keeps its own contract (a 0 with the count beside it).
+
+The state lives in the URL, written with `history.replaceState`, so a report can be bookmarked and
+no control goes back to the server.
+
+**Removed on purpose (19.09.2026):**
+- the R / Points / Ticks / Pips units, which a cross-instrument report can never show;
+- Compare mode, which lost trades from its totals;
+- the line chart over categories;
+- the cross-analysis pivot.
+
 ## Metrics
 
-34 metrics in a single registry (`src/lib/journal/reports/metrics.ts`), 25 built-in dimensions across
-four groups (11 off the trade, 9 derived, 4 process, 1 insight) plus one per custom field. Any
+34 metrics in a single registry (`src/lib/journal/reports/metrics.ts`), 23 built-in dimensions across
+four groups (9 off the trade, 9 derived, 4 process, 1 insight) plus one per custom field. Any
 metric runs against any dimension — which is why there is one report engine instead of ten report
 pages. The tables below list all 34.
 
@@ -341,7 +378,7 @@ of quietly showing a number in the wrong unit. Accounts sharing a currency still
 |---|---|---|
 | Max drawdown | Deepest peak-to-trough fall of cumulative P&L | In money, within the group |
 | Avg daily DD | Average intraday fall from that day's high | A day with no fall enters as 0 |
-| Recovery factor | `net profit / max drawdown` | `null` while the curve has never fallen |
+| Recovery factor | `profit / max drawdown` | Both on the selected net or gross basis. `null` while the curve has never fallen |
 | Sharpe | `mean daily P&L / σ × √periodsPerYear` | |
 | Sortino | The same, but the numerator only looks at falls below zero — the denominator still counts **every** day, not just losing ones | `null` when no day was negative — growth is not risk |
 | Calmar | `annualised return / max drawdown` | Recovery factor divided by the time it took |

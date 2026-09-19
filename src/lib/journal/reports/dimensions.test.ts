@@ -64,13 +64,14 @@ describe("trade column dimensions", () => {
 
   it("normalizes direction rather than trusting the stored string", () => {
     const short = one([{ direction: "Short (sell)" }]);
-    const long = one([{ direction: "" }]);
-    expect(bucketsOf(getDimension("direction")!, short, dimCtx())).toEqual([
-      "Short",
-    ]);
-    expect(bucketsOf(getDimension("direction")!, long, dimCtx())).toEqual([
-      "Long",
-    ]);
+    const long = one([{ direction: "Buy" }]);
+    const none = one([{ direction: "" }]);
+    const dim = getDimension("direction")!;
+    expect(bucketsOf(dim, short, dimCtx())).toEqual(["Short"]);
+    expect(bucketsOf(dim, long, dimCtx())).toEqual(["Long"]);
+    // No direction recorded is "—", not "Long". Defaulting it to Long credited
+    // its result to longs without anyone having said the trade was one.
+    expect(bucketsOf(dim, none, dimCtx())).toEqual(["—"]);
   });
 
   it("puts a tagged trade into every one of its tags", () => {
@@ -126,7 +127,9 @@ describe("derived bucket dimensions", () => {
     expect(bucketByEdges(-1.5, R_MULTIPLE_EDGES)).toBe("-2R … -1R");
     expect(bucketByEdges(0, R_MULTIPLE_EDGES)).toBe("0R … 1R");
     expect(bucketByEdges(2.5, R_MULTIPLE_EDGES)).toBe("2R … 3R");
-    expect(bucketByEdges(9, R_MULTIPLE_EDGES)).toBe("> 3R");
+    expect(bucketByEdges(9, R_MULTIPLE_EDGES)).toBe("≥ 3R");
+    // The bucket starts AT 3R, so its label says so.
+    expect(bucketByEdges(3, R_MULTIPLE_EDGES)).toBe("≥ 3R");
   });
 
   it("returns null for an unknown numeric, so the trade is excluded", () => {
@@ -349,9 +352,12 @@ describe("user-defined fields as dimensions", () => {
     expect(dims).toEqual([]);
 
     // And the registry still answers for every one of them — the point is that
-    // ONE side owns each key, not that the key disappears.
+    // ONE side owns each key, not that the key disappears. Except `miss_reason`:
+    // it is written on MISSED trades and a report counts closed ones only, so
+    // it is offered by neither side.
     for (const def of SEEDED_FIELD_DEFS) {
-      expect(getDimension(def.key), def.key).toBeDefined();
+      if (def.key === "miss_reason") expect(getDimension(def.key)).toBeUndefined();
+      else expect(getDimension(def.key), def.key).toBeDefined();
     }
   });
 

@@ -1,334 +1,295 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Filter, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import {
-  DIMENSIONS,
   DIMENSION_GROUP_LABELS,
   DIMENSION_GROUP_ORDER,
+  bucketLabel,
   bucketsOf,
   type Dimension,
   type DimensionContext,
 } from "@/lib/journal/reports/dimensions";
-import {
-  NUMERIC_FIELD_LABELS,
-  activeFilterCount,
-  type FilterClause,
-  type FilterSet,
-} from "@/lib/journal/reports/filters";
+import { NUMERIC_FIELD_LABELS, type FilterClause } from "@/lib/journal/reports/filters";
 import type { EnrichedTrade } from "@/lib/journal/enriched-trade";
 
-const OP_LABELS: Record<FilterClause["op"], string> = {
+type Op = "in" | "notIn" | "isSet" | "isNotSet";
+
+const OP_LABELS: Record<Op, string> = {
   in: "is",
   notIn: "is not",
-  between: "between",
   isSet: "has a value",
   isNotSet: "has no value",
 };
 
+/** "-1,5" and "1.5" both read; anything that is not a finite number is empty. */
+function parseBound(raw: string): number | undefined {
+  const t = raw.trim().replace(",", ".");
+  if (t === "") return undefined;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 /**
- * Filter builder.
+ * The values a dimension actually takes in the book, in the dimension's own
+ * order — grades A+ → C, weekdays Monday → Sunday, months oldest first — and
+ * alphabetically only when it has none. "(none)" last.
+ */
+function orderedValues(dim: Dimension, seen: Set<string>): string[] {
+  const values = [...seen];
+  const rank = dim.order ? new Map(dim.order.map((k, i) => [k, i])) : null;
+  return values.sort((a, b) => {
+    if (a === "—") return 1;
+    if (b === "—") return -1;
+    if (rank) {
+      const d = (rank.get(a) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b) ?? Number.MAX_SAFE_INTEGER);
+      if (d !== 0) return d;
+    }
+    return a.localeCompare(b);
+  });
+}
+
+/**
+ * Filters over any dimension or number.
  *
- * Negation is a peer of inclusion in the operator dropdown, not a checkbox
- * bolted onto it — "excluding" is how you ask most of the interesting
- * questions ("everything except the revenge trades"), and burying it would
- * make the common case feel like an edge case.
+ * A new filter is built HERE, in local state, and reaches the report only once
+ * it constrains something. It used to be written into the URL the moment "Add"
+ * was clicked, with no value yet — and the URL reader, rightly, drops an "is"
+ * with nothing in it, so the row vanished before a value could be picked. The
+ * same for numbers: a bound is typed as text and read on "Add", so `-1.5` can
+ * be typed through `-` and `-1.` without either being thrown away.
+ *
+ * Negation is a peer of inclusion ("is not"), not a checkbox bolted on —
+ * "everything except the revenge trades" is how most interesting questions are
+ * asked.
  */
 export function FilterBar({
-  filters,
+  clauses,
   onChange,
   trades,
   dimensionContext,
-  dimensions = DIMENSIONS,
-  accounts,
+  dimensions,
 }: {
-  filters: FilterSet;
-  onChange: (next: FilterSet) => void;
+  clauses: FilterClause[];
+  onChange: (next: FilterClause[]) => void;
+  /** The book in scope — the values offered are the ones it actually has. */
   trades: EnrichedTrade[];
   dimensionContext: DimensionContext;
-  /** Built-ins plus the user's own fields — a custom field filters like any other. */
-  dimensions?: Dimension[];
-  accounts: { id: string; name: string }[];
+  dimensions: Dimension[];
 }) {
-  const [draftField, setDraftField] = useState<string>(dimensions[0].key);
-  const [draftOp, setDraftOp] = useState<FilterClause["op"]>("in");
+  const [open, setOpen] = useState(false);
+  const [field, setField] = useState(dimensions[0]?.key ?? "instrument");
+  const [op, setOp] = useState<Op>("in");
+  const [picked, setPicked] = useState<string[]>([]);
+  const [min, setMin] = useState("");
+  const [max, setMax] = useState("");
 
-  /** Values actually present in the book — never a list of what could exist. */
-  const valuesFor = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const dim of dimensions) {
-      const seen = new Set<string>();
-      for (const t of trades) {
-        for (const b of bucketsOf(dim, t, dimensionContext)) seen.add(b);
-      }
-      map.set(dim.key, [...seen].sort());
-    }
-    return map;
-  }, [trades, dimensionContext, dimensions]);
+  const dimByKey = useMemo(() => new Map(dimensions.map((d) => [d.key, d])), [dimensions]);
+  const isNumeric = field in NUMERIC_FIELD_LABELS;
+  const dim = dimByKey.get(field);
 
-  const isNumeric = draftField in NUMERIC_FIELD_LABELS;
+  // Only the field being built — bucketing every dimension over the whole book
+  // on each render was the page's most expensive line for a dropdown.
+  const values = useMemo(() => {
+    if (!dim) return [];
+    const seen = new Set<string>();
+    for (const t of trades) for (const b of bucketsOf(dim, t, dimensionContext)) seen.add(b);
+    return orderedValues(dim, seen);
+  }, [dim, trades, dimensionContext]);
 
-  function addClause() {
-    if (isNumeric) {
-      onChange({
-        ...filters,
-        clauses: [...filters.clauses, { field: draftField, op: "between" }],
-      });
-      return;
-    }
-    if (draftOp === "isSet" || draftOp === "isNotSet") {
-      onChange({
-        ...filters,
-        clauses: [...filters.clauses, { field: draftField, op: draftOp }],
-      });
-      return;
-    }
-    onChange({
-      ...filters,
-      clauses: [
-        ...filters.clauses,
-        { field: draftField, op: draftOp === "notIn" ? "notIn" : "in", values: [] },
-      ],
-    });
+  const labelOf = (key: string) =>
+    dimByKey.get(key)?.label ?? NUMERIC_FIELD_LABELS[key] ?? key;
+
+  const draft: FilterClause | null = isNumeric
+    ? parseBound(min) != null || parseBound(max) != null
+      ? { field, op: "between", min: parseBound(min), max: parseBound(max) }
+      : null
+    : op === "isSet" || op === "isNotSet"
+      ? { field, op }
+      : picked.length > 0
+        ? { field, op, values: picked }
+        : null;
+
+  function chooseField(next: string) {
+    setField(next);
+    setPicked([]);
+    setMin("");
+    setMax("");
   }
 
-  function updateClause(i: number, next: FilterClause) {
-    const clauses = [...filters.clauses];
-    clauses[i] = next;
-    onChange({ ...filters, clauses });
+  function add() {
+    if (!draft) return;
+    onChange([...clauses, draft]);
+    setPicked([]);
+    setMin("");
+    setMax("");
   }
 
-  function removeClause(i: number) {
-    onChange({ ...filters, clauses: filters.clauses.filter((_, x) => x !== i) });
-  }
-
-  const labelOf = (field: string) =>
-    dimensions.find((d) => d.key === field)?.label ??
-    NUMERIC_FIELD_LABELS[field] ??
-    field;
+  const describe = (c: FilterClause): string => {
+    const d = dimByKey.get(c.field);
+    if (c.op === "between") {
+      const lo = c.min != null ? `≥ ${c.min}` : "";
+      const hi = c.max != null ? `≤ ${c.max}` : "";
+      return `${labelOf(c.field)} ${[lo, hi].filter(Boolean).join(" and ")}`;
+    }
+    if (c.op === "in" || c.op === "notIn") {
+      return `${labelOf(c.field)} ${OP_LABELS[c.op]} ${c.values.map((v) => bucketLabel(d, v)).join(", ")}`;
+    }
+    return `${labelOf(c.field)} ${OP_LABELS[c.op]}`;
+  };
 
   return (
-    <div className="space-y-3 rounded-md border p-3">
+    <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium">Filters</span>
-        {activeFilterCount(filters) > 0 && (
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
-            {activeFilterCount(filters)} aktivnih
-          </span>
-        )}
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Input
-            type="date"
-            value={filters.dateFrom ?? ""}
-            onChange={(e) =>
-              onChange({ ...filters, dateFrom: e.target.value || undefined })
-            }
-            className="h-8 w-auto"
-            aria-label="From date"
-          />
-          <span className="text-xs text-muted-foreground">do</span>
-          <Input
-            type="date"
-            value={filters.dateTo ?? ""}
-            onChange={(e) =>
-              onChange({ ...filters, dateTo: e.target.value || undefined })
-            }
-            className="h-8 w-auto"
-            aria-label="To date"
-          />
-          <Select
-            value={filters.accountIds?.[0] ?? "all"}
-            onValueChange={(v) =>
-              onChange({
-                ...filters,
-                accountIds: v === "all" ? undefined : [v],
-              })
-            }
+        <Button
+          variant={open ? "secondary" : "outline"}
+          size="sm"
+          className="h-9"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+        >
+          <Filter className="size-3.5" />
+          Filters
+          {clauses.length > 0 && (
+            <span className="rounded-full bg-primary px-1.5 text-xs text-primary-foreground">
+              {clauses.length}
+            </span>
+          )}
+        </Button>
+        {clauses.map((c, i) => (
+          <span
+            key={`${c.field}:${c.op}:${i}`}
+            className="inline-flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pr-1 pl-2.5 text-xs"
           >
-            <SelectTrigger className="h-8 w-auto min-w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All accounts</SelectItem>
-              {accounts.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+            {describe(c)}
+            <button
+              type="button"
+              onClick={() => onChange(clauses.filter((_, x) => x !== i))}
+              aria-label={`Remove filter: ${describe(c)}`}
+              className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-3" />
+            </button>
+          </span>
+        ))}
       </div>
 
-      {filters.clauses.map((c, i) => (
-        <div key={i} className="flex flex-wrap items-center gap-2">
-          <span className="min-w-32 text-sm">{labelOf(c.field)}</span>
+      {open && (
+        <div className="space-y-3 rounded-lg border bg-card p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={field} onValueChange={chooseField}>
+              <SelectTrigger className="h-9 w-52" aria-label="Filter field">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DIMENSION_GROUP_ORDER.map((g) => {
+                  const inGroup = dimensions.filter((d) => d.group === g);
+                  if (inGroup.length === 0) return null;
+                  return (
+                    <SelectGroup key={g}>
+                      <SelectLabel>{DIMENSION_GROUP_LABELS[g]}</SelectLabel>
+                      {inGroup.map((d) => (
+                        <SelectItem key={d.key} value={d.key}>
+                          {d.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  );
+                })}
+                <SelectGroup>
+                  <SelectLabel>Numbers</SelectLabel>
+                  {Object.entries(NUMERIC_FIELD_LABELS).map(([k, label]) => (
+                    <SelectItem key={k} value={k}>
+                      {label} (range)
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
 
-          {c.op === "between" ? (
-            <>
-              <Input
-                inputMode="decimal"
-                placeholder="min"
-                value={c.min ?? ""}
-                onChange={(e) =>
-                  updateClause(i, {
-                    ...c,
-                    min: e.target.value === "" ? undefined : Number(e.target.value),
-                  })
-                }
-                className="h-8 w-24"
-              />
-              <span className="text-xs text-muted-foreground">do</span>
-              <Input
-                inputMode="decimal"
-                placeholder="max"
-                value={c.max ?? ""}
-                onChange={(e) =>
-                  updateClause(i, {
-                    ...c,
-                    max: e.target.value === "" ? undefined : Number(e.target.value),
-                  })
-                }
-                className="h-8 w-24"
-              />
-            </>
-          ) : c.op === "in" || c.op === "notIn" ? (
-            <>
-              <Select
-                value={c.op}
-                onValueChange={(v) =>
-                  updateClause(i, {
-                    field: c.field,
-                    op: v as "in" | "notIn",
-                    values: c.values,
-                  })
-                }
-              >
-                <SelectTrigger className="h-8 w-24">
+            {isNumeric ? (
+              <>
+                <Input
+                  inputMode="decimal"
+                  placeholder="min"
+                  value={min}
+                  onChange={(e) => setMin(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && add()}
+                  className="h-9 w-24"
+                  aria-label="Minimum"
+                />
+                <span className="text-xs text-muted-foreground">to</span>
+                <Input
+                  inputMode="decimal"
+                  placeholder="max"
+                  value={max}
+                  onChange={(e) => setMax(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && add()}
+                  className="h-9 w-24"
+                  aria-label="Maximum"
+                />
+              </>
+            ) : (
+              <Select value={op} onValueChange={(v) => setOp(v as Op)}>
+                <SelectTrigger className="h-9 w-36" aria-label="Filter condition">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="in">{OP_LABELS.in}</SelectItem>
-                  <SelectItem value="notIn">{OP_LABELS.notIn}</SelectItem>
+                  {(Object.keys(OP_LABELS) as Op[]).map((o) => (
+                    <SelectItem key={o} value={o}>
+                      {OP_LABELS[o]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              <div className="flex flex-wrap gap-1">
-                {(valuesFor.get(c.field) ?? []).map((v) => {
-                  const on = c.values.includes(v);
+            )}
+
+            <Button size="sm" className="h-9" onClick={add} disabled={!draft}>
+              <Plus className="size-3.5" /> Add
+            </Button>
+          </div>
+
+          {!isNumeric && (op === "in" || op === "notIn") && (
+            <div className="flex flex-wrap gap-1.5">
+              {values.length === 0 ? (
+                <span className="text-xs text-muted-foreground">No values in this book.</span>
+              ) : (
+                values.map((v) => {
+                  const on = picked.includes(v);
                   return (
                     <button
                       key={v}
+                      type="button"
+                      aria-pressed={on}
                       onClick={() =>
-                        updateClause(i, {
-                          field: c.field,
-                          op: c.op,
-                          values: on
-                            ? c.values.filter((x: string) => x !== v)
-                            : [...c.values, v],
-                        })
+                        setPicked((p) => (on ? p.filter((x) => x !== v) : [...p, v]))
                       }
-                      className={`rounded-full border px-2 py-0.5 text-xs ${
+                      className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
                         on
                           ? "border-primary bg-primary text-primary-foreground"
-                          : "text-muted-foreground"
+                          : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
-                      {v}
+                      {bucketLabel(dim, v)}
                     </button>
                   );
-                })}
-              </div>
-            </>
-          ) : (
-            <span className="text-sm text-muted-foreground">
-              {OP_LABELS[c.op]}
-            </span>
+                })
+              )}
+            </div>
           )}
-
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2"
-            onClick={() => removeClause(i)}
-            aria-label="Remove filter"
-          >
-            <X className="size-3.5" />
-          </Button>
         </div>
-      ))}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Select value={draftField} onValueChange={setDraftField}>
-          <SelectTrigger className="h-8 w-52">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {DIMENSION_GROUP_ORDER.map((g) => {
-              const inGroup = dimensions.filter((d) => d.group === g);
-              if (inGroup.length === 0) return null;
-              return (
-                <div key={g}>
-                  <div className="px-2 py-1 text-xs text-muted-foreground">
-                    {DIMENSION_GROUP_LABELS[g]}
-                  </div>
-                  {inGroup.map((d) => (
-                    <SelectItem key={d.key} value={d.key}>
-                      {d.label}
-                    </SelectItem>
-                  ))}
-                </div>
-              );
-            })}
-            <div className="px-2 py-1 text-xs text-muted-foreground">Numbers</div>
-            {Object.entries(NUMERIC_FIELD_LABELS).map(([k, label]) => (
-              <SelectItem key={k} value={k}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {!isNumeric && (
-          <Select
-            value={draftOp}
-            onValueChange={(v) => setDraftOp(v as FilterClause["op"])}
-          >
-            <SelectTrigger className="h-8 w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="in">{OP_LABELS.in}</SelectItem>
-              <SelectItem value="notIn">{OP_LABELS.notIn}</SelectItem>
-              <SelectItem value="isSet">{OP_LABELS.isSet}</SelectItem>
-              <SelectItem value="isNotSet">{OP_LABELS.isNotSet}</SelectItem>
-            </SelectContent>
-          </Select>
-        )}
-
-        <Button variant="outline" size="sm" className="h-8" onClick={addClause}>
-          <Plus className="size-3.5" /> Add filter
-        </Button>
-
-        {activeFilterCount(filters) > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-muted-foreground"
-            onClick={() => onChange({ clauses: [] })}
-          >
-            Clear all
-          </Button>
-        )}
-      </div>
+      )}
     </div>
   );
 }

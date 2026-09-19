@@ -3,12 +3,10 @@ import { ruleScorecard } from "./rule-scorecard";
 import {
   RULE_SAMPLE,
   buildPlaybookLookup,
-  ruleFollowedDimension,
   ruleSampleTier,
 } from "./playbook-dimensions";
-import { bucketsOf } from "./dimensions";
 import { getMetric } from "./metrics";
-import { dimCtx, enrich, metricCtx, type TradeSpec } from "./test-helpers";
+import { enrich, metricCtx, type TradeSpec } from "./test-helpers";
 import type { PositionRule } from "../playbook-types";
 
 const RULES = [
@@ -44,41 +42,6 @@ function side(prefix: string, n: number, wins: number, followed: boolean) {
     followed,
   }));
 }
-
-describe("ruleFollowedDimension", () => {
-  it("splits one rule into a followed row and a broken row", () => {
-    const { lookup, trades } = book([
-      { id: "a", net: 100, followed: true },
-      { id: "b", net: -100, followed: false },
-    ]);
-    const dim = ruleFollowedDimension(lookup.rules);
-    const ctx = dimCtx();
-
-    expect(bucketsOf(dim, trades[0], ctx)).toEqual([
-      "Waited for the sweep · followed",
-    ]);
-    expect(bucketsOf(dim, trades[1], ctx)).toEqual([
-      "Waited for the sweep · broken",
-    ]);
-  });
-
-  it("excludes a trade whose answer is missing, rather than calling it broken", () => {
-    // Unanswered is missing information. Bucketing it as broken would
-    // manufacture a discipline problem out of a half-filled form.
-    const lookup = buildPlaybookLookup(
-      [{ id: "pb", name: "Book", rules: RULES }],
-      new Map([["a", [{ position_id: "a", rule_id: "r1", followed: null }]]]),
-    );
-    const [t] = enrich([{ id: "a", net: 100 }]);
-    expect(bucketsOf(ruleFollowedDimension(lookup.rules), t, dimCtx())).toEqual([]);
-  });
-
-  it("is multi-value — one trade answers several rules", () => {
-    expect(ruleFollowedDimension(buildPlaybookLookup([]).rules).multiValue).toBe(
-      true,
-    );
-  });
-});
 
 describe("ruleScorecard — the contrast", () => {
   it("compares the rule with ITSELF, followed against broken", () => {

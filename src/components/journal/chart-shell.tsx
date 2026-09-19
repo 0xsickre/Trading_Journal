@@ -66,13 +66,3 @@ export function ChartShell({
     </Card>
   );
 }
-
-/**
- * Up to three metrics on one chart, per the spec.
- *
- * Lives here rather than beside `ReportChart` because the workbench needs the
- * number to clamp its metric picker, and `ReportChart` is loaded lazily — a
- * static import of the constant from that module would pull recharts back into
- * the main chunk and undo the split.
- */
-export const MAX_CHART_METRICS = 3;

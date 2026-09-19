@@ -91,6 +91,15 @@ export type Dimension = {
   /** Fixed bucket order. Without it, rows sort by the chosen metric. */
   order?: readonly string[];
   /**
+   * The buckets have a natural order of their own — months — that is not a
+   * closed list to write out. Rows then sort by the bucket key ascending
+   * (`yyyy-MM` sorts chronologically) instead of by the first metric, which
+   * put March 2018 below June 2019 whenever it made less money.
+   */
+  natural?: boolean;
+  /** How a bucket key reads on screen, when that differs from the key. */
+  labelOf?: (bucket: string) => string;
+  /**
    * True when one trade can land in several buckets (tags, insights).
    * Consumers MUST surface this: with a multi-value dimension the rows no
    * longer sum to the portfolio total, and a reader who does not know that
@@ -241,7 +250,8 @@ export const R_MULTIPLE_EDGES = [
   { min: 0, label: "0R … 1R" },
   { min: 1, label: "1R … 2R" },
   { min: 2, label: "2R … 3R" },
-  { min: 3, label: "> 3R" },
+  // "≥", not ">": the bucket starts AT 3R, so a trade of exactly 3R lands here.
+  { min: 3, label: "≥ 3R" },
 ] as const;
 
 const SIZE_EDGES = [
@@ -252,21 +262,23 @@ const SIZE_EDGES = [
   { min: 10, label: "> 10" },
 ] as const;
 
+/** Monday first, as every week in the journal starts (`closeWeek`, the weekly review). */
 const WEEKDAYS = [
-  "Sunday",
   "Monday",
   "Tuesday",
   "Wednesday",
   "Thursday",
   "Friday",
   "Saturday",
+  "Sunday",
 ] as const;
 
 /**
  * A weekday name from a `yyyy-MM-dd` key, without resolving the timezone again.
  *
  * Delegates to `isoWeekdayOfDayKey`, which returns ISO numbering, 1 = Monday …
- * 7 = Sunday. `WEEKDAYS` starts on Sunday, so `iso % 7` maps 7 → 0.
+ * 7 = Sunday — the same numbering `WEEKDAYS` is written in, so the index is
+ * `iso - 1`.
  *
  * This used to hold its own `new Date(...Z).getUTCDay()` — correct, but a
  * second implementation of the same calendar arithmetic, on a different
@@ -275,7 +287,25 @@ const WEEKDAYS = [
  */
 function weekdayOf(dayKey: string): string | null {
   const iso = isoWeekdayOfDayKey(dayKey);
-  return iso === 0 ? null : WEEKDAYS[iso % 7];
+  return iso === 0 ? null : WEEKDAYS[iso - 1];
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** `2018-03` → `Mar 2018`. Anything else is shown as it is. */
+function monthLabel(bucket: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(bucket);
+  const name = m ? MONTHS[Number(m[2]) - 1] : undefined;
+  return m && name ? `${name} ${m[1]}` : bucket;
+}
+
+/**
+ * How a bucket reads on screen: the dimension's own label, and "(none)" for a
+ * trade that has no value — "—" reads as a missing number, not as a group.
+ */
+export function bucketLabel(dim: Dimension | undefined, bucket: string): string {
+  if (bucket === EMPTY_BUCKET) return "(none)";
+  return dim?.labelOf ? dim.labelOf(bucket) : bucket;
 }
 
 // --- trade columns ---------------------------------------------------------
@@ -286,12 +316,18 @@ const tradeDimensions: Dimension[] = [
     key: "direction",
     label: "Direction",
     group: "trade",
-    order: ["Long", "Short"],
-    valueOf: (t) => (isShortDirection(str(t, "direction")) ? "Short" : "Long"),
+    order: ["Long", "Short", EMPTY_BUCKET],
+    // A trade with no direction recorded is "—", not "Long": defaulting it to
+    // Long credited its result to longs without anyone having said so.
+    valueOf: (t) => {
+      const d = str(t, "direction");
+      if (!d) return EMPTY_BUCKET;
+      return isShortDirection(d) ? "Short" : "Long";
+    },
   },
   {
     key: "setup_grade",
-    label: "Setup Grade",
+    label: "Setup grade",
     group: "trade",
     listKey: "setup_grade",
     // The old `column()` helper set no order, so grades sorted by whichever
@@ -313,13 +349,15 @@ const tradeDimensions: Dimension[] = [
   // `result` is gone: it was a manual Win/Loss/Breakeven select that duplicated
   // the derived `outcome` dimension below, and could contradict it without any
   // report noticing. Group by "Ishod" instead.
-  column("exit_reason", "Exit Reason", "exit_reason"),
+  column("exit_reason", "Exit reason", "exit_reason"),
   // `text[]` since migration `20260819120000_mistake_multi` — a trade with two
   // mistakes stands in both rows, so the rows do NOT sum to the total trade
   // count. The same holds for the tags below, and `tagColumn` is what says so.
   tagColumn("mistake", "Mistake"),
-  column("miss_reason", "Miss reason", "miss_reason"),
-  column("status", "Status"),
+  // No `status` or `miss_reason`: a report counts closed trades only
+  // (`toRealized`), so status could only ever read "closed" and a missed trade,
+  // the one that carries a miss reason, never reaches it. `NOT_IN_REPORTS` below
+  // keeps their field definitions from bringing them back as custom fields.
   {
     // How well the trade was PLAYED, 1–5, entered after the exit.
     //
@@ -337,11 +375,11 @@ const tradeDimensions: Dimension[] = [
       return typeof v === "number" && v >= 1 && v <= 5 ? String(v) : null;
     },
   },
-  tagColumn("technical_tags", "Technical Tags"),
+  tagColumn("technical_tags", "Technical tags"),
   // Kept alongside the `emotion` / `discipline` split (see `tagSplitDimensions`)
   // rather than replaced by it: this is the only dimension that still shows a
   // free-typed tag belonging to no option list.
-  tagColumn("psychology_tags", "Psychology Tags (all)"),
+  tagColumn("psychology_tags", "Psychology tags (all)"),
   {
     key: "account",
     label: "Account",
@@ -391,6 +429,8 @@ const derivedDimensions: Dimension[] = [
     key: "month",
     label: "Month",
     group: "derived",
+    natural: true,
+    labelOf: monthLabel,
     valueOf: (t) => (t.closeDay ? t.closeDay.slice(0, 7) : null),
   },
   {
@@ -624,12 +664,18 @@ export function getDimension(key: string): Dimension | undefined {
  * report, and `setup_grade` derives the grade rather than reading the typed
  * letter. A definition row exists to make the category configurable on the
  * FORM; how it groups in a report is knowledge this file already has.
+ *
+ * Also except the fields a report cannot group on: it counts closed trades
+ * only, and `miss_reason` is written on MISSED trades, so it could only ever
+ * show one empty row.
  */
+const NOT_IN_REPORTS = new Set(["miss_reason", "status"]);
+
 export function customFieldDimensions(
   defs: readonly { key: string; label: string; field_type: string; list_key: string | null }[],
 ): Dimension[] {
   return defs
-    .filter((def) => !byKey.has(def.key))
+    .filter((def) => !byKey.has(def.key) && !NOT_IN_REPORTS.has(def.key))
     .map((def) => ({
       key: def.key,
       label: def.label,

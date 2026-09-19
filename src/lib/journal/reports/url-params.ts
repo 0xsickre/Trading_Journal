@@ -16,14 +16,17 @@
  */
 
 import type { PnlMode } from "../analytics";
-import { VIEW_MODES, type ViewMode } from "../units";
 import { DEFAULT_MIN_SAMPLE } from "./engine";
 
-const VIEW_MODE_SET = new Set<string>(VIEW_MODES.map((m) => m.value));
-
-/** A `view` outside the seven known modes falls back to dollars. */
-export function asViewMode(raw: string | null | undefined): ViewMode {
-  return raw && VIEW_MODE_SET.has(raw) ? (raw as ViewMode) : "dollars";
+/**
+ * Money in the account's currency, or as a percentage of equity — the two
+ * units a report across many instruments can honestly show. R, points, ticks
+ * and pips need one instrument and a per-trade risk, which a report has not
+ * got; their buttons only ever sat there disabled. Hiding amounts is a separate
+ * switch (`hide=1`), not a unit.
+ */
+export function asReportView(raw: string | null | undefined): "dollars" | "percentage" {
+  return raw === "percentage" ? "percentage" : "dollars";
 }
 
 /**
@@ -39,9 +42,8 @@ export function asPnlBasis(raw: string | null | undefined): PnlMode {
   return raw === "gross" ? "gross" : "net";
 }
 
-export function asChartType(raw: string | null | undefined): "bar" | "line" {
-  return raw === "line" ? "line" : "bar";
-}
+/** The thresholds the picker offers. */
+export const MIN_SAMPLE_OPTIONS = [1, 3, 5, 10, 20] as const;
 
 /**
  * Small-sample threshold.
@@ -54,12 +56,16 @@ export function asChartType(raw: string | null | undefined): "bar" | "line" {
  * this whole engine is built to avoid". A typo in a bookmarked URL turned it off
  * with nothing on screen to say so.
  *
- * Floored at 1, not 0: a threshold of zero admits every bucket, which is
- * indistinguishable from the bug. Truncated rather than rounded so `?min=2.9`
- * cannot quietly become a stricter filter than the number in the URL.
+ * Snapped DOWN to one of `MIN_SAMPLE_OPTIONS`, so the picker always shows what
+ * is in force (`?min=7` left it blank) and a hand-edited number never becomes a
+ * stricter filter than the one in the URL. Floored at 1: a threshold of zero
+ * admits every bucket, which is indistinguishable from the bug.
  */
 export function asMinSample(raw: string | null | undefined): number {
   if (raw == null || raw === "") return DEFAULT_MIN_SAMPLE;
   const n = Number(raw);
-  return Number.isFinite(n) ? Math.max(1, Math.floor(n)) : DEFAULT_MIN_SAMPLE;
+  if (!Number.isFinite(n)) return DEFAULT_MIN_SAMPLE;
+  let out: number = MIN_SAMPLE_OPTIONS[0];
+  for (const o of MIN_SAMPLE_OPTIONS) if (o <= n) out = o;
+  return out;
 }

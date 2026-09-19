@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  asChartType,
-  asMinSample,
-  asPnlBasis,
-  asViewMode,
-} from "./url-params";
+import { asMinSample, asPnlBasis, asReportView, MIN_SAMPLE_OPTIONS } from "./url-params";
 import { DEFAULT_MIN_SAMPLE } from "./engine";
-import { VIEW_MODES } from "../units";
 
 describe("asMinSample", () => {
   // The regression that matters most in this file. `Number("abc")` is NaN and
@@ -35,21 +29,22 @@ describe("asMinSample", () => {
     expect(asMinSample("-7")).toBe(1);
   });
 
-  it("truncates rather than rounds", () => {
-    // `?min=2.9` must not silently become a STRICTER filter than the URL says.
-    expect(asMinSample("2.9")).toBe(2);
-    expect(asMinSample("1.2")).toBe(1);
+  it("snaps down to an offered threshold, so the picker shows what is in force", () => {
+    // `?min=7` used to leave the picker blank. Down, never up: a hand-edited
+    // number must not become a STRICTER filter than the URL says.
+    expect(asMinSample("7")).toBe(5);
+    expect(asMinSample("2.9")).toBe(1);
+    expect(asMinSample("999")).toBe(20);
+    for (const o of MIN_SAMPLE_OPTIONS) expect(asMinSample(String(o))).toBe(o);
   });
 });
 
-describe("asViewMode", () => {
-  it("accepts every mode the UI offers", () => {
-    for (const m of VIEW_MODES) expect(asViewMode(m.value)).toBe(m.value);
-  });
-
-  it("falls back to dollars for anything else", () => {
-    for (const junk of ["", "Dollars", "euros", "PRIVACY", null, undefined]) {
-      expect(asViewMode(junk)).toBe("dollars");
+describe("asReportView", () => {
+  it("is money unless the URL asks for a percentage", () => {
+    expect(asReportView("percentage")).toBe("percentage");
+    // The units a cross-instrument report cannot show fall back to money.
+    for (const v of ["", "dollars", "r", "pips", "privacy", "Percentage", null, undefined]) {
+      expect(asReportView(v)).toBe("dollars");
     }
   });
 });
@@ -65,15 +60,6 @@ describe("asPnlBasis", () => {
     // The safe direction is the one the UI shows by default.
     for (const v of ["net", "Net", "NET", "Gross", "", "x", null, undefined]) {
       expect(asPnlBasis(v)).toBe("net");
-    }
-  });
-});
-
-describe("asChartType", () => {
-  it("reads line only when asked, bar otherwise", () => {
-    expect(asChartType("line")).toBe("line");
-    for (const v of ["bar", "Line", "", "pie", null, undefined]) {
-      expect(asChartType(v)).toBe("bar");
     }
   });
 });

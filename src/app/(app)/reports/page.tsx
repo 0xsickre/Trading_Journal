@@ -11,6 +11,7 @@ import { getPlaybooks, getPositionRules } from "@/lib/journal/playbooks";
 import { ReportsWorkbench } from "@/components/journal/reports/reports-workbench";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
+import { ReportsSkeleton } from "@/components/journal/reports/reports-skeleton";
 
 export default async function ReportsPage() {
   // `tj_position_rules` is drained ONCE, and the per-rule counts are derived
@@ -67,12 +68,12 @@ export default async function ReportsPage() {
     <div className="space-y-5">
       <PageHeader
         title="Reports"
-        description="Group by anything, cross it with anything. Every number carries the sample it rests on."
+        description="How each group of your trades did — by setup, instrument, day or any tag."
       />
 
       {/* useSearchParams needs a Suspense boundary to keep the route from
           opting the whole page out of static rendering. */}
-      <Suspense fallback={null}>
+      <Suspense fallback={<ReportsSkeleton />}>
         <ReportsWorkbench
           trades={trades as TradeRow[]}
           accounts={accounts}

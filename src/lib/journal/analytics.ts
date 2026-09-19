@@ -84,6 +84,14 @@ export type Stats = {
   expectancy: number;
   /** How many trades the expectancy is based on. */
   expectancySample: number;
+  /**
+   * How many trades carry an R, and how many winners / losers among them. The
+   * R averages above read 0 when these are 0; a consumer that must show "—"
+   * rather than a zero that looks measured (the reports catalogue) reads these.
+   */
+  rSample: number;
+  winRSample: number;
+  lossRSample: number;
   best: number;
   worst: number;
   maxWinStreak: number;
@@ -256,6 +264,9 @@ export function computeStats(
     profitFactor,
     expectancy,
     expectancySample: rDecided,
+    rSample: rCount,
+    winRSample: winRCount,
+    lossRSample: lossRCount,
     best: count ? best : 0,
     worst: count ? worst : 0,
     maxWinStreak: maxWin,
