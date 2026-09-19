@@ -1,5 +1,10 @@
 "use server";
 
+import { after } from "next/server";
+import {
+  fillExcursionsFromFeed,
+  type ExcursionFillReport,
+} from "@/lib/journal/excursion-fill";
 import { revalidateOptions } from "@/lib/journal/revalidate";
 import { createClient } from "@/lib/supabase/server";
 import { RESERVED_KEYS } from "@/lib/journal/reserved-keys";
@@ -734,6 +739,7 @@ export async function updateAccount(
   patch: {
     name?: string;
     broker?: string | null;
+    account_kind?: "trading" | "backtest";
     currency?: string;
     starting_balance?: number;
     default_asset_class?: string | null;
@@ -835,7 +841,37 @@ export async function updateAccount(
   const { error } = await supabase.from("tj_accounts").update(patch).eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidateAll();
+  if (patch.account_kind === "backtest") {
+    after(async () => {
+      try {
+        await fillExcursionsFromFeed({ accountId: id });
+        revalidateAll();
+      } catch {
+        // The feed being down costs the automatic MAE/MFE, not the save.
+      }
+    });
+  }
   return { ok: true };
+}
+
+/**
+ * Fill MAE/MFE for every closed trade on a backtest account, now, and say what
+ * happened to each one that was not filled.
+ *
+ * The automatic fill runs after every import and every save; this is the same
+ * work on demand, for the trades that were already there when the account was
+ * marked as a backtest.
+ */
+export async function fillAccountExcursions(
+  accountId: string,
+): Promise<{ ok: true; report: ExcursionFillReport } | { ok: false; error: string }> {
+  try {
+    const report = await fillExcursionsFromFeed({ accountId });
+    revalidateAll();
+    return { ok: true, report };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 /** Restart the FTMO challenge: trades before now stop counting toward breaches. */

@@ -175,6 +175,19 @@ export function ImportWizard({
   );
   const account = accounts.find((a) => a.id === accountId) ?? null;
   const tz = account?.timezone ?? DEFAULT_TZ;
+  /**
+   * The zone the TradingView chart was in, which is NOT the account's.
+   *
+   * The export writes the chart's wall clock with no offset. It used to be read
+   * in the account's zone, and a chart on New York time imported into a
+   * Belgrade account put every fill six hours early — checked against the
+   * market's own 1-minute candles, 1 of 7 fills landed in a bar that traded its
+   * price under that reading, and 7 of 7 under New York. New York is the
+   * default because it is where TradingView users on US instruments and on
+   * forex most often leave the chart; it is a select because it is a fact
+   * about the chart that only the trader knows.
+   */
+  const [fileTz, setFileTz] = useState("America/New_York");
 
   const [filename, setFilename] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
@@ -368,7 +381,7 @@ export function ImportWizard({
   function buildItems() {
     if (tv) {
       const flat = tradingViewRows();
-      if (flat) buildFrom(flat.rows, TV_MAP, TV_ISSUE, flat.plans);
+      if (flat) buildFrom(flat.rows, TV_MAP, TV_ISSUE, flat.plans, fileTz);
       return;
     }
     for (const req of ["instrument", "direction", "qty", "entry_price", "entry_time"] as Canonical[]) {
@@ -385,6 +398,8 @@ export function ImportWizard({
     map: Record<Canonical, string>,
     issueCol: string | null,
     plans: FillPlan[] | null,
+    /** The zone the file's wall clock is in — the account's for a statement. */
+    timeZone: string = tz,
   ) {
     const built: (ImportItem & { _diff?: string[]; _candidates?: MatchCandidate[] })[] =
       rows.map((row, index) => {
@@ -407,10 +422,10 @@ export function ImportWizard({
 
       const qty = read(map.qty, "qty") ?? 0;
       const entryPrice = read(map.entry_price, "entry price");
-      const entryTime = parseImportTime(row[map.entry_time], tz);
+      const entryTime = parseImportTime(row[map.entry_time], timeZone);
       if (!entryTime && row[map.entry_time]?.trim()) unreadable.push("entry time");
       const exitPrice = map.exit_price ? read(map.exit_price, "exit price") : null;
-      const exitTime = map.exit_time ? parseImportTime(row[map.exit_time], tz) : null;
+      const exitTime = map.exit_time ? parseImportTime(row[map.exit_time], timeZone) : null;
       if (map.exit_time && !exitTime && row[map.exit_time]?.trim())
         unreadable.push("exit time");
       const fee = (map.fee ? read(map.fee, "fee") : null) ?? 0;
@@ -446,7 +461,7 @@ export function ImportWizard({
           });
         }
         for (const leg of plan.exits) {
-          const at = parseImportTime(leg.time, tz);
+          const at = parseImportTime(leg.time, timeZone);
           if (!at) {
             unreadable.push("exit time");
             continue;
@@ -759,9 +774,30 @@ export function ImportWizard({
                     trade, and the size is converted to lots and checked against each
                     trade&apos;s own P&amp;L.
                   </p>
-                  <p>
-                    Times are read as <b>{tz.replace("_", " ")}</b> wall-clock — the
-                    chart&apos;s timezone in TradingView must be the same.
+                </div>
+                <div className="max-w-xs space-y-1">
+                  <label className="text-xs text-muted-foreground">
+                    Timezone of the TradingView chart
+                  </label>
+                  <Select value={fileTz} onValueChange={setFileTz}>
+                    <SelectTrigger aria-label="Timezone of the TradingView chart">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from(
+                        new Set(["America/New_York", "UTC", "Europe/London", tz]),
+                      ).map((zone) => (
+                        <SelectItem key={zone} value={zone}>
+                          {zone.replace("_", " ")}
+                          {zone === tz ? " (account)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    The export has no timezone in it — pick the one set at the
+                    bottom-right of the chart. Times are shown back in the
+                    account&apos;s zone.
                   </p>
                 </div>
                 <div className="flex justify-end">

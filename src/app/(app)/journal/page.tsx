@@ -8,6 +8,14 @@ import { JournalGrid } from "@/components/journal/journal-grid";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
 
+/**
+ * Server actions on this page may fill MAE/MFE from Dukascopy after they answer
+ * (`fillExcursionsFromFeed`, run through `after`). That work lives inside this
+ * route's time limit, and the platform default of 10 s is short for a week of
+ * candle files; 60 s is the Hobby plan's ceiling.
+ */
+export const maxDuration = 60;
+
 export default async function JournalPage() {
   // Answers first: `getPlaybooks` needs them to report per-rule statistics, and
   // the grid needs both to derive the setup grade. Same two-step the dashboard

@@ -9,6 +9,14 @@ import {
 import { ImportHistory } from "@/components/journal/import-history";
 import { PageHeader } from "@/components/app/page-header";
 
+/**
+ * Server actions on this page may fill MAE/MFE from Dukascopy after they answer
+ * (`fillExcursionsFromFeed`, run through `after`). That work lives inside this
+ * route's time limit, and the platform default of 10 s is short for a week of
+ * candle files; 60 s is the Hobby plan's ceiling.
+ */
+export const maxDuration = 60;
+
 export default async function ImportPage() {
   const [accounts, trades, batches, instruments] = await Promise.all([
     getAccounts(),

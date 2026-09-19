@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   user_id                     uuid        NOT NULL DEFAULT auth.uid(),
   name                        text        NOT NULL,
   broker                      text,
+  -- trading | backtest — odakle dolazi automatski MAE/MFE (20260919100000).
+  account_kind                text        NOT NULL DEFAULT 'trading',
   currency                    text        NOT NULL DEFAULT 'USD',
   starting_balance            numeric     NOT NULL DEFAULT 0,
   default_asset_class         text,
@@ -156,6 +158,9 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- Bruto rezultat prepisan sa brokerovog izvoda umesto izvedenog iz cena
   -- (20260815210613). Vidi `money_overridden` u tj_position_stats.
   gross_pnl_override   numeric,
+  -- Ko je upisao MAE/MFE: manual | dukascopy | mt5. Ručno se nikad ne gazi
+  -- (20260919100000).
+  excursion_source     text,
   CONSTRAINT tj_positions_pkey PRIMARY KEY (id),
   CONSTRAINT tj_positions_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,

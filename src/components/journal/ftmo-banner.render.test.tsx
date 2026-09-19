@@ -4,6 +4,13 @@ import { FtmoBanner } from "./ftmo-banner";
 import type { Account } from "@/lib/journal/types";
 import type { FtmoResult } from "@/lib/journal/ftmo";
 
+// `FtmoBanner` resets a challenge through a Settings action. Mocked so a render
+// test never loads the real actions module — and through it the Supabase server
+// client and the Dukascopy fetch chain.
+vi.mock("@/app/(app)/settings/actions", () => ({
+  resetFtmoChallenge: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
 // No `AppRouterContext` exists in jsdom, and `useRouter()` throws an invariant
 // without one. The reset button's `router.refresh()` isn't under test here —
 // the server action it calls is stubbed by the `server-only` alias anyway —

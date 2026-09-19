@@ -18,7 +18,7 @@ purpose — an applied migration is never edited here, and the comment inside on
 record of the day it was written.
 
 **The interface is deliberately half-and-half, and the line is a clean one.** At least 126 of the
-3,059 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+3,097 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into:
 
 | Surface | Serbian strings |
@@ -125,7 +125,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,381 tests across 143 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,401 tests across 144 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -239,7 +239,7 @@ would be erased by an unrelated save.
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
-| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments, Accounts (incl. FTMO), Deposits / withdrawals. Account deletion and reset live under Accounts |
+| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments, Accounts (incl. FTMO, and the account's type — trading or backtest, which decides where MAE/MFE comes from), Deposits / withdrawals. Account deletion and reset live under Accounts |
 | `/login` | Supabase auth |
 
 ---
@@ -781,7 +781,14 @@ produce a confidently wrong trade through the generic mapping, and each is handl
   figure found.
 
 The symbol exists only in the file name (`…_OANDA_XCUUSD_2026-09-18_….xlsx`), so a renamed file is
-refused. Times are the chart's wall clock and are read in the account's zone.
+refused.
+
+**The file's times are the CHART's wall clock, not the account's**, and the export says nothing about
+which zone that was — so the review asks, defaulting to New York. It used to read them in the
+account's zone, and a chart on New York time imported into a Belgrade account put every fill six
+hours early. That was found by checking each fill against the market's own 1-minute candles: under
+the Belgrade reading 1 of 7 fills landed in a bar that traded its price, under New York 7 of 7. The
+seven fills already imported that way were corrected by re-reading the same wall clock as New York.
 
 TradingView's favorable/adverse excursion is **not** imported. It is money net of the entry
 commission and floored at zero, so no price can be recovered from it, and MAE/MFE are stored as
@@ -1006,18 +1013,42 @@ container does not have. It stays a later option, not an oversight.
 | Economic calendar | Lives in the vault repo |
 | Running P&L curve per trade | Needs a price feed. Consequence: "most time in drawdown" is off the table |
 
-**Blocked, not rejected:** MAE/MFE **from historical candles** (Phase 8B). Today every MAE/MFE in the
-journal is typed by hand, on any trade that has one, and the fields carry nothing else.
+**Half built, half waiting:** MAE/MFE **from historical candles** (Phase 8B). Where it comes from
+depends on the account's **type**, set in Settings → Accounts:
 
-The scanning logic and the interval choice are written and tested — `excursion-scan.ts` picks 1m
-through 1h by holding time, and a candle only counts if it fits entirely inside the trade's window.
-It takes candles and never cared which broker they came from. **What is missing is the feed, and
-which feed it will be is now an open question.** The cTrader Open API was the answer while a cTrader
-bridge existed; with the move to MT4/MT5 that answer is gone, and nothing has replaced it yet. The
-candidates worth investigating, none of them chosen: an MT5 terminal export of the minutes around each
-trade, an Expert Advisor that records the extremes while a position is open, or any third-party candle
-API for the handful of instruments actually traded. Recorded here rather than left implicit, because
-`max_drawdown_price` and `max_profit_price` will otherwise look like fields somebody forgot to fill.
+| Account type | MAE/MFE source | State |
+|---|---|---|
+| **Backtest** — trades replayed on TradingView | Dukascopy 1-minute candles | **Automatic**: after every import, save and merge, and on demand with *Fill MAE/MFE now* |
+| **Trading** — live FTMO account | The broker's own MT5 terminal | **Waiting for MT5**; until then typed by hand |
+
+**Typed always wins.** `tj_positions.excursion_source` records who wrote the two prices — `manual`,
+`dukascopy` or `mt5`. The automatic fill writes only where the prices are empty or were written
+automatically before, and never over a value the trader typed; clearing both hands a trade back to
+it. The two XAUUSD trades typed by hand before this existed came within 15 cents of what the feed
+computes — the difference between two brokers' gold — and kept their typed values.
+
+**Why Dukascopy.** Measured, from every source this project has keys or access for: FMP answered HTTP
+402 on both keys for 1-minute history; Twelve Data's free tier had recent gold only; Yahoo keeps
+1-minute bars for seven days and serves futures rather than CFDs. Dukascopy had XAUUSD, the Nasdaq
+(`USATECHIDXUSD`) and copper (`COPPERCMDUSD`) back to 2018, free and without a key, one ~15 KB file per
+day (`dukascopy.ts`, `dukascopy-fetch.ts`).
+
+**Why it is not just "the low and the high between entry and exit"** (`excursion-feed.ts`):
+
+- **The feed is not the broker.** The difference — the basis — is measured from the trade itself:
+  every fill is a price the market printed inside its bar, so the basis has to put each fill inside
+  what the feed traded then. Of the range that allows, the one closest to zero is used, because two
+  brokers quote the same market until the fills prove otherwise.
+- **A fill time is often a bar, not a minute.** TradingView stamps the bar a limit filled in; the
+  scan starts at the first minute that traded the fill price, not at the bar's open.
+- **Two refusals instead of a confident wrong number.** A basis larger than two brokers can differ by
+  (a dollar on gold) is a wrong TIME, not a difference — the same trade read six hours early "fit" at
+  $3.13 and is refused with the timezone named. And a basis the fills cannot pin down to within a
+  quarter of the move is refused too: copper on 1-hour bars is, today, until MT5's minute-exact fills
+  make its difference measurable.
+
+Every skipped trade is named with its reason on *Fill MAE/MFE now*. `excursion-scan.ts`, the older
+scanner, is unchanged and still takes candles from anywhere.
 
 ---
 

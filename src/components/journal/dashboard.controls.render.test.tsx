@@ -6,6 +6,13 @@ import { mkTrade } from "@/lib/journal/reports/test-helpers";
 import type { Account, TradeRow } from "@/lib/journal/types";
 import type { RealizedTrade } from "@/lib/journal/analytics";
 
+// `FtmoBanner` resets a challenge through a Settings action. Mocked so a render
+// test never loads the real actions module — and through it the Supabase server
+// client and the Dukascopy fetch chain.
+vi.mock("@/app/(app)/settings/actions", () => ({
+  resetFtmoChallenge: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
 /**
  * THE CONTROLS, NOT JUST THE NUMBERS.
  *

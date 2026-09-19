@@ -1,6 +1,11 @@
-# Faza 8B — automatski MAE/MFE: plan je povučen, pitanje je otvoreno
+# Faza 8B — automatski MAE/MFE: backtest preko Dukascopy, trading preko MT5
 
-**Status na 18.09.2026:** ovaj fajl je do danas sadržao pun plan za **cTrader Open API** (OAuth2,
+**Status na 19.09.2026:** backtest nalozi su rešeni — **Dukascopy 1-minutne sveće**, automatski
+(`dukascopy.ts`, `dukascopy-fetch.ts`, `excursion-feed.ts`, `excursion-fill.ts`; README § „Half built,
+half waiting"). Trading nalozi čekaju **MT5**: paket `MetaTrader5` iz FTMO terminala na ovom računaru
+daje brokerove cene na tick; upisivaće `excursion_source = 'mt5'` kroz isti put.
+
+**Status na 18.09.2026:** ovaj fajl je do tada sadržao pun plan za **cTrader Open API** (OAuth2,
 `tj_ctrader_connections`, Protobuf-preko-TLS adapter, mapiranje simbola i sekvenca posla oko Spotware
 KYC-a). Plan je povučen i ne treba ga oživljavati u tom obliku.
 
@@ -29,5 +34,5 @@ više nije onaj na kom se trguje.
    Najlakše za izvesti, ali cene nisu brokerove, pa MAE/MFE postaje približan — i to mora da piše
    pored broja.
 
-Dok se izvor ne izabere, MAE/MFE ostaje ručni unos. Tako piše i u README § „Blocked, not rejected" i u
+Za trading naloge, dok se MT5 ne poveže, MAE/MFE ostaje ručni unos. Tako piše i u README § „Half built, half waiting" i u
 ROADMAP § Faza 8B, da se prazno polje ne pročita kao nešto što je neko zaboravio da popuni.

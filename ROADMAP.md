@@ -754,7 +754,21 @@ Dva pravila nose svaki broj, oba pinovana testom:
 Vraća se sirovi ekstrem, nikad odsečen na ulaznu cenu — `excursionFromTrade` već svodi ne-adverzni
 MAE na 0 i broji ga kao „nikad nije bio u minusu".
 
-#### Preostalo — polovina B: **izvor MAE/MFE je otvoreno pitanje (MT4/MT5)**
+#### Polovina B — **backtest: Dukascopy (isporučeno 19.09.2026.); trading: MT5 (čeka instalaciju)**
+
+**Odluka posle merenja**, svih izvora kojima projekat ima pristup: FMP (HTTP 402 na oba ključa),
+Twelve Data free (samo skorašnje zlato), Yahoo (1m za 7 dana, futures), Dukascopy (XAUUSD, NAS100,
+bakar, od 2018, besplatno). **Nalog ima tip** (Settings → Accounts): *backtest* ide preko Dukascopy
+minutnih sveća automatski posle svakog uvoza, čuvanja i spajanja; *trading* će ići preko FTMO MT5
+terminala. `excursion_source` je vraćen (manual | dukascopy | mt5) i ručno uvek pobeđuje.
+
+Usput nađena i ispravljena greška u uvozu: TradingView vremena su čitana u zoni NALOGA, a chart je bio
+na NY vremenu — svi fill-ovi šest sati ranije. Uvoz sada pita za zonu charta (podrazumevano NY), a
+sedam već uvezenih fill-ova je ispravljeno i provereno protiv Dukascopy sveća (7/7).
+
+Ostaje: **MT5 za trading naloge**, i bakar na 1h barovima (odbija se dok MT5 ne da fill-ove na minut).
+
+#### Stari tekst — izvor MAE/MFE kao otvoreno pitanje (pre 19.09.2026.)
 
 **Stanje na 18.09.2026:** MAE/MFE se unosi isključivo rukom, na trejdu koji ga ima. Logika koja ih
 računa iz sveća je napisana i testirana (`excursion-scan.ts`: bira 1m–1h prema dužini držanja, sveća
@@ -774,7 +788,7 @@ se broji samo ako cela staje u prozor trejda) i ne zavisi od izvora. **Nedostaje
 3. Treći candle API za nekoliko instrumenata koji se stvarno trguju.
 
 Dok se izvor ne izabere, `max_drawdown_price` i `max_profit_price` su polja koja se popunjavaju rukom
-— to je zapisano i u README § „Blocked, not rejected", da ne izgledaju kao polja koja je neko
+— to je zapisano i u README § „Half built, half waiting", da ne izgledaju kao polja koja je neko
 zaboravio.
 
 Ono što ostaje tačno iz originalnog plana, kad god se izvor izabere: **ručno mora da pobedi

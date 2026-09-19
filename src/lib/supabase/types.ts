@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       tj_accounts: {
         Row: {
+          account_kind: string
           breakeven_from: number
           breakeven_to: number
           breakeven_unit: string
@@ -47,6 +48,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          account_kind?: string
           breakeven_from?: number
           breakeven_to?: number
           breakeven_unit?: string
@@ -78,6 +80,7 @@ export type Database = {
           user_id?: string
         }
         Update: {
+          account_kind?: string
           breakeven_from?: number
           breakeven_to?: number
           breakeven_unit?: string
@@ -1010,6 +1013,7 @@ export type Database = {
           custom: Json
           direction: string | null
           entry_price: number | null
+          excursion_source: string | null
           execution_rating: number | null
           exit_reason: string | null
           fx_rate_at_trade: number | null
@@ -1054,6 +1058,7 @@ export type Database = {
           custom?: Json
           direction?: string | null
           entry_price?: number | null
+          excursion_source?: string | null
           execution_rating?: number | null
           exit_reason?: string | null
           fx_rate_at_trade?: number | null
@@ -1098,6 +1103,7 @@ export type Database = {
           custom?: Json
           direction?: string | null
           entry_price?: number | null
+          excursion_source?: string | null
           execution_rating?: number | null
           exit_reason?: string | null
           fx_rate_at_trade?: number | null

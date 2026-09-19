@@ -1,5 +1,8 @@
 "use server";
 
+import { after } from "next/server";
+import { fillExcursionsFromFeed } from "@/lib/journal/excursion-fill";
+import { excursionSourcePatch } from "@/lib/journal/excursion-source";
 import { revalidatePath } from "next/cache";
 import { revalidateTrades } from "@/lib/journal/revalidate";
 import { createClient } from "@/lib/supabase/server";
@@ -186,6 +189,22 @@ function resolveStatus(
   return patch;
 }
 
+/**
+ * MAE/MFE for a backtest account's closed trade, filled from Dukascopy after
+ * the response — the save does not wait on a public feed. Trading accounts and
+ * typed values are left alone inside `fillExcursionsFromFeed`.
+ */
+function fillExcursionsAfter(positionIds: string[]) {
+  after(async () => {
+    try {
+      await fillExcursionsFromFeed({ positionIds });
+      revalidateTrades();
+    } catch {
+      // A feed that is down costs the trade its automatic MAE/MFE, not the save.
+    }
+  });
+}
+
 export async function createTrade(input: TradeInput) {
   const prep = await prepareTrade(input);
   if (!prep.ok) return prep;
@@ -233,6 +252,7 @@ export async function createTrade(input: TradeInput) {
       ...snapshot,
       ...playbookPatch(input),
       ...scaleOutPatch(input),
+      ...excursionSourcePatch(patch.columns, null),
       source: "manual",
     } as Json,
     p_executions: execs as unknown as Json,
@@ -244,6 +264,7 @@ export async function createTrade(input: TradeInput) {
   }
 
   revalidateTrades();
+  fillExcursionsAfter([String(id)]);
   return { ok: true as const, id };
 }
 
@@ -306,7 +327,7 @@ export async function updateTrade(id: string, input: TradeInput) {
   // not render would be erased.
   const { data: prevPos } = await supabase
     .from("tj_positions")
-    .select("instrument, point_value_at_trade, custom")
+    .select("instrument, point_value_at_trade, custom, max_drawdown_price, max_profit_price")
     .eq("id", id)
     .maybeSingle();
 
@@ -354,6 +375,7 @@ export async function updateTrade(id: string, input: TradeInput) {
       ...playbookPatch(input),
       ...scaleOutPatch(input),
       ...(execs.length > 0 ? { needs_review: false } : {}),
+      ...excursionSourcePatch(patch.columns, prevPos),
     } as Json,
     p_executions: execs as unknown as Json,
     p_rules: ruleRows(input.rule_answers) as unknown as Json,
@@ -362,6 +384,7 @@ export async function updateTrade(id: string, input: TradeInput) {
 
   revalidatePath(`/trades/${id}`);
   revalidateTrades();
+  fillExcursionsAfter([id]);
   return { ok: true as const, id };
 }
 
@@ -506,6 +529,8 @@ export async function mergeTrades(keepId: string, fillsFromId: string) {
   });
   if (error) return { ok: false as const, error: error.message };
   revalidateTrades();
+  // The survivor now carries the imported fills, and its extremes follow them.
+  fillExcursionsAfter([keepId]);
   return { ok: true as const };
 }
 

@@ -61,4 +61,5 @@ export const RESERVED_KEYS = new Set([
   "invalidation",
   "time_stop_days",
   "scale_out_plan",
+  "excursion_source",
 ]);

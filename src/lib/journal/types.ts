@@ -70,6 +70,11 @@ export type Account = {
   id: string;
   name: string;
   broker: string | null;
+  /**
+   * trading = a live account, MAE/MFE from MT5 (not connected yet).
+   * backtest = replayed trades, MAE/MFE filled from Dukascopy candles.
+   */
+  account_kind: "trading" | "backtest";
   currency: string;
   starting_balance: number;
   default_asset_class: string | null;
