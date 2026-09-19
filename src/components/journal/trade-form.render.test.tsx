@@ -43,7 +43,7 @@ vi.mock("@/app/(app)/trades/actions", () => ({
 
 // The form's category drag-reorder saves through a Settings action. Without
 // this mock the REAL actions module loaded — and with it the Supabase server
-// client and the Dukascopy fetch chain, none of which a render test should
+// client, which a render test should
 // touch or be scored against.
 vi.mock("@/app/(app)/settings/actions", () => ({
   reorderCategoriesByKey: vi.fn().mockResolvedValue({ ok: true }),

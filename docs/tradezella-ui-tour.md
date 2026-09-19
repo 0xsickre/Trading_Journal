@@ -526,9 +526,9 @@ uneo. (Dokaz: moje izmišljene CSV cene od 1.087 dale su MAE/MFE od 1.16866/1.17
 tržišne cene EURUSD-a tog dana.) Ručno uneti trejd zato stoji na „Calculating…" — nema šta da se
 poveže.
 
-> **Zašto je ovo najvažniji nalaz za nas**: MAE/MFE kod nas na backtest nalozima dolazi iz Dukascopy
-> minutnih sveća automatski, a na trading nalozima će dolaziti iz MT5 (README §
-> „Half built, half waiting"). Ono što ovde dobijamo je OBLIK PRIKAZA, nezavisno od izvora. Ovaj ih daje gotov, na tri nivoa: traka po trejdu, „best exit" kolone u
+> **Zašto je ovo najvažniji nalaz za nas**: MAE/MFE kod nas na trading nalozima dolazi iz MT5
+> terminala (`scripts/mt5_excursion.py`), a na backtest nalozima se unosi ručno (README §
+> „MAE/MFE comes from MT5 on live accounts"). Ono što ovde dobijamo je OBLIK PRIKAZA, nezavisno od izvora. Ovaj ih daje gotov, na tri nivoa: traka po trejdu, „best exit" kolone u
 > gridu, i agregatna traka po danima.
 
 ## 2. Korisnik upravlja svojim kategorijama (bez izmene koda)
@@ -636,8 +636,8 @@ Ručna oznaka „pregledano", odvojena od postojanja beleške, sa filterom u gri
   poštovanje pravila STVARNO donelo bolji ishod. Naša podela to meri.
 - **Prilagodljiv dashboard** (Layout / Sections) — njihov je fiksan.
 - **Slobodan izbor dimenzije + metrike** u izveštajima — njihov je unapred sastavljen.
-- **MAE/MFE** — kod njih iz rekonstrukcije feed-a; kod nas backtest iz Dukascopy sveća (uz merenje
-  razlike između brokera i odbijanje kad se ne da izmeriti), trading iz MT5 kad bude povezan.
+- **MAE/MFE** — kod njih iz rekonstrukcije feed-a; kod nas trading iz brokerovih MT5 tikova (bid za
+  long, ask za short), backtest ručno.
 
 ---
 

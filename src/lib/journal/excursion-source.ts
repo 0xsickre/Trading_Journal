@@ -1,10 +1,10 @@
 /**
  * Who wrote the MAE/MFE after this save.
  *
- * A value the trader typed or changed is theirs — 'manual' — and the automatic
- * fill never writes over it (`excursion-fill.ts`). Clearing both hands the
- * trade back to the automatic fill. A save that did not touch them says nothing,
- * so an automatic value survives an edit of the thesis.
+ * A value the trader typed or changed is theirs — 'manual' — and the MT5 fill
+ * never writes over it (`scripts/mt5_excursion.py`). Clearing both hands the
+ * trade back to the MT5 fill. A save that did not touch them says nothing, so
+ * an MT5 value survives an edit of the thesis.
  */
 export function excursionSourcePatch(
   columns: Record<string, unknown>,

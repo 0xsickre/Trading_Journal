@@ -36,7 +36,6 @@ import {
   addAccount,
   countAccountUsage,
   deleteAccount,
-  fillAccountExcursions,
 } from "@/app/(app)/settings/actions";
 
 const TIMEZONES = [
@@ -197,7 +196,6 @@ function AccountCard({
   }
   const [name, setName] = useState(account.name);
   const [kind, setKind] = useState<"trading" | "backtest">(account.account_kind ?? "trading");
-  const [filling, startFill] = useTransition();
   const [tz, setTz] = useState(account.timezone);
   const [currency, setCurrency] = useState(account.currency);
   const [balance, setBalance] = useState(String(account.starting_balance));
@@ -301,40 +299,9 @@ function AccountCard({
           </Select>
           <p className="text-xs text-muted-foreground">
             {kind === "backtest"
-              ? "MAE/MFE is filled automatically from Dukascopy 1-minute candles for every closed trade, after each import and save. A value you type yourself is never overwritten."
-              : "MAE/MFE will come from your MT5 terminal. Until MT5 is connected, it is entered by hand."}
+              ? "MAE/MFE is entered by hand on a backtest account."
+              : "MAE/MFE is filled from your MT5 terminal by the MT5 sync script, for every closed trade. A value you type yourself is never overwritten."}
           </p>
-          {account.account_kind === "backtest" && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={filling}
-              onClick={() =>
-                startFill(async () => {
-                  const res = await fillAccountExcursions(account.id);
-                  if (!res.ok) {
-                    toast.error(res.error);
-                    return;
-                  }
-                  const { filled, skipped } = res.report;
-                  toast.success(`MAE/MFE filled on ${filled} trade${filled === 1 ? "" : "s"}`, {
-                    description:
-                      skipped.length > 0
-                        ? skipped
-                            .slice(0, 4)
-                            .map((s) => `${s.tradeNo != null ? `#${s.tradeNo}` : "a trade"}: ${s.reason}`)
-                            .join("\n")
-                        : undefined,
-                    duration: 12_000,
-                  });
-                  router.refresh();
-                })
-              }
-            >
-              {filling ? "Filling MAE/MFE…" : "Fill MAE/MFE now"}
-            </Button>
-          )}
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Currency</Label>

@@ -1,7 +1,5 @@
 "use server";
 
-import { after } from "next/server";
-import { fillExcursionsFromFeed } from "@/lib/journal/excursion-fill";
 import { revalidatePath } from "next/cache";
 import { revalidateTrades } from "@/lib/journal/revalidate";
 import { z } from "zod";
@@ -113,8 +111,6 @@ export async function commitImport(input: CommitInput) {
   // Why each row failed. Swallowing the message left the user staring at
   // "3 failed" with nothing to act on.
   const errors: { row: number; instrument: string | null; error: string }[] = [];
-  // Positions this import wrote fills onto — their MAE/MFE is filled afterwards.
-  const touched: string[] = [];
 
   for (const [index, item] of input.items.entries()) {
     let matchedId = item.matched_position_id;
@@ -252,7 +248,6 @@ export async function commitImport(input: CommitInput) {
       if (outcome === "created") created++;
       else if (outcome === "merged") merged++;
       else skipped++;
-      if ((outcome === "created" || outcome === "merged") && matchedId) touched.push(matchedId);
     } catch (e) {
       failed++;
       // A position inserted moments ago whose fills then failed is not a trade,
@@ -283,19 +278,6 @@ export async function commitImport(input: CommitInput) {
       },
     })
     .eq("id", batch.id);
-
-  // MAE/MFE for the backtest trades this import wrote, after the response: an
-  // import of a hundred trades must not wait on a public feed to say it is done.
-  if (touched.length > 0) {
-    after(async () => {
-      try {
-        await fillExcursionsFromFeed({ positionIds: touched });
-        revalidateTrades();
-      } catch {
-        // The feed being down costs the automatic MAE/MFE, never the import.
-      }
-    });
-  }
 
   revalidatePath("/journal");
   revalidateTrades();

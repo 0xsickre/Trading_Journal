@@ -19,13 +19,11 @@ import type { AccountUsage } from "@/lib/journal/account-usage";
 const deleteAccountMock = vi.fn();
 const countAccountUsageMock = vi.fn();
 const updateAccountMock = vi.fn();
-const fillAccountExcursionsMock = vi.fn();
 vi.mock("@/app/(app)/settings/actions", () => ({
   updateAccount: (...a: unknown[]) => updateAccountMock(...a),
   addAccount: vi.fn(),
   deleteAccount: (...a: unknown[]) => deleteAccountMock(...a),
   countAccountUsage: (...a: unknown[]) => countAccountUsageMock(...a),
-  fillAccountExcursions: (...a: unknown[]) => fillAccountExcursionsMock(...a),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -173,22 +171,14 @@ describe("an empty account is a tidy-up, a full one is a decision", () => {
 });
 
 describe("backtest or trading — where MAE/MFE comes from", () => {
-  it("a trading account says MT5, and offers no feed button", () => {
+  it("a trading account says MT5", () => {
     render(<AccountSettings accounts={[account({ account_kind: "trading" })]} />);
-    expect(screen.getByText(/will come from your MT5 terminal/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Fill MAE\/MFE now/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/filled from your MT5 terminal/)).toBeInTheDocument();
   });
 
-  it("a backtest account says Dukascopy and can fill its trades now", async () => {
-    fillAccountExcursionsMock.mockResolvedValue({
-      ok: true,
-      report: { filled: 3, skipped: [{ tradeNo: 7, instrument: "XCUUSD", reason: "cannot pin down" }] },
-    });
-    const user = userEvent.setup({ delay: null });
+  it("a backtest account says MAE/MFE is typed by hand", () => {
     render(<AccountSettings accounts={[account({ account_kind: "backtest" })]} />);
-    expect(screen.getByText(/filled automatically from Dukascopy/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Fill MAE\/MFE now/ }));
-    expect(fillAccountExcursionsMock).toHaveBeenCalledWith("acc-1");
+    expect(screen.getByText(/entered by hand on a backtest account/)).toBeInTheDocument();
   });
 
   it("the type is saved with the account", async () => {

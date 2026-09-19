@@ -1,9 +1,9 @@
-# Faza 8B — automatski MAE/MFE: backtest preko Dukascopy, trading preko MT5
+# Faza 8B — automatski MAE/MFE: trading preko MT5, backtest ručno
 
-**Status na 19.09.2026:** backtest nalozi su rešeni — **Dukascopy 1-minutne sveće**, automatski
-(`dukascopy.ts`, `dukascopy-fetch.ts`, `excursion-feed.ts`, `excursion-fill.ts`; README § „Half built,
-half waiting"). Trading nalozi čekaju **MT5**: paket `MetaTrader5` iz FTMO terminala na ovom računaru
-daje brokerove cene na tick; upisivaće `excursion_source = 'mt5'` kroz isti put.
+**Status na 19.09.2026 (kraj dana):** trading nalozi dobijaju MAE/MFE iz FTMO MT5 terminala,
+`scripts/mt5_excursion.py` (README § „MAE/MFE comes from MT5 on live accounts"). Backtest nalozi se
+unose ručno. Dukascopy popunjavanje, uvedeno ujutru, uklonjeno je uveče (`20260919140000`), jer feed
+nije broker na kom je backtest rađen.
 
 **Status na 18.09.2026:** ovaj fajl je do tada sadržao pun plan za **cTrader Open API** (OAuth2,
 `tj_ctrader_connections`, Protobuf-preko-TLS adapter, mapiranje simbola i sekvenca posla oko Spotware
@@ -34,5 +34,6 @@ više nije onaj na kom se trguje.
    Najlakše za izvesti, ali cene nisu brokerove, pa MAE/MFE postaje približan — i to mora da piše
    pored broja.
 
-Za trading naloge, dok se MT5 ne poveže, MAE/MFE ostaje ručni unos. Tako piše i u README § „Half built, half waiting" i u
-ROADMAP § Faza 8B, da se prazno polje ne pročita kao nešto što je neko zaboravio da popuni.
+Odgovor na to pitanje (19.09.2026): ni jedan od tri kandidata u tom obliku. Za trading naloge MT5
+terminal se čita direktno, preko Python paketa `MetaTrader5`, bez EA i bez ručnog izvoza. Za backtest
+naloge vrednost unosi trgovac.

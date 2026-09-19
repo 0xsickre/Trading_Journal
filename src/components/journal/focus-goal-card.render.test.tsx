@@ -5,7 +5,7 @@ import { daysOnActiveGoal, type FocusGoal } from "@/lib/journal/focus-goal";
 
 // `FtmoBanner` resets a challenge through a Settings action. Mocked so a render
 // test never loads the real actions module — and through it the Supabase server
-// client and the Dukascopy fetch chain.
+// client.
 vi.mock("@/app/(app)/settings/actions", () => ({
   resetFtmoChallenge: vi.fn().mockResolvedValue({ ok: true }),
 }));

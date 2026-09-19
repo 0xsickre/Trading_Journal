@@ -754,19 +754,25 @@ Dva pravila nose svaki broj, oba pinovana testom:
 Vraća se sirovi ekstrem, nikad odsečen na ulaznu cenu — `excursionFromTrade` već svodi ne-adverzni
 MAE na 0 i broji ga kao „nikad nije bio u minusu".
 
-#### Polovina B — **backtest: Dukascopy (isporučeno 19.09.2026.); trading: MT5 (čeka instalaciju)**
+#### Polovina B — **trading: MT5 (isporučeno 19.09.2026.); backtest: ručni unos**
 
-**Odluka posle merenja**, svih izvora kojima projekat ima pristup: FMP (HTTP 402 na oba ključa),
-Twelve Data free (samo skorašnje zlato), Yahoo (1m za 7 dana, futures), Dukascopy (XAUUSD, NAS100,
-bakar, od 2018, besplatno). **Nalog ima tip** (Settings → Accounts): *backtest* ide preko Dukascopy
-minutnih sveća automatski posle svakog uvoza, čuvanja i spajanja; *trading* će ići preko FTMO MT5
-terminala. `excursion_source` je vraćen (manual | dukascopy | mt5) i ručno uvek pobeđuje.
+**Trading nalozi** dobijaju MAE/MFE iz FTMO MT5 terminala na ovom računaru:
+`scripts/mt5_excursion.py`. Prijavljuje se kao korisnik dnevnika (`JOURNAL_EMAIL`/`JOURNAL_PASSWORD` iz
+`.env.local`, pod RLS-om). Uzima samo cene po simbolu i vremenu, pa broj FTMO naloga nije bitan. Long
+se meri na bid-u, short na ask-u, na tikovima između tika ulaza i tika poslednjeg izlaza. Fill se
+traži među tikovima svog minuta; ako nijedan nije u krugu od 0,05%, trejd se odbija sa razlogom.
+Sat servera je NY+7 i proverava se pre upisa. Jedinice bakra (centi prema dolarima po funti) usklađuju
+se same. Za trejdove starije od istorije tikova koriste se M1 barovi. `excursion_source` je sada
+`manual | mt5`, i ručni unos uvek pobeđuje.
 
-Usput nađena i ispravljena greška u uvozu: TradingView vremena su čitana u zoni NALOGA, a chart je bio
-na NY vremenu — svi fill-ovi šest sati ranije. Uvoz sada pita za zonu charta (podrazumevano NY), a
-sedam već uvezenih fill-ova je ispravljeno i provereno protiv Dukascopy sveća (7/7).
+**Backtest nalozi: MAE/MFE se unosi ručno.** Dukascopy popunjavanje (uvedeno istog dana) je
+**uklonjeno** (`20260919140000`). Feed nije broker na kom je backtest rađen, pa se razlika morala
+pogađati iz fill-ova, a na bakru sa 1h barovima to nije išlo. Jedini trejd koji je popunio (#6)
+zadržava cene, sada kao ručne.
 
-Ostaje: **MT5 za trading naloge**, i bakar na 1h barovima (odbija se dok MT5 ne da fill-ove na minut).
+Ostaje iz tog dana: greška u uvozu je ispravljena. TradingView vremena su čitana u zoni NALOGA, a
+chart je bio na NY vremenu, pa su svi fill-ovi bili šest sati ranije. Uvoz sada pita za zonu charta
+(podrazumevano NY), a sedam već uvezenih fill-ova je ispravljeno.
 
 #### Stari tekst — izvor MAE/MFE kao otvoreno pitanje (pre 19.09.2026.)
 

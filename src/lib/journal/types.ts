@@ -71,8 +71,8 @@ export type Account = {
   name: string;
   broker: string | null;
   /**
-   * trading = a live account, MAE/MFE from MT5 (not connected yet).
-   * backtest = replayed trades, MAE/MFE filled from Dukascopy candles.
+   * trading = a live account, MAE/MFE filled from MT5 (`scripts/mt5_excursion.py`).
+   * backtest = replayed trades, MAE/MFE typed by hand.
    */
   account_kind: "trading" | "backtest";
   currency: string;

@@ -117,6 +117,14 @@ NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 ```
 
+Only the MT5 script (`scripts/mt5_excursion.py`) needs two more, the journal login it signs in with.
+They stay in `.env.local`, which is never committed:
+
+```
+JOURNAL_EMAIL=<your login>
+JOURNAL_PASSWORD=<your password>
+```
+
 | Command | What it does |
 |---|---|
 | `npm run dev` | Development server |
@@ -125,7 +133,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,403 tests across 144 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,390 tests across 144 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -1013,42 +1021,59 @@ container does not have. It stays a later option, not an oversight.
 | Economic calendar | Lives in the vault repo |
 | Running P&L curve per trade | Needs a price feed. Consequence: "most time in drawdown" is off the table |
 
-**Half built, half waiting:** MAE/MFE **from historical candles** (Phase 8B). Where it comes from
-depends on the account's **type**, set in Settings → Accounts:
+**MAE/MFE comes from MT5 on live accounts, and is typed on backtests** (Phase 8B). Which one depends
+on the account's **type**, set in Settings → Accounts:
 
-| Account type | MAE/MFE source | State |
-|---|---|---|
-| **Backtest** — trades replayed on TradingView | Dukascopy 1-minute candles | **Automatic**: after every import, save and merge, and on demand with *Fill MAE/MFE now* |
-| **Trading** — live FTMO account | The broker's own MT5 terminal | **Waiting for MT5**; until then typed by hand |
+| Account type | MAE/MFE source |
+|---|---|
+| **Backtest**: trades replayed on TradingView | Typed by hand |
+| **Trading**: live FTMO account | The broker's own MT5 terminal, via `scripts/mt5_excursion.py` |
 
-**Typed always wins.** `tj_positions.excursion_source` records who wrote the two prices — `manual`,
-`dukascopy` or `mt5`. The automatic fill writes only where the prices are empty or were written
-automatically before, and never over a value the trader typed; clearing both hands a trade back to
-it. The two XAUUSD trades typed by hand before this existed came within 15 cents of what the feed
-computes — the difference between two brokers' gold — and kept their typed values.
+**Typed always wins.** `tj_positions.excursion_source` records who wrote the two prices, `manual` or
+`mt5`. The script writes only where both prices are empty (or, with `--recompute`, where MT5 wrote them
+before), and never over a value the trader typed. Clearing both hands a trade back to it.
 
-**Why Dukascopy.** Measured, from every source this project has keys or access for: FMP answered HTTP
-402 on both keys for 1-minute history; Twelve Data's free tier had recent gold only; Yahoo keeps
-1-minute bars for seven days and serves futures rather than CFDs. Dukascopy had XAUUSD, the Nasdaq
-(`USATECHIDXUSD`) and copper (`COPPERCMDUSD`) back to 2018, free and without a key, one ~15 KB file per
-day (`dukascopy.ts`, `dukascopy-fetch.ts`).
+**Running it.** On the Windows computer with the FTMO MT5 terminal open and logged in to *any* FTMO
+account (only prices by symbol and time are used, so a new trial or challenge needs no change):
 
-**Why it is not just "the low and the high between entry and exit"** (`excursion-feed.ts`):
+```bash
+pip install MetaTrader5 numpy
+python scripts/mt5_excursion.py --dry-run   # compute and print, write nothing
+python scripts/mt5_excursion.py             # fill
+```
 
-- **The feed is not the broker.** The difference — the basis — is measured from the trade itself:
-  every fill is a price the market printed inside its bar, so the basis has to put each fill inside
-  what the feed traded then. Of the range that allows, the one closest to zero is used, because two
-  brokers quote the same market until the fills prove otherwise.
-- **A fill time is often a bar, not a minute.** TradingView stamps the bar a limit filled in; the
-  scan starts at the first minute that traded the fill price, not at the bar's open.
-- **Two refusals instead of a confident wrong number.** A basis larger than two brokers can differ by
-  (a dollar on gold) is a wrong TIME, not a difference — the same trade read six hours early "fit" at
-  $3.13 and is refused with the timezone named. And a basis the fills cannot pin down to within a
-  quarter of the move is refused too: copper on 1-hour bars is, today, until MT5's minute-exact fills
-  make its difference measurable.
+It signs in as the journal's user with `JOURNAL_EMAIL` and `JOURNAL_PASSWORD` from `.env.local`, so
+row-level security applies exactly as in the app, and it never prints a value from that file. It
+places no orders.
 
-Every skipped trade is named with its reason on *Fill MAE/MFE now*. `excursion-scan.ts`, the older
-scanner, is unchanged and still takes candles from anywhere.
+**How a trade is measured:**
+
+- **FTMO's clock is New York + 7 hours** (UTC+3 in summer, UTC+2 in winter). The journal stores UTC, and
+  every request to the terminal is shifted into server time and back. The script checks the rule
+  against the terminal's newest tick before it writes anything: a clock that disagrees means another
+  broker, and nothing is filled.
+- **A long is valued at the bid, a short at the ask.** Those are the prices each could close at, the
+  same way MT5 shows a floating result.
+- **Each fill is found among the ticks.** The script takes the tick whose relevant side (ask when
+  buying, bid when selling) is closest to the fill price, searching the whole minute when the fill is
+  stamped to the minute. If nothing comes within 0.05%, the trade is refused with the reason printed:
+  the time, its zone or the symbol is wrong. Every tick between the entry tick and the last exit tick
+  counts, and so do the fills.
+- **Units are reconciled.** FTMO quotes copper in cents per pound (656.4), TradingView in dollars
+  (6.564). The hundredfold factor is read off the price level, the trade is measured in the terminal's
+  units, and the result is written back in the journal's.
+- **Ticks reach back about two years.** An older trade falls back to 1-minute bars, counting only full
+  minutes strictly inside the trade.
+
+Checked against the terminal's own ticks on XAUUSD, US100.cash and XCUUSD, long and short. The same
+trade shifted six hours is refused on all three.
+
+**Why backtests are typed.** For a while backtest accounts were filled from Dukascopy's free 1-minute
+candles. The feed is not the broker the trades were replayed on, so each trade's difference had to be
+inferred from its own fills. On 1-hour copper bars that could not be done, and it refused more than it
+filled. It was removed on 19.09.2026 (`20260919140000`). The one trade it had filled keeps its prices,
+now marked as typed. `excursion-scan.ts`, the older scanner, is unchanged and still takes candles from
+anywhere.
 
 ---
 
