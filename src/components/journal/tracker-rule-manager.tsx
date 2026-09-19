@@ -59,7 +59,8 @@ function DayToggles({
 }) {
   return (
     <div className="flex shrink-0 gap-0.5">
-      {ISO_WEEKDAYS.map((d) => {
+      {/* Monday to Friday only — nothing is scored at the weekend. */}
+      {ISO_WEEKDAYS.filter((d) => d <= 5).map((d) => {
         const on = days.includes(d);
         return (
           <button

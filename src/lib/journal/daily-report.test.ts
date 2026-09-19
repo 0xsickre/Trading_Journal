@@ -66,6 +66,18 @@ describe("daysOnActiveGoal", () => {
     expect(daysOnActiveGoal(goal, "2026-07-20")).toBe(1);
     expect(daysOnActiveGoal(goal, "2026-07-22")).toBe(3);
   });
+
+  it("counts trading days only — a weekend adds nothing", () => {
+    // Started Monday 20 July 2026. Friday is day 5; Saturday and Sunday stay
+    // at 5; the next Monday is day 6.
+    expect(daysOnActiveGoal(goal, "2026-07-24")).toBe(5);
+    expect(daysOnActiveGoal(goal, "2026-07-26")).toBe(5);
+    expect(daysOnActiveGoal(goal, "2026-07-27")).toBe(6);
+  });
+
+  it("reads at least 1 for a goal set on a weekend", () => {
+    expect(daysOnActiveGoal({ started_at: "2026-07-25T10:00:00Z" }, "2026-07-25")).toBe(1);
+  });
 });
 
 describe("todayInTz", () => {

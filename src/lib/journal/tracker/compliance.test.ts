@@ -749,3 +749,32 @@ describe("an auto rule is scored by its evaluator, never by a checkin", () => {
     expect(d.pct).toBe(100);
   });
 });
+
+describe("the weekend is never scored", () => {
+  // 2026-09-18 is a Friday; 19 and 20 are the weekend; 21 is Monday.
+  const everyDay = rule({ id: "r", active_days: [1, 2, 3, 4, 5, 6, 7] });
+
+  it("a rule saved with Saturday and Sunday still does not apply on them", () => {
+    expect(ruleIsLiveOn(everyDay, "2026-09-18")).toBe(true);
+    expect(ruleIsLiveOn(everyDay, "2026-09-19")).toBe(false);
+    expect(ruleIsLiveOn(everyDay, "2026-09-20")).toBe(false);
+  });
+
+  it("an unanswered weekend neither breaks the streak nor drags the mean", () => {
+    const answered = (d: string) => new Map([[d, checkins([["r", true]])]]);
+    const byDate = new Map([...answered("2026-09-18"), ...answered("2026-09-21")]);
+    const series = computeComplianceSeries(
+      ["2026-09-18", "2026-09-19", "2026-09-20", "2026-09-21"],
+      [everyDay],
+      byDate,
+      () => ({}),
+      "2026-09-22",
+    );
+    expect(series.filter((d) => d.status === "skipped").map((d) => d.date)).toEqual([
+      "2026-09-19",
+      "2026-09-20",
+    ]);
+    expect(computeStreak(series).current).toBe(2);
+    expect(meanCompliance(series)).toBe(100);
+  });
+});

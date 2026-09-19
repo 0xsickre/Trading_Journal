@@ -9,7 +9,7 @@
  * timestamps and why this table has no `is_active` boolean.
  */
 
-import { isoWeekdayOfDayKey } from "../time";
+import { isoWeekdayOfDayKey, isTradingDayKey } from "../time";
 import type { AutoRuleKey, AutoRuleResult } from "./auto-rules";
 import type { TrackerCheckin, TrackerRule } from "../tracker-types";
 
@@ -54,6 +54,10 @@ const dayOf = (iso: string | null): string => (iso ? iso.slice(0, 10) : "");
  * saying why it cannot answer.
  */
 export function ruleIsLiveOn(rule: TrackerRule, day: string): boolean {
+  // Never at the weekend, whatever the rule's own days say: the market is
+  // closed, so a Saturday is not a day that can be kept or broken. A rule
+  // saved with Sat/Sun before this still scores Monday to Friday only.
+  if (!isTradingDayKey(day)) return false;
   const dow = isoWeekdayOfDayKey(day);
   if (!rule.active_days.includes(dow)) return false;
   if (day < dayOf(rule.created_at)) return false;

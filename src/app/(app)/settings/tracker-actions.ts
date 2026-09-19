@@ -55,7 +55,9 @@ function configSchema(autoKey: AutoRuleKey | null) {
 function normalizeDays(days: number[] | undefined): number[] | null {
   if (!days) return null;
   const clean = [...new Set(days.map(Number))]
-    .filter((d) => Number.isInteger(d) && d >= 1 && d <= 7)
+    // Weekdays only: the weekend is never scored (`ruleIsLiveOn`), so storing
+    // Saturday or Sunday would only be a day the picker cannot show.
+    .filter((d) => Number.isInteger(d) && d >= 1 && d <= 5)
     .sort((a, b) => a - b);
   return clean.length > 0 ? clean : null;
 }

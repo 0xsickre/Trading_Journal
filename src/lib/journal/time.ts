@@ -324,6 +324,18 @@ export function isoWeekdayOfDayKey(day: string): number {
 }
 
 /**
+ * Whether a day is a trading day: Monday to Friday.
+ *
+ * The market is closed at the weekend, so nothing is scored on one — no rule,
+ * no streak day, no day on a focus goal. One definition, so the tracker and the
+ * goal counter cannot disagree about which days count.
+ */
+export function isTradingDayKey(day: string): boolean {
+  const dow = isoWeekdayOfDayKey(day);
+  return dow >= 1 && dow <= 5;
+}
+
+/**
  * Shift a `yyyy-MM-dd` key by whole days.
  *
  * String in, string out, with the arithmetic done in UTC — never through
