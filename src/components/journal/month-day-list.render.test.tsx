@@ -38,7 +38,6 @@ const list = (entries: MonthDayEntry[]) =>
     <MonthDayList
       monthKey="2026-04"
       currentMonth="2026-04"
-      monthLabel="April 2026"
       entries={entries}
       currency="USD"
     />,
@@ -49,7 +48,7 @@ describe("MonthDayList", () => {
     list([entry()]);
     const row = screen.getByRole("listitem");
     expect(within(row).getByText(/\+\$250/)).toBeInTheDocument();
-    expect(within(row).getByText("2t")).toBeInTheDocument();
+    expect(within(row).getByText("2 trades")).toBeInTheDocument();
     expect(within(row).getByText("temp 3/5")).toBeInTheDocument();
     expect(within(row).getByText("80%")).toBeInTheDocument();
   });
@@ -102,7 +101,9 @@ describe("MonthDayList", () => {
   });
 
   it("KEEPS view=list ON EVERY MONTH LINK, so the arrows do not drop you back into the grid", () => {
-    list([entry()]);
+    render(
+      <MonthDayList monthKey="2026-03" currentMonth="2026-04" entries={[entry()]} currency="USD" />,
+    );
     for (const name of ["Previous month", "Next month"]) {
       expect(screen.getByRole("link", { name })).toHaveAttribute(
         "href",

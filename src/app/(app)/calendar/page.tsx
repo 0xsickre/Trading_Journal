@@ -25,8 +25,10 @@ import {
   sharedBreakevenRange,
 } from "@/lib/journal/breakeven";
 import { todayInTz } from "@/lib/journal/daily-report";
-import { DEFAULT_TZ, isValidMonthKey, monthLabel } from "@/lib/journal/time";
-import { MonthCalendar } from "@/components/journal/month-calendar";
+import { DEFAULT_TZ, isValidMonthKey } from "@/lib/journal/time";
+import { MonthCalendar, MonthSummaryBar } from "@/components/journal/month-calendar";
+import { sharedCurrency } from "@/lib/journal/format";
+import { summarizeMonth } from "@/lib/journal/calendar-view";
 import { MonthDayList } from "@/components/journal/month-day-list";
 import { CalendarViewToggle } from "@/components/journal/calendar-view-toggle";
 import { PageHeader } from "@/components/app/page-header";
@@ -40,9 +42,9 @@ function indexBy(rows: PeriodRow[]): Map<string, PeriodRow> {
 export default async function CalendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; view?: string }>;
+  searchParams: Promise<{ month?: string; view?: string; account?: string }>;
 }) {
-  const { month: monthParam, view: viewParam } = await searchParams;
+  const { month: monthParam, view: viewParam, account: accountParam } = await searchParams;
   // Anything that is not exactly "list" is the grid. Same direction as
   // `asPnlBasis` in the reports params: fall back to what the screen has always
   // shown, so a truncated or mistyped link opens the familiar view.
@@ -77,9 +79,25 @@ export default async function CalendarPage({
   // including positions that never closed, which `RealizedTrade` excludes.
   const tzOfRow = (row: TradeRow) => tzFor(row.account_id);
 
-  // Mixed currencies have no common unit; the dashboard makes the same call.
-  const currencies = new Set(accounts.map((a) => a.currency));
-  const currency = currencies.size === 1 ? [...currencies][0] : "USD";
+  /**
+   * Which accounts the money covers.
+   *
+   * There was no choice before: every account was summed, and with accounts in
+   * two currencies the total was printed as "USD" — €500 and $300 as $800.
+   * "All accounts" is still the default when the currencies agree; when they
+   * do not, there is no honest pooled figure, so the page opens on the primary
+   * account and says why instead of inventing one.
+   */
+  const pooledCurrency = sharedCurrency(accounts);
+  const requested =
+    accountParam && accounts.some((a) => a.id === accountParam) ? accountParam : "all";
+  const mixedFallback = requested === "all" && accounts.length > 1 && pooledCurrency == null;
+  const accountId = mixedFallback ? (primary?.id ?? "all") : requested;
+  const scopedAccounts =
+    accountId === "all" ? accounts : accounts.filter((a) => a.id === accountId);
+  const currency = sharedCurrency(scopedAccounts) ?? primary?.currency ?? "USD";
+  const scopedTrades =
+    accountId === "all" ? trades : trades.filter((t) => t.account_id === accountId);
 
   /**
    * Breakeven band, only when every account agrees on it.
@@ -92,9 +110,9 @@ export default async function CalendarPage({
    * intended reading, one unit up: a ±50 band that calls a single +30 trade flat
    * says the same about a day that ended +30.
    */
-  const breakevenRange = sharedBreakevenRange(accounts);
+  const breakevenRange = sharedBreakevenRange(scopedAccounts);
 
-  const realized = toRealized(trades);
+  const realized = toRealized(scopedTrades);
 
   // One bucketing function, three granularities — cells, week column and header
   // can never disagree about which day a Friday-night close belongs to.
@@ -157,24 +175,38 @@ export default async function CalendarPage({
     <div className="space-y-5">
       <PageHeader
         title="Calendar"
-        description={
-          <>
-            The month by day, with each week&apos;s total alongside. P&amp;L is
-            attributed to the day it <b>closed</b> — a swing opened Monday and
-            closed Friday sits on Friday, because that is when the money arrived.
-          </>
-        }
+        description="Your month day by day, with weekly and monthly totals."
       />
 
-      <CalendarViewToggle monthKey={monthKey} view={view} />
+      <CalendarViewToggle
+        monthKey={monthKey}
+        view={view}
+        accountId={accountId}
+        accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
+        // "All" only when a pooled figure exists; otherwise it would be offered
+        // and then silently replaced.
+        allowAll={pooledCurrency != null || accounts.length <= 1}
+      />
+
+      {mixedFallback && (
+        <p className="text-xs text-muted-foreground">
+          Your accounts use different currencies, so they cannot be summed —
+          showing {primary?.name ?? "the primary account"}. Pick another account above.
+        </p>
+      )}
+
+      <MonthSummaryBar
+        summary={summarizeMonth(monthKey, byDay, breakevenRange)}
+        currency={currency}
+      />
 
       {view === "list" ? (
         <MonthDayList
           monthKey={monthKey}
           currentMonth={currentMonth}
-          monthLabel={monthLabel(monthKey)}
           entries={entries}
           currency={currency}
+          accountId={accountId}
         />
       ) : (
       <MonthCalendar
@@ -183,10 +215,11 @@ export default async function CalendarPage({
         todayKey={todayKey}
         byDay={byDay}
         byWeek={byWeek}
-        byMonth={byMonth.get(monthKey) ?? null}
+        byMonth={byMonth}
         loggedDays={new Set(loggedDates)}
         breakevenRange={breakevenRange}
         currency={currency}
+        accountId={accountId}
       />
       )}
     </div>

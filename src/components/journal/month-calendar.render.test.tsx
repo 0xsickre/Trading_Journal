@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
-import { MonthCalendar } from "./month-calendar";
+import { MonthCalendar, MonthSummaryBar } from "./month-calendar";
+import { summarizeMonth } from "@/lib/journal/calendar-view";
 import { EXACT_ZERO_RANGE } from "@/lib/journal/breakeven";
 import type { PeriodRow } from "@/lib/journal/period-stats";
 
@@ -49,16 +50,12 @@ const byWeek = new Map<string, PeriodRow>([
   ["2026-03-02", row({ key: "2026-03-02", net: 800, trades: 6, wins: 2, losses: 3, breakeven: 1, r: 0.4, rTrades: 5 })],
 ]);
 
-const byMonth = row({
-  key: "2026-03",
-  net: 800,
-  trades: 6,
-  wins: 2,
-  losses: 3,
-  breakeven: 1,
-  r: 0.4,
-  rTrades: 5,
-});
+const byMonth = new Map<string, PeriodRow>([
+  [
+    "2026-03",
+    row({ key: "2026-03", net: 800, trades: 6, wins: 2, losses: 3, breakeven: 1, r: 0.4, rTrades: 5 }),
+  ],
+]);
 
 function draw(over: Partial<Parameters<typeof MonthCalendar>[0]> = {}) {
   return render(
@@ -91,48 +88,27 @@ function dayCell(container: HTMLElement, dayKey: string): HTMLElement {
 }
 
 describe("zaglavlje meseca", () => {
-  it("prints the month, the net total and the trade and day counts", () => {
+  it("prints the month, and the week total once — the month's totals are in the summary bar", () => {
     draw();
     expect(screen.getByText("March 2026")).toBeInTheDocument();
-    // Twice: the month header and the week column — the book fits entirely in
-    // one week, so the two totals are the same number. That is an assertion in
-    // itself.
+    // The week column and March in the year strip. The card header used to
+    // print it a third time — the figure the summary bar above now carries.
     expect(screen.getAllByText("+$800.00")).toHaveLength(2);
-    // Six trades across three trading days — two different numbers that are
-    // easily confused, so both stand in the same sentence.
-    expect(screen.getByText(/6 trades · 3 days/)).toBeInTheDocument();
-  });
-
-  it("a singular is not written as a plural", () => {
-    draw({
-      byMonth: row({ key: "2026-03", net: 100, trades: 1 }),
-      byDay: new Map([["2026-03-02", row({ key: "2026-03-02", net: 100, trades: 1, wins: 1 })]]),
-    });
-    expect(screen.getByText(/1 trade · 1 day/)).toBeInTheDocument();
-  });
-
-  it("an empty month says zero, not nothing", () => {
-    // A month with no trades is a real state (a holiday, a break), and zero is
-    // the right answer there — unlike a single day, where "no decision" is not
-    // a zero.
-    draw({ byMonth: null, byDay: new Map(), byWeek: new Map() });
-    expect(screen.getByText("$0.00")).toBeInTheDocument();
-    expect(screen.getByText(/0 trades · 0 days/)).toBeInTheDocument();
+    expect(screen.queryByText(/6 trades · 3 days/)).not.toBeInTheDocument();
   });
 
   it("the account's currency is respected", () => {
     draw({ currency: "EUR" });
-    // Twice: once in the month header, once in the week column — the book fits
-    // entirely in one week, so the two totals are the same number.
     expect(screen.getAllByText("+€800.00")).toHaveLength(2);
   });
 
-  it("there is no stepping forward into the future", () => {
+  it("there is no stepping forward into the future — a real disabled button, not a link", () => {
     draw();
-    expect(screen.getByLabelText("Next month")).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
+    const next = screen.getByLabelText("Next month");
+    // It was a link with `disabled` on it, which an anchor ignores: clicking
+    // reloaded the same month.
+    expect(next.tagName).toBe("BUTTON");
+    expect(next).toBeDisabled();
     expect(screen.getByLabelText("Previous month")).toHaveAttribute(
       "href",
       "/calendar?month=2026-02",
@@ -146,6 +122,77 @@ describe("zaglavlje meseca", () => {
       "href",
       "/calendar?month=2026-02",
     );
+  });
+
+  it("carries the account on every month link", () => {
+    draw({ monthKey: "2026-01", accountId: "acc-2" });
+    expect(screen.getByLabelText("Previous month")).toHaveAttribute(
+      "href",
+      "/calendar?month=2025-12&account=acc-2",
+    );
+    expect(screen.getByLabelText("Next month")).toHaveAttribute(
+      "href",
+      "/calendar?month=2026-02&account=acc-2",
+    );
+  });
+});
+
+describe("the month summary bar", () => {
+  it("names the totals a month is read for", () => {
+    render(
+      <MonthSummaryBar
+        summary={summarizeMonth("2026-03", byDay, EXACT_ZERO_RANGE)}
+        currency="USD"
+      />,
+    );
+    const value = (label: string) => screen.getByText(label).parentElement!.children[1].textContent;
+    expect(value("Net P/L")).toBe("+$800.00");
+    expect(value("Trades")).toBe("6");
+    expect(screen.getByText("3 days traded")).toBeInTheDocument();
+    expect(value("Green / red days")).toBe("1 / 1");
+    expect(value("Best day")).toBe("+$1,200.00");
+    expect(value("Worst day")).toBe("-$400.00");
+  });
+
+  it("an empty month says zero for the money and a dash for the extremes", () => {
+    render(
+      <MonthSummaryBar summary={summarizeMonth("2026-05", byDay, EXACT_ZERO_RANGE)} currency="USD" />,
+    );
+    const value = (label: string) => screen.getByText(label).parentElement!.children[1].textContent;
+    expect(value("Net P/L")).toBe("$0.00");
+    expect(value("Best day")).toBe("—");
+    expect(value("Avg per day")).toBe("—");
+  });
+});
+
+describe("the calendar's edges", () => {
+  it("a future day is not a link", () => {
+    const { container } = draw();
+    // Today is the 6th; the 20th has not happened.
+    expect(container.querySelector('a[href="/daily?date=2026-03-20"]')).toBeNull();
+    expect(container.querySelector('a[href="/daily?date=2026-03-05"]')).not.toBeNull();
+  });
+
+  it("a week inside the breakeven band is grey, like its days", () => {
+    const flatWeek = new Map([
+      ["2026-03-02", row({ key: "2026-03-02", net: 8, trades: 1, breakeven: 1 })],
+    ]);
+    draw({ byWeek: flatWeek, breakevenRange: { from: -20, to: 20 } });
+    const cell = screen.getByText("+$8.00");
+    expect(cell.className).toContain("text-muted-foreground");
+  });
+
+  it("the year strip links every past month and none to come", () => {
+    draw({
+      monthKey: "2026-03",
+      currentMonth: "2026-03",
+      byMonth: new Map([["2026-02", row({ key: "2026-02", net: 300, trades: 4 })]]),
+    });
+    expect(screen.getByRole("link", { name: /February 2026, 4 trades/ })).toHaveAttribute(
+      "href",
+      "/calendar?month=2026-02",
+    );
+    expect(screen.queryByRole("link", { name: /April 2026/ })).not.toBeInTheDocument();
   });
 });
 
@@ -229,8 +276,7 @@ describe("switching the metric", () => {
 describe("the week column", () => {
   it("a week carries the sum of its days", () => {
     const { container } = draw();
-    // +1200 − 400 + 0 = +800, the same number as the month's, because the book
-    // fits entirely in one week. It appears exactly twice: header and week.
-    expect(within(container).getAllByText("+$800.00")).toHaveLength(2);
+    // +1200 − 400 + 0 = +800. The year strip shows March's +$800 too.
+    expect(within(container).getAllByText("+$800.00").length).toBeGreaterThanOrEqual(1);
   });
 });

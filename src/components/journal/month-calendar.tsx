@@ -27,6 +27,11 @@ import {
   type BreakevenRange,
 } from "@/lib/journal/breakeven";
 import type { PeriodRow } from "@/lib/journal/period-stats";
+import {
+  calendarHref,
+  yearMonths,
+  type MonthSummary,
+} from "@/lib/journal/calendar-view";
 
 const METRICS = [
   { key: "net", label: "Net P&L" },
@@ -91,6 +96,7 @@ export function MonthCalendar({
   loggedDays,
   breakevenRange,
   currency,
+  accountId = "all",
 }: {
   monthKey: string;
   /** The month "today" falls in, so navigation cannot run into the future. */
@@ -99,66 +105,40 @@ export function MonthCalendar({
   todayKey: string;
   byDay: Map<string, PeriodRow>;
   byWeek: Map<string, PeriodRow>;
-  byMonth: PeriodRow | null;
+  /** Every month's row — the year strip under the grid reads its twelve. */
+  byMonth: Map<string, PeriodRow>;
   /** Days that carry a daily report. */
   loggedDays: Set<string>;
   breakevenRange: BreakevenRange;
   currency: string;
+  /** Carried on every link, so moving month keeps the account. */
+  accountId?: string;
 }) {
   const [metric, setMetric] = useState<MetricKey>("net");
   const days = monthGridDays(monthKey);
   const weeks: string[][] = [];
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
 
-  const atCurrent = monthKey >= currentMonth;
   const prev = addMonthsToMonthKey(monthKey, -1);
   const next = addMonthsToMonthKey(monthKey, 1);
 
-  const monthNet = byMonth?.net ?? 0;
-  const tradingDays = [...byDay.keys()].filter((d) => d.startsWith(monthKey)).length;
+  const href = (month: string) => calendarHref({ month, account: accountId });
 
   return (
     <Card>
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="icon" className="size-8" asChild>
-            <Link href={`/calendar?month=${prev}`} aria-label="Previous month">
-              <ChevronLeft className="size-4" />
-            </Link>
-          </Button>
-          <CardTitle className="min-w-[9rem] text-center text-base capitalize">
-            {monthLabel(monthKey)}
-          </CardTitle>
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8"
-            asChild
-            disabled={atCurrent}
-          >
-            <Link
-              href={`/calendar?month=${atCurrent ? monthKey : next}`}
-              aria-disabled={atCurrent}
-              aria-label="Next month"
-            >
-              <ChevronRight className="size-4" />
-            </Link>
-          </Button>
-          {monthKey !== currentMonth && (
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/calendar">Today</Link>
-            </Button>
-          )}
+          <MonthNav
+            monthKey={monthKey}
+            currentMonth={currentMonth}
+            prevHref={href(prev)}
+            nextHref={href(next)}
+            todayHref={href(currentMonth)}
+          />
 
+          {/* The month's totals live in the summary bar above the card now; they
+              were printed here too, the same figures twice on one screen. */}
           <div className="ml-auto flex flex-wrap items-center gap-3 text-sm">
-            <span className={cn("font-semibold tabular-nums", pnlClass(monthNet))}>
-              {fmtMoney(monthNet, currency, { sign: true })}
-            </span>
-            <span className="text-muted-foreground">
-              {byMonth?.trades ?? 0}{" "}
-              {byMonth?.trades === 1 ? "trade" : "trades"} · {tradingDays}{" "}
-              {tradingDays === 1 ? "day" : "days"}
-            </span>
             <Select
               value={metric}
               onValueChange={(v) => setMetric(v as MetricKey)}
@@ -221,16 +201,200 @@ export function MonthCalendar({
         {/* Grey is only worth explaining once it can actually appear. Without a
             configured band it lands on exactly-zero days, which practically
             never happen on a float that already carries fees. */}
-        {hasBreakevenBand(breakevenRange) && (
-          <p className="mt-3 text-xs text-muted-foreground">
-            Grey = a day inside the account&apos;s breakeven range (
-            {fmtMoney(breakevenRange.from, currency)} to{" "}
-            {fmtMoney(breakevenRange.to, currency)}), so it counts as neither
-            a win nor a loss.
-          </p>
-        )}
+        <p className="mt-3 text-xs text-muted-foreground">
+          P&amp;L sits on the day a trade <b>closed</b> — that is when the money
+          arrived.
+          {/* Grey is only worth explaining once it can actually appear. */}
+          {hasBreakevenBand(breakevenRange) && (
+            <>
+              {" "}Grey = inside the breakeven range (
+              {fmtMoney(breakevenRange.from, currency)} to{" "}
+              {fmtMoney(breakevenRange.to, currency)}), neither a win nor a loss.
+            </>
+          )}
+        </p>
+
+        <YearStrip
+          months={yearMonths(monthKey, byMonth, currentMonth)}
+          selected={monthKey}
+          currency={currency}
+          breakevenRange={breakevenRange}
+          href={href}
+        />
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Previous / next / today. "Next" on the current month is a real disabled
+ * button: it used to be a link with `disabled` on it — which an anchor ignores
+ * — so clicking it reloaded the same month.
+ */
+export function MonthNav({
+  monthKey,
+  currentMonth,
+  prevHref,
+  nextHref,
+  todayHref,
+}: {
+  monthKey: string;
+  currentMonth: string;
+  prevHref: string;
+  nextHref: string;
+  todayHref: string;
+}) {
+  const atCurrent = monthKey >= currentMonth;
+  return (
+    <>
+      <Button variant="outline" size="icon" className="size-8" asChild>
+        <Link href={prevHref} aria-label="Previous month">
+          <ChevronLeft className="size-4" />
+        </Link>
+      </Button>
+      <CardTitle className="min-w-[9rem] text-center text-base capitalize">
+        {monthLabel(monthKey)}
+      </CardTitle>
+      {atCurrent ? (
+        <Button variant="outline" size="icon" className="size-8" disabled aria-label="Next month">
+          <ChevronRight className="size-4" />
+        </Button>
+      ) : (
+        <Button variant="outline" size="icon" className="size-8" asChild>
+          <Link href={nextHref} aria-label="Next month">
+            <ChevronRight className="size-4" />
+          </Link>
+        </Button>
+      )}
+      {monthKey !== currentMonth && (
+        <Button variant="ghost" size="sm" asChild>
+          <Link href={todayHref}>Today</Link>
+        </Button>
+      )}
+    </>
+  );
+}
+
+/**
+ * The month's totals, above either view — what a trader asks of a month
+ * before looking at any single day.
+ */
+export function MonthSummaryBar({
+  summary,
+  currency,
+}: {
+  summary: MonthSummary;
+  currency: string;
+}) {
+  const money = (v: number | null | undefined) =>
+    v == null ? "—" : fmtMoney(v, currency, { sign: true });
+  const cells: { label: string; value: string; cls?: string; sub?: string }[] = [
+    { label: "Net P/L", value: money(summary.net), cls: pnlClass(summary.net) },
+    {
+      label: "Trades",
+      value: String(summary.trades),
+      sub: `${summary.tradingDays} ${summary.tradingDays === 1 ? "day" : "days"} traded`,
+    },
+    {
+      label: "Green / red days",
+      value: `${summary.greenDays} / ${summary.redDays}`,
+    },
+    {
+      label: "Best day",
+      value: money(summary.best?.net),
+      cls: pnlClass(summary.best?.net),
+      sub: summary.best ? dayLabel(summary.best.key) : undefined,
+    },
+    {
+      label: "Worst day",
+      value: money(summary.worst?.net),
+      cls: pnlClass(summary.worst?.net),
+      sub: summary.worst ? dayLabel(summary.worst.key) : undefined,
+    },
+    {
+      label: "Avg per day",
+      value: money(summary.avgPerDay),
+      cls: pnlClass(summary.avgPerDay),
+      sub: "over days traded",
+    },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-3 lg:grid-cols-6">
+      {cells.map((c) => (
+        <div key={c.label} className="bg-card px-3 py-2">
+          <div className="text-xs text-muted-foreground">{c.label}</div>
+          <div className={cn("text-base font-semibold tabular-nums", c.cls)}>{c.value}</div>
+          {c.sub && <div className="text-[11px] text-muted-foreground">{c.sub}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function dayLabel(dayKey: string): string {
+  return `${Number(dayKey.slice(8, 10))} ${monthLabel(dayKey.slice(0, 7)).split(" ")[0].slice(0, 3)}`;
+}
+
+/** The year the month sits in, twelve cells wide — each one a way into its month. */
+function YearStrip({
+  months,
+  selected,
+  currency,
+  breakevenRange,
+  href,
+}: {
+  months: ReturnType<typeof yearMonths>;
+  selected: string;
+  currency: string;
+  breakevenRange: BreakevenRange;
+  href: (month: string) => string;
+}) {
+  return (
+    <div className="mt-4 border-t pt-3">
+      <div className="mb-1.5 text-xs font-medium text-muted-foreground">
+        {selected.slice(0, 4)}
+      </div>
+      <div className="grid grid-cols-4 gap-1 sm:grid-cols-6 lg:grid-cols-12">
+        {months.map(({ month, row, future }) => {
+          const outcome = row ? classifyOutcome(row.net, breakevenRange) : null;
+          const body = (
+            <>
+              <div className="text-[11px] text-muted-foreground">
+                {monthLabel(month).split(" ")[0].slice(0, 3)}
+              </div>
+              <div
+                className={cn(
+                  "text-xs font-medium tabular-nums",
+                  row ? (outcome === "breakeven" ? "text-muted-foreground" : pnlClass(row.net)) : "text-muted-foreground",
+                )}
+              >
+                {row ? fmtMoney(row.net, currency, { sign: true }) : "—"}
+              </div>
+            </>
+          );
+          const cls = cn(
+            "block rounded-md border px-1.5 py-1",
+            month === selected && "ring-1 ring-primary",
+            outcome === "win" && "border-[var(--profit)]/40 bg-[var(--profit)]/5",
+            outcome === "loss" && "border-[var(--loss)]/40 bg-[var(--loss)]/5",
+          );
+          return future ? (
+            <div key={month} className={cn(cls, "opacity-40")}>
+              {body}
+            </div>
+          ) : (
+            <Link
+              key={month}
+              href={href(month)}
+              className={cn(cls, "hover:border-primary")}
+              aria-label={`${monthLabel(month)}${row ? `, ${row.trades} trades` : ""}`}
+            >
+              {body}
+            </Link>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -262,13 +426,19 @@ function WeekRow({
         const inMonth = day.startsWith(monthKey);
         const logged = loggedDays.has(day);
         const outcome = row ? classifyOutcome(row.net, breakevenRange) : null;
+        // A day that has not happened is not a link: `/daily` would quietly
+        // clamp it to today and open a different day than the one clicked.
+        const future = day > todayKey;
+        // Same markup either way; only a real day is a link.
+        const Cell = (future ? "div" : Link) as typeof Link;
         return (
-          <Link
+          <Cell
             key={day}
             href={`/daily?date=${day}`}
             className={cn(
-              "block min-h-[4.5rem] rounded-md border p-1.5 transition-colors hover:border-primary",
-              !inMonth && "opacity-40",
+              "block min-h-[4.5rem] rounded-md border p-1.5 transition-colors",
+              !future && "hover:border-primary",
+              (!inMonth || future) && "opacity-40",
               // Colour follows the OUTCOME, not the raw sign: with a band
               // configured, a day inside it is flat and must not read as a win
               // just because it ended a few cents up.
@@ -309,7 +479,7 @@ function WeekRow({
                 </div>
               </>
             )}
-          </Link>
+          </Cell>
         );
       })}
 
@@ -323,7 +493,11 @@ function WeekRow({
             <div
               className={cn(
                 "text-sm font-medium tabular-nums",
-                pnlClass(weekRow.net),
+                // Same rule as the day cells: a week inside the breakeven band
+                // is flat, not green because it ended a few dollars up.
+                classifyOutcome(weekRow.net, breakevenRange) === "breakeven"
+                  ? "text-muted-foreground"
+                  : pnlClass(weekRow.net),
               )}
             >
               {cellValue(weekRow, metric, currency)}

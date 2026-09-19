@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Lock, NotebookPen } from "lucide-react";
+import { Lock, NotebookPen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { MonthNav } from "@/components/journal/month-calendar";
+import { calendarHref } from "@/lib/journal/calendar-view";
 import { cn } from "@/lib/utils";
 import { fmtMoney, pnlClass } from "@/lib/journal/format";
 import {
@@ -28,57 +29,34 @@ import type { DailyReportListRow } from "@/lib/journal/daily-report-queries";
 export function MonthDayList({
   monthKey,
   currentMonth,
-  monthLabel,
   entries,
   currency,
+  accountId = "all",
 }: {
   monthKey: string;
   /** The month "today" falls in — navigation cannot run past it. */
   currentMonth: string;
-  monthLabel: string;
   entries: readonly MonthDayEntry[];
   currency: string;
+  accountId?: string;
 }) {
-  const atCurrent = monthKey >= currentMonth;
   const prev = addMonthsToMonthKey(monthKey, -1);
   const next = addMonthsToMonthKey(monthKey, 1);
 
-  // Every link keeps `view=list`. Without it the month arrows would quietly
-  // drop the reader back into the grid, which reads as the app losing its place.
-  const href = (m: string) => `/calendar?month=${m}&view=list`;
+  // Every link keeps `view=list` and the account — `calendarHref` carries both.
+  const href = (m: string) => calendarHref({ month: m, view: "list", account: accountId });
 
   return (
     <Card>
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="icon" className="size-8" asChild>
-            <Link href={href(prev)} aria-label="Previous month">
-              <ChevronLeft className="size-4" />
-            </Link>
-          </Button>
-          <CardTitle className="min-w-[9rem] text-center text-base capitalize">
-            {monthLabel}
-          </CardTitle>
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8"
-            asChild
-            disabled={atCurrent}
-          >
-            <Link
-              href={href(atCurrent ? monthKey : next)}
-              aria-disabled={atCurrent}
-              aria-label="Next month"
-            >
-              <ChevronRight className="size-4" />
-            </Link>
-          </Button>
-          {monthKey !== currentMonth && (
-            <Button variant="ghost" size="sm" asChild>
-              <Link href={href(currentMonth)}>Today</Link>
-            </Button>
-          )}
+          <MonthNav
+            monthKey={monthKey}
+            currentMonth={currentMonth}
+            prevHref={href(prev)}
+            nextHref={href(next)}
+            todayHref={href(currentMonth)}
+          />
 
           <span className="ml-auto text-sm text-muted-foreground">
             {entries.length} {entries.length === 1 ? "day" : "days"}
@@ -93,6 +71,19 @@ export function MonthDayList({
           </p>
         ) : (
           <ul className="divide-y">
+            {/* Column names. The row used to be "2t · temp 3/5 · 80%" with
+                nothing saying which figure was which. */}
+            <li
+              aria-hidden
+              className="flex flex-wrap items-center gap-x-4 px-1 pb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+            >
+              <span className="w-28 shrink-0">Day</span>
+              <span className="w-24 shrink-0">P&amp;L</span>
+              <span className="w-16 shrink-0">Trades</span>
+              <span className="w-20 shrink-0">Mental</span>
+              <span className="w-16 shrink-0">Rules</span>
+              <span className="flex-1">Impulses</span>
+            </li>
             {entries.map((e) => (
               <DayRow key={e.day} entry={e} currency={currency} />
             ))}
@@ -134,7 +125,7 @@ function DayRow({
         </span>
 
         <span className="w-16 shrink-0 text-xs text-muted-foreground tabular-nums">
-          {row ? `${row.trades}t` : ""}
+          {row ? `${row.trades} ${row.trades === 1 ? "trade" : "trades"}` : ""}
         </span>
 
         {/* Mental temperature, on the five-star scale the check-in asks for.
