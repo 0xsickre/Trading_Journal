@@ -30,6 +30,7 @@ import {
   readTradingViewExport,
   resolveTradingViewScale,
   symbolFromTradingViewFilename,
+  tradingViewExcursion,
   tradingViewPnlMismatch,
   type TradingViewExport,
 } from "@/lib/journal/tradingview-export";
@@ -143,6 +144,8 @@ type FillPlan = {
   /** Commission of legs still open, charged on the entry. */
   entryFee: number;
   exits: { price: number; qty: number; time: string; fee: number }[];
+  /** MAE/MFE prices off TradingView's own excursions, when every leg closed. */
+  excursion: { mae: number; mfe: number } | null;
 };
 
 /** An instrument's point value, the one figure the TradingView size check needs. */
@@ -327,6 +330,11 @@ export function ImportWizard({
         ? exits.reduce((sum, e) => sum + e.price * e.qty, 0) / exitQty
         : null;
       const fees = exits.reduce((sum, e) => sum + e.fee, 0) + pos.openCommission;
+      // TradingView's money per 1.00 of price per 1 of its size.
+      const excursion = tradingViewExcursion(
+        pos.numbers.map((n) => byNumber.get(n)!),
+        scale.unit === "units" ? 1 : pointValue,
+      );
       rows.push({
         Symbol: tv.symbol,
         Side: pos.direction,
@@ -350,9 +358,10 @@ export function ImportWizard({
           : "",
         "TradingView favorable excursion": list((t) => t.favorable, pos.numbers),
         "TradingView adverse excursion": list((t) => t.adverse, pos.numbers),
+        "MAE / MFE": excursion ? `${excursion.mae} / ${excursion.mfe}` : "",
         [TV_ISSUE]: pos.problem ?? "",
       });
-      plans.push({ entryFee: pos.openCommission, exits });
+      plans.push({ entryFee: pos.openCommission, exits, excursion });
     }
     return { rows, plans };
   }
@@ -615,6 +624,9 @@ export function ImportWizard({
         executions: execs,
         gross_pnl_override: profit,
         target_price: target != null && target > 0 ? target : null,
+        excursion: plan?.excursion
+          ? { mae_price: plan.excursion.mae, mfe_price: plan.excursion.mfe }
+          : null,
         raw: row,
         // After the duplicate check above, so an unreadable cell never changes
         // how a row is MATCHED — it only makes sure the reader is told.

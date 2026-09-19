@@ -159,8 +159,8 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- Bruto rezultat prepisan sa brokerovog izvoda umesto izvedenog iz cena
   -- (20260815210613). Vidi `money_overridden` u tj_position_stats.
   gross_pnl_override   numeric,
-  -- Ko je upisao MAE/MFE: manual | mt5. Ručno se nikad ne gazi
-  -- (20260919100000, 20260919140000).
+  -- Ko je upisao MAE/MFE: manual | mt5 | tradingview. Ručno se nikad ne gazi
+  -- (20260919100000, 20260919140000, 20260919160000).
   excursion_source     text,
   CONSTRAINT tj_positions_pkey PRIMARY KEY (id),
   CONSTRAINT tj_positions_user_id_fkey FOREIGN KEY (user_id)
@@ -405,6 +405,9 @@ CREATE TABLE IF NOT EXISTS public.tj_import_rows (
   -- (20260918140000). Undo ga tada vraća na NULL; target koji je trejder uneo
   -- sam se ne dira, jer uvoz preko njega nikad ne piše.
   target_written      boolean     NOT NULL DEFAULT false,
+  -- Da li je ovaj uvoz upisao MAE/MFE (iz TradingView excursion-a) na trejd koji
+  -- ih nije imao (20260919160000). Undo ih tada vraća na NULL.
+  excursion_written   boolean     NOT NULL DEFAULT false,
   CONSTRAINT tj_import_rows_pkey PRIMARY KEY (id),
   CONSTRAINT tj_import_rows_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,

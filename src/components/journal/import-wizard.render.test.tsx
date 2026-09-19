@@ -400,6 +400,9 @@ describe("TradingView's list of trades", () => {
     const exit = item.executions.find((e: { side: string }) => e.side === "exit");
     expect(entry).toMatchObject({ price: 3.7306, qty: 536.1, fee: 0, executed_at: "2023-09-20T18:00:00.000Z" });
     expect(exit).toMatchObject({ price: 3.71195, qty: 536.1, fee: 1994.98, executed_at: "2023-09-20T19:00:00.000Z" });
+    // MAE/MFE off TradingView's own excursions: never went its way, stopped at a
+    // loss — the MAE is held to the stop, not to the end of the stop's bar.
+    expect(item.excursion).toEqual({ mae_price: 3.71195, mfe_price: 3.7306 });
   });
 
   it("reads the file in the CHART's zone — New York by default — not the account's", async () => {

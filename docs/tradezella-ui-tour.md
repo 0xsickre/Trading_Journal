@@ -527,7 +527,7 @@ tržišne cene EURUSD-a tog dana.) Ručno uneti trejd zato stoji na „Calculati
 poveže.
 
 > **Zašto je ovo najvažniji nalaz za nas**: MAE/MFE kod nas na trading nalozima dolazi iz MT5
-> terminala (`scripts/mt5_excursion.py`), a na backtest nalozima se unosi ručno (README §
+> terminala (`scripts/mt5_excursion.py`), a na backtest nalozima iz TradingView izvoza pri uvozu (README §
 > „MAE/MFE comes from MT5 on live accounts"). Ono što ovde dobijamo je OBLIK PRIKAZA, nezavisno od izvora. Ovaj ih daje gotov, na tri nivoa: traka po trejdu, „best exit" kolone u
 > gridu, i agregatna traka po danima.
 
@@ -637,7 +637,7 @@ Ručna oznaka „pregledano", odvojena od postojanja beleške, sa filterom u gri
 - **Prilagodljiv dashboard** (Layout / Sections) — njihov je fiksan.
 - **Slobodan izbor dimenzije + metrike** u izveštajima — njihov je unapred sastavljen.
 - **MAE/MFE** — kod njih iz rekonstrukcije feed-a; kod nas trading iz brokerovih MT5 tikova (bid za
-  long, ask za short), backtest ručno.
+  long, ask za short), backtest iz TradingView-ovog sopstvenog excursion-a.
 
 ---
 

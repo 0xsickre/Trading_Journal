@@ -1,9 +1,10 @@
 # Faza 8B — automatski MAE/MFE: trading preko MT5, backtest ručno
 
 **Status na 19.09.2026 (kraj dana):** trading nalozi dobijaju MAE/MFE iz FTMO MT5 terminala,
-`scripts/mt5_excursion.py` (README § „MAE/MFE comes from MT5 on live accounts"). Backtest nalozi se
-unose ručno. Dukascopy popunjavanje, uvedeno ujutru, uklonjeno je uveče (`20260919140000`), jer feed
-nije broker na kom je backtest rađen.
+`scripts/mt5_excursion.py` (README § „MAE/MFE comes from MT5 on live accounts"). Backtest nalozi
+dobijaju MAE/MFE iz TradingView izvoza pri uvozu (`tradingViewExcursion`), iz istih OANDA cena na
+kojima je backtest rađen. Dukascopy popunjavanje, uvedeno ujutru, uklonjeno je istog dana
+(`20260919140000`), jer feed nije broker na kom je backtest rađen.
 
 **Status na 18.09.2026:** ovaj fajl je do tada sadržao pun plan za **cTrader Open API** (OAuth2,
 `tj_ctrader_connections`, Protobuf-preko-TLS adapter, mapiranje simbola i sekvenca posla oko Spotware
@@ -36,4 +37,4 @@ više nije onaj na kom se trguje.
 
 Odgovor na to pitanje (19.09.2026): ni jedan od tri kandidata u tom obliku. Za trading naloge MT5
 terminal se čita direktno, preko Python paketa `MetaTrader5`, bez EA i bez ručnog izvoza. Za backtest
-naloge vrednost unosi trgovac.
+naloge vrednost dolazi iz TradingView izvoza, a trgovac je može prepisati.

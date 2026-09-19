@@ -50,7 +50,7 @@ describe("planUndo", () => {
     ];
     const plan = planUndo(rows, []);
     expect(plan.restore).toEqual([
-      { positionId: "old-1", executions: [], clearTarget: false },
+      { positionId: "old-1", executions: [], clearTarget: false, clearExcursion: false },
     ]);
     expect(plan.unrestorableIds).toEqual([]);
   });
@@ -106,6 +106,24 @@ describe("a target the import filled in", () => {
       [],
     );
     expect(plan.restore.map((r) => [r.positionId, r.clearTarget])).toEqual([
+      ["p1", true],
+      ["p2", false],
+      ["p3", false],
+    ]);
+  });
+});
+
+describe("MAE/MFE the import filled in", () => {
+  it("is emptied again on undo, and only where this import wrote it", () => {
+    const plan = planUndo(
+      [
+        { matched_position_id: "p1", prev_executions: [], excursion_written: true },
+        { matched_position_id: "p2", prev_executions: [], excursion_written: false },
+        { matched_position_id: "p3", prev_executions: [] },
+      ],
+      [],
+    );
+    expect(plan.restore.map((r) => [r.positionId, r.clearExcursion])).toEqual([
       ["p1", true],
       ["p2", false],
       ["p3", false],

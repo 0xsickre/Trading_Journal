@@ -17,10 +17,13 @@ What it needs, and nothing more:
 
 Which trades, and why each exclusion:
 
-  - account_kind = 'trading' only. Backtest MAE/MFE is typed by hand.
+  - account_kind = 'trading' only. Backtest MAE/MFE comes from the TradingView
+    import (or is typed).
   - closed only. An open trade has no last exit to scan up to.
   - never over a MANUAL value: excursion_source = 'manual', or prices present
-    with no source (typed before the column existed), are the trader's.
+    with no source (typed before the column existed), are the trader's. A value
+    a TradingView import wrote IS replaced: on a live account the broker's own
+    ticks are the record.
   - by default not over an earlier 'mt5' value either; --recompute redoes those,
     e.g. after a fill was corrected.
 

@@ -176,9 +176,9 @@ describe("backtest or trading — where MAE/MFE comes from", () => {
     expect(screen.getByText(/filled from your MT5 terminal/)).toBeInTheDocument();
   });
 
-  it("a backtest account says MAE/MFE is typed by hand", () => {
+  it("a backtest account says MAE/MFE comes from the TradingView import", () => {
     render(<AccountSettings accounts={[account({ account_kind: "backtest" })]} />);
-    expect(screen.getByText(/entered by hand on a backtest account/)).toBeInTheDocument();
+    expect(screen.getByText(/from TradingView's own excursions/)).toBeInTheDocument();
   });
 
   it("the type is saved with the account", async () => {

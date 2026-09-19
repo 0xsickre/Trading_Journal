@@ -299,7 +299,7 @@ function AccountCard({
           </Select>
           <p className="text-xs text-muted-foreground">
             {kind === "backtest"
-              ? "MAE/MFE is entered by hand on a backtest account."
+              ? "MAE/MFE comes from TradingView's own excursions when you import its list of trades. A value you type yourself is never overwritten."
               : "MAE/MFE is filled from your MT5 terminal by the MT5 sync script, for every closed trade. A value you type yourself is never overwritten."}
           </p>
         </div>

@@ -765,8 +765,15 @@ Sat servera je NY+7 i proverava se pre upisa. Jedinice bakra (centi prema dolari
 se same. Za trejdove starije od istorije tikova koriste se M1 barovi. `excursion_source` je sada
 `manual | mt5`, i ručni unos uvek pobeđuje.
 
-**Backtest nalozi: MAE/MFE se unosi ručno.** Dukascopy popunjavanje (uvedeno istog dana) je
-**uklonjeno** (`20260919140000`). Feed nije broker na kom je backtest rađen, pa se razlika morala
+**Backtest nalozi: MAE/MFE iz TradingView izvoza, pri uvozu** (`tradingViewExcursion`,
+`20260919160000`). Izvoz daje favorable/adverse excursion u novcu, umanjen za proviziju ulaza.
+Provizija se vraća, iznos se deli veličinom, i dobija se cena. Na tri trejda na zlatu čiji je MFE
+ranije kucan ručno iz istih fajlova, rezultat je jednak u cent. TradingView meri cele barove, pa kod
+gubitnog stopa MAE ide preko stopa; zato se tada drži na stopu, a MFE na TP-u. Stop na BE ili bolje
+nije granica. Upisuje se kao `excursion_source = 'tradingview'`, samo tamo gde nema vrednosti ili ih
+je upisao raniji uvoz. Undo ih briše (`excursion_written`). Ručni unos i dalje pobeđuje.
+
+Pre toga, istog dana: Dukascopy popunjavanje je **uklonjeno** (`20260919140000`). Feed nije broker na kom je backtest rađen, pa se razlika morala
 pogađati iz fill-ova, a na bakru sa 1h barovima to nije išlo. Jedini trejd koji je popunio (#6)
 zadržava cene, sada kao ručne.
 

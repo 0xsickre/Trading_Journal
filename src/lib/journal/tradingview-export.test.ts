@@ -6,6 +6,7 @@ import {
   readTradingViewExport,
   resolveTradingViewScale,
   symbolFromTradingViewFilename,
+  tradingViewExcursion,
   tradingViewPnlMismatch,
 } from "./tradingview-export";
 
@@ -257,5 +258,77 @@ describe("partial exits are one position, not several", () => {
     expect(pos.size).toBe(165);
     expect(pos.exits).toHaveLength(1);
     expect(pos.openCommission).toBe(3);
+  });
+});
+
+describe("MAE/MFE prices from TradingView's own excursions", () => {
+  /** Rows of a real export, as CSV reads them: every cell a string. */
+  const csv = (lines: string[]) =>
+    lines.map((l) => Object.fromEntries(HEADERS.map((h, i) => [h, l.split(",")[i]])));
+  const legsOf = (lines: string[]) => readTradingViewExport(csv(lines))!.trades;
+
+  // OANDA:XAUUSD, 18 Sep 2026: two longs, each stopped out. The MFE of both
+  // was typed by hand from this file as 1336.836 and 1329.146.
+  const GOLD = legsOf([
+    "1,Exit long,2018-02-27 05:00,Bracket Stop Loss,1326.629,173,230502.259,-997.74,-0.43,2.3,769.22,0.33,-1405.74,-0.61,-997.74,-1.00,5",
+    "1,Entry long,2018-02-26 09:00,Buy limit order,1332.383,173,230502.259,-997.74,-0.43,2.3,769.22,0.33,-1405.74,-0.61,-997.74,-1.00,5",
+    "2,Exit long,2018-03-08 17:00,Bracket Stop Loss,1317.616,100,132745,-984.72,-0.74,1.32,168.94,0.13,-1052.26,-0.79,-1982.46,-1.98,8",
+    "2,Entry long,2018-03-07 09:00,Buy limit order,1327.45,100,132745,-984.72,-0.74,1.32,168.94,0.13,-1052.26,-0.79,-1982.46,-1.98,8",
+  ]);
+
+  it("recovers the MFE typed by hand, to the cent", () => {
+    expect(tradingViewExcursion([GOLD[0]], 1)?.mfe).toBe(1336.836);
+    expect(tradingViewExcursion([GOLD[1]], 1)?.mfe).toBe(1329.146);
+  });
+
+  it("holds the MAE of a trade stopped at a loss to the stop — TradingView's bar reaches past it", () => {
+    // Unbounded, the adverse excursion puts the low at 1324.264: the rest of
+    // the 4-hour bar the stop was hit in, after the position was closed.
+    expect(tradingViewExcursion([GOLD[0]], 1)).toEqual({ mae: 1326.629, mfe: 1336.836 });
+    expect(tradingViewExcursion([GOLD[1]], 1)).toEqual({ mae: 1317.616, mfe: 1329.146 });
+  });
+
+  it("does not hold the MAE to a stop at breakeven or better — it was moved there", () => {
+    const moved = { ...GOLD[0], exitPrice: 1333, netPnl: 100 };
+    expect(tradingViewExcursion([moved], 1)?.mae).toBe(1324.264);
+  });
+
+  it("a position closed in two parts takes the furthest excursion of its legs, and a take profit bounds the MFE", () => {
+    // OANDA:XAUUSD: 50 closed at 1321.377, the other 115 at the target 1351.12.
+    const legs = legsOf([
+      "1,Exit long,2018-02-12 01:00,Close position (partial),1321.377,50,65652.5,415.69,0.63,0.66,682.02,1.04,-92.48,-0.14,414.94,0.41,4",
+      "1,Entry long,2018-02-09 09:00,Buy limit order,1313.05,50,65652.5,415.69,0.63,0.66,682.02,1.04,-92.48,-0.14,414.94,0.41,4",
+      "2,Exit long,2018-02-14 13:00,Bracket Take Profit,1351.12,115,151000.75,4376.52,2.90,1.53,4377.3,2.90,-212.7,-0.14,4792.21,4.79,19",
+      "2,Entry long,2018-02-09 09:00,Buy limit order,1313.05,115,151000.75,4376.52,2.90,1.53,4377.3,2.90,-212.7,-0.14,4792.21,4.79,19",
+    ]);
+    expect(tradingViewExcursion(legs, 1)).toEqual({ mae: 1311.207, mfe: 1351.12 });
+  });
+
+  it("mirrors for a short: the MAE is above the entry, the MFE below", () => {
+    // OANDA:XAUUSD, 19 Sep 2026: a short to its target.
+    const [short] = legsOf([
+      "1,Exit short,2026-09-14 11:00,Bracket Take Profit,4282.625,15,67154.655,2914.62,4.34,0.66,2914.94,4.34,-509.63,-0.76,2914.62,2.91,42",
+      "1,Entry short,2026-09-03 11:00,Sell limit order,4476.977,15,67154.655,2914.62,4.34,0.66,2914.94,4.34,-509.63,-0.76,2914.62,2.91,42",
+    ]);
+    expect(tradingViewExcursion([short], 1)).toEqual({ mae: 4510.93, mfe: 4282.625 });
+  });
+
+  it("a trade that never went its way has its MFE at the entry", () => {
+    // The copper trade: favorable 0, stopped out.
+    const [copper] = readTradingViewExport(REAL)!.trades;
+    expect(tradingViewExcursion([copper], 1)).toEqual({ mae: 3.71195, mfe: 3.7306 });
+  });
+
+  it("counts contracts at the point value", () => {
+    const contracts = { ...GOLD[0], size: 1.73, favorable: 769.22, commission: 2.3 };
+    // 1.73 contracts × 100 per 1.00 is the same money per 1.00 as 173 units.
+    expect(tradingViewExcursion([contracts], 100)?.mfe).toBe(1336.836);
+  });
+
+  it("answers nothing for a leg still open, a leg with a problem, or no excursion columns", () => {
+    expect(tradingViewExcursion([{ ...GOLD[0], exitPrice: null, exitTime: null }], 1)).toBeNull();
+    expect(tradingViewExcursion([{ ...GOLD[0], problem: "size" }], 1)).toBeNull();
+    expect(tradingViewExcursion([{ ...GOLD[0], favorable: null }], 1)).toBeNull();
+    expect(tradingViewExcursion([], 1)).toBeNull();
   });
 });

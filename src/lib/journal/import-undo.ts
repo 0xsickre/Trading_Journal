@@ -26,14 +26,16 @@ export type UndoAuditRow = {
    * and an undo that erased that would be a second edit rather than a reversal.
    */
   target_written?: boolean | null;
+  /** Whether THIS row wrote MAE/MFE onto a position that had none — the same rule as the target. */
+  excursion_written?: boolean | null;
 };
 
 export type UndoPlan<T = unknown> = {
   /** Positions to delete outright. */
   deleteIds: string[];
   /** Positions to restore, with the fills to put back and whether the target
-   *  this import wrote has to go back to empty. */
-  restore: { positionId: string; executions: T[]; clearTarget: boolean }[];
+   *  and the MAE/MFE this import wrote have to go back to empty. */
+  restore: { positionId: string; executions: T[]; clearTarget: boolean; clearExcursion: boolean }[];
   /** Merged positions whose previous fills were never captured. */
   unrestorableIds: string[];
 };
@@ -66,6 +68,7 @@ export function planUndo<T = unknown>(
       positionId: pid,
       executions: (row.prev_executions as T[]) ?? [],
       clearTarget: row.target_written === true,
+      clearExcursion: row.excursion_written === true,
     });
   }
 

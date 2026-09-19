@@ -192,6 +192,11 @@ export const importItemSchema = z.object({
    * one thing the field does. Absent and null mean the same: no target.
    */
   target_price: z.number().finite().positive().nullable().optional(),
+  /** MAE/MFE prices off TradingView's own excursions. Optional for the same reason as the target. */
+  excursion: z
+    .object({ mae_price: z.number().finite().positive(), mfe_price: z.number().finite().positive() })
+    .nullable()
+    .optional(),
   raw: z.record(z.string(), z.string()),
 });
 

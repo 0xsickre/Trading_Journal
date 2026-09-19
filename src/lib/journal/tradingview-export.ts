@@ -23,10 +23,11 @@
 // is not the P&L currency, an instrument whose point value differs from the
 // catalog's — is refused, and says which of the two it found.
 //
-// What is deliberately NOT carried over: TradingView's favorable/adverse
-// excursion. It is reported in money, net of the entry commission and floored
-// at zero, so a price cannot be recovered from it; the journal stores MAE/MFE
-// as prices. The values stay in the row's `raw` for the record.
+// TradingView's favorable/adverse excursion becomes the trade's MFE/MAE PRICES
+// (`tradingViewExcursion`). It is reported in money and net of the entry
+// commission, so the price is recovered by putting that commission back and
+// dividing by the size. Checked against every MFE typed by hand from the same
+// exports: equal to the cent.
 
 import { parseImportNumber } from "./import-number";
 
@@ -147,6 +148,8 @@ export type TradingViewTrade = {
   entrySignal: string;
   exitPrice: number | null;
   exitTime: string | null;
+  /** The exit order's name, e.g. "Bracket Stop Loss". Empty without an exit. */
+  exitSignal: string;
   commission: number;
   netPnl: number | null;
   favorable: number | null;
@@ -234,6 +237,7 @@ export function readTradingViewExport(rows: Record<string, unknown>[]): TradingV
       entrySignal: textOf(entry[SIGNAL]),
       exitPrice,
       exitTime,
+      exitSignal: exit ? textOf(exit[SIGNAL]) : "",
       commission: commission ?? 0,
       netPnl,
       favorable: cols.favorable ? numberOf(totals[cols.favorable]) : null,
@@ -406,4 +410,77 @@ export function groupTradingViewPositions(trades: TradingViewTrade[]): TradingVi
       problem: problems.length > 0 ? problems.join("; ") : null,
     };
   });
+}
+
+/**
+ * MAE and MFE as PRICES, from TradingView's own excursions, for a position whose
+ * every leg is closed.
+ *
+ * Each leg reports its excursions in money, net of its entry commission (half
+ * of the leg's commission; the other half is the exit's). Putting that back and
+ * dividing by the leg's size in money per 1.00 of price gives the distance from
+ * the entry. The position's extreme is the furthest across its legs, and never
+ * nearer than a price it actually filled at.
+ *
+ * TradingView measures over WHOLE BARS of the chart, so the bar a stop was hit
+ * in reaches past the stop: a long stopped at 1326.629 shows an adverse
+ * excursion down to 1324.26. The position was closed at the stop, so when the
+ * LAST exit is a stop at a loss the MAE is held to it, and when it is a take
+ * profit the MFE is held to that. A stop at or beyond breakeven is NOT a bound:
+ * it was moved there, and before it moved the price was free to go further.
+ * Nor are earlier exits: the legs still open after them saw the prices beyond.
+ *
+ * `perUnit` is TradingView's money per 1.00 of price per 1 of its size: 1 when
+ * it counts units, the point value when it counts contracts
+ * (`resolveTradingViewScale`). Rounded to the finest decimals the fills carry.
+ * `null` when any leg is open, has a problem, or carries no excursion.
+ */
+export function tradingViewExcursion(
+  legs: readonly TradingViewTrade[],
+  perUnit: number,
+): { mae: number; mfe: number } | null {
+  if (legs.length === 0 || !(perUnit > 0)) return null;
+  const sign = legs[0].direction === "Short" ? -1 : 1;
+  const entry = legs[0].entryPrice;
+  let favorable = 0;
+  let adverse = 0;
+  const fills = [entry];
+  for (const t of legs) {
+    if (t.problem || t.exitPrice == null || t.exitTime == null) return null;
+    if (t.favorable == null || t.adverse == null || !(t.size > 0)) return null;
+    const entryCommission = t.commission / 2;
+    const money = t.size * perUnit;
+    // A zero is TradingView's floor, "never went that way" — not a figure to
+    // put the commission back onto.
+    if (t.favorable > 0) favorable = Math.max(favorable, (t.favorable + entryCommission) / money);
+    if (t.adverse < 0) adverse = Math.max(adverse, (-t.adverse - entryCommission) / money);
+    fills.push(t.exitPrice);
+  }
+  let mfe = entry + sign * favorable;
+  let mae = entry - sign * adverse;
+  // Never nearer than a fill: an exit is a price the position certainly saw.
+  const best = sign > 0 ? Math.max(...fills) : Math.min(...fills);
+  const worst = sign > 0 ? Math.min(...fills) : Math.max(...fills);
+  mfe = sign > 0 ? Math.max(mfe, best) : Math.min(mfe, best);
+  mae = sign > 0 ? Math.min(mae, worst) : Math.max(mae, worst);
+
+  const last = [...legs].sort((a, b) => (a.exitTime! < b.exitTime! ? -1 : 1)).at(-1)!;
+  const signal = last.exitSignal.toLowerCase();
+  const lastPrice = last.exitPrice!;
+  const atLoss = sign * (lastPrice - entry) < 0;
+  if (signal.includes("stop loss") && atLoss) {
+    mae = sign > 0 ? Math.max(mae, lastPrice) : Math.min(mae, lastPrice);
+  } else if (signal.includes("take profit")) {
+    mfe = sign > 0 ? Math.min(mfe, lastPrice) : Math.max(mfe, lastPrice);
+  }
+
+  const decimals = Math.max(...fills.map(decimalsOf));
+  const fix = (n: number) => Number(n.toFixed(decimals));
+  return { mae: fix(mae), mfe: fix(mfe) };
+}
+
+function decimalsOf(n: number): number {
+  const s = String(n);
+  const dot = s.indexOf(".");
+  return dot < 0 ? 0 : Math.min(s.length - dot - 1, 8);
 }

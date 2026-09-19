@@ -133,7 +133,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,390 tests across 144 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,399 tests across 144 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -798,9 +798,22 @@ hours early. That was found by checking each fill against the market's own 1-min
 the Belgrade reading 1 of 7 fills landed in a bar that traded its price, under New York 7 of 7. The
 seven fills already imported that way were corrected by re-reading the same wall clock as New York.
 
-TradingView's favorable/adverse excursion is **not** imported. It is money net of the entry
-commission and floored at zero, so no price can be recovered from it, and MAE/MFE are stored as
-prices. The values stay in the import row's `raw`.
+**MAE/MFE comes from TradingView's own excursions** (`tradingViewExcursion`). The export gives each
+trade's favorable and adverse excursion in money, net of the entry commission (half of the trade's
+commission). Putting that commission back and dividing by the size gives the distance from the entry.
+On the three gold trades whose MFE had been typed by hand from the same files, the result is equal to
+the cent.
+
+TradingView measures over whole bars of the chart, so the bar a stop was hit in reaches past the stop.
+A long stopped at 1326.629 shows an adverse excursion down to 1324.26, the rest of a 4-hour bar after
+the position was already closed. So when the last exit is a stop **at a loss**, the MAE is held to the
+stop, and when it is a take profit, the MFE is held to the target. A stop at breakeven or better is not
+a bound: it was moved there, and before it moved the price was free to go further. A position closed in
+parts takes the furthest excursion of its legs.
+
+The prices are written as `excursion_source = 'tradingview'`: onto a new trade, and onto an existing one
+only where none stand or an earlier TradingView import wrote them. Typed always wins. Undo empties
+them again where this import wrote them (`tj_import_rows.excursion_written`).
 
 ---
 
@@ -1026,11 +1039,12 @@ on the account's **type**, set in Settings → Accounts:
 
 | Account type | MAE/MFE source |
 |---|---|
-| **Backtest**: trades replayed on TradingView | Typed by hand |
+| **Backtest**: trades replayed on TradingView | TradingView's own excursions, on import (§ TradingView backtests); or typed |
 | **Trading**: live FTMO account | The broker's own MT5 terminal, via `scripts/mt5_excursion.py` |
 
-**Typed always wins.** `tj_positions.excursion_source` records who wrote the two prices, `manual` or
-`mt5`. The script writes only where both prices are empty (or, with `--recompute`, where MT5 wrote them
+**Typed always wins.** `tj_positions.excursion_source` records who wrote the two prices: `manual`,
+`mt5` or `tradingview`. On a trading account the MT5 script replaces a value a TradingView import
+wrote, because there the broker's own ticks are the record. The script writes only where both prices are empty (or, with `--recompute`, where MT5 wrote them
 before), and never over a value the trader typed. Clearing both hands a trade back to it.
 
 **Running it.** On the Windows computer with the FTMO MT5 terminal open and logged in to *any* FTMO
@@ -1068,11 +1082,12 @@ places no orders.
 Checked against the terminal's own ticks on XAUUSD, US100.cash and XCUUSD, long and short. The same
 trade shifted six hours is refused on all three.
 
-**Why backtests are typed.** For a while backtest accounts were filled from Dukascopy's free 1-minute
-candles. The feed is not the broker the trades were replayed on, so each trade's difference had to be
-inferred from its own fills. On 1-hour copper bars that could not be done, and it refused more than it
-filled. It was removed on 19.09.2026 (`20260919140000`). The one trade it had filled keeps its prices,
-now marked as typed. `excursion-scan.ts`, the older scanner, is unchanged and still takes candles from
+**Why backtests do not use a candle feed.** For a while backtest accounts were filled from Dukascopy's
+free 1-minute candles. The feed is not the broker the trades were replayed on, so each trade's
+difference had to be inferred from its own fills. On 1-hour copper bars that could not be done, and it
+refused more than it filled. It was removed on 19.09.2026 (`20260919140000`), and the TradingView
+export's own excursions replaced it the same day: they come from the same OANDA prices the backtest
+was replayed on. The one trade Dukascopy had filled keeps its prices, now marked as typed. `excursion-scan.ts`, the older scanner, is unchanged and still takes candles from
 anywhere.
 
 ---

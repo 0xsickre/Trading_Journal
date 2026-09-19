@@ -63,6 +63,12 @@ export type ImportItem = {
    * plan; one that is missing is simply not recorded yet.
    */
   target_price: number | null;
+  /**
+   * MAE/MFE prices off TradingView's own excursions (`tradingViewExcursion`).
+   * Written onto a new trade, and onto an existing one only where no prices
+   * stand or an earlier TradingView import wrote them: typed always wins.
+   */
+  excursion?: { mae_price: number; mfe_price: number } | null;
   raw: Record<string, string>;
 };
 
@@ -123,6 +129,8 @@ export async function commitImport(input: CommitInput) {
     let prevOverride: number | null = null;
     // Whether this row filled in an empty target, which undo has to empty again.
     let targetWritten = false;
+    // Whether this row wrote MAE/MFE onto a trade that had none — undo empties them.
+    let excursionWritten = false;
     // Counted only once the audit row has landed too. The counters used to be
     // bumped inline, which was harmless while the audit insert could not fail —
     // now that it throws, an inline bump would count the same row as merged AND
@@ -153,6 +161,13 @@ export async function commitImport(input: CommitInput) {
             status: statusOf(item.executions),
             gross_pnl_override: item.gross_pnl_override,
             ...(item.target_price != null ? { target_price: item.target_price } : {}),
+            ...(item.excursion
+              ? {
+                  max_drawdown_price: item.excursion.mae_price,
+                  max_profit_price: item.excursion.mfe_price,
+                  excursion_source: "tradingview",
+                }
+              : {}),
             ...instrumentSnapshot(instrument, specs, accountCurrency),
           })
           .select("id")
@@ -187,12 +202,18 @@ export async function commitImport(input: CommitInput) {
         // a snapshot is not a restore but a second edit.
         const { data: prevPos } = await supabase
           .from("tj_positions")
-          .select("gross_pnl_override, target_price")
+          .select("gross_pnl_override, target_price, max_drawdown_price, max_profit_price, excursion_source")
           .eq("id", pid)
           .maybeSingle();
         prevOverride = prevPos?.gross_pnl_override ?? null;
         // Only onto an empty target, and recorded so undo can empty it again.
         targetWritten = item.target_price != null && prevPos?.target_price == null;
+        // MAE/MFE the same way, except that one an earlier TradingView import
+        // wrote is rewritten: the fills it followed have just been replaced.
+        const prevEmpty = prevPos?.max_drawdown_price == null && prevPos?.max_profit_price == null;
+        const writeExcursion =
+          item.excursion != null && (prevEmpty || prevPos?.excursion_source === "tradingview");
+        excursionWritten = writeExcursion && prevEmpty;
 
         const { error: exErr } = await supabase.rpc("tj_replace_executions", {
           p_position_id: pid,
@@ -211,6 +232,13 @@ export async function commitImport(input: CommitInput) {
               ? { gross_pnl_override: item.gross_pnl_override }
               : {}),
             ...(targetWritten ? { target_price: item.target_price } : {}),
+            ...(writeExcursion && item.excursion
+              ? {
+                  max_drawdown_price: item.excursion.mae_price,
+                  max_profit_price: item.excursion.mfe_price,
+                  excursion_source: "tradingview",
+                }
+              : {}),
           })
           .eq("id", pid);
         // Thrown, not ignored: the fills have already been replaced by the line
@@ -242,6 +270,7 @@ export async function commitImport(input: CommitInput) {
         prev_executions: replacedExecs,
         prev_gross_pnl_override: prevOverride,
         target_written: targetWritten,
+        excursion_written: excursionWritten,
       });
       if (auditErr) throw new Error(auditErr.message);
 
@@ -340,6 +369,7 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
     prev_executions: unknown;
     prev_gross_pnl_override?: number | null;
     target_written?: boolean | null;
+    excursion_written?: boolean | null;
   }[];
   try {
     [createdRows, rows] = await Promise.all([
@@ -356,12 +386,13 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
         prev_executions: unknown;
         prev_gross_pnl_override: number | null;
         target_written: boolean | null;
+        excursion_written: boolean | null;
       }>(
         (from, to) =>
           supabase
             .from("tj_import_rows")
             .select(
-              "matched_position_id, prev_executions, prev_gross_pnl_override, target_written, id",
+              "matched_position_id, prev_executions, prev_gross_pnl_override, target_written, excursion_written, id",
             )
             .eq("batch_id", batchId)
             .order("id")
@@ -411,7 +442,7 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
   // The database function only carries that decision out.
   const { error: undoErr } = await supabase.rpc("tj_undo_import_batch", {
     p_batch_id: batchId,
-    p_restore: plan.restore.map(({ positionId, executions, clearTarget }) => ({
+    p_restore: plan.restore.map(({ positionId, executions, clearTarget, clearExcursion }) => ({
       position_id: positionId,
       // `source` is carried back. The snapshot holds it, and the function
       // collapses an absent one to `manual` — so listing the other six fields by
@@ -433,6 +464,7 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
       // Decided in `planUndo`, like everything else about what an undo puts
       // back — this function only carries the decision out.
       clear_target: clearTarget,
+      clear_excursion: clearExcursion,
     })) as unknown as Json,
     p_delete_ids: plan.deleteIds,
   });

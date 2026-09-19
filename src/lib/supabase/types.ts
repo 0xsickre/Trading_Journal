@@ -412,6 +412,7 @@ export type Database = {
         Row: {
           batch_id: string
           created_at: string
+          excursion_written: boolean
           id: string
           match_status: string
           matched_position_id: string | null
@@ -425,6 +426,7 @@ export type Database = {
         Insert: {
           batch_id: string
           created_at?: string
+          excursion_written?: boolean
           id?: string
           match_status?: string
           matched_position_id?: string | null
@@ -438,6 +440,7 @@ export type Database = {
         Update: {
           batch_id?: string
           created_at?: string
+          excursion_written?: boolean
           id?: string
           match_status?: string
           matched_position_id?: string | null
