@@ -7,7 +7,13 @@ import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
 import { getFieldDefs } from "@/lib/journal/field-defs";
 import { buildPositionPatch, mergeCustom } from "@/lib/journal/trade-fields";
-import { computeStatus, isValidFill } from "@/lib/journal/trade-lifecycle";
+import {
+  addsExposure,
+  asFillSource,
+  computeStatus,
+  isValidFill,
+  type FillSource,
+} from "@/lib/journal/trade-lifecycle";
 import { isFtmoAccountFrozen } from "@/lib/journal/ftmo-status";
 import { parseScaleOutLevels } from "@/lib/journal/scale-out";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
@@ -30,6 +36,8 @@ export type ExecutionInput = {
   executed_at: string; // UTC ISO
   fee: number;
   swap_funding: number;
+  /** Origin of the fill. Absent means typed here — `manual`. */
+  source?: FillSource;
 };
 
 export type TradeInput = {
@@ -156,7 +164,10 @@ function cleanExecs(execs: ExecutionInput[]) {
       executed_at: e.executed_at,
       fee: Number(e.fee) || 0,
       swap_funding: Number(e.swap_funding) || 0,
-      source: "manual" as const,
+      // Kept, not stamped. `tj_save_trade` replaces every fill on each save, so
+      // hard-coding `manual` here relabelled an imported trade's fills the
+      // first time anyone saved a note on it.
+      source: asFillSource(e.source),
     }));
 }
 
@@ -286,20 +297,34 @@ export async function updateTrade(id: string, input: TradeInput) {
   const prep = await prepareTrade(input);
   if (!prep.ok) return prep;
 
-  // Same freeze guard as `createTrade`, and for the same reason: editing a
-  // planned trade into an active one opens a position on the account, which is
-  // exactly what the FTMO freeze exists to stop. Only `createTrade` had it, so
-  // the rule was enforceable through one door and not the other.
-  if (await isFtmoAccountFrozen(input.account_id)) {
-    return {
-      ok: false as const,
-      error:
-        "The FTMO account is frozen — a rule was breached. Reset the challenge in Settings to continue.",
-    };
-  }
-
   const supabase = await createClient();
   const { patch, execs, statusPatch } = prep;
+
+  // The freeze guard, narrowed. Editing a planned trade into a live one — or
+  // putting more size on — opens exposure on the account, which is what the
+  // FTMO freeze exists to stop. Everything else is record-keeping: this used to
+  // refuse EVERY save on a frozen account, so the trader could not even write
+  // up the trade that breached the rule.
+  if (await isFtmoAccountFrozen(input.account_id)) {
+    const [{ data: prevState }, { data: prevFills }] = await Promise.all([
+      supabase.from("tj_positions").select("status").eq("id", id).maybeSingle(),
+      supabase.from("tj_executions").select("side, qty").eq("position_id", id),
+    ]);
+    const entryQty = (rows: { side: string; qty: number }[]) =>
+      rows.filter((r) => r.side === "entry").reduce((s, r) => s + Number(r.qty), 0);
+    if (
+      addsExposure(
+        { status: prevState?.status ?? null, entryQty: entryQty(prevFills ?? []) },
+        { status: String(statusPatch.status), entryQty: entryQty(execs) },
+      )
+    ) {
+      return {
+        ok: false as const,
+        error:
+          "The FTMO account is frozen — a rule was breached. Notes and review can still be edited, but no new position or size. Reset the challenge in Settings to continue.",
+      };
+    }
+  }
 
   // Re-snapshot the contract spec ONLY when the trade moves to a different
   // symbol, or when it predates the snapshot column. Re-stamping on every save
@@ -471,8 +496,14 @@ export async function restoreTradeToPlanned(id: string) {
 
 export async function deleteTrade(id: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("tj_positions").delete().eq("id", id);
+  const { error, count } = await supabase
+    .from("tj_positions")
+    .delete({ count: "exact" })
+    .eq("id", id);
   if (error) return { ok: false as const, error: error.message };
+  // Zero rows is a trade that was already gone (another tab, an import undo) —
+  // saying "deleted" over it would confirm something that did not happen here.
+  if (!count) return { ok: false as const, error: "Trade not found — refresh the page" };
   revalidateTrades();
   return { ok: true as const };
 }

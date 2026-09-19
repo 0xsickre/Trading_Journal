@@ -2,13 +2,13 @@
 
 import { Fragment, useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import {
   Trash2,
   ArrowDownToLine,
   ArrowUpFromLine,
   ExternalLink,
-
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,7 +71,16 @@ import {
 } from "@/lib/journal/exit-efficiency";
 import { excursionFromTrade } from "@/lib/journal/excursion";
 import { ExcursionBar } from "@/components/journal/viz/tile-visuals";
-import { fmtMoney, fmtR, pnlClass } from "@/lib/journal/format";
+import { fmtMoney, fmtPrice, fmtR, pnlClass } from "@/lib/journal/format";
+import { classifyOutcome, resolveBreakevenRange } from "@/lib/journal/breakeven";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   computePlannedRewardR,
   computePositionSize,
@@ -97,6 +106,7 @@ import {
   updateTrade,
   markTradeMissed,
   restoreTradeToPlanned,
+  deleteTrade,
   type ExecutionInput,
 } from "@/app/(app)/trades/actions";
 import {
@@ -104,6 +114,8 @@ import {
   canRestoreToPlanned,
   isValidFill,
   statusToTradePhase,
+  validateFills,
+  type FillSource,
   type TradePhase,
 } from "@/lib/journal/trade-lifecycle";
 import {
@@ -121,6 +133,17 @@ type ExecRow = {
   executedLocal: string;
   fee: string;
   swap: string;
+  /**
+   * The stored instant and origin of a fill loaded for editing.
+   *
+   * `tj_save_trade` rewrites every fill on each save, and the time box only
+   * holds minutes. Without these, saving a note on an imported trade cut the
+   * seconds off every fill (changing its hold time) and relabelled them
+   * `manual`. An untouched time box now sends back the original instant.
+   */
+  originalIso?: string;
+  originalLocal?: string;
+  source?: FillSource;
 };
 
 export type FieldValue = string | number | string[] | null;
@@ -143,6 +166,7 @@ export type TradeFormInitial = {
     executed_at: string;
     fee: number;
     swap_funding: number;
+    source?: FillSource;
   }[];
 };
 
@@ -209,6 +233,23 @@ export function TradeForm({
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  /**
+   * Whether the trader has changed anything. Set by the edit handlers rather
+   * than by diffing state, because the new-trade form prefills account and risk
+   * from saved preferences on mount — that is not an edit worth warning about.
+   */
+  const [dirty, setDirty] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  // A reload or a closed tab would drop a half-written trade without a word.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
   const [activeTab, setActiveTab] = useState<"plan" | "execution">(() =>
     defaultTab(initial),
   );
@@ -263,6 +304,7 @@ export function TradeForm({
    * written as a string the picker will not show.
    */
   function pickPlaybook(id: string | null) {
+    setDirty(true);
     setPlaybookId(id);
     const book = playbooks.find((p) => p.id === id);
     const pct = book?.default_risk_pct;
@@ -275,6 +317,7 @@ export function TradeForm({
   }
 
   function setRuleAnswer(ruleId: string, followed: boolean | null) {
+    setDirty(true);
     setRuleAnswers((prev) => {
       const next = { ...prev };
       // Deleting rather than storing null: absent IS "not answered", and one
@@ -294,6 +337,9 @@ export function TradeForm({
     !initial && accountId != null && ftmoFailedAccountIds.includes(accountId);
   const tz = account?.timezone ?? DEFAULT_TZ;
   const currency = account?.currency ?? "USD";
+  // The account's breakeven band — the same classification every report uses,
+  // so the checklist and the statistics agree on what a "winner" was.
+  const breakevenRange = useMemo(() => resolveBreakevenRange(account), [account]);
   const costDefaults = account
     ? {
         default_commission_per_unit: account.default_commission_per_unit,
@@ -311,24 +357,32 @@ export function TradeForm({
   // the rows and writes them itself, so this state is never read again.
   const [imageDrafts, setImageDrafts] = useState<ImageDrafts>({});
   function setImageDraft(kind: PreImageKind, url: string) {
+    setDirty(true);
     setImageDrafts((prev) => ({ ...prev, [kind]: url }));
   }
 
   const [execs, setExecs] = useState<ExecRow[]>(() => {
     if (initial && initial.executions.length > 0) {
-      return initial.executions.map((e) => ({
-        side: e.side,
-        price: String(e.price),
-        qty: String(e.qty),
-        executedLocal: utcToZonedInput(e.executed_at, tz),
-        fee: String(e.fee ?? 0),
-        swap: String(e.swap_funding ?? 0),
-      }));
+      return initial.executions.map((e) => {
+        const local = utcToZonedInput(e.executed_at, tz);
+        return {
+          side: e.side,
+          price: String(e.price),
+          qty: String(e.qty),
+          executedLocal: local,
+          fee: String(e.fee ?? 0),
+          swap: String(e.swap_funding ?? 0),
+          originalIso: e.executed_at,
+          originalLocal: local,
+          source: e.source,
+        };
+      });
     }
     return [];
   });
 
   function setField(name: string, value: FieldValue) {
+    setDirty(true);
     setFields((prev) => {
       const next: Record<string, FieldValue> = { ...prev, [name]: value };
       if (name === "entry_price") {
@@ -612,13 +666,7 @@ export function TradeForm({
     const book = playbooks.find((p) => p.id === playbookId);
     if (!book) return {};
     const outcome =
-      metrics.netPl == null
-        ? null
-        : metrics.netPl > 0
-          ? ("win" as const)
-          : metrics.netPl < 0
-            ? ("loss" as const)
-            : ("breakeven" as const);
+      metrics.netPl == null ? null : classifyOutcome(metrics.netPl, breakevenRange);
 
     const out: Record<string, boolean> = {};
     for (const rule of book.rules) {
@@ -632,9 +680,10 @@ export function TradeForm({
       out[rule.id] = v === true;
     }
     return out;
-  }, [playbooks, playbookId, ruleAnswers, metrics.netPl]);
+  }, [playbooks, playbookId, ruleAnswers, metrics.netPl, breakevenRange]);
 
   function addExec(side: "entry" | "exit") {
+    setDirty(true);
     setExecs((prev) => {
       const nowIso = new Date().toISOString();
       const qtyStr = side === "exit" ? "" : "1";
@@ -669,9 +718,11 @@ export function TradeForm({
     });
   }
   function setExec(i: number, patch: Partial<ExecRow>) {
+    setDirty(true);
     setExecs((prev) => prev.map((e, idx) => (idx === i ? { ...e, ...patch } : e)));
   }
   function removeExec(i: number) {
+    setDirty(true);
     setExecs((prev) => prev.filter((_, idx) => idx !== i));
   }
 
@@ -699,11 +750,19 @@ export function TradeForm({
         side: e.side,
         price: n(e.price)!,
         qty: n(e.qty)!,
-        executed_at:
-          zonedInputToUtc(e.executedLocal, tz) ?? new Date().toISOString(),
+        // `submit` has already refused an empty or unreadable time, so the
+        // `!` holds. It used to fall back to "now" — silently re-dating a fill.
+        executed_at: execInstant(e)!,
         fee: n(e.fee) ?? 0,
         swap_funding: n(e.swap) ?? 0,
+        source: e.source,
       }));
+  }
+
+  /** UTC instant of a fill row: the stored one while its time box is untouched. */
+  function execInstant(e: ExecRow): string | null {
+    if (e.originalIso && e.executedLocal === e.originalLocal) return e.originalIso;
+    return zonedInputToUtc(e.executedLocal, tz);
   }
 
   function submit() {
@@ -726,6 +785,19 @@ export function TradeForm({
       toast.error(
         `Fill ${incomplete.map((i) => i + 1).join(", ")} needs a price and a quantity above zero — remove it or complete it.`,
       );
+      setActiveTab("execution");
+      return;
+    }
+
+    const fillProblem = validateFills(
+      execs.map((e) => ({
+        side: e.side,
+        qty: n(e.qty) ?? 0,
+        executedAt: execInstant(e),
+      })),
+    );
+    if (fillProblem) {
+      toast.error(fillProblem);
       setActiveTab("execution");
       return;
     }
@@ -809,6 +881,7 @@ export function TradeForm({
         riskPct: String(fieldsToSave.risk_pct ?? ""),
       });
       toast.success(initial ? "Trade updated" : "Trade saved");
+      setDirty(false);
       // No `router.refresh()` after it: the action already revalidated the
       // journal, which clears the client cache, so the push renders it fresh.
       // The refresh rendered the same page a second time.
@@ -848,6 +921,21 @@ export function TradeForm({
       setTradePhase("planned");
       toast.success("Restored to planned");
       router.refresh();
+    });
+  }
+
+  function handleDelete() {
+    if (!initial?.id) return;
+    start(async () => {
+      const res = await deleteTrade(initial.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setDirty(false);
+      setDeleteOpen(false);
+      toast.success("Trade deleted");
+      router.push("/journal");
     });
   }
 
@@ -923,6 +1011,7 @@ export function TradeForm({
                     onRemove={removeExec}
                     metrics={metrics}
                     currency={currency}
+                    tickSize={instrument?.tick_size ?? null}
                   />
                 )}
 
@@ -938,7 +1027,10 @@ export function TradeForm({
                       instruments={instruments}
                       accountId={accountId}
                       accounts={accounts}
-                      onAccountChange={setAccountId}
+                      onAccountChange={(id) => {
+                        setDirty(true);
+                        setAccountId(id);
+                      }}
                       showAccount={tab.id === "plan" && group.id === "meta"}
                       tradePhase={tradePhase}
                       isMissed={isMissed}
@@ -1000,7 +1092,13 @@ export function TradeForm({
                       }
                       scaleOut={
                         tab.id === "plan" && group.id === "risk_plan"
-                          ? { rows: scaleOutRows, onChange: setScaleOutRows }
+                          ? {
+                              rows: scaleOutRows,
+                              onChange: (rows) => {
+                                setDirty(true);
+                                setScaleOutRows(rows);
+                              },
+                            }
                           : undefined
                       }
                       // The percentage in money. A share of equity is an
@@ -1044,6 +1142,7 @@ export function TradeForm({
                         answers={ruleAnswers}
                         onAnswerChange={setRuleAnswer}
                         netPl={metrics.netPl}
+                        breakevenRange={breakevenRange}
                       />
                     )}
                     </Fragment>
@@ -1060,6 +1159,7 @@ export function TradeForm({
                     answers={ruleAnswers}
                     onAnswerChange={setRuleAnswer}
                     netPl={metrics.netPl}
+                    breakevenRange={breakevenRange}
                   />
                 )}
 
@@ -1118,6 +1218,26 @@ export function TradeForm({
       ) : (
         <TradeImageDrafts drafts={imageDrafts} onChange={setImageDraft} />
       )}
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this trade?</DialogTitle>
+            <DialogDescription>
+              This cannot be undone. Its fills, rule answers and chart snapshots
+              are deleted with it.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteOpen(false)} disabled={pending}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={pending}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 p-3 backdrop-blur md:left-(--sidebar-offset)">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
@@ -1188,16 +1308,13 @@ export function TradeForm({
                     title={`${fmtSlippagePts(metrics.slippage.adversePts)} vs planned`}
                   />
                 )}
+                {/* One cost figure. "Gross → Net" used to sit beside it and
+                    printed the same number again. */}
                 <Metric
-                  label="Fees + Swap"
+                  label="Costs"
                   value={fmtMoney(metrics.fees, currency)}
+                  title={`Fees ${fmtMoney(metrics.totalFees, currency)} · Swap ${fmtMoney(metrics.totalSwap, currency)}`}
                 />
-                {metrics.fees > 0 && metrics.grossPl != null && metrics.netPl != null && (
-                  <Metric
-                    label="Gross → Net"
-                    value={fmtMoney(metrics.grossPl - metrics.netPl, currency)}
-                  />
-                )}
               </>
             )}
           </div>
@@ -1209,8 +1326,28 @@ export function TradeForm({
               </p>
             )}
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => router.back()}>
-                Cancel
+              {initial && (
+                <Button
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                  disabled={pending}
+                >
+                  <Trash2 className="size-4" /> Delete
+                </Button>
+              )}
+              {/* A link to the list, not `router.back()`: opened from a
+                  bookmark or a new tab, "back" left the app entirely. The list
+                  restores its own filters and sort. */}
+              <Button variant="outline" asChild>
+                <Link
+                  href="/journal"
+                  onClick={(e) => {
+                    if (dirty && !window.confirm("Discard unsaved changes?")) e.preventDefault();
+                  }}
+                >
+                  Cancel
+                </Link>
               </Button>
               <Button onClick={submit} disabled={pending || ftmoBlocked}>
                 {pending ? "Saving…" : initial ? "Update trade" : "Save trade"}
@@ -1750,6 +1887,7 @@ function ExecutionsEditor({
   onRemove,
   metrics,
   currency,
+  tickSize,
 }: {
   execs: ExecRow[];
   tz: string;
@@ -1771,28 +1909,26 @@ function ExecutionsEditor({
     slippage: ReturnType<typeof computeEntrySlippage>;
   };
   currency: string;
+  /** The instrument's tick, so a 5-decimal FX price is not shown as 2 decimals. */
+  tickSize: number | null;
 }) {
   return (
     <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h4 className="text-sm font-semibold">
-            Fills (Executions){" "}
+            Fills{" "}
             <span className="font-normal text-muted-foreground">
               ({tz.replace("_", " ")})
             </span>
           </h4>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Swap and fees significantly affect Net P/L for swing positions held over
-            weekends.
-          </p>
         </div>
         <div className="flex gap-2">
           <Button type="button" size="sm" variant="outline" onClick={() => onAdd("entry")}>
             <ArrowDownToLine className="size-4" /> Entry fill
           </Button>
           <Button type="button" size="sm" variant="outline" onClick={() => onAdd("exit")}>
-            <ArrowUpFromLine className="size-4" /> Partial exit
+            <ArrowUpFromLine className="size-4" /> Exit fill
           </Button>
         </div>
       </div>
@@ -1845,32 +1981,20 @@ function ExecutionsEditor({
                 onChange={(ev) => onSet(i, { executedLocal: ev.target.value })}
               />
             </div>
-            <div
-              className={cn(
-                "col-span-6 rounded-md border-l-2 border-amber-500/40 bg-amber-500/5 p-1 sm:col-span-2",
-              )}
-            >
-              <Label className="text-[11px] font-medium text-amber-800 dark:text-amber-200">
-                Fee
-              </Label>
+            <div className="col-span-6 sm:col-span-2">
+              <Label className="text-[11px] text-muted-foreground">Fee</Label>
               <Input
-                className="h-8 border-amber-500/20"
+                className="h-8"
                 inputMode="decimal"
                 value={e.fee}
                 onChange={(ev) => onSet(i, { fee: ev.target.value })}
                 placeholder="0"
               />
             </div>
-            <div
-              className={cn(
-                "col-span-6 rounded-md border-l-2 border-amber-500/40 bg-amber-500/5 p-1 sm:col-span-2",
-              )}
-            >
-              <Label className="text-[11px] font-medium text-amber-800 dark:text-amber-200">
-                Swap / Funding
-              </Label>
+            <div className="col-span-6 sm:col-span-2">
+              <Label className="text-[11px] text-muted-foreground">Swap / Funding</Label>
               <Input
-                className="h-8 border-amber-500/20"
+                className="h-8"
                 inputMode="decimal"
                 value={e.swap}
                 onChange={(ev) => onSet(i, { swap: ev.target.value })}
@@ -1884,6 +2008,7 @@ function ExecutionsEditor({
                 variant="ghost"
                 className="size-8"
                 onClick={() => onRemove(i)}
+                aria-label={`Remove fill ${i + 1}`}
               >
                 <Trash2 className="size-4" />
               </Button>
@@ -1901,11 +2026,11 @@ function ExecutionsEditor({
         <span className="text-muted-foreground">
           Planned entry:{" "}
           <b className="text-foreground">
-            {metrics.plannedEntry?.toFixed(2) ?? "—"}
+            {fmtPrice(metrics.plannedEntry, tickSize)}
           </b>
         </span>
         <span className="text-muted-foreground">
-          Avg entry: <b className="text-foreground">{metrics.avgEntry?.toFixed(2) ?? "—"}</b>
+          Avg entry: <b className="text-foreground">{fmtPrice(metrics.avgEntry, tickSize)}</b>
         </span>
         {metrics.slippage != null && (
           <span className="text-muted-foreground">
@@ -1919,7 +2044,7 @@ function ExecutionsEditor({
           </span>
         )}
         <span className="text-muted-foreground">
-          Avg exit: <b className="text-foreground">{metrics.avgExit?.toFixed(2) ?? "—"}</b>
+          Avg exit: <b className="text-foreground">{fmtPrice(metrics.avgExit, tickSize)}</b>
         </span>
         <span className="text-muted-foreground">
           Size: <b className="text-foreground">{metrics.entryQty || "—"}</b>
@@ -1936,14 +2061,13 @@ function ExecutionsEditor({
             {fmtMoney(metrics.netPl, currency, { sign: true })}
           </b>
         </span>
-        <span className="text-muted-foreground">
-          Total fees: <b className="text-foreground">{fmtMoney(metrics.totalFees, currency)}</b>
-        </span>
-        <span className="text-muted-foreground">
-          Total swap: <b className="text-foreground">{fmtMoney(metrics.totalSwap, currency)}</b>
-        </span>
-        <span className="text-muted-foreground">
-          Combined costs: <b className="text-foreground">{fmtMoney(metrics.fees, currency)}</b>
+        {/* One figure, split on hover. Fees, swap and their sum used to be
+            three separate entries in a row that already ran to two lines. */}
+        <span
+          className="text-muted-foreground"
+          title={`Fees ${fmtMoney(metrics.totalFees, currency)} · Swap ${fmtMoney(metrics.totalSwap, currency)}`}
+        >
+          Costs: <b className="text-foreground">{fmtMoney(metrics.fees, currency)}</b>
         </span>
       </div>
     </div>

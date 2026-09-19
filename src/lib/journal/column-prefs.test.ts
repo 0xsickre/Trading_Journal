@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { hiddenToVisibility, toggleHidden, visibleCount } from "./column-prefs";
+import {
+  CONFIGURED_MARKER,
+  effectiveHidden,
+  hiddenToVisibility,
+  toStoredHidden,
+  toggleHidden,
+  visibleCount,
+} from "./column-prefs";
 
 const KNOWN = ["trade_no", "date", "net", "capture", "status"];
 
@@ -78,5 +85,26 @@ describe("visibleCount", () => {
   it("counts only known columns, never the stale ids", () => {
     expect(visibleCount([], KNOWN)).toBe(KNOWN.length);
     expect(visibleCount(["net", "gone_column"], KNOWN)).toBe(KNOWN.length - 1);
+  });
+});
+
+describe("default-hidden columns", () => {
+  const DEFAULTS = ["capture"];
+
+  it("adds the defaults to a list the user never configured", () => {
+    expect(effectiveHidden([], KNOWN, DEFAULTS)).toEqual(["capture"]);
+    expect(effectiveHidden(["status"], KNOWN, DEFAULTS)).toEqual(["capture", "status"]);
+  });
+
+  it("takes a configured list as-is, including one that turned every default back on", () => {
+    expect(effectiveHidden([CONFIGURED_MARKER], KNOWN, DEFAULTS)).toEqual([]);
+    expect(effectiveHidden(["status", CONFIGURED_MARKER], KNOWN, DEFAULTS)).toEqual(["status"]);
+  });
+
+  it("stores the choice with exactly one marker, which hides no column", () => {
+    const stored = toStoredHidden(["status", CONFIGURED_MARKER]);
+    expect(stored.filter((x) => x === CONFIGURED_MARKER)).toHaveLength(1);
+    expect(hiddenToVisibility(stored, KNOWN).status).toBe(false);
+    expect(visibleCount(stored, KNOWN)).toBe(KNOWN.length - 1);
   });
 });

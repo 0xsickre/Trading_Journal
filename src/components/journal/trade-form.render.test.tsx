@@ -39,6 +39,7 @@ vi.mock("@/app/(app)/trades/actions", () => ({
   updateTrade: (...a: unknown[]) => updateTradeMock(...a),
   markTradeMissed: (...a: unknown[]) => markTradeMissedMock(...a),
   restoreTradeToPlanned: (...a: unknown[]) => restoreTradeToPlannedMock(...a),
+  deleteTrade: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
 // The form's category drag-reorder saves through a Settings action. Without
@@ -382,8 +383,8 @@ describe("execution rating appears only where there is an execution to rate", ()
   });
 });
 
-describe("Gross → Net (rejected candidate, verified correct — not W)", () => {
-  it("grossPl − netPl always equals Fees + Swap, by construction of net_pl in position-stats.ts", async () => {
+describe("costs are shown once", () => {
+  it("one Costs figure — the Gross → Net duplicate of it is gone", async () => {
     const user = userEvent.setup({ delay: null });
     render(
       <TradeForm
@@ -395,12 +396,12 @@ describe("Gross → Net (rejected candidate, verified correct — not W)", () =>
     );
     await goToExecutionTab(user);
 
-    // fees(5) + swap(2) = $7.00; gross(20) − net(13) = $7.00 — same string,
-    // by the algebra `net_pl = gross_pl − total_fees − total_swap`.
-    const feesLabel = screen.getByText("Fees + Swap").closest("div")!;
-    const grossToNetLabel = screen.getByText("Gross → Net").closest("div")!;
-    expect(feesLabel.textContent).toContain("$7.00");
-    expect(grossToNetLabel.textContent).toContain("$7.00");
+    // fees(5) + swap(2) = $7.00. "Gross → Net" printed gross(20) − net(13) —
+    // the same $7.00 again, by `net_pl = gross_pl − total_fees − total_swap` —
+    // so it was a second label for one number.
+    const costs = screen.getByText("Costs").closest("div")!;
+    expect(costs.textContent).toContain("$7.00");
+    expect(screen.queryByText("Gross → Net")).toBeNull();
   });
 
   it("shows no money when the quote→account rate is unknown", async () => {
@@ -427,12 +428,10 @@ describe("Gross → Net (rejected candidate, verified correct — not W)", () =>
     );
     await goToExecutionTab(user);
 
-    expect(screen.queryByText("Gross → Net")).toBeNull();
-
     // R survives an unknown rate — a ratio in price space needs no currency. If
     // that part vanished along with the money, the one figure that is still
     // correct would be lost.
-    expect(screen.queryByText("Fees + Swap")).not.toBeNull();
+    expect(screen.queryByText("Costs")).not.toBeNull();
   });
 });
 
@@ -870,5 +869,59 @@ describe("the playbook offers its risk, and never argues with you", () => {
       />,
     );
     expect(screen.queryByText(/A\+ for/)).not.toBeInTheDocument();
+  });
+});
+
+describe("saving an edit does not rewrite the fills it did not touch", () => {
+  it("keeps each fill's exact instant — seconds included — and its source", async () => {
+    // `tj_save_trade` replaces every fill on each save, and the time box holds
+    // only minutes. Saving a note on an imported trade used to cut the seconds
+    // off every fill and relabel them `manual`.
+    const user = userEvent.setup({ delay: null });
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        initial={baseInitial({
+          executions: [
+            { side: "entry", price: 100, qty: 1, executed_at: "2026-04-01T13:00:37.000Z", fee: 0, swap_funding: 0, source: "import" },
+            { side: "exit", price: 120, qty: 1, executed_at: "2026-04-02T13:00:59.000Z", fee: 0, swap_funding: 0, source: "import" },
+          ],
+        })}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Update trade/ }));
+
+    await vi.waitFor(() => expect(updateTradeMock).toHaveBeenCalled());
+    const payload = updateTradeMock.mock.calls[0][1] as {
+      executions: { executed_at: string; source?: string }[];
+    };
+    expect(payload.executions.map((e) => e.executed_at)).toEqual([
+      "2026-04-01T13:00:37.000Z",
+      "2026-04-02T13:00:59.000Z",
+    ]);
+    expect(payload.executions.every((e) => e.source === "import")).toBe(true);
+  });
+
+  it("refuses to save an exit timed before the entry", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        initial={baseInitial({
+          executions: [
+            { side: "entry", price: 100, qty: 1, executed_at: "2026-04-02T13:00:00Z", fee: 0, swap_funding: 0 },
+            { side: "exit", price: 120, qty: 1, executed_at: "2026-04-01T13:00:00Z", fee: 0, swap_funding: 0 },
+          ],
+        })}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Update trade/ }));
+
+    expect(toastErrorMock).toHaveBeenCalledWith("Fill 2 exits before the first entry.");
+    expect(updateTradeMock).not.toHaveBeenCalled();
   });
 });

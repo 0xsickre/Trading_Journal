@@ -121,6 +121,9 @@ const OPTIONS_MAP: OptionsMap = {
 };
 
 beforeEach(() => {
+  // The grid remembers its view per tab; a search typed in one test must not
+  // narrow the next one.
+  window.sessionStorage.clear();
   pushMock.mockClear();
   refreshMock.mockClear();
   deleteTradeMock.mockReset().mockResolvedValue({ ok: true });
@@ -190,7 +193,7 @@ describe("outcome filter classifies by EACH account's own breakeven band", () =>
     // below is unchanged, only the path to the control is longer now.
     await user.click(screen.getByRole("button", { name: /Filters/ }));
     await user.click(screen.getByText("Outcome:").closest("button")!);
-    await user.click(await screen.findByRole("option", { name: "breakeven" }));
+    await user.click(await screen.findByRole("option", { name: "Breakeven" }));
 
     expect(screen.getByText(/1 of 2 trades/)).toBeInTheDocument();
     expect(screen.getByText("XAUUSD")).toBeInTheDocument(); // acc-wide's trade
@@ -230,9 +233,7 @@ describe("row click navigates, the actions cell does not propagate", () => {
     const user = userEvent.setup({ delay: null });
     render(<JournalGrid trades={rowsOf(trades)} accounts={[ACCOUNT]} />);
     pushMock.mockClear();
-    const menuButtons = screen.getAllByRole("button", { name: "" });
-    const rowMenu = menuButtons[menuButtons.length - 1];
-    await user.click(rowMenu);
+    await user.click(screen.getByRole("button", { name: "Trade actions" }));
     expect(pushMock).not.toHaveBeenCalled();
   });
 });
@@ -243,9 +244,9 @@ describe("the column picker refuses to empty the grid", () => {
   // Every hideable column but "net" already hidden — "net" is the last one
   // standing.
   const ALL_BUT_NET = [
-    "trade_no", "date", "instrument", "direction", "setup_grade",
+    "trade_no", "date", "instrument", "direction", "playbook", "setup_grade",
     "plan_entry", "stop_price", "target_price", "size",
-    "avg_entry", "slippage_r", "avg_exit", "r", "exit_eff", "capture",
+    "avg_entry", "slippage_r", "avg_exit", "hold", "r", "exit_eff", "capture",
     "gross", "status", "chart",
   ];
 
@@ -293,16 +294,32 @@ describe("the column picker refuses to empty the grid", () => {
 describe("row actions", () => {
   const ACCOUNT = account({ id: "acc-1" });
 
-  it("delete calls the server action and refreshes the route on success", async () => {
+  it("delete ASKS first, then calls the server action and refreshes", async () => {
+    // It used to delete on the menu click itself — fills, rule answers and
+    // snapshots gone on one mis-click, while the bulk path asked first.
     const user = userEvent.setup({ delay: null });
     render(<JournalGrid trades={rowsOf([mkTrade({ id: "t1" })])} accounts={[ACCOUNT]} />);
 
-    const menuButtons = screen.getAllByRole("button", { name: "" });
-    await user.click(menuButtons[menuButtons.length - 1]);
+    await user.click(screen.getByRole("button", { name: "Trade actions" }));
     await user.click(await screen.findByRole("menuitem", { name: /Delete/ }));
 
-    expect(deleteTradeMock).toHaveBeenCalledWith("t1");
+    expect(deleteTradeMock).not.toHaveBeenCalled();
+    expect(await screen.findByRole("heading", { name: /Delete trade/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await vi.waitFor(() => expect(deleteTradeMock).toHaveBeenCalledWith("t1"));
     expect(refreshMock).toHaveBeenCalled();
+  });
+
+  it("Cancel on the single-delete question deletes nothing", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<JournalGrid trades={rowsOf([mkTrade({ id: "t1" })])} accounts={[ACCOUNT]} />);
+
+    await user.click(screen.getByRole("button", { name: "Trade actions" }));
+    await user.click(await screen.findByRole("menuitem", { name: /Delete/ }));
+    await user.click(await screen.findByRole("button", { name: "Cancel" }));
+
+    expect(deleteTradeMock).not.toHaveBeenCalled();
   });
 
   it("offers no 'Move to active' at all — the fills decide the phase", async () => {
@@ -316,8 +333,7 @@ describe("row actions", () => {
         accounts={[ACCOUNT]}
       />,
     );
-    const menuButtons = screen.getAllByRole("button", { name: "" });
-    await user.click(menuButtons[menuButtons.length - 1]);
+    await user.click(screen.getByRole("button", { name: "Trade actions" }));
     expect(await screen.findByRole("menuitem", { name: /Edit/ })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: /Move to active/ })).not.toBeInTheDocument();
   });
@@ -360,7 +376,10 @@ describe("export", () => {
     await vi.waitFor(() => expect(jsonToSheetMock).toHaveBeenCalled());
     const rows = jsonToSheetMock.mock.calls[0][0] as Record<string, unknown>[];
     expect(rows[0]["Net P/L"]).toBe(250);
-    expect(writeFileMock).toHaveBeenCalledWith(expect.anything(), "journal.xlsx");
+    expect(writeFileMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringMatching(/^trades-\d{4}-\d{2}-\d{2}\.xlsx$/),
+    );
   });
 });
 
@@ -534,8 +553,10 @@ describe("a planned trade shows its plan", () => {
     };
   }
 
+  // The plan columns start hidden now; "__v2" is a stored choice with nothing
+  // switched off, which is how a trader who turned them on sees the grid.
   it("renders entry, stop and target at the instrument's precision", () => {
-    render(<JournalGrid trades={[plannedRow()]} accounts={[ACCOUNT]} />);
+    render(<JournalGrid trades={[plannedRow()]} accounts={[ACCOUNT]} hiddenColumns={["__v2"]} />);
 
     // Two decimals would print all three as "1.16" — one wrong fact where
     // there are three different ones.
@@ -555,7 +576,7 @@ describe("a planned trade shows its plan", () => {
   });
 
   it("has a column heading for each of the three plan fields", () => {
-    render(<JournalGrid trades={[plannedRow()]} accounts={[ACCOUNT]} />);
+    render(<JournalGrid trades={[plannedRow()]} accounts={[ACCOUNT]} hiddenColumns={["__v2"]} />);
 
     expect(screen.getByRole("columnheader", { name: "Plan" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Stop" })).toBeInTheDocument();
@@ -640,5 +661,103 @@ describe("merging two rows that are the same trade", () => {
 
     const item = await screen.findByText(/Merge 2 trades/);
     expect(item.closest("[role='menuitem']")).toHaveAttribute("aria-disabled", "true");
+  });
+});
+
+describe("the list a trader scans", () => {
+  const ACCOUNT = account({ id: "acc-1" });
+
+  it("starts with the study columns hidden, and shows them once the trader has chosen", () => {
+    const { unmount } = render(
+      <JournalGrid trades={rowsOf([mkTrade({ id: "t1" })])} accounts={[ACCOUNT]} />,
+    );
+    expect(screen.queryByRole("columnheader", { name: "Plan" })).not.toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /Net/ })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /Hold/ })).toBeInTheDocument();
+    unmount();
+
+    render(
+      <JournalGrid
+        trades={rowsOf([mkTrade({ id: "t1" })])}
+        accounts={[ACCOUNT]}
+        hiddenColumns={["__v2"]}
+      />,
+    );
+    expect(screen.getByRole("columnheader", { name: "Plan" })).toBeInTheDocument();
+  });
+
+  it("prints fill averages at the instrument's precision, not two decimals", () => {
+    const row: TradeRow = {
+      ...mkTrade({ id: "fx" }).row,
+      tick_size_at_trade: 0.00001,
+      stats: { ...mkTrade({ id: "fx" }).row.stats!, avg_entry: 1.16101, avg_exit: 1.16453 },
+    };
+    render(<JournalGrid trades={[row]} accounts={[ACCOUNT]} />);
+    expect(screen.getByRole("cell", { name: "1.16101" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "1.16453" })).toBeInTheDocument();
+  });
+
+  it("says the FILTERS hid everything, not that there are no trades", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<JournalGrid trades={rowsOf([mkTrade({ id: "t1" })])} accounts={[ACCOUNT]} />);
+    await user.type(screen.getByPlaceholderText(/Search notes/), "nothing-matches-this");
+
+    expect(await screen.findByText(/No trades match these filters/)).toBeInTheDocument();
+    expect(screen.queryByText(/No trades yet/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(screen.getByText(/1 of 1 trades/)).toBeInTheDocument();
+  });
+
+  it("sums the filtered set in the summary bar", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(
+      <JournalGrid
+        trades={rowsOf([
+          mkTrade({ id: "t1", instrument: "EURUSD", net: 100 }),
+          mkTrade({ id: "t2", instrument: "XAUUSD", net: -40 }),
+        ])}
+        accounts={[ACCOUNT]}
+      />,
+    );
+    const netCell = () => screen.getByText("Net P/L").parentElement!;
+    expect(netCell()).toHaveTextContent("60");
+
+    await user.type(screen.getByPlaceholderText(/Search notes/), "xauusd");
+    await vi.waitFor(() => expect(netCell()).toHaveTextContent("40"));
+    expect(screen.getByText("Win rate").parentElement).toHaveTextContent("0.0%");
+  });
+
+  it("remembers the view for the tab, so a save lands back on the same filters", async () => {
+    const user = userEvent.setup({ delay: null });
+    const trades = rowsOf([
+      mkTrade({ id: "t1", instrument: "EURUSD" }),
+      mkTrade({ id: "t2", instrument: "XAUUSD" }),
+    ]);
+    const { unmount } = render(<JournalGrid trades={trades} accounts={[ACCOUNT]} />);
+    await user.type(screen.getByPlaceholderText(/Search notes/), "eurusd");
+    expect(screen.getByText(/1 of 2 trades/)).toBeInTheDocument();
+    unmount();
+
+    render(<JournalGrid trades={trades} accounts={[ACCOUNT]} />);
+    expect(await screen.findByText(/1 of 2 trades/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Search notes/)).toHaveValue("eurusd");
+  });
+
+  it("drops a row from the selection once a filter hides it", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(
+      <JournalGrid
+        trades={rowsOf([
+          mkTrade({ id: "t1", instrument: "EURUSD" }),
+          mkTrade({ id: "t2", instrument: "XAUUSD" }),
+        ])}
+        accounts={[ACCOUNT]}
+      />,
+    );
+    await user.click(screen.getByRole("checkbox", { name: "Select all" }));
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText(/Search notes/), "eurusd");
+    await vi.waitFor(() => expect(screen.getByText("1 selected")).toBeInTheDocument());
   });
 });

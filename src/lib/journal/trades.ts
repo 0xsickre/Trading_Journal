@@ -7,6 +7,7 @@ import { getTradeRuleAnswers } from "./playbooks";
 import type { TradeFormInitial } from "@/components/journal/trade-form";
 import type { TradeImageKind } from "./tradingview-snapshot";
 import { narrowPositionStat } from "./types";
+import { asFillSource } from "./trade-lifecycle";
 import type { PositionStat, TradeRow, TradeTvImages } from "./types";
 
 export type { TradeRow } from "./types";
@@ -103,7 +104,7 @@ export async function getTradeForEdit(
     supabase.from("tj_positions").select("*").eq("id", id).maybeSingle(),
     supabase
       .from("tj_executions")
-      .select("side,price,qty,executed_at,fee,swap_funding")
+      .select("side,price,qty,executed_at,fee,swap_funding,source")
       .eq("position_id", id)
       .order("executed_at"),
     getTradeRuleAnswers(id),
@@ -151,6 +152,7 @@ export async function getTradeForEdit(
       executed_at: e.executed_at as string,
       fee: Number(e.fee),
       swap_funding: Number(e.swap_funding),
+      source: asFillSource(e.source),
     })),
   };
 }

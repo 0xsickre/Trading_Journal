@@ -7,6 +7,87 @@ export type ExecutionInput = {
   swap_funding: number;
 };
 
+/**
+ * Where a fill came from. Mirrors the CHECK on `tj_executions.source`.
+ *
+ * It travels through the edit form because `tj_save_trade` deletes and
+ * re-inserts every fill on each save: a fill the form did not carry the origin
+ * of came back as `manual`, so opening an imported trade to add a note quietly
+ * rewrote its provenance.
+ */
+export const FILL_SOURCES = ["manual", "import", "bot"] as const;
+export type FillSource = (typeof FILL_SOURCES)[number];
+
+export function asFillSource(v: unknown): FillSource {
+  return FILL_SOURCES.includes(v as FillSource) ? (v as FillSource) : "manual";
+}
+
+/** A fill as the form holds it, for `validateFills`. */
+export type FillCheck = {
+  side: "entry" | "exit";
+  qty: number;
+  /** UTC ISO, or null when the time box is empty or unreadable. */
+  executedAt: string | null;
+};
+
+/**
+ * The sequence rules a set of fills must satisfy to describe one position.
+ *
+ * Checked on manual entry only. Before this the form saved an exit with no
+ * entry (status `closed`, money from nothing), more exited than was entered,
+ * and an exit timed before the first entry — and a fill with an empty time box
+ * was saved at "now". Imports keep their own path: a broker statement is fixed
+ * at the source, not refused row by row here.
+ *
+ * Returns the first problem as a sentence, or null. Fill numbers are 1-based,
+ * matching the rows on screen.
+ */
+export function validateFills(fills: FillCheck[]): string | null {
+  const missingTime = fills.findIndex((f) => f.executedAt == null);
+  if (missingTime >= 0) return `Fill ${missingTime + 1} needs a valid time.`;
+
+  const entries = fills.filter((f) => f.side === "entry");
+  const exits = fills.filter((f) => f.side === "exit");
+  if (exits.length === 0) return null;
+  if (entries.length === 0) return "An exit fill needs an entry fill before it.";
+
+  const entryQty = entries.reduce((s, f) => s + f.qty, 0);
+  const exitQty = exits.reduce((s, f) => s + f.qty, 0);
+  // A hair of tolerance: 0.1 + 0.2 lots must not read as an over-exit of 0.3.
+  if (exitQty > entryQty + 1e-9) {
+    return `Exits total ${round(exitQty)} but entries only ${round(entryQty)} — a position cannot close more than was opened.`;
+  }
+
+  const firstEntry = Math.min(...entries.map((f) => Date.parse(f.executedAt!)));
+  const early = fills.findIndex(
+    (f) => f.side === "exit" && Date.parse(f.executedAt!) < firstEntry,
+  );
+  if (early >= 0) return `Fill ${early + 1} exits before the first entry.`;
+  return null;
+}
+
+function round(n: number): string {
+  return String(Math.round(n * 1e6) / 1e6);
+}
+
+/**
+ * Whether an edit opens or enlarges a position.
+ *
+ * The FTMO freeze exists to stop new exposure on an account that broke a rule.
+ * It used to refuse EVERY edit of a trade on such an account, so the trader
+ * could not even write the post-mortem of the trade that breached it. What it
+ * must refuse is narrower: a plan becoming a live trade, or more size going on.
+ */
+export function addsExposure(
+  prev: { status: string | null; entryQty: number },
+  next: { status: string; entryQty: number },
+): boolean {
+  const wasLive = statusToTradePhase(prev.status) === "active";
+  const isLive = statusToTradePhase(next.status) === "active";
+  if (!wasLive && isLive) return true;
+  return next.entryQty > prev.entryQty + 1e-9;
+}
+
 export type ExecLike = Pick<ExecutionInput, "side" | "qty">;
 
 /** The shape a fill must have to be worth storing. */

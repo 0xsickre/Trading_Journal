@@ -13,6 +13,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { gradeFromPct } from "@/lib/journal/setup-score";
+import {
+  classifyOutcome,
+  EXACT_ZERO_RANGE,
+  type BreakevenRange,
+} from "@/lib/journal/breakeven";
 import { cn } from "@/lib/utils";
 import {
   ruleAppliesTo,
@@ -46,6 +51,7 @@ export function PlaybookChecklist({
   answers,
   onAnswerChange,
   netPl,
+  breakevenRange = EXACT_ZERO_RANGE,
 }: {
   playbooks: Playbook[];
   playbookId: string | null;
@@ -54,6 +60,12 @@ export function PlaybookChecklist({
   onAnswerChange: (ruleId: string, followed: boolean | null) => void;
   /** Live net P&L, or null while the trade is still a plan. */
   netPl: number | null;
+  /**
+   * The account's breakeven band. The statistics classify with it, so the
+   * checklist must too: without it a +$8 scratch offered the "winner" rules
+   * here while every report counted the same trade as breakeven.
+   */
+  breakevenRange?: BreakevenRange;
 }) {
   const book = playbooks.find((p) => p.id === playbookId) ?? null;
 
@@ -62,10 +74,8 @@ export function PlaybookChecklist({
   // winner run" is not a question you can answer before there is a winner.
   const outcome = useMemo<"win" | "loss" | "breakeven" | null>(() => {
     if (netPl == null) return null;
-    if (netPl > 0) return "win";
-    if (netPl < 0) return "loss";
-    return "breakeven";
-  }, [netPl]);
+    return classifyOutcome(netPl, breakevenRange);
+  }, [netPl, breakevenRange]);
 
   // Bucketed by THIS book's own sections, in the order its owner put them in.
   // The sections used to come from one account-wide list, which is why the

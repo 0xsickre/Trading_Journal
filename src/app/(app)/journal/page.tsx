@@ -35,8 +35,8 @@ export default async function JournalPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Journal"
-        description="Every logged trade. Filter by any tag — archived options stay filterable."
+        title="Trades"
+        description="Every trade and plan you have logged — filter, review, and open one to edit it."
       />
 
       <JournalGrid

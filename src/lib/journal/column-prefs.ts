@@ -61,3 +61,33 @@ export function visibleCount(
   const off = new Set(hidden);
   return known.filter((k) => !off.has(k)).length;
 }
+
+/**
+ * Marks a stored list as the user's own choice.
+ *
+ * The grid grew to nineteen columns, and a trader who never opened the picker
+ * saw all of them. Some are for occasional study (planned stop and target,
+ * slippage, capture) rather than for scanning the book, so they now start
+ * hidden. A stored list WITHOUT this marker predates that and only records what
+ * the user switched off themselves, so the defaults are added on top of it; a
+ * list WITH it is taken as-is — including a user who deliberately turned every
+ * default column back on. It is an id no column has, so `hiddenToVisibility`
+ * ignores it.
+ */
+export const CONFIGURED_MARKER = "__v2";
+
+/** The hidden set in effect, given what is stored and the grid's defaults. */
+export function effectiveHidden(
+  stored: readonly string[],
+  known: readonly string[],
+  defaults: readonly string[],
+): string[] {
+  const off = new Set(stored.filter((id) => id !== CONFIGURED_MARKER));
+  if (!stored.includes(CONFIGURED_MARKER)) for (const id of defaults) off.add(id);
+  return known.filter((k) => off.has(k));
+}
+
+/** What to store for a hidden set the user just chose. */
+export function toStoredHidden(hidden: readonly string[]): string[] {
+  return [...hidden.filter((id) => id !== CONFIGURED_MARKER), CONFIGURED_MARKER];
+}

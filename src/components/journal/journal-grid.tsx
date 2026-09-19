@@ -3,7 +3,9 @@
 import {
   useCallback,
   useDeferredValue,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from "react";
@@ -11,15 +13,22 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   type ColumnDef,
+  type PaginationState,
   type RowSelectionState,
   type SortingState,
+  type Updater,
   flexRender,
   getCoreRowModel,
+  getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
 import {
+  ArrowDown,
+  ArrowUp,
   ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
   Columns3,
   Download,
   MoreHorizontal,
@@ -30,6 +39,7 @@ import {
   Merge,
   ExternalLink,
   SlidersHorizontal,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -71,7 +81,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TagMultiSelect } from "@/components/journal/tag-multi-select";
-import { dimensionsByGroup, getDimension } from "@/lib/journal/reports/dimensions";
 import {
   classifyOutcome,
   resolveBreakevenRange,
@@ -84,8 +93,17 @@ import { setupScoreFromTrade } from "@/lib/journal/setup-score";
 import type { Playbook, PositionRule } from "@/lib/journal/playbook-types";
 import { cn } from "@/lib/utils";
 import type { Account, OptionsMap, TradeRow } from "@/lib/journal/types";
-import { fmtInTz, DATE_TIME } from "@/lib/journal/time";
-import { fmtMoney, fmtNum, fmtPrice, fmtR, pnlClass } from "@/lib/journal/format";
+import { fmtInTz, DATE_TIME, DEFAULT_TZ } from "@/lib/journal/time";
+import {
+  fmtMoney,
+  fmtNum,
+  fmtPct,
+  fmtPrice,
+  fmtR,
+  pnlClass,
+} from "@/lib/journal/format";
+import { formatDuration } from "@/lib/journal/units";
+import { winRateOf } from "@/lib/journal/analytics";
 import { fmtSlippageR, slippageFromTrade } from "@/lib/journal/entry-slippage";
 import {
   exitEfficiencyFromTrade,
@@ -116,7 +134,9 @@ import {
 } from "@/lib/journal/merge-positions";
 import { setJournalHiddenColumns } from "@/app/(app)/journal/actions";
 import {
+  effectiveHidden,
   hiddenToVisibility,
+  toStoredHidden,
   toggleHidden,
   visibleCount,
 } from "@/lib/journal/column-prefs";
@@ -124,6 +144,19 @@ import {
   formatLifecycleStatusLabel,
   lifecycleStatusHint,
 } from "@/lib/journal/trade-lifecycle";
+import {
+  DEFAULT_VIEW,
+  PAGE_SIZES,
+  PAGE_SIZE_ALL,
+  PERIODS,
+  inBounds,
+  loadViewState,
+  periodBounds,
+  saveViewState,
+  summarizeTrades,
+  tradeDayKey,
+  type Period,
+} from "@/lib/journal/trades-view";
 
 function statusBadgeClass(status: string): string | undefined {
   if (status === "missed") return "border-amber-500/50 text-amber-700 dark:text-amber-400";
@@ -143,65 +176,13 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-/**
- * Grid filters come from the dimension registry, so a label is written once.
- *
- * Most of them filter on the RAW column value (see `fieldMatchesFilter`), which
- * is why only trade-column dimensions qualify — a derived bucket like "1–3d" is
- * not a value any row stores.
- *
- * `outcome` is the one exception, and it is here on purpose: it replaced the
- * manual `result` column, which was dropped for duplicating it. Win / loss /
- * breakeven fall out of net P&L against the account's breakeven band, so the
- * value has to be COMPUTED per row rather than read — hence its own branch in
- * `filtered` and its own fixed option list below.
- */
-const FILTER_KEYS = new Set([
-  "instrument",
-  "direction",
-  "setup_grade",
-  "ict_entry_model",
-  "status",
-]);
-
 const OUTCOME_KEY = "outcome";
-const outcomeDimension = getDimension(OUTCOME_KEY);
-
-const FILTERS: { key: string; label: string; options?: readonly string[] }[] = [
-  ...dimensionsByGroup("trade")
-    .filter((d) => FILTER_KEYS.has(d.key))
-    .map((d) => ({ key: d.key, label: d.label })),
-  ...(outcomeDimension
-    ? [
-        {
-          key: OUTCOME_KEY,
-          label: outcomeDimension.label,
-          // `distinct()` has nothing to read for a derived value, so the
-          // buckets come from the dimension's own declared order.
-          options: outcomeDimension.order ?? ["win", "breakeven", "loss"],
-        },
-      ]
-    : []),
-];
-
-function distinct(rows: TradeRow[], key: string): string[] {
-  const set = new Set<string>();
-  for (const r of rows) {
-    const tags = arrayFieldValue(r, key);
-    if (tags) for (const tag of tags) set.add(tag);
-    else {
-      const v = stringFieldValue(r, key);
-      if (v) set.add(v);
-    }
-  }
-  return [...set].sort();
-}
-
-function fieldMatchesFilter(row: TradeRow, key: string, value: string): boolean {
-  const tags = arrayFieldValue(row, key);
-  if (tags) return tags.includes(value);
-  return stringFieldValue(row, key) === value;
-}
+const OUTCOME_LABELS: Record<string, string> = {
+  win: "Win",
+  breakeven: "Breakeven",
+  loss: "Loss",
+};
+const STATUS_ORDER = ["planned", "open", "partial", "closed", "missed"];
 
 /**
  * Every column the user may switch off, and its name.
@@ -210,15 +191,13 @@ function fieldMatchesFilter(row: TradeRow, key: string, value: string): boolean 
  * below, it labels the picker, and **membership in it is what makes a column
  * hideable**. A column absent from here — `actions`, the row menu — simply
  * cannot be turned off, with no separate flag to keep in step.
- *
- * Labels live here rather than inline in each header so the name is written
- * once; the picker and the column heading cannot drift apart.
  */
 const COLUMN_LABELS: Record<string, string> = {
   trade_no: "#",
-  date: "Date (NY)",
+  date: "Opened",
   instrument: "Instrument",
   direction: "Dir",
+  playbook: "Playbook",
   setup_grade: "Grade",
   plan_entry: "Plan",
   stop_price: "Stop",
@@ -227,6 +206,7 @@ const COLUMN_LABELS: Record<string, string> = {
   avg_entry: "Entry",
   slippage_r: "Slip R",
   avg_exit: "Exit",
+  hold: "Hold",
   r: "R",
   exit_eff: "Target %",
   capture: "Capture %",
@@ -237,6 +217,22 @@ const COLUMN_LABELS: Record<string, string> = {
 };
 
 const HIDEABLE_COLUMNS = Object.keys(COLUMN_LABELS);
+
+/**
+ * Off until the trader turns them on. These answer study questions — how far
+ * the fill was from the plan, how much of the move was kept — rather than the
+ * scanning ones the list is opened for, and with them on the table ran to
+ * twenty columns and a horizontal scroll on any laptop.
+ */
+const DEFAULT_HIDDEN_COLUMNS = [
+  "plan_entry",
+  "stop_price",
+  "target_price",
+  "slippage_r",
+  "exit_eff",
+  "capture",
+  "gross",
+];
 
 /**
  * The three tag columns a bulk "Add tag" can target, and the option-list
@@ -255,6 +251,28 @@ const BULK_TAG_CATEGORIES: {
   { value: "mistake", label: "Mistake", listKey: "mistake" },
 ];
 
+/** One dimension filter: its options come from the book, its match from the row. */
+type FilterSpec = {
+  key: string;
+  label: string;
+  options: { value: string; label: string }[];
+  match: (t: TradeRow, value: string) => boolean;
+};
+
+function distinctValues(rows: TradeRow[], read: (t: TradeRow) => string[]): string[] {
+  const set = new Set<string>();
+  for (const r of rows) for (const v of read(r)) if (v) set.add(v);
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+/** A column's values: the tags of an array field, or the one string of a plain one. */
+function fieldValues(t: TradeRow, key: string): string[] {
+  const tags = arrayFieldValue(t, key);
+  if (tags) return tags;
+  const v = stringFieldValue(t, key);
+  return v ? [v] : [];
+}
+
 export function JournalGrid({
   trades,
   accounts,
@@ -272,7 +290,7 @@ export function JournalGrid({
   hiddenColumns?: string[];
   /** Option-list values, keyed by list key — powers the bulk "Add tag" picker. */
   optionsMap?: OptionsMap;
-  /** Playbooks and their rules, for the derived setup grade. */
+  /** Playbooks and their rules, for the playbook column and the derived setup grade. */
   playbooks?: Playbook[];
   /** Recorded rule answers, the other half of that grade. */
   positionRules?: Map<string, PositionRule[]>;
@@ -288,56 +306,103 @@ export function JournalGrid({
     for (const a of accounts) m.set(a.id, a.currency);
     return m;
   }, [accounts]);
+  const playbookName = useMemo(
+    () => new Map(playbooks.map((p) => [p.id, p.name])),
+    [playbooks],
+  );
 
-  const [search, setSearch] = useState("");
+  // View state. Starts from the default on the server and on first paint, and
+  // the tab's remembered view is read after mount — sessionStorage does not
+  // exist during SSR, and reading it in render would mismatch hydration.
+  const [search, setSearch] = useState(DEFAULT_VIEW.search);
   /**
-   * The value the FILTER reads, one render behind the box.
-   *
-   * `filtered` scans every trade and, for a search term, builds a lowercased
-   * haystack per trade — including `gradeOf`, which scores the trade against
-   * the whole rule library. Driving that straight off `search` ran the entire
-   * pass on every keystroke and the input visibly stuttered on a large book.
-   *
-   * `useDeferredValue` and not a timeout: React keeps the typed character
-   * responsive and re-runs the scan at lower priority, so nothing is dropped
-   * and no delay has to be guessed at.
+   * The value the FILTER reads, one render behind the box. `filtered` scores
+   * every trade against the rule library for its grade, so driving it straight
+   * off `search` ran that pass on every keystroke.
    */
   const deferredSearch = useDeferredValue(search);
-  const [accountFilter, setAccountFilter] = useState<string>("all");
-  const [filters, setFilters] = useState<Record<string, string>>({});
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [accountFilter, setAccountFilter] = useState<string>(DEFAULT_VIEW.account);
+  const [filters, setFilters] = useState<Record<string, string>>(DEFAULT_VIEW.filters);
+  const [period, setPeriod] = useState<Period>(DEFAULT_VIEW.period);
+  const [customFrom, setCustomFrom] = useState(DEFAULT_VIEW.customFrom);
+  const [customTo, setCustomTo] = useState(DEFAULT_VIEW.customTo);
+  // Newest trade first. The server orders by `created_at` — when the ROW was
+  // written — so a backlog imported today sat above last week's trades.
+  const [sorting, setSorting] = useState<SortingState>(DEFAULT_VIEW.sort);
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: DEFAULT_VIEW.pageIndex,
+    pageSize: DEFAULT_VIEW.pageSize,
+  });
+  const restored = useRef(false);
+
+  useEffect(() => {
+    const v = loadViewState();
+    setSearch(v.search);
+    setAccountFilter(v.account);
+    setFilters(v.filters);
+    setPeriod(v.period);
+    setCustomFrom(v.customFrom);
+    setCustomTo(v.customTo);
+    setSorting(v.sort);
+    setPagination({ pageIndex: v.pageIndex, pageSize: v.pageSize });
+    restored.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!restored.current) return;
+    saveViewState({
+      search,
+      account: accountFilter,
+      filters,
+      period,
+      customFrom,
+      customTo,
+      sort: sorting,
+      pageSize: pagination.pageSize,
+      pageIndex: pagination.pageIndex,
+    });
+  }, [search, accountFilter, filters, period, customFrom, customTo, sorting, pagination]);
+
+  /** Any narrowing sends the reader back to page one — page 4 of a smaller set may not exist. */
+  const toFirstPage = () => setPagination((p) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }));
+
+  function setFilter(key: string, value: string) {
+    setFilters((p) => {
+      const next = { ...p };
+      if (value === "all") delete next[key];
+      else next[key] = value;
+      return next;
+    });
+    toFirstPage();
+  }
+
+  function clearAllFilters() {
+    setFilters({});
+    setAccountFilter("all");
+    setPeriod("all");
+    setCustomFrom("");
+    setCustomTo("");
+    setSearch("");
+    toFirstPage();
+  }
 
   // Optimistic: the column disappears on click and the save follows. A round
   // trip before the grid reacts would read as a dead checkbox.
-  const [hidden, setHidden] = useState<string[]>(hiddenColumns);
+  const [hidden, setHidden] = useState<string[]>(() =>
+    effectiveHidden(hiddenColumns, HIDEABLE_COLUMNS, DEFAULT_HIDDEN_COLUMNS),
+  );
 
-  // Bulk selection + the two dialogs it can open. `rowSelection` is keyed by
-  // trade id (`getRowId` below), not row index, so it survives a re-sort or a
-  // filter narrowing the visible set instead of silently pointing at whatever
-  // trade now sits at that position.
+  // Bulk selection + the dialogs it can open. `rowSelection` is keyed by trade
+  // id (`getRowId` below), not row index, so it survives a re-sort.
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [bulkPending, startBulk] = useTransition();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [rowToDelete, setRowToDelete] = useState<TradeRow | null>(null);
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [tagKind, setTagKind] = useState<BulkTagKind>("technical");
   const [tagValues, setTagValues] = useState<string[]>([]);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
 
-  /**
-   * How many of the dimension filters are actually narrowing the grid.
-   *
-   * Only the keys in `FILTERS` count: `search` and the account picker stay
-   * visible in the toolbar, so they never need a badge to be noticed. `"all"`
-   * is the unset value, and an absent key means the same thing.
-   */
-  const activeFilterCount = useMemo(
-    () =>
-      FILTERS.filter((f) => {
-        const v = filters[f.key];
-        return v != null && v !== "all";
-      }).length,
-    [filters],
-  );
   const columnVisibility = useMemo(
     // Only the hideable ids are listed; TanStack treats every column it does
     // not hear about as visible, which is exactly right for `actions`.
@@ -351,22 +416,20 @@ export function JournalGrid({
     // last visible column — so there is nothing to save and nothing to redraw.
     if (next.length === hidden.length && next.every((x, i) => x === hidden[i]))
       return;
+    const before = hidden;
     setHidden(next);
-    void setJournalHiddenColumns(next).then((res) => {
+    void setJournalHiddenColumns(toStoredHidden(next)).then((res) => {
       if (!res.ok) {
-        setHidden(hidden);
+        setHidden(before);
         toast.error(res.error);
       }
     });
   }
 
   /**
-   * Breakeven band per account, for the outcome filter.
-   *
-   * Per account and not one global band: the same −$40 is a breakeven trade on
-   * an account whose band reaches −$50 and a loss on one that does not, and
-   * collapsing the two would classify a trade by whichever account happened to
-   * be first.
+   * Breakeven band per account, for the outcome filter. Per account and not one
+   * global band: the same −$40 is breakeven on an account whose band reaches
+   * −$50 and a loss on one that does not.
    */
   const rangeByAccount = useMemo(
     () => new Map(accounts.map((a) => [a.id, resolveBreakevenRange(a)])),
@@ -375,10 +438,10 @@ export function JournalGrid({
 
   const outcomeOf = useCallback(
     (t: TradeRow): "win" | "loss" | "breakeven" | null => {
+      // Closed trades only. A partial's P&L is not final, and an open or missed
+      // trade has no outcome at all — null keeps it out of every bucket.
       const net = t.stats?.net_pl;
-      // An open or missed trade has no outcome yet. Null excludes it from every
-      // outcome bucket rather than parking it in "loss" at 0.
-      if (net == null) return null;
+      if (net == null || t.status !== "closed") return null;
       const range =
         (t.account_id ? rangeByAccount.get(t.account_id) : null) ??
         EXACT_ZERO_RANGE;
@@ -393,12 +456,10 @@ export function JournalGrid({
   );
 
   /**
-   * The grade shown, filtered on and searched.
-   *
-   * Derived from the criteria when they were answered, and the hand-typed
-   * column otherwise. One reader for all three uses: a column that says B while
-   * the filter disagrees about which rows are B is the kind of split this repo
-   * spends its comments warning about.
+   * The grade shown, filtered on and searched: derived from the criteria when
+   * they were answered, the hand-typed column otherwise. The filter used to
+   * read the typed column alone, so it could disagree with the column beside
+   * it about which rows were a B.
    */
   const gradeOf = useCallback(
     (t: TradeRow): string | null => {
@@ -411,32 +472,118 @@ export function JournalGrid({
     [ruleLookup, outcomeOf],
   );
 
+  const tzOf = useCallback(
+    (t: TradeRow | undefined) =>
+      (t?.account_id && tzByAccount.get(t.account_id)) || DEFAULT_TZ,
+    [tzByAccount],
+  );
+  const curOf = useCallback(
+    (t: TradeRow) => (t.account_id && currencyByAccount.get(t.account_id)) || "USD",
+    [currencyByAccount],
+  );
+  const playbookOf = useCallback(
+    (t: TradeRow) => {
+      const id = t.playbook_id as string | null | undefined;
+      return id ? (playbookName.get(id) ?? null) : null;
+    },
+    [playbookName],
+  );
+
+  const filterSpecs = useMemo<FilterSpec[]>(() => {
+    const simple = (key: string, label: string): FilterSpec => ({
+      key,
+      label,
+      options: distinctValues(trades, (t) => fieldValues(t, key)).map((v) => ({
+        value: v,
+        label: v,
+      })),
+      match: (t, v) => fieldValues(t, key).includes(v),
+    });
+    const usedPlaybooks = new Set(trades.map((t) => t.playbook_id as string | null));
+    return [
+      simple("instrument", "Instrument"),
+      simple("direction", "Direction"),
+      {
+        key: "playbook",
+        label: "Playbook",
+        options: playbooks
+          .filter((p) => usedPlaybooks.has(p.id))
+          .map((p) => ({ value: p.id, label: p.name })),
+        match: (t, v) => t.playbook_id === v,
+      },
+      {
+        key: "setup_grade",
+        label: "Grade",
+        options: distinctValues(trades, (t) => {
+          const g = gradeOf(t);
+          return g ? [g] : [];
+        }).map((v) => ({ value: v, label: v })),
+        match: (t, v) => gradeOf(t) === v,
+      },
+      simple("ict_entry_model", "Entry model"),
+      simple("technical_tags", "Technical tag"),
+      simple("mistake", "Mistake"),
+      {
+        key: OUTCOME_KEY,
+        label: "Outcome",
+        options: ["win", "breakeven", "loss"].map((v) => ({
+          value: v,
+          label: OUTCOME_LABELS[v],
+        })),
+        match: (t, v) => outcomeOf(t) === v,
+      },
+      {
+        key: "status",
+        label: "Status",
+        options: STATUS_ORDER.filter((s) => trades.some((t) => t.status === s)).map(
+          (s) => ({ value: s, label: formatLifecycleStatusLabel(s) }),
+        ),
+        match: (t, v) => t.status === v,
+      },
+      {
+        key: "needs_review",
+        label: "Review",
+        options: [{ value: "yes", label: "Needs review" }],
+        match: (t) => t.needs_review === true,
+      },
+    ];
+  }, [trades, playbooks, gradeOf, outcomeOf]);
+
+  // The timezone "today" is counted in: the filtered account's, else the first
+  // active account's. Each trade's own day is still read in its own account tz.
+  const scopeTz = useMemo(() => {
+    const a =
+      accounts.find((x) => x.id === accountFilter) ??
+      accounts.find((x) => x.is_active) ??
+      accounts[0];
+    return a?.timezone ?? DEFAULT_TZ;
+  }, [accounts, accountFilter]);
+
+  const bounds = useMemo(
+    () =>
+      periodBounds(period, new Date(), scopeTz, { from: customFrom, to: customTo }),
+    [period, scopeTz, customFrom, customTo],
+  );
+
   const filtered = useMemo(() => {
+    const active = filterSpecs.filter((f) => filters[f.key] != null);
+    const q = deferredSearch.trim().toLowerCase();
     return trades.filter((t) => {
       if (accountFilter !== "all" && t.account_id !== accountFilter) return false;
-      for (const [k, v] of Object.entries(filters)) {
-        if (!v || v === "all") continue;
-        if (k === OUTCOME_KEY) {
-          if (outcomeOf(t) !== v) return false;
-          continue;
-        }
-        if (!fieldMatchesFilter(t, k, v)) return false;
-      }
-      if (deferredSearch.trim()) {
-        const q = deferredSearch.toLowerCase();
-        // `mistake` has been here since it became `text[]`. Before that it was not
-        // searchable even as text — an oversight only visible once it turned
-        // into an array like the other tags.
-        const tagHay = ["technical_tags", "psychology_tags", "mistake"]
-          .flatMap((k) => {
-            const v = t[k];
-            return Array.isArray(v) ? v : [];
-          })
-          .filter((x): x is string => typeof x === "string");
+      if (!inBounds(tradeDayKey(t, tzOf(t)), bounds)) return false;
+      for (const f of active) if (!f.match(t, filters[f.key])) return false;
+      if (q) {
+        const tagHay = ["technical_tags", "psychology_tags", "mistake"].flatMap(
+          (k) => arrayFieldValue(t, k) ?? [],
+        );
         const hay = [
+          t.trade_no != null ? `#${t.trade_no}` : null,
           t.instrument,
+          t.direction,
           t.trade_journal_notes,
           t.ict_entry_model,
+          t.miss_reason,
+          playbookOf(t),
           gradeOf(t),
           ...tagHay,
         ]
@@ -447,22 +594,30 @@ export function JournalGrid({
       }
       return true;
     });
-  }, [trades, accountFilter, filters, deferredSearch, outcomeOf, gradeOf]);
+  }, [trades, accountFilter, bounds, filterSpecs, filters, deferredSearch, tzOf, gradeOf, playbookOf]);
 
-  const tzOf = useCallback(
-    (t: TradeRow) =>
-      (t.account_id && tzByAccount.get(t.account_id)) || "America/New_York",
-    [tzByAccount],
-  );
-  const curOf = useCallback(
-    (t: TradeRow) => (t.account_id && currencyByAccount.get(t.account_id)) || "USD",
-    [currencyByAccount],
-  );
+  const summary = useMemo(() => summarizeTrades(filtered, accounts), [filtered, accounts]);
+
+  /**
+   * The selection the table sees: only rows still in the filtered set. A row
+   * ticked and then filtered away used to stay selected out of sight, and the
+   * count, the merge pair and a delete could each disagree about it.
+   */
+  const visibleSelection = useMemo(() => {
+    const ids = new Set(filtered.map((t) => t.id));
+    const out: RowSelectionState = {};
+    for (const [id, on] of Object.entries(rowSelection)) if (on && ids.has(id)) out[id] = true;
+    return out;
+  }, [rowSelection, filtered]);
+
+  const onRowSelectionChange = (u: Updater<RowSelectionState>) =>
+    setRowSelection(typeof u === "function" ? u(visibleSelection) : u);
 
   const columns = useMemo<ColumnDef<TradeRow>[]>(
     () => [
       {
         id: "select",
+        enableSorting: false,
         header: ({ table }) => (
           <Checkbox
             checked={
@@ -485,49 +640,48 @@ export function JournalGrid({
         ),
       },
       {
-        accessorKey: "trade_no",
+        id: "trade_no",
         header: COLUMN_LABELS.trade_no,
-        cell: ({ row }) => row.original.trade_no ?? "—",
+        accessorFn: (r) => r.trade_no ?? undefined,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground tabular-nums">
+            {row.original.trade_no ?? "—"}
+          </span>
+        ),
       },
       {
         id: "date",
-        header: ({ column }) => (
-          <SortBtn column={column} label={COLUMN_LABELS.date} />
-        ),
+        header: COLUMN_LABELS.date,
         accessorFn: (r) => r.stats?.opened_at ?? r.created_at,
         cell: ({ row }) => {
           const t = row.original;
-          const d = t.stats?.opened_at ?? t.created_at;
+          const tz = tzOf(t);
           return (
-            <span className="whitespace-nowrap">
-              {fmtInTz(d, tzOf(t), DATE_TIME)}
+            <span className="whitespace-nowrap tabular-nums" title={tz.replace("_", " ")}>
+              {fmtInTz(t.stats?.opened_at ?? t.created_at, tz, DATE_TIME)}
             </span>
           );
         },
       },
       {
-        accessorKey: "instrument",
+        id: "instrument",
         header: COLUMN_LABELS.instrument,
+        accessorFn: (r) => (r.instrument as string) ?? undefined,
         cell: ({ row }) => {
-          // Where this trade's money came from, or why there is none. This used
-          // to read `point_value_source` alone, which left the FX cases silent:
-          // an instrument WITH a point value but without a recorded rate has
-          // null money and a perfectly ordinary `snapshot` source, so the P/L
-          // column rendered a bare dash with nothing to act on.
+          // Only the warnings. "broker" — the money came from the statement —
+          // is not something to act on, so it moved to the Net cell's tooltip
+          // instead of sitting as a badge on every imported row.
           const money = moneyProvenance(row.original.stats);
+          const warn = money.label != null && money.label !== "broker";
           return (
             <span className="flex items-center gap-1.5">
               <span className="font-mono">
                 {(row.original.instrument as string) ?? "—"}
               </span>
-              {money.label && (
+              {warn && (
                 <Badge
                   variant="outline"
-                  className={
-                    money.unpriced
-                      ? "text-[var(--loss)]"
-                      : "text-muted-foreground"
-                  }
+                  className={money.unpriced ? "text-[var(--loss)]" : "text-muted-foreground"}
                   title={money.title ?? undefined}
                 >
                   {money.label}
@@ -538,8 +692,9 @@ export function JournalGrid({
         },
       },
       {
-        accessorKey: "direction",
+        id: "direction",
         header: COLUMN_LABELS.direction,
+        accessorFn: (r) => (r.direction as string) ?? undefined,
         cell: ({ row }) => {
           const d = row.original.direction as string;
           if (!d) return "—";
@@ -555,23 +710,26 @@ export function JournalGrid({
         },
       },
       {
+        id: "playbook",
+        header: COLUMN_LABELS.playbook,
+        accessorFn: (r) => playbookOf(r) ?? undefined,
+        cell: ({ row }) => (
+          <span className="block max-w-40 truncate">{playbookOf(row.original) ?? "—"}</span>
+        ),
+      },
+      {
         id: "setup_grade",
-        accessorFn: (r) => gradeOf(r),
+        accessorFn: (r) => gradeOf(r) ?? undefined,
         header: COLUMN_LABELS.setup_grade,
         cell: ({ row }) => gradeOf(row.original) ?? "—",
       },
-      // The plan, as opposed to what happened. Separate from `avg_entry` on
-      // purpose: that column is the average FILL, so a trade still waiting shows
-      // an em dash there and would otherwise show nothing anywhere — which is
-      // how a planned trade ends up as a row of dashes.
-      //
-      // Prices format against the trade's own frozen tick size, because two
-      // decimals turns a EURUSD stop of 1.16101 and a target of 1.16453 into the
-      // same "1.16".
+      // The plan, as opposed to what happened. Prices format against the
+      // trade's own frozen tick size, because two decimals turns a EURUSD stop
+      // of 1.16101 and a target of 1.16453 into the same "1.16".
       {
         id: "plan_entry",
         header: COLUMN_LABELS.plan_entry,
-        accessorFn: (r) => numberFieldValue(r, "entry_price"),
+        accessorFn: (r) => numberFieldValue(r, "entry_price") ?? undefined,
         cell: ({ row }) =>
           fmtPrice(
             numberFieldValue(row.original, "entry_price"),
@@ -581,7 +739,7 @@ export function JournalGrid({
       {
         id: "stop_price",
         header: COLUMN_LABELS.stop_price,
-        accessorFn: (r) => numberFieldValue(r, "stop_price"),
+        accessorFn: (r) => numberFieldValue(r, "stop_price") ?? undefined,
         cell: ({ row }) =>
           fmtPrice(
             numberFieldValue(row.original, "stop_price"),
@@ -591,7 +749,7 @@ export function JournalGrid({
       {
         id: "target_price",
         header: COLUMN_LABELS.target_price,
-        accessorFn: (r) => numberFieldValue(r, "target_price"),
+        accessorFn: (r) => numberFieldValue(r, "target_price") ?? undefined,
         cell: ({ row }) =>
           fmtPrice(
             numberFieldValue(row.original, "target_price"),
@@ -601,19 +759,25 @@ export function JournalGrid({
       {
         id: "size",
         header: COLUMN_LABELS.size,
-        accessorFn: (r) => r.stats?.entry_qty ?? null,
-        cell: ({ row }) => fmtNum(row.original.stats?.entry_qty, 2),
+        accessorFn: (r) => r.stats?.entry_qty || undefined,
+        cell: ({ row }) => fmtNum(row.original.stats?.entry_qty || null, 2),
       },
+      // Fill averages at the same precision as the plan columns. They used to
+      // print two decimals, so an FX entry and exit could read identical.
       {
         id: "avg_entry",
         header: COLUMN_LABELS.avg_entry,
-        accessorFn: (r) => r.stats?.avg_entry ?? null,
-        cell: ({ row }) => fmtNum(row.original.stats?.avg_entry, 2),
+        accessorFn: (r) => r.stats?.avg_entry ?? undefined,
+        cell: ({ row }) =>
+          fmtPrice(
+            row.original.stats?.avg_entry,
+            numberFieldValue(row.original, "tick_size_at_trade"),
+          ),
       },
       {
         id: "slippage_r",
-        header: ({ column }) => <SortBtn column={column} label={COLUMN_LABELS.slippage_r} />,
-        accessorFn: (r) => slippageFromTrade(r)?.slippageR ?? null,
+        header: COLUMN_LABELS.slippage_r,
+        accessorFn: (r) => slippageFromTrade(r)?.slippageR ?? undefined,
         cell: ({ row }) => {
           const slip = slippageFromTrade(row.original);
           if (slip?.slippageR == null) return "—";
@@ -627,13 +791,27 @@ export function JournalGrid({
       {
         id: "avg_exit",
         header: COLUMN_LABELS.avg_exit,
-        accessorFn: (r) => r.stats?.avg_exit ?? null,
-        cell: ({ row }) => fmtNum(row.original.stats?.avg_exit, 2),
+        accessorFn: (r) => r.stats?.avg_exit ?? undefined,
+        cell: ({ row }) =>
+          fmtPrice(
+            row.original.stats?.avg_exit,
+            numberFieldValue(row.original, "tick_size_at_trade"),
+          ),
+      },
+      {
+        id: "hold",
+        header: COLUMN_LABELS.hold,
+        accessorFn: (r) => r.stats?.duration_seconds ?? undefined,
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap">
+            {formatDuration(row.original.stats?.duration_seconds)}
+          </span>
+        ),
       },
       {
         id: "r",
-        header: ({ column }) => <SortBtn column={column} label={COLUMN_LABELS.r} />,
-        accessorFn: (r) => r.stats?.realized_r ?? null,
+        header: COLUMN_LABELS.r,
+        accessorFn: (r) => r.stats?.realized_r ?? undefined,
         cell: ({ row }) => (
           <span className={pnlClass(row.original.stats?.realized_r)}>
             {fmtR(row.original.stats?.realized_r)}
@@ -642,8 +820,8 @@ export function JournalGrid({
       },
       {
         id: "exit_eff",
-        header: ({ column }) => <SortBtn column={column} label={COLUMN_LABELS.exit_eff} />,
-        accessorFn: (r) => exitEfficiencyFromTrade(r)?.pct ?? null,
+        header: COLUMN_LABELS.exit_eff,
+        accessorFn: (r) => exitEfficiencyFromTrade(r)?.pct ?? undefined,
         cell: ({ row }) => {
           const eff = exitEfficiencyFromTrade(row.original);
           if (eff == null) return "—";
@@ -656,25 +834,20 @@ export function JournalGrid({
       },
       {
         id: "capture",
-        header: ({ column }) => <SortBtn column={column} label={COLUMN_LABELS.capture} />,
-        accessorFn: (r) => excursionFromTrade(r).capturePct,
+        header: COLUMN_LABELS.capture,
+        accessorFn: (r) => excursionFromTrade(r).capturePct ?? undefined,
         cell: ({ row }) => {
-          // Null means the trade carries no MFE price, or never went in favour
-          // at all — either way there is no peak to have captured a share of, and
-          // a 0 % would read as "gave it all back".
+          // Null means no MFE price, or a trade that never went in favour —
+          // there is no peak to have captured a share of.
           const pct = excursionFromTrade(row.original).capturePct;
           if (pct == null) return "—";
-          return (
-            // 100 % is the whole move, so the midpoint is the natural neutral —
-            // same treatment the Target % column already gives its own scale.
-            <span className={pnlClass(pct - 50)}>{fmtNum(pct, 0)}%</span>
-          );
+          return <span className={pnlClass(pct - 50)}>{fmtNum(pct, 0)}%</span>;
         },
       },
       {
         id: "gross",
-        header: ({ column }) => <SortBtn column={column} label={COLUMN_LABELS.gross} />,
-        accessorFn: (r) => r.stats?.gross_pl ?? null,
+        header: COLUMN_LABELS.gross,
+        accessorFn: (r) => r.stats?.gross_pl ?? undefined,
         cell: ({ row }) => (
           <span className={pnlClass(row.original.stats?.gross_pl)}>
             {fmtMoney(row.original.stats?.gross_pl, curOf(row.original), { sign: true })}
@@ -683,17 +856,24 @@ export function JournalGrid({
       },
       {
         id: "net",
-        header: ({ column }) => <SortBtn column={column} label={COLUMN_LABELS.net} />,
-        accessorFn: (r) => r.stats?.net_pl ?? null,
-        cell: ({ row }) => (
-          <span className={`font-medium ${pnlClass(row.original.stats?.net_pl)}`}>
-            {fmtMoney(row.original.stats?.net_pl, curOf(row.original), { sign: true })}
-          </span>
-        ),
+        header: COLUMN_LABELS.net,
+        accessorFn: (r) => r.stats?.net_pl ?? undefined,
+        cell: ({ row }) => {
+          const money = moneyProvenance(row.original.stats);
+          return (
+            <span
+              className={`font-medium tabular-nums ${pnlClass(row.original.stats?.net_pl)}`}
+              title={money.label === "broker" ? (money.title ?? undefined) : undefined}
+            >
+              {fmtMoney(row.original.stats?.net_pl, curOf(row.original), { sign: true })}
+            </span>
+          );
+        },
       },
       {
-        accessorKey: "status",
+        id: "status",
         header: COLUMN_LABELS.status,
+        accessorFn: (r) => STATUS_ORDER.indexOf(String(r.status)),
         cell: ({ row }) => {
           const t = row.original;
           return (
@@ -711,6 +891,7 @@ export function JournalGrid({
       {
         id: "chart",
         header: "",
+        enableSorting: false,
         cell: ({ row }) => {
           const url = primaryTradeImageUrl(row.original.tv_images ?? {});
           if (!url) return null;
@@ -731,50 +912,63 @@ export function JournalGrid({
       {
         id: "actions",
         header: "",
+        enableSorting: false,
         cell: ({ row }) => (
           <RowActions
             id={row.original.id}
-            onDeleted={() => router.refresh()}
+            onDelete={() => setRowToDelete(row.original)}
           />
         ),
       },
     ],
-    [tzOf, curOf, router, gradeOf],
+    [tzOf, curOf, gradeOf, playbookOf],
   );
 
   // React Compiler cannot memoize a `useReactTable` result: the builder hands
-  // back fresh functions every render by design, so the compiler skips this
-  // component rather than optimising it. Nothing here to fix — TanStack's API
-  // is what it is — and an unsilenced warning on a permanent condition is how a
-  // real one goes unread.
+  // back fresh functions every render by design.
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: filtered,
     columns,
-    // A trade's own id, not its position in `filtered` — the default. Bulk
-    // selection has to survive a re-sort or a filter change without silently
-    // re-pointing at whatever trade now sits at that row index.
+    // A trade's own id, not its position in `filtered`, so selection survives
+    // a re-sort without re-pointing at whatever trade now sits at that index.
     getRowId: (row) => row.id,
-    // Visibility is controlled from `hidden` and never from the table's own API,
-    // so there is deliberately no onColumnVisibilityChange: the picker is the
-    // only writer, and it saves as it goes.
-    state: { sorting, columnVisibility, rowSelection },
-    onSortingChange: setSorting,
-    onRowSelectionChange: setRowSelection,
+    state: { sorting, columnVisibility, rowSelection: visibleSelection, pagination },
+    onSortingChange: (u) => {
+      setSorting(u);
+      toFirstPage();
+    },
+    onRowSelectionChange,
+    onPaginationChange: setPagination,
+    // The page is reset by the controls that narrow the set, not by every new
+    // `data` array — a router refresh after an edit must not jump to page one.
+    autoResetPageIndex: false,
     enableRowSelection: true,
+    // Nulls last in either direction: a trade with no R is not the worst R.
+    defaultColumn: { sortUndefined: "last" },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
   });
 
+  // A remembered page past the end of a smaller set would show an empty table.
+  const pageCount = table.getPageCount();
+  if (pagination.pageIndex > 0 && pagination.pageIndex >= pageCount) {
+    setPagination((p) => ({ ...p, pageIndex: Math.max(0, pageCount - 1) }));
+  }
+
+  const selectedRows = useMemo(
+    () => filtered.filter((t) => visibleSelection[t.id]),
+    [filtered, visibleSelection],
+  );
+  const selectedIds = useMemo(() => selectedRows.map((t) => t.id), [selectedRows]);
+
   /**
-   * The two selected trades as the merge decision needs them.
-   *
-   * Only ever two: merging three rows is three decisions about which judgement
-   * survives, and a dialog that asks that is a dialog nobody reads.
+   * The two selected trades as the merge decision needs them. Only ever two:
+   * merging three rows is three decisions about which judgement survives.
    */
   const mergePair = useMemo((): [MergeSide, MergeSide] | null => {
-    const rows = table.getSelectedRowModel().rows.map((r) => r.original);
-    if (rows.length !== 2) return null;
+    if (selectedRows.length !== 2) return null;
     const asSide = (t: TradeRow): MergeSide => ({
       id: t.id,
       tradeNo: (t.trade_no as number) ?? null,
@@ -789,40 +983,65 @@ export function JournalGrid({
       entryQty: t.stats?.entry_qty ?? null,
       netPl: t.stats?.net_pl ?? null,
     });
-    return [asSide(rows[0]), asSide(rows[1])];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rowSelection, trades]);
+    return [asSide(selectedRows[0]), asSide(selectedRows[1])];
+  }, [selectedRows]);
 
   const mergeBlocked = mergePair ? mergeRefusal(mergePair[0], mergePair[1]) : null;
-  // Not a question. The rule is fixed and said once, in the dialog: the
-  // imported trade's numbers correct the typed one, and the typed one keeps its
-  // grade, plan and notes. Asking the trader to work out which row is which,
-  // every time, was asking them to do the one job this exists to do for them.
+  // Not a question: the imported trade's numbers correct the typed one, and
+  // the typed one keeps its grade, plan and notes.
   const mergeChoice = mergePair ? defaultMergeChoice(mergePair[0], mergePair[1]) : null;
 
-  // Memoized on the selection itself. This used to run on every render — every
-  // keystroke in the search box included — walking the row model to rebuild an
-  // array that only changes when a checkbox is ticked.
-  const selectedIds = useMemo(
-    () => table.getSelectedRowModel().rows.map((r) => r.original.id),
-    // `table` is a new object every render (TanStack's builder is not
-    // memoizable), so depending on it would defeat the memo. The selection
-    // state is what actually decides this value, and it is what the table reads
-    // to answer.
-    //
-    // The directive sits on its own line directly above the array: written as a
-    // `-- reason` suffix, the continuation lines pushed it away from the line
-    // the rule actually reports, and eslint called the directive unused while
-    // still reporting the dependency.
+  /** Active narrowing, as removable chips — a filter you cannot see is one you forget you set. */
+  const chips = useMemo(() => {
+    const out: { id: string; label: string; clear: () => void }[] = [];
+    if (accountFilter !== "all") {
+      const a = accounts.find((x) => x.id === accountFilter);
+      out.push({
+        id: "account",
+        label: `Account: ${a?.name ?? "?"}`,
+        clear: () => {
+          setAccountFilter("all");
+          toFirstPage();
+        },
+      });
+    }
+    if (period !== "all") {
+      const label =
+        period === "custom"
+          ? `${customFrom || "…"} → ${customTo || "…"}`
+          : (PERIODS.find((p) => p.value === period)?.label ?? period);
+      out.push({
+        id: "period",
+        label: `Period: ${label}`,
+        clear: () => {
+          setPeriod("all");
+          toFirstPage();
+        },
+      });
+    }
+    for (const f of filterSpecs) {
+      const v = filters[f.key];
+      if (v == null) continue;
+      const opt = f.options.find((o) => o.value === v)?.label ?? v;
+      out.push({ id: f.key, label: `${f.label}: ${opt}`, clear: () => setFilter(f.key, "all") });
+    }
+    return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rowSelection],
-  );
+  }, [accountFilter, accounts, period, customFrom, customTo, filterSpecs, filters]);
+
+  const activeFilterCount = filterSpecs.filter((f) => filters[f.key] != null).length;
+  const isNarrowed = chips.length > 0 || search.trim() !== "";
 
   function exportData(kind: "csv" | "xlsx") {
-    const rows = filtered.map((t) => {
+    // The selection when there is one — "export these five" is what ticking
+    // them usually means — and the filtered set otherwise.
+    const source = selectedRows.length > 0 ? selectedRows : filtered;
+    const rows = source.map((t) => {
       const o: Record<string, unknown> = {
         "Trade #": t.trade_no ?? "",
-        Date: fmtInTz(t.stats?.opened_at ?? t.created_at, tzOf(t), "yyyy-MM-dd HH:mm"),
+        Opened: fmtInTz(t.stats?.opened_at ?? t.created_at, tzOf(t), "yyyy-MM-dd HH:mm"),
+        Account: accounts.find((a) => a.id === t.account_id)?.name ?? "",
+        Playbook: playbookOf(t) ?? "",
       };
       for (const f of getAllFormFields(fieldDefs))
         o[f.label] = displayFieldValue(t, f.name);
@@ -832,10 +1051,11 @@ export function JournalGrid({
       o["Slip R"] = fmtSlippageR(slippageFromTrade(t)?.slippageR);
       o["Avg Exit"] = t.stats?.avg_exit ?? "";
       o["Size"] = t.stats?.entry_qty ?? "";
+      o["Hold"] = t.stats?.duration_seconds != null ? formatDuration(t.stats.duration_seconds) : "";
       o["R"] = t.stats?.realized_r ?? "";
       o["Target attainment %"] = fmtExitEfficiencyPct(exitEfficiencyFromTrade(t)?.pct);
-      // MAE and MFE ride along with the capture: the mentor reading the export
-      // cannot judge "captured 40 %" without knowing how big the peak was.
+      // MAE and MFE ride along with the capture: "captured 40 %" means nothing
+      // without knowing how big the peak was.
       const excursion = excursionFromTrade(t);
       o["MAE R"] = excursion.maeR ?? "";
       o["MFE R"] = excursion.mfeR ?? "";
@@ -843,7 +1063,8 @@ export function JournalGrid({
         excursion.capturePct == null ? "" : fmtNum(excursion.capturePct, 0);
       o["Gross P/L"] = t.stats?.gross_pl ?? "";
       o["Net P/L"] = t.stats?.net_pl ?? "";
-      o["Status"] = t.status;
+      o["Currency"] = curOf(t);
+      o["Status"] = formatLifecycleStatusLabel(String(t.status));
       o["Miss reason"] = (t.miss_reason as string) ?? "";
       o["Missed at"] = (t.missed_at as string) ?? "";
       return o;
@@ -852,47 +1073,94 @@ export function JournalGrid({
       toast.error("Nothing to export");
       return;
     }
+    const stamp = new Date().toISOString().slice(0, 10);
     if (kind === "csv") {
       import("papaparse").then((Papa) => {
         const csv = Papa.default.unparse(rows);
-        downloadBlob(csv, "journal.csv", "text/csv;charset=utf-8;");
+        downloadBlob(csv, `trades-${stamp}.csv`, "text/csv;charset=utf-8;");
       });
     } else {
       import("xlsx").then((XLSX) => {
         const ws = XLSX.utils.json_to_sheet(rows);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Journal");
-        XLSX.writeFile(wb, "journal.xlsx");
+        XLSX.utils.book_append_sheet(wb, ws, "Trades");
+        XLSX.writeFile(wb, `trades-${stamp}.xlsx`);
       });
     }
   }
 
+  const pageRows = table.getRowModel().rows;
+  const visibleColumnCount = table.getVisibleLeafColumns().length;
+
   return (
     <div className="space-y-3">
+      <SummaryBar summary={summary} />
+
       <div className="flex flex-wrap items-center gap-2">
         <Input
-          placeholder="Search notes, model…"
+          placeholder="Search notes, tags, playbook…"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-9 w-48"
+          onChange={(e) => {
+            setSearch(e.target.value);
+            toFirstPage();
+          }}
+          className="h-9 w-56"
+          aria-label="Search trades"
         />
+        <Select
+          value={period}
+          onValueChange={(v) => {
+            setPeriod(v as Period);
+            toFirstPage();
+          }}
+        >
+          <SelectTrigger className="h-9 w-auto min-w-36" aria-label="Period">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PERIODS.map((p) => (
+              <SelectItem key={p.value} value={p.value}>
+                {p.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {period === "custom" && (
+          <div className="flex items-center gap-1">
+            <Input
+              type="date"
+              className="h-9 w-36"
+              value={customFrom}
+              onChange={(e) => {
+                setCustomFrom(e.target.value);
+                toFirstPage();
+              }}
+              aria-label="From"
+            />
+            <span className="text-muted-foreground">–</span>
+            <Input
+              type="date"
+              className="h-9 w-36"
+              value={customTo}
+              onChange={(e) => {
+                setCustomTo(e.target.value);
+                toFirstPage();
+              }}
+              aria-label="To"
+            />
+          </div>
+        )}
         {accounts.length > 1 && (
           <FilterSelect
             label="Account"
             value={accountFilter}
-            onChange={setAccountFilter}
+            onChange={(v) => {
+              setAccountFilter(v);
+              toFirstPage();
+            }}
             options={accounts.map((a) => ({ value: a.id, label: a.name }))}
           />
         )}
-        {/* The six dimension filters live behind one button now. They used to
-            sit inline, which put eight controls in a row that wrapped onto two
-            or three lines on any normal screen — and buried the two that
-            actually get reached for (search, Missed) among six that mostly sit
-            on "all".
-
-            The COUNT on the trigger is what makes this safe: a filter you
-            cannot see is a filter you can forget you set, and a grid quietly
-            showing a third of its rows is worse than a crowded toolbar. */}
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="h-9">
@@ -912,41 +1180,30 @@ export function JournalGrid({
                   variant="ghost"
                   size="sm"
                   className="h-7 px-2 text-xs text-muted-foreground"
-                  onClick={() => setFilters({})}
+                  onClick={() => {
+                    setFilters({});
+                    toFirstPage();
+                  }}
                 >
                   Clear all
                 </Button>
               )}
             </div>
-            {FILTERS.map((f) => (
-              <FilterSelect
-                key={f.key}
-                label={f.label}
-                value={filters[f.key] ?? "all"}
-                onChange={(v) => setFilters((p) => ({ ...p, [f.key]: v }))}
-                options={(f.options ?? distinct(trades, f.key)).map((v) => ({
-                  value: v,
-                  label: v,
-                }))}
-                className="w-full"
-              />
-            ))}
+            {filterSpecs
+              // A filter with nothing to choose from is a dead control.
+              .filter((f) => f.options.length > 0 || filters[f.key] != null)
+              .map((f) => (
+                <FilterSelect
+                  key={f.key}
+                  label={f.label}
+                  value={filters[f.key] ?? "all"}
+                  onChange={(v) => setFilter(f.key, v)}
+                  options={f.options}
+                  className="w-full"
+                />
+              ))}
           </PopoverContent>
         </Popover>
-        <Button
-          type="button"
-          variant={filters.status === "missed" ? "default" : "outline"}
-          size="sm"
-          className="h-9"
-          onClick={() =>
-            setFilters((p) => ({
-              ...p,
-              status: p.status === "missed" ? "all" : "missed",
-            }))
-          }
-        >
-          Missed
-        </Button>
         <div className="ml-auto flex items-center gap-2">
           {selectedIds.length > 0 && (
             <>
@@ -963,9 +1220,6 @@ export function JournalGrid({
                   <DropdownMenuItem onClick={() => setTagDialogOpen(true)}>
                     <TagIcon className="size-4" /> Add tag…
                   </DropdownMenuItem>
-                  {/* Two rows that are the same trade. Shown only for a pair,
-                      because merging three is three decisions about whose
-                      judgement survives. */}
                   <DropdownMenuItem
                     disabled={!mergePair || mergeBlocked != null}
                     onClick={() => setMergeDialogOpen(true)}
@@ -986,20 +1240,16 @@ export function JournalGrid({
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
                 <Columns3 className="size-4" /> Columns
-                {hidden.length > 0 && (
-                  <Badge variant="secondary" className="ml-1">
-                    {visibleCount(hidden, HIDEABLE_COLUMNS)}/
-                    {HIDEABLE_COLUMNS.length}
-                  </Badge>
-                )}
+                <Badge variant="secondary" className="ml-1">
+                  {visibleCount(hidden, HIDEABLE_COLUMNS)}/{HIDEABLE_COLUMNS.length}
+                </Badge>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto">
               {HIDEABLE_COLUMNS.map((id) => {
                 const on = !hidden.includes(id);
-                // The last one on cannot be switched off; `toggleHidden` refuses
-                // it too, but a checkbox that silently does nothing is worse than
-                // one that is visibly unavailable.
+                // The last one on cannot be switched off; a checkbox that
+                // silently does nothing is worse than one visibly unavailable.
                 const isLast = on && visibleCount(hidden, HIDEABLE_COLUMNS) === 1;
                 return (
                   <DropdownMenuCheckboxItem
@@ -1019,9 +1269,6 @@ export function JournalGrid({
               })}
             </DropdownMenuContent>
           </DropdownMenu>
-          {/* One export button with two formats behind it, rather than two
-              buttons. The choice of file format is not a decision worth two
-              slots in a toolbar that had run out of them. */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
@@ -1040,38 +1287,114 @@ export function JournalGrid({
         </div>
       </div>
 
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {chips.map((c) => (
+            <Badge key={c.id} variant="secondary" className="gap-1 pr-1 font-normal">
+              {c.label}
+              <button
+                type="button"
+                onClick={c.clear}
+                className="rounded-sm p-0.5 hover:bg-muted-foreground/20"
+                aria-label={`Remove ${c.label}`}
+              >
+                <X className="size-3" />
+              </button>
+            </Badge>
+          ))}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs text-muted-foreground"
+            onClick={clearAllFilters}
+          >
+            Clear all
+          </Button>
+        </div>
+      )}
+
       <div className="rounded-lg border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>
-                {hg.headers.map((h) => (
-                  <TableHead key={h.id} className="whitespace-nowrap">
-                    {h.isPlaceholder
-                      ? null
-                      : flexRender(h.column.columnDef.header, h.getContext())}
-                  </TableHead>
-                ))}
+                {hg.headers.map((h) => {
+                  const sorted = h.column.getIsSorted();
+                  const label = h.isPlaceholder
+                    ? null
+                    : flexRender(h.column.columnDef.header, h.getContext());
+                  return (
+                    <TableHead
+                      key={h.id}
+                      className="whitespace-nowrap"
+                      aria-sort={
+                        sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : undefined
+                      }
+                    >
+                      {h.column.getCanSort() && COLUMN_LABELS[h.column.id] ? (
+                        <button
+                          type="button"
+                          className={cn(
+                            "inline-flex items-center gap-1 hover:text-foreground",
+                            sorted && "text-foreground",
+                          )}
+                          onClick={() => h.column.toggleSorting(sorted === "asc")}
+                        >
+                          {label}
+                          {sorted === "asc" ? (
+                            <ArrowUp className="size-3" />
+                          ) : sorted === "desc" ? (
+                            <ArrowDown className="size-3" />
+                          ) : (
+                            <ArrowUpDown className="size-3 opacity-40" />
+                          )}
+                        </button>
+                      ) : (
+                        label
+                      )}
+                    </TableHead>
+                  );
+                })}
               </TableRow>
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows.length === 0 ? (
+            {pageRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-32 text-center text-muted-foreground">
-                  No trades yet.{" "}
-                  <Link href="/trades/new" className="underline">
-                    Log your first trade
-                  </Link>
-                  .
+                <TableCell
+                  colSpan={visibleColumnCount}
+                  className="h-32 text-center text-muted-foreground"
+                >
+                  {trades.length === 0 ? (
+                    <>
+                      No trades yet.{" "}
+                      <Link href="/trades/new" className="underline">
+                        Log your first trade
+                      </Link>
+                      .
+                    </>
+                  ) : (
+                    <>
+                      No trades match these filters.{" "}
+                      <button type="button" className="underline" onClick={clearAllFilters}>
+                        Clear filters
+                      </button>
+                    </>
+                  )}
                 </TableCell>
               </TableRow>
             ) : (
-              table.getRowModel().rows.map((row) => (
+              pageRows.map((row) => (
                 <TableRow
                   key={row.id}
                   className="cursor-pointer"
+                  tabIndex={0}
+                  data-state={row.getIsSelected() ? "selected" : undefined}
                   onClick={() => router.push(`/trades/${row.original.id}/edit`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && e.target === e.currentTarget)
+                      router.push(`/trades/${row.original.id}/edit`);
+                  }}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
@@ -1090,17 +1413,61 @@ export function JournalGrid({
           </TableBody>
         </Table>
       </div>
-      <p className="text-xs text-muted-foreground">
-        {filtered.length} of {trades.length} trades. Click a row to edit.
-      </p>
 
-      {/* Confirmed here even though `RowActions`' single delete is not — a
-          mis-click deleting one trade is a mistake; a mis-click deleting
-          however many are selected is a much larger one, and the size of the
-          blast radius is exactly what a single-row delete does not have. */}
-      {/* Merge. The preview names both trades and says, in those words, that
-          it cannot be undone — the same contract as the delete dialog below,
-          because the outcome is the same for one of the two rows. */}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+        <p>
+          {filtered.length} of {trades.length} trades
+          {isNarrowed ? " (filtered)" : ""}
+        </p>
+        <div className="flex items-center gap-2">
+          <Select
+            value={String(pagination.pageSize)}
+            onValueChange={(v) => setPagination({ pageIndex: 0, pageSize: Number(v) })}
+          >
+            <SelectTrigger className="h-8 w-auto gap-1" aria-label="Rows per page">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZES.map((s) => (
+                <SelectItem key={s} value={String(s)}>
+                  {s} / page
+                </SelectItem>
+              ))}
+              <SelectItem value={String(PAGE_SIZE_ALL)}>All</SelectItem>
+            </SelectContent>
+          </Select>
+          {pageCount > 1 && (
+            <>
+              <span className="tabular-nums">
+                Page {pagination.pageIndex + 1} of {pageCount}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-8"
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-8"
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+                aria-label="Next page"
+              >
+                <ChevronRight className="size-4" />
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Merge. The preview names both trades and says it cannot be undone —
+          the same contract as the delete dialogs below. */}
       <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1115,7 +1482,10 @@ export function JournalGrid({
           {mergePair && mergeChoice && (() => {
             const keep = mergePair.find((p) => p.id === mergeChoice.keepId)!;
             const from = mergePair.find((p) => p.id === mergeChoice.fillsFromId)!;
-            const when = (iso: string) => fmtInTz(iso, tzOf(trades[0]), DATE_TIME);
+            // In the kept trade's own account timezone — this used to read the
+            // FIRST trade in the whole book, whichever account that was on.
+            const tz = tzOf(trades.find((t) => t.id === keep.id));
+            const when = (iso: string) => fmtInTz(iso, tz, DATE_TIME);
             return (
               <div className="space-y-2 text-sm">
                 <div className="rounded-md border p-2">
@@ -1160,6 +1530,53 @@ export function JournalGrid({
               }
             >
               Merge
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* One trade. It used to go on a single menu click with no question —
+          fills, rule answers and snapshots included. */}
+      <Dialog
+        open={rowToDelete != null}
+        onOpenChange={(v) => {
+          if (!v) setRowToDelete(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Delete trade
+              {rowToDelete?.trade_no != null ? ` #${rowToDelete.trade_no}` : ""}
+              {rowToDelete?.instrument ? ` (${rowToDelete.instrument as string})` : ""}?
+            </DialogTitle>
+            <DialogDescription>
+              This cannot be undone. Its fills, rule answers and chart snapshots
+              are deleted with it.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRowToDelete(null)} disabled={bulkPending}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={bulkPending}
+              onClick={() =>
+                startBulk(async () => {
+                  if (!rowToDelete) return;
+                  const res = await deleteTrade(rowToDelete.id);
+                  if (!res.ok) {
+                    toast.error(res.error);
+                    return;
+                  }
+                  toast.success("Trade deleted");
+                  setRowToDelete(null);
+                  router.refresh();
+                })
+              }
+            >
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1288,21 +1705,82 @@ export function JournalGrid({
   );
 }
 
-function SortBtn({
-  column,
+/**
+ * What the rows on screen add up to — the question a filtered list is usually
+ * opened to answer ("how do my A+ longs on NQ actually do?"). Closed trades
+ * only; see `summarizeTrades`.
+ */
+function SummaryBar({ summary }: { summary: ReturnType<typeof summarizeTrades> }) {
+  const s = summary.stats;
+  const cur = summary.currency;
+  const money = (v: number | null | undefined, sign = false) =>
+    cur ? fmtMoney(v, cur, { sign }) : "—";
+  const mixed = cur == null && summary.closed > 0;
+  const winRate = s ? winRateOf(s.wins, s.losses) : null;
+  const pf = s?.profitFactor;
+
+  const extra = [
+    summary.live > 0 ? `${summary.live} open` : null,
+    summary.notTaken > 0 ? `${summary.notTaken} planned/missed` : null,
+  ].filter(Boolean);
+
+  return (
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-3 lg:grid-cols-6">
+      <SummaryCell
+        label="Closed trades"
+        value={String(summary.closed)}
+        sub={extra.length > 0 ? extra.join(" · ") : undefined}
+      />
+      <SummaryCell
+        label="Win rate"
+        value={winRate != null ? fmtPct(winRate, 1) : "—"}
+        sub={s ? `${s.wins}W · ${s.losses}L · ${s.breakeven}BE` : undefined}
+      />
+      <SummaryCell
+        label="Net P/L"
+        value={money(s?.netSum, true)}
+        valueClass={cur ? pnlClass(s?.netSum) : undefined}
+        sub={mixed ? "Mixed currencies — filter to one account" : undefined}
+      />
+      <SummaryCell
+        label="Profit factor"
+        value={pf == null ? "—" : Number.isFinite(pf) ? fmtNum(pf, 2) : "∞"}
+      />
+      <SummaryCell
+        label="Expectancy"
+        value={s && s.expectancySample > 0 ? fmtR(s.expectancy) : "—"}
+        valueClass={s && s.expectancySample > 0 ? pnlClass(s.expectancy) : undefined}
+        sub={s && s.expectancySample > 0 ? `per trade, ${s.expectancySample} with R` : undefined}
+      />
+      <SummaryCell
+        label="Avg win / loss"
+        value={
+          s && (s.wins > 0 || s.losses > 0)
+            ? `${money(s.wins > 0 ? s.avgWinMoney : null)} / ${money(s.losses > 0 ? s.avgLossMoney : null)}`
+            : "—"
+        }
+      />
+    </div>
+  );
+}
+
+function SummaryCell({
   label,
+  value,
+  sub,
+  valueClass,
 }: {
-  column: { toggleSorting: (d?: boolean) => void; getIsSorted: () => false | "asc" | "desc" };
   label: string;
+  value: string;
+  sub?: string;
+  valueClass?: string;
 }) {
   return (
-    <button
-      className="inline-flex items-center gap-1"
-      onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-    >
-      {label}
-      <ArrowUpDown className="size-3" />
-    </button>
+    <div className="bg-card px-3 py-2">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className={cn("text-base font-semibold tabular-nums", valueClass)}>{value}</div>
+      {sub && <div className="truncate text-[11px] text-muted-foreground">{sub}</div>}
+    </div>
   );
 }
 
@@ -1337,18 +1815,12 @@ function FilterSelect({
   );
 }
 
-function RowActions({
-  id,
-  onDeleted,
-}: {
-  id: string;
-  onDeleted: () => void;
-}) {
+function RowActions({ id, onDelete }: { id: string; onDelete: () => void }) {
   const router = useRouter();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-8">
+        <Button variant="ghost" size="icon" className="size-8" aria-label="Trade actions">
           <MoreHorizontal className="size-4" />
         </Button>
       </DropdownMenuTrigger>
@@ -1356,18 +1828,8 @@ function RowActions({
         <DropdownMenuItem onClick={() => router.push(`/trades/${id}/edit`)}>
           <Pencil className="size-4" /> Edit
         </DropdownMenuItem>
-        <DropdownMenuItem
-          className="text-destructive"
-          onClick={async () => {
-            const res = await deleteTrade(id);
-            if (!res.ok) toast.error(res.error);
-            else {
-              toast.success("Trade deleted");
-              onDeleted();
-            }
-          }}
-        >
-          <Trash2 className="size-4" /> Delete
+        <DropdownMenuItem className="text-destructive" onClick={onDelete}>
+          <Trash2 className="size-4" /> Delete…
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

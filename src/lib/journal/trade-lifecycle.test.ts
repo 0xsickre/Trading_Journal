@@ -8,6 +8,9 @@ import {
   isValidFill,
   lifecycleStatusHint,
   statusToTradePhase,
+  addsExposure,
+  asFillSource,
+  validateFills,
   type ExecutionInput,
 } from "./trade-lifecycle";
 
@@ -158,5 +161,82 @@ describe("statusToTradePhase", () => {
     for (const s of ["planned", "missed", "", null, undefined, "unknown"]) {
       expect(statusToTradePhase(s)).toBe("planned");
     }
+  });
+});
+
+describe("validateFills", () => {
+  const at = (h: number) => `2026-04-01T${String(h).padStart(2, "0")}:00:00.000Z`;
+
+  it("accepts a plan, an open position, and a clean round trip", () => {
+    expect(validateFills([])).toBeNull();
+    expect(validateFills([{ side: "entry", qty: 1, executedAt: at(9) }])).toBeNull();
+    expect(
+      validateFills([
+        { side: "entry", qty: 2, executedAt: at(9) },
+        { side: "exit", qty: 1, executedAt: at(10) },
+        { side: "exit", qty: 1, executedAt: at(11) },
+      ]),
+    ).toBeNull();
+  });
+
+  it("refuses a fill with no readable time instead of dating it 'now'", () => {
+    expect(validateFills([{ side: "entry", qty: 1, executedAt: null }])).toBe(
+      "Fill 1 needs a valid time.",
+    );
+  });
+
+  it("refuses an exit with no entry", () => {
+    expect(validateFills([{ side: "exit", qty: 1, executedAt: at(9) }])).toMatch(/needs an entry/);
+  });
+
+  it("refuses closing more than was opened, with float tolerance", () => {
+    expect(
+      validateFills([
+        { side: "entry", qty: 1, executedAt: at(9) },
+        { side: "exit", qty: 2, executedAt: at(10) },
+      ]),
+    ).toMatch(/Exits total 2 but entries only 1/);
+    expect(
+      validateFills([
+        { side: "entry", qty: 0.1, executedAt: at(9) },
+        { side: "entry", qty: 0.2, executedAt: at(9) },
+        { side: "exit", qty: 0.3, executedAt: at(10) },
+      ]),
+    ).toBeNull();
+  });
+
+  it("refuses an exit before the first entry, naming the row", () => {
+    expect(
+      validateFills([
+        { side: "entry", qty: 1, executedAt: at(10) },
+        { side: "exit", qty: 1, executedAt: at(9) },
+      ]),
+    ).toBe("Fill 2 exits before the first entry.");
+  });
+});
+
+describe("addsExposure (the FTMO freeze)", () => {
+  it("lets a closed trade's record be edited", () => {
+    expect(addsExposure({ status: "closed", entryQty: 1 }, { status: "closed", entryQty: 1 })).toBe(false);
+  });
+  it("refuses a plan becoming a live trade", () => {
+    expect(addsExposure({ status: "planned", entryQty: 0 }, { status: "open", entryQty: 1 })).toBe(true);
+    expect(addsExposure({ status: "missed", entryQty: 0 }, { status: "open", entryQty: 0 })).toBe(true);
+  });
+  it("refuses more size on a live trade, allows less", () => {
+    expect(addsExposure({ status: "open", entryQty: 1 }, { status: "open", entryQty: 2 })).toBe(true);
+    expect(addsExposure({ status: "open", entryQty: 2 }, { status: "partial", entryQty: 2 })).toBe(false);
+  });
+  it("lets a plan stay a plan", () => {
+    expect(addsExposure({ status: "planned", entryQty: 0 }, { status: "planned", entryQty: 0 })).toBe(false);
+  });
+});
+
+describe("asFillSource", () => {
+  it("keeps a known origin and defaults anything else to manual", () => {
+    expect(asFillSource("import")).toBe("import");
+    expect(asFillSource("bot")).toBe("bot");
+    expect(asFillSource("broker")).toBe("manual");
+    expect(asFillSource(undefined)).toBe("manual");
   });
 });
