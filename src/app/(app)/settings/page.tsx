@@ -14,22 +14,22 @@ import { getTrackerRules } from "@/lib/journal/tracker/queries";
 import { PageHeader } from "@/components/app/page-header";
 
 export default async function SettingsPage() {
-  const [lists, instruments, accounts, cashEvents, trackerRules] =
+  // The Tags table shows a "Used" count on every row, so it has to be there
+  // when the table first paints — one batched read rather than a head count per
+  // tag. The delete dialogs re-count head-on before they act; see
+  // `getAllOptionUsage` for why the two differ. It needs the list keys, so it is
+  // chained onto the lists inside the one batch rather than run after it.
+  const listsPromise = getListsWithItems(false);
+  const [lists, instruments, accounts, cashEvents, trackerRules, optionUsage] =
     await Promise.all([
-      getListsWithItems(false),
+      listsPromise,
       getInstruments(false),
       getAccounts(),
       getCashEvents(),
       // Retired rules included, for the same reason.
       getTrackerRules({ includeRetired: true }),
+      listsPromise.then((l) => getAllOptionUsage(l.map((x) => x.key))),
     ]);
-
-
-  // The Tags table shows a "Used" count on every row, so it has to be there
-  // when the table first paints — one batched read rather than a head count per
-  // tag. The delete dialogs re-count head-on before they act; see
-  // `getAllOptionUsage` for why the two differ.
-  const optionUsage = await getAllOptionUsage(lists.map((l) => l.key));
 
   return (
     <div className="space-y-6">

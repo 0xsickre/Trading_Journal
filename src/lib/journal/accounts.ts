@@ -1,8 +1,9 @@
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Account } from "./types";
 
-export async function getAccounts(): Promise<Account[]> {
+async function readAccounts(): Promise<Account[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("tj_accounts")
@@ -12,6 +13,11 @@ export async function getAccounts(): Promise<Account[]> {
     .order("created_at");
   return (data ?? []) as Account[];
 }
+
+// Memoized per request (React `cache`), like `getCurrentUser` and `getFieldDefs`: a page
+// and the helpers it calls ask for this more than once in one render, and each ask
+// was its own round trip to the database.
+export const getAccounts = cache(readAccounts);
 
 /** The account used as default context (first active, else first). */
 export async function getPrimaryAccount(): Promise<Account | null> {

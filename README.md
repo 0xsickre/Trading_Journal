@@ -133,7 +133,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,399 tests across 144 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,401 tests across 144 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -174,6 +174,36 @@ React 19.2.4, TypeScript 5, Tailwind 4, shadcn/ui, TanStack Table 8, Recharts 3,
 (PostgREST + RLS), Vitest 4.
 
 ---
+
+## Speed
+
+A click has to feel instant. On 19.09.2026 it did not, and the cause was measured before anything
+changed:
+
+- **The server and the database were on two continents.** Supabase is in Frankfurt (eu-central-1).
+  Vercel ran the server code in Ashburn, Virginia: every server request in the Supabase edge logs came
+  from `cf.colo = IAD`. A round trip averaged ~200 ms, and a page makes 6–19 of them.
+  **`vercel.json` pins the functions to `fra1`**, next to the database.
+- **Nothing was kept between clicks.** Every page reads the session, so Next treats it as dynamic,
+  and its default keeps a dynamic page for 0 s. **`next.config.ts` keeps it 30 s**
+  (`staleTimes.dynamic`), so going back to a page is served from memory. A server action that
+  revalidates clears it, so an edit never shows stale.
+- **The page starts loading on hover.** The menu's links (`NavLink`) switch to a full prefetch when the
+  pointer or focus arrives, so the server render runs between pointing and clicking.
+- **One batch of reads per page.** Reads that waited on each other without needing to are started
+  together:
+  - the rule answers on `/journal`, `/reports` and `/playbooks`;
+  - the accounts on the dashboard, `/daily` and `/weekly`, where only the day or week waits on them;
+  - the tag usage on `/settings`;
+  - the notebook's purge of expired notes.
+- **The shared reads are memoized per request** (React `cache`), so a page and its helpers asking for
+  the same thing share one read: `getAccounts`, `getTradesWithStats`, `getFillCounts`, `getCashEvents`,
+  `getListsWithItems` and `getPositionRules`. `tj_position_rules` is now drained once per render
+  everywhere, including `/playbooks`, which read it twice.
+- **No second render after an action.** Saving a trade and ticking a check-in rule no longer call
+  `router.refresh()` on top of the action's own revalidation.
+- **Report filters stay in the browser.** Filters are written to the URL with `history.replaceState`
+  instead of a server navigation that re-read the whole book.
 
 ## Data model
 

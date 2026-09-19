@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   defaultNoteTitle,
+  isExpiredNote,
   noteInScope,
   parseScopeKey,
   scopeKey,
@@ -148,5 +149,17 @@ describe("tradeLinkPatch", () => {
     expect(tradeLinkPatch(note({ folder_id: null }), [], "trade-1")).toEqual({
       position_id: "trade-1",
     });
+  });
+});
+
+describe("a note past its 30 days in Recently Deleted", () => {
+  const now = Date.UTC(2026, 8, 19, 12);
+  const day = 24 * 60 * 60 * 1000;
+  it("is expired once deleted more than 30 days ago", () => {
+    expect(isExpiredNote({ deleted_at: new Date(now - 31 * day).toISOString() }, now)).toBe(true);
+  });
+  it("is kept within the 30 days, and a live note is never expired", () => {
+    expect(isExpiredNote({ deleted_at: new Date(now - 29 * day).toISOString() }, now)).toBe(false);
+    expect(isExpiredNote({ deleted_at: null }, now)).toBe(false);
   });
 });

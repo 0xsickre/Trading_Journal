@@ -1,7 +1,6 @@
 "use client";
 
 import { Fragment, type ComponentProps } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, LineChart, LogOut, Menu } from "lucide-react";
 import { NAV_ITEMS, NAV_SECTIONS, PRIMARY_ACTION } from "@/lib/journal/nav";
@@ -17,6 +16,7 @@ import { logout } from "@/app/login/actions";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/app/theme-toggle";
+import { NavLink } from "@/components/app/nav-link";
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -80,10 +80,10 @@ export function AppSidebar({ email }: { email: string | null }) {
 
       <div className="p-2 pb-0">
         <Button asChild className="w-full justify-start">
-          <Link href={PRIMARY_ACTION.href}>
+          <NavLink href={PRIMARY_ACTION.href}>
             <PrimaryIcon className="size-4" />
             {PRIMARY_ACTION.label}
-          </Link>
+          </NavLink>
         </Button>
       </div>
 
@@ -97,7 +97,7 @@ export function AppSidebar({ email }: { email: string | null }) {
               const active = isActive(pathname, item.href);
               const Icon = item.icon;
               return (
-                <Link
+                <NavLink
                   key={item.href}
                   href={item.href}
                   className={cn(
@@ -109,7 +109,7 @@ export function AppSidebar({ email }: { email: string | null }) {
                 >
                   <Icon className="size-4" />
                   {item.label}
-                </Link>
+                </NavLink>
               );
             })}
           </div>
@@ -192,10 +192,10 @@ export function MobileTopbar() {
                 const Icon = item.icon;
                 return (
                   <DropdownMenuItem key={item.href} asChild>
-                    <Link href={item.href}>
+                    <NavLink href={item.href}>
                       <Icon className="size-4" />
                       {item.label}
-                    </Link>
+                    </NavLink>
                   </DropdownMenuItem>
                 );
               })}
@@ -214,14 +214,14 @@ export function MobileTopbar() {
       {/* Both stay OUT of the menu. Logging a trade is the most frequent thing
           anyone does here, and the theme switch only arrived after it went
           missing on this exact breakpoint — neither belongs behind a click. */}
-      <Link
+      <NavLink
         href={PRIMARY_ACTION.href}
         aria-label={PRIMARY_ACTION.label}
         className="flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-primary-foreground"
       >
         <PrimaryIcon className="size-3.5" />
         New
-      </Link>
+      </NavLink>
       <div className="shrink-0">
         <ThemeToggle />
       </div>

@@ -9,12 +9,13 @@ import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
 
 export default async function JournalPage() {
-  // Answers first: `getPlaybooks` needs them to report per-rule statistics, and
-  // the grid needs both to derive the setup grade. Same two-step the dashboard
-  // page does, for the same reason.
-  const positionRules = await getPositionRules();
+  // `getPlaybooks` needs the answers to report per-rule statistics, and the grid
+  // needs both to derive the setup grade. It is handed the PROMISE, as on the
+  // dashboard, so the table is still drained once and nothing waits for it
+  // before starting — awaiting it alone first cost a round trip.
+  const positionRulesPromise = getPositionRules();
 
-  const [trades, accounts, fieldDefs, prefs, optionsMap, playbooks] = await Promise.all([
+  const [trades, accounts, fieldDefs, prefs, optionsMap, playbooks, positionRules] = await Promise.all([
     getTradesWithStats(),
     getAccounts(),
     // All defs: the grid READS history, and a retired field's values are still
@@ -27,7 +28,8 @@ export default async function JournalPage() {
     getOptionsMap(),
     // Retired rules included: the grid READS history, and a trade graded under
     // a rule since withdrawn still earned that grade.
-    getPlaybooks({ includeDeleted: true, positionRules }),
+    getPlaybooks({ includeDeleted: true, positionRules: positionRulesPromise }),
+    positionRulesPromise,
   ]);
 
   return (

@@ -27,19 +27,21 @@ import { stringFieldValue } from "@/lib/journal/field-values";
  * long scroll.
  */
 export default async function PlaybooksPage() {
-  // Drained once and handed to `getPlaybooks`, which derives the per-rule
-  // answer counts from it. `tj_position_rules` is one row per rule per trade
-  // — the fastest-growing table in the schema — and reading it twice per
-  // render is the mistake `/reports` already had to fix.
-  const positionRules = await getPositionRules();
+  // `tj_position_rules` — one row per rule per trade, the fastest-growing table
+  // in the schema — is drained ONCE per render: `getPositionRules` is memoized
+  // per request, and `getPlaybooks` and `getRuleLibrary` both count from it.
+  // It no longer has to be awaited alone first to get there, which cost the
+  // page a round trip.
+  const positionRulesPromise = getPositionRules();
 
-  const [accounts, trades, playbooks, library] = await Promise.all([
+  const [accounts, trades, playbooks, library, positionRules] = await Promise.all([
     getAccounts(),
     getTradesWithStats(),
     // Retired rules included: a rule taken off the checklist still owns the
     // observations it collected, and a page about evidence must show them.
-    getPlaybooks({ includeDeleted: true, positionRules }),
+    getPlaybooks({ includeDeleted: true, positionRules: positionRulesPromise }),
     getRuleLibrary({ includeDeleted: true }),
+    positionRulesPromise,
   ]);
 
   const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;

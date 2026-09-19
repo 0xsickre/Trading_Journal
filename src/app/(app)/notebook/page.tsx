@@ -4,6 +4,7 @@ import {
   getNotes,
   purgeExpiredNotes,
 } from "@/lib/journal/notes/queries";
+import { isExpiredNote } from "@/lib/journal/notes/note-types";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getAccounts } from "@/lib/journal/accounts";
 import { todayInTz } from "@/lib/journal/daily-report";
@@ -12,17 +13,19 @@ import { NotebookWorkbench } from "@/components/journal/notebook-workbench";
 import { PageHeader } from "@/components/app/page-header";
 
 export default async function NotebookPage() {
-  // Before the read, not inside it: getNotes() must see the state AFTER
-  // housekeeping, the same ordering ensureDefaults() needs on the dashboard.
-  await purgeExpiredNotes();
-
-  const [folders, notes, tags, trades, accounts] = await Promise.all([
+  // Housekeeping runs WITH the reads, not before them: it used to be awaited
+  // first, putting a DELETE's round trip in front of every visit. The page must
+  // still show the state after the purge, so the notes it would delete are
+  // dropped from what was read — same rule, `isExpiredNote`.
+  const [, folders, allNotes, tags, trades, accounts] = await Promise.all([
+    purgeExpiredNotes(),
     getNoteFolders(),
     getNotes(),
     getNoteTags(),
     getTradesWithStats(),
     getAccounts(),
   ]);
+  const notes = allNotes.filter((n) => !isExpiredNote(n));
 
   // Only what the "attach to trade" picker needs. Sending whole trade rows here
   // would put the entire journal on the wire for a dropdown.

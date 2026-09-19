@@ -1099,3 +1099,24 @@ Tri stvari koje su se videle tek kad je spajanje zaista upotrebljeno na backtest
 - **Forma za novi trejd ide redom odluka**: nalog, instrument, playbook sa checklistom, pa tek onda
   cene i rizik. **Ručna faza je uklonjena** (i select u formi i „Move to active" u gridu): planned
   ili active je ono što kažu fill-ovi. Ostaje samo „Mark as missed", jer to fill-ovi ne mogu da znaju.
+
+### Brzina — svaki klik skoro trenutan (19.09.2026.)
+
+**Uzrok, izmeren pre bilo kakve izmene:** server na Vercelu je radio u Virdžiniji (IAD), a baza je u
+Frankfurtu. Svaki upit je išao preko Atlantika, prosečno ~200 ms, a stranica ih pravi 6–19. Osim toga
+aplikacija nije pamtila nijednu stranicu između klikova (Next podrazumevano: 0 s).
+
+**Urađeno:**
+- `vercel.json` → `fra1`.
+- `staleTimes` 30 s.
+- Stranica počinje da se učitava na hover u meniju (`NavLink`).
+- Po jedna grupa paralelnih upita po stranici (journal, reports, playbooks, dashboard, daily, weekly,
+  settings, notebook).
+- React `cache()` na zajedničkim čitanjima; `tj_position_rules` se čita jednom po stranici.
+- Bez drugog iscrtavanja posle čuvanja trejda i čekiranja pravila.
+- Filteri u Reports bez odlaska na server.
+
+**Ostaje za kasnije**, kad trejdova bude stotine:
+- eksplicitne kolone i vremenski prozor u `getTradesWithStats`;
+- virtualizacija tabele trejdova;
+- `tj_position_stats` koji agregira sva izvršenja.

@@ -55,45 +55,57 @@ export default async function DailyPage({
 }) {
   const { date: dateParam } = await searchParams;
 
-  const [accounts, rules, trades, cashEvents] = await Promise.all([
-    getAccounts(),
+  // One batch. The day on screen depends on the account's timezone, so the three
+  // reads keyed by that day are chained onto the accounts instead of waiting for
+  // a whole first batch — that second batch used to cost the page a round trip.
+  const accountsPromise = getAccounts();
+  const dayPromise = accountsPromise.then((accounts) => {
+    const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
+    const timezone = primary?.timezone ?? DEFAULT_TZ;
+    const today = todayInTz(timezone);
+    // `isValidDayKey`, not a shape regex: `2026-00-00` matches `\d{4}-\d{2}-\d{2}`
+    // and then rolls backwards into December 2025, opening a day that does not
+    // exist under a heading that says it does.
+    const reportDate =
+      dateParam && isValidDayKey(dateParam)
+        ? dateParam > today
+          ? today
+          : dateParam
+        : today;
+    return { primary, timezone, today, reportDate };
+  });
+
+  const [
+    accounts,
+    { primary, timezone, today, reportDate },
+    rules,
+    trades,
+    cashEvents,
+    report,
+    activeGoal,
+    checkinsByDay,
+    positionCheckins,
+  ] = await Promise.all([
+    accountsPromise,
+    dayPromise,
     // Retired rules included: this page can look at any past day, and a rule that
     // was live on that day still applied to it. `rulesLiveOn` filters per day —
     // which is exactly why it takes the day as an argument.
     getTrackerRules({ includeRetired: true }),
     getTradesWithStats(),
     getCashEvents(),
+    dayPromise.then(({ reportDate }) => getDailyReport(reportDate)),
+    getActiveFocusGoal(),
+    // The whole window, not just this day. The streak strip needs the run
+    // leading UP TO the day in view, and the checklist's single day is the
+    // last entry of that same window — so one round trip serves both, and the
+    // two can never disagree about what was ticked.
+    dayPromise.then(({ reportDate }) =>
+      getCheckins(addDaysToDayKey(reportDate, -(TRACKER_SPAN_DAYS - 1)), reportDate),
+    ),
+    dayPromise.then(({ reportDate }) => getPositionCheckinsForDay(reportDate)),
   ]);
-
-  const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
-  const timezone = primary?.timezone ?? DEFAULT_TZ;
   const currency = primary?.currency ?? "USD";
-  const today = todayInTz(timezone);
-
-  // `isValidDayKey`, not a shape regex: `2026-00-00` matches `\d{4}-\d{2}-\d{2}`
-  // and then rolls backwards into December 2025, opening a day that does not
-  // exist under a heading that says it does.
-  const reportDate =
-    dateParam && isValidDayKey(dateParam)
-      ? dateParam > today
-        ? today
-        : dateParam
-      : today;
-
-  const [report, activeGoal, checkinsByDay, positionCheckins] =
-    await Promise.all([
-      getDailyReport(reportDate),
-      getActiveFocusGoal(),
-      // The whole window, not just this day. The streak strip needs the run
-      // leading UP TO the day in view, and the checklist's single day is the
-      // last entry of that same window — so one round trip serves both, and the
-      // two can never disagree about what was ticked.
-      getCheckins(
-        addDaysToDayKey(reportDate, -(TRACKER_SPAN_DAYS - 1)),
-        reportDate,
-      ),
-      getPositionCheckinsForDay(reportDate),
-    ]);
 
   const checkins = checkinsByDay.get(reportDate) ?? new Map();
 

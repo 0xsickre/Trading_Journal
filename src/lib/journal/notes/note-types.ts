@@ -3,6 +3,19 @@
 import { format, parseISO } from "date-fns";
 import { DATE } from "@/lib/journal/time";
 
+/** How long a deleted note stays in Recently Deleted before it is purged. */
+export const NOTE_TRASH_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Whether a note is past its 30 days in Recently Deleted — the rows
+ * `purgeExpiredNotes` deletes. The notebook runs the purge alongside its reads
+ * and drops these from what it read, so the page shows the state after
+ * housekeeping without waiting for it first.
+ */
+export function isExpiredNote(note: { deleted_at: string | null }, now = Date.now()): boolean {
+  return note.deleted_at != null && Date.parse(note.deleted_at) < now - NOTE_TRASH_MS;
+}
+
 export type NoteFolder = {
   id: string;
   name: string;

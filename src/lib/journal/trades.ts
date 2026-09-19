@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { selectAllByIds, selectAllPages } from "@/lib/supabase/paginate";
 import { CUSTOM_FIELD_COLUMN, flattenCustom } from "./field-values";
@@ -19,7 +20,7 @@ type RawPosition = Record<string, unknown> & {
   trade_no: number | null;
 };
 
-export async function getTradesWithStats(
+async function readTradesWithStats(
   accountId?: string | null,
 ): Promise<TradeWithStats[]> {
   const supabase = await createClient();
@@ -89,6 +90,11 @@ export async function getTradesWithStats(
   );
 }
 
+// Memoized per request (React `cache`), like `getCurrentUser` and `getFieldDefs`: a page
+// and the helpers it calls ask for this more than once in one render, and each ask
+// was its own round trip to the database.
+export const getTradesWithStats = cache(readTradesWithStats);
+
 export async function getTradeForEdit(
   id: string,
 ): Promise<TradeFormInitial | null> {
@@ -156,7 +162,7 @@ export async function getTradeForEdit(
  * fill and three 1-lot fills look identical there. Scale-in / scale-out
  * detection needs the row count, so it is fetched separately.
  */
-export async function getFillCounts(): Promise<
+async function readFillCounts(): Promise<
   Map<string, { entries: number; exits: number }>
 > {
   const supabase = await createClient();
@@ -183,3 +189,8 @@ export async function getFillCounts(): Promise<
 
   return map;
 }
+
+// Memoized per request (React `cache`), like `getCurrentUser` and `getFieldDefs`: a page
+// and the helpers it calls ask for this more than once in one render, and each ask
+// was its own round trip to the database.
+export const getFillCounts = cache(readFillCounts);

@@ -27,37 +27,51 @@ export default async function WeeklyPage({
 }) {
   const { week: weekParam } = await searchParams;
 
-  const [accounts, trades, checkins, reportDates] = await Promise.all([
-    getAccounts(),
+  // One batch. The week on screen depends on the account's timezone, so the
+  // review is chained onto the accounts instead of awaited after the batch,
+  // which cost the page a round trip.
+  const accountsPromise = getAccounts();
+  const weekPromise = accountsPromise.then((accounts) => {
+    const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
+    const timezone = primary?.timezone ?? DEFAULT_TZ;
+    const today = todayInTz(timezone);
+    const currentWeekStart = weekStartOfDayKey(today);
+
+    /**
+     * Any day key in the URL is snapped to its Monday rather than rejected.
+     *
+     * A link to a Wednesday is a link to that Wednesday's week, and the alternative
+     * — bouncing to the default — loses the week the reader asked for. Snapping
+     * also keeps the invariant the table's CHECK enforces: one row per week, keyed
+     * on Monday, so the same week can never be written twice under two keys.
+     */
+    const requested =
+      weekParam && isValidDayKey(weekParam) ? weekStartOfDayKey(weekParam) : "";
+    const weekStart =
+      requested && requested <= currentWeekStart
+        ? requested
+        : requested > currentWeekStart
+          ? currentWeekStart
+          : defaultWeekStart(today);
+    return { primary, timezone, currentWeekStart, weekStart };
+  });
+
+  const [
+    accounts,
+    { primary, timezone, currentWeekStart, weekStart },
+    trades,
+    checkins,
+    reportDates,
+    review,
+  ] = await Promise.all([
+    accountsPromise,
+    weekPromise,
     getTradesWithStats(),
     getPositionCheckins(),
     getDailyReportDates(),
+    weekPromise.then(({ weekStart }) => getWeeklyReview(weekStart)),
   ]);
-
-  const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
-  const timezone = primary?.timezone ?? DEFAULT_TZ;
   const currency = primary?.currency ?? "USD";
-  const today = todayInTz(timezone);
-  const currentWeekStart = weekStartOfDayKey(today);
-
-  /**
-   * Any day key in the URL is snapped to its Monday rather than rejected.
-   *
-   * A link to a Wednesday is a link to that Wednesday's week, and the alternative
-   * — bouncing to the default — loses the week the reader asked for. Snapping
-   * also keeps the invariant the table's CHECK enforces: one row per week, keyed
-   * on Monday, so the same week can never be written twice under two keys.
-   */
-  const requested =
-    weekParam && isValidDayKey(weekParam) ? weekStartOfDayKey(weekParam) : "";
-  const weekStart =
-    requested && requested <= currentWeekStart
-      ? requested
-      : requested > currentWeekStart
-        ? currentWeekStart
-        : defaultWeekStart(today);
-
-  const review = await getWeeklyReview(weekStart);
 
   // Per-trade timezone, not the primary account's: a trade on a NY account and
   // one on a London account close on different calendar days, and one zone for

@@ -17,16 +17,17 @@ import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
 
 export default async function DashboardPage() {
-  // ONE round trip before the rest, and only because the day key depends on it.
-  // `getCheckins` needs the account's timezone to know which 182 days to ask
-  // for, so accounts genuinely has to land first. Everything else below waits
-  // on nothing and goes in one parallel batch.
-  const accounts = await getAccounts();
-
-  // The account's day, not the browser's — every day key in the tracker is in
-  // account time, and the heatmap grid is anchored to this.
-  const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
-  const todayKey = todayInTz(primary?.timezone ?? DEFAULT_TZ);
+  // Only the tracker check-ins wait on the accounts: `getCheckins` needs the
+  // account's timezone to know which 182 days to ask for. So the accounts start
+  // with everything else and just that one read is chained onto them. Awaiting
+  // them alone first used to cost the whole page a round trip.
+  const accountsPromise = getAccounts();
+  const dayPromise = accountsPromise.then((accounts) => {
+    // The account's day, not the browser's — every day key in the tracker is in
+    // account time, and the heatmap grid is anchored to this.
+    const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
+    return { primary, todayKey: todayInTz(primary?.timezone ?? DEFAULT_TZ) };
+  });
 
   // `tj_position_rules` is drained ONCE, and the per-rule counts are derived
   // from the result inside `getPlaybooks`. Both reads used to sit in this
@@ -41,6 +42,8 @@ export default async function DashboardPage() {
   const positionRulesPromise = getPositionRules();
 
   const [
+    accounts,
+    { primary, todayKey },
     trades,
     cashEvents,
     loggedDates,
@@ -55,6 +58,8 @@ export default async function DashboardPage() {
     checkinsByDay,
     positionRules,
   ] = await Promise.all([
+    accountsPromise,
+    dayPromise,
     getTradesWithStats(),
     getCashEvents(),
     getDailyReportDates(),
@@ -78,7 +83,9 @@ export default async function DashboardPage() {
     getUserPrefs(),
     // The saved arrangements themselves. Small, per user, and scoped by RLS.
     getDashboardTemplates(),
-    getCheckins(addDaysToDayKey(todayKey, -(TRACKER_SPAN_DAYS - 1)), todayKey),
+    dayPromise.then(({ todayKey }) =>
+      getCheckins(addDaysToDayKey(todayKey, -(TRACKER_SPAN_DAYS - 1)), todayKey),
+    ),
     positionRulesPromise,
   ]);
 

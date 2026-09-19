@@ -18,7 +18,7 @@ import type { TrackerRule } from "@/lib/journal/tracker-types";
  * `const res = await setCheckin(...); if (!res.ok)` — so every click threw a
  * TypeError inside the `useTransition` callback. The assertions still passed,
  * because they only ask whether the mock was CALLED and the call happens before
- * the throw. What never ran was everything after it: no `router.refresh()`, no
+ * the throw. What never ran was everything after it: no
  * rollback on failure, and the transition ending through a rejection instead of
  * normally.
  *

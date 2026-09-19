@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -130,7 +130,6 @@ export function ReportsWorkbench({
   /** Option lists, used to cut `psychology_tags` back into emotion vs discipline. */
   optionsMap?: OptionsMap;
 }) {
-  const router = useRouter();
   const params = useSearchParams();
 
   // A custom field is a dimension like any other: built here, carried on the
@@ -196,6 +195,19 @@ export function ReportsWorkbench({
   const chartType = asChartType(params.get("chart"));
   const minSample = asMinSample(params.get("min"));
 
+  /**
+   * The URL holds the report's state, but changing it must not go to the server.
+   *
+   * `router.replace` re-rendered `/reports` on the server for every filter,
+   * column and metric change — every trade, rule answer and check-in fetched
+   * again — although the page never reads the query string: the workbench reads
+   * it itself through `useSearchParams`. `history.replaceState` updates the URL
+   * and `useSearchParams` with it, and nothing else.
+   */
+  const replaceUrl = useCallback((query: string) => {
+    window.history.replaceState(null, "", query ? `/reports?${query}` : "/reports");
+  }, []);
+
   const setParam = useCallback(
     (patch: Record<string, string | undefined>) => {
       const next = new URLSearchParams(params.toString());
@@ -203,9 +215,9 @@ export function ReportsWorkbench({
         if (v == null || v === "") next.delete(k);
         else next.set(k, v);
       }
-      router.replace(`/reports?${next.toString()}`, { scroll: false });
+      replaceUrl(next.toString());
     },
-    [params, router],
+    [params, replaceUrl],
   );
 
   const setFilters = useCallback(
@@ -217,9 +229,9 @@ export function ReportsWorkbench({
       }
       const fp = toSearchParams(next);
       for (const [k, v] of fp.entries()) preserved.append(k, v);
-      router.replace(`/reports?${preserved.toString()}`, { scroll: false });
+      replaceUrl(preserved.toString());
     },
-    [params, router],
+    [params, replaceUrl],
   );
 
   const columnKeys = useMemo(
@@ -804,7 +816,7 @@ export function ReportsWorkbench({
           variant="ghost"
           size="sm"
           className="text-muted-foreground"
-          onClick={() => router.replace("/reports", { scroll: false })}
+          onClick={() => replaceUrl("")}
         >
           Reset report
         </Button>

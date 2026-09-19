@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Check, Lock, Minus, X, Zap } from "lucide-react";
@@ -153,10 +152,9 @@ function ManualRow({
   answer: boolean | undefined;
   locked: boolean;
 }) {
-  const router = useRouter();
   const [pending, start] = useTransition();
-  // Optimistic, because the round trip is a server action plus a refresh and the
-  // control would otherwise sit unchanged long enough to be clicked twice.
+  // Optimistic, because the round trip is a server action and the control would
+  // otherwise sit unchanged long enough to be clicked twice.
   const [local, setLocal] = useState<boolean | undefined>(answer);
 
   function set(next: boolean | null) {
@@ -167,9 +165,10 @@ function ManualRow({
       if (!res.ok) {
         setLocal(previous);
         toast.error(res.error);
-        return;
       }
-      router.refresh();
+      // No `router.refresh()`: `setCheckin` revalidates `/daily`, the only page
+      // this checklist is on, and the action's response already carries the
+      // fresh page. The refresh rendered it a second time on every tick.
     });
   }
 

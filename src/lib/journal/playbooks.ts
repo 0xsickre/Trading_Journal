@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { selectAllPages } from "@/lib/supabase/paginate";
 import type {
@@ -223,23 +224,14 @@ function countAnswersByRule(
 /**
  * Trades answered per rule id — what makes `show_when` frozen and delete soft.
  *
- * The fallback for callers that do NOT already hold the answers (Settings, the
- * trade form). Anything that also needs `getPositionRules` should pass that map
- * in instead and skip this read entirely.
+ * The fallback for callers that do NOT hand the answers in (Settings, the trade
+ * form, the rule library). It counts from `getPositionRules`, which is memoized
+ * per request: a page that also reads the answers, or asks for playbooks AND the
+ * library, drains `tj_position_rules` once. It used to read the table on its
+ * own, so `/playbooks` drained it twice per render.
  */
 async function ruleAnswerCounts(): Promise<Map<string, number>> {
-  const supabase = await createClient();
-  const rows = await selectAllPages<{ rule_id: string }>((from, to) =>
-    supabase
-      .from("tj_position_rules")
-      .select("rule_id, id")
-      .order("rule_id")
-      .order("id")
-      .range(from, to),
-  );
-  const map = new Map<string, number>();
-  for (const r of rows) map.set(r.rule_id, (map.get(r.rule_id) ?? 0) + 1);
-  return map;
+  return countAnswersByRule(await getPositionRules());
 }
 
 /**
@@ -249,7 +241,7 @@ async function ruleAnswerCounts(): Promise<Map<string, number>> {
  * rule per trade, so it outgrows a single page faster than the trades do, and a
  * short page would under-count follow rates without any error.
  */
-export async function getPositionRules(): Promise<Map<string, PositionRule[]>> {
+async function readPositionRules(): Promise<Map<string, PositionRule[]>> {
   const supabase = await createClient();
   const rows = await selectAllPages<{
     position_id: string;
@@ -276,6 +268,11 @@ export async function getPositionRules(): Promise<Map<string, PositionRule[]>> {
   }
   return map;
 }
+
+// Memoized per request (React `cache`), like `getCurrentUser` and `getFieldDefs`: a page
+// and the helpers it calls ask for this more than once in one render, and each ask
+// was its own round trip to the database.
+export const getPositionRules = cache(readPositionRules);
 
 /** Answers for one trade, for the edit form. */
 export async function getTradeRuleAnswers(

@@ -40,20 +40,21 @@ export default async function PlaybookDetailPage({
 }) {
   const { id } = await params;
 
-  // Awaited first, same reason `/playbooks` does it: `getPlaybooks` accepts
-  // the settled map or its promise, and this page needs the settled map on
-  // its own too, to slice it down to just this book's trades below.
-  const positionRules = await getPositionRules();
+  // Drained once per render, as on `/playbooks`: `getPositionRules` is memoized
+  // per request and `getPlaybooks`/`getRuleLibrary` count from it. Started with
+  // everything else instead of awaited alone first, which cost a round trip.
+  const positionRulesPromise = getPositionRules();
 
-  const [accounts, trades, playbooks, library, optionsMap, fieldDefs, notes] =
+  const [accounts, trades, playbooks, library, optionsMap, fieldDefs, notes, positionRules] =
     await Promise.all([
       getAccounts(),
       getTradesWithStats(),
-      getPlaybooks({ includeDeleted: true, positionRules }),
+      getPlaybooks({ includeDeleted: true, positionRules: positionRulesPromise }),
       getRuleLibrary({ includeDeleted: true }),
       getOptionsMap(false),
       getFieldDefs(false),
       getNotesForPlaybook(id),
+      positionRulesPromise,
     ]);
 
   const book = playbooks.find((b) => b.id === id);

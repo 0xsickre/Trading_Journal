@@ -16,9 +16,10 @@ export default async function ReportsPage() {
   // `tj_position_rules` is drained ONCE, and the per-rule counts are derived
   // from the result inside `getPlaybooks`. Both reads used to sit in this
   // Promise.all, draining the same table — one row per rule per trade, the
-  // fastest-growing in the schema — twice on every render of the route. One
-  // extra await costs a round trip; the second drain cost the whole table.
-  const positionRules = await getPositionRules();
+  // fastest-growing in the schema — twice on every render of the route. It is
+  // handed to `getPlaybooks` as a PROMISE, so the single drain no longer costs a
+  // round trip of its own before everything else starts.
+  const positionRulesPromise = getPositionRules();
 
   const [
     trades,
@@ -31,6 +32,7 @@ export default async function ReportsPage() {
     optionsMap,
     positionCheckins,
     weekGrades,
+    positionRules,
   ] = await Promise.all([
     getTradesWithStats(),
     getAccounts(),
@@ -43,7 +45,7 @@ export default async function ReportsPage() {
     // Retired rules included for the same reason — their recorded answers are
     // real observations, and dropping them would move numbers for trades logged
     // long before the rule was retired.
-    getPlaybooks({ includeDeleted: true, positionRules }),
+    getPlaybooks({ includeDeleted: true, positionRules: positionRulesPromise }),
     // Inactive options included, for the third time and the same reason: an
     // emotion the trader has since retired is still the emotion those trades
     // were tagged with, and dropping it would move a tag from the Emocija
@@ -58,6 +60,7 @@ export default async function ReportsPage() {
     // grouped on, and shipping five paragraphs a week to the browser to render
     // one letter would be paying for the whole review to draw a bucket label.
     getWeekGrades(),
+    positionRulesPromise,
   ]);
 
   return (

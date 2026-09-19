@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { selectAllPages } from "@/lib/supabase/paginate";
-import type { Note, NoteFolder } from "./note-types";
+import { NOTE_TRASH_MS, type Note, type NoteFolder } from "./note-types";
 
 /**
  * Purges notes that have sat in Recently Deleted for 30 days.
@@ -22,7 +22,7 @@ import type { Note, NoteFolder } from "./note-types";
  */
 export async function purgeExpiredNotes(): Promise<void> {
   const supabase = await createClient();
-  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = new Date(Date.now() - NOTE_TRASH_MS).toISOString();
   const { error } = await supabase
     .from("tj_notes")
     .delete()

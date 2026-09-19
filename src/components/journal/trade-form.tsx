@@ -809,8 +809,10 @@ export function TradeForm({
         riskPct: String(fieldsToSave.risk_pct ?? ""),
       });
       toast.success(initial ? "Trade updated" : "Trade saved");
+      // No `router.refresh()` after it: the action already revalidated the
+      // journal, which clears the client cache, so the push renders it fresh.
+      // The refresh rendered the same page a second time.
       router.push("/journal");
-      router.refresh();
     });
   }
 

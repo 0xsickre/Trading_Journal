@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { OptionItem, OptionList, OptionsMap } from "./types";
 import {
@@ -11,7 +12,7 @@ import {
 export type { OptionList, OptionsMap } from "./types";
 
 /** All lists with their items. `activeOnly` filters soft-deleted options. */
-export async function getListsWithItems(
+async function readListsWithItems(
   activeOnly = false,
 ): Promise<OptionList[]> {
   const supabase = await createClient();
@@ -70,6 +71,11 @@ export async function getListsWithItems(
     items: byList.get(l.id) ?? [],
   }));
 }
+
+// Memoized per request (React `cache`), like `getCurrentUser` and `getFieldDefs`: a page
+// and the helpers it calls ask for this more than once in one render, and each ask
+// was its own round trip to the database.
+export const getListsWithItems = cache(readListsWithItems);
 
 /** Map keyed by list `key` -> items, for powering form dropdowns. */
 export async function getOptionsMap(activeOnly = true): Promise<OptionsMap> {
