@@ -297,3 +297,35 @@ export function widgetCounts(hidden: readonly string[]): {
     total: hideable.length,
   };
 }
+
+/**
+ * Tailwind classes for each widget in a packed row, so the row has no hole.
+ *
+ * `packRows` fills four quarters, but a row can close short — the widget after
+ * it did not fit, or its partner is switched off — and the missing quarters
+ * showed as a blank slab beside the last card. On the two-column (md) grid the
+ * same happens with an odd number of one-column widgets. The LAST widget of the
+ * row takes whatever is left, at each breakpoint separately; nothing is
+ * reordered, the reader's sequence stands.
+ *
+ * Literal class names only — Tailwind compiles what it can read in the source.
+ */
+const XL_SPAN: Record<number, string> = {
+  1: "xl:col-span-1",
+  2: "xl:col-span-2",
+  3: "xl:col-span-3",
+  4: "xl:col-span-4",
+};
+
+export function rowSpanClasses(spans: readonly number[]): string[] {
+  const xlTotal = spans.reduce((s, n) => s + n, 0);
+  // On md every span of 2 or more fills the row's two columns.
+  const md = spans.map((n) => (n >= 2 ? 2 : 1));
+  const mdTotal = md.reduce((s, n) => s + n, 0);
+  return spans.map((n, i) => {
+    const last = i === spans.length - 1;
+    const xl = last ? Math.min(ROW_UNITS, n + Math.max(0, ROW_UNITS - xlTotal)) : n;
+    const mdSpan = last && mdTotal % 2 === 1 ? 2 : md[i];
+    return [mdSpan === 2 ? "md:col-span-2" : "", XL_SPAN[xl]].filter(Boolean).join(" ");
+  });
+}

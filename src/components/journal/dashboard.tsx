@@ -155,9 +155,9 @@ import {
   moveWidget,
   packRows,
   resolveOrder,
+  rowSpanClasses,
   toggleWidget,
   visibleWidgets,
-  type WidgetSpan,
 } from "@/lib/journal/dashboard-widgets";
 import {
   createDashboardTemplate,
@@ -253,20 +253,6 @@ import {
 } from "@/lib/journal/risk-ratios";
 
 /**
- * How many of the four columns a widget takes.
- *
- * Literal classes rather than a template string: Tailwind's compiler scans
- * source text, so `col-span-${n}` compiles to nothing and every widget silently
- * collapses to one column. Each of these has to be written out to exist in the
- * stylesheet at all.
- */
-const SPAN_CLASS: Record<WidgetSpan, string> = {
-  1: "",
-  2: "md:col-span-2 xl:col-span-2",
-  4: "md:col-span-2 xl:col-span-4",
-};
-
-/**
  * A money tile, aware of the view-mode switcher — but the "dollars" case
  * still goes through `fmtMoney(..., { sign: true })` exactly as before,
  * because that leading "+" on a positive Net P/L is existing, tested
@@ -310,21 +296,29 @@ function renderRows(
     return node != null && node !== false;
   });
 
-  return packRows(present).map((row) => (
-    <div
-      // Keyed by the row's first widget rather than by index: an index key
-      // makes React reuse a chart's DOM for whatever lands in that slot after a
-      // reorder, and recharts does not survive having its data swapped under it.
-      key={row[0].id}
-      className="grid gap-4 [&>*]:min-w-0 md:grid-cols-2 xl:grid-cols-4"
-    >
-      {row.map((w) => (
-        <div key={w.id} className={SPAN_CLASS[w.span]}>
-          {nodes[w.id]}
-        </div>
-      ))}
-    </div>
-  ));
+  return packRows(present).map((row) => {
+    // The last widget fills what the row leaves over, per breakpoint, so a
+    // short row never ends in a blank slab.
+    const spans = rowSpanClasses(row.map((w) => w.span));
+    return (
+      <div
+        // Keyed by the row's first widget rather than by index: an index key
+        // makes React reuse a chart's DOM for whatever lands in that slot after a
+        // reorder, and recharts does not survive having its data swapped under it.
+        key={row[0].id}
+        className="grid gap-4 [&>*]:min-w-0 md:grid-cols-2 xl:grid-cols-4"
+      >
+        {row.map((w, i) => (
+          // `[&>*]:h-full`: the card fills its cell, so cards side by side end
+          // on one line. A short chart beside a tall score card used to leave
+          // the gap under it that the eye reads as a missing widget.
+          <div key={w.id} className={cn(spans[i], "[&>*]:h-full")}>
+            {nodes[w.id]}
+          </div>
+        ))}
+      </div>
+    );
+  });
 }
 
 /**

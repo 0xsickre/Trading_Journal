@@ -6,6 +6,7 @@ import {
   getWidget,
   moveWidget,
   packRows,
+  rowSpanClasses,
   resolveOrder,
   toggleWidget,
   visibleWidgets,
@@ -312,5 +313,30 @@ describe("getWidget", () => {
   it("finds by id and answers undefined for anything else", () => {
     expect(getWidget("equity")?.label).toBe("Equity curve");
     expect(getWidget("nope")).toBeUndefined();
+  });
+});
+
+describe("rowSpanClasses — a packed row leaves no hole", () => {
+  it("leaves a full row as it is", () => {
+    expect(rowSpanClasses([2, 2])).toEqual(["md:col-span-2 xl:col-span-2", "md:col-span-2 xl:col-span-2"]);
+    expect(rowSpanClasses([1, 1, 1, 1])).toEqual([
+      "xl:col-span-1",
+      "xl:col-span-1",
+      "xl:col-span-1",
+      "xl:col-span-1",
+    ]);
+  });
+
+  it("widens the last widget of a short row to the edge", () => {
+    expect(rowSpanClasses([2])).toEqual(["md:col-span-2 xl:col-span-4"]);
+    expect(rowSpanClasses([1, 1, 1])).toEqual([
+      "xl:col-span-1",
+      "xl:col-span-1",
+      "md:col-span-2 xl:col-span-2",
+    ]);
+  });
+
+  it("closes an odd two-column line on medium screens", () => {
+    expect(rowSpanClasses([2, 1])).toEqual(["md:col-span-2 xl:col-span-2", "md:col-span-2 xl:col-span-2"]);
   });
 });
