@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/app/page-header";
 import type { RealizedTrade } from "@/lib/journal/analytics";
 import { accountTimezoneResolver } from "@/lib/journal/time";
 import { stringFieldValue } from "@/lib/journal/field-values";
+import { sharedCurrency } from "@/lib/journal/format";
 
 /**
  * Playbooks: a compact list of every setup, click through to judge one.
@@ -45,7 +46,9 @@ export default async function PlaybooksPage() {
   ]);
 
   const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
-  const currency = primary?.currency ?? "USD";
+  // Null when the accounts' currencies differ: the list then refuses to sum
+  // money rather than print €500 + $300 as "$800".
+  const currency = sharedCurrency(accounts);
 
   const tzFor = accountTimezoneResolver(accounts, primary?.timezone);
   const tzOf = (t: RealizedTrade) => tzFor(t.row.account_id);
@@ -83,7 +86,7 @@ export default async function PlaybooksPage() {
     <div className="space-y-5">
       <PageHeader
         title="Playbooks"
-        description="Define a setup and see what it did. Rules are a library — written once, linked into any number of playbooks, keeping one set of statistics."
+        description="Your setups, and what each one actually did."
       />
 
       <PlaybooksScreen

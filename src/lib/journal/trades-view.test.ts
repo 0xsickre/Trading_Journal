@@ -6,6 +6,7 @@ import {
   periodBounds,
   summarizeTrades,
   tradeDayKey,
+  viewStorageKey,
 } from "./trades-view";
 import { mkTrade } from "./reports/test-helpers";
 import type { Account, TradeRow } from "./types";
@@ -141,5 +142,12 @@ describe("parseViewState", () => {
     expect(v.sort).toEqual([{ id: "net", desc: false }]);
     expect(v.pageSize).toBe(DEFAULT_VIEW.pageSize);
     expect(v.pageIndex).toBe(2);
+  });
+});
+
+describe("viewStorageKey", () => {
+  it("gives each list its own remembered view", () => {
+    expect(viewStorageKey()).toBe("tj.trades.view.v1");
+    expect(viewStorageKey("playbook:pb-1")).toBe("tj.trades.view.v1:playbook:pb-1");
   });
 });

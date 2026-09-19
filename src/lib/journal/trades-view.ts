@@ -182,6 +182,15 @@ export const DEFAULT_VIEW: GridViewState = {
 const VIEW_KEY = "tj.trades.view.v1";
 
 /**
+ * Storage key per list. The grid renders on `/journal` AND inside each
+ * playbook's Trades tab; one shared key made a filter set on one silently
+ * narrow the other.
+ */
+export function viewStorageKey(viewKey?: string): string {
+  return viewKey ? `${VIEW_KEY}:${viewKey}` : VIEW_KEY;
+}
+
+/**
  * Read back a stored view, trusting nothing about its shape: a value written by
  * an older build, or edited by hand, falls back field by field to the default.
  */
@@ -231,17 +240,17 @@ export function parseViewState(raw: string | null): GridViewState {
   };
 }
 
-export function loadViewState(): GridViewState {
+export function loadViewState(viewKey?: string): GridViewState {
   try {
-    return parseViewState(window.sessionStorage.getItem(VIEW_KEY));
+    return parseViewState(window.sessionStorage.getItem(viewStorageKey(viewKey)));
   } catch {
     return DEFAULT_VIEW;
   }
 }
 
-export function saveViewState(state: GridViewState): void {
+export function saveViewState(state: GridViewState, viewKey?: string): void {
   try {
-    window.sessionStorage.setItem(VIEW_KEY, JSON.stringify(state));
+    window.sessionStorage.setItem(viewStorageKey(viewKey), JSON.stringify(state));
   } catch {
     // Private mode or blocked storage: the list still works, it just forgets.
   }

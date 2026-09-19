@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check } from "lucide-react";
+import { Check, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +19,7 @@ import {
   type PlaybookRule,
   type PlaybookSection,
 } from "@/lib/journal/playbook-types";
-import { linkRule } from "@/app/(app)/settings/playbook-actions";
+import { deletePlaybookRule, linkRule } from "@/app/(app)/settings/playbook-actions";
 
 /**
  * Pick a rule you have already written and file it into THIS section.
@@ -45,6 +45,7 @@ export function RuleLibraryDialog({
   available,
   open,
   onOpenChange,
+  linkedRuleIds = [],
 }: {
   playbookId: string;
   section: PlaybookSection;
@@ -52,6 +53,11 @@ export function RuleLibraryDialog({
   available: readonly PlaybookRule[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Every rule some playbook links. None of them may be deleted from here —
+   * a rule another setup still checks is not spare, even with no answers yet.
+   */
+  linkedRuleIds?: readonly string[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -66,12 +72,43 @@ export function RuleLibraryDialog({
    * survives until the dialog is reopened.
    */
   const [linked, setLinked] = useState<string[]>([]);
+  /** Deleted during this visit — hidden at once, before the refresh lands. */
+  const [deleted, setDeleted] = useState<string[]>([]);
+  /** The row whose bin was pressed once and now asks to be pressed again. */
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return available;
-    return available.filter((r) => r.text.toLowerCase().includes(q));
-  }, [available, query]);
+    const live = available.filter((r) => !deleted.includes(r.id));
+    if (!q) return live;
+    return live.filter((r) => r.text.toLowerCase().includes(q));
+  }, [available, query, deleted]);
+
+  /**
+   * Delete a rule no trade has answered.
+   *
+   * Offered only for a rule that is truly spare: no trade has answered it (an
+   * answered rule carries statistics), and no playbook uses it. The bin still
+   * asks twice — a deleted rule cannot be brought back.
+   */
+  const linkedSet = useMemo(() => new Set(linkedRuleIds), [linkedRuleIds]);
+
+  function remove(rule: PlaybookRule) {
+    if (confirmId !== rule.id) {
+      setConfirmId(rule.id);
+      return;
+    }
+    setConfirmId(null);
+    start(async () => {
+      const res = await deletePlaybookRule(rule.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setDeleted((ids) => [...ids, rule.id]);
+      router.refresh();
+    });
+  }
 
   function pick(rule: PlaybookRule) {
     if (linked.includes(rule.id)) return;
@@ -116,16 +153,19 @@ export function RuleLibraryDialog({
           ) : (
             matches.map((rule) => {
               const done = linked.includes(rule.id);
+              const deletable =
+                rule.answerCount === 0 && !done && !linkedSet.has(rule.id);
+              const asking = confirmId === rule.id;
               return (
+                <div key={rule.id} className="flex items-stretch gap-1">
                 <button
-                  key={rule.id}
                   type="button"
                   role="option"
                   aria-selected={done}
                   disabled={pending || done}
                   onClick={() => pick(rule)}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md border px-2.5 py-2 text-left text-sm",
+                    "flex min-w-0 flex-1 items-center gap-2 rounded-md border px-2.5 py-2 text-left text-sm",
                     done ? "bg-[var(--profit)]/5" : "hover:bg-accent/60",
                   )}
                 >
@@ -150,6 +190,30 @@ export function RuleLibraryDialog({
                     </span>
                   )}
                 </button>
+                {deletable && (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => remove(rule)}
+                    onBlur={() => asking && setConfirmId(null)}
+                    aria-label={asking ? `Confirm delete: ${rule.text}` : `Delete rule: ${rule.text}`}
+                    title={
+                      asking
+                        ? "Click again to delete this rule for good"
+                        : "Delete this rule — no playbook uses it and no trade has answered it"
+                    }
+                    className={cn(
+                      "flex shrink-0 items-center gap-1 rounded-md border px-2 text-xs",
+                      asking
+                        ? "border-destructive/60 bg-destructive/10 text-destructive"
+                        : "text-muted-foreground hover:bg-accent/60 hover:text-destructive",
+                    )}
+                  >
+                    <Trash2 className="size-3.5" />
+                    {asking && "Delete?"}
+                  </button>
+                )}
+                </div>
               );
             })
           )}

@@ -19,6 +19,7 @@ import { sharedBreakevenRange } from "@/lib/journal/breakeven";
 import { accountTimezoneResolver, DEFAULT_TZ } from "@/lib/journal/time";
 import { todayInTz } from "@/lib/journal/daily-report";
 import { stringFieldValue } from "@/lib/journal/field-values";
+import { sharedCurrency } from "@/lib/journal/format";
 import type { RealizedTrade } from "@/lib/journal/analytics";
 import type { TradeRow } from "@/lib/journal/types";
 import { JournalGrid } from "@/components/journal/journal-grid";
@@ -61,7 +62,8 @@ export default async function PlaybookDetailPage({
   if (!book) notFound();
 
   const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
-  const currency = primary?.currency ?? "USD";
+  // Null when the accounts' currencies differ — see the list page.
+  const currency = sharedCurrency(accounts);
   const todayKey = todayInTz(primary?.timezone ?? DEFAULT_TZ);
 
   const tzFor = accountTimezoneResolver(accounts, primary?.timezone);
@@ -129,6 +131,9 @@ export default async function PlaybookDetailPage({
             trades={enrichedBookTrades}
             lookup={lookup}
             computeCtx={computeCtx}
+            // Every rule some playbook uses — active or not. The "reuse a rule"
+            // dialog offers to delete only rules outside all of them.
+            linkedRuleIds={[...new Set(playbooks.flatMap((p) => p.rules.map((r) => r.id)))]}
           />
         </TabsContent>
 
@@ -140,6 +145,8 @@ export default async function PlaybookDetailPage({
             optionsMap={optionsMap}
             playbooks={[book as Playbook]}
             positionRules={positionRulesForBook}
+            // Its own remembered filters — not the Trades page's.
+            viewKey={`playbook:${book.id}`}
           />
         </TabsContent>
 

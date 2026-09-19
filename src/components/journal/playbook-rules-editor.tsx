@@ -21,6 +21,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -216,6 +224,7 @@ function RuleRow({
   const { pending, run } = useAction();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(rule.text);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const locked = rule.answerCount > 0;
   const retired = rule.deleted_at != null;
 
@@ -468,11 +477,16 @@ function RuleRow({
           )}
           <DropdownMenuItem
             variant={retired ? "default" : "destructive"}
-            onSelect={() =>
-              run(() =>
-                retired ? restorePlaybookRule(rule.id) : deletePlaybookRule(rule.id),
-              )
-            }
+            onSelect={() => {
+              // A rule never answered is DELETED — from the library, so from
+              // every playbook linking it — and that is not undoable. Ask first.
+              // Restoring and archiving are both reversible and stay one click.
+              if (!retired && !locked) setConfirmDelete(true);
+              else
+                run(() =>
+                  retired ? restorePlaybookRule(rule.id) : deletePlaybookRule(rule.id),
+                );
+            }}
             title={
               retired
                 ? "Restore to the checklist."
@@ -497,6 +511,34 @@ function RuleRow({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete this rule?</DialogTitle>
+            <DialogDescription>
+              “{rule.text}” is removed from your library, and so from every playbook
+              that uses it. No trade has answered it yet. To take it out of this
+              playbook only, use “Remove from this playbook” instead.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmDelete(false)} disabled={pending}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={pending}
+              onClick={() => {
+                setConfirmDelete(false);
+                run(() => deletePlaybookRule(rule.id));
+              }}
+            >
+              Delete rule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -518,6 +560,7 @@ function SectionCard({
   section,
   rules,
   library,
+  linkedRuleIds,
   scoreById,
   canUp,
   canDown,
@@ -537,6 +580,8 @@ function SectionCard({
   section: PlaybookSection;
   rules: LinkedRule[];
   library: PlaybookRule[];
+  /** Rules any playbook links — never offered for deletion. */
+  linkedRuleIds: readonly string[];
   scoreById: Map<string, RuleScore>;
   canUp: boolean;
   canDown: boolean;
@@ -710,6 +755,7 @@ function SectionCard({
         available={available}
         open={libraryOpen}
         onOpenChange={setLibraryOpen}
+        linkedRuleIds={linkedRuleIds}
       />
 
       <SectionDeleteDialog
@@ -732,12 +778,15 @@ export function PlaybookRulesEditor({
   trades,
   lookup,
   computeCtx,
+  linkedRuleIds = [],
 }: {
   book: Playbook;
   library: PlaybookRule[];
   trades: EnrichedTrade[];
   lookup: PlaybookLookup;
   computeCtx: ComputeContext;
+  /** Rules linked by ANY playbook — the library dialog may not delete them. */
+  linkedRuleIds?: readonly string[];
 }) {
   // No `useAction` here any more: the drag hook owns its own transition, and
   // nothing else on this level writes.
@@ -839,6 +888,7 @@ export function PlaybookRulesEditor({
                 section={section}
                 rules={rules}
                 library={library}
+                linkedRuleIds={linkedRuleIds}
                 scoreById={scoreById}
                 canUp={canUp}
                 canDown={canDown}

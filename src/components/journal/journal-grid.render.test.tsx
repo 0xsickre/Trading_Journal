@@ -761,3 +761,23 @@ describe("the list a trader scans", () => {
     await vi.waitFor(() => expect(screen.getByText("1 selected")).toBeInTheDocument());
   });
 });
+
+describe("a playbook's Trades tab keeps its own view", () => {
+  const ACCOUNT = account({ id: "acc-1" });
+  const trades = rowsOf([
+    mkTrade({ id: "t1", instrument: "EURUSD" }),
+    mkTrade({ id: "t2", instrument: "XAUUSD" }),
+  ]);
+
+  it("a search on /journal does not narrow the playbook's list", async () => {
+    // One storage key for both made a filter set on the Trades page silently
+    // cut the playbook's trades — and the other way round.
+    const user = userEvent.setup({ delay: null });
+    const { unmount } = render(<JournalGrid trades={trades} accounts={[ACCOUNT]} />);
+    await user.type(screen.getByPlaceholderText(/Search notes/), "eurusd");
+    unmount();
+
+    render(<JournalGrid trades={trades} accounts={[ACCOUNT]} viewKey="playbook:pb-1" />);
+    expect(await screen.findByText(/2 of 2 trades/)).toBeInTheDocument();
+  });
+});

@@ -281,6 +281,7 @@ export function JournalGrid({
   optionsMap = {},
   playbooks = [],
   positionRules,
+  viewKey,
 }: {
   trades: TradeRow[];
   accounts: Account[];
@@ -294,6 +295,11 @@ export function JournalGrid({
   playbooks?: Playbook[];
   /** Recorded rule answers, the other half of that grade. */
   positionRules?: Map<string, PositionRule[]>;
+  /**
+   * Which remembered view this list uses. Absent on `/journal`; a playbook's
+   * Trades tab passes its own, so the two lists keep separate filters.
+   */
+  viewKey?: string;
 }) {
   const router = useRouter();
   const tzByAccount = useMemo(() => {
@@ -336,7 +342,7 @@ export function JournalGrid({
   const restored = useRef(false);
 
   useEffect(() => {
-    const v = loadViewState();
+    const v = loadViewState(viewKey);
     setSearch(v.search);
     setAccountFilter(v.account);
     setFilters(v.filters);
@@ -346,7 +352,7 @@ export function JournalGrid({
     setSorting(v.sort);
     setPagination({ pageIndex: v.pageIndex, pageSize: v.pageSize });
     restored.current = true;
-  }, []);
+  }, [viewKey]);
 
   useEffect(() => {
     if (!restored.current) return;
@@ -360,8 +366,8 @@ export function JournalGrid({
       sort: sorting,
       pageSize: pagination.pageSize,
       pageIndex: pagination.pageIndex,
-    });
-  }, [search, accountFilter, filters, period, customFrom, customTo, sorting, pagination]);
+    }, viewKey);
+  }, [search, accountFilter, filters, period, customFrom, customTo, sorting, pagination, viewKey]);
 
   /** Any narrowing sends the reader back to page one — page 4 of a smaller set may not exist. */
   const toFirstPage = () => setPagination((p) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }));

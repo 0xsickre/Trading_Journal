@@ -28,6 +28,8 @@ import {
   type PlaybookLookup,
 } from "@/lib/journal/reports/playbook-dimensions";
 import { HEADER_METRICS, type Playbook } from "@/lib/journal/playbook-types";
+import { EMPTY_BUCKET } from "@/lib/journal/reports/dimensions";
+import { DeletePlaybookDialog } from "@/components/journal/playbook-identity-header";
 import type { EnrichedTrade } from "@/lib/journal/enriched-trade";
 import type { BreakevenRange } from "@/lib/journal/breakeven";
 import {
@@ -136,7 +138,11 @@ export function PlaybooksScreen({
   playbooks: Playbook[];
   trades: EnrichedTrade[];
   lookup: PlaybookLookup;
-  currency: string;
+  /**
+   * The currency every account shares, or null when they differ — then there
+   * is no honest money total, and the money column shows a dash.
+   */
+  currency: string | null;
   breakevenRange: BreakevenRange;
   /**
    * Missed-trade counts, keyed by playbook id. Computed server-side in
@@ -148,6 +154,7 @@ export function PlaybooksScreen({
 }) {
   const router = useRouter();
   const { pending, run } = useRowAction();
+  const [toDelete, setToDelete] = useState<Playbook | null>(null);
 
   const metricCtx = useMemo<MetricContext>(
     () => ({
@@ -177,6 +184,7 @@ export function PlaybooksScreen({
     });
     return new Map((result?.rows ?? []).map((r) => [r.bucket, r] as const));
   }, [trades, lookup, metricCtx]);
+  const noPlaybook = byPlaybook.get(EMPTY_BUCKET);
 
   return (
     <div className="space-y-4">
@@ -195,8 +203,15 @@ export function PlaybooksScreen({
                 <th className="px-3 py-2 text-right font-medium">Trades</th>
                 <th className="px-3 py-2 text-right font-medium">Net P&amp;L</th>
                 <th className="px-3 py-2 text-right font-medium">Win Rate</th>
-                <th className="px-3 py-2 text-right font-medium">Missed</th>
+                <th className="px-3 py-2 text-right font-medium">Profit factor</th>
                 <th className="px-3 py-2 text-right font-medium">Expectancy</th>
+                <th
+                  className="px-3 py-2 text-right font-medium"
+                  title="Share of checklist answers marked followed"
+                >
+                  Followed
+                </th>
+                <th className="px-3 py-2 text-right font-medium">Missed</th>
                 <th className="w-20 px-3 py-2" />
               </tr>
             </thead>
@@ -235,24 +250,9 @@ export function PlaybooksScreen({
                     <td className="px-3 py-2 text-right tabular-nums">
                       {formatMetric(mkMetric(n > 0 ? n : null, "count"))}
                     </td>
-                    <td
-                      className={cn(
-                        "px-3 py-2 text-right tabular-nums",
-                        pnlClass(row?.values.net_pnl),
-                      )}
-                    >
-                      {formatMetric(
-                        mkMetric(row?.values.net_pnl ?? null, "money", { currency }),
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {formatMetric(mkMetric(row?.values.win_rate ?? null, "pct"))}
-                    </td>
+                    <FigureCells row={row} currency={currency} />
                     <td className="px-3 py-2 text-right tabular-nums">
                       {formatMetric(mkMetric(missed > 0 ? missed : null, "count"))}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {formatMetric(mkMetric(row?.values.expectancy ?? null, "r"))}
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       <Button
@@ -286,7 +286,7 @@ export function PlaybooksScreen({
                         disabled={pending}
                         onClick={(e) => {
                           e.stopPropagation();
-                          run(() => deletePlaybook(book.id));
+                          setToDelete(book);
                         }}
                         aria-label="Delete playbook"
                         title="Only possible while no trade uses it."
@@ -297,10 +297,74 @@ export function PlaybooksScreen({
                   </tr>
                 );
               })}
+              {/* The baseline. A playbook's numbers only mean something next to
+                  what the trades WITHOUT one did — otherwise "55 % win rate"
+                  cannot say whether the setup adds anything. */}
+              {noPlaybook && (
+                <tr className="border-t bg-muted/20 text-muted-foreground">
+                  <td className="px-3 py-2 italic">No playbook</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {formatMetric(mkMetric(noPlaybook.n, "count"))}
+                  </td>
+                  <FigureCells row={noPlaybook} currency={currency} />
+                  <td className="px-3 py-2" />
+                  <td className="px-3 py-2" />
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       )}
+      {currency == null && playbooks.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Net P&amp;L is not summed: your accounts use different currencies.
+        </p>
+      )}
+
+      <DeletePlaybookDialog
+        name={toDelete?.name ?? ""}
+        open={toDelete != null}
+        onOpenChange={(v) => {
+          if (!v) setToDelete(null);
+        }}
+        pending={pending}
+        onConfirm={() => {
+          const book = toDelete;
+          if (!book) return;
+          setToDelete(null);
+          run(() => deletePlaybook(book.id));
+        }}
+      />
     </div>
+  );
+}
+
+/** Net, win rate, profit factor, expectancy and follow rate — one row's figures. */
+function FigureCells({
+  row,
+  currency,
+}: {
+  row: { values: Record<string, number | null> } | undefined;
+  currency: string | null;
+}) {
+  const v = (k: string) => row?.values[k] ?? null;
+  return (
+    <>
+      <td className={cn("px-3 py-2 text-right tabular-nums", currency && pnlClass(v("net_pnl")))}>
+        {currency ? formatMetric(mkMetric(v("net_pnl"), "money", { currency })) : "—"}
+      </td>
+      <td className="px-3 py-2 text-right tabular-nums">
+        {formatMetric(mkMetric(v("win_rate"), "pct"))}
+      </td>
+      <td className="px-3 py-2 text-right tabular-nums">
+        {formatMetric(mkMetric(v("profit_factor"), "ratio"))}
+      </td>
+      <td className={cn("px-3 py-2 text-right tabular-nums", pnlClass(v("expectancy")))}>
+        {formatMetric(mkMetric(v("expectancy"), "r"))}
+      </td>
+      <td className="px-3 py-2 text-right tabular-nums">
+        {formatMetric(mkMetric(v("follow_rate"), "pct"))}
+      </td>
+    </>
   );
 }
