@@ -124,6 +124,7 @@ import {
   defaultRiskPctOption,
 } from "@/lib/journal/trade-form-prefs";
 import { cn } from "@/lib/utils";
+import { pickableAccounts, primaryAccount } from "@/lib/journal/account-rules";
 import { InstrumentSelect } from "@/components/journal/instrument-select";
 
 type ExecRow = {
@@ -329,7 +330,7 @@ export function TradeForm({
   }
 
   const [accountId, setAccountId] = useState<string | null>(
-    initial?.account_id ?? accounts.find((a) => a.is_active)?.id ?? accounts[0]?.id ?? null,
+    initial?.account_id ?? primaryAccount(accounts)?.id ?? null,
   );
   const account = accounts.find((a) => a.id === accountId) ?? null;
   // Block only NEW trades on a frozen FTMO account (editing existing is allowed).
@@ -416,7 +417,7 @@ export function TradeForm({
   useEffect(() => {
     if (initial) return;
     const prefs = getTradeFormPrefs();
-    if (prefs.accountId && accounts.some((a) => a.id === prefs.accountId)) {
+    if (prefs.accountId && pickableAccounts(accounts).some((a) => a.id === prefs.accountId)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- external-store init
       setAccountId(prefs.accountId);
     }
@@ -1026,7 +1027,9 @@ export function TradeForm({
                       optionsMap={optionsMap}
                       instruments={instruments}
                       accountId={accountId}
-                      accounts={accounts}
+                      // Archived accounts are not offered — except the one this
+                      // trade is already filed under, so saving never re-files it.
+                      accounts={pickableAccounts(accounts, initial?.account_id)}
                       onAccountChange={(id) => {
                         setDirty(true);
                         setAccountId(id);

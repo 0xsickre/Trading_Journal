@@ -2,13 +2,14 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Account } from "./types";
+import { primaryAccount } from "./account-rules";
 
 async function readAccounts(): Promise<Account[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("tj_accounts")
     .select(
-      "id,name,broker,account_kind,currency,starting_balance,default_asset_class,timezone,is_active,breakeven_from,breakeven_to,breakeven_unit,default_commission_per_unit,default_fee_fixed,default_swap_per_day,default_stop_pct,default_target_pct,ftmo_mode,ftmo_daily_loss_enabled,ftmo_daily_loss_pct,ftmo_daily_loss_basis,ftmo_max_loss_enabled,ftmo_max_loss_pct,ftmo_profit_target_enabled,ftmo_profit_target_pct,ftmo_min_days_enabled,ftmo_min_days,ftmo_reset_at",
+      "id,name,broker,account_kind,currency,starting_balance,default_asset_class,timezone,is_active,breakeven_from,breakeven_to,breakeven_unit,default_commission_per_unit,default_fee_fixed,default_swap_per_day,default_stop_pct,default_target_pct,ftmo_mode,ftmo_daily_loss_enabled,ftmo_daily_loss_pct,ftmo_daily_loss_basis,ftmo_max_loss_enabled,ftmo_max_loss_pct,ftmo_profit_target_enabled,ftmo_profit_target_pct,ftmo_min_days_enabled,ftmo_min_days,ftmo_reset_at,archived_at,created_at",
     )
     .order("created_at");
   return (data ?? []) as Account[];
@@ -19,10 +20,14 @@ async function readAccounts(): Promise<Account[]> {
 // was its own round trip to the database.
 export const getAccounts = cache(readAccounts);
 
-/** The account used as default context (first active, else first). */
+/**
+ * The account used as default context: the default one, else the first — never
+ * an archived one while any other exists. An archived account is finished, and
+ * opening the app on it would date the day and pick the currency of a book
+ * nobody trades any more.
+ */
 export async function getPrimaryAccount(): Promise<Account | null> {
-  const accounts = await getAccounts();
-  return accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
+  return primaryAccount(await getAccounts());
 }
 
 /**

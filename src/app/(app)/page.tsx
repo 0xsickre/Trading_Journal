@@ -1,3 +1,4 @@
+import { primaryAccount } from "@/lib/journal/account-rules";
 import { getTradesWithStats, getFillCounts } from "@/lib/journal/trades";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getCashEvents } from "@/lib/journal/cash-events";
@@ -25,7 +26,7 @@ export default async function DashboardPage() {
   const dayPromise = accountsPromise.then((accounts) => {
     // The account's day, not the browser's — every day key in the tracker is in
     // account time, and the heatmap grid is anchored to this.
-    const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
+    const primary = primaryAccount(accounts);
     return { primary, todayKey: todayInTz(primary?.timezone ?? DEFAULT_TZ) };
   });
 

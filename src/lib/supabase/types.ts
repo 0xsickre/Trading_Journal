@@ -17,6 +17,7 @@ export type Database = {
       tj_accounts: {
         Row: {
           account_kind: string
+          archived_at: string | null
           breakeven_from: number
           breakeven_to: number
           breakeven_unit: string
@@ -49,6 +50,7 @@ export type Database = {
         }
         Insert: {
           account_kind?: string
+          archived_at?: string | null
           breakeven_from?: number
           breakeven_to?: number
           breakeven_unit?: string
@@ -81,6 +83,7 @@ export type Database = {
         }
         Update: {
           account_kind?: string
+          archived_at?: string | null
           breakeven_from?: number
           breakeven_to?: number
           breakeven_unit?: string

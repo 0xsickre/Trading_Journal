@@ -136,6 +136,11 @@ describe("parseSettingsNumber (A10)", () => {
     expect(parseSettingsNumber("10,000.50")).toEqual({ ok: true, value: 10000.5 });
     expect(parseSettingsNumber("-37,50")).toEqual({ ok: true, value: -37.5 });
   });
+  it("refuses a thousands-or-decimal guess instead of picking one", () => {
+    expect(parseSettingsNumber("25.000")).toEqual({ ok: false, error: "Ambiguous — write 25000 or 25.0." });
+    expect(parseSettingsNumber("1,500")).toEqual({ ok: false, error: "Ambiguous — write 1500 or 1.5." });
+    expect(parseSettingsNumber("0.5")).toEqual({ ok: true, value: 0.5 });
+  });
   it("refuses instead of saving 0", () => {
     expect(parseSettingsNumber("")).toEqual({ ok: false, error: "Required." });
     expect(parseSettingsNumber("abc")).toEqual({ ok: false, error: "Not a number." });

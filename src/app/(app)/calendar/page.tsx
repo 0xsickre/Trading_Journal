@@ -1,3 +1,4 @@
+import { accountFilterOptions, primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import {
@@ -57,7 +58,7 @@ export default async function CalendarPage({
     getCashEvents(),
   ]);
 
-  const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
+  const primary = primaryAccount(accounts);
   const todayKey = todayInTz(primary?.timezone ?? DEFAULT_TZ);
   const currentMonth = todayKey.slice(0, 7);
 
@@ -182,7 +183,7 @@ export default async function CalendarPage({
         monthKey={monthKey}
         view={view}
         accountId={accountId}
-        accounts={accounts.map((a) => ({ id: a.id, name: a.name }))}
+        accounts={accountFilterOptions(accounts)}
         // "All" only when a pooled figure exists; otherwise it would be offered
         // and then silently replaced.
         allowAll={pooledCurrency != null || accounts.length <= 1}

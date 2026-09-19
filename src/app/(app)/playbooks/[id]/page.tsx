@@ -1,3 +1,4 @@
+import { primaryAccount } from "@/lib/journal/account-rules";
 import { notFound } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getAccounts } from "@/lib/journal/accounts";
@@ -61,7 +62,7 @@ export default async function PlaybookDetailPage({
   const book = playbooks.find((b) => b.id === id);
   if (!book) notFound();
 
-  const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
+  const primary = primaryAccount(accounts);
   // Null when the accounts' currencies differ — see the list page.
   const currency = sharedCurrency(accounts);
   const todayKey = todayInTz(primary?.timezone ?? DEFAULT_TZ);

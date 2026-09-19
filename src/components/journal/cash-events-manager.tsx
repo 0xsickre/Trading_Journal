@@ -14,11 +14,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fmtMoney, pnlClass } from "@/lib/journal/format";
-import { netCashFlow, type CashEvent } from "@/lib/journal/balance";
+import type { CashEvent } from "@/lib/journal/balance";
 import type { Account } from "@/lib/journal/types";
 import { parseSettingsNumber } from "@/lib/journal/settings-rules";
+import {
+  accountFilterOptions,
+  cashRowsWithOpening,
+  netFlowByCurrency,
+  pickableAccounts,
+  primaryAccount,
+  type CashRow,
+} from "@/lib/journal/account-rules";
+import { DATE, DEFAULT_TZ, fmtInTz, zonedDateKey, zonedInputToUtc } from "@/lib/journal/time";
 import {
   addCashEvent,
   deleteCashEvent,
@@ -32,7 +49,8 @@ const TYPES: { value: CashEventType; label: string; hint: string }[] = [
   { value: "adjustment", label: "Adjustment", hint: "Manual balance correction" },
 ];
 
-const todayLocal = () => new Date().toISOString().slice(0, 10);
+const typeLabel = (t: CashRow["type"]) =>
+  t === "opening" ? "Opening balance" : (TYPES.find((x) => x.value === t)?.label ?? t);
 
 export function CashEventsManager({
   accounts,
@@ -44,34 +62,71 @@ export function CashEventsManager({
   const router = useRouter();
   const [pending, start] = useTransition();
 
-  const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
+  // New entries go only to accounts in use; the history still shows them all.
+  const pickable = useMemo(() => pickableAccounts(accounts), [accounts]);
+  const [accountId, setAccountId] = useState(() => primaryAccount(pickable)?.id ?? "");
   const [type, setType] = useState<CashEventType>("deposit");
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(todayLocal);
+  const account = pickable.find((a) => a.id === accountId) ?? null;
+  const tz = account?.timezone ?? DEFAULT_TZ;
+  // "Today" is the account's today, not UTC's: in the evening in New York the
+  // UTC date is already tomorrow.
+  const [date, setDate] = useState(() => zonedDateKey(new Date(), tz));
   const [note, setNote] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [confirming, setConfirming] = useState<CashRow | null>(null);
 
-  const accountById = useMemo(
-    () => new Map(accounts.map((a) => [a.id, a])),
-    [accounts],
+  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
+  const currency = account?.currency ?? "USD";
+
+  const amountCheck = amount.trim() === "" ? null : parseSettingsNumber(amount);
+  const amountError =
+    amountCheck == null
+      ? null
+      : !amountCheck.ok
+        ? amountCheck.error
+        : amountCheck.value === 0
+          ? "Enter an amount other than zero."
+          : null;
+
+  const rows = useMemo(() => {
+    const inScope = filter === "all" ? accounts : accounts.filter((a) => a.id === filter);
+    const ids = new Set(inScope.map((a) => a.id));
+    return cashRowsWithOpening(
+      inScope,
+      events.filter((e) => ids.has(e.account_id)),
+    );
+  }, [accounts, events, filter]);
+
+  // The opening balance is where the account started, not money that moved.
+  const nets = netFlowByCurrency(
+    rows.filter((r) => r.type !== "opening"),
+    (id) => accountById.get(id)?.currency ?? "USD",
   );
-  const currency = accountById.get(accountId)?.currency ?? "USD";
 
   function submit() {
+    if (!account) {
+      toast.error("Pick an account.");
+      return;
+    }
     // Read like the import reads money: "1.000,50" is a thousand, not one.
-    const parsed = parseSettingsNumber(amount);
-    const magnitude = parsed.ok ? (parsed.value ?? 0) : NaN;
-    if (!Number.isFinite(magnitude) || magnitude === 0) {
-      toast.error(parsed.ok ? "Enter an amount other than zero." : `Amount: ${parsed.error}`);
+    if (amountCheck == null || amountError || !amountCheck.ok) {
+      toast.error(amountError ? `Amount: ${amountError}` : "Enter an amount.");
+      return;
+    }
+    // Midday in the ACCOUNT's zone: the entry lands on the day that was picked
+    // there, whatever the zone of the browser.
+    const occurredAt = zonedInputToUtc(`${date}T12:00`, tz);
+    if (!occurredAt) {
+      toast.error("Pick a valid date.");
       return;
     }
     start(async () => {
       const res = await addCashEvent({
-        account_id: accountId,
+        account_id: account.id,
         event_type: type,
-        amount: magnitude,
-        // Stored as an instant; midday avoids a same-day event landing before
-        // the account's day boundary in western timezones.
-        occurred_at: new Date(`${date}T12:00:00Z`).toISOString(),
+        amount: amountCheck.value ?? 0,
+        occurred_at: occurredAt,
         note,
       });
       if (!res.ok) {
@@ -85,11 +140,16 @@ export function CashEventsManager({
     });
   }
 
-  function remove(id: string) {
+  function remove(row: CashRow) {
     start(async () => {
-      const res = await deleteCashEvent(id);
-      if (!res.ok) toast.error(res.error);
-      else router.refresh();
+      const res = await deleteCashEvent(row.id);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setConfirming(null);
+      toast.success("Entry deleted");
+      router.refresh();
     });
   }
 
@@ -100,6 +160,8 @@ export function CashEventsManager({
       </p>
     );
   }
+
+  const rowAccount = (r: CashRow) => accountById.get(r.accountId);
 
   return (
     <div className="space-y-4">
@@ -114,13 +176,15 @@ export function CashEventsManager({
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-1.5">
-            <Label className="text-xs">Account</Label>
+            <Label className="text-xs" htmlFor="cash-account">
+              Account
+            </Label>
             <Select value={accountId} onValueChange={setAccountId}>
-              <SelectTrigger>
-                <SelectValue />
+              <SelectTrigger id="cash-account">
+                <SelectValue placeholder="Account" />
               </SelectTrigger>
               <SelectContent>
-                {accounts.map((a) => (
+                {pickable.map((a) => (
                   <SelectItem key={a.id} value={a.id}>
                     {a.name}
                   </SelectItem>
@@ -130,12 +194,11 @@ export function CashEventsManager({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">Type</Label>
-            <Select
-              value={type}
-              onValueChange={(v) => setType(v as CashEventType)}
-            >
-              <SelectTrigger>
+            <Label className="text-xs" htmlFor="cash-type">
+              Type
+            </Label>
+            <Select value={type} onValueChange={(v) => setType(v as CashEventType)}>
+              <SelectTrigger id="cash-type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -146,26 +209,42 @@ export function CashEventsManager({
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">
+              {TYPES.find((t) => t.value === type)?.hint}
+            </p>
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">
+            <Label className="text-xs" htmlFor="cash-amount">
               Amount ({currency})
-              {type !== "adjustment" && (
-                <span className="ml-1 text-muted-foreground">unsigned</span>
-              )}
             </Label>
             <Input
+              id="cash-amount"
               inputMode="decimal"
               value={amount}
               placeholder="1000"
+              aria-invalid={amountError != null}
               onChange={(e) => setAmount(e.target.value)}
             />
+            {amountError ? (
+              <p className="text-xs text-destructive">{amountError}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {type === "adjustment"
+                  ? "Signed: negative lowers the balance."
+                  : type === "deposit"
+                    ? "Added to the balance."
+                    : "Taken off the balance."}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">Date</Label>
+            <Label className="text-xs" htmlFor="cash-date">
+              Date
+            </Label>
             <Input
+              id="cash-date"
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
@@ -173,8 +252,11 @@ export function CashEventsManager({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">Note</Label>
+            <Label className="text-xs" htmlFor="cash-note">
+              Note
+            </Label>
             <Input
+              id="cash-note"
               value={note}
               placeholder="Optional"
               onChange={(e) => setNote(e.target.value)}
@@ -182,7 +264,10 @@ export function CashEventsManager({
           </div>
 
           <div className="sm:col-span-2 lg:col-span-5">
-            <Button disabled={pending} onClick={submit}>
+            <Button
+              disabled={pending || !account || amountCheck == null || amountError != null || !date}
+              onClick={submit}
+            >
               <Plus className="size-4" /> Add
             </Button>
           </div>
@@ -192,15 +277,40 @@ export function CashEventsManager({
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-3">
           <CardTitle className="text-base">History</CardTitle>
-          <span className="text-sm text-muted-foreground">
-            Net flow: {fmtMoney(netCashFlow(events), currency, { sign: true })}
-          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            {nets.length > 0 && (
+              <span className="text-sm text-muted-foreground">
+                Net flow:{" "}
+                {nets.map((n, i) => (
+                  <span key={n.currency}>
+                    {i > 0 && " · "}
+                    <span className={`tabular-nums ${pnlClass(n.net)}`}>
+                      {fmtMoney(n.net, n.currency, { sign: true })}
+                    </span>
+                  </span>
+                ))}
+              </span>
+            )}
+            {accounts.length > 1 && (
+              <Select value={filter} onValueChange={setFilter}>
+                <SelectTrigger className="h-8 w-44" aria-label="Filter by account">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All accounts</SelectItem>
+                  {accountFilterOptions(accounts).map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          {events.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No deposits or withdrawals yet.
-            </p>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No deposits or withdrawals yet.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -210,43 +320,42 @@ export function CashEventsManager({
                     <th className="py-2 text-left font-medium">Account</th>
                     <th className="py-2 text-left font-medium">Type</th>
                     <th className="py-2 text-right font-medium">Amount</th>
-                    <th className="py-2 text-left font-medium">Note</th>
+                    <th className="py-2 pl-4 text-left font-medium">Note</th>
                     <th className="py-2" />
                   </tr>
                 </thead>
                 <tbody>
-                  {events.map((e) => {
-                    const acc = accountById.get(e.account_id);
+                  {rows.map((r) => {
+                    const acc = rowAccount(r);
                     return (
-                      <tr key={e.id} className="border-b last:border-0">
-                        <td className="py-2">{e.occurred_at.slice(0, 10)}</td>
+                      <tr key={r.id} className="border-b last:border-0">
+                        <td className="py-2 tabular-nums">
+                          {fmtInTz(r.at, acc?.timezone ?? DEFAULT_TZ, DATE)}
+                        </td>
                         <td className="py-2">{acc?.name ?? "—"}</td>
-                        <td className="py-2">
-                          {TYPES.find((t) => t.value === e.event_type)?.label ??
-                            e.event_type}
-                        </td>
+                        <td className="py-2">{typeLabel(r.type)}</td>
                         <td
-                          className={`py-2 text-right tabular-nums ${pnlClass(
-                            e.amount,
-                          )}`}
+                          className={`py-2 text-right tabular-nums ${
+                            r.readOnly ? "" : pnlClass(r.amount)
+                          }`}
                         >
-                          {fmtMoney(e.amount, acc?.currency ?? "USD", {
-                            sign: true,
-                          })}
+                          {fmtMoney(r.amount, acc?.currency ?? "USD", { sign: !r.readOnly })}
                         </td>
-                        <td className="py-2 text-muted-foreground">
-                          {e.note ?? ""}
+                        <td className="py-2 pl-4 text-muted-foreground">
+                          {r.readOnly ? "Starting balance — change it on the account" : (r.note ?? "")}
                         </td>
                         <td className="py-2 text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={pending}
-                            onClick={() => remove(e.id)}
-                            aria-label="Delete"
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
+                          {!r.readOnly && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={pending}
+                              onClick={() => setConfirming(r)}
+                              aria-label={`Delete ${typeLabel(r.type).toLowerCase()} of ${fmtInTz(r.at, acc?.timezone ?? DEFAULT_TZ, DATE)}`}
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -257,6 +366,33 @@ export function CashEventsManager({
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={confirming != null} onOpenChange={(o) => !o && setConfirming(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this entry?</DialogTitle>
+            <DialogDescription>
+              {confirming &&
+                (() => {
+                  const acc = rowAccount(confirming);
+                  return `${typeLabel(confirming.type)} of ${fmtMoney(confirming.amount, acc?.currency ?? "USD", { sign: true })} on ${fmtInTz(confirming.at, acc?.timezone ?? DEFAULT_TZ, DATE)}${acc ? ` (${acc.name})` : ""}. The balance and every percentage view change with it.`;
+                })()}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirming(null)} disabled={pending}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={pending}
+              onClick={() => confirming && remove(confirming)}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

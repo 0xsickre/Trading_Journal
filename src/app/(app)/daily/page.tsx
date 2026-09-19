@@ -1,3 +1,4 @@
+import { primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getDailyReport } from "@/lib/journal/daily-report-queries";
 import { todayInTz } from "@/lib/journal/daily-report";
@@ -61,7 +62,7 @@ export default async function DailyPage({
   // a whole first batch — that second batch used to cost the page a round trip.
   const accountsPromise = getAccounts();
   const dayPromise = accountsPromise.then((accounts) => {
-    const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
+    const primary = primaryAccount(accounts);
     const timezone = primary?.timezone ?? DEFAULT_TZ;
     const today = todayInTz(timezone);
     // `isValidDayKey`, not a shape regex: `2026-00-00` matches `\d{4}-\d{2}-\d{2}`

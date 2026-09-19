@@ -1,3 +1,4 @@
+import { primaryAccount } from "@/lib/journal/account-rules";
 import {
   getNoteFolders,
   getNoteTags,
@@ -41,7 +42,7 @@ export default async function NotebookPage() {
 
   // The account's day, not the browser's — so a note's default title matches
   // the same calendar date every other screen would call "today".
-  const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
+  const primary = primaryAccount(accounts);
   const todayKey = todayInTz(primary?.timezone ?? DEFAULT_TZ);
 
   return (

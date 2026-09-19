@@ -1,5 +1,6 @@
 "use client";
 
+import { accountFilterOptions, primaryAccount } from "@/lib/journal/account-rules";
 import {
   useCallback,
   useEffect,
@@ -782,7 +783,7 @@ export function Dashboard({
    * `getPrimaryAccount` applies on the server.
    */
   const tzForAccount = useMemo(() => {
-    const primary = accounts.find((a) => a.is_active) ?? accounts[0];
+    const primary = primaryAccount(accounts);
     return accountTimezoneResolver(accounts, primary?.timezone);
   }, [accounts]);
 
@@ -1541,9 +1542,9 @@ export function Dashboard({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All accounts</SelectItem>
-              {accounts.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.name}
+              {accountFilterOptions(accounts).map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
                 </SelectItem>
               ))}
             </SelectContent>

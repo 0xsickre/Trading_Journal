@@ -1,5 +1,6 @@
 "use client";
 
+import { accountFilterOptions } from "@/lib/journal/account-rules";
 import {
   useCallback,
   useDeferredValue,
@@ -1164,7 +1165,7 @@ export function JournalGrid({
               setAccountFilter(v);
               toFirstPage();
             }}
-            options={accounts.map((a) => ({ value: a.id, label: a.name }))}
+            options={accountFilterOptions(accounts)}
           />
         )}
         <Popover>

@@ -1,5 +1,6 @@
 "use client";
 
+import { pickableAccounts, primaryAccount } from "@/lib/journal/account-rules";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -201,7 +202,7 @@ export function ImportWizard({
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [accountId, setAccountId] = useState<string>(
-    accounts.find((a) => a.is_active)?.id ?? accounts[0]?.id ?? "",
+    primaryAccount(accounts)?.id ?? "",
   );
   const account = accounts.find((a) => a.id === accountId) ?? null;
   const tz = account?.timezone ?? DEFAULT_TZ;
@@ -893,7 +894,7 @@ export function ImportWizard({
                     <SelectValue placeholder="Account" />
                   </SelectTrigger>
                   <SelectContent>
-                    {accounts.map((a) => (
+                    {pickableAccounts(accounts, accountId).map((a) => (
                       <SelectItem key={a.id} value={a.id}>
                         {a.name} ({a.timezone.replace("_", " ")})
                       </SelectItem>

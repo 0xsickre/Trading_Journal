@@ -33,7 +33,7 @@ export function CalendarViewToggle({
   monthKey: string;
   view: CalendarView;
   accountId?: string;
-  accounts?: { id: string; name: string }[];
+  accounts?: { value: string; label: string }[];
   /** False when the accounts' currencies differ and cannot be pooled. */
   allowAll?: boolean;
 }) {
@@ -66,9 +66,9 @@ export function CalendarViewToggle({
           </SelectTrigger>
           <SelectContent>
             {allowAll && <SelectItem value="all">All accounts</SelectItem>}
-            {accounts.map((a) => (
-              <SelectItem key={a.id} value={a.id}>
-                {a.name}
+            {accounts.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
               </SelectItem>
             ))}
           </SelectContent>

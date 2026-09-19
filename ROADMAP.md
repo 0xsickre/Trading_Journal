@@ -1187,3 +1187,21 @@ Nastavak primopredaje `plan_ostatak.md` (obrisana kad je sve urađeno).
 - Preskočen red više ne imenuje trejd, pa ne kvari vraćanje.
 - Undo odbija da poništi uvoz dok noviji uvoz nad istim trejdom nije poništen.
 - Istorija uvoza prikazuje datum kao dd/MM/yyyy.
+
+### Settings — nalozi i depoziti (19.09.2026.)
+
+**Nalozi:**
+- Kompaktna lista (tip, valuta, početni balans, pravila, broj trejdova); sve izmene idu kroz dijalog.
+- **Novi nalog** i **Duplicate** (kopira sva podešavanja osim datuma resetovanja izazova).
+- **Archive / Restore** (`archived_at`, migracija `20260919220000_account_archived_at.sql`). Arhiviran
+  nalog čuva trejdove, ne nudi se za nove trejdove, uvoz ni depozite, a u filterima ostaje, označen
+  „(archived)". Poslednji aktivan nalog ne može da se arhivira.
+- Uređivanje: jedno Save, broj koji se ne može pročitati blokira čuvanje, valuta zaključana kad nalog
+  ima trejdove, upozorenje pri promeni balansa ili zone, restart izazova uz potvrdu.
+- „25.000" i „1,500" se odbijaju kao dvosmisleni umesto da se pogađa.
+- Brisanje: „Delete permanently", uz kucanje imena kad nalog ima podatke.
+
+**Depoziti:**
+- Početni balans je prvi, samo za čitanje, red liste (izveden, ne upisuje se — equity ga već sadrži).
+- Datumi dd/MM/yyyy u zoni naloga; „danas" je dan naloga, a unos se beleži u podne te zone.
+- Filter po nalogu, neto tok po valuti, brisanje uz potvrdu.

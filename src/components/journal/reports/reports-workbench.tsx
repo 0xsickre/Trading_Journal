@@ -1,5 +1,6 @@
 "use client";
 
+import { primaryAccount } from "@/lib/journal/account-rules";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
@@ -208,7 +209,7 @@ export function ReportsWorkbench({
   // --- The book in scope ------------------------------------------------------
 
   const tzOf = useMemo(() => {
-    const primary = accounts.find((a) => a.is_active) ?? accounts[0];
+    const primary = primaryAccount(accounts);
     const resolve = accountTimezoneResolver(accounts, primary?.timezone);
     return (t: { row: TradeRow }) => resolve(t.row.account_id);
   }, [accounts]);

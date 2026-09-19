@@ -3,6 +3,7 @@ import { getListsWithItems } from "@/lib/journal/options";
 import { getAllOptionUsage } from "@/lib/journal/option-usage-queries";
 import { getInstruments } from "@/lib/journal/instruments";
 import { getAccounts } from "@/lib/journal/accounts";
+import { getAccountTradeCounts } from "@/lib/journal/account-usage-queries";
 import { getCashEvents } from "@/lib/journal/cash-events";
 import { ListManager } from "@/components/journal/list-manager";
 import { InstrumentManager } from "@/components/journal/instrument-manager";
@@ -20,15 +21,18 @@ export default async function SettingsPage() {
   // `getAllOptionUsage` for why the two differ. It needs the list keys, so it is
   // chained onto the lists inside the one batch rather than run after it.
   const listsPromise = getListsWithItems(false);
-  const [lists, instruments, accounts, cashEvents, trackerRules, optionUsage] =
+  const accountsPromise = getAccounts();
+  const [lists, instruments, accounts, cashEvents, trackerRules, optionUsage, tradeCounts] =
     await Promise.all([
       listsPromise,
       getInstruments(false),
-      getAccounts(),
+      accountsPromise,
       getCashEvents(),
       // Retired rules included, for the same reason.
       getTrackerRules({ includeRetired: true }),
       listsPromise.then((l) => getAllOptionUsage(l.map((x) => x.key))),
+      // One head count per account, for the Trades column of the list.
+      accountsPromise.then((a) => getAccountTradeCounts(a.map((x) => x.id))),
     ]);
 
   return (
@@ -87,7 +91,7 @@ export default async function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="accounts" className="space-y-6">
-          <AccountSettings accounts={accounts} />
+          <AccountSettings accounts={accounts} tradeCounts={tradeCounts} />
           {/* On the Accounts tab, not a seventh one: this is where someone
               already is when they discover they cannot remove what they made. */}
           <DangerZone />

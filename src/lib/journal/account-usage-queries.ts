@@ -53,3 +53,29 @@ export async function getAccountUsage(
 
   return out;
 }
+
+/**
+ * Trades per account, for the Accounts list — `null` for an account whose count
+ * failed, shown as "—" rather than as 0.
+ *
+ * Head counts, one per account, for the reason `getAccountUsage` gives. Only the
+ * trade count: the list needs one number per row, and the delete dialog still
+ * reads the full usage when it opens.
+ */
+export async function getAccountTradeCounts(
+  accountIds: string[],
+): Promise<Record<string, number | null>> {
+  const out: Record<string, number | null> = {};
+  if (accountIds.length === 0) return out;
+  const supabase = await createClient();
+  await Promise.all(
+    accountIds.map(async (id) => {
+      const { count, error } = await supabase
+        .from("tj_positions")
+        .select("id", { count: "exact", head: true })
+        .eq("account_id", id);
+      out[id] = error ? null : (count ?? 0);
+    }),
+  );
+  return out;
+}

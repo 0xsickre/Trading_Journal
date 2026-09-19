@@ -133,7 +133,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,540 tests across 155 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,562 tests across 157 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -282,7 +282,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
-| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments, Accounts (incl. FTMO, and the account's type — trading or backtest, which decides where MAE/MFE comes from), Deposits / withdrawals. Account deletion and reset live under Accounts |
+| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments, Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — type Live or Backtest, which decides where MAE/MFE comes from, currency locked once it has trades, FTMO rules and challenge restart), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion and reset live under Accounts |
 | `/login` | Supabase auth |
 
 ---
@@ -1053,9 +1053,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,540 tests across 155 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,013 tests in 104 files) and `components` (environment `jsdom`, files `*.test.tsx`, 527
-tests in 51 files). The rule is the extension, so no file can land in both. The split exists so that
+2,562 tests across 157 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,023 tests in 105 files) and `components` (environment `jsdom`, files `*.test.tsx`, 539
+tests in 52 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves

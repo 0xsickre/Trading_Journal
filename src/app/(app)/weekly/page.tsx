@@ -1,3 +1,4 @@
+import { primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getDailyReportDates } from "@/lib/journal/daily-report-queries";
 import { todayInTz } from "@/lib/journal/daily-report";
@@ -32,7 +33,7 @@ export default async function WeeklyPage({
   // which cost the page a round trip.
   const accountsPromise = getAccounts();
   const weekPromise = accountsPromise.then((accounts) => {
-    const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
+    const primary = primaryAccount(accounts);
     const timezone = primary?.timezone ?? DEFAULT_TZ;
     const today = todayInTz(timezone);
     const currentWeekStart = weekStartOfDayKey(today);

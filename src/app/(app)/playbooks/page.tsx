@@ -1,3 +1,4 @@
+import { primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import {
@@ -45,7 +46,7 @@ export default async function PlaybooksPage() {
     positionRulesPromise,
   ]);
 
-  const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
+  const primary = primaryAccount(accounts);
   // Null when the accounts' currencies differ: the list then refuses to sum
   // money rather than print €500 + $300 as "$800".
   const currency = sharedCurrency(accounts);

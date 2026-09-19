@@ -79,7 +79,14 @@ export type Account = {
   starting_balance: number;
   default_asset_class: string | null;
   timezone: string;
+  /** The default account. Not "archived" — that is `archived_at`. */
   is_active: boolean;
+  /**
+   * When the account was archived, or null. An archived account is left out of
+   * every picker and default; its trades still count in every scope.
+   */
+  archived_at: string | null;
+  created_at: string;
   // Breakeven band — asymmetric on purpose (e.g. -37.50 .. 0), not a tolerance.
   breakeven_from: number;
   breakeven_to: number;

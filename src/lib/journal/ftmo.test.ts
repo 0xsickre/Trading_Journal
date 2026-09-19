@@ -320,6 +320,8 @@ describe("ftmoConfigFromAccount", () => {
     ftmo_min_days_enabled: false,
     ftmo_min_days: 3,
     ftmo_reset_at: "2026-07-01T00:00:00Z",
+    archived_at: null,
+    created_at: "2026-01-01T00:00:00Z",
   };
 
   it("carries every limit across from the account row", () => {

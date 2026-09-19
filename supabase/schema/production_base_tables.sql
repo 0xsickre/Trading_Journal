@@ -90,6 +90,8 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   -- Od čega se meri dnevni gubitak: od početnog stanja ili od equity-ja na
   -- početku dana (20260822144309).
   ftmo_daily_loss_basis       text        NOT NULL DEFAULT 'starting_balance',
+  -- Arhiviran nalog: skriven iz birača, trejdovi i dalje broje (20260919220000).
+  archived_at                 timestamptz,
   CONSTRAINT tj_accounts_pkey PRIMARY KEY (id),
   CONSTRAINT tj_accounts_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,

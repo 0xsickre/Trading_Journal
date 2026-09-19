@@ -17,7 +17,7 @@ import {
 } from "@/lib/journal/option-usage-queries";
 import { getAllFormFields } from "@/lib/journal/form-config";
 import { RESET_PHRASE } from "@/lib/journal/reset-phrase";
-import { isValidTimeZone, DEFAULT_TZ } from "@/lib/journal/time";
+import { isValidTimeZone, DEFAULT_TZ, toEpoch } from "@/lib/journal/time";
 import {
   fieldTypeForSelection,
   FIELD_DEF_PHASES,
@@ -27,7 +27,8 @@ import {
   type FieldDefPhase,
   type FieldDefType,
 } from "@/lib/journal/field-def-types";
-import type { OptionItem } from "@/lib/journal/types";
+import type { Account, OptionItem } from "@/lib/journal/types";
+import { duplicateSettings } from "@/lib/journal/account-rules";
 import { z } from "zod";
 import {
   listProtection,
@@ -1108,29 +1109,114 @@ export async function resetFtmoChallenge(id: string) {
   return { ok: true as const };
 }
 
+/**
+ * Create an account, from the new-account dialog or as a duplicate.
+ *
+ * The dialog asks for what decides how every trade on the account reads —
+ * name, Live or Backtest, currency, starting balance, timezone — instead of the
+ * blank "New Account" this used to make on one click. `copyFrom` copies the
+ * rest (breakeven, costs, FTMO rules) from another account: many prop-firm
+ * challenges share one rule set, and retyping it per account is how two of
+ * them end up with different limits.
+ */
 export async function addAccount(input: {
   name: string;
+  account_kind?: "trading" | "backtest";
   currency?: string;
   starting_balance?: number;
   timezone?: string;
   default_asset_class?: string | null;
+  copyFrom?: string | null;
 }) {
   const supabase = await createClient();
-  if (!input.name.trim()) return { ok: false, error: "Name required." };
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: "Name required." };
+  if (name.length > 80) return { ok: false, error: "The name is too long." };
   // Same guard as `updateAccount` — a bad zone must not be creatable either.
   if (input.timezone != null && !isValidTimeZone(input.timezone)) {
     return { ok: false, error: `Unknown time zone: ${input.timezone}` };
   }
-  const { error } = await supabase.from("tj_accounts").insert({
-    name: input.name.trim(),
-    currency: input.currency ?? "USD",
-    starting_balance: input.starting_balance ?? 0,
-    timezone: input.timezone ?? DEFAULT_TZ,
-    default_asset_class: input.default_asset_class ?? null,
-  });
+  const currency = (input.currency ?? "USD").trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) return { ok: false, error: "Currency is a three-letter code." };
+  const balance = input.starting_balance ?? 0;
+  if (!Number.isFinite(balance) || balance < 0)
+    return { ok: false, error: "Starting balance cannot be negative." };
+
+  let copied: Partial<ReturnType<typeof duplicateSettings>> = {};
+  if (input.copyFrom) {
+    const { data: src, error: srcError } = await supabase
+      .from("tj_accounts")
+      .select("*")
+      .eq("id", input.copyFrom)
+      .maybeSingle();
+    if (srcError) return { ok: false, error: srcError.message };
+    if (!src) return { ok: false, error: "The account to copy was not found." };
+    copied = duplicateSettings(src as Account);
+  }
+
+  const { data: created, error } = await supabase
+    .from("tj_accounts")
+    .insert({
+      ...copied,
+      name,
+      account_kind: input.account_kind ?? copied.account_kind ?? "trading",
+      currency,
+      starting_balance: balance,
+      timezone: input.timezone ?? copied.timezone ?? DEFAULT_TZ,
+      default_asset_class: input.default_asset_class ?? copied.default_asset_class ?? null,
+      // Never the default: the account the trader already works in stays it.
+      is_active: false,
+    })
+    .select("id")
+    .single();
   if (error) return { ok: false, error: error.message };
   revalidateAll();
-  return { ok: true };
+  return { ok: true, id: created.id };
+}
+
+/**
+ * Archive an account: hidden from every picker and default, its trades still
+ * counted in every scope that includes them. Reversible with `restoreAccount`.
+ *
+ * The last account that is not archived cannot be archived — the journal needs
+ * one to date its days and name its currency.
+ */
+export async function archiveAccount(id: string) {
+  const supabase = await createClient();
+  const { data: live, error: liveError } = await supabase
+    .from("tj_accounts")
+    .select("id")
+    .is("archived_at", null);
+  if (liveError) return { ok: false as const, error: liveError.message };
+  if (!(live ?? []).some((a) => a.id === id))
+    return { ok: false as const, error: "Account not found, or already archived." };
+  if ((live ?? []).length <= 1)
+    return {
+      ok: false as const,
+      error: "This is your only account that is not archived. Create or restore another first.",
+    };
+
+  const { error } = await supabase
+    .from("tj_accounts")
+    // No longer the default either: the default is the account the app opens on.
+    .update({ archived_at: new Date().toISOString(), is_active: false })
+    .eq("id", id);
+  if (error) return { ok: false as const, error: error.message };
+  revalidateAll();
+  return { ok: true as const };
+}
+
+export async function restoreAccount(id: string) {
+  const supabase = await createClient();
+  const { data: restored, error } = await supabase
+    .from("tj_accounts")
+    .update({ archived_at: null })
+    .eq("id", id)
+    .select("id");
+  if (error) return { ok: false as const, error: error.message };
+  if (!restored || restored.length === 0) return { ok: false as const, error: "Account not found." };
+  revalidateAll();
+  return { ok: true as const };
 }
 
 /**
@@ -1258,6 +1344,8 @@ export async function addCashEvent(input: {
   const amount = signedAmount(input.event_type, Number(input.amount));
   if (!Number.isFinite(amount) || amount === 0)
     return { ok: false as const, error: "Amount must be a non-zero number." };
+  if (!Number.isFinite(toEpoch(input.occurred_at)))
+    return { ok: false as const, error: "Pick a valid date." };
 
   const supabase = await createClient();
   const user = await getCurrentUser();
@@ -1268,11 +1356,13 @@ export async function addCashEvent(input: {
   // foreign-key or policy error.
   const { data: account, error: accountError } = await supabase
     .from("tj_accounts")
-    .select("id")
+    .select("id, archived_at")
     .eq("id", input.account_id)
     .maybeSingle();
   if (accountError) return { ok: false as const, error: accountError.message };
   if (!account) return { ok: false as const, error: "Account not found." };
+  if (account.archived_at)
+    return { ok: false as const, error: "That account is archived — restore it first." };
 
   const { error } = await supabase.from("tj_cash_events").insert({
     user_id: user.id,
