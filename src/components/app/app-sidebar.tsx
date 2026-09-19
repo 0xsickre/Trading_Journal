@@ -1,8 +1,8 @@
 "use client";
 
-import { Fragment, type ComponentProps } from "react";
+import { Fragment, useEffect, useRef, useState, type ComponentProps } from "react";
 import { usePathname } from "next/navigation";
-import { ChevronDown, LineChart, LogOut, Menu } from "lucide-react";
+import { ChevronDown, LineChart, LogOut, Menu, Pin, PinOff } from "lucide-react";
 import { NAV_ITEMS, NAV_SECTIONS, PRIMARY_ACTION } from "@/lib/journal/nav";
 import {
   DropdownMenu,
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/app/theme-toggle";
 import { NavLink } from "@/components/app/nav-link";
+import { getSidebarPinned, setSidebarPinned } from "@/lib/journal/sidebar-prefs";
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -65,77 +66,160 @@ function SourceLink({ className, ...props }: ComponentProps<"a">) {
   );
 }
 
+/** How long the pointer may leave the sidebar before it slides away. */
+const CLOSE_DELAY_MS = 250;
+
+/**
+ * The desktop sidebar. Auto-hides by default: it sits off the left edge and
+ * slides in over the page when the pointer reaches that edge (or keyboard focus
+ * lands in it), then slides away when the pointer leaves — the page keeps the
+ * full width until the menu is wanted. The pin in its header keeps it open in
+ * the layout instead, remembered per browser (`sidebar-prefs.ts`).
+ */
 export function AppSidebar({ email }: { email: string | null }) {
   const pathname = usePathname();
   const PrimaryIcon = PRIMARY_ACTION.icon;
+  const [pinned, setPinned] = useState(false);
+  const [open, setOpen] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    if (getSidebarPinned()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- external-store init
+      setPinned(true);
+    }
+    return () => clearTimeout(closeTimer.current);
+  }, []);
+
+  function show() {
+    clearTimeout(closeTimer.current);
+    setOpen(true);
+  }
+  // A short grace period, so brushing past the edge or crossing the border on
+  // the way to a link does not make the menu flicker shut.
+  function hideSoon() {
+    clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setOpen(false), CLOSE_DELAY_MS);
+  }
+  function togglePin() {
+    const next = !pinned;
+    setPinned(next);
+    setSidebarPinned(next);
+    setOpen(false);
+  }
+
+  const floating = !pinned;
 
   return (
-    <aside className="hidden w-60 shrink-0 flex-col border-r bg-sidebar md:flex">
-      <div className="flex h-14 items-center gap-2 border-b px-4">
-        <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <LineChart className="size-4" />
-        </div>
-        <span className="font-semibold">ICT Journal</span>
-      </div>
-
-      <div className="p-2 pb-0">
-        <Button asChild className="w-full justify-start">
-          <NavLink href={PRIMARY_ACTION.href}>
-            <PrimaryIcon className="size-4" />
-            {PRIMARY_ACTION.label}
-          </NavLink>
-        </Button>
-      </div>
-
-      <nav className="flex-1 space-y-4 p-2">
-        {NAV_SECTIONS.map((section) => (
-          <div key={section.id} className="space-y-1">
-            <p className="px-3 pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
-              {section.label}
-            </p>
-            {section.items.map((item) => {
-              const active = isActive(pathname, item.href);
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                    active
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-                  )}
-                >
-                  <Icon className="size-4" />
-                  {item.label}
-                </NavLink>
-              );
-            })}
-          </div>
-        ))}
-      </nav>
-
-      <div className="space-y-2 border-t p-2">
-        <ThemeToggle />
-        {email && (
-          <p className="truncate px-3 pt-1 text-xs text-muted-foreground">
-            {email}
-          </p>
+    <>
+      {floating && (
+        // The edge the pointer reaches to call the menu. Invisible, a few pixels
+        // wide, and only while the sidebar is hidden.
+        <div
+          aria-hidden
+          data-testid="sidebar-edge"
+          className="fixed inset-y-0 left-0 z-40 hidden w-2 md:block"
+          onMouseEnter={show}
+        />
+      )}
+      <aside
+        data-state={pinned ? "pinned" : open ? "open" : "closed"}
+        onMouseEnter={floating ? show : undefined}
+        onMouseLeave={floating ? hideSoon : undefined}
+        onFocus={floating ? show : undefined}
+        onBlur={
+          floating
+            ? (e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) hideSoon();
+              }
+            : undefined
+        }
+        onKeyDown={floating ? (e) => e.key === "Escape" && setOpen(false) : undefined}
+        className={cn(
+          "hidden w-60 shrink-0 flex-col border-r bg-sidebar md:flex",
+          floating &&
+            "fixed inset-y-0 left-0 z-50 overflow-y-auto shadow-xl transition-transform duration-200 ease-out",
+          floating && !open && "-translate-x-full shadow-none",
         )}
-        <form action={logout}>
+      >
+        <div className="flex h-14 items-center gap-2 border-b px-4">
+          <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <LineChart className="size-4" />
+          </div>
+          <span className="font-semibold">ICT Journal</span>
           <Button
-            type="submit"
+            type="button"
             variant="ghost"
-            className="w-full justify-start text-muted-foreground"
+            size="icon"
+            className="ml-auto size-7 text-muted-foreground"
+            aria-pressed={pinned}
+            aria-label={pinned ? "Unpin sidebar — hide it until the pointer reaches the left edge" : "Pin sidebar open"}
+            title={pinned ? "Auto-hide the sidebar" : "Keep the sidebar open"}
+            onClick={togglePin}
           >
-            <LogOut className="size-4" />
-            Sign out
+            {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
           </Button>
-        </form>
-        <SourceLink className="px-3 pb-1" />
-      </div>
-    </aside>
+        </div>
+
+        <div className="p-2 pb-0">
+          <Button asChild className="w-full justify-start">
+            <NavLink href={PRIMARY_ACTION.href}>
+              <PrimaryIcon className="size-4" />
+              {PRIMARY_ACTION.label}
+            </NavLink>
+          </Button>
+        </div>
+
+        <nav className="flex-1 space-y-4 p-2">
+          {NAV_SECTIONS.map((section) => (
+            <div key={section.id} className="space-y-1">
+              <p className="px-3 pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                {section.label}
+              </p>
+              {section.items.map((item) => {
+                const active = isActive(pathname, item.href);
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      active
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                    )}
+                  >
+                    <Icon className="size-4" />
+                    {item.label}
+                  </NavLink>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+
+        <div className="space-y-2 border-t p-2">
+          <ThemeToggle />
+          {email && (
+            <p className="truncate px-3 pt-1 text-xs text-muted-foreground">
+              {email}
+            </p>
+          )}
+          <form action={logout}>
+            <Button
+              type="submit"
+              variant="ghost"
+              className="w-full justify-start text-muted-foreground"
+            >
+              <LogOut className="size-4" />
+              Sign out
+            </Button>
+          </form>
+          <SourceLink className="px-3 pb-1" />
+        </div>
+      </aside>
+    </>
   );
 }
 

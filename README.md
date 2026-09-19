@@ -133,7 +133,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,401 tests across 144 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,407 tests across 145 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -262,6 +262,11 @@ would be erased by an unrelated save.
 ---
 
 ## Routes
+
+On desktop the **menu hides off the left edge** and slides in over the page when the pointer reaches
+that edge, or when keyboard focus lands in it. It slides away when the pointer leaves, so the page
+keeps the full width. The pin in the menu's header keeps it open in the layout instead, remembered per
+browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as before.
 
 | Route | What it is |
 |---|---|

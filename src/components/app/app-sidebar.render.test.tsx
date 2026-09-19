@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppSidebar, MobileTopbar } from "./app-sidebar";
 import { NAV_ITEMS, PRIMARY_ACTION } from "@/lib/journal/nav";
@@ -119,5 +119,54 @@ describe("both chromes render the whole menu", () => {
     expect(
       screen.getByRole("button", { name: /Dashboard/ }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("the desktop sidebar hides until the pointer reaches the left edge", () => {
+  afterEach(() => {
+    localStorage.clear();
+    vi.useRealTimers();
+  });
+
+  const aside = () => screen.getByRole("complementary");
+
+  it("starts hidden, slides in at the edge, and slides away after the pointer leaves", () => {
+    vi.useFakeTimers();
+    render(<AppSidebar email="t@example.com" />);
+    expect(aside()).toHaveAttribute("data-state", "closed");
+
+    fireEvent.mouseEnter(screen.getByTestId("sidebar-edge"));
+    expect(aside()).toHaveAttribute("data-state", "open");
+
+    // A short grace period, so crossing the border on the way to a link does
+    // not shut it.
+    fireEvent.mouseLeave(aside());
+    fireEvent.mouseEnter(aside());
+    act(() => vi.advanceTimersByTime(500));
+    expect(aside()).toHaveAttribute("data-state", "open");
+
+    fireEvent.mouseLeave(aside());
+    act(() => vi.advanceTimersByTime(500));
+    expect(aside()).toHaveAttribute("data-state", "closed");
+  });
+
+  it("opens for keyboard focus too, so it is never out of reach", () => {
+    render(<AppSidebar email="t@example.com" />);
+    fireEvent.focus(screen.getByRole("button", { name: /Pin sidebar open/ }));
+    expect(aside()).toHaveAttribute("data-state", "open");
+  });
+
+  it("the pin keeps it in the layout, and the browser remembers it", async () => {
+    const user = userEvent.setup({ delay: null });
+    const { unmount } = render(<AppSidebar email="t@example.com" />);
+    await user.click(screen.getByRole("button", { name: /Pin sidebar open/ }));
+    expect(aside()).toHaveAttribute("data-state", "pinned");
+    expect(screen.queryByTestId("sidebar-edge")).not.toBeInTheDocument();
+    unmount();
+
+    render(<AppSidebar email="t@example.com" />);
+    expect(aside()).toHaveAttribute("data-state", "pinned");
+    await user.click(screen.getByRole("button", { name: /Unpin sidebar/ }));
+    expect(aside()).toHaveAttribute("data-state", "closed");
   });
 });
