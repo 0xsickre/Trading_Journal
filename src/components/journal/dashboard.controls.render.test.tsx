@@ -139,7 +139,7 @@ describe("the period buttons read the account's day, never the browser's clock",
   // cutoff without that deadlock.
   afterEach(() => vi.useRealTimers());
 
-  it("defaults to 90d, which covers the whole book", () => {
+  it("defaults to All — the whole record, whatever today is", () => {
     renderAt("2026-04-05T12:00:00Z");
     expect(statValue("Trades")).toBe("10");
     // 300−100+200−50+150−200+400−150+0+50 = 600, same total step 1 proved.
@@ -559,7 +559,7 @@ describe("the scope a trader works in", () => {
 
   it("does not warn about older trades while the period still has trades in it", () => {
     renderIt();
-    // 90d covers both; switch to Week, which leaves one out.
+    // All covers both; switch to Week, which leaves one out.
     return userEvent
       .setup({ delay: null })
       .click(screen.getByRole("button", { name: "Week" }))

@@ -236,7 +236,7 @@ import {
   type ViewMode,
 } from "@/lib/journal/units";
 import { DATE, fmtInTz, toEpoch, zonedDateKey } from "@/lib/journal/time";
-import { defaultDashboardPeriod, hiddenByPeriod } from "@/lib/journal/default-period";
+import { hiddenByPeriod } from "@/lib/journal/default-period";
 import {
   DASHBOARD_PERIODS,
   loadScope,
@@ -645,17 +645,9 @@ export function Dashboard({
   const show = useCallback((id: string) => visible.has(id), [visible]);
 
   const [accountFilter, setAccountFilter] = useState("all");
-  // 90 days when anything closed within them, "all" when nothing did — a
-  // backtest of 2018 otherwise opens on a page of zeros. See `default-period.ts`.
-  const [period, setPeriod] = useState<DashboardPeriod>(() =>
-    defaultDashboardPeriod(
-      toRealized(trades).map((t) => toEpoch(t.closedAt)),
-      // The same 90-day boundary `cutoffMs` draws below. An unresolvable day
-      // key cannot happen for a server-resolved `todayKey`, but if it did the
-      // safe reading is "nothing is recent", which opens on everything.
-      dayKeyStartUtc(addDaysToDayKey(todayKey, -89), timezone) ?? Number.POSITIVE_INFINITY,
-    ),
-  );
+  // All time by default — the whole record first, narrowed on request. The
+  // remembered scope (below) still reopens a tab on the period last chosen.
+  const [period, setPeriod] = useState<DashboardPeriod>("all");
   const [mode, setMode] = useState<PnlMode>("net");
 
   /**

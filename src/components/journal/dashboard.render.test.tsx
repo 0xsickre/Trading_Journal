@@ -300,8 +300,8 @@ describe("trades the period leaves out", () => {
   it("names the hidden trades when a narrower period is chosen", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup({ delay: null });
-    // The book closes 2–13 March; "today" on 20 April keeps it inside 90 days
-    // (so the dashboard opens on 90d) and puts all of it outside 30.
+    // The book closes 2–13 March; the dashboard opens on All, and "today" on
+    // 20 April puts all of it outside 30 days.
     render(
       <Dashboard
         trades={rowsOf(BOOK)}
