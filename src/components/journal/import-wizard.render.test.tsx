@@ -402,6 +402,43 @@ describe("TradingView's list of trades", () => {
     expect(exit).toMatchObject({ price: 3.71195, qty: 536.1, fee: 1994.98, executed_at: "2023-09-20T19:00:00.000Z" });
   });
 
+  it("reads the file in the CHART's zone — New York by default — not the account's", async () => {
+    // A Belgrade account and a chart on New York time: "14:00" on 20 Sep 2023 is
+    // 18:00 UTC (EDT), not 12:00 UTC. Read in the account's zone, every fill
+    // landed six hours early — measured on real trades, 1 of 7 fills matched the
+    // market that way, 7 of 7 under New York.
+    const user = userEvent.setup({ delay: null });
+    const belgrade = account({ id: "acc-bg", timezone: "Europe/Belgrade" });
+    render(<ImportWizard accounts={[belgrade]} candidates={[]} instruments={XCU} />);
+    await upload(user, await tvFile());
+    expect(await screen.findByRole("combobox", { name: /Timezone of the TradingView chart/ })).toHaveTextContent(
+      "America/New York",
+    );
+    await user.click(screen.getByRole("button", { name: /Reconcile/ }));
+    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+
+    await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
+    const [item] = commitImportMock.mock.calls[0][0].items;
+    const entry = item.executions.find((e: { side: string }) => e.side === "entry");
+    expect(entry.executed_at).toBe("2023-09-20T18:00:00.000Z");
+  });
+
+  it("the chart's zone can be set to the account's when that is what the chart used", async () => {
+    const user = userEvent.setup({ delay: null });
+    const belgrade = account({ id: "acc-bg", timezone: "Europe/Belgrade" });
+    render(<ImportWizard accounts={[belgrade]} candidates={[]} instruments={XCU} />);
+    await upload(user, await tvFile());
+    await user.click(await screen.findByRole("combobox", { name: /Timezone of the TradingView chart/ }));
+    await user.click(await screen.findByRole("option", { name: /Europe\/Belgrade \(account\)/ }));
+    await user.click(screen.getByRole("button", { name: /Reconcile/ }));
+    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+
+    await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
+    const [item] = commitImportMock.mock.calls[0][0].items;
+    const entry = item.executions.find((e: { side: string }) => e.side === "entry");
+    expect(entry.executed_at).toBe("2023-09-20T12:00:00.000Z");
+  });
+
   it("refuses an instrument the catalog does not know — the size cannot be converted", async () => {
     const user = userEvent.setup({ delay: null });
     render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} instruments={[]} />);
