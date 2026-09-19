@@ -1119,7 +1119,7 @@ export function TradeForm({
         <TradeImageDrafts drafts={imageDrafts} onChange={setImageDraft} />
       )}
 
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 p-3 backdrop-blur md:left-60">
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 p-3 backdrop-blur md:left-(--sidebar-offset)">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3 text-sm">
             {activeTab === "plan" ? (

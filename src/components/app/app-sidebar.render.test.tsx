@@ -162,11 +162,15 @@ describe("the desktop sidebar hides until the pointer reaches the left edge", ()
     await user.click(screen.getByRole("button", { name: /Pin sidebar open/ }));
     expect(aside()).toHaveAttribute("data-state", "pinned");
     expect(screen.queryByTestId("sidebar-edge")).not.toBeInTheDocument();
+    // Bottom-fixed bars start past a pinned sidebar, and at the edge otherwise.
+    const offset = () => document.documentElement.style.getPropertyValue("--sidebar-offset");
+    expect(offset()).toBe("15rem");
     unmount();
 
     render(<AppSidebar email="t@example.com" />);
     expect(aside()).toHaveAttribute("data-state", "pinned");
     await user.click(screen.getByRole("button", { name: /Unpin sidebar/ }));
     expect(aside()).toHaveAttribute("data-state", "closed");
+    expect(offset()).toBe("0px");
   });
 });

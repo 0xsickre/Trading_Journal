@@ -262,7 +262,7 @@ export function WeeklyReviewForm({
       <div
         className={cn(
           "fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 p-4 backdrop-blur",
-          "md:left-60",
+          "md:left-(--sidebar-offset)",
         )}
       >
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">

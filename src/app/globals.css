@@ -51,6 +51,9 @@
 }
 
 :root {
+  /* Where a page starts: 15rem while the sidebar is pinned into the layout,
+     0 while it auto-hides. Set by `AppSidebar`; read by bottom-fixed bars. */
+  --sidebar-offset: 0px;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
