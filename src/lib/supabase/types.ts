@@ -1476,10 +1476,15 @@ export type Database = {
         Args: { p_ids: string[]; p_kind: string; p_values: string[] }
         Returns: undefined
       }
+      tj_delete_list: { Args: { p_list_id: string }; Returns: undefined }
       tj_delete_account: { Args: { p_account_id: string }; Returns: undefined }
       tj_lock_day: {
         Args: { p_auto?: Json; p_date: string }
         Returns: undefined
+      }
+      tj_rename_option: {
+        Args: { p_item_id: string; p_new: string; p_targets: Json }
+        Returns: number
       }
       tj_rename_option_value: {
         Args: { p_new: string; p_old: string; p_targets: Json }

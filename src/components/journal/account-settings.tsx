@@ -31,6 +31,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Account } from "@/lib/journal/types";
+import { parseSettingsNumber } from "@/lib/journal/settings-rules";
 import {
   updateAccount,
   addAccount,
@@ -229,29 +230,54 @@ function AccountCard({
   );
 
   function save() {
+    // Every number read the way a trader types it, and a value that cannot be
+    // read STOPS the save and says which field. `Number(x) || 0` stored
+    // "10.000" as 10 and a typo as 0 — a starting balance of zero re-bases
+    // every drawdown and FTMO limit on the account, silently.
+    const fields: [string, string, Parameters<typeof parseSettingsNumber>[1]][] = [
+      ["Starting balance", balance, { min: 0 }],
+      ["Breakeven from", beFrom, {}],
+      ["Breakeven to", beTo, {}],
+      ["Commission per unit", commPerUnit, { min: 0 }],
+      ["Fixed fee", feeFixed, { min: 0 }],
+      ["Swap per day", swapPerDay, {}],
+      ["Daily loss %", dailyPct, { min: 0, max: 100 }],
+      ["Max loss %", maxPct, { min: 0, max: 100 }],
+      ["Profit target %", targetPct, { min: 0, max: 100 }],
+      ["Minimum trading days", minDays, { min: 0, max: 365, integer: true }],
+    ];
+    const n: Record<string, number> = {};
+    for (const [label, raw, opts] of fields) {
+      const r = parseSettingsNumber(raw, opts);
+      if (!r.ok) {
+        toast.error(`${label}: ${r.error}`);
+        return;
+      }
+      n[label] = r.value ?? 0;
+    }
     start(async () => {
       const res = await updateAccount(account.id, {
         name: name.trim() || account.name,
         account_kind: kind,
         timezone: tz,
         currency,
-        starting_balance: Number(balance) || 0,
-        breakeven_from: Number(beFrom) || 0,
-        breakeven_to: Number(beTo) || 0,
+        starting_balance: n["Starting balance"],
+        breakeven_from: n["Breakeven from"],
+        breakeven_to: n["Breakeven to"],
         breakeven_unit: beUnit,
-        default_commission_per_unit: Number(commPerUnit) || 0,
-        default_fee_fixed: Number(feeFixed) || 0,
-        default_swap_per_day: Number(swapPerDay) || 0,
+        default_commission_per_unit: n["Commission per unit"],
+        default_fee_fixed: n["Fixed fee"],
+        default_swap_per_day: n["Swap per day"],
         ftmo_mode: ftmoMode,
         ftmo_daily_loss_enabled: dailyOn,
-        ftmo_daily_loss_pct: Number(dailyPct) || 0,
+        ftmo_daily_loss_pct: n["Daily loss %"],
         ftmo_daily_loss_basis: dailyBasis,
         ftmo_max_loss_enabled: maxOn,
-        ftmo_max_loss_pct: Number(maxPct) || 0,
+        ftmo_max_loss_pct: n["Max loss %"],
         ftmo_profit_target_enabled: targetOn,
-        ftmo_profit_target_pct: Number(targetPct) || 0,
+        ftmo_profit_target_pct: n["Profit target %"],
         ftmo_min_days_enabled: minDaysOn,
-        ftmo_min_days: Math.max(0, Math.round(Number(minDays) || 0)),
+        ftmo_min_days: n["Minimum trading days"],
       });
       if (!res.ok) toast.error(res.error);
       else {

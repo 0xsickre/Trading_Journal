@@ -65,6 +65,7 @@ import {
   type FieldDefPhase,
 } from "@/lib/journal/field-def-types";
 import { usageKey } from "@/lib/journal/option-usage";
+import { SEEDED_COLUMN_LISTS } from "@/lib/journal/settings-rules";
 
 const PALETTE = [
   "#22c55e",
@@ -382,11 +383,15 @@ function CategoryRow({
                 </p>
               ) : (
                 <>
-                  <SelectionPicker
-                    value={selection}
-                    onChange={setSelection}
-                    disabled={pending}
-                  />
+                  {/* Not for a category stored in a trade column: its shape is
+                      fixed by the column, and the server refuses the switch. */}
+                  {!SEEDED_COLUMN_LISTS.has(list.key) && (
+                    <SelectionPicker
+                      value={selection}
+                      onChange={setSelection}
+                      disabled={pending}
+                    />
+                  )}
                   <PhasePicker
                     value={phase}
                     onChange={setPhase}
@@ -663,7 +668,8 @@ function TagRow({
 }: {
   row: TagRowData;
   lists: OptionList[];
-  used: number;
+  /** Trades carrying this tag, or null when the count could not be read. */
+  used: number | null;
   canUp: boolean;
   canDown: boolean;
   onMove: (dir: -1 | 1) => void;
@@ -727,7 +733,8 @@ function TagRow({
         </span>
       </td>
       <td className="px-3 py-2.5 text-right text-sm tabular-nums text-muted-foreground">
-        {used}
+        {/* "—" when the scan failed: a 0 there would read as "safe to delete". */}
+        {used == null ? <span title="Count unavailable">—</span> : used}
       </td>
       <td className="w-10 px-3 py-2.5 text-right">
         <DropdownMenu>
@@ -795,7 +802,7 @@ function TagRow({
                 {/* Said before the rename, not after: the trades come along, and
                     a user who expected the old tag to stay put deserves to know
                     that while they can still change their mind. */}
-                {used > 0 && (
+                {used != null && used > 0 && (
                   <p className="text-xs text-muted-foreground">
                     Renaming also rewrites this on{" "}
                     <strong>
@@ -981,7 +988,8 @@ function TagsTab({
   usage,
 }: {
   lists: OptionList[];
-  usage: Record<string, number>;
+  /** Null when the usage scan failed — every count then reads "unavailable". */
+  usage: Record<string, number> | null;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState(ALL);
@@ -1105,7 +1113,7 @@ function TagsTab({
                     key={r.item.id}
                     row={r}
                     lists={lists}
-                    used={usage[usageKey(r.list.key, r.item.value)] ?? 0}
+                    used={usage == null ? null : (usage[usageKey(r.list.key, r.item.value)] ?? 0)}
                     canUp={index > 0}
                     canDown={index >= 0 && index < total - 1}
                     onMove={(dir) => move(r, dir)}
@@ -1137,7 +1145,7 @@ export function ListManager({
   usage,
 }: {
   lists: OptionList[];
-  usage: Record<string, number>;
+  usage: Record<string, number> | null;
 }) {
   const shown = editableLists(lists);
   return (

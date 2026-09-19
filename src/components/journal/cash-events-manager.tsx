@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fmtMoney, pnlClass } from "@/lib/journal/format";
 import { netCashFlow, type CashEvent } from "@/lib/journal/balance";
 import type { Account } from "@/lib/journal/types";
+import { parseSettingsNumber } from "@/lib/journal/settings-rules";
 import {
   addCashEvent,
   deleteCashEvent,
@@ -56,9 +57,11 @@ export function CashEventsManager({
   const currency = accountById.get(accountId)?.currency ?? "USD";
 
   function submit() {
-    const magnitude = Number(amount);
+    // Read like the import reads money: "1.000,50" is a thousand, not one.
+    const parsed = parseSettingsNumber(amount);
+    const magnitude = parsed.ok ? (parsed.value ?? 0) : NaN;
     if (!Number.isFinite(magnitude) || magnitude === 0) {
-      toast.error("Enter an amount other than zero.");
+      toast.error(parsed.ok ? "Enter an amount other than zero." : `Amount: ${parsed.error}`);
       return;
     }
     start(async () => {

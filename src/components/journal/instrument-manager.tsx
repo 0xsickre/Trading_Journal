@@ -9,16 +9,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Instrument } from "@/lib/journal/types";
+import { parseSettingsNumber } from "@/lib/journal/settings-rules";
 import {
   addInstrument,
   updateInstrument,
   deleteInstrument,
 } from "@/app/(app)/settings/actions";
 
-function num(v: string): number | null {
-  if (v.trim() === "") return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
+/**
+ * The two contract numbers, read the way a trader types them, or the reason
+ * they cannot be. `Number()` turned "1,5" into NaN and then into the default 1
+ * without a word, so a CFD saved with the wrong $ / point.
+ */
+function readSpec(
+  pointValue: string,
+  tickSize: string,
+): { ok: true; point_value: number; tick_size: number | null } | { ok: false; error: string } {
+  const pv = parseSettingsNumber(pointValue, { min: 0 });
+  if (!pv.ok) return { ok: false, error: `$ / point: ${pv.error}` };
+  if (pv.value === 0) return { ok: false, error: "$ / point: Must be greater than zero." };
+  const ts = parseSettingsNumber(tickSize, { min: 0, allowEmpty: true });
+  if (!ts.ok) return { ok: false, error: `Tick: ${ts.error}` };
+  return { ok: true, point_value: pv.value!, tick_size: ts.value };
 }
 
 function InstrumentRow({ inst }: { inst: Instrument }) {
@@ -35,9 +47,14 @@ function InstrumentRow({ inst }: { inst: Instrument }) {
       // editing them solves no problem the user has; `$ / point` and `tick`
       // solve the one they do have — a broker whose contract spec differs from
       // the default.
+      const spec = readSpec(pointValue, tickSize);
+      if (!spec.ok) {
+        toast.error(spec.error);
+        return;
+      }
       const res = await updateInstrument(inst.id, {
-        point_value: num(pointValue) ?? 1,
-        tick_size: num(tickSize),
+        point_value: spec.point_value,
+        tick_size: spec.tick_size,
       });
       if (!res.ok) toast.error(res.error);
       else {
@@ -124,12 +141,17 @@ export function InstrumentManager({
       return;
     }
     start(async () => {
+      const spec = readSpec(pointValue, tickSize);
+      if (!spec.ok) {
+        toast.error(spec.error);
+        return;
+      }
       const res = await addInstrument({
         symbol,
         name,
         asset_class: assetClass,
-        point_value: num(pointValue) ?? 1,
-        tick_size: num(tickSize),
+        point_value: spec.point_value,
+        tick_size: spec.tick_size,
       });
       if (!res.ok) toast.error(res.error);
       else {

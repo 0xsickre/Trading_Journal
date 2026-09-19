@@ -133,7 +133,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,507 tests across 154 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,540 tests across 155 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -1053,9 +1053,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,344 tests across 140 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 1,884 tests in 93 files) and `components` (environment `jsdom`, files `*.test.tsx`, 460
-tests in 47 files). The rule is the extension, so no file can land in both. The split exists so that
+2,540 tests across 155 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,013 tests in 104 files) and `components` (environment `jsdom`, files `*.test.tsx`, 527
+tests in 51 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves

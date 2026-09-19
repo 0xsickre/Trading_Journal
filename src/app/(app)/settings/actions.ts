@@ -15,7 +15,6 @@ import {
   getOptionFieldTargets,
   getOptionUsage,
 } from "@/lib/journal/option-usage-queries";
-import { isListBuiltIn } from "@/lib/journal/option-usage";
 import { getAllFormFields } from "@/lib/journal/form-config";
 import { RESET_PHRASE } from "@/lib/journal/reset-phrase";
 import { isValidTimeZone, DEFAULT_TZ } from "@/lib/journal/time";
@@ -29,6 +28,70 @@ import {
   type FieldDefType,
 } from "@/lib/journal/field-def-types";
 import type { OptionItem } from "@/lib/journal/types";
+import { z } from "zod";
+import {
+  listProtection,
+  moveRefusal,
+  newCategoryKey,
+  renameCollision,
+  selectionChangeRefusal,
+  siblingLists,
+  type DefShape,
+} from "@/lib/journal/settings-rules";
+
+/**
+ * True when PostgREST could not find the function — a migration not applied yet.
+ *
+ * The two new RPCs (`tj_rename_option`, `tj_delete_list`) ship with a migration
+ * the database may not have yet. Until it does, the old two-step path still
+ * runs rather than every rename and delete failing outright.
+ */
+function missingFunction(error: { code?: string; message: string } | null): boolean {
+  return (
+    error != null &&
+    (error.code === "PGRST202" || /could not find the function/i.test(error.message))
+  );
+}
+
+/** The field definitions that read `listKey`, as protection needs them. */
+async function defsForList(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  listKey: string,
+): Promise<{ ok: true; defs: DefShape[] } | { ok: false; error: string }> {
+  const { data, error } = await supabase
+    .from("tj_field_defs")
+    .select("key, list_key")
+    .eq("list_key", listKey);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, defs: data ?? [] };
+}
+
+/**
+ * Trades using ANY value of a list, or -1 when a count failed.
+ *
+ * One unreadable value makes the total unreadable: a guard fed a partial sum
+ * would read "unused" for a category that is not.
+ */
+async function tradesUsingList(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  listId: string,
+  listKey: string,
+): Promise<number> {
+  const { data: items, error } = await supabase
+    .from("tj_option_items")
+    .select("value")
+    .eq("list_id", listId);
+  if (error) return -1;
+  const values = (items ?? []).map((i) => i.value);
+  const perValue = await getOptionUsage(listKey, values);
+  let total = 0;
+  for (const v of values) {
+    const n = perValue[v]?.trades ?? 0;
+    if (n < 0) return -1;
+    total += n;
+  }
+  return total;
+}
 
 // `OptionItem` itself rather than a structural copy of it: the copy was already
 // a second place to remember every column, and it drifted the moment one was
@@ -97,7 +160,7 @@ export async function addOption(
 export async function renameOption(id: string, label: string) {
   const supabase = await createClient();
   const trimmed = label.trim();
-  if (!trimmed) return { ok: false, error: "Empty label." };
+  if (!trimmed) return { ok: false, error: "The name cannot be empty." };
 
   // The list key, so the cascade knows which fields could be carrying it, and
   // the old value, which is what the trades actually hold.
@@ -112,22 +175,55 @@ export async function renameOption(id: string, label: string) {
   const oldValue = current.value;
   const listKey = (current.tj_option_lists as unknown as { key: string }).key;
 
-  if (oldValue !== trimmed) {
-    const targets = await getOptionFieldTargets(listKey);
-    if (targets.length > 0) {
-      const { error: cascadeError } = await supabase.rpc(
-        "tj_rename_option_value",
-        { p_targets: targets, p_old: oldValue, p_new: trimmed },
-      );
-      if (cascadeError) return { ok: false, error: cascadeError.message };
-    }
-  }
+  // A name already in this list — or in a sibling list writing to the same
+  // column (Emotion / Discipline) — would merge two tags into one on every trade
+  // that holds either. Refused before anything is written.
+  const siblings = siblingLists(listKey);
+  const { data: others, error: othersError } = await supabase
+    .from("tj_option_items")
+    .select("id, value, tj_option_lists!inner(key)")
+    .in("tj_option_lists.key", siblings);
+  if (othersError) return { ok: false, error: othersError.message };
+  const collision = renameCollision(
+    trimmed,
+    oldValue,
+    (others ?? []).filter((o) => o.id !== id).map((o) => o.value),
+  );
+  if (collision) return { ok: false, error: collision };
 
-  const { error } = await supabase
+  const targets = await getOptionFieldTargets(listKey);
+
+  // ONE transaction: the trades and the option change together or not at all.
+  // It used to be the cascade, then a separate update — a failure between them
+  // left every trade on the new name and the list still offering the old one.
+  const { error: rpcError } = await supabase.rpc("tj_rename_option", {
+    p_item_id: id,
+    p_targets: targets,
+    p_new: trimmed,
+  });
+  if (!rpcError) {
+    revalidateAll();
+    return { ok: true };
+  }
+  if (!missingFunction(rpcError)) return { ok: false, error: rpcError.message };
+
+  // Fallback until the migration is applied: the old order, cascade first, so a
+  // failure leaves the option on its old name and nothing drifted.
+  if (oldValue !== trimmed && targets.length > 0) {
+    const { error: cascadeError } = await supabase.rpc("tj_rename_option_value", {
+      p_targets: targets,
+      p_old: oldValue,
+      p_new: trimmed,
+    });
+    if (cascadeError) return { ok: false, error: cascadeError.message };
+  }
+  const { data: renamed, error } = await supabase
     .from("tj_option_items")
     .update({ label: trimmed, value: trimmed })
-    .eq("id", id);
+    .eq("id", id)
+    .select("id");
   if (error) return { ok: false, error: error.message };
+  if (!renamed || renamed.length === 0) return { ok: false, error: "Option not found." };
   revalidateAll();
   return { ok: true };
 }
@@ -245,7 +341,7 @@ export async function reorderOptions(orderedIds: string[]) {
 }
 
 export async function addList(
-  key: string,
+  _key: string,
   label: string,
   category: string | null,
   /** When the trade form asks for it. Defaults to every phase. */
@@ -254,17 +350,29 @@ export async function addList(
   selection: CategorySelection = "multi",
 ) {
   const supabase = await createClient();
-  const cleanKey = key
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  if (!cleanKey || !label.trim())
-    return { ok: false, error: "Key and label are required." };
+
+  // The key is derived from the NAME with the same rules the field definition
+  // enforces, and checked BEFORE anything is inserted. `addList` used its own
+  // looser derivation, so "Čekirano" or "1st setup" made a list whose key the
+  // field then refused — and the list stayed behind with no field, blocking
+  // every retry with "already exists".
+  const [{ data: lists, error: listsError }, { data: defs, error: defsError }] =
+    await Promise.all([
+      supabase.from("tj_option_lists").select("key"),
+      supabase.from("tj_field_defs").select("key"),
+    ]);
+  if (listsError) return { ok: false, error: listsError.message };
+  if (defsError) return { ok: false, error: defsError.message };
+  const derived = newCategoryKey(label, [
+    ...(lists ?? []).map((l) => l.key),
+    ...(defs ?? []).map((d) => d.key),
+  ]);
+  if (!derived.ok) return { ok: false, error: derived.error };
+  const key = derived.key;
 
   // Same atomic-ordinal reasoning as addOption above.
   const { error } = await supabase.rpc("tj_add_option_list", {
-    p_key: cleanKey,
+    p_key: key,
     p_label: label.trim(),
     // `?? undefined`, not `category`: the RPC declares the argument optional,
     // and an explicit null would be sent as a value rather than omitted.
@@ -272,28 +380,22 @@ export async function addList(
   });
   if (error) return { ok: false, error: error.message };
 
-  // A NEW CATEGORY IS A NEW FIELD ON THE TRADE FORM. That is the whole point of
-  // making one — a category nothing can be tagged with is a list of words. The
-  // definition used to be a second, separate step on a "My fields" screen, and
-  // the two could drift: a category with no field never appeared anywhere, and
-  // the screen gave no hint that a step was missing.
-  //
-  // The trader's choice, defaulting to several: a category is usually a set you
-  // pick more than one of, which is the shape `technical_tag` and `mistake`
-  // already have. One at a time is the right answer for a category whose values
-  // are mutually exclusive — a bias is bullish or bearish, not both.
-  //
-  // Failure here is reported but does not undo the list: the category exists
-  // and is usable, and a retry is a click away, whereas rolling back would
-  // throw away work over a second write the trader never asked about.
+  // A NEW CATEGORY IS A NEW FIELD ON THE TRADE FORM — a category nothing can be
+  // tagged with is a list of words. One at a time or several is the trader's
+  // choice; several is the shape `technical_tag` and `mistake` already have.
   const fieldRes = await addFieldDef({
     label: label.trim(),
     field_type: fieldTypeForSelection(selection),
     show_phase: showPhase,
-    list_key: cleanKey,
-    key: cleanKey,
+    list_key: key,
+    key,
   });
-  if (!fieldRes.ok) return { ok: false, error: fieldRes.error };
+  if (!fieldRes.ok) {
+    // Taken back out, so the category is either whole or absent. Left behind, a
+    // list with no field never appeared on the form and made every retry fail.
+    await supabase.from("tj_option_lists").delete().eq("key", key);
+    return { ok: false, error: fieldRes.error };
+  }
 
   revalidateAll();
   return { ok: true };
@@ -422,6 +524,19 @@ export async function setListSelection(
   if (readError) return { ok: false, error: readError.message };
   if (!list) return { ok: false, error: "Category not found." };
 
+  // A column-backed category stores its values in a typed column, so its shape
+  // is fixed; a custom one can change shape only while no trade holds a value —
+  // otherwise old trades keep a string where the form now expects a list, or
+  // the other way round.
+  const defs = await defsForList(supabase, list.key);
+  if (!defs.ok) return { ok: false, error: defs.error };
+  const refusal = selectionChangeRefusal(
+    list.key,
+    defs.defs,
+    await tradesUsingList(supabase, id, list.key),
+  );
+  if (refusal) return { ok: false, error: refusal };
+
   const { data: touched, error } = await supabase
     .from("tj_field_defs")
     .update({ field_type: fieldTypeForSelection(selection) })
@@ -479,12 +594,22 @@ export async function setListPhase(id: string, phase: FieldDefPhase) {
 export async function renameList(id: string, label: string) {
   const supabase = await createClient();
   const trimmed = label.trim();
-  if (!trimmed) return { ok: false, error: "Name cannot be empty." };
-  const { error } = await supabase
+  if (!trimmed) return { ok: false, error: "The name cannot be empty." };
+  const { data: renamed, error } = await supabase
     .from("tj_option_lists")
     .update({ label: trimmed })
-    .eq("id", id);
+    .eq("id", id)
+    .select("key");
   if (error) return { ok: false, error: error.message };
+  if (!renamed || renamed.length === 0) return { ok: false, error: "Category not found." };
+
+  // The field the category feeds is labelled by its definition, not the list —
+  // so the trade form went on showing the old name after a rename here.
+  const { error: defError } = await supabase
+    .from("tj_field_defs")
+    .update({ label: trimmed })
+    .eq("list_key", renamed[0].key);
+  if (defError) return { ok: false, error: defError.message };
   revalidateAll();
   return { ok: true };
 }
@@ -511,13 +636,34 @@ export async function setListColor(id: string, color: string | null) {
  */
 export async function moveOptionToList(optionId: string, listId: string) {
   const supabase = await createClient();
-  const { data: list, error: listError } = await supabase
-    .from("tj_option_lists")
-    .select("id")
-    .eq("id", listId)
-    .maybeSingle();
-  if (listError) return { ok: false, error: listError.message };
-  if (!list) return { ok: false, error: "Category not found." };
+  const [{ data: item, error: itemError }, { data: to, error: toError }] =
+    await Promise.all([
+      supabase
+        .from("tj_option_items")
+        .select("value, tj_option_lists!inner(key)")
+        .eq("id", optionId)
+        .maybeSingle(),
+      supabase.from("tj_option_lists").select("key").eq("id", listId).maybeSingle(),
+    ]);
+  if (itemError) return { ok: false, error: itemError.message };
+  if (toError) return { ok: false, error: toError.message };
+  if (!item) return { ok: false, error: "Tag not found." };
+  if (!to) return { ok: false, error: "Category not found." };
+
+  // The tag keeps its text, so trades that hold it stay attached only if the
+  // destination feeds the SAME field. Anywhere else it may move only while no
+  // trade uses it. This makes the promise in the move menu true.
+  const fromKey = (item.tj_option_lists as unknown as { key: string }).key;
+  const toDefs = await defsForList(supabase, to.key);
+  if (!toDefs.ok) return { ok: false, error: toDefs.error };
+  const usage = await getOptionUsage(fromKey, [item.value]);
+  const refusal = moveRefusal(
+    fromKey,
+    to.key,
+    usage[item.value]?.trades ?? -1,
+    listProtection(to.key, toDefs.defs, getAllFormFields([])) != null,
+  );
+  if (refusal) return { ok: false, error: refusal };
 
   const { error } = await supabase
     .from("tj_option_items")
@@ -575,16 +721,21 @@ export async function countListUsage(
 
   const { data: fieldDefs, error: fieldError } = await supabase
     .from("tj_field_defs")
-    .select("label")
+    .select("key, list_key, label")
     .eq("list_key", list.key);
   if (fieldError) return { ok: false, error: fieldError.message };
 
+  // `listProtection`, not `isListBuiltIn(getAllFormFields([]))` alone: with no
+  // definitions merged in, that call knows only `risk_pct`, so the seeded
+  // categories read as the trader's own and the dialog offered to delete them.
+  const protectedReason = listProtection(list.key, fieldDefs ?? [], getAllFormFields([]));
   return {
     ok: true,
     usage: {
       trades,
-      builtIn: isListBuiltIn(getAllFormFields([]), list.key),
-      customFieldLabels: (fieldDefs ?? []).map((d) => d.label),
+      builtIn: protectedReason != null,
+      customFieldLabels:
+        protectedReason != null ? [] : (fieldDefs ?? []).map((d) => d.label),
     },
   };
 }
@@ -613,21 +764,29 @@ export async function deleteList(id: string) {
     .eq("id", id)
     .maybeSingle();
   if (listError) return { ok: false, error: listError.message };
-  if (!list) return { ok: false, error: "List not found." };
+  if (!list) return { ok: false, error: "Category not found." };
 
-  if (isListBuiltIn(getAllFormFields([]), list.key)) {
-    return {
-      ok: false,
-      error: "A built-in field reads this list — it cannot be deleted.",
-    };
+  const defs = await defsForList(supabase, list.key);
+  if (!defs.ok) return { ok: false, error: defs.error };
+  const protectedReason = listProtection(list.key, defs.defs, getAllFormFields([]));
+  if (protectedReason)
+    return { ok: false, error: `${protectedReason} It cannot be deleted.` };
+
+  // One transaction: the field definition and the list go together. Two
+  // requests left a category with no field when the second one failed.
+  const { error: rpcError } = await supabase.rpc("tj_delete_list", { p_list_id: id });
+  if (!rpcError) {
+    revalidateAll();
+    return { ok: true };
   }
+  if (!missingFunction(rpcError)) return { ok: false, error: rpcError.message };
 
+  // Fallback until the migration is applied.
   const { error: fieldError } = await supabase
     .from("tj_field_defs")
     .delete()
     .eq("list_key", list.key);
   if (fieldError) return { ok: false, error: fieldError.message };
-
   // Cascades to tj_option_items via ON DELETE CASCADE.
   const { error } = await supabase.from("tj_option_lists").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -667,6 +826,24 @@ function badSpec(patch: {
   return null;
 }
 
+/**
+ * The columns `updateInstrument` may write, with their ranges.
+ *
+ * A whitelist, because the patch arrives from the browser: without one any
+ * column on the row — `user_id` included — was one field away from being set.
+ */
+const instrumentPatchSchema = z
+  .object({
+    name: z.string().max(120).nullable().optional(),
+    asset_class: z.string().max(60).nullable().optional(),
+    point_value: z.number().finite().positive("Point value must be greater than zero.").optional(),
+    tick_size: z.number().finite().nonnegative("Tick size cannot be negative.").nullable().optional(),
+    tick_value: z.number().finite().nonnegative("Tick value cannot be negative.").nullable().optional(),
+    quote_currency: z.string().trim().regex(/^[A-Za-z]{3}$/, "Currency is a three-letter code.").optional(),
+    is_active: z.boolean().optional(),
+  })
+  .strict();
+
 export async function addInstrument(input: {
   symbol: string;
   name?: string;
@@ -677,7 +854,9 @@ export async function addInstrument(input: {
   quote_currency?: string;
 }) {
   const supabase = await createClient();
-  const symbol = input.symbol.trim();
+  // Upper case, as the catalog and every import normalise symbols: "es" and
+  // "ES" as two instruments would split one market's trades in two.
+  const symbol = input.symbol.trim().toUpperCase();
   if (!symbol) return { ok: false, error: "Symbol required." };
   const spec = badSpec(input);
   if (spec) return { ok: false, error: spec };
@@ -707,14 +886,25 @@ export async function updateInstrument(
     is_active?: boolean;
   },
 ) {
-  const spec = badSpec(patch);
+  const parsed = instrumentPatchSchema.safeParse(patch);
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid instrument." };
+  const spec = badSpec(parsed.data);
   if (spec) return { ok: false, error: spec };
+  const clean = {
+    ...parsed.data,
+    ...(parsed.data.quote_currency != null
+      ? { quote_currency: parsed.data.quote_currency.trim().toUpperCase() }
+      : {}),
+  };
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("tj_instruments")
-    .update(patch)
-    .eq("id", id);
+    .update(clean)
+    .eq("id", id)
+    .select("id");
   if (error) return { ok: false, error: error.message };
+  if (!updated || updated.length === 0) return { ok: false, error: "Instrument not found." };
   revalidateAll();
   return { ok: true };
 }
@@ -728,6 +918,50 @@ export async function deleteInstrument(id: string) {
 }
 
 // ---- Accounts ----
+
+const pct = (label: string) =>
+  z.number().finite().min(0, `${label} cannot be below 0 %.`).max(100, `${label} cannot be above 100 %.`);
+const money = (label: string) =>
+  z.number().finite().min(0, `${label} cannot be negative.`);
+
+/**
+ * The columns `updateAccount` may write, with their ranges.
+ *
+ * FTMO limits are percentages and live in 0–100; costs and balances are not
+ * negative; the breakeven band may be (a loss-side edge). Anything outside
+ * these, or any column not listed, is refused rather than stored.
+ */
+const accountPatchSchema = z
+  .object({
+    name: z.string().trim().min(1, "The name cannot be empty.").max(80).optional(),
+    broker: z.string().max(80).nullable().optional(),
+    account_kind: z.enum(["trading", "backtest"]).optional(),
+    currency: z.string().trim().regex(/^[A-Za-z]{3}$/, "Currency is a three-letter code.").transform((c) => c.toUpperCase()).optional(),
+    starting_balance: money("Starting balance").optional(),
+    default_asset_class: z.string().max(60).nullable().optional(),
+    timezone: z.string().min(1).max(64).optional(),
+    is_active: z.boolean().optional(),
+    breakeven_from: z.number().finite().optional(),
+    breakeven_to: z.number().finite().optional(),
+    breakeven_unit: z.enum(["currency", "pct"]).optional(),
+    default_commission_per_unit: money("Commission").optional(),
+    default_fee_fixed: money("Fixed fee").optional(),
+    default_swap_per_day: z.number().finite().optional(),
+    default_stop_pct: pct("Default stop").nullable().optional(),
+    default_target_pct: pct("Default target").nullable().optional(),
+    ftmo_mode: z.boolean().optional(),
+    ftmo_daily_loss_enabled: z.boolean().optional(),
+    ftmo_daily_loss_pct: pct("Daily loss limit").optional(),
+    ftmo_daily_loss_basis: z.enum(["starting_balance", "prev_close"]).optional(),
+    ftmo_max_loss_enabled: z.boolean().optional(),
+    ftmo_max_loss_pct: pct("Max loss limit").optional(),
+    ftmo_profit_target_enabled: z.boolean().optional(),
+    ftmo_profit_target_pct: pct("Profit target").optional(),
+    ftmo_min_days_enabled: z.boolean().optional(),
+    ftmo_min_days: z.number().int("Minimum days is a whole number.").min(0).max(365).optional(),
+    ftmo_reset_at: z.string().nullable().optional(),
+  })
+  .strict();
 
 export async function updateAccount(
   id: string,
@@ -761,6 +995,13 @@ export async function updateAccount(
     ftmo_reset_at?: string | null;
   },
 ) {
+  // Whitelisted and ranged. The patch used to go straight to the update, so any
+  // column — and any number, NaN and 1e9 % included — reached the row.
+  const parsedPatch = accountPatchSchema.safeParse(patch);
+  if (!parsedPatch.success)
+    return { ok: false, error: parsedPatch.error.issues[0]?.message ?? "Invalid account settings." };
+  patch = parsedPatch.data;
+
   if (
     patch.breakeven_from != null &&
     patch.breakeven_to != null &&
@@ -792,16 +1033,25 @@ export async function updateAccount(
   // gating on presence alone would block ordinary saves of an account that
   // already has trades, not just an actual currency change.
   if (patch.currency != null) {
-    const { data: current } = await supabase
+    const { data: current, error: currentError } = await supabase
       .from("tj_accounts")
       .select("currency")
       .eq("id", id)
       .maybeSingle();
-    if (current && current.currency !== patch.currency) {
-      const { count } = await supabase
+    if (currentError) return { ok: false, error: currentError.message };
+    if (!current) return { ok: false, error: "Account not found." };
+    if (current.currency !== patch.currency) {
+      const { count, error: countError } = await supabase
         .from("tj_positions")
         .select("id", { count: "exact", head: true })
         .eq("account_id", id);
+      // A failed count refuses the change. Read as 0 it switched the lock off,
+      // and the currency could change under trades already converted to it.
+      if (countError)
+        return {
+          ok: false,
+          error: "Could not check whether this account has trades, so the currency was not changed. Try again.",
+        };
       if ((count ?? 0) > 0) {
         return {
           ok: false,
@@ -830,11 +1080,16 @@ export async function updateAccount(
   // with nothing on screen that looks wrong. Refused here, where the user is
   // still looking at the field they typed it into.
   if (patch.timezone != null && !isValidTimeZone(patch.timezone)) {
-    return { ok: false, error: `Nepoznata vremenska zona: ${patch.timezone}` };
+    return { ok: false, error: `Unknown time zone: ${patch.timezone}` };
   }
 
-  const { error } = await supabase.from("tj_accounts").update(patch).eq("id", id);
+  const { data: updated, error } = await supabase
+    .from("tj_accounts")
+    .update(patch)
+    .eq("id", id)
+    .select("id");
   if (error) return { ok: false, error: error.message };
+  if (!updated || updated.length === 0) return { ok: false, error: "Account not found." };
   revalidateAll();
   return { ok: true };
 }
@@ -842,11 +1097,13 @@ export async function updateAccount(
 /** Restart the FTMO challenge: trades before now stop counting toward breaches. */
 export async function resetFtmoChallenge(id: string) {
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("tj_accounts")
     .update({ ftmo_reset_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .select("id");
   if (error) return { ok: false as const, error: error.message };
+  if (!updated || updated.length === 0) return { ok: false as const, error: "Account not found." };
   revalidateAll();
   return { ok: true as const };
 }
@@ -862,7 +1119,7 @@ export async function addAccount(input: {
   if (!input.name.trim()) return { ok: false, error: "Name required." };
   // Same guard as `updateAccount` — a bad zone must not be creatable either.
   if (input.timezone != null && !isValidTimeZone(input.timezone)) {
-    return { ok: false, error: `Nepoznata vremenska zona: ${input.timezone}` };
+    return { ok: false, error: `Unknown time zone: ${input.timezone}` };
   }
   const { error } = await supabase.from("tj_accounts").insert({
     name: input.name.trim(),
@@ -1006,6 +1263,17 @@ export async function addCashEvent(input: {
   const user = await getCurrentUser();
   if (!user) return { ok: false as const, error: "Not signed in." };
 
+  // The account must be one of the caller's. Under RLS another user's account
+  // reads as missing; checked here so the message names it instead of a
+  // foreign-key or policy error.
+  const { data: account, error: accountError } = await supabase
+    .from("tj_accounts")
+    .select("id")
+    .eq("id", input.account_id)
+    .maybeSingle();
+  if (accountError) return { ok: false as const, error: accountError.message };
+  if (!account) return { ok: false as const, error: "Account not found." };
+
   const { error } = await supabase.from("tj_cash_events").insert({
     user_id: user.id,
     account_id: input.account_id,
@@ -1021,8 +1289,13 @@ export async function addCashEvent(input: {
 
 export async function deleteCashEvent(id: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("tj_cash_events").delete().eq("id", id);
+  const { data: deleted, error } = await supabase
+    .from("tj_cash_events")
+    .delete()
+    .eq("id", id)
+    .select("id");
   if (error) return { ok: false as const, error: error.message };
+  if (!deleted || deleted.length === 0) return { ok: false as const, error: "Entry not found." };
   revalidateAll();
   return { ok: true as const };
 }

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { selectAllPages } from "@/lib/supabase/paginate";
 import { getFieldDefs } from "./field-defs";
 import { getAllFormFields } from "./form-config";
+import { pgTextArrayLiteral } from "./settings-rules";
 import {
   optionFieldTargets,
   usageKey,
@@ -19,29 +20,6 @@ import {
  * A head count is answered by the server and has no such ceiling. Same reason,
  * and same shape, as `account-usage-queries.ts`.
  */
-
-/**
- * The column and operator that match one value in one field.
- *
- * Returned as a description rather than applied to a builder, so the caller
- * keeps PostgREST's own types all the way through — a helper taking the
- * builder would have to name a type PostgREST does not export.
- */
-function filterFor(
-  target: OptionFieldTarget,
-): { column: string; op: "eq" | "contains" } {
-  if (target.array) {
-    // `->` and not `->>`: a jsonb array has to stay jsonb for `@>` to match.
-    return {
-      column: target.custom ? `custom->${target.key}` : target.key,
-      op: "contains",
-    };
-  }
-  return {
-    column: target.custom ? `custom->>${target.key}` : target.key,
-    op: "eq",
-  };
-}
 
 /**
  * The trade fields fed by `listKey`, resolved against this user's field defs.
@@ -96,11 +74,19 @@ export async function getOptionUsage(
     values.map(async (value) => {
       const counts = await Promise.all(
         targets.map((t) => {
-          const { column, op } = filterFor(t);
           const q = supabase
             .from("tj_positions")
             .select("id", { count: "exact", head: true });
-          return op === "contains" ? q.contains(column, [value]) : q.eq(column, value);
+          // Three shapes, each matched the way its storage needs:
+          //   - a tag list inside `custom`: JSON containment on the bag itself.
+          //     `.contains("custom->key", [v])` sent `cs.{v}`, which is not JSON,
+          //     so every custom multi-select count failed and read "unknown".
+          //   - a text[] column: an array literal with the value QUOTED, so a
+          //     tag with a comma in it stays one element instead of two.
+          //   - a single value: plain equality, on the column or `custom->>key`.
+          if (t.array && t.custom) return q.contains("custom", { [t.key]: [value] });
+          if (t.array) return q.filter(t.key, "cs", pgTextArrayLiteral([value]));
+          return q.eq(t.custom ? `custom->>${t.key}` : t.key, value);
         }),
       );
 
@@ -139,7 +125,7 @@ export async function getOptionUsage(
  */
 export async function getAllOptionUsage(
   listKeys: readonly string[],
-): Promise<Record<string, number>> {
+): Promise<Record<string, number> | null> {
   const out: Record<string, number> = {};
   if (listKeys.length === 0) return out;
 
@@ -184,7 +170,10 @@ export async function getAllOptionUsage(
         }>,
     );
   } catch {
-    return out;
+    // Null, not an empty tally. `{}` read as "every tag is used 0 times", which
+    // is the one answer that invites a careless delete; the table shows
+    // "count unavailable" instead.
+    return null;
   }
 
   const bump = (listKey: string, value: string) => {

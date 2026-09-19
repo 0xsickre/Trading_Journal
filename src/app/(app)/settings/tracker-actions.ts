@@ -6,6 +6,10 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
 import { getCurrentUser } from "@/lib/supabase/user";
+import { getPrimaryAccount } from "@/lib/journal/accounts";
+import { todayInTz } from "@/lib/journal/daily-report";
+import { DEFAULT_TZ, zonedDateKey } from "@/lib/journal/time";
+import { trackerRuleMayHardDelete } from "@/lib/journal/settings-rules";
 import {
   AUTO_RULES_NEEDING_PCT,
   TRACKER_STAGES,
@@ -197,49 +201,54 @@ export async function clearTrackerRuleLimit(id: string): Promise<Result> {
 /**
  * Retire a rule.
  *
- * Soft once it has been answered, hard when it never was — the same shape as
- * `deletePlaybookRule`. The soft path is not politeness: `compliance.ts` decides
- * applicability by comparing each day against `deleted_at`, so a hard delete
- * would erase the denominator of every past day the rule was live on and
- * silently raise those scores.
- *
- * Mandatory rules can be retired like any other; `is_mandatory` guards the hard
- * delete and the identity of the seeded set, not the user's right to stop
- * tracking something.
+ * Deleted outright only when it was created TODAY and never answered. Any older
+ * rule was live on past days — as an unanswered box it already counted against
+ * them — so a hard delete would take it out of those days' denominators and
+ * raise their scores after the fact. `compliance.ts` reads `deleted_at` as the
+ * cutoff, which is exactly what keeps history still. It used to hard-delete
+ * every non-mandatory rule that had never been answered, however old.
  */
 export async function deleteTrackerRule(id: string): Promise<Result> {
   const supabase = await createClient();
 
-  const [{ data: rule }, { count }] = await Promise.all([
-    supabase.from("tj_tracker_rules").select("is_mandatory").eq("id", id).maybeSingle(),
-    supabase
-      .from("tj_tracker_checkins")
-      .select("id", { count: "exact", head: true })
-      .eq("rule_id", id),
-  ]);
+  const [{ data: rule, error: ruleError }, { count, error: countError }, account] =
+    await Promise.all([
+      supabase
+        .from("tj_tracker_rules")
+        .select("is_mandatory, created_at")
+        .eq("id", id)
+        .maybeSingle(),
+      supabase
+        .from("tj_tracker_checkins")
+        .select("id", { count: "exact", head: true })
+        .eq("rule_id", id),
+      getPrimaryAccount(),
+    ]);
+  if (ruleError) return { ok: false, error: ruleError.message };
   if (!rule) return { ok: false, error: "Rule not found." };
+  // A failed count must not read as "never answered": that is the branch that
+  // deletes.
+  if (countError)
+    return { ok: false, error: "Could not check whether this rule was answered, so it was not changed. Try again." };
 
-  const answered = (count ?? 0) > 0;
-  if (rule.is_mandatory && !answered) {
-    // Nothing to preserve, but hard-deleting a seeded rule would let it come
-    // back on the next reseed and look like it was never removed.
-    const { error } = await supabase
-      .from("tj_tracker_rules")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", id);
-    if (error) return { ok: false, error: error.message };
-    revalidateAll();
-    return { ok: true };
-  }
+  const tz = account?.timezone ?? DEFAULT_TZ;
+  const hardDelete = trackerRuleMayHardDelete({
+    createdDay: zonedDateKey(rule.created_at, tz),
+    today: todayInTz(tz),
+    answered: (count ?? 0) > 0,
+    mandatory: rule.is_mandatory,
+  });
 
-  const { error } = answered
-    ? await supabase
+  const { data: changed, error } = hardDelete
+    ? await supabase.from("tj_tracker_rules").delete().eq("id", id).select("id")
+    : await supabase
         .from("tj_tracker_rules")
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", id)
-    : await supabase.from("tj_tracker_rules").delete().eq("id", id);
+        .select("id");
 
   if (error) return { ok: false, error: error.message };
+  if (!changed || changed.length === 0) return { ok: false, error: "Rule not found." };
   revalidateAll();
   return { ok: true };
 }
