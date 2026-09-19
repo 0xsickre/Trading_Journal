@@ -50,7 +50,14 @@ describe("planUndo", () => {
     ];
     const plan = planUndo(rows, []);
     expect(plan.restore).toEqual([
-      { positionId: "old-1", executions: [], clearTarget: false, clearExcursion: false },
+      {
+        positionId: "old-1",
+        executions: [],
+        clearTarget: false,
+        clearExcursion: false,
+        prevStatus: null,
+        prevNeedsReview: null,
+      },
     ]);
     expect(plan.unrestorableIds).toEqual([]);
   });
@@ -128,5 +135,52 @@ describe("MAE/MFE the import filled in", () => {
       ["p2", false],
       ["p3", false],
     ]);
+  });
+});
+
+describe("several rows merged into one trade", () => {
+  it("restores the OLDEST snapshot, and clears what ANY row wrote", () => {
+    // Rows arrive oldest first. The second row's snapshot is what the first row
+    // wrote — putting that back would leave the import's own fills in place.
+    const rows: UndoAuditRow[] = [
+      { matched_position_id: "p", prev_executions: [exec(100)], target_written: false, excursion_written: true },
+      { matched_position_id: "p", prev_executions: [exec(555)], target_written: true, excursion_written: false },
+    ];
+    const plan = planUndo<ReturnType<typeof exec>>(rows, []);
+    expect(plan.restore).toHaveLength(1);
+    expect(plan.restore[0].executions).toEqual([exec(100)]);
+    expect(plan.restore[0].clearTarget).toBe(true);
+    expect(plan.restore[0].clearExcursion).toBe(true);
+  });
+
+  it("puts back the status the trade had before the import", () => {
+    // A missed plan merged into and then undone must come back missed, not
+    // `planned` — which is what a status computed from zero fills says.
+    const plan = planUndo(
+      [{ matched_position_id: "p", prev_executions: [], prev_status: "missed", prev_needs_review: false }],
+      [],
+    );
+    expect(plan.restore[0].prevStatus).toBe("missed");
+    expect(plan.restore[0].prevNeedsReview).toBe(false);
+  });
+
+  it("a skip row that named the trade does not stop the merge being put back", () => {
+    // The wizard sends the matched id on a duplicate it skips, and that row has
+    // no snapshot. Sitting first, it used to make the merge after it
+    // "unrestorable" — and the merge's fills stayed in place.
+    const plan = planUndo<ReturnType<typeof exec>>(
+      [
+        { matched_position_id: "p", prev_executions: null },
+        { matched_position_id: "p", prev_executions: [exec(100)] },
+      ],
+      [],
+    );
+    expect(plan.unrestorableIds).toEqual([]);
+    expect(plan.restore[0].executions).toEqual([exec(100)]);
+  });
+
+  it("has no status to put back for a batch that predates recording it", () => {
+    const plan = planUndo([{ matched_position_id: "p", prev_executions: [] }], []);
+    expect(plan.restore[0].prevStatus).toBeNull();
   });
 });

@@ -251,3 +251,52 @@ describe("a hand-typed trade whose time is the typist's, not the broker's", () =
     expect(out.matched?.id).toBe("strict");
   });
 });
+
+describe("the strict path never crosses accounts either", () => {
+  it("a row for account A does not merge into a trade of account B, even to the minute", () => {
+    // A merge deletes fills. Time and price agreeing across two books is two
+    // trades that happen to look alike, not one trade.
+    const out = match({ ...row, accountId: "acc-A" }, [c({ accountId: "acc-B" })]);
+    expect(out.status).toBe("new");
+    expect(out.matched).toBeNull();
+  });
+
+  it("still merges within the same account", () => {
+    const out = match({ ...row, accountId: "acc-A" }, [c({ accountId: "acc-A" })]);
+    expect(out.status).toBe("match");
+  });
+});
+
+describe("money is compared like with like", () => {
+  // A hand-typed trade with $30 of commission: gross −950, net −980.
+  const typed = c({
+    id: "typed",
+    instrument: "XAUUSD",
+    avgEntry: 1327.45,
+    avgExit: 1317.62,
+    openedAt: "2026-09-18T21:10:00Z",
+    entryQty: 1,
+    grossPl: -950,
+    netPl: -980,
+    accountId: "acc-1",
+  });
+  const fromFile: ImportRowKey = {
+    instrument: "XAUUSD",
+    direction: "Long",
+    entryPrice: 1327.45,
+    entryTime: "2026-03-07T14:00:00Z",
+    entryQty: 3, // sized differently, so only the money can recognise it
+    exitPrice: 1317.62,
+    accountId: "acc-1",
+  };
+
+  it("a broker's GROSS profit is set against the trade's gross, not its net", () => {
+    const out = match({ ...fromFile, pnl: -950, pnlBasis: "gross" }, [typed]);
+    expect(out.status).toBe("suggested");
+  });
+
+  it("a NET figure is set against the trade's net", () => {
+    expect(match({ ...fromFile, pnl: -980, pnlBasis: "net" }, [typed]).status).toBe("suggested");
+    expect(match({ ...fromFile, pnl: -950, pnlBasis: "net" }, [typed]).status).toBe("new");
+  });
+});

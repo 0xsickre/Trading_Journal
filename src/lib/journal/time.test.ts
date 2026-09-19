@@ -315,3 +315,15 @@ describe("day and month keys out of a URL", () => {
     expect(isValidMonthKey("2026-05-04")).toBe(false);
   });
 });
+
+describe("parseImportTime — a bare number is not a date", () => {
+  it("refuses an Excel serial or a timestamp that arrived as text", () => {
+    expect(parseImportTime("45000", "America/New_York")).toBeNull();
+    expect(parseImportTime("45000.5", "America/New_York")).toBeNull();
+    expect(parseImportTime("1714060800", "America/New_York")).toBeNull();
+  });
+
+  it("still reads a dotted date, which is not a bare number", () => {
+    expect(parseImportTime("2026.03.05 14:30:00", "UTC")).toBe("2026-03-05T14:30:00.000Z");
+  });
+});

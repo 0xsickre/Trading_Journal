@@ -112,8 +112,16 @@ export type ImportRowKey = {
   entryQty?: number | null;
   /** Size-weighted exit price, or null when the row closes nothing. */
   exitPrice?: number | null;
-  /** The row's own result, net of its costs. Null when the file states none. */
+  /** The row's own result. Null when the file states none. */
   pnl?: number | null;
+  /**
+   * What `pnl` is: a broker's "Profit" column is GROSS (before commission and
+   * swap), TradingView's net P&L is NET. Compared against the trade's figure of
+   * the same kind — a gross statement figure set against a net trade result
+   * misses by exactly the costs, and a real trade went unrecognised.
+   * Absent: net where the trade has one, else gross (the old behaviour).
+   */
+  pnlBasis?: "gross" | "net";
   /** The account this import is being committed into. */
   accountId?: string | null;
 };
@@ -189,7 +197,13 @@ function sameTradeIgnoringTime(
   }
 
   // Then size OR money. See the header for why it is not both.
-  return sameSize(row.entryQty, c.entryQty) || sameMoney(row.pnl, c.netPl ?? c.grossPl);
+  const candidateMoney =
+    row.pnlBasis === "gross"
+      ? c.grossPl
+      : row.pnlBasis === "net"
+        ? c.netPl
+        : (c.netPl ?? c.grossPl);
+  return sameSize(row.entryQty, c.entryQty) || sameMoney(row.pnl, candidateMoney);
 }
 
 /**
@@ -207,6 +221,13 @@ function sameTrade(
   if (!c.instrument || !row.instrument) return false;
   if (!instrumentsMatch(c.instrument, row.instrument)) return false;
   if ((c.direction ?? "").toLowerCase() !== (row.direction ?? "").toLowerCase()) {
+    return false;
+  }
+  // Never across accounts — the same rule as the time-blind path. This one did
+  // not check it, so a statement imported into one account could MERGE into a
+  // trade of another whenever the time and price lined up, replacing that
+  // trade's fills with fills from a different book.
+  if (row.accountId != null && c.accountId != null && row.accountId !== c.accountId) {
     return false;
   }
   if (row.entryTime == null || c.openedAt == null) return false;

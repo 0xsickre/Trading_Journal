@@ -148,6 +148,33 @@ type FillPlan = {
   excursion: { mae: number; mfe: number } | null;
 };
 
+/**
+ * A row under review. `_blocked` is set when a key cell could not be read:
+ * "merge" means the row may be created by hand but never merged, "all" that it
+ * has no fill at all and can only be skipped.
+ */
+type ReviewItem = ImportItem & {
+  _diff?: string[];
+  _candidates?: MatchCandidate[];
+  _blocked?: "merge" | "all";
+};
+
+/** Rows sent per request: each chunk commits well inside the platform's time limit. */
+const COMMIT_CHUNK = 50;
+
+/** A price as the file wrote it, without the two-decimal rounding that hid a changed fill. */
+function px(n: number | null | undefined): string {
+  return n == null || !Number.isFinite(n) ? "—" : String(Number(n.toFixed(6)));
+}
+
+/**
+ * Whether two numbers differ beyond floating-point noise, relative to their size:
+ * a flat 1e-9 is noise on a 0.0001 price and a real change on 20,000.
+ */
+function differs(a: number, b: number): boolean {
+  return Math.abs(a - b) > 1e-9 * Math.max(1, Math.abs(a));
+}
+
 /** An instrument's point value, the one figure the TradingView size check needs. */
 export type ImportInstrument = { symbol: string; point_value: number | null };
 
@@ -198,9 +225,7 @@ export function ImportWizard({
   const [map, setMap] = useState<Record<Canonical, string>>(
     {} as Record<Canonical, string>,
   );
-  const [items, setItems] = useState<
-    (ImportItem & { _diff?: string[]; _candidates?: MatchCandidate[] })[]
-  >([]);
+  const [items, setItems] = useState<ReviewItem[]>([]);
   // Set when the file is TradingView's list of trades; the column mapping is
   // then skipped, because the layout is known and a trade spans two rows.
   const [tv, setTv] = useState<{ symbol: string; data: TradingViewExport } | null>(null);
@@ -237,8 +262,19 @@ export function ImportWizard({
           });
           if (raw.length > 0 && isTradingViewTrades(Object.keys(raw[0]))) tvRows = raw;
         }
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        parsed = XLSX.utils.sheet_to_json(ws, { defval: "", raw: false });
+        if (!tvRows) {
+          // A statement's dates as real dates, written out unambiguously. Read as
+          // text they came out in whatever short form the cell was formatted with
+          // ("3/5/26 14:30"), which the time parser rightly refuses. Read a second
+          // time and only here: TradingView's own path needs the raw serials.
+          const dated = XLSX.read(buf, { type: "array", cellDates: true });
+          const ws = dated.Sheets[dated.SheetNames[0]];
+          parsed = XLSX.utils.sheet_to_json(ws, {
+            defval: "",
+            raw: false,
+            dateNF: "yyyy-mm-dd hh:mm:ss",
+          });
+        }
       }
       if (tvRows) {
         const symbol = symbolFromTradingViewFilename(file.name);
@@ -379,8 +415,8 @@ export function ImportWizard({
     if (cand.avgEntry != null) {
       parts.push(
         cand.avgExit != null
-          ? `${fmtNum(cand.avgEntry, 2)}→${fmtNum(cand.avgExit, 2)}`
-          : String(fmtNum(cand.avgEntry, 2)),
+          ? `${px(cand.avgEntry)}→${px(cand.avgExit)}`
+          : px(cand.avgEntry),
       );
     }
     if (cand.netPl != null) parts.push(String(fmtNum(cand.netPl, 2)));
@@ -410,7 +446,7 @@ export function ImportWizard({
     /** The zone the file's wall clock is in — the account's for a statement. */
     timeZone: string = tz,
   ) {
-    const built: (ImportItem & { _diff?: string[]; _candidates?: MatchCandidate[] })[] =
+    const built: ReviewItem[] =
       rows.map((row, index) => {
       const instrument =
         normalizeInstrumentSymbol(row[map.instrument] ?? "") ?? null;
@@ -452,14 +488,14 @@ export function ImportWizard({
       // `tj_replace_executions` before it) drops a fill with `qty <= 0` through
       // its WHERE. The row would import as an empty position, with no fills and
       // not a word about why.
-      if (qty <= 0) unreadable.push("qty");
+      if (qty <= 0 && !unreadable.includes("qty")) unreadable.push("qty");
 
       const execs: ImportExec[] = [];
       const plan = plans?.[index] ?? null;
       if (plan) {
         // Fills known one by one: the entry, then each exit with its own time,
         // size and commission.
-        if (entryPrice != null && entryTime) {
+        if (entryPrice != null && entryTime && qty > 0) {
           execs.push({
             side: "entry",
             price: entryPrice,
@@ -479,7 +515,9 @@ export function ImportWizard({
         }
       }
       const hasExit = exitPrice != null && (exitTime ?? entryTime) != null;
-      if (!plan && entryPrice != null && entryTime) {
+      // A fill of zero size is not built: the server refuses it, and one such
+      // fill used to fail the whole row with an `executions.0.qty` error.
+      if (!plan && entryPrice != null && entryTime && qty > 0) {
         execs.push({
           side: "entry",
           price: entryPrice,
@@ -505,7 +543,7 @@ export function ImportWizard({
       // real observation about this trade, just a less precise one. Inventing
       // "now" is not an observation about anything.
       const exitAt = exitTime ?? entryTime;
-      if (!plan && exitPrice != null && exitAt) {
+      if (!plan && exitPrice != null && exitAt && qty > 0) {
         execs.push({
           side: "exit",
           price: exitPrice,
@@ -536,6 +574,9 @@ export function ImportWizard({
           entryQty: qty > 0 ? qty : null,
           exitPrice: avgExitPrice,
           pnl: row[NET_RESULT] ? num(row[NET_RESULT]) : profit,
+          // Which money that is, so it is held to the same figure on the trade:
+          // TradingView's result is net, a broker's profit column gross.
+          pnlBasis: row[NET_RESULT] ? "net" : profit != null ? "gross" : undefined,
           accountId,
         },
         candidates,
@@ -566,32 +607,40 @@ export function ImportWizard({
           // objective half — starting with the time, which is the thing that
           // kept the two apart.
           diff.push(`same trade as ${labelOf(matched)}`);
-          if (matched.openedAt && entryTime && matched.openedAt !== entryTime) {
-            diff.push(
-              `opened ${fmtInTz(matched.openedAt, tz, DAY_TIME)}→${fmtInTz(entryTime, tz, DAY_TIME)}`,
-            );
-          }
-          if (matched.entryQty != null && Math.abs(matched.entryQty - qty) > 1e-9) {
-            diff.push(`size ${fmtNum(matched.entryQty, 2)}→${fmtNum(qty, 2)}`);
-          }
         }
-        if (entryPrice != null && matched.avgEntry != null && Math.abs(matched.avgEntry - entryPrice) > 1e-9)
-          diff.push(`entry ${fmtNum(matched.avgEntry, 2)}→${fmtNum(entryPrice, 2)}`);
-        if (exitPrice != null && matched.avgExit != null && Math.abs(matched.avgExit - exitPrice) > 1e-9)
-          diff.push(`exit ${fmtNum(matched.avgExit, 2)}→${fmtNum(exitPrice, 2)}`);
+        // Time and size on EVERY match, not only a suggested one. An exact match
+        // whose size or time the file corrects was otherwise read as a duplicate
+        // and skipped — the correction never landed. A minute's slack: files
+        // round seconds differently.
+        if (
+          matched.openedAt &&
+          entryTime &&
+          Math.abs(Date.parse(matched.openedAt) - Date.parse(entryTime)) > 60_000
+        ) {
+          diff.push(
+            `opened ${fmtInTz(matched.openedAt, tz, DAY_TIME)}→${fmtInTz(entryTime, tz, DAY_TIME)}`,
+          );
+        }
+        if (matched.entryQty != null && qty > 0 && differs(matched.entryQty, qty)) {
+          diff.push(`size ${px(matched.entryQty)}→${px(qty)}`);
+        }
+        if (entryPrice != null && matched.avgEntry != null && differs(matched.avgEntry, entryPrice))
+          diff.push(`entry ${px(matched.avgEntry)}→${px(entryPrice)}`);
+        if (avgExitPrice != null && matched.avgExit != null && differs(matched.avgExit, avgExitPrice))
+          diff.push(`exit ${px(matched.avgExit)}→${px(avgExitPrice)}`);
         // Commission and swap are compared SEPARATELY. They used to be summed
         // into one number, so a statement correcting the swap but not the
         // commission (or the other way round) passed as "fees match" whenever
         // the two differences cancelled out.
-        if (matched.totalFees != null && Math.abs(matched.totalFees - fee) > 1e-9)
+        if (matched.totalFees != null && differs(matched.totalFees, fee))
           diff.push(`fee ${fmtNum(matched.totalFees, 2)}→${fmtNum(fee, 2)}`);
-        if (matched.totalSwap != null && Math.abs(matched.totalSwap - swap) > 1e-9)
+        if (matched.totalSwap != null && differs(matched.totalSwap, swap))
           diff.push(`swap ${fmtNum(matched.totalSwap, 2)}→${fmtNum(swap, 2)}`);
         // The statement's result against what the trade currently shows. This is
         // the check that makes an import worth running when the trades were
         // already entered by hand: the broker is authoritative for money, the
         // human for everything else.
-        if (profit != null && matched.grossPl != null && Math.abs(matched.grossPl - profit) > 1e-9)
+        if (profit != null && matched.grossPl != null && differs(matched.grossPl, profit))
           diff.push(`profit ${fmtNum(matched.grossPl, 2)}→${fmtNum(profit, 2)}`);
         else if (profit != null && matched.grossPl == null)
           diff.push(`profit —→${fmtNum(profit, 2)}`);
@@ -608,6 +657,23 @@ export function ImportWizard({
       if (issue) {
         diff.unshift(issue);
         decision = "skip";
+      }
+
+      // A key cell the parser could not read means the row is not the trade the
+      // file describes, and merging it would replace a trade's fills with a
+      // guess. Skipped; created by hand only if at least one fill was read.
+      const keyUnreadable: string[] = unreadable.filter((u) =>
+        u === "qty" || u === "entry price" || u === "entry time",
+      );
+      let blocked: ReviewItem["_blocked"];
+      if (execs.length === 0 || keyUnreadable.length > 0) {
+        blocked = execs.length === 0 ? "all" : "merge";
+        decision = "skip";
+        diff.unshift(
+          keyUnreadable.length > 0
+            ? `cannot merge: unreadable ${keyUnreadable.join(", ")}`
+            : "cannot import: no fill could be read",
+        );
       }
 
       return {
@@ -628,13 +694,34 @@ export function ImportWizard({
           ? { mae_price: plan.excursion.mae, mfe_price: plan.excursion.mfe }
           : null,
         raw: row,
+        _blocked: blocked,
         // After the duplicate check above, so an unreadable cell never changes
-        // how a row is MATCHED — it only makes sure the reader is told.
-        _diff: unreadable.length > 0
-          ? [...diff, `unreadable: ${unreadable.join(", ")}`]
-          : diff,
+        // how a row is MATCHED — it only makes sure the reader is told. The key
+        // cells are already named in the "cannot merge" line above.
+        _diff: (() => {
+          const rest = unreadable.filter((u) => !keyUnreadable.includes(u));
+          return rest.length > 0 ? [...diff, `unreadable: ${rest.join(", ")}`] : diff;
+        })(),
       };
     });
+
+    // One row per trade. Two rows merging into one trade would each replace
+    // its fills, the second erasing the first, and undo could only give one
+    // back. The first row in the file keeps the merge; the rest are named and
+    // skipped for the reader to decide.
+    const firstRowFor = new Map<string, number>();
+    built.forEach((it, i) => {
+      if (it.decision !== "merge" || !it.matched_position_id) return;
+      const first = firstRowFor.get(it.matched_position_id);
+      if (first == null) {
+        firstRowFor.set(it.matched_position_id, i);
+        return;
+      }
+      it.decision = "skip";
+      it.match_status = "ambiguous";
+      it._diff = [`same trade as row ${first + 1}`, ...(it._diff ?? [])];
+    });
+
     setItems(built);
     setStep(2);
   }
@@ -648,7 +735,22 @@ export function ImportWizard({
     return c;
   }, [items]);
 
+  /** The row, other than `except`, already merging into this trade — or -1. */
+  function mergingInto(positionId: string | null, except: number): number {
+    if (!positionId) return -1;
+    return items.findIndex(
+      (it, idx) => idx !== except && it.decision === "merge" && it.matched_position_id === positionId,
+    );
+  }
+
   function setDecision(i: number, decision: ImportItem["decision"]) {
+    if (decision === "merge") {
+      const other = mergingInto(items[i]?.matched_position_id ?? null, i);
+      if (other >= 0) {
+        toast.error(`Row ${other + 1} already merges into this trade.`);
+        return;
+      }
+    }
     setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, decision } : it)));
   }
 
@@ -660,6 +762,11 @@ export function ImportWizard({
    * decision select is still there to take it back.
    */
   function setMergeTarget(i: number, positionId: string) {
+    const other = mergingInto(positionId || null, i);
+    if (other >= 0) {
+      toast.error(`Row ${other + 1} already merges into this trade.`);
+      return;
+    }
     setItems((prev) =>
       prev.map((it, idx) =>
         idx === i
@@ -673,29 +780,63 @@ export function ImportWizard({
     );
   }
 
+  /** Rows sent so far, while a commit runs in chunks. */
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+
   function commit() {
+    const payload = items.map(({ _diff, _candidates, _blocked, ...it }) => it);
     start(async () => {
-      const res = await commitImport({
-        account_id: accountId || null,
-        filename,
-        items: items.map(({ _diff, _candidates, ...it }) => it),
-      });
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
+      // In chunks, each its own request: one request for a year of trades ran
+      // into the platform's time limit and left the batch half-written with no
+      // word of where it stopped. Every chunk after the first continues the
+      // same batch, so the history shows one import and one undo.
+      let batchId: string | undefined;
+      const sum = { created: 0, merged: 0, skipped: 0, failed: 0 };
+      const errors: { row: number; instrument: string | null; error: string }[] = [];
+      setProgress({ done: 0, total: payload.length });
+      for (let offset = 0; offset < payload.length; offset += COMMIT_CHUNK) {
+        let res: Awaited<ReturnType<typeof commitImport>>;
+        try {
+          res = await commitImport({
+            account_id: accountId || null,
+            filename,
+            items: payload.slice(offset, offset + COMMIT_CHUNK),
+            ...(batchId ? { batch_id: batchId, row_offset: offset } : {}),
+          });
+        } catch (e) {
+          res = { ok: false, error: e instanceof Error ? e.message : String(e) };
+        }
+        if (!res.ok) {
+          setProgress(null);
+          toast.error(
+            offset === 0
+              ? res.error
+              : `Imported ${offset} of ${payload.length} rows — the rest were not sent. Undo from history if needed.`,
+            offset === 0 ? undefined : { description: res.error, duration: 15_000 },
+          );
+          if (offset > 0) router.refresh();
+          return;
+        }
+        batchId = res.batch_id;
+        sum.created += res.created;
+        sum.merged += res.merged;
+        sum.skipped += res.skipped;
+        sum.failed += res.failed;
+        errors.push(...res.errors);
+        setProgress({ done: Math.min(offset + COMMIT_CHUNK, payload.length), total: payload.length });
       }
+      setProgress(null);
       toast.success(
-        `Imported: ${res.created} created, ${res.merged} merged, ${res.skipped} skipped`,
+        `Imported: ${sum.created} created, ${sum.merged} merged, ${sum.skipped} skipped`,
       );
       // A silent "N failed" is not actionable. Name the rows and the reason.
-      if (res.failed > 0) {
-        const detail = res.errors
+      if (sum.failed > 0) {
+        const detail = errors
           .slice(0, 3)
           .map((e) => `row ${e.row}${e.instrument ? ` (${e.instrument})` : ""}: ${e.error}`)
           .join("\n");
-        const more =
-          res.errors.length > 3 ? `\n…and ${res.errors.length - 3} more` : "";
-        toast.error(`${res.failed} row(s) failed`, {
+        const more = errors.length > 3 ? `\n…and ${errors.length - 3} more` : "";
+        toast.error(`${sum.failed} row(s) failed`, {
           description: `${detail}${more}`,
           duration: 15_000,
         });
@@ -885,7 +1026,7 @@ export function ImportWizard({
                     <th className="p-2 font-medium">Dir</th>
                     <th className="p-2 font-medium">Entry</th>
                     <th className="p-2 font-medium">Exit</th>
-                    <th className="p-2 font-medium">Time (NY)</th>
+                    <th className="p-2 font-medium">Time ({tz})</th>
                     <th className="p-2 font-medium">Status</th>
                     <th className="p-2 font-medium">Differences</th>
                     <th className="p-2 font-medium">Action</th>
@@ -905,9 +1046,9 @@ export function ImportWizard({
                       <tr key={i} className="border-t">
                         <td className="p-2 font-mono">{it.instrument ?? "—"}</td>
                         <td className="p-2">{it.direction ?? "—"}</td>
-                        <td className="p-2">{fmtNum(entry?.price, 2)}</td>
+                        <td className="p-2">{px(entry?.price)}</td>
                         <td className="p-2">
-                          {exitAvg == null ? "—" : fmtNum(exitAvg, 2)}
+                          {px(exitAvg)}
                           {exits.length > 1 && (
                             <span className="text-xs text-muted-foreground"> ({exits.length} exits)</span>
                           )}
@@ -946,11 +1087,15 @@ export function ImportWizard({
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="__none">— none —</SelectItem>
-                                {it._candidates!.map((cand) => (
-                                  <SelectItem key={cand.id} value={cand.id}>
-                                    {labelOf(cand)}
-                                  </SelectItem>
-                                ))}
+                                {it._candidates!.map((cand) => {
+                                  const taken = mergingInto(cand.id, i);
+                                  return (
+                                    <SelectItem key={cand.id} value={cand.id} disabled={taken >= 0}>
+                                      {labelOf(cand)}
+                                      {taken >= 0 ? ` (row ${taken + 1})` : ""}
+                                    </SelectItem>
+                                  );
+                                })}
                               </SelectContent>
                             </Select>
                           )}
@@ -964,10 +1109,12 @@ export function ImportWizard({
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="create">Create new</SelectItem>
+                              <SelectItem value="create" disabled={it._blocked === "all"}>
+                                Create new
+                              </SelectItem>
                               <SelectItem
                                 value="merge"
-                                disabled={!it.matched_position_id}
+                                disabled={!it.matched_position_id || it._blocked != null}
                               >
                                 Merge
                               </SelectItem>
@@ -1000,7 +1147,11 @@ export function ImportWizard({
                 Back
               </Button>
               <Button onClick={commit} disabled={pending}>
-                {pending ? "Importing…" : "Commit import"}
+                {pending
+                  ? progress
+                    ? `Importing ${progress.done} / ${progress.total}…`
+                    : "Importing…"
+                  : `Commit — create ${counts.create} · merge ${counts.merge} · skip ${counts.skip}`}
               </Button>
             </div>
           </CardContent>

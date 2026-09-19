@@ -223,6 +223,11 @@ export function parseImportTime(
     return fromZonedTime(local, safeTz(tz)).toISOString();
   }
 
+  // A bare number is not a date. `new Date("45000")` is the year 45000, and an
+  // Excel serial or a Unix timestamp arriving as text would have been read as
+  // a time forty thousand years from now instead of refused.
+  if (/^[\d\s.,]+$/.test(s)) return null;
+
   // A month NAME is unambiguous, so these are still accepted — but the wall
   // clock has to be lifted out and re-applied in the account's zone. `new Date`
   // resolves a name-form string in the SYSTEM zone; reading the local getters

@@ -79,6 +79,7 @@ beforeEach(() => {
   toastSuccessMock.mockClear();
   commitImportMock.mockReset().mockResolvedValue({
     ok: true,
+    batch_id: "00000000-0000-4000-8000-000000000001",
     created: 1,
     merged: 0,
     skipped: 0,
@@ -102,8 +103,10 @@ describe("ambiguous cells are shown as refused, not silently defaulted", () => {
     await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
 
     const row = screen.getByText("EURUSD").closest("tr")!;
-    expect(within(row).getByText(/unreadable:/)).toHaveTextContent("qty");
-    expect(within(row).getByText(/unreadable:/)).toHaveTextContent("entry time");
+    // Both key cells are named once, in the line that also says why the row
+    // is held back.
+    expect(within(row).getByText(/unreadable/)).toHaveTextContent("qty");
+    expect(within(row).getByText(/unreadable/)).toHaveTextContent("entry time");
   });
 
   it("a clean, unambiguous row reads no rejected cells and imports as new/create", async () => {
@@ -143,7 +146,7 @@ describe("a missing exit time falls back to the entry's own timestamp, never to 
       ),
     );
     await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
-    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+    await user.click(screen.getByRole("button", { name: /^Commit/ }));
 
     await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
     const items = commitImportMock.mock.calls[0][0].items;
@@ -216,7 +219,7 @@ describe("classification against existing trades", () => {
     const row = screen.getByText("XAUUSD").closest("tr")!;
     expect(within(row).getByText("match")).toBeInTheDocument();
     expect(within(row).getByText("Merge")).toBeInTheDocument();
-    expect(within(row).getByText(/exit 2,100.*2,050/)).toBeInTheDocument();
+    expect(within(row).getByText(/exit 2100.*2050/)).toBeInTheDocument();
   });
 
   it("a statement corrects the profit and swap on a hand-entered trade", async () => {
@@ -304,7 +307,7 @@ describe("classification against existing trades", () => {
     await user.click(within(row).getByRole("combobox"));
     await user.click(await screen.findByRole("option", { name: "Skip" }));
 
-    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+    await user.click(screen.getByRole("button", { name: /^Commit/ }));
     await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
     expect(commitImportMock.mock.calls[0][0].items[0].decision).toBe("skip");
   });
@@ -321,7 +324,7 @@ describe("required-column guard and partial-failure reporting", () => {
 
     expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining("direction"));
     // Still on step 1 — no review table rendered.
-    expect(screen.queryByRole("button", { name: /Commit import/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Commit/ })).not.toBeInTheDocument();
   });
 
   it("names the failed rows and reason rather than a bare count", async () => {
@@ -340,7 +343,7 @@ describe("required-column guard and partial-failure reporting", () => {
       csvFile("broker.csv", "Symbol,Direction,Qty,Entry Price,Entry Time\nEURUSD,Buy,1,1.2,2026-01-05 10:00\n"),
     );
     await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
-    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+    await user.click(screen.getByRole("button", { name: /^Commit/ }));
 
     await vi.waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
     const call = toastErrorMock.mock.calls.find(([msg]) => String(msg).includes("1 row"))!;
@@ -389,7 +392,7 @@ describe("TradingView's list of trades", () => {
     expect(await screen.findByText(/TradingView export/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Reconcile/ }));
     expect(screen.getAllByText("XCUUSD")).toHaveLength(1);
-    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+    await user.click(screen.getByRole("button", { name: /^Commit/ }));
 
     await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
     const [item] = commitImportMock.mock.calls[0][0].items;
@@ -418,7 +421,7 @@ describe("TradingView's list of trades", () => {
       "America/New York",
     );
     await user.click(screen.getByRole("button", { name: /Reconcile/ }));
-    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+    await user.click(screen.getByRole("button", { name: /^Commit/ }));
 
     await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
     const [item] = commitImportMock.mock.calls[0][0].items;
@@ -434,7 +437,7 @@ describe("TradingView's list of trades", () => {
     await user.click(await screen.findByRole("combobox", { name: /Timezone of the TradingView chart/ }));
     await user.click(await screen.findByRole("option", { name: /Europe\/Belgrade \(account\)/ }));
     await user.click(screen.getByRole("button", { name: /Reconcile/ }));
-    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+    await user.click(screen.getByRole("button", { name: /^Commit/ }));
 
     await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
     const [item] = commitImportMock.mock.calls[0][0].items;
@@ -449,7 +452,7 @@ describe("TradingView's list of trades", () => {
     await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
 
     expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining("not in the instrument catalog"));
-    expect(screen.queryByRole("button", { name: /Commit import/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Commit/ })).not.toBeInTheDocument();
   });
 
   it("refuses an account in another currency than the export's money", async () => {
@@ -513,7 +516,7 @@ describe("TradingView partial exits", () => {
 
     expect(screen.getAllByText("XAUUSD")).toHaveLength(1);
     expect(screen.getByText(/2 exits/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+    await user.click(screen.getByRole("button", { name: /^Commit/ }));
 
     await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
     const items = commitImportMock.mock.calls[0][0].items;
@@ -589,7 +592,7 @@ describe("a trade already typed by hand, recognised without the time", () => {
     render(<ImportWizard accounts={[ACCOUNT]} candidates={TYPED} />);
     await upload(user, csvFile("backtest.csv", FILE));
     await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
-    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+    await user.click(screen.getByRole("button", { name: /^Commit/ }));
 
     await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
     const [item] = commitImportMock.mock.calls[0][0].items;
@@ -618,7 +621,7 @@ describe("a trade already typed by hand, recognised without the time", () => {
     // Two selects in the cell: the candidate picker first, the decision second.
     await user.click(within(row).getAllByRole("combobox")[0]);
     await user.click(await screen.findByText(/#9/));
-    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+    await user.click(screen.getByRole("button", { name: /^Commit/ }));
 
     await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
     const [item] = commitImportMock.mock.calls[0][0].items;
@@ -650,7 +653,7 @@ describe("the target comes from the file, the stop never does", () => {
       ),
     );
     await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
-    await user.click(screen.getByRole("button", { name: /Commit import/ }));
+    await user.click(screen.getByRole("button", { name: /^Commit/ }));
 
     await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
     const [item] = commitImportMock.mock.calls[0][0].items;
@@ -660,5 +663,142 @@ describe("the target comes from the file, the stop never does", () => {
   it("has no stop column at all — a stop pulled to breakeven would rewrite the risk", () => {
     render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} />);
     expect(screen.queryByText(/Stop/)).not.toBeInTheDocument();
+  });
+});
+
+describe("a merge is only offered when it is safe", () => {
+  const TYPED: MatchCandidate[] = [
+    {
+      id: "pos-typed",
+      instrument: "XAUUSD",
+      direction: "Long",
+      avgEntry: 1327.45,
+      avgExit: 1317.62,
+      openedAt: "2026-09-19T01:10:00Z",
+      totalFees: 0,
+      totalSwap: 0,
+      grossPl: -983.4,
+      netPl: -983.4,
+      accountId: "acc-1",
+      entryQty: 1,
+      tradeNo: 5,
+    },
+  ];
+  const HEAD = "Symbol,Direction,Qty,Entry Price,Entry Time,Exit Price,Exit Time,Profit\n";
+  const ROW = "XAUUSD,Buy,1,1327.45,2026-03-07 09:00,1317.62,2026-03-07 15:00,-983.40\n";
+
+  it("a row whose entry time cannot be read is skipped, and cannot be merged", async () => {
+    // Merged, it would replace the trade's fills with a row missing its entry.
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={TYPED} />);
+    await upload(
+      user,
+      csvFile("bt.csv", HEAD + "XAUUSD,Buy,1,1327.45,someday,1317.62,2026-03-07 15:00,-983.40\n"),
+    );
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+
+    const row = screen.getByText("XAUUSD").closest("tr")!;
+    expect(within(row).getByText(/cannot merge: unreadable entry time/)).toBeInTheDocument();
+    expect(within(row).getByText("Skip")).toBeInTheDocument();
+    await user.click(within(row).getByRole("combobox"));
+    expect(await screen.findByRole("option", { name: "Merge" })).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("two rows that are the same trade: the first merges, the second is named and skipped", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={TYPED} />);
+    await upload(user, csvFile("bt.csv", HEAD + ROW + ROW));
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+
+    const rows = screen.getAllByText("XAUUSD").map((c) => c.closest("tr")!);
+    expect(within(rows[0]).getByText("Merge")).toBeInTheDocument();
+    expect(within(rows[1]).getByText(/same trade as row 1/)).toBeInTheDocument();
+    expect(within(rows[1]).getByText("Skip")).toBeInTheDocument();
+    // And the second cannot be switched onto the same trade by hand.
+    await user.click(within(rows[1]).getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "Merge" }));
+    expect(toastErrorMock).toHaveBeenCalledWith("Row 1 already merges into this trade.");
+  });
+
+  it("an exact match that changes the size is not a duplicate", async () => {
+    // Same instrument, side, time and prices — only the size differs. It used to
+    // be called a duplicate and skipped, so the corrected size never landed.
+    const user = userEvent.setup({ delay: null });
+    const exact: MatchCandidate[] = [{ ...TYPED[0], openedAt: "2026-03-07T14:00:00Z" }];
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={exact} />);
+    await upload(
+      user,
+      csvFile("bt.csv", HEAD + "XAUUSD,Buy,2,1327.45,2026-03-07 09:00,1317.62,2026-03-07 15:00,-983.40\n"),
+    );
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+
+    const row = screen.getByText("XAUUSD").closest("tr")!;
+    expect(within(row).queryByText("duplicate")).not.toBeInTheDocument();
+    expect(within(row).getByText(/size 1→2/)).toBeInTheDocument();
+    expect(within(row).getByText("Merge")).toBeInTheDocument();
+  });
+
+  it("names the time column after the account's zone", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} />);
+    await upload(user, csvFile("bt.csv", HEAD + ROW));
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+    expect(screen.getByText("Time (America/New_York)")).toBeInTheDocument();
+  });
+});
+
+describe("a large file is committed in chunks", () => {
+  const HEAD = "Symbol,Direction,Qty,Entry Price,Entry Time,Exit Price,Exit Time\n";
+  const file = (n: number) =>
+    csvFile(
+      "big.csv",
+      HEAD +
+        Array.from({ length: n }, (_, i) => {
+          const day = String(1 + (i % 28)).padStart(2, "0");
+          const month = String(1 + Math.floor(i / 28)).padStart(2, "0");
+          return `EURUSD,Buy,1,1.1,2026-${month}-${day} 10:00,1.2,2026-${month}-${day} 14:00\n`;
+        }).join(""),
+    );
+
+  it("sends 50 rows, then the rest into the same batch, starting at row 51", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} />);
+    await upload(user, file(65));
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+    await user.click(screen.getByRole("button", { name: /^Commit/ }));
+
+    await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalledTimes(2));
+    const [first, second] = commitImportMock.mock.calls.map((c) => c[0]);
+    expect(first.items).toHaveLength(50);
+    expect(first.batch_id).toBeUndefined();
+    expect(second.items).toHaveLength(15);
+    expect(second).toMatchObject({ batch_id: "00000000-0000-4000-8000-000000000001", row_offset: 50 });
+  });
+
+  it("stops at a failed chunk and says how far it got", async () => {
+    const user = userEvent.setup({ delay: null });
+    commitImportMock
+      .mockResolvedValueOnce({
+        ok: true,
+        batch_id: "00000000-0000-4000-8000-000000000001",
+        created: 50,
+        merged: 0,
+        skipped: 0,
+        failed: 0,
+        errors: [],
+      })
+      .mockResolvedValueOnce({ ok: false, error: "timeout" });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} />);
+    await upload(user, file(65));
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+    await user.click(screen.getByRole("button", { name: /^Commit/ }));
+
+    await vi.waitFor(() =>
+      expect(toastErrorMock).toHaveBeenCalledWith(
+        "Imported 50 of 65 rows — the rest were not sent. Undo from history if needed.",
+        expect.objectContaining({ description: "timeout" }),
+      ),
+    );
+    expect(toastSuccessMock).not.toHaveBeenCalled();
   });
 });

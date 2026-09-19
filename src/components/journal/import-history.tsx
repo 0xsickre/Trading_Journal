@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { fmtInTz, DEFAULT_TZ } from "@/lib/journal/time";
+import { fmtInTz, DATE_TIME, DEFAULT_TZ } from "@/lib/journal/time";
 import type { ImportBatch } from "@/lib/journal/import-batches";
 import type { Account } from "@/lib/journal/types";
 import { undoImportBatch } from "@/app/(app)/import/actions";
@@ -71,7 +71,7 @@ export function ImportHistory({
                   {b.filename ?? "Unnamed"}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {fmtInTz(b.created_at, tzOf(b.account_id))} ·{" "}
+                  {fmtInTz(b.created_at, tzOf(b.account_id), DATE_TIME)} ·{" "}
                   {s.created ?? 0} new · {s.merged ?? 0} merged ·{" "}
                   {s.skipped ?? 0} skipped
                   {(s.failed ?? 0) > 0 && ` · ${s.failed} failed`}

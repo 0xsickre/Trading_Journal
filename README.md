@@ -133,7 +133,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,483 tests across 153 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,507 tests across 154 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -796,7 +796,43 @@ Two things the wizard refuses rather than guesses, both because guessing is sile
   separator as the decimal point. `1,234` is refused: it is 1234 to an American broker and 1.234 to a
   German one, and nothing in the cell decides which.
 
-Every refused cell is named on its own row in the preview (`unreadable: qty, fee`).
+Every refused cell is named on its own row in the preview (`unreadable: qty, fee`). **A row whose
+size, entry price or entry time could not be read is skipped and cannot be merged**, and it says so
+(`cannot merge: unreadable entry time`). Merged, it would replace a trade's fills with a guess. It
+may still be created by hand if at least one fill was read. A fill of zero size is never built.
+
+### A merge that can always be undone
+
+A merge replaces a trade's fills, so every step is ordered to keep the way back open:
+
+1. **Read what is there first**: the fills and the trade itself. A failed read stops the row. It used
+   to become an empty snapshot, and undo would later "restore" nothing.
+2. **Write the audit row before anything changes.** It holds the only copy of the old fills, and the
+   trade's previous status (`parsed.prev`), so a missed plan comes back missed.
+3. **Replace the fills and update the trade.** If that fails, the old fills and fields are put back and
+   the audit row is removed. If even that fails, the audit row stays and the error says to undo the
+   import.
+
+**What a merge refuses:**
+- a row with no target;
+- a row with no fill (it would delete every fill of the trade);
+- **a second row into the same trade.**
+
+The review enforces the same rules. It sends the first row in the file to the merge and names the rest
+(`same trade as row 1`), and it will not let two rows point at one trade.
+
+**An exact match that changes something is not a duplicate.** Size and time are compared on every
+match, prices within a relative tolerance, and prices are shown as the file wrote them. The chart
+zone the times are shown in heads the time column.
+
+**Large files go in chunks** of 50 rows into one batch (`batch_id`, `row_offset`), with the progress
+on the button. A chunk that fails stops the commit and says how many rows landed. The batch's summary
+is the running total (`mergeImportSummary`).
+
+**Undo goes newest first.** If a newer import merged into a trade this one created or changed, undo
+refuses and names the newer file: its snapshot is this import's result. Audit rows are read in the
+order they were written, and a trade is restored from its **earliest** snapshot. A skipped row names
+no trade, so it can no longer stand in for a merge.
 
 ### Recognising a trade you already typed
 

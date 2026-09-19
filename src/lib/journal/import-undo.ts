@@ -28,6 +28,16 @@ export type UndoAuditRow = {
   target_written?: boolean | null;
   /** Whether THIS row wrote MAE/MFE onto a position that had none — the same rule as the target. */
   excursion_written?: boolean | null;
+  /**
+   * The position's status and review flag before THIS row merged into it.
+   *
+   * Recorded since the merge order was fixed, inside the audit row's `parsed`
+   * jsonb. Without it undo recomputed the status from the restored fills, so a
+   * MISSED plan came back as `planned`. Absent on older batches, which then
+   * fall back to that recomputation.
+   */
+  prev_status?: string | null;
+  prev_needs_review?: boolean | null;
 };
 
 export type UndoPlan<T = unknown> = {
@@ -35,7 +45,15 @@ export type UndoPlan<T = unknown> = {
   deleteIds: string[];
   /** Positions to restore, with the fills to put back and whether the target
    *  and the MAE/MFE this import wrote have to go back to empty. */
-  restore: { positionId: string; executions: T[]; clearTarget: boolean; clearExcursion: boolean }[];
+  restore: {
+    positionId: string;
+    executions: T[];
+    clearTarget: boolean;
+    clearExcursion: boolean;
+    /** The status to put back, when the audit row recorded one. */
+    prevStatus: string | null;
+    prevNeedsReview: boolean | null;
+  }[];
   /** Merged positions whose previous fills were never captured. */
   unrestorableIds: string[];
 };
@@ -51,24 +69,46 @@ export function planUndo<T = unknown>(
     unrestorableIds: [],
   };
 
-  const seen = new Set<string>();
-
+  /**
+   * Every row that touched one position, IN THE ORDER THEY WERE WRITTEN — the
+   * caller hands rows oldest first. More than one row can merge into the same
+   * trade (older batches allowed it), and then only the FIRST row's snapshot is
+   * the state before the import; a later one holds what the earlier row wrote.
+   * This used to keep whichever row came first by uuid, which is random, and
+   * could hand back the import's own fills as "the original".
+   *
+   * The two "this import wrote it" flags are the opposite: any row having
+   * written the target means the target is the import's, so they are OR-ed.
+   */
+  const byPosition = new Map<string, UndoAuditRow[]>();
   for (const row of rows) {
     const pid = row.matched_position_id;
     if (!pid) continue; // skipped row
     if (created.has(pid)) continue; // handled by deleteIds
-    if (seen.has(pid)) continue; // one restore per position
-    seen.add(pid);
+    const list = byPosition.get(pid) ?? [];
+    list.push(row);
+    byPosition.set(pid, list);
+  }
 
-    if (row.prev_executions == null) {
+  for (const [pid, list] of byPosition) {
+    // The earliest row WITH a snapshot is the state before the import. A row
+    // without one is a skip that still named the trade — the wizard sends the
+    // matched id on a duplicate — and it used to sit first in this list, so
+    // the merge after it was reported unrestorable and never put back. Only a
+    // position no row ever snapshotted (a batch older than the column) is
+    // unrestorable.
+    const first = list.find((r) => r.prev_executions != null);
+    if (!first) {
       plan.unrestorableIds.push(pid);
       continue;
     }
     plan.restore.push({
       positionId: pid,
-      executions: (row.prev_executions as T[]) ?? [],
-      clearTarget: row.target_written === true,
-      clearExcursion: row.excursion_written === true,
+      executions: (first.prev_executions as T[]) ?? [],
+      clearTarget: list.some((r) => r.target_written === true),
+      clearExcursion: list.some((r) => r.excursion_written === true),
+      prevStatus: first.prev_status ?? null,
+      prevNeedsReview: first.prev_needs_review ?? null,
     });
   }
 

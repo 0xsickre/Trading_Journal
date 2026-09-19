@@ -216,6 +216,13 @@ export const commitImportSchema = z.object({
   account_id: z.uuid().nullable(),
   filename: z.string(),
   items: z.array(z.unknown()),
+  /**
+   * A large file is committed in chunks, each within the platform's time limit.
+   * The first chunk opens the batch; the rest name it, with the file row the
+   * chunk starts at so every error still names the row of the FILE.
+   */
+  batch_id: z.uuid().optional(),
+  row_offset: z.number().int().min(0).optional(),
 });
 
 /**

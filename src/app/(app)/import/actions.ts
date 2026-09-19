@@ -5,11 +5,16 @@ import { revalidateTrades } from "@/lib/journal/revalidate";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
-import { selectAllPages } from "@/lib/supabase/paginate";
+import { selectAllByIds, selectAllPages } from "@/lib/supabase/paginate";
 
 import { computeStatus } from "@/lib/journal/trade-lifecycle";
 import { normalizeInstrumentSymbol } from "@/lib/journal/instrument-aliases";
 import { planUndo } from "@/lib/journal/import-undo";
+import {
+  mergeImportSummary,
+  mergeRefusal,
+  type ImportSummary,
+} from "@/lib/journal/import-commit";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
 import { getAccountCurrency } from "@/lib/journal/accounts";
 import {
@@ -76,35 +81,98 @@ export type CommitInput = {
   account_id: string | null;
   filename: string;
   items: ImportItem[];
+  /** Set on every chunk after the first: the batch the first chunk opened. */
+  batch_id?: string;
+  /** The file row this chunk starts at, so errors name the row of the file. */
+  row_offset?: number;
 };
+
+export type CommitResult =
+  | {
+      ok: true;
+      batch_id: string;
+      created: number;
+      merged: number;
+      skipped: number;
+      failed: number;
+      errors: ImportSummary["errors"];
+    }
+  | { ok: false; error: string };
 
 function statusOf(execs: ImportExec[]) {
   return computeStatus(execs);
 }
 
-export async function commitImport(input: CommitInput) {
+/** The position fields a merge may change, as they stood before it. */
+type PositionBefore = {
+  status: string;
+  needs_review: boolean;
+  gross_pnl_override: number | null;
+  target_price: number | null;
+  max_drawdown_price: number | null;
+  max_profit_price: number | null;
+  excursion_source: string | null;
+};
+
+export async function commitImport(input: CommitInput): Promise<CommitResult> {
   const envelope = commitImportSchema.safeParse(input);
   if (!envelope.success) {
     return { ok: false as const, error: firstIssue(envelope.error) };
   }
 
   const supabase = await createClient();
+  const rowOffset = input.row_offset ?? 0;
 
-  const { data: batch, error: batchErr } = await supabase
-    .from("tj_import_batches")
-    .insert({
-      account_id: input.account_id,
-      filename: input.filename,
-      summary: { total: input.items.length },
-    })
-    .select("id")
-    .single();
-  if (batchErr || !batch)
-    return { ok: false as const, error: batchErr?.message ?? "Batch failed" };
+  // The batch: opened by the first chunk, continued by the rest. A chunk that
+  // names a batch must name one of THIS account — the summary and the undo are
+  // per batch, and two accounts' rows in one would undo together.
+  let batchId: string;
+  let prevSummary: unknown = null;
+  // Trades a row of THIS batch already merged into, across chunks.
+  const mergedInBatch = new Set<string>();
+  if (input.batch_id) {
+    const { data: existing, error } = await supabase
+      .from("tj_import_batches")
+      .select("id, account_id, summary")
+      .eq("id", input.batch_id)
+      .maybeSingle();
+    if (error) return { ok: false as const, error: error.message };
+    if (!existing || existing.account_id !== input.account_id) {
+      return { ok: false as const, error: "Import batch not found for this account." };
+    }
+    batchId = existing.id;
+    prevSummary = existing.summary;
+    try {
+      const done = await selectAllPages<{ matched_position_id: string | null }>((from, to) =>
+        supabase
+          .from("tj_import_rows")
+          .select("matched_position_id, id")
+          .eq("batch_id", batchId)
+          .not("prev_executions", "is", null)
+          .order("id")
+          .range(from, to),
+      );
+      for (const r of done) if (r.matched_position_id) mergedInBatch.add(r.matched_position_id);
+    } catch (e) {
+      return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+    }
+  } else {
+    const { data: batch, error: batchErr } = await supabase
+      .from("tj_import_batches")
+      .insert({
+        account_id: input.account_id,
+        filename: input.filename,
+        summary: { total: 0 },
+      })
+      .select("id")
+      .single();
+    if (batchErr || !batch)
+      return { ok: false as const, error: batchErr?.message ?? "Batch failed" };
+    batchId = batch.id;
+  }
 
-  // One lookup for the whole batch — the snapshot is per-position but the specs
+  // One lookup for the whole chunk — the snapshot is per-position but the specs
   // are shared, and a per-row query would be a round trip per imported trade.
-  // Once per import, not per row: the account's currency is the same for the whole batch.
   const accountCurrency = await getAccountCurrency(input.account_id);
   const specs = await getInstrumentSpecs(
     input.items.map((i) => normalizeInstrumentSymbol(i.instrument)),
@@ -116,34 +184,40 @@ export async function commitImport(input: CommitInput) {
     failed = 0;
   // Why each row failed. Swallowing the message left the user staring at
   // "3 failed" with nothing to act on.
-  const errors: { row: number; instrument: string | null; error: string }[] = [];
+  const errors: ImportSummary["errors"] = [];
+
+  /** The audit row. Every path writes one; a merge writes it BEFORE it changes anything. */
+  const audit = (item: ImportItem, extra: Record<string, unknown>) =>
+    supabase
+      .from("tj_import_rows")
+      .insert({
+        batch_id: batchId,
+        raw: item.raw,
+        parsed: {
+          instrument: item.instrument,
+          direction: item.direction,
+          executions: item.executions,
+          ...(extra.prev ? { prev: extra.prev } : {}),
+        } as unknown as Json,
+        match_status: item.match_status,
+        matched_position_id: (extra.matched_position_id as string | null) ?? null,
+        prev_executions: (extra.prev_executions as Json | undefined) ?? null,
+        prev_gross_pnl_override: (extra.prev_gross_pnl_override as number | null | undefined) ?? null,
+        target_written: extra.target_written === true,
+        excursion_written: extra.excursion_written === true,
+      })
+      .select("id")
+      .single();
 
   for (const [index, item] of input.items.entries()) {
-    let matchedId = item.matched_position_id;
     // Set once a position exists, so a later failure can take it back out
     // instead of leaving an empty shell behind.
     let createdPositionId: string | null = null;
-    // Fills this row displaced, kept so `undoImportBatch` can put them back.
-    let replacedExecs: SnapshotExec[] | null = null;
-    // The result the merge overwrote, kept for undo.
-    let prevOverride: number | null = null;
-    // Whether this row filled in an empty target, which undo has to empty again.
-    let targetWritten = false;
-    // Whether this row wrote MAE/MFE onto a trade that had none — undo empties them.
-    let excursionWritten = false;
-    // Counted only once the audit row has landed too. The counters used to be
-    // bumped inline, which was harmless while the audit insert could not fail —
-    // now that it throws, an inline bump would count the same row as merged AND
-    // as failed, and the four totals would no longer sum to the batch.
-    let outcome: "created" | "merged" | "skipped" | null = null;
 
     try {
       // Per row, inside the try, so a bad cell costs that row and not the file.
-      // Until now nothing checked the numbers on this path at all: a mapping
-      // that lands the P&L column on `price` produces negative fills, and the
-      // view then prices them into a confident wrong figure. `tj_executions`
-      // now carries `price > 0` as a CHECK too — this is the copy that names
-      // the row.
+      // `tj_executions` carries `price > 0` as a CHECK too — this is the copy
+      // that names the row.
       const parsed = importItemSchema.safeParse(item);
       if (!parsed.success) throw new Error(firstIssue(parsed.error));
 
@@ -156,7 +230,7 @@ export async function commitImport(input: CommitInput) {
             direction: item.direction,
             account_id: input.account_id,
             source: "import",
-            import_batch_id: batch.id,
+            import_batch_id: batchId,
             needs_review: item.executions.length === 0,
             status: statusOf(item.executions),
             gross_pnl_override: item.gross_pnl_override,
@@ -175,7 +249,6 @@ export async function commitImport(input: CommitInput) {
         if (error || !pos) {
           throw new Error(error?.message ?? "Could not create the position.");
         }
-        matchedId = pos.id;
         createdPositionId = pos.id;
         if (item.executions.length > 0) {
           const { error: exErr } = await supabase.rpc("tj_replace_executions", {
@@ -184,134 +257,162 @@ export async function commitImport(input: CommitInput) {
           });
           if (exErr) throw new Error(exErr.message);
         }
-        outcome = "created";
-      } else if (item.decision === "merge" && matchedId) {
-        const pid: string = matchedId;
-        // Replace ONLY the objective fills; subjective position fields untouched.
-        // The snapshot is still taken, but for undo (see undoImportBatch) — the
-        // replacement itself is atomic now, so it needs no rollback of its own.
-        const { data: prevExecs } = await supabase
-          .from("tj_executions")
-          .select("side,price,qty,executed_at,fee,swap_funding,source")
-          .eq("position_id", pid);
-        replacedExecs = (prevExecs ?? []) as unknown as SnapshotExec[];
-
-        // The result that stood before the import, so undo can put it back. The
-        // same reason `prev_executions` has existed since 20260727122000: a
-        // merge PERMANENTLY overwrites what a human entered, so an undo without
-        // a snapshot is not a restore but a second edit.
-        const { data: prevPos } = await supabase
-          .from("tj_positions")
-          .select("gross_pnl_override, target_price, max_drawdown_price, max_profit_price, excursion_source")
-          .eq("id", pid)
-          .maybeSingle();
-        prevOverride = prevPos?.gross_pnl_override ?? null;
-        // Only onto an empty target, and recorded so undo can empty it again.
-        targetWritten = item.target_price != null && prevPos?.target_price == null;
-        // MAE/MFE the same way, except that one an earlier TradingView import
-        // wrote is rewritten: the fills it followed have just been replaced.
-        const prevEmpty = prevPos?.max_drawdown_price == null && prevPos?.max_profit_price == null;
-        const writeExcursion =
-          item.excursion != null && (prevEmpty || prevPos?.excursion_source === "tradingview");
-        excursionWritten = writeExcursion && prevEmpty;
-
-        const { error: exErr } = await supabase.rpc("tj_replace_executions", {
-          p_position_id: pid,
-          p_executions: item.executions.map((e) => ({ ...e, source: "import" })),
-        });
-        if (exErr) throw new Error(exErr.message);
-        const { error: stErr } = await supabase
-          .from("tj_positions")
-          .update({
-            status: statusOf(item.executions),
-            needs_review: item.executions.length === 0,
-            // The statement is authoritative for money. A column that is not mapped
-            // leaves the existing value alone rather than clearing it — an
-            // import with no profit column must not wipe a hand-entered result.
-            ...(item.gross_pnl_override != null
-              ? { gross_pnl_override: item.gross_pnl_override }
-              : {}),
-            ...(targetWritten ? { target_price: item.target_price } : {}),
-            ...(writeExcursion && item.excursion
-              ? {
-                  max_drawdown_price: item.excursion.mae_price,
-                  max_profit_price: item.excursion.mfe_price,
-                  excursion_source: "tradingview",
-                }
-              : {}),
-          })
-          .eq("id", pid);
-        // Thrown, not ignored: the fills have already been replaced by the line
-        // above, so a swallowed failure here leaves the position carrying new
-        // fills under its old status — closed fills on a row still reading
-        // `open`, which every stat then reads as an unfinished trade.
-        if (stErr) throw new Error(stErr.message);
-        outcome = "merged";
+        const { error: auditErr } = await audit(item, { matched_position_id: pos.id });
+        if (auditErr) throw new Error(auditErr.message);
+        created++;
+      } else if (item.decision === "merge") {
+        const refusal = mergeRefusal(item, mergedInBatch);
+        if (refusal) throw new Error(refusal);
+        const pid = item.matched_position_id!;
+        await mergeRow(item, pid);
+        mergedInBatch.add(pid);
+        merged++;
       } else {
-        outcome = "skipped";
+        // A skipped row names no trade. It used to carry the matched id, and
+        // undo then read it as a merge with no snapshot — which could stop the
+        // real merge into that trade from being put back.
+        const { error: auditErr } = await audit(item, { matched_position_id: null });
+        if (auditErr) throw new Error(auditErr.message);
+        skipped++;
       }
-
-      // The audit row is the serious one. `prev_executions` is the ONLY record
-      // of the fills a merge displaced, and by this point they are already
-      // gone from `tj_executions`. Swallowing this error made undo permanently
-      // impossible for that row — `undoImportBatch` would report it under
-      // `unrestorableMerges` with nothing to say the cause was a failed write
-      // rather than a batch predating the snapshot column.
-      const { error: auditErr } = await supabase.from("tj_import_rows").insert({
-        batch_id: batch.id,
-        raw: item.raw,
-        parsed: {
-          instrument: item.instrument,
-          direction: item.direction,
-          executions: item.executions,
-        },
-        match_status: item.match_status,
-        matched_position_id: matchedId,
-        prev_executions: replacedExecs,
-        prev_gross_pnl_override: prevOverride,
-        target_written: targetWritten,
-        excursion_written: excursionWritten,
-      });
-      if (auditErr) throw new Error(auditErr.message);
-
-      if (outcome === "created") created++;
-      else if (outcome === "merged") merged++;
-      else skipped++;
     } catch (e) {
       failed++;
       // A position inserted moments ago whose fills then failed is not a trade,
-      // it is debris. createTrade already rolls this back; this path did not,
-      // and the orphan would survive as a phantom row in the journal.
+      // it is debris.
       if (createdPositionId) {
         await supabase.from("tj_positions").delete().eq("id", createdPositionId);
       }
       errors.push({
-        row: index + 1,
+        row: rowOffset + index + 1,
         instrument: item.instrument,
         error: e instanceof Error ? e.message : String(e),
       });
     }
   }
 
+  /**
+   * One merge, in the order that keeps undo possible at every step.
+   *
+   *   1. Read what is there — the fills and the position — and refuse to go on
+   *      if either read fails. A failed read used to become an empty snapshot,
+   *      and undo would later "restore" nothing over the import's fills.
+   *   2. Write the audit row FIRST. It holds the only copy of what is about to
+   *      be replaced; written last, a failure between the replace and the
+   *      audit left the trade changed with no way back.
+   *   3. Replace the fills, then update the position.
+   *   4. If 3 fails, put back what 1 read. If that works the audit row goes
+   *      too, and the row reports its error with the trade as it was. If even
+   *      that fails, the audit row stays, so undoing the import still restores
+   *      the trade — and the error says so.
+   */
+  async function mergeRow(item: ImportItem, pid: string) {
+    const { data: prevExecs, error: execErr } = await supabase
+      .from("tj_executions")
+      .select("side,price,qty,executed_at,fee,swap_funding,source")
+      .eq("position_id", pid);
+    if (execErr) throw new Error(execErr.message);
+    const snapshot = (prevExecs ?? []) as unknown as SnapshotExec[];
+
+    const { data: prevPos, error: posErr } = await supabase
+      .from("tj_positions")
+      .select(
+        "status, needs_review, gross_pnl_override, target_price, max_drawdown_price, max_profit_price, excursion_source",
+      )
+      .eq("id", pid)
+      .maybeSingle();
+    if (posErr) throw new Error(posErr.message);
+    if (!prevPos) throw new Error("Trade not found — it may have been deleted since the file was read.");
+    const before = prevPos as PositionBefore;
+
+    // Only onto an empty target, and recorded so undo can empty it again.
+    const targetWritten = item.target_price != null && before.target_price == null;
+    // MAE/MFE the same way, except that one an earlier TradingView import
+    // wrote is rewritten: the fills it followed are being replaced.
+    const prevEmpty = before.max_drawdown_price == null && before.max_profit_price == null;
+    const writeExcursion =
+      item.excursion != null && (prevEmpty || before.excursion_source === "tradingview");
+
+    const { data: auditRow, error: auditErr } = await audit(item, {
+      matched_position_id: pid,
+      prev_executions: snapshot,
+      prev_gross_pnl_override: before.gross_pnl_override,
+      target_written: targetWritten,
+      excursion_written: writeExcursion && prevEmpty,
+      prev: { status: before.status, needs_review: before.needs_review },
+    });
+    if (auditErr || !auditRow) throw new Error(auditErr?.message ?? "Could not record the merge.");
+
+    try {
+      const { error: exErr } = await supabase.rpc("tj_replace_executions", {
+        p_position_id: pid,
+        p_executions: item.executions.map((e) => ({ ...e, source: "import" })),
+      });
+      if (exErr) throw new Error(exErr.message);
+      const { error: stErr } = await supabase
+        .from("tj_positions")
+        .update({
+          status: statusOf(item.executions),
+          needs_review: item.executions.length === 0,
+          // The statement is authoritative for money. A column that is not
+          // mapped leaves the existing value alone rather than clearing it.
+          ...(item.gross_pnl_override != null ? { gross_pnl_override: item.gross_pnl_override } : {}),
+          ...(targetWritten ? { target_price: item.target_price } : {}),
+          ...(writeExcursion && item.excursion
+            ? {
+                max_drawdown_price: item.excursion.mae_price,
+                max_profit_price: item.excursion.mfe_price,
+                excursion_source: "tradingview",
+              }
+            : {}),
+        })
+        .eq("id", pid);
+      if (stErr) throw new Error(stErr.message);
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      const { error: backErr } = await supabase.rpc("tj_replace_executions", {
+        p_position_id: pid,
+        p_executions: snapshot.map((x) => ({ ...x, source: x.source ?? "manual" })),
+      });
+      const { error: posBackErr } = backErr
+        ? { error: backErr }
+        : await supabase.from("tj_positions").update(before).eq("id", pid);
+      if (backErr || posBackErr) {
+        throw new Error(`${reason} — the trade could not be put back; undo this import to restore the trade.`);
+      }
+      await supabase.from("tj_import_rows").delete().eq("id", auditRow.id);
+      throw new Error(reason);
+    }
+  }
+
+  const summary = mergeImportSummary(prevSummary, {
+    total: input.items.length,
+    created,
+    merged,
+    skipped,
+    failed,
+    errors,
+  });
   await supabase
     .from("tj_import_batches")
-    .update({
-      summary: {
-        total: input.items.length,
-        created,
-        merged,
-        skipped,
-        failed,
-        // Kept on the batch so a failure stays diagnosable after the toast.
-        errors: errors.slice(0, 50),
-      },
-    })
-    .eq("id", batch.id);
+    // Kept on the batch so a failure stays diagnosable after the toast.
+    .update({ summary: summary as unknown as Json })
+    .eq("id", batchId);
 
   revalidatePath("/journal");
   revalidateTrades();
-  return { ok: true as const, created, merged, skipped, failed, errors };
+  return { ok: true as const, batch_id: batchId, created, merged, skipped, failed, errors };
 }
+
+/** An audit row as undo reads it. */
+type AuditRead = {
+  matched_position_id: string | null;
+  prev_executions: unknown;
+  prev_gross_pnl_override: number | null;
+  target_written: boolean | null;
+  excursion_written: boolean | null;
+  parsed: unknown;
+  created_at: string;
+};
 
 export type UndoResult =
   | {
@@ -343,7 +444,7 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
 
   const { data: batch } = await supabase
     .from("tj_import_batches")
-    .select("id")
+    .select("id, created_at")
     .eq("id", batchId)
     .maybeSingle();
   if (!batch) return { ok: false, error: "Import batch not found." };
@@ -364,13 +465,7 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
   // Both end with the user reading `ok` and a count that understates what was
   // actually left behind.
   let createdRows: { id: string }[];
-  let rows: {
-    matched_position_id: string | null;
-    prev_executions: unknown;
-    prev_gross_pnl_override?: number | null;
-    target_written?: boolean | null;
-    excursion_written?: boolean | null;
-  }[];
+  let rows: AuditRead[];
   try {
     [createdRows, rows] = await Promise.all([
       selectAllPages<{ id: string }>((from, to) =>
@@ -381,20 +476,18 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
           .order("id")
           .range(from, to),
       ),
-      selectAllPages<{
-        matched_position_id: string | null;
-        prev_executions: unknown;
-        prev_gross_pnl_override: number | null;
-        target_written: boolean | null;
-        excursion_written: boolean | null;
-      }>(
+      // Oldest first: `planUndo` takes a position's EARLIEST snapshot as the
+      // state before the import. Ordered by id alone, which is a random uuid,
+      // a later row's snapshot — the import's own fills — could come first.
+      selectAllPages<AuditRead>(
         (from, to) =>
           supabase
             .from("tj_import_rows")
             .select(
-              "matched_position_id, prev_executions, prev_gross_pnl_override, target_written, excursion_written, id",
+              "matched_position_id, prev_executions, prev_gross_pnl_override, target_written, excursion_written, parsed, created_at, id",
             )
             .eq("batch_id", batchId)
+            .order("created_at")
             .order("id")
             .range(from, to),
       ),
@@ -403,7 +496,43 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 
-  const plan = planUndo<SnapshotExec>(rows, new Set(createdRows.map((p) => p.id)));
+  const createdIds = new Set(createdRows.map((p) => p.id));
+  const plan = planUndo<SnapshotExec>(
+    rows.map((r) => {
+      const prev = (r.parsed as { prev?: { status?: string; needs_review?: boolean } } | null)?.prev;
+      return { ...r, prev_status: prev?.status ?? null, prev_needs_review: prev?.needs_review ?? null };
+    }),
+    createdIds,
+  );
+
+  /**
+   * Newest first. A newer import that merged into a trade this one created or
+   * changed took its snapshot of THIS import's result; undoing this one first
+   * would put back a state the newer one's undo then overwrites with this
+   * import's fills. So the newer one has to go first, and this says which.
+   */
+  const touched = [...plan.deleteIds, ...plan.restore.map((r) => r.positionId)];
+  try {
+    const later = await selectAllByIds<{ batch_id: string; tj_import_batches: { filename: string | null; created_at: string } | null }, string>(
+      touched,
+      (chunk, from, to) =>
+        supabase
+          .from("tj_import_rows")
+          .select("batch_id, tj_import_batches!inner(filename, created_at), id")
+          .in("matched_position_id", chunk)
+          .not("prev_executions", "is", null)
+          .neq("batch_id", batchId)
+          .gt("tj_import_batches.created_at", batch.created_at)
+          .order("id")
+          .range(from, to),
+    );
+    if (later.length > 0) {
+      const name = later[0].tj_import_batches?.filename ?? "a later import";
+      return { ok: false, error: `Undo the newer import first: ${name}.` };
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 
   /**
    * The result a merge overwrote, per position.
@@ -419,9 +548,11 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
    */
   const prevOverrides = new Map<string, number | null>();
   for (const r of rows) {
-    if (r.matched_position_id && !createdRows.some((c) => c.id === r.matched_position_id)) {
-      prevOverrides.set(r.matched_position_id, r.prev_gross_pnl_override ?? null);
-    }
+    // The EARLIEST snapshotted row per position, as for the fills: a later
+    // row's "previous result" is what an earlier row of this import wrote.
+    const pid = r.matched_position_id;
+    if (!pid || createdIds.has(pid) || r.prev_executions == null) continue;
+    if (!prevOverrides.has(pid)) prevOverrides.set(pid, r.prev_gross_pnl_override ?? null);
   }
 
   // ONE CALL, ONE TRANSACTION.
@@ -442,7 +573,7 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
   // The database function only carries that decision out.
   const { error: undoErr } = await supabase.rpc("tj_undo_import_batch", {
     p_batch_id: batchId,
-    p_restore: plan.restore.map(({ positionId, executions, clearTarget, clearExcursion }) => ({
+    p_restore: plan.restore.map(({ positionId, executions, clearTarget, clearExcursion, prevStatus, prevNeedsReview }) => ({
       position_id: positionId,
       // `source` is carried back. The snapshot holds it, and the function
       // collapses an absent one to `manual` — so listing the other six fields by
@@ -457,8 +588,10 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
         swap_funding: e.swap_funding,
         source: e.source ?? "manual",
       })),
-      status: statusOf(executions),
-      needs_review: executions.length === 0,
+      // The status the trade HAD, when the merge recorded it: computed from the
+      // restored fills, a missed plan came back as planned.
+      status: prevStatus ?? statusOf(executions),
+      needs_review: prevNeedsReview ?? executions.length === 0,
       restore_override: prevOverrides.has(positionId),
       gross_pnl_override: prevOverrides.get(positionId) ?? null,
       // Decided in `planUndo`, like everything else about what an undo puts

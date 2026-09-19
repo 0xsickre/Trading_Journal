@@ -1159,3 +1159,31 @@ aplikacija nije pamtila nijednu stranicu između klikova (Next podrazumevano: 0 
   - Istoimeni nalozi se razlikuju.
 - **Testovi:** svaka greška ima svoj test (`report-fixes.test.ts`, `scope.test.ts`, render testovi za
   workbench i filtere).
+
+### Import — tačno uparivanje i spajanje koje se uvek može poništiti (19.09.2026.)
+
+Nastavak primopredaje `plan_ostatak.md` (obrisana kad je sve urađeno).
+
+**Uparivanje:**
+- Strogo uparivanje ne prelazi na drugi nalog.
+- Novac se poredi na istoj osnovi (`pnlBasis`: TradingView neto, broker bruto).
+- Goli broj nije vreme.
+- Veličina i vreme se porede na svakom poklapanju, uz relativnu toleranciju.
+- Cene se prikazuju onako kako ih je fajl zapisao.
+
+**Spajanje:**
+- Pre bilo kakve izmene čita se stanje trejda i upisuje audit red sa starim fill-ovima i statusom
+  (`parsed.prev`).
+- Ako zamena padne, stari fill-ovi i polja se vraćaju.
+- Odbija se spajanje:
+  - bez fill-ova (brisalo bi sve fill-ove trejda),
+  - bez cilja,
+  - drugog reda u isti trejd.
+- Red sa nečitljivom veličinom, cenom ili vremenom ulaza se preskače i ne može se spojiti.
+
+**Upis i poništavanje:**
+- Upis ide u delovima od 50 redova u isti batch, sa napretkom na dugmetu.
+- Undo čita redove po redosledu upisa i vraća najraniji snimak.
+- Preskočen red više ne imenuje trejd, pa ne kvari vraćanje.
+- Undo odbija da poništi uvoz dok noviji uvoz nad istim trejdom nije poništen.
+- Istorija uvoza prikazuje datum kao dd/MM/yyyy.
