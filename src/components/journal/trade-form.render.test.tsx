@@ -442,7 +442,9 @@ describe("lifecycle buttons only appear where the action can actually succeed", 
     expect(screen.queryByRole("button", { name: /Vrati u planned/ })).not.toBeInTheDocument();
   });
 
-  it("a saved planned trade with no fills offers Move to active and Mark missed, not Restore", async () => {
+  it("a saved planned trade with no fills offers Mark missed, and no way to set the phase by hand", async () => {
+    // Planned or active is what the fills say. The only lifecycle fact the
+    // fills cannot know is that a plan was MISSED, so that is the only button.
     const user = userEvent.setup({ delay: null });
     render(
       <TradeForm
@@ -453,9 +455,40 @@ describe("lifecycle buttons only appear where the action can actually succeed", 
       />,
     );
     await goToPlanTab(user);
-    expect(screen.getByRole("button", { name: /Move to active trade/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Mark as missed/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Move to active trade/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Trade phase")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Vrati u planned/ })).not.toBeInTheDocument();
+  });
+
+  it("the execution tab is never locked — fills can be logged straight away", async () => {
+    render(
+      <TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} />,
+    );
+    expect(screen.getByRole("tab", { name: /Execution/ })).not.toBeDisabled();
+  });
+
+  it("puts the playbook right after the account and the instrument, before the prices", async () => {
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        playbooks={[{
+          id: "pb1", name: "WPO3", description: null, a_plus_criteria: null,
+          default_risk_pct: null, sort_order: 0, is_active: true, sections: [], rules: [],
+        } as never]}
+      />,
+    );
+    const text = document.body.textContent ?? "";
+    const account = text.indexOf("Account");
+    const instrument = text.indexOf("Instrument");
+    const playbook = text.search(/Playbook/);
+    const entry = text.indexOf("Planned Entry Price");
+    expect(account).toBeGreaterThan(-1);
+    expect(account).toBeLessThan(instrument);
+    expect(instrument).toBeLessThan(playbook);
+    expect(playbook).toBeLessThan(entry);
   });
 
   it("a trade with a valid entry fill is already active — none of the three buttons apply", async () => {

@@ -98,7 +98,7 @@ const BASE_TABS: FormTab[] = [
       {
         id: "meta",
         title: "Trade",
-        description: "What, on which account, at which phase.",
+        description: "Which account, and what instrument.",
         fields: [
           { name: "instrument", label: "Instrument", type: "instrument" },
         ],

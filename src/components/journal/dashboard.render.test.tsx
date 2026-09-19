@@ -259,3 +259,51 @@ describe("the shapes a book can take, on screen", () => {
     expect(await scoreHeadline()).toBe("63");
   });
 });
+
+/**
+ * A period that silently drops trades reads as a book that does not have them.
+ * That is what happened to merged backtest trades: closed in 2018, outside any
+ * window counted back from today, gone from every figure with nothing on screen
+ * saying it was the WINDOW and not the trade.
+ */
+describe("trades the period leaves out", () => {
+  it("says how many are older than the period, and offers to show them", () => {
+    // TODAY_KEY is the book's last close, so 90 days covers it; moving "today"
+    // a year on leaves the whole book outside the window — except nothing, so
+    // the dashboard opens on "all" by itself.
+    render(
+      <Dashboard
+        trades={rowsOf(BOOK)}
+        accounts={[ACCOUNT]}
+        todayKey="2027-03-13"
+        timezone={ACCOUNT.timezone}
+      />,
+    );
+    // Opened on "all": nothing closed within 90 days of that today.
+    expect(screen.queryByText(/older than the selected period/)).not.toBeInTheDocument();
+  });
+
+  it("names the hidden trades when a narrower period is chosen", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup({ delay: null });
+    // The book closes 2–13 March; "today" on 20 April keeps it inside 90 days
+    // (so the dashboard opens on 90d) and puts all of it outside 30.
+    render(
+      <Dashboard
+        trades={rowsOf(BOOK)}
+        accounts={[ACCOUNT]}
+        todayKey="2026-04-20"
+        timezone={ACCOUNT.timezone}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Show all" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "30d" }));
+
+    const showAll = await screen.findByRole("button", { name: "Show all" });
+    expect(showAll.parentElement?.textContent).toMatch(
+      new RegExp(`${BOOK.length} closed trades are older than the selected period`),
+    );
+    await user.click(showAll);
+    expect(screen.queryByRole("button", { name: "Show all" })).not.toBeInTheDocument();
+  });
+});

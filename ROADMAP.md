@@ -1058,3 +1058,17 @@ trejd.
 u transakciji koja je vraćena, i rezultat stoji u zaglavlju migracije.
 
 **Testovi: 2372 u 142 fajla** (2326 → 2372).
+
+### Faza 12b — posle prvog pravog korišćenja (19.09.2026.)
+
+Tri stvari koje su se videle tek kad je spajanje zaista upotrebljeno na backtest trejdovima:
+
+- **Spojeni trejdovi „nestali" sa dashboarda.** Nisu bili pokvareni: fill-ovi iz TradingView fajla
+  nose datume iz 2018, a dashboard se otvarao na 90 dana. Sada se otvara na **All** kad ništa nije
+  zatvoreno u poslednjih 90 dana, a kad period izostavlja trejdove, iznad brojki piše koliko i do
+  kada, sa dugmetom **Show all**. Kolona datuma u journal-u sada nosi i godinu.
+- **Dijalog za spajanje je pitao ono što je pravilo.** Uvoz ispravlja ručno unet trejd — nije
+  pitanje. Dijalog sada kaže koji red ostaje i koji se troši, i ima jedno dugme.
+- **Forma za novi trejd ide redom odluka**: nalog, instrument, playbook sa checklistom, pa tek onda
+  cene i rizik. **Ručna faza je uklonjena** (i select u formi i „Move to active" u gridu): planned
+  ili active je ono što kažu fill-ovi. Ostaje samo „Mark as missed", jer to fill-ovi ne mogu da znaju.

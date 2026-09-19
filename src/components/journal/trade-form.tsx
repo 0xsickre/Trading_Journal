@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -387,11 +387,6 @@ export function TradeForm({
     [fields.entry_price, fields.stop_price],
   );
 
-  const executionUnlocked =
-    tradePhase === "active" ||
-    execs.length > 0 ||
-    initial?.status === "partial" ||
-    initial?.status === "closed";
 
   const hasValidEntryFill = useMemo(
     () =>
@@ -680,11 +675,6 @@ export function TradeForm({
     setExecs((prev) => prev.filter((_, idx) => idx !== i));
   }
 
-  function handleMoveToActive() {
-    setTradePhase("active");
-    setActiveTab("execution");
-  }
-
   function handleAddEntryFromPlan() {
     setTradePhase("active");
     if (execs.length === 0) addExec("entry");
@@ -692,7 +682,6 @@ export function TradeForm({
   }
 
   function handleTabChange(v: string) {
-    if (v === "execution" && !executionUnlocked) return;
     setActiveTab(v as "plan" | "execution");
   }
 
@@ -875,7 +864,6 @@ export function TradeForm({
    * a trade you are already in cannot be missed, and it is already active.
    */
   const isSaved = initial != null;
-  const showMoveToActive = isSaved && isPlannedPhase;
   const showMarkMissed =
     isSaved && isPlannedPhase && canMarkMissed(execs.length, "planned");
   const showRestorePlanned =
@@ -908,12 +896,6 @@ export function TradeForm({
               key={tab.id}
               value={tab.id}
               className="flex-1 sm:flex-none"
-              disabled={tab.id === "execution" && !executionUnlocked}
-              title={
-                tab.id === "execution" && !executionUnlocked
-                  ? "Set Trade phase to Active, or use Add Entry Fill."
-                  : undefined
-              }
             >
               {tab.title}
             </TabsTrigger>
@@ -922,14 +904,6 @@ export function TradeForm({
 
         {formTabs.map((tab) => (
           <TabsContent key={tab.id} value={tab.id} className="mt-4">
-            {tab.id === "execution" && !executionUnlocked ? (
-              <Card>
-                <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                  Set <b>Trade phase</b> to <b>Active</b>, or use{" "}
-                  <b>Add Entry Fill</b> on the Plan tab to log execution.
-                </CardContent>
-              </Card>
-            ) : (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">{tab.title}</CardTitle>
@@ -952,6 +926,7 @@ export function TradeForm({
 
                 {tab.groups
                   .map((group) => (
+                    <Fragment key={group.id}>
                     <FormGroupSection
                       key={group.id}
                       group={group}
@@ -1047,24 +1022,35 @@ export function TradeForm({
                           : null
                       }
                     />
+                    {/* Playbook right after the account and the instrument.
+
+                        The order of a trade is the order of the decisions:
+                        which account, what instrument, then WHICH SETUP and
+                        whether its rules are all met — and only then the prices,
+                        the risk and the rest. A plan whose checklist comes last
+                        is a plan filled in before anyone asked whether the setup
+                        qualified.
+
+                        Playbook is a fixed group, not a field def: the checklist
+                        scopes itself by outcome and answers are three-state,
+                        which no field definition can express. */}
+                    {tab.id === "plan" && group.id === "meta" && !isMissed && (
+                      <PlaybookChecklist
+                        playbooks={playbooks}
+                        playbookId={playbookId}
+                        onPlaybookChange={pickPlaybook}
+                        answers={ruleAnswers}
+                        onAnswerChange={setRuleAnswer}
+                        netPl={metrics.netPl}
+                      />
+                    )}
+                    </Fragment>
                   ))}
 
-                {/* Playbook is a fixed group, not a field def: the checklist
-                    scopes itself by outcome and answers are three-state, which
-                    no field definition can express.
-
-                    Placed AFTER the fields, not before them. Committing to a
-                    strategy and ticking its rules is the last thing you do
-                    before saving — asking it above the instrument put the
-                    question "did you follow the plan" before you had said what
-                    you were trading.
-
-                    On BOTH tabs deliberately. Plan is where you commit, but a
-                    'winner' rule — "did you let it run?" — only becomes
-                    answerable once the trade is closed, and by then the trader
-                    is on Execution. Offering it in one place only would make
-                    those rules unanswerable in practice. */}
-                {!isMissed && (
+                {/* On Execution the checklist comes last: a 'winner' rule —
+                    "did you let it run?" — only becomes answerable once the trade
+                    is closed, which is where the trader is by then. */}
+                {tab.id === "execution" && !isMissed && (
                   <PlaybookChecklist
                     playbooks={playbooks}
                     playbookId={playbookId}
@@ -1075,58 +1061,19 @@ export function TradeForm({
                   />
                 )}
 
-                {/* Lifecycle, at the bottom and on its own.
-                    `Trade phase` used to sit in the "Trade" group at the very
-                    top, between the account and the instrument. It is not a
-                    field of the trade — it is the same control as the buttons
-                    below it, worded as a select, and asking "planned or active?"
-                    before the trader has said what they are trading put the
-                    lifecycle question first in a form about a setup. Here it
-                    stands next to the actions that move the trade between the
-                    same two states. */}
-                {tab.id === "plan" && (
+                {/* Lifecycle. There is no phase control: planned or active is
+                    not the trader's to set, it is what the fills say. An entry
+                    fill means you are in the trade; no entry fill means it is
+                    still a plan. A select that could say "active" on a trade
+                    with no fill, or "planned" on one with a fill, could only
+                    ever disagree with the record.
+
+                    What stays is the one lifecycle fact the fills cannot know:
+                    that a plan was MISSED — the limit never hit, the setup never
+                    came. */}
+                {tab.id === "plan" && (showMarkMissed || showRestorePlanned) && (
                   <div className="mt-6 space-y-3 border-t pt-4">
-                    {!isMissed && (
-                      <div className="max-w-xs space-y-1.5">
-                        <Label className="text-xs">Trade phase</Label>
-                        <Select
-                          value={tradePhase}
-                          onValueChange={(v) => setTradePhase(v as TradePhase)}
-                          disabled={hasValidEntryFill}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="planned" disabled={hasValidEntryFill}>
-                              Planned
-                            </SelectItem>
-                            <SelectItem value="active">Active</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          {hasValidEntryFill
-                            ? "Automatically active — an entry fill exists."
-                            : "Planned = the trade is still a plan. Active = you are already in the position."}
-                        </p>
-                      </div>
-                    )}
-                    {isMissed && (
-                      <p className="text-xs text-muted-foreground">
-                        Restore from missed to change the phase.
-                      </p>
-                    )}
                     <div className="flex flex-wrap gap-2">
-                      {showMoveToActive && (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={handleMoveToActive}
-                        >
-                          Move to active trade
-                        </Button>
-                      )}
                       {showMarkMissed && (
                         <Button
                           type="button"
@@ -1160,7 +1107,6 @@ export function TradeForm({
                 )}
               </CardContent>
             </Card>
-            )}
           </TabsContent>
         ))}
       </Tabs>

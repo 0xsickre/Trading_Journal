@@ -465,46 +465,6 @@ export async function restoreTradeToPlanned(id: string) {
   return { ok: true as const, id };
 }
 
-/** Planned → Active without fills (manual) or confirm after import. */
-export async function activateTrade(id: string) {
-  const supabase = await createClient();
-
-  const [{ data: pos }, { count }] = await Promise.all([
-    supabase.from("tj_positions").select("status").eq("id", id).maybeSingle(),
-    supabase
-      .from("tj_executions")
-      .select("id", { count: "exact", head: true })
-      .eq("position_id", id),
-  ]);
-
-  if (!pos) return { ok: false as const, error: "Trade not found" };
-  if (pos.status === "missed") {
-    return { ok: false as const, error: "Missed trade — restore to planned first" };
-  }
-  if (pos.status !== "planned") {
-    return { ok: true as const, id };
-  }
-  if ((count ?? 0) > 0) {
-    return { ok: false as const, error: "Trade already has fills — refresh the page" };
-  }
-
-  const { data: changed, error } = await supabase
-    .from("tj_positions")
-    .update({ status: "open", needs_review: false })
-    .eq("id", id)
-    .eq("status", "planned")
-    .select("id");
-
-  if (error) return { ok: false as const, error: error.message };
-  if (!changed || changed.length === 0) {
-    return { ok: false as const, error: "Trade changed — refresh the page" };
-  }
-
-  revalidatePath(`/trades/${id}`);
-  revalidateTrades();
-  return { ok: true as const, id };
-}
-
 export async function deleteTrade(id: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("tj_positions").delete().eq("id", id);

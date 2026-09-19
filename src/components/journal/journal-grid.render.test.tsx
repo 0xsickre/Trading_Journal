@@ -21,13 +21,11 @@ vi.mock("next/navigation", () => ({
 }));
 
 const deleteTradeMock = vi.fn();
-const activateTradeMock = vi.fn();
 const bulkDeleteTradesMock = vi.fn();
 const bulkAddTagMock = vi.fn();
 const mergeTradesMock = vi.fn();
 vi.mock("@/app/(app)/trades/actions", () => ({
   deleteTrade: (id: string) => deleteTradeMock(id),
-  activateTrade: (id: string) => activateTradeMock(id),
   bulkDeleteTrades: (ids: string[]) => bulkDeleteTradesMock(ids),
   bulkAddTag: (ids: string[], kind: string, values: string[]) =>
     bulkAddTagMock(ids, kind, values),
@@ -126,7 +124,6 @@ beforeEach(() => {
   pushMock.mockClear();
   refreshMock.mockClear();
   deleteTradeMock.mockReset().mockResolvedValue({ ok: true });
-  activateTradeMock.mockReset().mockResolvedValue({ ok: true });
   bulkDeleteTradesMock.mockReset().mockResolvedValue({ ok: true, deleted: 0 });
   bulkAddTagMock.mockReset().mockResolvedValue({ ok: true });
   mergeTradesMock.mockReset().mockResolvedValue({ ok: true });
@@ -308,16 +305,20 @@ describe("row actions", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it("'Move to active' only appears for a planned trade", async () => {
+  it("offers no 'Move to active' at all — the fills decide the phase", async () => {
+    // Planned or active is what the fills say: an entry fill means the trader
+    // is in the trade. A menu item that could set it by hand could only ever
+    // disagree with the record, so it is gone even for a planned trade.
     const user = userEvent.setup({ delay: null });
     render(
       <JournalGrid
-        trades={rowsOf([mkTrade({ id: "t1", status: "closed" })])}
+        trades={rowsOf([mkTrade({ id: "t1", status: "planned" })])}
         accounts={[ACCOUNT]}
       />,
     );
     const menuButtons = screen.getAllByRole("button", { name: "" });
     await user.click(menuButtons[menuButtons.length - 1]);
+    expect(await screen.findByRole("menuitem", { name: /Edit/ })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: /Move to active/ })).not.toBeInTheDocument();
   });
 });
@@ -607,25 +608,28 @@ describe("merging two rows that are the same trade", () => {
 
     // Said in words before anything happens.
     expect(await screen.findByText(/cannot be undone/)).toBeInTheDocument();
-    expect(screen.getByText(/stays — keeps its number/)).toBeInTheDocument();
+    expect(screen.getByText("Stays, corrected")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Merge" }));
     await vi.waitFor(() => expect(mergeTradesMock).toHaveBeenCalled());
     expect(mergeTradesMock).toHaveBeenCalledWith("typed", "imported");
   });
 
-  it("the side that stays can be swapped in the dialog", async () => {
+  it("asks nothing: the typed trade stays whichever order the rows were ticked in", async () => {
+    // The rule is fixed — the import corrects the typed trade. Offering a choice
+    // made the trader work out which row was which, every time.
     const user = userEvent.setup({ delay: null });
-    render(<JournalGrid trades={pair()} accounts={[ACCOUNT]} />);
+    const rows = pair();
+    render(<JournalGrid trades={[rows[1], rows[0]]} accounts={[ACCOUNT]} />);
     await selectAll(user);
     await user.click(screen.getByRole("button", { name: /Bulk actions/ }));
     await user.click(await screen.findByText(/Merge 2 trades/));
 
-    await user.click(await screen.findByText(/#7/));
+    expect(screen.queryByText(/Click a trade/)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Merge" }));
 
     await vi.waitFor(() => expect(mergeTradesMock).toHaveBeenCalled());
-    expect(mergeTradesMock).toHaveBeenCalledWith("imported", "typed");
+    expect(mergeTradesMock).toHaveBeenCalledWith("typed", "imported");
   });
 
   it("refuses two instruments — the item is there but cannot be used", async () => {

@@ -84,7 +84,7 @@ import { setupScoreFromTrade } from "@/lib/journal/setup-score";
 import type { Playbook, PositionRule } from "@/lib/journal/playbook-types";
 import { cn } from "@/lib/utils";
 import type { Account, OptionsMap, TradeRow } from "@/lib/journal/types";
-import { fmtInTz, DAY_TIME } from "@/lib/journal/time";
+import { fmtInTz, DATE_TIME } from "@/lib/journal/time";
 import { fmtMoney, fmtNum, fmtPrice, fmtR, pnlClass } from "@/lib/journal/format";
 import { fmtSlippageR, slippageFromTrade } from "@/lib/journal/entry-slippage";
 import {
@@ -103,7 +103,6 @@ import {
 } from "@/lib/journal/field-values";
 import {
   deleteTrade,
-  activateTrade,
   bulkDeleteTrades,
   bulkAddTag,
   mergeTrades,
@@ -323,14 +322,6 @@ export function JournalGrid({
   const [tagKind, setTagKind] = useState<BulkTagKind>("technical");
   const [tagValues, setTagValues] = useState<string[]>([]);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
-  /**
-   * Which of the two selected trades keeps its identity.
-   *
-   * `null` means "whatever `defaultMergeChoice` says" — the imported row gives
-   * up its fills, the typed one keeps its grade and plan. Swapping is one click,
-   * and the dialog reads back what will happen either way.
-   */
-  const [mergeKeepId, setMergeKeepId] = useState<string | null>(null);
 
   /**
    * How many of the dimension filters are actually narrowing the grid.
@@ -509,7 +500,7 @@ export function JournalGrid({
           const d = t.stats?.opened_at ?? t.created_at;
           return (
             <span className="whitespace-nowrap">
-              {fmtInTz(d, tzOf(t), DAY_TIME)}
+              {fmtInTz(d, tzOf(t), DATE_TIME)}
             </span>
           );
         },
@@ -743,7 +734,6 @@ export function JournalGrid({
         cell: ({ row }) => (
           <RowActions
             id={row.original.id}
-            status={String(row.original.status)}
             onDeleted={() => router.refresh()}
           />
         ),
@@ -804,14 +794,11 @@ export function JournalGrid({
   }, [rowSelection, trades]);
 
   const mergeBlocked = mergePair ? mergeRefusal(mergePair[0], mergePair[1]) : null;
-  const mergeChoice = mergePair
-    ? (() => {
-        const fallback = defaultMergeChoice(mergePair[0], mergePair[1]);
-        if (!mergeKeepId) return fallback;
-        const other = mergePair.find((p) => p.id !== mergeKeepId);
-        return other ? { keepId: mergeKeepId, fillsFromId: other.id } : fallback;
-      })()
-    : null;
+  // Not a question. The rule is fixed and said once, in the dialog: the
+  // imported trade's numbers correct the typed one, and the typed one keeps its
+  // grade, plan and notes. Asking the trader to work out which row is which,
+  // every time, was asking them to do the one job this exists to do for them.
+  const mergeChoice = mergePair ? defaultMergeChoice(mergePair[0], mergePair[1]) : null;
 
   // Memoized on the selection itself. This used to run on every render — every
   // keystroke in the search box included — walking the row model to rebuild an
@@ -981,10 +968,7 @@ export function JournalGrid({
                       judgement survives. */}
                   <DropdownMenuItem
                     disabled={!mergePair || mergeBlocked != null}
-                    onClick={() => {
-                      setMergeKeepId(null);
-                      setMergeDialogOpen(true);
-                    }}
+                    onClick={() => setMergeDialogOpen(true)}
                   >
                     <Merge className="size-4" /> Merge 2 trades…
                   </DropdownMenuItem>
@@ -1122,43 +1106,31 @@ export function JournalGrid({
           <DialogHeader>
             <DialogTitle>Merge two trades into one</DialogTitle>
             <DialogDescription>
-              One trade keeps its number, grade, plan and notes; the other gives
-              up its fills and is deleted. Empty fields on the one that stays are
-              filled in from the other. This cannot be undone.
+              The imported numbers correct the typed trade: times, entry, exit,
+              size and costs come from the import, anything the typed trade is
+              missing is filled in, and its grade, plan and notes stay. The
+              second row is then deleted. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          {mergePair && mergeChoice && (
-            <div className="space-y-3 text-sm">
-              <div className="space-y-2">
-                {mergePair.map((side) => {
-                  const keeps = side.id === mergeChoice.keepId;
-                  return (
-                    <button
-                      key={side.id}
-                      type="button"
-                      onClick={() => setMergeKeepId(side.id)}
-                      className={`w-full rounded-md border p-2 text-left ${
-                        keeps ? "border-foreground" : "border-border opacity-70"
-                      }`}
-                    >
-                      <div className="font-medium">
-                        {describeSide(side, (iso) => fmtInTz(iso, tzOf(trades[0]), DAY_TIME))}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {keeps
-                          ? "stays — keeps its number, grade, plan and notes"
-                          : "gives up its fills, then is deleted"}
-                        {side.source === "import" ? " · imported" : " · typed"}
-                      </div>
-                    </button>
-                  );
-                })}
+          {mergePair && mergeChoice && (() => {
+            const keep = mergePair.find((p) => p.id === mergeChoice.keepId)!;
+            const from = mergePair.find((p) => p.id === mergeChoice.fillsFromId)!;
+            const when = (iso: string) => fmtInTz(iso, tzOf(trades[0]), DATE_TIME);
+            return (
+              <div className="space-y-2 text-sm">
+                <div className="rounded-md border p-2">
+                  <div className="text-xs text-muted-foreground">Stays, corrected</div>
+                  <div className="font-medium">{describeSide(keep, when)}</div>
+                </div>
+                <div className="rounded-md border border-dashed p-2 opacity-80">
+                  <div className="text-xs text-muted-foreground">
+                    Its numbers are used, then it is deleted
+                  </div>
+                  <div className="font-medium">{describeSide(from, when)}</div>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Click a trade to make it the one that stays.
-              </p>
-            </div>
-          )}
+            );
+          })()}
           <DialogFooter>
             <Button
               variant="ghost"
@@ -1367,11 +1339,9 @@ function FilterSelect({
 
 function RowActions({
   id,
-  status,
   onDeleted,
 }: {
   id: string;
-  status: string;
   onDeleted: () => void;
 }) {
   const router = useRouter();
@@ -1386,20 +1356,6 @@ function RowActions({
         <DropdownMenuItem onClick={() => router.push(`/trades/${id}/edit`)}>
           <Pencil className="size-4" /> Edit
         </DropdownMenuItem>
-        {status === "planned" && (
-          <DropdownMenuItem
-            onClick={async () => {
-              const res = await activateTrade(id);
-              if (!res.ok) toast.error(res.error);
-              else {
-                toast.success("Trade moved to active");
-                onDeleted();
-              }
-            }}
-          >
-            Move to active
-          </DropdownMenuItem>
-        )}
         <DropdownMenuItem
           className="text-destructive"
           onClick={async () => {

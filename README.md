@@ -18,7 +18,7 @@ purpose — an applied migration is never edited here, and the comment inside on
 record of the day it was written.
 
 **The interface is deliberately half-and-half, and the line is a clean one.** At least 126 of the
-3,071 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+3,059 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into:
 
 | Surface | Serbian strings |
@@ -125,7 +125,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,372 tests across 142 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,381 tests across 143 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -227,9 +227,9 @@ would be erased by an unrelated save.
 
 | Route | What it is |
 |---|---|
-| `/` | Dashboard: KPIs, equity curve, drawdown, heatmap calendars, breakdowns, Sickre Score, insights |
-| `/journal` | Trade table — sorting, filtering, column picking |
-| `/trades/new`, `/trades/[id]/edit` | Trade form: plan, fills, playbook checklist, psychology, images. The instrument is **typed, not scrolled** — `instrument-select.tsx` filters the 91-symbol catalog on symbol, name and asset class, so "gold" finds both XAUUSD and GC; a grouped `Select` could only jump to the start of a label |
+| `/` | Dashboard: KPIs, equity curve, drawdown, heatmap calendars, breakdowns, Sickre Score, insights. Opens on **90 days when anything closed within them, and on All when nothing did** — a 2018 backtest otherwise opens on a page of zeros. Whenever the period leaves closed trades out, a notice above the figures says how many and how far back, with **Show all** (`default-period.ts`) |
+| `/journal` | Trade table — sorting, filtering, column picking. The date column carries the **year**, because a backtest's trades are years old and `07/03` without one reads as this spring |
+| `/trades/new`, `/trades/[id]/edit` | Trade form: plan, fills, playbook checklist, psychology, images. In the **order of the decisions**: account, instrument, then the playbook and its checklist, and only then the prices and the risk. **There is no phase control**: planned or active is what the fills say — an entry fill means you are in the trade — so a select that could disagree with the record is gone, and so is "Move to active". The one lifecycle fact the fills cannot know, a MISSED plan, keeps its button. The instrument is **typed, not scrolled** — `instrument-select.tsx` filters the 91-symbol catalog on symbol, name and asset class, so "gold" finds both XAUUSD and GC; a grouped `Select` could only jump to the start of a label |
 | `/daily` | Daily report + tracker checklist for one day; locking the day |
 | `/calendar` | Monthly P&L grid by day, weekly totals |
 | `/weekly` | Weekly review: week rating, five questions, the week's figures (`week-recap.ts`) |
@@ -366,8 +366,8 @@ Get this wrong and nothing breaks — the numbers simply file themselves under d
 - **Days are always in the ACCOUNT's timezone**, resolved on the server. A `new Date()` read in the
   browser shifts the whole calendar by one column for anyone not sitting in the account's zone.
 - **ISO weekdays, 1 = Monday … 7 = Sunday.** Never `Date#getDay`.
-- **Dates are written day-first, clocks are 24-hour**: `18/09/2026 21:10`, or `18/09 21:10` in table
-  columns where every row is the same season of trading. Three shapes, exported from
+- **Dates are written day-first, clocks are 24-hour**: `18/09/2026 21:10`, or `18/09 21:10` in the
+  import review, where every row is from one file. Three shapes, exported from
   `lib/journal/time.ts` (`DATE`, `DATE_TIME`, `DAY_TIME`), because "what does a date look like here"
   is one question — it used to have four answers, one of which was `MM/dd`. That one is not a style
   but a different date: `03/07` is 7 March to the reader and 3 July to the format that wrote it, and
@@ -796,11 +796,12 @@ trades…**. It exists because the import's recognition (§ Recognising a trade 
 helps at import time — a trade typed by hand and the same trade imported before that matcher existed
 sit in the journal as two rows, and every total counts the trade twice.
 
-**One trade keeps its identity, the other supplies the fills.** By default the imported row gives up
-its fills and is deleted, and the typed one stays: an import carries the broker's own numbers, while
-a typed trade carries the grade, the thesis and the plan that no import ever writes. With two of a
-kind the newer is treated as the correction. Either side can be made the survivor by clicking it in
-the dialog.
+**The import corrects the typed trade, and nothing is asked.** The typed trade stays — its number,
+grade, thesis and plan — and the imported one supplies the fills, then is deleted: an import carries
+the broker's own numbers, a typed trade carries the judgement no import ever writes. With two of a
+kind the newer is treated as the correction. The dialog says which row stays and which is used up,
+and has one button. It used to let either side be clicked as the survivor, which turned a rule into
+a question the trader had to answer by working out which row was which, every time.
 
 | What | Where it comes from |
 |---|---|

@@ -233,7 +233,8 @@ import {
   type MetricContext,
   type ViewMode,
 } from "@/lib/journal/units";
-import { toEpoch, zonedDateKey } from "@/lib/journal/time";
+import { DATE, fmtInTz, toEpoch, zonedDateKey } from "@/lib/journal/time";
+import { defaultDashboardPeriod, hiddenByPeriod } from "@/lib/journal/default-period";
 import {
   computeDailyDrawdown,
   type DayPnlPoint,
@@ -637,7 +638,17 @@ export function Dashboard({
   const show = useCallback((id: string) => visible.has(id), [visible]);
 
   const [accountFilter, setAccountFilter] = useState("all");
-  const [period, setPeriod] = useState("90");
+  // 90 days when anything closed within them, "all" when nothing did — a
+  // backtest of 2018 otherwise opens on a page of zeros. See `default-period.ts`.
+  const [period, setPeriod] = useState<string>(() =>
+    defaultDashboardPeriod(
+      toRealized(trades).map((t) => toEpoch(t.closedAt)),
+      // The same 90-day boundary `cutoffMs` draws below. An unresolvable day
+      // key cannot happen for a server-resolved `todayKey`, but if it did the
+      // safe reading is "nothing is recent", which opens on everything.
+      dayKeyStartUtc(addDaysToDayKey(todayKey, -89), timezone) ?? Number.POSITIVE_INFINITY,
+    ),
+  );
   const [mode, setMode] = useState<PnlMode>("net");
 
   /**
@@ -825,6 +836,18 @@ export function Dashboard({
       cutoffMs == null
         ? realizedAll
         : realizedAll.filter((t) => toEpoch(t.closedAt) >= cutoffMs),
+    [realizedAll, cutoffMs],
+  );
+
+  /**
+   * Trades the period leaves out, so the page can say so.
+   *
+   * A period that silently drops trades reads as a book that does not have
+   * them: a merged backtest trade closed in 2018 vanished from every figure
+   * here, and nothing on screen said it was the WINDOW, not the trade.
+   */
+  const outsidePeriod = useMemo(
+    () => hiddenByPeriod(realizedAll.map((t) => toEpoch(t.closedAt)), cutoffMs),
     [realizedAll, cutoffMs],
   );
 
@@ -1425,6 +1448,26 @@ export function Dashboard({
             </Link>{" "}
             to see which, and fix them in Settings or on the trade.
           </span>
+        </div>
+      )}
+
+      {outsidePeriod && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-[var(--chart-4)]/40 bg-[var(--chart-4)]/10 px-3 py-2 text-sm">
+          <AlertTriangle className="size-4 text-[var(--chart-4)]" />
+          <span>
+            <b>{outsidePeriod.count}</b> closed trade
+            {outsidePeriod.count === 1 ? " is" : "s are"} older than the selected
+            period — the oldest closed {fmtInTz(new Date(outsidePeriod.oldestMs), timezone, DATE)} —
+            and {outsidePeriod.count === 1 ? "is" : "are"} not in these figures.
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7"
+            onClick={() => setPeriodDeferred("all")}
+          >
+            Show all
+          </Button>
         </div>
       )}
 
