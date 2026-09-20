@@ -1351,6 +1351,7 @@ export type Database = {
           next_week_catalysts: string | null
           one_change: string | null
           one_pattern: string | null
+          previous_change_kept: string | null
           updated_at: string
           user_id: string
           week_grade: number | null
@@ -1365,6 +1366,7 @@ export type Database = {
           next_week_catalysts?: string | null
           one_change?: string | null
           one_pattern?: string | null
+          previous_change_kept?: string | null
           updated_at?: string
           user_id: string
           week_grade?: number | null
@@ -1379,6 +1381,7 @@ export type Database = {
           next_week_catalysts?: string | null
           one_change?: string | null
           one_pattern?: string | null
+          previous_change_kept?: string | null
           updated_at?: string
           user_id?: string
           week_grade?: number | null
