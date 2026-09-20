@@ -875,6 +875,24 @@ const instrumentPatchSchema = z
     tick_size: z.number().finite().nonnegative("Tick size cannot be negative.").nullable().optional(),
     tick_value: z.number().finite().nonnegative("Tick value cannot be negative.").nullable().optional(),
     quote_currency: z.string().trim().regex(/^[A-Za-z]{3}$/, "Currency is a three-letter code.").optional(),
+    // What the broker charges on this symbol. Per side for the commission, in
+    // points per lot per night for the swap — the shapes `instrument-costs.ts`
+    // reads. Swap is signed: a positive number is a credit the broker pays.
+    commission_per_lot: z.number().finite().nonnegative("Commission cannot be negative.").optional(),
+    commission_pct: z
+      .number()
+      .finite()
+      .nonnegative("Commission cannot be negative.")
+      .max(100, "A commission above 100 % of notional is not a commission.")
+      .optional(),
+    commission_currency: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z]{3}$/, "Currency is a three-letter code.")
+      .optional(),
+    swap_long: z.number().finite().optional(),
+    swap_short: z.number().finite().optional(),
+    swap_triple_day: z.number().int().min(1).max(7).optional(),
     is_active: z.boolean().optional(),
   })
   .strict();
@@ -918,6 +936,12 @@ export async function updateInstrument(
     tick_size?: number | null;
     tick_value?: number | null;
     quote_currency?: string;
+    commission_per_lot?: number;
+    commission_pct?: number;
+    commission_currency?: string;
+    swap_long?: number;
+    swap_short?: number;
+    swap_triple_day?: number;
     is_active?: boolean;
   },
 ) {

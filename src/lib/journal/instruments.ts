@@ -13,7 +13,7 @@ export type InstrumentSpec = {
 };
 
 const INSTRUMENT_COLUMNS =
-  "id,symbol,name,asset_class,point_value,tick_size,tick_value,quote_currency,is_active,sort_order";
+  "id,symbol,name,asset_class,point_value,tick_size,tick_value,quote_currency,commission_per_lot,commission_pct,commission_currency,swap_long,swap_short,swap_triple_day,is_active,sort_order";
 
 export async function getInstruments(
   activeOnly = false,

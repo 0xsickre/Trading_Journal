@@ -481,6 +481,12 @@ export type Database = {
       tj_instruments: {
         Row: {
           asset_class: string | null
+          commission_currency: string
+          commission_per_lot: number
+          commission_pct: number
+          swap_long: number
+          swap_short: number
+          swap_triple_day: number
           created_at: string
           id: string
           is_active: boolean
@@ -495,6 +501,12 @@ export type Database = {
         }
         Insert: {
           asset_class?: string | null
+          commission_currency?: string
+          commission_per_lot?: number
+          commission_pct?: number
+          swap_long?: number
+          swap_short?: number
+          swap_triple_day?: number
           created_at?: string
           id?: string
           is_active?: boolean
@@ -509,6 +521,12 @@ export type Database = {
         }
         Update: {
           asset_class?: string | null
+          commission_currency?: string
+          commission_per_lot?: number
+          commission_pct?: number
+          swap_long?: number
+          swap_short?: number
+          swap_triple_day?: number
           created_at?: string
           id?: string
           is_active?: boolean

@@ -93,6 +93,25 @@ export function pipSize(instrument: InstrumentContext | null | undefined): numbe
   return tick * 10;
 }
 
+/**
+ * What one unit of `position_size` IS, in words.
+ *
+ * The form printed the size followed by the symbol — "0.59 XAUUSD" — which
+ * reads as 0.59 ounces of gold and is out by a factor of a hundred. Size here
+ * is counted in LOTS: one lot is 100 000 of the base currency on FX, 100 ounces
+ * of gold, one index unit on the index, and `point_value` carries that contract
+ * size. Futures are counted in contracts, hence the split rather than a single
+ * hardcoded word.
+ */
+export function sizeUnitLabel(
+  instrument: InstrumentContext | null | undefined,
+  qty = 1,
+): string {
+  const cls = (instrument?.asset_class ?? "").toLowerCase();
+  const word = cls.includes("futures") ? "contract" : "lot";
+  return Math.abs(qty) === 1 ? word : `${word}s`;
+}
+
 /** Whether `mode` can actually be rendered for this value. */
 export function canRender(v: MetricValue, mode: ViewMode): boolean {
   if (mode === "privacy" || mode === "dollars") return true;

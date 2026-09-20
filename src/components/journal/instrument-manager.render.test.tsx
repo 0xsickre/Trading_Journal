@@ -39,6 +39,12 @@ function inst(over: Partial<Instrument> = {}): Instrument {
     tick_size: 0.001,
     tick_value: null,
     quote_currency: "USD",
+    commission_per_lot: 0,
+    commission_pct: 0.0007,
+    commission_currency: "EUR",
+    swap_long: -83,
+    swap_short: -8.3,
+    swap_triple_day: 3,
     is_active: true,
     sort_order: 200,
     ...over,
@@ -107,10 +113,10 @@ describe("the contract numbers", () => {
     expect(save).toBeEnabled();
 
     await user.click(save);
-    expect(updateInstrument).toHaveBeenCalledWith("i-gold", {
-      point_value: 100,
-      tick_size: 0.001,
-    });
+    expect(updateInstrument).toHaveBeenCalledWith(
+      "i-gold",
+      expect.objectContaining({ point_value: 100, tick_size: 0.001 }),
+    );
   });
 
   it("a tick of 0.001 is a thousandth, and saves", async () => {
@@ -125,10 +131,10 @@ describe("the contract numbers", () => {
     await user.type(tick, "0.001");
     await user.click(within(row).getByRole("button", { name: "Save" }));
 
-    expect(updateInstrument).toHaveBeenCalledWith("i-gold", {
-      point_value: 1,
-      tick_size: 0.001,
-    });
+    expect(updateInstrument).toHaveBeenCalledWith(
+      "i-gold",
+      expect.objectContaining({ point_value: 1, tick_size: 0.001 }),
+    );
   });
 
   it("names a number it cannot read, and refuses to save it", async () => {
@@ -220,5 +226,44 @@ describe("adding one the catalog does not carry", () => {
   it("Add is off while the symbol is empty", () => {
     render(<InstrumentManager instruments={[]} />);
     expect(screen.getByRole("button", { name: "Add" })).toBeDisabled();
+  });
+});
+
+describe("what the broker charges", () => {
+  it("saves the commission and the swap alongside the contract spec", async () => {
+    const user = userEvent.setup({ delay: null });
+    updateInstrument.mockResolvedValue({ ok: true });
+    render(<InstrumentManager instruments={[inst()]} />);
+
+    const row = rowOf("XAUUSD");
+    const swapLong = within(row).getByLabelText("Swap L");
+    await user.clear(swapLong);
+    await user.type(swapLong, "-90");
+    await user.click(within(row).getByRole("button", { name: "Save" }));
+
+    await vi.waitFor(() =>
+      expect(updateInstrument).toHaveBeenCalledWith(
+        "i-gold",
+        expect.objectContaining({ swap_long: -90, commission_pct: 0.0007 }),
+      ),
+    );
+  });
+
+  it("says which side is charged and which night is tripled", () => {
+    render(<InstrumentManager instruments={[inst()]} />);
+    expect(screen.getByText(/charged three times on Wednesday/)).toBeInTheDocument();
+  });
+
+  it("refuses a swap it cannot read, instead of saving a zero", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<InstrumentManager instruments={[inst()]} />);
+
+    const row = rowOf("XAUUSD");
+    const swapShort = within(row).getByLabelText("Swap S");
+    await user.clear(swapShort);
+    await user.type(swapShort, "abc");
+
+    expect(within(row).getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(updateInstrument).not.toHaveBeenCalled();
   });
 });

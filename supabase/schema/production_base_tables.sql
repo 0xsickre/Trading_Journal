@@ -270,6 +270,18 @@ CREATE TABLE IF NOT EXISTS public.tj_instruments (
   -- koje nema. Zapis koji zaostane za bazom je gori od nepostojećeg: veruje mu
   -- se.
   quote_currency text     NOT NULL DEFAULT 'USD',
+  -- Šta broker naplaćuje na OVOM simbolu, dodato u
+  -- 20260920140000_broker_instruments_and_costs.sql: jedan nalog se naplaćuje
+  -- na tri načina (po lotu, kao udeo nominale, nikako), pa jedan broj na nalogu
+  -- nije mogao biti tačan za sva tri.
+  commission_per_lot  numeric  NOT NULL DEFAULT 0,
+  commission_pct      numeric  NOT NULL DEFAULT 0,
+  commission_currency text     NOT NULL DEFAULT 'USD',
+  -- Swap u POENIMA po lotu po noći; negativno je trošak za trejdera.
+  swap_long       numeric  NOT NULL DEFAULT 0,
+  swap_short      numeric  NOT NULL DEFAULT 0,
+  -- ISO dan čija se noć naplaćuje trostruko (3 = sreda, 5 = petak).
+  swap_triple_day smallint NOT NULL DEFAULT 3,
   is_active   boolean     NOT NULL DEFAULT true,
   sort_order  integer     NOT NULL DEFAULT 0,
   created_at  timestamptz NOT NULL DEFAULT now(),

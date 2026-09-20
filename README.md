@@ -140,7 +140,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,640 tests across 162 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,654 tests across 163 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -293,7 +293,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
-| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments, Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — type Live or Backtest, which decides where MAE/MFE comes from, currency locked once it has trades, FTMO rules and challenge restart), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion and reset live under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
+| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments (the broker's own ten, each with its contract spec AND what it costs — commission per lot or as a share of notional, swap in points per lot per night with the weekly triple day), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — type Live or Backtest, which decides where MAE/MFE comes from, currency locked once it has trades, FTMO rules and challenge restart), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion and reset live under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
 | `/login` | Supabase auth |
 
 ---
@@ -1038,7 +1038,7 @@ migration — it already fell through the cascade from `tj_playbooks`, but the l
 what "reset everything" means, and a reader should not have to trace foreign keys to believe it.
 
 What actually comes back, counted from the seed functions rather than assumed from their names:
-**1 Main Account, 91 instruments, 11 lists holding 55 options, 8 tracker rules, 7 custom fields,
+**1 Main Account, the broker's 10 instruments, 11 lists holding 55 options, 8 tracker rules, 7 custom fields,
 3 note folders.**
 
 **An instrument you delete stays deleted, since 20.09.2026.** `tj_seed_instruments_defaults` inserted
@@ -1106,8 +1106,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,640 tests across 162 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,069 tests in 108 files) and `components` (environment `jsdom`, files `*.test.tsx`, 571
+2,654 tests across 163 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,080 tests in 109 files) and `components` (environment `jsdom`, files `*.test.tsx`, 574
 tests in 54 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

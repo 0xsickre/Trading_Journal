@@ -12,37 +12,32 @@ export function cleanInstrumentKey(raw: string): string {
  * Keys are cleaned (see cleanInstrumentKey).
  */
 const INSTRUMENT_ALIAS_TO_CANONICAL: Record<string, string> = {
-  // FTMO indices
-  US500CASH: "SP500",
-  US500: "SP500",
-  SPX500USD: "SP500",
-  SP500USD: "SP500",
-  SPX500: "SP500",
-  US100CASH: "NAS100",
-  US100: "NAS100",
-  NAS100USD: "NAS100",
-  USTEC: "NAS100",
-  NDX: "NAS100",
-  NAS100: "NAS100",
+  // The index, under every name a statement or a platform gives it. The
+  // canonical one is the broker's own — "US100.cash" — so an MT5 import matches
+  // without a mapping at all; these are for the exports that do not.
+  US100CASH: "US100.cash",
+  US100: "US100.cash",
+  NAS100: "US100.cash",
+  NAS100USD: "US100.cash",
+  USTEC: "US100.cash",
+  NDX: "US100.cash",
 
-  // Metals / commodities
+  // Metals
   GOLD: "XAUUSD",
   XAU: "XAUUSD",
   XAUUSD: "XAUUSD",
-  COPPER: "HG",
-  HGCASH: "HG",
-
-  // Russell / small-cap radar
-  US2000: "RTY",
-  RUSSELL2000: "RTY",
-  RUSSELL: "RTY",
+  COPPER: "XCUUSD",
+  XCU: "XCUUSD",
+  HGCASH: "XCUUSD",
 
   // FX
   EURUSD: "EURUSD",
   GBPUSD: "GBPUSD",
   USDJPY: "USDJPY",
   USDCAD: "USDCAD",
+  USDCHF: "USDCHF",
   AUDUSD: "AUDUSD",
+  NZDUSD: "NZDUSD",
 };
 
 const CANONICAL_SET = new Set(DEFAULT_INSTRUMENT_SYMBOLS);

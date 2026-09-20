@@ -45,6 +45,39 @@ function readSpec(
 
 const CURRENCY_RE = /^[A-Za-z]{3}$/;
 
+/** The four cost fields, or the first reason one of them cannot be read. */
+function readCosts(input: {
+  commLot: string;
+  commPct: string;
+  swapLong: string;
+  swapShort: string;
+}):
+  | {
+      ok: true;
+      commission_per_lot: number;
+      commission_pct: number;
+      swap_long: number;
+      swap_short: number;
+    }
+  | { ok: false; error: string } {
+  const perLot = parseSettingsNumber(input.commLot, { min: 0 });
+  if (!perLot.ok) return { ok: false, error: `Commission per lot: ${perLot.error}` };
+  const pct = parseSettingsNumber(input.commPct, { min: 0, max: 100 });
+  if (!pct.ok) return { ok: false, error: `Commission %: ${pct.error}` };
+  // Swap is signed: a positive number is a credit the broker pays you.
+  const long = parseSettingsNumber(input.swapLong);
+  if (!long.ok) return { ok: false, error: `Swap long: ${long.error}` };
+  const short = parseSettingsNumber(input.swapShort);
+  if (!short.ok) return { ok: false, error: `Swap short: ${short.error}` };
+  return {
+    ok: true,
+    commission_per_lot: perLot.value ?? 0,
+    commission_pct: pct.value ?? 0,
+    swap_long: long.value ?? 0,
+    swap_short: short.value ?? 0,
+  };
+}
+
 function DeleteInstrumentDialog({
   inst,
   open,
@@ -105,6 +138,10 @@ function InstrumentRow({ inst }: { inst: Instrument }) {
   const id = useId();
   const [pointValue, setPointValue] = useState(String(inst.point_value));
   const [tickSize, setTickSize] = useState(inst.tick_size == null ? "" : String(inst.tick_size));
+  const [commLot, setCommLot] = useState(String(inst.commission_per_lot));
+  const [commPct, setCommPct] = useState(String(inst.commission_pct));
+  const [swapLong, setSwapLong] = useState(String(inst.swap_long));
+  const [swapShort, setSwapShort] = useState(String(inst.swap_short));
   const [deleting, setDeleting] = useState(false);
   const [trades, setTrades] = useState<number | null>(null);
   const [, startCount] = useTransition();
@@ -120,21 +157,40 @@ function InstrumentRow({ inst }: { inst: Instrument }) {
   }
 
   const spec = readSpec(pointValue, tickSize);
+  // The four cost fields, read the way every other number on this page is read:
+  // "2,5" is two and a half, and a value that cannot be read blocks the save
+  // rather than silently becoming zero.
+  const costs = readCosts({ commLot, commPct, swapLong, swapShort });
+  const ok = spec.ok && costs.ok;
   const changed =
-    spec.ok && (spec.point_value !== inst.point_value || spec.tick_size !== inst.tick_size);
+    ok &&
+    (spec.point_value !== inst.point_value ||
+      spec.tick_size !== inst.tick_size ||
+      costs.commission_per_lot !== inst.commission_per_lot ||
+      costs.commission_pct !== inst.commission_pct ||
+      costs.swap_long !== inst.swap_long ||
+      costs.swap_short !== inst.swap_short);
 
   function save() {
-    // Only two fields are sent. Name and class come from the catalog, and
-    // editing them solves no problem the user has; point value and tick solve
-    // the one they do have — a broker whose contract spec differs.
+    // Name and class come from the catalog, and editing them solves no problem
+    // the user has. The contract spec and what the broker charges do: both
+    // differ per broker, and both multiply every trade on the symbol.
     if (!spec.ok) {
       toast.error(spec.error);
+      return;
+    }
+    if (!costs.ok) {
+      toast.error(costs.error);
       return;
     }
     start(async () => {
       const res = await updateInstrument(inst.id, {
         point_value: spec.point_value,
         tick_size: spec.tick_size,
+        commission_per_lot: costs.commission_per_lot,
+        commission_pct: costs.commission_pct,
+        swap_long: costs.swap_long,
+        swap_short: costs.swap_short,
       });
       if (!res.ok) toast.error(res.error);
       else toast.success(`Saved ${inst.symbol}`);
@@ -176,7 +232,48 @@ function InstrumentRow({ inst }: { inst: Instrument }) {
           onChange={(e) => setTickSize(e.target.value)}
         />
       </div>
-      <div className="col-span-4 flex gap-1 sm:col-span-3">
+      <div className="col-span-6 sm:col-span-2">
+        <Label htmlFor={`${id}-comm`} className="text-[11px] text-muted-foreground">
+          {inst.commission_pct > 0 ? "% of notional" : `${inst.commission_currency} / lot`}
+        </Label>
+        <Input
+          id={`${id}-comm`}
+          className="h-8"
+          inputMode="decimal"
+          value={inst.commission_pct > 0 ? commPct : commLot}
+          aria-invalid={!costs.ok}
+          onChange={(e) =>
+            inst.commission_pct > 0 ? setCommPct(e.target.value) : setCommLot(e.target.value)
+          }
+        />
+      </div>
+      <div className="col-span-3 sm:col-span-1">
+        <Label htmlFor={`${id}-swl`} className="text-[11px] text-muted-foreground">
+          Swap L
+        </Label>
+        <Input
+          id={`${id}-swl`}
+          className="h-8"
+          inputMode="decimal"
+          value={swapLong}
+          aria-invalid={!costs.ok}
+          onChange={(e) => setSwapLong(e.target.value)}
+        />
+      </div>
+      <div className="col-span-3 sm:col-span-1">
+        <Label htmlFor={`${id}-sws`} className="text-[11px] text-muted-foreground">
+          Swap S
+        </Label>
+        <Input
+          id={`${id}-sws`}
+          className="h-8"
+          inputMode="decimal"
+          value={swapShort}
+          aria-invalid={!costs.ok}
+          onChange={(e) => setSwapShort(e.target.value)}
+        />
+      </div>
+      <div className="col-span-12 flex gap-1 sm:col-span-3">
         <Button size="sm" className="h-8 flex-1" disabled={pending || !changed} onClick={save}>
           Save
         </Button>
@@ -192,6 +289,14 @@ function InstrumentRow({ inst }: { inst: Instrument }) {
         </Button>
       </div>
       {!spec.ok && <p className="col-span-12 text-xs text-destructive">{spec.error}</p>}
+      {spec.ok && !costs.ok && (
+        <p className="col-span-12 text-xs text-destructive">{costs.error}</p>
+      )}
+      <p className="col-span-12 text-[11px] text-muted-foreground">
+        Commission is charged per side, so a round turn costs twice this. Swap is in points per
+        lot per night, charged three times on{" "}
+        {inst.swap_triple_day === 5 ? "Friday" : "Wednesday"}.
+      </p>
       <DeleteInstrumentDialog
         inst={inst}
         open={deleting}

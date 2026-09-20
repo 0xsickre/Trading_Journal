@@ -1309,3 +1309,22 @@ treba još potvrditi na izveštaju koji ih ima.**
 - Filter po nalogu; nalozi u različitim valutama se više ne sabiraju.
 - Dani u traci vode na taj dnevni unos.
 - Strana više ne čita ceo dnevnik: check-in-ovi i zabeleženi dani čitaju se samo za tu nedelju.
+
+### Instrumenti: katalog je tvoj broker, i nosi svoje troškove (20.09.2026.)
+
+Migracija `20260920140000_broker_instruments_and_costs.sql`.
+
+- Katalog je sa 91 instrumenta sveden na **tvojih 10**: EURUSD, GBPUSD, AUDUSD, NZDUSD, USDCAD,
+  USDCHF, USDJPY, XAUUSD, XCUUSD i US100.cash — sa specifikacijama iz tvojih ugovornih listova, ne
+  po „konvenciji koju većina brokera drži".
+- **Veličina je u lotovima.** `point_value` je i veličina ugovora (100.000 za forex lot, 100 za
+  zlato i bakar, 1 za indeks), pa predlog veličine sada ispada u lotovima. Ranije je XAUUSD imao
+  `point_value` 1 i predlagao „590426.70 XAUUSD"; sada piše npr. „0.59 lots".
+- **Provizija i swap su po instrumentu** (`instrument-costs.ts`): 2,5 USD po lotu po strani za
+  forex, 0,0007% od nominale za zlato i bakar, 0 za indeks. Provizija se računa za svaku stranu, pa
+  je povratni put dvostruk.
+- **Swap u poenima**, long i short odvojeno, pretvoren u novac kao `poeni × tick × point_value ×
+  lotovi`. Vikend se naplaćuje trostrukom noći — sredom, a za US100.cash petkom, kako tvoj broker
+  kaže. Subota i nedelja se ne naplaćuju dvaput.
+- Uvoz: `US100.cash` je kanonski naziv, pa se MT5 izveštaj poklapa bez mapiranja; `NAS100`, `USTEC`
+  i slično i dalje vode na njega.

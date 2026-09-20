@@ -62,6 +62,21 @@ export type Instrument = {
   tick_value: number | null;
   /** The currency the instrument is QUOTED in — the currency of `point_value`, and so of gross P&L before conversion. */
   quote_currency: string;
+  /**
+   * What the broker charges on THIS instrument, per side and per night.
+   *
+   * On the instrument rather than the account because one book is charged
+   * three ways: a fee per lot on FX, a share of notional on the metals, and
+   * nothing on the index. `instrument-costs.ts` does the arithmetic.
+   */
+  commission_per_lot: number;
+  commission_pct: number;
+  commission_currency: string;
+  /** Swap in POINTS per lot per night; negative is a cost to the trader. */
+  swap_long: number;
+  swap_short: number;
+  /** ISO weekday charged three times, to collect the weekend (3 = Wed, 5 = Fri). */
+  swap_triple_day: number;
   is_active: boolean;
   sort_order: number;
 };

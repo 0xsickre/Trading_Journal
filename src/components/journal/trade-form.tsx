@@ -94,7 +94,7 @@ import {
 } from "@/lib/journal/plan-calculations";
 import { computePositionStats } from "@/lib/journal/position-stats";
 import { resolveFxRate } from "@/lib/journal/fx";
-import { utcToZonedInput, zonedInputToUtc, fmtInTz, DEFAULT_TZ, DATE_TIME } from "@/lib/journal/time";
+import { utcToZonedInput, zonedInputToUtc, zonedDateKey, fmtInTz, DEFAULT_TZ, DATE_TIME } from "@/lib/journal/time";
 import {
   NO_COST_DEFAULTS,
   nightsBetween,
@@ -124,6 +124,8 @@ import {
   defaultRiskPctOption,
 } from "@/lib/journal/trade-form-prefs";
 import { cn } from "@/lib/utils";
+import { commissionPerSide, swapCharge } from "@/lib/journal/instrument-costs";
+import { sizeUnitLabel } from "@/lib/journal/units";
 import { pickableAccounts, primaryAccount } from "@/lib/journal/account-rules";
 import { InstrumentSelect } from "@/components/journal/instrument-select";
 
@@ -702,8 +704,36 @@ export function TradeForm({
             )
           : 0;
 
-      const fee = prefillFee(qty, costDefaults);
-      const swap = prefillSwap(qty, nights, costDefaults);
+      /**
+       * The instrument's own costs win over the account's.
+       *
+       * This broker charges 2.50 a lot on FX, a share of notional on the
+       * metals and nothing on the index; one account-wide number was wrong for
+       * two of the three. The account defaults stay as the fallback for a
+       * symbol whose costs nobody filled in.
+       */
+      const spec =
+        instrument &&
+        (instrument.commission_per_lot > 0 ||
+          instrument.commission_pct > 0 ||
+          instrument.swap_long !== 0 ||
+          instrument.swap_short !== 0)
+          ? instrument
+          : null;
+      const planPrice = n(String(fields.entry_price ?? "")) ?? 0;
+      const fee = spec
+        ? commissionPerSide(spec, qty, planPrice)
+        : prefillFee(qty, costDefaults);
+      const swap =
+        spec && side === "exit" && firstEntry
+          ? swapCharge({
+              spec,
+              lots: qty,
+              direction: String(fields.direction ?? "").toLowerCase() === "short" ? "short" : "long",
+              openDay: zonedDateKey(zonedInputToUtc(firstEntry.executedLocal, tz), tz),
+              closeDay: zonedDateKey(nowIso, tz),
+            })
+          : prefillSwap(qty, nights, costDefaults);
 
       return [
         ...prev,
@@ -1050,7 +1080,7 @@ export function TradeForm({
                                   : "—",
                               position_size:
                                 metrics.sizeSuggestion != null
-                                  ? `${metrics.sizeSuggestion.toFixed(2)}${instrument?.symbol ? ` ${instrument.symbol}` : ""}`
+                                  ? `${metrics.sizeSuggestion.toFixed(2)} ${sizeUnitLabel(instrument, metrics.sizeSuggestion)}`
                                   : "—",
                             }
                           : undefined
@@ -1259,7 +1289,7 @@ export function TradeForm({
                   label="Position Size"
                   value={
                     metrics.sizeSuggestion != null
-                      ? `${metrics.sizeSuggestion.toFixed(2)}${instrument?.symbol ? ` ${instrument.symbol}` : ""}`
+                      ? `${metrics.sizeSuggestion.toFixed(2)} ${sizeUnitLabel(instrument, metrics.sizeSuggestion)}`
                       : "—"
                   }
                 />
