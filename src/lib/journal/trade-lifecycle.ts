@@ -51,12 +51,11 @@ export function validateFills(fills: FillCheck[]): string | null {
   if (exits.length === 0) return null;
   if (entries.length === 0) return "An exit fill needs an entry fill before it.";
 
-  const entryQty = entries.reduce((s, f) => s + f.qty, 0);
-  const exitQty = exits.reduce((s, f) => s + f.qty, 0);
-  // A hair of tolerance: 0.1 + 0.2 lots must not read as an over-exit of 0.3.
-  if (exitQty > entryQty + 1e-9) {
-    return `Exits total ${round(exitQty)} but entries only ${round(entryQty)} — a position cannot close more than was opened.`;
-  }
+  const over = overExitMessage(
+    entries.reduce((s, f) => s + f.qty, 0),
+    exits.reduce((s, f) => s + f.qty, 0),
+  );
+  if (over) return over;
 
   const firstEntry = Math.min(...entries.map((f) => Date.parse(f.executedAt!)));
   const early = fills.findIndex(
@@ -68,6 +67,60 @@ export function validateFills(fills: FillCheck[]): string | null {
 
 function round(n: number): string {
   return String(Math.round(n * 1e6) / 1e6);
+}
+
+/** A hair of tolerance: 0.1 + 0.2 lots must not read as an over-exit of 0.3. */
+const QTY_EPSILON = 1e-9;
+
+/**
+ * Closing more than was opened, said once.
+ *
+ * Extracted from `validateFills` so the fills editor can say it WHILE the
+ * quantity is being typed, in the same words the save refuses it with. Two
+ * wordings for one rule would let the screen and the save path disagree about
+ * what is wrong.
+ *
+ * Null when the fills are consistent — including when nothing has been exited.
+ */
+export function overExitMessage(
+  entryQty: number,
+  exitQty: number,
+): string | null {
+  if (exitQty <= entryQty + QTY_EPSILON) return null;
+  return `Exits total ${round(exitQty)} but entries only ${round(entryQty)} — a position cannot close more than was opened.`;
+}
+
+/**
+ * What is still open: entries minus exits, never below zero.
+ *
+ * An over-exit is a data-entry error, not a negative position — `computeStatus`
+ * already calls it closed rather than blocking — so this clamps at 0 and leaves
+ * the complaining to `overExitMessage`.
+ */
+export function openQty(entryQty: number, exitQty: number): number {
+  return Math.max(0, entryQty - exitQty);
+}
+
+/**
+ * Entry, exit and open quantity over a set of fills.
+ *
+ * The one definition. The same three lines lived in `validateFills`, in the
+ * open-positions widget and in the import wizard, and a rounding rule fixed in
+ * one of them stayed wrong in the other two.
+ */
+export function fillTotals(fills: ExecLike[]): {
+  entryQty: number;
+  exitQty: number;
+  openQty: number;
+} {
+  let entry = 0;
+  let exit = 0;
+  for (const f of fills) {
+    const qty = Number.isFinite(f.qty) ? f.qty : 0;
+    if (f.side === "entry") entry += qty;
+    else if (f.side === "exit") exit += qty;
+  }
+  return { entryQty: entry, exitQty: exit, openQty: openQty(entry, exit) };
 }
 
 /**

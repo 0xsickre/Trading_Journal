@@ -3,9 +3,12 @@ import {
   canMarkMissed,
   canRestoreToPlanned,
   computeStatus,
+  fillTotals,
   formatLifecycleStatusLabel,
   hasEntryFill,
   isValidFill,
+  openQty,
+  overExitMessage,
   lifecycleStatusHint,
   statusToTradePhase,
   addsExposure,
@@ -212,6 +215,74 @@ describe("validateFills", () => {
         { side: "exit", qty: 1, executedAt: at(9) },
       ]),
     ).toBe("Fill 2 exits before the first entry.");
+  });
+});
+
+describe("openQty", () => {
+  it("what is left of the position", () => {
+    expect(openQty(4.78, 0)).toBe(4.78);
+    expect(openQty(4.78, 3)).toBeCloseTo(1.78, 10);
+    expect(openQty(2, 2)).toBe(0);
+  });
+
+  it("clamps at zero — an over-exit is bad data, not a negative position", () => {
+    expect(openQty(1, 2)).toBe(0);
+  });
+});
+
+describe("fillTotals", () => {
+  it("adds up each side and what stays open", () => {
+    // Raw sums, NOT rounded: this is the arithmetic, and the rounding belongs
+    // to the one place a quantity is written for a human — `qtyToInput`.
+    const t = fillTotals([
+      { side: "entry", qty: 2 },
+      { side: "entry", qty: 2.78 },
+      { side: "exit", qty: 3 },
+    ]);
+    expect(t.entryQty).toBeCloseTo(4.78, 10);
+    expect(t.exitQty).toBe(3);
+    expect(t.openQty).toBeCloseTo(1.78, 10);
+  });
+
+  it("nothing in, nothing out", () => {
+    expect(fillTotals([])).toEqual({ entryQty: 0, exitQty: 0, openQty: 0 });
+  });
+
+  it("an unreadable quantity counts as none rather than poisoning the total", () => {
+    // The editor holds quantities as text; a half-typed row arrives as NaN,
+    // and one NaN used to make every figure on the screen NaN.
+    expect(
+      fillTotals([
+        { side: "entry", qty: 2 },
+        { side: "entry", qty: Number.NaN },
+      ]),
+    ).toEqual({ entryQty: 2, exitQty: 0, openQty: 2 });
+  });
+});
+
+describe("overExitMessage", () => {
+  it("silent while the exits fit inside the entries", () => {
+    expect(overExitMessage(2, 0)).toBeNull();
+    expect(overExitMessage(2, 2)).toBeNull();
+    expect(overExitMessage(0.1 + 0.2, 0.3)).toBeNull();
+  });
+
+  it("names both totals when more is closed than was opened", () => {
+    expect(overExitMessage(1, 2)).toBe(
+      "Exits total 2 but entries only 1 — a position cannot close more than was opened.",
+    );
+  });
+
+  it("is the same sentence validateFills refuses with", () => {
+    // One rule, one wording: the fills editor says this live and the save path
+    // says it on submit, and they must not diverge.
+    const at = (h: number) => `2026-04-01T${String(h).padStart(2, "0")}:00:00.000Z`;
+    expect(
+      validateFills([
+        { side: "entry", qty: 1, executedAt: at(9) },
+        { side: "exit", qty: 2, executedAt: at(10) },
+      ]),
+    ).toBe(overExitMessage(1, 2));
   });
 });
 

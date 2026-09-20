@@ -925,3 +925,233 @@ describe("saving an edit does not rewrite the fills it did not touch", () => {
     expect(updateTradeMock).not.toHaveBeenCalled();
   });
 });
+
+describe("the planned size reaches the fill, and the exit cannot exceed it", () => {
+  /**
+   * 1 % of 4 780 is 47.80; over a ten-point stop at point value 1 that is
+   * 4.78 lots — the figure the Plan tab prints, and the one every assertion
+   * below expects to find in the Qty box.
+   */
+  const EQUITY = { "acc-1": 4_780 };
+
+  /** The same symbol, with the costs this broker actually charges on FX. */
+  const PRICED: Instrument = {
+    ...INSTRUMENT,
+    commission_per_lot: 2.5,
+    commission_pct: 0,
+    swap_long: 0,
+    swap_short: 0,
+    swap_triple_day: 3,
+  } as unknown as Instrument;
+
+  function plan(over: Record<string, unknown> = {}) {
+    return baseInitial({
+      status: "planned",
+      fields: {
+        instrument: "EURUSD",
+        direction: "Long",
+        entry_price: "100",
+        stop_price: "90",
+        risk_pct: "1%",
+        ...over,
+      },
+    });
+  }
+
+  function renderPlan(instrument: Instrument = INSTRUMENT, over = {}) {
+    return render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[instrument]}
+        accounts={[ACCOUNT]}
+        accountEquity={EQUITY}
+        initial={plan(over)}
+      />,
+    );
+  }
+
+  /** A fill row, found by the one label that names its number. */
+  function row(i: number): HTMLElement {
+    return screen.getByLabelText(`Remove fill ${i}`).closest("div.grid") as HTMLElement;
+  }
+  /** Price, Qty, Fee, Swap are the row's four text boxes, in that order. */
+  function box(i: number, which: 0 | 1 | 2 | 3): HTMLInputElement {
+    return within(row(i)).getAllByRole("textbox")[which] as HTMLInputElement;
+  }
+  const qty = (i: number) => box(i, 1);
+  const fee = (i: number) => box(i, 2);
+
+  async function type(el: HTMLInputElement, value: string, user: ReturnType<typeof userEvent.setup>) {
+    await user.clear(el);
+    if (value !== "") await user.type(el, value);
+  }
+
+  it("an entry fill opens at the planned size, not at the number 1", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPlan();
+    expect(screen.getAllByDisplayValue("4.78 lots").length).toBeGreaterThan(0);
+
+    await goToExecutionTab(user);
+    await user.click(screen.getByRole("button", { name: /Entry fill/ }));
+
+    expect(qty(1)).toHaveValue("4.78");
+  });
+
+  it("the commission follows that size instead of pricing one lot", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPlan(PRICED);
+    await goToExecutionTab(user);
+    await user.click(screen.getByRole("button", { name: /Entry fill/ }));
+
+    // 2.50 a lot × 4.78. The old seed of 1 put 2.50 here on a 4.78-lot trade.
+    expect(fee(1)).toHaveValue("11.95");
+  });
+
+  it("correcting the size corrects the commission with it", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPlan(PRICED);
+    await goToExecutionTab(user);
+    await user.click(screen.getByRole("button", { name: /Entry fill/ }));
+
+    await type(qty(1), "2", user);
+    expect(fee(1)).toHaveValue("5");
+  });
+
+  it("but never a commission the trader typed themselves", async () => {
+    // The broker's real charge outranks our estimate of it, for good.
+    const user = userEvent.setup({ delay: null });
+    renderPlan(PRICED);
+    await goToExecutionTab(user);
+    await user.click(screen.getByRole("button", { name: /Entry fill/ }));
+
+    await type(fee(1), "7", user);
+    await type(qty(1), "3", user);
+    expect(fee(1)).toHaveValue("7");
+  });
+
+  it("a second entry offers only what is left of the plan", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPlan();
+    await goToExecutionTab(user);
+    await user.click(screen.getByRole("button", { name: /Entry fill/ }));
+    await type(qty(1), "2", user);
+
+    await user.click(screen.getByRole("button", { name: /Entry fill/ }));
+    // 4.78 − 2, not another whole 4.78: adding to a position must not propose
+    // doubling it.
+    expect(qty(2)).toHaveValue("2.78");
+  });
+
+  it("an exit opens at what is still open, and closes the position", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPlan();
+    await goToExecutionTab(user);
+    await user.click(screen.getByRole("button", { name: /Entry fill/ }));
+    await user.click(screen.getByRole("button", { name: /Exit fill/ }));
+
+    expect(qty(2)).toHaveValue("4.78");
+    expect(screen.getByText("Open:").closest("span")).toHaveTextContent("Open: —");
+  });
+
+  it("names what is still open while the position is half closed", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPlan();
+    await goToExecutionTab(user);
+    await user.click(screen.getByRole("button", { name: /Entry fill/ }));
+    await user.click(screen.getByRole("button", { name: /Exit fill/ }));
+    await type(qty(2), "3", user);
+
+    expect(screen.getByText("Open:").closest("span")).toHaveTextContent("Open: 1.78 lots");
+  });
+
+  it("says so WHILE an over-exit is being typed, not only on Save", async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPlan();
+    await goToExecutionTab(user);
+    await user.click(screen.getByRole("button", { name: /Entry fill/ }));
+    await user.click(screen.getByRole("button", { name: /Exit fill/ }));
+    await type(qty(2), "5", user);
+
+    expect(
+      screen.getByText(/Exits total 5 but entries only 4.78/),
+    ).toBeInTheDocument();
+    expect(qty(2)).toHaveAttribute("aria-invalid", "true");
+    // The entry is not the row at fault and is not marked as one.
+    expect(qty(1)).toHaveAttribute("aria-invalid", "false");
+  });
+
+  it("without a contract spec it offers nothing rather than a 1", async () => {
+    // An imported broker symbol that resolves to no instrument: the plan
+    // cannot be sized, so the fill is not sized either. A 1 here is the guess
+    // `computePositionSize` refuses to make.
+    const user = userEvent.setup({ delay: null });
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        accountEquity={EQUITY}
+        initial={plan({ instrument: "GBPJPY.pro" })}
+      />,
+    );
+    await goToExecutionTab(user);
+    await user.click(screen.getByRole("button", { name: /Entry fill/ }));
+
+    expect(qty(1)).toHaveValue("");
+  });
+
+  it("a fill that differs from the plan is noted, never refused", async () => {
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        accountEquity={EQUITY}
+        initial={baseInitial({
+          status: "open",
+          fields: {
+            instrument: "EURUSD",
+            direction: "Long",
+            entry_price: "100",
+            stop_price: "90",
+            position_size: 4.78,
+          },
+          // What an MT5 statement imported over the plan: one lot, not 4.78.
+          executions: [
+            { side: "entry", price: 100, qty: 1, executed_at: "2026-04-01T13:00:00Z", fee: 0, swap_funding: 0, source: "import" },
+          ],
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByText("Filled 1.00 of a planned 4.78 lots."),
+    ).toBeInTheDocument();
+  });
+
+  it("and is silent when the fill matches the plan", async () => {
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        accountEquity={EQUITY}
+        initial={baseInitial({
+          status: "open",
+          fields: {
+            instrument: "EURUSD",
+            direction: "Long",
+            entry_price: "100",
+            stop_price: "90",
+            position_size: 4.78,
+          },
+          executions: [
+            { side: "entry", price: 100, qty: 4.78, executed_at: "2026-04-01T13:00:00Z", fee: 0, swap_funding: 0 },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.queryByText(/of a planned/)).not.toBeInTheDocument();
+  });
+});

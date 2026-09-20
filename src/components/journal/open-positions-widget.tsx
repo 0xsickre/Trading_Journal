@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { fmtNum, fmtPrice } from "@/lib/journal/format";
 import { numberFieldValue } from "@/lib/journal/field-values";
 import { formatDuration } from "@/lib/journal/units";
+import { openQty } from "@/lib/journal/trade-lifecycle";
 import { DAY_TIME, fmtInTz, toEpoch } from "@/lib/journal/time";
 import type { TradeRow } from "@/lib/journal/types";
 
@@ -60,8 +61,13 @@ export function OpenPositionsWidget({
           <ul className="divide-y">
             {open.slice(0, MAX_ROWS).map((t) => {
               const openedAt = t.stats?.opened_at ?? null;
+              // The shared definition, so "size still open" here and the fills
+              // editor's "Open" can never drift apart — including the clamp at
+              // zero, which this copy did not have.
               const left =
-                t.stats != null ? (t.stats.entry_qty ?? 0) - (t.stats.exit_qty ?? 0) : null;
+                t.stats != null
+                  ? openQty(t.stats.entry_qty ?? 0, t.stats.exit_qty ?? 0)
+                  : null;
               const tick = numberFieldValue(t, "tick_size_at_trade");
               const stop = numberFieldValue(t, "stop_price");
               const dir = (t.direction as string | null) ?? "";

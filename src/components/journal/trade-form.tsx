@@ -112,7 +112,9 @@ import {
 import {
   canMarkMissed,
   canRestoreToPlanned,
+  fillTotals,
   isValidFill,
+  overExitMessage,
   statusToTradePhase,
   validateFills,
   type FillSource,
@@ -126,6 +128,12 @@ import {
 import { cn } from "@/lib/utils";
 import { commissionPerSide, swapCharge } from "@/lib/journal/instrument-costs";
 import { sizeUnitLabel } from "@/lib/journal/units";
+import {
+  plannedSize,
+  qtyToInput,
+  seedFillQty,
+  sizeDeviationNote,
+} from "@/lib/journal/fill-defaults";
 import { pickableAccounts, primaryAccount } from "@/lib/journal/account-rules";
 import { InstrumentSelect } from "@/components/journal/instrument-select";
 
@@ -147,6 +155,18 @@ type ExecRow = {
   originalIso?: string;
   originalLocal?: string;
   source?: FillSource;
+  /**
+   * Whether Fee and Swap are still the journal's own suggestion.
+   *
+   * The costs are prefilled from the quantity, and the quantity is the box the
+   * trader most often corrects. Without these flags the commission stayed at
+   * whatever the size was when the row was ADDED: seed 4.78 lots, type 2, and
+   * the fee silently remained the one for 4.78. The moment either box is typed
+   * into it becomes the trader's own figure and is never recomputed again — a
+   * broker's real charge must not be overwritten by our estimate of it.
+   */
+  feeAuto?: boolean;
+  swapAuto?: boolean;
 };
 
 export type FieldValue = string | number | string[] | null;
@@ -657,6 +677,28 @@ export function TradeForm({
   }, [execs, fields, pointValue, fx.rate, account, accountEquity, scaleOutRows]);
 
   /**
+   * The size this trade planned, in lots — the figure the plan tab prints.
+   *
+   * Stored field first, live suggestion second: once a size is on the trade it
+   * is a decision that was made, not one to re-derive from today's equity.
+   */
+  const plannedLots = plannedSize(fields.position_size, metrics.sizeSuggestion);
+
+  /**
+   * Entry, exit and open quantity over the rows AS TYPED — deliberately not
+   * `metrics`, which counts only fills complete enough to price.
+   *
+   * A row with a quantity and no price yet is already exposure the next fill
+   * must be measured against: without this, adding a second entry to a row
+   * whose price was still blank would offer the whole planned size again, and
+   * an over-exit would stay silent until a price happened to be typed.
+   */
+  const qtyTotals = fillTotals(
+    execs.map((e) => ({ side: e.side, qty: n(e.qty) ?? 0 })),
+  );
+  const overExit = overExitMessage(qtyTotals.entryQty, qtyTotals.exitQty);
+
+  /**
    * Answers to rules the checklist is currently OFFERING.
    *
    * The save path writes only these, so an answer recorded while the trade was
@@ -685,55 +727,94 @@ export function TradeForm({
     return out;
   }, [playbooks, playbookId, ruleAnswers, metrics.netPl, breakevenRange]);
 
+  /**
+   * What this fill would cost, at this size.
+   *
+   * Lifted out of `addExec` so the same arithmetic answers both questions it
+   * is asked: what to prefill when a row appears, and what to correct it to
+   * when its quantity changes. It used to run only on the first — the
+   * commission was a fact about the size the row was BORN with.
+   */
+  function costPrefill(
+    side: "entry" | "exit",
+    qty: number,
+    rows: ExecRow[],
+    atIso: string,
+  ): { fee: number; swap: number } {
+    // Swap only accrues once a position has been open overnight, so it is
+    // suggested on exits, measured from the first entry fill.
+    const firstEntry = rows.find((e) => e.side === "entry");
+    const nights =
+      side === "exit" && firstEntry
+        ? nightsBetween(zonedInputToUtc(firstEntry.executedLocal, tz), atIso, tz)
+        : 0;
+
+    /**
+     * The instrument's own costs win over the account's.
+     *
+     * This broker charges 2.50 a lot on FX, a share of notional on the
+     * metals and nothing on the index; one account-wide number was wrong for
+     * two of the three. The account defaults stay as the fallback for a
+     * symbol whose costs nobody filled in.
+     */
+    const spec =
+      instrument &&
+      (instrument.commission_per_lot > 0 ||
+        instrument.commission_pct > 0 ||
+        instrument.swap_long !== 0 ||
+        instrument.swap_short !== 0)
+        ? instrument
+        : null;
+    const planPrice = n(String(fields.entry_price ?? "")) ?? 0;
+    const fee = spec
+      ? commissionPerSide(spec, qty, planPrice)
+      : prefillFee(qty, costDefaults);
+    const swap =
+      spec && side === "exit" && firstEntry
+        ? swapCharge({
+            spec,
+            lots: qty,
+            direction: String(fields.direction ?? "").toLowerCase() === "short" ? "short" : "long",
+            openDay: zonedDateKey(zonedInputToUtc(firstEntry.executedLocal, tz), tz),
+            closeDay: zonedDateKey(atIso, tz),
+          })
+        : prefillSwap(qty, nights, costDefaults);
+    return { fee, swap };
+  }
+
+  /** A cost box holds a figure only when there is one — otherwise the placeholder 0. */
+  function costToInput(v: number): string {
+    return v !== 0 ? String(v) : "";
+  }
+
   function addExec(side: "entry" | "exit") {
     setDirty(true);
     setExecs((prev) => {
       const nowIso = new Date().toISOString();
-      const qtyStr = side === "exit" ? "" : "1";
-      const qty = n(qtyStr) ?? 0;
-
-      // Swap only accrues once a position has been open overnight, so it is
-      // suggested on exits, measured from the first entry fill.
-      const firstEntry = prev.find((e) => e.side === "entry");
-      const nights =
-        side === "exit" && firstEntry
-          ? nightsBetween(
-              zonedInputToUtc(firstEntry.executedLocal, tz),
-              nowIso,
-              tz,
-            )
-          : 0;
 
       /**
-       * The instrument's own costs win over the account's.
+       * The size comes from the plan, not from the number 1.
        *
-       * This broker charges 2.50 a lot on FX, a share of notional on the
-       * metals and nothing on the index; one account-wide number was wrong for
-       * two of the three. The account defaults stay as the fallback for a
-       * symbol whose costs nobody filled in.
+       * An entry opens with what is left of the planned position size, an exit
+       * with what is still open. The old seed was a literal `"1"` on entries:
+       * a quantity nobody computed, sitting in the box that decides the size of
+       * the trade — and, because the cost prefill multiplies by it, a
+       * commission for one lot on a 4.78-lot position.
+       *
+       * Totals come from `prev` rather than from `qtyTotals`, so two fills
+       * added in one React batch still see each other.
        */
-      const spec =
-        instrument &&
-        (instrument.commission_per_lot > 0 ||
-          instrument.commission_pct > 0 ||
-          instrument.swap_long !== 0 ||
-          instrument.swap_short !== 0)
-          ? instrument
-          : null;
-      const planPrice = n(String(fields.entry_price ?? "")) ?? 0;
-      const fee = spec
-        ? commissionPerSide(spec, qty, planPrice)
-        : prefillFee(qty, costDefaults);
-      const swap =
-        spec && side === "exit" && firstEntry
-          ? swapCharge({
-              spec,
-              lots: qty,
-              direction: String(fields.direction ?? "").toLowerCase() === "short" ? "short" : "long",
-              openDay: zonedDateKey(zonedInputToUtc(firstEntry.executedLocal, tz), tz),
-              closeDay: zonedDateKey(nowIso, tz),
-            })
-          : prefillSwap(qty, nights, costDefaults);
+      const totals = fillTotals(
+        prev.map((e) => ({ side: e.side, qty: n(e.qty) ?? 0 })),
+      );
+      const qtyStr = seedFillQty({
+        side,
+        plannedSize: plannedLots,
+        entryQty: totals.entryQty,
+        exitQty: totals.exitQty,
+      });
+      const qty = n(qtyStr) ?? 0;
+      const { fee, swap } = costPrefill(side, qty, prev, nowIso);
 
       return [
         ...prev,
@@ -742,15 +823,49 @@ export function TradeForm({
           price: "",
           qty: qtyStr,
           executedLocal: utcToZonedInput(nowIso, tz),
-          fee: fee !== 0 ? String(fee) : "",
-          swap: swap !== 0 ? String(swap) : "",
+          fee: costToInput(fee),
+          swap: costToInput(swap),
+          feeAuto: true,
+          swapAuto: true,
         },
       ];
     });
   }
   function setExec(i: number, patch: Partial<ExecRow>) {
     setDirty(true);
-    setExecs((prev) => prev.map((e, idx) => (idx === i ? { ...e, ...patch } : e)));
+    setExecs((prev) =>
+      prev.map((e, idx) => {
+        if (idx !== i) return e;
+        // Typing in a cost box claims it. From there it is the broker's figure,
+        // not ours, and no later size change may touch it.
+        const feeAuto = patch.fee !== undefined ? false : e.feeAuto;
+        const swapAuto = patch.swap !== undefined ? false : e.swapAuto;
+        const merged = { ...e, ...patch, feeAuto, swapAuto };
+
+        // Built, never mutated: a row spread out of state is still state as
+        // far as the React Compiler is concerned, and writing a field on it
+        // costs the whole component its memoization.
+        const resized = patch.qty !== undefined || patch.side !== undefined;
+        if (!resized || (!feeAuto && !swapAuto)) return merged;
+
+        // The row time as a plain instant, rather than the whole row through
+        // `execInstant`. Handing a spread-of-state object to a helper from
+        // inside a state updater is enough for the React Compiler to abandon
+        // this component (`react-hooks/preserve-manual-memoization`), and the
+        // seconds `execInstant` preserves do not change a count of nights.
+        const { fee, swap } = costPrefill(
+          merged.side,
+          n(merged.qty) ?? 0,
+          prev,
+          zonedInputToUtc(merged.executedLocal, tz) ?? new Date().toISOString(),
+        );
+        return {
+          ...merged,
+          fee: feeAuto ? costToInput(fee) : merged.fee,
+          swap: swapAuto ? costToInput(swap) : merged.swap,
+        };
+      }),
+    );
   }
   function removeExec(i: number) {
     setDirty(true);
@@ -1043,6 +1158,17 @@ export function TradeForm({
                     metrics={metrics}
                     currency={currency}
                     tickSize={instrument?.tick_size ?? null}
+                    openQty={qtyTotals.openQty}
+                    overExit={overExit}
+                    sizeUnit={sizeUnitLabel(instrument, qtyTotals.openQty)}
+                    sizeNote={sizeDeviationNote({
+                      plannedSize: plannedLots,
+                      entryQty: qtyTotals.entryQty,
+                      // Pluralised on the PLANNED size, because that is the
+                      // number the unit word sits next to: "a planned 4.78
+                      // lots", not "a planned 4.78 lot" after a 1-lot fill.
+                      unit: sizeUnitLabel(instrument, plannedLots ?? qtyTotals.entryQty),
+                    })}
                   />
                 )}
 
@@ -1921,6 +2047,10 @@ function ExecutionsEditor({
   metrics,
   currency,
   tickSize,
+  openQty,
+  overExit,
+  sizeUnit,
+  sizeNote,
 }: {
   execs: ExecRow[];
   tz: string;
@@ -1944,6 +2074,25 @@ function ExecutionsEditor({
   currency: string;
   /** The instrument's tick, so a 5-decimal FX price is not shown as 2 decimals. */
   tickSize: number | null;
+  /** What is still open: entries minus exits, over the rows as typed. */
+  openQty: number;
+  /**
+   * The over-exit complaint, live — the same sentence, from the same function,
+   * that the save path refuses with. It used to appear only on Save, so a
+   * trader could type a 5-lot exit against a 2-lot entry and find out several
+   * fields later.
+   */
+  overExit: string | null;
+  /** "lot" / "lots" / "contracts", for the open figure. */
+  sizeUnit: string;
+  /**
+   * Filled size against planned size, when the two differ.
+   *
+   * A note, never a refusal: a broker statement is the truth about what was
+   * traded, and sizing down mid-entry is the trader's right. What a sizing
+   * deviation must not be is invisible.
+   */
+  sizeNote: string | null;
 }) {
   return (
     <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
@@ -1998,10 +2147,19 @@ function ExecutionsEditor({
             </div>
             <div className="col-span-6 sm:col-span-1">
               <Label className="text-[11px] text-muted-foreground">Qty</Label>
+              {/* Marked, not clamped. Cutting the value down while it is being
+                  typed turns "0.5" into "0.5.5" the moment the first digit
+                  exceeds what is open. */}
               <Input
-                className="h-8"
+                className={cn(
+                  "h-8",
+                  overExit != null &&
+                    e.side === "exit" &&
+                    "border-destructive focus-visible:ring-destructive",
+                )}
                 inputMode="decimal"
                 value={e.qty}
+                aria-invalid={overExit != null && e.side === "exit"}
                 onChange={(ev) => onSet(i, { qty: ev.target.value })}
               />
             </div>
@@ -2053,6 +2211,12 @@ function ExecutionsEditor({
             No fills yet — add an entry when you enter, and exits when you close.
           </p>
         )}
+        {overExit != null && (
+          <p className="text-sm font-medium text-destructive">{overExit}</p>
+        )}
+        {overExit == null && sizeNote != null && (
+          <p className="text-xs text-muted-foreground">{sizeNote}</p>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-x-6 gap-y-1 border-t pt-2 text-sm">
@@ -2081,6 +2245,12 @@ function ExecutionsEditor({
         </span>
         <span className="text-muted-foreground">
           Size: <b className="text-foreground">{metrics.entryQty || "—"}</b>
+        </span>
+        <span className="text-muted-foreground">
+          Open:{" "}
+          <b className={openQty > 0 ? "text-foreground" : "text-muted-foreground"}>
+            {openQty > 0 ? `${qtyToInput(openQty)} ${sizeUnit}` : "—"}
+          </b>
         </span>
         <span className="text-muted-foreground">
           Gross:{" "}
