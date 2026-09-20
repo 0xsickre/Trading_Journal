@@ -1376,3 +1376,17 @@ Profit factor 2.4 na 12 trejdova i 2.4 na 300 izgledali su identično. Jedina od
   od osamdeset sa 60%. `minSample` ostaje samo kao kapija za rangiranje.
 - **Usput, brzina:** sortiranje je odvojeno od računanja (`sortRows` je izvezen). Klik na zaglavlje je
   ranije ponovo pokretao ceo motor; sa bootstrap-om bi to bio zastoj od nekoliko sekundi.
+
+### Faza C — preživljavanje (21.09.2026.)
+
+- **Portfolio heat:** zbirni otvoren rizik, **po nalogu** (procenti dva naloga se ne sabiraju), sa
+  preostalom količinom kod delimično zatvorenih pozicija i brojem „3 od 4 izmereno" umesto da
+  pozicija bez stopa uđe kao nula. Stoji u widgetu otvorenih pozicija, žuto iznad tvog tracker limita.
+- **Trajanje drawdowna:** `drawdownEpisodes` iz iste šetnje po vrhovima koja već daje dubinu — najduže
+  pod vodom, koliko traje trenutni pad, koliko je trebalo da se izađe iz najdubljeg. Dve nove pločice.
+- **Survival simulacija:** blok-bootstrap dnevnih prinosa, 60 dana unapred, 2000 pokretanja.
+  **Radi i bez FTMO-a** — tada je prag tvoj najgori istorijski drawdown. Kartica ispisuje pretpostavke
+  (koliko dana istorije, koja veličina bloka) jer verovatnoća bez napisane pretpostavke izgleda kao
+  merenje.
+- **Držano istovremeno:** po paru instrumenata, broj dana zajedničke izloženosti i korelacija dnevnog
+  P&L-a sa Fisher-z intervalom, koja se ne prikazuje ispod pet zajedničkih dana zatvaranja.

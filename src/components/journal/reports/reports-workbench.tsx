@@ -39,6 +39,12 @@ import {
 } from "@/lib/journal/reports/dimensions";
 import { parseSort, runReport, sortRows, summarizeReport } from "@/lib/journal/reports/engine";
 import {
+  dailyPnlByInstrument,
+  instrumentPairs,
+  spansOf,
+} from "@/lib/journal/co-exposure";
+import { CoExposurePanel } from "@/components/journal/reports/co-exposure-panel";
+import {
   MIN_SAMPLE_OPTIONS,
   asMinSample,
   asPnlBasis,
@@ -360,6 +366,24 @@ export function ReportsWorkbench({
     () => applyFilters(enriched, filters, dimensionContext),
     [enriched, filters, dimensionContext],
   );
+
+  /**
+   * Which instruments were carried at the same time.
+   *
+   * Built from the filtered set, so it answers about the book on screen. The
+   * spans run to today, which for a closed book is simply the last day each
+   * position was open.
+   */
+  const pairs = useMemo(() => {
+    const rows = scopedBook.map((t) => t.trade.row);
+    const tz = (row: TradeRow) => tzOf({ row });
+    const today = new Date().toISOString().slice(0, 10);
+    return instrumentPairs(
+      spansOf(rows, tz, today),
+      dailyPnlByInstrument(rows, tz, (row) => row.stats?.net_pl ?? null),
+    );
+  }, [scopedBook, tzOf]);
+
 
   /**
    * The report itself — WITHOUT the sort.
@@ -693,6 +717,7 @@ export function ReportsWorkbench({
               sortBy={sortBy}
               onSort={(s) => setParam({ sort: s })}
             />
+            <CoExposurePanel pairs={pairs} />
           </>
         )
       )}

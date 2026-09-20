@@ -4,7 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { fmtNum, fmtPrice } from "@/lib/journal/format";
+import { fmtMoney, fmtNum, fmtPrice } from "@/lib/journal/format";
+import { heatByAccount, heatExceedsPerTradeLimit } from "@/lib/journal/portfolio-heat";
+import { cn } from "@/lib/utils";
 import { numberFieldValue } from "@/lib/journal/field-values";
 import { formatDuration } from "@/lib/journal/units";
 import { openQty } from "@/lib/journal/trade-lifecycle";
@@ -26,11 +28,19 @@ export function OpenPositionsWidget({
   rows,
   tzOf,
   now: nowProp,
+  equityOf,
+  currency = "USD",
+  perTradeLimitPct = null,
 }: {
   rows: TradeRow[];
   tzOf: (t: TradeRow) => string;
   /** Injected for tests; the mount time otherwise. */
   now?: number;
+  /** Current equity per account — the denominator of the heat figure. */
+  equityOf?: (accountId: string) => number | null;
+  currency?: string;
+  /** The tracker's own per-trade ceiling, when one is configured. */
+  perTradeLimitPct?: number | null;
 }) {
   // Read once per mount: "held for" is a glance, not a ticking clock.
   const [now] = useState(() => nowProp ?? Date.now());
@@ -40,6 +50,12 @@ export function OpenPositionsWidget({
       (a, b) =>
         toEpoch(b.stats?.opened_at ?? b.created_at) - toEpoch(a.stats?.opened_at ?? a.created_at),
     );
+
+  /**
+   * Open risk, per account and never summed across them: 2 % of a 5,000
+   * account and 2 % of a 100,000 one are not 4 % of anything that exists.
+   */
+  const heats = equityOf ? heatByAccount(open, equityOf) : [];
 
   return (
     <Card className="h-full">
@@ -55,6 +71,32 @@ export function OpenPositionsWidget({
         </Link>
       </CardHeader>
       <CardContent>
+        {heats.length > 0 && (
+          <div className="mb-2 space-y-0.5 border-b pb-2">
+            {heats.map((h) => {
+              const over = heatExceedsPerTradeLimit(h, perTradeLimitPct);
+              return (
+                <p key={h.accountId} className="flex items-baseline justify-between text-xs">
+                  <span className="text-muted-foreground">
+                    Open risk
+                    {heats.length > 1 && ` · ${h.accountId.slice(0, 8)}`}
+                  </span>
+                  <span
+                    className={cn("tabular-nums", over && "font-medium text-amber-600 dark:text-amber-500")}
+                  >
+                    {h.totalRiskPct != null ? `${h.totalRiskPct.toFixed(2)}%` : "—"}
+                    <span className="ml-1 text-muted-foreground">
+                      {fmtMoney(h.totalRiskMoney, currency)}
+                      {/* Unmeasured is not safe: a position with no stop is
+                          counted here rather than added as a zero. */}
+                      {h.unpriced > 0 && ` · ${h.priced} of ${h.priced + h.unpriced} measured`}
+                    </span>
+                  </span>
+                </p>
+              );
+            })}
+          </div>
+        )}
         {open.length === 0 ? (
           <p className="py-4 text-sm text-muted-foreground">No open positions.</p>
         ) : (

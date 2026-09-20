@@ -27,6 +27,11 @@ const MONEY_MODULES = [
   // An interval is a claim about money like any other: it decides which figure
   // the reader is allowed to believe, and which bucket gets crowned "best".
   "src/lib/journal/uncertainty.ts",
+  // Survival: open risk in percent of equity, and a simulation whose output a
+  // reader will treat as a probability. Both decide whether a position is
+  // taken, which is the test this list applies.
+  "src/lib/journal/portfolio-heat.ts",
+  "src/lib/journal/survival.ts",
   // Does not compute money — GUARDS it. The only check standing between a
   // missed sign and a `gross_pl` that looks perfectly healthy (measured: entry
   // −5000, exit −4990 on ES gives +$500 and R = 1.00, with no flag anywhere). A

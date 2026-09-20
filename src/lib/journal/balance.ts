@@ -13,7 +13,13 @@
  * in or out of the account.
  */
 
-import { compareInstants, toEpoch } from "./time";
+import {
+  compareInstants,
+  daysBetweenDayKeys,
+  toEpoch,
+  zonedDateKey,
+  DEFAULT_TZ,
+} from "./time";
 
 export type CashEventType = "deposit" | "withdrawal" | "payout" | "adjustment";
 
@@ -280,6 +286,123 @@ export function computeDrawdown(timeline: BalancePoint[]): DrawdownStats {
         : 0,
     currentMoney,
     currentPctOfEquity,
+  };
+}
+
+/**
+ * One drawdown from the peak that started it to the peak that ended it.
+ *
+ * WHY TIME, NOT ONLY DEPTH. `computeDrawdown` answers how far the curve fell
+ * and says nothing about how long it stayed down: −8 % over three days and
+ * −8 % over four months render identically today, and for a prop account and
+ * for a trader's nerve they are not the same event. Every input is already in
+ * the timeline — the walk below only kept the depth and threw the instants
+ * away.
+ */
+export type DrawdownEpisode = {
+  /** The peak the fall started from. */
+  startAt: string;
+  /** The deepest point of the fall. */
+  troughAt: string;
+  /** The point that regained the peak; null while it never has. */
+  recoveredAt: string | null;
+  depthMoney: number;
+  /** Calendar days from the peak to the recovery, or to the last point when still under. */
+  days: number;
+  /** Days from the trough to the recovery — how long the climb back took. */
+  daysToRecover: number | null;
+};
+
+/**
+ * Every drawdown episode, in order.
+ *
+ * Days are counted on CALENDAR DAY KEYS in the account's zone, not on elapsed
+ * hours: "eleven days under water" is a statement about days a trader lived
+ * through, and 11 × 24 hours would answer a different question at every DST
+ * boundary. Same convention as `bookEquityLadder`, which takes its zone the
+ * same way.
+ */
+export function drawdownEpisodes(
+  timeline: BalancePoint[],
+  tz: string = DEFAULT_TZ,
+): DrawdownEpisode[] {
+  if (timeline.length <= 1) return [];
+
+  const out: DrawdownEpisode[] = [];
+  // The peak an open episode fell from, and the worst point since.
+  let startAt: string | null = null;
+  let troughAt = "";
+  let depth = 0;
+  let lastPeakAt = timeline[0]?.at ?? "";
+  let lastAt = lastPeakAt;
+
+  const close = (recoveredAt: string | null, endAt: string) => {
+    if (startAt == null || depth >= 0) return;
+    out.push({
+      startAt,
+      troughAt,
+      recoveredAt,
+      depthMoney: depth,
+      days: daysBetween(startAt, endAt, tz),
+      daysToRecover: recoveredAt ? daysBetween(troughAt, recoveredAt, tz) : null,
+    });
+    startAt = null;
+    depth = 0;
+  };
+
+  for (const w of walkPeaks(timeline)) {
+    lastAt = w.point.at || lastAt;
+    if (w.isNewPeak) {
+      // Regaining the peak ends whatever was open, and starts nothing.
+      close(w.point.at || null, w.point.at || lastAt);
+      lastPeakAt = w.point.at || lastPeakAt;
+      continue;
+    }
+    if (w.dropMoney < 0) {
+      if (startAt == null) startAt = lastPeakAt;
+      if (w.dropMoney < depth) {
+        depth = w.dropMoney;
+        troughAt = w.point.at || lastAt;
+      }
+    }
+  }
+  // Still under water at the end of the book: a real episode with no recovery.
+  close(null, lastAt);
+
+  return out;
+}
+
+/** Whole calendar days between two instants, on the account's clock. */
+function daysBetween(fromISO: string, toISO: string, tz: string): number {
+  const from = zonedDateKey(fromISO, tz);
+  const to = zonedDateKey(toISO, tz);
+  if (!from || !to) return 0;
+  return Math.max(0, daysBetweenDayKeys(from, to));
+}
+
+/** The longest stretch under water, and whether the book is under one now. */
+export type DrawdownDuration = {
+  /** Days of the longest episode, recovered or not. */
+  longestDays: number;
+  /** Days the current, unrecovered episode has run; 0 when at a peak. */
+  currentDays: number;
+  /** How long the climb out of the DEEPEST episode took; null if never. */
+  daysToRecoverWorst: number | null;
+  episodes: number;
+};
+
+export function drawdownDuration(episodes: readonly DrawdownEpisode[]): DrawdownDuration {
+  if (episodes.length === 0)
+    return { longestDays: 0, currentDays: 0, daysToRecoverWorst: null, episodes: 0 };
+
+  const worst = episodes.reduce((a, b) => (b.depthMoney < a.depthMoney ? b : a));
+  const open = episodes.find((e) => e.recoveredAt == null);
+
+  return {
+    longestDays: Math.max(...episodes.map((e) => e.days)),
+    currentDays: open?.days ?? 0,
+    daysToRecoverWorst: worst.daysToRecover,
+    episodes: episodes.length,
   };
 }
 

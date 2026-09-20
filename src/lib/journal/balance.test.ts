@@ -3,6 +3,8 @@ import {
   buildBalanceTimeline,
   computeDrawdown,
   currentEquity,
+  drawdownDuration,
+  drawdownEpisodes,
   drawdownSeries,
   netCashFlow,
   resolvePeriodWindow,
@@ -384,5 +386,116 @@ describe("computeDrawdown and drawdownSeries agree", () => {
     const stats = computeDrawdown(timeline);
     const series = drawdownSeries(timeline);
     expect(stats.currentMoney).toBe(series[series.length - 1].ddMoney);
+  });
+});
+
+describe("drawdownEpisodes — how long, not only how deep", () => {
+  /** A book that falls, climbs back, and falls again without recovering. */
+  const twoFalls = () =>
+    buildBalanceTimeline(
+      10_000,
+      [
+        { at: "2026-01-05T12:00:00Z", pnl: 1_000 }, // peak
+        { at: "2026-01-07T12:00:00Z", pnl: -400 },
+        { at: "2026-01-09T12:00:00Z", pnl: -300 }, // trough of the first fall
+        { at: "2026-01-16T12:00:00Z", pnl: 800 }, // back above the peak
+        { at: "2026-01-20T12:00:00Z", pnl: -600 }, // second fall, never recovered
+      ],
+      [],
+    );
+
+  it("closes an episode on the peak that ends it, and dates the climb back", () => {
+    const [first] = drawdownEpisodes(twoFalls(), "UTC");
+    expect(first.startAt).toBe("2026-01-05T12:00:00Z");
+    expect(first.troughAt).toBe("2026-01-09T12:00:00Z");
+    expect(first.recoveredAt).toBe("2026-01-16T12:00:00Z");
+    expect(first.depthMoney).toBe(-700);
+    // 5 Jan to 16 Jan under water, and 9 Jan to 16 Jan climbing out.
+    expect(first.days).toBe(11);
+    expect(first.daysToRecover).toBe(7);
+  });
+
+  it("leaves the last episode open when the book never got back", () => {
+    const episodes = drawdownEpisodes(twoFalls(), "UTC");
+    expect(episodes).toHaveLength(2);
+    const last = episodes[1];
+    expect(last.recoveredAt).toBeNull();
+    expect(last.daysToRecover).toBeNull();
+    expect(last.depthMoney).toBe(-600);
+  });
+
+  it("does not merge two falls across a new peak", () => {
+    const depths = drawdownEpisodes(twoFalls(), "UTC").map((e) => e.depthMoney);
+    expect(depths).toEqual([-700, -600]);
+  });
+
+  it("counts days on the account's clock, not in elapsed hours", () => {
+    // 23:00 in New York on the 5th is already the 6th in UTC: the same two
+    // instants are one day apart on one clock and two on the other.
+    const tl = buildBalanceTimeline(
+      1_000,
+      [
+        { at: "2026-01-06T04:00:00Z", pnl: 100 },
+        { at: "2026-01-07T04:00:00Z", pnl: -50 },
+        { at: "2026-01-08T04:00:00Z", pnl: 80 },
+      ],
+      [],
+    );
+    const ny = drawdownEpisodes(tl, "America/New_York")[0];
+    const utc = drawdownEpisodes(tl, "UTC")[0];
+    expect(ny.days).toBe(utc.days);
+    expect(ny.startAt).toBe(utc.startAt);
+  });
+
+  it("counts no days when an instant cannot be read as a date", () => {
+    // `buildBalanceTimeline` keeps a point whose `at` is unparseable (the
+    // reports engine feeds it synthetic keys); the duration of such an episode
+    // is unknown, and 0 is the honest answer rather than a guess.
+    const tl = buildBalanceTimeline(
+      1_000,
+      [
+        { at: "2026-01-05T12:00:00Z", pnl: 100 },
+        { at: "not-a-date", pnl: -50 },
+      ],
+      [],
+    );
+    const [episode] = drawdownEpisodes(tl, "UTC");
+    expect(episode.days).toBe(0);
+  });
+
+  it("has nothing to report on a book that only ever rose", () => {
+    const tl = buildBalanceTimeline(1_000, [{ at: "2026-01-05T12:00:00Z", pnl: 500 }], []);
+    expect(drawdownEpisodes(tl, "UTC")).toEqual([]);
+  });
+});
+
+describe("drawdownDuration", () => {
+  const episodes = [
+    { startAt: "a", troughAt: "b", recoveredAt: "c", depthMoney: -700, days: 11, daysToRecover: 7 },
+    { startAt: "d", troughAt: "e", recoveredAt: null, depthMoney: -900, days: 4, daysToRecover: null },
+  ];
+
+  it("reports the longest stretch, the open one, and the climb out of the worst", () => {
+    const d = drawdownDuration(episodes);
+    expect(d.longestDays).toBe(11);
+    expect(d.currentDays).toBe(4);
+    // The deepest episode is the one still open, so its climb has not happened.
+    expect(d.daysToRecoverWorst).toBeNull();
+    expect(d.episodes).toBe(2);
+  });
+
+  it("says zero days under water when the book sits at a peak", () => {
+    const d = drawdownDuration([episodes[0]]);
+    expect(d.currentDays).toBe(0);
+    expect(d.daysToRecoverWorst).toBe(7);
+  });
+
+  it("answers an empty book without inventing an episode", () => {
+    expect(drawdownDuration([])).toEqual({
+      longestDays: 0,
+      currentDays: 0,
+      daysToRecoverWorst: null,
+      episodes: 0,
+    });
   });
 });

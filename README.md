@@ -140,7 +140,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,803 tests across 167 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,871 tests across 172 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -412,6 +412,8 @@ of quietly showing a number in the wrong unit. Accounts sharing a currency still
 | Calmar | `annualised return / max drawdown` | Recovery factor divided by the time it took |
 | Consistency | `100 − cv × 20`, where `cv = σ / \|mean\|` | 0 for a losing book |
 | Avg MAE in R | Average of how far trades went against the position | Averaged only over trades that *have* an MAE |
+| Longest drawdown | Days from the peak that started the deepest-or-longest fall to the peak that ended it | Counted on calendar day keys in the account's zone, so it is days lived through, not 24-hour blocks |
+| Under water now | Days since the last equity peak | 0 at a new peak; a fall that never recovered keeps counting |
 | Avg risk taken | Mean of `riskPctTaken` over the group | The stop distance at the size filled, over the equity the entry day opened with. `null` for a trade with no stop, an unpriced instrument or an unknown entry-day equity — never 0 |
 | Max risk taken | The largest of the same | The single biggest bet in the group |
 | Risk dispersion | Population σ of `riskPctTaken` | The sizing-discipline number. `null` under two trades: one trade has no spread |
@@ -753,6 +755,35 @@ only the chosen one.
 stay forever as a value nobody meant, and "not recorded" and "1" are different answers.
 
 ---
+
+## Survival
+
+**Portfolio heat** is the open risk of one account, as a percentage of that account's equity right
+now (`portfolio-heat.ts`). Per account and never summed across them: 2 % of a €5,000 account plus 2 %
+of a $100,000 one is not 4 % of anything. A half-closed position carries its REMAINING risk, and a
+position with no stop is counted separately — "3 of 4 measured" — because treating an unmeasurable
+position as zero would turn "I do not know" into "it is safe".
+
+**The survival simulation** (`survival.ts`) is the only forward-looking figure in the application. It
+replays the account's own daily results — as percentages of the equity each day opened with — a few
+thousand times over the next sixty trading days, and counts how often the run hits a floor, breaks a
+daily limit, reaches a target, or simply ends lower than it began.
+
+Three things about it are deliberate. **Days, not trades**: a prop account's binding rule is a daily
+loss limit, and a bad session is several trades rather than one. **Blocks, not single days**: drawing
+one day at a time assumes today says nothing about tomorrow, and the run of losses that ends an
+account is a correlated stretch; the trader chooses between single days and weeks, and the choice is
+on the card because it changes the answer. **Thresholds have two sources**: with FTMO on they are the
+challenge's rules; with it off they are the trader's own — defaulting to the worst drawdown the book
+has already seen — so the card works on any account. It is seeded from the data, so the same book
+always gets the same answer, and it states its assumptions beside the number: a probability with a
+hidden assumption reads as a measurement.
+
+**Held at the same time** (`co-exposure.ts`) answers whether three positions are really one. It gives
+two numbers per pair, because the familiar one is the weaker: the OVERLAP is days both instruments
+were open, which is a fact about exposure; the CORRELATION compares days on which both *closed*
+something, which on a swing book is a much smaller set. The coefficient carries a Fisher-z interval
+and is withheld entirely below five shared days.
 
 ## Process tracking
 
@@ -1136,9 +1167,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,803 tests across 167 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,213 tests in 113 files) and `components` (environment `jsdom`, files `*.test.tsx`, 590
-tests in 54 files). The rule is the extension, so no file can land in both. The split exists so that
+2,871 tests across 172 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,272 tests in 116 files) and `components` (environment `jsdom`, files `*.test.tsx`, 599
+tests in 56 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves

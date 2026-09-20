@@ -32,6 +32,7 @@ import { StatGroup } from "@/components/journal/stat-group";
 import { CalendarHeatmap } from "@/components/journal/calendar-heatmap";
 import { TrackerStreakCard } from "@/components/journal/tracker-streak-card";
 import { bookEquityLadder } from "@/lib/journal/tracker/equity-ladder";
+import { drawdownDuration, drawdownEpisodes } from "@/lib/journal/balance";
 
 /**
  * Every recharts plot on this page, behind a lazy boundary.
@@ -247,6 +248,15 @@ import {
 } from "@/lib/journal/dashboard-view";
 import { formatDuration } from "@/lib/journal/units";
 import { OpenPositionsWidget } from "@/components/journal/open-positions-widget";
+import { SurvivalCard } from "@/components/journal/survival-card";
+import {
+  dayReturnsFrom,
+  simulateSurvival,
+  thresholdsFor,
+} from "@/lib/journal/survival";
+
+/** Roughly a quarter of trading days — far enough to matter, near enough to plan. */
+const SURVIVAL_HORIZON_DAYS = 60;
 import { RecentTradesWidget } from "@/components/journal/recent-trades-widget";
 import {
   computeDailyDrawdown,
@@ -686,6 +696,8 @@ export function Dashboard({
   // no single planned risk to convert through), so the R curve was
   // unreachable. The curve is built in R directly, trade by trade.
   const [equityMetric, setEquityMetric] = useState<"money" | "r">("money");
+  /** Single days, or weeks — see `survival.ts` on why the choice is visible. */
+  const [survivalBlock, setSurvivalBlock] = useState(1);
 
   // The scope is remembered for the tab: leave for a trade and come back to
   // the same account, period and basis. Read after mount — sessionStorage does
@@ -909,6 +921,42 @@ export function Dashboard({
   );
 
   /**
+   * Current equity PER ACCOUNT — the denominator portfolio heat divides by.
+   *
+   * Separate from `equityBase` below, and it has to be: that one is a single
+   * pooled figure for the percentage view, while heat is a percentage of one
+   * account at a time. Adding two accounts' percentages together would be a
+   * number describing nothing.
+   */
+  const equityByAccount = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const a of accounts) {
+      out[a.id] = currentEquity(
+        buildBalanceTimeline(
+          a.starting_balance,
+          realizedAll
+            .filter((t) => t.row.account_id === a.id)
+            .map((t) => ({ at: t.closedAt ?? "", pnl: t.net })),
+          cashEvents.filter((c) => c.account_id === a.id),
+        ),
+      );
+    }
+    return out;
+  }, [accounts, realizedAll, cashEvents]);
+
+  /**
+   * The ceiling the trader set for a single trade, when the tracker carries
+   * one. Heat is a different question, but a book holding more open risk than
+   * one entry is allowed to take is worth saying out loud.
+   */
+  const perTradeRiskLimitPct = useMemo(() => {
+    const rule = trackerRules.find(
+      (r) => r.auto_key === "risk_per_trade" && r.deleted_at == null,
+    );
+    return rule?.config?.pct ?? null;
+  }, [trackerRules]);
+
+  /**
    * Denominator for Percentage view mode — current equity, not starting
    * balance. Built through `buildBalanceTimeline`/`currentEquity` exactly like
    * `/reports` does (`reports-workbench.tsx`), so the two screens cannot
@@ -1005,6 +1053,18 @@ export function Dashboard({
       ),
     [realized, mode, windowed],
   );
+  /**
+   * How LONG the book was down, not only how far.
+   *
+   * −8 % over three days and −8 % over four months are two different events and
+   * rendered identically until now. Everything here comes off the same timeline
+   * the depth does, so the two can never describe different episodes.
+   */
+  const ddDuration = useMemo(
+    () => drawdownDuration(drawdownEpisodes(balanceTimeline, timezone)),
+    [balanceTimeline, timezone],
+  );
+
   const drawdown = useMemo(
     () => computeDrawdown(balanceTimeline),
     [balanceTimeline],
@@ -1359,6 +1419,67 @@ export function Dashboard({
     () => dailyPnl(realizedAll, mode, tzOf),
     [realizedAll, mode, tzOf],
   );
+  /**
+   * Equity as each day OPENED, for the simulation's denominators.
+   *
+   * The same ladder the tracker judges its daily limits against, so a 2 % day
+   * means the same thing on both screens.
+   */
+  const dayEquityOf = useMemo(() => {
+    const scoped =
+      accountFilter === "all"
+        ? trades
+        : trades.filter((t) => t.account_id === accountFilter);
+    return bookEquityLadder(
+      buildTradeDayIndex(scoped, (row) => tzForAccount(row.account_id)),
+      accountFilter === "all" ? accounts : accounts.filter((a) => a.id === accountFilter),
+      scopedCashEvents,
+      tzForAccount,
+    );
+  }, [trades, accounts, accountFilter, scopedCashEvents, tzForAccount]);
+
+  /**
+   * The simulation behind the Survival card.
+   *
+   * Its input is the book's own daily results as percentages of the equity each
+   * day opened with, so the run compounds the way the account does and every
+   * threshold is a percentage of the same thing. Thresholds come from the
+   * challenge when one is on, and from the trader's own worst historical
+   * drawdown when it is not — the simulation itself does not know the
+   * difference.
+   */
+  const survival = useMemo(() => {
+    const account =
+      accountFilter === "all"
+        ? (accounts.find((a) => a.ftmo_mode) ?? accounts[0] ?? null)
+        : (accounts.find((a) => a.id === accountFilter) ?? null);
+    if (!account) return null;
+
+    const returns = dayReturnsFrom(daily, (day) => dayEquityOf(day));
+    const ftmoOn = account.ftmo_mode === true;
+    const thresholds = thresholdsFor({
+      ftmoEnabled: ftmoOn,
+      ftmoMaxLossPct: account.ftmo_max_loss_enabled ? account.ftmo_max_loss_pct : null,
+      ftmoDailyLossPct: account.ftmo_daily_loss_enabled ? account.ftmo_daily_loss_pct : null,
+      ftmoProfitTargetPct: account.ftmo_profit_target_enabled
+        ? account.ftmo_profit_target_pct
+        : null,
+      // Without a challenge the floor is the one the book has already seen —
+      // the honest default for "a drawdown I would not accept", rounded up to
+      // the next whole percent and never below five.
+      ownMaxLossPct: Math.max(5, Math.ceil(drawdown.maxPctOfEquity || 0)),
+    });
+    return {
+      result: simulateSurvival({
+        dayReturns: returns,
+        horizonDays: SURVIVAL_HORIZON_DAYS,
+        blockDays: survivalBlock,
+        thresholds,
+      }),
+      limitLabel: ftmoOn ? "the challenge floor" : `a ${thresholds.maxLossPct}% drawdown`,
+    };
+  }, [accounts, accountFilter, daily, dayEquityOf, drawdown, survivalBlock]);
+
   const breakdown = useMemo(
     () => breakdownByField(realized, breakdownField, breakevenRange),
     [realized, breakdownField, breakevenRange],
@@ -2047,6 +2168,26 @@ export function Dashboard({
                 : "Share of peak account equity, including deposits and withdrawals."
             }
           />
+          {/* Time under water, beside the depth it belongs to. */}
+          <Stat
+            label="Longest drawdown"
+            value={ddDuration.longestDays > 0 ? `${ddDuration.longestDays} d` : "—"}
+            title={
+              ddDuration.daysToRecoverWorst != null
+                ? `The deepest one took ${ddDuration.daysToRecoverWorst} days to climb out of.`
+                : "The deepest drawdown has not been recovered yet."
+            }
+          />
+          <Stat
+            label="Under water now"
+            value={ddDuration.currentDays > 0 ? `${ddDuration.currentDays} d` : "—"}
+            cls={ddDuration.currentDays > 0 ? "text-[var(--loss)]" : undefined}
+            title={
+              ddDuration.currentDays > 0
+                ? "Days since the last equity peak."
+                : "The book is at a new peak."
+            }
+          />
           <Stat
             label="Avg daily DD"
             // No `equityBase` in the context passed here — on purpose.
@@ -2102,10 +2243,22 @@ export function Dashboard({
         </ChartShell>
         ),
         score: show("score") && <SickreScoreCard score={sickreScore} />,
+        survival: show("survival") && (
+          <SurvivalCard
+            result={survival?.result ?? null}
+            horizonDays={SURVIVAL_HORIZON_DAYS}
+            blockDays={survivalBlock}
+            limitLabel={survival?.limitLabel ?? "the floor"}
+            onBlockChange={setSurvivalBlock}
+          />
+        ),
         "open-positions": show("open-positions") && (
           <OpenPositionsWidget
             rows={scopedRows}
             tzOf={(t) => tzForAccount(t.account_id)}
+            equityOf={(id) => equityByAccount[id] ?? null}
+            currency={currency}
+            perTradeLimitPct={perTradeRiskLimitPct}
           />
         ),
         "recent-trades": show("recent-trades") && (

@@ -303,6 +303,38 @@ manje bolje). Zato „najbolji" više ne može biti grupa od tri trejda: njena d
 
 ---
 
+## 18. Preživljavanje — heat, trajanje drawdowna, simulacija (`portfolio-heat.ts`, `balance.ts`, `survival.ts`, `co-exposure.ts`)
+
+```
+heat        = Σ (riskMoneyAtEntry × openQty/entryQty) / tekući equity naloga × 100
+dd trajanje = dani od vrha do vrha, po ključevima dana u zoni naloga
+simulacija  = blok-bootstrap dnevnih prinosa (% equity-ja), 2000 pokretanja
+korelacija  = Pearson nad zajedničkim danima zatvaranja + Fisher-z interval
+```
+
+**Verdikt: ✅ Standardni postupci, sa četiri svesna izbora.**
+
+⚪ **Heat se ne sabira preko naloga.** Procenat ima imenilac, a dva naloga ga ne dele. Pozicija bez
+stopa se broji posebno umesto da uđe kao nula — isti razlog zbog kog `sickre-score.ts` odbija da
+nulti drawdown oceni kao savršeno upravljanje rizikom.
+
+⚪ **Blok-bootstrap umesto i.i.d.** Dani se vuku u uzastopnim blokovima jer serija gubitaka obara
+nalog, a ne jedan loš dan. Veličina bloka je izbor na ekranu, ne skrivena pretpostavka; i.i.d. (blok
+= 1) sistematski potcenjuje rep.
+
+⚪ **Dnevni prinosi, ne R po trejdu.** FTMO dnevni limit je dnevno pravilo; preuzorkovanje trejdova
+pa deljenje po danima uništilo bi upravo strukturu koju to pravilo meri. Uz to, prinosi u procentima
+znače da simulacija složeno raste kao i nalog.
+
+⚪ **Korelacija po danu ZATVARANJA.** To je uža tvrdnja nego što izgleda: dve pozicije koje su tri
+nedelje stajale zajedno a zatvorile se različitim danima daju nulu. Zato uz koeficijent stoji i broj
+dana istovremene izloženosti, a sam koeficijent se ne prikazuje ispod pet zajedničkih dana.
+
+**Šta simulacija NE tvrdi:** ne predviđa tržište. Ona ponavlja knjigu koja je već odigrana, što je
+najjača poštena tvrdnja koja se iz ovih podataka može izvesti.
+
+---
+
 ## Rezime — šta zahteva pažnju
 
 | # | Metrika | Verdikt | Akcija |
@@ -313,6 +345,7 @@ manje bolje). Zato „najbolji" više ne može biti grupa od tri trejda: njena d
 | 3b | Sickre Score ponderi kalibrisani za intraday scalp, ne za ovaj profil | ✅ ispravljeno | Rebalans: win % izbačen iz skora, avgWinLoss 20→5, process 15→30 (najteža), maxDrawdown 20→25, profitFactor 25→20, consistency 10→15, recovery 10→5, nova FTMO headroom komponenta sa 10. Detalji i obrazloženja u sekciji 10 gore. |
 | 4 | FTMO dnevni loss limit pegovan na starting balance umesto na balans prethodnog dana | ✅ ispravljeno | Novo polje po nalogu, `ftmo_daily_loss_basis` (Settings → FTMO), sa dve vrednosti: "starting balance (fixed — FTMO 2-Step)" i "previous day's close (rolling — FTMO 1-Step)". Default ostaje fiksna baza (nepromenjeno ponašanje za postojeće naloge). `ftmo.ts::evaluateFtmo` sad računa dnevni limit po danu kad je izabrana rolling baza. |
 | 5 | FTMO modul modelira samo statičan (2-Step) tip pravila za MAX total loss | 🔵 van scope-a ove revizije | Max total loss (drawdown floor) ostaje uvek statičan — to je van scope-a stavke #4, koja je menjala isključivo dnevni loss limit. Settings napomena sad eksplicitno kaže da je max total loss uvek statičan. |
+| 9 | Nema zbirnog otvorenog rizika, trajanja drawdowna ni pogleda unapred | ✅ ispravljeno | Faza C: `portfolio-heat.ts` (po nalogu, preostala količina, „3 od 4 izmereno"), `drawdownEpisodes`/`drawdownDuration` u `balance.ts`, `survival.ts` (blok-bootstrap, radi i bez FTMO-a), `co-exposure.ts` (istovremenost + Fisher-z) |
 | 8 | Tačka bez intervala — profit factor 2.4 na 12 trejdova izgleda isto kao na 300 | ✅ ispravljeno | Faza B: `uncertainty.ts` (Wilson + bootstrap), interval ispod tri metrike u tabeli, prigušena ćelija kad obuhvata neutralno, rangiranje po konzervativnom kraju, `minSample` sveden na kapiju za rangiranje |
 | 7 | Rizik preuzet na ulazu se nigde nije merio (`risk_pct` je bila samo namera iz dropdowna) | ✅ ispravljeno | Faza A: kolona `equity_at_entry`, modul `risk-taken.ts`, 4 metrike, dimenzija `risk_bucket`, filter `risk_pct_taken`, kolona „Risk %" u žurnalu i dva auto tracker pravila (`risk_per_trade`, `risk_matched_intent`). Staro pravilo `max_loss_per_trade` namerno ostaje: ono meri ISHOD na dan zatvaranja, novo meri ODLUKU na dan ulaska |
 | 6 | Sve ostalo (win rate, profit factor, expectancy, R-multiple konvencija, max drawdown %, MAE/MFE/capture%, Sortino downside-deviation baza, recovery factor, position sizing, FX rezolucija, swap/nights logika) | ✅ potvrđeno standardno | Nema akcije |
