@@ -16,6 +16,7 @@
 import { stringFieldValue } from "../field-values";
 import { addDaysToDayKey, zonedDateKey } from "../time";
 import { weekStartOfDayKey } from "../weekly-review";
+import { matchedRiskIntent, riskMoneyAtEntry, riskPctTaken } from "../risk-taken";
 import type { EquityLadder } from "./equity-ladder";
 import type { AutoRuleKey } from "../tracker-types";
 import type { TradeRow } from "../types";
@@ -80,6 +81,18 @@ export type TrackerTrade = {
   hasStop: boolean;
   /** A non-empty `thesis` on the row — the reason for the trade, in writing. */
   hasThesis: boolean;
+  /**
+   * Risk taken at entry, in account currency and as a share of the equity the
+   * entry day opened with. Null when any factor is unknown — no stop, an
+   * unpriced instrument, or an entry day whose equity could not be established.
+   */
+  riskMoney: number | null;
+  riskPctTaken: number | null;
+  /**
+   * Whether the size matched the `risk_pct` chosen for the trade. Null when
+   * either half is unknown, which is not the same as "no".
+   */
+  matchedIntent: boolean | null;
 };
 
 export type TradeDayIndex = {
@@ -118,6 +131,9 @@ function toTrackerTrade(row: TradeRow, tz: string): TrackerTrade | null {
     // Trimmed: a thesis of three spaces is not a thesis, and storing one would
     // let the rule be satisfied by pressing the spacebar.
     hasThesis: (stringFieldValue(row, "thesis") ?? "").trim() !== "",
+    riskMoney: riskMoneyAtEntry(row),
+    riskPctTaken: riskPctTaken(row),
+    matchedIntent: matchedRiskIntent(row),
   };
 }
 
@@ -321,6 +337,112 @@ function evalOpenDayFlag(
 }
 
 /**
+ * Risk taken at entry against the trader's own ceiling, on the OPEN day.
+ *
+ * The counterpart to `max_loss_per_trade`, and the reason both exist: this one
+ * grades the size while the risk is still in front of the trader, the other
+ * grades the loss once it is behind them. A trade sized at three times the
+ * limit that ran to target fails here and passes there — correctly, in both
+ * cases.
+ *
+ * Money, not percentages, in `observed` and `limit`: the checklist renders both
+ * with `fmtMoney`, and "risked 520 of the allowed 240" is the sentence a trader
+ * can act on. Positive, because money at risk is not a loss yet.
+ *
+ * The comparison carries a tiny epsilon. Sizing to exactly the limit is the
+ * plan, not a breach, and lot granularity puts "1 %" on 1.0000000002 as often
+ * as on 1.
+ */
+function evalRiskPerTrade(
+  trades: TrackerTrade[],
+  pct: number | undefined,
+  equity: number | null,
+): AutoRuleResult {
+  const key: AutoRuleKey = "risk_per_trade";
+  if (pct == null) return na(key, "unconfigured");
+  if (trades.length === 0) return na(key, "no_trades");
+
+  const priced = trades.filter((t) => t.riskPctTaken != null && t.riskMoney != null);
+
+  /**
+   * The percentage is judged against the equity FROZEN ON EACH TRADE, not
+   * against the ladder's reading for the day: `equity_at_entry` is that same
+   * opening figure, stored when the position opened, and a trade that carries
+   * it can be graded even on a day the ladder cannot price (an unpriced trade
+   * earlier in the book breaks the ladder from that point on).
+   *
+   * The ladder's figure is used only to say the limit in money, and derived
+   * from a priced trade when the ladder has nothing — the two are the same
+   * number by construction.
+   */
+  const dayEquity =
+    equity != null && equity > 0
+      ? equity
+      : priced.length > 0
+        ? ((priced[0].riskMoney as number) / (priced[0].riskPctTaken as number)) * 100
+        : null;
+  const limit = dayEquity != null ? (dayEquity * Math.abs(pct)) / 100 : null;
+  const offenders = priced.filter((t) => (t.riskPctTaken as number) > Math.abs(pct) + 1e-9);
+
+  if (offenders.length > 0) {
+    return {
+      key,
+      verdict: "fail",
+      reason: "violated",
+      offenders: offenders.map((t) => t.id),
+      observed: Math.max(...offenders.map((t) => t.riskMoney as number)),
+      limit,
+    };
+  }
+  // Nothing measurable breached, but an unmeasurable trade might have.
+  if (priced.length < trades.length) return na(key, "unpriced");
+
+  return {
+    key,
+    verdict: "pass",
+    reason: "ok",
+    offenders: [],
+    observed: priced.length > 0 ? Math.max(...priced.map((t) => t.riskMoney as number)) : null,
+    limit,
+  };
+}
+
+/**
+ * Was each entry sized to the risk it was planned at, within
+ * `RISK_INTENT_TOLERANCE`?
+ *
+ * Not an `evalOpenDayFlag`, because "unknown" is a third answer here: a trade
+ * with no stop, an unpriced instrument or no `risk_pct` chosen cannot be judged,
+ * and a flag rule would count it as a miss. A day whose every trade is
+ * unmeasurable is `na`, not a fail.
+ *
+ * No `observed`: the miss is a distance in percentage points and the checklist
+ * renders `observed` as money. The offenders carry the finding — they are the
+ * trades to open.
+ */
+function evalRiskMatchedIntent(trades: TrackerTrade[]): AutoRuleResult {
+  const key: AutoRuleKey = "risk_matched_intent";
+  if (trades.length === 0) return na(key, "no_trades");
+
+  const judged = trades.filter((t) => t.matchedIntent != null);
+  const offenders = judged.filter((t) => t.matchedIntent === false);
+
+  if (offenders.length > 0) {
+    return {
+      key,
+      verdict: "fail",
+      reason: "violated",
+      offenders: offenders.map((t) => t.id),
+      observed: null,
+      limit: null,
+    };
+  }
+  if (judged.length < trades.length) return na(key, "unpriced");
+
+  return { key, verdict: "pass", reason: "ok", offenders: [], observed: null, limit: null };
+}
+
+/**
  * Verdicts for one day.
  *
  * A day with no trades is `na`, never `pass`. "I did not exceed my max loss" is
@@ -377,6 +499,11 @@ export function evaluateAutoRulesForDay(
     // that the reason existed BEFORE the position did, and only the open day
     // can say that.
     thesis_written: evalOpenDayFlag("thesis_written", opened, (t) => t.hasThesis),
+    // Open day, like the flags and for the same reason: the size is the decision
+    // taken at entry. Grading it on the close day would grade it once the risk
+    // has already been spent.
+    risk_per_trade: evalRiskPerTrade(opened, configs.risk_per_trade?.pct, equity),
+    risk_matched_intent: evalRiskMatchedIntent(opened),
   };
 }
 

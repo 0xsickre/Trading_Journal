@@ -44,6 +44,7 @@ const NUMERIC_FIELDS: Record<string, (t: EnrichedTrade) => number | null> = {
   duration_days: (t) => t.durationDays,
   mae_r: (t) => t.excursion.maeR,
   mfe_r: (t) => t.excursion.mfeR,
+  risk_pct_taken: (t) => t.riskPctTaken,
 };
 
 export const NUMERIC_FIELD_LABELS: Record<string, string> = {
@@ -53,6 +54,7 @@ export const NUMERIC_FIELD_LABELS: Record<string, string> = {
   duration_days: "Duration (days)",
   mae_r: "MAE (R)",
   mfe_r: "MFE (R)",
+  risk_pct_taken: "Risk % taken",
 };
 
 function matchesClause(

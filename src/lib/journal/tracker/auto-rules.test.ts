@@ -17,6 +17,12 @@ type Spec = {
   playbook?: boolean;
   stop?: boolean;
   thesis?: boolean;
+  /** Risk-at-entry inputs: the stop distance, the size, and the day's equity. */
+  stopPrice?: number | null;
+  qty?: number;
+  equityAtEntry?: number | null;
+  /** What the trader chose from the dropdown, as it is stored: text. */
+  riskPct?: string | null;
 };
 
 function mkRow(s: Spec): TradeRow {
@@ -29,13 +35,15 @@ function mkRow(s: Spec): TradeRow {
     needs_review: false,
     created_at: s.opened,
     playbook_id: s.playbook === false ? null : "pb-1",
-    stop_price: s.stop === false ? null : 90,
+    stop_price: s.stop === false ? null : (s.stopPrice ?? 90),
+    equity_at_entry: s.equityAtEntry === undefined ? null : s.equityAtEntry,
+    risk_pct: s.riskPct === undefined ? null : s.riskPct,
     thesis: s.thesis === false ? null : "Written before entry",
     stats: {
       position_id: s.id,
       avg_entry: 100,
       avg_exit: null,
-      entry_qty: 1,
+      entry_qty: s.qty ?? 1,
       exit_qty: 1,
       gross_pl: s.net ?? 0,
       net_pl: s.net === undefined ? 0 : s.net,
@@ -47,6 +55,7 @@ function mkRow(s: Spec): TradeRow {
       closed_at: s.closed === undefined ? s.opened : s.closed,
       duration_seconds: null,
       point_value: 1,
+      fx_rate: 1,
       tick_size: null,
       point_value_source: s.net === null ? "missing" : "snapshot",
     },
@@ -70,6 +79,7 @@ const LIMITS: AutoConfigs = {
   max_loss_per_day: { pct: 4 },
   max_loss_per_trade: { pct: 2 },
   max_loss_per_week: { pct: 6 },
+  risk_per_trade: { pct: 2 },
 };
 
 const evalDay = (day: string, specs: Spec[], configs: AutoConfigs = LIMITS, tz = "UTC") =>
@@ -345,6 +355,7 @@ describe("the closed set of auto rules", () => {
       "max_loss_per_day",
       "max_loss_per_trade",
       "max_loss_per_week",
+      "risk_per_trade",
     ]);
     // With no config and no trades, a money rule cannot answer for want of a
     // limit; the flag rules cannot answer for want of trades. Two different
@@ -418,5 +429,138 @@ describe("max loss per week", () => {
   it("reports the money the percentage worked out to", () => {
     const d = evalDay(TUE, [at("a", MON, -700)]);
     expect(d.max_loss_per_week.limit).toBe(-600);
+  });
+});
+
+/**
+ * The two rules about the size of the bet rather than the size of the loss.
+ *
+ * Every fixture below opens on 2026-03-02 with a stop 10 points away, point
+ * value 1 and fx 1, so the risk in money is simply `qty × 10` and the percentage
+ * is that over `equityAtEntry`.
+ */
+describe("risk taken at entry", () => {
+  const DAY = "2026-03-02";
+  const entry = (id: string, over: Partial<Spec> = {}): Spec => ({
+    id,
+    opened: `${DAY}T09:00:00Z`,
+    closed: null,
+    status: "open",
+    equityAtEntry: 10_000,
+    ...over,
+  });
+
+  const verdicts = (specs: Spec[], configs: AutoConfigs = {}) =>
+    evaluateAutoRulesForDay(DAY, index(specs), configs);
+
+  describe("risk_per_trade", () => {
+    const limit1pct: AutoConfigs = { risk_per_trade: { pct: 1 } };
+
+    it("passes a trade sized inside the limit, and reports the money at risk", () => {
+      // 5 lots × 10 points = 50 at risk, 0.5 % of 10,000.
+      const v = verdicts([entry("a", { qty: 5 })], limit1pct).risk_per_trade;
+      expect(v.verdict).toBe("pass");
+      expect(v.observed).toBe(50);
+      expect(v.limit).toBe(100);
+    });
+
+    it("fails the trade that risked more than the ceiling, and names it", () => {
+      const v = verdicts(
+        [entry("small", { qty: 5 }), entry("big", { qty: 30 })],
+        limit1pct,
+      ).risk_per_trade;
+      expect(v.verdict).toBe("fail");
+      expect(v.offenders).toEqual(["big"]);
+      expect(v.observed).toBe(300);
+    });
+
+    it("counts sizing exactly to the limit as the plan, not a breach", () => {
+      const v = verdicts([entry("exact", { qty: 10 })], limit1pct).risk_per_trade;
+      expect(v.verdict).toBe("pass");
+    });
+
+    it("grades the OPEN day — a loss closed later cannot hide the size", () => {
+      // Opened on DAY, closed two days on: the risk was taken on DAY.
+      const v = verdicts(
+        [entry("held", { qty: 30, closed: "2026-03-04T15:00:00Z", status: "closed", net: 20 })],
+        limit1pct,
+      ).risk_per_trade;
+      expect(v.verdict).toBe("fail");
+      // The same trade passes the loss rule, because it made money.
+      expect(
+        evaluateAutoRulesForDay(
+          "2026-03-04",
+          index([entry("held", { qty: 30, closed: "2026-03-04T15:00:00Z", status: "closed", net: 20 })]),
+          { max_loss_per_trade: { pct: 1 } },
+          () => 10_000,
+        ).max_loss_per_trade.verdict,
+      ).toBe("pass");
+    });
+
+    it("says it is unscored rather than passing when it cannot measure", () => {
+      expect(verdicts([entry("a")], {}).risk_per_trade.reason).toBe("unconfigured");
+      // No stop: the risk has no size. Nothing breached, but nothing is known.
+      expect(
+        verdicts([entry("nostop", { stop: false })], limit1pct).risk_per_trade.reason,
+      ).toBe("unpriced");
+      // No entry-day equity: the denominator is missing.
+      expect(
+        verdicts([entry("noequity", { equityAtEntry: null })], limit1pct).risk_per_trade.reason,
+      ).toBe("unpriced");
+      expect(verdicts([], limit1pct).risk_per_trade.reason).toBe("no_trades");
+    });
+
+    it("a breach stands even beside a trade that cannot be measured", () => {
+      const v = verdicts(
+        [entry("big", { qty: 30 }), entry("unknown", { stop: false })],
+        limit1pct,
+      ).risk_per_trade;
+      expect(v.verdict).toBe("fail");
+      expect(v.offenders).toEqual(["big"]);
+    });
+  });
+
+  describe("risk_matched_intent", () => {
+    it("passes when the size matches what was chosen", () => {
+      // 10 lots × 10 points = 100 = 1 % of 10,000, and "1%" was chosen.
+      const v = verdicts([entry("a", { qty: 10, riskPct: "1%" })]).risk_matched_intent;
+      expect(v.verdict).toBe("pass");
+    });
+
+    it("fails the trade that was sized past its own plan", () => {
+      const v = verdicts([
+        entry("planned", { qty: 10, riskPct: "1%" }),
+        entry("oversized", { qty: 16, riskPct: "1%" }),
+      ]).risk_matched_intent;
+      expect(v.verdict).toBe("fail");
+      expect(v.offenders).toEqual(["oversized"]);
+    });
+
+    it("forgives a rounding-sized difference, because lots are not continuous", () => {
+      // 0.05 pp over — inside RISK_INTENT_TOLERANCE.
+      const v = verdicts([entry("rounded", { qty: 10.5, riskPct: "1%" })]).risk_matched_intent;
+      expect(v.verdict).toBe("pass");
+    });
+
+    it("is unscored, never a fail, when the intent or the risk is unknown", () => {
+      // Nothing chosen from the dropdown.
+      expect(verdicts([entry("nointent", { qty: 10 })]).risk_matched_intent.reason).toBe(
+        "unpriced",
+      );
+      // Chosen, but the trade has no stop to measure against.
+      expect(
+        verdicts([entry("nostop", { stop: false, riskPct: "1%" })]).risk_matched_intent.reason,
+      ).toBe("unpriced");
+      expect(verdicts([]).risk_matched_intent.reason).toBe("no_trades");
+    });
+
+    it("judges what it can even when another trade cannot be judged", () => {
+      const v = verdicts([
+        entry("oversized", { qty: 16, riskPct: "1%" }),
+        entry("unknown", { qty: 10 }),
+      ]).risk_matched_intent;
+      expect(v.verdict).toBe("fail");
+      expect(v.offenders).toEqual(["oversized"]);
+    });
   });
 });

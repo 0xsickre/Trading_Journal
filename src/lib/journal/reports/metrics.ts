@@ -33,6 +33,7 @@ import type { BreakevenRange } from "../breakeven";
 import type { EnrichedTrade } from "../enriched-trade";
 import type { MetricUnit } from "../units";
 import { scorable, setupScoreFromTrade } from "../setup-score";
+import { riskDispersion } from "../risk-taken";
 import { computeFollowRate, type RuleLookup } from "./playbook-dimensions";
 
 export type MetricContext = {
@@ -140,6 +141,21 @@ const whenSampled = (n: number, v: number): number | null => (n > 0 ? v : null);
 function dayPointsOf(group: EnrichedTrade[]): DayPnlPoint[] {
   return group.map((e) => ({ day: e.closeDay, at: e.closedAt, pnl: e.pnl }));
 }
+
+/** The values a derived number actually has, with the unanswered dropped. */
+const defined = (xs: readonly (number | null)[]): number[] =>
+  xs.filter((x): x is number => x != null && Number.isFinite(x));
+
+/**
+ * Average over the trades that HAVE the value.
+ *
+ * Null, not 0, for an empty set — the rule `whenSampled` above states for the
+ * counted statistics, applied to the derived ones.
+ */
+const mean = (xs: readonly (number | null)[]): number | null => {
+  const vs = defined(xs);
+  return vs.length > 0 ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
+};
 
 export const METRICS: ReportMetric[] = [
   {
@@ -494,6 +510,61 @@ export const METRICS: ReportMetric[] = [
     // as "no rule was ever followed", which is a finding, not a missing input.
     compute: (group, ctx, scope) =>
       ctx.rules ? computeFollowRate(group, ctx.rules, scope) : null,
+  },
+
+  // --- Risk actually taken -------------------------------------------------
+  //
+  // The four below all answer from `riskPctTaken`, which is null for any trade
+  // whose risk cannot be known — no stop, no fills, an unpriced instrument, or
+  // an entry day whose opening equity could not be established. Those trades
+  // drop out of the average rather than entering it as zeros: a zero would
+  // report a riskless trade, which is a claim, not a gap.
+  //
+  // `higherIsBetter: false` on all four. Unlike P&L, none of these is a score —
+  // more risk is not better, and a book that cannot hold its own size is not
+  // improving when the number grows.
+  {
+    key: "avg_risk_pct",
+    label: "Avg risk taken",
+    unit: "pct",
+    hint:
+      "Average risk per trade, as a % of the equity the entry day opened with. " +
+      "What was actually put at stake, not what was chosen in the form.",
+    higherIsBetter: false,
+    compute: (g) => mean(g.map((t) => t.riskPctTaken)),
+  },
+  {
+    key: "max_risk_pct",
+    label: "Max risk taken",
+    unit: "pct",
+    hint: "The largest single risk in the group, as a % of that day's opening equity.",
+    higherIsBetter: false,
+    compute: (g) => {
+      const xs = defined(g.map((t) => t.riskPctTaken));
+      return xs.length > 0 ? Math.max(...xs) : null;
+    },
+  },
+  {
+    key: "risk_dispersion",
+    label: "Risk dispersion",
+    unit: "pct",
+    hint:
+      "Standard deviation of the risk taken. Near zero means every trade was " +
+      "sized the same way; a large value means the size is being decided trade " +
+      "by trade.",
+    higherIsBetter: false,
+    compute: (g) => riskDispersion(g.map((t) => t.riskPctTaken)),
+  },
+  {
+    key: "risk_intent_gap",
+    label: "Risk vs intent",
+    unit: "pct",
+    hint:
+      "Average distance between the risk taken and the risk chosen, in points " +
+      "of equity. Unsigned: oversizing and undersizing are both misses and must " +
+      "not cancel.",
+    higherIsBetter: false,
+    compute: (g) => mean(g.map((t) => t.riskIntentGap)),
   },
 ];
 

@@ -14,6 +14,7 @@ import { numberFieldValue as numField } from "./field-values";
 import { daysBetweenKeys } from "./open-positions";
 import { spansWeekend } from "./weekend-hold";
 import { excursionFromTrade, type Excursion } from "./excursion";
+import { riskIntentGap, riskMoneyAtEntry, riskPctTaken } from "./risk-taken";
 import { zonedDateKey, zonedHour, zonedWeekStartKey } from "./time";
 
 /**
@@ -89,6 +90,25 @@ export type EnrichedTrade = {
   entryFills: number;
   exitFills: number;
   size: number | null;
+  /**
+   * What the stop was worth at the size entered, in account currency.
+   *
+   * Null whenever any factor is unknown — no stop, no fills, an unpriced
+   * instrument, no rate. See `risk-taken.ts`, which is the only place that
+   * chain is written.
+   */
+  riskMoney: number | null;
+  /**
+   * That risk as a percentage of the equity the entry day opened with.
+   *
+   * The answer to "how much of the account did this decision actually put at
+   * stake", which the journal could not ask until `equity_at_entry` existed:
+   * `risk_pct` on the row is the risk the trader CHOSE, and nothing compared
+   * the two.
+   */
+  riskPctTaken: number | null;
+  /** Unsigned distance between the risk taken and the risk chosen, in points of equity. */
+  riskIntentGap: number | null;
   instrument: string | null;
   accountId: string | null;
 };
@@ -149,6 +169,9 @@ export function enrichTrades(
       entryFills: fills?.entries ?? 0,
       exitFills: fills?.exits ?? 0,
       size: numField(t.row, "position_size"),
+      riskMoney: riskMoneyAtEntry(t.row),
+      riskPctTaken: riskPctTaken(t.row),
+      riskIntentGap: riskIntentGap(t.row),
       instrument,
       accountId: t.row.account_id ?? null,
     };

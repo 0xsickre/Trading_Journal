@@ -127,6 +127,11 @@ export async function getTradeForEdit(
   // reduce it to `[]` — inert, but it would sit in the bag looking like a value
   // the form could write back. It travels on its own key instead.
   delete flat.scale_out_levels;
+  // Also not a form field: `equity_at_entry` is written by the save path, never
+  // typed. `buildPositionPatch` would drop it on the way back out anyway, so
+  // leaving it here changes nothing that is written — but it would show up in
+  // the bag the form reasons about as though it were an answer the trader gave.
+  delete flat.equity_at_entry;
 
   const fields: Record<string, string | number | string[] | null> = {};
   for (const [k, v] of Object.entries(flat)) {

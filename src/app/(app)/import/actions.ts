@@ -16,7 +16,10 @@ import {
   type ImportSummary,
 } from "@/lib/journal/import-commit";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
-import { getAccountCurrency } from "@/lib/journal/accounts";
+import { getAccountCurrency, getAccounts } from "@/lib/journal/accounts";
+import { equityAtEntryPatch, firstEntryAt } from "@/lib/journal/equity-at-entry";
+import { getDayOpeningEquities } from "@/lib/journal/equity";
+import { accountTimezoneResolver, zonedDateKey } from "@/lib/journal/time";
 import {
   commitImportSchema,
   firstIssue,
@@ -112,6 +115,7 @@ type PositionBefore = {
   max_drawdown_price: number | null;
   max_profit_price: number | null;
   excursion_source: string | null;
+  equity_at_entry: number | null;
 };
 
 export async function commitImport(input: CommitInput): Promise<CommitResult> {
@@ -178,6 +182,28 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
     input.items.map((i) => normalizeInstrumentSymbol(i.instrument)),
   );
 
+  // The risk denominator, for the whole file in one read. Per row it would be a
+  // round trip each, and an import is the one place that arrives two hundred
+  // rows at a time. Keyed by DAY rather than by row because a file of a week's
+  // trades holds five distinct days, not two hundred.
+  const importTz = accountTimezoneResolver(await getAccounts())(input.account_id);
+  const entryDayOf = (item: ImportItem): string | null => {
+    const at = firstEntryAt(item.executions);
+    return at ? zonedDateKey(at, importTz) : null;
+  };
+  const equityByDay = await getDayOpeningEquities(
+    input.account_id,
+    [...new Set(input.items.map(entryDayOf).filter((d): d is string => d != null))],
+  );
+  const equityPatchFor = (item: ImportItem, prev: { equity_at_entry: number | null } | null) => {
+    const day = entryDayOf(item);
+    return equityAtEntryPatch(
+      statusOf(item.executions),
+      prev,
+      day ? (equityByDay.get(day) ?? null) : null,
+    );
+  };
+
   let created = 0,
     merged = 0,
     skipped = 0,
@@ -243,6 +269,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
                 }
               : {}),
             ...instrumentSnapshot(instrument, specs, accountCurrency),
+            ...equityPatchFor(item, null),
           })
           .select("id")
           .single();
@@ -316,7 +343,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
     const { data: prevPos, error: posErr } = await supabase
       .from("tj_positions")
       .select(
-        "status, needs_review, gross_pnl_override, target_price, max_drawdown_price, max_profit_price, excursion_source",
+        "status, needs_review, gross_pnl_override, target_price, max_drawdown_price, max_profit_price, excursion_source, equity_at_entry",
       )
       .eq("id", pid)
       .maybeSingle();
@@ -364,6 +391,10 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
                 excursion_source: "tradingview",
               }
             : {}),
+          // A plan that the statement turns into a position gets its
+          // denominator here; one that already had an entry keeps its own.
+          // `before` carries the column, so the rollback below restores it.
+          ...equityPatchFor(item, before),
         })
         .eq("id", pid);
       if (stErr) throw new Error(stErr.message);

@@ -164,6 +164,10 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- Ko je upisao MAE/MFE: manual | mt5 | tradingview. Ručno se nikad ne gazi
   -- (20260919100000, 20260919140000, 20260919160000).
   excursion_source     text,
+  -- Equity naloga na POČETKU dana ulaska, u zoni naloga, zamrznut kad je trejd
+  -- prvi put dobio entry fill (20260920160000). Imenilac svakog procenta rizika;
+  -- jedini činilac tog računa koji se ne može rekonstruisati unazad.
+  equity_at_entry      numeric,
   CONSTRAINT tj_positions_pkey PRIMARY KEY (id),
   CONSTRAINT tj_positions_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -184,7 +188,9 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   CONSTRAINT tj_positions_scale_out_levels_check
     CHECK (jsonb_typeof(scale_out_levels) = 'array'),
   CONSTRAINT tj_positions_time_stop_days_positive
-    CHECK (time_stop_days IS NULL OR time_stop_days > 0)
+    CHECK (time_stop_days IS NULL OR time_stop_days > 0),
+  CONSTRAINT tj_positions_equity_at_entry_positive
+    CHECK (equity_at_entry IS NULL OR equity_at_entry > 0)
 );
 CREATE INDEX IF NOT EXISTS tj_positions_user_idx
   ON public.tj_positions USING btree (user_id);

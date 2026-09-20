@@ -62,4 +62,5 @@ export const RESERVED_KEYS = new Set([
   "time_stop_days",
   "scale_out_plan",
   "excursion_source",
+  "equity_at_entry",
 ]);

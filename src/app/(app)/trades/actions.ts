@@ -13,7 +13,9 @@ import {
   computeStatus,
   isValidFill,
   type FillSource,
+  type PositionStatus,
 } from "@/lib/journal/trade-lifecycle";
+import { getEquityAtEntryPatch } from "@/lib/journal/equity";
 import { isFtmoAccountFrozen } from "@/lib/journal/ftmo-status";
 import { parseScaleOutLevels } from "@/lib/journal/scale-out";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
@@ -247,6 +249,15 @@ export async function createTrade(input: TradeInput) {
       ...playbookPatch(input),
       ...scaleOutPatch(input),
       ...excursionSourcePatch(patch.columns, null),
+      // The risk denominator, frozen the moment the trade has an entry fill.
+      // A trade saved as a plan gets nothing, and picks one up on the save that
+      // gives it fills.
+      ...(await getEquityAtEntryPatch(
+        input.account_id,
+        String(statusPatch.status) as PositionStatus,
+        execs,
+        null,
+      )),
       source: "manual",
     } as Json,
     p_executions: execs as unknown as Json,
@@ -334,7 +345,9 @@ export async function updateTrade(id: string, input: TradeInput) {
   // not render would be erased.
   const { data: prevPos } = await supabase
     .from("tj_positions")
-    .select("instrument, point_value_at_trade, custom, max_drawdown_price, max_profit_price")
+    .select(
+      "instrument, point_value_at_trade, custom, max_drawdown_price, max_profit_price, equity_at_entry",
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -383,6 +396,15 @@ export async function updateTrade(id: string, input: TradeInput) {
       ...scaleOutPatch(input),
       ...(execs.length > 0 ? { needs_review: false } : {}),
       ...excursionSourcePatch(patch.columns, prevPos),
+      // Stamped on the save that first gives the trade fills, and never
+      // restated afterwards — editing a fill changes how much was risked, not
+      // what the account was worth on the day it was risked.
+      ...(await getEquityAtEntryPatch(
+        input.account_id,
+        String(statusPatch.status) as PositionStatus,
+        execs,
+        prevPos,
+      )),
     } as Json,
     p_executions: execs as unknown as Json,
     p_rules: ruleRows(input.rule_answers) as unknown as Json,

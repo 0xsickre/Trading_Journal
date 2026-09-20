@@ -96,8 +96,11 @@ describe("how a trade is named in the dialog", () => {
  * says it should have been.
  */
 describe("the migration and this module agree on the fields", () => {
+  // The LATEST definition of the function, not the one that introduced it.
+  // 20260920160000 restates it whole to carry `equity_at_entry`; reading the
+  // superseded copy would guard a function that no longer runs.
   const sql = readFileSync(
-    "supabase/migrations/20260918160000_merge_positions.sql",
+    "supabase/migrations/20260920160000_equity_at_entry.sql",
     "utf8",
   );
 

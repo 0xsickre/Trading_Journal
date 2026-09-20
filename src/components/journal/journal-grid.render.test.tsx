@@ -245,7 +245,7 @@ describe("the column picker refuses to empty the grid", () => {
   // standing.
   const ALL_BUT_NET = [
     "trade_no", "date", "instrument", "direction", "playbook", "setup_grade",
-    "plan_entry", "stop_price", "target_price", "size",
+    "plan_entry", "stop_price", "target_price", "size", "risk_pct",
     "avg_entry", "slippage_r", "avg_exit", "hold", "r", "exit_eff", "capture",
     "gross", "status", "chart",
   ];
@@ -779,5 +779,29 @@ describe("a playbook's Trades tab keeps its own view", () => {
 
     render(<JournalGrid trades={trades} accounts={[ACCOUNT]} viewKey="playbook:pb-1" />);
     expect(await screen.findByText(/2 of 2 trades/)).toBeInTheDocument();
+  });
+});
+
+describe("the Risk % column", () => {
+  const ACCOUNT = account({ id: "acc-1" });
+
+  it("prints the risk actually taken, not the one chosen from the dropdown", () => {
+    // Default fixture: entry 100, stop 90, point value 1 — so qty 2 risks 20,
+    // which is 2 % of the 1,000 the entry day opened with.
+    const trades = rowsOf([
+      mkTrade({ id: "t1", instrument: "EURUSD", entryQty: 2, equityAtEntry: 1000, riskPct: "1%" }),
+    ]);
+    render(<JournalGrid trades={trades} accounts={[ACCOUNT]} />);
+    expect(screen.getByText("2.00%")).toBeInTheDocument();
+    // The intention is still visible, as the reason the figure is flagged.
+    expect(screen.getByTitle("Planned 1% · taken 2.00%")).toBeInTheDocument();
+  });
+
+  it("shows a dash, never a zero, when the risk cannot be measured", () => {
+    const trades = rowsOf([
+      mkTrade({ id: "t1", instrument: "EURUSD", entryQty: 2, equityAtEntry: null }),
+    ]);
+    render(<JournalGrid trades={trades} accounts={[ACCOUNT]} />);
+    expect(screen.queryByText("0.00%")).not.toBeInTheDocument();
   });
 });

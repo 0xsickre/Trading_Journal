@@ -69,6 +69,10 @@ export const MERGE_COALESCE_COLUMNS = [
   "missed_at",
   "max_drawdown_price",
   "max_profit_price",
+  // The risk denominator. Completed rather than carried with the fills: the
+  // survivor's own entry was measured against its own day, and a merge must not
+  // re-base a trade that was already open.
+  "equity_at_entry",
 ] as const;
 
 /** Tag columns merged as a union — two lists of tags about one trade are one list. */

@@ -262,6 +262,27 @@ const SIZE_EDGES = [
   { min: 10, label: "> 10" },
 ] as const;
 
+/**
+ * Risk taken, as a share of the entry day's opening equity.
+ *
+ * Cut finely around 1 % and coarsely above 2 %, because that is where the
+ * decisions are: this book's risk options run 0.25 % to 2 %, so the difference
+ * between 0.9 % and 1.4 % is a difference in behaviour, while everything past
+ * 3 % is one bucket called "too much". Bucketing them evenly would put every
+ * trade in one row and prove nothing.
+ *
+ * `size_bucket` above counts LOTS, which is not the same question: two lots of
+ * copper and two lots of gold are different fractions of the same account.
+ */
+const RISK_PCT_EDGES = [
+  { min: -Infinity, label: "< 0.5%" },
+  { min: 0.5, label: "0.5 – 1%" },
+  { min: 1, label: "1 – 1.5%" },
+  { min: 1.5, label: "1.5 – 2%" },
+  { min: 2, label: "2 – 3%" },
+  { min: 3, label: "≥ 3%" },
+] as const;
+
 /** Monday first, as every week in the journal starts (`closeWeek`, the weekly review). */
 /** "08:00–09:00" … one label per hour of the day, in clock order. */
 export const ENTRY_HOURS: readonly string[] = Array.from({ length: 24 }, (_, h) => {
@@ -423,6 +444,13 @@ const derivedDimensions: Dimension[] = [
     group: "derived",
     order: SIZE_EDGES.map((e) => e.label),
     valueOf: (t) => bucketByEdges(t.size, SIZE_EDGES),
+  },
+  {
+    key: "risk_bucket",
+    label: "Risk taken",
+    group: "derived",
+    order: RISK_PCT_EDGES.map((e) => e.label),
+    valueOf: (t) => bucketByEdges(t.riskPctTaken, RISK_PCT_EDGES),
   },
   {
     key: "outcome",

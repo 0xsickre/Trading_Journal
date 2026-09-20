@@ -238,6 +238,39 @@ Dnevni compliance % = prost neponderisani odnos ispunjeno/primenjivo po danu (`n
 
 ---
 
+## 16. Rizik preuzet na ulazu (`risk-taken.ts`, `equity-at-entry.ts`)
+
+```
+riskMoney  = plannedRiskPts(entry_price, stop_price, avg_entry)
+           × entry_qty × point_value × fx_rate
+riskPct    = riskMoney / equity_at_entry × 100
+intentGap  = |riskPct − parseRiskPct(risk_pct)|
+dispersion = populaciona σ od riskPct
+```
+
+Imenilac je **equity na otvaranju dana ulaska**, zamrznut u koloni
+`tj_positions.equity_at_entry` u trenutku kad trejd prvi put dobije entry fill; nikad se ne prepisuje.
+Brojilac se ne čuva — svi njegovi ulazi su već nepromenljivi po trejdu (`point_value_at_trade`,
+`fx_rate_at_trade`, fill-ovi), pa bi čuvanje izvedene vrednosti pored njenih ulaza bilo tačno ono što
+`tj_position_stats` postoji da spreči.
+
+**Verdikt: ✅ Ispravno, sa jednim bespoke izborom.** Lanac u novcu je identičan onom koji
+`computePositionStats` već koristi za `realized_r_net` — dve formule za istu veličinu bile bi dva
+različita rizika na dva ekrana. Osnovica „equity na otvaranju dana" je isti izbor koji
+`equity-ladder.ts` brani za dnevne limite: imenilac koji se pomera sa svakim zatvaranjem unutar dana
+daje istom trejdu dva odgovora u zavisnosti od toga kad se pita.
+
+⚪ **Bespoke: `risk_intent_gap` je prosek APSOLUTNE razlike**, ne razlike sa predznakom. Sa
+predznakom se prevelik i premali trejd potiru, pa knjiga koja nikad ne pogađa svoju nameru čita kao
+savršena. Tolerancija za tracker pravilo (`RISK_INTENT_TOLERANCE = 0.1` procentnih poena) je
+apsolutna, ne relativna: na veličinama koje ova knjiga trguje „1 %" i „1.05 %" su ista odluka
+zaokružena granularnošću lota, dok „1 %" i „1.5 %" nisu.
+
+**Svuda `null`, nikad 0**, kad bilo koji činilac nedostaje (nema stopa, neocenjen instrument, nepoznat
+equity na ulasku) — trejd bez merljivog rizika ne sme da čita kao trejd koji nije rizikovao ništa.
+
+---
+
 ## Rezime — šta zahteva pažnju
 
 | # | Metrika | Verdikt | Akcija |
@@ -248,6 +281,7 @@ Dnevni compliance % = prost neponderisani odnos ispunjeno/primenjivo po danu (`n
 | 3b | Sickre Score ponderi kalibrisani za intraday scalp, ne za ovaj profil | ✅ ispravljeno | Rebalans: win % izbačen iz skora, avgWinLoss 20→5, process 15→30 (najteža), maxDrawdown 20→25, profitFactor 25→20, consistency 10→15, recovery 10→5, nova FTMO headroom komponenta sa 10. Detalji i obrazloženja u sekciji 10 gore. |
 | 4 | FTMO dnevni loss limit pegovan na starting balance umesto na balans prethodnog dana | ✅ ispravljeno | Novo polje po nalogu, `ftmo_daily_loss_basis` (Settings → FTMO), sa dve vrednosti: "starting balance (fixed — FTMO 2-Step)" i "previous day's close (rolling — FTMO 1-Step)". Default ostaje fiksna baza (nepromenjeno ponašanje za postojeće naloge). `ftmo.ts::evaluateFtmo` sad računa dnevni limit po danu kad je izabrana rolling baza. |
 | 5 | FTMO modul modelira samo statičan (2-Step) tip pravila za MAX total loss | 🔵 van scope-a ove revizije | Max total loss (drawdown floor) ostaje uvek statičan — to je van scope-a stavke #4, koja je menjala isključivo dnevni loss limit. Settings napomena sad eksplicitno kaže da je max total loss uvek statičan. |
+| 7 | Rizik preuzet na ulazu se nigde nije merio (`risk_pct` je bila samo namera iz dropdowna) | ✅ ispravljeno | Faza A: kolona `equity_at_entry`, modul `risk-taken.ts`, 4 metrike, dimenzija `risk_bucket`, filter `risk_pct_taken`, kolona „Risk %" u žurnalu i dva auto tracker pravila (`risk_per_trade`, `risk_matched_intent`). Staro pravilo `max_loss_per_trade` namerno ostaje: ono meri ISHOD na dan zatvaranja, novo meri ODLUKU na dan ulaska |
 | 6 | Sve ostalo (win rate, profit factor, expectancy, R-multiple konvencija, max drawdown %, MAE/MFE/capture%, Sortino downside-deviation baza, recovery factor, position sizing, FX rezolucija, swap/nights logika) | ✅ potvrđeno standardno | Nema akcije |
 
 Sve stavke označene ⚪ (bespoke: breakeven pojas, Sickre Score ponderi/bande van gorenavedenog nalaza, compliance blend) su proizvod dizajna ovog journala — nemaju eksterni standard za poređenje, ocenjene su samo na unutrašnju logičku doslednost i nisu pronađeni problemi osim gde je eksplicitno navedeno.

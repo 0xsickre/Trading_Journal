@@ -1328,3 +1328,32 @@ Migracija `20260920140000_broker_instruments_and_costs.sql`.
   kaže. Subota i nedelja se ne naplaćuju dvaput.
 - Uvoz: `US100.cash` je kanonski naziv, pa se MT5 izveštaj poklapa bez mapiranja; `NAS100`, `USTEC`
   i slično i dalje vode na njega.
+
+### Faza A — rizik kao prvorazredni podatak (20.09.2026.)
+
+Žurnal je meru ishoda imao besprekornu, a **rizik koji je preuzet da bi taj ishod nastao nije merio
+nigde**. `risk_pct` je tekst iz dropdowna — namera; `position_size` je broj koji se otkuca; ništa ih
+nije poredilo. Trejd dimenzionisan na 3% koji je dobio bio je nevidljiv.
+
+**Podatak:**
+- Nova kolona `tj_positions.equity_at_entry` (migracija `20260920160000`) — equity na otvaranju dana
+  ulaska, u zoni naloga, sa SQL backfill-om. Ostaje `NULL` kad je raniji trejd neocenjen: nepoznat
+  imenilac ne sme da proizvede procenat.
+- Brojilac se **ne čuva**: `plannedRiskPts × entry_qty × point_value × fx_rate` su svi već zamrznuti
+  po trejdu. Isti lanac koji `computePositionStats` koristi za `realized_r_net`.
+- Piše se jednom (`equity-at-entry.ts`), nikad se ne prepisuje, briše se na povratak u plan. Zakačeno
+  na sva četiri mesta upisa: nov trejd, izmena, uvoz (create i merge).
+
+**Čitanje:**
+- `risk-taken.ts`: rizik u novcu, u % equity-ja, odstupanje od namere (apsolutno), disperzija (σ).
+- `EnrichedTrade` nosi `riskMoney` / `riskPctTaken` / `riskIntentGap`, pa svih 12 poziva
+  `enrichTrades` to dobija besplatno.
+- Četiri metrike (`avg_risk_pct`, `max_risk_pct`, `risk_dispersion`, `risk_intent_gap`), dimenzija
+  `risk_bucket`, filter `risk_pct_taken`, i kolona **„Risk %"** u tabeli trejdova — žuta kad se
+  veličina razišla sa planom.
+
+**Tracker (migracija `20260920170000`):** dva nova auto pravila na **dan ulaska** —
+`risk_per_trade` (nijedan trejd nije rizikovao više od izabranog limita) i `risk_matched_intent`
+(svaki trejd je dimenzionisan u toleranciji od svoje namere, `RISK_INTENT_TOLERANCE = 0.1 pp`).
+Staro `max_loss_per_trade` namerno ostaje: ono meri ishod na dan zatvaranja, novo meri odluku na dan
+ulaska, a prepisivanje bi tiho promenilo značenje svakog zaključanog dana u istoriji.

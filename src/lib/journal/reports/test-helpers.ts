@@ -40,6 +40,16 @@ export type TradeSpec = {
   playbookId?: string | null;
   /** Values for user-defined fields, as they are actually stored. */
   custom?: Record<string, unknown>;
+  /**
+   * Size entered, which is the multiplier on the risk taken. Default 1, with
+   * the default entry/stop of 100/90 and a point value of 1, so the default
+   * trade risks 10 — and at `equityAtEntry: 1000` that is a round 1 %.
+   */
+  entryQty?: number | null;
+  /** The account's opening balance on the entry day, frozen on the row. */
+  equityAtEntry?: number | null;
+  /** The risk the trader chose, as the dropdown stores it ("1%"). */
+  riskPct?: string | null;
 };
 
 let seq = 0;
@@ -54,7 +64,7 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     position_id: id,
     avg_entry: 100,
     avg_exit: null,
-    entry_qty: 1,
+    entry_qty: spec.entryQty === undefined ? 1 : spec.entryQty,
     exit_qty: 1,
     gross_pl: spec.gross ?? net,
     net_pl: net,
@@ -115,6 +125,8 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     time_stop_days: spec.timeStopDays ?? null,
     thesis: spec.thesis ?? null,
     playbook_id: spec.playbookId ?? null,
+    equity_at_entry: spec.equityAtEntry ?? null,
+    risk_pct: spec.riskPct ?? null,
     stats,
   } as unknown as TradeRow;
 

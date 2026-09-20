@@ -22,6 +22,8 @@ export const AUTO_RULE_KEYS = [
   "playbook_linked",
   "stop_loss_set",
   "thesis_written",
+  "risk_per_trade",
+  "risk_matched_intent",
 ] as const;
 export type AutoRuleKey = (typeof AUTO_RULE_KEYS)[number];
 
@@ -41,6 +43,11 @@ export const AUTO_RULES_NEEDING_PCT: ReadonlySet<AutoRuleKey> = new Set([
   "max_loss_per_trade",
   "max_loss_per_day",
   "max_loss_per_week",
+  // The risk limit is the one percentage that describes a DECISION rather than
+  // an outcome: how much of the account a single entry was allowed to put at
+  // stake. `risk_matched_intent` is deliberately absent — its tolerance is a
+  // constant (`RISK_INTENT_TOLERANCE`), not something to configure per user.
+  "risk_per_trade",
 ]);
 
 /** ISO weekday numbering, 1=Mon … 7=Sun — never `Date#getDay`'s 0=Sun. */

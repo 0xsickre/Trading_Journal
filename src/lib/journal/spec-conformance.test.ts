@@ -271,7 +271,7 @@ const SHAPES: Record<string, TradeSpec[]> = {
 };
 
 describe("every metric through every shape of book", () => {
-  it("the registry holds thirty-four metrics and no duplicate key", () => {
+  it("the registry holds thirty-eight metrics and no duplicate key", () => {
     // The count is hardcoded on purpose: the loop below runs EVERY metric
     // through every shape, so a metric added without thought quietly gains
     // twenty-one new assertions and no attention. This line is that attention —
@@ -281,9 +281,11 @@ describe("every metric through every shape of book", () => {
     // 30 → 33 when `winner_target_attainment`, `avg_entry_slip` and
     // `total_slip_r` arrived from the dashboard, where they had stopped being
     // displayed. 33 → 34 with `setup_score`, when the setup grade stopped being
-    // a typed letter and became the share of playbook criteria met.
-    expect(METRICS).toHaveLength(34);
-    expect(new Set(METRICS.map((m) => m.key)).size).toBe(34);
+    // a typed letter and became the share of playbook criteria met. 34 → 38
+    // with the four risk-taken metrics, when `equity_at_entry` made the risk a
+    // trade actually carried measurable for the first time.
+    expect(METRICS).toHaveLength(38);
+    expect(new Set(METRICS.map((m) => m.key)).size).toBe(38);
   });
 
   for (const [shapeName, specs] of Object.entries(SHAPES)) {

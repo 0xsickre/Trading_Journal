@@ -140,7 +140,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,654 tests across 163 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,768 tests across 166 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -337,10 +337,10 @@ no control goes back to the server.
 
 ## Metrics
 
-34 metrics in a single registry (`src/lib/journal/reports/metrics.ts`), 24 built-in dimensions across
-four groups (9 off the trade, 10 derived, 4 process, 1 insight) plus one per custom field. Any
+38 metrics in a single registry (`src/lib/journal/reports/metrics.ts`), 25 built-in dimensions across
+four groups (9 off the trade, 11 derived, 4 process, 1 insight) plus one per custom field. Any
 metric runs against any dimension — which is why there is one report engine instead of ten report
-pages. The tables below list all 34.
+pages. The tables below list all 38.
 
 **A registry is a registry, not a second implementation.** Every entry delegates to a function that
 already exists and is already tested elsewhere. A metric that computed something inside itself would
@@ -395,6 +395,10 @@ of quietly showing a number in the wrong unit. Accounts sharing a currency still
 | Calmar | `annualised return / max drawdown` | Recovery factor divided by the time it took |
 | Consistency | `100 − cv × 20`, where `cv = σ / \|mean\|` | 0 for a losing book |
 | Avg MAE in R | Average of how far trades went against the position | Averaged only over trades that *have* an MAE |
+| Avg risk taken | Mean of `riskPctTaken` over the group | The stop distance at the size filled, over the equity the entry day opened with. `null` for a trade with no stop, an unpriced instrument or an unknown entry-day equity — never 0 |
+| Max risk taken | The largest of the same | The single biggest bet in the group |
+| Risk dispersion | Population σ of `riskPctTaken` | The sizing-discipline number. `null` under two trades: one trade has no spread |
+| Risk vs intent | Mean of \|taken − chosen\| in percentage points | Unsigned on purpose: averaged with its sign, a book that alternates half-size and double-size reads as perfectly disciplined |
 
 **Planned reward is WEIGHTED when the exit is scaled.** Entry-to-target is the whole plan only when
 the entire position leaves at one price. Take 30 % at 1R, 30 % at 2R and the rest at 3R and the plan
@@ -735,11 +739,20 @@ stay forever as a value nobody meant, and "not recorded" and "1" are different a
 
 ## Process tracking
 
-**Tracker rules** are daily obligations, per weekday. **Six** are scored automatically from data —
+**Tracker rules** are daily obligations, per weekday. **Eight** are scored automatically from data —
 max loss per trade, per day and per week, every trade linked to a playbook, every trade has a stop,
-every trade has a written thesis — and the rest are ticked by hand.
+every trade has a written thesis, no entry risked more than the ceiling, and every entry was sized to
+its own planned risk — and the rest are ticked by hand.
 
-The three limits are a **percentage of the day's opening equity, not an amount of money** (migration
+**The last two grade the SIZE, the loss rules grade the outcome**, and both are kept for that reason.
+`max_loss_per_trade` reads the realized loss on the close day, so a trade sized at three times the
+intended risk that ran to target is invisible to it and one closed early passes; `risk_per_trade`
+reads the stop distance against the equity the entry day opened with
+(`tj_positions.equity_at_entry`), on the day the decision was made. Rewriting the old rule instead of
+adding a new one would have restated every locked day in the history under a meaning it was never
+scored with.
+
+The four limits are a **percentage of the day's opening equity, not an amount of money** (migration
 `20260822190000`). A fixed €200 is a different rule on a 5,000 account than on a 50,000 one, so a
 limit set once stops describing the trader's risk the moment the account grows — and the number that
 has to be re-typed to stay honest is the number nobody re-types.
@@ -1106,8 +1119,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,654 tests across 163 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,080 tests in 109 files) and `components` (environment `jsdom`, files `*.test.tsx`, 574
+2,768 tests across 166 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,181 tests in 112 files) and `components` (environment `jsdom`, files `*.test.tsx`, 587
 tests in 54 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
