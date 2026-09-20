@@ -1,19 +1,20 @@
-import { primaryAccount } from "@/lib/journal/account-rules";
+import { accountFilterOptions, primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
-import { getDailyReportDates } from "@/lib/journal/daily-report-queries";
+import { getDailyReportDatesInRange } from "@/lib/journal/daily-report-queries";
 import { todayInTz } from "@/lib/journal/daily-report";
-import { getPositionCheckins } from "@/lib/journal/position-checkin-queries";
+import { getPositionCheckinsInRange } from "@/lib/journal/position-checkin-queries";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getWeeklyReview } from "@/lib/journal/weekly-review-queries";
 import { toRealized } from "@/lib/journal/analytics";
 import { enrichTrades } from "@/lib/journal/enriched-trade";
 import { buildWeekRecap, weekDayRows } from "@/lib/journal/week-recap";
+import { sharedBreakevenRange } from "@/lib/journal/breakeven";
+import { sharedCurrency } from "@/lib/journal/format";
+import { DEFAULT_TZ, isValidDayKey, zonedDateKey } from "@/lib/journal/time";
 import {
-  sharedBreakevenRange,
-} from "@/lib/journal/breakeven";
-import { DEFAULT_TZ, isValidDayKey } from "@/lib/journal/time";
-import {
+  addWeeksToWeekStart,
   defaultWeekStart,
+  weekEndOfWeekStart,
   weekStartOfDayKey,
 } from "@/lib/journal/weekly-review";
 import { WeeklyReviewForm } from "@/components/journal/weekly-review-form";
@@ -24,9 +25,9 @@ import { accountTimezoneResolver } from "@/lib/journal/time";
 export default async function WeeklyPage({
   searchParams,
 }: {
-  searchParams: Promise<{ week?: string }>;
+  searchParams: Promise<{ week?: string; account?: string }>;
 }) {
-  const { week: weekParam } = await searchParams;
+  const { week: weekParam, account: accountParam } = await searchParams;
 
   // One batch. The week on screen depends on the account's timezone, so the
   // review is chained onto the accounts instead of awaited after the batch,
@@ -48,31 +49,58 @@ export default async function WeeklyPage({
      */
     const requested =
       weekParam && isValidDayKey(weekParam) ? weekStartOfDayKey(weekParam) : "";
+    // A week that has not happened is clamped to the running one, and the page
+    // says so rather than quietly showing a different week than the link asked
+    // for.
+    const clamped = requested !== "" && requested > currentWeekStart;
     const weekStart =
-      requested && requested <= currentWeekStart
-        ? requested
-        : requested > currentWeekStart
-          ? currentWeekStart
-          : defaultWeekStart(today);
-    return { primary, timezone, currentWeekStart, weekStart };
+      requested && !clamped ? requested : clamped ? currentWeekStart : defaultWeekStart(today);
+    return { primary, timezone, currentWeekStart, weekStart, clamped };
   });
 
   const [
     accounts,
-    { primary, timezone, currentWeekStart, weekStart },
+    { primary, timezone, currentWeekStart, weekStart, clamped },
     trades,
     checkins,
     reportDates,
     review,
+    previousReview,
   ] = await Promise.all([
     accountsPromise,
     weekPromise,
+    // NOT ranged, unlike the two below: the recap counts positions OPENED in an
+    // earlier week, the R figures need the trade rows anyway, and this read is
+    // memoized per request and shared with every other screen.
     getTradesWithStats(),
-    getPositionCheckins(),
-    getDailyReportDates(),
+    weekPromise.then(({ weekStart }) =>
+      getPositionCheckinsInRange(weekStart, weekEndOfWeekStart(weekStart)),
+    ),
+    weekPromise.then(({ weekStart }) =>
+      getDailyReportDatesInRange(weekStart, weekEndOfWeekStart(weekStart)),
+    ),
     weekPromise.then(({ weekStart }) => getWeeklyReview(weekStart)),
+    // Last week's answers, for the commitment this week has to live up to.
+    weekPromise.then(({ weekStart }) => getWeeklyReview(addWeeksToWeekStart(weekStart, -1))),
   ]);
-  const currency = primary?.currency ?? "USD";
+
+  /**
+   * Which accounts the money covers — the same rule `/calendar` applies.
+   *
+   * Every account was summed and the total printed in the primary account's
+   * currency: €500 and $300 as $800. "All accounts" stays the default while the
+   * currencies agree; when they do not there is no honest pooled figure, so the
+   * page falls back to the primary account and says why.
+   */
+  const pooledCurrency = sharedCurrency(accounts);
+  const requestedAccount =
+    accountParam && accounts.some((a) => a.id === accountParam) ? accountParam : "all";
+  const mixedFallback =
+    requestedAccount === "all" && accounts.length > 1 && pooledCurrency == null;
+  const accountId = mixedFallback ? (primary?.id ?? "all") : requestedAccount;
+  const scopedAccounts =
+    accountId === "all" ? accounts : accounts.filter((a) => a.id === accountId);
+  const currency = sharedCurrency(scopedAccounts) ?? primary?.currency ?? "USD";
 
   // Per-trade timezone, not the primary account's: a trade on a NY account and
   // one on a London account close on different calendar days, and one zone for
@@ -83,9 +111,11 @@ export default async function WeeklyPage({
   // The same band the dashboard classifies with, so a week's win/loss split here
   // matches the one on every other screen. Mixed bands across accounts fall back
   // to exact zero rather than silently adopting one account's tolerance.
-  const breakevenRange = sharedBreakevenRange(accounts);
+  const breakevenRange = sharedBreakevenRange(scopedAccounts);
 
-  const realized = toRealized(trades);
+  const realized = toRealized(
+    accountId === "all" ? trades : trades.filter((t) => t.account_id === accountId),
+  );
 
   const recap = buildWeekRecap(
     enrichTrades(realized, { tzOf, range: breakevenRange }),
@@ -99,6 +129,21 @@ export default async function WeeklyPage({
   // one number in the strip and another in the month grid.
   const days = weekDayRows(weekStart, realized, tzOf, breakevenRange);
 
+  /**
+   * The oldest week worth opening: the one holding the first trade, or the
+   * account's own first week when nothing has been traded yet. Without it the
+   * back arrow paged into empty weeks forever.
+   */
+  const firstDay = realized.reduce<string | null>((oldest, t) => {
+    const day = zonedDateKey(t.row.stats?.opened_at ?? t.closedAt, tzOf(t));
+    return day && (oldest == null || day < oldest) ? day : oldest;
+  }, null);
+  const accountStart = accounts.reduce<string | null>((oldest, a) => {
+    const day = zonedDateKey(a.created_at, a.timezone);
+    return day && (oldest == null || day < oldest) ? day : oldest;
+  }, null);
+  const earliestWeekStart = weekStartOfDayKey(firstDay ?? accountStart ?? weekStart) || weekStart;
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
@@ -109,11 +154,18 @@ export default async function WeeklyPage({
       <WeeklyReviewForm
         key={weekStart}
         review={review}
+        previousReview={previousReview}
         weekStart={weekStart}
         currentWeekStart={currentWeekStart}
+        earliestWeekStart={earliestWeekStart}
+        clamped={clamped}
         recap={recap}
         days={days}
         currency={currency}
+        timezone={timezone}
+        accountId={accountId}
+        accountOptions={accounts.length > 1 ? accountFilterOptions(accounts) : []}
+        mixedFallback={mixedFallback}
       />
     </div>
   );

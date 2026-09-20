@@ -47,6 +47,9 @@ function review(over: Partial<WeeklyReview> = {}): WeeklyReview {
     one_pattern: null,
     one_change: null,
     next_week_catalysts: null,
+    // Present and null, as a row reads once the migration is applied. A row
+    // WITHOUT the key is the pre-migration shape, and its own test below.
+    previous_change_kept: null,
     locked_at: null,
     created_at: "2026-01-12T00:00:00Z",
     updated_at: "2026-01-12T00:00:00Z",
@@ -62,6 +65,7 @@ function recap(over: Partial<WeekRecap> = {}): WeekRecap {
     losses: 1,
     weekendHolds: 1,
     journalledDays: 5,
+    journalledOutOf: 5,
     checkedPositions: 6,
     interferedPositions: 2,
     thesisSlippedPositions: 1,
@@ -71,6 +75,7 @@ function recap(over: Partial<WeekRecap> = {}): WeekRecap {
     winRate: 75,
     profitFactor: 2.4,
     avgR: 0.9,
+    rSample: 4,
     expectancy: 0.9,
     expectancySample: 4,
     ...over,
@@ -114,7 +119,7 @@ beforeEach(() => {
 describe("the facts come before the questions", () => {
   it("shows the week's counts, so the review is not written from memory", () => {
     render(form());
-    expect(screen.getByText("5 / 7")).toBeInTheDocument(); // journalled days
+    expect(screen.getByText("5 / 5")).toBeInTheDocument(); // journalled days, Mon–Fri
     expect(screen.getByText("3 / 1")).toBeInTheDocument(); // won / lost
     expect(screen.getByText("Dirano")).toBeInTheDocument();
     expect(screen.getByText("Teza oslabila")).toBeInTheDocument();
@@ -143,7 +148,7 @@ describe("a week that is still running", () => {
 });
 
 describe("Complete means the grade plus both singular answers", () => {
-  it("reads Draft until all three are given", async () => {
+  it("reads Draft until all three are STORED, not merely typed", async () => {
     const user = userEvent.setup({ delay: null });
     render(
       form({
@@ -155,10 +160,26 @@ describe("Complete means the grade plus both singular answers", () => {
     );
     expect(screen.getByText("Nacrt")).toBeInTheDocument();
 
-    // The stars carry `role="radio"` and the name "N of 5" — a rating is a choice
+    // The stars carry `role="radio"` and the name "N od 5" — a rating is a choice
     // out of a set, not five independent buttons.
-    await user.click(screen.getByRole("radio", { name: "4 of 5" }));
+    await user.click(screen.getByRole("radio", { name: "4 od 5" }));
 
+    // Still a draft: the grade is on screen and not in the database. The save
+    // bar is where the live state belongs, and it now says so.
+    expect(screen.getByText("Nacrt")).toBeInTheDocument();
+    expect(screen.getByText("Nesačuvane izmene")).toBeInTheDocument();
+  });
+
+  it("reads Complete when the stored review already has all three", () => {
+    render(
+      form({
+        review: review({
+          week_grade: 4,
+          one_pattern: "Held two losers past the time stop",
+          one_change: "Close anything past its time stop on sight",
+        }),
+      }),
+    );
     expect(screen.getByText("Završeno")).toBeInTheDocument();
   });
 });
@@ -172,7 +193,7 @@ describe("a locked week", () => {
     // They are disabled by the `<fieldset disabled>` around the whole form, not
     // by a prop on the component — which is why this still holds after the move
     // to stars.
-    expect(screen.getByRole("radio", { name: "5 of 5" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "5 od 5" })).toBeDisabled();
   });
 });
 
@@ -207,5 +228,155 @@ describe("locking saves first, so it never seals unsaved text", () => {
 
     await vi.waitFor(() => expect(saveWeeklyReviewMock).toHaveBeenCalled());
     expect(lockWeekMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("unsaved answers survive the week arrows", () => {
+  it("asks before leaving, and stays put when the answer is no", async () => {
+    const user = userEvent.setup({ delay: null });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(form());
+
+    await user.type(screen.getByLabelText("Šta je išlo dobro"), "Waited for the sweep");
+    await user.click(screen.getByRole("link", { name: "Prethodna nedelja" }));
+
+    expect(confirm).toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it("offers a draft left behind for this week, and restores it on request", async () => {
+    const user = userEvent.setup({ delay: null });
+    localStorage.setItem(
+      "tj:weekly-draft",
+      JSON.stringify({
+        [LAST]: {
+          savedAt: "2026-01-12T09:30:00Z",
+          fields: {
+            week_grade: null,
+            went_well: "Sat on my hands Monday",
+            went_badly: "",
+            one_pattern: "",
+            one_change: "",
+            next_week_catalysts: "",
+          },
+        },
+      }),
+    );
+
+    render(form());
+    expect(await screen.findByText(/Imaš nesačuvan nacrt/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Vrati nacrt" }));
+    expect(screen.getByLabelText("Šta je išlo dobro")).toHaveValue("Sat on my hands Monday");
+    localStorage.clear();
+  });
+
+  it("never offers a draft that only repeats what is already saved", () => {
+    localStorage.setItem(
+      "tj:weekly-draft",
+      JSON.stringify({
+        [LAST]: {
+          savedAt: "2026-01-12T09:30:00Z",
+          fields: {
+            week_grade: null,
+            went_well: "Already stored",
+            went_badly: "",
+            one_pattern: "",
+            one_change: "",
+            next_week_catalysts: "",
+          },
+        },
+      }),
+    );
+    render(form({ review: review({ went_well: "Already stored" }) }));
+    expect(screen.queryByText(/Imaš nesačuvan nacrt/)).not.toBeInTheDocument();
+    localStorage.clear();
+  });
+});
+
+describe("the week arrows", () => {
+  it("the next arrow on the newest week is a disabled button, not a link", () => {
+    render(form({ weekStart: THIS }));
+    const next = screen.getByRole("button", { name: "Sledeća nedelja" });
+    expect(next).toBeDisabled();
+    expect(screen.queryByRole("link", { name: "Sledeća nedelja" })).not.toBeInTheDocument();
+  });
+
+  it("the back arrow stops at the oldest week there is anything to see", () => {
+    render(form({ earliestWeekStart: LAST }));
+    expect(screen.getByRole("button", { name: "Prethodna nedelja" })).toBeDisabled();
+  });
+});
+
+describe("last week's commitment", () => {
+  it("opens the week with what was promised, and asks whether it held", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(
+      form({
+        previousReview: review({
+          week_start: "2025-12-29",
+          one_change: "No entry before the London sweep",
+          next_week_catalysts: "CPI on Wednesday",
+          previous_change_kept: null,
+        }),
+      }),
+    );
+    expect(screen.getByText("No entry before the London sweep")).toBeInTheDocument();
+    expect(screen.getByText(/CPI on Wednesday/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delimično" }));
+    await user.click(screen.getByRole("button", { name: /Sačuvaj osvrt/ }));
+    await vi.waitFor(() =>
+      expect(saveWeeklyReviewMock).toHaveBeenCalledWith(
+        LAST,
+        expect.objectContaining({ previous_change_kept: "partly" }),
+      ),
+    );
+  });
+
+  it("hides the follow-up while the database has no column for the answer", () => {
+    const noColumn = review();
+    delete (noColumn as { previous_change_kept?: unknown }).previous_change_kept;
+    render(
+      form({
+        review: noColumn,
+        previousReview: review({ week_start: "2025-12-29", one_change: "No entry before the sweep" }),
+      }),
+    );
+    expect(screen.getByText("No entry before the sweep")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delimično" })).not.toBeInTheDocument();
+  });
+
+  it("says nothing when last week left no commitment", () => {
+    render(form({ previousReview: null }));
+    expect(screen.queryByText("Prošle nedelje si rekao")).not.toBeInTheDocument();
+  });
+});
+
+describe("a week with nothing in it", () => {
+  it("says so once instead of printing a grid of zeros", () => {
+    render(
+      form({
+        recap: recap({
+          closed: 0,
+          net: 0,
+          wins: 0,
+          losses: 0,
+          weekendHolds: 0,
+          journalledDays: 0,
+          checkedPositions: 0,
+          interferedPositions: 0,
+          thesisSlippedPositions: 0,
+          winRate: null,
+          profitFactor: null,
+          avgR: null,
+          rSample: 0,
+          expectancy: null,
+          expectancySample: 0,
+        }),
+        days: [null, null, null, null, null, null, null],
+      }),
+    );
+    expect(screen.getByText(/nema nijednog zatvorenog trejda/)).toBeInTheDocument();
+    expect(screen.queryByText("Dirano")).not.toBeInTheDocument();
   });
 });

@@ -7,6 +7,9 @@ import {
   isWeekComplete,
   weekDayKeys,
   weekEndOfWeekStart,
+  weekKeyRefusal,
+  weekLockRefusal,
+  weekSaveRefusal,
   weekStartOfDayKey,
 } from "./weekly-review";
 
@@ -120,5 +123,51 @@ describe("emptyWeeklyReview", () => {
     expect(row.week_grade).toBeNull();
     expect(row.one_pattern).toBeNull();
     expect(row.next_week_catalysts).toBeNull();
+  });
+});
+
+/**
+ * The refusals the two server actions used to spell out inline, where nothing
+ * could test them — and where they disagreed: locking refused a week that had
+ * not happened, saving stored a review for 2031.
+ */
+describe("what may be written, and when", () => {
+  const TODAY = "2026-01-14"; // a Wednesday; its week starts 2026-01-12
+
+  it("refuses a key that is not a Monday, and one that is not a date", () => {
+    expect(weekKeyRefusal("2026-01-14")).toMatch(/ponedeljkom/);
+    expect(weekKeyRefusal("nope")).toMatch(/Neispravna/);
+    expect(weekKeyRefusal("2026-01-12")).toBeNull();
+  });
+
+  it("saving refuses a week that has not started, and a sealed one", () => {
+    expect(weekSaveRefusal({ weekStart: "2026-01-19", todayKey: TODAY, lockedAt: null })).toMatch(
+      /još nije počela/,
+    );
+    expect(
+      weekSaveRefusal({ weekStart: "2026-01-05", todayKey: TODAY, lockedAt: "2026-01-12T20:00:00Z" }),
+    ).toMatch(/zaključana/);
+  });
+
+  it("saving allows the running week and any week behind it", () => {
+    expect(weekSaveRefusal({ weekStart: "2026-01-12", todayKey: TODAY, lockedAt: null })).toBeNull();
+    expect(weekSaveRefusal({ weekStart: "2026-01-05", todayKey: TODAY, lockedAt: null })).toBeNull();
+  });
+
+  it("sealing refuses the running week, a future one, an unsaved one and a re-lock", () => {
+    const base = { todayKey: TODAY, existing: { locked_at: null } };
+    expect(weekLockRefusal({ ...base, weekStart: "2026-01-12" })).toMatch(/nije završena/);
+    expect(weekLockRefusal({ ...base, weekStart: "2026-01-19" })).toMatch(/još nije počela/);
+    expect(weekLockRefusal({ weekStart: "2026-01-05", todayKey: TODAY, existing: null })).toMatch(
+      /Sačuvaj osvrt/,
+    );
+    expect(
+      weekLockRefusal({
+        weekStart: "2026-01-05",
+        todayKey: TODAY,
+        existing: { locked_at: "2026-01-12T20:00:00Z" },
+      }),
+    ).toMatch(/već zaključana/);
+    expect(weekLockRefusal({ ...base, weekStart: "2026-01-05" })).toBeNull();
   });
 });

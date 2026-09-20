@@ -1285,3 +1285,27 @@ Provereno na stvarnom izveštaju vlasnika (`ReportHistory-1514682848.xlsx`, FTMO
 valuta i broj naloga pročitani, nula zatvorenih pozicija — nalog ih zaista nema. **Redove sa trejdovima
 treba još potvrditi na izveštaju koji ih ima.**
 
+### Nedeljni osvrt — ništa se ne gubi i prošla nedelja se pamti (20.09.2026.)
+
+**Greške:**
+- Nesačuvan tekst je nestajao pri promeni nedelje. Sada se nacrt čuva u pregledaču po nedelji
+  (`weekly-draft.ts`), nudi se nazad uz datum, i pita se pre napuštanja strane.
+- Strelica „sledeća nedelja" je bila link sa `disabled` atributom, što na `<a>` ne radi ništa — sada je
+  pravo onemogućeno dugme. Unazad se staje na najstariju nedelju koja uopšte ima podatke.
+- Vremena (zaključavanje, poslednje čuvanje) formatirala su se u zoni servera; sada idu u zoni naloga.
+- Čuvanje je primalo nedelju koja još nije počela, a zaključavanje nije — sada oba koriste ista
+  pravila (`weekSaveRefusal`, `weekLockRefusal`), koja su prvi put i testirana.
+- `Avg R` je bio čuvan pogrešnim uzorkom, pa je nedelja sa nultim R-om pisala „—" umesto 0.00R.
+- „Zabeleženo dana" se računalo iz 7, a boduje se samo pon–pet.
+- Ocena nedelje nije osvežavala izveštaje (`revalidateWeekly`), a značka „Završeno" je opisivala ono
+  što je otkucano, ne ono što je sačuvano.
+- Pet tekstualnih polja nije imalo ograničenje dužine (sada 4000 znakova).
+
+**Novo:**
+- Kartica **„Prošle nedelje si rekao"** na vrhu: obaveza iz prošle nedelje i njeni katalizatori, uz
+  pitanje Da / Delimično / Ne. Odgovor se čuva na redu tekuće nedelje
+  (migracija `20260920120000_weekly_previous_change_kept.sql`; dok nije primenjena, pitanja nema).
+- Recap je podeljen na **Novac** i **Proces**, a prazna nedelja piše jednu rečenicu umesto mreže nula.
+- Filter po nalogu; nalozi u različitim valutama se više ne sabiraju.
+- Dani u traci vode na taj dnevni unos.
+- Strana više ne čita ceo dnevnik: check-in-ovi i zabeleženi dani čitaju se samo za tu nedelju.

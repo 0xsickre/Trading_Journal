@@ -42,6 +42,16 @@ export type WeeklyReview = {
   one_change: string | null;
   next_week_catalysts: string | null;
   /**
+   * Whether last week's "one thing I change" survived this week.
+   *
+   * Optional on the type, not on the table: the column arrives with
+   * `20260920120000_weekly_previous_change_kept.sql`, and until that migration
+   * is applied the row simply comes back without it. The control that writes it
+   * is hidden in that case, so an older database renders a complete screen
+   * rather than a broken one.
+   */
+  previous_change_kept?: PreviousChangeKept | null;
+  /**
    * When the review was sealed. Null while it is still editable.
    *
    * Not part of `WeeklyReviewInput`, for the same reason `locked_at` is absent
@@ -58,6 +68,11 @@ export type WeeklyReviewInput = Omit<
   WeeklyReview,
   "id" | "user_id" | "created_at" | "updated_at" | "locked_at"
 >;
+
+/** How the trader answered last week's commitment. Null while unanswered. */
+export type PreviousChangeKept = "yes" | "partly" | "no";
+
+export const PREVIOUS_CHANGE_KEPT = ["yes", "partly", "no"] as const;
 
 export function emptyWeeklyReview(weekStart: string): WeeklyReviewInput {
   return {
@@ -173,4 +188,65 @@ export function isWeekComplete(
     (review.one_pattern ?? "").trim() !== "" &&
     (review.one_change ?? "").trim() !== ""
   );
+}
+
+// --- What may be written, and when -------------------------------------------
+
+/**
+ * Why this week key cannot be written at all, or null when it can.
+ *
+ * The DB carries the same Monday CHECK, and this is the copy that produces a
+ * sentence instead of a constraint violation. Both are needed: without the
+ * CHECK a direct PostgREST write stores a Wednesday and the week then exists
+ * twice under two keys, with the unique constraint powerless to notice.
+ */
+export function weekKeyRefusal(weekStart: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) return "Neispravna nedelja.";
+  if (weekStartOfDayKey(weekStart) !== weekStart) return "Nedelja počinje ponedeljkom.";
+  return null;
+}
+
+/**
+ * Why the review may not be SAVED, or null when it may.
+ *
+ * `lockWeek` refused a week that has not happened; saving did not, so a direct
+ * action call could file a review for 2031 — a row the page can never show,
+ * because the page clamps the URL to the running week. The two writes now
+ * refuse the same futures, in the same words.
+ */
+export function weekSaveRefusal(input: {
+  weekStart: string;
+  /** Today in the account's zone, as a day key. */
+  todayKey: string;
+  lockedAt: string | null;
+}): string | null {
+  const bad = weekKeyRefusal(input.weekStart);
+  if (bad) return bad;
+  if (input.weekStart > weekStartOfDayKey(input.todayKey))
+    return "Ta nedelja još nije počela.";
+  if (input.lockedAt != null) return "Ova nedelja je zaključana i više se ne menja.";
+  return null;
+}
+
+/**
+ * Why the week may not be SEALED, or null when it may.
+ *
+ * A week still running cannot be sealed: locking Wednesday's view of the week
+ * would make the seal a lie, because the review would be permanent and the week
+ * it describes would not be over.
+ */
+export function weekLockRefusal(input: {
+  weekStart: string;
+  todayKey: string;
+  /** The stored row, or null when nothing has been saved for the week yet. */
+  existing: { locked_at: string | null } | null;
+}): string | null {
+  const bad = weekKeyRefusal(input.weekStart);
+  if (bad) return bad;
+  const currentWeek = weekStartOfDayKey(input.todayKey);
+  if (input.weekStart === currentWeek) return "Ova nedelja još nije završena.";
+  if (input.weekStart > currentWeek) return "Ta nedelja još nije počela.";
+  if (!input.existing) return "Sačuvaj osvrt pre zaključavanja.";
+  if (input.existing.locked_at != null) return "Ova nedelja je već zaključana.";
+  return null;
 }

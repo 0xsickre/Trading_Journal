@@ -57,6 +57,31 @@ export async function getPositionCheckins(): Promise<PositionCheckin[]> {
   return rows.map(toCheckin);
 }
 
+/**
+ * The check-ins of one date span — what a week needs.
+ *
+ * `/weekly` used `getPositionCheckins()` and drained every check-in ever
+ * recorded to describe seven days; the cost grew with the age of the account
+ * and the page never read a row outside its week.
+ */
+export async function getPositionCheckinsInRange(
+  from: string,
+  to: string,
+): Promise<PositionCheckin[]> {
+  const supabase = await createClient();
+  const rows = await selectAllPages<CheckinRow>((lo, hi) =>
+    supabase
+      .from("tj_position_checkins")
+      .select(COLUMNS)
+      .gte("report_date", from)
+      .lte("report_date", to)
+      .order("report_date")
+      .order("id")
+      .range(lo, hi),
+  );
+  return rows.map(toCheckin);
+}
+
 /** One day's check-ins, indexed by position id — what `/daily` renders from. */
 export async function getPositionCheckinsForDay(
   date: string,

@@ -34,6 +34,29 @@ export async function getDailyReportDates(): Promise<string[]> {
 }
 
 /**
+ * The journalled dates inside one span, for a screen that only asks about it.
+ *
+ * Same reason as `getPositionCheckinsInRange`: a week needs seven answers, not
+ * every date the journal has ever held.
+ */
+export async function getDailyReportDatesInRange(
+  from: string,
+  to: string,
+): Promise<string[]> {
+  const supabase = await createClient();
+  const data = await selectAllPages((lo, hi) =>
+    supabase
+      .from("tj_daily_reports")
+      .select("report_date")
+      .gte("report_date", from)
+      .lte("report_date", to)
+      .order("report_date", { ascending: false })
+      .range(lo, hi),
+  );
+  return data.map((r) => r.report_date);
+}
+
+/**
  * One day's journal, as the month list shows it.
  *
  * `DailyReportLite` is not enough — it carries neither the impulses nor

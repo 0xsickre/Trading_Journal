@@ -2,6 +2,7 @@ import { computeStats, winRateOf, type RealizedTrade } from "./analytics";
 import type { BreakevenRange } from "./breakeven";
 import type { EnrichedTrade } from "./enriched-trade";
 import { bucketByPeriod, type PeriodRow } from "./period-stats";
+import { isTradingDayKey } from "./time";
 import { isInterference, type PositionCheckin } from "./position-checkin";
 import { weekDayKeys, weekEndOfWeekStart } from "./weekly-review";
 
@@ -26,8 +27,17 @@ export type WeekRecap = {
   losses: number;
   /** Of those, the ones whose holding window crossed a Saturday or Sunday. */
   weekendHolds: number;
-  /** Days of the week with a daily entry, out of seven. */
+  /** Days with a daily entry, out of `journalledOutOf`. */
   journalledDays: number;
+  /**
+   * The days that COUNT as journalling days: Monday to Friday.
+   *
+   * It was seven, so a trader who wrote every working day read "5 / 7" and
+   * looked delinquent for not journalling the weekend. Nothing else in the app
+   * scores a Saturday — the tracker and the focus goal both stop at Friday
+   * (`isTradingDayKey`), and a weekend entry is neither a miss nor a bonus.
+   */
+  journalledOutOf: number;
   /** Positions that got at least one check-in during the week. */
   checkedPositions: number;
   /** Of those, ones with a recorded intervention on any day of the week. */
@@ -53,9 +63,11 @@ export type WeekRecap = {
   winRate: number | null;
   /** Gross profit over gross loss. Null with no losses, `Infinity` with no loss at all. */
   profitFactor: number | null;
-  /** Mean R across trades that carry one. */
+  /** Mean R across trades that carry one. Null when none do. */
   avgR: number | null;
-  /** Mean R per trade — the same figure the dashboard calls expectancy. */
+  /** How many trades `avgR` averaged over; 0 means it is not a reading. */
+  rSample: number;
+  /** Mean R per decided trade — the figure the dashboard calls expectancy. */
   expectancy: number | null;
   /** How many trades `expectancy` averaged over; 0 means it is not a reading. */
   expectancySample: number;
@@ -100,6 +112,8 @@ export function buildWeekRecap(
   // card read. `range` is the one the caller already enriched with, so the
   // classification behind `profitFactor` cannot disagree with the `wins` and
   // `losses` counted a line above from `outcome`.
+  const journalDays = weekDayKeys(weekStart).filter(isTradingDayKey);
+
   const stats = computeStats(
     inWeek.map((t) => t.trade),
     "net",
@@ -112,8 +126,8 @@ export function buildWeekRecap(
     wins,
     losses,
     weekendHolds: inWeek.filter((t) => t.weekendHold).length,
-    journalledDays: weekDayKeys(weekStart).filter((d) => reportDates.has(d))
-      .length,
+    journalledDays: journalDays.filter((d) => reportDates.has(d)).length,
+    journalledOutOf: journalDays.length,
     checkedPositions: checked.size,
     interferedPositions: interfered.size,
     thesisSlippedPositions: slipped.size,
@@ -122,7 +136,11 @@ export function buildWeekRecap(
     // contradict the two numbers printed beside it.
     winRate: winRateOf(wins, losses),
     profitFactor: stats.profitFactor,
-    avgR: stats.expectancySample > 0 ? stats.avgR : null,
+    // `rSample`, not `expectancySample`: the latter counts trades whose R was
+    // decided (a winner or a loser), so a week whose only R-carrying trades
+    // scratched breakeven printed "—" over a real 0.00R.
+    avgR: stats.rSample > 0 ? stats.avgR : null,
+    rSample: stats.rSample,
     expectancy: stats.expectancySample > 0 ? stats.expectancy : null,
     expectancySample: stats.expectancySample,
   };

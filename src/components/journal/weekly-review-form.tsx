@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useId, useMemo, useState, useTransition, type MouseEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Lock, Save } from "lucide-react";
-import { format } from "date-fns";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +19,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -29,11 +35,19 @@ import {
   emptyWeeklyReview,
   formatWeekRange,
   isWeekComplete,
+  type PreviousChangeKept,
   type WeeklyReview,
 } from "@/lib/journal/weekly-review";
+import {
+  clearWeeklyDraft,
+  draftDiffers,
+  readWeeklyDraft,
+  writeWeeklyDraft,
+  type WeeklyDraftFields,
+} from "@/lib/journal/weekly-draft";
 import type { WeekRecap } from "@/lib/journal/week-recap";
 import type { PeriodRow } from "@/lib/journal/period-stats";
-import { DATE_TIME } from "@/lib/journal/time";
+import { DATE, DATE_TIME, DEFAULT_TZ, fmtInTz } from "@/lib/journal/time";
 import {
   lockWeek,
   saveWeeklyReview,
@@ -54,51 +68,143 @@ function toFormState(review: WeeklyReview | null, weekStart: string): FormState 
     one_pattern: review.one_pattern,
     one_change: review.one_change,
     next_week_catalysts: review.next_week_catalysts,
+    previous_change_kept: review.previous_change_kept ?? null,
+  };
+}
+
+/** The shape the local draft is stored in — text, never null, so it round-trips. */
+function toDraft(form: FormState): WeeklyDraftFields {
+  return {
+    week_grade: form.week_grade ?? null,
+    went_well: form.went_well ?? "",
+    went_badly: form.went_badly ?? "",
+    one_pattern: form.one_pattern ?? "",
+    one_change: form.one_change ?? "",
+    next_week_catalysts: form.next_week_catalysts ?? "",
   };
 }
 
 export function WeeklyReviewForm({
   review,
+  previousReview,
   weekStart,
   currentWeekStart,
+  earliestWeekStart,
+  clamped = false,
   recap,
   days,
   currency,
+  timezone = DEFAULT_TZ,
+  accountId = "all",
+  accountOptions = [],
+  mixedFallback = false,
 }: {
   review: WeeklyReview | null;
+  /** The week before this one, for the commitment it left behind. */
+  previousReview?: WeeklyReview | null;
   weekStart: string;
   /** The week containing today — the one that cannot be reviewed or sealed yet. */
   currentWeekStart: string;
+  /** The oldest week worth opening; the back arrow stops here. */
+  earliestWeekStart?: string;
+  /** True when the URL asked for a week that has not happened. */
+  clamped?: boolean;
   recap: WeekRecap;
   /** Exactly seven, Monday-first; `null` where the day saw no trade. */
   days: readonly (PeriodRow | null)[];
   currency: string;
+  /** The account's zone — every timestamp on this page is read on that clock. */
+  timezone?: string;
+  accountId?: string;
+  accountOptions?: { value: string; label: string }[];
+  /** True when "all accounts" was refused because the currencies differ. */
+  mixedFallback?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [form, setForm] = useState<FormState>(() =>
-    toFormState(review, weekStart),
-  );
+  const [form, setForm] = useState<FormState>(() => toFormState(review, weekStart));
   const [lastSaved, setLastSaved] = useState(review?.updated_at ?? null);
-
-  const complete = useMemo(
-    () =>
-      isWeekComplete({
-        week_grade: form.week_grade,
-        one_pattern: form.one_pattern,
-        one_change: form.one_change,
-      }),
-    [form.week_grade, form.one_pattern, form.one_change],
-  );
+  /**
+   * Typed and not yet saved. The week arrows navigate, which remounts this form
+   * — everything unsaved used to be dropped without a word.
+   */
+  const [dirty, setDirty] = useState(false);
+  const [draftAt, setDraftAt] = useState<string | null>(null);
 
   const locked = review?.locked_at != null;
   const isRunningWeek = weekStart === currentWeekStart;
-  const lockedAt = review?.locked_at
-    ? format(new Date(review.locked_at), DATE_TIME)
-    : null;
+  const lockedAt = review?.locked_at ? fmtInTz(review.locked_at, timezone, DATE_TIME) : null;
+  const saved = useMemo(() => toDraft(toFormState(review, weekStart)), [review, weekStart]);
+
+  /**
+   * The badge reads the STORED review, not what is on screen.
+   *
+   * Typing the last answer used to flip it to "Završeno" while the database
+   * still held nothing — a status that described the keyboard rather than the
+   * journal. The live state belongs in the save bar, and that is where it is.
+   */
+  const complete = useMemo(
+    () =>
+      isWeekComplete({
+        week_grade: review?.week_grade ?? null,
+        one_pattern: review?.one_pattern ?? null,
+        one_change: review?.one_change ?? null,
+      }),
+    [review],
+  );
+
+  // Mount-only: a draft is offered, never applied. Applying it during render
+  // would both break hydration and overwrite a review saved from another device
+  // with whatever this browser happened to keep.
+  useEffect(() => {
+    if (locked) return;
+    const draft = readWeeklyDraft(weekStart);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- external-store init
+    if (draft && draftDiffers(saved, draft.fields)) setDraftAt(draft.savedAt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only, by design
+  }, []);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  /** Stops a week change that would throw away unsaved text, unless confirmed. */
+  function guardLeave(e: MouseEvent) {
+    if (dirty && !window.confirm("Imaš nesačuvane izmene. Napusti ovu nedelju bez čuvanja?"))
+      e.preventDefault();
+  }
 
   function patch<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+      setDirty(true);
+      writeWeeklyDraft(weekStart, toDraft(next));
+      return next;
+    });
+  }
+
+  function restoreDraft() {
+    const draft = readWeeklyDraft(weekStart);
+    if (!draft) return;
+    setForm((prev) => ({
+      ...prev,
+      week_grade: draft.fields.week_grade,
+      went_well: draft.fields.went_well || null,
+      went_badly: draft.fields.went_badly || null,
+      one_pattern: draft.fields.one_pattern || null,
+      one_change: draft.fields.one_change || null,
+      next_week_catalysts: draft.fields.next_week_catalysts || null,
+    }));
+    setDirty(true);
+    setDraftAt(null);
+  }
+
+  function discardDraft() {
+    clearWeeklyDraft(weekStart);
+    setDraftAt(null);
   }
 
   /** Split out so locking can persist first — same contract as the daily form. */
@@ -109,57 +215,132 @@ export function WeeklyReviewForm({
       return false;
     }
     setLastSaved(res.updated_at);
+    setDirty(false);
+    clearWeeklyDraft(weekStart);
+    setDraftAt(null);
     return true;
   }
 
   function save() {
     start(async () => {
-      if (!(await persist())) return;
-      toast.success("Nedeljni osvrt sačuvan");
-      router.refresh();
+      // No router.refresh(): the action revalidates /weekly itself.
+      if (await persist()) toast.success("Nedeljni osvrt sačuvan");
     });
   }
+
+  const canGoBack = earliestWeekStart == null || weekStart > earliestWeekStart;
+  const canGoForward = weekStart < currentWeekStart;
 
   return (
     <div className="space-y-6 pb-24">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" className="size-8" asChild>
-            <Link href={`/weekly?week=${addWeeksToWeekStart(weekStart, -1)}`}>
+          {canGoBack ? (
+            <Button variant="outline" size="icon" className="size-8" asChild>
+              <Link
+                href={`/weekly?week=${addWeeksToWeekStart(weekStart, -1)}`}
+                aria-label="Prethodna nedelja"
+                onClick={guardLeave}
+              >
+                <ChevronLeft className="size-4" />
+              </Link>
+            </Button>
+          ) : (
+            // A real disabled button, not a link wearing the attribute: on an
+            // <a> `disabled` is invalid and does nothing, so the arrow looked
+            // and behaved enabled.
+            <Button variant="outline" size="icon" className="size-8" disabled aria-label="Prethodna nedelja">
               <ChevronLeft className="size-4" />
-            </Link>
-          </Button>
-          <div className="min-w-[11rem] text-center">
-            <p className="text-lg font-semibold">{formatWeekRange(weekStart)}</p>
-            {isRunningWeek && (
-              <p className="text-xs text-muted-foreground">još u toku</p>
-            )}
-          </div>
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8"
-            asChild
-            disabled={weekStart >= currentWeekStart}
-          >
-            <Link
-              href={
-                weekStart >= currentWeekStart
-                  ? `/weekly?week=${weekStart}`
-                  : `/weekly?week=${addWeeksToWeekStart(weekStart, 1)}`
-              }
-              aria-disabled={weekStart >= currentWeekStart}
-            >
+            </Button>
+          )}
+          <p className="min-w-[13rem] text-center text-lg font-semibold">
+            {formatWeekRange(weekStart)}
+          </p>
+          {canGoForward ? (
+            <Button variant="outline" size="icon" className="size-8" asChild>
+              <Link
+                href={`/weekly?week=${addWeeksToWeekStart(weekStart, 1)}`}
+                aria-label="Sledeća nedelja"
+                onClick={guardLeave}
+              >
+                <ChevronRight className="size-4" />
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="outline" size="icon" className="size-8" disabled aria-label="Sledeća nedelja">
               <ChevronRight className="size-4" />
-            </Link>
-          </Button>
+            </Button>
+          )}
         </div>
-        <Badge variant={complete ? "default" : "secondary"}>
-          {complete ? "Završeno" : "Nacrt"}
-        </Badge>
+        <div className="flex items-center gap-2">
+          {accountOptions.length > 0 && (
+            <Select
+              value={accountId}
+              onValueChange={(v) => {
+                if (dirty && !window.confirm("Imaš nesačuvane izmene. Promeniti nalog bez čuvanja?"))
+                  return;
+                router.push(`/weekly?week=${weekStart}${v === "all" ? "" : `&account=${v}`}`);
+              }}
+            >
+              <SelectTrigger className="h-8 w-44" aria-label="Nalog">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Svi nalozi</SelectItem>
+                {accountOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Badge variant={complete ? "default" : "secondary"}>
+            {complete ? "Završeno" : "Nacrt"}
+          </Badge>
+        </div>
       </div>
 
-      <WeekRecapCard recap={recap} days={days} currency={currency} />
+      {clamped && (
+        <p className="text-xs text-muted-foreground">
+          Tražena nedelja još nije počela — prikazana je tekuća.
+        </p>
+      )}
+      {mixedFallback && (
+        <p className="text-xs text-muted-foreground">
+          Nalozi su u različitim valutama, pa se ne mogu sabrati — prikazan je podrazumevani nalog.
+        </p>
+      )}
+
+      {draftAt && (
+        <Alert>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>
+              Imaš nesačuvan nacrt za ovu nedelju od {fmtInTz(draftAt, timezone, DATE_TIME)}.
+            </span>
+            <span className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={restoreDraft}>
+                Vrati nacrt
+              </Button>
+              <Button size="sm" variant="ghost" onClick={discardDraft}>
+                Odbaci
+              </Button>
+            </span>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <WeekRecapCard recap={recap} days={days} currency={currency} timezone={timezone} />
+
+      {previousReview?.one_change && (
+        <PreviousWeekCard
+          previous={previousReview}
+          disabled={locked}
+          kept={form.previous_change_kept ?? null}
+          canAnswer={review == null || review.previous_change_kept !== undefined}
+          onKept={(v) => patch("previous_change_kept", v)}
+        />
+      )}
 
       {isRunningWeek && (
         <Alert>
@@ -212,6 +393,7 @@ export function WeeklyReviewForm({
               label="Ocena nedelje"
               value={form.week_grade}
               onChange={(next) => patch("week_grade", next)}
+              texts={{ clear: "Obriši", valueLabel: (n) => `${n} od 5`, clearHint: "Klikni ponovo da obrišeš" }}
             />
           </CardContent>
         </Card>
@@ -269,18 +451,16 @@ export function WeeklyReviewForm({
           <p className="text-xs text-muted-foreground">
             {locked
               ? "Nedelja je zaključana"
-              : lastSaved
-                ? `Poslednje čuvanje ${format(new Date(lastSaved), "HH:mm")}`
-                : "Još nije sačuvano"}
+              : dirty
+                ? "Nesačuvane izmene"
+                : lastSaved
+                  ? `Poslednje čuvanje ${fmtInTz(lastSaved, timezone, "HH:mm")}`
+                  : "Još nije sačuvano"}
           </p>
           {!locked && (
             <div className="flex items-center gap-2">
               {!isRunningWeek && (
-                <LockWeekButton
-                  weekStart={weekStart}
-                  disabled={pending}
-                  persist={persist}
-                />
+                <LockWeekButton weekStart={weekStart} disabled={pending} persist={persist} />
               )}
               <Button onClick={save} disabled={pending}>
                 <Save className="mr-2 size-4" />
@@ -291,6 +471,76 @@ export function WeeklyReviewForm({
         </div>
       </div>
     </div>
+  );
+}
+
+const KEPT_LABELS: Record<PreviousChangeKept, string> = {
+  yes: "Da",
+  partly: "Delimično",
+  no: "Ne",
+};
+
+/**
+ * Last week's commitment, at the top of this week.
+ *
+ * The review asked for "one thing I change next week" and then never mentioned
+ * it again: the promise was written once and read by nothing, so breaking it
+ * cost nothing. Here it is the first thing on the screen, with the answer
+ * stored on THIS week's row — last week's may already be sealed.
+ */
+function PreviousWeekCard({
+  previous,
+  kept,
+  onKept,
+  disabled,
+  canAnswer,
+}: {
+  previous: WeeklyReview;
+  kept: PreviousChangeKept | null;
+  onKept: (v: PreviousChangeKept) => void;
+  disabled: boolean;
+  /** False while the database has no column for the answer yet. */
+  canAnswer: boolean;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Prošle nedelje si rekao</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p className="rounded-md border-l-2 border-primary/50 bg-muted/40 px-3 py-2">
+          {previous.one_change}
+        </p>
+        {previous.next_week_catalysts && (
+          <p className="text-muted-foreground">
+            Očekivao si na kalendaru: {previous.next_week_catalysts}
+          </p>
+        )}
+        {canAnswer && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-muted-foreground">Jesi li to ispunio?</span>
+            {(Object.keys(KEPT_LABELS) as PreviousChangeKept[]).map((v) => (
+              <Button
+                key={v}
+                size="sm"
+                variant={kept === v ? "default" : "outline"}
+                disabled={disabled}
+                aria-pressed={kept === v}
+                onClick={() => onKept(v)}
+              >
+                {KEPT_LABELS[v]}
+              </Button>
+            ))}
+          </div>
+        )}
+        <Link
+          href={`/weekly?week=${previous.week_start}`}
+          className="inline-block text-xs text-muted-foreground underline underline-offset-4"
+        >
+          Otvori tu nedelju
+        </Link>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -307,53 +557,70 @@ function WeekRecapCard({
   recap,
   days,
   currency,
+  timezone,
 }: {
   recap: WeekRecap;
   days: readonly (PeriodRow | null)[];
   currency: string;
+  timezone: string;
 }) {
+  const nothingHappened =
+    recap.closed === 0 && recap.checkedPositions === 0 && recap.journalledDays === 0;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Šta se desilo</CardTitle>
       </CardHeader>
       <CardContent>
-        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Stat label="Zatvoreno" value={String(recap.closed)} />
-          <Stat
-            label="Net"
-            value={fmtMoney(recap.net, currency)}
-            tone={recap.net > 0 ? "up" : recap.net < 0 ? "down" : undefined}
-          />
-          <Stat label="Dobitni / gubitni" value={`${recap.wins} / ${recap.losses}`} />
-          <Stat label="Zabeleženo dana" value={`${recap.journalledDays} / 7`} />
-          <Stat label="Proverenih pozicija" value={String(recap.checkedPositions)} />
-          <Stat label="Dirano" value={String(recap.interferedPositions)} />
-          <Stat label="Teza oslabila" value={String(recap.thesisSlippedPositions)} />
-          <Stat label="Držano preko vikenda" value={String(recap.weekendHolds)} />
+        {nothingHappened ? (
+          <p className="text-sm text-muted-foreground">
+            Ove nedelje nema nijednog zatvorenog trejda ni zabeleženog dana. Pitanja ispod i
+            dalje stoje — nedelja bez trgovanja je i dalje nedelja o kojoj se ima šta reći.
+          </p>
+        ) : (
+          <div className="space-y-5">
+            <section>
+              <h3 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Novac
+              </h3>
+              <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <Stat label="Zatvoreno" value={String(recap.closed)} />
+                <Stat
+                  label="Net"
+                  value={fmtMoney(recap.net, currency)}
+                  tone={recap.net > 0 ? "up" : recap.net < 0 ? "down" : undefined}
+                />
+                <Stat label="Dobitni / gubitni" value={`${recap.wins} / ${recap.losses}`} />
+                <Stat label="Win rate" value={fmtPct(recap.winRate)} />
+                <Stat label="Profit factor" value={fmtFactor(recap.profitFactor)} />
+                <Stat
+                  label="Avg R"
+                  value={fmtR(recap.avgR)}
+                  hint={recap.rSample > 0 ? `${recap.rSample} od ${recap.closed} trejdova nosi R` : undefined}
+                />
+              </dl>
+            </section>
+            <section>
+              <h3 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Proces
+              </h3>
+              <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <Stat
+                  label="Zabeleženo dana"
+                  value={`${recap.journalledDays} / ${recap.journalledOutOf}`}
+                  hint="pon–pet"
+                />
+                <Stat label="Proverenih pozicija" value={String(recap.checkedPositions)} />
+                <Stat label="Dirano" value={String(recap.interferedPositions)} />
+                <Stat label="Teza oslabila" value={String(recap.thesisSlippedPositions)} />
+                <Stat label="Držano preko vikenda" value={String(recap.weekendHolds)} />
+              </dl>
+            </section>
+          </div>
+        )}
 
-          {/* Measurements, not verdicts — see the note on `WeekRecap`. Every one
-              reads "—" rather than a zero when the week gave it nothing to
-              divide by, because a week with no closed trade has no win rate. */}
-          <Stat label="Win rate" value={fmtPct(recap.winRate)} />
-          <Stat label="Profit factor" value={fmtFactor(recap.profitFactor)} />
-          <Stat label="Avg R" value={fmtR(recap.avgR)} />
-          <Stat
-            label="Expectancy"
-            value={fmtR(recap.expectancy)}
-            tone={
-              recap.expectancy == null
-                ? undefined
-                : recap.expectancy > 0
-                  ? "up"
-                  : recap.expectancy < 0
-                    ? "down"
-                    : undefined
-            }
-          />
-        </dl>
-
-        <WeekDayStrip days={days} currency={currency} />
+        <WeekDayStrip days={days} currency={currency} timezone={timezone} />
       </CardContent>
     </Card>
   );
@@ -379,26 +646,35 @@ const fmtFactor = (v: number | null) =>
  * Always seven columns, Monday to Sunday, so the shape of the week is legible
  * at a glance: three traded days in a row followed by four blanks looks like
  * what it was. A day with no trade shows a dash — NOT a zero, which would claim
- * a flat result was traded for.
+ * a flat result was traded for. Each tile links to that day's journal, which is
+ * where the answer to "what happened on Wednesday" actually lives.
  */
 function WeekDayStrip({
   days,
   currency,
+  timezone,
 }: {
   days: readonly (PeriodRow | null)[];
   currency: string;
+  timezone: string;
 }) {
   return (
     <div className="mt-6 grid grid-cols-7 gap-1.5">
       {days.map((row, i) => (
-        <div
+        <Link
           key={DAY_LABELS[i]}
+          href={row == null ? "/daily" : `/daily?date=${row.key}`}
           className={cn(
-            "rounded-md border px-1.5 py-2 text-center",
+            "rounded-md border px-1.5 py-2 text-center transition-colors hover:bg-muted/50",
             row == null && "opacity-50",
             row != null && row.net > 0 && "border-emerald-600/40 bg-emerald-600/5",
             row != null && row.net < 0 && "border-red-600/40 bg-red-600/5",
           )}
+          aria-label={
+            row == null
+              ? `${DAY_LABELS[i]} — bez trejdova`
+              : `${DAY_LABELS[i]} ${fmtInTz(`${row.key}T12:00:00Z`, timezone, DATE)}, ${fmtMoney(row.net, currency)}, ${tradeCountLabel(row.trades)}`
+          }
         >
           <div className="text-[10px] text-muted-foreground">{DAY_LABELS[i]}</div>
           <div
@@ -413,7 +689,7 @@ function WeekDayStrip({
           <div className="text-[10px] text-muted-foreground">
             {row == null ? "" : tradeCountLabel(row.trades)}
           </div>
-        </div>
+        </Link>
       ))}
     </div>
   );
@@ -442,10 +718,12 @@ function Stat({
   label,
   value,
   tone,
+  hint,
 }: {
   label: string;
   value: string;
   tone?: "up" | "down";
+  hint?: string;
 }) {
   return (
     <div>
@@ -459,6 +737,7 @@ function Stat({
       >
         {value}
       </dd>
+      {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -480,7 +759,6 @@ function LockWeekButton({
   disabled: boolean;
   persist: () => Promise<boolean>;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
 
@@ -493,8 +771,8 @@ function LockWeekButton({
         return;
       }
       setOpen(false);
+      // No router.refresh(): `lockWeek` revalidates /weekly and /reports.
       toast.success("Nedelja zaključana.");
-      router.refresh();
     });
   }
 
@@ -548,11 +826,19 @@ function Field({
   onChange: (v: string | null) => void;
   hint?: string;
 }) {
+  const id = useId();
+  const hintId = `${id}-hint`;
   return (
     <div className="space-y-2">
-      <Label>{label}</Label>
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      <Label htmlFor={id}>{label}</Label>
+      {hint && (
+        <p id={hintId} className="text-xs text-muted-foreground">
+          {hint}
+        </p>
+      )}
       <Textarea
+        id={id}
+        aria-describedby={hint ? hintId : undefined}
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value || null)}
         rows={3}

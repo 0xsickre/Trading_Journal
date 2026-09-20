@@ -140,7 +140,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,613 tests across 161 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,640 tests across 162 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -286,7 +286,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/trades/new`, `/trades/[id]/edit` | Trade form: plan, fills, playbook checklist, psychology, images. In the **order of the decisions**: account, instrument, then the playbook and its checklist, and only then the prices and the risk. **There is no phase control**: planned or active is what the fills say — an entry fill means you are in the trade — so a select that could disagree with the record is gone, and so is "Move to active". The one lifecycle fact the fills cannot know, a MISSED plan, keeps its button. The instrument is **typed, not scrolled** — `instrument-select.tsx` filters the 91-symbol catalog on symbol, name and asset class, so "gold" finds both XAUUSD and GC; a grouped `Select` could only jump to the start of a label |
 | `/daily` | Daily report + tracker checklist for one day; locking the day |
 | `/calendar` | Monthly P&L grid by day, weekly totals |
-| `/weekly` | Weekly review: week rating, five questions, the week's figures (`week-recap.ts`) |
+| `/weekly` | Weekly review: week rating, five questions, the week's figures split into money and process (`week-recap.ts`), last week's commitment with the answer to whether it held, and an account filter that refuses to sum two currencies. Unsaved answers are kept per week in the browser (`weekly-draft.ts`) and offered back; leaving a week with unsaved text asks first |
 | `/playbooks` | Every setup as one table: Trades / Net P&L / Win Rate / Missed / Expectancy per row |
 | `/playbooks/[id]` | One playbook: identity, Stats, Rules (section and rule editor), Trades, Notes |
 | `/reports` | How each group of trades did — by setup, instrument, day or any tag; Live and Backtest kept apart (§ Reports) |
@@ -1106,8 +1106,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,613 tests across 161 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,052 tests in 107 files) and `components` (environment `jsdom`, files `*.test.tsx`, 561
+2,640 tests across 162 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,069 tests in 108 files) and `components` (environment `jsdom`, files `*.test.tsx`, 571
 tests in 54 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

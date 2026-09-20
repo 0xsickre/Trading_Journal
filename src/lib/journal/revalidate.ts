@@ -80,3 +80,16 @@ export function revalidateDaily() {
   revalidatePath("/");
   revalidatePath("/calendar");
 }
+
+/**
+ * After a weekly review is saved or sealed.
+ *
+ * `/reports` and not only `/weekly`: the week rating is a report dimension
+ * (`reports/dimensions.ts`, key `week_grade`), read through `getWeekGrades()`
+ * on the reports page. Rating a week and finding the report still grouping it
+ * under "no rating" was the bug this exists to prevent.
+ */
+export function revalidateWeekly() {
+  revalidatePath("/weekly");
+  revalidatePath("/reports");
+}

@@ -124,6 +124,34 @@ describe("buildWeekRecap — journalled days", () => {
   it("is zero when nothing was written", () => {
     expect(recap([]).journalledDays).toBe(0);
   });
+
+  it("counts Monday to Friday, because nothing else in the app scores a weekend", () => {
+    // Saturday's entry is neither a miss nor a bonus: it is not a scored day.
+    const r = recap([], [], ["2026-01-05", "2026-01-09", "2026-01-10"]);
+    expect(r.journalledDays).toBe(2);
+    expect(r.journalledOutOf).toBe(5);
+  });
+});
+
+describe("avgR is guarded by the trades that CARRY an R", () => {
+  it("prints a real 0.00R for a week whose R trades all scratched", () => {
+    // Both trades carry an R and neither is a winner or a loser, so the
+    // expectancy sample is 0 while the R sample is 2. Guarding avgR by the
+    // former printed "—" over a reading that exists.
+    const r = recap([
+      { id: "a", closedAt: "2026-01-06T12:00:00Z", net: 0, r: 0 },
+      { id: "b", closedAt: "2026-01-07T12:00:00Z", net: 0, r: 0 },
+    ]);
+    expect(r.rSample).toBe(2);
+    expect(r.avgR).toBe(0);
+    expect(r.expectancy).toBeNull();
+  });
+
+  it("is null when no trade carries one", () => {
+    const r = recap([{ id: "a", closedAt: "2026-01-06T12:00:00Z", net: 120, r: null }]);
+    expect(r.rSample).toBe(0);
+    expect(r.avgR).toBeNull();
+  });
 });
 
 describe("the measurements — null when there is nothing to divide by", () => {
