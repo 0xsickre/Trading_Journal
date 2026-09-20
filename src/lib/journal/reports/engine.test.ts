@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_MIN_SAMPLE, runReport, summarizeReport } from "./engine";
+import {
+  DEFAULT_MIN_SAMPLE,
+  isInconclusive,
+  runReport,
+  sortRows,
+  summarizeReport,
+} from "./engine";
 import { DEFAULT_METRIC_KEYS } from "./metrics";
 import { dimCtx, enrich, metricCtx, mkReport } from "./test-helpers";
 
@@ -351,5 +357,108 @@ describe("summarizeReport orders ties instead of leaving them to chance", () => 
     )!;
     // The table and the headline must not disagree about who is on top.
     expect(summarizeReport(r, "profit_factor").best?.bucket).toBe(r.rows[0].bucket);
+  });
+});
+
+describe("intervals", () => {
+  /** Eight trades, four each way: a book that has established nothing. */
+  const coinFlip = (instrument = "EURUSD") =>
+    enrich([
+      ...Array.from({ length: 4 }, (_, i) => ({ id: `${instrument}w${i}`, instrument, net: 100, r: 1 })),
+      ...Array.from({ length: 4 }, (_, i) => ({ id: `${instrument}l${i}`, instrument, net: -100, r: -1 })),
+    ]);
+
+  it("attaches one to the three figures that can be mistaken for facts, and to nothing else", () => {
+    const row = run(coinFlip(), "instrument")!.rows[0];
+    expect(row.intervals.win_rate).not.toBeNull();
+    expect(row.intervals.expectancy).not.toBeNull();
+    expect(row.intervals.profit_factor).not.toBeNull();
+    // A count and a sum are exactly what they say.
+    expect(row.intervals.trades).toBeUndefined();
+    expect(row.intervals.net_pnl).toBeUndefined();
+  });
+
+  it("brackets the figure it belongs to", () => {
+    const row = run(coinFlip(), "instrument")!.rows[0];
+    const wr = row.intervals.win_rate!;
+    expect(wr.lo).toBeLessThanOrEqual(row.values.win_rate as number);
+    expect(wr.hi).toBeGreaterThanOrEqual(row.values.win_rate as number);
+  });
+
+  it("counts the DECIDED trades, not the row's — the two are different numbers", () => {
+    const withScratches = enrich([
+      ...Array.from({ length: 3 }, (_, i) => ({ id: `w${i}`, instrument: "EURUSD", net: 100, r: 1 })),
+      ...Array.from({ length: 3 }, (_, i) => ({ id: `l${i}`, instrument: "EURUSD", net: -100, r: -1 })),
+      ...Array.from({ length: 4 }, (_, i) => ({ id: `b${i}`, instrument: "EURUSD", net: 0, r: 0 })),
+    ]);
+    const row = run(withScratches, "instrument")!.rows[0];
+    expect(row.n).toBe(10);
+    expect(row.intervals.win_rate!.n).toBe(6);
+  });
+
+  it("says a 50/50 book has not ruled out a coin, and a lopsided one has", () => {
+    const metrics = run(coinFlip(), "instrument")!.metrics;
+    const winRate = metrics.find((m) => m.key === "win_rate")!;
+
+    expect(isInconclusive(run(coinFlip(), "instrument")!.rows[0], winRate)).toBe(true);
+
+    const oneSided = enrich(
+      Array.from({ length: 60 }, (_, i) => ({
+        id: `t${i}`,
+        instrument: "EURUSD",
+        net: i % 10 === 0 ? -100 : 100,
+        r: i % 10 === 0 ? -1 : 1,
+      })),
+    );
+    expect(isInconclusive(run(oneSided, "instrument")!.rows[0], winRate)).toBe(false);
+  });
+
+  it("a metric with no neutral is never inconclusive", () => {
+    const result = run(coinFlip(), "instrument")!;
+    const netPnl = result.metrics.find((m) => m.key === "net_pnl")!;
+    expect(isInconclusive(result.rows[0], netPnl)).toBe(false);
+  });
+});
+
+describe("sortRows is separate from running the report", () => {
+  const book = () =>
+    enrich([
+      { id: "a", instrument: "EURUSD", net: 100 },
+      { id: "b", instrument: "XAUUSD", net: 900 },
+      { id: "c", instrument: "US100.cash", net: -50 },
+    ]);
+
+  it("orders an existing report without recomputing it", () => {
+    const result = run(book(), "instrument")!;
+    const rows = [...result.rows];
+    sortRows(rows, result.dimension, "net_pnl:asc", result.metrics);
+    expect(rows.map((r) => r.bucket)).toEqual(["US100.cash", "EURUSD", "XAUUSD"]);
+    sortRows(rows, result.dimension, "net_pnl:desc", result.metrics);
+    expect(rows.map((r) => r.bucket)).toEqual(["XAUUSD", "EURUSD", "US100.cash"]);
+    // The same row objects throughout — ordering must not rebuild anything.
+    expect(rows.every((r) => result.rows.includes(r))).toBe(true);
+  });
+});
+
+describe("ranking is sceptical", () => {
+  it("a perfect three-trade bucket does not beat a good eighty-trade one", () => {
+    const trades = enrich([
+      // Three trades, all winners: a 100 % win rate nobody should bet on.
+      ...Array.from({ length: 3 }, (_, i) => ({ id: `lucky${i}`, instrument: "XAUUSD", net: 100, r: 1 })),
+      // Eighty trades at 60 %, which is a finding.
+      ...Array.from({ length: 80 }, (_, i) => ({
+        id: `solid${i}`,
+        instrument: "EURUSD",
+        net: i % 10 < 6 ? 100 : -100,
+        r: i % 10 < 6 ? 1 : -1,
+      })),
+    ]);
+    // `minSample` 3 lets the lucky bucket be ranked at all; the interval is
+    // what keeps it from winning.
+    const result = run(trades, "instrument", { minSample: 3 })!;
+    expect(summarizeReport(result, "win_rate").best?.bucket).toBe("EURUSD");
+    // …and on the point estimate alone it would have won.
+    const lucky = result.rows.find((r) => r.bucket === "XAUUSD")!;
+    expect(lucky.values.win_rate).toBe(100);
   });
 });

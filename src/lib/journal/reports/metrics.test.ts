@@ -91,6 +91,20 @@ describe("registry integrity", () => {
     expect(getMetric("no_such_metric")).toBeUndefined();
   });
 
+  it("pairs every interval with a neutral value, and never one without the other", () => {
+    // An interval with no neutral cannot say whether it has ruled anything
+    // out, and a neutral with no interval has nothing to compare against — the
+    // table would silently dim nothing, or dim everything.
+    for (const m of METRICS) {
+      expect(m.interval != null, m.key).toBe(m.neutral != null);
+    }
+    expect(METRICS.filter((m) => m.interval).map((m) => m.key).sort()).toEqual([
+      "expectancy",
+      "profit_factor",
+      "win_rate",
+    ]);
+  });
+
   it("declares no metric in a unit nothing produces", () => {
     // `points` is a legal MetricUnit and `formatMetric` has a whole branch for
     // it, but no metric in the registry emits it — recorded in step 3 and

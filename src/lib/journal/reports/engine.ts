@@ -20,17 +20,34 @@ import {
 import { applyFilters, EMPTY_FILTER_SET, type FilterSet } from "./filters";
 import { getMetric, type MetricContext, type ReportMetric } from "./metrics";
 import type { EnrichedTrade } from "../enriched-trade";
+import { containsNeutral, type Interval } from "../uncertainty";
 
-/** Below this many trades a group is flagged as statistically thin. */
+/**
+ * Below this many trades a group cannot be RANKED.
+ *
+ * It used to dim the row as well, and that was the whole defence: a filter
+ * hides, it does not explain. The table now carries an interval per figure,
+ * which says how unsure the number is instead of how few trades made it — and
+ * this constant is left holding the one job an interval cannot do, which is to
+ * keep a three-trade bucket off the "best category" card.
+ */
 export const DEFAULT_MIN_SAMPLE = 5;
 
 export type ReportRow = {
   bucket: string;
   /** Trades in this bucket. */
   n: number;
-  /** True when `n` is under the threshold — display must show it, not hide it. */
+  /** True when `n` is under the ranking threshold — display must show it, not hide it. */
   belowSample: boolean;
   values: Record<string, number | null>;
+  /**
+   * How sure each value is, for the metrics that carry an interval.
+   *
+   * Keyed like `values`, and missing (not null) for a metric with no interval
+   * at all — the difference between "this figure has no uncertainty to state"
+   * and "it has one and there was not enough data to state it".
+   */
+  intervals: Record<string, Interval | null>;
   trades: EnrichedTrade[];
 };
 
@@ -118,13 +135,19 @@ export function runReport(input: RunReportInput): ReportResult | null {
 
   const rows: ReportRow[] = [...groups.entries()].map(([bucket, trades]) => {
     const values: Record<string, number | null> = {};
-    for (const m of metrics)
+    const intervals: Record<string, Interval | null> = {};
+    for (const m of metrics) {
       values[m.key] = m.compute(trades, input.metricContext, [bucket]);
+      // Resampling is the expensive half of this loop, so it runs only for the
+      // metrics that declare it — three of thirty-eight.
+      if (m.interval) intervals[m.key] = m.interval(trades, input.metricContext);
+    }
     return {
       bucket,
       n: trades.length,
       belowSample: trades.length < minSample,
       values,
+      intervals,
       trades,
     };
   });
@@ -142,7 +165,15 @@ export function runReport(input: RunReportInput): ReportResult | null {
   };
 }
 
-function sortRows(
+/**
+ * Order the rows in place.
+ *
+ * Exported so a caller can re-sort a report it already has instead of running
+ * the engine again. `/reports` re-ran everything — every metric, every row,
+ * every bootstrap — on a click of a column header, because the sort lived
+ * inside the same memo as the computation.
+ */
+export function sortRows(
   rows: ReportRow[],
   dimension: Dimension,
   sortBy: string | undefined,
@@ -239,9 +270,29 @@ export function summarizeReport(
   // sort in an unspecified order, so with two flawless buckets `best` and
   // `worst` were both arbitrary. The row sort above has always had this guard;
   // this one did not, and the two used different orders for the same data.
+  /**
+   * Ranked by the CONSERVATIVE end of the interval when there is one.
+   *
+   * A bucket of three trades that all won has a 100 % win rate and an
+   * expectancy no honest reader would bet on; ranked on the point estimate it
+   * is crowned "best" over a bucket of eighty at 60 %. Its lower bound is
+   * terrible, and that is the number that answers "which of these do I
+   * actually know is good". The cell still shows the point estimate; only the
+   * ranking is sceptical.
+   *
+   * For a metric where lower is better the same logic runs off the upper
+   * bound — the worst the figure might really be.
+   */
+  const rankValue = (r: ReportRow): number => {
+    const point = r.values[metricKey] as number;
+    const i = r.intervals?.[metricKey];
+    if (!i) return point;
+    const bound = dir === -1 ? i.lo : i.hi;
+    return Number.isFinite(bound) ? bound : point;
+  };
   const byMetric = [...withValue].sort((a, b) => {
-    const av = a.values[metricKey] as number;
-    const bv = b.values[metricKey] as number;
+    const av = rankValue(a);
+    const bv = rankValue(b);
     return av === bv ? a.bucket.localeCompare(b.bucket) : (av - bv) * dir;
   });
   const byWinRate = eligible
@@ -255,4 +306,17 @@ export function summarizeReport(
     highestWinRate: byWinRate[0] ?? null,
     qualifying: eligible.length,
   };
+}
+
+/**
+ * Whether a figure is still indistinguishable from no effect.
+ *
+ * The display rule for a cell: an expectancy whose interval spans zero, a win
+ * rate whose interval spans 50, a profit factor whose interval spans 1. Not a
+ * judgement about the trade — a statement that this sample cannot tell the
+ * reader which side of neutral the truth is on.
+ */
+export function isInconclusive(row: ReportRow, metric: ReportMetric): boolean {
+  if (metric.neutral == null) return false;
+  return containsNeutral(row.intervals?.[metric.key] ?? null, metric.neutral);
 }

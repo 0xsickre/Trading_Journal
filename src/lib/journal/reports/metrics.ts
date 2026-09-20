@@ -29,11 +29,17 @@ import {
   computeRiskRatios,
   type DayPnlPoint,
 } from "../risk-ratios";
-import type { BreakevenRange } from "../breakeven";
+import { classifyOutcome, type BreakevenRange } from "../breakeven";
 import type { EnrichedTrade } from "../enriched-trade";
 import type { MetricUnit } from "../units";
 import { scorable, setupScoreFromTrade } from "../setup-score";
 import { riskDispersion } from "../risk-taken";
+import {
+  bootstrapMean,
+  bootstrapProfitFactor,
+  wilsonInterval,
+  type Interval,
+} from "../uncertainty";
 import { computeFollowRate, type RuleLookup } from "./playbook-dimensions";
 
 export type MetricContext = {
@@ -69,6 +75,21 @@ export type ReportMetric = {
   /** Higher is better — drives the "best category" summary and bar colouring. */
   higherIsBetter: boolean;
   /**
+   * How sure this number is, over the same group.
+   *
+   * Optional, and only three of the catalogue's metrics carry it: a rate, a
+   * mean and a ratio of sums are the figures a reader mistakes for facts. The
+   * rest are counts and sums, which are exactly what they say. Keeping it off
+   * `compute` means the other thirty-five pay nothing for it.
+   */
+  interval?(group: EnrichedTrade[], ctx: MetricContext): Interval | null;
+  /**
+   * The value that means "no effect" — 0 for a mean, 50 for a rate, 1 for a
+   * ratio. Present exactly when `interval` is: an interval with no neutral
+   * cannot say whether it has ruled anything out.
+   */
+  neutral?: number;
+  /**
    * `scope` is the bucket (or buckets, in a pivot cell) that define this group.
    *
    * Almost every metric ignores it: net P&L over a group of trades is net P&L
@@ -97,6 +118,46 @@ const realized = (group: EnrichedTrade[]): RealizedTrade[] =>
  * slippage at all.
  */
 const negate = (n: number): number => (n === 0 ? 0 : -n);
+
+/**
+ * The three resample frames, read the way `computeStats` reads them.
+ *
+ * Each interval has to be computed over exactly the trades its own statistic
+ * counts, and the three differ: the P&L basis and the breakeven band both come
+ * from the CONTEXT, not from what `enrichTrades` happened to resolve, so a
+ * Net/Gross toggle moves the bounds with the number.
+ */
+const pnlOf = (t: EnrichedTrade, ctx: MetricContext): number =>
+  ctx.pnlBasis === "gross" ? t.trade.gross : t.trade.net;
+
+/** Wins and losses, with breakeven left out — the win rate's own denominator. */
+function outcomes(group: EnrichedTrade[], ctx: MetricContext): { wins: number; losses: number } {
+  let wins = 0;
+  let losses = 0;
+  for (const t of group) {
+    const o = classifyOutcome(pnlOf(t, ctx), ctx.range);
+    if (o === "win") wins++;
+    else if (o === "loss") losses++;
+  }
+  return { wins, losses };
+}
+
+/**
+ * R of the trades expectancy actually averages: decided, and carrying an R.
+ *
+ * The mean of these is the same number `computeStats` builds from win rate and
+ * the two average R's — the weighted form and the plain mean agree by
+ * construction, and the plain one is what a bootstrap can resample.
+ */
+function decidedRs(group: EnrichedTrade[], ctx: MetricContext): number[] {
+  const out: number[] = [];
+  for (const t of group) {
+    if (t.r == null) continue;
+    const o = classifyOutcome(pnlOf(t, ctx), ctx.range);
+    if (o === "win" || o === "loss") out.push(t.r);
+  }
+  return out;
+}
 
 /** computeStats is the workhorse; memoized per group to avoid recomputation. */
 function statsOf(group: EnrichedTrade[], ctx: MetricContext) {
@@ -189,6 +250,13 @@ export const METRICS: ReportMetric[] = [
       const s = statsOf(g, ctx);
       return whenSampled(s.wins + s.losses, s.winRate);
     },
+    // Wilson over the DECIDED trades, which is the same denominator the rate
+    // itself uses — breakeven is deliberately out of both.
+    interval: (g, ctx) => {
+      const decided = outcomes(g, ctx);
+      return wilsonInterval(decided.wins, decided.losses);
+    },
+    neutral: 50,
   },
   {
     key: "profit_factor",
@@ -201,6 +269,11 @@ export const METRICS: ReportMetric[] = [
     hint: "Gross profit / gross loss. ∞ means the group holds no losing trade at all; empty only when the group has no trades.",
     higherIsBetter: true,
     compute: (g, ctx) => statsOf(g, ctx).profitFactor,
+    // Resampled over per-trade P&L on the chosen basis — the same numbers the
+    // ratio is built from. A ratio of sums has no usable closed form, and its
+    // distribution on forty trades is nothing like normal.
+    interval: (g, ctx) => bootstrapProfitFactor(g.map((t) => pnlOf(t, ctx))),
+    neutral: 1,
   },
   {
     key: "expectancy",
@@ -211,6 +284,11 @@ export const METRICS: ReportMetric[] = [
       const s = statsOf(g, ctx);
       return whenSampled(s.expectancySample, s.expectancy);
     },
+    // The mean R over the trades expectancy is actually averaged across: those
+    // that carry an R and were decided. Resampling the whole group instead
+    // would mix in trades the statistic never counted.
+    interval: (g, ctx) => bootstrapMean(decidedRs(g, ctx)),
+    neutral: 0,
   },
   {
     key: "avg_r",

@@ -4,14 +4,20 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMetric, metric, type ViewMode } from "@/lib/journal/units";
 import { bucketLabel } from "@/lib/journal/reports/dimensions";
-import { parseSort, type ReportResult } from "@/lib/journal/reports/engine";
+import { isInconclusive, parseSort, type ReportResult } from "@/lib/journal/reports/engine";
 
 /**
  * The groups, one row each, with the whole book as a Total row.
  *
- * The trade count sits beside every figure, always. A group of three trades
- * with a 100 % win rate is not a finding, and a reader can only know that if
- * the sample is on screen — so thin rows are dimmed, never dropped.
+ * The trade count sits beside every figure, always, and the three figures a
+ * reader is most likely to mistake for a fact — win rate, expectancy, profit
+ * factor — carry their confidence interval underneath. A group of three trades
+ * with a 100 % win rate is not a finding; the interval is what says so, where
+ * dimming by sample size only said "there are few of these".
+ *
+ * A cell whose interval still contains its neutral value (0 for a mean, 50 for
+ * a rate, 1 for a ratio) is dimmed: this sample cannot tell which side of
+ * neutral the truth is on.
  *
  * A header click sorts by that column, better end first; a second click
  * reverses it. The arrow shows the order actually in force.
@@ -40,8 +46,11 @@ export function ReportTable({
     formatMetric(metric(v ?? null, unit, { currency, equityBase }), viewMode);
 
   const notes: string[] = [];
+  if (result.rows.some((r) => result.metrics.some((m) => isInconclusive(r, m)))) {
+    notes.push("Dimmed figures: the 95 % interval still includes no edge");
+  }
   if (result.rows.some((r) => r.belowSample)) {
-    notes.push(`Dimmed: fewer than ${result.minSample} trades`);
+    notes.push(`Under ${result.minSample} trades: shown, but never ranked`);
   }
   if (result.excluded > 0) {
     notes.push(`${result.excluded} ${result.excluded === 1 ? "trade has" : "trades have"} no ${result.dimension.label.toLowerCase()} and ${result.excluded === 1 ? "is" : "are"} left out`);
@@ -92,19 +101,38 @@ export function ReportTable({
             </thead>
             <tbody>
               {result.rows.map((row) => (
-                <tr
-                  key={row.bucket}
-                  className={`border-b last:border-0 ${row.belowSample ? "text-muted-foreground/70" : ""}`}
-                >
+                <tr key={row.bucket} className="border-b last:border-0">
                   <td className="sticky left-0 bg-card py-2 pr-3">
                     {bucketLabel(result.dimension, row.bucket)}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums">{row.n}</td>
-                  {result.metrics.map((m) => (
-                    <td key={m.key} className="py-2 pl-3 text-right tabular-nums">
-                      {fmt(row.values[m.key], m.unit)}
-                    </td>
-                  ))}
+                  {result.metrics.map((m) => {
+                    const ci = row.intervals?.[m.key] ?? null;
+                    const unsure = isInconclusive(row, m);
+                    return (
+                      <td
+                        key={m.key}
+                        className={`py-2 pl-3 text-right tabular-nums ${unsure ? "text-muted-foreground/70" : ""}`}
+                        // The interval's own sample, when it differs from the
+                        // row's: a win rate over 40 trades can be decided by 12.
+                        title={
+                          ci && ci.n !== row.n
+                            ? `95 % interval over ${ci.n} of ${row.n} trades`
+                            : undefined
+                        }
+                      >
+                        {fmt(row.values[m.key], m.unit)}
+                        {ci && (
+                          // Both bounds through the formatter separately, so
+                          // Privacy mode masks them exactly as it masks the
+                          // figure above.
+                          <span className="block text-[11px] font-normal text-muted-foreground">
+                            {fmt(ci.lo, m.unit)} – {fmt(ci.hi, m.unit)}
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>

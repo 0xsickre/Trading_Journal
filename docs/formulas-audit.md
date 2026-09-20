@@ -271,6 +271,38 @@ equity na ulasku) — trejd bez merljivog rizika ne sme da čita kao trejd koji 
 
 ---
 
+## 17. Intervali poverenja (`uncertainty.ts`)
+
+```
+win rate      → Wilson score interval, z = 1.96, imenilac = pobede + gubici
+expectancy    → percentilni bootstrap nad R odlučenih trejdova (2.5 / 97.5)
+profit factor → percentilni bootstrap nad P&L po izabranoj osnovi, racio se
+                 računa iznova u svakom uzorku
+```
+
+Generator je zasejan iz samih vrednosti (mulberry32 + FNV hash nad bit-obrascem), pa isti red uvek
+daje iste granice — broj koji se menja pri svakom sortiranju bio bi gori od nikakvog.
+
+**Verdikt: ✅ Ispravno, standardni postupci, sa dva svesna izbora.**
+
+Wilson umesto normalne aproksimacije jer normalna na malom uzorku daje granice ispod 0 i iznad 100 —
+a mali uzorak je jedini koji ova knjiga ima. Bootstrap umesto zatvorene formule jer je raspodela
+P&L-a iskošena sa teškim repovima, a racio suma nema upotrebljiv zatvoren oblik.
+
+⚪ **Bespoke 1: percentilni bootstrap**, ne BCa. Percentilni je blago pristrasan na jako iskošenim
+raspodelama; BCa to ispravlja uz osetno više računanja. Na uzorcima od 40–70 trejdova razlika je
+manja od širine koju interval ionako ima, a cena je vidljiva u tabeli koja računa sve redove odjednom.
+
+⚪ **Bespoke 2: „neutralna vrednost" po metrici** (0 za sredinu, 50 za stopu, 1 za racio). To nije
+test hipoteze nego pravilo prikaza: ćelija se priguši kad interval i dalje obuhvata neutralno. Nema
+korekcije za višestruka poređenja — tabela sa 25 dimenzija × 38 metrika bi je tražila, ali cilj ovde
+je da se broj čita sa rezervom, ne da se donese formalna odluka.
+
+**Rangiranje ide po konzervativnom kraju intervala** (donja granica kad je veće bolje, gornja kad je
+manje bolje). Zato „najbolji" više ne može biti grupa od tri trejda: njena donja granica je loša.
+
+---
+
 ## Rezime — šta zahteva pažnju
 
 | # | Metrika | Verdikt | Akcija |
@@ -281,6 +313,7 @@ equity na ulasku) — trejd bez merljivog rizika ne sme da čita kao trejd koji 
 | 3b | Sickre Score ponderi kalibrisani za intraday scalp, ne za ovaj profil | ✅ ispravljeno | Rebalans: win % izbačen iz skora, avgWinLoss 20→5, process 15→30 (najteža), maxDrawdown 20→25, profitFactor 25→20, consistency 10→15, recovery 10→5, nova FTMO headroom komponenta sa 10. Detalji i obrazloženja u sekciji 10 gore. |
 | 4 | FTMO dnevni loss limit pegovan na starting balance umesto na balans prethodnog dana | ✅ ispravljeno | Novo polje po nalogu, `ftmo_daily_loss_basis` (Settings → FTMO), sa dve vrednosti: "starting balance (fixed — FTMO 2-Step)" i "previous day's close (rolling — FTMO 1-Step)". Default ostaje fiksna baza (nepromenjeno ponašanje za postojeće naloge). `ftmo.ts::evaluateFtmo` sad računa dnevni limit po danu kad je izabrana rolling baza. |
 | 5 | FTMO modul modelira samo statičan (2-Step) tip pravila za MAX total loss | 🔵 van scope-a ove revizije | Max total loss (drawdown floor) ostaje uvek statičan — to je van scope-a stavke #4, koja je menjala isključivo dnevni loss limit. Settings napomena sad eksplicitno kaže da je max total loss uvek statičan. |
+| 8 | Tačka bez intervala — profit factor 2.4 na 12 trejdova izgleda isto kao na 300 | ✅ ispravljeno | Faza B: `uncertainty.ts` (Wilson + bootstrap), interval ispod tri metrike u tabeli, prigušena ćelija kad obuhvata neutralno, rangiranje po konzervativnom kraju, `minSample` sveden na kapiju za rangiranje |
 | 7 | Rizik preuzet na ulazu se nigde nije merio (`risk_pct` je bila samo namera iz dropdowna) | ✅ ispravljeno | Faza A: kolona `equity_at_entry`, modul `risk-taken.ts`, 4 metrike, dimenzija `risk_bucket`, filter `risk_pct_taken`, kolona „Risk %" u žurnalu i dva auto tracker pravila (`risk_per_trade`, `risk_matched_intent`). Staro pravilo `max_loss_per_trade` namerno ostaje: ono meri ISHOD na dan zatvaranja, novo meri ODLUKU na dan ulaska |
 | 6 | Sve ostalo (win rate, profit factor, expectancy, R-multiple konvencija, max drawdown %, MAE/MFE/capture%, Sortino downside-deviation baza, recovery factor, position sizing, FX rezolucija, swap/nights logika) | ✅ potvrđeno standardno | Nema akcije |
 

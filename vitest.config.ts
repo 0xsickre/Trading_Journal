@@ -23,6 +23,10 @@ const MONEY_MODULES = [
   "src/lib/journal/position-stats.ts",
   "src/lib/journal/risk-metrics.ts",
   "src/lib/journal/risk-ratios.ts",
+  "src/lib/journal/risk-taken.ts",
+  // An interval is a claim about money like any other: it decides which figure
+  // the reader is allowed to believe, and which bucket gets crowned "best".
+  "src/lib/journal/uncertainty.ts",
   // Does not compute money — GUARDS it. The only check standing between a
   // missed sign and a `gross_pl` that looks perfectly healthy (measured: entry
   // −5000, exit −4990 on ES gives +$500 and R = 1.00, with no flag anywhere). A

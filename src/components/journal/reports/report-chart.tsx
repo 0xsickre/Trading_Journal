@@ -5,6 +5,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ErrorBar,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -55,12 +56,23 @@ export function ReportChart({
 
   const data = result.rows.map((row) => {
     const raw = row.values[m.key] ?? null;
+    const value = raw != null && Number.isFinite(raw) ? raw : null;
+    const ci = row.intervals?.[m.key] ?? null;
     return {
       bucket: bucketLabel(result.dimension, row.bucket),
       n: row.n,
       belowSample: row.belowSample,
       raw,
-      value: raw != null && Number.isFinite(raw) ? raw : null,
+      value,
+      /**
+       * Recharts wants the whisker as a distance from the bar, not as bounds.
+       * Dropped when either end is not finite — a profit factor whose upper
+       * bound is infinite has no line that could be drawn honestly.
+       */
+      err:
+        ci && value != null && Number.isFinite(ci.lo) && Number.isFinite(ci.hi)
+          ? ([Math.max(0, value - ci.lo), Math.max(0, ci.hi - value)] as [number, number])
+          : null,
     };
   });
 
@@ -112,6 +124,11 @@ export function ReportChart({
             />
             <ReferenceLine y={0} stroke="var(--border)" />
             <Bar dataKey="value" isAnimationActive={false} radius={[3, 3, 0, 0]}>
+              {/* The 95 % interval, where the metric has one. A bar whose
+                  whisker crosses the zero line has not established its sign. */}
+              {data.some((d) => d.err != null) && (
+                <ErrorBar dataKey="err" width={4} strokeWidth={1} stroke="var(--muted-foreground)" />
+              )}
               {/* Sample size as opacity: a thin bar is not read with the same
                   confidence as a solid one. */}
               {data.map((d, idx) => (

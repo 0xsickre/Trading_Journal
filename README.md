@@ -140,7 +140,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,768 tests across 166 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,803 tests across 167 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -341,6 +341,23 @@ no control goes back to the server.
 four groups (9 off the trade, 11 derived, 4 process, 1 insight) plus one per custom field. Any
 metric runs against any dimension — which is why there is one report engine instead of ten report
 pages. The tables below list all 38.
+
+**Three of them carry a confidence interval, and the other thirty-five do not.**
+A win rate, an expectancy and a profit factor are a rate, a mean and a ratio of sums — the figures a
+reader mistakes for facts. The rest are counts and sums, which are exactly what they say. The
+interval is **Wilson** for the rate (closed form, and it cannot produce a bound below 0 or above 100
+on the small samples this book has) and a **percentile bootstrap** for the other two, seeded from the
+data so the same row always yields the same bounds (`src/lib/journal/uncertainty.ts`).
+
+Its sample is the statistic's own, not the row's: a win rate over forty trades can be decided by
+twelve, because breakeven stays out of that denominator. When the two differ the cell says so on
+hover. A figure whose interval still contains its **neutral** value — 0 for a mean, 50 for a rate,
+**1** for a ratio — is dimmed: that sample cannot tell which side of neutral the truth is on.
+
+**Ranking is sceptical.** Best and worst are chosen on the conservative end of the interval, so a
+three-trade bucket at 100 % does not beat an eighty-trade one at 60 %. The cell still shows the point
+estimate; only the ranking distrusts it. The minimum-sample control no longer hides or dims rows — it
+sets the floor below which a group cannot be ranked at all.
 
 **A registry is a registry, not a second implementation.** Every entry delegates to a function that
 already exists and is already tested elsewhere. A metric that computed something inside itself would
@@ -1119,8 +1136,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,768 tests across 166 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,181 tests in 112 files) and `components` (environment `jsdom`, files `*.test.tsx`, 587
+2,803 tests across 167 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,213 tests in 113 files) and `components` (environment `jsdom`, files `*.test.tsx`, 590
 tests in 54 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

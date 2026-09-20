@@ -33,7 +33,7 @@ const table = (
   );
 
 describe("ReportTable", () => {
-  it("dims a thin row but still shows its numbers, and says why once", () => {
+  it("shows a thin row's numbers, and says it will not be ranked", () => {
     const result = run(
       enrich([
         ...Array.from({ length: 6 }, (_, i) => ({ id: `big${i}`, instrument: "EURUSD", net: 100 })),
@@ -42,10 +42,12 @@ describe("ReportTable", () => {
       "instrument",
     );
     table(result);
-    expect(screen.getByText("XAUUSD").closest("tr")!.className).toContain("text-muted-foreground");
-    expect(screen.getByText("EURUSD").closest("tr")!.className).not.toContain("text-muted-foreground");
+    // The row is no longer dimmed for being small — the interval under each
+    // figure is what now says how much it can be trusted.
     expect(screen.getByText("$900.00")).toBeInTheDocument();
-    expect(screen.getByText(new RegExp(`fewer than ${DEFAULT_MIN_SAMPLE} trades`))).toBeInTheDocument();
+    expect(
+      screen.getByText(new RegExp(`Under ${DEFAULT_MIN_SAMPLE} trades`)),
+    ).toBeInTheDocument();
   });
 
   it("a header click sorts better-first, and a second click on it reverses", async () => {
@@ -98,5 +100,57 @@ describe("ReportTable", () => {
     table(result);
     expect(screen.getByText("(none)")).toBeInTheDocument();
     expect(screen.getByText(/rows do not add up to the book/)).toBeInTheDocument();
+  });
+});
+
+describe("the confidence intervals", () => {
+  /** Four winners and four losers: a book that has established nothing. */
+  const coinFlip = () =>
+    enrich([
+      ...Array.from({ length: 4 }, (_, i) => ({ id: `w${i}`, instrument: "EURUSD", net: 100, r: 1 })),
+      ...Array.from({ length: 4 }, (_, i) => ({ id: `l${i}`, instrument: "EURUSD", net: -100, r: -1 })),
+    ]);
+
+  it("prints a range under the figures that carry one, and nothing under the rest", () => {
+    const result = run(coinFlip(), "instrument");
+    table(result);
+    const row = screen.getByText("EURUSD").closest("tr")!;
+    const cells = within(row).getAllByRole("cell");
+    const byMetric = new Map(result.metrics.map((m, i) => [m.key, cells[i + 2]]));
+
+    // A win rate of 50 % over eight decided trades cannot rule out a coin.
+    expect(byMetric.get("win_rate")!.textContent).toMatch(/\d+\.\d% – \d+\.\d%/);
+    expect(byMetric.get("expectancy")!.textContent).toMatch(/R – /);
+    // Trades and net P&L are counts and sums: they are exactly what they say.
+    expect(byMetric.get("net_pnl")!.textContent).not.toMatch(/–/);
+  });
+
+  it("dims the figure whose interval still contains no edge", () => {
+    const result = run(coinFlip(), "instrument");
+    table(result);
+    const row = screen.getByText("EURUSD").closest("tr")!;
+    const cells = within(row).getAllByRole("cell");
+    const winRateCell = cells[result.metrics.findIndex((m) => m.key === "win_rate") + 2];
+    expect(winRateCell.className).toContain("text-muted-foreground");
+    expect(screen.getByText(/interval still includes no edge/)).toBeInTheDocument();
+  });
+
+  it("masks both bounds in privacy mode, exactly as it masks the figure", () => {
+    const result = run(coinFlip(), "instrument");
+    render(
+      <ReportTable
+        result={result}
+        totals={null}
+        viewMode="privacy"
+        currency="USD"
+        equityBase={null}
+        onSort={vi.fn()}
+      />,
+    );
+    const row = screen.getByText("EURUSD").closest("tr")!;
+    const cells = within(row).getAllByRole("cell");
+    const winRateCell = cells[result.metrics.findIndex((m) => m.key === "win_rate") + 2];
+    expect(winRateCell.textContent).not.toMatch(/\d/);
+    expect(winRateCell.textContent).toContain("•••");
   });
 });

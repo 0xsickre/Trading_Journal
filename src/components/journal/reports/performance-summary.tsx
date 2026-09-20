@@ -52,16 +52,19 @@ export function PerformanceSummaryPanel({
       label: `Best ${selected.label.toLowerCase()}`,
       row: summary.best,
       value: fmt(summary.best?.values[selected.key]),
+      interval: summary.best?.intervals?.[selected.key] ?? null,
     },
     {
       label: `Worst ${selected.label.toLowerCase()}`,
       row: summary.worst,
       value: fmt(summary.worst?.values[selected.key]),
+      interval: summary.worst?.intervals?.[selected.key] ?? null,
     },
     {
       label: "Most traded",
       row: summary.mostActive,
       value: `${summary.mostActive?.n ?? 0} trades`,
+      interval: null,
     },
   ];
 
@@ -80,6 +83,15 @@ export function PerformanceSummaryPanel({
                 <span className="text-xs text-muted-foreground">{it.row.n} trades</span>
               )}
             </div>
+            {/* The ranking itself is decided on the conservative end of this
+                interval (see `summarizeReport`), so the card shows the range
+                the winner was chosen on rather than only the figure it won
+                with. */}
+            {it.interval && (
+              <div className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
+                {fmt(it.interval.lo)} – {fmt(it.interval.hi)}
+              </div>
+            )}
           </CardContent>
         </Card>
       ))}

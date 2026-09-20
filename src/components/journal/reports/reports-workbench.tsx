@@ -37,7 +37,7 @@ import {
   tagSplitDimensions,
   type DimensionContext,
 } from "@/lib/journal/reports/dimensions";
-import { parseSort, runReport, summarizeReport } from "@/lib/journal/reports/engine";
+import { parseSort, runReport, sortRows, summarizeReport } from "@/lib/journal/reports/engine";
 import {
   MIN_SAMPLE_OPTIONS,
   asMinSample,
@@ -361,7 +361,15 @@ export function ReportsWorkbench({
     [enriched, filters, dimensionContext],
   );
 
-  const result = useMemo(
+  /**
+   * The report itself — WITHOUT the sort.
+   *
+   * `sortBy` used to sit in these dependencies, so every click on a column
+   * header recomputed every metric over every row. That was already wasteful
+   * and became unaffordable once three of those metrics resample their group
+   * two thousand times: ordering rows is not a reason to recompute them.
+   */
+  const computed = useMemo(
     () =>
       runReport({
         trades: enriched,
@@ -371,10 +379,18 @@ export function ReportsWorkbench({
         dimensionContext,
         metricContext,
         minSample,
-        sortBy,
       }),
-    [enriched, dimension, columnKeys, filters, dimensionContext, metricContext, minSample, sortBy],
+    [enriched, dimension, columnKeys, filters, dimensionContext, metricContext, minSample],
   );
+
+  // Ordering only. The rows are copied rather than sorted in place, so the
+  // memo above keeps an array React can compare against next time.
+  const result = useMemo(() => {
+    if (!computed) return null;
+    const rows = [...computed.rows];
+    sortRows(rows, computed.dimension, sortBy, computed.metrics);
+    return { ...computed, rows };
+  }, [computed, sortBy]);
 
   // The whole table as one group — only when every trade sits in one row, so
   // the Total is the book the rows add up to.
@@ -563,14 +579,17 @@ export function ReportsWorkbench({
           </PopoverContent>
         </Popover>
 
+        {/* Ranking only. Rows below it are still shown, with their intervals —
+            what this number buys is that a three-trade bucket cannot be named
+            the best category. */}
         <Select value={String(minSample)} onValueChange={(v) => setParam({ min: v })}>
-          <SelectTrigger className="h-9 w-40" aria-label="Minimum trades per group">
+          <SelectTrigger className="h-9 w-44" aria-label="Minimum trades to rank">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {MIN_SAMPLE_OPTIONS.map((n) => (
               <SelectItem key={n} value={String(n)}>
-                Min {n} {n === 1 ? "trade" : "trades"}
+                Rank from {n} {n === 1 ? "trade" : "trades"}
               </SelectItem>
             ))}
           </SelectContent>

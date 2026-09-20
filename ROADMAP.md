@@ -1357,3 +1357,22 @@ nije poredilo. Trejd dimenzionisan na 3% koji je dobio bio je nevidljiv.
 (svaki trejd je dimenzionisan u toleranciji od svoje namere, `RISK_INTENT_TOLERANCE = 0.1 pp`).
 Staro `max_loss_per_trade` namerno ostaje: ono meri ishod na dan zatvaranja, novo meri odluku na dan
 ulaska, a prepisivanje bi tiho promenilo značenje svakog zaključanog dana u istoriji.
+
+### Faza B — nesigurnost na ekranu (20.09.2026.)
+
+Profit factor 2.4 na 12 trejdova i 2.4 na 300 izgledali su identično. Jedina odbrana bio je
+`minSample`, koji je red **prigušivao** — filter krije, interval objašnjava.
+
+- **`uncertainty.ts`:** Wilson za stopu (zatvorena formula, granice ne izlaze iz 0–100 ni na malom
+  uzorku) i percentilni bootstrap za sredinu i za racio suma. Generator je zasejan iz samih podataka,
+  pa isti red uvek daje iste granice; 2000 preuzoraka, 500 iznad 500 trejdova.
+- **Tri metrike nose interval** — win rate, expectancy, profit factor. Ostalih 35 su brojanja i zbirovi
+  i ne plaćaju ništa.
+- **Uzorak je onaj koji metrika zaista broji:** win rate nad 40 trejdova može biti odlučen sa 12, jer
+  breakeven nije u imeniocu. Kad se razlikuje od reda, ćelija to kaže na hover.
+- **Prigušena ćelija = „ovo još ne znaš":** interval i dalje obuhvata neutralno (0 za sredinu, 50 za
+  stopu, **1** za racio — doslovna nula ne bi prigušila nijedan profit factor).
+- **Rangiranje po konzervativnom kraju intervala:** grupa od tri trejda sa 100% više ne pobeđuje grupu
+  od osamdeset sa 60%. `minSample` ostaje samo kao kapija za rangiranje.
+- **Usput, brzina:** sortiranje je odvojeno od računanja (`sortRows` je izvezen). Klik na zaglavlje je
+  ranije ponovo pokretao ceo motor; sa bootstrap-om bi to bio zastoj od nekoliko sekundi.
