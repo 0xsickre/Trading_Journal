@@ -2,6 +2,11 @@ import type { RealizedTrade } from "../analytics";
 import type { PositionCheckin } from "../position-checkin";
 import type { PositionStat, TradeRow } from "../types";
 import { buildInsightContext, type DailyReportLite } from "./context";
+import {
+  GRADED_PLAYBOOK_ID,
+  gradedRules,
+  recordGradeAnswers,
+} from "../reports/test-helpers";
 
 export const DAY = 86_400;
 
@@ -90,7 +95,11 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     max_drawdown_price: spec.mae ?? null,
     max_profit_price: spec.mfe ?? null,
     position_size: spec.size ?? null,
-    setup_grade: spec.setupGrade ?? null,
+    // The grade is DERIVED from playbook criteria since Phase E dropped the
+    // column. A fixture asking for one names the shared graded playbook and
+    // records the answers that land on that band — the same fixture the report
+    // tests use, because two definitions of "an A setup" would be two answers.
+    playbook_id: spec.setupGrade ? GRADED_PLAYBOOK_ID : null,
     // macro_align became a user-defined field in Phase 4a — the fixture stores
     // it in the custom bag, the way a real row does.
     custom: spec.macroAlign ? { macro_align: spec.macroAlign } : {},
@@ -105,6 +114,8 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     instrument: spec.instrument ?? "EURUSD",
     stats,
   } as unknown as TradeRow;
+
+  if (spec.setupGrade) recordGradeAnswers(id, spec.setupGrade);
 
   return {
     id,
@@ -162,7 +173,21 @@ export function ctxOf(
     fillCounts: extra.fillCounts,
     checkins: extra.checkins,
     currency: "USD",
+    rules: gradedRules(),
   });
+}
+
+/**
+ * A RAW row with a derived setup grade — for the rules that read `allRows`
+ * rather than enriched trades (a missed plan has no fills to enrich).
+ */
+export function mkGradedRow(
+  id: string,
+  grade: string,
+  status: string,
+): TradeRow {
+  recordGradeAnswers(id, grade);
+  return { id, status, playbook_id: GRADED_PLAYBOOK_ID } as unknown as TradeRow;
 }
 
 /** Ids fired by a rule, for terse assertions. */

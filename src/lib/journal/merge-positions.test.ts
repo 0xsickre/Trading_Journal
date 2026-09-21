@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import {
   MERGE_COALESCE_COLUMNS,
   MERGE_UNION_COLUMNS,
@@ -96,13 +96,28 @@ describe("how a trade is named in the dialog", () => {
  * says it should have been.
  */
 describe("the migration and this module agree on the fields", () => {
-  // The LATEST definition of the function, not the one that introduced it.
-  // 20260920160000 restates it whole to carry `equity_at_entry`; reading the
-  // superseded copy would guard a function that no longer runs.
-  const sql = readFileSync(
-    "supabase/migrations/20260920160000_equity_at_entry.sql",
-    "utf8",
-  );
+  /**
+   * The LATEST definition of the function, FOUND rather than named.
+   *
+   * This used to hold a filename, and it went stale the first time the
+   * function was restated afterwards — the test then guarded a body that no
+   * longer runs, which is worse than no guard because it still passes.
+   * Migrations sort by their timestamp prefix, so the last file that defines
+   * the function is the one the database has.
+   */
+  const sql = (() => {
+    const dir = "supabase/migrations";
+    const defines = readdirSync(dir)
+      .filter((f) => f.endsWith(".sql"))
+      .sort()
+      .filter((f) =>
+        readFileSync(`${dir}/${f}`, "utf8").includes(
+          "CREATE OR REPLACE FUNCTION public.tj_merge_positions",
+        ),
+      );
+    expect(defines.length).toBeGreaterThan(0);
+    return readFileSync(`${dir}/${defines[defines.length - 1]}`, "utf8");
+  })();
 
   it("fills in every listed column from the other trade, and no other", () => {
     const found = [...sql.matchAll(/^\s{4}(\w+)\s*= COALESCE\(k\.\1, v_other\.\1\)/gm)].map(

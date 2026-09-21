@@ -164,7 +164,7 @@ describe("breakdownByField", () => {
         status: "closed",
         net_pl: 200,
         realized_r: 2,
-        setup_grade: "A",
+        exit_reason: "Target",
         technical_tags: ["Sweep", "FVG"],
       } as never),
       trade({
@@ -172,7 +172,7 @@ describe("breakdownByField", () => {
         status: "closed",
         net_pl: -100,
         realized_r: -1,
-        setup_grade: "B",
+        exit_reason: "Stop",
         technical_tags: ["FVG"],
       } as never),
       trade({
@@ -180,22 +180,25 @@ describe("breakdownByField", () => {
         status: "closed",
         net_pl: 50,
         realized_r: 0.5,
-        setup_grade: "A",
+        exit_reason: "Target",
         technical_tags: [],
       } as never),
     ]);
 
+  // `exit_reason`, not `setup_grade`: since Phase E the grade is derived from
+  // playbook criteria and there is no column to group on, so it would have
+  // turned a test about GROUPING into a test about the rule lookup.
   it("groups a scalar column and sorts by net, descending", () => {
-    const rows = breakdownByField(book(), "setup_grade");
+    const rows = breakdownByField(book(), "exit_reason");
     expect(rows.map((r) => [r.key, r.count, r.netSum])).toEqual([
-      ["A", 2, 250],
-      ["B", 1, -100],
+      ["Target", 2, 250],
+      ["Stop", 1, -100],
     ]);
   });
 
   it("computes win rate, total R and average R per group", () => {
-    const rows = breakdownByField(book(), "setup_grade");
-    const a = rows.find((r) => r.key === "A")!;
+    const rows = breakdownByField(book(), "exit_reason");
+    const a = rows.find((r) => r.key === "Target")!;
     expect(a.winRate).toBe(100);
     expect(a.totalR).toBe(2.5);
     expect(a.avgR).toBe(1.25);
@@ -212,7 +215,7 @@ describe("breakdownByField", () => {
       toRealized([
         trade({ id: "x", status: "closed", net_pl: 10, realized_r: 0.1 } as never),
       ]),
-      "setup_grade",
+      "exit_reason",
     );
     expect(rows.map((r) => r.key)).toEqual(["—"]);
   });

@@ -1071,7 +1071,6 @@ export type Database = {
       tj_positions: {
         Row: {
           account_id: string | null
-          conviction: number | null
           created_at: string
           custom: Json
           direction: string | null
@@ -1107,7 +1106,6 @@ export type Database = {
           risk_pct: string | null
           scale_out_levels: Json
           scale_out_plan: string | null
-          setup_grade: string | null
           source: string
           status: string
           stop_price: number | null
@@ -1123,7 +1121,6 @@ export type Database = {
         }
         Insert: {
           account_id?: string | null
-          conviction?: number | null
           created_at?: string
           custom?: Json
           direction?: string | null
@@ -1159,7 +1156,6 @@ export type Database = {
           risk_pct?: string | null
           scale_out_levels?: Json
           scale_out_plan?: string | null
-          setup_grade?: string | null
           source?: string
           status?: string
           stop_price?: number | null
@@ -1175,7 +1171,6 @@ export type Database = {
         }
         Update: {
           account_id?: string | null
-          conviction?: number | null
           created_at?: string
           custom?: Json
           direction?: string | null
@@ -1211,7 +1206,6 @@ export type Database = {
           risk_pct?: string | null
           scale_out_levels?: Json
           scale_out_plan?: string | null
-          setup_grade?: string | null
           source?: string
           status?: string
           stop_price?: number | null

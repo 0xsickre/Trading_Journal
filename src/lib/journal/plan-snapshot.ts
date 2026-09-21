@@ -41,8 +41,8 @@ import type { TradeRow } from "./types";
  * The fields a plan consists of.
  *
  * These and no others: what was decided BEFORE the entry. `position_size` and
- * `direction` are derived, `conviction` has no field on the form at all, and
- * the tags are a description of the setup rather than a commitment about it.
+ * `direction` are derived, and the tags are a description of the setup rather
+ * than a commitment about it.
  */
 export const PLAN_FIELDS = [
   "entry_price",

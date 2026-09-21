@@ -1453,3 +1453,41 @@ Profit factor 2.4 na 12 trejdova i 2.4 na 300 izgledali su identično. Jedina od
   postoji u podacima. Bez toga bi svaki takav promašaj bio upisan kao dobitak.
 - **Panel na `/reports`** broji neizmerene promašaje odvojeno umesto da ih sabere kao nulu, i uz zbir
   ispisuje koliko planova stoji nerazrešeno — dok stoje, broj meri urednost, a ne cenu oklevanja.
+
+## Faza E — rezanje (21.09.2026.)
+
+Ništa se ne dodaje. Izlazi ono što izgleda institucionalno a ne može da se izmeri na knjizi od
+40–70 trejdova godišnje, i ono što se upisuje a niko ne čita.
+
+### E0 — prazna knjiga
+
+Ciljano brisanje unetog sadržaja (dnevnici, nedeljni osvrti, tracker check-in-i, uvozi, fokus cilj),
+a **podešavanja ostaju**: nalog, 3 playbooka, 18 tracker pravila, 10 instrumenata, 7 polja,
+11 kategorija sa 59 stavki. Ne `tj_reset_my_data`, jer ona briše i podešavanja i ponovo seeduje.
+Ovo ide prvo: posle njega nijedan `DROP COLUMN` u fazi ne gubi nijedan red.
+
+### E1 — tri racija napolje iz `/reports`
+
+Sharpe, Sortino, Calmar i recovery factor izlaze iz drugog reda `BookOverviewPanel`-a; ulaze
+Total R, prosečan preuzet rizik, disperzija rizika i follow rate. Racija ostaju u registru kao
+kolone koje se mogu uključiti. `periodsPerYear` se meri iz podataka, pa ta tri broja nisu uporediva
+ni sa čim objavljenim — to je red 1 u rezimeu `docs/formulas-audit.md`. Podrazumevane kolone tabele
+dobijaju `follow_rate`: svih pet do sada su bile ishod.
+
+### E2 — četiri ocene kvaliteta trejda → dve
+
+- **`conviction`** obrisan: nema polje u formi, nema dimenziju, nema pravilo koje ga čita. Rejting
+  koji se ne može dati nije rejting.
+- **`setup_grade`** kolona obrisana, **dimenzija ostaje** — ocena se izvodi iz playbook kriterijuma.
+  Fallback na kolonu je posle E0 mogao da pročita samo NULL: drugi izvor istine bez ijednog reda.
+  Tri čitača (`dimensions.ts`, `journal-grid.tsx`, `insights/process-rules.ts`) sada izvode ili
+  ćute.
+- `missedASetup` je čitao kolonu „namerno", uz komentar da izvedena ocena nije dohvatljiva sa sirovog
+  reda — nije bilo tačno: `ScorableTrade` je tačno `{id, outcome, row}`, a kriterijumi su vezani za
+  `show_when='always'`, pa važe i bez ishoda. Sada izvodi kao i ostali.
+- Migracija `20260921150000_drop_dead_ratings.sql` sa prepisom `tj_merge_positions` napravljenim
+  **skriptom** iz prethodne verzije, uz proveru na živoj bazi (normalizovano telo identično, minus
+  tačno ta dva reda).
+- Usput: `merge-positions.test.ts` je čuvao SQL iz `20260920160000` — fajl koji je D1 u međuvremenu
+  nadjačao. Test je sada sam nalazi poslednju migraciju koja definiše funkciju, pa ne može da
+  zastari.

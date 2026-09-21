@@ -3,6 +3,9 @@ import { enrichTrades, type DailyReportLite } from "../enriched-trade";
 import type { PositionCheckin } from "../position-checkin";
 import type { PositionStat, TradeRow } from "../types";
 import { customFieldDimensions, type DimensionContext } from "./dimensions";
+import { buildPlaybookLookup } from "./playbook-dimensions";
+import type { RuleLookup } from "./rule-lookup";
+import type { PositionRule } from "../playbook-types";
 import type { MetricContext } from "./metrics";
 import { EXACT_ZERO_RANGE } from "../breakeven";
 
@@ -53,6 +56,64 @@ export type TradeSpec = {
 };
 
 let seq = 0;
+
+/**
+ * The playbook a fixture's `setupGrade` is graded against.
+ *
+ * Phase E dropped `tj_positions.setup_grade`: the letter is DERIVED from
+ * playbook criteria and can no longer be typed onto the row. So a fixture
+ * asking for a grade now has to produce one the real way — a playbook with
+ * five criteria and answers that land on the band.
+ *
+ * Five criteria, because `gradeFromPct` bands on 100 / 80 / 60: five answers
+ * can express every grade exactly (5, 4, 3, 1 met).
+ */
+export const GRADED_PLAYBOOK_ID = "pb-graded";
+const GRADE_CRITERIA = ["gc1", "gc2", "gc3", "gc4", "gc5"];
+const MET_FOR_GRADE: Record<string, number> = { "A+": 5, A: 4, B: 3, C: 1 };
+
+/**
+ * Trade id → the criterion answers `mkTrade` recorded for it.
+ *
+ * Module-level, so the ~25 call sites that pass `setupGrade` keep working and
+ * `dimCtx()` can hand the engine a real rule lookup without every test wiring
+ * one. Keyed by trade id, so a rebuilt fixture simply overwrites its own
+ * entry; an id never reused leaves an orphan answer nothing reads.
+ */
+const gradeAnswers = new Map<string, PositionRule[]>();
+
+/**
+ * Record the answers that make `id` come out at `grade`.
+ *
+ * Exported because the insights fixtures need exactly the same thing, and two
+ * graded playbooks would be two definitions of what an "A setup" is.
+ */
+export function recordGradeAnswers(id: string, grade: string): void {
+  const met = MET_FOR_GRADE[grade] ?? 0;
+  gradeAnswers.set(
+    id,
+    GRADE_CRITERIA.map((rule_id, i) => ({ position_id: id, rule_id, followed: i < met })),
+  );
+}
+
+/** The lookup the dimension and the setup-score metric read. */
+export function gradedRules(): RuleLookup {
+  return buildPlaybookLookup(
+    [
+      {
+        id: GRADED_PLAYBOOK_ID,
+        name: "Graded",
+        rules: GRADE_CRITERIA.map((id) => ({
+          id,
+          text: id,
+          show_when: "always" as const,
+          is_setup_criterion: true,
+        })),
+      },
+    ],
+    gradeAnswers,
+  ).rules;
+}
 
 export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
   const id = spec.id ?? `t${++seq}`;
@@ -105,7 +166,6 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     max_drawdown_price: spec.mae ?? null,
     max_profit_price: spec.mfe ?? null,
     position_size: spec.size ?? null,
-    setup_grade: spec.setupGrade ?? null,
     // macro_align is a USER-DEFINED field since Phase 4a, so the fixture stores
     // it where the real row does. Every test that groups by it therefore
     // exercises the custom-field path, not a column that no longer exists.
@@ -124,11 +184,14 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     planned_rr: spec.plannedRr ?? null,
     time_stop_days: spec.timeStopDays ?? null,
     thesis: spec.thesis ?? null,
-    playbook_id: spec.playbookId ?? null,
+    // A graded fixture names the graded playbook, unless it named its own.
+    playbook_id: spec.playbookId ?? (spec.setupGrade ? GRADED_PLAYBOOK_ID : null),
     equity_at_entry: spec.equityAtEntry ?? null,
     risk_pct: spec.riskPct ?? null,
     stats,
   } as unknown as TradeRow;
+
+  if (spec.setupGrade) recordGradeAnswers(id, spec.setupGrade);
 
   return {
     id,
@@ -214,6 +277,9 @@ export function dimCtx(
   return {
     reportByDate: new Map(reports.map((r) => [r.report_date, r])),
     customDimensions: customFieldDimensions(TEST_FIELD_DEFS),
+    // The graded playbook by default, so `setupGrade` in a spec still produces
+    // a grade — through the criteria, which is the only route left.
+    rules: gradedRules(),
     ...extra,
   };
 }

@@ -760,10 +760,16 @@ rate when a rule was kept against when it was broken, so a criterion that predic
 found and dropped. A letter can never do that, because it does not know *which* part of that "A+"
 was doing the work.
 
-The `tj_positions.setup_grade` column stays and **carries the history** of hand-graded trades — the
-derived value wins, the column is the fallback. The same precedence pattern `plannedRewardFromTrade`
-already documents, in reverse order, because here the derived value is the better one and the column
-is the legacy.
+**The `tj_positions.setup_grade` column is gone** (Phase E). It survived as a fallback under the
+derived value, "carrying the history" of hand-graded trades — and once the book was emptied, the
+fallback could only ever read NULL: a second source of truth with no rows in it. The three readers
+that had it (`dimensions.ts`, `journal-grid.tsx`, `insights/process-rules.ts`) now derive or say
+nothing, which is the honest pair of answers. A trade with no playbook, or an unfinished checklist,
+has no grade — not a stale letter.
+
+`conviction` went with it, for a blunter reason: it had no field in `form-config.ts`, so nothing in
+the application could write it. No dimension read it, no rule read it, and `trade-input-schema` had
+a test asserting it never reaches the database. A rating that cannot be given is not a rating.
 
 ---
 
@@ -777,7 +783,8 @@ of question.
 | Time stop | free number, **no upper bound in the database** | five buttons 1–5, `CHECK` up to 5 |
 | Mental temperature | `Select` 1–10 | **5 stars** |
 | Week rating | `A–F` | **5 stars** |
-| Execution rating, conviction | 5 stars / 1–5 | unchanged |
+| Execution rating | 5 stars | unchanged |
+| Conviction | 1–5, with no field to enter it | **dropped in Phase E** |
 
 **Ten levels is a precision nobody has about their own head.** Asked every morning, it produces noise
 that then feeds a report dimension and the `low_mental_temp_entry` rule as if it were signal. Five

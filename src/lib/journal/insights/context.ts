@@ -92,8 +92,9 @@ export type InsightContext = {
    * Rules and their answers, for the DERIVED setup grade.
    *
    * Optional: a caller without playbooks loaded still gets every other rule.
-   * The two A-setup rules fall back to the hand-typed column when it is absent,
-   * which is what keeps them working on trades graded before criteria existed.
+   * Without it the two A-setup rules simply do not fire — since Phase E there
+   * is no hand-typed column left to fall back to, and a grade is a verdict on
+   * a checklist rather than a letter someone chose.
    */
   rules?: RuleLookup;
 };

@@ -8,7 +8,7 @@ import {
   stalePlan,
   swapAteTheTrade,
 } from "./process-rules";
-import { ctxOf, fired, mkCheckin, mkReport, mkTrade } from "./test-helpers";
+import { ctxOf, fired, mkCheckin, mkGradedRow, mkReport, mkTrade } from "./test-helpers";
 import type { TradeRow } from "../types";
 
 describe("micromanagedASetup", () => {
@@ -200,11 +200,11 @@ describe("lowMentalTempEntry", () => {
 describe("missedASetup", () => {
   it("counts A-grade plans that were never taken", () => {
     const rows = [
-      { status: "missed", setup_grade: "A" },
-      { status: "missed", setup_grade: "A" },
-      { status: "missed", setup_grade: "C" },
-      { status: "closed", setup_grade: "A" },
-    ] as unknown as TradeRow[];
+      mkGradedRow("m1", "A", "missed"),
+      mkGradedRow("m2", "A", "missed"),
+      mkGradedRow("m3", "C", "missed"),
+      mkGradedRow("c1", "A", "closed"),
+    ];
     const out = missedASetup.evaluate(ctxOf([], { allRows: rows }));
     expect(out).toHaveLength(1);
     expect(out[0].sample).toBe(2);

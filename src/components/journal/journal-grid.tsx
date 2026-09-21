@@ -481,7 +481,9 @@ export function JournalGrid({
         { id: t.id, outcome: outcomeOf(t), row: t },
         ruleLookup,
       );
-      return scored?.grade ?? (t.setup_grade as string) ?? null;
+      // No fallback to a typed letter: Phase E dropped that column, because a
+      // grade chosen after the exit explains performance with performance.
+      return scored?.grade ?? null;
     },
     [ruleLookup, outcomeOf],
   );

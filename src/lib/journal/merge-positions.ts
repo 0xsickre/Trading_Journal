@@ -55,8 +55,6 @@ export const MERGE_COALESCE_COLUMNS = [
   "risk_pct",
   "planned_rr",
   "position_size",
-  "setup_grade",
-  "conviction",
   "execution_rating",
   "exit_reason",
   "thesis",

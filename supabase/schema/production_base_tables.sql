@@ -116,7 +116,6 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   trade_no             integer,
   instrument           text,
   direction            text,
-  setup_grade          text,
   entry_price          numeric,
   stop_price           numeric,
   target_price         numeric,
@@ -146,7 +145,6 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   tick_size_at_trade   numeric,
   custom               jsonb       NOT NULL DEFAULT '{}'::jsonb,
   playbook_id          uuid,
-  conviction           smallint,
   execution_rating     smallint,
   thesis               text,
   invalidation         text,
@@ -195,8 +193,6 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- dozvoljen, a redovi koje je upisao prebačeni su na 'manual'.
   CONSTRAINT tj_positions_source_check CHECK (source = ANY (ARRAY[
     'manual'::text, 'import'::text])),
-  CONSTRAINT tj_positions_conviction_check
-    CHECK (conviction IS NULL OR (conviction >= 1 AND conviction <= 5)),
   CONSTRAINT tj_positions_execution_rating_check
     CHECK (execution_rating IS NULL OR (execution_rating >= 1 AND execution_rating <= 5)),
   CONSTRAINT tj_positions_scale_out_levels_check

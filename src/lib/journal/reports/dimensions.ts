@@ -362,12 +362,13 @@ const tradeDimensions: Dimension[] = [
     // makes a fixed order possible.
     order: SETUP_GRADES,
     valueOf: (t, ctx) => {
-      // Derived first. The typed letter was chosen AFTER the outcome was known,
-      // which is what made this dimension explain performance with a label
-      // partly taken from performance.
+      // Derived, and ONLY derived. The typed letter was chosen after the
+      // outcome was known, which is what made this dimension explain
+      // performance with a label partly taken from performance — so Phase E
+      // dropped the column it used to fall back to. A trade with no playbook,
+      // or an unfinished checklist, has no grade rather than a stale one.
       const scored = ctx.rules ? setupScoreFromTrade(scorable(t), ctx.rules) : null;
-      if (scored) return scored.grade;
-      return str(t, "setup_grade") ?? EMPTY_BUCKET;
+      return scored ? scored.grade : EMPTY_BUCKET;
     },
   },
   // macro_align / cot_filter / htf_bias / entry_tf are no longer listed here:

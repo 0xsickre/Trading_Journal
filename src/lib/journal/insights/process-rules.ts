@@ -198,7 +198,8 @@ function isASetup(
   row: TradeRow,
   scored: { grade: string } | null,
 ): boolean {
-  const grade = scored?.grade ?? strField(row, "setup_grade") ?? "";
+  // Derived only — the typed column is gone (Phase E).
+  const grade = scored?.grade ?? "";
   return grade === "A+" || grade === "A";
 }
 
@@ -208,13 +209,22 @@ export const missedASetup: Rule = {
   minSample: 0,
   description: "A-setups marked as missed.",
   evaluate: (ctx) => {
-    // Missed trades are read from `allRows`, which are raw rows rather than
-    // enriched trades, so the derived grade is not reachable here. The hand-typed
-    // column is all there is — and a trade that was never taken has no outcome to
-    // be graded with hindsight, which is the defect deriving exists to avoid. So
-    // this one keeps reading the column, deliberately.
+    // Derived here too, from the raw row — `ScorableTrade` is exactly
+    // `{ id, outcome, row }`, and setup criteria are pinned to
+    // `show_when = 'always'`, so they apply with no outcome at all. That is
+    // the right population for this rule: a plan that was never taken has no
+    // outcome to be graded with hindsight, and its checklist was filled in
+    // when it was written. This used to read the typed column instead, which
+    // Phase E removed.
     const missed = ctx.allRows.filter(
-      (r) => r.status === "missed" && isASetup(r, null),
+      (r) =>
+        r.status === "missed" &&
+        isASetup(
+          r,
+          ctx.rules
+            ? setupScoreFromTrade({ id: r.id, outcome: null, row: r }, ctx.rules)
+            : null,
+        ),
     );
     if (missed.length === 0) return [];
     return [
