@@ -124,10 +124,10 @@ export const actedAgainstThePlan: Rule = {
       // No grade needed for this one: the two answers disagreeing is the
       // cleanest evidence there is that the intervention came from the screen
       // and not from the plan.
-      if (rows.some((c) => c.thesis_state === "intact" && isInterference(c.touched))) {
-        const day = rows.find(
-          (c) => c.thesis_state === "intact" && isInterference(c.touched),
-        )!;
+      const day = rows.find(
+        (c) => c.thesis_state === "intact" && isInterference(c.touched),
+      );
+      if (day) {
         out.push({
           ruleId: "acted_against_the_plan",
           level: "trade",

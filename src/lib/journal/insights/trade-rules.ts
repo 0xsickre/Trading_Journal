@@ -92,17 +92,20 @@ export const cleanHold: Rule = {
     "The entry never hurt: no drawdown at all, or profit several times over it.",
   evaluate: (ctx) =>
     ctx.trades.flatMap((e) => {
-      if (e.outcome !== "win" || e.r == null || e.excursion.maeR == null) return [];
+      // No `e.r` guard: `no_drawdown` never had one, and adding it here would
+      // have silently dropped a winner whose R could not be computed.
+      if (e.outcome !== "win" || e.excursion.maeR == null) return [];
 
       if (e.excursion.maeR === 0) {
         return insight(e, {
           ruleId: "clean_hold",
           severity: "good",
           title: "No drawdown",
-          detail: "Price never came back below the entry - a clean entry.",
+          detail: "Price never came back below the entry — a clean entry.",
         });
       }
       if (
+        e.r != null &&
         e.r > 0 &&
         e.excursion.maeR > 0 &&
         e.r >= e.excursion.maeR * T.CLEAN_HOLD_MULTIPLE
@@ -113,7 +116,7 @@ export const cleanHold: Rule = {
           title: "Clean hold",
           detail: `${r2(e.r)}R of profit with only ${r2(
             e.excursion.maeR,
-          )}R against it - the thesis worked almost at once.`,
+          )}R against it — the thesis worked almost at once.`,
         });
       }
       return [];
@@ -183,7 +186,7 @@ export const exceedAvgHoldTime: Rule = {
           detail: `${formatDuration(e.durationSeconds)} and ${fmtMoney(
             e.pnl,
             ctx.currency,
-          )} - longer and costlier than your typical loss. Hope, not a plan.`,
+          )} — longer and costlier than your typical loss. Hope, not a plan.`,
           sample: ctx.baseline.sample,
         });
       }
@@ -195,7 +198,7 @@ export const exceedAvgHoldTime: Rule = {
           title: "Longer than usual",
           detail: `Held ${formatDuration(
             e.durationSeconds,
-          )} - longer than 75 % of your winners (${formatDuration(p75)}).`,
+          )} — longer than 75 % of your winners (${formatDuration(p75)}).`,
           sample: ctx.baseline.sample,
         });
       }
@@ -244,11 +247,17 @@ export const gaveBackProfit: Rule = {
         });
       }
 
-      if (e.outcome !== "win" || capture == null) return [];
-
       // A peak above your own average, mostly handed back. The one branch that
-      // needs a history to compare against.
-      if (haveBaseline && mfe > avgMfe && capture < T.GAVE_BACK_CAPTURE_PCT) {
+      // needs a history to compare against — and the one that is NOT restricted
+      // to winners: the rule it came from had no outcome filter, so a loss
+      // whose peak beat your average but never reached the half-R the first
+      // branch asks for is still a move you had and did not keep.
+      if (
+        haveBaseline &&
+        capture != null &&
+        mfe > avgMfe &&
+        capture < T.GAVE_BACK_CAPTURE_PCT
+      ) {
         return insight(e, {
           ruleId: "gave_back_profit",
           severity: "warning",
@@ -261,7 +270,7 @@ export const gaveBackProfit: Rule = {
       }
 
       // Any winner that kept little of its move.
-      if (capture < T.GAVE_BACK_CAPTURE_PCT) {
+      if (e.outcome === "win" && capture != null && capture < T.GAVE_BACK_CAPTURE_PCT) {
         return insight(e, {
           ruleId: "gave_back_profit",
           severity: "warning",

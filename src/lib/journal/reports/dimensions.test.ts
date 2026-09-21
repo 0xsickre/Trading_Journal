@@ -308,11 +308,11 @@ describe("insight dimension", () => {
   it("places a trade in every insight that fired for it", () => {
     const t = one([{ id: "x1" }]);
     const ctx = dimCtx([], {
-      insightsByTrade: new Map([["x1", ["green_to_red", "weak_win"]]]),
+      insightsByTrade: new Map([["x1", ["gave_back_profit", "clean_hold"]]]),
     });
     const dim = getDimension("insight")!;
     expect(dim.multiValue).toBe(true);
-    expect(bucketsOf(dim, t, ctx)).toEqual(["green_to_red", "weak_win"]);
+    expect(bucketsOf(dim, t, ctx)).toEqual(["gave_back_profit", "clean_hold"]);
   });
 
   it("excludes a trade that fired nothing", () => {

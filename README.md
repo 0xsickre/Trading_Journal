@@ -140,7 +140,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,925 tests across 177 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,927 tests across 177 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -894,7 +894,9 @@ insight is stored in the database: thresholds change, and a stored insight would
 changed threshold while still looking authoritative.
 
 There were 37 until Phase E **grouped them by cause**, and the regrouping found two rules that could
-never have fired alone. `weak_win` asked for under 0.3R out of a move of at least 1R — which IS a
+never have fired alone. (The review of that merge found two narrowings it had introduced, both now
+pinned by tests: a merged branch must keep every case its rules caught, and `no_drawdown` needed no
+R while `gave_back_profit` was never restricted to winners.) `weak_win` asked for under 0.3R out of a move of at least 1R — which IS a
 capture below 30 %, always inside `maximize_your_profit`'s 40 % threshold — so every weak win was
 already reported twice, under two headings, as two problems. `no_drawdown` and `clean_hold` were the
 same observation at two degrees and could never both fire. Four merges:
@@ -1250,8 +1252,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,925 tests across 177 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,309 tests in 118 files) and `components` (environment `jsdom`, files `*.test.tsx`, 616
+2,927 tests across 177 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,311 tests in 118 files) and `components` (environment `jsdom`, files `*.test.tsx`, 616
 tests in 59 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

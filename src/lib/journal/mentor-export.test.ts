@@ -212,8 +212,8 @@ describe("buildMentorPack optional sections", () => {
     const md = buildMentorPack([trade("t1", 100)], {
       insights: {
         insights: [
-          insight({ ruleId: "green_to_red", title: "Zeleno u crveno" }),
-          insight({ ruleId: "green_to_red", title: "Zeleno u crveno" }),
+          insight({ ruleId: "gave_back_profit", title: "Zeleno u crveno" }),
+          insight({ ruleId: "gave_back_profit", title: "Zeleno u crveno" }),
           insight({ ruleId: "oversize", title: "Prevelika pozicija", severity: "critical" }),
         ],
         skipped: [],

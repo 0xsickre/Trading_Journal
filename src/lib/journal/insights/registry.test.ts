@@ -112,12 +112,12 @@ describe("sortInsights / groupInsights", () => {
 
   it("groups by rule and counts subjects", () => {
     const groups = groupInsights([
-      { ...mk("green_to_red", "critical"), subjectId: "t1" },
-      { ...mk("green_to_red", "critical"), subjectId: "t2" },
-      { ...mk("no_drawdown", "good"), subjectId: "t3" },
+      { ...mk("gave_back_profit", "critical"), subjectId: "t1" },
+      { ...mk("gave_back_profit", "critical"), subjectId: "t2" },
+      { ...mk("clean_hold", "good"), subjectId: "t3" },
     ]);
-    expect(groups[0].ruleId).toBe("green_to_red");
+    expect(groups[0].ruleId).toBe("gave_back_profit");
     expect(groups[0].count).toBe(2);
-    expect(groups[1].ruleId).toBe("no_drawdown");
+    expect(groups[1].ruleId).toBe("clean_hold");
   });
 });

@@ -1559,3 +1559,14 @@ tipa — id nedelje tamo gde panel očekuje id trejda. Zato ih je 29 a ne ~21 ka
    zapažanje u dva stepena.
 
 Usput: `flip_flop_day` je imao srpski ostatak u engleskoj rečenici („long i shorts istog dana za").
+
+**Provera spajanja (ista sesija).** Pregled E5 je našao dva tiha sužavanja koja je samo spajanje
+uvelo, oba sada pribijena testom koji pada na prethodnoj verziji:
+1. `clean_hold` je dobio `e.r != null` uslov koji `no_drawdown` nikad nije imao — dobitnik bez
+   izračunljivog R-a bi nestao sa ekrana.
+2. Grana „peak iznad tvog proseka, vraćen nazad" je bila stavljena iza `outcome === "win"` filtera,
+   a pravilo iz kog je došla nije imalo filter po ishodu. Gubitak čiji je vrh premašio tvoj prosek
+   ali nije stigao do pola R-a nije više prijavljivao ništa.
+
+Nauk je zapisan uz pravilo: spojena grana mora da zadrži SVAKI slučaj koji su pravila hvatala,
+a jedini dozvoljeni gubitak je onaj koji se izričito obrazloži (kao `weak_win`).

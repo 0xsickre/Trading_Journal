@@ -56,6 +56,15 @@ describe("cleanHold — one rule for an entry that did not hurt", () => {
   it("says nothing when MAE was never recorded", () => {
     expect(fired(cleanHold, ctxOf([mkTrade({ id: "a", net: 200, mae: null })]))).toEqual([]);
   });
+
+  it("does not need an R to call an entry clean", () => {
+    // A guard the merge briefly added and `no_drawdown` never had. A winner
+    // that never traded below its entry is a clean entry whether or not an R
+    // can be computed for it, and narrowing that silently is how a merge
+    // loses a rule while looking like it kept one.
+    const ctx = ctxOf([mkTrade({ id: "a", net: 200, r: null, mae: 101 })]);
+    expect(fired(cleanHold, ctx)).toEqual(["a"]);
+  });
 });
 
 describe("redToGreen", () => {
@@ -161,6 +170,24 @@ describe("gaveBackProfit — five rules that were one finding", () => {
     const ctx = ctxOf([mkTrade({ id: "a", net: 10, r: 0.1, mfe: 130 })]);
     expect(gaveBackProfit.evaluate(ctx)).toHaveLength(1);
     expect(firedTitles(gaveBackProfit, ctx)).toEqual(["Little of the move taken"]);
+  });
+
+  it("flags an above-average peak given back on a LOSER too", () => {
+    // The branch this came from had no outcome filter, and the merge briefly
+    // put one in front of it. A loss whose peak beat your own average but
+    // never reached the half-R the "green to red" branch asks for is still a
+    // move you had and did not keep — and it was the only rule that saw it.
+    const tiny = Array.from({ length: 8 }, (_, i) =>
+      mkTrade({ id: `t${i}`, net: 10, r: 0.1, mfe: 101 }),
+    );
+    const ctx = ctxOf([
+      ...tiny,
+      // Peak 0.3R: above the ~0.12R average, below the 0.5R the first branch
+      // needs, and handed back to a loss.
+      mkTrade({ id: "loser", net: -100, r: -1, mfe: 103 }),
+    ]);
+    const hit = gaveBackProfit.evaluate(ctx).find((i) => i.subjectId === "loser")!;
+    expect(hit.title).toBe("Above-average move given back");
   });
 
   it("stays quiet when most of the move was captured", () => {

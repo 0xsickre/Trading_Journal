@@ -61,7 +61,7 @@ export const OMITTED_RULES: OmittedRule[] = [
   {
     id: "maximize_your_profit_day",
     reason:
-      "Needs the intraday peak of cumulative P&L. The trade-level `maximize_your_profit` covers the same behaviour from MFE.",
+      "Needs the intraday peak of cumulative P&L. The trade-level `gave_back_profit` covers the same behaviour from MFE.",
   },
 ];
 
