@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  actedAgainstThePlan,
   entryWithoutThesis,
   pastTimeStop,
-  thesisInvalidatedButHeld,
-  touchedAnIntactThesis,
   unplannedPartial,
   weekendHoldRecord,
 } from "./swing-rules";
 import { ctxOf, fired, mkCheckin, mkTrade } from "./test-helpers";
 
-describe("thesisInvalidatedButHeld", () => {
+describe("actedAgainstThePlan — held past invalidation", () => {
   it("fires when the thesis died before the position did", () => {
     const ctx = ctxOf(
       [
@@ -21,7 +20,7 @@ describe("thesisInvalidatedButHeld", () => {
       ],
       { checkins: [mkCheckin("a", "2026-01-07", { thesis_state: "invalidated" })] },
     );
-    expect(fired(thesisInvalidatedButHeld, ctx)).toEqual(["a"]);
+    expect(fired(actedAgainstThePlan, ctx)).toEqual(["a"]);
   });
 
   it("does NOT fire when it was closed the same day", () => {
@@ -37,7 +36,7 @@ describe("thesisInvalidatedButHeld", () => {
       ],
       { checkins: [mkCheckin("a", "2026-01-07", { thesis_state: "invalidated" })] },
     );
-    expect(fired(thesisInvalidatedButHeld, ctx)).toEqual([]);
+    expect(fired(actedAgainstThePlan, ctx)).toEqual([]);
   });
 
   it("does not fire on a thesis that only weakened", () => {
@@ -45,7 +44,7 @@ describe("thesisInvalidatedButHeld", () => {
       [mkTrade({ id: "a", closedAt: "2026-01-09T09:00:00Z" })],
       { checkins: [mkCheckin("a", "2026-01-06", { thesis_state: "weakened" })] },
     );
-    expect(fired(thesisInvalidatedButHeld, ctx)).toEqual([]);
+    expect(fired(actedAgainstThePlan, ctx)).toEqual([]);
   });
 
   it("dates the breach from the FIRST invalidated day, not the last", () => {
@@ -66,7 +65,7 @@ describe("thesisInvalidatedButHeld", () => {
         ],
       },
     );
-    const [insight] = thesisInvalidatedButHeld.evaluate(ctx);
+    const [insight] = actedAgainstThePlan.evaluate(ctx);
     expect(insight.detail).toContain("2026-01-06");
   });
 
@@ -83,12 +82,12 @@ describe("thesisInvalidatedButHeld", () => {
       ],
       { checkins: [mkCheckin("a", "2026-01-06", { thesis_state: "invalidated" })] },
     );
-    expect(fired(thesisInvalidatedButHeld, ctx)).toEqual(["a"]);
+    expect(fired(actedAgainstThePlan, ctx)).toEqual(["a"]);
   });
 
   it("stays silent with no check-ins at all", () => {
     const ctx = ctxOf([mkTrade({ id: "a" })]);
-    expect(fired(thesisInvalidatedButHeld, ctx)).toEqual([]);
+    expect(fired(actedAgainstThePlan, ctx)).toEqual([]);
   });
 });
 
@@ -148,7 +147,7 @@ describe("pastTimeStop", () => {
   });
 });
 
-describe("touchedAnIntactThesis", () => {
+describe("actedAgainstThePlan — interfered with a plan that was fine", () => {
   it("fires when the position moved on a day nothing about it had changed", () => {
     const ctx = ctxOf([mkTrade({ id: "a" })], {
       checkins: [
@@ -158,7 +157,54 @@ describe("touchedAnIntactThesis", () => {
         }),
       ],
     });
-    expect(fired(touchedAnIntactThesis, ctx)).toEqual(["a"]);
+    expect(fired(actedAgainstThePlan, ctx)).toEqual(["a"]);
+    expect(actedAgainstThePlan.evaluate(ctx)[0].title).toBe(
+      "Managed a thesis that was fine",
+    );
+  });
+
+  it("names the A-setup case, which used to be a rule in another file", () => {
+    // `micromanaged_a_setup` lived in `process-rules.ts` and read the same
+    // check-ins as this one. An A-setup touched on a day its thesis was intact
+    // fired BOTH, and the panel showed one trade twice under two headings.
+    const ctx = ctxOf([mkTrade({ id: "a", setupGrade: "A" })], {
+      checkins: [
+        mkCheckin("a", "2026-01-06", {
+          thesis_state: "intact",
+          touched: "stop_moved",
+        }),
+      ],
+    });
+    const hits = actedAgainstThePlan.evaluate(ctx);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].title).toBe("Micromanaged an A-setup");
+    expect(hits[0].severity).toBe("critical");
+  });
+
+  it("puts holding past invalidation above any interference", () => {
+    // Both happened. One insight, at the worse cause: a decision repeated over
+    // days outranks a single act.
+    const ctx = ctxOf(
+      [
+        mkTrade({
+          id: "a",
+          setupGrade: "A",
+          openedAt: "2026-01-05T09:00:00Z",
+          closedAt: "2026-01-09T09:00:00Z",
+        }),
+      ],
+      {
+        checkins: [
+          mkCheckin("a", "2026-01-06", {
+            thesis_state: "invalidated",
+            touched: "stop_moved",
+          }),
+        ],
+      },
+    );
+    const hits = actedAgainstThePlan.evaluate(ctx);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].title).toBe("Held past invalidation");
   });
 
   it("does not fire when the thesis had weakened first", () => {
@@ -171,7 +217,7 @@ describe("touchedAnIntactThesis", () => {
         }),
       ],
     });
-    expect(fired(touchedAnIntactThesis, ctx)).toEqual([]);
+    expect(fired(actedAgainstThePlan, ctx)).toEqual([]);
   });
 
   it("does not fire when the position was left alone", () => {
@@ -183,7 +229,7 @@ describe("touchedAnIntactThesis", () => {
         }),
       ],
     });
-    expect(fired(touchedAnIntactThesis, ctx)).toEqual([]);
+    expect(fired(actedAgainstThePlan, ctx)).toEqual([]);
   });
 
   it("needs BOTH answers on the SAME day", () => {
@@ -195,7 +241,7 @@ describe("touchedAnIntactThesis", () => {
         mkCheckin("a", "2026-01-08", { touched: "added" }),
       ],
     });
-    expect(fired(touchedAnIntactThesis, ctx)).toEqual([]);
+    expect(fired(actedAgainstThePlan, ctx)).toEqual([]);
   });
 });
 

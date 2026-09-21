@@ -145,11 +145,11 @@ export const flipFlopDay: Rule = {
           severity: red ? "warning" : "info",
           title: red ? "Side-switching, red day" : "Side-switching, green day",
           detail: red
-            ? `${longs} long i ${shorts} short istog dana za ${fmtMoney(
+            ? `${longs} long and ${shorts} short on the same day for ${fmtMoney(
                 d.net,
                 ctx.currency,
               )} — the bias was not settled.`
-            : `${longs} long i ${shorts} short istog dana za ${fmtMoney(
+            : `${longs} long and ${shorts} short on the same day for ${fmtMoney(
                 d.net,
                 ctx.currency,
               )}. It worked, but check whether it could have been cleaner.`,

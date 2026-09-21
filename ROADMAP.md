@@ -1532,3 +1532,30 @@ Izašli sa kompozitom: consistency, avg win/loss i recovery factor — ostaju ka
 Revizija formula je u sekciji 10 imala preporuku „razmotriti da drawdown komponenta koristi
 peak-equity bazu". Sprovedena je; jedini razlog za peak-PnL bazu bila je uporedivost sa skorom koji
 više ne postoji.
+
+### E5 — insights 37 → 29, grupisano po uzroku
+
+Četiri spajanja, svako unutar JEDNOG nivoa:
+
+| Ostaje | Progutalo |
+|---|---|
+| `gave_back_profit` | `green_to_red`, `green_to_breakeven`, `maximize_your_profit`, `weak_win` |
+| `acted_against_the_plan` | `thesis_invalidated_but_held`, `touched_an_intact_thesis`, `micromanaged_a_setup` |
+| `exceed_avg_hold_time` | `loser_long_hold` |
+| `clean_hold` | `no_drawdown` |
+
+Spojeno pravilo se javlja **jednom po trejdu, na najgorem uzroku koji važi**, a uzrok stoji u
+naslovu nalaza.
+
+**Nije spojeno preko nivoa**, i to je razlog a ne izgovor: `tilt_week` je nedeljni, `revenge_trade`
+je trejd; `sizing_problem_day` je dnevni, `unusual_size` je trejd. Subjekt nalaza bi bio pogrešnog
+tipa — id nedelje tamo gde panel očekuje id trejda. Zato ih je 29 a ne ~21 kako je plan procenio.
+
+**Dva prava nalaza koja je spajanje otkrilo:**
+1. `weak_win` se nikad nije mogao javiti sam: `r < 0.3` uz MFE ≥ 1R JESTE capture ispod 30 %, dakle
+   uvek unutar praga od 40 % u `maximize_your_profit`. Svaki slab dobitak je bio prijavljen dvaput,
+   pod dva naslova, kao dva problema. Grana je obrisana, ne preseljena.
+2. `no_drawdown` (MAE = 0) i `clean_hold` (MAE > 0) su se međusobno isključivali — dva id-a za jedno
+   zapažanje u dva stepena.
+
+Usput: `flip_flop_day` je imao srpski ostatak u engleskoj rečenici („long i shorts istog dana za").

@@ -14,7 +14,8 @@
 import { parseScaleOutLevels } from "../scale-out";
 import { stringFieldValue } from "../field-values";
 import { fmtMoney } from "../format";
-import { isInterference } from "../position-checkin";
+import { isInterference, type TouchedState } from "../position-checkin";
+import { scorable, setupScoreFromTrade } from "../setup-score";
 import type { EnrichedTrade, InsightContext } from "./context";
 import type { Insight, InsightRule } from "./types";
 
@@ -34,49 +35,109 @@ const P = {
 
 type Rule = InsightRule<InsightContext>;
 
+/**
+ * English copy for `TouchedState`, kept apart from `TOUCHED_LABELS` in
+ * `position-checkin.ts` on purpose. That map now reads in Serbian for the
+ * `/daily` check-in card, but this insight's sentence renders on the (English)
+ * Reports page — importing the Serbian map would leave the sentence
+ * half-translated.
+ */
+const TOUCHED_LABELS_EN: Record<TouchedState, string> = {
+  untouched: "did not touch",
+  stop_moved: "moved stop",
+  partial_exit: "partial exit",
+  added: "added",
+};
+
 const rPart = (e: EnrichedTrade, currency: string) =>
   e.r != null ? `${e.r.toFixed(2)}R` : fmtMoney(e.pnl, currency);
 
 /**
- * The reason to hold expired, and the position did not.
+ * Your own plan said one thing and you did another.
  *
- * This is the rule the whole redesign was built to make possible, and nothing
- * before phase 2 could express it: `micromanage` was a fact about a DAY, so
- * "this position's thesis died on Tuesday and I was still in it on Friday" had
- * nowhere to live.
+ * THREE RULES WERE ONE FINDING, and two of them overlapped outright.
+ * `thesis_invalidated_but_held` (you wrote the reason off and kept holding),
+ * `micromanaged_a_setup` (you interfered with an A-setup) and
+ * `touched_an_intact_thesis` (you interfered on a day you had just called the
+ * thesis fine) all read the same per-position check-ins and all say: the
+ * position was managed by something other than the plan. An A-setup touched on
+ * a day its thesis was intact fired TWO of them, and the panel showed one
+ * trade twice under two headings.
+ *
+ * One insight per trade now, at the worst cause that applies. Held past
+ * invalidation outranks interference because it is a decision repeated over
+ * days rather than one act.
  *
  * Critical regardless of outcome, and that is the point. A trade held past its
  * invalidation that happened to win is the most expensive kind of win — it pays
  * for the habit that loses next time.
  */
-export const thesisInvalidatedButHeld: Rule = {
-  id: "thesis_invalidated_but_held",
+export const actedAgainstThePlan: Rule = {
+  id: "acted_against_the_plan",
   level: "trade",
   minSample: 0,
   description:
-    "A position you recorded as invalidated and went on holding into a later day.",
+    "A position managed against what you had written about it: held past its own invalidation, or interfered with while the plan said to leave it alone.",
   evaluate: (ctx) => {
     const out: Insight[] = [];
     for (const e of ctx.trades) {
       const rows = ctx.checkinsByPosition.get(e.id) ?? [];
+
       // Sorted oldest-first by `buildInsightContext`, so the first hit is the
       // day the thesis died — the day the decision to keep holding was made.
       const died = rows.find((c) => c.thesis_state === "invalidated");
-      if (!died) continue;
-
       // Same-day is not the pattern: calling it invalidated and closing it that
       // day IS the discipline this rule is looking for.
-      if (!e.closeDay || e.closeDay <= died.report_date) continue;
+      if (died && e.closeDay && e.closeDay > died.report_date) {
+        out.push({
+          ruleId: "acted_against_the_plan",
+          level: "trade",
+          severity: "critical",
+          title: "Held past invalidation",
+          detail: `You marked the thesis invalidated on ${died.report_date} and closed on ${e.closeDay}. Outcome: ${rPart(e, ctx.currency)}.`,
+          subjectId: e.id,
+          subjectLabel: e.label,
+        });
+        continue;
+      }
 
-      out.push({
-        ruleId: "thesis_invalidated_but_held",
-        level: "trade",
-        severity: "critical",
-        title: "Held past invalidation",
-        detail: `You marked the thesis invalidated on ${died.report_date} and closed on ${e.closeDay}. Outcome: ${rPart(e, ctx.currency)}.`,
-        subjectId: e.id,
-        subjectLabel: e.label,
-      });
+      const touchedOn = rows.find((c) => isInterference(c.touched));
+      if (!touchedOn?.touched) continue;
+
+      // An A-setup is the sharper case: the checklist you wrote said this was
+      // the setup you were waiting for, and you managed it anyway.
+      const scored = ctx.rules ? setupScoreFromTrade(scorable(e), ctx.rules) : null;
+      const grade = scored?.grade ?? "";
+      if (grade === "A+" || grade === "A") {
+        out.push({
+          ruleId: "acted_against_the_plan",
+          level: "trade",
+          severity: "critical",
+          title: "Micromanaged an A-setup",
+          detail: `On ${touchedOn.report_date} you recorded "${TOUCHED_LABELS_EN[touchedOn.touched]}" on this A-setup. Outcome: ${rPart(e, ctx.currency)}.`,
+          subjectId: e.id,
+          subjectLabel: e.label,
+        });
+        continue;
+      }
+
+      // No grade needed for this one: the two answers disagreeing is the
+      // cleanest evidence there is that the intervention came from the screen
+      // and not from the plan.
+      if (rows.some((c) => c.thesis_state === "intact" && isInterference(c.touched))) {
+        const day = rows.find(
+          (c) => c.thesis_state === "intact" && isInterference(c.touched),
+        )!;
+        out.push({
+          ruleId: "acted_against_the_plan",
+          level: "trade",
+          severity: "warning",
+          title: "Managed a thesis that was fine",
+          detail: `On ${day.report_date} you recorded the thesis as intact and moved the position anyway. Outcome: ${rPart(e, ctx.currency)}.`,
+          subjectId: e.id,
+          subjectLabel: e.label,
+        });
+      }
     }
     return out;
   },
@@ -195,43 +256,6 @@ export const weekendHoldRecord: Rule = {
 };
 
 /**
- * Touching a position on the same day its thesis was still intact.
- *
- * The complement of `micromanaged_a_setup`, which needs an A-grade setup to
- * fire. This one needs no grade — it needs the two answers to disagree, which is
- * the cleanest evidence there is that the intervention came from the screen and
- * not from the plan: nothing about the setup had changed that day, and you
- * changed the position anyway.
- */
-export const touchedAnIntactThesis: Rule = {
-  id: "touched_an_intact_thesis",
-  level: "trade",
-  minSample: 0,
-  description:
-    "A position you moved on a day you had just recorded its thesis as intact.",
-  evaluate: (ctx) => {
-    const out: Insight[] = [];
-    for (const e of ctx.trades) {
-      const day = (ctx.checkinsByPosition.get(e.id) ?? []).find(
-        (c) => c.thesis_state === "intact" && isInterference(c.touched),
-      );
-      if (!day) continue;
-
-      out.push({
-        ruleId: "touched_an_intact_thesis",
-        level: "trade",
-        severity: "warning",
-        title: "Managed a thesis that was fine",
-        detail: `On ${day.report_date} you recorded the thesis as intact and moved the position anyway. Outcome: ${rPart(e, ctx.currency)}.`,
-        subjectId: e.id,
-        subjectLabel: e.label,
-      });
-    }
-    return out;
-  },
-};
-
-/**
  * Reducing a position that had no plan to be reduced.
  *
  * This is what makes `scale_out_plan` a column rather than a nicety. The daily
@@ -288,9 +312,8 @@ export const unplannedPartial: Rule = {
 };
 
 export const SWING_RULES: Rule[] = [
-  thesisInvalidatedButHeld,
+  actedAgainstThePlan,
   pastTimeStop,
-  touchedAnIntactThesis,
   unplannedPartial,
   entryWithoutThesis,
   weekendHoldRecord,

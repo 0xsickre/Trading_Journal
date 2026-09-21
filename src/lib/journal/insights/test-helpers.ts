@@ -197,3 +197,16 @@ export function fired(
 ): string[] {
   return rule.evaluate(ctx).map((i) => i.subjectId);
 }
+
+/**
+ * The TITLES a rule fired, for the merged rules where the cause is the point.
+ *
+ * Several rules now answer one finding with a branch per cause, so "which
+ * subject fired" no longer says which case was recognised.
+ */
+export function firedTitles(
+  rule: { evaluate: (c: ReturnType<typeof ctxOf>) => { title: string }[] },
+  ctx: ReturnType<typeof ctxOf>,
+): string[] {
+  return rule.evaluate(ctx).map((i) => i.title);
+}

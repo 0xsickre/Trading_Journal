@@ -4,38 +4,15 @@ import {
   drawdownExceedsProfit,
   exceedAvgHoldTime,
   gaveBackProfit,
-  greenToBreakeven,
-  greenToRed,
-  loserLongHold,
-  maximizeYourProfit,
-  noDrawdown,
   redToGreen,
   revengeTrade,
   scaleIn,
   scaleOut,
   unusualSize,
-  weakWin,
 } from "./trade-rules";
-import { ctxOf, DAY, fired, mkTrade } from "./test-helpers";
+import { ctxOf, DAY, fired, firedTitles, mkTrade } from "./test-helpers";
 
 // Risk is entry 100 − stop 90 = 10 points, so 1R = 10 points of price.
-
-describe("noDrawdown", () => {
-  it("fires for a winner that never traded below entry", () => {
-    const ctx = ctxOf([mkTrade({ id: "clean", net: 200, mae: 101 })]);
-    expect(fired(noDrawdown, ctx)).toEqual(["clean"]);
-  });
-
-  it("does not fire when the trade went offside", () => {
-    const ctx = ctxOf([mkTrade({ id: "dirty", net: 200, mae: 95 })]);
-    expect(fired(noDrawdown, ctx)).toEqual([]);
-  });
-
-  it("does not fire when MAE was never recorded", () => {
-    const ctx = ctxOf([mkTrade({ id: "unknown", net: 200, mae: null })]);
-    expect(fired(noDrawdown, ctx)).toEqual([]);
-  });
-});
 
 describe("drawdownExceedsProfit", () => {
   it("fires when MAE in R is larger than realized R", () => {
@@ -55,34 +32,29 @@ describe("drawdownExceedsProfit", () => {
   });
 });
 
-describe("cleanHold", () => {
+describe("cleanHold — one rule for an entry that did not hurt", () => {
   it("fires when profit is at least twice the adverse excursion", () => {
     const ctx = ctxOf([mkTrade({ id: "a", net: 200, r: 2, mae: 99 })]);
     expect(fired(cleanHold, ctx)).toEqual(["a"]);
+    expect(firedTitles(cleanHold, ctx)).toEqual(["Clean hold"]);
   });
 
-  it("does not fire when the ratio is thin", () => {
-    const ctx = ctxOf([mkTrade({ id: "a", net: 60, r: 0.6, mae: 95 })]);
-    expect(fired(cleanHold, ctx)).toEqual([]);
-  });
-});
-
-describe("greenToRed", () => {
-  it("fires for a loser that was meaningfully in profit", () => {
-    const ctx = ctxOf([mkTrade({ id: "a", net: -100, r: -1, mfe: 110 })]);
-    expect(fired(greenToRed, ctx)).toEqual(["a"]);
+  it("names the extreme case, which used to be a rule of its own", () => {
+    // `no_drawdown`: the price never came back below the entry. It could never
+    // fire together with the branch above — that one needs `maeR > 0` — so two
+    // ids described one observation at two degrees.
+    const ctx = ctxOf([mkTrade({ id: "clean", net: 200, mae: 101 })]);
+    expect(fired(cleanHold, ctx)).toEqual(["clean"]);
+    expect(firedTitles(cleanHold, ctx)).toEqual(["No drawdown"]);
   });
 
-  it("does not fire when the loser never went green", () => {
-    const ctx = ctxOf([mkTrade({ id: "a", net: -100, r: -1, mfe: 101 })]);
-    expect(fired(greenToRed, ctx)).toEqual([]);
+  it("does not fire when the ratio is thin, or the trade went offside", () => {
+    expect(fired(cleanHold, ctxOf([mkTrade({ id: "a", net: 60, r: 0.6, mae: 95 })]))).toEqual([]);
+    expect(fired(cleanHold, ctxOf([mkTrade({ id: "b", net: 200, mae: 95, r: 0.5 })]))).toEqual([]);
   });
-});
 
-describe("greenToBreakeven", () => {
-  it("fires when a full R of profit ended at zero", () => {
-    const ctx = ctxOf([mkTrade({ id: "a", net: 0, r: 0, mfe: 115 })]);
-    expect(fired(greenToBreakeven, ctx)).toEqual(["a"]);
+  it("says nothing when MAE was never recorded", () => {
+    expect(fired(cleanHold, ctxOf([mkTrade({ id: "a", net: 200, mae: null })]))).toEqual([]);
   });
 });
 
@@ -93,7 +65,7 @@ describe("redToGreen", () => {
   });
 });
 
-describe("exceedAvgHoldTime", () => {
+describe("exceedAvgHoldTime — held longer than your own history", () => {
   const many = (n: number) =>
     Array.from({ length: n }, (_, i) =>
       mkTrade({ id: `w${i}`, net: 100, durationSeconds: 2 * DAY }),
@@ -111,26 +83,23 @@ describe("exceedAvgHoldTime", () => {
     ]);
     expect(fired(exceedAvgHoldTime, ctx)).toContain("long");
   });
-});
 
-describe("loserLongHold", () => {
-  it("fires only when the loser is both slower and bigger than typical", () => {
+  it("upgrades to critical for a loser both slower and bigger than typical", () => {
+    // `loser_long_hold` was a separate rule for this case. Same observation,
+    // with the outcome attached — so it is the severe branch, not a second row.
     const typicalLosers = Array.from({ length: 8 }, (_, i) =>
-      mkTrade({
-        id: `l${i}`,
-        net: -100,
-        r: -1,
-        durationSeconds: 2 * DAY,
-      }),
+      mkTrade({ id: `l${i}`, net: -100, r: -1, durationSeconds: 2 * DAY }),
     );
     const ctx = ctxOf([
       ...typicalLosers,
       mkTrade({ id: "bad", net: -400, r: -4, durationSeconds: 20 * DAY }),
     ]);
-    expect(fired(loserLongHold, ctx)).toEqual(["bad"]);
+    const hit = exceedAvgHoldTime.evaluate(ctx).find((i) => i.subjectId === "bad")!;
+    expect(hit.severity).toBe("critical");
+    expect(hit.title).toBe("Loser held too long");
   });
 
-  it("does not fire for a long hold that stayed small", () => {
+  it("does not call a long hold that stayed small a loser held too long", () => {
     const typicalLosers = Array.from({ length: 8 }, (_, i) =>
       mkTrade({ id: `l${i}`, net: -100, r: -1, durationSeconds: 2 * DAY }),
     );
@@ -138,11 +107,13 @@ describe("loserLongHold", () => {
       ...typicalLosers,
       mkTrade({ id: "slow-small", net: -50, r: -0.5, durationSeconds: 20 * DAY }),
     ]);
-    expect(fired(loserLongHold, ctx)).toEqual([]);
+    const hit = exceedAvgHoldTime.evaluate(ctx).find((i) => i.subjectId === "slow-small");
+    // It may still be flagged as a long hold — but not as the costly kind.
+    expect(hit?.severity).not.toBe("critical");
   });
 });
 
-describe("gaveBackProfit", () => {
+describe("gaveBackProfit — five rules that were one finding", () => {
   it("fires when an above-average excursion was mostly returned", () => {
     const ordinary = Array.from({ length: 8 }, (_, i) =>
       mkTrade({ id: `o${i}`, net: 100, r: 1, mfe: 110 }),
@@ -152,31 +123,49 @@ describe("gaveBackProfit", () => {
       ...ordinary,
       mkTrade({ id: "gave-back", net: 100, r: 1, mfe: 200 }),
     ]);
-    expect(fired(gaveBackProfit, ctx)).toEqual(["gave-back"]);
+    const hit = gaveBackProfit.evaluate(ctx).find((i) => i.subjectId === "gave-back")!;
+    expect(hit.title).toBe("Above-average move given back");
   });
-});
 
-describe("maximizeYourProfit", () => {
-  it("fires for a winner that kept under 40 % of its best move", () => {
+  it("calls a loser that was in profit the worst case, with no history needed", () => {
+    // `green_to_red`. It used to be its own rule precisely because it needs no
+    // baseline, which is why the merged rule gates the BRANCH and not itself.
+    const ctx = ctxOf([mkTrade({ id: "a", net: -100, r: -1, mfe: 110 })]);
+    const hit = gaveBackProfit.evaluate(ctx)[0];
+    expect(hit.subjectId).toBe("a");
+    expect(hit.severity).toBe("critical");
+    expect(hit.title).toBe("Green to red");
+  });
+
+  it("does not fire for a loser that never went green", () => {
+    const ctx = ctxOf([mkTrade({ id: "a", net: -100, r: -1, mfe: 101 })]);
+    expect(fired(gaveBackProfit, ctx)).toEqual([]);
+  });
+
+  it("names a full R handed back to a scratch", () => {
+    const ctx = ctxOf([mkTrade({ id: "a", net: 0, r: 0, mfe: 115 })]);
+    expect(firedTitles(gaveBackProfit, ctx)).toEqual(["Green to flat"]);
+  });
+
+  it("names a winner that kept under 40 % of its best move", () => {
     const ctx = ctxOf([mkTrade({ id: "a", net: 100, r: 1, mfe: 140 })]);
-    expect(fired(maximizeYourProfit, ctx)).toEqual(["a"]);
+    expect(firedTitles(gaveBackProfit, ctx)).toEqual(["Little of the move taken"]);
   });
 
-  it("does not fire when most of the move was captured", () => {
-    const ctx = ctxOf([mkTrade({ id: "a", net: 100, r: 1, mfe: 111 })]);
-    expect(fired(maximizeYourProfit, ctx)).toEqual([]);
-  });
-});
-
-describe("weakWin", () => {
-  it("fires for a tiny win out of a large available move", () => {
+  it("reports a tiny win out of a large move ONCE, as low capture", () => {
+    // `weak_win` was a fifth rule for this case and could never have fired on
+    // its own: `r < 0.3` with an MFE of at least 1R IS a capture below 30 %,
+    // which the branch above already catches. Every weak win was reported
+    // twice, under two headings, as two problems. Merging the rules is what
+    // made that arithmetic visible.
     const ctx = ctxOf([mkTrade({ id: "a", net: 10, r: 0.1, mfe: 130 })]);
-    expect(fired(weakWin, ctx)).toEqual(["a"]);
+    expect(gaveBackProfit.evaluate(ctx)).toHaveLength(1);
+    expect(firedTitles(gaveBackProfit, ctx)).toEqual(["Little of the move taken"]);
   });
 
-  it("does not fire when the win was substantial", () => {
-    const ctx = ctxOf([mkTrade({ id: "a", net: 200, r: 2, mfe: 130 })]);
-    expect(fired(weakWin, ctx)).toEqual([]);
+  it("stays quiet when most of the move was captured", () => {
+    const ctx = ctxOf([mkTrade({ id: "a", net: 100, r: 1, mfe: 111 })]);
+    expect(fired(gaveBackProfit, ctx)).toEqual([]);
   });
 });
 

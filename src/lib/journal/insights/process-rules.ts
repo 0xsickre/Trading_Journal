@@ -9,26 +9,11 @@
 
 import { stringFieldValue } from "../field-values";
 import { winRateOf } from "../analytics";
-import { scorable, setupScoreFromTrade } from "../setup-score";
+import { setupScoreFromTrade } from "../setup-score";
 import { fmtMoney } from "../format";
-import { isInterference, type TouchedState } from "../position-checkin";
 import type { TradeRow } from "../types";
 import type { InsightContext } from "./context";
 import type { Insight, InsightRule } from "./types";
-
-/**
- * English copy for `TouchedState`, kept apart from `TOUCHED_LABELS` in
- * `position-checkin.ts` on purpose. That map now reads in Serbian for the
- * `/daily` check-in card, but this insight's sentence renders on the (English)
- * Reports page — importing the Serbian map would leave the sentence
- * half-translated.
- */
-const TOUCHED_LABELS_EN: Record<TouchedState, string> = {
-  untouched: "did not touch",
-  stop_moved: "moved stop",
-  partial_exit: "partial exit",
-  added: "added",
-};
 
 const P = {
   /** Mental temperature below which entries are flagged. */
@@ -49,50 +34,6 @@ function strField(row: Record<string, unknown>, key: string): string {
 }
 
 const norm = (s: string) => s.trim().toLowerCase();
-
-/**
- * Micromanaging an A-setup, priced in R.
- *
- * `dayKeysBetween(openDay, closeDay)` used to be the first half of this rule: it
- * swept every day of the hold and asked the DAILY report whether the day was
- * marked as touched. That answer was about the day, not about this position, so
- * an A-setup left strictly alone was flagged whenever some OTHER position was
- * touched while it happened to be open.
- *
- * The check-in now names its position, so no sweep is needed and no other
- * position's answer can reach this one — the join is on the position id.
- */
-export const micromanagedASetup: Rule = {
-  id: "micromanaged_a_setup",
-  level: "trade",
-  minSample: 0,
-  description:
-    "An A-setup you recorded interfering with while it was open.",
-  evaluate: (ctx) => {
-    const out: Insight[] = [];
-    for (const e of ctx.trades) {
-      if (!isASetup(e.trade.row, ctx.rules ? setupScoreFromTrade(scorable(e), ctx.rules) : null))
-        continue;
-
-      const touchedOn = (ctx.checkinsByPosition.get(e.id) ?? []).find((c) =>
-        isInterference(c.touched),
-      );
-      if (!touchedOn?.touched) continue;
-
-      const rPart = e.r != null ? `${e.r.toFixed(2)}R` : fmtMoney(e.pnl, ctx.currency);
-      out.push({
-        ruleId: "micromanaged_a_setup",
-        level: "trade",
-        severity: "critical",
-        title: "Micromanaged an A-setup",
-        detail: `On ${touchedOn.report_date} you recorded "${TOUCHED_LABELS_EN[touchedOn.touched]}" on this A-setup. Outcome: ${rPart}.`,
-        subjectId: e.id,
-        subjectLabel: e.label,
-      });
-    }
-    return out;
-  },
-};
 
 /** Entering against the macro bias recorded at the time. */
 export const againstMacroBias: Rule = {
@@ -304,7 +245,6 @@ export const stalePlan: Rule = {
 };
 
 export const PROCESS_RULES: Rule[] = [
-  micromanagedASetup,
   againstMacroBias,
   cotChase,
   lowMentalTempEntry,

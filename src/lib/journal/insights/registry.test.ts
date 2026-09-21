@@ -42,7 +42,7 @@ describe("registry integrity", () => {
   });
 
   it("finds rules by id", () => {
-    expect(ruleById("green_to_red")?.level).toBe("trade");
+    expect(ruleById("gave_back_profit")?.level).toBe("trade");
     expect(ruleById("nope")).toBeUndefined();
   });
 });
@@ -61,8 +61,8 @@ describe("runInsights", () => {
   it("runs zero-sample rules even on a single trade", () => {
     const ctx = ctxOf([mkTrade({ id: "a", net: 200, mae: 101 })]);
     const { insights, skipped } = runInsights(ctx);
-    expect(skipped.map((s) => s.id)).not.toContain("no_drawdown");
-    expect(insights.some((i) => i.ruleId === "no_drawdown")).toBe(true);
+    expect(skipped.map((s) => s.id)).not.toContain("clean_hold");
+    expect(insights.some((i) => i.ruleId === "clean_hold")).toBe(true);
   });
 
   it("returns nothing at all for an empty book", () => {
@@ -82,8 +82,8 @@ describe("runInsights", () => {
 
   it("only runs the rules it is given", () => {
     const ctx = ctxOf([mkTrade({ id: "a", net: 200, mae: 101 })]);
-    const { insights } = runInsights(ctx, [ruleById("no_drawdown")!]);
-    expect(insights.every((i) => i.ruleId === "no_drawdown")).toBe(true);
+    const { insights } = runInsights(ctx, [ruleById("clean_hold")!]);
+    expect(insights.every((i) => i.ruleId === "clean_hold")).toBe(true);
   });
 });
 

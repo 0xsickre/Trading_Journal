@@ -3,117 +3,12 @@ import {
   againstMacroBias,
   cotChase,
   lowMentalTempEntry,
-  micromanagedASetup,
   missedASetup,
   stalePlan,
   swapAteTheTrade,
 } from "./process-rules";
-import { ctxOf, fired, mkCheckin, mkGradedRow, mkReport, mkTrade } from "./test-helpers";
+import { ctxOf, fired, mkGradedRow, mkReport, mkTrade } from "./test-helpers";
 import type { TradeRow } from "../types";
-
-describe("micromanagedASetup", () => {
-  it("fires for an A-setup you recorded moving the stop on", () => {
-    const ctx = ctxOf(
-      [
-        mkTrade({
-          id: "a",
-          setupGrade: "A",
-          net: -100,
-          r: -1,
-          closedAt: "2026-01-05T12:00:00Z",
-        }),
-      ],
-      { checkins: [mkCheckin("a", "2026-01-05", { touched: "stop_moved" })] },
-    );
-    expect(fired(micromanagedASetup, ctx)).toEqual(["a"]);
-  });
-
-  it("fires when the interference was mid-hold, not on the close day", () => {
-    // The behaviour being caught happens while the position is open; a swing
-    // trade is almost never interfered with on the exact day it closes.
-    const ctx = ctxOf(
-      [
-        mkTrade({
-          id: "a",
-          setupGrade: "A",
-          net: -100,
-          r: -1,
-          openedAt: "2026-01-05T09:00:00Z",
-          closedAt: "2026-01-12T09:00:00Z",
-        }),
-      ],
-      {
-        checkins: [
-          mkCheckin("a", "2026-01-06", { touched: "untouched" }),
-          mkCheckin("a", "2026-01-08", { touched: "added" }),
-        ],
-      },
-    );
-    expect(fired(micromanagedASetup, ctx)).toEqual(["a"]);
-  });
-
-  it("does not convict a position for what was done to ANOTHER one", () => {
-    // The bug this redesign exists to fix. `micromanage` was a column on the
-    // DAY, so an A-setup left strictly alone was flagged whenever some other
-    // position was touched while it happened to be open.
-    const ctx = ctxOf(
-      [
-        mkTrade({
-          id: "a",
-          setupGrade: "A",
-          openedAt: "2026-01-05T09:00:00Z",
-          closedAt: "2026-01-08T09:00:00Z",
-        }),
-        mkTrade({
-          id: "b",
-          setupGrade: "A",
-          openedAt: "2026-01-05T09:00:00Z",
-          closedAt: "2026-01-08T09:00:00Z",
-        }),
-      ],
-      {
-        checkins: [
-          mkCheckin("a", "2026-01-06", { touched: "untouched" }),
-          mkCheckin("b", "2026-01-06", { touched: "stop_moved" }),
-        ],
-      },
-    );
-    expect(fired(micromanagedASetup, ctx)).toEqual(["b"]);
-  });
-
-  it("does not fire when the position was left alone", () => {
-    const ctx = ctxOf(
-      [mkTrade({ id: "a", setupGrade: "A", closedAt: "2026-01-05T12:00:00Z" })],
-      { checkins: [mkCheckin("a", "2026-01-05", { touched: "untouched" })] },
-    );
-    expect(fired(micromanagedASetup, ctx)).toEqual([]);
-  });
-
-  it("does not fire for a lower grade setup", () => {
-    const ctx = ctxOf(
-      [mkTrade({ id: "a", setupGrade: "B", closedAt: "2026-01-05T12:00:00Z" })],
-      { checkins: [mkCheckin("a", "2026-01-05", { touched: "stop_moved" })] },
-    );
-    expect(fired(micromanagedASetup, ctx)).toEqual([]);
-  });
-
-  it("does not fire when the question was never answered", () => {
-    // A check-in row with no `touched` is silence, not a denial — and silence
-    // is not evidence of interference.
-    const ctx = ctxOf(
-      [mkTrade({ id: "a", setupGrade: "A", closedAt: "2026-01-05T12:00:00Z" })],
-      { checkins: [mkCheckin("a", "2026-01-05")] },
-    );
-    expect(fired(micromanagedASetup, ctx)).toEqual([]);
-  });
-
-  it("does not fire when there is no check-in at all", () => {
-    const ctx = ctxOf([
-      mkTrade({ id: "a", setupGrade: "A", closedAt: "2026-01-05T12:00:00Z" }),
-    ]);
-    expect(fired(micromanagedASetup, ctx)).toEqual([]);
-  });
-});
 
 describe("againstMacroBias", () => {
   it("stays silent below the category sample threshold", () => {

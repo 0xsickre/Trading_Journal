@@ -22,14 +22,17 @@ const T = {
   WAS_RED_R: 0.5,
   /** Capture below this on a winner means most of the move was handed back. */
   GAVE_BACK_CAPTURE_PCT: 40,
-  /** A win this small in R, after a big MFE, is a weak win rather than an edge. */
-  WEAK_WIN_R: 0.3,
-  WEAK_WIN_MFE_R: 1,
   /** Profit exceeding drawdown by this multiple is a cleanly-held trade. */
   CLEAN_HOLD_MULTIPLE: 2,
   /** Days after a loss within which a re-entry counts as reactive. */
   REVENGE_WINDOW_DAYS: 1,
 } as const;
+
+/**
+ * Trades of history a rule needs before it may compare a trade against "your
+ * own" anything. Named once: three rules used to spell the same 8 inline.
+ */
+const BASELINE_MIN = 8;
 
 type Rule = InsightRule<InsightContext>;
 
@@ -44,26 +47,6 @@ const insight = (
 });
 
 const r2 = (n: number) => n.toFixed(2);
-
-export const noDrawdown: Rule = {
-  id: "no_drawdown",
-  level: "trade",
-  minSample: 0,
-  // Restricted to winners on purpose: a trade that never moved against you yet
-  // still closed red is a fee-only loss, and calling that "good" would be wrong.
-  description: "A winner that was never underwater.",
-  evaluate: (ctx) =>
-    ctx.trades
-      .filter((e) => e.excursion.maeR === 0 && e.outcome === "win")
-      .map((e) =>
-        insight(e, {
-          ruleId: "no_drawdown",
-          severity: "good",
-          title: "No drawdown",
-          detail: "Price never came back below the entry — a clean entry.",
-        }),
-      ),
-};
 
 export const drawdownExceedsProfit: Rule = {
   id: "drawdown_exceeds_profit",
@@ -92,81 +75,49 @@ export const drawdownExceedsProfit: Rule = {
       ),
 };
 
+/**
+ * The entry that did not hurt.
+ *
+ * ONE RULE, TWO DEGREES. `no_drawdown` (the price never came back below the
+ * entry at all) was a separate rule saying this one's sentence in its extreme
+ * form — and since it required `maeR === 0` while this required `maeR > 0`,
+ * the two could never both fire on the same trade. Two ids, two panel rows and
+ * two entries in the rule catalogue for one observation.
+ */
 export const cleanHold: Rule = {
   id: "clean_hold",
   level: "trade",
   minSample: 0,
-  description: "The profit beat the drawdown several times over.",
+  description:
+    "The entry never hurt: no drawdown at all, or profit several times over it.",
   evaluate: (ctx) =>
-    ctx.trades
-      .filter(
-        (e) =>
-          e.r != null &&
-          e.r > 0 &&
-          e.excursion.maeR != null &&
-          e.excursion.maeR > 0 &&
-          e.r >= e.excursion.maeR * T.CLEAN_HOLD_MULTIPLE,
-      )
-      .map((e) =>
-        insight(e, {
+    ctx.trades.flatMap((e) => {
+      if (e.outcome !== "win" || e.r == null || e.excursion.maeR == null) return [];
+
+      if (e.excursion.maeR === 0) {
+        return insight(e, {
+          ruleId: "clean_hold",
+          severity: "good",
+          title: "No drawdown",
+          detail: "Price never came back below the entry - a clean entry.",
+        });
+      }
+      if (
+        e.r > 0 &&
+        e.excursion.maeR > 0 &&
+        e.r >= e.excursion.maeR * T.CLEAN_HOLD_MULTIPLE
+      ) {
+        return insight(e, {
           ruleId: "clean_hold",
           severity: "good",
           title: "Clean hold",
-          detail: `${r2(e.r!)}R of profit with only ${r2(
-            e.excursion.maeR!,
-          )}R against it — the thesis worked almost at once.`,
-        }),
-      ),
-};
-
-export const greenToRed: Rule = {
-  id: "green_to_red",
-  level: "trade",
-  minSample: 0,
-  description: "Was in profit, closed at a loss.",
-  evaluate: (ctx) =>
-    ctx.trades
-      .filter(
-        (e) =>
-          e.outcome === "loss" &&
-          e.excursion.mfeR != null &&
-          e.excursion.mfeR >= T.WAS_GREEN_R,
-      )
-      .map((e) =>
-        insight(e, {
-          ruleId: "green_to_red",
-          severity: "critical",
-          title: "Green to red",
-          detail: `It was ${r2(
-            e.excursion.mfeR!,
-          )}R u profitu pa zatvoren sa ${fmtMoney(e.pnl, ctx.currency)}.`,
-        }),
-      ),
-};
-
-export const greenToBreakeven: Rule = {
-  id: "green_to_breakeven",
-  level: "trade",
-  minSample: 0,
-  description: "Was in profit, finished around zero.",
-  evaluate: (ctx) =>
-    ctx.trades
-      .filter(
-        (e) =>
-          e.outcome === "breakeven" &&
-          e.excursion.mfeR != null &&
-          e.excursion.mfeR >= 1,
-      )
-      .map((e) =>
-        insight(e, {
-          ruleId: "green_to_breakeven",
-          severity: "warning",
-          title: "Green to flat",
-          detail: `The peak was ${r2(
-            e.excursion.mfeR!,
-          )}R, and the result was zero. The whole move was given back.`,
-        }),
-      ),
+          detail: `${r2(e.r)}R of profit with only ${r2(
+            e.excursion.maeR,
+          )}R against it - the thesis worked almost at once.`,
+        });
+      }
+      return [];
+    }),
 };
 
 export const redToGreen: Rule = {
@@ -194,146 +145,143 @@ export const redToGreen: Rule = {
       ),
 };
 
+/**
+ * Held longer than your own history says you hold.
+ *
+ * TWO RULES, ONE CAUSE, TWO SEVERITIES. `loser_long_hold` was a separate rule
+ * for the case that costs money: a loser held past the median loser AND bigger
+ * than the average loss. It is this observation with the outcome attached, so
+ * it is the critical branch now rather than a second row in the panel.
+ */
 export const exceedAvgHoldTime: Rule = {
   id: "exceed_avg_hold_time",
   level: "trade",
   // Comparing against "your own winners" is meaningless until there are enough
   // winners to form a distribution.
-  minSample: 8,
-  description: "Held longer than 75 % of your winners.",
+  minSample: BASELINE_MIN,
+  description: "Held longer than your own history - worst when it was a loser.",
   evaluate: (ctx) => {
     const p75 = ctx.baseline.winnerHoldP75;
-    if (p75 == null) return [];
-    return ctx.trades
-      .filter((e) => e.durationSeconds != null && e.durationSeconds > p75)
-      .map((e) =>
-        insight(e, {
+    const med = ctx.baseline.loserHoldMedian;
+    const avgLoss = ctx.baseline.avgLossMagnitude;
+
+    return ctx.trades.flatMap((e) => {
+      if (e.durationSeconds == null) return [];
+
+      // Hope, not a plan: a loser held past the median AND costlier than usual.
+      if (
+        e.outcome === "loss" &&
+        med != null &&
+        avgLoss != null &&
+        e.durationSeconds > med &&
+        Math.abs(e.pnl) > avgLoss
+      ) {
+        return insight(e, {
+          ruleId: "exceed_avg_hold_time",
+          severity: "critical",
+          title: "Loser held too long",
+          detail: `${formatDuration(e.durationSeconds)} and ${fmtMoney(
+            e.pnl,
+            ctx.currency,
+          )} - longer and costlier than your typical loss. Hope, not a plan.`,
+          sample: ctx.baseline.sample,
+        });
+      }
+
+      if (p75 != null && e.durationSeconds > p75) {
+        return insight(e, {
           ruleId: "exceed_avg_hold_time",
           severity: "info",
           title: "Longer than usual",
           detail: `Held ${formatDuration(
             e.durationSeconds,
-          )} — longer than 75 % of your winners (${formatDuration(p75)}).`,
+          )} - longer than 75 % of your winners (${formatDuration(p75)}).`,
           sample: ctx.baseline.sample,
-        }),
-      );
-  },
-};
+        });
+      }
 
-export const loserLongHold: Rule = {
-  id: "loser_long_hold",
-  level: "trade",
-  minSample: 8,
-  description:
-    "A loser held longer than the median loser and larger than the average loss.",
-  evaluate: (ctx) => {
-    const med = ctx.baseline.loserHoldMedian;
-    const avgLoss = ctx.baseline.avgLossMagnitude;
-    if (med == null || avgLoss == null) return [];
-    return ctx.trades
-      .filter(
-        (e) =>
-          e.outcome === "loss" &&
-          e.durationSeconds != null &&
-          e.durationSeconds > med &&
-          Math.abs(e.pnl) > avgLoss,
-      )
-      .map((e) =>
-        insight(e, {
-          ruleId: "loser_long_hold",
-          severity: "critical",
-          title: "Loser held too long",
-          detail: `${formatDuration(
-            e.durationSeconds,
-          )} i ${fmtMoney(e.pnl, ctx.currency)} — longer and costlier than your typical loss. Hope, not a plan.`,
-          sample: ctx.baseline.sample,
-        }),
-      );
+      return [];
+    });
   },
 };
 
 export const gaveBackProfit: Rule = {
   id: "gave_back_profit",
   level: "trade",
-  minSample: 8,
-  description: "A profit peak above your average, closed well below it.",
+  minSample: 0,
+  description: "A move that was in your favour and was not kept.",
   evaluate: (ctx) => {
     const avgMfe = ctx.baseline.avgMfeR;
-    if (avgMfe == null) return [];
-    return ctx.trades
-      .filter(
-        (e) =>
-          e.excursion.mfeR != null &&
-          e.excursion.mfeR > avgMfe &&
-          e.excursion.capturePct != null &&
-          e.excursion.capturePct < T.GAVE_BACK_CAPTURE_PCT,
-      )
-      .map((e) =>
-        insight(e, {
+    const haveBaseline = avgMfe != null && ctx.baseline.sample >= BASELINE_MIN;
+
+    return ctx.trades.flatMap((e) => {
+      const mfe = e.excursion.mfeR;
+      const capture = e.excursion.capturePct;
+      if (mfe == null) return [];
+
+      // Handed all the way back to a loss.
+      if (e.outcome === "loss" && mfe >= T.WAS_GREEN_R) {
+        return insight(e, {
+          ruleId: "gave_back_profit",
+          severity: "critical",
+          title: "Green to red",
+          detail: `It was ${r2(mfe)}R in profit and closed at ${fmtMoney(
+            e.pnl,
+            ctx.currency,
+          )}.`,
+        });
+      }
+
+      // Handed back to a scratch.
+      if (e.outcome === "breakeven" && mfe >= 1) {
+        return insight(e, {
+          ruleId: "gave_back_profit",
+          severity: "warning",
+          title: "Green to flat",
+          detail: `The peak was ${r2(
+            mfe,
+          )}R and the result was zero. The whole move was given back.`,
+        });
+      }
+
+      if (e.outcome !== "win" || capture == null) return [];
+
+      // A peak above your own average, mostly handed back. The one branch that
+      // needs a history to compare against.
+      if (haveBaseline && mfe > avgMfe && capture < T.GAVE_BACK_CAPTURE_PCT) {
+        return insight(e, {
           ruleId: "gave_back_profit",
           severity: "warning",
           title: "Above-average move given back",
-          detail: `A peak of ${r2(
-            e.excursion.mfeR!,
-          )}R (above your average of ${r2(avgMfe)}R), and you took ${e.excursion.capturePct!.toFixed(
-            0,
-          )} % toga.`,
+          detail: `A peak of ${r2(mfe)}R (above your average of ${r2(
+            avgMfe,
+          )}R), and you took ${capture.toFixed(0)} % of it.`,
           sample: ctx.baseline.sample,
-        }),
-      );
-  },
-};
+        });
+      }
 
-export const maximizeYourProfit: Rule = {
-  id: "maximize_your_profit",
-  level: "trade",
-  minSample: 0,
-  description: "A winner where most of the move was given back.",
-  evaluate: (ctx) =>
-    ctx.trades
-      .filter(
-        (e) =>
-          e.outcome === "win" &&
-          e.excursion.capturePct != null &&
-          e.excursion.capturePct < T.GAVE_BACK_CAPTURE_PCT,
-      )
-      .map((e) =>
-        insight(e, {
-          ruleId: "maximize_your_profit",
+      // Any winner that kept little of its move.
+      if (capture < T.GAVE_BACK_CAPTURE_PCT) {
+        return insight(e, {
+          ruleId: "gave_back_profit",
           severity: "warning",
           title: "Little of the move taken",
-          detail: `You kept ${e.excursion.capturePct!.toFixed(
+          detail: `You kept ${capture.toFixed(
             0,
           )} % of the maximum move in your favour.`,
-        }),
-      ),
-};
+        });
+      }
 
-export const weakWin: Rule = {
-  id: "weak_win",
-  level: "trade",
-  minSample: 0,
-  description: "Closed green, but barely — with a large missed move.",
-  evaluate: (ctx) =>
-    ctx.trades
-      .filter(
-        (e) =>
-          e.outcome === "win" &&
-          e.r != null &&
-          e.r < T.WEAK_WIN_R &&
-          e.excursion.mfeR != null &&
-          e.excursion.mfeR >= T.WEAK_WIN_MFE_R,
-      )
-      .map((e) =>
-        insight(e, {
-          ruleId: "weak_win",
-          severity: "info",
-          title: "Weak winner",
-          detail: `${r2(e.r!)}R taken from a move of ${r2(
-            e.excursion.mfeR!,
-          )}R — green on paper, missed in practice.`,
-        }),
-      ),
+      // `weak_win` WAS A FIFTH RULE AND IS NOT A FIFTH BRANCH, because it
+      // could never have fired on its own: it asked for `r < 0.3` with an MFE
+      // of at least 1R, which is a capture below 30 % by arithmetic — always
+      // inside the 40 % branch above. Every weak win was already reported
+      // twice, under two headings, as two problems. Merging the rules is what
+      // made that visible; keeping the branch would have kept it invisible.
+
+      return [];
+    });
+  },
 };
 
 export const revengeTrade: Rule = {
@@ -439,17 +387,11 @@ export const unusualSize: Rule = {
 };
 
 export const TRADE_RULES: Rule[] = [
-  noDrawdown,
   drawdownExceedsProfit,
   cleanHold,
-  greenToRed,
-  greenToBreakeven,
   redToGreen,
   exceedAvgHoldTime,
-  loserLongHold,
   gaveBackProfit,
-  maximizeYourProfit,
-  weakWin,
   revengeTrade,
   scaleIn,
   scaleOut,

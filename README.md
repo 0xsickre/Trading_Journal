@@ -140,7 +140,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,932 tests across 177 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,925 tests across 177 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -888,10 +888,29 @@ verdicts are what stops compliance from following it.
 **Playbooks** hold groups of rules; answering their checklist writes `tj_position_rules`, which feeds
 the follow rate. An unanswered rule counts in neither the numerator nor the denominator.
 
-**Insights** are 37 rules at four levels — trade (24), day (6), week (3), portfolio (4) — reading the
+**Insights** are 29 rules at four levels — trade (16), day (6), week (3), portfolio (4) — reading the
 same enriched trades the reports do. Every rule declares a `minSample` and none fires at n=1. No
 insight is stored in the database: thresholds change, and a stored insight would go stale against a
 changed threshold while still looking authoritative.
+
+There were 37 until Phase E **grouped them by cause**, and the regrouping found two rules that could
+never have fired alone. `weak_win` asked for under 0.3R out of a move of at least 1R — which IS a
+capture below 30 %, always inside `maximize_your_profit`'s 40 % threshold — so every weak win was
+already reported twice, under two headings, as two problems. `no_drawdown` and `clean_hold` were the
+same observation at two degrees and could never both fire. Four merges:
+
+| Now | Was |
+|---|---|
+| `gave_back_profit` | + `green_to_red`, `green_to_breakeven`, `maximize_your_profit`, `weak_win` |
+| `acted_against_the_plan` | + `thesis_invalidated_but_held`, `touched_an_intact_thesis`, `micromanaged_a_setup` |
+| `exceed_avg_hold_time` | + `loser_long_hold` |
+| `clean_hold` | + `no_drawdown` |
+
+Each merged rule fires **once per trade, at the worst cause that applies**, and names the cause in
+its title. Rules were only merged **within one level**: a week-level finding and a trade-level one
+have different subjects, so folding `tilt_week` into `revenge_trade` — or `sizing_problem_day` into
+`unusual_size` — would put a week's id where a trade id belongs. They stay separate for that reason
+rather than for a good story about causes.
 
 **FTMO mode** is per account: daily loss, overall loss, profit target and minimum trading days.
 Breaching a rule freezes the account — a new trade can neither be created nor activated until the
@@ -1231,8 +1250,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,932 tests across 177 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,316 tests in 118 files) and `components` (environment `jsdom`, files `*.test.tsx`, 616
+2,925 tests across 177 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,309 tests in 118 files) and `components` (environment `jsdom`, files `*.test.tsx`, 616
 tests in 59 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
