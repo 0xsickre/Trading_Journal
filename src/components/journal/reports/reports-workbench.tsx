@@ -108,7 +108,22 @@ const ReportChart = dynamic(
 );
 
 const DEFAULT_DIMENSION = "setup_grade";
-const DEFAULT_COLUMNS = ["net_pnl", "win_rate", "profit_factor", "expectancy", "max_drawdown"];
+/**
+ * What the table shows before anyone chooses.
+ *
+ * Five outcomes and — since Phase E — one PROCESS column. Every default here
+ * used to be a result, which made the table answer "how did it go" six times
+ * and "did you follow your own rules" never; on a book this size the second
+ * question is the one with enough sample to answer.
+ */
+const DEFAULT_COLUMNS = [
+  "net_pnl",
+  "win_rate",
+  "profit_factor",
+  "expectancy",
+  "max_drawdown",
+  "follow_rate",
+];
 /** Every metric but the trade count, which the table always shows on its own. */
 const COLUMN_CHOICES = METRICS.filter((m) => m.key !== "trade_count");
 const COLUMN_KEYS = new Set(COLUMN_CHOICES.map((m) => m.key));

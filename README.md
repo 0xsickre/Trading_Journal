@@ -313,7 +313,11 @@ One page, one question: **how did each group of trades do?** Top to bottom:
    be ranked, and filters. A filter is built in the panel and added only once it constrains
    something, and number bounds accept `-1.5`.
 3. **The book as a whole.** Six headline figures, then the risk and execution figures in a quieter
-   row.
+   row: total R, avg risk taken, risk dispersion, follow rate, target attainment, avg entry slip,
+   avg hold. Sharpe, Sortino, Calmar and recovery factor **left that row in Phase E** — they are
+   annualised ratios on a book that trades forty to seventy times a year, with `periodsPerYear`
+   measured from the data, so they compare with nothing published anywhere. They stay in the
+   registry as optional columns.
 4. **Best, worst and most traded group**, ranked on the column the table is sorted by. It needs two
    groups at the threshold before it ranks anything.
 5. **A bar chart of one metric.** It is formatted like the table, so Privacy and `%` apply to its axis

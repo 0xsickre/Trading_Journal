@@ -40,16 +40,35 @@ describe("BookOverviewPanel", () => {
 
   it("keeps the risk and execution figures in a quieter second row", () => {
     panel("dollars");
-    for (const label of ["Sharpe", "Sortino", "Calmar", "Recovery factor", "Avg hold", "Avg entry slip", "Target attainment"]) {
+    for (const label of [
+      "Total R",
+      "Avg risk taken",
+      "Risk dispersion",
+      "Follow rate",
+      "Target attainment",
+      "Avg entry slip",
+      "Avg hold",
+    ]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });
 
+  it("no longer offers the annualised ratios this book cannot support", () => {
+    // Forty to seventy trades a year, with periods-per-year measured from the
+    // data: three numbers incomparable with any published figure. Still in the
+    // registry as optional columns — just not in the reader's face.
+    panel("dollars");
+    for (const label of ["Sharpe", "Sortino", "Calmar", "Recovery factor"]) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    }
+  });
+
   it("privacy masks every monetary, R and % figure", () => {
-    // Ratios, counts and durations stay: a Sharpe says nothing about account size.
+    // Counts and durations stay: "3 trades" says nothing about account size.
     panel("privacy");
-    // net_pnl, win_rate, expectancy, max_drawdown, avg_entry_slip, target_attainment.
-    expect(screen.getAllByText("•••")).toHaveLength(6);
+    // net_pnl, win_rate, expectancy, max_drawdown, total_r, avg_risk_pct,
+    // risk_dispersion, follow_rate, target_attainment, avg_entry_slip.
+    expect(screen.getAllByText("•••").length).toBeGreaterThanOrEqual(6);
     expect(screen.queryByText("$205.00")).not.toBeInTheDocument();
   });
 

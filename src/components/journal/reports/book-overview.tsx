@@ -9,22 +9,31 @@ import type { EnrichedTrade } from "@/lib/journal/enriched-trade";
  * The whole book in scope, before any split.
  *
  * Every other panel answers "which group wins"; this one answers "how is the
- * book doing". Six headline figures, then the risk-adjusted and execution
- * figures in a quieter second row — those go blank for reasons of their own
- * (too few trading days, no plan on the trade), and their hints say which.
+ * book doing". Six headline figures, then the risk and execution figures in a
+ * quieter second row — those go blank for reasons of their own (no stop on the
+ * trade, no plan, no answered rule), and their hints say which.
+ *
+ * WHAT LEFT THIS ROW, and why it is a cut rather than a deletion: Sharpe,
+ * Sortino, Calmar and recovery factor are annualised risk-adjusted ratios, and
+ * this book trades forty to seventy times a year. Their `periodsPerYear` is
+ * measured from the data because a swing trader is not in the market every
+ * day, which — as `docs/formulas-audit.md` says in the first row of its summary
+ * — makes them incomparable with any published figure. Three numbers nobody can
+ * act on were sitting where four measurable ones now are. They stay in the
+ * metric registry: anyone who wants one turns on the column.
  *
  * Every value goes through `formatMetric`, so Privacy hides these too.
  */
 
 const HEADLINE = ["net_pnl", "win_rate", "profit_factor", "expectancy", "max_drawdown"] as const;
 const SECONDARY = [
-  "sharpe",
-  "sortino",
-  "calmar",
-  "recovery_factor",
-  "avg_hold",
-  "avg_entry_slip",
+  "total_r",
+  "avg_risk_pct",
+  "risk_dispersion",
+  "follow_rate",
   "target_attainment",
+  "avg_entry_slip",
+  "avg_hold",
 ] as const;
 
 export function BookOverviewPanel({
