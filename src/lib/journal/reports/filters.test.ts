@@ -291,3 +291,35 @@ describe("between reaches every numeric field, not just R", () => {
     expect(kept("mae_r")).toEqual(["a", "b", "c"]);
   });
 });
+
+describe("two filter sets in one URL", () => {
+  it("writes and reads the second set under its own keys", () => {
+    const b: FilterSet = {
+      clauses: [{ field: "instrument", op: "in", values: ["XAUUSD"] }],
+      dateFrom: "2026-01-01",
+      dateTo: "2026-03-31",
+    };
+    const q = toSearchParams(b, "2");
+    expect(q.getAll("f2")).toEqual(["instrument:in:XAUUSD"]);
+    expect(q.get("from2")).toBe("2026-01-01");
+    expect(q.get("f")).toBeNull();
+    expect(fromSearchParams(q, "2")).toEqual(b);
+  });
+
+  it("keeps the two sets out of each other's way in one query string", () => {
+    const a: FilterSet = { clauses: [{ field: "setup_grade", op: "in", values: ["A"] }] };
+    const b: FilterSet = { clauses: [{ field: "setup_grade", op: "in", values: ["B"] }] };
+    const q = new URLSearchParams(toSearchParams(a).toString());
+    for (const [k, v] of toSearchParams(b, "2")) q.append(k, v);
+
+    expect(fromSearchParams(q)).toEqual(a);
+    expect(fromSearchParams(q, "2")).toEqual(b);
+  });
+
+  it("reads a link written before compare mode existed as set A", () => {
+    const q = new URLSearchParams("f=instrument:in:EURUSD&from=2026-01-01");
+    expect(fromSearchParams(q).clauses).toHaveLength(1);
+    // And the second set is simply empty, not a copy of the first.
+    expect(fromSearchParams(q, "2")).toEqual({ clauses: [] });
+  });
+});

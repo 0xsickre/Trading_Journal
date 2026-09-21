@@ -308,6 +308,131 @@ export function summarizeReport(
   };
 }
 
+// --- Compare mode: two books, side by side ---------------------------------
+
+/** One bucket as both books saw it. */
+export type CompareRow = {
+  bucket: string;
+  /** Null when this bucket exists only in the other set — never a zero row. */
+  a: ReportRow | null;
+  b: ReportRow | null;
+  /** B − A per metric. Null when either side has no value to subtract. */
+  deltas: Record<string, number | null>;
+  /** How sure each gap is, for the metrics that can say. */
+  deltaIntervals: Record<string, Interval | null>;
+  /** Trades this bucket holds in BOTH sets — see `sharedTrades`. */
+  shared: number;
+};
+
+export type CompareResult = {
+  dimension: Dimension;
+  metrics: ReportMetric[];
+  rows: CompareRow[];
+  a: ReportResult;
+  b: ReportResult;
+  /**
+   * Trades the two filter sets have in common, over the whole report.
+   *
+   * The warning that cannot be left off: "Grade A" against "all trades" is not
+   * two independent samples, and every interval below assumes it is. A reader
+   * comparing a subset with its own superset is reading a difference between a
+   * thing and itself.
+   */
+  sharedTrades: number;
+  minSample: number;
+};
+
+/**
+ * Join two reports on the bucket, keeping every bucket either one has.
+ *
+ * A full outer join, and the missing side is NULL rather than an empty row: a
+ * category that only one book traded has no figure of zero, it has no figure.
+ *
+ * Both reports must have been run with the same dimension, the same metrics
+ * and the same basis — the workbench shares those controls between the two
+ * filter sets precisely so this holds. The difference of two numbers computed
+ * on different bases is not a difference of anything.
+ */
+export function compareReports(
+  a: ReportResult,
+  b: ReportResult,
+  metricContext: MetricContext,
+): CompareResult {
+  const byBucketB = new Map(b.rows.map((r) => [r.bucket, r]));
+  const buckets = [...a.rows.map((r) => r.bucket)];
+  for (const r of b.rows) if (!buckets.includes(r.bucket)) buckets.push(r.bucket);
+
+  const idsOf = (rows: readonly ReportRow[]): Set<string> =>
+    new Set(rows.flatMap((r) => r.trades.map((t) => t.trade.id)));
+  const sharedIds = idsOf(a.rows);
+  let sharedTrades = 0;
+  for (const id of idsOf(b.rows)) if (sharedIds.has(id)) sharedTrades++;
+
+  const rows: CompareRow[] = buckets.map((bucket) => {
+    const ra = a.rows.find((r) => r.bucket === bucket) ?? null;
+    const rb = byBucketB.get(bucket) ?? null;
+
+    const deltas: Record<string, number | null> = {};
+    const deltaIntervals: Record<string, Interval | null> = {};
+    for (const m of a.metrics) {
+      const va = ra?.values[m.key] ?? null;
+      const vb = rb?.values[m.key] ?? null;
+      // `Infinity − Infinity` is NaN, and a NaN rendered as a number is a lie
+      // with a minus sign in front of it. Two flawless buckets have no gap
+      // anyone can state.
+      const d = va == null || vb == null ? null : vb - va;
+      deltas[m.key] = d == null || Number.isNaN(d) ? null : d;
+      deltaIntervals[m.key] =
+        m.difference && ra && rb ? m.difference(ra.trades, rb.trades, metricContext) : null;
+    }
+
+    const inA = ra ? new Set(ra.trades.map((t) => t.trade.id)) : new Set<string>();
+    const shared = rb ? rb.trades.filter((t) => inA.has(t.trade.id)).length : 0;
+
+    return { bucket, a: ra, b: rb, deltas, deltaIntervals, shared };
+  });
+
+  return {
+    dimension: a.dimension,
+    metrics: a.metrics,
+    rows,
+    a,
+    b,
+    sharedTrades,
+    minSample: a.minSample,
+  };
+}
+
+/**
+ * Order compare rows, by the same rules a single report uses.
+ *
+ * Sorted ONCE over the joined rows rather than twice before the join: two
+ * independently sorted lists zipped together would put a bucket's A row beside
+ * another bucket's B row for every bucket the two sets do not share.
+ *
+ * The sort reads set A, because A is the book the reader started from. A bucket
+ * A never traded sinks, the same way a row with no value does.
+ */
+export function sortCompareRows(
+  rows: CompareRow[],
+  dimension: Dimension,
+  sortBy: string | undefined,
+  metrics: ReportMetric[],
+): void {
+  const placeholder = (bucket: string): ReportRow => ({
+    bucket,
+    n: 0,
+    belowSample: true,
+    values: {},
+    intervals: {},
+    trades: [],
+  });
+  const proxies = rows.map((r) => r.a ?? placeholder(r.bucket));
+  sortRows(proxies, dimension, sortBy, metrics);
+  const order = new Map(proxies.map((r, i) => [r.bucket, i]));
+  rows.sort((x, y) => (order.get(x.bucket) ?? 0) - (order.get(y.bucket) ?? 0));
+}
+
 /**
  * Whether a figure is still indistinguishable from no effect.
  *
@@ -319,4 +444,16 @@ export function summarizeReport(
 export function isInconclusive(row: ReportRow, metric: ReportMetric): boolean {
   if (metric.neutral == null) return false;
   return containsNeutral(row.intervals?.[metric.key] ?? null, metric.neutral);
+}
+
+/**
+ * The same question for a GAP, where neutral is always zero.
+ *
+ * Not the metric's own neutral: a win rate is neutral at 50 and a profit factor
+ * at 1, but a DIFFERENCE of either is neutral at no difference. Reading
+ * `metric.neutral` here would have marked every win-rate gap under 50 points
+ * as conclusive.
+ */
+export function isDeltaInconclusive(row: CompareRow, metric: ReportMetric): boolean {
+  return containsNeutral(row.deltaIntervals[metric.key] ?? null, 0);
 }

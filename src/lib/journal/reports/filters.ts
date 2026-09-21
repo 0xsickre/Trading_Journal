@@ -147,27 +147,40 @@ export function applyFilters(
 const SEP = "~";
 
 /**
+ * The suffix that tells the two filter sets apart in one URL.
+ *
+ * Compare mode writes its second set as `f2` / `from2` / `to2` / `acc2`, beside
+ * the first — so a compared report is still one bookmarkable link, and a URL
+ * written before compare mode existed still reads as set A.
+ */
+export type FilterSlot = "" | "2";
+
+/**
  * Encode to query params.
  *
  * Clauses are packed as repeated `f` entries (`field:op:v1|v2`) rather than
  * JSON so the URL stays legible and hand-editable.
+ *
+ * THE ONLY ENCODER. `/reports` used to carry a second copy of this loop inline,
+ * written to the same format by hand, and two encoders for one format is one
+ * edit away from a link that reads back as a different report.
  */
-export function toSearchParams(filters: FilterSet): URLSearchParams {
+export function toSearchParams(filters: FilterSet, slot: FilterSlot = ""): URLSearchParams {
   const p = new URLSearchParams();
-  if (filters.dateFrom) p.set("from", filters.dateFrom);
-  if (filters.dateTo) p.set("to", filters.dateTo);
-  if (filters.accountIds?.length) p.set("acc", filters.accountIds.join(SEP));
+  if (filters.dateFrom) p.set(`from${slot}`, filters.dateFrom);
+  if (filters.dateTo) p.set(`to${slot}`, filters.dateTo);
+  if (filters.accountIds?.length) p.set(`acc${slot}`, filters.accountIds.join(SEP));
 
   for (const c of filters.clauses) {
     if (c.op === "between") {
       p.append(
-        "f",
+        `f${slot}`,
         `${c.field}:between:${c.min ?? ""}${SEP}${c.max ?? ""}`,
       );
     } else if (c.op === "in" || c.op === "notIn") {
-      p.append("f", `${c.field}:${c.op}:${c.values.join(SEP)}`);
+      p.append(`f${slot}`, `${c.field}:${c.op}:${c.values.join(SEP)}`);
     } else {
-      p.append("f", `${c.field}:${c.op}:`);
+      p.append(`f${slot}`, `${c.field}:${c.op}:`);
     }
   }
   return p;
@@ -175,6 +188,7 @@ export function toSearchParams(filters: FilterSet): URLSearchParams {
 
 export function fromSearchParams(
   params: URLSearchParams | Record<string, string | string[] | undefined>,
+  slot: FilterSlot = "",
 ): FilterSet {
   const get = (k: string): string[] => {
     if (params instanceof URLSearchParams) return params.getAll(k);
@@ -184,7 +198,7 @@ export function fromSearchParams(
   };
 
   const clauses: FilterClause[] = [];
-  for (const raw of get("f")) {
+  for (const raw of get(`f${slot}`)) {
     // Only the first two colons are separators; a value may contain one.
     const first = raw.indexOf(":");
     const second = raw.indexOf(":", first + 1);
@@ -209,9 +223,9 @@ export function fromSearchParams(
   }
 
   const out: FilterSet = { clauses };
-  const from = get("from")[0];
-  const to = get("to")[0];
-  const acc = get("acc")[0];
+  const from = get(`from${slot}`)[0];
+  const to = get(`to${slot}`)[0];
+  const acc = get(`acc${slot}`)[0];
   if (from) out.dateFrom = from;
   if (to) out.dateTo = to;
   if (acc) out.accountIds = acc.split(SEP).filter(Boolean);

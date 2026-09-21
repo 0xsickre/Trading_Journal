@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  compareReports,
   DEFAULT_MIN_SAMPLE,
+  isDeltaInconclusive,
   isInconclusive,
   runReport,
+  sortCompareRows,
   sortRows,
   summarizeReport,
 } from "./engine";
+import { getMetric } from "./metrics";
 import { DEFAULT_METRIC_KEYS } from "./metrics";
 import { dimCtx, enrich, metricCtx, mkReport } from "./test-helpers";
 
@@ -460,5 +464,108 @@ describe("ranking is sceptical", () => {
     // …and on the point estimate alone it would have won.
     const lucky = result.rows.find((r) => r.bucket === "XAUUSD")!;
     expect(lucky.values.win_rate).toBe(100);
+  });
+});
+
+describe("compare mode — two books joined on the bucket", () => {
+  const winners = (n: number, prefix: string, instrument: string) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `${prefix}${i}`,
+      instrument,
+      net: i % 10 < 8 ? 100 : -100,
+      r: i % 10 < 8 ? 1 : -1,
+    }));
+  const losers = (n: number, prefix: string, instrument: string) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `${prefix}${i}`,
+      instrument,
+      net: i % 10 < 3 ? 100 : -100,
+      r: i % 10 < 3 ? 1 : -1,
+    }));
+
+  it("keeps a bucket only one set traded, as nothing rather than as zero", () => {
+    const a = run(enrich([{ id: "a1", instrument: "XAUUSD", net: 100, r: 1 }]), "instrument")!;
+    const b = run(enrich([{ id: "b1", instrument: "EURUSD", net: -100, r: -1 }]), "instrument")!;
+    const cmp = compareReports(a, b, metricCtx);
+
+    expect(cmp.rows.map((r) => r.bucket).sort()).toEqual(["EURUSD", "XAUUSD"]);
+    const gold = cmp.rows.find((r) => r.bucket === "XAUUSD")!;
+    expect(gold.b).toBeNull();
+    // No side to subtract from: an em dash on screen, not a delta of −100.
+    expect(gold.deltas.win_rate).toBeNull();
+    expect(gold.deltaIntervals.win_rate).toBeNull();
+  });
+
+  it("states the gap as B minus A", () => {
+    const a = run(enrich(losers(40, "a", "XAUUSD")), "instrument")!;
+    const b = run(enrich(winners(40, "b", "XAUUSD")), "instrument")!;
+    const row = compareReports(a, b, metricCtx).rows[0];
+    // 80 % against 30 %: B is fifty points better.
+    expect(row.deltas.win_rate).toBeCloseTo(50, 6);
+    expect(row.deltaIntervals.win_rate!.lo).toBeGreaterThan(0);
+    expect(isDeltaInconclusive(row, getMetric("win_rate")!)).toBe(false);
+  });
+
+  it("calls a gap inconclusive while its interval still holds zero", () => {
+    // Six trades against six: four winners against two. On the point estimate
+    // that is a 33-point edge, and it proves nothing at all.
+    const mix = (prefix: string, wins: number, total: number) =>
+      Array.from({ length: total }, (_, i) => ({
+        id: `${prefix}${i}`,
+        instrument: "XAUUSD",
+        net: i < wins ? 100 : -100,
+        r: i < wins ? 1 : -1,
+      }));
+    const a = run(enrich(mix("a", 4, 6)), "instrument")!;
+    const b = run(enrich(mix("b", 2, 6)), "instrument")!;
+    const row = compareReports(a, b, metricCtx).rows[0];
+    expect(row.deltas.win_rate).toBeCloseTo(-33.33, 1);
+    expect(isDeltaInconclusive(row, getMetric("win_rate")!)).toBe(true);
+  });
+
+  it("counts the trades the two sets share, because the interval assumes none", () => {
+    const shared = enrich(winners(10, "s", "XAUUSD"));
+    const a = run(shared, "instrument")!;
+    const b = run(shared, "instrument")!;
+    const cmp = compareReports(a, b, metricCtx);
+    expect(cmp.sharedTrades).toBe(10);
+    expect(cmp.rows[0].shared).toBe(10);
+  });
+
+  it("has nothing shared when the two sets are different trades", () => {
+    const a = run(enrich(winners(5, "a", "XAUUSD")), "instrument")!;
+    const b = run(enrich(winners(5, "b", "XAUUSD")), "instrument")!;
+    expect(compareReports(a, b, metricCtx).sharedTrades).toBe(0);
+  });
+
+  it("sorts ONCE, over the joined rows", () => {
+    const a = run(
+      enrich([
+        ...winners(10, "ag", "XAUUSD"),
+        ...losers(10, "ae", "EURUSD"),
+      ]),
+      "instrument",
+    )!;
+    const b = run(enrich(winners(10, "be", "EURUSD")), "instrument")!;
+    const cmp = compareReports(a, b, metricCtx);
+    sortCompareRows(cmp.rows, cmp.dimension, "win_rate:desc", cmp.metrics);
+    // A's own order: gold won more often than euro did IN SET A, whatever B says.
+    expect(cmp.rows.map((r) => r.bucket)).toEqual(["XAUUSD", "EURUSD"]);
+    // And every row still carries its OWN two sides after the sort.
+    for (const r of cmp.rows) {
+      expect(r.a?.bucket ?? r.bucket).toBe(r.bucket);
+      expect(r.b?.bucket ?? r.bucket).toBe(r.bucket);
+    }
+  });
+
+  it("sinks a bucket set A never traded, instead of ordering it by nothing", () => {
+    const a = run(enrich(winners(10, "a", "XAUUSD")), "instrument")!;
+    const b = run(
+      enrich([...winners(10, "bg", "XAUUSD"), ...winners(10, "be", "EURUSD")]),
+      "instrument",
+    )!;
+    const cmp = compareReports(a, b, metricCtx);
+    sortCompareRows(cmp.rows, cmp.dimension, "win_rate:desc", cmp.metrics);
+    expect(cmp.rows[cmp.rows.length - 1].bucket).toBe("EURUSD");
   });
 });

@@ -35,8 +35,10 @@ import type { MetricUnit } from "../units";
 import { scorable, setupScoreFromTrade } from "../setup-score";
 import { riskDispersion } from "../risk-taken";
 import {
+  bootstrapDifference,
   bootstrapMean,
   bootstrapProfitFactor,
+  newcombeDifference,
   wilsonInterval,
   type Interval,
 } from "../uncertainty";
@@ -84,6 +86,21 @@ export type ReportMetric = {
    */
   interval?(group: EnrichedTrade[], ctx: MetricContext): Interval | null;
   /**
+   * How sure the GAP is, between the same statistic over two groups — compare
+   * mode's only honest answer, as **B − A**.
+   *
+   * It lives next to `interval` rather than in the engine because the two
+   * decide the same thing: which numbers the statistic is computed over. A
+   * win rate compares decided outcomes, an expectancy compares the R's it
+   * averages, and a switch in the engine would be a second copy of that rule,
+   * free to drift from this one.
+   */
+  difference?(
+    a: EnrichedTrade[],
+    b: EnrichedTrade[],
+    ctx: MetricContext,
+  ): Interval | null;
+  /**
    * The value that means "no effect" — 0 for a mean, 50 for a rate, 1 for a
    * ratio. Present exactly when `interval` is: an interval with no neutral
    * cannot say whether it has ruled anything out.
@@ -129,6 +146,30 @@ const negate = (n: number): number => (n === 0 ? 0 : -n);
  */
 const pnlOf = (t: EnrichedTrade, ctx: MetricContext): number =>
   ctx.pnlBasis === "gross" ? t.trade.gross : t.trade.net;
+
+/** The mean of a resample — expectancy's statistic, as the bootstrap sees it. */
+const meanOf = (s: readonly number[]): number | null => {
+  if (s.length === 0) return null;
+  let sum = 0;
+  for (const v of s) sum += v;
+  return sum / s.length;
+};
+
+/**
+ * Gross profit over gross loss for a resample — the same three answers
+ * `bootstrapProfitFactor` gives, restated here because the two-sample bootstrap
+ * needs the statistic itself rather than a finished interval.
+ */
+const profitFactorOf = (s: readonly number[]): number | null => {
+  let pos = 0;
+  let neg = 0;
+  for (const v of s) {
+    if (v > 0) pos += v;
+    else if (v < 0) neg -= v;
+  }
+  if (neg > 0) return pos / neg;
+  return pos > 0 ? Infinity : null;
+};
 
 /** Wins and losses, with breakeven left out — the win rate's own denominator. */
 function outcomes(group: EnrichedTrade[], ctx: MetricContext): { wins: number; losses: number } {
@@ -256,6 +297,13 @@ export const METRICS: ReportMetric[] = [
       const decided = outcomes(g, ctx);
       return wilsonInterval(decided.wins, decided.losses);
     },
+    // Newcombe, built out of the same two Wilson intervals the cells show, so
+    // the three figures on one row cannot contradict each other.
+    difference: (a, b, ctx) => {
+      const da = outcomes(a, ctx);
+      const db = outcomes(b, ctx);
+      return newcombeDifference(da.wins, da.losses, db.wins, db.losses);
+    },
     neutral: 50,
   },
   {
@@ -273,6 +321,12 @@ export const METRICS: ReportMetric[] = [
     // ratio is built from. A ratio of sums has no usable closed form, and its
     // distribution on forty trades is nothing like normal.
     interval: (g, ctx) => bootstrapProfitFactor(g.map((t) => pnlOf(t, ctx))),
+    difference: (a, b, ctx) =>
+      bootstrapDifference(
+        a.map((t) => pnlOf(t, ctx)),
+        b.map((t) => pnlOf(t, ctx)),
+        profitFactorOf,
+      ),
     neutral: 1,
   },
   {
@@ -288,6 +342,8 @@ export const METRICS: ReportMetric[] = [
     // that carry an R and were decided. Resampling the whole group instead
     // would mix in trades the statistic never counted.
     interval: (g, ctx) => bootstrapMean(decidedRs(g, ctx)),
+    difference: (a, b, ctx) =>
+      bootstrapDifference(decidedRs(a, ctx), decidedRs(b, ctx), meanOf),
     neutral: 0,
   },
   {

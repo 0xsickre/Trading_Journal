@@ -4,7 +4,7 @@ import { primaryAccount } from "@/lib/journal/account-rules";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { Columns3, Eye, EyeOff, RotateCcw } from "lucide-react";
+import { Columns3, Eye, EyeOff, GitCompare, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -37,7 +37,15 @@ import {
   tagSplitDimensions,
   type DimensionContext,
 } from "@/lib/journal/reports/dimensions";
-import { parseSort, runReport, sortRows, summarizeReport } from "@/lib/journal/reports/engine";
+import {
+  compareReports,
+  parseSort,
+  runReport,
+  sortCompareRows,
+  sortRows,
+  summarizeReport,
+} from "@/lib/journal/reports/engine";
+import { CompareTable } from "@/components/journal/reports/compare-table";
 import {
   dailyPnlByInstrument,
   instrumentPairs,
@@ -54,8 +62,10 @@ import { METRICS, getMetric } from "@/lib/journal/reports/metrics";
 import {
   applyFilters,
   fromSearchParams,
+  toSearchParams,
   type FilterClause,
   type FilterSet,
+  type FilterSlot,
 } from "@/lib/journal/reports/filters";
 import {
   REPORT_KINDS,
@@ -207,6 +217,17 @@ export function ReportsWorkbench({
   const urlFilters = useMemo<FilterSet>(() => fromSearchParams(params), [params]);
   const clauses = urlFilters.clauses;
 
+  /**
+   * The second filter set, under its own URL keys.
+   *
+   * Dimension, columns, basis, unit and the sample threshold are NOT doubled:
+   * two sets that differ in their basis are not comparable, and a difference
+   * between a net figure and a gross one is not a difference in trading.
+   */
+  const comparing = params.get("cmp") === "1";
+  const urlFiltersB = useMemo<FilterSet>(() => fromSearchParams(params, "2"), [params]);
+  const clausesB = urlFiltersB.clauses;
+
   const columnKeys = useMemo(() => {
     const picked = (params.get("cols") ?? "").split(",").filter((k) => COLUMN_KEYS.has(k));
     return picked.length > 0 ? picked : DEFAULT_COLUMNS;
@@ -354,6 +375,17 @@ export function ReportsWorkbench({
     }),
     [clauses, urlFilters.dateFrom, urlFilters.dateTo, scopeIds],
   );
+  const filtersB = useMemo<FilterSet>(
+    () => ({
+      clauses: clausesB,
+      dateFrom: urlFiltersB.dateFrom,
+      dateTo: urlFiltersB.dateTo,
+      // The same book: the account scope is the reader's choice of book, not
+      // part of the question being compared.
+      accountIds: scopeIds.size > 0 ? [...scopeIds] : [NO_ACCOUNT],
+    }),
+    [clausesB, urlFiltersB.dateFrom, urlFiltersB.dateTo, scopeIds],
+  );
   const filtering = clauses.length > 0 || !!urlFilters.dateFrom || !!urlFilters.dateTo;
 
   // The book the filter values are offered from: in scope, before any filter.
@@ -416,6 +448,37 @@ export function ReportsWorkbench({
     return { ...computed, rows };
   }, [computed, sortBy]);
 
+  /**
+   * Set B, run through the same engine with the same everything but its
+   * filters — and only while comparing, so a reader who never opens compare
+   * mode pays nothing for it.
+   */
+  const computedB = useMemo(
+    () =>
+      comparing
+        ? runReport({
+            trades: enriched,
+            dimension,
+            metricKeys: columnKeys,
+            filters: filtersB,
+            dimensionContext,
+            metricContext,
+            minSample,
+          })
+        : null,
+    [comparing, enriched, dimension, columnKeys, filtersB, dimensionContext, metricContext, minSample],
+  );
+
+  // Joined, then sorted ONCE over the joined rows: two lists sorted separately
+  // and zipped would pair one bucket's A row with another bucket's B row.
+  const compared = useMemo(() => {
+    if (!computed || !computedB) return null;
+    const joined = compareReports(computed, computedB, metricContext);
+    const rows = [...joined.rows];
+    sortCompareRows(rows, joined.dimension, sortBy, joined.metrics);
+    return { ...joined, rows };
+  }, [computed, computedB, metricContext, sortBy]);
+
   // The whole table as one group — only when every trade sits in one row, so
   // the Total is the book the rows add up to.
   const totals = useMemo(() => {
@@ -439,14 +502,32 @@ export function ReportsWorkbench({
     replaceUrl(new URLSearchParams(params.get("kind") ? { kind: params.get("kind")! } : {}));
   }
 
-  function setClauses(next: FilterClause[]) {
-    const q = new URLSearchParams(params.toString());
-    q.delete("f");
-    for (const c of next) {
-      if (c.op === "between") q.append("f", `${c.field}:between:${c.min ?? ""}~${c.max ?? ""}`);
-      else if (c.op === "in" || c.op === "notIn") q.append("f", `${c.field}:${c.op}:${c.values.join("~")}`);
-      else q.append("f", `${c.field}:${c.op}:`);
+  /**
+   * Write one set's clauses back to the URL, through `toSearchParams` — the
+   * ONE encoder. This used to hold a second copy of that loop, and two
+   * encoders for one format is one edit away from a link that reads back as a
+   * different report.
+   */
+  function setClausesIn(slot: FilterSlot) {
+    return (next: FilterClause[]) => {
+      const q = new URLSearchParams(params.toString());
+      q.delete(`f${slot}`);
+      for (const v of toSearchParams({ clauses: next }, slot).getAll(`f${slot}`)) {
+        q.append(`f${slot}`, v);
+      }
+      replaceUrl(q);
+    };
+  }
+
+  function toggleCompare() {
+    if (!comparing) {
+      setParam({ cmp: "1" });
+      return;
     }
+    // Leaving compare mode takes set B with it: a hidden filter that still
+    // sits in the URL is a report nobody can read back.
+    const q = new URLSearchParams(params.toString());
+    for (const k of ["cmp", "f2", "from2", "to2", "acc2"]) q.delete(k);
     replaceUrl(q);
   }
 
@@ -620,9 +701,21 @@ export function ReportsWorkbench({
         </Select>
 
         <Button
+          variant={comparing ? "secondary" : "outline"}
+          size="sm"
+          className="ml-auto h-9"
+          aria-pressed={comparing}
+          onClick={toggleCompare}
+          title="Run the same report over two filter sets and state the gap between them"
+        >
+          <GitCompare className="size-3.5" />
+          Compare
+        </Button>
+
+        <Button
           variant="ghost"
           size="sm"
-          className="ml-auto h-9 text-muted-foreground"
+          className="h-9 text-muted-foreground"
           onClick={resetReport}
         >
           <RotateCcw className="size-3.5" />
@@ -630,14 +723,66 @@ export function ReportsWorkbench({
         </Button>
       </div>
 
-      <FilterBar
-        key={resetKey}
-        clauses={clauses}
-        onChange={setClauses}
-        trades={scopeOnlyBook}
-        dimensionContext={dimensionContext}
-        dimensions={dimensions}
-      />
+      <div className="space-y-2">
+        {comparing && (
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <span className="rounded bg-muted px-1.5 py-0.5">A</span>
+            <Input
+              type="date"
+              value={urlFilters.dateFrom ?? ""}
+              onChange={(e) => setParam({ from: e.target.value })}
+              className="h-8 w-[9.5rem]"
+              aria-label="A from"
+            />
+            <span>→</span>
+            <Input
+              type="date"
+              value={urlFilters.dateTo ?? ""}
+              onChange={(e) => setParam({ to: e.target.value })}
+              className="h-8 w-[9.5rem]"
+              aria-label="A to"
+            />
+          </div>
+        )}
+        <FilterBar
+          key={`a-${resetKey}`}
+          clauses={clauses}
+          onChange={setClausesIn("")}
+          trades={scopeOnlyBook}
+          dimensionContext={dimensionContext}
+          dimensions={dimensions}
+        />
+        {comparing && (
+          <>
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <span className="rounded bg-muted px-1.5 py-0.5">B</span>
+              <Input
+                type="date"
+                value={urlFiltersB.dateFrom ?? ""}
+                onChange={(e) => setParam({ from2: e.target.value })}
+                className="h-8 w-[9.5rem]"
+                aria-label="B from"
+              />
+              <span>→</span>
+              <Input
+                type="date"
+                value={urlFiltersB.dateTo ?? ""}
+                onChange={(e) => setParam({ to2: e.target.value })}
+                className="h-8 w-[9.5rem]"
+                aria-label="B to"
+              />
+            </div>
+            <FilterBar
+              key={`b-${resetKey}`}
+              clauses={clausesB}
+              onChange={setClausesIn("2")}
+              trades={scopeOnlyBook}
+              dimensionContext={dimensionContext}
+              dimensions={dimensions}
+            />
+          </>
+        )}
+      </div>
 
       {unpriced > 0 && (
         <p className="text-xs text-muted-foreground">
@@ -708,15 +853,27 @@ export function ReportsWorkbench({
                 </Select>
               }
             />
-            <ReportTable
-              result={result}
-              totals={totals}
-              viewMode={viewMode}
-              currency={currency}
-              equityBase={equityBase}
-              sortBy={sortBy}
-              onSort={(s) => setParam({ sort: s })}
-            />
+            {compared ? (
+              <CompareTable
+                result={compared}
+                viewMode={viewMode}
+                currency={currency}
+                equityBase={equityBase}
+                sortBy={sortBy}
+                onSort={(s) => setParam({ sort: s })}
+                labels={{ a: "A", b: "B" }}
+              />
+            ) : (
+              <ReportTable
+                result={result}
+                totals={totals}
+                viewMode={viewMode}
+                currency={currency}
+                equityBase={equityBase}
+                sortBy={sortBy}
+                onSort={(s) => setParam({ sort: s })}
+              />
+            )}
             <CoExposurePanel pairs={pairs} />
           </>
         )

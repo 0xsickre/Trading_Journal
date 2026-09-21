@@ -154,11 +154,22 @@ function bootstrapInterval(
     const s = statistic(sample);
     if (s != null) stats.push(s);
   }
-  if (stats.length === 0) return null;
+  return percentileInterval(stats, n, opts);
+}
 
-  // Infinity sorts to the end and stays there: a resample with no losing trade
-  // has a genuinely infinite profit factor, and the upper bound saying so is
-  // the truth. Collapsing it to a finite number would invent a ceiling.
+/**
+ * The percentile step, shared by the one-sample and two-sample bootstraps.
+ *
+ * Infinity sorts to the end and stays there: a resample with no losing trade
+ * has a genuinely infinite profit factor, and the upper bound saying so is the
+ * truth. Collapsing it to a finite number would invent a ceiling.
+ */
+function percentileInterval(
+  stats: number[],
+  n: number,
+  opts: BootstrapOptions,
+): Interval | null {
+  if (stats.length === 0) return null;
   stats.sort((a, b) => a - b);
   const coverage = opts.coverage ?? 0.95;
   const tail = (1 - coverage) / 2;
@@ -232,4 +243,99 @@ export function bootstrapProfitFactor(
 export function containsNeutral(interval: Interval | null, neutral: number): boolean {
   if (!interval) return false;
   return interval.lo <= neutral && interval.hi >= neutral;
+}
+
+// --- Two samples: is B actually different from A? --------------------------
+
+/**
+ * The interval of a DIFFERENCE between two independent samples.
+ *
+ * Compare mode's whole point. Two profit factors, 2.4 against 1.6, look like a
+ * finding and on forty trades usually are not; the only honest answer is an
+ * interval around the gap, and whether it still admits zero.
+ *
+ * Both sides are resampled independently and the statistic is recomputed on
+ * each pair — not the difference of two separately bootstrapped bounds, which
+ * would be wider than the truth and is a different quantity.
+ *
+ * Reported as **B − A**, so a positive figure means the second set did better
+ * on a metric where higher is better.
+ *
+ * `n` is the smaller of the two samples: the pair is only as certain as its
+ * thinner half, and a reader comparing 200 trades against 6 must see the 6.
+ */
+export function bootstrapDifference(
+  a: readonly number[],
+  b: readonly number[],
+  statistic: (sample: readonly number[]) => number | null,
+  opts: BootstrapOptions = {},
+): Interval | null {
+  if (a.length < 2 || b.length < 2) return null;
+
+  // Seeded from BOTH series, so the pair reproduces: one generator feeding two
+  // draws, rather than two generators that could accidentally share a stream.
+  const rand = mulberry32((Math.imul(seedFrom(a), 16777619) ^ seedFrom(b)) >>> 0);
+  const n = Math.min(a.length, b.length);
+  const iters = opts.iters ?? iterationsFor(n);
+
+  const sa = new Array<number>(a.length);
+  const sb = new Array<number>(b.length);
+  const stats: number[] = [];
+
+  for (let i = 0; i < iters; i++) {
+    for (let j = 0; j < a.length; j++) sa[j] = a[(rand() * a.length) | 0];
+    for (let j = 0; j < b.length; j++) sb[j] = b[(rand() * b.length) | 0];
+    const va = statistic(sa);
+    const vb = statistic(sb);
+    if (va == null || vb == null) continue;
+    // Two infinite profit factors are not a difference of zero — they are two
+    // groups that never lost, and nothing can be said about the gap.
+    const d = vb - va;
+    if (!Number.isNaN(d)) stats.push(d);
+  }
+  return percentileInterval(stats, n, opts);
+}
+
+/**
+ * Newcombe's interval for the DIFFERENCE OF TWO RATES, in percentage points.
+ *
+ * Not a bootstrap: a rate has a closed form worth using. Newcombe's method 10
+ * builds the difference out of the two Wilson intervals — the same interval
+ * each rate already shows on its own, so the three figures on screen cannot
+ * contradict one another. Like Wilson, it behaves on the small, lopsided
+ * samples this book actually has, where the normal approximation happily
+ * reports a bound beyond ±100 points.
+ *
+ * Reported as **B − A**, matching `bootstrapDifference`.
+ */
+export function newcombeDifference(
+  aWins: number,
+  aLosses: number,
+  bWins: number,
+  bLosses: number,
+): Interval | null {
+  const wa = wilsonInterval(aWins, aLosses);
+  const wb = wilsonInterval(bWins, bLosses);
+  if (!wa || !wb) return null;
+
+  const na = aWins + aLosses;
+  const nb = bWins + bLosses;
+  const pa = aWins / na;
+  const pb = bWins / nb;
+  // Back to proportions: `wilsonInterval` answers in percent for the screen.
+  const la = wa.lo / 100;
+  const ua = wa.hi / 100;
+  const lb = wb.lo / 100;
+  const ub = wb.hi / 100;
+
+  const diff = pb - pa;
+  const lo = diff - Math.sqrt((pb - lb) ** 2 + (ua - pa) ** 2);
+  const hi = diff + Math.sqrt((ub - pb) ** 2 + (pa - la) ** 2);
+
+  return {
+    lo: Math.max(-100, lo * 100),
+    hi: Math.min(100, hi * 100),
+    // The thinner half, as in `bootstrapDifference`, and for the same reason.
+    n: Math.min(na, nb),
+  };
 }

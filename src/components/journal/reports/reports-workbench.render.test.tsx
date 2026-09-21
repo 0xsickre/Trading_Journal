@@ -168,3 +168,44 @@ describe("controls", () => {
     expect(screen.getByText("By setup grade")).toBeInTheDocument();
   });
 });
+
+describe("compare mode", () => {
+  const book = rows([
+    { accountId: "live", instrument: "XAUUSD", net: 100, r: 1 },
+    { accountId: "live", instrument: "XAUUSD", net: -50, r: -1 },
+    { accountId: "live", instrument: "EURUSD", net: 80, r: 1 },
+  ]);
+
+  it("is off until asked for, and then writes itself into the URL", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<ReportsWorkbench accounts={[LIVE]} trades={book} />);
+
+    const button = screen.getByRole("button", { name: "Compare" });
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByLabelText("B from")).not.toBeInTheDocument();
+
+    await user.click(button);
+    expect(lastUrl()).toContain("cmp=1");
+  });
+
+  it("shows a second filter set and the Δ column once it is on", () => {
+    search = new URLSearchParams("cmp=1&f2=instrument:in:XAUUSD");
+    render(<ReportsWorkbench accounts={[LIVE]} trades={book} />);
+
+    expect(screen.getByLabelText("B from")).toBeInTheDocument();
+    expect(screen.getByLabelText("A from")).toBeInTheDocument();
+    expect(screen.getAllByText("Δ").length).toBeGreaterThan(0);
+  });
+
+  it("takes set B with it when it is turned off — a hidden filter is unreadable", async () => {
+    const user = userEvent.setup({ delay: null });
+    search = new URLSearchParams("cmp=1&f2=instrument:in:XAUUSD&from2=2026-01-01");
+    render(<ReportsWorkbench accounts={[LIVE]} trades={book} />);
+
+    await user.click(screen.getByRole("button", { name: "Compare" }));
+    const url = lastUrl();
+    expect(url).not.toContain("cmp=1");
+    expect(url).not.toContain("f2=");
+    expect(url).not.toContain("from2=");
+  });
+});

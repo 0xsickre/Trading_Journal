@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  bootstrapDifference,
   bootstrapMean,
   bootstrapProfitFactor,
   containsNeutral,
   iterationsFor,
   mulberry32,
+  newcombeDifference,
   seedFrom,
   wilsonInterval,
 } from "./uncertainty";
@@ -190,5 +192,129 @@ describe("iterationsFor", () => {
     expect(iterationsFor(50)).toBe(2000);
     expect(iterationsFor(500)).toBe(2000);
     expect(iterationsFor(5000)).toBe(500);
+  });
+});
+
+describe("the default resample count", () => {
+  it("is chosen from the sample when the caller names none", () => {
+    // The path every screen takes: `bootstrapMean` with no options at all.
+    const d = bootstrapMean([1, -1, 2, -1, 0.5, -1])!;
+    expect(d.n).toBe(6);
+    expect(d.hi).toBeGreaterThan(d.lo);
+  });
+});
+
+describe("bootstrapDifference — B minus A, with the gap's own interval", () => {
+  const mean = (s: readonly number[]) => s.reduce((a, b) => a + b, 0) / s.length;
+  const opts = { iters: 400 };
+
+  it("admits zero when the two samples are the same book", () => {
+    const a = [1, -1, 2, -1, 0.5, -1, 3, -1];
+    const d = bootstrapDifference(a, [...a], mean, opts)!;
+    expect(d.lo).toBeLessThanOrEqual(0);
+    expect(d.hi).toBeGreaterThanOrEqual(0);
+  });
+
+  it("rules zero out when one side is plainly better", () => {
+    const poor = Array.from({ length: 40 }, (_, i) => (i % 2 ? -1 : 0.5));
+    const good = Array.from({ length: 40 }, (_, i) => (i % 2 ? -1 : 4));
+    const d = bootstrapDifference(poor, good, mean, opts)!;
+    expect(d.lo).toBeGreaterThan(0);
+  });
+
+  it("is deterministic — the same pair gives the same bounds every time", () => {
+    const a = [1, -1, 2, -1];
+    const b = [2, -1, 3, -0.5];
+    const first = bootstrapDifference(a, b, mean, opts)!;
+    const second = bootstrapDifference(a, b, mean, opts)!;
+    expect(second).toEqual(first);
+  });
+
+  it("states the THINNER sample, because that is what the pair is worth", () => {
+    const d = bootstrapDifference([1, -1], Array.from({ length: 50 }, () => 1), mean, opts)!;
+    expect(d.n).toBe(2);
+  });
+
+  it("chooses its own resample count when none is given", () => {
+    // The default path, which the screen always takes: 2,000 resamples on a
+    // sample this size.
+    const d = bootstrapDifference([1, -1, 2, -1], [2, -1, 3, -0.5], mean)!;
+    expect(d.n).toBe(4);
+    expect(d.hi).toBeGreaterThan(d.lo);
+  });
+
+  it("refuses a side with fewer than two values", () => {
+    expect(bootstrapDifference([1], [1, 2, 3], mean, opts)).toBeNull();
+    expect(bootstrapDifference([1, 2, 3], [], mean, opts)).toBeNull();
+  });
+
+  it("skips a resample one side cannot answer at all", () => {
+    // A book of pure breakevens has no profit factor — not zero, not infinity.
+    // Every draw is unanswerable, so the pair is too.
+    const pf = (sample: readonly number[]) => {
+      let pos = 0;
+      let neg = 0;
+      for (const v of sample) {
+        if (v > 0) pos += v;
+        else if (v < 0) neg -= v;
+      }
+      return neg > 0 ? pos / neg : pos > 0 ? Infinity : null;
+    };
+    expect(bootstrapDifference([0, 0, 0], [1, -1, 2], pf, opts)).toBeNull();
+  });
+
+  it("says nothing rather than zero when both sides are infinite", () => {
+    // Two groups that never lost. Infinity − Infinity is not a difference of
+    // nothing; it is two books with no measurable gap between them.
+    const pf = (s: readonly number[]) => {
+      let pos = 0;
+      let neg = 0;
+      for (const v of s) {
+        if (v > 0) pos += v;
+        else if (v < 0) neg -= v;
+      }
+      return neg > 0 ? pos / neg : pos > 0 ? Infinity : null;
+    };
+    expect(bootstrapDifference([1, 2, 3], [2, 3, 4], pf, opts)).toBeNull();
+  });
+});
+
+describe("newcombeDifference — two rates, one gap, in percentage points", () => {
+  it("centres on the difference of the two rates", () => {
+    // 60 % against 40 %: the gap is 20 points, and the interval straddles it.
+    const d = newcombeDifference(40, 60, 60, 40)!;
+    expect(d.lo).toBeLessThan(20);
+    expect(d.hi).toBeGreaterThan(20);
+    expect(d.n).toBe(100);
+  });
+
+  it("still admits zero on the samples this book actually has", () => {
+    // Six trades against six: 4/6 against 2/6 looks like a 33-point edge and
+    // proves nothing at all.
+    const d = newcombeDifference(2, 4, 4, 2)!;
+    expect(d.lo).toBeLessThan(0);
+    expect(d.hi).toBeGreaterThan(0);
+  });
+
+  it("rules zero out when the sample is large and the gap is wide", () => {
+    expect(newcombeDifference(20, 180, 120, 80)!.lo).toBeGreaterThan(0);
+  });
+
+  it("mirrors exactly when the two sides are swapped", () => {
+    const ab = newcombeDifference(12, 18, 21, 9)!;
+    const ba = newcombeDifference(21, 9, 12, 18)!;
+    expect(ba.lo).toBeCloseTo(-ab.hi, 10);
+    expect(ba.hi).toBeCloseTo(-ab.lo, 10);
+  });
+
+  it("never leaves the range a difference of rates can occupy", () => {
+    const d = newcombeDifference(0, 1, 1, 0)!;
+    expect(d.lo).toBeGreaterThanOrEqual(-100);
+    expect(d.hi).toBeLessThanOrEqual(100);
+  });
+
+  it("has no answer when either side has no decided trade", () => {
+    expect(newcombeDifference(0, 0, 5, 5)).toBeNull();
+    expect(newcombeDifference(5, 5, 0, 0)).toBeNull();
   });
 });

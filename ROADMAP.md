@@ -1408,3 +1408,22 @@ Profit factor 2.4 na 12 trejdova i 2.4 na 300 izgledali su identično. Jedina od
   Dokazano na živoj bazi u transakciji koja se poništava: nijedan postojeći red se nije pomerio.
 - `tj_merge_positions` prepisan **doslovno** iz `20260920160000` sa tri dodata reda — pečat ostaje
   preživelom trejdu i nikad se ne uzima od onog drugog. Provereno poređenjem `prosrc`-a, ne okom.
+
+### Faza D2 — compare mode (21.09.2026.)
+
+- **Dva seta filtera u jednom URL-u** (`f2`, `from2`, `to2`). Dimenzija, kolone, osnova, jedinica i
+  min-sample su **zajednički** — dva seta koja se razlikuju po osnovi nisu uporediva. Gašenje
+  compare moda briše set B iz URL-a: skriven filter koji i dalje sužava izveštaj niko ne može da
+  pročita unazad.
+- **Jedan enkoder.** Radionica je imala svoju kopiju petlje koja piše `f=...`; sad i ona ide kroz
+  `toSearchParams`, koji je dobio slot (`""` / `"2"`). Dva enkodera za isti format su jedna izmena
+  od linka koji se čita kao drugi izveštaj.
+- **Pun spoljni spoj po bucket-u**, sortiran **jednom** nad spojenim redovima. Bucket koji je trgovao
+  samo jedan set piše „—", nikad nulu. (Prethodni compare mode je uklonjen 19.09. jer je gubio
+  trejdove iz zbirova.)
+- **Razlika nosi svoj interval:** Newcombe za razliku dve stope (iz ista dva Wilson intervala koja
+  ćelije već prikazuju), dvouzoračni bootstrap za expectancy i profit factor. Δ se priguši dok
+  interval obuhvata nulu — na knjizi od 40–70 trejdova godišnje to je najčešći ishod, i to je poenta.
+- **Dva upozorenja koja se ne mogu izostaviti:** koliko trejdova setovi dele (interval pretpostavlja
+  nezavisnost, a podskup protiv svog nadskupa nije poređenje), i da kartice i grafikon iznad tabele i
+  dalje opisuju set A.

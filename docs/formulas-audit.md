@@ -382,6 +382,40 @@ samo se ne tvrdi da je to ono što je odlučeno pre ulaska.
 
 ---
 
+## 20. Razlika između dva skupa (`uncertainty.ts`, compare mode)
+
+```
+Δ            = statistika(B) − statistika(A)
+Δ stopa      = Newcombe (metoda 10) iz dva Wilson intervala
+Δ sredina    = dvouzoračni percentilni bootstrap (expectancy)
+Δ odnos suma = isto, nad P&L-om po trejdu (profit factor)
+n            = min(nA, nB)
+```
+
+**Zašto interval, a ne samo razlika.** Profit faktor 2.4 prema 1.6 izgleda kao nalaz, a na četrdeset
+trejdova po pravilu nije. Jedini pošten odgovor je interval oko razmaka i pitanje da li i dalje
+obuhvata nulu — ćelija se priguši kad obuhvata. Neutralna vrednost za RAZLIKU je uvek nula, nikad
+metrička (50 za stopu, 1 za profit faktor): razlika dve stope od 50 % nije „bez efekta".
+
+**Bootstrap preuzorkuje obe strane nezavisno** i računa statistiku iznova na svakom paru. Razlika dva
+odvojeno bootstrap-ovana intervala nije isto — bila bi šira od istine i odgovarala bi na drugo
+pitanje. `Infinity − Infinity` se odbija: dve knjige koje nikad nisu izgubile nemaju razmak koji se
+može izreći.
+
+**Newcombe umesto bootstrap-a za stope**, jer stopa ima zatvoren oblik koji vredi koristiti, a ovaj
+je građen tačno od dva Wilson intervala koje ćelije već prikazuju — tri broja u istom redu ne mogu da
+protivreče jedan drugom. Kao i Wilson, ponaša se na malim i nakrivljenim uzorcima, gde normalna
+aproksimacija mirno prijavi granicu izvan ±100 poena.
+
+**`n` je tanja od dve strane.** Par je siguran onoliko koliko i njegova slabija polovina; 200 trejdova
+protiv 6 je uzorak od 6.
+
+**Šta ovo NE kontroliše.** Preklapanje. Ako skupovi dele trejdove — „Grade A" protiv „svi trejdovi" —
+pretpostavka nezavisnosti pada, i nijedan od ovih intervala to ne zna. Zato tabela ispisuje koliko
+trejdova dele, kao tvrdnju a ne kao fusnotu.
+
+---
+
 ## Rezime — šta zahteva pažnju
 
 | # | Metrika | Verdikt | Akcija |

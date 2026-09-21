@@ -140,7 +140,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,906 tests across 173 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,939 tests across 174 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -329,9 +329,33 @@ group. The dashboard keeps its own contract (a 0 with the count beside it).
 The state lives in the URL, written with `history.replaceState`, so a report can be bookmarked and
 no control goes back to the server.
 
+### Compare mode
+
+**Compare** runs the same report over a second filter set and states the gap. The two sets share the
+grouping, the columns, the P&L basis, the unit and the sample threshold — two sets that differ in
+their basis are not comparable, and a difference between a net figure and a gross one is not a
+difference in trading. Only the filters and the dates are doubled, under their own URL keys (`f2`,
+`from2`, `to2`), so a compared report is still one bookmarkable link and a link written before
+compare mode existed still reads as set A.
+
+The table shows three columns per metric — A, B and **B − A** — and the delta carries its own 95 %
+interval: Newcombe's method for a difference of two rates (built from the same two Wilson intervals
+the cells already show), a two-sample percentile bootstrap for expectancy and profit factor. **The
+delta is dimmed whenever that interval still includes zero**, which on a book of forty to seventy
+trades a year is most of the time, and is the honest answer.
+
+Two things it says out loud rather than leaving to the reader: how many trades the two sets have in
+common — "Grade A" against "all trades" is not two independent samples, and every interval assumes
+it is — and that a bucket only one set traded shows an em dash rather than a fall to zero. Leaving
+compare mode deletes set B from the URL: a hidden filter that still constrains the report is one
+nobody can read back.
+
+An earlier compare mode was removed on 19.09.2026 because it lost trades from its totals. This one
+joins the two reports on the bucket with a full outer join and sorts once, over the joined rows —
+two lists sorted separately and zipped is how a bucket's A row ends up beside another bucket's B row.
+
 **Removed on purpose (19.09.2026):**
 - the R / Points / Ticks / Pips units, which a cross-instrument report can never show;
-- Compare mode, which lost trades from its totals;
 - the line chart over categories;
 - the cross-analysis pivot.
 
@@ -1185,9 +1209,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,906 tests across 173 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,307 tests in 117 files) and `components` (environment `jsdom`, files `*.test.tsx`, 599
-tests in 56 files). The rule is the extension, so no file can land in both. The split exists so that
+2,939 tests across 174 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,332 tests in 117 files) and `components` (environment `jsdom`, files `*.test.tsx`, 607
+tests in 57 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves
