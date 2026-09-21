@@ -295,6 +295,45 @@ export type Database = {
           },
         ]
       }
+      tj_experiments: {
+        Row: {
+          baseline_weeks: number
+          created_at: string
+          ended_week: string | null
+          hypothesis: string
+          id: string
+          metric_key: string
+          started_week: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          baseline_weeks?: number
+          created_at?: string
+          ended_week?: string | null
+          hypothesis: string
+          id?: string
+          metric_key: string
+          started_week: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          baseline_weeks?: number
+          created_at?: string
+          ended_week?: string | null
+          hypothesis?: string
+          id?: string
+          metric_key?: string
+          started_week?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tj_field_defs: {
         Row: {
           created_at: string
@@ -1051,6 +1090,9 @@ export type Database = {
           max_profit_price: number | null
           miss_reason: string | null
           missed_at: string | null
+          missed_outcome: string | null
+          missed_r: number | null
+          missed_source: string | null
           mistake: string[]
           needs_review: boolean
           planned_rr: string | null
@@ -1100,6 +1142,9 @@ export type Database = {
           max_profit_price?: number | null
           miss_reason?: string | null
           missed_at?: string | null
+          missed_outcome?: string | null
+          missed_r?: number | null
+          missed_source?: string | null
           mistake?: string[]
           needs_review?: boolean
           planned_rr?: string | null
@@ -1149,6 +1194,9 @@ export type Database = {
           max_profit_price?: number | null
           miss_reason?: string | null
           missed_at?: string | null
+          missed_outcome?: string | null
+          missed_r?: number | null
+          missed_source?: string | null
           mistake?: string[]
           needs_review?: boolean
           planned_rr?: string | null

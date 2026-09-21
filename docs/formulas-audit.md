@@ -416,6 +416,46 @@ trejdova dele, kao tvrdnju a ne kao fusnotu.
 
 ---
 
+## 21. Eksperiment i cena promašaja (`experiments.ts`, `missed-cost.ts`)
+
+```
+pre    = metrika nad nedeljama [start − baseline, start − 1]
+posle  = metrika nad nedeljama [start, danas]      (akumulira se)
+Δ      = posle − pre, sa intervalom iz sekcije 20
+verdikt: thin (<5 trejdova sa bilo koje strane) | unknown (Δ interval sadrži 0)
+         | better/worse (interval prešao nulu, u smeru same metrike)
+
+missed_r = planirani reward u R (target prvi) | −1 (stop prvi) | 0 (nijedno)
+ukupno   = zbir SAMO nad izmerenima; neizmereni se broje, ne sabiraju kao nula
+```
+
+**Eksperiment nudi samo tri metrike** — win rate, profit factor, expectancy —
+jer su to jedine tri koje nose interval. Eksperiment bez intervala je anegdota
+sa datumom, i to odbija CHECK u bazi, ne dogovor.
+
+**Prozori se ključaju po nedelji ZATVARANJA.** Promena u vođenju trejda vidi se
+u tome kako se trejd završi; pozicija otvorena u petak pre početka a zatvorena
+unutar eksperimenta vođena je po novom pravilu i pripada „posle". „Posle" se
+akumulira — jedna nedelja je 4–7 trejdova, a verdikt iz toga je šum.
+
+**Šta eksperiment NE kontroliše:** instrument, volatilnost, ostatak tržišta i
+sama svest da se meri. Dva prozora iste knjige nisu eksperiment u naučnom
+smislu — to je najbolje poređenje koje ovi podaci nose, što je manja tvrdnja.
+Samoprijavljeno „ispoštovao sam" stoji odvojeno i tako označeno: reč o
+ponašanju i broj iz knjige nisu nezavisna zapažanja.
+
+**Cena promašaja meri i disciplinu, ne samo oklevanje.** Plan koji nikad nije
+označen kao promašen ostaje `planned` zauvek, pa zbir raste samo onoliko koliko
+se stari planovi razrešavaju. Zato uz zbir stoji i broj nerazrešenih planova —
+bez njega „ništa nije promašeno" zapravo znači „ništa nije označeno".
+
+**Redosled je celo pitanje.** Iz M1 svećica se ne može znati da li je prvo
+stigao target ili stop kad su oba unutar iste svećice; skript to ODBIJA umesto
+da pogodi, a baza odbija isti par nezavisno (`stop` sa pozitivnim `missed_r`
+pada na CHECK). Na tikovima redosled postoji u samim podacima.
+
+---
+
 ## Rezime — šta zahteva pažnju
 
 | # | Metrika | Verdikt | Akcija |

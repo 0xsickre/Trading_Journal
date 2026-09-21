@@ -171,6 +171,12 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- Plan kakav je bio kad je trejd prvi put dobio entry fill (20260921120000).
   -- Piše se jednom, nikad se ne prepisuje, briše se na povratak u `planned`.
   -- NULL znači da trejd prethodi pečatu — čitači tada padaju na živa polja.
+  -- Hipotetički ishod promašenog setupa (20260921140000): šta bi plan prvo
+  -- dodirnuo, koliko je to R (negativan kad je stop stigao prvi — zato NIJE u
+  -- prices_positive), i ko je to upisao.
+  missed_outcome       text,
+  missed_r             numeric,
+  missed_source        text,
   plan_snapshot        jsonb,
   plan_sealed_at       timestamptz,
   -- Prvi put kad je zapečaćeno polje izmenjeno posle ulaska. Merenja i dalje
@@ -200,7 +206,18 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   CONSTRAINT tj_positions_equity_at_entry_positive
     CHECK (equity_at_entry IS NULL OR equity_at_entry > 0),
   CONSTRAINT tj_positions_plan_snapshot_object
-    CHECK (plan_snapshot IS NULL OR jsonb_typeof(plan_snapshot) = 'object')
+    CHECK (plan_snapshot IS NULL OR jsonb_typeof(plan_snapshot) = 'object'),
+  CONSTRAINT tj_positions_missed_outcome_check
+    CHECK (missed_outcome IS NULL OR missed_outcome = ANY (ARRAY[
+      'target'::text, 'stop'::text, 'neither'::text])),
+  CONSTRAINT tj_positions_missed_source_check
+    CHECK (missed_source IS NULL OR missed_source = ANY (ARRAY[
+      'manual'::text, 'mt5'::text])),
+  -- Znak prati ishod: stop koji je "zaradio" je greška skeniranja, ne podatak.
+  CONSTRAINT tj_positions_missed_r_matches_outcome
+    CHECK (missed_outcome IS NULL OR missed_r IS NULL OR (missed_outcome = 'target' AND missed_r > 0) OR (missed_outcome = 'stop' AND missed_r < 0) OR (missed_outcome = 'neither' AND missed_r = 0)),
+  CONSTRAINT tj_positions_missed_outcome_only_when_missed
+    CHECK (missed_outcome IS NULL OR status = 'missed')
 );
 CREATE INDEX IF NOT EXISTS tj_positions_user_idx
   ON public.tj_positions USING btree (user_id);

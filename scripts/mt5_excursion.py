@@ -3,6 +3,7 @@
     python scripts/mt5_excursion.py            fill what is missing
     python scripts/mt5_excursion.py --dry-run  compute and print, write nothing
     python scripts/mt5_excursion.py --recompute  also redo values MT5 wrote before
+    python scripts/mt5_excursion.py --missed   price the setups you did NOT take
 
 What it needs, and nothing more:
 
@@ -46,6 +47,37 @@ How a trade is measured:
     minutes strictly inside the trade.
 
 Every skipped trade is printed with its reason.
+
+--missed: what the trades you did not take would have done
+---------------------------------------------------------
+
+The same prices, a different question. A plan marked `missed` carries an entry,
+a stop and a target and no fills at all, so there is nothing to measure
+BETWEEN — the scan walks FORWARD from the moment the plan was written and asks
+which of the three levels the market reached first.
+
+  - `created_at` is the anchor, and it is the only honest one: a missed trade
+    has no `opened_at`, and picking a later moment would mean choosing the
+    window after seeing the prices in it. A plan written once the setup had
+    already moved simply reads as never triggered.
+  - The window is `time_stop_days` trading days, or five when the plan named
+    none. Weekends are skipped, so five means five sessions.
+  - The entry must be REACHED first. A plan whose price never came is recorded
+    as costing nothing — which is true — and the line says it never triggered,
+    a different fact from "it triggered and went nowhere".
+  - Then whichever of target and stop arrives first decides: the planned reward
+    in R, −1, or 0 when neither arrives inside the window.
+
+WHICH CAME FIRST IS THE WHOLE QUESTION, and 1-minute bars usually cannot answer
+it: a bar reports its high and its low with no order between them, so a bar
+holding both the target and the stop could be either result. That case is
+REFUSED rather than guessed — writing a stopped-out plan down as a winner would
+make this figure worse than not having it. A bar holding only one of the two is
+unambiguous and counts. On ticks the order is in the data and nothing has to be
+refused.
+
+The database refuses the same mistake independently: a `missed_outcome` of
+`stop` with a positive `missed_r` violates a CHECK.
 """
 
 from __future__ import annotations
@@ -337,6 +369,188 @@ def _minute_extremes(symbol: str, first: int, last: int, is_short: bool, prices:
     return low, high
 
 
+# --- what a missed setup would have done -------------------------------------
+
+
+@dataclass
+class MissedResult:
+    outcome: str  # target | stop | neither
+    r: float
+    source: str  # "ticks" | "M1"
+    note: str = ""
+
+
+def _window_end_ms(start_ms: int, trading_days: int) -> int:
+    """`trading_days` sessions after `start_ms`, skipping Saturdays and Sundays."""
+    at = datetime.fromtimestamp(start_ms / 1000, tz=timezone.utc)
+    left = trading_days
+    while left > 0:
+        at += timedelta(days=1)
+        if at.weekday() < 5:
+            left -= 1
+    return int(at.timestamp() * 1000)
+
+
+def _crossed(prev: float, now: float, level: float) -> bool:
+    """True when the price moved onto or through `level` between two readings.
+
+    A weekend gap jumps a level without ever printing it, and a plan the market
+    gapped through is a plan that would have filled - so a crossing, not an
+    equality.
+    """
+    return min(prev, now) <= level <= max(prev, now)
+
+
+def scan_missed(
+    symbol: str,
+    entry: float,
+    stop: float,
+    target: float,
+    is_short: bool,
+    start_ms: int,
+    end_ms: int,
+) -> MissedResult:
+    reward_r = abs(target - entry) / abs(entry - stop)
+    ticks = _ticks(symbol, start_ms, end_ms)
+    if ticks is not None and len(ticks[0]):
+        return _scan_missed_ticks(ticks, entry, stop, target, is_short, reward_r)
+    return _scan_missed_bars(symbol, entry, stop, target, is_short, reward_r, start_ms, end_ms)
+
+
+def _scan_missed_ticks(ticks, entry, stop, target, is_short, reward_r) -> MissedResult:
+    times, bids, asks = ticks
+    # Entering a long buys at the ask; valuing it afterwards reads the bid. A
+    # short is the other way round, exactly as `measure` above has it.
+    enter_on = asks if not is_short else bids
+    value_on = bids if not is_short else asks
+
+    prev_enter = None
+    prev_value = None
+    entered = False
+    for i in range(len(times)):
+        e = float(enter_on[i])
+        v = float(value_on[i])
+        if e <= 0 or v <= 0:
+            continue
+        if not entered:
+            if prev_enter is not None and _crossed(prev_enter, e, entry):
+                entered = True
+                prev_value = v
+            prev_enter = e
+            continue
+        if prev_value is not None:
+            # Both levels inside ONE tick's move is a gap straight past the
+            # pair. The stop is the honest answer there: it is the nearer
+            # level, so the price passed it on the way.
+            if _crossed(prev_value, v, stop):
+                return MissedResult("stop", -1.0, "ticks")
+            if _crossed(prev_value, v, target):
+                return MissedResult("target", round(reward_r, 4), "ticks")
+        prev_value = v
+
+    if not entered:
+        return MissedResult("neither", 0.0, "ticks", "the entry was never reached")
+    return MissedResult("neither", 0.0, "ticks", "neither level inside the window")
+
+
+def _scan_missed_bars(symbol, entry, stop, target, is_short, reward_r, start_ms, end_ms) -> MissedResult:
+    frm = datetime.fromtimestamp(start_ms / 1000, tz=timezone.utc)
+    to = datetime.fromtimestamp(end_ms / 1000, tz=timezone.utc)
+    bars = mt5.copy_rates_range(symbol, mt5.TIMEFRAME_M1, to_server(frm), to_server(to))
+    if bars is None or not len(bars):
+        raise Refused("the terminal has neither ticks nor 1-minute bars for that window")
+
+    point = mt5.symbol_info(symbol).point
+    entered = False
+    for b in bars:
+        add = b["spread"] * point if is_short else 0.0
+        low = float(b["low"]) + add
+        high = float(b["high"]) + add
+        if not entered:
+            if low <= entry <= high:
+                entered = True
+            continue
+        hit_t = low <= target <= high
+        hit_s = low <= stop <= high
+        # A bar holding BOTH cannot say which came first, and a guess here
+        # would print a stopped-out plan as a winner.
+        if hit_t and hit_s:
+            raise Refused(
+                "one 1-minute bar holds both the target and the stop - the order "
+                "cannot be recovered from bars, only from ticks"
+            )
+        if hit_s:
+            return MissedResult("stop", -1.0, "M1")
+        if hit_t:
+            return MissedResult("target", round(reward_r, 4), "M1")
+
+    if not entered:
+        return MissedResult("neither", 0.0, "M1", "the entry was never reached")
+    return MissedResult("neither", 0.0, "M1", "neither level inside the window")
+
+
+def run_missed(journal: "Journal", ids: list[str], args) -> int:
+    positions = journal.get(
+        "tj_positions",
+        {
+            "select": (
+                "id,trade_no,instrument,direction,created_at,entry_price,stop_price,"
+                "target_price,time_stop_days,missed_outcome,missed_source"
+            ),
+            "account_id": f"in.({','.join(ids)})",
+            "status": "eq.missed",
+            "order": "trade_no",
+        },
+    )
+    filled, skipped = 0, 0
+    for p in positions:
+        label = f"#{p['trade_no']} {p['instrument'] or '?'}"
+        # A value typed by hand is the trader's, exactly as for MAE/MFE.
+        if p["missed_source"] == "manual":
+            continue
+        if p["missed_outcome"] is not None and not args.recompute:
+            continue
+        try:
+            symbol = SYMBOLS.get((p["instrument"] or "").upper())
+            if not symbol:
+                raise Refused(f"no MT5 symbol mapped for {p['instrument']}")
+            if not mt5.symbol_select(symbol, True) or mt5.symbol_info(symbol) is None:
+                raise Refused(f"the terminal has no symbol {symbol}")
+            entry, stop, target = p["entry_price"], p["stop_price"], p["target_price"]
+            if entry is None or stop is None or target is None:
+                raise Refused("the plan has no entry, stop and target to measure")
+            entry, stop, target = float(entry), float(stop), float(target)
+            if entry == stop:
+                raise Refused("the stop sits at the entry - there is no R to measure")
+            start_ms = int(datetime.fromisoformat(p["created_at"]).timestamp() * 1000)
+            days = int(p["time_stop_days"] or 5)
+            r = scan_missed(
+                symbol,
+                entry,
+                stop,
+                target,
+                (p["direction"] or "").lower().startswith("short"),
+                start_ms,
+                _window_end_ms(start_ms, days),
+            )
+        except Refused as e:
+            skipped += 1
+            print(f"skip  {label}: {e}")
+            continue
+        if not args.dry_run:
+            journal.patch(
+                "tj_positions",
+                p["id"],
+                {"missed_outcome": r.outcome, "missed_r": r.r, "missed_source": "mt5"},
+            )
+        filled += 1
+        note = f" - {r.note}" if r.note else ""
+        verb = "would price" if args.dry_run else "price"
+        print(f"{verb}  {label}: {r.outcome}  {r.r:+.2f}R  ({r.source}){note}")
+    print(f"\n{filled} {'would be ' if args.dry_run else ''}priced, {skipped} skipped.")
+    return 0
+
+
 # --- main --------------------------------------------------------------------
 
 
@@ -375,6 +589,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--dry-run", action="store_true", help="compute and print, write nothing")
     ap.add_argument("--recompute", action="store_true", help="also redo values MT5 wrote before")
+    ap.add_argument(
+        "--missed",
+        action="store_true",
+        help="price the setups that were planned and never taken",
+    )
     args = ap.parse_args()
 
     journal = Journal(read_env_local())
@@ -390,6 +609,8 @@ def main() -> int:
         if not ids:
             print("No trading accounts in the journal - nothing to fill.")
             return 0
+        if args.missed:
+            return run_missed(journal, ids, args)
         positions = journal.get(
             "tj_positions",
             {

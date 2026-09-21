@@ -18,6 +18,9 @@ import {
   weekStartOfDayKey,
 } from "@/lib/journal/weekly-review";
 import { WeeklyReviewForm } from "@/components/journal/weekly-review-form";
+import { ExperimentCard } from "@/components/journal/experiment-card";
+import { getExperiments } from "@/lib/journal/experiment-queries";
+import { summarizeExperiments } from "@/lib/journal/experiments";
 import { PageHeader } from "@/components/app/page-header";
 import type { RealizedTrade } from "@/lib/journal/analytics";
 import { accountTimezoneResolver } from "@/lib/journal/time";
@@ -66,6 +69,7 @@ export default async function WeeklyPage({
     reportDates,
     review,
     previousReview,
+    experiments,
   ] = await Promise.all([
     accountsPromise,
     weekPromise,
@@ -82,6 +86,7 @@ export default async function WeeklyPage({
     weekPromise.then(({ weekStart }) => getWeeklyReview(weekStart)),
     // Last week's answers, for the commitment this week has to live up to.
     weekPromise.then(({ weekStart }) => getWeeklyReview(addWeeksToWeekStart(weekStart, -1))),
+    getExperiments(),
   ]);
 
   /**
@@ -130,6 +135,23 @@ export default async function WeeklyPage({
   const days = weekDayRows(weekStart, realized, tzOf, breakevenRange);
 
   /**
+   * The experiments, measured over the WHOLE book rather than this week's.
+   *
+   * An experiment compares four weeks of history against every week since it
+   * started, so it needs the book — and `recap` above already enriches only
+   * what the week needs. Two windows, computed here, and only the numbers
+   * cross to the browser: the trades themselves would be the whole book sent
+   * twice to render six figures.
+   */
+  const experimentSummaries = summarizeExperiments(
+    experiments,
+    enrichTrades(realized, { tzOf, range: breakevenRange }),
+    // Net, like every other figure on this page.
+    { pnlBasis: "net", range: breakevenRange },
+    currentWeekStart,
+  );
+
+  /**
    * The oldest week worth opening: the one holding the first trade, or the
    * account's own first week when nothing has been traded yet. Without it the
    * back arrow paged into empty weeks forever.
@@ -166,6 +188,16 @@ export default async function WeeklyPage({
         accountId={accountId}
         accountOptions={accounts.length > 1 ? accountFilterOptions(accounts) : []}
         mixedFallback={mixedFallback}
+      />
+
+      {/* Below the review, not inside it: an experiment spans weeks, so it is
+          not part of the row this week seals. A locked week still cannot start
+          or finish one — that decision belongs to the week it is made in. */}
+      <ExperimentCard
+        weekStart={weekStart}
+        summaries={experimentSummaries}
+        oneChange={review?.one_change ?? null}
+        disabled={review?.locked_at != null || weekStart > currentWeekStart}
       />
     </div>
   );

@@ -140,7 +140,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,939 tests across 174 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,975 tests across 178 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -827,6 +827,48 @@ were open, which is a fact about exposure; the CORRELATION compares days on whic
 something, which on a swing book is a much smaller set. The coefficient carries a Fisher-z interval
 and is withheld entirely below five shared days.
 
+## Learning
+
+Two things the journal used to record and never check.
+
+### The weekly change gets an outcome
+
+The weekly review asks for "one thing I am changing" and the next week asks whether it was kept. Both
+answers are the trader's word about the trader's own behaviour; nothing asked the BOOK whether the
+change did anything. **Experiment** (`tj_experiments`, `experiments.ts`) is that question: a Monday, a
+sentence, and ONE metric that would move if the change worked.
+
+The metric can only be win rate, profit factor or expectancy — the three that carry a confidence
+interval. An experiment without one is an anecdote with a start date, and the table's CHECK enforces
+that rather than leaving it to convention. "Before" is the four weeks before it started; "after" is
+every week since, accumulating, keyed on the week a trade CLOSED in — a change to how trades are
+managed shows up in how they end.
+
+**The verdict is withheld while the interval of the difference still contains zero**, and on forty to
+seventy trades a year that is the usual answer. The card says "still don't know, n = …" rather than
+naming a winner, and below five trades on either side it does not compare at all. What it does not
+control is printed beside it every time: instrument, volatility, and the fact of being watched. The
+self-reported "did I keep it" stays separate and labelled — one is a word about behaviour, the other
+is a number out of the book.
+
+### The missed setup gets a price
+
+`status = 'missed'` and `miss_reason` have existed since the beginning and cost nothing, which made
+hesitation the cheapest mistake to keep making. `scripts/mt5_excursion.py --missed` walks the same
+price history forward from the moment the plan was written — `time_stop_days` trading days, or five —
+and records what it would have met first: `missed_outcome`, `missed_r` (the planned reward, −1, or 0)
+and `missed_source`.
+
+The entry has to be reached first; a plan whose price never came reads as never triggered and cost
+nothing. And **which came first is the whole question**, so a 1-minute bar holding both the target and
+the stop is refused rather than guessed — a stopped-out plan written down as a winner would make the
+figure worse than not having it. The database refuses the same pair independently: `stop` with a
+positive `missed_r` violates a CHECK.
+
+The `/reports` panel counts unmeasured misses separately instead of summing them as zero, and states
+how many plans are still unresolved — until those are taken or marked missed, the figure measures how
+tidily plans are filed rather than what hesitation cost.
+
 ## Process tracking
 
 **Tracker rules** are daily obligations, per weekday. **Eight** are scored automatically from data —
@@ -1209,9 +1251,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,939 tests across 174 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,332 tests in 117 files) and `components` (environment `jsdom`, files `*.test.tsx`, 607
-tests in 57 files). The rule is the extension, so no file can land in both. The split exists so that
+2,975 tests across 178 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,354 tests in 119 files) and `components` (environment `jsdom`, files `*.test.tsx`, 621
+tests in 59 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves

@@ -536,6 +536,12 @@ export async function restoreTradeToPlanned(id: string) {
       status: "planned",
       missed_at: null,
       miss_reason: null,
+      // The hypothetical result goes with the miss. A restored plan is a live
+      // idea again, and "what this would have done" is a statement about a
+      // trade that was not taken — the table's own CHECK refuses the pair.
+      missed_outcome: null,
+      missed_r: null,
+      missed_source: null,
     })
     .eq("id", id)
     .eq("status", "missed")

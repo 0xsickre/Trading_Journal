@@ -11,7 +11,12 @@ import {
   PREVIOUS_CHANGE_KEPT,
   weekLockRefusal,
   weekSaveRefusal,
+  weekStartOfDayKey,
 } from "@/lib/journal/weekly-review";
+import {
+  DEFAULT_BASELINE_WEEKS,
+  EXPERIMENT_METRIC_KEYS,
+} from "@/lib/journal/experiments";
 
 /**
  * A cap on the five prose fields.
@@ -165,6 +170,92 @@ export async function lockWeek(weekStart: string): Promise<Result> {
     .from("tj_weekly_reviews")
     .update({ locked_at: new Date().toISOString() })
     .eq("id", existing!.id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidateWeekly();
+  return { ok: true };
+}
+
+// --- Experiments: the weekly change, with an outcome ------------------------
+
+const experimentSchema = z.object({
+  hypothesis: z
+    .string()
+    .trim()
+    .min(1, "Napiši šta menjaš.")
+    .max(MAX_ANSWER, `Hipoteza: najviše ${MAX_ANSWER} znakova.`),
+  // Only the three metrics that carry an interval. The database CHECK says the
+  // same thing; this one says it in a sentence.
+  metric_key: z.enum(EXPERIMENT_METRIC_KEYS, {
+    message: "Eksperiment se meri samo metrikom koja nosi interval.",
+  }),
+  baseline_weeks: z.number().int().min(1).max(26).optional(),
+});
+
+export type StartExperimentInput = z.infer<typeof experimentSchema>;
+
+/**
+ * Start tracking this week's change as an experiment.
+ *
+ * Keyed on the week, and the table enforces one per week: two changes started
+ * in the same week cannot be told apart afterwards — whichever number moved,
+ * both would claim it.
+ */
+export async function startExperiment(
+  weekStart: string,
+  input: StartExperimentInput,
+): Promise<Result> {
+  const parsed = experimentSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Neispravan unos." };
+  }
+
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Nisi prijavljen." };
+
+  const { error } = await supabase.from("tj_experiments").insert({
+    user_id: user.id,
+    started_week: weekStart,
+    hypothesis: parsed.data.hypothesis,
+    metric_key: parsed.data.metric_key,
+    baseline_weeks: parsed.data.baseline_weeks ?? DEFAULT_BASELINE_WEEKS,
+  });
+
+  if (error) {
+    // The unique index, in the sentence it actually means.
+    if (error.code === "23505") {
+      return { ok: false, error: "Za tu nedelju već postoji eksperiment." };
+    }
+    return { ok: false, error: error.message };
+  }
+
+  revalidateWeekly();
+  return { ok: true };
+}
+
+/**
+ * Finish an experiment: kept, or dropped.
+ *
+ * The end week is the week the decision is made in — the last week the
+ * experiment covers. It is written here rather than left to the database,
+ * because `status` and `ended_week` are the same fact said twice and the CHECK
+ * refuses them if they disagree.
+ */
+export async function endExperiment(
+  id: string,
+  status: "kept" | "dropped",
+): Promise<Result> {
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "Nisi prijavljen." };
+
+  const { error } = await supabase
+    .from("tj_experiments")
+    .update({ status, ended_week: weekStartOfDayKey(await todayKey()) })
+    .eq("id", id)
+    .eq("status", "running");
+
   if (error) return { ok: false, error: error.message };
 
   revalidateWeekly();

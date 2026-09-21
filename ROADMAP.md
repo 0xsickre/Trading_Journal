@@ -1427,3 +1427,29 @@ Profit factor 2.4 na 12 trejdova i 2.4 na 300 izgledali su identično. Jedina od
 - **Dva upozorenja koja se ne mogu izostaviti:** koliko trejdova setovi dele (interval pretpostavlja
   nezavisnost, a podskup protiv svog nadskupa nije poređenje), i da kartice i grafikon iznad tabele i
   dalje opisuju set A.
+
+### Faza D3 — eksperiment: nedeljna promena dobija merenje (21.09.2026.)
+
+- **`tj_experiments`** (`20260921130000_experiments.sql`): nedelja, rečenica i JEDNA metrika.
+  `metric_key` je CHECK-om ograničen na tri koje nose interval — eksperiment bez intervala je
+  anegdota sa datumom. Jedan eksperiment po nedelji: dve promene pokrenute iste nedelje se posle ne
+  mogu razdvojiti. Dodat i u ručnu listu u `tj_reset_my_data` (sada 28 tabela).
+- **Ništa izvedeno se ne čuva.** Prozori, dve brojke, razlika i njen interval računaju se pri
+  čitanju iz samih trejdova; sačuvan rezultat bio bi druga kopija broja, slobodna da odluta.
+- **Verdikt se ne izriče** dok interval razlike obuhvata nulu, niti ispod pet trejdova sa bilo koje
+  strane. Kartica tada piše „još ne znaš, n=…", i to je na ovoj knjizi najčešći ishod.
+- Uz karticu uvek stoji šta se NE kontroliše (instrument, volatilnost, sama svest da se meri) i da je
+  samoprijavljeno „ispoštovao sam" odvojeno od broja iz knjige.
+
+### Faza D4 — cena promašenog setupa (21.09.2026.)
+
+- **Tri kolone** (`20260921140000_missed_cost.sql`): `missed_outcome`, `missed_r`, `missed_source`.
+  `missed_r` je negativan kad je stop stigao prvi, pa NIJE u `tj_positions_prices_positive`; znak
+  mora da prati ishod (CHECK), a hipotetički ishod ne može da preživi povratak plana u `planned`.
+- **`mt5_excursion.py --missed`** skenira unapred od `created_at` — jedinog poštenog sidra, jer
+  promašen trejd nema `opened_at` — u prozoru od `time_stop_days` ili pet trgovačkih dana. Ulaz mora
+  prvo da bude dodirnut; plan do čije cene nije ni došlo čita se kao „nije se aktivirao".
+- **Redosled se ne pogađa.** Svećica koja drži i target i stop se ODBIJA; na tikovima redosled
+  postoji u podacima. Bez toga bi svaki takav promašaj bio upisan kao dobitak.
+- **Panel na `/reports`** broji neizmerene promašaje odvojeno umesto da ih sabere kao nulu, i uz zbir
+  ispisuje koliko planova stoji nerazrešeno — dok stoje, broj meri urednost, a ne cenu oklevanja.
