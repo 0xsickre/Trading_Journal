@@ -1054,6 +1054,9 @@ export type Database = {
           mistake: string[]
           needs_review: boolean
           planned_rr: string | null
+          plan_amended_at: string | null
+          plan_sealed_at: string | null
+          plan_snapshot: Json | null
           playbook_id: string | null
           point_value_at_trade: number | null
           position_size: number | null
@@ -1100,6 +1103,9 @@ export type Database = {
           mistake?: string[]
           needs_review?: boolean
           planned_rr?: string | null
+          plan_amended_at?: string | null
+          plan_sealed_at?: string | null
+          plan_snapshot?: Json | null
           playbook_id?: string | null
           point_value_at_trade?: number | null
           position_size?: number | null
@@ -1146,6 +1152,9 @@ export type Database = {
           mistake?: string[]
           needs_review?: boolean
           planned_rr?: string | null
+          plan_amended_at?: string | null
+          plan_sealed_at?: string | null
+          plan_snapshot?: Json | null
           playbook_id?: string | null
           point_value_at_trade?: number | null
           position_size?: number | null

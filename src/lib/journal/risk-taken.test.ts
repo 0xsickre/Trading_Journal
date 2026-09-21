@@ -186,3 +186,37 @@ describe("riskDispersion", () => {
     expect(riskDispersion([null, null])).toBeNull();
   });
 });
+
+describe("the sealed plan is what the risk is measured against", () => {
+  it("keeps the stop the trade was entered with, however the row reads now", () => {
+    // The trade was entered with a 10-point stop. Afterwards the stop was
+    // widened to 20 — which halves every R on the trade if the live column is
+    // read. The seal is the answer.
+    const row = mkRow({
+      stop_price: 80,
+      plan_snapshot: { entry_price: 100, stop_price: 90 },
+    });
+    expect(riskMoneyAtEntry(row)).toBe(100);
+  });
+
+  it("reads the intent as it was chosen, not as it was re-chosen", () => {
+    const row = mkRow({ risk_pct: "3%", plan_snapshot: { risk_pct: "1%" } });
+    expect(riskIntentPct(row)).toBe(1);
+    // 100 of risk on 10,000 of equity is the 1 % that was intended.
+    expect(matchedRiskIntent(row)).toBe(true);
+  });
+
+  it("falls back to the live columns for a trade written before the seal", () => {
+    expect(riskMoneyAtEntry(mkRow({ plan_snapshot: null }))).toBe(100);
+    expect(riskIntentPct(mkRow({ plan_snapshot: null }))).toBe(1);
+  });
+
+  it("reads a field an import's seal never carried from the live row", () => {
+    // An imported trade seals only what the file knew. The risk it was sized
+    // at is still readable from the plan typed around it.
+    const row = mkRow({ plan_snapshot: { target_price: 130 } });
+    expect(riskMoneyAtEntry(row)).toBe(100);
+    expect(riskIntentPct(row)).toBe(1);
+  });
+});
+

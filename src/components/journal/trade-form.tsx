@@ -9,6 +9,7 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   ExternalLink,
+  PencilLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -177,6 +178,13 @@ export type TradeFormInitial = {
   trade_no: number | null;
   status?: string;
   missed_at?: string | null;
+  /**
+   * When the plan was sealed, and whether it has been edited since. Not form
+   * fields — the save path writes both — but the form is where the trader sees
+   * that the two exist.
+   */
+  plan_sealed_at?: string | null;
+  plan_amended_at?: string | null;
   playbook_id?: string | null;
   scale_out_levels?: unknown;
   /** Rule id → followed, for rules answered on this trade. */
@@ -1105,6 +1113,11 @@ export function TradeForm({
   const showRestorePlanned =
     isMissed && canRestoreToPlanned(execs.length, "missed");
   const missedAt = initial?.missed_at ?? null;
+  // The seal. `plan_sealed_at` is stamped on the save that first gives the
+  // trade fills; `plan_amended_at` the first time a sealed field moved after
+  // that. Both are written by the save path — the form only says they happened.
+  const sealedAt = initial?.plan_sealed_at ?? null;
+  const planAmendedAt = initial?.plan_amended_at ?? null;
 
   return (
     <div className="space-y-6 pb-24">
@@ -1121,7 +1134,24 @@ export function TradeForm({
                 · Missed {fmtInTz(missedAt, tz, DATE_TIME)}
               </>
             )}
+            {sealedAt && (
+              <>
+                {" "}
+                · Plan sealed {fmtInTz(sealedAt, tz, DATE_TIME)}
+              </>
+            )}
           </p>
+          {planAmendedAt && (
+            <p className="mt-1 flex items-start gap-1.5 text-sm text-[var(--chart-4)]">
+              <PencilLine className="mt-0.5 size-3.5 shrink-0" />
+              <span>
+                Plan edited after entry on {fmtInTz(planAmendedAt, tz, DATE_TIME)}.
+                Slippage, R and target attainment still read the plan as it was
+                sealed — editing these fields corrects the record, it does not
+                move the measurements.
+              </span>
+            </p>
+          )}
         </div>
       </div>
 

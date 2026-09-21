@@ -20,6 +20,10 @@ const MONEY_MODULES = [
   "src/lib/journal/exit-efficiency.ts",
   "src/lib/journal/hold-time.ts",
   "src/lib/journal/plan-calculations.ts",
+  // Not arithmetic, but it CHOOSES which numbers the arithmetic reads: every R,
+  // every slippage and every risk percentage goes through `sealedNumber`. A
+  // branch missed here is a trade measured against a plan it never made.
+  "src/lib/journal/plan-snapshot.ts",
   "src/lib/journal/position-stats.ts",
   "src/lib/journal/risk-metrics.ts",
   "src/lib/journal/risk-ratios.ts",

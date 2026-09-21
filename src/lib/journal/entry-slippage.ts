@@ -1,3 +1,4 @@
+import { sealedNumber } from "./plan-snapshot";
 import { tradeDirectionMultiplier } from "./position-stats";
 import type { TradeRow } from "./types";
 
@@ -61,11 +62,15 @@ export function computeEntrySlippage(input: SlippageInput): SlippageResult | nul
   };
 }
 
+/**
+ * Slippage against the plan AS IT WAS SEALED at entry, not as the row reads
+ * today. Moving the planned entry afterwards used to improve this number — the
+ * exact edit `plan-snapshot.ts` exists to make harmless. A trade with no seal
+ * (everything before that shipped) falls back to the live columns.
+ */
 export function slippageFromTrade(row: TradeRow): SlippageResult | null {
-  const plannedEntry =
-    typeof row.entry_price === "number" ? row.entry_price : null;
-  const stopPrice =
-    typeof row.stop_price === "number" ? row.stop_price : null;
+  const plannedEntry = sealedNumber(row, "entry_price");
+  const stopPrice = sealedNumber(row, "stop_price");
   const direction = typeof row.direction === "string" ? row.direction : null;
   const avgEntry = row.stats?.avg_entry ?? null;
   const entryQty = row.stats?.entry_qty ?? null;

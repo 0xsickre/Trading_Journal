@@ -335,6 +335,53 @@ najjača poštena tvrdnja koja se iz ovih podataka može izvesti.
 
 ---
 
+## 19. Pečat plana (`plan-snapshot.ts`, `tj_sealed_num` SQL)
+
+```
+plan_snapshot   = polja plana u trenutku PRVOG entry fill-a   (piše se jednom)
+plan_sealed_at  = trenutak tog pisanja
+plan_amended_at = prvi put kad se posle toga pomerilo neko zapečaćeno polje
+sealedNumber(row, k) = k ∈ snapshot ? snapshot[k] : row[k]
+```
+
+Polja plana: `entry_price`, `stop_price`, `target_price`, `risk_pct`,
+`time_stop_days`, `thesis`, `invalidation`, `scale_out_levels`.
+
+**Šta je bio problem.** Dan se zaključava, nedelja se zaključava, a plan nikad nije.
+Svaka „plan vs realnost" veličina — entry slippage, target attainment, delta R,
+tracker pravila `thesis_written` i `stop_loss_set`, i **sam R**, čiji je imenilac
+planirana razdaljina do stopa — čitala je živa polja. Na sistemu sa jednim
+korisnikom to znači da je celo poređenje bilo falsifikabilno od strane jedine
+osobe koju meri: proširi stop posle zatvaranja i svaki gubitak izražen u R se
+smanji.
+
+**Zašto snimak a ne brava.** Brava zabranjuje izmenu, što zvuči strože a nije:
+samo pomera prepravku na „otključaj pa prepravi", a u međuvremenu blokira
+ispravku očigledne greške u kucanju. Snimak umesto toga čini ispravku
+**bezopasnom po merenje** — brojevi čitaju ono što je zapečaćeno, živa polja
+ostaju izmenjiva, a izmena posle pečata dobija značku.
+
+Tri pravila su ista kao kod `equity_at_entry`: piše se jednom (na prvi entry
+fill), nikad se ne prepisuje, briše se na povratak u `planned`. Bez backfill-a —
+istorija nema pečat i ne sme da glumi da ga ima; `plan_snapshot IS NULL` znači
+„čitaj živa polja", što važi za svaki trejd napisan pre migracije
+`20260921120000`.
+
+**Dve implementacije istog pravila, namerno.** `sealedNumber` u TypeScript-u i
+`public.tj_sealed_num` u SQL-u (koji `tj_position_stats` koristi za `entry_price`
+i `stop_price`, tj. za `risk_pts`). Obe poštuju isti redosled: ključ koji snimak
+ne nosi pada na živu kolonu; ključ koji nosi važi i kad drži `null` (plan koji
+namerno nije imao stop ne sme da pozajmi stop ukucan kasnije); a vrednost koja
+nije broj čita se kao `null` umesto da podigne grešku, jer view koji pukne ruši
+svaki ekran. Da se razilaze, jedan trejd bi imao dva R.
+
+**Šta pečat NE tvrdi.** Da je plan bio dobar, ni da je uopšte postojao: uvezeni
+trejd se pečati praznim snimkom, jer „nije bilo plana" jeste nalaz. Prazan snimak
+po ključu pada na živa polja, pa plan ukucan kasnije i dalje stoji na ekranu —
+samo se ne tvrdi da je to ono što je odlučeno pre ulaska.
+
+---
+
 ## Rezime — šta zahteva pažnju
 
 | # | Metrika | Verdikt | Akcija |

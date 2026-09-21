@@ -132,6 +132,12 @@ export async function getTradeForEdit(
   // leaving it here changes nothing that is written — but it would show up in
   // the bag the form reasons about as though it were an answer the trader gave.
   delete flat.equity_at_entry;
+  // The seal, for the same reason — and these two are strings, so the loop
+  // below would keep them and the form would reason about a timestamp as
+  // though it were an answer the trader typed. They travel on their own keys.
+  delete flat.plan_snapshot;
+  delete flat.plan_sealed_at;
+  delete flat.plan_amended_at;
 
   const fields: Record<string, string | number | string[] | null> = {};
   for (const [k, v] of Object.entries(flat)) {
@@ -146,6 +152,10 @@ export async function getTradeForEdit(
     trade_no: trade_no ?? null,
     status: (pos as RawPosition & { status?: string }).status ?? "planned",
     missed_at: (pos as RawPosition & { missed_at?: string | null }).missed_at ?? null,
+    plan_sealed_at:
+      (pos as RawPosition & { plan_sealed_at?: string | null }).plan_sealed_at ?? null,
+    plan_amended_at:
+      (pos as RawPosition & { plan_amended_at?: string | null }).plan_amended_at ?? null,
     playbook_id: (pos as RawPosition & { playbook_id?: string | null }).playbook_id ?? null,
     scale_out_levels: (pos as RawPosition & { scale_out_levels?: unknown }).scale_out_levels ?? [],
     rule_answers: ruleAnswers,

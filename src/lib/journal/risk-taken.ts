@@ -27,6 +27,7 @@
 
 import { numberFieldValue } from "./field-values";
 import { parseRiskPct } from "./plan-calculations";
+import { sealedNumber, sealedText } from "./plan-snapshot";
 import { plannedRiskPts } from "./position-stats";
 import type { TradeRow } from "./types";
 
@@ -58,9 +59,12 @@ export function riskMoneyAtEntry(row: TradeRow): number | null {
   const stats = row.stats;
   if (!stats) return null;
 
+  // The PLANNED stop distance as it was sealed at entry: this is the
+  // denominator of every R on the trade, and a stop widened after the fact
+  // would shrink every loss measured against it.
   const riskPts = plannedRiskPts(
-    numberFieldValue(row, "entry_price"),
-    numberFieldValue(row, "stop_price"),
+    sealedNumber(row, "entry_price"),
+    sealedNumber(row, "stop_price"),
     stats.avg_entry,
   );
   if (riskPts == null) return null;
@@ -96,11 +100,14 @@ export function riskPctTaken(row: TradeRow): number | null {
   return (money / equity) * 100;
 }
 
-/** The risk the trader chose from the dropdown, as a number. */
+/**
+ * The risk the trader chose from the dropdown, as a number — sealed, because
+ * the whole point of `matchedRiskIntent` is to compare what was done against
+ * what was INTENDED BEFOREHAND. Read live, the intent could be edited to match
+ * the size after the trade was already on.
+ */
 export function riskIntentPct(row: TradeRow): number | null {
-  return parseRiskPct(
-    (row as Record<string, unknown>).risk_pct as string | number | null,
-  );
+  return parseRiskPct(sealedText(row, "risk_pct"));
 }
 
 /**

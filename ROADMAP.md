@@ -1390,3 +1390,21 @@ Profit factor 2.4 na 12 trejdova i 2.4 na 300 izgledali su identično. Jedina od
   merenje.
 - **Držano istovremeno:** po paru instrumenata, broj dana zajedničke izloženosti i korelacija dnevnog
   P&L-a sa Fisher-z intervalom, koja se ne prikazuje ispod pet zajedničkih dana zatvaranja.
+
+### Faza D1 — plan se pečati na ulasku (21.09.2026.)
+
+- **Tri kolone** na `tj_positions` (`20260921120000_plan_snapshot.sql`): `plan_snapshot jsonb`,
+  `plan_sealed_at`, `plan_amended_at`. Snimak se piše na čuvanju koje trejdu prvi put da fill,
+  nikad se ne prepisuje, briše se na povratak u `planned`. Bez backfill-a: istorija nema pečat i
+  ne sme da glumi da ga ima.
+- **Snimak, ne brava.** Živa polja ostaju izmenjiva (ispravka greške u kucanju je i dalje moguća),
+  ali merenja čitaju pečat, pa se ne mogu popraviti pošto je ishod poznat. Prva izmena posle pečata
+  stampuje `plan_amended_at` — značka u gridu i red u formi.
+- **Čitači prešli na pečat:** entry slippage, target attainment (uključujući zapečaćenu scale-out
+  lestvicu), rizik preuzet na ulazu i namera iz `risk_pct`, i tracker pravila `thesis_written` i
+  `stop_loss_set` — poslednja dva su tek sa pečatom počela da mere ono što im komentar tvrdi.
+- **I sam R:** `tj_position_stats.risk_pts` čita `public.tj_sealed_num(...)`, SQL blizanca funkcije
+  `sealedNumber`. Bez toga bi proširen stop posle zatvaranja i dalje smanjivao svaki gubitak u R.
+  Dokazano na živoj bazi u transakciji koja se poništava: nijedan postojeći red se nije pomerio.
+- `tj_merge_positions` prepisan **doslovno** iz `20260920160000` sa tri dodata reda — pečat ostaje
+  preživelom trejdu i nikad se ne uzima od onog drugog. Provereno poređenjem `prosrc`-a, ne okom.

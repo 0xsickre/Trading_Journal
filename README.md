@@ -140,7 +140,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,871 tests across 172 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,906 tests across 173 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -447,6 +447,24 @@ Two different drawdown denominators exist on purpose:
   score stays comparable with theirs. **Never displayed.** It returns `null` — not `0` — when the
   curve fell from a peak that was never above zero, because a book that only lost has no profit peak
   to express the fall against.
+
+### The plan is sealed at entry
+
+Every figure in the next table compares a trade against its plan, and the plan used to be editable
+forever with no history. It is now **sealed**: on the save that first gives a trade fills,
+`tj_positions.plan_snapshot` captures `entry_price`, `stop_price`, `target_price`, `risk_pct`,
+`time_stop_days`, `thesis`, `invalidation` and `scale_out_levels` as they stood, with
+`plan_sealed_at`. Written once, never overwritten, cleared if the last fill is removed.
+
+A snapshot rather than a lock, on purpose. A lock only moves the edit to "unlock, then change" while
+blocking the honest correction of a typo; the snapshot makes the correction harmless instead. The
+measurements read the seal — slippage, target attainment, R (its denominator is the planned stop
+distance, via `tj_sealed_num` in the stats view), and the `thesis_written` / `stop_loss_set` tracker
+rules — the live fields stay editable, and the first edit after the seal stamps `plan_amended_at`,
+which the trade form and the journal grid both show.
+
+Trades written before this migration have no seal, and readers fall back to their live columns:
+history has no seal and must not pretend to one.
 
 ### Costs, plan and execution
 
@@ -1167,8 +1185,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,871 tests across 172 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,272 tests in 116 files) and `components` (environment `jsdom`, files `*.test.tsx`, 599
+2,906 tests across 173 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,307 tests in 117 files) and `components` (environment `jsdom`, files `*.test.tsx`, 599
 tests in 56 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

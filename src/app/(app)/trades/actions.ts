@@ -16,6 +16,12 @@ import {
   type PositionStatus,
 } from "@/lib/journal/trade-lifecycle";
 import { getEquityAtEntryPatch } from "@/lib/journal/equity";
+import {
+  planAmendedPatch,
+  planFieldsOf,
+  planSnapshotPatch,
+  type PlanSnapshot,
+} from "@/lib/journal/plan-snapshot";
 import { isFtmoAccountFrozen } from "@/lib/journal/ftmo-status";
 import { parseScaleOutLevels } from "@/lib/journal/scale-out";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
@@ -249,6 +255,14 @@ export async function createTrade(input: TradeInput) {
       ...playbookPatch(input),
       ...scaleOutPatch(input),
       ...excursionSourcePatch(patch.columns, null),
+      // The plan as it stood at entry. A trade created straight into fills
+      // (an import, or a trade logged after the fact) seals what it was
+      // created with; a plan seals nothing until it is entered.
+      ...planSnapshotPatch(
+        String(statusPatch.status) as PositionStatus,
+        null,
+        planFieldsOf({ ...patch.columns, ...scaleOutPatch(input) }),
+      ),
       // The risk denominator, frozen the moment the trade has an entry fill.
       // A trade saved as a plan gets nothing, and picks one up on the save that
       // gives it fills.
@@ -346,7 +360,7 @@ export async function updateTrade(id: string, input: TradeInput) {
   const { data: prevPos } = await supabase
     .from("tj_positions")
     .select(
-      "instrument, point_value_at_trade, custom, max_drawdown_price, max_profit_price, equity_at_entry",
+      "instrument, point_value_at_trade, custom, max_drawdown_price, max_profit_price, equity_at_entry, plan_snapshot, plan_amended_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -372,6 +386,12 @@ export async function updateTrade(id: string, input: TradeInput) {
         )
       : {};
 
+  // The plan this save leaves behind. `scale_out_levels` travels on its own
+  // key rather than in `patch.columns`, so it is folded back in here — a ladder
+  // is part of the plan, and a seal without it would call every later ladder
+  // edit an amendment of nothing.
+  const nextPlan = planFieldsOf({ ...patch.columns, ...scaleOutPatch(input) });
+
   // Fields, fills and rule answers in ONE transaction — the fix this path
   // needed most. As three round trips the position UPDATE was already committed
   // by the time the fills and the answers were written, so a failure in either
@@ -395,6 +415,21 @@ export async function updateTrade(id: string, input: TradeInput) {
       ...playbookPatch(input),
       ...scaleOutPatch(input),
       ...(execs.length > 0 ? { needs_review: false } : {}),
+      // Sealed on the save that first gives the trade fills; afterwards the
+      // seal stands and a change to any sealed field is STAMPED instead. The
+      // comparison is by value, because this form sends every plan column on
+      // every save — "the payload named it" would mark an amendment each time
+      // the notes were edited.
+      ...planSnapshotPatch(
+        String(statusPatch.status) as PositionStatus,
+        prevPos,
+        nextPlan,
+      ),
+      ...planAmendedPatch(
+        prevPos.plan_snapshot as PlanSnapshot | null,
+        nextPlan,
+        prevPos.plan_amended_at as string | null,
+      ),
       ...excursionSourcePatch(patch.columns, prevPos),
       // Stamped on the save that first gives the trade fills, and never
       // restated afterwards — editing a fill changes how much was risked, not

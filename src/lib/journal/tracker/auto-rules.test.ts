@@ -118,6 +118,26 @@ describe("day attribution", () => {
     expect(d3.stop_loss_set.verdict).toBe("na");
   });
 
+  it("asks the SEALED plan whether the reason and the stop existed", () => {
+    // The day alone cannot catch this one: the trade was entered with neither
+    // a stop nor a reason, and both were typed in afterwards. Read from the
+    // live row the day would score a clean entry.
+    const backfilled = {
+      ...mkRow(swing),
+      stop_price: 90,
+      thesis: "Written at the exit, about the exit",
+      plan_snapshot: { stop_price: null, thesis: "" },
+    } as unknown as TradeRow;
+    const day = evaluateAutoRulesForDay(
+      "2026-03-02",
+      buildTradeDayIndex([backfilled], () => "UTC"),
+      LIMITS,
+      flatEquity,
+    );
+    expect(day.stop_loss_set.verdict).toBe("fail");
+    expect(day.thesis_written.verdict).toBe("fail");
+  });
+
   it("charges the thesis to the OPEN day, which is the whole rule", () => {
     // A thesis written afterwards is a rationalisation. The check is that the
     // reason existed BEFORE the position did, and only the open day can say so

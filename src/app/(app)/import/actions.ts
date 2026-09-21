@@ -18,6 +18,7 @@ import {
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
 import { getAccountCurrency, getAccounts } from "@/lib/journal/accounts";
 import { equityAtEntryPatch, firstEntryAt } from "@/lib/journal/equity-at-entry";
+import { planFieldsOf, planSnapshotPatch } from "@/lib/journal/plan-snapshot";
 import { getDayOpeningEquities } from "@/lib/journal/equity";
 import { accountTimezoneResolver, zonedDateKey } from "@/lib/journal/time";
 import {
@@ -116,6 +117,16 @@ type PositionBefore = {
   max_profit_price: number | null;
   excursion_source: string | null;
   equity_at_entry: number | null;
+  // The plan, and the seal over it: a statement that fills a plan seals what
+  // the trader had written before the file arrived.
+  plan_snapshot: Json | null;
+  entry_price: number | null;
+  stop_price: number | null;
+  risk_pct: string | null;
+  time_stop_days: number | null;
+  thesis: string | null;
+  invalidation: string | null;
+  scale_out_levels: Json | null;
 };
 
 export async function commitImport(input: CommitInput): Promise<CommitResult> {
@@ -269,6 +280,16 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
                 }
               : {}),
             ...instrumentSnapshot(instrument, specs, accountCurrency),
+            // A trade that arrives already filled had no plan in this journal,
+            // and that is what gets sealed: an empty seal, or the target the
+            // file carried. Readers fall back to the live fields per key, so a
+            // plan typed in afterwards still shows — it just is not claimed to
+            // be what was decided before entry.
+            ...planSnapshotPatch(
+              statusOf(item.executions),
+              null,
+              planFieldsOf(item.target_price != null ? { target_price: item.target_price } : {}),
+            ),
             ...equityPatchFor(item, null),
           })
           .select("id")
@@ -343,7 +364,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
     const { data: prevPos, error: posErr } = await supabase
       .from("tj_positions")
       .select(
-        "status, needs_review, gross_pnl_override, target_price, max_drawdown_price, max_profit_price, excursion_source, equity_at_entry",
+        "status, needs_review, gross_pnl_override, target_price, max_drawdown_price, max_profit_price, excursion_source, equity_at_entry, plan_snapshot, entry_price, stop_price, risk_pct, time_stop_days, thesis, invalidation, scale_out_levels",
       )
       .eq("id", pid)
       .maybeSingle();
@@ -391,6 +412,18 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
                 excursion_source: "tradingview",
               }
             : {}),
+          // The same moment seals the plan: a plan the statement turns into a
+          // position is sealed as the trader wrote it, including a target this
+          // very merge is writing — sealing the old null would make the next
+          // form save read as an amendment of a field nobody touched.
+          ...planSnapshotPatch(
+            statusOf(item.executions),
+            before,
+            planFieldsOf({
+              ...before,
+              ...(targetWritten ? { target_price: item.target_price } : {}),
+            }),
+          ),
           // A plan that the statement turns into a position gets its
           // denominator here; one that already had an entry keeps its own.
           // `before` carries the column, so the rollback below restores it.

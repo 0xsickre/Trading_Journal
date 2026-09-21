@@ -168,6 +168,14 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- prvi put dobio entry fill (20260920160000). Imenilac svakog procenta rizika;
   -- jedini činilac tog računa koji se ne može rekonstruisati unazad.
   equity_at_entry      numeric,
+  -- Plan kakav je bio kad je trejd prvi put dobio entry fill (20260921120000).
+  -- Piše se jednom, nikad se ne prepisuje, briše se na povratak u `planned`.
+  -- NULL znači da trejd prethodi pečatu — čitači tada padaju na živa polja.
+  plan_snapshot        jsonb,
+  plan_sealed_at       timestamptz,
+  -- Prvi put kad je zapečaćeno polje izmenjeno posle ulaska. Merenja i dalje
+  -- čitaju pečat; ovo samo nosi značku na ekranu.
+  plan_amended_at      timestamptz,
   CONSTRAINT tj_positions_pkey PRIMARY KEY (id),
   CONSTRAINT tj_positions_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -190,7 +198,9 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   CONSTRAINT tj_positions_time_stop_days_positive
     CHECK (time_stop_days IS NULL OR time_stop_days > 0),
   CONSTRAINT tj_positions_equity_at_entry_positive
-    CHECK (equity_at_entry IS NULL OR equity_at_entry > 0)
+    CHECK (equity_at_entry IS NULL OR equity_at_entry > 0),
+  CONSTRAINT tj_positions_plan_snapshot_object
+    CHECK (plan_snapshot IS NULL OR jsonb_typeof(plan_snapshot) = 'object')
 );
 CREATE INDEX IF NOT EXISTS tj_positions_user_idx
   ON public.tj_positions USING btree (user_id);

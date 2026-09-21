@@ -13,7 +13,7 @@
  * describes days you did not live.
  */
 
-import { stringFieldValue } from "../field-values";
+import { sealedNumber, sealedText } from "../plan-snapshot";
 import { addDaysToDayKey, zonedDateKey } from "../time";
 import { weekStartOfDayKey } from "../weekly-review";
 import { matchedRiskIntent, riskMoneyAtEntry, riskPctTaken } from "../risk-taken";
@@ -79,7 +79,7 @@ export type TrackerTrade = {
   netPl: number | null;
   hasPlaybook: boolean;
   hasStop: boolean;
-  /** A non-empty `thesis` on the row — the reason for the trade, in writing. */
+  /** A non-empty `thesis` in the SEALED plan — the reason, written beforehand. */
   hasThesis: boolean;
   /**
    * Risk taken at entry, in account currency and as a share of the equity the
@@ -127,10 +127,15 @@ function toTrackerTrade(row: TradeRow, tz: string): TrackerTrade | null {
     closeDay: row.stats?.closed_at ? zonedDateKey(row.stats.closed_at, tz) : null,
     netPl: row.stats?.net_pl ?? null,
     hasPlaybook: row.playbook_id != null && row.playbook_id !== "",
-    hasStop: row.stop_price != null,
+    hasStop: sealedNumber(row, "stop_price") != null,
+    // Both read the SEALED plan, which is the whole content of these two rules:
+    // they ask whether the stop and the reason existed before the position did.
+    // Read live, a thesis typed after the close would satisfy "thesis written"
+    // — the rationalisation the rule exists to catch.
+    //
     // Trimmed: a thesis of three spaces is not a thesis, and storing one would
     // let the rule be satisfied by pressing the spacebar.
-    hasThesis: (stringFieldValue(row, "thesis") ?? "").trim() !== "",
+    hasThesis: (sealedText(row, "thesis") ?? "").trim() !== "",
     riskMoney: riskMoneyAtEntry(row),
     riskPctTaken: riskPctTaken(row),
     matchedIntent: matchedRiskIntent(row),

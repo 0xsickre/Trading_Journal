@@ -101,6 +101,28 @@ describe("slippageFromTrade", () => {
   });
 });
 
+describe("slippage is measured against the SEALED plan", () => {
+  const sealed = {
+    id: "1",
+    entry_price: 100.5,
+    stop_price: 98,
+    direction: "long",
+    // Entered planning 100; the entry was later edited up to the fill price,
+    // which would read as a perfect entry off the live column.
+    plan_snapshot: { entry_price: 100, stop_price: 98 },
+    stats: { avg_entry: 100.5, entry_qty: 1, point_value: 1 },
+  } as unknown as TradeRow;
+
+  it("does not let an entry edited after the fill erase the slippage", () => {
+    expect(slippageFromTrade(sealed)!.adversePts).toBe(0.5);
+  });
+
+  it("still reads the live columns for a trade that has no seal", () => {
+    const unsealed = { ...sealed, plan_snapshot: null } as unknown as TradeRow;
+    expect(slippageFromTrade(unsealed)!.adversePts).toBe(0);
+  });
+});
+
 describe("fmtSlippageR", () => {
   it("inverts adverse to negative display", () => {
     expect(fmtSlippageR(0.08)).toBe("-0.08R");

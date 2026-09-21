@@ -1,4 +1,4 @@
-import { numberFieldValue as numField } from "./field-values";
+import { sealedNumber, sealedValue } from "./plan-snapshot";
 import type { TradeRow } from "./types";
 import {
   blendedPlannedRewardR,
@@ -52,14 +52,15 @@ export function plannedRewardFromTrade(row: TradeRow): number | null {
   const parsed = parsePlannedRewardR(row.planned_rr as string | null);
   if (parsed != null) return parsed;
 
+  // The sealed plan, for the same reason the stored `planned_rr` wins over
+  // live prices: this is the DENOMINATOR of Target attainment, so lowering a
+  // target after the close must not raise the score.
   return blendedPlannedRewardR({
     direction: (row.direction as string) ?? null,
-    entry: numField(row, "entry_price"),
-    stop: numField(row, "stop_price"),
-    target: numField(row, "target_price"),
-    levels: parseScaleOutLevels(
-      (row as { scale_out_levels?: unknown }).scale_out_levels,
-    ),
+    entry: sealedNumber(row, "entry_price"),
+    stop: sealedNumber(row, "stop_price"),
+    target: sealedNumber(row, "target_price"),
+    levels: parseScaleOutLevels(sealedValue(row, "scale_out_levels")),
   });
 }
 

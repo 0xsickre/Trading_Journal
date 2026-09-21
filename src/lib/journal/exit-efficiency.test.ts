@@ -41,6 +41,39 @@ describe("plannedRewardFromTrade", () => {
   });
 });
 
+describe("the planned reward comes from the sealed plan", () => {
+  it("a target lowered after the close does not raise target attainment", () => {
+    const row = {
+      entry_price: 100,
+      stop_price: 98,
+      // Today the row says the target was 104 — a 2R plan, which would make a
+      // 2R result look like a perfect exit.
+      target_price: 104,
+      plan_snapshot: { entry_price: 100, stop_price: 98, target_price: 106 },
+      stats: { realized_r: 2 },
+    } as unknown as TradeRow;
+    expect(plannedRewardFromTrade(row)).toBe(3);
+    expect(exitEfficiencyFromTrade(row)!.pct).toBeCloseTo(66.67, 1);
+  });
+
+  it("weighs a sealed scale-out ladder, not the one edited afterwards", () => {
+    const row = {
+      entry_price: 100,
+      stop_price: 98,
+      target_price: 106,
+      scale_out_levels: [{ pct: 50, price: 106 }],
+      plan_snapshot: {
+        entry_price: 100,
+        stop_price: 98,
+        target_price: 106,
+        scale_out_levels: [{ pct: 50, price: 102 }],
+      },
+    } as unknown as TradeRow;
+    // Half out at 1R, half at 3R = 2R.
+    expect(plannedRewardFromTrade(row)).toBeCloseTo(2);
+  });
+});
+
 describe("exitEfficiencyFromTrade", () => {
   it("winner partial capture", () => {
     const row = {

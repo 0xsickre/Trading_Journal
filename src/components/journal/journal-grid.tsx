@@ -34,6 +34,7 @@ import {
   Download,
   MoreHorizontal,
   Pencil,
+  PencilLine,
   Tag as TagIcon,
   Trash2,
   AlertTriangle,
@@ -926,6 +927,11 @@ export function JournalGrid({
               {t.needs_review && (
                 <span title="Needs review">
                   <AlertTriangle className="size-3.5 text-[var(--chart-4)]" />
+                </span>
+              )}
+              {t.plan_amended_at != null && (
+                <span title="Plan edited after entry — slippage, R and target attainment still read the plan as it was sealed">
+                  <PencilLine className="size-3.5 text-[var(--chart-4)]" />
                 </span>
               )}
             </div>
