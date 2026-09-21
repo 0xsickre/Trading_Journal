@@ -12,12 +12,7 @@ const journal = (
   report_date,
   mental_temp: 6,
   no_trade_day: false,
-  impulse_fomo: false,
-  impulse_fear: false,
-  impulse_greed: false,
-  impulse_fear_wrong: false,
   locked: false,
-  hasNote: false,
   ...over,
 });
 

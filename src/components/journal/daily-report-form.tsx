@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { StarRating } from "@/components/journal/star-rating";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
   emptyDailyReport,
@@ -63,12 +62,6 @@ function toFormState(
   }
   return {
     mental_temp: report.mental_temp,
-    macro_note: report.macro_note,
-    impulse_fomo: report.impulse_fomo,
-    impulse_fear: report.impulse_fear,
-    impulse_greed: report.impulse_greed,
-    impulse_fear_wrong: report.impulse_fear_wrong,
-    impulse_note: report.impulse_note,
     no_trade_day: report.no_trade_day ?? false,
   };
 }
@@ -162,18 +155,7 @@ export function DailyReportForm({
 
   function toggleNoTradeDay(checked: boolean) {
     setDirty(true);
-    setForm((prev) => ({
-      ...prev,
-      no_trade_day: checked,
-      ...(checked
-        ? {
-            impulse_fomo: false,
-            impulse_fear: false,
-            impulse_greed: false,
-            impulse_fear_wrong: false,
-          }
-        : {}),
-    }));
+    setForm((prev) => ({ ...prev, no_trade_day: checked }));
   }
 
   /** Split out so locking can persist first — see LockDayButton. */
@@ -334,20 +316,6 @@ export function DailyReportForm({
             />
           </div>
 
-          {/* Same column as the old "macro events today", asked differently on
-              purpose. "Today" is the day trader's window; a position carried to
-              Thursday is exposed to Thursday's release whether or not it lands
-              in this session. */}
-          <div className="space-y-2">
-            <Label>Katalizatori pre planiranog izlaska</Label>
-            <Textarea
-              value={form.macro_note ?? ""}
-              onChange={(e) => patch("macro_note", e.target.value || null)}
-              placeholder="Šta se dešava između sada i trenutka kad očekujem da izađem — objave, earnings, vikend…"
-              rows={2}
-            />
-          </div>
-
           <div className="flex items-start gap-2 rounded-md border border-dashed p-3">
             <Checkbox
               id="no_trade_day"
@@ -371,62 +339,16 @@ export function DailyReportForm({
         </CardContent>
       </Card>
 
-      {!form.no_trade_day && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Kontrola impulsa</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Uhvati loše navike pre nego što se nagomilaju.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Impulsi danas (Daglasovi strahovi)</Label>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {(
-                  [
-                    ["impulse_fomo", "FOMO — jurio bez edge-a"],
-                    [
-                      "impulse_fear",
-                      "Strah od gubitka — oklevao ili izašao prerano",
-                    ],
-                    [
-                      "impulse_fear_wrong",
-                      "Strah da nisam u pravu — pomerio stop / usrednjavao naniže",
-                    ],
-                    [
-                      "impulse_greed",
-                      "Strah da ostavljam novac — uzeo profit prerano",
-                    ],
-                  ] as const
-                ).map(([key, label]) => (
-                  <div key={key} className="flex items-center gap-2">
-                    <Checkbox
-                      id={key}
-                      checked={form[key]}
-                      onCheckedChange={(c) => patch(key, c === true)}
-                    />
-                    <label htmlFor={key} className="cursor-pointer text-sm">
-                      {label}
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
+      {/* The "Kontrola impulsa" card stood here: four Douglas fears as
+          checkboxes and a note. Removed in Phase E, and not because the
+          question is wrong — because NOTHING EVER READ THE ANSWER. No
+          dimension grouped on it, no insight rule joined it, no metric counted
+          it; four booleans and a note were written every trading day and
+          rendered back as four badges in the month list. The same question
+          lives on the trade as `psychology_tags`, which IS a dimension and can
+          be grouped, filtered and compared. */}
 
-            <div className="space-y-2">
-              <Label>Beleška</Label>
-              <Textarea
-                value={form.impulse_note ?? ""}
-                onChange={(e) => patch("impulse_note", e.target.value || null)}
-                rows={2}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* What used to be the "Evening · debrief" card lived here: what I learned,
+      {/* What used to be the "Evening · debrief" card lived here      {/* What used to be the "Evening · debrief" card lived here: what I learned,
           what I will change tomorrow, the day overview, whether I broke a rule.
           Five prose fields, asked daily, mid-hold. All five moved to the weekly
           review — a debrief written before the position is closed is a debrief

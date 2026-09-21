@@ -25,18 +25,20 @@ async function dayError(reportDate: string): Promise<string | null> {
   return null;
 }
 
-// Eight fields, down from twenty-one. What left did not move here — it moved to
-// the position (`micromanage`, now `savePositionCheckin` below) or to the weekly
-// review (the grade and the debrief prose). What stayed is what a day mid-hold
-// can honestly answer.
+// Two fields, down from twenty-one.
+//
+// Most of what left moved rather than died: to the position
+// (`micromanage`, now `savePositionCheckin` below) or to the weekly review (the
+// grade and the debrief prose). Phase E took the last six — the macro note and
+// the four Douglas impulse checkboxes with their note — because nothing ever
+// READ them: no dimension, no insight rule, no metric. The same question is
+// already asked where it can be grouped and counted, as `psychology_tags` on
+// the trade.
+//
+// What is left is a pre-market gate rather than a diary: how is your head, and
+// are you opening anything new today.
 const dailyReportSchema = z.object({
   mental_temp: z.number().int().min(1).max(5).nullable(),
-  macro_note: z.string().nullable(),
-  impulse_fomo: z.boolean(),
-  impulse_fear: z.boolean(),
-  impulse_greed: z.boolean(),
-  impulse_fear_wrong: z.boolean(),
-  impulse_note: z.string().nullable(),
   no_trade_day: z.boolean(),
 });
 
@@ -99,8 +101,6 @@ export async function saveDailyReport(
     user_id: user.id,
     report_date: reportDate,
     ...parsed.data,
-    macro_note: emptyToNull(parsed.data.macro_note),
-    impulse_note: emptyToNull(parsed.data.impulse_note),
   };
 
   const { data, error } = await supabase

@@ -21,12 +21,6 @@ export type DailyReport = {
    * which is the day trader's window. A position held to Thursday is exposed to
    * Thursday's release whether or not it lands today.
    */
-  macro_note: string | null;
-  impulse_fomo: boolean;
-  impulse_fear: boolean;
-  impulse_greed: boolean;
-  impulse_fear_wrong: boolean;
-  impulse_note: string | null;
   no_trade_day: boolean;
   /**
    * When the day's process journal was sealed. Null while it is still editable.
@@ -104,12 +98,6 @@ export function emptyDailyReport(reportDate: string): DailyReportInput {
   return {
     report_date: reportDate,
     mental_temp: null,
-    macro_note: null,
-    impulse_fomo: false,
-    impulse_fear: false,
-    impulse_greed: false,
-    impulse_fear_wrong: false,
-    impulse_note: null,
     no_trade_day: false,
   };
 }

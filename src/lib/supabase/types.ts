@@ -164,13 +164,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          impulse_fear: boolean
-          impulse_fear_wrong: boolean
-          impulse_fomo: boolean
-          impulse_greed: boolean
-          impulse_note: string | null
           locked_at: string | null
-          macro_note: string | null
           mental_temp: number | null
           no_trade_day: boolean
           report_date: string
@@ -180,13 +174,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
-          impulse_fear?: boolean
-          impulse_fear_wrong?: boolean
-          impulse_fomo?: boolean
-          impulse_greed?: boolean
-          impulse_note?: string | null
           locked_at?: string | null
-          macro_note?: string | null
           mental_temp?: number | null
           no_trade_day?: boolean
           report_date: string
@@ -196,13 +184,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
-          impulse_fear?: boolean
-          impulse_fear_wrong?: boolean
-          impulse_fomo?: boolean
-          impulse_greed?: boolean
-          impulse_note?: string | null
           locked_at?: string | null
-          macro_note?: string | null
           mental_temp?: number | null
           no_trade_day?: boolean
           report_date?: string

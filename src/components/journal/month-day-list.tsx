@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Lock, NotebookPen } from "lucide-react";
+import { Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { MonthNav } from "@/components/journal/month-calendar";
@@ -12,7 +12,6 @@ import {
   isoWeekdayOfDayKey,
 } from "@/lib/journal/time";
 import type { MonthDayEntry } from "@/lib/journal/month-day-list";
-import type { DailyReportListRow } from "@/lib/journal/daily-report-queries";
 
 /**
  * The month as a list, showing what the grid cannot.
@@ -151,11 +150,6 @@ function DayRow({
         </span>
 
         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-          {impulsesOf(journal).map((label) => (
-            <Badge key={label} variant="outline" className="text-[10px]">
-              {label}
-            </Badge>
-          ))}
           {journal?.no_trade_day && (
             <Badge variant="secondary" className="text-[10px]">
               No trade
@@ -164,28 +158,11 @@ function DayRow({
         </span>
 
         <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
-          {journal?.hasNote && <NotebookPen className="size-3.5" />}
           {journal?.locked && <Lock className="size-3.5" />}
         </span>
       </Link>
     </li>
   );
-}
-
-/**
- * The impulses actually ticked, in Douglas' order.
- *
- * Only the ticked ones. Four greyed-out labels on every row would make a clean
- * day look as busy as a bad one, and the list is scanned, not read.
- */
-function impulsesOf(journal: DailyReportListRow | null): string[] {
-  if (!journal) return [];
-  const out: string[] = [];
-  if (journal.impulse_fomo) out.push("FOMO");
-  if (journal.impulse_fear) out.push("Fear of losing");
-  if (journal.impulse_fear_wrong) out.push("Fear of being wrong");
-  if (journal.impulse_greed) out.push("Left money");
-  return out;
 }
 
 /**

@@ -1491,3 +1491,18 @@ dobijaju `follow_rate`: svih pet do sada su bile ishod.
 - Usput: `merge-positions.test.ts` je čuvao SQL iz `20260920160000` — fajl koji je D1 u međuvremenu
   nadjačao. Test je sada sam nalazi poslednju migraciju koja definiše funkciju, pa ne može da
   zastari.
+
+### E3 — dnevna proza koju niko nije čitao
+
+`tj_daily_reports` gubi `macro_note` i četiri „Daglasova straha" sa beleškom
+(`20260921160000_drop_daily_prose.sql`). Pisali su se svakog trgovačkog dana i vraćali na ekran kao
+četiri značke u mesečnoj listi — i to je sve: nema dimenzije, nema insight pravila, nema metrike
+koja ih čita. Isto pitanje postoji kao `psychology_tags` na trejdu, gde JESTE dimenzija i može da se
+grupiše i uporedi sa ishodom.
+
+`mental_temp` i `no_trade_day` OSTAJU: prvo je kapija pre ulaska (čitaju je `dimensions.ts` i
+pravilo `low_mental_temp_entry`), drugo je odluka o danu. Dnevni izveštaj sada ima dva odgovora,
+sa dvadeset jednog na početku.
+
+Usput: mesečna lista je čitala dve prozne kolone samo da bi nacrtala tačku „ima beleške" — read
+more than it ships, kako je i pisalo u komentaru. Sad ne čita ništa od toga.

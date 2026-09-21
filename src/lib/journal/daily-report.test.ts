@@ -55,8 +55,6 @@ describe("emptyDailyReport", () => {
     const row = emptyDailyReport("2026-07-22");
     expect(row.report_date).toBe("2026-07-22");
     expect(row.mental_temp).toBeNull();
-    expect(row.macro_note).toBeNull();
-    expect(row.impulse_fomo).toBe(false);
     expect(row.no_trade_day).toBe(false);
   });
 });

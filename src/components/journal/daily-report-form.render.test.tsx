@@ -84,12 +84,6 @@ function report(over: Partial<DailyReport> = {}): DailyReport {
     user_id: "u1",
     report_date: "2026-04-02",
     mental_temp: null,
-    macro_note: null,
-    impulse_fomo: false,
-    impulse_fear: false,
-    impulse_greed: false,
-    impulse_fear_wrong: false,
-    impulse_note: null,
     no_trade_day: false,
     locked_at: null,
     created_at: "2026-04-02T00:00:00Z",
@@ -193,12 +187,12 @@ describe("a locked day disables everything, including the embedded tracker check
   });
 });
 
-describe("no-trade-day clears the impulse fields it hides", () => {
-  it("checking it hides the impulse card — but not the open positions", async () => {
+describe("no new entry today", () => {
+  it("keeps the open positions on screen — holding is a decision too", async () => {
     const user = userEvent.setup({ delay: null });
     render(
       <DailyReportForm
-        report={report({ impulse_fomo: true, impulse_fear: true })}
+        report={report()}
         reportDate="2026-04-02"
         today="2026-04-10"
         timezone="America/New_York"
@@ -207,10 +201,11 @@ describe("no-trade-day clears the impulse fields it hides", () => {
         tracker={trackerData()}
       />,
     );
-    expect(screen.getByText("Kontrola impulsa")).toBeInTheDocument();
 
     await user.click(screen.getByRole("checkbox", { name: /Danas bez novog ulaska/ }));
 
+    // The impulse card it used to hide is gone entirely (Phase E): four
+    // checkboxes and a note that nothing ever read.
     expect(screen.queryByText("Kontrola impulsa")).not.toBeInTheDocument();
     // The point of the reworded label. "No new entry" is not "no exposure": a
     // swing book's quietest days are the ones spent holding, and hiding the
@@ -429,12 +424,13 @@ describe("moving between days", () => {
     expect(next).toBeDisabled();
   });
 
-  it("asks before leaving a day with unsaved text, and stays if told to", async () => {
-    // The form remounts per day: without this, typed text vanished on an arrow.
+  it("asks before leaving a day with an unsaved answer, and stays if told to", async () => {
+    // The form remounts per day: without this, an answer given vanished on an
+    // arrow. Any field will do — since Phase E the day has two of them, so
+    // this uses the checkbox rather than the prose that used to be here.
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     drawOn("2026-04-02", "2026-04-10");
-    const note = screen.getByPlaceholderText(/Šta se dešava između sada/);
-    fireEvent.change(note, { target: { value: "CPI u četvrtak" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /Danas bez novog ulaska/ }));
 
     const prev = screen.getByLabelText("Prethodni dan");
     const click = new MouseEvent("click", { bubbles: true, cancelable: true });

@@ -16,12 +16,7 @@ const journal = (over: Partial<DailyReportListRow> = {}): DailyReportListRow => 
   report_date: "2026-04-07",
   mental_temp: 3,
   no_trade_day: false,
-  impulse_fomo: false,
-  impulse_fear: false,
-  impulse_greed: false,
-  impulse_fear_wrong: false,
   locked: false,
-  hasNote: false,
   ...over,
 });
 
@@ -61,16 +56,6 @@ describe("MonthDayList", () => {
     );
   });
 
-  it("NAMES ONLY THE IMPULSES ACTUALLY TICKED", () => {
-    // Four greyed-out labels on every row would make a clean day look as busy
-    // as a bad one, and the list is scanned rather than read.
-    list([entry({ journal: journal({ impulse_fomo: true, impulse_greed: true }) })]);
-    expect(screen.getByText("FOMO")).toBeInTheDocument();
-    expect(screen.getByText("Left money")).toBeInTheDocument();
-    expect(screen.queryByText("Fear of losing")).not.toBeInTheDocument();
-    expect(screen.queryByText("Fear of being wrong")).not.toBeInTheDocument();
-  });
-
   it("SHOWS A DASH, NOT A ZERO, on a day that was written but not traded", () => {
     // The row is here because of the journal. Printing $0.00 would claim a flat
     // result was traded for — the distinction the whole list is built on.
@@ -93,11 +78,9 @@ describe("MonthDayList", () => {
     expect(screen.getByText("0%")).toBeInTheDocument();
   });
 
-  it("marks a sealed day and a day carrying a note", () => {
-    const { container } = list([
-      entry({ journal: journal({ locked: true, hasNote: true }) }),
-    ]);
-    expect(container.querySelectorAll("svg").length).toBeGreaterThanOrEqual(2);
+  it("marks a sealed day", () => {
+    const { container } = list([entry({ journal: journal({ locked: true }) })]);
+    expect(container.querySelectorAll("svg").length).toBeGreaterThanOrEqual(1);
   });
 
   it("KEEPS view=list ON EVERY MONTH LINK, so the arrows do not drop you back into the grid", () => {

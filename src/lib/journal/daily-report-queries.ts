@@ -63,21 +63,16 @@ export async function getDailyReportDatesInRange(
  * `locked_at`, and a list whose whole point is the journal's CONTENT cannot
  * omit the four flags the reader ticked.
  *
- * The two prose fields are read and thrown away, kept only as "was anything
- * written". That is a deliberate trade: it reads more than it ships. A month is
- * at most 31 rows, so the read is cheap, while shipping the notes themselves
- * would put a page of prose per day on the wire to draw one dot.
+ * Four fields, down from nine. Phase E dropped the macro note, the four
+ * impulse booleans and the impulse note from the table itself, so there is no
+ * prose on a day any more and nothing to read-and-throw-away: what a day now
+ * holds is a mental temperature, whether anything new was opened, and the lock.
  */
 export type DailyReportListRow = {
   report_date: string;
   mental_temp: number | null;
   no_trade_day: boolean;
-  impulse_fomo: boolean;
-  impulse_fear: boolean;
-  impulse_greed: boolean;
-  impulse_fear_wrong: boolean;
   locked: boolean;
-  hasNote: boolean;
 };
 
 /**
@@ -97,19 +92,11 @@ export async function getDailyReportsInRange(
     report_date: string;
     mental_temp: number | null;
     no_trade_day: boolean;
-    impulse_fomo: boolean;
-    impulse_fear: boolean;
-    impulse_greed: boolean;
-    impulse_fear_wrong: boolean;
     locked_at: string | null;
-    macro_note: string | null;
-    impulse_note: string | null;
   }>((lo, hi) =>
     supabase
       .from("tj_daily_reports")
-      .select(
-        "report_date, mental_temp, no_trade_day, impulse_fomo, impulse_fear, impulse_greed, impulse_fear_wrong, locked_at, macro_note, impulse_note",
-      )
+      .select("report_date, mental_temp, no_trade_day, locked_at")
       .gte("report_date", from)
       .lte("report_date", to)
       .order("report_date")
@@ -120,13 +107,7 @@ export async function getDailyReportsInRange(
     report_date: r.report_date,
     mental_temp: r.mental_temp,
     no_trade_day: r.no_trade_day,
-    impulse_fomo: r.impulse_fomo,
-    impulse_fear: r.impulse_fear,
-    impulse_greed: r.impulse_greed,
-    impulse_fear_wrong: r.impulse_fear_wrong,
     locked: r.locked_at != null,
-    hasNote:
-      (r.macro_note ?? "").trim() !== "" || (r.impulse_note ?? "").trim() !== "",
   }));
 }
 
