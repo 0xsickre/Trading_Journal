@@ -163,8 +163,16 @@ export type DrawdownStats = {
   /**
    * Worst drop as a share of peak EQUITY at the time, including cash flow.
    * This is the number to show a human.
+   *
+   * `0` means "never fell". **`null` means the question has no answer**: the
+   * curve fell, and there was no positive peak equity to divide by — an
+   * account with no starting balance whose P&L never got above water. The two
+   * were one value until Phase E, and the zero they shared scored a perfect
+   * 100 on the survival axis for a book that had only ever lost. The same
+   * distinction `maxPctOfPeakPnl` below already makes, for the same reason and
+   * after the same bug.
    */
-  maxPctOfEquity: number;
+  maxPctOfEquity: number | null;
   /**
    * Worst drop as a share of peak cumulative P&L before the drop, per the
    * TradeZella formula. Exists so the composite score stays comparable with
@@ -238,7 +246,7 @@ export function computeDrawdown(timeline: BalancePoint[]): DrawdownStats {
 
   let maxMoney = 0;
   let maxAt: string | null = null;
-  let maxPctOfEquity = 0;
+  let maxPctOfEquity: number | null = 0;
   // Starts at 0 — "never fell" — and only becomes null if a fall happens with
   // no positive peak behind it. The two zeros the old code conflated are now
   // the initial 0 (nothing fell) and null (fell, nothing to divide by).
@@ -261,7 +269,7 @@ export function computeDrawdown(timeline: BalancePoint[]): DrawdownStats {
       maxMoney = w.dropMoney;
       maxAt = w.point.at || null;
       maxPctOfEquity =
-        w.peakEquity > 0 ? (Math.abs(w.dropMoney) / w.peakEquity) * 100 : 0;
+        w.peakEquity > 0 ? (Math.abs(w.dropMoney) / w.peakEquity) * 100 : null;
       maxPctOfPeakPnl =
         w.peakPnl > 0 ? (Math.abs(w.dropMoney) / w.peakPnl) * 100 : null;
     }

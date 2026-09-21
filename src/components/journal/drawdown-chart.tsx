@@ -125,7 +125,10 @@ export function DrawdownChart({
                       // "Trenutni" below — before this fix "Max 40.00%" sat next to
                       // "Trenutni −15.00%" and read like a gain, not the worse of the
                       // two drawdowns.
-                      fmtPct(-stats.maxPctOfEquity, 2)
+                      fmtPct(
+                        stats.maxPctOfEquity == null ? null : -stats.maxPctOfEquity,
+                        2,
+                      )
                 }
               />
               <Figure

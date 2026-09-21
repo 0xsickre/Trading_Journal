@@ -1,5 +1,6 @@
 /**
- * Recovery factor, consistency, planned R — the risk half of the Sickre Score
+ * Recovery factor, consistency, planned R — report metrics, and until Phase E
+ * also components of the composite score that no longer exists
  * inputs, plus the planned-vs-realized comparison the spec calls for.
  */
 

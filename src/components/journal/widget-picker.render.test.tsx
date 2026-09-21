@@ -101,7 +101,7 @@ describe("the arrows that reorder the page", () => {
     );
     return open().then(async (user) => {
       await user.click(
-        screen.getByRole("button", { name: "Move Sickre Score up" }),
+        screen.getByRole("button", { name: "Move Process · Survival · Edge up" }),
       );
       expect(onMove).toHaveBeenCalledWith("score", -1);
       expect(onToggle).not.toHaveBeenCalled();

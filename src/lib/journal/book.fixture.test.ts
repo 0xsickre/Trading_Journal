@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { computeStats } from "./analytics";
-import { buildBalanceTimeline, computeDrawdown } from "./balance";
+import {
+  buildBalanceTimeline,
+  computeDrawdown,
+  drawdownDuration,
+  drawdownEpisodes,
+} from "./balance";
 import { EXACT_ZERO_RANGE } from "./breakeven";
 import { enrichTrades } from "./enriched-trade";
 import { avgWinLossRatio, consistencyScore, recoveryFactor } from "./risk-metrics";
-import { computeSickreScore } from "./sickre-score";
+import { computeScorecard } from "./scorecard";
 import { BOOK, BOOK_NET, CLOSE_DAYS, TZ, shapedBook } from "./book.fixture";
 import type { RealizedTrade } from "./analytics";
 
@@ -166,54 +171,80 @@ describe("the book, attributed to days", () => {
 
 describe("the book, scored", () => {
   /**
-   * The Sickre Score over exactly the figures derived above.
+   * The three axes over exactly the figures derived above.
    *
-   *   max drawdown     40% → 100 − 40                   → 60      × 25 = 1500
-   *   profit factor  2.20  → RATIO_BANDS floor 2.2      → 80      × 20 = 1600
-   *   consistency    37.28 → carried through as-is      → 37.2837 × 15 =  559.26
-   *   avg win/loss   1.76  → below the 1.8 floor        → 20      ×  5 =  100
-   *   recovery        3.00 → RECOVERY_BANDS floor 3.0   → 70      ×  5 =  350
-   *                                                        total  4109.26 / 70
+   *   Survival  drawdown   200 / 500 = 40 %      → 100 − 40    = 60
+   *             under water  peak 03-10 → 03-13  → 100 − 3/90  = 96.67
+   *                                                    mean    = 78.33
+   *   Edge      decided R: 3, −1, 2, −0.5, 1.5, −2, 4, −1.5, 0.5
+   *             sum 6 over 9                              = 0.667R
+   *   Process   no tracker history, no answered rules     = null
    *
-   * Win % is not in this table any more, and the 55.56 % this book runs is the
-   * reason why: on the old scale it scored 92.59, the second-best component in
-   * a book whose actual edge was mediocre. The fixture has no FTMO account, so
-   * headroom is absent too and the coverage is the trade-derived 70.
+   * The drawdown is over PEAK EQUITY now rather than peak cumulative P&L. On
+   * this fixture the two are the same number — the timeline starts at 0, so
+   * equity IS cumulative P&L — which is why the 40 % above is unchanged from
+   * when the composite used the other base.
+   *
+   * Process being null is the point of having three numbers instead of one: a
+   * book of trades says nothing about whether its trader kept their own rules,
+   * and the old composite would have folded that silence into a score anyway.
    */
-  const score = () => {
-    const s = stats();
+  const card = () => {
     const dd = drawdown();
-    return computeSickreScore({
-      profitFactor: s.profitFactor,
-      avgWinLossRatio: avgWinLossRatio(s.avgWinMoney, s.avgLossMoney),
-      maxDrawdownPctOfPeakPnl: dd.maxPctOfPeakPnl,
-      recoveryFactor: recoveryFactor(s.netSum, dd.maxMoney),
-      consistencyScore: consistencyScore(BOOK_NET).score,
-      sample: { trades: s.count, decided: s.wins + s.losses },
+    const episodes = drawdownEpisodes(
+      buildBalanceTimeline(
+        0,
+        BOOK.map((t) => ({ at: t.closedAt ?? "", pnl: t.net })),
+      ),
+      TZ,
+    );
+    return computeScorecard({
+      trackerPct: null,
+      followRatePct: null,
+      maxDrawdownPctOfEquity: dd.maxPctOfEquity,
+      underWaterDays: drawdownDuration(episodes).currentDays,
+      decidedRs: BOOK.filter((t) => t.net !== 0).map((t) => t.net / 100),
+      trades: BOOK.length,
     });
   };
 
-  it("scores each component where the band table puts it", () => {
-    const by = Object.fromEntries(
-      score().components.map((c) => [c.key, c.score]),
+  it("ends the book under water, three days from the last peak", () => {
+    // Trade 7 put the peak at 700 on the 10th; 8, 9 and 10 never got back to
+    // it. The book on screen is profitable AND still below its high.
+    const episodes = drawdownEpisodes(
+      buildBalanceTimeline(
+        0,
+        BOOK.map((t) => ({ at: t.closedAt ?? "", pnl: t.net })),
+      ),
+      TZ,
     );
-    expect(by.profitFactor).toBeCloseTo(80, 6);
-    expect(by.avgWinLoss).toBeCloseTo(20, 6);
-    expect(by.maxDrawdown).toBeCloseTo(60, 6);
-    expect(by.recovery).toBeCloseTo(70, 6);
-    expect(by.consistency).toBeCloseTo(37.2837, 3);
-    expect(by.winPct).toBeUndefined();
+    expect(drawdownDuration(episodes).currentDays).toBe(3);
   });
 
-  it("weights them into the number on the card", () => {
-    expect(score().score).toBeCloseTo(58.7, 2);
-    expect(score().coverage).toBe(70);
+  it("blends survival out of the depth and the time under water", () => {
+    expect(card().survival.score).toBeCloseTo(78.33, 2);
+    expect(card().survival.counted).toBe(2);
   });
 
-  it("calls a ten-trade sample provisional, and says so with the n", () => {
-    // Real, and thin. The card shows the score WITH its sample rather than
-    // hiding it or presenting it as settled.
-    expect(score().confidence).toEqual({ level: "provisional", trades: 10 });
+  it("states the edge as a measurement, with its sample", () => {
+    const edge = card().edge;
+    expect(edge.expectancyR).toBeCloseTo(6 / 9, 10);
+    expect(edge.n).toBe(9);
+    // Nine trades spanning −2R to +4R: the interval is far too wide to have
+    // ruled out zero, and the card says so rather than printing 0.67R as a
+    // finding.
+    expect(edge.inconclusive).toBe(true);
+  });
+
+  it("has nothing to say about process, and says nothing", () => {
+    expect(card().process.score).toBeNull();
+  });
+
+  it("calls a ten-trade sample provisional", () => {
+    // Real, and thin. The card shows the numbers WITH the sample rather than
+    // hiding them or presenting them as settled.
+    expect(card().provisional).toBe(true);
+    expect(card().trades).toBe(10);
   });
 });
 
@@ -225,7 +256,7 @@ describe("the book, scored", () => {
  */
 describe("the shapes a book can take", () => {
   // `shapedBook` lives in `book.fixture.ts`, shared with the render test.
-  const scoreOf = (trades: RealizedTrade[], nets: number[]) => {
+  const cardOf = (trades: RealizedTrade[]) => {
     const s = computeStats(trades, "net", EXACT_ZERO_RANGE);
     const dd = computeDrawdown(
       buildBalanceTimeline(
@@ -233,142 +264,79 @@ describe("the shapes a book can take", () => {
         trades.map((t) => ({ at: t.closedAt ?? "", pnl: t.net })),
       ),
     );
-    return computeSickreScore({
-      profitFactor: s.profitFactor,
-      avgWinLossRatio: avgWinLossRatio(s.avgWinMoney, s.avgLossMoney),
-      maxDrawdownPctOfPeakPnl: dd.maxPctOfPeakPnl,
-      recoveryFactor: recoveryFactor(s.netSum, dd.maxMoney),
-      consistencyScore: consistencyScore(nets).score,
-      sample: { trades: s.count, decided: s.wins + s.losses },
+    return computeScorecard({
+      trackerPct: null,
+      followRatePct: null,
+      maxDrawdownPctOfEquity: dd.maxPctOfEquity,
+      underWaterDays: null,
+      decidedRs: trades.filter((t) => t.net !== 0).map((t) => t.net / 100),
+      trades: s.count,
     });
   };
 
-  it("EMPTY — every statistic is 0 and the score refuses to exist", () => {
+  it("EMPTY — every statistic is 0 and nothing scores", () => {
     // The reported bug, in its general form. Each zero below is the honest
     // value of its statistic and none of them is a measurement of the trader.
     const s = computeStats([], "net", EXACT_ZERO_RANGE);
     expect(s.netSum).toBe(0);
     expect(s.winRate).toBe(0);
     expect(s.profitFactor).toBeNull(); // this one already knew
-    expect(computeDrawdown(buildBalanceTimeline(0, [])).maxPctOfPeakPnl).toBe(0);
+    expect(computeDrawdown(buildBalanceTimeline(0, [])).maxPctOfEquity).toBe(0);
 
-    const r = scoreOf([], []);
-    expect(r.score).toBeNull();
-    expect(r.components.every((c) => !c.counted)).toBe(true);
+    const card = cardOf([]);
+    expect(card.survival.score).toBeNull();
+    expect(card.edge.expectancyR).toBeNull();
+    expect(card.process.score).toBeNull();
   });
 
-  it("ONE WINNER — four components peak, and none of them counts", () => {
-    const r = scoreOf(shapedBook([250]), [250]);
-    expect(r.score).toBeNull();
-    expect(r.confidence).toEqual({
-      level: "withheld",
-      reason: "sample",
-      tradesShort: 4,
-    });
+  it("ONE WINNER — a perfect drawdown that is an artefact of n=1", () => {
+    // A single trade that only went up has a real 0 % drawdown, and scoring it
+    // 100 would be the original defect: four maxima, every one of them the
+    // sample rather than the trader.
+    const card = cardOf(shapedBook([250]));
+    expect(card.survival.score).toBeNull();
+    expect(card.edge.expectancyR).toBeNull();
   });
 
-  it("ALL WINNERS — infinite profit factor is kept, ratios with no loser are dropped", () => {
-    // A real, maximal profit factor: winners and no losses. It scores the top
-    // band rather than being mistaken for missing data. Avg win/loss and
-    // recovery have no denominator at all and drop out honestly.
-    const nets = [100, 200, 150, 300, 250, 175];
-    const r = scoreOf(shapedBook(nets), nets);
-    const by = Object.fromEntries(r.components.map((c) => [c.key, c]));
-    expect(by.profitFactor.value).toBe(Infinity);
-    expect(by.profitFactor.score).toBe(100);
-    expect(by.avgWinLoss.counted).toBe(false);
-    expect(by.recovery.counted).toBe(false);
-    expect(by.maxDrawdown.score).toBe(100); // never fell below its peak — earned
-    expect(r.score).not.toBeNull();
+  it("ALL WINNERS — an earned hundred, once there are enough of them", () => {
+    // Six winners never fell below their peak. That 0 % IS a measurement now,
+    // because six clears the sample floor — the distinction the gate exists to
+    // make, in its positive direction.
+    const card = cardOf(shapedBook([100, 200, 150, 300, 250, 175]));
+    expect(card.survival.drawdownPct).toBe(0);
+    expect(card.survival.score).toBe(100);
+    // And the edge is real: every trade won, so the interval cannot hold zero.
+    expect(card.edge.expectancyR!).toBeGreaterThan(0);
+    expect(card.edge.inconclusive).toBe(false);
   });
 
   it("ALL LOSERS — nothing reads as perfect", () => {
-    // The third instance of the same defect, and the worst, because unlike the
-    // other two it needs no empty and no thin account — only a losing streak,
-    // which is when a trader most needs the number to be honest.
+    // The worst instance of the old defect, because unlike the other two it
+    // needs no empty and no thin account — only a losing streak, which is when
+    // a trader most needs the number to be honest. The fall is divided by the
+    // peak that preceded it, and a book that never got above water has no such
+    // peak. The guard used to answer 0 %, which the score read as
+    // `100 - 0 = 100`: six straight losses scored FLAWLESS risk management.
     //
-    // `maxPctOfPeakPnl` divides the fall by the peak profit that preceded it.
-    // A book that never rose above zero has no such peak, and the guard
-    // `peakPnl > 0 ? … : 0` answered **0 %** — which the score read as
-    // `100 - 0 = 100`. Six straight losses scored FLAWLESS risk management.
-    //
-    // It is now null: the fall is real and the percentage has no denominator,
-    // so the component drops instead of inventing a perfect one.
-    const nets = [-100, -50, -200, -150, -75, -125];
-    const dd = computeDrawdown(
-      buildBalanceTimeline(
-        0,
-        shapedBook(nets).map((t) => ({ at: t.closedAt ?? "", pnl: t.net })),
-      ),
-    );
-    expect(dd.maxMoney).toBe(-700); // it really did fall, all the way
-    expect(dd.maxPctOfPeakPnl).toBeNull(); // and there is no peak to divide by
-
-    const r = scoreOf(shapedBook(nets), nets);
-    const by = Object.fromEntries(r.components.map((c) => [c.key, c]));
-    expect(by.profitFactor.score).toBe(20); // bottom band
-    expect(by.consistency.score).toBe(0); // a losing book has no consistency
-    expect(by.maxDrawdown.counted).toBe(false); // NOT 100
-    expect(r.score!).toBeLessThan(20);
-  });
-
-  it("keeps 0 % for a book that genuinely never fell", () => {
-    // The distinction the null exists to make. Rising the whole way is a real
-    // 0 % drawdown and must keep scoring 100 — otherwise the fix would have
-    // traded one lie for another.
-    const dd = computeDrawdown(
-      buildBalanceTimeline(
-        0,
-        shapedBook([100, 200, 150]).map((t) => ({ at: t.closedAt ?? "", pnl: t.net })),
-      ),
-    );
-    expect(dd.maxMoney).toBe(0);
-    expect(dd.maxPctOfPeakPnl).toBe(0);
+    // Phase E found the same hole surviving on the EQUITY base — this fixture
+    // starts its timeline at zero, so there is no starting balance to divide
+    // by either — and `maxPctOfEquity` now answers null the way its sibling
+    // already did. Survival drops the part instead of scoring it perfect.
+    const card = cardOf(shapedBook([-100, -50, -200, -150, -75, -125]));
+    expect(card.survival.drawdownPct).toBeNull();
+    expect(card.survival.score).toBeNull();
+    // What IS measurable on a book of six losses: the edge, and it is negative.
+    expect(card.edge.expectancyR!).toBeLessThan(0);
+    expect(card.edge.inconclusive).toBe(false);
   });
 
   it("ALL BREAKEVEN — trades to measure, no decisions to have won", () => {
     // The case that makes one sample count wrong: six trades, zero decided.
-    // Drawdown and consistency have a series to work on; profit factor and avg
-    // win/loss have no denominator and must drop.
-    const nets = [0, 0, 0, 0, 0, 0];
-    const r = scoreOf(shapedBook(nets), nets);
-    const by = Object.fromEntries(r.components.map((c) => [c.key, c]));
-    expect(by.profitFactor.counted).toBe(false);
-    expect(by.avgWinLoss.counted).toBe(false);
-    expect(by.maxDrawdown.counted).toBe(true);
-    expect(by.consistency.counted).toBe(true);
-
-    // BEHAVIOUR THE REBALANCE CHANGED, AND THE ONE PLACE IT IS VISIBLE.
-    //
-    // This used to be withheld for coverage. It no longer is, and the cause is
-    // arithmetic rather than judgement: the components gated on `decided` were
-    // 60 of 100 weights while win % was among them, and are 25 of 70 without
-    // it. So the two that survive an all-breakeven book — drawdown and
-    // consistency — now clear `MIN_COVERAGE_SHARE` on their own.
-    //
-    // Pinned rather than quietly accepted, because it is a real weakening of
-    // the coverage gate. What the card shows instead of nothing is a score
-    // labelled provisional, carrying its sample and "2 of 5 components", and
-    // the 100 inside it is drawdown honestly reporting that six flat trades
-    // lost nothing. If that reads as too generous, the knob is
-    // `MIN_COVERAGE_SHARE`, and moving it moves every score in the journal.
-    expect(r.coverage).toBe(40);
-    expect(r.maxCoverage).toBe(70);
-    expect(r.score).toBeCloseTo(62.5, 6);
-    expect(r.confidence).toEqual({ level: "provisional", trades: 6 });
-  });
-
-  it("OPEN POSITIONS ONLY — an unclosed trade is not a realized result", () => {
-    // `toRealized` is what decides this upstream; here the guard is that a
-    // book of trades with no close date produces no money statistics rather
-    // than a set of zeros presented as a flat month.
-    const open = shapedBook([0, 0, 0]).map((t) => ({ ...t, closedAt: null }));
-    const s = computeStats(open, "net", EXACT_ZERO_RANGE);
-    expect(s.count).toBe(3);
-    expect(s.netSum).toBe(0);
-    // No close instant means no day to file the money under, which is what
-    // keeps an open position out of every dated total.
-    const enriched = enrichTrades(open, { tzOf: () => TZ });
-    expect(enriched.every((e) => e.closeDay === "")).toBe(true);
+    // Survival has a series to work on; the edge has no population at all.
+    const card = cardOf(shapedBook([0, 0, 0, 0, 0, 0]));
+    expect(card.survival.score).not.toBeNull();
+    expect(card.edge.n).toBe(0);
+    expect(card.edge.expectancyR).toBeNull();
+    expect(card.edge.inconclusive).toBe(true);
   });
 });

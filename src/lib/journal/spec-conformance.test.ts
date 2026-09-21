@@ -5,13 +5,7 @@ import { dimCtx, enrich, mkTrade, metricCtx, type TradeSpec } from "./reports/te
 import { computeRiskRatios, computeDailyDrawdown, MIN_RATIO_DAYS } from "./risk-ratios";
 import { computeStats } from "./analytics";
 import { EXACT_ZERO_RANGE } from "./breakeven";
-import {
-  computeSickreScore,
-  FTMO_HEADROOM_WEIGHT,
-  PROCESS_ADHERENCE_WEIGHT,
-  RATIO_BANDS,
-  RECOVERY_BANDS,
-} from "./sickre-score";
+import { computeScorecard, UNDER_WATER_FLOOR_DAYS } from "./scorecard";
 
 /**
  * FORMULAS AGAINST THE SPEC, NOT AGAINST THEMSELVES.
@@ -402,135 +396,101 @@ describe("getMetric", () => {
 });
 
 // ---------------------------------------------------------------------------
-// SICKRE SCORE — the tables and weights exactly as the README states them
+// PROCESS · SURVIVAL · EDGE — the three axes exactly as the README states them
 // ---------------------------------------------------------------------------
 
-describe("Sickre Score — README §Sickre Score", () => {
-  it("the weights are exactly the ones in the README's table", () => {
-    // README: "Process adherence 30 | Max drawdown 25 | Profit factor 20 |
-    // Consistency 15 | FTMO headroom 10 | Avg win/loss 5 | Recovery factor 5".
-    //
-    // A weight is the one number in the score that no other test would catch:
-    // an error here moves EVERY score, and no individual component would report
-    // anything. So it is read from what the score actually returns, not from
-    // the constant.
-    const full = computeSickreScore({
-      profitFactor: 3,
-      avgWinLossRatio: 3,
-      maxDrawdownPctOfPeakPnl: 0,
-      recoveryFactor: 5,
-      consistencyScore: 100,
-      processAdherencePct: 100,
-      ftmoHeadroomPct: 100,
-      sample: { trades: 100, decided: 100 },
-    });
-    const w = Object.fromEntries(full.components.map((c) => [c.key, c.weight]));
-    expect(w).toEqual({
-      process: PROCESS_ADHERENCE_WEIGHT,
-      maxDrawdown: 25,
-      profitFactor: 20,
-      consistency: 15,
-      ftmoHeadroom: FTMO_HEADROOM_WEIGHT,
-      avgWinLoss: 5,
-      recovery: 5,
-    });
-    expect(PROCESS_ADHERENCE_WEIGHT).toBe(30);
-    expect(FTMO_HEADROOM_WEIGHT).toBe(10);
+describe("the scorecard — README §Process, Survival, Edge", () => {
+  const base = {
+    trackerPct: null,
+    followRatePct: null,
+    maxDrawdownPctOfEquity: 10,
+    underWaterDays: 0,
+    decidedRs: [1, -1, 1, 1, -1, 1],
+    trades: 100,
+  };
 
-    // README: "The trade-derived components total 70; with process it is 100,
-    // with both optional ones 110." The optional ones are added on top of the
-    // base and the score renormalizes by coverage.
-    expect(25 + 20 + 15 + 5 + 5).toBe(70);
-    expect(full.maxCoverage).toBe(110);
+  it("has no composite, and no weights to get wrong", () => {
+    // README: "There is no headline." The whole defect of the number this
+    // replaced was that one figure moved both when the trader changed and when
+    // the data did; the guard against its return is that there is nothing to
+    // blend and nothing to weight.
+    const card = computeScorecard(base);
+    expect(Object.keys(card).sort()).toEqual([
+      "edge",
+      "process",
+      "provisional",
+      "survival",
+      "trades",
+    ]);
+    expect("score" in card).toBe(false);
   });
 
-  it("win % no longer exists as a component of the score", () => {
-    // README: "Win % is out of the score entirely, not merely reweighted… Win
-    // rate stays as a KPI tile on the dashboard and as a /reports metric."
-    const keys = computeSickreScore({
-      profitFactor: 3,
-      avgWinLossRatio: 3,
-      maxDrawdownPctOfPeakPnl: 0,
-      recoveryFactor: 5,
-      consistencyScore: 100,
-      sample: { trades: 100, decided: 100 },
-    }).components.map((c) => c.key);
-    expect(keys).not.toContain("winPct");
-  });
-
-  it("process adherence is the heaviest component in the composite", () => {
-    // README: "Process adherence is the heaviest component, at 30. It is the
-    // only one that does not depend on variance." The claim from the prose,
-    // checked against the numbers.
-    const r = computeSickreScore({
-      profitFactor: 3,
-      avgWinLossRatio: 3,
-      maxDrawdownPctOfPeakPnl: 0,
-      recoveryFactor: 5,
-      consistencyScore: 100,
-      processAdherencePct: 100,
-      ftmoHeadroomPct: 100,
-      sample: { trades: 100, decided: 100 },
-    });
-    expect(PROCESS_ADHERENCE_WEIGHT).toBe(
-      Math.max(...r.components.map((c) => c.weight)),
-    );
-  });
-
-  it("the ratio table starts at 1.8 and ends at 2.6, as the README says", () => {
-    // README: "Band table, 1.8 → 2.6 maps to 20 → 100"
-    const floors = RATIO_BANDS.map((b) => b.min).filter((m) => Number.isFinite(m));
-    expect(Math.min(...floors)).toBe(1.8);
-    expect(Math.max(...floors)).toBe(2.6);
-    // Below the lowest floor it drops to 20, not to 0 — 20 is a floor, not an
-    // absence.
-    expect(RATIO_BANDS.at(-1)!.scoreMin).toBe(20);
-    expect(RATIO_BANDS[0].scoreMax).toBe(100);
-  });
-
-  it("the recovery table runs from 1.0 to 3.5", () => {
-    // README: "Its own table, 1.0 → 3.5"
-    const floors = RECOVERY_BANDS.map((b) => b.min).filter((m) => Number.isFinite(m));
-    expect(Math.min(...floors)).toBe(1.0);
-    expect(Math.max(...floors)).toBe(3.5);
-    // A recovery below 1.0 IS zero: a book that has not made back its drawdown
-    // has not recovered. Unlike the ratio table, zero here is not missing data.
-    expect(RECOVERY_BANDS.at(-1)!.scoreMax).toBe(0);
-  });
-
-  it("FTMO headroom is 100 minus the closest approach, and absent with no challenge", () => {
-    // README: "`100 − closest approach to a limit`, in %"… "When no account
-    // runs FTMO mode the component is absent — not 100."
-    const at = (ftmoHeadroomPct: number | null) =>
-      computeSickreScore({
-        profitFactor: 2, avgWinLossRatio: 2, maxDrawdownPctOfPeakPnl: 10,
-        recoveryFactor: 2, consistencyScore: 50, ftmoHeadroomPct,
-        sample: { trades: 100, decided: 100 },
-      }).components.find((c) => c.key === "ftmoHeadroom");
-
-    expect(at(90)!.score).toBeCloseTo(90, 6);
-    // Zero is a measurement — the account stood on its limit — and must count.
-    expect(at(0)!.score).toBe(0);
-    expect(at(0)!.counted).toBe(true);
-    // With no challenge there is no axis and no row, so the rest renormalize.
-    expect(at(null)).toBeUndefined();
-  });
-
-  it("max drawdown is 100 minus the percentage, on the peak-P&L base", () => {
-    // README: "`100 − maxPctOfPeakPnl`", and explicitly: that base is NEVER
-    // displayed, it exists only to keep the score comparable with TradeZella's.
+  it("scores survival as 100 minus the drawdown, on the EQUITY base", () => {
+    // README: "how deep the worst fall was" — over peak equity, the figure the
+    // KPI row has always shown a human, not the peak-P&L base the composite
+    // used for comparability with another tool.
     const at = (pct: number | null) =>
-      computeSickreScore({
-        profitFactor: 2, avgWinLossRatio: 2, maxDrawdownPctOfPeakPnl: pct,
-        recoveryFactor: 2, consistencyScore: 50,
-        sample: { trades: 100, decided: 100 },
-      }).components.find((c) => c.key === "maxDrawdown");
+      computeScorecard({ ...base, maxDrawdownPctOfEquity: pct, underWaterDays: null })
+        .survival;
 
-    expect(at(40)!.score).toBeCloseTo(60, 6);
-    expect(at(0)!.score).toBeCloseTo(100, 6);
-    // `null` means "the curve never fell from a peak above zero" — the
-    // component is then NOT counted, instead of 100 − 0 grading an empty
-    // account as flawless. That is finding S1, and this is its guard.
-    expect(at(null)!.counted).toBe(false);
+    expect(at(40).score).toBeCloseTo(60, 6);
+    expect(at(0).score).toBeCloseTo(100, 6);
+    // `null` means the curve fell with no positive peak to divide by. The part
+    // drops instead of `100 - 0` grading a losing book as flawless — finding
+    // S1, and this is its guard on the base that inherited it.
+    expect(at(null).score).toBeNull();
+    expect(at(null).counted).toBe(0);
+  });
+
+  it("reaches zero on the time axis at a quarter under water", () => {
+    // README: "The time part reaches zero at 90 days."
+    const at = (days: number) =>
+      computeScorecard({ ...base, maxDrawdownPctOfEquity: null, underWaterDays: days })
+        .survival.score;
+
+    expect(at(0)).toBe(100);
+    expect(at(UNDER_WATER_FLOOR_DAYS)).toBe(0);
+    expect(at(UNDER_WATER_FLOOR_DAYS * 3)).toBe(0);
+  });
+
+  it("takes FTMO headroom as it comes, and drops it when no challenge runs", () => {
+    // README: "the room left against a prop-firm limit"… absent, not 100, when
+    // nothing is running.
+    const at = (ftmoHeadroomPct: number | null) =>
+      computeScorecard({
+        ...base,
+        maxDrawdownPctOfEquity: null,
+        underWaterDays: null,
+        ftmoHeadroomPct,
+      }).survival;
+
+    expect(at(90).score).toBeCloseTo(90, 6);
+    // Zero is a measurement — the account stood on its limit — and must count.
+    expect(at(0).score).toBe(0);
+    expect(at(0).counted).toBe(1);
+    expect(at(null).score).toBeNull();
+    expect(at(null).counted).toBe(0);
+  });
+
+  it("states the edge in R with an interval, never as a grade", () => {
+    // README: "Edge — a MEASUREMENT, not a score." There is no 0–100 anywhere
+    // on this axis, and the interval is what makes the number readable.
+    const edge = computeScorecard(base).edge;
+    expect(edge.expectancyR).toBeCloseTo(2 / 6, 6);
+    expect(edge.interval).not.toBeNull();
+    expect(edge.n).toBe(6);
+  });
+
+  it("keeps process out of the reach of every outcome", () => {
+    // README: "The only figure here that is entirely yours to move."
+    const good = computeScorecard({ ...base, trackerPct: 90, followRatePct: 90 });
+    const ruined = computeScorecard({
+      ...base,
+      trackerPct: 90,
+      followRatePct: 90,
+      maxDrawdownPctOfEquity: 90,
+      decidedRs: [-1, -1, -1, -1, -1, -1],
+    });
+    expect(ruined.process.score).toBe(good.process.score);
   });
 });

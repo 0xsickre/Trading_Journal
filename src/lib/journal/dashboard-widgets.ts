@@ -80,7 +80,7 @@ export const DASHBOARD_WIDGETS: DashboardWidget[] = [
   { id: "detail-tiles", label: "Result and risk — detail", group: "detail", span: 4, hideable: true },
 
   { id: "equity", label: "Equity curve", group: "charts", span: 2, hideable: true },
-  { id: "score", label: "Sickre Score", group: "charts", span: 2, hideable: true },
+  { id: "score", label: "Process · Survival · Edge", group: "charts", span: 2, hideable: true },
   // What is on right now, and what just happened — the two lists a session
   // opens on, each one click from the trade itself.
   { id: "open-positions", label: "Open positions", group: "detail", span: 2, hideable: true },

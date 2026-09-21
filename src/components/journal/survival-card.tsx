@@ -31,7 +31,7 @@ export function SurvivalCard({
     return (
       <Card className="h-full">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Survival</CardTitle>
+          <CardTitle className="text-base">Survival simulation</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="py-2 text-sm text-muted-foreground">
@@ -49,8 +49,11 @@ export function SurvivalCard({
   return (
     <Card className="h-full">
       <CardHeader className="flex-row items-baseline justify-between space-y-0 pb-2">
+        {/* "Survival simulation", not "Survival": the scorecard's Survival axis
+            says where the account STANDS, and this says what could happen next.
+            Two cards under one word read as one fact stated twice. */}
         <CardTitle className="text-base">
-          Survival
+          Survival simulation
           <span className="ml-2 text-sm font-normal text-muted-foreground">
             next {horizonDays} trading days
           </span>

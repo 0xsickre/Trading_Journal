@@ -58,11 +58,9 @@ const DrawdownChart = dynamic(
   () => import("@/components/journal/drawdown-chart").then((m) => m.DrawdownChart),
   { ssr: false, loading: chartLoading },
 );
-const SickreScoreCard = dynamic(
+const ScorecardCard = dynamic(
   () =>
-    import("@/components/journal/sickre-score-card").then(
-      (m) => m.SickreScoreCard,
-    ),
+    import("@/components/journal/scorecard-card").then((m) => m.ScorecardCard),
   { ssr: false, loading: chartLoading },
 );
 const EquityChart = dynamic(
@@ -99,7 +97,6 @@ import {
   rulesLiveOn,
   TRACKER_SPAN_DAYS,
 } from "@/lib/journal/tracker/compliance";
-import { processAdherence } from "@/lib/journal/tracker/process-adherence";
 import type {
   TrackerCheckin,
   TrackerRule,
@@ -132,13 +129,8 @@ import {
   tradingDayKeysFromRows,
 } from "@/lib/journal/activity";
 import { bucketByPeriod, summarizePeriods } from "@/lib/journal/period-stats";
-import {
-  avgWinLossRatio,
-  computePlannedRStats,
-  consistencyScore,
-  recoveryFactor,
-} from "@/lib/journal/risk-metrics";
-import { computeSickreScore } from "@/lib/journal/sickre-score";
+import { avgWinLossRatio, computePlannedRStats } from "@/lib/journal/risk-metrics";
+import { computeScorecard } from "@/lib/journal/scorecard";
 import { buildInsightContext, type DailyReportLite } from "@/lib/journal/insights/context";
 import type { PositionCheckin } from "@/lib/journal/position-checkin";
 import { runInsights } from "@/lib/journal/insights/registry";
@@ -646,8 +638,8 @@ export function Dashboard({
    *
    * Only memos read by exactly ONE hideable widget qualify, and each is
    * verified as such: `insightResult`, `hist`, `ddSeries`, `weeklySlip`,
-   * `weeklyExitEff`. `trackerSeries` and `processAdherencePct` look like
-   * candidates and are NOT gated — both feed the Sickre score, and returning a
+   * `weeklyExitEff`. `trackerSeries` and the two halves of Process look like
+   * candidates and are NOT gated — they feed the scorecard, and returning a
    * placeholder for them would not hide a number, it would silently change one.
    * That is the line: gating may cost a widget its content, never a figure its
    * meaning.
@@ -854,9 +846,9 @@ export function Dashboard({
    *      and outside it at 11:00 — the same page, the same data, two different
    *      net P&Ls depending on when you opened it.
    *
-   * `-(period - 1)` matches `processAdherencePct` below, which has always used
-   * `addDaysToDayKey(todayKey, -(period - 1))`. The two halves of the Sickre
-   * Score were measuring windows a day apart.
+   * `-(period - 1)` matches `trackerAdherencePct` below, which has always used
+   * `addDaysToDayKey(todayKey, -(period - 1))`. The two halves of Process were
+   * measuring windows a day apart.
    */
   const periodFrom = useMemo(() => periodStartKey(period, todayKey), [period, todayKey]);
   const cutoffMs = useMemo(
@@ -1161,14 +1153,10 @@ export function Dashboard({
     () => avgWinLossRatio(stats.avgWinMoney, stats.avgLossMoney),
     [stats.avgWinMoney, stats.avgLossMoney],
   );
-  const recovery = useMemo(
-    () => recoveryFactor(stats.netSum, drawdown.maxMoney),
-    [stats.netSum, drawdown.maxMoney],
-  );
-  const consistency = useMemo(
-    () => consistencyScore(realized.map(pnlOf)),
-    [realized, pnlOf],
-  );
+  // `recoveryFactor` and `consistencyScore` were computed here and read by
+  // nothing except the composite score. Phase E dropped both from the card —
+  // two ratios whose band tables came from a spec for an intraday book — and
+  // they went with it. Both remain in the report registry as columns.
 
   /**
    * Daily P&L points behind Sharpe, Sortino, Calmar and the daily drawdown.
@@ -1301,35 +1289,28 @@ export function Dashboard({
   ]);
 
   /**
-   * Process adherence for the score, over the SAME window as the other six
-   * components — otherwise the score would mix a 90-day profit factor with a
-   * six-month discipline figure and call the result one number.
+   * The two halves of Process, over the SAME window as everything else on the
+   * card — otherwise it would mix a 90-day figure with a six-month one.
    *
    * "All" is capped at the span actually loaded; the alternative is fetching
-   * every check-in ever to move a 15 % component by a fraction.
+   * every check-in ever to move one number by a fraction.
+   *
+   * Both halves are kept separately rather than only their blend, because the
+   * card shows them: "72" is not actionable, "tracker 80, follow rate 60" is.
    */
-  const processAdherencePct = useMemo(() => {
+  const trackerAdherencePct = useMemo(() => {
     const from = periodFrom ?? "";
-    const trackerPct = meanCompliance(
-      trackerSeries.filter((d) => d.date >= from),
-    );
+    return meanCompliance(trackerSeries.filter((d) => d.date >= from));
+  }, [trackerSeries, periodFrom]);
 
-    const followRatePct = computeFollowRate(
-      enrichTrades(realized, { tzOf, range: breakevenRange, pnlOf, fillCounts }),
-      playbookLookup.rules,
-    );
-
-    return processAdherence({ trackerPct, followRatePct });
-  }, [
-    trackerSeries,
-    periodFrom,
-    playbookLookup.rules,
-    realized,
-    tzOf,
-    breakevenRange,
-    pnlOf,
-    fillCounts,
-  ]);
+  const followRatePct = useMemo(
+    () =>
+      computeFollowRate(
+        enrichTrades(realized, { tzOf, range: breakevenRange, pnlOf, fillCounts }),
+        playbookLookup.rules,
+      ),
+    [realized, tzOf, breakevenRange, pnlOf, fillCounts, playbookLookup.rules],
+  );
 
   /**
    * Worst prop-firm headroom across the accounts running a challenge.
@@ -1337,12 +1318,12 @@ export function Dashboard({
    * MINIMUM, NOT AVERAGE. The constraint that ends a challenge is whichever
    * account came nearest to its own floor, and averaging two accounts lets a
    * comfortable one paper over the one that sat a fraction of a percent from
-   * the end. `null` — the component drops and the rest renormalize — when no
+   * the end. `null` — the part drops and Survival averages the rest — when no
    * account has FTMO mode on, or when every challenge window is still empty.
    *
-   * DELIBERATELY OUTSIDE THE PERIOD FILTER, unlike every other component fed
-   * to the score, including `processAdherencePct` directly above, which is
-   * windowed precisely so the score does not mix timeframes. The exception is
+   * DELIBERATELY OUTSIDE THE PERIOD FILTER, unlike every other figure fed to
+   * the scorecard, including the two Process halves above, which are windowed
+   * precisely so the card does not mix timeframes. The exception is
    * not an oversight: a challenge window is defined by its own `ftmo_reset_at`
    * and a fixed starting balance, and 4.5 % of a 5 % floor does not stop having
    * been touched because the reader switched the view to the last 30 days.
@@ -1356,35 +1337,49 @@ export function Dashboard({
     return rooms.length === 0 ? null : Math.min(...rooms);
   }, [ftmoStatuses]);
 
-  const sickreScore = useMemo(
+  /**
+   * R of the trades expectancy is actually averaged over — decided, and
+   * carrying one.
+   *
+   * The same population `metrics.ts` resamples for the report table's
+   * interval, built here from the enriched trades the dashboard already has.
+   * Passing the values rather than a finished number is what lets the
+   * scorecard state the interval as well as the point estimate.
+   */
+  const decidedRs = useMemo(
     () =>
-      computeSickreScore({
-        profitFactor: stats.profitFactor,
-        avgWinLossRatio: winLossRatio,
-        // Peak-P&L base, not the equity percentage shown in the KPI row — the
-        // two have different denominators and only this one matches how
-        // TradeZella computes it, which is what keeps the score comparable.
-        maxDrawdownPctOfPeakPnl: drawdown.maxPctOfPeakPnl,
-        recoveryFactor: recovery,
-        consistencyScore: consistency.score,
-        processAdherencePct,
+      enrichTrades(realized, { tzOf, range: breakevenRange, pnlOf, fillCounts })
+        .filter((t) => t.r != null && (t.outcome === "win" || t.outcome === "loss"))
+        .map((t) => t.r as number),
+    [realized, tzOf, breakevenRange, pnlOf, fillCounts],
+  );
+
+  const scorecard = useMemo(
+    () =>
+      computeScorecard({
+        trackerPct: trackerAdherencePct,
+        followRatePct,
+        // The EQUITY base, not the peak-P&L one the old composite used: that
+        // was chosen to stay comparable with another tool's published figure,
+        // and the composite it fed is gone. A deposit genuinely changes what a
+        // given dollar of loss means, which is why this is the figure the KPI
+        // row has always shown a human.
+        maxDrawdownPctOfEquity: drawdown.maxPctOfEquity,
+        underWaterDays: ddDuration.currentDays,
         ftmoHeadroomPct,
-        // Drawdown and consistency both answer 0 for an empty book, and a 0
-        // drawdown scores 100. The counts let the score tell "no evidence"
-        // from "measured zero" and drop the component instead.
-        sample: { trades: stats.count, decided: stats.wins + stats.losses },
+        decidedRs,
+        // Drawdown answers 0 for an empty book, and a 0 drawdown scores 100.
+        // The count lets the card tell "no evidence" from "measured zero".
+        trades: stats.count,
       }),
     [
-      stats.profitFactor,
-      stats.count,
-      stats.wins,
-      stats.losses,
-      winLossRatio,
-      drawdown.maxPctOfPeakPnl,
-      recovery,
-      consistency.score,
-      processAdherencePct,
+      trackerAdherencePct,
+      followRatePct,
+      drawdown.maxPctOfEquity,
+      ddDuration.currentDays,
       ftmoHeadroomPct,
+      decidedRs,
+      stats.count,
     ],
   );
   const equity = useMemo(
@@ -2039,7 +2034,13 @@ export function Dashboard({
           // second fact.
           value={
             viewMode === "percentage" && drawdown.maxAt
-              ? formatMetric(mkMetric(-drawdown.maxPctOfEquity, "pct"), viewMode)
+              ? formatMetric(
+                  mkMetric(
+                    drawdown.maxPctOfEquity == null ? null : -drawdown.maxPctOfEquity,
+                    "pct",
+                  ),
+                  viewMode,
+                )
               : dashboardMoney(stats.maxDrawdown, metricCtx, viewMode)
           }
           cls="text-[var(--loss)]"
@@ -2213,7 +2214,7 @@ export function Dashboard({
 
         /* The verdict, beside the shape that produced it — a DEFAULT
            adjacency now rather than a fixed one, since the reader can move
-           either. The Sickre Score used to sit six sections down, below every
+           either. The scorecard used to sit six sections down, below every
            raw money tile: the one figure that weighs result AND process
            together, ranked under `Total swap`. */
         equity: show("equity") && (
@@ -2242,7 +2243,7 @@ export function Dashboard({
           <EquityChart data={equity} metric={equityMetric} currency={currency} />
         </ChartShell>
         ),
-        score: show("score") && <SickreScoreCard score={sickreScore} />,
+        score: show("score") && <ScorecardCard card={scorecard} />,
         survival: show("survival") && (
           <SurvivalCard
             result={survival?.result ?? null}

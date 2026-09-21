@@ -117,14 +117,14 @@ function statValue(label: string): string {
 }
 
 /**
- * The Sickre Score headline, found by the `/ 100` that always sits beside it.
+ * One axis of the scorecard, by its label.
  *
- * Async because the card is behind a `next/dynamic` boundary — recharts is
- * ~840 KB and the dashboard is the `/` route, so the radar chart is fetched
- * rather than bundled. `findByText` waits for that import the way the browser
- * does; a synchronous `getByText` would only ever see the loading placeholder.
+ * Async because the card is behind a `next/dynamic` boundary — the dashboard
+ * is the `/` route and this card is fetched rather than bundled. `findByText`
+ * waits for that import the way the browser does; a synchronous `getByText`
+ * would only ever see the loading placeholder.
  */
-async function scoreHeadline(): Promise<string> {
+async function axisValue(label: string): Promise<string> {
   // A far longer wait than the suite's default, and it is measured rather than
   // guessed. This query sits behind TWO real costs, both of which are the
   // product working as designed:
@@ -142,8 +142,13 @@ async function scoreHeadline(): Promise<string> {
   //
   // The ceiling only costs time when the query is going to FAIL; a passing run
   // resolves as soon as the import lands.
-  const marker = await screen.findByText("/ 100", undefined, { timeout: 30_000 });
-  return marker.previousElementSibling?.textContent ?? "";
+  // By ROLE and accessible name, not by text: "Survival" also names the
+  // simulation card's title, and a query that matches two different facts
+  // proves neither.
+  const group = await screen.findByRole("group", { name: label }, { timeout: 30_000 });
+  const value = group.querySelector(".tabular-nums");
+  // The "/ 100" suffix is a child of the value node; the axis is the number.
+  return (value?.firstChild?.textContent ?? value?.textContent ?? "").trim();
 }
 
 describe("the book, on screen — same figures the paper already proved", () => {
@@ -180,15 +185,25 @@ describe("the book, on screen — same figures the paper already proved", () => 
     expect(statValue("Win rate")).toBe("55.6%");
   });
 
-  it("shows the Sickre Score the paper works out to 58.70, rounded to 59", async () => {
+  it("shows the three axes the paper works out to", async () => {
     renderDashboard(rowsOf(BOOK));
-    expect(await scoreHeadline()).toBe("59");
-    // Ten trades: real, and thin — labelled so, with the count beside it.
-    // Asserted as ONE string rather than two lookups: "10 trades" on its own
-    // now also matches the Hold time card's "10 trades with a known duration",
-    // and a query that matches two different facts proves neither. The Serbian
-    // "10 trejda" this replaced happened to be unique; the English is not.
-    expect(screen.getByText(/provisional · 10 trades/)).toBeInTheDocument();
+
+    // SURVIVAL, and the one number on this screen the equity base changed.
+    // The worst fall is 200 from a peak of 10,500 — 1.90 %, where the same
+    // fall over peak cumulative P&L was 40 %. Both are true; this is the one
+    // a human is owed, because the account really did hold 10,500 at the time.
+    //   drawdown    100 − 1.905  = 98.10
+    //   under water 100 − 3/90   = 96.67   (peak 03-10, book ends 03-13)
+    //                       mean = 97.38   → 97
+    expect(await axisValue("Survival")).toBe("97");
+
+    // EDGE: nine decided trades, R summing to 6 — and no rounding to a grade.
+    expect(await axisValue("Edge")).toBe("+0.67R");
+    expect(screen.getByText("n=9")).toBeInTheDocument();
+
+    // PROCESS has no tracker history and no answered rules in this fixture,
+    // and says so rather than folding silence into a number.
+    expect(await axisValue("Process")).toBe("—");
   });
 });
 
@@ -236,14 +251,18 @@ describe("the shapes a book can take, on screen", () => {
     renderDashboard([]);
     expect(statValue("Trades")).toBe("0");
     expect(statValue("Net P/L")).toBe("$0.00");
-    expect(await scoreHeadline()).toBe("—");
-    expect(screen.getByText(/5 more/)).toBeInTheDocument();
+    expect(await axisValue("Survival")).toBe("—");
+    expect(await axisValue("Edge")).toBe("—");
+    // And the reason, in words: a drawdown of zero over no trades is not
+    // flawless risk management.
+    expect(screen.getByText(/Survival needs 5 closed trades/)).toBeInTheDocument();
   });
 
-  it("ONE WINNER — the score withholds rather than reading 100", async () => {
+  it("ONE WINNER — survival withholds rather than reading 100", async () => {
     renderDashboard(rowsOf(shapedBook([250])));
     expect(statValue("Trades")).toBe("1");
-    expect(await scoreHeadline()).toBe("—");
+    expect(await axisValue("Survival")).toBe("—");
+    expect(await axisValue("Edge")).toBe("—");
   });
 
   it("ALL LOSERS — the score is low, and drawdown does not read as flawless", async () => {
@@ -265,12 +284,10 @@ describe("the shapes a book can take, on screen", () => {
     renderDashboard(rowsOf(shapedBook([0, 0, 0, 0, 0, 0])));
     expect(statValue("Trades")).toBe("6");
     expect(statValue("Win rate")).toBe("—");
-    // The score DOES state a number here, and that is a change the weight
-    // rebalance made rather than a regression in this tile. Dropping win %
-    // shrank the weights gated on `decided` from 60 of 100 to 25 of 70, so
-    // drawdown and consistency now clear `MIN_COVERAGE_SHARE` between them.
-    // Worked through, and pinned, in `book.fixture.test.ts`.
-    expect(await scoreHeadline()).toBe("63");
+    // Six trades to measure survival with, and no decisions to have won: the
+    // two axes answer independently, which is the point of splitting them.
+    expect(await axisValue("Survival")).not.toBe("—");
+    expect(await axisValue("Edge")).toBe("—");
   });
 });
 

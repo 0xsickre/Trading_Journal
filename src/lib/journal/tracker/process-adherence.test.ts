@@ -1,14 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { processAdherence, PROCESS_BLEND } from "./process-adherence";
-import { computeSickreScore } from "../sickre-score";
+import { computeScorecard } from "../scorecard";
 
+/** Everything the scorecard needs beyond the two process halves. */
 const base = {
-  profitFactor: 2.0,
-  avgWinLossRatio: 2.0,
-  maxDrawdownPctOfPeakPnl: 20,
-  recoveryFactor: 2.0,
-  consistencyScore: 70,
-  sample: { trades: 30, decided: 30 },
+  maxDrawdownPctOfEquity: 20,
+  underWaterDays: 0,
+  decidedRs: [1, -1, 1, 1, -1, 1, 1, -1],
+  trades: 30,
 };
 
 describe("processAdherence", () => {
@@ -42,10 +41,8 @@ describe("processAdherence", () => {
     expect(processAdherence({ trackerPct: 0, followRatePct: 0 })).toBe(0);
     expect(processAdherence({ trackerPct: 0, followRatePct: null })).toBe(0);
 
-    const r = computeSickreScore({ ...base, processAdherencePct: 0 });
-    const process = r.components.find((c) => c.key === "process")!;
-    expect(process.counted).toBe(true);
-    expect(process.score).toBe(0);
+    const card = computeScorecard({ ...base, trackerPct: 0, followRatePct: 0 });
+    expect(card.process.score).toBe(0);
   });
 
   it("keeps the documented blend as data, not as a magic number", () => {
@@ -53,49 +50,35 @@ describe("processAdherence", () => {
   });
 });
 
-describe("the heaviest component in the score", () => {
-  it("is absent, and coverage complete, when nothing is supplied", () => {
-    const r = computeSickreScore(base);
-    expect(r.components).toHaveLength(5);
-    expect(r.coverage).toBe(70);
-    expect(r.maxCoverage).toBe(70);
-  });
+describe("process on the scorecard", () => {
+  it("stands on its own axis, unblended with any outcome", () => {
+    // The composite it used to be the heaviest component of is gone. There is
+    // no weight to be heaviest of any more: Process is a number in its own
+    // right, and nothing about the account's results can move it.
+    const card = computeScorecard({ ...base, trackerPct: 90, followRatePct: 50 });
+    expect(card.process.score).toBeCloseTo(74, 10);
 
-  it("raises the maximum to 100 once supplied", () => {
-    const r = computeSickreScore({ ...base, processAdherencePct: 80 });
-    expect(r.components).toHaveLength(6);
-    expect(r.coverage).toBe(100);
-    expect(r.maxCoverage).toBe(100);
-  });
-
-  it("reports a partial score as partial rather than as fully covered", () => {
-    // The display bug this exists to prevent: with recovery missing the score
-    // covers 95 of 100, and a hardcoded total would have rendered it complete.
-    const r = computeSickreScore({
+    const worse = computeScorecard({
       ...base,
-      recoveryFactor: null,
-      processAdherencePct: 80,
+      trackerPct: 90,
+      followRatePct: 50,
+      maxDrawdownPctOfEquity: 60,
+      decidedRs: [-1, -1, -1, -1, -1, -1],
     });
-    expect(r.coverage).toBe(95);
-    expect(r.maxCoverage).toBe(100);
-    expect(r.coverage).toBeLessThan(r.maxCoverage);
+    expect(worse.process.score).toBe(card.process.score);
+    expect(worse.survival.score!).toBeLessThan(card.survival.score!);
   });
 
-  it("moves the score in the direction of the process figure", () => {
-    const poor = computeSickreScore({ ...base, processAdherencePct: 0 });
-    const great = computeSickreScore({ ...base, processAdherencePct: 100 });
-    expect(great.score!).toBeGreaterThan(poor.score!);
-  });
-
-  it("carries more weight than any outcome component", () => {
-    // The rebalance, stated where the process component is defined. Over forty
-    // trades a year the outcome components are measured on a sample too thin to
-    // trust; tracker compliance and follow rate measure behaviour, where n=40
-    // already means something.
-    const r = computeSickreScore({ ...base, processAdherencePct: 80 });
-    const process = r.components.find((c) => c.key === "process")!;
-    for (const other of r.components.filter((c) => c.key !== "process")) {
-      expect(process.weight, other.key).toBeGreaterThan(other.weight);
-    }
+  it("is measured on a book with nothing closed, where no outcome can be", () => {
+    const card = computeScorecard({
+      ...base,
+      trades: 0,
+      decidedRs: [],
+      trackerPct: 100,
+      followRatePct: null,
+    });
+    expect(card.process.score).toBe(100);
+    expect(card.survival.score).toBeNull();
+    expect(card.edge.expectancyR).toBeNull();
   });
 });

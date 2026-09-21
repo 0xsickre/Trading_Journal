@@ -1,5 +1,5 @@
 /**
- * The Sickre Score's seventh component.
+ * The Process axis of the scorecard.
  *
  * Two signals, both already computed elsewhere: the tracker's daily compliance
  * (this phase) and the playbook follow rate (Phase 4). Neither is redesigned

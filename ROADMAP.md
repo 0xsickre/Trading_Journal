@@ -1506,3 +1506,29 @@ sa dvadeset jednog na početku.
 
 Usput: mesečna lista je čitala dve prozne kolone samo da bi nacrtala tačku „ima beleške" — read
 more than it ships, kako je i pisalo u komentaru. Sad ne čita ništa od toga.
+
+### E4 — Sickre Score → tri broja
+
+Kompozit od sedam ponderisanih komponenti je rasformiran. Razlog nije ni jedan ponder nego sama
+konstrukcija: jedan broj koji se menja i kad trguješ drugačije i kad stigne više podataka nije
+merilo. Umesto njega:
+
+- **Process (0–100)** — tracker + follow rate, 60/40. Jedina osa koju nijedan ishod ne može da
+  pomeri, i jedina koja ima smisla na knjizi bez ijednog zatvorenog trejda.
+- **Survival (0–100)** — prosek prisutnih delova: `100 − max DD %` (nad **equity** bazom),
+  `100 − dana pod vodom / 90`, i FTMO rezerva.
+- **Edge — merenje, ne ocena.** Expectancy u R sa intervalom i uzorkom; priguši se dok interval
+  obuhvata nulu.
+
+Izašli sa kompozitom: consistency, avg win/loss i recovery factor — ostaju kao kolone u `/reports`.
+
+**Dva nalaza usput, oba popravljena:**
+1. `maxPctOfEquity` je vraćao `0` kad pad nema pozitivan vrh kapitala — ista rupa zbog koje je
+   `maxPctOfPeakPnl` još u rundi 3 dobio `null`, samo na drugoj bazi. Survival bi tu pročitao
+   savršenih 100 za knjigu koja je samo gubila. Sada vraća `null`.
+2. Dve kartice su se zvale „Survival" — osa i simulacija. Simulacija je preimenovana u
+   „Survival simulation": jedna kaže gde nalog stoji, druga šta može da se desi.
+
+Revizija formula je u sekciji 10 imala preporuku „razmotriti da drawdown komponenta koristi
+peak-equity bazu". Sprovedena je; jedini razlog za peak-PnL bazu bila je uporedivost sa skorom koji
+više ne postoji.

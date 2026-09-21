@@ -222,7 +222,7 @@ describe("drawdownSeries", () => {
     const worst = drawdownSeries(tl).reduce((a, b) =>
       b.ddMoney < a.ddMoney ? b : a,
     );
-    expect(Math.abs(worst.ddPct)).toBeCloseTo(stats.maxPctOfEquity, 10);
+    expect(Math.abs(worst.ddPct)).toBeCloseTo(stats.maxPctOfEquity!, 10);
   });
 });
 
@@ -307,7 +307,7 @@ describe("resolvePeriodWindow", () => {
     // Same dollar drawdown, different denominator: 500/17,000 vs 500/15,000.
     expect(windowed.maxPctOfEquity).toBeCloseTo((500 / 17_000) * 100, 6);
     expect(broken.maxPctOfEquity).toBeCloseTo((500 / 15_000) * 100, 6);
-    expect(windowed.maxPctOfEquity).not.toBeCloseTo(broken.maxPctOfEquity, 6);
+    expect(windowed.maxPctOfEquity!).not.toBeCloseTo(broken.maxPctOfEquity!, 6);
   });
 });
 
@@ -497,5 +497,31 @@ describe("drawdownDuration", () => {
       daysToRecoverWorst: null,
       episodes: 0,
     });
+  });
+});
+
+describe("a fall with no peak equity to divide by", () => {
+  it("answers null rather than the 0 % that reads as flawless", () => {
+    // The same hole `maxPctOfPeakPnl` had, on the equity base: a book with no
+    // starting balance that only ever lost has a real fall and no denominator.
+    // As 0 it scored a perfect 100 on the survival axis — six straight losses
+    // rendered as flawless risk management.
+    const tl = buildBalanceTimeline(0, [
+      { at: "2026-01-02T12:00:00Z", pnl: -100 },
+      { at: "2026-01-03T12:00:00Z", pnl: -200 },
+    ]);
+    const stats = computeDrawdown(tl);
+    expect(stats.maxMoney).toBe(-300);
+    expect(stats.maxPctOfEquity).toBeNull();
+    expect(stats.maxPctOfPeakPnl).toBeNull();
+  });
+
+  it("keeps 0 for a book that genuinely never fell", () => {
+    // The distinction the null exists to make, in its positive direction.
+    const tl = buildBalanceTimeline(10_000, [
+      { at: "2026-01-02T12:00:00Z", pnl: 100 },
+      { at: "2026-01-03T12:00:00Z", pnl: 200 },
+    ]);
+    expect(computeDrawdown(tl).maxPctOfEquity).toBe(0);
   });
 });

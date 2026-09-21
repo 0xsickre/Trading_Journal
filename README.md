@@ -140,7 +140,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,975 tests across 178 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,932 tests across 177 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -281,7 +281,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 
 | Route | What it is |
 |---|---|
-| `/` | Dashboard: KPIs, equity curve, drawdown, heatmap calendars, breakdowns, Sickre Score, insights. Opens on **90 days when anything closed within them, and on All when nothing did** — a 2018 backtest otherwise opens on a page of zeros. Whenever the period leaves closed trades out, a notice above the figures says how many and how far back, with **Show all** (`default-period.ts`) |
+| `/` | Dashboard: KPIs, equity curve, drawdown, heatmap calendars, breakdowns, the Process · Survival · Edge card, insights. Opens on **90 days when anything closed within them, and on All when nothing did** — a 2018 backtest otherwise opens on a page of zeros. Whenever the period leaves closed trades out, a notice above the figures says how many and how far back, with **Show all** (`default-period.ts`) |
 | `/journal` | Trade table — sorting, filtering, column picking. The date column carries the **year**, because a backtest's trades are years old and `07/03` without one reads as this spring |
 | `/trades/new`, `/trades/[id]/edit` | Trade form: plan, fills, playbook checklist, psychology, images. In the **order of the decisions**: account, instrument, then the playbook and its checklist, and only then the prices and the risk. **There is no phase control**: planned or active is what the fills say — an entry fill means you are in the trade — so a select that could disagree with the record is gone, and so is "Move to active". The one lifecycle fact the fills cannot know, a MISSED plan, keeps its button. The instrument is **typed, not scrolled** — `instrument-select.tsx` filters the 91-symbol catalog on symbol, name and asset class, so "gold" finds both XAUUSD and GC; a grouped `Select` could only jump to the start of a label |
 | `/daily` | The day's **pre-market gate** — mental temperature and "am I opening anything new" — plus the per-position check-ins, the tracker checklist, and the lock. Two answers, down from twenty-one: the rest moved to the position or to the weekly review, and the last six (a macro note and four Douglas-fear checkboxes) **left in Phase E** because nothing ever read them |
@@ -400,7 +400,7 @@ drift from the module computing the same thing.
 | Trades | Closed trades in scope | |
 | Win rate | `wins / (wins + losses) × 100` | **Breakeven trades are out of the denominator** |
 | Avg win / Avg loss | Average winning and losing money, separately | |
-| Avg win/loss | `avg win / \|avg loss\|` | A money ratio, not R — a Sickre Score component |
+| Avg win/loss | `avg win / \|avg loss\|` | A money ratio, not R. A report column only — it left the dashboard with the composite in Phase E |
 | Profit factor | `gross profit / gross loss` | `Infinity` when there is no loss — a real maximum, not missing data. `null` only when there is nothing to divide |
 | Expectancy | `winRate × avgWinR + (1 − winRate) × avgLossR` | Computed over the R population only — only a trade with a stop has an R |
 | Best / worst | Largest and smallest single net result | |
@@ -544,92 +544,61 @@ Get this wrong and nothing breaks — the numbers simply file themselves under d
 
 ---
 
-## Sickre Score
+## Process · Survival · Edge
 
-One composite, 0–100, over seven components. The **band tables** are transcribed from the TradeZella
-spec. The **weights are not, any more** — that spec calibrates an intraday scalp book, and what is
-kept here is a swing book on a prop account: 40–70 trades a year, a fixed target near 3× the stop.
+Three numbers that do not share a denominator, in place of one composite that did.
 
-| Component | Weight | Scored by |
+**What the Sickre Score was.** Seven weighted components — process adherence, max drawdown, profit
+factor, consistency, prop-firm headroom, avg win/loss, recovery factor — blended into one 0–100
+figure, with a radar, a coverage percentage and a folded component list under it. It was rebalanced
+once and gated twice, and it still had the defect no reweighting can remove: **one number that moves
+both when you trade differently and when the data behind it arrives is not a measurement.** A quiet
+fortnight lowered it; answering more playbook rules raised it; the reader could not tell which. The
+card's own structure — a headline that had to be unfolded before it could be read — was the
+admission.
+
+| Axis | Range | What it is |
 |---|---|---|
-| **Process adherence** | **30** | 60 % tracker compliance + 40 % playbook follow rate |
-| Max drawdown | 25 | `100 − maxPctOfPeakPnl` |
-| Profit factor | 20 | Band table, 1.8 → 2.6 maps to 20 → 100 |
-| Consistency | 15 | Passed through as-is |
-| **FTMO headroom** | 10 | `100 − closest approach to a limit`, in % |
-| Avg win/loss | 5 | The same table as profit factor, in money |
-| Recovery factor | 5 | Its own table, 1.0 → 3.5 |
+| **Process** | 0–100 | 60 % tracker compliance + 40 % playbook follow rate. The only figure entirely yours to move, and the only one that means anything on a book with nothing closed |
+| **Survival** | 0–100 | The mean of the parts that have data: `100 − max drawdown %` (over peak **equity**), `100 − days under water / 90`, and the room left against a prop-firm limit |
+| **Edge** | R | Expectancy with its 95 % interval and its sample. **Not** a score |
 
-The trade-derived components total **70**; with process it is 100, with both optional ones 110. The
-card divides by the real total, never by a hardcoded hundred.
+**Edge is a measurement, deliberately.** Squeezing an interval onto a 0–100 band throws away exactly
+what Phase B added. "0.32R, and the interval still includes zero" is the honest sentence, and on
+forty to seventy trades a year the card says it for a long time. It is dimmed while that holds, the
+same rule the reports table applies to a cell.
 
-### Why these weights, and not the transcribed ones
+**Consistency, avg win/loss and recovery factor left the screen entirely.** Each was a ratio whose
+band table came from a spec written for an intraday book, and none answers a question the three axes
+do not answer better. All three remain as `/reports` columns.
 
-**Win % is out of the score entirely, not merely reweighted.** Its scale (`win% / 60 × 100`) encodes
-"higher is better". At a 3R target the mathematically expected win rate is 35–45 %, so a book
-trading exactly to plan scored about 67 on that component — punished for its own design.
-Qullamaggie runs 25–35 % on purpose. Win rate stays as a KPI tile on the dashboard and as a
-`/reports` metric, where it is a fact rather than a verdict.
+**The evidence gates survive, because the bug they prevent has not gone anywhere.** Three separate
+fixes in round 3 were all the same error at different depths:
 
-**Avg win/loss fell from 20 to 5.** With a fixed target the ratio is settled by design, not by
-execution — it will sit near 3 whatever happens. Twenty points were measuring a constant, and
-half-duplicating profit factor besides.
-
-**Process adherence is the heaviest component, at 30.** It is the only one that does not depend on
-variance. Over 40–70 trades a year every other component measures an outcome on a sample too thin to
-trust, while follow rate and tracker compliance measure behaviour, where n=40 already means
-something. This README's thesis is "P&L is the consequence, process is the cause"; the old weights
-gave the cause 15 of 115 and the consequence 100 of 115.
-
-**FTMO headroom is new.** It measures how close the account came to the daily or the overall limit —
-and specifically the **closest approach across the whole challenge**, not how much room is left
-today. An account that finishes +8 % but touched 4.5 % against a 5 % floor was one bad day from the
-end, and no other component could see that. It is therefore the one component that deliberately
-ignores the period filter: a challenge window is defined by `ftmo_reset_at` and a fixed starting
-balance, not by what the reader happens to be looking at. When no account runs FTMO mode the
-component is absent — not 100.
-
-When a challenge window holds no closed trade at all, `evaluateFtmo` returns `null` rather than 100.
-A fresh account that has never risked anything must not score a maximum for risk management — that is
-the same defect as finding 1 below, one module earlier.
-
-**A component with no data is dropped and the remaining weights renormalize**, so a young track
-record is not punished for arithmetic with nothing to divide. Getting that right took three separate
-fixes in round 3, all three the same error at different depths:
-
-1. Drawdown and consistency answer `0` on an empty book — honest as *statistics* — and `100 − 0 =
-   100` turned "never traded" into flawless risk management.
+1. Drawdown answers `0` on an empty book — honest as a *statistic* — and `100 − 0 = 100` turned
+   "never traded" into flawless risk management.
 2. A single winning trade scored **100/100**: infinite profit factor, zero drawdown because there
-   was nothing to fall from, and zero variance over one sample. Maxima all the way down, every one
-   an artifact of n=1.
+   was nothing to fall from, zero variance over one sample. Maxima all the way down, every one an
+   artifact of n=1.
 3. A book of six consecutive losses scored **100 for risk management**, because the drawdown
    percentage had no positive peak to divide by and returned `0`.
 
-So the score now carries an evidence gate:
+So: below 5 closed trades the two trade-derived parts of Survival are withheld, and Edge is withheld
+below 5 *decided* trades — its own denominator, because a book of breakeven scratches has a path to
+measure and no decisions it could have won. Below 30 closed trades the numbers are shown **with**
+the sample, labelled provisional: hiding them for weeks is dishonest in the other direction.
+Prop-firm headroom is ungated — `evaluateFtmo` already answers `null` for a challenge with nothing
+closed in it, so the evidence rides with the producer.
 
-- **Below 5 closed trades there is no score.** The card counts down to it.
-- **Below 30 it is shown WITH its sample**, labelled provisional. A profit factor over five
-  decisions can jump across the whole band table on one trade, but hiding the score for weeks is
-  dishonest in the other direction.
-- **Below 50 % of weights covered there is no score** — one component under the heading of a
-  seven-component composite is not a composite. An empty account with tracker history covers
-  process 30 + FTMO headroom 10 = 40 of 110, still under the gate.
+**Phase E found the third bug still alive on the equity base.** `maxPctOfEquity` answered `0` when a
+fall had no positive peak equity to divide by — an account with no starting balance that never got
+above water — and the new Survival axis would have read that as a perfect 100. It answers `null` now,
+exactly as `maxPctOfPeakPnl` already did, and `balance.test.ts` pins both halves of the distinction:
+a fall with no denominator is not a book that never fell.
 
-Each gate reads its own denominator: `trades` for the path-dependent statistics (drawdown walks the
-sequence, consistency is its dispersion), `decided` (wins + losses) for the ones built from wins
-against losses. A book of nothing but breakeven scratches has a path to measure and no decisions it
-could have won.
-
-**The rebalance weakened the coverage gate in one place, and that is written down rather than
-swallowed.** While win % was in the score, the components gated on `decided` carried 60 of 100
-weights; without it they carry 25 of 70. A book of nothing but breakeven trades therefore now clears
-the threshold on drawdown and consistency alone (40 of 70) and gets a score instead of silence —
-provisional, with the sample beside it and "2 of 5 components" on the card. Pinned by a test in
-`book.fixture.test.ts`; if it matters that this stays silent, the knob is `MIN_COVERAGE_SHARE`, and
-it moves every score in the journal.
-
-The calibration constants are pinned by value in `sickre-score.test.ts`. Changing any one of them
-moves every score ever displayed, so it now has to change a test too.
+**Survival, the axis, and "Survival simulation", the card, are different questions** and no longer
+share a title. One says where the account stands; the other resamples the book forward sixty trading
+days (§ Survival).
 
 ---
 
@@ -934,8 +903,8 @@ percentage of the previous trading day's closing balance) for the 1-Step type. T
 (drawdown floor) is always fixed to the starting balance — that part is common to both.
 
 Alongside the verdict, `evaluateFtmo` returns `headroomPct` — how much room is left from the
-**closest approach** to any enabled limit across the whole challenge. It is a Sickre Score component
-(§ Sickre Score), and the only number in the application that tells an account that passed apart
+**closest approach** to any enabled limit across the whole challenge. It is the third part of the Survival axis
+(§ Process · Survival · Edge), and the only number in the application that tells an account that passed apart
 from one that passed by a hair.
 
 ---
@@ -1262,8 +1231,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,975 tests across 178 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,354 tests in 119 files) and `components` (environment `jsdom`, files `*.test.tsx`, 621
+2,932 tests across 177 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,316 tests in 118 files) and `components` (environment `jsdom`, files `*.test.tsx`, 616
 tests in 59 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
