@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const ftmoFrozen = vi.fn<(id: string | null | undefined) => Promise<boolean>>();
 const topstepFailed = vi.fn<(id: string | null | undefined) => Promise<boolean>>();
 const rpc = vi.fn();
+const budgetPatch = vi.fn(async (..._a: unknown[]): Promise<Record<string, number | null>> => ({}));
 /** Answers per table, in call order: each `from(table)` takes the next one. */
 let tableAnswers: Record<string, unknown[]> = {};
 
@@ -41,6 +42,7 @@ vi.mock("@/lib/journal/ftmo-status", () => ({
 }));
 vi.mock("@/lib/journal/topstep-status", () => ({
   isTopstepAccountFailed: (id: string | null | undefined) => topstepFailed(id),
+  getRiskBudgetAtEntryPatch: (...a: unknown[]) => budgetPatch(...a),
 }));
 
 const { createTrade, updateTrade } = await import("./actions");
@@ -77,6 +79,7 @@ beforeEach(() => {
   ftmoFrozen.mockReset().mockResolvedValue(false);
   topstepFailed.mockReset().mockResolvedValue(false);
   rpc.mockReset().mockResolvedValue({ data: "new-id", error: null });
+  budgetPatch.mockReset().mockResolvedValue({});
   tableAnswers = {};
 });
 
@@ -161,5 +164,26 @@ describe("updateTrade on a Topstep account that hit its MLL", () => {
     };
     const res = await updateTrade("pos-1", logged);
     expect(res).toEqual({ ok: false, error: "Trade not found" });
+  });
+});
+
+describe("the risk budget at entry is sealed on the write (F3, E4)", () => {
+  it("createTrade carries the patch into tj_save_trade, from the fills it was given", async () => {
+    budgetPatch.mockResolvedValue({ risk_budget_at_entry: 250 });
+    await createTrade(logged);
+    expect(budgetPatch).toHaveBeenCalledWith(ACCOUNT, "closed", expect.any(Array), null);
+    expect(rpc.mock.calls[0][1].p_position).toMatchObject({ risk_budget_at_entry: 250 });
+  });
+
+  it("updateTrade hands it the stored seal, so a sealed budget is never rewritten", async () => {
+    tableAnswers = { tj_positions: [{ status: "closed", risk_budget_at_entry: 180, custom: {} }] };
+    rpc.mockResolvedValue({ data: null, error: null });
+    await updateTrade("pos-1", logged);
+    expect(budgetPatch).toHaveBeenCalledWith(
+      ACCOUNT,
+      "closed",
+      expect.any(Array),
+      expect.objectContaining({ risk_budget_at_entry: 180 }),
+    );
   });
 });

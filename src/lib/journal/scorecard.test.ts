@@ -22,7 +22,7 @@ const input = (over: Partial<ScorecardInputs> = {}): ScorecardInputs => ({
   followRatePct: 60,
   maxDrawdownPctOfEquity: 10,
   underWaterDays: 0,
-  ftmoHeadroomPct: null,
+  propHeadroomPct: null,
   decidedRs: rs(10),
   trades: 40,
   ...over,
@@ -82,7 +82,7 @@ describe("survival", () => {
     // The evidence rides with the producer: `evaluateFtmo` answers null for a
     // window with nothing closed, so a figure here is already earned.
     const s = computeScorecard(
-      input({ trades: 0, ftmoHeadroomPct: 40, decidedRs: [] }),
+      input({ trades: 0, propHeadroomPct: 40, decidedRs: [] }),
     ).survival;
     expect(s.score).toBe(40);
     expect(s.counted).toBe(1);
@@ -102,7 +102,7 @@ describe("survival", () => {
 
   it("never leaves the 0–100 band, however bad the book", () => {
     const s = computeScorecard(
-      input({ maxDrawdownPctOfEquity: 240, underWaterDays: 400, ftmoHeadroomPct: -5 }),
+      input({ maxDrawdownPctOfEquity: 240, underWaterDays: 400, propHeadroomPct: -5 }),
     ).survival;
     expect(s.score).toBe(0);
     expect(s.counted).toBe(3);

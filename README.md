@@ -179,7 +179,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 3,075 tests across 186 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 3,125 tests across 187 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -585,7 +585,8 @@ Get this wrong and nothing breaks — the numbers simply file themselves under d
 - **"Today" is the primary account's day** (`todayFor`): on a Topstep primary, after 17:00 CT it is
   already tomorrow, so `/daily` opens the session that has just started. Locked days keep the verdicts
   they were frozen with; FTMO keeps its own day in its own zone, and `equity_at_entry` is still the
-  opening balance of the calendar day (`FAZA_F_DAYTRADING_PLAN.md` F3).
+  opening balance of the calendar day — a Topstep account's size is graded against its risk budget
+  instead (§ Topstep).
 - **ISO weekdays, 1 = Monday … 7 = Sunday.** Never `Date#getDay`.
 - **Dates are written day-first, clocks are 24-hour**: `18/09/2026 21:10`, or `18/09 21:10` in the
   import review, where every row is from one file. Three shapes, exported from
@@ -648,10 +649,11 @@ So: below 5 closed trades the two trade-derived parts of Survival are withheld, 
 below 5 *decided* trades — its own denominator, because a book of breakeven scratches has a path to
 measure and no decisions it could have won. Below 30 closed trades the numbers are shown **with**
 the sample, labelled provisional: hiding them for weeks is dishonest in the other direction.
-Prop-firm headroom is ungated — `evaluateFtmo` already answers `null` for a challenge with nothing
-closed in it, so the evidence rides with the producer. **It is FTMO's headroom only**: a Topstep
-account's Survival is drawdown and time under water, with no part for the room above its MLL — that
-room is on the Topstep banner, not on this axis (`FAZA_F_DAYTRADING_PLAN.md` #6).
+Prop-firm headroom ("Prop-firm room" on the card, `propHeadroomPct`) is ungated — `evaluateFtmo` and
+`evaluateTopstep` answer `null` for an account with nothing closed in its window, so the evidence
+rides with the producer. On a Topstep account it is the **smallest room ever left above the trailing
+MLL, as a share of the plan's MLL**, after every close and every overnight trail — the closest the
+account came to ending, the twin of FTMO's closest approach. The worst account counts.
 
 **Phase E found the third bug still alive on the equity base.** `maxPctOfEquity` answered `0` when a
 fall had no positive peak equity to divide by — an account with no starting balance that never got
@@ -860,8 +862,13 @@ one day at a time assumes today says nothing about tomorrow, and the run of loss
 account is a correlated stretch; the trader chooses between single days and weeks, and the choice is
 on the card because it changes the answer. **Thresholds have two sources**: with FTMO on they are the
 challenge's rules; with it off they are the trader's own — defaulting to the worst drawdown the book
-has already seen — so the card works on any account. A Topstep account takes the second source: the
-simulation does not yet know its trailing MLL or its DLL in money (`FAZA_F_DAYTRADING_PLAN.md` #6). It is seeded from the data, so the same book
+has already seen — so the card works on any account. **A Topstep account is replayed in money**
+(`simulateTopstepSurvival`): its own Topstep days, from its balance and floor as they stand now; the
+floor trails every high close and locks at the starting balance, so a run that gives back what its
+highs gained ends on it where a fixed percentage floor would not; a day that reaches the DLL is
+counted and stops there, because Topstep liquidates at it; the floor ends the run; the target grows
+with the best day (55 %). In "All accounts" the card simulates the primary account — one account's
+floor, not a sum no floor applies to. It is seeded from the data, so the same book
 always gets the same answer, and it states its assumptions beside the number: a probability with a
 hidden assumption reads as a measurement.
 
@@ -935,9 +942,8 @@ trejd nije planiran pre ulaza"), not `pass`. The quick log's sentence goes to `t
 never to `thesis`: sealed as the reason before entry, a sentence written after the close would be
 exactly the rationalisation the rule reads the seal to catch. Unlocked past days re-read under this
 meaning (a CFD trade typed after its entry is now `na` there); locked days keep their frozen verdicts.
-`risk_matched_intent` still reads a swing trade's shape: it compares the size with the `risk_pct`
-chosen on the plan form, which `/trades/log` does not ask, so there it answers `na` and grades
-nothing (`FAZA_F_DAYTRADING_PLAN.md` #4).
+`risk_matched_intent` compares the size with the `risk_pct` chosen on the plan form; on a Topstep
+account it compares the contracts with the count the form would have given (§ Topstep).
 
 **The last two grade the SIZE, the loss rules grade the outcome**, and both are kept for that reason.
 `max_loss_per_trade` reads the realized loss on the close day, so a trade sized at three times the
@@ -948,7 +954,9 @@ adding a new one would have restated every locked day in the history under a mea
 scored with.
 
 The four limits are a **percentage of the day's opening equity, not an amount of money** (migration
-`20260822190000`). A fixed €200 is a different rule on a 5,000 account than on a 50,000 one, so a
+`20260822190000`) — on every account except a Topstep one, whose trades read their plan's money
+(§ Topstep). The equity is that of the accounts NOT in Topstep mode: a 50K Topstep balance is not
+capital a percentage limit is a share of, so its balance, cash and trades stay out of the ladder. A fixed €200 is a different rule on a 5,000 account than on a 50,000 one, so a
 limit set once stops describing the trader's risk the moment the account grows — and the number that
 has to be re-typed to stay honest is the number nobody re-types.
 
@@ -1049,9 +1057,26 @@ a 50K, 120–600 on a 100K, 180–900 on a 150K, so three stops fit in the DLL �
 is left of today's DLL. `risk_rule_pct`, `risk_rule_min` and `risk_rule_max` on the account override
 the three. The brief in `futures-trading` prints the same figure each morning.
 
-**The tracker's loss and risk rules do not read any of this yet.** They are percentages of the day's
-opening equity (§ Process tracking), so on a Topstep account they must be set by hand to match the
-plan (`FAZA_F_DAYTRADING_PLAN.md` #3, #4).
+**The tracker grades a Topstep account's trades by its plan**, each account on its own, while every
+other account keeps its percentages (§ Process tracking); a day fails if either side does, and the
+checklist names which rule the limit came from:
+
+| Rule | On a Topstep account |
+|---|---|
+| Max loss per day | The plan's DLL, per account and per Topstep day — two 50Ks each down 600 are two survived days |
+| Max loss per trade | The risk budget at entry **+ 10 %** for slippage (`TOPSTEP_SLIPPAGE_TOLERANCE`) |
+| Max loss per week | Not graded — Topstep has no weekly limit; a week of only Topstep trades says so |
+| Risk per trade | The risk at the stop against the budget at entry |
+| Sized to intent | The contracts equal the count the form would have given from that budget (rounded down, commission counted, capped at the plan) |
+
+**The budget at entry** is what `computeTopstepRisk` allowed at the moment of the first fill — the
+room and today's DLL as `topstepStateAt` reads them from everything closed before that instant
+(`riskBudgetAt`). It is **sealed** in `tj_positions.risk_budget_at_entry` by the manual write path on
+the save that first gives a trade fills, never overwritten, 0 when there was no room (migration
+`20260928160000`); a later correction or late import cannot move the measure a decision was graded
+against. A trade with no seal — created by the import, or older than the column — reads the same
+budget derived at its entry. The plan form on a Topstep future does not offer the **Risk %** list:
+the size comes from the rule, and appears once entry and stop are in.
 
 ---
 
@@ -1370,7 +1395,7 @@ project.
 
 ## Migrations
 
-123 files in `supabase/migrations/`, named `YYYYMMDDHHMMSS_description.sql`.
+124 files in `supabase/migrations/`, named `YYYYMMDDHHMMSS_description.sql`.
 
 - **Additive.** An applied migration is never edited — a new delta is written instead.
 - **A migration explains itself.** Each one opens with a comment saying what was wrong and what
@@ -1408,8 +1433,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-3,075 tests across 186 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,441 tests in 125 files) and `components` (environment `jsdom`, files `*.test.tsx`, 634
+3,125 tests across 187 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,486 tests in 126 files) and `components` (environment `jsdom`, files `*.test.tsx`, 639
 tests in 61 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

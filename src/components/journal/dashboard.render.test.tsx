@@ -352,3 +352,46 @@ describe("trades the period leaves out", () => {
     expect(screen.queryByRole("button", { name: "Show all" })).not.toBeInTheDocument();
   });
 });
+
+describe("Survival on a Topstep account is replayed against its MLL (F3, E6)", () => {
+  it("names the Topstep MLL as the floor, not a percentage drawdown", async () => {
+    const topstep = { ...ACCOUNT, topstep_mode: true, starting_balance: 50_000 } as unknown as Account;
+    // Twenty-two Topstep days, one small trade each, 10:00 CT.
+    const trades = Array.from({ length: 22 }, (_, i) => {
+      const day = new Date(Date.UTC(2026, 1, 2 + i, 15, 0, 0)).toISOString();
+      return {
+        id: `t${i}`,
+        account_id: ACCOUNT.id,
+        trade_no: i + 1,
+        status: "closed",
+        source: "import",
+        needs_review: false,
+        created_at: day,
+        instrument: "MNQ",
+        direction: "Long",
+        stats: {
+          position_id: `t${i}`,
+          avg_entry: 20_000,
+          avg_exit: 20_010,
+          entry_qty: 1,
+          exit_qty: 1,
+          gross_pl: i % 3 === 0 ? -150 : 120,
+          net_pl: i % 3 === 0 ? -150 : 120,
+          total_fees: 0,
+          total_swap: 0,
+          realized_r: null,
+          realized_r_net: null,
+          opened_at: day,
+          closed_at: day,
+          duration_seconds: 60,
+          point_value: 2,
+          fx_rate: 1,
+          tick_size: 0.25,
+          point_value_source: "snapshot",
+        },
+      } as unknown as TradeRow;
+    });
+    render(<Dashboard trades={trades} accounts={[topstep]} todayKey="2026-02-24" timezone={ACCOUNT.timezone} />);
+    expect(await screen.findByText("Hits the Topstep MLL")).toBeInTheDocument();
+  });
+});

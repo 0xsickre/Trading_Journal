@@ -6,6 +6,7 @@ import type { Json } from "@/lib/supabase/types";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { getAccounts, getPrimaryAccount } from "@/lib/journal/accounts";
 import { accountDayZoneResolver, todayFor } from "@/lib/journal/time";
+import { topstepRulesResolver } from "@/lib/journal/topstep";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getTrackerRules } from "@/lib/journal/tracker/queries";
 import { bookEquityLadder } from "@/lib/journal/tracker/equity-ladder";
@@ -144,7 +145,7 @@ export async function lockDay(reportDate: string): Promise<Result> {
   // The same day rule per account as the page — a Topstep account's trading day,
   // any other's calendar day — so what is locked is what was on screen.
   const tzOf = accountDayZoneResolver(accounts, primary);
-  const index = buildTradeDayIndex(trades, (row) => tzOf(row.account_id));
+  const index = buildTradeDayIndex(trades, (row) => tzOf(row.account_id), topstepRulesResolver(accounts));
   // The same ladder the page used to show these verdicts. Locking freezes what
   // was on screen, so a different basis here would seal a number the trader
   // never saw.

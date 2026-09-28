@@ -57,6 +57,14 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 28.09.2026 | F2 | D2-A: pravilo dana se izvodi iz `topstep_mode` (Topstep nalog = 17:00 → 17:00 CT), bez nove kolone i bez migracije |
 | 28.09.2026 | F2 | D3-A: „danas" je Topstep dan kad je primarni nalog u Topstep režimu (posle 17:00 CT je već sutra) |
 | 28.09.2026 | F2 | D4-A: nedelja se broji po Topstep danu — nedeljno veče od 17:00 CT pripada novoj nedelji |
+| 28.09.2026 | F3 | E1-A: isto pravilo, Topstep trejdovi po planu (DLL po nalogu i Topstep danu), ostali po % sa osnovicom BEZ Topstep naloga; dan pada ako padne bilo koji nalog |
+| 28.09.2026 | F3 | E2-A: `max_loss_per_week` ne ocenjuje Topstep trejdove (Topstep nema nedeljni limit) |
+| 28.09.2026 | F3 | E3-B: gubitak po trejdu na Topstep-u = budžet rizika na ulazu + 10 % tolerancije za proklizavanje |
+| 28.09.2026 | F3 | E4-B: budžet se pečati na ulazu u `risk_budget_at_entry` (migracija); trejd bez pečata čita izvedeni iz timeline-a |
+| 28.09.2026 | F3 | E5: „veličina po nameri" na Topstep-u = broj ugovora jednak onom što forma izračuna iz budžeta na ulazu |
+| 28.09.2026 | F3 | E6-A: headroom = najbliži prilaz MLL podu u istoriji (min prostor ÷ MLL); Survival u „All accounts" simulira primarni nalog |
+| 28.09.2026 | F3 | E7: lista „Risk %" se ne nudi na Topstep fjučersu u formi plana |
+| 28.09.2026 | — | Trejder: FTMO, swing i CFD „verovatno se više neće koristiti", sme da se izbaci. Baza na taj dan: nijedan FTMO/CFD trejd. Obim uklanjanja se dogovara kao posebna faza, ne usput u F3 |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.

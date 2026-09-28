@@ -13,7 +13,17 @@
  * describes days you did not live.
  */
 
+import { numberFieldValue } from "../field-values";
+import { computeFuturesContracts } from "../plan-calculations";
 import { sealedNumber, sealedText } from "../plan-snapshot";
+import {
+  riskBudgetAt,
+  TOPSTEP_PLANS,
+  TOPSTEP_SLIPPAGE_TOLERANCE,
+  topstepMaxContracts,
+  type TopstepRules,
+  type TopstepTrade,
+} from "../topstep";
 import { addDaysToDayKey, dayKeyIn, type DayZone } from "../time";
 import { weekStartOfDayKey } from "../weekly-review";
 import { matchedRiskIntent, riskMoneyAtEntry, riskPctTaken } from "../risk-taken";
@@ -50,7 +60,18 @@ export type AutoReason =
    */
   | "no_equity"
   /** The day is locked; the verdict is the one frozen at lock time. */
-  | "frozen";
+  | "frozen"
+  /**
+   * Only Topstep trades, and Topstep has no such rule — the weekly loss limit.
+   * The rule grades the other accounts; this week had none of theirs.
+   */
+  | "not_on_topstep";
+
+/**
+ * Where a money limit came from when it is not a percentage of equity: a
+ * Topstep account's plan. Absent on a percentage limit.
+ */
+export type LimitBasis = "topstep_dll" | "topstep_budget" | "topstep_budget_slippage";
 
 export type AutoRuleResult = {
   key: AutoRuleKey;
@@ -70,11 +91,14 @@ export type AutoRuleResult = {
    * evaluator knows what that balance was.
    */
   limit?: number | null;
+  /** Set when `limit` is a Topstep plan's money rather than a percentage. */
+  basis?: LimitBasis;
 };
 
 /** Everything the evaluators need, and nothing else. */
 export type TrackerTrade = {
   id: string;
+  accountId: string | null;
   label: string;
   status: string;
   /** Account-timezone day the position was opened. */
@@ -108,6 +132,20 @@ export type TrackerTrade = {
    * either half is unknown, which is not the same as "no".
    */
   matchedIntent: boolean | null;
+  /**
+   * On a Topstep account, the plan's money rules this trade is graded by; null
+   * on any other account, whose limits are percentages of equity.
+   */
+  topstep: {
+    /** The plan's Daily Loss Limit, positive. */
+    dll: number;
+    /**
+     * What the risk rule allowed at entry: `risk_budget_at_entry` as sealed,
+     * else derived from the account's closed trades at that moment. Null only
+     * when the entry instant cannot be read.
+     */
+    budget: number | null;
+  } | null;
 };
 
 export type TradeDayIndex = {
@@ -131,11 +169,46 @@ const EXECUTED_STATUSES: ReadonlySet<string> = new Set([
   "closed",
 ]);
 
-function toTrackerTrade(row: TradeRow, zone: DayZone): TrackerTrade | null {
+/** A Topstep account's rules and its closed trades, for budgets derived at entry. */
+type TopstepBook = { rules: TopstepRules; closed: TopstepTrade[] };
+
+/**
+ * The contracts the trade form would have sized this entry to: the budget at
+ * entry, the sealed stop, the commission, the plan's cap — `computeFuturesContracts`,
+ * the call the form makes. Null when any input is missing.
+ */
+function expectedContracts(row: TradeRow, budget: number | null, book: TopstepBook): number | null {
+  const stats = row.stats;
+  if (budget == null || !stats) return null;
+  const qty = stats.entry_qty ?? 0;
+  const pointValue = (stats.point_value ?? 0) * (stats.fx_rate ?? 1);
+  const out = computeFuturesContracts({
+    riskAmount: budget,
+    entry: sealedNumber(row, "entry_price") ?? stats.avg_entry,
+    stop: sealedNumber(row, "stop_price"),
+    pointValue: pointValue > 0 ? pointValue : null,
+    // Per side and per contract, as the form counts it: the trade's fees are
+    // both sides of every contract.
+    commissionPerSide: qty > 0 ? (stats.total_fees ?? 0) / (2 * qty) : 0,
+    maxContracts: topstepMaxContracts(
+      TOPSTEP_PLANS[book.rules.config.plan],
+      typeof row.instrument === "string" ? row.instrument : null,
+    ),
+  });
+  return out?.contracts ?? null;
+}
+
+function toTrackerTrade(row: TradeRow, zone: DayZone, book: TopstepBook | null): TrackerTrade | null {
   const openedAt = row.stats?.opened_at ?? null;
   if (!openedAt) return null;
+  const budget = book
+    ? (numberFieldValue(row, "risk_budget_at_entry") ??
+      riskBudgetAt(book.rules.config, book.rules.risk, book.closed, openedAt))
+    : null;
+  const expected = book ? expectedContracts(row, budget, book) : null;
   return {
     id: row.id,
+    accountId: row.account_id,
     label: row.trade_no != null ? `#${row.trade_no}` : row.id.slice(0, 8),
     status: String(row.status ?? ""),
     openDay: dayKeyIn(openedAt, zone),
@@ -154,7 +227,14 @@ function toTrackerTrade(row: TradeRow, zone: DayZone): TrackerTrade | null {
     plannedBeforeEntry: createdBy(row.created_at, openedAt),
     riskMoney: riskMoneyAtEntry(row),
     riskPctTaken: riskPctTaken(row),
-    matchedIntent: matchedRiskIntent(row),
+    // On Topstep the intent is the rule's budget, and a whole-contract size
+    // can only match it by being the count the form would have given.
+    matchedIntent: book
+      ? expected == null
+        ? null
+        : (row.stats?.entry_qty ?? null) === expected
+      : matchedRiskIntent(row),
+    topstep: book ? { dll: TOPSTEP_PLANS[book.rules.config.plan].dll, budget } : null,
   };
 }
 
@@ -183,13 +263,28 @@ export function buildTradeDayIndex(
   rows: TradeRow[],
   /** The account's day rule — a Topstep account counts Topstep's trading day. */
   tzOf: (row: TradeRow) => DayZone,
+  /** A Topstep account's rules; null for every other account. */
+  topstepOf: (accountId: string | null) => TopstepRules | null = () => null,
 ): TradeDayIndex {
   const byOpenDay = new Map<string, TrackerTrade[]>();
   const byCloseDay = new Map<string, TrackerTrade[]>();
 
+  // Each Topstep account's closed trades, once: a budget derived at entry is the
+  // account's state at that moment, read off everything that had closed before.
+  const books = new Map<string, TopstepBook>();
+  for (const row of rows) {
+    const rules = topstepOf(row.account_id);
+    if (!rules || !row.account_id) continue;
+    const book = books.get(row.account_id) ?? { rules, closed: [] };
+    if (row.status === "closed" && row.stats?.net_pl != null) {
+      book.closed.push({ closedAt: row.stats.closed_at, net: row.stats.net_pl });
+    }
+    books.set(row.account_id, book);
+  }
+
   for (const row of rows) {
     if (!EXECUTED_STATUSES.has(String(row.status ?? ""))) continue;
-    const t = toTrackerTrade(row, tzOf(row));
+    const t = toTrackerTrade(row, tzOf(row), (row.account_id && books.get(row.account_id)) || null);
     if (!t || !t.openDay) continue;
 
     const open = byOpenDay.get(t.openDay) ?? [];
@@ -237,7 +332,7 @@ function limitFor(pct: number | undefined, equity: number | null): number | null
  * Boundary is inclusive (`net <= limit`), matching `evaluateFtmo`: a day
  * exactly at your limit is a day you hit your limit.
  */
-function evalMaxLossPerDay(
+function evalPctDayLoss(
   trades: TrackerTrade[],
   pct: number | undefined,
   equity: number | null,
@@ -285,15 +380,18 @@ function evalMaxLossPerWeek(
 ): AutoRuleResult {
   const key: AutoRuleKey = "max_loss_per_week";
   const limit = limitFor(pct, equity);
-  if (limit == null) return na(key, pct == null ? "unconfigured" : "no_equity");
-
   const weekStart = weekStartOfDayKey(day);
-  if (!weekStart) return na(key, "no_trades");
 
-  const soFar: TrackerTrade[] = [];
-  for (let d = weekStart; d <= day; d = addDaysToDayKey(d, 1)) {
-    for (const t of index.byCloseDay.get(d) ?? []) soFar.push(t);
+  // Topstep has no weekly limit (E2), so its trades are not graded here — and a
+  // week that held nothing else says so rather than reading as empty.
+  const all: TrackerTrade[] = [];
+  for (let d = weekStart; weekStart && d <= day; d = addDaysToDayKey(d, 1)) {
+    for (const t of index.byCloseDay.get(d) ?? []) all.push(t);
   }
+  if (all.length > 0 && all.every((t) => t.topstep)) return na(key, "not_on_topstep");
+  if (limit == null) return na(key, pct == null ? "unconfigured" : "no_equity");
+  if (!weekStart) return na(key, "no_trades");
+  const soFar = all.filter((t) => !t.topstep);
 
   if (soFar.length === 0) return na(key, "no_trades");
   if (soFar.some((t) => t.netPl == null)) return na(key, "unpriced");
@@ -317,7 +415,7 @@ function evalMaxLossPerWeek(
  * per trade, so an unknown trade clouds only itself. A priced trade that
  * breaches is a breach regardless of what the unknown one turns out to be.
  */
-function evalMaxLossPerTrade(
+function evalPctTradeLoss(
   trades: TrackerTrade[],
   pct: number | undefined,
   equity: number | null,
@@ -352,6 +450,155 @@ function evalMaxLossPerTrade(
       priced.length > 0 ? Math.min(...priced.map((t) => t.netPl as number)) : null,
     limit,
   };
+}
+
+// --- Topstep accounts: the plan's money, per account (F3, E1–E5) --------------
+//
+// A Topstep account's limits are money from its plan, not percentages of equity,
+// and they belong to that ACCOUNT: two 50Ks each down 600 are two survived days,
+// not one lost 1 200. So a rule's trades are split — each Topstep account on its
+// own, every other account together on the percentage — each part is graded,
+// and the parts are folded into one verdict. A book with no Topstep trade never
+// reaches this code: the percentage evaluators above answer exactly as before.
+
+/** How close a result came to its limit: observed ÷ limit, same sign on both sides. */
+function usage(r: AutoRuleResult): number {
+  if (r.observed == null || r.limit == null) return 0;
+  if (r.limit === 0) return r.observed === 0 ? 0 : Infinity;
+  return r.observed / r.limit;
+}
+
+const worstOf = (rs: AutoRuleResult[]): AutoRuleResult =>
+  rs.reduce((a, b) => (usage(b) > usage(a) ? b : a));
+
+/**
+ * One verdict from the parts of a rule: any part broken breaks the day (its
+ * offenders are the ones to open, and the numbers shown are the worst breach's);
+ * a part whose answer is unknown leaves the rest unknown too, as an unpriced
+ * trade does inside one part; otherwise the day passed, and shows the part that
+ * came nearest its limit. A part with nothing to grade drops out.
+ */
+function combine(key: AutoRuleKey, parts: AutoRuleResult[]): AutoRuleResult {
+  const fails = parts.filter((p) => p.verdict === "fail");
+  if (fails.length > 0) {
+    const w = worstOf(fails);
+    return {
+      key,
+      verdict: "fail",
+      reason: "violated",
+      offenders: fails.flatMap((p) => p.offenders),
+      observed: w.observed,
+      limit: w.limit ?? null,
+      ...(w.basis ? { basis: w.basis } : {}),
+    };
+  }
+  if (parts.some((p) => p.verdict === "na" && p.reason === "unpriced")) return na(key, "unpriced");
+  const passes = parts.filter((p) => p.verdict === "pass");
+  if (passes.length > 0) {
+    const w = worstOf(passes);
+    return {
+      key,
+      verdict: "pass",
+      reason: "ok",
+      offenders: [],
+      observed: w.observed,
+      limit: w.limit ?? null,
+      ...(w.basis ? { basis: w.basis } : {}),
+    };
+  }
+  return parts[0] ?? na(key, "no_trades");
+}
+
+/** Topstep trades grouped by their account, in first-seen order. */
+function byTopstepAccount(trades: TrackerTrade[]): TrackerTrade[][] {
+  const groups = new Map<string, TrackerTrade[]>();
+  for (const t of trades) {
+    if (!t.topstep) continue;
+    const k = t.accountId ?? "";
+    groups.set(k, [...(groups.get(k) ?? []), t]);
+  }
+  return [...groups.values()];
+}
+
+/** One Topstep account's day against its plan's DLL — inclusive, as Topstep counts it. */
+function topstepDayLoss(trades: TrackerTrade[]): AutoRuleResult {
+  const key: AutoRuleKey = "max_loss_per_day";
+  if (trades.some((t) => t.netPl == null)) return na(key, "unpriced");
+  const net = trades.reduce((s, t) => s + (t.netPl ?? 0), 0);
+  const limit = -(trades[0].topstep as { dll: number }).dll;
+  const breached = net <= limit;
+  return {
+    key,
+    verdict: breached ? "fail" : "pass",
+    reason: breached ? "violated" : "ok",
+    offenders: breached ? trades.map((t) => t.id) : [],
+    observed: net,
+    limit,
+    basis: "topstep_dll",
+  };
+}
+
+/** One Topstep trade's loss against its budget at entry, plus the slippage tolerance (E3). */
+function topstepTradeLoss(t: TrackerTrade): AutoRuleResult {
+  const key: AutoRuleKey = "max_loss_per_trade";
+  const budget = t.topstep?.budget ?? null;
+  if (budget == null || t.netPl == null) return na(key, "unpriced");
+  const limit = -budget * (1 + TOPSTEP_SLIPPAGE_TOLERANCE);
+  // A loss, not a flat trade: with no budget at all, breakeven is not a breach.
+  const breached = t.netPl < 0 && t.netPl <= limit;
+  return {
+    key,
+    verdict: breached ? "fail" : "pass",
+    reason: breached ? "violated" : "ok",
+    offenders: breached ? [t.id] : [],
+    observed: t.netPl,
+    limit,
+    basis: "topstep_budget_slippage",
+  };
+}
+
+/** One Topstep entry's risk against the budget the rule allowed at that moment. */
+function topstepRisk(t: TrackerTrade): AutoRuleResult {
+  const key: AutoRuleKey = "risk_per_trade";
+  const budget = t.topstep?.budget ?? null;
+  if (budget == null || t.riskMoney == null) return na(key, "unpriced");
+  const breached = t.riskMoney > budget + 1e-9;
+  return {
+    key,
+    verdict: breached ? "fail" : "pass",
+    reason: breached ? "violated" : "ok",
+    offenders: breached ? [t.id] : [],
+    observed: t.riskMoney,
+    limit: budget,
+    basis: "topstep_budget",
+  };
+}
+
+function evalMaxLossPerDay(trades: TrackerTrade[], pct: number | undefined, equity: number | null): AutoRuleResult {
+  if (!trades.some((t) => t.topstep)) return evalPctDayLoss(trades, pct, equity);
+  const others = trades.filter((t) => !t.topstep);
+  return combine("max_loss_per_day", [
+    ...byTopstepAccount(trades).map(topstepDayLoss),
+    ...(others.length > 0 ? [evalPctDayLoss(others, pct, equity)] : []),
+  ]);
+}
+
+function evalMaxLossPerTrade(trades: TrackerTrade[], pct: number | undefined, equity: number | null): AutoRuleResult {
+  if (!trades.some((t) => t.topstep)) return evalPctTradeLoss(trades, pct, equity);
+  const others = trades.filter((t) => !t.topstep);
+  return combine("max_loss_per_trade", [
+    ...trades.filter((t) => t.topstep).map(topstepTradeLoss),
+    ...(others.length > 0 ? [evalPctTradeLoss(others, pct, equity)] : []),
+  ]);
+}
+
+function evalRiskPerTrade(trades: TrackerTrade[], pct: number | undefined, equity: number | null): AutoRuleResult {
+  if (!trades.some((t) => t.topstep)) return evalPctRisk(trades, pct, equity);
+  const others = trades.filter((t) => !t.topstep);
+  return combine("risk_per_trade", [
+    ...trades.filter((t) => t.topstep).map(topstepRisk),
+    ...(others.length > 0 ? [evalPctRisk(others, pct, equity)] : []),
+  ]);
 }
 
 /** A yes/no property of every trade OPENED that day. */
@@ -409,7 +656,7 @@ function evalThesisWritten(trades: TrackerTrade[]): AutoRuleResult {
  * plan, not a breach, and lot granularity puts "1 %" on 1.0000000002 as often
  * as on 1.
  */
-function evalRiskPerTrade(
+function evalPctRisk(
   trades: TrackerTrade[],
   pct: number | undefined,
   equity: number | null,

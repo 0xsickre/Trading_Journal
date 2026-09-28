@@ -91,12 +91,12 @@ export type ScorecardInputs = {
    * Room left against the nearest prop-firm limit, 0–100.
    *
    * Ungated by the trade count, unlike its two neighbours: the evidence rides
-   * with the producer. `evaluateFtmo` answers null for a challenge with nothing
-   * closed in its window, so there is no measured zero here to tell apart from
+   * with the producer. `evaluateFtmo` and `evaluateTopstep` answer null for an
+   * account with nothing closed in its window, so there is no measured zero here to tell apart from
    * an absence. It is also on its own clock — a limit nearly touched does not
    * stop having been nearly touched because the reader changed the period.
    */
-  ftmoHeadroomPct?: number | null;
+  propHeadroomPct?: number | null;
   /**
    * R of the trades expectancy is actually averaged over: decided, and
    * carrying an R. The same population `metrics.ts` resamples.
@@ -116,7 +116,7 @@ export type SurvivalScore = {
   score: number | null;
   drawdownPct: number | null;
   underWaterDays: number | null;
-  ftmoHeadroomPct: number | null;
+  propHeadroomPct: number | null;
   /** How many of the three parts had data. Shown, not hidden. */
   counted: number;
 };
@@ -147,7 +147,7 @@ export function computeScorecard(inputs: ScorecardInputs): Scorecard {
 
   const drawdownPct = enoughTrades ? inputs.maxDrawdownPctOfEquity : null;
   const underWaterDays = enoughTrades ? inputs.underWaterDays : null;
-  const headroom = inputs.ftmoHeadroomPct ?? null;
+  const headroom = inputs.propHeadroomPct ?? null;
 
   // Each part on the same 0–100 scale, then the mean of the ones that exist.
   // A mean rather than weights: three quantities this different have no honest
@@ -181,7 +181,7 @@ export function computeScorecard(inputs: ScorecardInputs): Scorecard {
       score: parts.length === 0 ? null : parts.reduce((a, b) => a + b, 0) / parts.length,
       drawdownPct,
       underWaterDays,
-      ftmoHeadroomPct: headroom,
+      propHeadroomPct: headroom,
       counted: parts.length,
     },
     edge: {

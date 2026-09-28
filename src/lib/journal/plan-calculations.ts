@@ -173,11 +173,18 @@ export function riskPlanFieldVisible(
   stop: number | null,
   target: number | null,
   riskPct: number | null,
+  /**
+   * A Topstep future (F3, E7): the size comes from the account's risk rule
+   * (`computeTopstepRisk`), so a "Risk %" of the balance is never asked, and the
+   * size does not wait for one.
+   */
+  options: { sizedByRule?: boolean } = {},
 ): boolean {
   const hasEntry = entry != null;
   const hasStop = stop != null;
   const hasTarget = target != null;
-  const hasRisk = riskPct != null;
+  const hasRisk = riskPct != null || options.sizedByRule === true;
+  if (options.sizedByRule && fieldName === "risk_pct") return false;
 
   switch (fieldName) {
     case "entry_price":

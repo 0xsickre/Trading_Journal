@@ -133,7 +133,7 @@ import { cn } from "@/lib/utils";
 import { commissionPerSide, swapCharge } from "@/lib/journal/instrument-costs";
 import { sizeUnitLabel } from "@/lib/journal/units";
 import { MICRO_OF, MINI_OF } from "@/lib/journal/default-instruments";
-import type { TopstepSizing } from "@/lib/journal/topstep";
+import { topstepMaxContracts, type TopstepSizing } from "@/lib/journal/topstep";
 import {
   plannedSize,
   qtyToInput,
@@ -649,7 +649,7 @@ export function TradeForm({
         : null;
     const futuresBudget = ts ? (topstepRisk?.amount ?? 0) : riskAmount;
     // Topstep counts a micro as a tenth of a mini: its cap is ten times as many.
-    const capFor = (sym: string) => (ts ? ts.plan.maxMini * (MINI_OF[sym] ? 10 : 1) : null);
+    const capFor = (sym: string) => (ts ? topstepMaxContracts(ts.plan, sym) : null);
     const futures =
       isFuture && instrument
         ? computeFuturesContracts({
@@ -1312,6 +1312,8 @@ export function TradeForm({
                         setAccountId(id);
                       }}
                       showAccount={tab.id === "plan" && group.id === "meta"}
+                      // A Topstep future is sized by the risk rule: no Risk % list.
+                      sizedByRule={metrics.topstep != null}
                       tradePhase={tradePhase}
                       isMissed={isMissed}
                       computedDisplay={
@@ -1737,6 +1739,7 @@ function FormGroupSection({
   accounts,
   onAccountChange,
   showAccount,
+  sizedByRule = false,
   onAddEntryFill,
   tradePhase,
   isMissed,
@@ -1756,6 +1759,8 @@ function FormGroupSection({
   accounts?: Account[];
   onAccountChange?: (id: string) => void;
   showAccount?: boolean;
+  /** A Topstep future: the size comes from the account's risk rule, so Risk % is not offered (F3, E7). */
+  sizedByRule?: boolean;
   onAddEntryFill?: () => void;
   /** Only to hide the review note on a trade that has not happened yet. */
   tradePhase?: TradePhase;
@@ -1791,7 +1796,7 @@ function FormGroupSection({
   const fieldsToRender =
     group.id === "risk_plan"
       ? group.fields.filter((field) =>
-          riskPlanFieldVisible(field.name, entry, stop, target, riskPct),
+          riskPlanFieldVisible(field.name, entry, stop, target, riskPct, { sizedByRule }),
         )
       : group.id === "psychology_notes" &&
             (isMissed || tradePhase === "planned")

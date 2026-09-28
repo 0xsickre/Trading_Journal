@@ -69,13 +69,13 @@ describe("ScorecardCard", () => {
   });
 
   it("shows each axis's parts, with an em dash for the ones with no data", () => {
-    card({ ftmoHeadroomPct: null });
+    card({ propHeadroomPct: null });
     const survival = within(screen.getByRole("group", { name: "Survival" }));
     expect(survival.getByText("Max DD")).toBeInTheDocument();
     expect(survival.getByText("Under water")).toBeInTheDocument();
     // No prop-firm challenge: the part is named and left empty rather than
     // counted as full room.
-    expect(survival.getByText("FTMO room")).toBeInTheDocument();
+    expect(survival.getByText("Prop-firm room")).toBeInTheDocument();
     expect(survival.getAllByText("—").length).toBeGreaterThanOrEqual(1);
   });
 

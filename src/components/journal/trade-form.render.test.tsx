@@ -738,6 +738,39 @@ describe("the plan reveals one decision at a time", () => {
   });
 });
 
+describe("a Topstep future is sized by the risk rule — no Risk % list (F3, E7)", () => {
+  const FUTURE = { ...INSTRUMENT, id: "i2", symbol: "MNQ", asset_class: "Futures", point_value: 2 } as Instrument;
+  const form = (acc: Account) =>
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[FUTURE]}
+        accounts={[acc]}
+        // As in production: only a Topstep account has sizing (`getTopstepSizing`).
+        topstepSizing={
+          acc.topstep_mode
+            ? { [acc.id]: { room: 2_000, dllLeftToday: 1_000, plan: { mll: 2_000, dll: 1_000, target: 3_000, maxMini: 5, riskMin: 60, riskMax: 300 } } }
+            : {}
+        }
+        initial={baseInitial({
+          account_id: acc.id,
+          status: "planned",
+          fields: { instrument: "MNQ", entry_price: "20000", stop_price: "19950" },
+        })}
+      />,
+    );
+
+  it("does not offer Risk % on a Topstep account", () => {
+    form(account({ id: "ts", topstep_mode: true }));
+    expect(screen.queryByText("Risk %")).not.toBeInTheDocument();
+  });
+
+  it("still does on any other account", () => {
+    form(account({ id: "plain" }));
+    expect(screen.getByText("Risk %")).toBeInTheDocument();
+  });
+});
+
 describe("the risk is shown in money, not only as a percentage", () => {
   it("prints what the chosen percentage costs if the stop is hit", async () => {
     render(

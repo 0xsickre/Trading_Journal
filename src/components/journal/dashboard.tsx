@@ -202,7 +202,7 @@ import {
 import { evaluateFtmo, ftmoConfigFromAccount } from "@/lib/journal/ftmo";
 import { FtmoBanner } from "@/components/journal/ftmo-banner";
 import { TopstepBanner } from "@/components/journal/topstep-banner";
-import { evaluateTopstep, topstepConfigFromAccount, type TopstepResult } from "@/lib/journal/topstep";
+import { evaluateTopstep, topstepConfigFromAccount, topstepRulesResolver, type TopstepResult } from "@/lib/journal/topstep";
 import { unpricedClosedCount } from "@/lib/journal/money-provenance";
 import {
   buildMentorPack,
@@ -249,6 +249,7 @@ import { SurvivalCard } from "@/components/journal/survival-card";
 import {
   dayReturnsFrom,
   simulateSurvival,
+  simulateTopstepSurvival,
   thresholdsFor,
 } from "@/lib/journal/survival";
 
@@ -820,6 +821,8 @@ export function Dashboard({
     (t: { row: TradeRow }) => tzForAccount(t.row.account_id),
     [tzForAccount],
   );
+  // A Topstep account's tracker limits are its plan's money (F3).
+  const topstepOf = useMemo(() => topstepRulesResolver(accounts), [accounts]);
 
   /**
    * "All accounts" pooling raw money across DIFFERENT currencies — €500 and
@@ -1266,8 +1269,10 @@ export function Dashboard({
       accountFilter === "all"
         ? trades
         : trades.filter((t) => t.account_id === accountFilter);
-    const index = buildTradeDayIndex(scoped, (row) =>
-      tzForAccount(row.account_id),
+    const index = buildTradeDayIndex(
+      scoped,
+      (row) => tzForAccount(row.account_id),
+      topstepOf,
     );
     // Scoped to the same accounts and cash the rest of this panel is scoped to,
     // so a filtered dashboard judges the limits against the filtered book.
@@ -1316,6 +1321,7 @@ export function Dashboard({
     scopedCashEvents,
     accountFilter,
     tzForAccount,
+    topstepOf,
     todayKey,
   ]);
 
@@ -1350,7 +1356,9 @@ export function Dashboard({
    * account came nearest to its own floor, and averaging two accounts lets a
    * comfortable one paper over the one that sat a fraction of a percent from
    * the end. `null` — the part drops and Survival averages the rest — when no
-   * account has FTMO mode on, or when every challenge window is still empty.
+   * account runs FTMO or Topstep rules, or when every window is still empty.
+   * A Topstep account's figure is the smallest room ever left above its
+   * trailing MLL, as a share of the MLL (`evaluateTopstep`, F3).
    *
    * DELIBERATELY OUTSIDE THE PERIOD FILTER, unlike every other figure fed to
    * the scorecard, including the two Process halves above, which are windowed
@@ -1361,12 +1369,12 @@ export function Dashboard({
    * Recomputing it over the dashboard period would produce a number no prop
    * firm would recognise.
    */
-  const ftmoHeadroomPct = useMemo(() => {
-    const rooms = ftmoStatuses
+  const propHeadroomPct = useMemo(() => {
+    const rooms = [...ftmoStatuses, ...topstepStatuses]
       .map(({ result }) => result.headroomPct)
       .filter((h): h is number => h != null);
     return rooms.length === 0 ? null : Math.min(...rooms);
-  }, [ftmoStatuses]);
+  }, [ftmoStatuses, topstepStatuses]);
 
   /**
    * R of the trades expectancy is actually averaged over — decided, and
@@ -1397,7 +1405,7 @@ export function Dashboard({
         // row has always shown a human.
         maxDrawdownPctOfEquity: drawdown.maxPctOfEquity,
         underWaterDays: ddDuration.currentDays,
-        ftmoHeadroomPct,
+        propHeadroomPct,
         decidedRs,
         // Drawdown answers 0 for an empty book, and a 0 drawdown scores 100.
         // The count lets the card tell "no evidence" from "measured zero".
@@ -1408,7 +1416,7 @@ export function Dashboard({
       followRatePct,
       drawdown.maxPctOfEquity,
       ddDuration.currentDays,
-      ftmoHeadroomPct,
+      propHeadroomPct,
       decidedRs,
       stats.count,
     ],
@@ -1457,12 +1465,12 @@ export function Dashboard({
         ? trades
         : trades.filter((t) => t.account_id === accountFilter);
     return bookEquityLadder(
-      buildTradeDayIndex(scoped, (row) => tzForAccount(row.account_id)),
+      buildTradeDayIndex(scoped, (row) => tzForAccount(row.account_id), topstepOf),
       accountFilter === "all" ? accounts : accounts.filter((a) => a.id === accountFilter),
       scopedCashEvents,
       tzForAccount,
     );
-  }, [trades, accounts, accountFilter, scopedCashEvents, tzForAccount]);
+  }, [trades, accounts, accountFilter, scopedCashEvents, tzForAccount, topstepOf]);
 
   /**
    * The simulation behind the Survival card.
@@ -1473,13 +1481,46 @@ export function Dashboard({
    * challenge when one is on, and from the trader's own worst historical
    * drawdown when it is not — the simulation itself does not know the
    * difference.
+   *
+   * A Topstep account is replayed in MONEY instead (`simulateTopstepSurvival`,
+   * F3): its own Topstep days, from its balance and trailing floor as they stand
+   * now. In "All accounts" the card simulates the primary account (E6) — one
+   * account's floor, not a sum of accounts no single floor applies to.
    */
   const survival = useMemo(() => {
     const account =
       accountFilter === "all"
-        ? (accounts.find((a) => a.ftmo_mode) ?? accounts[0] ?? null)
+        ? primaryAccount(accounts)
         : (accounts.find((a) => a.id === accountFilter) ?? null);
     if (!account) return null;
+
+    if (account.topstep_mode) {
+      const status = topstepStatuses.find((s) => s.account.id === account.id)?.result;
+      if (!status) return null;
+      const own = dailyPnl(
+        realizedAll.filter((t) => t.row.account_id === account.id),
+        "net",
+        tzOf,
+      );
+      // Chronological, so a block of days is days that followed each other.
+      const dayPnl = [...own.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
+      return {
+        result: simulateTopstepSurvival({
+          dayPnl,
+          horizonDays: SURVIVAL_HORIZON_DAYS,
+          blockDays: survivalBlock,
+          rules: status.rules,
+          startingBalance: account.starting_balance,
+          now: {
+            balance: status.balance,
+            mllFloor: status.mllFloor,
+            mllLocked: status.mllLocked,
+            bestDay: status.bestDay?.net ?? null,
+          },
+        }),
+        limitLabel: "the Topstep MLL",
+      };
+    }
 
     const returns = dayReturnsFrom(daily, (day) => dayEquityOf(day));
     const ftmoOn = account.ftmo_mode === true;
@@ -1504,7 +1545,7 @@ export function Dashboard({
       }),
       limitLabel: ftmoOn ? "the challenge floor" : `a ${thresholds.maxLossPct}% drawdown`,
     };
-  }, [accounts, accountFilter, daily, dayEquityOf, drawdown, survivalBlock]);
+  }, [accounts, accountFilter, daily, dayEquityOf, drawdown, survivalBlock, topstepStatuses, realizedAll, tzOf]);
 
   const breakdown = useMemo(
     () => breakdownByField(realized, breakdownField, breakevenRange),

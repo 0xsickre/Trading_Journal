@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { equityAtEntryPatch } from "./equity-at-entry";
+import { equityAtEntryPatch, riskBudgetAtEntryPatch } from "./equity-at-entry";
 
 describe("equityAtEntryPatch", () => {
   it("stamps the denominator when a plan becomes a position", () => {
@@ -43,5 +43,29 @@ describe("equityAtEntryPatch", () => {
     expect(equityAtEntryPatch("open", null, null)).toEqual({});
     expect(equityAtEntryPatch("open", null, 0)).toEqual({});
     expect(equityAtEntryPatch("open", null, -500)).toEqual({});
+  });
+});
+
+describe("riskBudgetAtEntryPatch (F3, E4) — the same three rules", () => {
+  it("writes the budget on the save that first gives the trade an entry", () => {
+    expect(riskBudgetAtEntryPatch("closed", null, 250)).toEqual({ risk_budget_at_entry: 250 });
+    expect(riskBudgetAtEntryPatch("open", { risk_budget_at_entry: null }, 180)).toEqual({ risk_budget_at_entry: 180 });
+  });
+
+  it("writes a 0 — an account with no room allowed nothing, and that is the record", () => {
+    expect(riskBudgetAtEntryPatch("closed", null, 0)).toEqual({ risk_budget_at_entry: 0 });
+  });
+
+  it("never overwrites one already sealed", () => {
+    expect(riskBudgetAtEntryPatch("closed", { risk_budget_at_entry: 250 }, 120)).toEqual({});
+  });
+
+  it("clears it when the trade goes back to a plan, and says nothing for a plan that never had one", () => {
+    expect(riskBudgetAtEntryPatch("planned", { risk_budget_at_entry: 250 }, null)).toEqual({ risk_budget_at_entry: null });
+    expect(riskBudgetAtEntryPatch("planned", null, 250)).toEqual({});
+  });
+
+  it("writes nothing it does not know — not a Topstep account, or no entry instant", () => {
+    expect(riskBudgetAtEntryPatch("closed", null, null)).toEqual({});
   });
 });

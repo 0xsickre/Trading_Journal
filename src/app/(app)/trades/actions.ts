@@ -24,7 +24,7 @@ import {
   type PlanSnapshot,
 } from "@/lib/journal/plan-snapshot";
 import { isFtmoAccountFrozen } from "@/lib/journal/ftmo-status";
-import { isTopstepAccountFailed } from "@/lib/journal/topstep-status";
+import { getRiskBudgetAtEntryPatch, isTopstepAccountFailed } from "@/lib/journal/topstep-status";
 import { parseScaleOutLevels } from "@/lib/journal/scale-out";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
 import { getAccountCurrency } from "@/lib/journal/accounts";
@@ -311,6 +311,14 @@ export async function createTrade(input: TradeInput) {
         execs,
         null,
       )),
+      // On a Topstep account, what the risk rule allowed at that entry — the
+      // measure its size is graded against (F3). Frozen like the equity above.
+      ...(await getRiskBudgetAtEntryPatch(
+        input.account_id,
+        String(statusPatch.status) as PositionStatus,
+        execs,
+        null,
+      )),
       source: "manual",
     } as Json,
     p_executions: execs as unknown as Json,
@@ -402,7 +410,7 @@ export async function updateTrade(id: string, input: TradeInput) {
   const { data: prevPos } = await supabase
     .from("tj_positions")
     .select(
-      "instrument, point_value_at_trade, custom, max_drawdown_price, max_profit_price, equity_at_entry, plan_snapshot, plan_amended_at",
+      "instrument, point_value_at_trade, custom, max_drawdown_price, max_profit_price, equity_at_entry, risk_budget_at_entry, plan_snapshot, plan_amended_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -477,6 +485,12 @@ export async function updateTrade(id: string, input: TradeInput) {
       // restated afterwards — editing a fill changes how much was risked, not
       // what the account was worth on the day it was risked.
       ...(await getEquityAtEntryPatch(
+        input.account_id,
+        String(statusPatch.status) as PositionStatus,
+        execs,
+        prevPos,
+      )),
+      ...(await getRiskBudgetAtEntryPatch(
         input.account_id,
         String(statusPatch.status) as PositionStatus,
         execs,

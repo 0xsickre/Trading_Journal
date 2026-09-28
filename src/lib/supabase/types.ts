@@ -1107,6 +1107,7 @@ export type Database = {
           position_size: number | null
           psychology_tags: string[]
           quote_currency_at_trade: string | null
+          risk_budget_at_entry: number | null
           risk_pct: string | null
           scale_out_levels: Json
           scale_out_plan: string | null
@@ -1158,6 +1159,7 @@ export type Database = {
           position_size?: number | null
           psychology_tags?: string[]
           quote_currency_at_trade?: string | null
+          risk_budget_at_entry?: number | null
           risk_pct?: string | null
           scale_out_levels?: Json
           scale_out_plan?: string | null
@@ -1209,6 +1211,7 @@ export type Database = {
           position_size?: number | null
           psychology_tags?: string[]
           quote_currency_at_trade?: string | null
+          risk_budget_at_entry?: number | null
           risk_pct?: string | null
           scale_out_levels?: Json
           scale_out_plan?: string | null

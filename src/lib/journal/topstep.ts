@@ -32,6 +32,8 @@
  * plan with and to review discipline; the platform's own risk engine is the
  * record.
  */
+import { MINI_OF } from "./default-instruments";
+import { computeTopstepRisk } from "./plan-calculations";
 import { compareInstants, toEpoch, topstepTradingDay } from "./time";
 import type { Account } from "./types";
 
@@ -91,6 +93,14 @@ export type TopstepResult = {
   consistencyOk: boolean;
   profit: number;
   daysTraded: number;
+  /**
+   * The closest the account ever came to its floor: the smallest room seen,
+   * after every close and every overnight trail, as a share of the plan's MLL
+   * (0–100). The Topstep twin of `evaluateFtmo`'s `headroomPct` — a trailing
+   * floor has no fixed percentage, so the measure is the room itself. Null
+   * with no trades: nothing was tested.
+   */
+  headroomPct: number | null;
 };
 
 /** What the trade form sizes from, per Topstep account: the room, today's DLL left, the plan. */
@@ -139,6 +149,11 @@ export function evaluateTopstep(
   let breachDay: string | null = null;
   const dllDays: string[] = [];
   let bestDay: { day: string; net: number } | null = null;
+  let minRoom: number | null = null;
+  const seeRoom = () => {
+    const room = balance - floor;
+    if (minRoom == null || room < minRoom) minRoom = room;
+  };
 
   for (const [day, dayTrades] of [...days.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
     let net = 0;
@@ -153,6 +168,7 @@ export function evaluateTopstep(
       // Realized balance on or under the floor: the account is over. Intraday
       // with open P&L it may have ended earlier — see the header.
       if (breachDay == null && balance <= floor) breachDay = day;
+      seeRoom();
     }
     if (net <= -rules.dll) dllDays.push(day);
     if (bestDay == null || net > bestDay.net) bestDay = { day, net };
@@ -166,6 +182,9 @@ export function evaluateTopstep(
       floor = Math.max(floor, Math.min(start, highEod - rules.mll));
       locked = floor >= start;
     }
+    // The trail happens overnight, under an unchanged balance: that is a
+    // moment the room shrinks too.
+    seeRoom();
   }
   if (payoutMs != null && toEpoch(now) >= payoutMs) {
     floor = start;
@@ -199,5 +218,89 @@ export function evaluateTopstep(
     consistencyOk: bestDay == null || bestDay.net <= rules.target * TOPSTEP_CONSISTENCY,
     profit,
     daysTraded: days.size,
+    headroomPct:
+      minRoom == null ? null : Math.max(0, Math.min(100, (minRoom / rules.mll) * 100)),
   };
 }
+
+/**
+ * The account as it stood at `instant`: only trades CLOSED before it count, and
+ * the day `instant` falls in has not ended, so its wins have not raised the
+ * floor yet. Exactly `evaluateTopstep` asked at that moment — one walk, so the
+ * state a past trade is graded against cannot drift from the banner's.
+ */
+export function topstepStateAt(
+  config: TopstepConfig,
+  trades: readonly TopstepTrade[],
+  instant: string | Date,
+): TopstepResult | null {
+  const at = toEpoch(instant);
+  if (!Number.isFinite(at)) return null;
+  const before = trades.filter((t) => t.closedAt != null && toEpoch(t.closedAt) < at);
+  const r = evaluateTopstep(config, before, instant);
+  return r.status === "off" ? null : (r as TopstepResult);
+}
+
+/** The trader's risk rule on an account: a share of the room, and optional money bounds. */
+export type TopstepRiskRule = { pct: number; min: number | null; max: number | null };
+
+export function riskRuleFromAccount(account: Account): TopstepRiskRule {
+  return {
+    pct: account.risk_rule_pct ?? 12.5,
+    min: account.risk_rule_min ?? null,
+    max: account.risk_rule_max ?? null,
+  };
+}
+
+/**
+ * What the risk rule allowed at `instant` — the budget a trade entered then
+ * should have been sized from (`computeTopstepRisk`, the same call the trade
+ * form makes). 0 on an account with no room or no DLL left: nothing was
+ * allowed, which is an answer, not an unknown. Null outside Topstep mode.
+ */
+export function riskBudgetAt(
+  config: TopstepConfig,
+  rule: TopstepRiskRule,
+  trades: readonly TopstepTrade[],
+  instant: string | Date,
+): number | null {
+  const s = topstepStateAt(config, trades, instant);
+  if (!s) return null;
+  const risk = computeTopstepRisk({
+    room: s.room,
+    pct: rule.pct,
+    min: rule.min ?? s.rules.riskMin,
+    max: rule.max ?? s.rules.riskMax,
+    dllLeft: s.dllLeftToday,
+  });
+  return risk?.amount ?? 0;
+}
+
+/** What the tracker needs to grade a Topstep account's trades: its rules and its risk rule. */
+export type TopstepRules = { config: TopstepConfig; risk: TopstepRiskRule };
+
+/** Per account id: its Topstep rules, or null for any account not in Topstep mode. */
+export function topstepRulesResolver(
+  accounts: readonly Account[],
+): (accountId: string | null | undefined) => TopstepRules | null {
+  const byId = new Map<string, TopstepRules>();
+  for (const a of accounts) {
+    if (a.topstep_mode) byId.set(a.id, { config: topstepConfigFromAccount(a), risk: riskRuleFromAccount(a) });
+  }
+  return (accountId) => (accountId ? (byId.get(accountId) ?? null) : null);
+}
+
+/**
+ * The most contracts the plan lets the account hold, in THIS contract's units:
+ * Topstep counts a micro as a tenth of a mini, so its cap is ten times as many.
+ */
+export function topstepMaxContracts(plan: TopstepPlanRules, symbol: string | null | undefined): number {
+  return plan.maxMini * (symbol && MINI_OF[symbol] ? 10 : 1);
+}
+
+/**
+ * How far past the risk budget a single trade's loss may go before the tracker
+ * calls it a breach (decision E3, 28.09.2026): a stop filled a tick or two late
+ * is the market, not the trader. 10 % of the budget.
+ */
+export const TOPSTEP_SLIPPAGE_TOLERANCE = 0.1;

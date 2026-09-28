@@ -79,7 +79,9 @@ export function buildEquityLadder(
   let brokenFrom: string | null = null;
 
   for (const day of ordered) {
-    const closed = index.byCloseDay.get(day) ?? [];
+    // A Topstep account's money is not capital a percentage limit is a share of:
+    // its limits are the plan's (F3), so its trades never move this ladder.
+    const closed = (index.byCloseDay.get(day) ?? []).filter((t) => !t.topstep);
     if (brokenFrom == null && closed.some((t) => t.netPl == null)) {
       brokenFrom = day;
     }
@@ -132,14 +134,18 @@ export const NO_EQUITY: EquityLadder = () => null;
  */
 export function bookEquityLadder(
   index: TradeDayIndex,
-  accounts: readonly { starting_balance?: number | null }[],
+  accounts: readonly { id?: string; starting_balance?: number | null; topstep_mode?: boolean | null }[],
   cashEvents: readonly CashEvent[],
   tzOf: (accountId: string) => DayZone,
 ): EquityLadder {
-  const startingBalance = accounts.reduce(
-    (sum, a) => sum + (a.starting_balance ?? 0),
-    0,
-  );
+  // Topstep accounts left out, balance and cash alike (F3, E1): a 50K Topstep
+  // balance is not money a CFD limit is a percentage of — the account can only
+  // lose what is above its MLL, and its own limits are money from its plan.
+  const topstep = new Set(accounts.filter((a) => a.topstep_mode && a.id).map((a) => a.id as string));
+  const startingBalance = accounts
+    .filter((a) => !a.topstep_mode)
+    .reduce((sum, a) => sum + (a.starting_balance ?? 0), 0);
+  cashEvents = cashEvents.filter((e) => !topstep.has(e.account_id));
   // A book with no starting balance has no percentage of itself, and the seed
   // writes 0 — so this is the state a new journal is in, not an edge case.
   if (startingBalance <= 0) return NO_EQUITY;

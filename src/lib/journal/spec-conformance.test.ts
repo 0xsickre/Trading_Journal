@@ -456,12 +456,12 @@ describe("the scorecard — README §Process, Survival, Edge", () => {
   it("takes FTMO headroom as it comes, and drops it when no challenge runs", () => {
     // README: "the room left against a prop-firm limit"… absent, not 100, when
     // nothing is running.
-    const at = (ftmoHeadroomPct: number | null) =>
+    const at = (propHeadroomPct: number | null) =>
       computeScorecard({
         ...base,
         maxDrawdownPctOfEquity: null,
         underWaterDays: null,
-        ftmoHeadroomPct,
+        propHeadroomPct,
       }).survival;
 
     expect(at(90).score).toBeCloseTo(90, 6);

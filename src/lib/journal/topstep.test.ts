@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   TOPSTEP_PLANS,
   evaluateTopstep,
+  riskBudgetAt,
+  topstepStateAt,
   topstepTradingDay,
   type TopstepConfig,
   type TopstepResult,
@@ -172,5 +174,89 @@ describe("reading an account", () => {
     const r = run([t("2026-09-28T15:00:00Z", 1000), t("2026-09-29T15:00:00Z", -1200)], { payoutAt: "2026-09-29T12:00:00Z" });
     expect(r.mllFloor).toBe(50_000);
     expect(r.status).toBe("failed"); // 49 800 is under the 50 000 floor
+  });
+});
+
+describe("the account as it stood at a moment (F3)", () => {
+  // Mon 28.09 closes +1 000; Tue 29.09 loses 400 at 09:00 CT and 300 at 11:00 CT.
+  const book = [
+    t("2026-09-28T15:00:00Z", 1_000),
+    t("2026-09-29T14:00:00Z", -400),
+    t("2026-09-29T16:00:00Z", -300),
+  ];
+
+  it("before anything: the whole MLL is room, the whole DLL is left", () => {
+    const s = topstepStateAt(cfg(), book, "2026-09-28T13:00:00Z")!;
+    expect(s.room).toBe(2_000);
+    expect(s.dllLeftToday).toBe(1_000);
+  });
+
+  it("Tuesday 10:00 CT: Monday's close raised the floor, the morning loss used DLL", () => {
+    const s = topstepStateAt(cfg(), book, "2026-09-29T15:00:00Z")!;
+    // Floor 49 000 after Monday's EOD of 51 000; balance 50 600.
+    expect(s.mllFloor).toBe(49_000);
+    expect(s.balance).toBe(50_600);
+    expect(s.room).toBe(1_600);
+    expect(s.dllLeftToday).toBe(600);
+  });
+
+  it("counts only what had CLOSED before the moment", () => {
+    // A trade closing at the very instant is not yet in the state.
+    const s = topstepStateAt(cfg(), book, "2026-09-29T14:00:00Z")!;
+    expect(s.balance).toBe(51_000);
+    expect(s.dllLeftToday).toBe(1_000);
+  });
+
+  it("answers null outside Topstep mode", () => {
+    expect(topstepStateAt(cfg({ enabled: false }), book, "2026-09-29T15:00:00Z")).toBeNull();
+  });
+});
+
+describe("the risk budget at entry (F3, E4)", () => {
+  const book = [t("2026-09-28T15:00:00Z", 1_000), t("2026-09-29T14:00:00Z", -400)];
+  const rule = { pct: 12.5, min: null, max: null };
+
+  it("is the trader's rule on the room and the DLL left at that moment", () => {
+    // Room 1 600 → 12.5 % = 200, inside 60–300, under DLL left 600.
+    expect(riskBudgetAt(cfg(), rule, book, "2026-09-29T15:00:00Z")).toBe(200);
+  });
+
+  it("before the Monday win the room was 2 000 → 250", () => {
+    expect(riskBudgetAt(cfg(), rule, book, "2026-09-28T13:00:00Z")).toBe(250);
+  });
+
+  it("the account's own overrides win over the plan's bounds", () => {
+    expect(riskBudgetAt(cfg(), { pct: 12.5, min: null, max: 150 }, book, "2026-09-28T13:00:00Z")).toBe(150);
+  });
+
+  it("is 0 on an account with no room — nothing was allowed, which is an answer", () => {
+    const blown = [t("2026-09-28T15:00:00Z", -2_000)];
+    expect(riskBudgetAt(cfg(), rule, blown, "2026-09-29T15:00:00Z")).toBe(0);
+  });
+
+  it("is null outside Topstep mode", () => {
+    expect(riskBudgetAt(cfg({ enabled: false }), rule, book, "2026-09-29T15:00:00Z")).toBeNull();
+  });
+});
+
+describe("headroom: the closest the account came to its floor (F3, E6)", () => {
+  it("is the smallest room ever seen, as a share of the MLL", () => {
+    // Down 1 500 on Monday (room 500 of 2 000 = 25 %), then back up.
+    const r = run([t("2026-09-28T15:00:00Z", -1_500), t("2026-09-29T15:00:00Z", 1_400)]);
+    expect(r.headroomPct).toBe(25);
+  });
+
+  it("counts the overnight trail: a high close raises the floor under the balance", () => {
+    // +1 900 Monday: EOD 51 900 pulls the floor to 49 900. Tuesday -1 500: room 500.
+    const r = run([t("2026-09-28T15:00:00Z", 1_900), t("2026-09-29T15:00:00Z", -1_500)]);
+    expect(r.headroomPct).toBe(25);
+  });
+
+  it("is null with no trades — nothing was tested", () => {
+    expect(run([]).headroomPct).toBeNull();
+  });
+
+  it("is 0 once the floor was touched", () => {
+    expect(run([t("2026-09-28T15:00:00Z", -2_100)]).headroomPct).toBe(0);
   });
 });

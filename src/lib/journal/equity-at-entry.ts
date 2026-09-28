@@ -81,3 +81,27 @@ export function firstEntryAt(
   }
   return earliest;
 }
+
+/**
+ * When `tj_positions.risk_budget_at_entry` is written — the same three rules as
+ * `equity_at_entry`, for the same reason (F3, decision E4): what the Topstep risk
+ * rule allowed at the moment of entry is the measure a size is graded against,
+ * and a figure re-derived later would move with every correction and late
+ * import that changes what had closed before it.
+ *
+ * One difference: 0 is written. An account with no room above its MLL or no
+ * DLL left allowed nothing, and that is a fact about the entry, not a missing
+ * value. `null` — not a Topstep account, or no entry instant — writes nothing,
+ * and a reader then derives the budget from the account's closed trades.
+ */
+export function riskBudgetAtEntryPatch(
+  nextStatus: PositionStatus,
+  prev: { risk_budget_at_entry: number | null } | null,
+  budget: number | null,
+): { risk_budget_at_entry?: number | null } {
+  const had = prev?.risk_budget_at_entry ?? null;
+  if (!ENTERED.has(nextStatus)) return had == null ? {} : { risk_budget_at_entry: null };
+  if (had != null) return {};
+  if (budget == null || !(budget >= 0)) return {};
+  return { risk_budget_at_entry: budget };
+}

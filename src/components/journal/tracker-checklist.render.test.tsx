@@ -231,6 +231,55 @@ describe("auto rules show a verdict but never a manual control", () => {
     expect(screen.getByText(/Limit nije podešen/)).toBeInTheDocument();
   });
 
+  it("a Topstep limit names the plan, not a percentage of equity", () => {
+    // The rule is configured at 2 %, but this breach was the plan's DLL on a
+    // Topstep account — "(2 % equity-ja)" would be a false sentence.
+    const R = [rule({ id: "r1", text: "Max loss per day", auto_key: "max_loss_per_day", config: { pct: 2 } })];
+    render(
+      <TrackerStageSection
+        stage="prepare"
+        data={data({
+          rules: R,
+          auto: {
+            max_loss_per_day: {
+              key: "max_loss_per_day",
+              verdict: "fail",
+              reason: "violated",
+              observed: -1_050,
+              limit: -1_000,
+              basis: "topstep_dll",
+              offenders: [],
+            },
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText(/DLL Topstep plana/)).toBeInTheDocument();
+    expect(screen.queryByText(/equity-ja/)).not.toBeInTheDocument();
+  });
+
+  it("a week with only Topstep trades says Topstep has no weekly limit", () => {
+    const R = [rule({ id: "r1", text: "Max loss per week", auto_key: "max_loss_per_week" })];
+    render(
+      <TrackerStageSection
+        stage="prepare"
+        data={data({
+          rules: R,
+          auto: {
+            max_loss_per_week: {
+              key: "max_loss_per_week",
+              verdict: "na",
+              reason: "not_on_topstep",
+              observed: null,
+              offenders: [],
+            },
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText(/Topstep nema nedeljni limit/)).toBeInTheDocument();
+  });
+
   it("a thesis rule with no planned trade says why nothing was graded", () => {
     // Every trade that day was logged after its close, so there was no plan
     // before the entry to hold a thesis — the rule is not scored, and says so.

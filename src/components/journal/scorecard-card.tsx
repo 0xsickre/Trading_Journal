@@ -56,7 +56,7 @@ export function ScorecardCard({ card }: { card: Scorecard }) {
                 "Under water",
                 survival.underWaterDays == null ? "—" : `${survival.underWaterDays} d`,
               ],
-              ["FTMO room", pct(survival.ftmoHeadroomPct)],
+              ["Prop-firm room", pct(survival.propHeadroomPct)],
             ]}
           />
           <div className="space-y-1" role="group" aria-label="Edge">

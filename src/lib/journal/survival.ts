@@ -31,6 +31,7 @@
  * change in the trader's own behaviour.
  */
 
+import { TOPSTEP_CONSISTENCY, type TopstepPlanRules } from "./topstep";
 import { mulberry32, seedFrom } from "./uncertainty";
 
 /** A day's result as a share of the equity it opened with, in percent. */
@@ -216,5 +217,130 @@ export function thresholdsFor(input: {
     maxLossPct: input.ownMaxLossPct ?? null,
     dailyLossPct: null,
     profitTargetPct: null,
+  };
+}
+
+/**
+ * The account as it stands now, for a Topstep run: the balance, the floor under
+ * it, whether the floor has locked, and the best day so far (the consistency
+ * rule reads it).
+ */
+export type TopstepNow = {
+  balance: number;
+  mllFloor: number;
+  mllLocked: boolean;
+  bestDay: number | null;
+};
+
+export type TopstepSurvivalInput = {
+  /** The account's own history: net money per Topstep day that traded. */
+  dayPnl: readonly number[];
+  horizonDays: number;
+  blockDays: number;
+  iters?: number;
+  rules: TopstepPlanRules;
+  startingBalance: number;
+  now: TopstepNow;
+};
+
+/**
+ * The same replay for a Topstep account (F3, decision E6) — in MONEY, because
+ * its floor cannot be a percentage: the Maximum Loss Limit trails the highest
+ * end-of-day balance and locks at the starting balance, so a fixed percentage
+ * floor would miss every account that is ended by a floor that had followed it
+ * up. Resampled days are Topstep days, drawn in blocks as above.
+ *
+ * Three rules differ from the percentage run, each Topstep's own:
+ *   - the run starts from the account AS IT STANDS — its balance and its floor —
+ *     because "will this account survive" is about the room it has now;
+ *   - a day that reaches the DLL is counted and STOPS there: Topstep liquidates
+ *     at the Daily Loss Limit, so a −1 500 day in the history is a −1 000 day on
+ *     a 50K. The day ends, the account does not;
+ *   - the floor ends the run: an account on its MLL is over, and the balance it
+ *     ended on is its final one.
+ * The target grows with the best day (55 % consistency), the same as the banner.
+ *
+ * Percentiles and drawdown are in percent of the balance the run started from,
+ * so the card reads the same for both kinds of account.
+ */
+export function simulateTopstepSurvival(input: TopstepSurvivalInput): SurvivalResult | null {
+  const days = input.dayPnl.filter((d) => Number.isFinite(d));
+  if (days.length < MIN_SAMPLE_DAYS) return null;
+  if (!(input.horizonDays > 0)) return null;
+  const iters = input.iters ?? 2000;
+  const block = Math.max(1, Math.min(Math.floor(input.blockDays) || 1, days.length));
+  const rand = mulberry32(seedFrom(days));
+  const { rules, startingBalance: start, now } = input;
+  const base = now.balance;
+
+  let hitFloor = 0;
+  let hitDaily = 0;
+  let hitTarget = 0;
+  let down = 0;
+  const finals: number[] = [];
+  const worstDrawdowns: number[] = [];
+
+  for (let run = 0; run < iters; run++) {
+    let balance = base;
+    let floor = now.mllFloor;
+    let locked = now.mllLocked;
+    // The highest close is never below the one that put the floor where it is;
+    // taking it as floor + MLL moves the floor exactly as the true one would.
+    let highEod = Math.max(balance, floor + rules.mll);
+    let best = now.bestDay ?? -Infinity;
+    let peak = balance;
+    let worst = 0;
+    let floorBreached = false;
+    let dailyBreached = false;
+    let targetReached = false;
+
+    for (let d = 0; d < input.horizonDays && !floorBreached; ) {
+      const startIdx = (rand() * days.length) | 0;
+      for (let b = 0; b < block && d < input.horizonDays && !floorBreached; b++, d++) {
+        let r = days[(startIdx + b) % days.length];
+        if (r <= -rules.dll) {
+          dailyBreached = true;
+          r = -rules.dll;
+        }
+        balance += r;
+        if (r > best) best = r;
+        if (balance > peak) peak = balance;
+        const dd = ((peak - balance) / peak) * 100;
+        if (dd > worst) worst = dd;
+        if (balance <= floor) {
+          floorBreached = true;
+          break;
+        }
+        const target = Math.max(rules.target, best > 0 ? best / TOPSTEP_CONSISTENCY : 0);
+        if (balance - start >= target) targetReached = true;
+        // End of the Topstep day: the floor follows the highest close.
+        highEod = Math.max(highEod, balance);
+        if (!locked) {
+          floor = Math.max(floor, Math.min(start, highEod - rules.mll));
+          locked = floor >= start;
+        }
+      }
+    }
+
+    if (floorBreached) hitFloor++;
+    if (dailyBreached) hitDaily++;
+    if (targetReached) hitTarget++;
+    if (balance < base) down++;
+    finals.push(balance / base);
+    worstDrawdowns.push(worst);
+  }
+
+  finals.sort((a, b) => a - b);
+  worstDrawdowns.sort((a, b) => a - b);
+  const pct = (q: number) => (quantile(finals, q) - 1) * 100;
+  return {
+    pMaxLoss: (hitFloor / iters) * 100,
+    pDailyLoss: (hitDaily / iters) * 100,
+    pTarget: (hitTarget / iters) * 100,
+    pNegative: (down / iters) * 100,
+    percentiles: { p5: pct(0.05), p25: pct(0.25), p50: pct(0.5), p75: pct(0.75), p95: pct(0.95) },
+    medianWorstDrawdownPct: quantile(worstDrawdowns, 0.5),
+    sampleDays: days.length,
+    iters,
   };
 }

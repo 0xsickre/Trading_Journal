@@ -16,6 +16,23 @@ import {
   thesisGroupVisible,
 } from "./plan-calculations";
 
+describe("riskPlanFieldVisible on a Topstep future — sized by the rule (F3, E7)", () => {
+  const opts = { sizedByRule: true };
+  it("never offers the Risk % list: the size comes from the risk rule, not a share of the balance", () => {
+    expect(riskPlanFieldVisible("risk_pct", 100, 90, 120, null, opts)).toBe(false);
+  });
+
+  it("shows the size once entry and stop are in — no Risk % needed first", () => {
+    expect(riskPlanFieldVisible("position_size", 100, 90, null, null, opts)).toBe(true);
+    expect(riskPlanFieldVisible("position_size", 100, null, null, null, opts)).toBe(false);
+  });
+
+  it("leaves every other field as it was", () => {
+    expect(riskPlanFieldVisible("target_price", 100, 90, null, null, opts)).toBe(true);
+    expect(riskPlanFieldVisible("stop_price", null, null, null, null, opts)).toBe(false);
+  });
+});
+
 describe("riskPlanFieldVisible", () => {
   const vis = (name: string, e: number | null, s: number | null, t: number | null, r: number | null) =>
     riskPlanFieldVisible(name, e, s, t, r);

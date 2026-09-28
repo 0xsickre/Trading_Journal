@@ -51,6 +51,7 @@ import { ReviewGapsCard } from "@/components/journal/review-gaps-card";
 import { reviewGaps } from "@/lib/journal/review-gaps";
 import { sharedCurrency } from "@/lib/journal/format";
 import { accountDayZoneResolver } from "@/lib/journal/time";
+import { topstepRulesResolver } from "@/lib/journal/topstep";
 
 export default async function DailyPage({
   searchParams,
@@ -128,7 +129,8 @@ export default async function DailyPage({
   const tzFor = accountDayZoneResolver(accounts, primary);
   const tzOf = (row: TradeRow) => tzFor(row.account_id);
 
-  const index = buildTradeDayIndex(trades, tzOf);
+  // A Topstep account's trades are graded by its plan, the rest by percentage.
+  const index = buildTradeDayIndex(trades, tzOf, topstepRulesResolver(accounts));
   // The percentage limits are a percentage of the balance each day OPENED with;
   // the ladder is what knows that balance. Built once for both evaluations
   // below, so the day in view and the streak behind it agree on it.

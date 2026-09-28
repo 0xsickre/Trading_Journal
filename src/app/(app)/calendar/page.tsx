@@ -33,6 +33,7 @@ import { MonthDayList } from "@/components/journal/month-day-list";
 import { CalendarViewToggle } from "@/components/journal/calendar-view-toggle";
 import { PageHeader } from "@/components/app/page-header";
 import { accountDayZoneResolver } from "@/lib/journal/time";
+import { topstepRulesResolver } from "@/lib/journal/topstep";
 
 
 function indexBy(rows: PeriodRow[]): Map<string, PeriodRow> {
@@ -147,7 +148,7 @@ export default async function CalendarPage({
       getCheckins(from, to),
     ]);
 
-    const index = buildTradeDayIndex(trades, tzOfRow);
+    const index = buildTradeDayIndex(trades, tzOfRow, topstepRulesResolver(accounts));
     const equityOf = bookEquityLadder(index, accounts, cashEvents, tzFor);
     const series = computeComplianceSeries(
       days,

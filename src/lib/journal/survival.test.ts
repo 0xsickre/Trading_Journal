@@ -3,6 +3,7 @@ import {
   dayReturnsFrom,
   MIN_SAMPLE_DAYS,
   simulateSurvival,
+  simulateTopstepSurvival,
   thresholdsFor,
   type SurvivalInput,
 } from "./survival";
@@ -198,5 +199,71 @@ describe("thresholdsFor — the same engine, two sources of limits", () => {
       dailyLossPct: null,
       profitTargetPct: null,
     });
+  });
+});
+
+describe("a Topstep account: money, a trailing floor and a DLL (F3, E6)", () => {
+  const RULES = { mll: 2_000, dll: 1_000, target: 3_000, maxMini: 5, riskMin: 60, riskMax: 300 };
+  const FRESH = { balance: 50_000, mllFloor: 48_000, mllLocked: false, bestDay: null };
+  const topstep = (dayPnl: number[], over: Partial<Parameters<typeof simulateTopstepSurvival>[0]> = {}) =>
+    simulateTopstepSurvival({
+      dayPnl,
+      horizonDays: 60,
+      blockDays: 1,
+      iters: 300,
+      rules: RULES,
+      startingBalance: 50_000,
+      now: FRESH,
+      ...over,
+    });
+
+  it("refuses to answer on fewer than twenty traded days, or over no horizon", () => {
+    expect(topstep(Array(MIN_SAMPLE_DAYS - 1).fill(100))).toBeNull();
+    expect(topstep(Array(30).fill(100), { horizonDays: 0 })).toBeNull();
+  });
+
+  it("the same book always gets the same answer", () => {
+    const b = Array.from({ length: 40 }, (_, i) => (i % 4 === 0 ? -400 : 200));
+    expect(topstep(b)).toEqual(topstep(b));
+  });
+
+  it("the floor TRAILS: giving back what the high closes gained ends the account", () => {
+    // Four-day blocks of +1 000, +1 000, −1 000, −1 000 (every day inside the DLL).
+    // A floor fixed 2 000 under the start is reached only by the blocks that open
+    // with the two losses — one start in four. Topstep's floor follows the high
+    // closes up, so three starts in four land on it.
+    const b = Array.from({ length: 40 }, (_, i) => (i % 4 < 2 ? 1_000 : -1_000));
+    const r = topstep(b, { horizonDays: 4, blockDays: 4 })!;
+    expect(r.pMaxLoss).toBeGreaterThan(60);
+  });
+
+  it("a steady small winner never meets the floor and reaches the target", () => {
+    const r = topstep(Array(30).fill(300))!;
+    expect(r.pMaxLoss).toBe(0);
+    expect(r.pTarget).toBe(100);
+  });
+
+  it("the DLL ends the DAY: counted, and the day's loss stops at it", () => {
+    // Topstep liquidates at the DLL, so a −1 500 day in the history is a −1 000
+    // day in the account: one day of it leaves the balance 2 % lower, not 3 %.
+    const r = topstep(Array(20).fill(-1_500), { horizonDays: 1 })!;
+    expect(r.pDailyLoss).toBe(100);
+    expect(r.pMaxLoss).toBe(0);
+    expect(r.percentiles.p50).toBeCloseTo(-2);
+  });
+
+  it("starts from the account as it stands now, not from a fresh one", () => {
+    // 500 above the floor, a history of −600 days: tomorrow ends it.
+    const now = { balance: 48_500, mllFloor: 48_000, mllLocked: false, bestDay: null };
+    expect(topstep(Array(20).fill(-600), { horizonDays: 1, now })!.pMaxLoss).toBe(100);
+    expect(topstep(Array(20).fill(-600), { horizonDays: 1 })!.pMaxLoss).toBe(0);
+  });
+
+  it("a big day raises the target (55 % consistency): +2 500 days need more than 3 000", () => {
+    // Best day 2 500 → target 2 500 ÷ 0.55 ≈ 4 545: two days (5 000) reach it, one does not.
+    const r1 = topstep(Array(20).fill(2_500), { horizonDays: 1 })!;
+    expect(r1.pTarget).toBe(0);
+    const r2 = topstep(Array(20).fill(2_500), { horizonDays: 2 })!;
+    expect(r2.pTarget).toBe(100);
   });
 });

@@ -14,7 +14,7 @@ import {
   type TrackerRule,
   type TrackerStage,
 } from "@/lib/journal/tracker-types";
-import type { AutoRuleResult } from "@/lib/journal/tracker/auto-rules";
+import type { AutoRuleResult, LimitBasis } from "@/lib/journal/tracker/auto-rules";
 import type {
   AutoResults,
   DayCompliance,
@@ -27,6 +27,13 @@ const STATUS_LABELS: Record<DayStatus, string> = {
   broken: "Dan prekršen",
   skipped: "Nema pravila za ovaj dan",
   pending: "Dan u toku",
+};
+
+/** Where a Topstep limit came from, said after the amount. */
+const BASIS_TEXT: Record<LimitBasis, string> = {
+  topstep_dll: "DLL Topstep plana",
+  topstep_budget: "budžet rizika na ulazu",
+  topstep_budget_slippage: "budžet rizika na ulazu + 10 % za proklizavanje",
 };
 
 /**
@@ -53,6 +60,8 @@ function autoReasonText(
       return "Nema equity-ja od kog bi se procenat računao — upiši početni balans naloga u Settings › Accounts.";
     case "no_trades":
       return "Nema trejdova po kojima bi se ovo pravilo ocenilo ovog dana.";
+    case "not_on_topstep":
+      return "Topstep nema nedeljni limit gubitka — pravilo ocenjuje samo naloge van Topstep-a, a ove nedelje ih nije bilo.";
     case "no_plans":
       return "Nijedan trejd ovog dana nije planiran pre ulaza — upisan posle zatvaranja ili uvozom, pa teza pre ulaza nije mogla da postoji. Ocenjuju se samo trejdovi otvoreni iz plana.";
     case "unpriced":
@@ -62,8 +71,12 @@ function autoReasonText(
     case "violated":
       // Both numbers, and the percentage that produced the second one: "2 %"
       // alone does not tell you how much room today had.
+      // On a Topstep account the limit is the plan's money, not the rule's
+      // percentage — naming the percentage there would be a false sentence.
       return res.observed != null && limit != null
-        ? `Prekršeno: ${fmtMoney(res.observed, currency)} od dozvoljenih ${fmtMoney(limit, currency)}${pct != null ? ` (${pct} % equity-ja)` : ""}.`
+        ? `Prekršeno: ${fmtMoney(res.observed, currency)} od dozvoljenih ${fmtMoney(limit, currency)}${
+            res.basis ? ` (${BASIS_TEXT[res.basis]})` : pct != null ? ` (${pct} % equity-ja)` : ""
+          }.`
         : "Prekršeno.";
     case "ok":
       return res.observed != null
