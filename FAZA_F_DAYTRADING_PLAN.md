@@ -7,7 +7,7 @@ ga zamenjuje. README opisuje stanje koda kakvo jeste — i swing ostatke — dok
 
 **Kako je fajl složen.** Posao je podeljen u **šest faza, F1–F6**; jedna faza = jedna sesija, sa
 jasnim ulazom i izlazom, da nijedna ne zavisi od konteksta koji živi samo u razgovoru. **Detaljan
-plan postoji samo za fazu koja je sledeća** (sada F1). Ostale imaju okvir — cilj, stavke, odluke koje
+plan postoji samo za fazu koja je sledeća** (sada F2). Ostale imaju okvir — cilj, stavke, odluke koje
 treba doneti — i dobijaju detaljan plan tek kad dođu na red, jer svaka zavisi od onoga što je
 prethodna odlučila (npr. F3 i F4 čitaju dan koji F2 tek definiše). Stavke `#1–#23` su u katalogu na
 dnu i brojevi se ne menjaju, jer README upućuje na njih.
@@ -29,6 +29,7 @@ Pravila koja važe za svaki korak ispod, jer su ista kao u ostatku repoa:
 | `b3d6ff4` | Uvoz nalazi plan koji je limit popunio (treće pitanje u `import-match.ts`) |
 | `3e2d1bd` | Topstep nalozi (`topstep.ts`: MLL trail po EOD, DLL, konzistentnost 55 %), veličina u celim ugovorima (`computeTopstepRisk`, `computeFuturesContracts`), Topstep baner, katalog samo fjučersi |
 | `57d5580` | `/trades/log` (upis posle zatvaranja, A/B/C), `/trades/[id]/review`, „Bez pregleda" na `/daily`, „Napredak" na `/weekly`, MLL ne raste pre kraja dana |
+| `c0077e1` | **F1**: `thesis_written` ocenjuje samo trejdove planirane pre ulaza (`no_plans`); probijen MLL / FTMO blokira plan, ne evidenciju (`origin`); Topstep „Reset account…" u Settings; tekst dupliranja naloga |
 
 ## Protokol jedne faze
 
@@ -57,8 +58,9 @@ pogađa.
 
 ## Kako nastaviti (nova AI sesija)
 
-1. Grana `claude/journal-swing-to-day-trading-a49d56` (dok se ne spoji u `main`). Isti naziv grane
-   postoji i u `0xsickre/futures-trading`, za delove koji diraju njega (F2: `journal_podsetnik.py`).
+1. Grana: `main` — od F1 (28.09.2026) trejder je tražio da se radi direktno na `main`, bez posebnih
+   grana; `claude/journal-swing-to-day-trading-a49d56` je ostala na stanju pre F1. Isti naziv grane
+   postoji i u `0xsickre/futures-trading`; F2 tamo ne menja kod (vidi F2 → „Utvrđeno u kodu").
 2. Pročitaj ovaj fajl ceo, pa `AGENTS.md` (Next.js 16 — dokumentacija u `node_modules/next/dist/docs/`),
    pa README sekcije koje faza navodi.
 3. Radi **samo prvu fazu u Mapi čiji status nije ✅**, po Protokolu. Ako faza nema sekciju
@@ -70,14 +72,20 @@ pogađa.
 
 | Faza | Cilj | Stavke | Zavisi od | Migracija | Model | Status |
 |---|---|---|---|---|---|---|
-| **F1** | Tačnost odmah: ono što danas pogrešno ocenjuje, a ne traži nijednu veliku odluku | #2, #5, #21 | — | ne | Sonnet | ⏳ **sledeća — odluke donete, spremna za rad** |
-| **F2** | Topstep dan (17:00 → 17:00 CT) kao ključ dana svuda gde se dan broji | #1 | F1 | verovatno ne (izvedeno iz zone i moda naloga) | **Opus** | okvir |
+| **F1** | Tačnost odmah: ono što danas pogrešno ocenjuje, a ne traži nijednu veliku odluku | #2, #5, #21 | — | ne | Sonnet | ✅ `c0077e1` (28.09.2026) |
+| **F2** | Topstep dan (17:00 → 17:00 CT) kao ključ dana svuda gde se dan broji | #1 | F1 | ne ako D2-A (izvedeno iz `topstep_mode`), da ako D2-B | **Opus** | ⏳ **sledeća — detaljan plan napisan, čeka odluke D1–D4** |
 | **F3** | Topstep pravila u tracker-u i Survival-u | #3, #4, #6 | F2 | da (config pravila u novcu) | **Opus** | okvir |
 | **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da (seed, nova pravila, time stop) | Opus za #10, Sonnet ostalo | okvir |
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, swap, uzorak | #11–#15, #17, #18 | F2 | ne (sve izvedeno) | Sonnet, Opus za #13 | okvir |
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, legacy CFD u UI-ju, komentari, PARITY | #16, #19, #20, #22, #23 | F5 | možda (#16) | Sonnet | okvir |
 
-## F1 — Tačnost odmah (detaljno)
+## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
+
+**Isporučeno kako je planirano**, uz dve stvari koje plan nije predvideo: (1) Settings nije imao
+reset za Topstep nalog, pa bi blokada plana bila bez izlaza — dodat „Reset account…" (odluka u
+dnevniku); (2) `origin: "log"` propušta samo trejd koji je stvarno zatvoren, jer je server akcija
+javni endpoint. Gate zelen, 3.046 testova (+32). Tekstovi grešaka u formi su na engleskom, kao ostatak
+te forme; razlog `no_plans` u checklisti je na srpskom, kao ostali razlozi.
 
 **Ulaz:** grana čista, gate zelen (3.014 testova). **Pročitati:** README § Process tracking, § Topstep,
 § The plan is sealed at entry. **Bez migracije:** razlog `na` se ne čuva u bazi (`tj_tracker_checkins`
@@ -157,16 +165,99 @@ pravilo rizika; test u `account-settings.render.test.tsx` čita tekst.
   quick-log trejdu), § Topstep (red o MLL-u: plan blokiran, evidencija ne), broj testova.
 - Ovde: F1 ✅ sa commitom; **detaljan plan za F2** upisan pre nego što F2 počne.
 
-## F2–F6 — okvir (detaljno kad dođu na red)
+## F2 — Topstep dan kao ključ dana (detaljno)
 
-### F2 — Topstep dan (#1)
-- **Cilj:** jedan ključ dana po nalogu: Topstep nalog → `topstepTradingDay`, ostali → dan u zoni
-  naloga. Kalendar, `/daily`, tracker, dnevni insights, „Bez pregleda", `journal_podsetnik.py` čitaju
-  isti ključ.
-- **Odluke:** šta sa „All accounts" pogledom kad su u njemu i Topstep i CFD nalog (dva različita dana);
-  da li se ključ izvodi iz `topstep_mode` ili je posebno podešavanje naloga.
-- **Pročitati pre plana:** README § Attributing to days; `time.ts`, `activity.ts`, `calendar-view.ts`,
-  `tracker/auto-rules.ts` (`TradeDayIndex`), `tracker/queries.ts`, `daily-report-queries.ts`.
+**Ulaz:** `main` posle F1 (`c0077e1`), gate zelen (3.046 testova). **Pročitati:** README § Attributing
+to days, § A trading day, § Process tracking, § Topstep; `time.ts`, `topstep.ts`
+(`topstepTradingDay`), `tracker/auto-rules.ts`, `daily/page.tsx`. **Bez migracije:** ključ se izvodi
+iz naloga, ništa se ne upisuje; `tj_daily_reports` i `tj_tracker_checkins` ostaju ključani datumom.
+
+### Utvrđeno u kodu (28.09.2026, posle F1)
+
+- **Jedan obrazac svuda.** Dan se svuda računa kao `zonedDateKey(trenutak, tzOf(red))`, gde je `tzOf`
+  iz `accountTimezoneResolver` (`time.ts:515`: zona naloga → zona primarnog → `America/New_York`).
+  Mesta: `daily/page.tsx:122–125, 169, 286` (tracker indeks, brojke dana, „Bez pregleda"),
+  `calendar/page.tsx:77–81, 120–122, 150` (dan/nedelja/mesec + tracker), `weekly/page.tsx:119–120, 142,
+  173`, `dashboard.tsx:807–814, 1144, 1189, 1447, 1553`, `enriched-trade.ts:142–164` (`openDay`,
+  `closeDay`, `closeWeek` → dnevni i nedeljni insights), `period-stats.ts:123–127`,
+  `analytics.ts:346, 458, 521`, `activity.ts` (`tradingDayKeysFromRows`),
+  `tracker/equity-ladder.ts:49` (keš po danu), `trades-view.ts:51, 86–87` (filter perioda),
+  `daily/tracker-actions.ts:147–150` (zaključavanje). Zamena `tzOf` → `dayOf` na jednom mestu u
+  resolveru pokriva skoro sve.
+- **Topstep dan postoji samo u `topstep.ts`** (`topstepTradingDay`, `:112`; DLL, EOD MLL, najbolji dan).
+  Nijedan drugi modul ga ne zove — potvrđeno pretragom.
+- **„Danas" je zona primarnog naloga**, na devet mesta: `todayInTz` u `daily/page.tsx:69`,
+  `daily/actions.ts:23`, `daily/tracker-actions.ts:56, 143` (budući dan se ne zaključava),
+  `page.tsx:30` (dashboard), `calendar/page.tsx:62`, `weekly/page.tsx:45`, `weekly/actions.ts:72`,
+  `playbooks/[id]/page.tsx:68`, `notebook/page.tsx:46`, `settings/tracker-actions.ts:237`.
+- **Dnevni izveštaj i tracker su jedan red po datumu za celu knjigu** (`tj_daily_reports`
+  `UNIQUE (user_id, report_date)`), ne po nalogu. Zato „All accounts" pitanje nije o dva izveštaja,
+  nego o tome koji trejd ulazi u koji datum.
+- **`journal_podsetnik.py` (futures-trading) VEĆ broji Topstep dan** (`racun.trgovacki_dan`, 17:00 CT),
+  samo za naloge u Topstep režimu. Plan (#1) ga je navodio kao potrošača koji treba da pređe — ne
+  treba; prelazi journal. Danas se podsetnik i „Bez pregleda" na `/daily` NE slažu za trejd zatvoren
+  posle 17:00 CT (18:00 ET): podsetnik ga broji u sutra, `/daily` u danas. F2 to ispravlja sa strane
+  journala; `futures-trading` se ne menja.
+- **Beograd ≈ Topstep dan.** 17:00 CT = 00:00 u Beogradu dok su oba u letnjem/zimskom vremenu; ne
+  poklapa se ~3 nedelje u martu i ~1 u novembru (sat razlike). Zato promena zone naloga u
+  `Europe/Belgrade` NIJE rešenje — tačno je samo većinu godine.
+- **`equity_at_entry`** (`equity.ts:157`, `import/actions.ts:203`) uzima stanje na početku dana u zoni
+  naloga; za Topstep to ide u F3 (rizik u novcu, ne u %), F2 ga ne dira.
+- **Sat ulaza** (`zonedHour` u `enriched-trade.ts`, „sat ulaza" na `/weekly`) ostaje sat na satu zone
+  naloga — to je pitanje sesije (F5), ne dana.
+
+### Izmena
+
+- `time.ts`: `accountDayResolver(accounts, primaryTz)` → `(trenutak, accountId) => dayKey`: Topstep nalog
+  → `topstepTradingDay`, ostali → `zonedDateKey` u zoni naloga (pravilo naloga po D2). Uz njega
+  `weekKeyOf` = ponedeljak Topstep dana (`weekStartOfDayKey`), da nedeljni ključ i dnevni ne razdvoje
+  nedeljno veče. `topstepTradingDay` se seli u `time.ts` (ili ostaje u `topstep.ts` i uvozi se) —
+  jedno mesto, isti testovi.
+- Svi `tzOf`/`tzFor` potrošači sa liste gore prelaze na `dayOf(trenutak, red)` umesto
+  `zonedDateKey(trenutak, tzOf(red))`. `buildTradeDayIndex`, `bucketByPeriod`, `enrichTrades`,
+  `cashByDay`, `tradingDayKeysFromRows`, `reviewGaps` dobijaju `dayOf` umesto `tzOf`.
+- „Danas" po D3: jedna funkcija `todayFor(primary)` umesto `todayInTz(primary.timezone)` na devet mesta.
+- FTMO (`ftmo.ts:168`) ostaje na svojoj zoni — FTMO dan je dan FTMO-a, ne Topstep-a.
+- Zaključani dani se ne diraju (zamrznuti redovi). Nezaključani prošli dani na Topstep nalogu se
+  preračunaju: trejd zatvoren posle 17:00 CT prelazi u sledeći datum — **reći trejderu pre merge-a**
+  koliko takvih trejdova ima (upit nad `tj_position_stats` pre primene).
+
+### Odluke koje traži trejder (pre koda)
+
+- **D1 — „All accounts" sa Topstep i CFD nalogom zajedno.** (A) svaki trejd ide u dan po pravilu
+  SVOG naloga — isti datum može da znači 17→17 CT za jedan i ponoć–ponoć za drugi; (B) u „All
+  accounts" jedno pravilo za sve (primarnog naloga). Preporuka: **A** — dan trejda ne sme da zavisi od
+  filtera na ekranu, inače isti trejd ima dva datuma.
+- **D2 — Odakle pravilo dana.** (A) iz `topstep_mode` (nalog u Topstep režimu = Topstep dan, bez nove
+  kolone); (B) posebno podešavanje naloga „kraj dana" (npr. `day_boundary: calendar | cme_17ct`,
+  migracija). Preporuka: **A** — nijedan nalog danas ne traži treće pravilo; B je migracija za
+  hipotetički slučaj. Posledica A: isključen Topstep mod vraća nalogu kalendarske dane.
+- **D3 — Šta je „danas".** (A) Topstep dan kad je primarni nalog u Topstep režimu (posle 17:00 CT
+  `/daily` otvara sutrašnji dan — tačno kad počinje Globex sesija); (B) uvek kalendarski dan zone
+  primarnog naloga. Preporuka: **A**, isto pravilo kao D2.
+- **D4 — Vikend.** Topstep dan petka se završava u 16:00 CT (zatvaranje), a nedelja od 17:00 CT je
+  već ponedeljak. Nedeljni ključ po Topstep danu (nedeljno veče → nova nedelja) — potvrditi da tako i
+  `/weekly` treba da broji.
+
+### Testovi (prvo padaju)
+
+- `time.test.ts`: `accountDayResolver` — Topstep nalog 18:30 CT pon → uto; 16:59 CT → isti dan; CFD
+  nalog u NY istog trenutka → pon; nalog bez zone → primarni; nedelja 17:30 CT → pon; DST prelaz
+  (mart/novembar) — dan se računa u Chicagu, ne u zoni naloga.
+- `tracker/auto-rules.test.ts`: `max_loss_per_day` na Topstep nalogu sabira trejd od 18:30 CT pon u
+  utorak; CFD trejd istog trenutka ostaje u ponedeljku (D1-A).
+- `review-gaps` + `daily/page`: „Bez pregleda" za dan D = isti skup kao `journal_podsetnik.py` za D
+  (fiksni primer sa trejdom posle 17:00 CT).
+- `period-stats` / kalendar: dan, nedelja (D4) i mesec Topstep trejda posle 17:00 CT.
+- Zaključan dan: zamrznute presude se ne menjaju kad trejd „pređe" u sledeći dan.
+
+### Izlaz iz F2
+
+- Gate zelen; README § Attributing to days (izuzetak „Except Topstep's own day" postaje pravilo),
+  § A trading day (21:25 podsetnik i `/daily` isti dan), § Topstep (banner i kalendar isti dan).
+- Ovde: F2 ✅ sa commitom, detaljan plan za F3.
+
+## F3–F6 — okvir (detaljno kad dođu na red)
 
 ### F3 — Topstep pravila u tracker-u i Survival-u (#3, #4, #6)
 - **Cilj:** `max_loss_per_day` = DLL plana, rizik po trejdu = `computeTopstepRisk`, namera =

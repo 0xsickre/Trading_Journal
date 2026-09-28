@@ -1580,3 +1580,5 @@ Sve što je u kodu još uvek swing — dan u zoni naloga umesto Topstep dana, `t
 quick-log obara, tracker limiti u %, Survival bez Topstep pravila, check-in po poziciji, korpe
 trajanja u danima, swing insights — popisano je i podeljeno u šest faza (F1–F6; detaljan plan samo za sledeću) u
 [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md).
+
+- **F1 ✅ (`c0077e1`, 28.09.2026):** `thesis_written` ocenjuje samo trejdove planirane pre ulaza; probijen MLL / FTMO blokira plan, a ne upis posle zatvaranja; Topstep „Reset account…" u Settings. Sledeća je F2 (Topstep dan kao ključ dana), plan napisan, čeka odluke D1–D4.
