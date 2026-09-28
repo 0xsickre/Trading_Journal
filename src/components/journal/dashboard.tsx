@@ -198,6 +198,8 @@ import {
 } from "@/lib/journal/analytics";
 import { evaluateFtmo, ftmoConfigFromAccount } from "@/lib/journal/ftmo";
 import { FtmoBanner } from "@/components/journal/ftmo-banner";
+import { TopstepBanner } from "@/components/journal/topstep-banner";
+import { evaluateTopstep, topstepConfigFromAccount, type TopstepResult } from "@/lib/journal/topstep";
 import { unpricedClosedCount } from "@/lib/journal/money-provenance";
 import {
   buildMentorPack,
@@ -762,6 +764,22 @@ export function Dashboard({
             account,
             result: evaluateFtmo(ftmoConfigFromAccount(account), rows),
           };
+        }),
+    [accounts, trades],
+  );
+
+  // Topstep status per account in that mode (topstep.ts): room above the MLL,
+  // today's DLL, consistency, target.
+  const topstepStatuses = useMemo(
+    () =>
+      accounts
+        .filter((a) => a.topstep_mode)
+        .map((account) => {
+          const rows = toRealized(trades.filter((t) => t.account_id === account.id)).map((r) => ({
+            closedAt: r.closedAt,
+            net: r.net,
+          }));
+          return { account, result: evaluateTopstep(topstepConfigFromAccount(account), rows) as TopstepResult };
         }),
     [accounts, trades],
   );
@@ -1591,6 +1609,14 @@ export function Dashboard({
 
   return (
     <div className="space-y-5">
+      {topstepStatuses.length > 0 && (
+        <div className="space-y-2">
+          {topstepStatuses.map(({ account, result }) => (
+            <TopstepBanner key={account.id} account={account} result={result} />
+          ))}
+        </div>
+      )}
+
       {ftmoStatuses.length > 0 && (
         <div className="space-y-2">
           {ftmoStatuses.map(({ account, result }) => (

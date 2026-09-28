@@ -83,9 +83,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  computeFuturesContracts,
   computePlannedRewardR,
   computePositionSize,
   computeRiskAmount,
+  computeTopstepRisk,
+  ticksBetween,
   formatPlannedRewardR,
   inferDirectionFromPrices,
   matchRiskOption,
@@ -129,6 +132,8 @@ import {
 import { cn } from "@/lib/utils";
 import { commissionPerSide, swapCharge } from "@/lib/journal/instrument-costs";
 import { sizeUnitLabel } from "@/lib/journal/units";
+import { MICRO_OF, MINI_OF } from "@/lib/journal/default-instruments";
+import type { TopstepSizing } from "@/lib/journal/topstep";
 import {
   plannedSize,
   qtyToInput,
@@ -235,6 +240,7 @@ export function TradeForm({
   initial,
   ftmoFailedAccountIds = [],
   accountEquity = {},
+  topstepSizing = {},
   categoryOrder,
 }: {
   optionsMap: OptionsMap;
@@ -253,6 +259,12 @@ export function TradeForm({
    * opened with.
    */
   accountEquity?: Record<string, number>;
+  /**
+   * Per Topstep account: the room above the MLL, today's DLL left and the plan
+   * (`topstep-status.ts`). A planned FUTURES trade on such an account is sized
+   * from the trader's rule — a share of the room, not of the balance.
+   */
+  topstepSizing?: Record<string, TopstepSizing>;
   /**
    * Category key → the ordinal the trader dragged it to.
    *
@@ -608,6 +620,54 @@ export function TradeForm({
     // showing while the other half is unavailable.
     const riskAmount = computeRiskAmount({ balance, riskPct });
 
+    // A FUTURE is sized in whole contracts, rounded down, commission counted
+    // (plan-calculations `computeFuturesContracts`). On a Topstep account the
+    // budget is the trader's rule — a share of the room above the MLL, between
+    // the plan's bounds, never past today's DLL — because a share of the whole
+    // balance is not money a prop account can lose. Elsewhere it stays the
+    // risk % of equity above.
+    const isFuture = (instrument?.asset_class ?? "") === "Futures";
+    const ts = isFuture && account ? topstepSizing[account.id] : undefined;
+    const topstepRisk =
+      ts && account
+        ? computeTopstepRisk({
+            room: ts.room,
+            pct: account.risk_rule_pct ?? 12.5,
+            min: account.risk_rule_min ?? ts.plan.riskMin,
+            max: account.risk_rule_max ?? ts.plan.riskMax,
+            dllLeft: ts.dllLeftToday,
+          })
+        : null;
+    const futuresBudget = ts ? (topstepRisk?.amount ?? 0) : riskAmount;
+    // Topstep counts a micro as a tenth of a mini: its cap is ten times as many.
+    const capFor = (sym: string) => (ts ? ts.plan.maxMini * (MINI_OF[sym] ? 10 : 1) : null);
+    const futures =
+      isFuture && instrument
+        ? computeFuturesContracts({
+            riskAmount: futuresBudget,
+            entry: pe,
+            stop,
+            pointValue,
+            commissionPerSide: instrument.commission_per_lot ?? 0,
+            maxContracts: capFor(instrument.symbol),
+          })
+        : null;
+    const pairSymbol = instrument ? (MICRO_OF[instrument.symbol] ?? MINI_OF[instrument.symbol]) : undefined;
+    const pairInstrument = pairSymbol ? instruments.find((i) => i.symbol === pairSymbol) : undefined;
+    const futuresPair =
+      futures && pairInstrument
+        ? computeFuturesContracts({
+            riskAmount: futuresBudget,
+            entry: pe,
+            stop,
+            pointValue: pairInstrument.point_value,
+            commissionPerSide: pairInstrument.commission_per_lot ?? 0,
+            maxContracts: capFor(pairInstrument.symbol),
+          })
+        : null;
+    const stopTicks = isFuture ? ticksBetween(pe, stop, instrument?.tick_size ?? null) : null;
+    const targetTicks = isFuture ? ticksBetween(pe, pt, instrument?.tick_size ?? null) : null;
+
     const slippage = computeEntrySlippage({
       direction: String(fields.direction ?? ""),
       plannedEntry: pe,
@@ -658,8 +718,17 @@ export function TradeForm({
       netPl,
       r,
       plannedRR,
-      sizeSuggestion,
+      // A future's suggestion is its whole-contract count; zero is no suggestion.
+      sizeSuggestion: isFuture ? (futures && futures.contracts > 0 ? futures.contracts : null) : sizeSuggestion,
       riskAmount,
+      isFuture,
+      futures,
+      futuresPair,
+      pairSymbol,
+      futuresBudget,
+      topstep: ts ? { ...ts, risk: topstepRisk, pct: account?.risk_rule_pct ?? 12.5 } : null,
+      stopTicks,
+      targetTicks,
       // Exposed so the risk note can tell a BUDGET from a CONSEQUENCE: with no
       // stop on the form there is nothing that can be "hit", and the sentence
       // has to stop claiming there is.
@@ -682,7 +751,7 @@ export function TradeForm({
     // scaleOutRows is a dependency because the planned reward now weighs it:
     // without it the figure would freeze at whatever the levels were when some
     // other field last changed.
-  }, [execs, fields, pointValue, fx.rate, account, accountEquity, scaleOutRows]);
+  }, [execs, fields, pointValue, fx.rate, account, accountEquity, scaleOutRows, instrument, instruments, topstepSizing]);
 
   /**
    * The size this trade planned, in lots — the figure the plan tab prints.
@@ -1236,7 +1305,9 @@ export function TradeForm({
                                   : "—",
                               position_size:
                                 metrics.sizeSuggestion != null
-                                  ? `${metrics.sizeSuggestion.toFixed(2)} ${sizeUnitLabel(instrument, metrics.sizeSuggestion)}`
+                                  ? metrics.isFuture
+                                    ? `${metrics.sizeSuggestion} ${instrument?.symbol ?? ""}`
+                                    : `${metrics.sizeSuggestion.toFixed(2)} ${sizeUnitLabel(instrument, metrics.sizeSuggestion)}`
                                   : "—",
                             }
                           : undefined
@@ -1302,7 +1373,9 @@ export function TradeForm({
                       // being written. The number was right (a share of
                       // equity); the claim around it was not.
                       riskNote={
-                        tab.id === "plan" &&
+                        tab.id === "plan" && group.id === "risk_plan" && metrics.isFuture
+                          ? futuresRiskNote(metrics, instrument?.symbol ?? "", currency)
+                          : tab.id === "plan" &&
                         group.id === "risk_plan" &&
                         metrics.riskAmount != null
                           ? metrics.stop != null
@@ -1445,7 +1518,9 @@ export function TradeForm({
                   label="Position Size"
                   value={
                     metrics.sizeSuggestion != null
-                      ? `${metrics.sizeSuggestion.toFixed(2)} ${sizeUnitLabel(instrument, metrics.sizeSuggestion)}`
+                      ? metrics.isFuture
+                        ? `${metrics.sizeSuggestion} ${instrument?.symbol ?? ""}`
+                        : `${metrics.sizeSuggestion.toFixed(2)} ${sizeUnitLabel(instrument, metrics.sizeSuggestion)}`
                       : "—"
                   }
                 />
@@ -2305,4 +2380,61 @@ function ExecutionsEditor({
       </div>
     </div>
   );
+}
+
+/**
+ * The sizing line under a planned FUTURES trade — what goes into the TopstepX
+ * ticket: how many contracts, what they lose at the stop, and the stop and
+ * target in ticks for the bracket. Then where the budget came from, and what
+ * to do when the count is zero or capped.
+ */
+function futuresRiskNote(
+  m: {
+    stop: number | null;
+    futures: { contracts: number; risk: number; capped: boolean } | null;
+    futuresPair: { contracts: number; risk: number } | null;
+    pairSymbol?: string;
+    futuresBudget: number | null;
+    topstep: (TopstepSizing & { risk: { amount: number; threeStopsFitDll: boolean } | null; pct: number }) | null;
+    stopTicks: number | null;
+    targetTicks: number | null;
+  },
+  symbol: string,
+  currency: string,
+): string | null {
+  const parts: string[] = [];
+  if (m.topstep) {
+    if (m.topstep.risk == null) {
+      return `No room to risk: ${fmtMoney(m.topstep.room, currency)} above the MLL, ${fmtMoney(m.topstep.dllLeftToday, currency)} of today's DLL left.`;
+    }
+    parts.push(
+      `Budget ${fmtMoney(m.topstep.risk.amount, currency)} (${m.topstep.pct} % of ${fmtMoney(m.topstep.room, currency)} room above the MLL, plan ${fmtMoney(m.topstep.plan.riskMin, currency)}–${fmtMoney(m.topstep.plan.riskMax, currency)}).`,
+    );
+  } else if (m.futuresBudget != null) {
+    parts.push(`Budget ${fmtMoney(m.futuresBudget, currency)}.`);
+  }
+  if (m.stop == null || m.futures == null) {
+    parts.push("Set a stop to size whole contracts.");
+    return parts.join(" ");
+  }
+  const bracket = [m.stopTicks != null ? `stop ${m.stopTicks} ticks` : null, m.targetTicks != null ? `target ${m.targetTicks} ticks` : null]
+    .filter(Boolean)
+    .join(", ");
+  if (m.futures.contracts > 0) {
+    parts.unshift(
+      `${m.futures.contracts} ${symbol} — ${fmtMoney(m.futures.risk, currency)} at the stop incl. commission${bracket ? ` (${bracket})` : ""}.`,
+    );
+  } else {
+    parts.unshift(`0 ${symbol} at this stop${bracket ? ` (${bracket})` : ""} — one contract would lose more than the budget.`);
+  }
+  if (m.futuresPair && m.pairSymbol) {
+    parts.push(
+      m.futuresPair.contracts > 0
+        ? `Or ${m.futuresPair.contracts} ${m.pairSymbol} (${fmtMoney(m.futuresPair.risk, currency)}).`
+        : `${m.pairSymbol}: 0 at this stop.`,
+    );
+  }
+  if (m.futures.capped) parts.push("Capped at the plan's maximum position.");
+  if (m.topstep?.risk && !m.topstep.risk.threeStopsFitDll) parts.push("⚠ Three stops no longer fit today's DLL.");
+  return parts.join(" ");
 }

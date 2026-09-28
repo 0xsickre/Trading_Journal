@@ -51,6 +51,7 @@ import type { Account } from "@/lib/journal/types";
 import { parseSettingsNumber } from "@/lib/journal/settings-rules";
 import { duplicateSettings, isArchived } from "@/lib/journal/account-rules";
 import { fmtMoney } from "@/lib/journal/format";
+import { TOPSTEP_PLANS, type TopstepPlan } from "@/lib/journal/topstep";
 import { isValidTimeZone } from "@/lib/journal/time";
 import {
   updateAccount,
@@ -475,6 +476,14 @@ function EditAccountDialog({
   const [minDaysOn, setMinDaysOn] = useState(account.ftmo_min_days_enabled);
   const [minDays, setMinDays] = useState(String(account.ftmo_min_days));
 
+  const [topstepMode, setTopstepMode] = useState(account.topstep_mode === true);
+  const [topstepPlan, setTopstepPlan] = useState<TopstepPlan>(account.topstep_plan ?? "50K");
+  const [payoutDate, setPayoutDate] = useState(account.topstep_payout_at ? account.topstep_payout_at.slice(0, 10) : "");
+  const [riskPct, setRiskPct] = useState(String(account.risk_rule_pct ?? 12.5));
+  const [riskMin, setRiskMin] = useState(account.risk_rule_min == null ? "" : String(account.risk_rule_min));
+  const [riskMax, setRiskMax] = useState(account.risk_rule_max == null ? "" : String(account.risk_rule_max));
+  const plan = TOPSTEP_PLANS[topstepPlan];
+
   const [beFrom, setBeFrom] = useState(String(account.breakeven_from));
   const [beTo, setBeTo] = useState(String(account.breakeven_to));
   const [beUnit, setBeUnit] = useState(account.breakeven_unit);
@@ -494,6 +503,9 @@ function EditAccountDialog({
     max: parseSettingsNumber(maxPct, { min: 0, max: 100 }),
     target: parseSettingsNumber(targetPct, { min: 0, max: 100 }),
     minDays: parseSettingsNumber(minDays, { min: 0, max: 365, integer: true }),
+    riskPct: parseSettingsNumber(riskPct, { min: 0.1, max: 100 }),
+    riskMin: parseSettingsNumber(riskMin, { min: 1, allowEmpty: true }),
+    riskMax: parseSettingsNumber(riskMax, { min: 1, allowEmpty: true }),
   };
   const err = (k: keyof typeof checks) => (checks[k].ok ? null : checks[k].error);
   const val = (k: keyof typeof checks) => {
@@ -504,8 +516,16 @@ function EditAccountDialog({
     checks.beFrom.ok && checks.beTo.ok && val("beFrom") > val("beTo")
       ? "'From' must be less than or equal to 'to'."
       : null;
+  const nullable = (k: "riskMin" | "riskMax") => {
+    const r = checks[k];
+    return r.ok ? r.value : null;
+  };
+  const riskOrder =
+    nullable("riskMin") != null && nullable("riskMax") != null && nullable("riskMin")! > nullable("riskMax")!
+      ? "The minimum is above the maximum."
+      : null;
   const invalid =
-    Object.values(checks).some((c) => !c.ok) || beOrder != null || !isValidTimeZone(tz) || !name.trim();
+    Object.values(checks).some((c) => !c.ok) || beOrder != null || riskOrder != null || !isValidTimeZone(tz) || !name.trim();
 
   const balanceChanged = checks.balance.ok && val("balance") !== account.starting_balance;
   const tzChanged = tz !== account.timezone;
@@ -535,6 +555,12 @@ function EditAccountDialog({
         ftmo_profit_target_pct: val("target"),
         ftmo_min_days_enabled: minDaysOn,
         ftmo_min_days: val("minDays"),
+        topstep_mode: topstepMode,
+        topstep_plan: topstepPlan,
+        topstep_payout_at: payoutDate ? new Date(`${payoutDate}T00:00:00Z`).toISOString() : null,
+        risk_rule_pct: val("riskPct"),
+        risk_rule_min: nullable("riskMin"),
+        risk_rule_max: nullable("riskMax"),
       });
       if (!res.ok) toast.error(res.error);
       else {
@@ -661,7 +687,10 @@ function EditAccountDialog({
             <Checkbox
               id={`ftmo-${account.id}`}
               checked={ftmoMode}
-              onCheckedChange={(v) => setFtmoMode(v === true)}
+              onCheckedChange={(v) => {
+                setFtmoMode(v === true);
+                if (v === true) setTopstepMode(false);
+              }}
             />
             <Label htmlFor={`ftmo-${account.id}`} className="text-sm font-medium">
               FTMO challenge rules
@@ -699,6 +728,90 @@ function EditAccountDialog({
                   <RotateCcw className="size-4" /> Restart challenge…
                 </Button>
               </div>
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-3 rounded-md border p-3">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id={`topstep-${account.id}`}
+              checked={topstepMode}
+              onCheckedChange={(v) => {
+                setTopstepMode(v === true);
+                if (v === true) setFtmoMode(false);
+              }}
+            />
+            <Label htmlFor={`topstep-${account.id}`} className="text-sm font-medium">
+              Topstep rules (futures)
+            </Label>
+          </div>
+          {topstepMode && (
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor={`tsplan-${account.id}`} className="text-xs">
+                    Plan
+                  </Label>
+                  <Select value={topstepPlan} onValueChange={(v) => setTopstepPlan(v as TopstepPlan)}>
+                    <SelectTrigger id={`tsplan-${account.id}`} className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(TOPSTEP_PLANS) as TopstepPlan[]).map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {p}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={`tspay-${account.id}`} className="text-xs">
+                    First payout (from then the floor is the starting balance)
+                  </Label>
+                  <Input
+                    id={`tspay-${account.id}`}
+                    type="date"
+                    className="h-8"
+                    value={payoutDate}
+                    onChange={(e) => setPayoutDate(e.target.value)}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Max loss {fmtMoney(plan.mll, "USD")}, trailing the highest end-of-day balance and
+                locking at the starting balance · daily loss {fmtMoney(plan.dll, "USD")} · target{" "}
+                {fmtMoney(plan.target, "USD")}, best day at most 55 % of it · at most {plan.maxMini} mini /{" "}
+                {plan.maxMini * 10} micro.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <NumberField
+                  id={`rp-${account.id}`}
+                  label="Risk per trade, % of room above the MLL"
+                  value={riskPct}
+                  onChange={setRiskPct}
+                  error={err("riskPct")}
+                />
+                <NumberField
+                  id={`rmin-${account.id}`}
+                  label={`At least (empty = ${fmtMoney(plan.riskMin, "USD")})`}
+                  value={riskMin}
+                  onChange={setRiskMin}
+                  error={err("riskMin") ?? riskOrder}
+                />
+                <NumberField
+                  id={`rmax-${account.id}`}
+                  label={`At most (empty = ${fmtMoney(plan.riskMax, "USD")})`}
+                  value={riskMax}
+                  onChange={setRiskMax}
+                  error={err("riskMax")}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                The trade form sizes a planned futures trade from this: whole contracts, rounded down,
+                commission counted, never over today&apos;s daily loss room.
+              </p>
             </div>
           )}
         </section>

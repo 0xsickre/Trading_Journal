@@ -68,6 +68,13 @@ export function duplicateSettings(src: Account) {
     ftmo_profit_target_pct: src.ftmo_profit_target_pct,
     ftmo_min_days_enabled: src.ftmo_min_days_enabled,
     ftmo_min_days: src.ftmo_min_days,
+    // Topstep: the plan and the risk rule travel; a payout and a reset belong to
+    // the account that had them, so the copy starts a fresh Combine.
+    topstep_mode: src.topstep_mode,
+    topstep_plan: src.topstep_plan,
+    risk_rule_pct: src.risk_rule_pct,
+    risk_rule_min: src.risk_rule_min,
+    risk_rule_max: src.risk_rule_max,
   };
 }
 

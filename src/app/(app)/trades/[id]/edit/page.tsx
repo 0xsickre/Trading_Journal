@@ -4,6 +4,7 @@ import { getInstruments } from "@/lib/journal/instruments";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getTradeForEdit } from "@/lib/journal/trades";
 import { getAccountEquities } from "@/lib/journal/equity";
+import { getTopstepSizing } from "@/lib/journal/topstep-status";
 import { getFieldDefs } from "@/lib/journal/field-defs";
 import { getPlaybooks } from "@/lib/journal/playbooks";
 import { TradeForm } from "@/components/journal/trade-form";
@@ -14,7 +15,7 @@ export default async function EditTradePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [optionsMap, instruments, accounts, initial, accountEquity, fieldDefs, playbooks, categoryOrder] =
+  const [optionsMap, instruments, accounts, initial, accountEquity, fieldDefs, playbooks, categoryOrder, topstepSizing] =
     await Promise.all([
       getOptionsMap(true),
       getInstruments(true),
@@ -29,6 +30,8 @@ export default async function EditTradePage({
       getPlaybooks({ activeOnly: false, includeDeleted: true }),
       // The order the trader dragged the categories into.
       getCategoryOrder(),
+      // Room above the MLL and today's DLL per Topstep account: the futures sizing base.
+      getTopstepSizing(),
     ]);
 
   if (!initial) notFound();
@@ -42,6 +45,7 @@ export default async function EditTradePage({
       playbooks={playbooks}
       initial={initial}
       accountEquity={accountEquity}
+      topstepSizing={topstepSizing}
       categoryOrder={categoryOrder}
     />
   );

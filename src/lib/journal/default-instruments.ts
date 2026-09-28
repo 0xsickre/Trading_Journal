@@ -1,31 +1,29 @@
-// The instrument catalog — this book's broker, and nothing else.
+// The instrument catalog — the six CME futures traded on Topstep, and nothing else.
 //
-// It used to be 91 rows: every major pair, every cross, futures for markets
-// nobody here trades. A trade form that offers HG, ZB and HK50 to someone who
-// trades ten CFDs is a list to scroll past, and worse, its specs were guesses
-// at "the MT5 convention most brokers keep". The first ten are copied from the
-// contract sheets of the account's own broker, so the numbers are facts rather
-// than conventions; the six futures at the end are the exchange's contracts on
-// the second book, Topstep. A symbol a broker adds later is added in Settings.
+// It used to be one CFD broker's book (ten FX pairs, metals and an index CFD on
+// FTMO). Trading moved to Topstep on 28.09.2026 and the CFD rows went with it
+// (migration 20260928140000 removed only those no trade named). A symbol traded
+// somewhere else is added in Settings.
 //
-// EVERYTHING IS PER LOT. `point_value` is the money one full point of price is
-// worth for ONE lot, and `position_size` on a trade is counted in those same
-// lots: 100 000 for a 100k FX lot, 100 for gold's 100-ounce lot and copper's
-// 100-unit lot, 1 for the index. That identity is also the contract size, which
-// is why `instrument-costs.ts` can price a position from `point_value` alone.
+// EVERYTHING IS PER LOT, and a futures lot is one contract: `point_value` is the
+// CME multiplier — 20 dollars a point on NQ, a tenth of that on the micro — and
+// `position_size` on a trade is counted in contracts. `instrument-costs.ts`
+// prices a position from `point_value` alone for that reason.
 //
-// tick_size is the broker's own quote precision (its "Digits"): five decimals
-// on FX, three on the JPY pair, two on the CFDs. It is what a "point" means in
-// the swap table, so the swap arithmetic depends on it being right.
+// tick_size is the exchange's minimum move: a quarter point on the equity
+// indexes, half a pip on 6E and a pip on M6E. The trade form turns a stop into
+// ticks with it, which is what TopstepX's bracket asks for.
 //
-// tick_value stays null: for a CFD the value of a tick is not exchange data but
-// a broker's decision, and it is already implied by point_value × tick_size.
+// tick_value stays null: it is point_value × tick_size, and a second copy of a
+// product is a number that can disagree with itself.
 //
-// COSTS ARE PER INSTRUMENT because this broker charges three different ways:
-// 2.50 USD per lot per side on FX, 0.0007 % of notional on the metals, nothing
-// on the index. Swap is published in POINTS per lot per night, with one night a
-// week charged three times to cover the weekend — Wednesday on FX and metals,
-// Friday on the index.
+// The commission is Topstep's round turn halved into the per-side figure this
+// catalog keeps (help.topstep.com, "TopstepX — Commissions and Fees", read
+// 28.09.2026: 3.78 / 1.22 / 4.22 / 1.00 a round turn). There is no swap: a
+// future carries its financing in the price, so both sides are zero on purpose.
+//
+// MAE/MFE on these comes from the exchange's own prices, kept in Cloudflare R2
+// (futures-trading repo, `tools/journal_mae.py`), never typed.
 
 export type DefaultInstrument = {
   symbol: string;
@@ -58,127 +56,6 @@ export type DefaultInstrument = {
   sort_order: number;
 };
 
-/** The FX pairs: one lot is 100 000 of the base currency, 2.50 USD a side. */
-function fx(
-  symbol: string,
-  name: string,
-  quote: string,
-  swapLong: number,
-  swapShort: number,
-  sort: number,
-): DefaultInstrument {
-  return {
-    symbol,
-    name,
-    asset_class: "Forex",
-    point_value: 100_000,
-    // Five decimals everywhere except the JPY pair, quoted to three.
-    tick_size: quote === "JPY" ? 0.001 : 0.00001,
-    tick_value: null,
-    quote_currency: quote,
-    commission_per_lot: 2.5,
-    commission_pct: 0,
-    commission_currency: "USD",
-    swap_long: swapLong,
-    swap_short: swapShort,
-    swap_triple_day: 3,
-    is_active: true,
-    sort_order: sort,
-  };
-}
-
-export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
-  // ------------------------------------------------------------------- Forex
-  fx("EURUSD", "Euro / US Dollar", "USD", -11.06, 0.59, 0),
-  fx("GBPUSD", "Pound / US Dollar", "USD", -6.78, -3.76, 1),
-  fx("AUDUSD", "Aussie / US Dollar", "USD", -3.92, -5.11, 2),
-  fx("NZDUSD", "Kiwi / US Dollar", "USD", -5.3, -0.17, 3),
-  fx("USDCAD", "US Dollar / Canadian Dollar", "CAD", 1.42, -14.45, 4),
-  fx("USDCHF", "US Dollar / Swiss Franc", "CHF", 2.55, -16.95, 5),
-  fx("USDJPY", "US Dollar / Yen", "JPY", 4.8, -23.65, 6),
-
-  // ------------------------------------------------------------- Metals, CFD
-  // One lot is 100 ounces of gold, 100 units of copper. Commission is a share
-  // of what the position is worth, not a fee per lot.
-  {
-    symbol: "XAUUSD",
-    name: "Gold / US Dollar (spot CFD)",
-    asset_class: "Metals CFD",
-    point_value: 100,
-    tick_size: 0.01,
-    tick_value: null,
-    quote_currency: "USD",
-    commission_per_lot: 0,
-    commission_pct: 0.0007,
-    commission_currency: "EUR",
-    swap_long: -83,
-    swap_short: -8.3,
-    swap_triple_day: 3,
-    is_active: true,
-    sort_order: 10,
-  },
-  {
-    symbol: "XCUUSD",
-    name: "Copper / US Dollar (spot CFD)",
-    asset_class: "Metals CFD",
-    point_value: 100,
-    tick_size: 0.01,
-    tick_value: null,
-    quote_currency: "USD",
-    commission_per_lot: 0,
-    commission_pct: 0.0007,
-    commission_currency: "EUR",
-    swap_long: -17.93,
-    swap_short: 2.57,
-    swap_triple_day: 3,
-    is_active: true,
-    sort_order: 11,
-  },
-
-  // -------------------------------------------------------------- Index, CFD
-  // Named as the broker names it, so an MT5 import matches without a mapping.
-  // One lot is one index unit per point, there is no commission, and the
-  // weekend's carry is collected on FRIDAY rather than Wednesday.
-  {
-    symbol: "US100.cash",
-    name: "Nasdaq 100 (spot CFD)",
-    asset_class: "Index CFD",
-    point_value: 1,
-    tick_size: 0.01,
-    tick_value: null,
-    quote_currency: "USD",
-    commission_per_lot: 0,
-    commission_pct: 0,
-    commission_currency: "USD",
-    swap_long: -634.31,
-    swap_short: 27.37,
-    swap_triple_day: 5,
-    is_active: true,
-    sort_order: 20,
-  },
-
-  // --------------------------------------------------------- Futures, Topstep
-  // The second book: CME futures traded on Topstep (TopstepX), added 28.09.2026
-  // when trading moved there. The contract terms are the exchange's, not a
-  // broker's: one lot is one contract, and `point_value` is the CME multiplier
-  // — 20 dollars a point on NQ, a tenth of that on the micro. The commission
-  // is Topstep's round turn halved into the per-side figure this catalog keeps
-  // (help.topstep.com, "TopstepX — Commissions and Fees", read 28.09.2026:
-  // 3.78 / 1.22 / 4.22 / 1.00 a round turn).
-  //
-  // There is no swap: a future carries its financing in the price, so both
-  // sides are zero on purpose, not left unfilled.
-  //
-  // MAE/MFE on these comes from the exchange's own prices, kept in Cloudflare
-  // R2 (futures-trading repo, `tools/journal_mae.py`), never typed.
-  futures("NQ", "E-mini Nasdaq 100", 20, 0.25, 1.89, 30),
-  futures("MNQ", "Micro E-mini Nasdaq 100", 2, 0.25, 0.61, 31),
-  futures("ES", "E-mini S&P 500", 50, 0.25, 1.89, 32),
-  futures("MES", "Micro E-mini S&P 500", 5, 0.25, 0.61, 33),
-  futures("6E", "Euro FX", 125_000, 0.00005, 2.11, 34),
-  futures("M6E", "Micro EUR/USD", 12_500, 0.0001, 0.5, 35),
-];
-
 /** A CME future: one lot is one contract, the multiplier is `point_value`, no swap. */
 function futures(
   symbol: string,
@@ -207,4 +84,17 @@ function futures(
   };
 }
 
+export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
+  futures("NQ", "E-mini Nasdaq 100", 20, 0.25, 1.89, 30),
+  futures("MNQ", "Micro E-mini Nasdaq 100", 2, 0.25, 0.61, 31),
+  futures("ES", "E-mini S&P 500", 50, 0.25, 1.89, 32),
+  futures("MES", "Micro E-mini S&P 500", 5, 0.25, 0.61, 33),
+  futures("6E", "Euro FX", 125_000, 0.00005, 2.11, 34),
+  futures("M6E", "Micro EUR/USD", 12_500, 0.0001, 0.5, 35),
+];
+
 export const DEFAULT_INSTRUMENT_SYMBOLS = DEFAULT_INSTRUMENTS.map((i) => i.symbol);
+
+/** The micro of a mini and the mini of a micro — a tenth of the multiplier, one tick. */
+export const MICRO_OF: Record<string, string> = { NQ: "MNQ", ES: "MES", "6E": "M6E" };
+export const MINI_OF: Record<string, string> = { MNQ: "NQ", MES: "ES", M6E: "6E" };

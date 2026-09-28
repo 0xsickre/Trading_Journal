@@ -41,6 +41,13 @@ export type Database = {
           ftmo_profit_target_enabled: boolean
           ftmo_profit_target_pct: number
           ftmo_reset_at: string | null
+          risk_rule_max: number | null
+          risk_rule_min: number | null
+          risk_rule_pct: number
+          topstep_mode: boolean
+          topstep_payout_at: string | null
+          topstep_plan: string
+          topstep_reset_at: string | null
           id: string
           is_active: boolean
           name: string
@@ -74,6 +81,13 @@ export type Database = {
           ftmo_profit_target_enabled?: boolean
           ftmo_profit_target_pct?: number
           ftmo_reset_at?: string | null
+          risk_rule_max?: number | null
+          risk_rule_min?: number | null
+          risk_rule_pct?: number
+          topstep_mode?: boolean
+          topstep_payout_at?: string | null
+          topstep_plan?: string
+          topstep_reset_at?: string | null
           id?: string
           is_active?: boolean
           name: string
@@ -107,6 +121,13 @@ export type Database = {
           ftmo_profit_target_enabled?: boolean
           ftmo_profit_target_pct?: number
           ftmo_reset_at?: string | null
+          risk_rule_max?: number | null
+          risk_rule_min?: number | null
+          risk_rule_pct?: number
+          topstep_mode?: boolean
+          topstep_payout_at?: string | null
+          topstep_plan?: string
+          topstep_reset_at?: string | null
           id?: string
           is_active?: boolean
           name?: string

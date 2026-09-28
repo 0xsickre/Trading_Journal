@@ -1041,6 +1041,13 @@ const accountPatchSchema = z
     ftmo_min_days_enabled: z.boolean().optional(),
     ftmo_min_days: z.number().int("Minimum days is a whole number.").min(0).max(365).optional(),
     ftmo_reset_at: z.string().nullable().optional(),
+    topstep_mode: z.boolean().optional(),
+    topstep_plan: z.enum(["50K", "100K", "150K"]).optional(),
+    topstep_payout_at: z.string().nullable().optional(),
+    topstep_reset_at: z.string().nullable().optional(),
+    risk_rule_pct: z.number().finite().gt(0, "Risk share must be above 0 %.").max(100).optional(),
+    risk_rule_min: money("Minimum risk").nullable().optional(),
+    risk_rule_max: money("Maximum risk").nullable().optional(),
   })
   .strict();
 
@@ -1074,6 +1081,13 @@ export async function updateAccount(
     ftmo_min_days_enabled?: boolean;
     ftmo_min_days?: number;
     ftmo_reset_at?: string | null;
+    topstep_mode?: boolean;
+    topstep_plan?: "50K" | "100K" | "150K";
+    topstep_payout_at?: string | null;
+    topstep_reset_at?: string | null;
+    risk_rule_pct?: number;
+    risk_rule_min?: number | null;
+    risk_rule_max?: number | null;
   },
 ) {
   // Whitelisted and ranged. The patch used to go straight to the update, so any
@@ -1082,6 +1096,16 @@ export async function updateAccount(
   if (!parsedPatch.success)
     return { ok: false, error: parsedPatch.error.issues[0]?.message ?? "Invalid account settings." };
   patch = parsedPatch.data;
+
+  // One prop firm's rules at a time: FTMO's percentages and Topstep's trailing
+  // money limits describe different accounts, and both on one would read as two
+  // sets of limits the same balance has to satisfy.
+  if (patch.ftmo_mode === true && patch.topstep_mode === true) {
+    return { ok: false, error: "An account follows FTMO rules or Topstep rules, not both." };
+  }
+  if (patch.risk_rule_min != null && patch.risk_rule_max != null && patch.risk_rule_min > patch.risk_rule_max) {
+    return { ok: false, error: "Risk per trade: the minimum must not exceed the maximum." };
+  }
 
   if (
     patch.breakeven_from != null &&

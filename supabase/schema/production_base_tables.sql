@@ -92,6 +92,16 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   ftmo_daily_loss_basis       text        NOT NULL DEFAULT 'starting_balance',
   -- Arhiviran nalog: skriven iz birača, trejdovi i dalje broje (20260919220000).
   archived_at                 timestamptz,
+  -- Topstep režim (20260928140000): pravila po planu u src/lib/journal/topstep.ts;
+  -- isključiv sa ftmo_mode. Pravilo rizika: % prostora iznad MLL-a, između min i max
+  -- (null = granice plana).
+  topstep_mode                boolean     NOT NULL DEFAULT false,
+  topstep_plan                text        NOT NULL DEFAULT '50K',
+  topstep_payout_at           timestamptz,
+  topstep_reset_at            timestamptz,
+  risk_rule_pct               numeric     NOT NULL DEFAULT 12.5,
+  risk_rule_min               numeric,
+  risk_rule_max               numeric,
   CONSTRAINT tj_accounts_pkey PRIMARY KEY (id),
   CONSTRAINT tj_accounts_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,

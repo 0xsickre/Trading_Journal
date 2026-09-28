@@ -87,7 +87,21 @@ function account(over: Partial<Account> & { id: string }): Account {
     ftmo_profit_target_pct: 0,
     ftmo_min_days_enabled: false,
     ftmo_min_days: 0,
-    ftmo_reset_at: null,
+    ftmo_reset_at: null,
+
+    topstep_mode: false,
+
+    topstep_plan: "50K" as const,
+
+    topstep_payout_at: null,
+
+    topstep_reset_at: null,
+
+    risk_rule_pct: 12.5,
+
+    risk_rule_min: null,
+
+    risk_rule_max: null,
     ...over,
   } as unknown as Account;
 }

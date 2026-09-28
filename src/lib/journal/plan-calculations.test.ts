@@ -8,6 +8,9 @@ import {
   parsePlannedRewardR,
   parseRiskPct,
   computeRiskAmount,
+  computeFuturesContracts,
+  computeTopstepRisk,
+  ticksBetween,
   matchRiskOption,
   riskPlanFieldVisible,
   thesisGroupVisible,
@@ -479,5 +482,101 @@ describe("blendedPlannedRewardR", () => {
     expect(
       blendedPlannedRewardR({ direction: "Long", entry: null, stop: 90, target: 130, levels: [] }),
     ).toBeNull();
+  });
+});
+
+/**
+ * The trader's own rule, from futures-trading izlaz/Uputstvo_rizik.pdf: risk is
+ * 12.5 % of the room above the MLL, $60–$300 on a 50K, contracts ROUNDED DOWN.
+ * The worked examples of that document are the tests.
+ */
+describe("computeTopstepRisk", () => {
+  const rule = { pct: 12.5, min: 60, max: 300, dllLeft: 1000 };
+
+  it("example 1 — 50K on its first day: room 2 000 → 250", () => {
+    expect(computeTopstepRisk({ ...rule, room: 50_000 - 48_000 })).toEqual({ amount: 250, threeStopsFitDll: true });
+  });
+
+  it("example 4 — MLL locked at 50 000, balance 52 600: 12.5 % is 325, the ceiling is 300", () => {
+    expect(computeTopstepRisk({ ...rule, room: 2_600 })!.amount).toBe(300);
+  });
+
+  it("a small room is held at the floor of the range", () => {
+    expect(computeTopstepRisk({ ...rule, room: 400 })!.amount).toBe(60);
+  });
+
+  it("never more than today's DLL allows, and says when three stops no longer fit", () => {
+    expect(computeTopstepRisk({ ...rule, room: 2_000, dllLeft: 100 })).toEqual({ amount: 100, threeStopsFitDll: false });
+  });
+
+  it("never more than the room itself", () => {
+    expect(computeTopstepRisk({ ...rule, room: 40 })!.amount).toBe(40);
+  });
+
+  it("nothing to risk on the floor, or with the day's DLL spent", () => {
+    expect(computeTopstepRisk({ ...rule, room: 0 })).toBeNull();
+    expect(computeTopstepRisk({ ...rule, room: 2_000, dllLeft: 0 })).toBeNull();
+  });
+});
+
+describe("computeFuturesContracts", () => {
+  const mnq = { pointValue: 2, commissionPerSide: 0.61, maxContracts: 50 };
+
+  it("250 at a 50-point MNQ stop is 2 contracts — rounded down, commission in", () => {
+    const r = computeFuturesContracts({ ...mnq, riskAmount: 250, entry: 30_600, stop: 30_550 })!;
+    expect(r.contracts).toBe(2); // 250 / (50 × 2 + 1.22) = 2.47
+    expect(r.perContract).toBeCloseTo(101.22, 10);
+    expect(r.risk).toBeCloseTo(202.44, 10);
+    expect(r.capped).toBe(false);
+  });
+
+  it("the mini at the same stop does not fit: 0 contracts, not a fraction", () => {
+    const r = computeFuturesContracts({ riskAmount: 250, entry: 30_600, stop: 30_550, pointValue: 20, commissionPerSide: 1.89, maxContracts: 5 })!;
+    expect(r.contracts).toBe(0);
+    expect(r.risk).toBe(0);
+  });
+
+  it("example 2 — 6E, 150 at an 8-pip stop: 1 6E, or 13 M6E", () => {
+    const e = { riskAmount: 150, entry: 1.1400, stop: 1.1392 };
+    expect(computeFuturesContracts({ ...e, pointValue: 125_000, commissionPerSide: 2.11, maxContracts: 5 })!.contracts).toBe(1);
+    expect(computeFuturesContracts({ ...e, pointValue: 12_500, commissionPerSide: 0.5, maxContracts: 50 })!.contracts).toBe(13);
+  });
+
+  it("an exact fit is not lost to floating point", () => {
+    expect(computeFuturesContracts({ riskAmount: 250, entry: 100, stop: 37.5, pointValue: 2, commissionPerSide: 0, maxContracts: null })!.contracts).toBe(2);
+  });
+
+  it("is capped at what the account may hold, and says so", () => {
+    const r = computeFuturesContracts({ ...mnq, maxContracts: 150, riskAmount: 900, entry: 30_600, stop: 30_598 })!;
+    expect(r.contracts).toBe(150);
+    expect(r.capped).toBe(true);
+  });
+
+  it("refuses to size without a price, a stop distance or a point value", () => {
+    const base = { ...mnq, riskAmount: 250, entry: 30_600, stop: 30_550 };
+    expect(computeFuturesContracts({ ...base, riskAmount: null })).toBeNull();
+    expect(computeFuturesContracts({ ...base, entry: null })).toBeNull();
+    expect(computeFuturesContracts({ ...base, stop: null })).toBeNull();
+    expect(computeFuturesContracts({ ...base, pointValue: null })).toBeNull();
+    expect(computeFuturesContracts({ ...base, pointValue: 0 })).toBeNull();
+    expect(computeFuturesContracts({ ...base, stop: 30_600 })).toBeNull();
+  });
+
+  it("a negative commission is not a rebate on the stop", () => {
+    expect(computeFuturesContracts({ ...mnq, commissionPerSide: -5, riskAmount: 200, entry: 110, stop: 60 })!.perContract).toBe(100);
+  });
+});
+
+describe("ticksBetween", () => {
+  it("is the distance a bracket asks for", () => {
+    expect(ticksBetween(30_600, 30_584, 0.25)).toBe(64);
+    expect(ticksBetween(1.14, 1.1392, 0.00005)).toBe(16);
+  });
+
+  it("is null without both prices or a tick size", () => {
+    expect(ticksBetween(null, 1, 0.25)).toBeNull();
+    expect(ticksBetween(1, null, 0.25)).toBeNull();
+    expect(ticksBetween(1, 2, null)).toBeNull();
+    expect(ticksBetween(1, 2, 0)).toBeNull();
   });
 });

@@ -319,7 +319,21 @@ describe("ftmoConfigFromAccount", () => {
     ftmo_profit_target_pct: 9,
     ftmo_min_days_enabled: false,
     ftmo_min_days: 3,
-    ftmo_reset_at: "2026-07-01T00:00:00Z",
+    ftmo_reset_at: "2026-07-01T00:00:00Z",
+
+    topstep_mode: false,
+
+    topstep_plan: "50K" as const,
+
+    topstep_payout_at: null,
+
+    topstep_reset_at: null,
+
+    risk_rule_pct: 12.5,
+
+    risk_rule_min: null,
+
+    risk_rule_max: null,
     archived_at: null,
     created_at: "2026-01-01T00:00:00Z",
   };

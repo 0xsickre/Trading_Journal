@@ -310,3 +310,74 @@ export function blendedPlannedRewardR(params: {
 
   return weighted / 100;
 }
+
+/**
+ * Risk per trade on a Topstep account, in money: a share of the ROOM above the
+ * Maximum Loss Limit, held between the plan's bounds, and never more than the
+ * Daily Loss Limit still allows today.
+ *
+ * The trader's own rule (futures-trading `izlaz/Uputstvo_rizik.pdf`): 12.5 % of
+ * the room, at least $60 and at most $300 on a 50K — scaled with the plan, so
+ * three stops always fit inside the DLL. A percentage of the whole balance is
+ * the wrong base on a prop account: 1 % of $150 000 is $1 500, more than a 50K
+ * may lose in a day, while the account can really only lose what is above the
+ * floor.
+ *
+ * The bounds apply in order: the floor of the range first, then the ceiling,
+ * then today's DLL — a minimum that would break today's DLL is not a minimum
+ * worth keeping. Null when there is no room: an account on its floor has
+ * nothing to risk.
+ */
+export function computeTopstepRisk(params: {
+  room: number;
+  pct: number;
+  min: number;
+  max: number;
+  dllLeft: number;
+}): { amount: number; threeStopsFitDll: boolean } | null {
+  const { room, pct, min, max, dllLeft } = params;
+  if (!(room > 0) || !(dllLeft > 0)) return null;
+  const amount = Math.min(Math.max(room * (pct / 100), min), max, dllLeft, room);
+  return { amount, threeStopsFitDll: 3 * amount <= dllLeft };
+}
+
+/**
+ * Whole contracts for a futures position: what the risk buys at this stop,
+ * ROUNDED DOWN, with the round-turn commission counted as part of the loss, and
+ * no more than the account may hold.
+ *
+ * `maxContracts` is in THIS contract's units: a micro's cap is ten times its
+ * mini's (Topstep counts micros 10:1). The loss the trader actually takes on
+ * the stop is returned beside the count, because a rounded-down position risks
+ * less than the budget and that is the number to read before sending the order.
+ *
+ * Null when a price, the point value or the stop distance is missing: sizing
+ * refuses rather than guesses, like `computePositionSize`.
+ */
+export function computeFuturesContracts(params: {
+  riskAmount: number | null;
+  entry: number | null;
+  stop: number | null;
+  pointValue: number | null;
+  commissionPerSide: number;
+  maxContracts: number | null;
+}): { contracts: number; perContract: number; risk: number; capped: boolean } | null {
+  const { riskAmount, entry, stop, pointValue, commissionPerSide, maxContracts } = params;
+  if (riskAmount == null || entry == null || stop == null || pointValue == null || pointValue <= 0) {
+    return null;
+  }
+  const dist = Math.abs(entry - stop);
+  if (dist <= 0) return null;
+  const perContract = dist * pointValue + 2 * Math.max(0, commissionPerSide);
+  // A hair of tolerance so $250 / $125.00 is 2, not 1.9999999.
+  const byRisk = Math.max(0, Math.floor(riskAmount / perContract + 1e-9));
+  const capped = maxContracts != null && byRisk > maxContracts;
+  const contracts = capped ? (maxContracts as number) : byRisk;
+  return { contracts, perContract, risk: contracts * perContract, capped };
+}
+
+/** A price distance in ticks — what a platform's bracket asks for. Null without a tick size. */
+export function ticksBetween(a: number | null, b: number | null, tickSize: number | null): number | null {
+  if (a == null || b == null || tickSize == null || tickSize <= 0) return null;
+  return Math.round(Math.abs(a - b) / tickSize);
+}

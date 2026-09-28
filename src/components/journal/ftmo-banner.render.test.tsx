@@ -47,6 +47,13 @@ function account(over: Partial<Account> = {}): Account {
     ftmo_min_days_enabled: true,
     ftmo_min_days: 2,
     ftmo_reset_at: null,
+    topstep_mode: false,
+    topstep_plan: "50K" as const,
+    topstep_payout_at: null,
+    topstep_reset_at: null,
+    risk_rule_pct: 12.5,
+    risk_rule_min: null,
+    risk_rule_max: null,
     ...over,
   } as unknown as Account;
 }

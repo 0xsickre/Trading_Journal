@@ -13,15 +13,12 @@ describe("cleanInstrumentKey", () => {
 });
 
 describe("normalizeInstrumentSymbol", () => {
-  it("maps every name the index is exported under to the broker's own", () => {
-    expect(normalizeInstrumentSymbol("US100.cash")).toBe("US100.cash");
-    expect(normalizeInstrumentSymbol("NAS100")).toBe("US100.cash");
-    expect(normalizeInstrumentSymbol("USTEC")).toBe("US100.cash");
-  });
-
-  it("maps gold and copper", () => {
-    expect(normalizeInstrumentSymbol("GOLD")).toBe("XAUUSD");
-    expect(normalizeInstrumentSymbol("Copper")).toBe("XCUUSD");
+  it("leaves the CFD names as themselves now that the catalog holds no CFD", () => {
+    // The aliases stay for an FTMO book added back in Settings, but they only
+    // bend a name onto a symbol the catalog HAS — none of these is there now.
+    expect(normalizeInstrumentSymbol("US100.cash")).toBe("US100CASH");
+    expect(normalizeInstrumentSymbol("NAS100")).toBe("NAS100");
+    expect(normalizeInstrumentSymbol("GOLD")).toBe("GOLD");
   });
 
   it("leaves a symbol this book does not trade as itself", () => {
@@ -40,7 +37,7 @@ describe("normalizeInstrumentSymbol", () => {
   });
 
   it("does not read the CFD index as the future, nor the future as the CFD", () => {
-    expect(normalizeInstrumentSymbol("NDX")).toBe("US100.cash");
+    expect(normalizeInstrumentSymbol("NDX")).toBe("NDX"); // the index is not NQ
     expect(instrumentsMatch("NQZ6", "US100.cash")).toBe(false);
     expect(instrumentsMatch("MNQZ6", "NQ")).toBe(false); // a micro is not its mini
   });
@@ -57,9 +54,9 @@ describe("normalizeInstrumentSymbol", () => {
 });
 
 describe("instrumentsMatch", () => {
-  it("matches alias to canonical", () => {
-    expect(instrumentsMatch("NAS100USD", "US100.cash")).toBe(true);
-    expect(instrumentsMatch("gold", "XAUUSD")).toBe(true);
+  it("matches a contract to its catalog root, whatever case or platform", () => {
+    expect(instrumentsMatch("mnqz6", "MNQ")).toBe(true);
+    expect(instrumentsMatch("/ESH27", "es")).toBe(true);
   });
 
   it("rejects different instruments", () => {

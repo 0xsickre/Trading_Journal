@@ -128,6 +128,17 @@ export type Account = {
   ftmo_min_days_enabled: boolean;
   ftmo_min_days: number;
   ftmo_reset_at: string | null;
+  // Topstep futures account (per account; exclusive with ftmo_mode). See topstep.ts.
+  topstep_mode: boolean;
+  topstep_plan: "50K" | "100K" | "150K";
+  /** First payout: from then on the MLL floor is the starting balance (Topstep's "$0"). */
+  topstep_payout_at: string | null;
+  topstep_reset_at: string | null;
+  /** Risk per trade as a share of the room above the MLL, in %. */
+  risk_rule_pct: number;
+  /** Risk-per-trade bounds in money; null = the plan's own (topstep.ts `TOPSTEP_PLANS`). */
+  risk_rule_min: number | null;
+  risk_rule_max: number | null;
 };
 
 /** Where `point_value` came from. `missing` means the money columns are null. */
