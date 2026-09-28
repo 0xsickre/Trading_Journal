@@ -7,7 +7,7 @@ ga zamenjuje. README opisuje stanje koda kakvo jeste — i swing ostatke — dok
 
 **Kako je fajl složen.** Posao je podeljen u **šest faza, F1–F6**; jedna faza = jedna sesija, sa
 jasnim ulazom i izlazom, da nijedna ne zavisi od konteksta koji živi samo u razgovoru. **Detaljan
-plan postoji samo za fazu koja je sledeća** (sada F2). Ostale imaju okvir — cilj, stavke, odluke koje
+plan postoji samo za fazu koja je sledeća** (sada F3). Ostale imaju okvir — cilj, stavke, odluke koje
 treba doneti — i dobijaju detaljan plan tek kad dođu na red, jer svaka zavisi od onoga što je
 prethodna odlučila (npr. F3 i F4 čitaju dan koji F2 tek definiše). Stavke `#1–#23` su u katalogu na
 dnu i brojevi se ne menjaju, jer README upućuje na njih.
@@ -29,6 +29,7 @@ Pravila koja važe za svaki korak ispod, jer su ista kao u ostatku repoa:
 | `b3d6ff4` | Uvoz nalazi plan koji je limit popunio (treće pitanje u `import-match.ts`) |
 | `3e2d1bd` | Topstep nalozi (`topstep.ts`: MLL trail po EOD, DLL, konzistentnost 55 %), veličina u celim ugovorima (`computeTopstepRisk`, `computeFuturesContracts`), Topstep baner, katalog samo fjučersi |
 | `57d5580` | `/trades/log` (upis posle zatvaranja, A/B/C), `/trades/[id]/review`, „Bez pregleda" na `/daily`, „Napredak" na `/weekly`, MLL ne raste pre kraja dana |
+| `3644c05` | **F2**: Topstep nalog broji Topstep dan (17:00 → 17:00 CT) svuda — kalendar, `/daily`, „Bez pregleda", tracker, `/weekly`, dashboard, izveštaji; „danas" po primarnom nalogu (`DayZone`, `todayFor`) |
 | `c0077e1` | **F1**: `thesis_written` ocenjuje samo trejdove planirane pre ulaza (`no_plans`); probijen MLL / FTMO blokira plan, ne evidenciju (`origin`); Topstep „Reset account…" u Settings; tekst dupliranja naloga |
 
 ## Protokol jedne faze
@@ -77,8 +78,8 @@ pogađa.
 | Faza | Cilj | Stavke | Zavisi od | Migracija | Model | Status |
 |---|---|---|---|---|---|---|
 | **F1** | Tačnost odmah: ono što danas pogrešno ocenjuje, a ne traži nijednu veliku odluku | #2, #5, #21 | — | ne | Sonnet | ✅ `c0077e1` (28.09.2026) |
-| **F2** | Topstep dan (17:00 → 17:00 CT) kao ključ dana svuda gde se dan broji | #1 | F1 | ne ako D2-A (izvedeno iz `topstep_mode`), da ako D2-B | **Opus** | ⏳ **sledeća — detaljan plan napisan, čeka odluke D1–D4** |
-| **F3** | Topstep pravila u tracker-u i Survival-u | #3, #4, #6 | F2 | da (config pravila u novcu) | **Opus** | okvir |
+| **F2** | Topstep dan (17:00 → 17:00 CT) kao ključ dana svuda gde se dan broji | #1 | F1 | ne (D2-A: izvedeno iz `topstep_mode`) | **Opus** | ✅ `3644c05` (28.09.2026) |
+| **F3** | Topstep pravila u tracker-u i Survival-u | #3, #4, #6 | F2 | da ako E4-B (budžet rizika zapečaćen na ulazu) | **Opus** | ⏳ **sledeća — detaljan plan napisan, čeka odluke E1–E7** |
 | **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da (seed, nova pravila, time stop) | Opus za #10, Sonnet ostalo | okvir |
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, swap, uzorak | #11–#15, #17, #18 | F2 | ne (sve izvedeno) | Sonnet, Opus za #13 | okvir |
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, legacy CFD u UI-ju, komentari, PARITY | #16, #19, #20, #22, #23 | F5 | možda (#16) | Sonnet | okvir |
@@ -169,7 +170,19 @@ pravilo rizika; test u `account-settings.render.test.tsx` čita tekst.
   quick-log trejdu), § Topstep (red o MLL-u: plan blokiran, evidencija ne), broj testova.
 - Ovde: F1 ✅ sa commitom; **detaljan plan za F2** upisan pre nego što F2 počne.
 
-## F2 — Topstep dan kao ključ dana (detaljno)
+## F2 — Topstep dan kao ključ dana (detaljno) — ✅ `3644c05`
+
+**Isporučeno po planu i odlukama D1–D4 (sve A).** `time.ts` ima `DayZone` (ime zone ili Topstep
+pravilo), `dayKeyIn` / `weekKeyIn` / `dayStartUtcIn` / `todayFor` i `accountDayZoneResolver`;
+`topstepTradingDay` je preseljen tamo. Unija sa imenom zone je zadržala potpise svih modula (stari
+testovi rade nepromenjeno), a kompajler je pokazao svako mesto gde zona ulazi u funkciju koja traži
+samo ime. `todayInTz` je uklonjen. Van plana: početak perioda na dashboardu (`dayStartUtcIn`) — za
+Topstep 17:00 CT prethodne večeri, uz test za nedelju prelaska na letnje vreme, gde „ponoć + 17 h"
+greši za sat. Proveren produkcioni podatak (samo čitanje): jedan Topstep trejd, nijedan ne menja
+dan, nijedan zaključan dan nije pogođen. `futures-trading` se ne menja. Gate zelen, 3.075 testova
+(+29). Namerno ostaje kalendarski dan: FTMO dan, noći swap-a, vikend držanja, dani drawdown-a,
+time stop u danima (F4) i `equity_at_entry` (F3).
+
 
 **Ulaz:** `main` posle F1 (`c0077e1`), gate zelen (3.046 testova). **Pročitati:** README § Attributing
 to days, § A trading day, § Process tracking, § Topstep; `time.ts`, `topstep.ts`
@@ -261,15 +274,94 @@ iz naloga, ništa se ne upisuje; `tj_daily_reports` i `tj_tracker_checkins` osta
   § A trading day (21:25 podsetnik i `/daily` isti dan), § Topstep (banner i kalendar isti dan).
 - Ovde: F2 ✅ sa commitom, detaljan plan za F3.
 
-## F3–F6 — okvir (detaljno kad dođu na red)
+## F3 — Topstep pravila u tracker-u i Survival-u (detaljno)
 
-### F3 — Topstep pravila u tracker-u i Survival-u (#3, #4, #6)
-- **Cilj:** `max_loss_per_day` = DLL plana, rizik po trejdu = `computeTopstepRisk`, namera =
-  iznos pravila; Survival osa dobija Topstep prostor iznad MLL-a, simulacija pod u novcu i DLL.
-- **Odluke:** da li Topstep nalog ima procentualna pravila uopšte ili samo novčana; kako se računa
-  „headroom" kad MLL trail-uje.
-- **Pročitati:** README § Process tracking, § Survival, § Process · Survival · Edge; `survival.ts`,
-  `scorecard.ts`, `tracker-types.ts`.
+**Ulaz:** `main` posle F2 (`3644c05`), gate zelen (3.075 testova). **Pročitati:** README § Process
+tracking, § Topstep, § Survival, § Process · Survival · Edge; `tracker/auto-rules.ts`,
+`tracker/equity-ladder.ts`, `risk-taken.ts`, `topstep.ts`, `plan-calculations.ts`
+(`computeTopstepRisk`, `computeFuturesContracts`), `survival.ts`, `scorecard.ts`, `dashboard.tsx`
+(survival, scorecard).
+
+### Utvrđeno u kodu (28.09.2026, posle F2)
+
+- **Tracker pravila su jedan skup za celu knjigu**, ne po nalogu: `tj_tracker_rules` nema
+  `account_id`, `config` je samo `{ pct }` (`tracker-types.ts`). Četiri pravila su procenat
+  equity-ja kojim je dan otvoren (`AUTO_RULES_NEEDING_PCT`); `max_loss_per_day` sabira SVE trejdove
+  zatvorene tog dana, preko svih naloga (`evalMaxLossPerDay`).
+- **Osnovica procenata je cela knjiga**: `bookEquityLadder` sabira `starting_balance` svih naloga
+  (`equity-ladder.ts`). Topstep 50K ulazi sa 50.000 u imenilac iako nalog može da izgubi samo prostor
+  iznad MLL-a — pa je u mešovitoj knjizi i CFD procenat pogrešan (razblažen Topstep kapitalom).
+- **`computeTopstepRisk` zna samo SADA** (`room`, `dllLeftToday` iz `getTopstepSizing`). Istorije
+  prostora iznad MLL-a po danu nema: `evaluateTopstep` računa trailing pod u petlji, ali vraća samo
+  završno stanje. Za ocenu prošlog trejda treba prostor i DLL **u trenutku ulaza**.
+- **`equity_at_entry`** je zapečaćen na ulazu (dan otvaranja u zoni naloga, `equity.ts:157`,
+  `import/actions.ts:203`) — na Topstep nalogu to je balans, ne prostor iznad MLL-a, pa je
+  `risk_per_trade` u % i tu merilo pogrešne stvari.
+- **`risk_matched_intent`** poredi rizik sa `risk_pct` iz padajuće liste; `/trades/log` ga ne pita,
+  pa je na Topstep-u uvek `na` (`matchedRiskIntent`). Zaokruživanje naniže (`computeFuturesContracts`)
+  znači da je stvarni rizik skoro uvek ispod budžeta (1 MNQ od $202 na budžetu od $250).
+- **Survival je simulacija u procentima** koja se ukamaćuje (`simulateSurvival`, `dayReturnsFrom`);
+  pragovi su FTMO procenti ili sopstveni najgori DD (`dashboard.tsx`, `thresholdsFor`). Trailing MLL
+  u novcu ne može da se izrazi fiksnim procentualnim podom. U „All accounts" kartica uzima prvi FTMO
+  nalog ili prvi nalog.
+- **Scorecard** dobija samo `ftmoHeadroomPct` (`scorecard.ts:99`, iz `evaluateFtmo`); Topstep nema
+  ekvivalent, pa Survival osa na Topstep nalogu ima samo drawdown od sopstvenog vrha.
+
+### Predlog izmene (posle odluka)
+
+- `topstep.ts`: `topstepTimeline(config, trades)` — za svaki Topstep dan: pod i balans na otvaranju,
+  neto dana, DLL preostao; `evaluateTopstep` postaje poslednji red timeline-a (isti testovi). Iz
+  njega `topstepStateAt(instant)` = prostor iznad MLL-a i DLL preostao u trenutku ulaza.
+- Auto pravila po nalogu (E1): trejdovi Topstep naloga se ocenjuju novcem iz plana, ostali
+  procentom, a osnovica procenta je kapital samo ne-Topstep naloga. Dan pada ako padne bilo koji nalog.
+- `risk_per_trade` / `risk_matched_intent` na Topstep-u čitaju budžet na ulazu (E3, E4, E5).
+- Survival: Topstep režim simulacije u novcu (trailing EOD pod, DLL kao zaustavljen dan, cilj uz
+  55 %), `headroom` za scorecard po E6.
+- Forma plana na Topstep fjučersu: bez liste „Risk %" (E7).
+
+### Odluke koje traži trejder (pre koda)
+
+- **E1 — Novčana pravila na Topstep nalogu.** (A) ista pravila, ali Topstep trejdovi se ocenjuju po
+  planu: dnevni gubitak = DLL plana po nalogu i Topstep danu, a procenti ostaju za CFD, sa osnovicom
+  bez Topstep naloga; (B) nova auto pravila (`topstep_dll`, `topstep_risk`) uz stara — nova CHECK
+  vrednost, migracija. Preporuka: **A** — jedno pravilo „dnevni gubitak" koje svaki nalog čita po
+  svom pravilu, kao dan u F2; nezaključani prošli dani se preračunaju (1 Topstep trejd danas).
+- **E2 — Nedeljni limit na Topstep-u.** Topstep nema nedeljno pravilo. (A) `na` za Topstep trejdove;
+  (B) procenat kao do sada, ali od prostora iznad MLL-a. Preporuka: **A**.
+- **E3 — Gubitak po trejdu na Topstep-u.** Granica = budžet rizika na ulazu (A) tačno, ili (B) uz
+  toleranciju za proklizavanje (npr. +10 %). Preporuka: **B** sa tolerancijom koju ti odrediš —
+  stop pogođen uz tik-dva proklizavanja nije prekršaj pravila.
+- **E4 — Odakle budžet na ulazu.** (A) izvodi se iz zatvorenih trejdova (timeline, bez migracije,
+  ali se menja kad kasni uvoz ispravi raniji trejd); (B) pečati se na ulazu u novu kolonu
+  `risk_budget_at_entry` (migracija, kao `equity_at_entry`), a stari trejdovi čitaju izvedeni.
+  Preporuka: **B** — odluka se meri onim što se znalo u trenutku ulaza.
+- **E5 — „Veličina po nameri" na Topstep-u.** Pogođeno ako je broj ugovora = ono što bi forma
+  izračunala iz budžeta na ulazu (`computeFuturesContracts`, zaokruženo naniže), ne ±0,1 pp.
+  Preporuka: **da**.
+- **E6 — Headroom kad MLL trail-uje.** (A) najbliži prilaz podu u istoriji: min(prostor ÷ MLL plana)
+  — kao FTMO `headroomPct`; (B) samo trenutni prostor ÷ MLL. Preporuka: **A**. Uz to: Survival
+  kartica u „All accounts" simulira primarni nalog, ne zbir naloga.
+- **E7 — Lista „Risk %" na Topstep fjučersu** u formi plana: sakriti (veličina je već iz pravila
+  rizika). Preporuka: **da**.
+
+### Testovi (prvo padaju)
+
+- `topstep.test.ts`: timeline — pod na otvaranju svakog dana, trail samo po EOD, reset, isplata;
+  `topstepStateAt` usred dana (DLL već potrošen jutrom).
+- `tracker/auto-rules.test.ts`: Topstep dan sa gubitkom = DLL → `fail`; CFD trejd istog dana ocenjen
+  procentom sa osnovicom bez Topstep naloga; `max_loss_per_week` `na` na Topstep-u (E2).
+- `risk-taken.test.ts`: budžet na ulazu, `matchedIntent` po broju ugovora (E5).
+- `survival.test.ts`: novčana simulacija — trailing pod, DLL ne završava run, cilj uz 55 %.
+- `scorecard.test.ts`: Topstep headroom po E6.
+
+### Izlaz iz F3
+
+- Gate zelen; migracija (ako E4-B) primenjena tek posle zelenog gate-a i uz odobrenje trejdera.
+- README: § Process tracking (četiri limita), § Topstep (pasus „The tracker's loss and risk rules
+  do not read any of this yet" prepisan), § Survival, § Process · Survival · Edge.
+- Ovde: F3 ✅ sa commitom, detaljan plan za F4.
+
+## F4–F6 — okvir (detaljno kad dođu na red)
 
 ### F4 — Dnevni tok (#7–#10)
 - **Cilj:** `/daily` = pred-sesija (brief, raspon, crveni prozori, plan dana) + „Bez pregleda";

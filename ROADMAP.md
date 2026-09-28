@@ -1582,3 +1582,4 @@ trajanja u danima, swing insights — popisano je i podeljeno u šest faza (F1�
 [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md).
 
 - **F1 ✅ (`c0077e1`, 28.09.2026):** `thesis_written` ocenjuje samo trejdove planirane pre ulaza; probijen MLL / FTMO blokira plan, a ne upis posle zatvaranja; Topstep „Reset account…" u Settings. Sledeća je F2 (Topstep dan kao ključ dana), plan napisan, čeka odluke D1–D4.
+- **F2 ✅ (`3644c05`, 28.09.2026):** Topstep nalog broji Topstep dan (17:00 → 17:00 CT) svuda gde se dan broji; „danas" po primarnom nalogu; svaki trejd po pravilu svog naloga i u „All accounts". Sledeća je F3 (Topstep pravila u tracker-u i Survival-u), plan napisan, čeka odluke E1–E7.
