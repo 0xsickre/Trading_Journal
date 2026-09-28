@@ -267,6 +267,85 @@ describe("the strict path never crosses accounts either", () => {
   });
 });
 
+/**
+ * A limit traded the way it is on Topstep: the trade is written when the order
+ * is placed — playbook, chart, thesis — and the export arrives at the end of the
+ * day with the fills. The plan has none, so only this question can find it.
+ * Numbers from the first real TopstepX row (MNQZ6, 28.09.2026).
+ */
+describe("the fill of a plan written before the order filled", () => {
+  const plan = c({
+    id: "plan",
+    instrument: "MNQ",
+    direction: "Short",
+    avgEntry: null,
+    avgExit: null,
+    openedAt: null,
+    grossPl: null,
+    netPl: null,
+    accountId: "topstep",
+    tradeNo: 7,
+    status: "planned",
+    plannedEntry: 30584,
+    plannedAt: "2026-09-28T08:40:00Z",
+  });
+  const fill: ImportRowKey = {
+    instrument: "MNQ",
+    direction: "Short",
+    entryPrice: 30584,
+    entryTime: "2026-09-28T08:43:54Z",
+    entryQty: 1,
+    exitPrice: 30600.25,
+    pnl: -32.5,
+    pnlBasis: "gross",
+    accountId: "topstep",
+  };
+
+  it("is suggested, with the plan named — the reader still confirms", () => {
+    const out = match(fill, [plan]);
+    expect(out.status).toBe("suggested");
+    expect(out.matched?.id).toBe("plan");
+  });
+
+  it("a limit that filled a few ticks better is still that plan", () => {
+    expect(match({ ...fill, entryPrice: 30585.5 }, [plan]).status).toBe("suggested");
+  });
+
+  it("is not the fill of a plan written AFTER it — an order cannot fill before it exists", () => {
+    expect(match(fill, [c({ ...plan, plannedAt: "2026-09-28T09:00:00Z" })]).status).toBe("new");
+  });
+
+  it("is not the fill of a plan at another price, side, instrument or account", () => {
+    expect(match({ ...fill, entryPrice: 30700 }, [plan]).status).toBe("new");
+    expect(match({ ...fill, direction: "Long" }, [plan]).status).toBe("new");
+    expect(match({ ...fill, instrument: "NQ" }, [plan]).status).toBe("new"); // a micro is not its mini
+    expect(match({ ...fill, accountId: "ftmo" }, [plan]).status).toBe("new");
+  });
+
+  it("only a plan with no fills is asked — an entered trade answers the other questions", () => {
+    expect(match(fill, [c({ ...plan, status: "open" })]).status).toBe("new");
+  });
+
+  it("two plans at the same limit are ambiguous, and both are offered", () => {
+    const out = match(fill, [plan, c({ ...plan, id: "plan2", tradeNo: 8 })]);
+    expect(out.status).toBe("ambiguous");
+    expect(out.matched).toBeNull();
+    expect(out.candidates.map((x) => x.id)).toEqual(["plan", "plan2"]);
+  });
+
+  it("a trade already entered with the same time and price is still asked first", () => {
+    const entered = c({
+      id: "entered",
+      instrument: "MNQ",
+      direction: "Short",
+      avgEntry: 30584,
+      openedAt: "2026-09-28T08:44:00Z",
+      accountId: "topstep",
+    });
+    expect(match(fill, [plan, entered]).matched?.id).toBe("entered");
+  });
+});
+
 describe("money is compared like with like", () => {
   // A hand-typed trade with $30 of commission: gross −950, net −980.
   const typed = c({

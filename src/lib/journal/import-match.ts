@@ -78,6 +78,12 @@ export type MatchCandidate = {
   entryQty?: number | null;
   /** The trade's number, so a suggestion can name it on screen. */
   tradeNo?: number | null;
+  /** `planned` for a plan with no fills yet — the third question below. */
+  status?: string | null;
+  /** The plan's own entry — the limit price the order rests at. */
+  plannedEntry?: number | null;
+  /** When the plan was written (`created_at`); a fill before it is not its fill. */
+  plannedAt?: string | null;
 };
 
 /**
@@ -207,6 +213,39 @@ function sameTradeIgnoringTime(
 }
 
 /**
+ * Whether a row is the fill of a PLAN — the third question, for the way a limit
+ * is traded: the trade is written into the journal when the order is placed
+ * (playbook, chart, thesis), and the platform's export arrives at the end of the
+ * day with the fills. A plan has no fills, so neither question above can see it:
+ * both read the entry off fills, and a plan's is null. It was created as a second
+ * trade, and the plan stayed behind with the playbook and the chart on it.
+ *
+ * Same account, instrument and direction; the row's entry within the merge
+ * tolerance of the plan's own entry (a limit fills at its price or better); and
+ * the fill AFTER the plan was written — an order cannot fill before it exists.
+ * `suggested`, never `match`: the trade is named on screen and the reader can
+ * still create instead. The merge seals the plan as written (`planSnapshotPatch`
+ * in the import action already handles a plan turning into a position).
+ */
+function samePlannedTrade(
+  c: MatchCandidate,
+  row: ImportRowKey,
+  instrumentsMatch: (a: string, b: string) => boolean,
+): boolean {
+  if (c.status !== "planned" || c.avgEntry != null) return false;
+  if (!c.instrument || !row.instrument) return false;
+  if (!instrumentsMatch(c.instrument, row.instrument)) return false;
+  if ((c.direction ?? "").toLowerCase() !== (row.direction ?? "").toLowerCase()) return false;
+  if (row.accountId != null && c.accountId != null && row.accountId !== c.accountId) return false;
+  if (c.plannedEntry == null || row.entryPrice == null) return false;
+  if (Math.abs(c.plannedEntry - row.entryPrice) > mergePriceTolerance(row.entryPrice)) return false;
+  if (!c.plannedAt || !row.entryTime) return false;
+  const planned = new Date(c.plannedAt).getTime();
+  const filled = new Date(row.entryTime).getTime();
+  return Number.isFinite(planned) && Number.isFinite(filled) && filled >= planned;
+}
+
+/**
  * Whether a candidate and a statement row can be the same trade.
  *
  * Both conditions, without exception. Time without price would merge two trades
@@ -274,6 +313,15 @@ export function matchImportRow(
   }
   if (suggested.length > 1) {
     return { matched: null, status: "ambiguous", candidates: suggested };
+  }
+
+  // No trade with fills is this one. Is it the fill of a plan written earlier?
+  const planned = candidates.filter((c) => samePlannedTrade(c, row, instrumentsMatch));
+  if (planned.length === 1) {
+    return { matched: planned[0], status: "suggested", candidates: planned };
+  }
+  if (planned.length > 1) {
+    return { matched: null, status: "ambiguous", candidates: planned };
   }
 
   return { matched: null, status: "new", candidates: [] };

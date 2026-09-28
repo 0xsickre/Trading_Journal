@@ -34,6 +34,11 @@ export default async function ImportPage() {
     totalSwap: t.stats?.total_swap ?? 0,
     grossPl: t.stats?.gross_pl ?? null,
     netPl: t.stats?.net_pl ?? null,
+    // For a plan written before its order filled: the limit it rests at and
+    // when it was written, so the export's fill can find it (import-match.ts).
+    status: (t.status as string) ?? null,
+    plannedEntry: t.entry_price != null ? Number(t.entry_price) : null,
+    plannedAt: (t.created_at as string) ?? null,
   }));
 
   return (
