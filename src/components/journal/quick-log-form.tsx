@@ -115,12 +115,21 @@ export function QuickLogForm({
   playbooks,
   optionsMap,
   review,
+  ftmoFailedAccountIds = [],
+  topstepFailedAccountIds = [],
 }: {
   accounts: Account[];
   instruments: Instrument[];
   playbooks: Playbook[];
   optionsMap: OptionsMap;
   review?: ReviewTrade;
+  /**
+   * Blown prop-firm accounts. A warning, never a block: a trade that already
+   * closed is the record, and refusing it would refuse the very trade that took
+   * the account through its limit. Only a new plan is refused (`createTrade`).
+   */
+  ftmoFailedAccountIds?: string[];
+  topstepFailedAccountIds?: string[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -130,6 +139,14 @@ export function QuickLogForm({
     open.find((a) => a.topstep_mode)?.id ?? open[0]?.id ?? null,
   );
   const account = open.find((a) => a.id === accountId) ?? null;
+  const blownWarning =
+    accountId == null || review
+      ? null
+      : topstepFailedAccountIds.includes(accountId)
+        ? "This Topstep account hit its Maximum Loss Limit. The trade is logged as a record — no new plan until the account is reset in Settings."
+        : ftmoFailedAccountIds.includes(accountId)
+          ? "The FTMO account is frozen — a rule was breached. The trade is logged as a record — no new plan until the challenge is reset in Settings."
+          : null;
   const tz = account?.timezone ?? "UTC";
   const [symbol, setSymbol] = useState<string>(instruments[0]?.symbol ?? "");
   const instrument = instruments.find((i) => i.symbol === symbol) ?? null;
@@ -284,6 +301,14 @@ export function QuickLogForm({
 
   return (
     <div className="space-y-4">
+      {blownWarning && (
+        <p
+          role="alert"
+          className="flex items-start gap-1.5 rounded-md border border-[var(--loss)]/40 bg-[var(--loss)]/10 p-3 text-sm text-[var(--loss)]"
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" /> {blownWarning}
+        </p>
+      )}
       {review ? (
         <Card>
           <CardHeader>

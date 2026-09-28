@@ -192,6 +192,8 @@ export function quickLogToTradeInput(q: QuickLogInput, exitReasonOptions: readon
     ],
     trade_phase: "active" as const,
     current_status: null,
+    // The record of a trade that already closed: a blown account lets it through.
+    origin: "log" as const,
     playbook_id: q.playbookId,
     images: snapshot ? [{ kind: "ltf_post", image_url: snapshot }] : [],
   };

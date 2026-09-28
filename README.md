@@ -179,7 +179,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 3,014 tests across 184 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 3,046 tests across 185 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -917,12 +917,18 @@ max loss per trade, per day and per week, every trade linked to a playbook, ever
 every trade has a written thesis, no entry risked more than the ceiling, and every entry was sized to
 its own planned risk — and the rest are ticked by hand.
 
-**Two of the eight read a swing trade's shape.** `thesis_written` reads `thesis`, and `/trades/log`
-writes its one sentence into `trade_journal_notes`, so every trade logged after the close **fails**
-it and Process falls for a reason that is not the trader's — retire it in Settings → Tracker on a
-day-trading account until it is reworked (`FAZA_F_DAYTRADING_PLAN.md` #2). `risk_matched_intent`
-compares the size with the `risk_pct` chosen on the plan form, which `/trades/log` does not ask, so
-there it answers `na` and grades nothing (#4).
+**`thesis_written` grades only trades planned before their entry** — `created_at` no later than the
+first fill (`plannedBeforeEntry` in `tracker/auto-rules.ts`): a plan-first trade, and a resting plan
+the import later filled. A trade logged after the close (`/trades/log`) or created by the import had
+no "before" in which a thesis could exist — its seal is stamped at the moment of writing — so it is
+neither failed nor passed, and a day with only such trades is `na` with its own reason ("nijedan
+trejd nije planiran pre ulaza"), not `pass`. The quick log's sentence goes to `trade_journal_notes`,
+never to `thesis`: sealed as the reason before entry, a sentence written after the close would be
+exactly the rationalisation the rule reads the seal to catch. Unlocked past days re-read under this
+meaning (a CFD trade typed after its entry is now `na` there); locked days keep their frozen verdicts.
+`risk_matched_intent` still reads a swing trade's shape: it compares the size with the `risk_pct`
+chosen on the plan form, which `/trades/log` does not ask, so there it answers `na` and grades
+nothing (`FAZA_F_DAYTRADING_PLAN.md` #4).
 
 **The last two grade the SIZE, the loss rules grade the outcome**, and both are kept for that reason.
 `max_loss_per_trade` reads the realized loss on the close day, so a trade sized at three times the
@@ -983,8 +989,11 @@ have different subjects, so folding `tilt_week` into `revenge_trade` — or `siz
 rather than for a good story about causes.
 
 **FTMO mode** is per account: daily loss, overall loss, profit target and minimum trading days.
-Breaching a rule freezes the account — a new trade can neither be created nor activated until the
-challenge is reset in Settings.
+Breaching a rule freezes the account for **new exposure**, not for the record: a plan can neither be
+created (`/trades/new`) nor activated or sized up until the challenge is reset in Settings, while a
+trade logged after it closed (`/trades/log`, `origin: "log"` on `createTrade`, accepted only when
+the trade is closed) still goes in — refusing it would refuse the very trade that broke the rule.
+Notes and review stay editable, and the import writes around this guard, as the record it is.
 
 The daily limit has a **configurable basis**, because real FTMO accounts differ on it: fixed (a
 percentage of the starting balance, for the whole challenge) for the 2-Step type, or rolling (a
@@ -1018,8 +1027,11 @@ help.topstep.com on 28.09.2026):
 - **Closed trades only**, as with FTMO: Topstep watches both limits intraday with open P&L, so a
   position that went through the floor and came back reads here as a survived day. The platform's
   risk engine is the record.
-- **Reaching the MLL does not freeze the account** here, where an FTMO breach does; the banner turns
-  red and says on which day (`FAZA_F_DAYTRADING_PLAN.md` #5).
+- **Reaching the MLL blocks a new plan, never the record** — the same rule as a frozen FTMO account:
+  `/trades/new` refuses (`isTopstepAccountFailed` in `topstep-status.ts`), an edit that adds a
+  position or size is refused, while `/trades/log` only warns above the form and logs the trade. The
+  banner turns red and says on which day; **Reset account…** under the account's Topstep rules in
+  Settings writes `topstep_reset_at`, from which the balance starts again and the MLL is cleared.
 
 **Risk per trade is the trader's own rule** (`computeTopstepRisk`, from `futures-trading`'s
 `Uputstvo_rizik.pdf`): **12.5 % of the room above the MLL**, held between the plan's bounds — 60–300 on
@@ -1386,8 +1398,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-3,014 tests across 184 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,390 tests in 123 files) and `components` (environment `jsdom`, files `*.test.tsx`, 624
+3,046 tests across 185 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,412 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 634
 tests in 61 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

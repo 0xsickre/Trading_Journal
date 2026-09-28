@@ -61,6 +61,47 @@ beforeEach(() => {
   localStorage.clear();
 });
 
+describe("QuickLogForm on a blown prop-firm account", () => {
+  it("warns above the form but still logs the trade — the record, not new exposure", async () => {
+    const user = userEvent.setup();
+    render(
+      <QuickLogForm
+        accounts={[ACCOUNT]}
+        instruments={[MNQ]}
+        playbooks={[PLAYBOOK]}
+        optionsMap={OPTIONS}
+        topstepFailedAccountIds={[ACCOUNT.id]}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/hit its Maximum Loss Limit/);
+    await user.type(screen.getByLabelText("Entry"), "30584");
+    await user.type(screen.getByLabelText("Exit"), "30604");
+    await user.click(screen.getByRole("button", { name: "5 min ago" }));
+    await user.click(screen.getByRole("button", { name: /^A/ }));
+    await user.click(screen.getByRole("button", { name: "Log trade" }));
+    expect(createTradeMock).toHaveBeenCalledOnce();
+    expect(createTradeMock.mock.calls[0][0].origin).toBe("log");
+  });
+
+  it("says the same for a frozen FTMO account", () => {
+    render(
+      <QuickLogForm
+        accounts={[ACCOUNT]}
+        instruments={[MNQ]}
+        playbooks={[PLAYBOOK]}
+        optionsMap={OPTIONS}
+        ftmoFailedAccountIds={[ACCOUNT.id]}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/FTMO account is frozen/);
+  });
+
+  it("shows no warning on a healthy account", () => {
+    renderLog();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
 describe("QuickLogForm — logging after the trade", () => {
   it("asks for four numbers and three answers, nothing from the plan form", () => {
     renderLog();

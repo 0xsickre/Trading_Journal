@@ -22,12 +22,14 @@ const addAccountMock = vi.fn();
 const archiveAccountMock = vi.fn();
 const restoreAccountMock = vi.fn();
 const resetFtmoChallengeMock = vi.fn();
+const resetTopstepAccountMock = vi.fn();
 vi.mock("@/app/(app)/settings/actions", () => ({
   updateAccount: (...a: unknown[]) => updateAccountMock(...a),
   addAccount: (...a: unknown[]) => addAccountMock(...a),
   archiveAccount: (...a: unknown[]) => archiveAccountMock(...a),
   restoreAccount: (...a: unknown[]) => restoreAccountMock(...a),
   resetFtmoChallenge: (...a: unknown[]) => resetFtmoChallengeMock(...a),
+  resetTopstepAccount: (...a: unknown[]) => resetTopstepAccountMock(...a),
   deleteAccount: (...a: unknown[]) => deleteAccountMock(...a),
   countAccountUsage: (...a: unknown[]) => countAccountUsageMock(...a),
 }));
@@ -103,6 +105,7 @@ beforeEach(() => {
     archiveAccountMock,
     restoreAccountMock,
     resetFtmoChallengeMock,
+    resetTopstepAccountMock,
   ])
     m.mockReset().mockResolvedValue({ ok: true });
   countAccountUsageMock.mockReset();
@@ -194,6 +197,15 @@ describe("new account and duplicate", () => {
       expect(addAccountMock).toHaveBeenCalledWith(expect.objectContaining({ copyFrom: "acc-2" })),
     );
   });
+
+  it("says a duplicate copies the prop-firm rules, FTMO or Topstep — both are copied", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<AccountSettings accounts={TWO} />);
+    await openMenu(user, "FTMO 100k");
+    await user.click(await screen.findByRole("menuitem", { name: /Duplicate/ }));
+    expect(screen.getByText(/costs and prop-firm rules \(FTMO or Topstep\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/costs and FTMO rules/)).not.toBeInTheDocument();
+  });
 });
 
 describe("edit", () => {
@@ -234,6 +246,31 @@ describe("edit", () => {
         expect.objectContaining({ account_kind: "backtest", starting_balance: 100000 }),
       ),
     );
+  });
+});
+
+describe("a Topstep account can be reset", () => {
+  // A plan on a Topstep account past its MLL is refused until the account is
+  // reset, so the reset has to exist where the refusal points: here.
+  it("offers Reset account… and writes the reset only after the confirmation", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<AccountSettings accounts={[account({ topstep_mode: true })]} tradeCounts={{ "acc-1": 3 }} />);
+    await openMenu(user, "Main Account");
+    await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
+    await user.click(screen.getByRole("button", { name: /Reset account/ }));
+    expect(resetTopstepAccountMock).not.toHaveBeenCalled();
+    expect(screen.getByText(/stop counting toward the Topstep limits/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+    await vi.waitFor(() => expect(resetTopstepAccountMock).toHaveBeenCalledWith("acc-1"));
+    expect(resetFtmoChallengeMock).not.toHaveBeenCalled();
+  });
+
+  it("is not offered on an account outside Topstep mode", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<AccountSettings accounts={[account()]} tradeCounts={{ "acc-1": 3 }} />);
+    await openMenu(user, "Main Account");
+    await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
+    expect(screen.queryByRole("button", { name: /Reset account/ })).not.toBeInTheDocument();
   });
 });
 

@@ -94,6 +94,10 @@ describe("autoExitReason", () => {
 });
 
 describe("quickLogToTradeInput", () => {
+  it("says it is a log, so a blown prop-firm account still takes the record", () => {
+    expect(quickLogToTradeInput(q(), EXIT_REASONS).origin).toBe("log");
+  });
+
   it("is one entry and one exit, commission per side, the plan columns and the review", () => {
     const t = quickLogToTradeInput(q(), EXIT_REASONS);
     expect(t.executions).toEqual([

@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { selectAllPages } from "@/lib/supabase/paginate";
 import { getAccounts } from "./accounts";
@@ -42,10 +43,32 @@ export async function getTopstepStatuses(accountIds?: string[]): Promise<Account
   });
 }
 
+/**
+ * Every Topstep account's state, read once per request: `/trades/new` asks for
+ * both the sizing and the failed accounts, and they are the same read.
+ */
+const getAllTopstepStatuses = cache(() => getTopstepStatuses());
+
 export async function getTopstepSizing(): Promise<Record<string, TopstepSizing>> {
   const out: Record<string, TopstepSizing> = {};
-  for (const { account, result } of await getTopstepStatuses()) {
+  for (const { account, result } of await getAllTopstepStatuses()) {
     out[account.id] = { room: result.room, dllLeftToday: result.dllLeftToday, plan: result.rules };
   }
   return out;
+}
+
+/** Account ids whose Topstep account has hit its Maximum Loss Limit. */
+export async function getFailedTopstepAccountIds(): Promise<Set<string>> {
+  const statuses = await getAllTopstepStatuses();
+  return new Set(statuses.filter((s) => s.result.status === "failed").map((s) => s.account.id));
+}
+
+/**
+ * Whether one account has hit its MLL — the Topstep twin of
+ * `isFtmoAccountFrozen`, and evaluated the same way: one account, not the book.
+ */
+export async function isTopstepAccountFailed(accountId: string | null | undefined): Promise<boolean> {
+  if (!accountId) return false;
+  const [status] = await getTopstepStatuses([accountId]);
+  return status?.result.status === "failed";
 }

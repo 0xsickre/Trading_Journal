@@ -230,6 +230,31 @@ describe("auto rules show a verdict but never a manual control", () => {
     expect(screen.getByText("nije ocenjeno")).toBeInTheDocument();
     expect(screen.getByText(/Limit nije podešen/)).toBeInTheDocument();
   });
+
+  it("a thesis rule with no planned trade says why nothing was graded", () => {
+    // Every trade that day was logged after its close, so there was no plan
+    // before the entry to hold a thesis — the rule is not scored, and says so.
+    const R = [rule({ id: "r1", text: "Every trade has a thesis", auto_key: "thesis_written" })];
+    render(
+      <TrackerStageSection
+        stage="prepare"
+        data={data({
+          rules: R,
+          auto: {
+            thesis_written: {
+              key: "thesis_written",
+              verdict: "na",
+              reason: "no_plans",
+              observed: null,
+              offenders: [],
+            },
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText("nije ocenjeno")).toBeInTheDocument();
+    expect(screen.getByText(/Nijedan trejd ovog dana nije planiran pre ulaza/)).toBeInTheDocument();
+  });
 });
 
 describe("each stage names itself", () => {

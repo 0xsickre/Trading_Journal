@@ -150,6 +150,12 @@ export const tradeInputSchema = z.object({
   executions: z.array(executionSchema),
   trade_phase: z.enum(["planned", "active"]).nullable().optional(),
   current_status: z.string().nullable().optional(),
+  /**
+   * Where a NEW trade comes from: the plan form, or a log written after the
+   * close. Decides only whether a blown prop-firm account refuses it; absent
+   * means `plan`, the stricter answer.
+   */
+  origin: z.enum(["plan", "log"]).optional(),
   playbook_id: z.uuid().nullable().optional(),
   /**
    * 1–5, and stricter than it used to be.

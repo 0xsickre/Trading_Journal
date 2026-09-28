@@ -239,6 +239,7 @@ export function TradeForm({
   playbooks = [],
   initial,
   ftmoFailedAccountIds = [],
+  topstepFailedAccountIds = [],
   accountEquity = {},
   topstepSizing = {},
   categoryOrder,
@@ -253,6 +254,11 @@ export function TradeForm({
   initial?: TradeFormInitial;
   /** Accounts whose FTMO challenge is frozen — new trades are blocked. */
   ftmoFailedAccountIds?: string[];
+  /**
+   * Topstep accounts that hit their MLL — a new plan is blocked, as on a frozen
+   * FTMO account. A trade that already closed goes through `/trades/log`.
+   */
+  topstepFailedAccountIds?: string[];
   /**
    * Current equity per account id — starting balance + realized P&L + cash
    * flow. Risk % is a share of what the account is worth NOW, not of what it
@@ -375,9 +381,12 @@ export function TradeForm({
     initial?.account_id ?? primaryAccount(accounts)?.id ?? null,
   );
   const account = accounts.find((a) => a.id === accountId) ?? null;
-  // Block only NEW trades on a frozen FTMO account (editing existing is allowed).
+  // Block only NEW trades on a blown prop-firm account (editing existing is
+  // allowed, and so is logging a trade that already closed — `/trades/log`).
   const ftmoBlocked =
     !initial && accountId != null && ftmoFailedAccountIds.includes(accountId);
+  const topstepBlocked =
+    !initial && accountId != null && topstepFailedAccountIds.includes(accountId);
   const tz = account?.timezone ?? DEFAULT_TZ;
   const currency = account?.currency ?? "USD";
   // The account's breakeven band — the same classification every report uses,
@@ -995,6 +1004,10 @@ export function TradeForm({
       );
       return;
     }
+    if (topstepBlocked) {
+      toast.error("The Topstep account hit its Maximum Loss Limit. Reset it in Settings.");
+      return;
+    }
     if (!fields.instrument) {
       toast.error("Pick an instrument.");
       setActiveTab("plan");
@@ -1598,6 +1611,16 @@ export function TradeForm({
                 Settings to add new trades.
               </p>
             )}
+            {topstepBlocked && (
+              <p className="text-xs text-[var(--loss)]">
+                Topstep account hit its Maximum Loss Limit — reset it in Settings
+                to plan new trades. A trade that already closed:{" "}
+                <Link href="/trades/log" className="underline">
+                  Log Trade
+                </Link>
+                .
+              </p>
+            )}
             <div className="flex gap-2">
               {initial && (
                 <Button
@@ -1622,7 +1645,7 @@ export function TradeForm({
                   Cancel
                 </Link>
               </Button>
-              <Button onClick={submit} disabled={pending || ftmoBlocked}>
+              <Button onClick={submit} disabled={pending || ftmoBlocked || topstepBlocked}>
                 {pending ? "Saving…" : initial ? "Update trade" : "Save trade"}
               </Button>
             </div>

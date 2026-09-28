@@ -24,6 +24,7 @@ import {
   type PlanSnapshot,
 } from "@/lib/journal/plan-snapshot";
 import { isFtmoAccountFrozen } from "@/lib/journal/ftmo-status";
+import { isTopstepAccountFailed } from "@/lib/journal/topstep-status";
 import { parseScaleOutLevels } from "@/lib/journal/scale-out";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
 import { getAccountCurrency } from "@/lib/journal/accounts";
@@ -57,6 +58,12 @@ export type TradeInput = {
   /** User choice when no fills: planned vs active (maps to planned/open). */
   trade_phase?: "planned" | "active" | null;
   current_status?: string | null;
+  /**
+   * Where a NEW trade comes from. `log` is a trade written after it closed
+   * (`/trades/log`); anything else, and its absence, is a plan. Read only by
+   * `createTrade`, to let the record through on a blown prop-firm account.
+   */
+  origin?: "plan" | "log";
   playbook_id?: string | null;
   /** Planned scale-out levels: `[{pct, price}]`. Validated in `scaleOutPatch`. */
   scale_out_levels?: unknown;
@@ -208,22 +215,53 @@ function resolveStatus(
 }
 
 
+/**
+ * Which prop-firm limit the account has broken, if any.
+ *
+ * FTMO and Topstep are exclusive per account (`tj_accounts_one_prop_firm`), so
+ * at most one answers; both are asked in one round trip. Scoped to the one
+ * account being written to.
+ */
+async function blownAccount(accountId: string | null): Promise<"ftmo" | "topstep" | null> {
+  const [ftmo, topstep] = await Promise.all([
+    isFtmoAccountFrozen(accountId),
+    isTopstepAccountFailed(accountId),
+  ]);
+  return ftmo ? "ftmo" : topstep ? "topstep" : null;
+}
+
 export async function createTrade(input: TradeInput) {
   const prep = await prepareTrade(input);
   if (!prep.ok) return prep;
+  const { patch, execs, statusPatch } = prep;
 
-  // Freeze: block new trades on an FTMO account that broke a rule. Scoped to
-  // the one account being written to — this used to evaluate every account.
-  if (await isFtmoAccountFrozen(input.account_id)) {
-    return {
-      ok: false as const,
-      error:
-        "The FTMO account is frozen — a rule was breached. Reset the challenge in Settings to continue.",
-    };
+  // A blown account blocks new EXPOSURE, never the record. A trade logged
+  // after it closed is history: refusing it would refuse exactly the trade that
+  // broke the limit, and the book would lie about why the account failed. So
+  // only a plan is refused — and `log` counts only for a trade that IS closed,
+  // because this is a public endpoint and an entry without an exit is exposure
+  // whatever the caller calls it. The import writes around this path and stays
+  // there: it too is the record.
+  const isRecord = input.origin === "log" && statusPatch.status === "closed";
+  if (!isRecord) {
+    const blown = await blownAccount(input.account_id);
+    if (blown === "ftmo") {
+      return {
+        ok: false as const,
+        error:
+          "The FTMO account is frozen — a rule was breached. Reset the challenge in Settings to continue.",
+      };
+    }
+    if (blown === "topstep") {
+      return {
+        ok: false as const,
+        error:
+          "The Topstep account hit its Maximum Loss Limit — reset it in Settings to plan new trades. A trade that already closed can still be logged.",
+      };
+    }
   }
 
   const supabase = await createClient();
-  const { patch, execs, statusPatch } = prep;
 
   // Freeze the contract spec onto the trade. Without this, later edits to the
   // instrument would retroactively rewrite this trade's P&L.
@@ -328,10 +366,11 @@ export async function updateTrade(id: string, input: TradeInput) {
 
   // The freeze guard, narrowed. Editing a planned trade into a live one — or
   // putting more size on — opens exposure on the account, which is what the
-  // FTMO freeze exists to stop. Everything else is record-keeping: this used to
-  // refuse EVERY save on a frozen account, so the trader could not even write
-  // up the trade that breached the rule.
-  if (await isFtmoAccountFrozen(input.account_id)) {
+  // FTMO freeze and a Topstep MLL breach exist to stop. Everything else is
+  // record-keeping: this used to refuse EVERY save on a frozen account, so the
+  // trader could not even write up the trade that breached the rule.
+  const blown = await blownAccount(input.account_id);
+  if (blown) {
     const [{ data: prevState }, { data: prevFills }] = await Promise.all([
       supabase.from("tj_positions").select("status").eq("id", id).maybeSingle(),
       supabase.from("tj_executions").select("side, qty").eq("position_id", id),
@@ -347,7 +386,9 @@ export async function updateTrade(id: string, input: TradeInput) {
       return {
         ok: false as const,
         error:
-          "The FTMO account is frozen — a rule was breached. Notes and review can still be edited, but no new position or size. Reset the challenge in Settings to continue.",
+          blown === "ftmo"
+            ? "The FTMO account is frozen — a rule was breached. Notes and review can still be edited, but no new position or size. Reset the challenge in Settings to continue."
+            : "The Topstep account hit its Maximum Loss Limit. Notes and review can still be edited, but no new position or size. Reset the account in Settings to continue.",
       };
     }
   }

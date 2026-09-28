@@ -50,6 +50,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 |---|---|---|
 | 28.09.2026 | F1.1 | `thesis_written` ocenjuje samo trejdove napravljene pre ulaza (opcija A); ostali `na/no_plans` |
 | 28.09.2026 | F1.2 | Probijen MLL / FTMO kršenje blokira samo plan (`origin: "plan"`), nikad upis posle zatvaranja — za oba moda |
+| 28.09.2026 | F1.2 | Settings dobija „Reset account…" za Topstep (upisuje `topstep_reset_at`, kao FTMO restart) — bez njega poruka „resetuj ga u Settings" nema kuda da vodi. Kolona već postoji, bez migracije |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.

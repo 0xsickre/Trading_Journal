@@ -597,6 +597,47 @@ describe("FTMO-frozen account blocks a new trade before anything else is validat
   });
 });
 
+describe("a Topstep account that hit its MLL blocks a new plan, like a frozen FTMO one", () => {
+  it("disables Save trade and says why", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        topstepFailedAccountIds={["acc-1"]}
+      />,
+    );
+    const saveBtn = screen.getByRole("button", { name: /Save trade/ });
+    expect(saveBtn).toBeDisabled();
+    expect(screen.getByText(/Topstep account hit its Maximum Loss Limit/)).toBeInTheDocument();
+    // The way out is named: the record of a closed trade is still open.
+    expect(screen.getByRole("link", { name: /Log Trade/ })).toHaveAttribute("href", "/trades/log");
+
+    await user.click(saveBtn);
+    expect(createTradeMock).not.toHaveBeenCalled();
+  });
+
+  it("editing an already-saved trade on that account stays allowed", () => {
+    render(
+      <TradeForm
+        optionsMap={{}}
+        instruments={[INSTRUMENT]}
+        accounts={[ACCOUNT]}
+        topstepFailedAccountIds={["acc-1"]}
+        initial={baseInitial({ status: "planned", executions: [] })}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /Update trade/ })).toBeEnabled();
+  });
+
+  it("says nothing on a healthy account", () => {
+    render(<TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} />);
+    expect(screen.queryByText(/Maximum Loss Limit/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Save trade/ })).toBeEnabled();
+  });
+});
+
 describe("the plan reveals one decision at a time", () => {
   /**
    * The regression this block exists for.

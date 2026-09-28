@@ -1214,6 +1214,25 @@ export async function resetFtmoChallenge(id: string) {
 }
 
 /**
+ * Reset a Topstep account: trades closed before now stop counting toward the
+ * MLL, DLL and target (`evaluateTopstep` reads `topstep_reset_at`). The Topstep
+ * twin of `resetFtmoChallenge` — a new plan on an account past its MLL is
+ * refused until this runs.
+ */
+export async function resetTopstepAccount(id: string) {
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase
+    .from("tj_accounts")
+    .update({ topstep_reset_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id");
+  if (error) return { ok: false as const, error: error.message };
+  if (!updated || updated.length === 0) return { ok: false as const, error: "Account not found." };
+  revalidateAll();
+  return { ok: true as const };
+}
+
+/**
  * Create an account, from the new-account dialog or as a duplicate.
  *
  * The dialog asks for what decides how every trade on the account reads —

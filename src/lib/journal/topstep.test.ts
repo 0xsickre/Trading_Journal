@@ -145,6 +145,14 @@ describe("off and reset", () => {
     expect(r.balance).toBe(50_200);
     expect(r.daysTraded).toBe(1);
   });
+
+  it("a reset clears a reached MLL — what lets a new plan through again", () => {
+    const blown = [t("2026-09-28T15:00:00Z", -2_100)];
+    expect(run(blown).status).toBe("failed");
+    const after = run(blown, { resetAt: "2026-09-29T00:00:00Z" });
+    expect(after.status).toBe("active");
+    expect(after.mllBreachDay).toBeNull();
+  });
 });
 
 describe("reading an account", () => {

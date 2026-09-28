@@ -17,6 +17,11 @@ type Spec = {
   playbook?: boolean;
   stop?: boolean;
   thesis?: boolean;
+  /**
+   * When the row was created. Defaults to `opened` — a plan entered the moment
+   * it was written, the shape every older test here was written against.
+   */
+  created?: string;
   /** Risk-at-entry inputs: the stop distance, the size, and the day's equity. */
   stopPrice?: number | null;
   qty?: number;
@@ -33,7 +38,7 @@ function mkRow(s: Spec): TradeRow {
     status: s.status ?? "closed",
     source: "manual",
     needs_review: false,
-    created_at: s.opened,
+    created_at: s.created ?? s.opened,
     playbook_id: s.playbook === false ? null : "pb-1",
     stop_price: s.stop === false ? null : (s.stopPrice ?? 90),
     equity_at_entry: s.equityAtEntry === undefined ? null : s.equityAtEntry,
@@ -582,5 +587,99 @@ describe("risk taken at entry", () => {
       expect(v.verdict).toBe("fail");
       expect(v.offenders).toEqual(["oversized"]);
     });
+  });
+});
+
+describe("thesis_written grades only trades planned before entry", () => {
+  // `/trades/log` and the TopstepX import create a trade AFTER its fills, so
+  // its seal is stamped at the moment of writing — after the close. There was
+  // no plan before the entry to hold a thesis, and failing the rule on it
+  // grades the way the trade was recorded, not the trader.
+  const OPENED = "2026-03-02T14:00:00Z";
+  const CLOSED = "2026-03-02T14:20:00Z";
+  const planFirst = (id: string, thesis: boolean): Spec => ({
+    id,
+    opened: OPENED,
+    closed: CLOSED,
+    created: "2026-03-02T13:30:00Z",
+    thesis,
+  });
+  const loggedAfter = (id: string, thesis: boolean): Spec => ({
+    id,
+    opened: OPENED,
+    closed: CLOSED,
+    created: "2026-03-02T15:05:00Z",
+    thesis,
+  });
+
+  it("does not grade a trade created after its entry — na, no_plans", () => {
+    const out = evalDay("2026-03-02", [loggedAfter("log", false)]);
+    expect(out.thesis_written.verdict).toBe("na");
+    expect(out.thesis_written.reason).toBe("no_plans");
+    expect(out.thesis_written.offenders).toEqual([]);
+  });
+
+  it("does not pass it either, even when the seal carries a thesis", () => {
+    // Nothing was checked: a sentence sealed after the close is not a reason
+    // that existed before the position.
+    const out = evalDay("2026-03-02", [loggedAfter("log", true)]);
+    expect(out.thesis_written.verdict).toBe("na");
+    expect(out.thesis_written.reason).toBe("no_plans");
+  });
+
+  it("passes a plan-first trade with a thesis", () => {
+    const out = evalDay("2026-03-02", [planFirst("plan", true)]);
+    expect(out.thesis_written.verdict).toBe("pass");
+  });
+
+  it("fails a plan-first trade without one", () => {
+    const out = evalDay("2026-03-02", [planFirst("plan", false)]);
+    expect(out.thesis_written.verdict).toBe("fail");
+    expect(out.thesis_written.offenders).toEqual(["plan"]);
+  });
+
+  it("grades only the plan-first trade on a day that has both", () => {
+    const out = evalDay("2026-03-02", [planFirst("plan", true), loggedAfter("log", false)]);
+    expect(out.thesis_written.verdict).toBe("pass");
+
+    const bad = evalDay("2026-03-02", [planFirst("plan", false), loggedAfter("log", false)]);
+    expect(bad.thesis_written.verdict).toBe("fail");
+    expect(bad.thesis_written.offenders).toEqual(["plan"]);
+  });
+
+  it("grades a resting plan the import filled — it was created before the fill", () => {
+    const filled: Spec = {
+      id: "limit",
+      opened: OPENED,
+      closed: CLOSED,
+      created: "2026-02-27T09:00:00Z",
+      thesis: false,
+    };
+    expect(evalDay("2026-03-02", [filled]).thesis_written.verdict).toBe("fail");
+  });
+
+  it("counts a trade created at the instant of its entry as planned", () => {
+    // Boundary: `created_at <= opened_at`, the same instant is not "after".
+    const out = evalDay("2026-03-02", [{ ...planFirst("edge", true), created: OPENED }]);
+    expect(out.thesis_written.verdict).toBe("pass");
+  });
+
+  it("does not grade a trade whose creation time cannot be read", () => {
+    // Not knowing when the row was written is not a breach: na, not fail.
+    const row = { ...mkRow(planFirst("odd", false)), created_at: "" } as TradeRow;
+    const out = evaluateAutoRulesForDay(
+      "2026-03-02",
+      buildTradeDayIndex([row], () => "UTC"),
+      LIMITS,
+    );
+    expect(out.thesis_written.verdict).toBe("na");
+    expect(out.thesis_written.reason).toBe("no_plans");
+  });
+
+  it("leaves the other open-day rules grading the logged trade", () => {
+    // Quick log fills stop and playbook itself; only the thesis rule is narrowed.
+    const out = evalDay("2026-03-02", [loggedAfter("log", false)]);
+    expect(out.stop_loss_set.verdict).toBe("pass");
+    expect(out.playbook_linked.verdict).toBe("pass");
   });
 });

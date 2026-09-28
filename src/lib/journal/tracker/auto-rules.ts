@@ -32,6 +32,12 @@ export type AutoReason =
   | "unconfigured"
   /** Nothing happened on this day that the rule could judge. */
   | "no_trades"
+  /**
+   * Trades were opened, but none of them was written as a plan before its
+   * entry — so there was no moment at which a reason could have been written
+   * beforehand. `thesis_written` only.
+   */
+  | "no_plans"
   /** A contributing trade has no price, so the answer is unknown. */
   | "unpriced"
   /**
@@ -81,6 +87,15 @@ export type TrackerTrade = {
   hasStop: boolean;
   /** A non-empty `thesis` in the SEALED plan — the reason, written beforehand. */
   hasThesis: boolean;
+  /**
+   * The row existed before its first fill: `created_at <= opened_at`.
+   *
+   * A plan-first trade, and a resting plan the import later filled, were
+   * written before the position; a trade logged after the close, or created by
+   * the import, was written after it — its seal is stamped at the moment of
+   * writing, so it cannot say whether a reason existed beforehand.
+   */
+  plannedBeforeEntry: boolean;
   /**
    * Risk taken at entry, in account currency and as a share of the equity the
    * entry day opened with. Null when any factor is unknown — no stop, an
@@ -136,10 +151,24 @@ function toTrackerTrade(row: TradeRow, tz: string): TrackerTrade | null {
     // Trimmed: a thesis of three spaces is not a thesis, and storing one would
     // let the rule be satisfied by pressing the spacebar.
     hasThesis: (sealedText(row, "thesis") ?? "").trim() !== "",
+    plannedBeforeEntry: createdBy(row.created_at, openedAt),
     riskMoney: riskMoneyAtEntry(row),
     riskPctTaken: riskPctTaken(row),
     matchedIntent: matchedRiskIntent(row),
   };
+}
+
+/**
+ * Whether a row was created no later than an instant.
+ *
+ * Compared as instants, not strings: Postgres and the stats view do not promise
+ * the same offset notation. An unreadable timestamp answers false, which makes
+ * the trade ungraded (`na`) rather than failed — not knowing is not a breach.
+ */
+function createdBy(createdAt: string | null | undefined, instant: string): boolean {
+  const c = Date.parse(String(createdAt ?? ""));
+  const o = Date.parse(instant);
+  return Number.isFinite(c) && Number.isFinite(o) && c <= o;
 }
 
 /**
@@ -342,6 +371,27 @@ function evalOpenDayFlag(
 }
 
 /**
+ * `thesis_written`, over the trades that were planned before their entry.
+ *
+ * A trade written after the fact had no "before" in which a thesis could have
+ * existed, so it is not graded at all — neither a fail (the trader recorded a
+ * trade, which is not a breach) nor a pass (nothing was checked). A day on
+ * which every trade was logged afterwards is therefore `na` with `no_plans`,
+ * not `pass`: the same reasoning that makes a day with no trades `na`.
+ *
+ * Rejected alternative: writing the quick log's sentence into `thesis`. It
+ * would be sealed as the reason before entry while written after the close —
+ * the very rationalisation the rule reads the seal to catch.
+ */
+function evalThesisWritten(trades: TrackerTrade[]): AutoRuleResult {
+  const key: AutoRuleKey = "thesis_written";
+  if (trades.length === 0) return na(key, "no_trades");
+  const planned = trades.filter((t) => t.plannedBeforeEntry);
+  if (planned.length === 0) return na(key, "no_plans");
+  return evalOpenDayFlag(key, planned, (t) => t.hasThesis);
+}
+
+/**
  * Risk taken at entry against the trader's own ceiling, on the OPEN day.
  *
  * The counterpart to `max_loss_per_trade`, and the reason both exist: this one
@@ -502,8 +552,9 @@ export function evaluateAutoRulesForDay(
     // Open day, and for this rule it is not a nuance but the entire content of
     // it. A thesis written after the fact is a rationalisation — the check is
     // that the reason existed BEFORE the position did, and only the open day
-    // can say that.
-    thesis_written: evalOpenDayFlag("thesis_written", opened, (t) => t.hasThesis),
+    // can say that. Only trades planned before their entry are graded — see
+    // `evalThesisWritten`.
+    thesis_written: evalThesisWritten(opened),
     // Open day, like the flags and for the same reason: the size is the decision
     // taken at entry. Grading it on the close day would grade it once the risk
     // has already been spent.

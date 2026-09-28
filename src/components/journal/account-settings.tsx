@@ -59,6 +59,7 @@ import {
   archiveAccount,
   restoreAccount,
   resetFtmoChallenge,
+  resetTopstepAccount,
   countAccountUsage,
   deleteAccount,
 } from "@/app/(app)/settings/actions";
@@ -273,7 +274,7 @@ function CreateAccountDialog({
           <DialogTitle>{source ? `Duplicate "${source.name}"` : "New account"}</DialogTitle>
           <DialogDescription>
             {source
-              ? "Copies the type, currency, timezone, breakeven range, costs and FTMO rules. Trades and deposits are not copied, and the challenge starts fresh."
+              ? "Copies the type, currency, timezone, breakeven range, costs and prop-firm rules (FTMO or Topstep). Trades and deposits are not copied, and the challenge starts fresh."
               : "These decide how every trade on the account reads. Everything else can be set later."}
           </DialogDescription>
         </DialogHeader>
@@ -457,6 +458,7 @@ function EditAccountDialog({
 }) {
   const [pending, start] = useTransition();
   const [resetOpen, setResetOpen] = useState(false);
+  const [topstepResetOpen, setTopstepResetOpen] = useState(false);
   const hasTrades = trades == null || trades > 0;
 
   const [name, setName] = useState(account.name);
@@ -577,6 +579,17 @@ function EditAccountDialog({
       else {
         toast.success("Challenge restarted");
         setResetOpen(false);
+      }
+    });
+  }
+
+  function resetTopstep() {
+    start(async () => {
+      const res = await resetTopstepAccount(account.id);
+      if (!res.ok) toast.error(res.error);
+      else {
+        toast.success("Topstep account reset");
+        setTopstepResetOpen(false);
       }
     });
   }
@@ -812,6 +825,15 @@ function EditAccountDialog({
                 The trade form sizes a planned futures trade from this: whole contracts, rounded down,
                 commission counted, never over today&apos;s daily loss room.
               </p>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <p className="text-xs text-muted-foreground">
+                  Reaching the MLL shows a red banner and blocks new plans until the account is
+                  reset. A trade that already closed can always be logged.
+                </p>
+                <Button variant="outline" size="sm" onClick={() => setTopstepResetOpen(true)} disabled={pending}>
+                  <RotateCcw className="size-4" /> Reset account…
+                </Button>
+              </div>
             </div>
           )}
         </section>
@@ -841,6 +863,26 @@ function EditAccountDialog({
             </Button>
             <Button onClick={resetChallenge} disabled={pending}>
               Restart
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={topstepResetOpen} onOpenChange={setTopstepResetOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset the Topstep account?</DialogTitle>
+            <DialogDescription>
+              Trades before now stop counting toward the Topstep limits — the balance starts again
+              from the starting balance and a reached MLL is cleared. The trades themselves stay.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setTopstepResetOpen(false)} disabled={pending}>
+              Cancel
+            </Button>
+            <Button onClick={resetTopstep} disabled={pending}>
+              Reset
             </Button>
           </DialogFooter>
         </DialogContent>

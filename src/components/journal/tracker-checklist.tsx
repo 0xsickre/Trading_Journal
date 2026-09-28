@@ -53,6 +53,8 @@ function autoReasonText(
       return "Nema equity-ja od kog bi se procenat računao — upiši početni balans naloga u Settings › Accounts.";
     case "no_trades":
       return "Nema trejdova po kojima bi se ovo pravilo ocenilo ovog dana.";
+    case "no_plans":
+      return "Nijedan trejd ovog dana nije planiran pre ulaza — upisan posle zatvaranja ili uvozom, pa teza pre ulaza nije mogla da postoji. Ocenjuju se samo trejdovi otvoreni iz plana.";
     case "unpriced":
       return "Trejd bez vrednosti poena — rezultat je nepoznat, pa se dan po ovom pravilu ne ocenjuje.";
     case "frozen":
