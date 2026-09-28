@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getCashEvents } from "@/lib/journal/cash-events";
 import { getDailyReportsLite } from "@/lib/journal/daily-report-queries";
-import { getPositionCheckins } from "@/lib/journal/position-checkin-queries";
 import { getWeekGrades } from "@/lib/journal/weekly-review-queries";
 import { getFillCounts, getTradesWithStats } from "@/lib/journal/trades";
 import { getFieldDefs } from "@/lib/journal/field-defs";
@@ -31,7 +30,6 @@ export default async function ReportsPage() {
     fieldDefs,
     playbooks,
     optionsMap,
-    positionCheckins,
     weekGrades,
     positionRules,
   ] = await Promise.all([
@@ -52,11 +50,6 @@ export default async function ReportsPage() {
     // were tagged with, and dropping it would move a tag from the Emocija
     // dimension into nothing at all.
     getOptionsMap(false),
-    // Every check-in, not just a window: they feed the `touched` and
-    // `thesis_state` dimensions, which group CLOSED trades by what was recorded
-    // while they were open. A date-bounded read would drop the answers given
-    // during a hold that started before the window.
-    getPositionCheckins(),
     // Only the grade per week. The review's prose is written to be read, not
     // grouped on, and shipping five paragraphs a week to the browser to render
     // one letter would be paying for the whole review to draw a bucket label.
@@ -78,7 +71,6 @@ export default async function ReportsPage() {
           trades={trades as TradeRow[]}
           accounts={accounts}
           dailyReports={dailyReports}
-          positionCheckins={positionCheckins}
           weekGrades={weekGrades}
           fillCounts={fillCounts}
           cashEvents={cashEvents}

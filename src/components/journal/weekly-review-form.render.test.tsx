@@ -63,12 +63,8 @@ function recap(over: Partial<WeekRecap> = {}): WeekRecap {
     net: 820,
     wins: 3,
     losses: 1,
-    weekendHolds: 1,
     journalledDays: 5,
     journalledOutOf: 5,
-    checkedPositions: 6,
-    interferedPositions: 2,
-    thesisSlippedPositions: 1,
     // Consistent with the counts above by construction: 3 of 4 decided = 75 %.
     // A fixture whose ratio contradicted its own wins/losses would let the card
     // print an impossible pair and still pass.
@@ -121,8 +117,10 @@ describe("the facts come before the questions", () => {
     render(form());
     expect(screen.getByText("5 / 5")).toBeInTheDocument(); // journalled days, Mon–Fri
     expect(screen.getByText("3 / 1")).toBeInTheDocument(); // won / lost
-    expect(screen.getByText("Dirano")).toBeInTheDocument();
-    expect(screen.getByText("Teza oslabila")).toBeInTheDocument();
+    // The swing counts are gone (H1): no check-ins, no weekend holds.
+    for (const gone of ["Dirano", "Teza oslabila", "Proverenih pozicija", "Držano preko vikenda"]) {
+      expect(screen.queryByText(gone)).not.toBeInTheDocument();
+    }
   });
 
   it("names the week by its range, not by a raw key", () => {
@@ -361,11 +359,7 @@ describe("a week with nothing in it", () => {
           net: 0,
           wins: 0,
           losses: 0,
-          weekendHolds: 0,
           journalledDays: 0,
-          checkedPositions: 0,
-          interferedPositions: 0,
-          thesisSlippedPositions: 0,
           winRate: null,
           profitFactor: null,
           avgR: null,

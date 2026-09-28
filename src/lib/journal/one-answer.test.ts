@@ -8,7 +8,6 @@ import {
 } from "./breakeven";
 import { isFriday } from "./daily-report";
 import { lifecycleStatusHint } from "./trade-lifecycle";
-import { daysBetweenKeys } from "./open-positions";
 import { isShortDirection } from "./plan-calculations";
 import { tradeDirectionMultiplier } from "./position-stats";
 import { accountTimezoneResolver, daysBetweenDayKeys, isoWeekdayOfDayKey } from "./time";
@@ -69,33 +68,12 @@ describe("win rate — one formula", () => {
   });
 });
 
-describe("the day difference — two conventions, both deliberate", () => {
+describe("the day difference", () => {
   it("the calendar difference is 0-based", () => {
+    // The 1-based "sessions held" count left with the swing book (H1): an
+    // intraday trade opens and closes inside one trading day.
     expect(daysBetweenDayKeys("2026-03-02", "2026-03-02")).toBe(0);
     expect(daysBetweenDayKeys("2026-03-02", "2026-03-05")).toBe(3);
-  });
-
-  it("the count of sessions held is 1-based and larger by exactly one", () => {
-    // The open day counts as the first session. The difference in convention is
-    // real and stays; what was removed is the second IMPLEMENTATION — a loop
-    // adding one day at a time and counting steps up to 3650.
-    expect(daysBetweenKeys("2026-03-02", "2026-03-02")).toBe(1);
-    expect(daysBetweenKeys("2026-03-02", "2026-03-05")).toBe(4);
-
-    for (const [from, to] of [
-      ["2026-02-26", "2026-03-02"], // month boundary
-      ["2024-02-27", "2024-03-01"], // leap year
-      ["2026-12-30", "2027-01-02"], // year boundary
-      ["2026-03-06", "2026-03-10"], // across the US clock change
-    ]) {
-      expect(daysBetweenKeys(from, to), `${from} → ${to}`).toBe(
-        daysBetweenDayKeys(from, to) + 1,
-      );
-    }
-  });
-
-  it("a reversed order gives 0, not a negative number of sessions", () => {
-    expect(daysBetweenKeys("2026-03-05", "2026-03-02")).toBe(0);
   });
 });
 

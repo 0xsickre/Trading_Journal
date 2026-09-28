@@ -16,10 +16,8 @@ import { SEEDED_FIELD_DEFS } from "../field-defs.fixture";
 import {
   DAY,
   TEST_FIELD_DEFS,
-  byPosition,
   dimCtx,
   enrich,
-  mkCheckin,
   mkReport,
 } from "./test-helpers";
 
@@ -184,90 +182,6 @@ describe("process dimensions", () => {
     ]);
   });
 
-  it("reads interference from the position's OWN check-ins, mid-hold", () => {
-    // Interference happens while the position is open; neither endpoint of the
-    // trade would catch it.
-    const t = one([{ ...held, id: "p1" }]);
-    const ctx = dimCtx([], {
-      checkinsByPosition: byPosition([
-        mkCheckin("p1", "2026-01-07", { touched: "stop_moved" }),
-      ]),
-    });
-    expect(bucketsOf(getDimension("touched")!, t, ctx)).toEqual(["stop_moved"]);
-  });
-
-  it("takes the furthest-from-plan state across the hold", () => {
-    // Not the last answer and not the average: touching a position once in five
-    // days is the fact worth grouping on, and `added` outranks `stop_moved`
-    // because it takes on exposure the plan never sized for.
-    const t = one([{ ...held, id: "p1" }]);
-    const ctx = dimCtx([], {
-      checkinsByPosition: byPosition([
-        mkCheckin("p1", "2026-01-05", { touched: "untouched" }),
-        mkCheckin("p1", "2026-01-07", { touched: "added" }),
-        mkCheckin("p1", "2026-01-09", { touched: "partial_exit" }),
-      ]),
-    });
-    expect(bucketsOf(getDimension("touched")!, t, ctx)).toEqual(["added"]);
-  });
-
-  it("never lets ANOTHER position's answer reach this one", () => {
-    // The measurement bug this replaced: `micromanage` was a column on the DAY,
-    // so an untouched position was convicted by the calendar whenever a
-    // different one was touched while both were open.
-    const t = one([{ ...held, id: "p1" }]);
-    const ctx = dimCtx([], {
-      checkinsByPosition: byPosition([
-        mkCheckin("p1", "2026-01-07", { touched: "untouched" }),
-        mkCheckin("p2", "2026-01-07", { touched: "added" }),
-      ]),
-    });
-    expect(bucketsOf(getDimension("touched")!, t, ctx)).toEqual(["untouched"]);
-  });
-
-  it("takes the worst thesis state across the hold", () => {
-    const t = one([{ ...held, id: "p1" }]);
-    const ctx = dimCtx([], {
-      checkinsByPosition: byPosition([
-        mkCheckin("p1", "2026-01-05", { thesis_state: "intact" }),
-        mkCheckin("p1", "2026-01-07", { thesis_state: "invalidated" }),
-        mkCheckin("p1", "2026-01-09", { thesis_state: "weakened" }),
-      ]),
-    });
-    expect(bucketsOf(getDimension("thesis_state")!, t, ctx)).toEqual([
-      "invalidated",
-    ]);
-  });
-
-  it("splits weekend holds from trades that were flat by Friday", () => {
-    // Mon→Fri never crosses a Saturday; Fri→Mon does.
-    const flat = one([held]);
-    const over = one([
-      { openedAt: "2026-01-09T09:00:00Z", closedAt: "2026-01-12T09:00:00Z" },
-    ]);
-    const dim = getDimension("weekend_hold")!;
-    expect(bucketsOf(dim, flat, dimCtx())).toEqual(["Flat by Friday"]);
-    expect(bucketsOf(dim, over, dimCtx())).toEqual(["Held over weekend"]);
-  });
-
-  it("splits trades that outlived their time stop from those that did not", () => {
-    // Mon→Fri is five sessions. Against a 3-day stop that is a breach; against
-    // a 5-day one it is the plan, on the last day of it.
-    const dim = getDimension("time_stop_breached")!;
-    const late = one([{ ...held, timeStopDays: 3 }]);
-    const onTime = one([{ ...held, timeStopDays: 5 }]);
-    expect(bucketsOf(dim, late, dimCtx())).toEqual(["Held past it"]);
-    expect(bucketsOf(dim, onTime, dimCtx())).toEqual(["Exited in time"]);
-  });
-
-  it("excludes a trade that never had a time stop", () => {
-    // Unmeasured, not compliant. Bucketing it as "exited in time" would flatter
-    // every trade logged before the field existed.
-    expect(
-      bucketsOf(getDimension("time_stop_breached")!, one([held]), dimCtx()),
-    ).toEqual([]);
-  });
-
   it("reads the week grade from the week the trade CLOSED in", () => {
     // A judgement made after the fact belongs to the week that had the fact —
     // the same reason the old `day_grade` dimension read the close day.
@@ -289,18 +203,9 @@ describe("process dimensions", () => {
 
   it("excludes a trade with no entry rather than inventing a bucket", () => {
     // Unrecorded process is unknown, not a value — bucketing it would make an
-    // absence look like a finding. A check-in row that exists but answers
-    // nothing is the same silence.
+    // absence look like a finding.
     const t = one([{ ...held, id: "p1" }]);
-    expect(bucketsOf(getDimension("touched")!, t, dimCtx())).toEqual([]);
-    expect(bucketsOf(getDimension("thesis_state")!, t, dimCtx())).toEqual([]);
     expect(bucketsOf(getDimension("mental_temp")!, t, dimCtx())).toEqual([]);
-
-    const silent = dimCtx([], {
-      checkinsByPosition: byPosition([mkCheckin("p1", "2026-01-07")]),
-    });
-    expect(bucketsOf(getDimension("touched")!, t, silent)).toEqual([]);
-    expect(bucketsOf(getDimension("thesis_state")!, t, silent)).toEqual([]);
   });
 });
 
@@ -507,10 +412,7 @@ describe("every dimension buckets without throwing", () => {
    */
   const rich = one([
     {
-      // Named so the check-in fixture below joins onto it — the sweep is meant
-      // to execute each `valueOf`'s populated path, not its early return.
       id: "rich",
-      timeStopDays: 3,
       thesis: "Dollar weakness into CPI",
       instrument: "XAUUSD",
       net: 300,
@@ -531,12 +433,6 @@ describe("every dimension buckets without throwing", () => {
   const bare = one([{ net: 0, r: null, durationSeconds: null, size: null, accountId: null }]);
 
   const ctx = dimCtx([mkReport("2026-01-09", { mental_temp: 3 })], {
-    checkinsByPosition: byPosition([
-      mkCheckin("rich", "2026-01-09", {
-        thesis_state: "weakened",
-        touched: "partial_exit",
-      }),
-    ]),
     weekGradeByWeek: new Map([["2026-01-05", 4]]),
   });
 
@@ -592,6 +488,14 @@ describe("every dimension buckets without throwing", () => {
     for (const d of all) {
       expect(DIMENSION_GROUP_LABELS[d.group], d.key).toBeTruthy();
       expect(DIMENSION_GROUP_ORDER, d.key).toContain(d.group);
+    }
+  });
+});
+
+describe("the swing dimensions are gone (H1, 28.09.2026)", () => {
+  it("check-ins, weekend holds and a time stop in days no longer group a report", () => {
+    for (const key of ["touched", "thesis_state", "weekend_hold", "time_stop_breached"]) {
+      expect(getDimension(key)).toBeUndefined();
     }
   });
 });

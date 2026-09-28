@@ -25,7 +25,6 @@ import { enrichTrades, type DailyReportLite, type FillCounts } from "@/lib/journ
 import { sharedCurrency } from "@/lib/journal/format";
 import { sharedBreakevenRange } from "@/lib/journal/breakeven";
 import { buildInsightContext } from "@/lib/journal/insights/context";
-import type { PositionCheckin } from "@/lib/journal/position-checkin";
 import { runInsights } from "@/lib/journal/insights/registry";
 import { unpricedClosedCount } from "@/lib/journal/money-provenance";
 import {
@@ -145,7 +144,6 @@ export function ReportsWorkbench({
   trades,
   accounts,
   dailyReports = [],
-  positionCheckins = [],
   weekGrades,
   fillCounts,
   cashEvents = [],
@@ -157,8 +155,6 @@ export function ReportsWorkbench({
   trades: TradeRow[];
   accounts: Account[];
   dailyReports?: DailyReportLite[];
-  /** Per-position daily check-ins — what `touched` and `thesis_state` group on. */
-  positionCheckins?: PositionCheckin[];
   /** Week start → that week's review grade, for the `week_grade` dimension. */
   weekGrades?: Map<string, number>;
   fillCounts?: FillCounts;
@@ -327,16 +323,6 @@ export function ReportsWorkbench({
   );
   const dimensions = useMemo(() => allDimensions(extraDimensions), [extraDimensions]);
 
-  const checkinsByPosition = useMemo(() => {
-    const out = new Map<string, PositionCheckin[]>();
-    for (const c of [...positionCheckins].sort((a, b) => a.report_date.localeCompare(b.report_date))) {
-      const list = out.get(c.position_id);
-      if (list) list.push(c);
-      else out.set(c.position_id, [c]);
-    }
-    return out;
-  }, [positionCheckins]);
-
   // Insights are a dimension and a filter, so they are evaluated once and
   // indexed by trade.
   const insightsByTrade = useMemo(() => {
@@ -349,7 +335,6 @@ export function ReportsWorkbench({
       pnlOf,
       currency,
       fillCounts,
-      checkins: positionCheckins,
       rules: playbookLookup.rules,
     });
     const map = new Map<string, string[]>();
@@ -358,12 +343,11 @@ export function ReportsWorkbench({
       map.set(i.subjectId, [...(map.get(i.subjectId) ?? []), i.ruleId]);
     }
     return map;
-  }, [trades, dailyReports, positionCheckins, playbookLookup.rules, tzOf, range, pnlOf, currency, fillCounts]);
+  }, [trades, dailyReports, playbookLookup.rules, tzOf, range, pnlOf, currency, fillCounts]);
 
   const dimensionContext = useMemo<DimensionContext>(
     () => ({
       reportByDate: new Map(dailyReports.map((r) => [r.report_date, r])),
-      checkinsByPosition,
       weekGradeByWeek: weekGrades,
       rules: playbookLookup.rules,
       insightsByTrade,
@@ -371,7 +355,7 @@ export function ReportsWorkbench({
       accountNames: accountLabels(accounts),
       customDimensions: extraDimensions,
     }),
-    [dailyReports, checkinsByPosition, weekGrades, playbookLookup, insightsByTrade, accounts, extraDimensions],
+    [dailyReports, weekGrades, playbookLookup, insightsByTrade, accounts, extraDimensions],
   );
 
   const metricContext = useMemo(

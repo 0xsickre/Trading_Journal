@@ -3,7 +3,6 @@ import type { BreakevenRange } from "./breakeven";
 import type { EnrichedTrade } from "./enriched-trade";
 import { bucketByPeriod, type PeriodRow } from "./period-stats";
 import { isTradingDayKey, type DayZone } from "./time";
-import { isInterference, type PositionCheckin } from "./position-checkin";
 import { weekDayKeys, weekEndOfWeekStart } from "./weekly-review";
 
 /**
@@ -25,8 +24,6 @@ export type WeekRecap = {
   net: number;
   wins: number;
   losses: number;
-  /** Of those, the ones whose holding window crossed a Saturday or Sunday. */
-  weekendHolds: number;
   /** Days with a daily entry, out of `journalledOutOf`. */
   journalledDays: number;
   /**
@@ -38,12 +35,6 @@ export type WeekRecap = {
    * (`isTradingDayKey`), and a weekend entry is neither a miss nor a bonus.
    */
   journalledOutOf: number;
-  /** Positions that got at least one check-in during the week. */
-  checkedPositions: number;
-  /** Of those, ones with a recorded intervention on any day of the week. */
-  interferedPositions: number;
-  /** Positions whose thesis was recorded as weakened or invalidated. */
-  thesisSlippedPositions: number;
 
   /*
    * The four below are MEASUREMENTS, and the distinction is the reason they are
@@ -78,13 +69,10 @@ export type WeekRecap = {
  *
  * A position opened in week 1 and closed in week 2 belongs to week 2's numbers,
  * because that is the week the money landed — and the two screens must never
- * print different figures for the same span. Its check-ins are a separate
- * question and are counted by their own date, so week 1 still gets credit for
- * the days it judged the position.
+ * print different figures for the same span.
  */
 export function buildWeekRecap(
   trades: readonly EnrichedTrade[],
-  checkins: readonly PositionCheckin[],
   reportDates: ReadonlySet<string>,
   weekStart: string,
   range?: BreakevenRange,
@@ -93,17 +81,6 @@ export function buildWeekRecap(
   const inWeek = trades.filter(
     (t) => t.closeDay >= weekStart && t.closeDay <= weekEnd,
   );
-
-  const checked = new Set<string>();
-  const interfered = new Set<string>();
-  const slipped = new Set<string>();
-  for (const c of checkins) {
-    if (c.report_date < weekStart || c.report_date > weekEnd) continue;
-    checked.add(c.position_id);
-    if (isInterference(c.touched)) interfered.add(c.position_id);
-    if (c.thesis_state === "weakened" || c.thesis_state === "invalidated")
-      slipped.add(c.position_id);
-  }
 
   const wins = inWeek.filter((t) => t.outcome === "win").length;
   const losses = inWeek.filter((t) => t.outcome === "loss").length;
@@ -125,12 +102,8 @@ export function buildWeekRecap(
     net: inWeek.reduce((s, t) => s + t.pnl, 0),
     wins,
     losses,
-    weekendHolds: inWeek.filter((t) => t.weekendHold).length,
     journalledDays: journalDays.filter((d) => reportDates.has(d)).length,
     journalledOutOf: journalDays.length,
-    checkedPositions: checked.size,
-    interferedPositions: interfered.size,
-    thesisSlippedPositions: slipped.size,
 
     // From the counts above rather than from `stats`, so the ratio can never
     // contradict the two numbers printed beside it.

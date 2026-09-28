@@ -156,7 +156,5 @@ describe("stalePlan", () => {
 
 // `dayKeysBetween` and its four tests stood here. It existed only to sweep the
 // holding window looking for a day marked as micromanaged; the check-in now
-// names its position, so there is no window to sweep and no caller left. The
-// equivalent day-walk that survives is `daysBetweenKeys` in `open-positions.ts`,
-// which is tested there — and walks day keys rather than epoch days, so DST
-// cannot round it off by one.
+// named its position, so there was no window to sweep and no caller left. The
+// check-in itself left with the swing book (H1).

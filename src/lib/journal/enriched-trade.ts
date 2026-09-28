@@ -11,8 +11,6 @@
 import type { RealizedTrade } from "./analytics";
 import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
 import { numberFieldValue as numField } from "./field-values";
-import { daysBetweenKeys } from "./open-positions";
-import { spansWeekend } from "./weekend-hold";
 import { excursionFromTrade, type Excursion } from "./excursion";
 import { riskIntentGap, riskMoneyAtEntry, riskPctTaken } from "./risk-taken";
 import { dayKeyIn, weekKeyIn, zonedHour, zoneTz, type DayZone } from "./time";
@@ -21,9 +19,9 @@ import { dayKeyIn, weekKeyIn, zonedHour, zoneTz, type DayZone } from "./time";
  * The journal fields downstream consumers join against — process, not prose.
  *
  * `micromanage`, `day_grade` and `rule_broken` used to be here. The first moved
- * to `tj_position_checkins` (a fact about a position, not about a day); the
- * other two moved to the weekly review. What is left is what a DAY can actually
- * answer about a multi-day hold.
+ * to `tj_position_checkins` (a fact about a position, not about a day, and
+ * retired with the swing book in H1); the other two moved to the weekly review.
+ * What is left is what a DAY can actually answer.
  */
 export type DailyReportLite = {
   report_date: string;
@@ -58,35 +56,6 @@ export type EnrichedTrade = {
   /** Day key of the CLOSE — where the money lands. */
   closeDay: string;
   closeWeek: string;
-  /**
-   * Whether the holding window crossed a Saturday or Sunday.
-   *
-   * Derived here rather than stored on the row — see `weekend-hold.ts`. It rides
-   * along on every enriched trade because the weekend is a DIFFERENT risk from
-   * an overnight gap, not a longer one, and a trader who crosses one rarely is
-   * running a small self-selected sample worth measuring against the rest.
-   */
-  weekendHold: boolean;
-  /**
-   * Days held, counted in SESSIONS and inclusive of the open day.
-   *
-   * Not `durationDays`, which is the hold in hours divided by 24. A position
-   * opened at 15:50 Monday and closed at 09:10 Tuesday lasted 0.7 of a day and
-   * spanned two of them — and a time stop written as "3 days" means three
-   * sessions, not seventy-two hours.
-   */
-  heldDays: number;
-  /** The exit deadline written on the trade at entry, if one was. */
-  timeStopDays: number | null;
-  /**
-   * Held STRICTLY past that deadline.
-   *
-   * On the day the time stop is reached the plan is still being followed; the
-   * breach belongs to the day it was broken. Same boundary as
-   * `openPositionsOn`, and deliberately the same — a position flagged live on
-   * `/daily` must not un-flag itself once it closes.
-   */
-  pastTimeStop: boolean;
   entryFills: number;
   exitFills: number;
   size: number | null;
@@ -142,8 +111,6 @@ export function enrichTrades(
 
     const openDay = dayKeyIn(t.row.stats?.opened_at ?? t.closedAt, tz);
     const closeDay = dayKeyIn(t.closedAt, tz);
-    const heldDays = daysBetweenKeys(openDay, closeDay);
-    const timeStopDays = numField(t.row, "time_stop_days");
 
     return {
       trade: t,
@@ -163,10 +130,6 @@ export function enrichTrades(
       openHour: zonedHour(t.row.stats?.opened_at ?? null, zoneTz(tz)),
       closeDay,
       closeWeek: weekKeyIn(t.closedAt, tz),
-      weekendHold: spansWeekend(t.row.stats?.opened_at ?? null, t.closedAt, zoneTz(tz)),
-      heldDays,
-      timeStopDays,
-      pastTimeStop: timeStopDays != null && heldDays > timeStopDays,
       entryFills: fills?.entries ?? 0,
       exitFills: fills?.exits ?? 0,
       size: numField(t.row, "position_size"),

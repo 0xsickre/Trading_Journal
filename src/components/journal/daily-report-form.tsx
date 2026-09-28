@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition, type MouseEvent } from "react";
+import { useEffect, useState, useTransition, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { srLatn } from "date-fns/locale/sr-Latn";
@@ -44,10 +44,6 @@ import {
   TrackerStageSection,
   type TrackerDayData,
 } from "@/components/journal/tracker-checklist";
-import {
-  OpenPositionsCard,
-  type OpenPositionView,
-} from "@/components/journal/open-positions-card";
 
 type FormState = SaveDailyReportInput;
 
@@ -73,21 +69,12 @@ export function DailyReportForm({
   timezone,
   activeGoal,
   tracker,
-  positions,
 }: {
   report: DailyReport | null;
   reportDate: string;
   today: string;
   timezone: string;
   activeGoal: FocusGoal | null;
-  /**
-   * Positions that were open on this day, with the answers already given.
-   *
-   * They render inside this form rather than beside it because `tj_lock_day`
-   * seals the report, the checklist and now these check-ins in one call, and the
-   * one `disabled` fieldset below is what makes a sealed day read-only.
-   */
-  positions: OpenPositionView[];
   /**
    * The tracker checklist for this same day.
    *
@@ -124,21 +111,7 @@ export function DailyReportForm({
       e.preventDefault();
   }
 
-  // Read off the positions rather than the form: the day's remaining work is
-  // judging what was open, and the answers are saved on tap, so this counts
-  // stored rows and does not need to live in form state.
-  const complete = useMemo(
-    () =>
-      isDayComplete(
-        {
-          openCount: positions.length,
-          judgedCount: positions.filter((p) => p.checkin?.thesis_state != null)
-            .length,
-        },
-        activeGoal,
-      ),
-    [positions, activeGoal],
-  );
+  const complete = isDayComplete(activeGoal);
 
   const isToday = reportDate === today;
   const lowMental = form.mental_temp != null && form.mental_temp < 3;
@@ -267,14 +240,6 @@ export function DailyReportForm({
           </Alert>
         )}
 
-      {/* First, because it is the only thing on this page whose answer actually
-          changes from one day to the next while a swing is running. */}
-      <OpenPositionsCard
-        positions={positions}
-        reportDate={reportDate}
-        locked={tracker.locked}
-      />
-
       {/* The tracker checklist is the backbone of the day, not an extra — it is
           what `tj_lock_day` scores. The trade-stage rules stand on their own
           because they still apply on a day you did not trade: "I only trade in
@@ -290,8 +255,7 @@ export function DailyReportForm({
         <CardHeader>
           <CardTitle className="text-base">Pre nego što uđeš</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Filter, ne dnevnik. Oba pitanja su o tome šta ćeš tek uraditi, zato
-            stoje ispod pozicija, a ne iznad njih.
+            Filter, ne dnevnik. Oba pitanja su o tome šta ćeš tek uraditi.
           </p>
         </CardHeader>
         <CardContent className="space-y-5">

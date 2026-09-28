@@ -16,13 +16,6 @@ import { arrayFieldValue, stringFieldValue } from "../field-values";
 import { isShortDirection } from "../plan-calculations";
 import { SETUP_GRADES, scorable, setupScoreFromTrade } from "../setup-score";
 import type { RuleLookup } from "./rule-lookup";
-import {
-  THESIS_STATES,
-  TOUCHED_STATES,
-  worstTouched,
-  type PositionCheckin,
-  type ThesisState,
-} from "../position-checkin";
 import type { EnrichedTrade } from "../enriched-trade";
 import type { DailyReportLite } from "../enriched-trade";
 import { isoWeekdayOfDayKey } from "../time";
@@ -34,14 +27,6 @@ export type DimensionGroup = "trade" | "derived" | "process" | "insight" | "cust
 
 export type DimensionContext = {
   reportByDate: Map<string, DailyReportLite>;
-  /**
-   * Position id → that position's daily check-ins.
-   *
-   * Position-scoped, not day-scoped, and that is the whole point: the old
-   * `micromanage` column lived on the DAY, so holding two positions and touching
-   * one tagged both — the untouched one convicted by the calendar.
-   */
-  checkinsByPosition?: Map<string, PositionCheckin[]>;
   /**
    * Week start (`yyyy-MM-dd`, Monday) → the grade given in that week's review.
    *
@@ -496,90 +481,9 @@ const derivedDimensions: Dimension[] = [
 
 // --- process dimensions ----------------------------------------------------
 //
-// These used to be a family built by one `processDimension(key, label, window,
-// …)` helper, where `window` chose whether to read the trade's open day, its
-// close day, or every day of the hold. The window mattered because the journal
-// was per-DAY and a trade spans several: reading the wrong end mis-attributed
-// the process to the wrong decision.
-//
-// Two of the three windows are gone with the columns that needed them. `close`
-// existed for `day_grade`, which is now weekly. `hold` existed for
-// `micromanage`, which is now per-position and joins on the position id rather
-// than sweeping a date range. What is left reads a single day — the open day,
-// for a judgement made at entry — so the helper collapses into the one
-// dimension that still uses it.
-
-/**
- * Was this position managed, or left alone?
- *
- * Hand-written rather than a `processDimension`, because it is the one process
- * dimension that no longer reads the DAY. It used to: `micromanage` was a column
- * on `tj_daily_reports` and this dimension let the worst state across the
- * holding window win — so holding two positions and touching one tagged BOTH as
- * violated, the untouched one convicted by the calendar.
- *
- * Now each check-in names its position, so the window collapses over that
- * position's own rows. The worst-wins rule stays, and stays deliberate: touching
- * a position once in five days is the fact worth grouping on, and averaging it
- * across the quiet days would hide it.
- */
-const touchedDimension: Dimension = {
-  key: "touched",
-  label: "Position managed",
-  group: "process",
-  order: [...TOUCHED_STATES],
-  // No check-in at all means the question was never answered — unknown, not a
-  // value, so the trade drops out rather than landing in a bucket that would
-  // read as a finding.
-  valueOf: (t, ctx) => {
-    const rows = ctx.checkinsByPosition?.get(t.id);
-    if (!rows || rows.length === 0) return null;
-    return worstTouched(rows.map((r) => r.touched));
-  },
-};
-
-/**
- * Did the reason for holding survive?
- *
- * Same worst-wins shape, over the thesis instead of the intervention, and the
- * ordering runs intact → invalidated so a table reads left-to-right as the
- * thesis decaying. Grouping on it answers the question a swing book exists to
- * answer: what happens to the trades I keep holding after the reason is gone.
- */
-const thesisDimension: Dimension = {
-  key: "thesis_state",
-  label: "Thesis at close",
-  group: "process",
-  order: [...THESIS_STATES],
-  valueOf: (t, ctx) => {
-    const rows = ctx.checkinsByPosition?.get(t.id);
-    if (!rows || rows.length === 0) return null;
-    let worst: ThesisState | null = null;
-    for (const r of rows) {
-      const s = r.thesis_state;
-      if (s == null) continue;
-      if (worst == null || THESIS_STATES.indexOf(s) > THESIS_STATES.indexOf(worst))
-        worst = s;
-    }
-    return worst;
-  },
-};
-
-/**
- * Did the holding window cross a weekend?
- *
- * Derived on every enriched trade (see `weekend-hold.ts`), so this is a lookup,
- * not a join. It earns a dimension because a weekend gap is a DIFFERENT risk
- * from an overnight one rather than a longer one — and for a trader who crosses
- * one rarely, that rare subset is exactly the one worth grouping out.
- */
-const weekendHoldDimension: Dimension = {
-  key: "weekend_hold",
-  label: "Weekend hold",
-  group: "derived",
-  order: ["Held over weekend", "Flat by Friday"],
-  valueOf: (t) => (t.weekendHold ? "Held over weekend" : "Flat by Friday"),
-};
+// The swing ones — position managed, thesis at close, weekend hold, time stop in
+// days — read the per-position check-ins and a hold across days, and went with
+// the swing book (H1, 28.09.2026).
 
 /**
  * How ready you said you were, read from the day you ENTERED.
@@ -606,30 +510,6 @@ const mentalTempDimension: Dimension = {
 };
 
 /**
- * Did the position outlive the exit deadline it was given?
- *
- * The trade only enters the table if it HAD a deadline — a trade with no time
- * stop is not "within" one, it is unmeasured, and bucketing it as compliant
- * would flatter every trade written before the field existed.
- *
- * Worth grouping because a time stop is the one rule a swing trader breaks
- * without noticing. Moving a stop is an act; sitting on a position for a fourth
- * day is the absence of one, and it is invisible unless something counts it.
- */
-const timeStopDimension: Dimension = {
-  key: "time_stop_breached",
-  label: "Time stop",
-  group: "derived",
-  order: ["Exited in time", "Held past it"],
-  valueOf: (t) =>
-    t.timeStopDays == null
-      ? null
-      : t.pastTimeStop
-        ? "Held past it"
-        : "Exited in time",
-};
-
-/**
  * The grade you gave the week this trade closed in.
  *
  * The successor to the `day_grade` dimension, which Phase 2 removed. It reads
@@ -653,10 +533,6 @@ const weekGradeDimension: Dimension = {
 };
 
 const processDimensions: Dimension[] = [
-  touchedDimension,
-  thesisDimension,
-  weekendHoldDimension,
-  timeStopDimension,
   weekGradeDimension,
   mentalTempDimension,
 ];

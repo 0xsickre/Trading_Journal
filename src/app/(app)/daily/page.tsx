@@ -2,8 +2,6 @@ import { primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getDailyReport } from "@/lib/journal/daily-report-queries";
 import { getActiveFocusGoal } from "@/lib/journal/focus-goal-queries";
-import { getPositionCheckinsForDay } from "@/lib/journal/position-checkin-queries";
-import { openPositionsOn } from "@/lib/journal/open-positions";
 import { stringFieldValue } from "@/lib/journal/field-values";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getCheckins, getTrackerRules } from "@/lib/journal/tracker/queries";
@@ -44,7 +42,6 @@ import {
   type DayTradeRow,
 } from "@/components/journal/day-stats-card";
 import type { TrackerDayData } from "@/components/journal/tracker-checklist";
-import type { OpenPositionView } from "@/components/journal/open-positions-card";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
 import { ReviewGapsCard } from "@/components/journal/review-gaps-card";
@@ -91,7 +88,6 @@ export default async function DailyPage({
     report,
     activeGoal,
     checkinsByDay,
-    positionCheckins,
   ] = await Promise.all([
     accountsPromise,
     dayPromise,
@@ -110,7 +106,6 @@ export default async function DailyPage({
     dayPromise.then(({ reportDate }) =>
       getCheckins(addDaysToDayKey(reportDate, -(TRACKER_SPAN_DAYS - 1)), reportDate),
     ),
-    dayPromise.then(({ reportDate }) => getPositionCheckinsForDay(reportDate)),
   ]);
   // The day's money is summed across accounts, so it needs ONE currency;
   // with two it is left unsummed rather than printed in the primary's.
@@ -188,33 +183,6 @@ export default async function DailyPage({
     net: t.net,
     r: t.r,
     qty: tradeVolume(t),
-  }));
-
-  /**
-   * The positions this day has to answer for.
-   *
-   * Derived from `trades`, which this page already loaded for the day's numbers
-   * — a second round trip for a list computable from the first is a round trip
-   * spent on nothing. Only the seven values the card renders cross to the
-   * client: a `TradeRow` carries every custom field on the trade, and shipping
-   * whole records to draw a heading is how a page gets slow quietly.
-   */
-  const openPositions: OpenPositionView[] = openPositionsOn(
-    trades,
-    reportDate,
-    tzOf,
-  ).map((p) => ({
-    id: p.id,
-    label: p.label,
-    daysInTrade: p.daysInTrade,
-    timeStopDays: p.timeStopDays,
-    pastTimeStop: p.pastTimeStop,
-    // Read through the field accessor, not off the row: thesis and invalidation
-    // are columns today, but the same accessor covers them if they are ever
-    // re-declared as custom fields.
-    thesis: stringFieldValue(p.row, "thesis"),
-    invalidation: stringFieldValue(p.row, "invalidation"),
-    checkin: positionCheckins.get(p.id) ?? null,
   }));
 
   /**
@@ -302,7 +270,6 @@ export default async function DailyPage({
         timezone={timezone}
         activeGoal={activeGoal}
         tracker={tracker}
-        positions={openPositions}
       />
     </div>
   );

@@ -10,7 +10,6 @@
 import type { InsightContext } from "./context";
 import { DAY_RULES } from "./day-rules";
 import { PROCESS_RULES } from "./process-rules";
-import { SWING_RULES } from "./swing-rules";
 import { TRADE_RULES } from "./trade-rules";
 import { WEEK_RULES } from "./week-rules";
 import { sortInsights, type Insight, type InsightRule } from "./types";
@@ -21,14 +20,11 @@ export type Rule = InsightRule<InsightContext>;
 export const TZ_RULES: Rule[] = [...TRADE_RULES, ...DAY_RULES, ...WEEK_RULES];
 
 /**
- * Patterns this journal has that TradeZella structurally cannot.
- *
- * `SWING_RULES` join on the thesis, the time stop and the per-position
- * check-ins — three things that only exist because the trade is held across
- * days. There is nothing to approximate them with in a book that flattens
- * every night.
+ * Patterns this journal has that TradeZella structurally cannot. The swing
+ * rules that joined on the per-position check-ins, the time stop in days and
+ * the weekend went with the swing book (H1, 28.09.2026).
  */
-export const OWN_RULES: Rule[] = [...PROCESS_RULES, ...SWING_RULES];
+export const OWN_RULES: Rule[] = [...PROCESS_RULES];
 
 export const ALL_RULES: Rule[] = [...TZ_RULES, ...OWN_RULES];
 

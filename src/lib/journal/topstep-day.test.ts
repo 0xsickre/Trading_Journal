@@ -10,7 +10,6 @@ import { enrichTrades } from "./enriched-trade";
 import { tradingDayKeysFromRows } from "./activity";
 import { periodBounds, tradeDayKey } from "./trades-view";
 import { reviewGaps } from "./review-gaps";
-import { openPositionsOn } from "./open-positions";
 import { dailyPnlByInstrument, spansOf } from "./co-exposure";
 import type { CashEvent } from "./balance";
 import type { TradeRow } from "./types";
@@ -143,16 +142,13 @@ describe("today and this week follow the primary account's rule (D3)", () => {
   });
 });
 
-describe("cash, positions and exposure use the same day", () => {
+describe("cash and exposure use the same day", () => {
   it("a deposit after 17:00 CT opens the next Topstep day's balance", () => {
     const ev = { account_id: "ts", occurred_at: "2026-09-28T22:30:00Z", amount: 500 } as unknown as CashEvent;
     expect([...cashByDay([ev], zoneOf).keys()]).toEqual(["2026-09-29"]);
   });
 
-  it("open positions, spans and per-instrument days", () => {
-    const open = row("ts-open", "ts", EVENING_OPEN, null, 0);
-    expect(openPositionsOn([open], "2026-09-28", zoneOfRow)).toEqual([]);
-    expect(openPositionsOn([open], "2026-09-29", zoneOfRow).map((p) => p.id)).toEqual(["ts-open"]);
+  it("spans and per-instrument days", () => {
     expect(spansOf([tsEvening], zoneOfRow, "2026-09-30")).toEqual([
       { instrument: "MNQ", openDay: "2026-09-29", closeDay: "2026-09-29" },
     ]);

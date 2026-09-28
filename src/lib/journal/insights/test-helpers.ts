@@ -1,5 +1,4 @@
 import type { RealizedTrade } from "../analytics";
-import type { PositionCheckin } from "../position-checkin";
 import type { PositionStat, TradeRow } from "../types";
 import { buildInsightContext, type DailyReportLite } from "./context";
 import {
@@ -105,9 +104,8 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     custom: spec.macroAlign ? { macro_align: spec.macroAlign } : {},
     cot_filter: spec.cotFilter ?? null,
     time_stop_days: spec.timeStopDays ?? null,
-    // Defaults to a written thesis so the `entry_without_thesis` rule stays
-    // silent in every fixture that is not about it — a rule that fires across
-    // unrelated suites teaches nothing except to ignore it.
+    // Defaults to a written thesis, as a real entry has one. The rule that read
+    // it (`entry_without_thesis`) left with the swing insights in H1.
     thesis: spec.thesis === undefined ? "Written" : spec.thesis,
     scale_out_plan: spec.scaleOutPlan ?? null,
     scale_out_levels: spec.scaleOutLevels ?? [],
@@ -139,30 +137,12 @@ export function mkReport(
   };
 }
 
-/** A position's check-in for one day. `position_id` is the trade id. */
-export function mkCheckin(
-  position_id: string,
-  report_date: string,
-  overrides: Partial<PositionCheckin> = {},
-): PositionCheckin {
-  return {
-    id: `${position_id}-${report_date}`,
-    position_id,
-    report_date,
-    thesis_state: null,
-    touched: null,
-    note: null,
-    ...overrides,
-  };
-}
-
 export function ctxOf(
   trades: RealizedTrade[],
   extra: {
     reports?: DailyReportLite[];
     allRows?: TradeRow[];
     fillCounts?: Map<string, { entries: number; exits: number }>;
-    checkins?: PositionCheckin[];
   } = {},
 ) {
   return buildInsightContext({
@@ -171,7 +151,6 @@ export function ctxOf(
     reports: extra.reports,
     allRows: extra.allRows,
     fillCounts: extra.fillCounts,
-    checkins: extra.checkins,
     currency: "USD",
     rules: gradedRules(),
   });

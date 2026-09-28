@@ -3,7 +3,6 @@ import { computeStats, dailyPnl, toRealized } from "./analytics";
 import { resolveBreakevenRange, type BreakevenConfig } from "./breakeven";
 import { unpricedClosedCount } from "./money-provenance";
 import { narrowPositionStat } from "./types";
-import { openPositionsOn } from "./open-positions";
 import type { Database } from "@/lib/supabase/types";
 import type { TradeRow } from "./types";
 
@@ -259,45 +258,5 @@ describe("day by day, in the account's zone", () => {
     const total = [...dailyPnl(toRealized(TRADES), "net", () => TZ).values()]
       .reduce((s, v) => s + v, 0);
     expect(total).toBeCloseTo(640.5, 10);
-  });
-});
-
-describe("otvorena pozicija", () => {
-  const only6 = (dayKey: string) =>
-    openPositionsOn(TRADES, dayKey, () => TZ).find(
-      (p) => p.id === "793c67d5-c55a-46b6-9baa-8ff2290b9050",
-    );
-
-  it("THE CLOSE DAY COUNTS AS OPEN — deliberately, and easy to assume otherwise", () => {
-    // I wrote this backwards first. Only #2 was opened on 3 March, and it
-    // closed the same day — so `openPositionsOn` returns it anyway.
-    //
-    // That is deliberate: the position was alive that day, it could have been
-    // managed, and its thesis was either right or wrong that morning. Leaving
-    // it out would make the last day of every trade — often the one that
-    // decided the outcome — the one day nobody recorded.
-    const treci = openPositionsOn(TRADES, "2026-03-03", () => TZ);
-    expect(treci).toHaveLength(1);
-    expect(treci[0].id).toBe("8323ca02-132f-4b21-9c1e-4a58039aefc1");
-  });
-
-  it("before anything is opened the list is empty", () => {
-    expect(openPositionsOn(TRADES, "2026-03-01", () => TZ)).toHaveLength(0);
-  });
-
-  it("6 March is the third day held, and the time stop is NOT breached", () => {
-    // Opened on the 4th, so the 4th, 5th and 6th are three sessions — 1-based
-    // counting. The stop is 3 days; on the day it is reached the plan is still
-    // being kept, and the breach belongs to the day it is exceeded.
-    const p = only6("2026-03-06")!;
-    expect(p.daysInTrade).toBe(3);
-    expect(p.timeStopDays).toBe(3);
-    expect(p.pastTimeStop).toBe(false);
-  });
-
-  it("7 March is the fourth day, and then it IS breached", () => {
-    const p = only6("2026-03-07")!;
-    expect(p.daysInTrade).toBe(4);
-    expect(p.pastTimeStop).toBe(true);
   });
 });

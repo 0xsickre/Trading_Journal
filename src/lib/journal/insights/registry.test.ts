@@ -121,3 +121,24 @@ describe("sortInsights / groupInsights", () => {
     expect(groups[1].ruleId).toBe("clean_hold");
   });
 });
+
+describe("the swing insights are gone (H1, 28.09.2026)", () => {
+  it("no rule reads a check-in, a time stop in days, a weekend or a swing thesis", () => {
+    const ids = new Set(ALL_RULES.map((r) => r.id));
+    for (const gone of [
+      "acted_against_the_plan",
+      "past_time_stop",
+      "unplanned_partial",
+      "entry_without_thesis",
+      "weekend_hold_record",
+    ]) {
+      expect(ids.has(gone)).toBe(false);
+    }
+  });
+
+  it("24 rules remain: trade 13, day 6, week 3, portfolio 2", () => {
+    const by = (level: string) => ALL_RULES.filter((r) => r.level === level).length;
+    expect(ALL_RULES).toHaveLength(24);
+    expect([by("trade"), by("day"), by("week"), by("portfolio")]).toEqual([13, 6, 3, 2]);
+  });
+});

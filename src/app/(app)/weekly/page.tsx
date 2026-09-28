@@ -1,7 +1,6 @@
 import { accountFilterOptions, primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getDailyReportDatesInRange } from "@/lib/journal/daily-report-queries";
-import { getPositionCheckinsInRange } from "@/lib/journal/position-checkin-queries";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getWeeklyReview } from "@/lib/journal/weekly-review-queries";
 import { toRealized } from "@/lib/journal/analytics";
@@ -68,7 +67,6 @@ export default async function WeeklyPage({
     accounts,
     { primary, timezone, currentWeekStart, weekStart, clamped },
     trades,
-    checkins,
     reportDates,
     review,
     previousReview,
@@ -77,13 +75,10 @@ export default async function WeeklyPage({
   ] = await Promise.all([
     accountsPromise,
     weekPromise,
-    // NOT ranged, unlike the two below: the recap counts positions OPENED in an
-    // earlier week, the R figures need the trade rows anyway, and this read is
-    // memoized per request and shared with every other screen.
+    // NOT ranged, unlike the one below: the R figures need the trade rows
+    // anyway, and this read is memoized per request and shared with every
+    // other screen.
     getTradesWithStats(),
-    weekPromise.then(({ weekStart }) =>
-      getPositionCheckinsInRange(weekStart, weekEndOfWeekStart(weekStart)),
-    ),
     weekPromise.then(({ weekStart }) =>
       getDailyReportDatesInRange(weekStart, weekEndOfWeekStart(weekStart)),
     ),
@@ -131,7 +126,6 @@ export default async function WeeklyPage({
   const enriched = enrichTrades(realized, { tzOf, range: breakevenRange });
   const recap = buildWeekRecap(
     enriched,
-    checkins,
     new Set(reportDates),
     weekStart,
     breakevenRange,

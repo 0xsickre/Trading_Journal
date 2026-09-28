@@ -21,20 +21,14 @@ const goal = {
 };
 
 describe("isDayComplete", () => {
-  it("is complete when every open position was judged", () => {
-    expect(isDayComplete({ openCount: 2, judgedCount: 2 }, goal)).toBe(true);
-    expect(isDayComplete({ openCount: 2, judgedCount: 1 }, goal)).toBe(false);
-  });
-
-  it("is complete with nothing open — there is nothing to answer", () => {
-    expect(isDayComplete({ openCount: 0, judgedCount: 0 }, goal)).toBe(true);
+  it("is complete once a focus goal exists — no position is left to judge (H1)", () => {
+    expect(isDayComplete(goal)).toBe(true);
   });
 
   it("is never complete without an active focus goal", () => {
     // The day is measured against the goal. With no goal set, "complete" has
     // nothing to be complete against.
-    expect(isDayComplete({ openCount: 0, judgedCount: 0 }, null)).toBe(false);
-    expect(isDayComplete({ openCount: 2, judgedCount: 2 }, null)).toBe(false);
+    expect(isDayComplete(null)).toBe(false);
   });
 });
 

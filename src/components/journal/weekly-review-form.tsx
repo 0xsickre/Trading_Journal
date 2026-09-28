@@ -565,7 +565,7 @@ function WeekRecapCard({
   timezone: string;
 }) {
   const nothingHappened =
-    recap.closed === 0 && recap.checkedPositions === 0 && recap.journalledDays === 0;
+    recap.closed === 0 && recap.journalledDays === 0;
 
   return (
     <Card>
@@ -611,10 +611,6 @@ function WeekRecapCard({
                   value={`${recap.journalledDays} / ${recap.journalledOutOf}`}
                   hint="pon–pet"
                 />
-                <Stat label="Proverenih pozicija" value={String(recap.checkedPositions)} />
-                <Stat label="Dirano" value={String(recap.interferedPositions)} />
-                <Stat label="Teza oslabila" value={String(recap.thesisSlippedPositions)} />
-                <Stat label="Držano preko vikenda" value={String(recap.weekendHolds)} />
               </dl>
             </section>
           </div>

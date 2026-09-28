@@ -7,7 +7,6 @@ import { ensureDefaults } from "@/lib/journal/ensure-defaults";
 import { getFieldDefs } from "@/lib/journal/field-defs";
 import { getTrackerRules, getCheckins } from "@/lib/journal/tracker/queries";
 import { TRACKER_SPAN_DAYS } from "@/lib/journal/tracker/compliance";
-import { getPositionCheckins } from "@/lib/journal/position-checkin-queries";
 import { getPlaybooks, getPositionRules } from "@/lib/journal/playbooks";
 import { getUserPrefs } from "@/lib/journal/user-prefs";
 import { getDashboardTemplates } from "@/lib/journal/dashboard-template-queries";
@@ -52,7 +51,6 @@ export default async function DashboardPage() {
     fieldDefs,
     trackerRules,
     playbooks,
-    positionCheckins,
     userPrefs,
     dashboardTemplates,
     checkinsByDay,
@@ -73,10 +71,6 @@ export default async function DashboardPage() {
     // Follow rate is 40 % of process adherence, and a retired rule's answers are
     // real observations — same reason the reports screen loads them all.
     getPlaybooks({ includeDeleted: true, positionRules: positionRulesPromise }),
-    // Unbounded, unlike the tracker check-ins below: those fill a 28-week
-    // heatmap, while these are joined to trades by position id and a trade in
-    // range can carry answers given outside it.
-    getPositionCheckins(),
     // Which dashboard sections this user has switched off. A missing row is the
     // normal state and answers "none", so a brand-new account gets the whole
     // page rather than an empty one.
@@ -112,7 +106,6 @@ export default async function DashboardPage() {
         cashEvents={cashEvents}
         loggedDates={loggedDates}
         dailyReports={dailyReports}
-        positionCheckins={positionCheckins}
         fillCounts={fillCounts}
         fieldDefs={fieldDefs}
         trackerRules={trackerRules}

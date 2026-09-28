@@ -4,9 +4,9 @@ import { isoWeekdayOfDayKey } from "./time";
 
 // `DAY_GRADES`, `MICROMANAGE_*` and `MARKET_TYPE*` lived here. The grade moved
 // to the weekly review (rating a day mid-hold reads the P&L), and "did I touch
-// it" moved to the position — see `position-checkin.ts`, where it also gained
-// the `added` state the day-level version could not express. Market type had no
-// reader at all: nothing grouped, scored or surfaced it.
+// it" moved to a per-position check-in, which left with the swing book (H1) — a
+// day trader is flat by the close. Market type had no reader at all: nothing
+// grouped, scored or surfaced it.
 
 export type DailyReport = {
   id: string;
@@ -68,25 +68,15 @@ export function isFriday(date: string): boolean {
 /**
  * Is there anything left to answer for this day?
  *
- * This replaces `isReportComplete`, and the change of subject is the point. The
- * old question was "did you grade the day and say whether you broke a rule" —
- * both of which are now weekly, because a day mid-hold has no outcome to grade.
- * The daily question that remains is about POSITIONS: every one that was open
- * today should have been judged today.
- *
- * A day with no open positions is complete as soon as a focus goal exists.
- * There is nothing to answer, and inventing something to answer is exactly the
+ * The grade and "did you break a rule" are weekly now, and the per-position
+ * check-in went with the swing book (H1, 28.09.2026): a day trader is flat by
+ * the close, so no position is left to judge. What remains is the focus goal —
+ * the day is measured against it, and with no goal set there is nothing for
+ * "complete" to mean. Inventing something else to answer is exactly the
  * friction that gets journals abandoned.
- *
- * The focus goal still gates it: the day is measured against the goal, and with
- * no goal set there is nothing for "complete" to mean.
  */
-export function isDayComplete(
-  positions: { openCount: number; judgedCount: number },
-  activeGoal: FocusGoal | null,
-): boolean {
-  if (!activeGoal) return false;
-  return positions.judgedCount >= positions.openCount;
+export function isDayComplete(activeGoal: FocusGoal | null): boolean {
+  return activeGoal != null;
 }
 
 export function emptyDailyReport(reportDate: string): DailyReportInput {

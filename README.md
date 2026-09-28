@@ -11,9 +11,10 @@ one thing written from outside is MAE/MFE on a future, from the exchange's own c
 
 **It was built as a swing journal** (FTMO CFDs on MT5, positions held for days), and the move to
 day trading is under way. **FTMO mode and the MT5 statement import are gone** (H1, 28.09.2026: no
-FTMO or CFD trade was in the book); their columns stay in the database, only the code went. The
-TradingView backtest path still works. What is still measured on swing terms — the day boundary, the `/daily` check-ins, the
-hold-time buckets, several insights — is listed item by item and split into six phases, F1–F6, in
+FTMO or CFD trade was in the book); their columns stay in the database, only the code went. So are
+the per-position check-ins on `/daily` and the five swing insights (thesis, time stop, weekend). The
+TradingView backtest path still works. What is still measured on swing terms — the hold-time
+buckets, a few insights — is listed item by item and split into six phases, F1–F6, in
 [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md). This README describes the code as it is,
 swing leftovers included.
 
@@ -27,16 +28,16 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 166 of the
-3,615 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 165 of the
+3,482 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
 |---|---|
-| Daily, weekly, tracker, focus goal | 109 |
+| Daily, weekly, tracker, focus goal | 110 |
 | Mentor-export prompt | 33 |
 | Weekly "Napredak" (progress) and experiment cards | 18 |
-| Weekly insight sentence, open-position check-ins | 3 |
+| Weekly insight sentence | 1 |
 | TradingView snapshot helper, trade images | 3 |
 | Dashboard, `/reports`, journal grid, playbooks, **`/settings`**, `/trades/log`, Topstep banner | **0** |
 
@@ -53,15 +54,15 @@ side and were moved across: one reconcile-row message in `import-wizard.tsx`; th
 fallback in `trade-form.tsx`, which read `Ostalo` two lines under a comment calling it "Other"; the `derived` group label `Izvedeno` among
 English ones in `reports/dimensions.ts`; and two insight sentences in `insights/day-rules.ts` and
 `insights/trade-rules.ts` that opened in English and finished in Serbian. A sixth, the check-in tick
-in `open-positions-card.tsx`, was miscounted rather than misplaced — that card renders inside the daily
-form, so it belongs to the Serbian half and stayed.
+in `open-positions-card.tsx`, was miscounted rather than misplaced — that card rendered inside the
+daily form, so it belonged to the Serbian half; it left with the card in H1.
 
 How the count was taken, since the claim is only worth as much as its method: `npm run lang:count`
 lexes every `.ts`/`.tsx` outside tests into comment / string / code regions, keeps the string regions
 that read as prose rather than as machinery, and scores those for Serbian by diacritics and by a word
 list. A single Serbian word carrying no diacritic can still slip past that, and JSX text between tags
 is not a string literal (the "Bez pregleda" card on `/daily` is Serbian and not in the count), so
-**166 is a floor, not a ceiling**. Three earlier versions of this paragraph said "about 46 of some 1,700", then "153 of
+**165 is a floor, not a ceiling**. Three earlier versions of this paragraph said "about 46 of some 1,700", then "153 of
 1,663", then "185 of 2,191" — each counted by hand, and each had to be replaced rather than quietly
 corrected. That is why the method now ships as a script: a number nobody can re-run is a number
 nobody can check. The figure moved again when the bot bridge was removed, and this time by re-running
@@ -172,7 +173,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 3,077 tests across 184 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,975 tests across 179 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -284,7 +285,7 @@ shows before saving. A test holds both to the same inputs.
 | **Trades** | `tj_positions`, `tj_executions`, `tj_trade_images` |
 | **Accounts and money** | `tj_accounts`, `tj_cash_events`, `tj_instruments` |
 | **Configuration** | `tj_option_lists`, `tj_option_items`, `tj_field_defs`, `tj_user_prefs`, `tj_dashboard_templates` |
-| **Daily process** | `tj_daily_reports`, `tj_focus_goals`, `tj_position_checkins` |
+| **Daily process** | `tj_daily_reports`, `tj_focus_goals`, `tj_position_checkins` (swing history: kept, no longer read or written since H1) |
 | **Weekly process** | `tj_weekly_reviews`, `tj_experiments` |
 | **Tracker** | `tj_tracker_rules`, `tj_tracker_checkins` |
 | **Playbooks** | `tj_playbooks`, `tj_playbook_sections`, `tj_playbook_rules`, `tj_playbook_rule_links`, `tj_position_rules` |
@@ -318,7 +319,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/trades/new`, `/trades/[id]/edit` | Trade form: plan, fills, playbook checklist, psychology, images. In the **order of the decisions**: account, instrument, then the playbook and its checklist, and only then the prices and the risk. **There is no phase control**: planned or active is what the fills say — an entry fill means you are in the trade — so a select that could disagree with the record is gone, and so is "Move to active". The one lifecycle fact the fills cannot know, a MISSED plan, keeps its button. The instrument is **typed, not scrolled** — `instrument-select.tsx` filters the catalog on symbol, name and asset class. On a **Topstep account** the size is whole contracts: risk by the account's rule (§ Topstep), contracts rounded down with the round-turn commission counted and capped at the plan, stop and target in ticks for the TopstepX bracket — "2 MNQ · $202.44 at the stop incl. commission (stop 200 ticks)" — with the mini or micro alternative and a warning when the count is zero, capped, or three stops no longer fit today's DLL. This is the **plan-first** form, for a limit written well before price gets there; the everyday way in is `/trades/log` |
 | `/trades/log` | **Log Trade**, the sidebar's primary action: a trade logged **after it is flat**. Four numbers off the platform — contracts, entry, stop, exit (target optional) — with "N min ago" chips for the entry time; then the setup (playbook), **A / B / C** on execution (stored as `execution_rating` 5 / 3 / 1), what went wrong only on B or C ("No mistake" recorded on an A), emotions, one sentence (`trade_journal_notes`) and the exit chart. The exit reason is read off the prices — stop, target, breakeven or closed early — and written only when the trader's own Exit Reason list has that item (`quick-log.ts`). The numbers may be rough: the day's TopstepX export matches the trade (entry within 0.05 %, entry time within ten minutes) and replaces the fills, and the answers stay |
 | `/trades/[id]/review` | The same setup / A-B-C / mistake / sentence review for a trade that arrived only through the export. One UPDATE of the review columns (`saveTradeReview`), never `tj_save_trade`, which rewrites fills and rule answers on every save |
-| `/daily` | **Bez pregleda** first: the day's closed trades still missing a setup or an A/B/C grade, each a link to its review (`review-gaps.ts`; the 21:25 Telegram reminder in `futures-trading` applies the same rule). Then the day's **pre-market gate** — mental temperature and "am I opening anything new" — the per-position check-ins, the tracker checklist, and the lock. Two answers, down from twenty-one: the rest moved to the position or to the weekly review, and the last six (a macro note and four Douglas-fear checkboxes) **left in Phase E** because nothing ever read them. The check-ins are the swing half of the page: a day trader is flat by the close, so there is rarely a position to check in on (`FAZA_F_DAYTRADING_PLAN.md` #7) |
+| `/daily` | **Bez pregleda** first: the day's closed trades still missing a setup or an A/B/C grade, each a link to its review (`review-gaps.ts`; the 21:25 Telegram reminder in `futures-trading` applies the same rule). Then the day's **pre-market gate** — mental temperature and "am I opening anything new" — the tracker checklist, and the lock. Two answers, down from twenty-one: the rest moved to the position or to the weekly review, and the last six (a macro note and four Douglas-fear checkboxes) **left in Phase E** because nothing ever read them. The day is complete once a focus goal is active. The per-position check-ins **left in H1**: a day trader is flat by the close, so there is no position to check in on |
 | `/calendar` | Monthly P&L grid by day, weekly totals |
 | `/weekly` | Weekly review: week rating, five questions, the week's figures split into money and process (`week-recap.ts`), last week's commitment with the answer to whether it held, and an account filter that refuses to sum two currencies. Unsaved answers are kept per week in the browser (`weekly-draft.ts`) and offered back; leaving a week with unsaved text asks first. **Napredak** (`progress.ts`) is the weekend review in six answers, each beside last week: R per setup, what each mistake cost, A against B/C, hour of entry, MAE of winners / MFE of losers / share of the move kept, and trade number in the day plus the trade after a loss |
 | `/playbooks` | Every setup as one table: Trades / Net P&L / Win Rate / Missed / Expectancy per row |
@@ -400,8 +401,8 @@ two lists sorted separately and zipped is how a bucket's A row ends up beside an
 
 ## Metrics
 
-38 metrics in a single registry (`src/lib/journal/reports/metrics.ts`), 25 built-in dimensions across
-four groups (9 off the trade, 11 derived, 4 process, 1 insight) plus one per custom field. Any
+38 metrics in a single registry (`src/lib/journal/reports/metrics.ts`), 21 built-in dimensions across
+four groups (9 off the trade, 9 derived, 2 process, 1 insight) plus one per custom field. Any
 metric runs against any dimension — which is why there is one report engine instead of ten report
 pages. The tables below list all 38.
 
@@ -972,7 +973,7 @@ verdicts are what stops compliance from following it.
 **Playbooks** hold groups of rules; answering their checklist writes `tj_position_rules`, which feeds
 the follow rate. An unanswered rule counts in neither the numerator nor the denominator.
 
-**Insights** are 29 rules at four levels — trade (16), day (6), week (3), portfolio (4) — reading the
+**Insights** are 24 rules at four levels — trade (13), day (6), week (3), portfolio (2) — reading the
 same enriched trades the reports do. Every rule declares a `minSample` and none fires at n=1. No
 insight is stored in the database: thresholds change, and a stored insight would go stale against a
 changed threshold while still looking authoritative.
@@ -988,7 +989,7 @@ same observation at two degrees and could never both fire. Four merges:
 | Now | Was |
 |---|---|
 | `gave_back_profit` | + `green_to_red`, `green_to_breakeven`, `maximize_your_profit`, `weak_win` |
-| `acted_against_the_plan` | + `thesis_invalidated_but_held`, `touched_an_intact_thesis`, `micromanaged_a_setup` |
+| `acted_against_the_plan` | + `thesis_invalidated_but_held`, `touched_an_intact_thesis`, `micromanaged_a_setup` (removed in H1 with the check-ins it read) |
 | `exceed_avg_hold_time` | + `loser_long_hold` |
 | `clean_hold` | + `no_drawdown` |
 
@@ -997,6 +998,13 @@ its title. Rules were only merged **within one level**: a week-level finding and
 have different subjects, so folding `tilt_week` into `revenge_trade` — or `sizing_problem_day` into
 `unusual_size` — would put a week's id where a trade id belongs. They stay separate for that reason
 rather than for a good story about causes.
+
+**H1 removed five more** (28.09.2026), the swing rules that joined on the per-position check-in, the
+time stop in days, the written thesis and the weekend: `acted_against_the_plan`, `past_time_stop`,
+`unplanned_partial`, `entry_without_thesis` and `weekend_hold_record`. With them went four report
+dimensions (`touched`, `thesis_state`, `weekend_hold`, `time_stop_breached`) and the weekly recap's
+weekend, checked, touched and thesis-slipped counts. A book that is flat by the close has none of
+those things to measure.
 
 ### Topstep
 
@@ -1382,9 +1390,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-3,077 tests across 184 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,443 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 634
-tests in 60 files). The rule is the extension, so no file can land in both. The split exists so that
+2,975 tests across 179 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,360 tests in 120 files) and `components` (environment `jsdom`, files `*.test.tsx`, 615
+tests in 59 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves

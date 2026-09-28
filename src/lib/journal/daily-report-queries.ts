@@ -36,8 +36,7 @@ export async function getDailyReportDates(): Promise<string[]> {
 /**
  * The journalled dates inside one span, for a screen that only asks about it.
  *
- * Same reason as `getPositionCheckinsInRange`: a week needs seven answers, not
- * every date the journal has ever held.
+ * A week needs seven answers, not every date the journal has ever held.
  */
 export async function getDailyReportDatesInRange(
   from: string,
