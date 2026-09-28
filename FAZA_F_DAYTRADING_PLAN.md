@@ -7,7 +7,7 @@ ga zamenjuje. README opisuje stanje koda kakvo jeste — i swing ostatke — dok
 
 **Kako je fajl složen.** Posao je podeljen u **šest faza, F1–F6**; jedna faza = jedna sesija, sa
 jasnim ulazom i izlazom, da nijedna ne zavisi od konteksta koji živi samo u razgovoru. **Detaljan
-plan postoji samo za fazu koja je sledeća** (sada F3). Ostale imaju okvir — cilj, stavke, odluke koje
+plan postoji samo za fazu koja je sledeća** (sada F4). Ostale imaju okvir — cilj, stavke, odluke koje
 treba doneti — i dobijaju detaljan plan tek kad dođu na red, jer svaka zavisi od onoga što je
 prethodna odlučila (npr. F3 i F4 čitaju dan koji F2 tek definiše). Stavke `#1–#23` su u katalogu na
 dnu i brojevi se ne menjaju, jer README upućuje na njih.
@@ -29,6 +29,7 @@ Pravila koja važe za svaki korak ispod, jer su ista kao u ostatku repoa:
 | `b3d6ff4` | Uvoz nalazi plan koji je limit popunio (treće pitanje u `import-match.ts`) |
 | `3e2d1bd` | Topstep nalozi (`topstep.ts`: MLL trail po EOD, DLL, konzistentnost 55 %), veličina u celim ugovorima (`computeTopstepRisk`, `computeFuturesContracts`), Topstep baner, katalog samo fjučersi |
 | `57d5580` | `/trades/log` (upis posle zatvaranja, A/B/C), `/trades/[id]/review`, „Bez pregleda" na `/daily`, „Napredak" na `/weekly`, MLL ne raste pre kraja dana |
+| `a8e63f9` | **F3**: Topstep trejdovi po planu u tracker-u (DLL, budžet na ulazu +10 %, broj ugovora), % osnovica bez Topstep kapitala, `risk_budget_at_entry`, Survival u novcu (trailing MLL), prop-firm headroom i za Topstep, bez „Risk %" na Topstep fjučersu |
 | `3644c05` | **F2**: Topstep nalog broji Topstep dan (17:00 → 17:00 CT) svuda — kalendar, `/daily`, „Bez pregleda", tracker, `/weekly`, dashboard, izveštaji; „danas" po primarnom nalogu (`DayZone`, `todayFor`) |
 | `c0077e1` | **F1**: `thesis_written` ocenjuje samo trejdove planirane pre ulaza (`no_plans`); probijen MLL / FTMO blokira plan, ne evidenciju (`origin`); Topstep „Reset account…" u Settings; tekst dupliranja naloga |
 
@@ -87,8 +88,8 @@ pogađa.
 |---|---|---|---|---|---|---|
 | **F1** | Tačnost odmah: ono što danas pogrešno ocenjuje, a ne traži nijednu veliku odluku | #2, #5, #21 | — | ne | Sonnet | ✅ `c0077e1` (28.09.2026) |
 | **F2** | Topstep dan (17:00 → 17:00 CT) kao ključ dana svuda gde se dan broji | #1 | F1 | ne (D2-A: izvedeno iz `topstep_mode`) | **Opus** | ✅ `3644c05` (28.09.2026) |
-| **F3** | Topstep pravila u tracker-u i Survival-u | #3, #4, #6 | F2 | da ako E4-B (budžet rizika zapečaćen na ulazu) | **Opus** | ⏳ **sledeća — detaljan plan napisan, čeka odluke E1–E7** |
-| **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da (seed, nova pravila, time stop) | Opus za #10, Sonnet ostalo | okvir |
+| **F3** | Topstep pravila u tracker-u i Survival-u | #3, #4, #6 | F2 | da: `20260928160000` (`risk_budget_at_entry`) | **Opus** | ✅ `a8e63f9` (28.09.2026) — migracija čeka odobrenje za primenu, push posle nje |
+| **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da (brief tabela, nova pravila, time stop, kategorije) | **Opus** | ⏳ **sledeća — detaljan plan napisan, čeka odluke G1–G6 i H1** |
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, swap, uzorak | #11–#15, #17, #18 | F2 | ne (sve izvedeno) | Sonnet, Opus za #13 | okvir |
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, legacy CFD u UI-ju, komentari, PARITY | #16, #19, #20, #22, #23 | F5 | možda (#16) | Sonnet | okvir |
 
@@ -282,7 +283,22 @@ iz naloga, ništa se ne upisuje; `tj_daily_reports` i `tj_tracker_checkins` osta
   § A trading day (21:25 podsetnik i `/daily` isti dan), § Topstep (banner i kalendar isti dan).
 - Ovde: F2 ✅ sa commitom, detaljan plan za F3.
 
-## F3 — Topstep pravila u tracker-u i Survival-u (detaljno)
+## F3 — Topstep pravila u tracker-u i Survival-u (detaljno) — ✅ `a8e63f9`
+
+**Isporučeno po odlukama E1–E7.** Van plana ili drugačije od predloga:
+- **Uvoz ne pečati budžet**: izvod stiže posle sesije, pa bi njegov „pečat" bio samo ista izvedena
+  vrednost; trejd koji je napravio samo uvoz čita budžet izveden u trenutku ulaza. Pečat piše ručni
+  upis (forma plana, `/trades/log`) na čuvanju koje trejdu prvi put daje fill.
+- **Spajanje trejdova ne prenosi pečat**: lista kolona spajanja živi u SQL funkciji; dodavanje bi
+  značilo prepisivanje funkcije. Preživeli trejd zadržava svoj pečat ili čita izvedeni.
+- **Survival počinje od SADAŠNJEG stanja naloga** (balans i pod), DLL dan se seče na −DLL (Topstep
+  likvidira), pod završava run. Test za trailing je scenario unutar DLL-a — prvi, sa danom od
+  −2.000, bio je pogrešan jer ga DLL s pravom seče.
+- `ftmoHeadroomPct` je postao `propHeadroomPct` („Prop-firm room" na kartici).
+- Gate zelen, 3.125 testova (+50), coverage pragovi (100 % za `survival.ts`) prolaze.
+- **Migracija `20260928160000` NIJE primenjena** — čeka odobrenje trejdera; kod čita kolonu, pa
+  push na `main` (Vercel) ide tek posle primene.
+
 
 **Ulaz:** `main` posle F2 (`3644c05`), gate zelen (3.075 testova). **Pročitati:** README § Process
 tracking, § Topstep, § Survival, § Process · Survival · Edge; `tracker/auto-rules.ts`,
@@ -369,15 +385,91 @@ tracking, § Topstep, § Survival, § Process · Survival · Edge; `tracker/auto
   do not read any of this yet" prepisan), § Survival, § Process · Survival · Edge.
 - Ovde: F3 ✅ sa commitom, detaljan plan za F4.
 
-## F4–F6 — okvir (detaljno kad dođu na red)
+## F4 — Dnevni tok za day tradera (detaljno)
 
-### F4 — Dnevni tok (#7–#10)
-- **Cilj:** `/daily` = pred-sesija (brief, raspon, crveni prozori, plan dana) + „Bez pregleda";
-  forma sa time stop-om u minutima; seed kategorija za day tradera; auto pravila
-  `max_trades_per_day`, `stop_after_losses`, `flat_by_close`.
-- **Odluke:** tačna lista kategorija i grešaka; odakle `/daily` čita brief (link ili podaci).
-- **Pročitati:** README § Routes `/daily`, § Ratings; `daily-report-form.tsx`, `form-config.ts`,
-  seed migracija `20260919230000`.
+**Ulaz:** `main` posle F3 (`a8e63f9`, migracija `20260928160000` primenjena). **Pročitati:** README
+§ Routes `/daily`, § Ratings, § Process tracking; `daily-report-form.tsx`, `open-positions-card.tsx`,
+`position-checkin.ts`, `form-config.ts`, `tracker-types.ts`, `tracker-rule-manager.tsx`,
+`tracker/auto-rules.ts`, seed migracija `20260919230000`; u `futures-trading`: `tools/brief/brief.py`,
+`tools/journal_api.py`, README § Dnevni brief.
+
+### Utvrđeno u kodu i bazi (28.09.2026, posle F3; baza samo čitana)
+
+- **`/daily`** ima „Bez pregleda", tri tracker faze, karticu „Pre nego što uđeš" (mentalno stanje u
+  zvezdicama + „ne otvaram ništa novo") i check-in po otvorenoj poziciji (`open-positions-card.tsx`,
+  `tj_position_checkins`) — swing ostatak: day trader je ravan do 15:10 CT.
+- **Brief** (`futures-trading`) pravi HTML u repou (`izlaz/brief/{datum}.html`) i Telegram poruku u
+  06:40 BG: vesti sa crvenim prozorima (−5/+15 i −2/+5 min), očekivani raspon NQ/ES za Topstep dan i
+  RTH, Topstep kraj dana (praznici, rani kraj), ugovori danas. **Journal ne dobija ništa
+  strukturisano** — nema tabele ni polja; `journal_api.py` brief danas samo ČITA iz journala.
+- **Forma plana**: `thesis`, `invalidation`, `time_stop_days` (1–5 dana) u grupi „Why this trade"
+  (`form-config.ts`); `time_stop_days` čitaju plan pečat, `open-positions`, insights (`pastTimeStop`).
+- **Kategorije trejdera u bazi su swing seed**: Entry TF `15m | 1h | 4h | 1D | 5m | 15`, HTF Bias,
+  Exit „Time exit", greške „Overmanaged", „Against HTF bias", „Counter HTF trend", Risk %
+  `0.25–1`. Seed (`tj_seed_categories`) puni samo PRAZNU knjigu — ova nije prazna, pa novi seed ne bi
+  promenio ništa kod trejdera.
+- **Tracker pravila u bazi**: 8 auto + 10 ručnih. Ručna koja su već day-trading pravila i mogu da
+  postanu auto: „max 2 trejda dnevno", „Walk Away Target (USD)", „Max Daily Loss (USD)" (sada ga
+  pokriva DLL iz F3), „bez ulaza 15 min pre/posle crvenih vesti", „pozicije samo u mom vremenskom
+  okviru". Auto ključevi su zatvoren skup sa CHECK-om u bazi (`AUTO_RULE_KEYS`) — novo pravilo =
+  migracija + evaluator.
+
+### Predlog izmene (posle odluka)
+
+- Tabela `tj_session_briefs` (G1-B): datum (Topstep dan), raspon NQ/ES, crveni prozori
+  `[{od, do, naziv}]`, Topstep kraj dana, ugovori danas; `brief.py` je upisuje preko `journal_api`,
+  `/daily` je čita. Bez nje `no_entry_in_red_window` i praznični `flat_by_close` nemaju izvor.
+- `/daily`: kartica „Pred sesiju" (raspon, crveni prozori, kraj dana, ugovori, DLL danas sa banera,
+  plan dana) umesto check-in kartice (G2); „Bez pregleda" ostaje.
+- Forma: time stop u minutima (G3); teza ostaje opciona (F1 je već ocenjuje samo na planu).
+- Kategorije (G4) i nova auto pravila (G5, G6) po odlukama.
+
+### Odluke koje traži trejder (pre koda)
+
+- **G1 — Odakle `/daily` čita brief.** (A) samo link na HTML/Telegram; (B) brief upisuje strukturisan
+  red u journal (nova tabela), `/daily` ga prikazuje i pravila ga čitaju. Preporuka: **B**.
+- **G2 — Check-in po poziciji.** (A) ukloniti karticu sa `/daily` (tabela i istorija ostaju);
+  (B) prikazivati je samo kad postoji pozicija otvorena preko noći. Preporuka: **A**.
+- **G3 — Time stop.** (A) nova kolona `time_stop_minutes` + izbor „do kraja sesije"; stara
+  `time_stop_days` ostaje za istoriju, forma je više ne nudi; (B) bez time stop-a u formi.
+  Preporuka: **A**.
+- **G4 — Kategorije.** Predlog novih stavki: Entry TF `1m | 2m | 5m | 15m`; „Bias dana (brief)"
+  `Long | Short | Neutral` umesto HTF Bias; Exit + „Flat by close"; greške + „Overtrading", „Trade
+  after DLL plan", „Revenge re-entry", „Traded red window". Pitanje: (A) migracija DODAJE nove stavke
+  u tvoje postojeće liste i GASI (ne briše) swing stavke — vrednosti na starim trejdovima ostaju;
+  (B) samo seed za nove knjige, svoje liste menjaš u Settings. Preporuka: **A**, uz tvoju potvrdu
+  tačnih lista.
+- **G5 — Nova auto pravila i brojevi.** Predlog: `max_trades_per_day` (N — tvoje ručno pravilo kaže
+  2), `stop_after_losses` (N uzastopnih gubitaka u Topstep danu), `flat_by_close` (nijedna pozicija
+  posle Topstep kraja dana, uz rani kraj iz brief-a), `no_entry_in_red_window` (traži G1-B),
+  `walk_away_target` (posle dnevnog cilja u USD nema novog ulaza). Koja od njih, sa kojim N i
+  iznosom, i da li se odgovarajuća ručna pravila penzionišu (`deleted_at`, istorija ostaje).
+- **G6 — Vremenski prozor ulaza** („pozicije samo u mom okviru"): auto pravilo sa prozorima u ET
+  ovde, ili tek u F5 zajedno sa sesijskim prozorima. Preporuka: **F5** (iste granice).
+- **H1 — Uklanjanje FTMO / swing / CFD** (trejder: „verovatno se više neće koristiti"; baza
+  28.09.2026: nijedan FTMO ni CFD trejd). Predlog obima: FTMO mod (evaluator, baner, zamrzavanje,
+  Settings), MT5 statement uvoz i `mt5_excursion.py`, swap metrike, check-in po poziciji, swing
+  insights (vikend, time stop u danima, teza „intact"), procentualni % pragovi samo ako nema
+  ne-Topstep naloga. Kolone u bazi OSTAJU (migracije su aditivne) — briše se kod. Pitanje: (A) kao
+  posebna faza ODMAH posle F4 (umesto „Legacy (CFD)" u F6), ili (B) pre F4, da F4–F5 ne prilagođavaju
+  kod koji će nestati. Preporuka: **B** — manje posla ukupno; obim potvrditi stavku po stavku.
+
+### Testovi (prvo padaju)
+
+- `session-brief` čitanje i prikaz na `/daily` (render), prazan dan bez brief-a kaže „brief nije
+  stigao", ne prazan raspon.
+- Evaluatori novih pravila u `tracker/auto-rules.test.ts`: brojanje trejdova po Topstep danu, niz
+  gubitaka, pozicija posle kraja dana (i rani kraj), ulaz u crvenom prozoru (granice uključene).
+- Forma: time stop u minutima se pečati; `time_stop_days` se više ne nudi, stari trejdovi ga čitaju.
+
+### Izlaz iz F4
+
+- Gate zelen; migracije primenjene tek posle zelenog gate-a i uz odobrenje trejdera.
+- README § Routes `/daily`, § Process tracking (broj auto pravila), § A trading day; u
+  `futures-trading` README § Dnevni brief (upis u journal).
+- Ovde: F4 ✅, detaljan plan sledeće faze.
+
+## F5–F6 — okvir (detaljno kad dođu na red)
 
 ### F5 — Intraday analitika (#11–#15, #17, #18)
 - **Cilj:** dimenzije sesija / minuti od otvaranja / redni broj u danu / posle gubitka; trajanje u
