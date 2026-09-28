@@ -1578,5 +1578,5 @@ Topstep nalozi i veličina u ugovorima, katalog samo fjučersi, TopstepX uvoz, M
 `/trades/log` (upis posle zatvaranja), „Bez pregleda" na `/daily` i „Napredak" na `/weekly`.
 Sve što je u kodu još uvek swing — dan u zoni naloga umesto Topstep dana, `thesis_written` koje
 quick-log obara, tracker limiti u %, Survival bez Topstep pravila, check-in po poziciji, korpe
-trajanja u danima, swing insights — popisano je sa prioritetima u
+trajanja u danima, swing insights — popisano je i podeljeno u šest faza (F1–F6; detaljan plan samo za sledeću) u
 [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md).

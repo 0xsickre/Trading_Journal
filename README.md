@@ -12,7 +12,7 @@ one thing written from outside is MAE/MFE on a future, from the exchange's own c
 **It was built as a swing journal** (FTMO CFDs on MT5, positions held for days), and the move to
 day trading is under way. The CFD history stays readable and the FTMO, MT5 and TradingView paths
 still work. What is still measured on swing terms — the day boundary, the `/daily` check-ins, the
-hold-time buckets, several insights — is listed item by item, with priorities, in
+hold-time buckets, several insights — is listed item by item and split into six phases, F1–F6, in
 [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md). This README describes the code as it is,
 swing leftovers included.
 
@@ -571,7 +571,7 @@ Get this wrong and nothing breaks — the numbers simply file themselves under d
 - **Days are always in the ACCOUNT's timezone**, resolved on the server. A `new Date()` read in the
   browser shifts the whole calendar by one column for anyone not sitting in the account's zone.
 - **Except Topstep's own day.** `topstep.ts` keys its Daily Loss Limit, its end-of-day MLL and its
-  best day on Topstep's trading day, **17:00 → 17:00 Chicago** (`topstepDayKey`): a fill at 18:30 CT
+  best day on Topstep's trading day, **17:00 → 17:00 Chicago** (`topstepTradingDay`): a fill at 18:30 CT
   on Monday is Tuesday's. The calendar, `/daily`, the tracker and the day-level insights still use
   the account's zone. On the seeded New York account a fill between 18:00 and midnight ET files under
   that calendar day while Topstep counts it in the next one, so the calendar's day and the banner's
@@ -1555,7 +1555,7 @@ anywhere.
 | [`CODE_REVIEW.md`](CODE_REVIEW.md) | Rounds 2b, 3 and 4 plus the render-layer execution (Phase 10), every finding with its outcome |
 | [`docs/formulas-audit.md`](docs/formulas-audit.md) | Every formula checked against outside practice, with a verdict each (Serbian) |
 | [`PARITY.md`](PARITY.md) | A comparison against TradeZella, item by item (Serbian) |
-| [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md) | The move from swing to day trading: every place the code still measures swing, with priorities (Serbian) |
+| [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md) | The move from swing to day trading: six phases F1–F6, a detailed plan for the next one, and every place the code still measures swing (Serbian) |
 | [`FAZA_8B_PLAN.md`](FAZA_8B_PLAN.md) | Automatic MAE/MFE: MT5 for CFDs, R2 for futures, and why the cTrader plan was withdrawn (Serbian) |
 | [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md) | AI entry point (Cursor / Claude Code) |
 | [futures-trading](https://github.com/0xsickre/futures-trading/blob/main/README.md) | Morning brief, contracts per day, MAE/MFE from R2, the evening journal reminder, the daily journal routine |
