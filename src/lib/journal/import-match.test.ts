@@ -319,7 +319,7 @@ describe("the fill of a plan written before the order filled", () => {
     expect(match({ ...fill, entryPrice: 30700 }, [plan]).status).toBe("new");
     expect(match({ ...fill, direction: "Long" }, [plan]).status).toBe("new");
     expect(match({ ...fill, instrument: "NQ" }, [plan]).status).toBe("new"); // a micro is not its mini
-    expect(match({ ...fill, accountId: "ftmo" }, [plan]).status).toBe("new");
+    expect(match({ ...fill, accountId: "other" }, [plan]).status).toBe("new");
   });
 
   it("only a plan with no fills is asked — an entered trade answers the other questions", () => {

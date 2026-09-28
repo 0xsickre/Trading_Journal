@@ -31,12 +31,12 @@ describe("WidgetPicker", () => {
   });
 
   it("SHOWS THE LOCKED ONES DISABLED rather than hiding them", async () => {
-    // Omitting them would leave a reader who wants the FTMO banner gone
+    // Omitting them would leave a reader who wants the Topstep banner gone
     // hunting for a switch that does not exist. Disabled answers in place.
     render(<WidgetPicker hidden={[]} order={[]} onToggle={() => {}} onMove={() => {}} />);
     await open();
     const locked = screen.getByRole("menuitemcheckbox", {
-      name: "Challenge status",
+      name: "Topstep status",
     });
     // `data-disabled`, not `toBeDisabled()`: a Radix menu item is a `div` with
     // a role, not a form control, so there is no native `disabled` attribute to

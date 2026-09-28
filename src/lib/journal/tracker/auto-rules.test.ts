@@ -304,7 +304,7 @@ describe("boundaries", () => {
   });
 
   it("treats a day exactly at the limit as a breach", () => {
-    // Inclusive, matching evaluateFtmo: hitting your limit IS hitting it.
+    // Inclusive, as Topstep counts its DLL: hitting your limit IS hitting it.
     expect(evalDay(day, [at("a", -400)]).max_loss_per_day.verdict).toBe("fail");
     expect(evalDay(day, [at("a", -399.99)]).max_loss_per_day.verdict).toBe("pass");
   });

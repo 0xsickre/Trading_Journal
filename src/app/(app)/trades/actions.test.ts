@@ -6,10 +6,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * A breached prop-firm account blocks NEW EXPOSURE, never the record: a plan
  * written on `/trades/new` is refused, a trade logged after it closed
  * (`/trades/log`, `origin: "log"`) goes through — including the very trade that
- * took the account through its limit. One rule for FTMO and Topstep.
+ * took the account through its limit.
  */
 
-const ftmoFrozen = vi.fn<(id: string | null | undefined) => Promise<boolean>>();
 const topstepFailed = vi.fn<(id: string | null | undefined) => Promise<boolean>>();
 const rpc = vi.fn();
 const budgetPatch = vi.fn(async (..._a: unknown[]): Promise<Record<string, number | null>> => ({}));
@@ -36,9 +35,6 @@ vi.mock("@/lib/journal/accounts", () => ({ getAccountCurrency: async () => "USD"
 vi.mock("@/lib/journal/instruments", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/journal/instruments")>()),
   getInstrumentSpecs: async () => new Map(),
-}));
-vi.mock("@/lib/journal/ftmo-status", () => ({
-  isFtmoAccountFrozen: (id: string | null | undefined) => ftmoFrozen(id),
 }));
 vi.mock("@/lib/journal/topstep-status", () => ({
   isTopstepAccountFailed: (id: string | null | undefined) => topstepFailed(id),
@@ -76,7 +72,6 @@ const logged: Input = {
 };
 
 beforeEach(() => {
-  ftmoFrozen.mockReset().mockResolvedValue(false);
   topstepFailed.mockReset().mockResolvedValue(false);
   rpc.mockReset().mockResolvedValue({ data: "new-id", error: null });
   budgetPatch.mockReset().mockResolvedValue({});
@@ -113,22 +108,6 @@ describe("createTrade on a Topstep account that hit its MLL", () => {
     const res = await createTrade({ ...logged, executions: [fill("entry")] });
     expect(res.ok).toBe(false);
     expect(rpc).not.toHaveBeenCalled();
-  });
-});
-
-describe("createTrade on a frozen FTMO account", () => {
-  beforeEach(() => ftmoFrozen.mockResolvedValue(true));
-
-  it("still refuses a plan, with the same message", async () => {
-    const res = await createTrade(plan);
-    expect(res.ok).toBe(false);
-    expect(!res.ok && res.error).toMatch(/The FTMO account is frozen/);
-    expect(rpc).not.toHaveBeenCalled();
-  });
-
-  it("now lets a trade logged after the close through", async () => {
-    const res = await createTrade(logged);
-    expect(res).toEqual({ ok: true, id: "new-id" });
   });
 });
 

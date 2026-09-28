@@ -10,13 +10,6 @@ import { mkTrade } from "@/lib/journal/reports/test-helpers";
 import type { Account, TradeRow } from "@/lib/journal/types";
 import type { RealizedTrade } from "@/lib/journal/analytics";
 
-// `FtmoBanner` resets a challenge through a Settings action. Mocked so a render
-// test never loads the real actions module — and through it the Supabase server
-// client.
-vi.mock("@/app/(app)/settings/actions", () => ({
-  resetFtmoChallenge: vi.fn().mockResolvedValue({ ok: true }),
-}));
-
 /**
  * THE CONTROLS, NOT JUST THE NUMBERS.
  *
@@ -57,16 +50,7 @@ function account(over: Partial<Account> & { id: string }): Account {
     default_swap_per_day: 0,
     default_stop_pct: null,
     default_target_pct: null,
-    ftmo_mode: false,
-    ftmo_daily_loss_enabled: false,
-    ftmo_daily_loss_pct: 0,
-    ftmo_max_loss_enabled: false,
-    ftmo_max_loss_pct: 0,
-    ftmo_profit_target_enabled: false,
-    ftmo_profit_target_pct: 0,
-    ftmo_min_days_enabled: false,
-    ftmo_min_days: 0,
-    ftmo_reset_at: null,
+
 
     topstep_mode: false,
 

@@ -91,7 +91,7 @@ export type ScorecardInputs = {
    * Room left against the nearest prop-firm limit, 0–100.
    *
    * Ungated by the trade count, unlike its two neighbours: the evidence rides
-   * with the producer. `evaluateFtmo` and `evaluateTopstep` answer null for an
+   * with the producer. `evaluateTopstep` answers null for an
    * account with nothing closed in its window, so there is no measured zero here to tell apart from
    * an absence. It is also on its own clock — a limit nearly touched does not
    * stop having been nearly touched because the reader changed the period.

@@ -58,7 +58,6 @@ import {
   addAccount,
   archiveAccount,
   restoreAccount,
-  resetFtmoChallenge,
   resetTopstepAccount,
   countAccountUsage,
   deleteAccount,
@@ -274,7 +273,7 @@ function CreateAccountDialog({
           <DialogTitle>{source ? `Duplicate "${source.name}"` : "New account"}</DialogTitle>
           <DialogDescription>
             {source
-              ? "Copies the type, currency, timezone, breakeven range, costs and prop-firm rules (FTMO or Topstep). Trades and deposits are not copied, and the challenge starts fresh."
+              ? "Copies the type, currency, timezone, breakeven range, costs and Topstep rules. Trades and deposits are not copied, and the challenge starts fresh."
               : "These decide how every trade on the account reads. Everything else can be set later."}
           </DialogDescription>
         </DialogHeader>
@@ -442,7 +441,7 @@ function NumberField({
  *
  * Numbers are checked as they are typed and a value that cannot be read is
  * named under its field and blocks the save — `Number(x) || 0` used to store a
- * typo as 0 and re-base every drawdown and FTMO limit on the account.
+ * typo as 0 and re-base every drawdown and Topstep limit on the account.
  */
 function EditAccountDialog({
   account,
@@ -457,7 +456,6 @@ function EditAccountDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const [pending, start] = useTransition();
-  const [resetOpen, setResetOpen] = useState(false);
   const [topstepResetOpen, setTopstepResetOpen] = useState(false);
   const hasTrades = trades == null || trades > 0;
 
@@ -466,17 +464,6 @@ function EditAccountDialog({
   const [tz, setTz] = useState(account.timezone);
   const [currency, setCurrency] = useState(account.currency);
   const [balance, setBalance] = useState(String(account.starting_balance));
-
-  const [ftmoMode, setFtmoMode] = useState(account.ftmo_mode);
-  const [dailyOn, setDailyOn] = useState(account.ftmo_daily_loss_enabled);
-  const [dailyPct, setDailyPct] = useState(String(account.ftmo_daily_loss_pct));
-  const [dailyBasis, setDailyBasis] = useState(account.ftmo_daily_loss_basis);
-  const [maxOn, setMaxOn] = useState(account.ftmo_max_loss_enabled);
-  const [maxPct, setMaxPct] = useState(String(account.ftmo_max_loss_pct));
-  const [targetOn, setTargetOn] = useState(account.ftmo_profit_target_enabled);
-  const [targetPct, setTargetPct] = useState(String(account.ftmo_profit_target_pct));
-  const [minDaysOn, setMinDaysOn] = useState(account.ftmo_min_days_enabled);
-  const [minDays, setMinDays] = useState(String(account.ftmo_min_days));
 
   const [topstepMode, setTopstepMode] = useState(account.topstep_mode === true);
   const [topstepPlan, setTopstepPlan] = useState<TopstepPlan>(account.topstep_plan ?? "50K");
@@ -501,10 +488,6 @@ function EditAccountDialog({
     comm: parseSettingsNumber(commPerUnit, { min: 0 }),
     fee: parseSettingsNumber(feeFixed, { min: 0 }),
     swap: parseSettingsNumber(swapPerDay),
-    daily: parseSettingsNumber(dailyPct, { min: 0, max: 100 }),
-    max: parseSettingsNumber(maxPct, { min: 0, max: 100 }),
-    target: parseSettingsNumber(targetPct, { min: 0, max: 100 }),
-    minDays: parseSettingsNumber(minDays, { min: 0, max: 365, integer: true }),
     riskPct: parseSettingsNumber(riskPct, { min: 0.1, max: 100 }),
     riskMin: parseSettingsNumber(riskMin, { min: 1, allowEmpty: true }),
     riskMax: parseSettingsNumber(riskMax, { min: 1, allowEmpty: true }),
@@ -547,16 +530,6 @@ function EditAccountDialog({
         default_commission_per_unit: val("comm"),
         default_fee_fixed: val("fee"),
         default_swap_per_day: val("swap"),
-        ftmo_mode: ftmoMode,
-        ftmo_daily_loss_enabled: dailyOn,
-        ftmo_daily_loss_pct: val("daily"),
-        ftmo_daily_loss_basis: dailyBasis,
-        ftmo_max_loss_enabled: maxOn,
-        ftmo_max_loss_pct: val("max"),
-        ftmo_profit_target_enabled: targetOn,
-        ftmo_profit_target_pct: val("target"),
-        ftmo_min_days_enabled: minDaysOn,
-        ftmo_min_days: val("minDays"),
         topstep_mode: topstepMode,
         topstep_plan: topstepPlan,
         topstep_payout_at: payoutDate ? new Date(`${payoutDate}T00:00:00Z`).toISOString() : null,
@@ -568,17 +541,6 @@ function EditAccountDialog({
       else {
         toast.success("Account saved");
         onOpenChange(false);
-      }
-    });
-  }
-
-  function resetChallenge() {
-    start(async () => {
-      const res = await resetFtmoChallenge(account.id);
-      if (!res.ok) toast.error(res.error);
-      else {
-        toast.success("Challenge restarted");
-        setResetOpen(false);
       }
     });
   }
@@ -637,7 +599,7 @@ function EditAccountDialog({
             error={err("balance")}
             hint={
               balanceChanged && hasTrades
-                ? "Changes every drawdown % and FTMO limit on past trades too."
+                ? "Changes every drawdown % and the Topstep floor on past trades too."
                 : checks.balance.ok
                   ? fmtMoney(val("balance"), currency)
                   : undefined
@@ -698,62 +660,9 @@ function EditAccountDialog({
         <section className="space-y-3 rounded-md border p-3">
           <div className="flex items-center gap-2">
             <Checkbox
-              id={`ftmo-${account.id}`}
-              checked={ftmoMode}
-              onCheckedChange={(v) => {
-                setFtmoMode(v === true);
-                if (v === true) setTopstepMode(false);
-              }}
-            />
-            <Label htmlFor={`ftmo-${account.id}`} className="text-sm font-medium">
-              FTMO challenge rules
-            </Label>
-          </div>
-          {ftmoMode && (
-            <div className="space-y-2">
-              <FtmoRule id={`d-${account.id}`} label="Max daily loss" enabled={dailyOn} onEnabled={setDailyOn} value={dailyPct} onValue={setDailyPct} suffix="%" error={err("daily")} />
-              {dailyOn && (
-                <div className="flex items-center gap-2 pl-6">
-                  <span className="text-xs text-muted-foreground">of</span>
-                  <Select
-                    value={dailyBasis}
-                    onValueChange={(v) => setDailyBasis(v as "starting_balance" | "prev_close")}
-                  >
-                    <SelectTrigger className="h-7 w-auto text-xs" aria-label="Daily loss basis">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="starting_balance">starting balance (2-Step)</SelectItem>
-                      <SelectItem value="prev_close">previous day&apos;s close (1-Step)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <FtmoRule id={`m-${account.id}`} label="Max total loss" enabled={maxOn} onEnabled={setMaxOn} value={maxPct} onValue={setMaxPct} suffix="%" error={err("max")} />
-              <FtmoRule id={`t-${account.id}`} label="Profit target" enabled={targetOn} onEnabled={setTargetOn} value={targetPct} onValue={setTargetPct} suffix="%" error={err("target")} />
-              <FtmoRule id={`n-${account.id}`} label="Min. trading days" enabled={minDaysOn} onEnabled={setMinDaysOn} value={minDays} onValue={setMinDays} suffix="days" error={err("minDays")} />
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                <p className="text-xs text-muted-foreground">
-                  A breach shows a red banner and blocks new trades until the
-                  challenge is restarted.
-                </p>
-                <Button variant="outline" size="sm" onClick={() => setResetOpen(true)} disabled={pending}>
-                  <RotateCcw className="size-4" /> Restart challenge…
-                </Button>
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section className="space-y-3 rounded-md border p-3">
-          <div className="flex items-center gap-2">
-            <Checkbox
               id={`topstep-${account.id}`}
               checked={topstepMode}
-              onCheckedChange={(v) => {
-                setTopstepMode(v === true);
-                if (v === true) setFtmoMode(false);
-              }}
+              onCheckedChange={(v) => setTopstepMode(v === true)}
             />
             <Label htmlFor={`topstep-${account.id}`} className="text-sm font-medium">
               Topstep rules (futures)
@@ -848,26 +757,6 @@ function EditAccountDialog({
         </DialogFooter>
       </DialogContent>
 
-      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Restart the challenge?</DialogTitle>
-            <DialogDescription>
-              Trades before now stop counting toward the FTMO limits, and a
-              breach is cleared. The trades themselves stay.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setResetOpen(false)} disabled={pending}>
-              Cancel
-            </Button>
-            <Button onClick={resetChallenge} disabled={pending}>
-              Restart
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={topstepResetOpen} onOpenChange={setTopstepResetOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -888,50 +777,6 @@ function EditAccountDialog({
         </DialogContent>
       </Dialog>
     </Dialog>
-  );
-}
-
-function FtmoRule({
-  id,
-  label,
-  enabled,
-  onEnabled,
-  value,
-  onValue,
-  suffix,
-  error,
-}: {
-  id: string;
-  label: string;
-  enabled: boolean;
-  onEnabled: (v: boolean) => void;
-  value: string;
-  onValue: (v: string) => void;
-  suffix: string;
-  error: string | null;
-}) {
-  return (
-    <div className="space-y-1">
-      <div className="flex flex-wrap items-center gap-2">
-        <Checkbox id={`${id}-on`} checked={enabled} onCheckedChange={(v) => onEnabled(v === true)} />
-        {/* The text is the checkbox's label, so clicking it toggles the rule. */}
-        <Label htmlFor={`${id}-on`} className="shrink-0 text-sm font-normal sm:w-40">
-          {label}
-        </Label>
-        <Input
-          id={`${id}-val`}
-          aria-label={`${label} value`}
-          inputMode="decimal"
-          value={value}
-          disabled={!enabled}
-          onChange={(e) => onValue(e.target.value)}
-          aria-invalid={error != null}
-          className="h-8 w-24"
-        />
-        <span className="text-xs text-muted-foreground">{suffix}</span>
-      </div>
-      {enabled && error && <p className="pl-6 text-xs text-destructive">{error}</p>}
-    </div>
   );
 }
 
@@ -981,7 +826,11 @@ function AccountRow({
         {fmtMoney(account.starting_balance, account.currency)}
       </td>
       <td className="px-3 py-2">
-        {account.ftmo_mode ? <Badge variant="secondary">FTMO</Badge> : <span className="text-muted-foreground">—</span>}
+        {account.topstep_mode ? (
+          <Badge variant="secondary">Topstep {account.topstep_plan}</Badge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
       </td>
       <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
         {trades == null ? <span title="Count unavailable">—</span> : trades}

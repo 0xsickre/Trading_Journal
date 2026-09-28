@@ -126,7 +126,7 @@ export function fillTotals(fills: ExecLike[]): {
 /**
  * Whether an edit opens or enlarges a position.
  *
- * The FTMO freeze exists to stop new exposure on an account that broke a rule.
+ * The prop-firm guard exists to stop new exposure on an account past its limit.
  * It used to refuse EVERY edit of a trade on such an account, so the trader
  * could not even write the post-mortem of the trade that breached it. What it
  * must refuse is narrower: a plan becoming a live trade, or more size going on.

@@ -2,7 +2,6 @@ import { getOptionsMap } from "@/lib/journal/options";
 import { getInstruments } from "@/lib/journal/instruments";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getPlaybooks } from "@/lib/journal/playbooks";
-import { getFailedFtmoAccountIds } from "@/lib/journal/ftmo-status";
 import { getFailedTopstepAccountIds } from "@/lib/journal/topstep-status";
 import { PageHeader } from "@/components/app/page-header";
 import { QuickLogForm } from "@/components/journal/quick-log-form";
@@ -12,13 +11,12 @@ import { QuickLogForm } from "@/components/journal/quick-log-form";
  * (`/trades/new`) stays for a limit written well before price gets there.
  */
 export default async function LogTradePage() {
-  const [optionsMap, instruments, accounts, playbooks, failedFtmo, failedTopstep] = await Promise.all([
+  const [optionsMap, instruments, accounts, playbooks, failedTopstep] = await Promise.all([
     getOptionsMap(true),
     getInstruments(true),
     getAccounts(),
     getPlaybooks({ activeOnly: true }),
     // A blown account is warned about here, never blocked: this is the record.
-    getFailedFtmoAccountIds(),
     getFailedTopstepAccountIds(),
   ]);
 
@@ -33,7 +31,6 @@ export default async function LogTradePage() {
         instruments={instruments}
         playbooks={playbooks}
         optionsMap={optionsMap}
-        ftmoFailedAccountIds={[...failedFtmo]}
         topstepFailedAccountIds={[...failedTopstep]}
       />
     </div>

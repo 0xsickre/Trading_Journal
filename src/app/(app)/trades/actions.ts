@@ -23,7 +23,6 @@ import {
   planSnapshotPatch,
   type PlanSnapshot,
 } from "@/lib/journal/plan-snapshot";
-import { isFtmoAccountFrozen } from "@/lib/journal/ftmo-status";
 import { getRiskBudgetAtEntryPatch, isTopstepAccountFailed } from "@/lib/journal/topstep-status";
 import { parseScaleOutLevels } from "@/lib/journal/scale-out";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
@@ -148,7 +147,7 @@ async function sanitizeFields(
  * CHECK constraints; this copy exists to answer in a sentence.
  *
  * Structure is checked BEFORE anything touches the database. `account_id` used
- * to go straight into `isFtmoAccountFrozen`, so a non-uuid produced a Postgres
+ * to go straight into the account guard, so a non-uuid produced a Postgres
  * type error instead of a message about the account.
  */
 async function prepareTrade(input: TradeInput) {
@@ -215,21 +214,6 @@ function resolveStatus(
 }
 
 
-/**
- * Which prop-firm limit the account has broken, if any.
- *
- * FTMO and Topstep are exclusive per account (`tj_accounts_one_prop_firm`), so
- * at most one answers; both are asked in one round trip. Scoped to the one
- * account being written to.
- */
-async function blownAccount(accountId: string | null): Promise<"ftmo" | "topstep" | null> {
-  const [ftmo, topstep] = await Promise.all([
-    isFtmoAccountFrozen(accountId),
-    isTopstepAccountFailed(accountId),
-  ]);
-  return ftmo ? "ftmo" : topstep ? "topstep" : null;
-}
-
 export async function createTrade(input: TradeInput) {
   const prep = await prepareTrade(input);
   if (!prep.ok) return prep;
@@ -244,15 +228,7 @@ export async function createTrade(input: TradeInput) {
   // there: it too is the record.
   const isRecord = input.origin === "log" && statusPatch.status === "closed";
   if (!isRecord) {
-    const blown = await blownAccount(input.account_id);
-    if (blown === "ftmo") {
-      return {
-        ok: false as const,
-        error:
-          "The FTMO account is frozen — a rule was breached. Reset the challenge in Settings to continue.",
-      };
-    }
-    if (blown === "topstep") {
+    if (await isTopstepAccountFailed(input.account_id)) {
       return {
         ok: false as const,
         error:
@@ -373,12 +349,11 @@ export async function updateTrade(id: string, input: TradeInput) {
   const { patch, execs, statusPatch } = prep;
 
   // The freeze guard, narrowed. Editing a planned trade into a live one — or
-  // putting more size on — opens exposure on the account, which is what the
-  // FTMO freeze and a Topstep MLL breach exist to stop. Everything else is
-  // record-keeping: this used to refuse EVERY save on a frozen account, so the
-  // trader could not even write up the trade that breached the rule.
-  const blown = await blownAccount(input.account_id);
-  if (blown) {
+  // putting more size on — opens exposure on the account, which is what a
+  // Topstep MLL breach exists to stop. Everything else is record-keeping: this
+  // used to refuse EVERY save on a blown account, so the trader could not even
+  // write up the trade that breached the rule.
+  if (await isTopstepAccountFailed(input.account_id)) {
     const [{ data: prevState }, { data: prevFills }] = await Promise.all([
       supabase.from("tj_positions").select("status").eq("id", id).maybeSingle(),
       supabase.from("tj_executions").select("side, qty").eq("position_id", id),
@@ -394,9 +369,7 @@ export async function updateTrade(id: string, input: TradeInput) {
       return {
         ok: false as const,
         error:
-          blown === "ftmo"
-            ? "The FTMO account is frozen — a rule was breached. Notes and review can still be edited, but no new position or size. Reset the challenge in Settings to continue."
-            : "The Topstep account hit its Maximum Loss Limit. Notes and review can still be edited, but no new position or size. Reset the account in Settings to continue.",
+          "The Topstep account hit its Maximum Loss Limit. Notes and review can still be edited, but no new position or size. Reset the account in Settings to continue.",
       };
     }
   }

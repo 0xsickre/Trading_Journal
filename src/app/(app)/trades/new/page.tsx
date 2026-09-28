@@ -1,7 +1,6 @@
 import { getCategoryOrder, getOptionsMap } from "@/lib/journal/options";
 import { getInstruments } from "@/lib/journal/instruments";
 import { getAccounts } from "@/lib/journal/accounts";
-import { getFailedFtmoAccountIds } from "@/lib/journal/ftmo-status";
 import { getAccountEquities } from "@/lib/journal/equity";
 import { getFailedTopstepAccountIds, getTopstepSizing } from "@/lib/journal/topstep-status";
 import { getFieldDefs } from "@/lib/journal/field-defs";
@@ -9,12 +8,11 @@ import { getPlaybooks } from "@/lib/journal/playbooks";
 import { TradeForm } from "@/components/journal/trade-form";
 
 export default async function NewTradePage() {
-  const [optionsMap, instruments, accounts, failedFtmo, accountEquity, fieldDefs, playbooks, categoryOrder, topstepSizing, failedTopstep] =
+  const [optionsMap, instruments, accounts, accountEquity, fieldDefs, playbooks, categoryOrder, topstepSizing, failedTopstep] =
     await Promise.all([
       getOptionsMap(true),
       getInstruments(true),
       getAccounts(),
-      getFailedFtmoAccountIds(),
       getAccountEquities(),
       // Active only: a deactivated field must not be offered for NEW input.
       getFieldDefs(true),
@@ -24,7 +22,7 @@ export default async function NewTradePage() {
       getCategoryOrder(),
       // Room above the MLL and today's DLL per Topstep account: the futures sizing base.
       getTopstepSizing(),
-      // Topstep accounts past their MLL: a new plan is refused, as on frozen FTMO.
+      // Topstep accounts past their MLL: a new plan is refused.
       getFailedTopstepAccountIds(),
     ]);
 
@@ -35,7 +33,6 @@ export default async function NewTradePage() {
       accounts={accounts}
       fieldDefs={fieldDefs}
       playbooks={playbooks}
-      ftmoFailedAccountIds={[...failedFtmo]}
       topstepFailedAccountIds={[...failedTopstep]}
       accountEquity={accountEquity}
       topstepSizing={topstepSizing}

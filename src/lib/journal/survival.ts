@@ -6,11 +6,11 @@
  * and this size, how often does the account hit a floor before it reaches
  * anything.
  *
- * IT WORKS WITHOUT A PROP ACCOUNT. The simulation is identical either way; only
- * the thresholds differ. With FTMO on they come from the challenge's own rules;
- * with it off they are the trader's — the drawdown they would not accept —
- * because "how likely am I to be down 10 % in two months" is the same question
- * a challenge asks, minus the fee.
+ * IT WORKS WITHOUT A PROP ACCOUNT. On a Topstep account the replay is in money,
+ * against the account's own trailing floor (`simulateTopstepSurvival`); on any
+ * other account the threshold is the trader's — the drawdown they would not
+ * accept — because "how likely am I to be down 10 % in two months" is the same
+ * question a prop firm asks, minus the fee.
  *
  * WHY DAYS AND NOT TRADES. The binding rule on a prop account is a DAILY loss
  * limit, and a day is also how losses actually arrive: a bad session is several
@@ -191,28 +191,16 @@ export function dayReturnsFrom(
 }
 
 /**
- * The thresholds a prop challenge imposes, or the one the trader set.
- *
- * The simulation does not know about FTMO; this is the only place the two
- * worlds meet. With the challenge off, the daily rule has no meaning (nobody
- * fails a personal account for one bad day) and the target is whatever the
- * trader wants to see, so both are left null.
+ * The thresholds of an account with no prop-firm rules: the drawdown the trader
+ * would not accept. A Topstep account is replayed by `simulateTopstepSurvival`
+ * against its own rules instead. With no firm behind it, a daily rule has no
+ * meaning (nobody fails a personal account for one bad day) and the target is
+ * whatever the trader wants to see, so both are left null.
  */
 export function thresholdsFor(input: {
-  ftmoEnabled: boolean;
-  ftmoMaxLossPct?: number | null;
-  ftmoDailyLossPct?: number | null;
-  ftmoProfitTargetPct?: number | null;
-  /** The drawdown the trader would not accept, when there is no challenge. */
+  /** The drawdown the trader would not accept. */
   ownMaxLossPct?: number | null;
 }): SurvivalThresholds {
-  if (input.ftmoEnabled) {
-    return {
-      maxLossPct: input.ftmoMaxLossPct ?? null,
-      dailyLossPct: input.ftmoDailyLossPct ?? null,
-      profitTargetPct: input.ftmoProfitTargetPct ?? null,
-    };
-  }
   return {
     maxLossPct: input.ownMaxLossPct ?? null,
     dailyLossPct: null,

@@ -113,22 +113,7 @@ export type Account = {
   // Risk plan defaults applied when stop / target are left empty.
   default_stop_pct: number | null;
   default_target_pct: number | null;
-  // FTMO / prop-firm challenge mode (per account).
-  ftmo_mode: boolean;
-  ftmo_daily_loss_enabled: boolean;
-  ftmo_daily_loss_pct: number;
-  /** What the daily-loss % is OF: a fixed starting balance, or the previous
-   * trading day's closing equity. Real FTMO account types use both, depending
-   * on the challenge purchased. */
-  ftmo_daily_loss_basis: "starting_balance" | "prev_close";
-  ftmo_max_loss_enabled: boolean;
-  ftmo_max_loss_pct: number;
-  ftmo_profit_target_enabled: boolean;
-  ftmo_profit_target_pct: number;
-  ftmo_min_days_enabled: boolean;
-  ftmo_min_days: number;
-  ftmo_reset_at: string | null;
-  // Topstep futures account (per account; exclusive with ftmo_mode). See topstep.ts.
+  // Topstep futures account (per account). See topstep.ts.
   topstep_mode: boolean;
   topstep_plan: "50K" | "100K" | "150K";
   /** First payout: from then on the MLL floor is the starting balance (Topstep's "$0"). */

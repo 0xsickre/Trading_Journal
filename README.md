@@ -10,8 +10,9 @@ one thing written from outside is MAE/MFE on a future, from the exchange's own c
 (§ MAE/MFE).
 
 **It was built as a swing journal** (FTMO CFDs on MT5, positions held for days), and the move to
-day trading is under way. The CFD history stays readable and the FTMO, MT5 and TradingView paths
-still work. What is still measured on swing terms — the day boundary, the `/daily` check-ins, the
+day trading is under way. **FTMO mode is gone** (H1, 28.09.2026: no FTMO or CFD trade was in the
+book); its columns stay in the database, only the code went. The MT5 and TradingView paths still
+work. What is still measured on swing terms — the day boundary, the `/daily` check-ins, the
 hold-time buckets, several insights — is listed item by item and split into six phases, F1–F6, in
 [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md). This README describes the code as it is,
 swing leftovers included.
@@ -179,7 +180,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 3,125 tests across 187 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 3,094 tests across 185 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -320,7 +321,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 
 | Route | What it is |
 |---|---|
-| `/` | Dashboard: a **Topstep banner** per Topstep account (room above the MLL, DLL left today, best day against the 55 % line, the target) and an FTMO banner per FTMO account, then KPIs, equity curve, drawdown, heatmap calendars, breakdowns, the Process · Survival · Edge card, insights. Opens on **All** — the whole record first, narrowed on request; the scope last chosen is remembered per browser. Whenever the period leaves closed trades out, a notice above the figures says how many and how far back, with **Show all** (`default-period.ts`) |
+| `/` | Dashboard: a **Topstep banner** per Topstep account (room above the MLL, DLL left today, best day against the 55 % line, the target) then KPIs, equity curve, drawdown, heatmap calendars, breakdowns, the Process · Survival · Edge card, insights. Opens on **All** — the whole record first, narrowed on request; the scope last chosen is remembered per browser. Whenever the period leaves closed trades out, a notice above the figures says how many and how far back, with **Show all** (`default-period.ts`) |
 | `/journal` | Trade table — sorting, filtering, column picking. The date column carries the **year**, because a backtest's trades are years old and `07/03` without one reads as this spring |
 | `/trades/new`, `/trades/[id]/edit` | Trade form: plan, fills, playbook checklist, psychology, images. In the **order of the decisions**: account, instrument, then the playbook and its checklist, and only then the prices and the risk. **There is no phase control**: planned or active is what the fills say — an entry fill means you are in the trade — so a select that could disagree with the record is gone, and so is "Move to active". The one lifecycle fact the fills cannot know, a MISSED plan, keeps its button. The instrument is **typed, not scrolled** — `instrument-select.tsx` filters the catalog on symbol, name and asset class. On a **Topstep account** the size is whole contracts: risk by the account's rule (§ Topstep), contracts rounded down with the round-turn commission counted and capped at the plan, stop and target in ticks for the TopstepX bracket — "2 MNQ · $202.44 at the stop incl. commission (stop 200 ticks)" — with the mini or micro alternative and a warning when the count is zero, capped, or three stops no longer fit today's DLL. This is the **plan-first** form, for a limit written well before price gets there; the everyday way in is `/trades/log` |
 | `/trades/log` | **Log Trade**, the sidebar's primary action: a trade logged **after it is flat**. Four numbers off the platform — contracts, entry, stop, exit (target optional) — with "N min ago" chips for the entry time; then the setup (playbook), **A / B / C** on execution (stored as `execution_rating` 5 / 3 / 1), what went wrong only on B or C ("No mistake" recorded on an A), emotions, one sentence (`trade_journal_notes`) and the exit chart. The exit reason is read off the prices — stop, target, breakeven or closed early — and written only when the trader's own Exit Reason list has that item (`quick-log.ts`). The numbers may be rough: the day's TopstepX export matches the trade (entry within 0.05 %, entry time within ten minutes) and replaces the fills, and the answers stay |
@@ -334,7 +335,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
-| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments (the six futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional; swap in points per lot per night with the weekly triple day, zero on a future and kept for the CFD rows a trade still names), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — type Live or Backtest, which decides where MAE/MFE comes from, currency locked once it has trades, and ONE prop firm's rules: **Topstep rules (futures)** — plan 50K / 100K / 150K, first payout, reset, the risk rule — or FTMO rules and challenge restart, never both), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion and reset live under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
+| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments (the six futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional; swap in points per lot per night with the weekly triple day, zero on a future and kept for the CFD rows a trade still names), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — type Live or Backtest, which decides where MAE/MFE comes from, currency locked once it has trades, and **Topstep rules (futures)** — plan 50K / 100K / 150K, first payout, reset, the risk rule), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion and reset live under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
 | `/login` | Supabase auth |
 
 ---
@@ -584,7 +585,7 @@ Get this wrong and nothing breaks — the numbers simply file themselves under d
   most of the year and drifts by an hour in the weeks the two change clocks on different dates.
 - **"Today" is the primary account's day** (`todayFor`): on a Topstep primary, after 17:00 CT it is
   already tomorrow, so `/daily` opens the session that has just started. Locked days keep the verdicts
-  they were frozen with; FTMO keeps its own day in its own zone, and `equity_at_entry` is still the
+  they were frozen with, and `equity_at_entry` is still the
   opening balance of the calendar day — a Topstep account's size is graded against its risk budget
   instead (§ Topstep).
 - **ISO weekdays, 1 = Monday … 7 = Sunday.** Never `Date#getDay`.
@@ -649,11 +650,11 @@ So: below 5 closed trades the two trade-derived parts of Survival are withheld, 
 below 5 *decided* trades — its own denominator, because a book of breakeven scratches has a path to
 measure and no decisions it could have won. Below 30 closed trades the numbers are shown **with**
 the sample, labelled provisional: hiding them for weeks is dishonest in the other direction.
-Prop-firm headroom ("Prop-firm room" on the card, `propHeadroomPct`) is ungated — `evaluateFtmo` and
-`evaluateTopstep` answer `null` for an account with nothing closed in its window, so the evidence
-rides with the producer. On a Topstep account it is the **smallest room ever left above the trailing
-MLL, as a share of the plan's MLL**, after every close and every overnight trail — the closest the
-account came to ending, the twin of FTMO's closest approach. The worst account counts.
+Prop-firm headroom ("Prop-firm room" on the card, `propHeadroomPct`) is ungated — `evaluateTopstep`
+answers `null` for an account with nothing closed in its window, so the evidence rides with the
+producer. It is the **smallest room ever left above the trailing MLL, as a share of the plan's MLL**,
+after every close and every overnight trail — the closest the account came to ending. The worst
+Topstep account counts.
 
 **Phase E found the third bug still alive on the equity base.** `maxPctOfEquity` answered `0` when a
 fall had no positive peak equity to divide by — an account with no starting balance that never got
@@ -860,9 +861,9 @@ Three things about it are deliberate. **Days, not trades**: a prop account's bin
 loss limit, and a bad session is several trades rather than one. **Blocks, not single days**: drawing
 one day at a time assumes today says nothing about tomorrow, and the run of losses that ends an
 account is a correlated stretch; the trader chooses between single days and weeks, and the choice is
-on the card because it changes the answer. **Thresholds have two sources**: with FTMO on they are the
-challenge's rules; with it off they are the trader's own — defaulting to the worst drawdown the book
-has already seen — so the card works on any account. **A Topstep account is replayed in money**
+on the card because it changes the answer. **On an account without prop-firm rules the threshold is
+the trader's own** — defaulting to the worst drawdown the book has already seen — so the card works
+on any account. **A Topstep account is replayed in money**
 (`simulateTopstepSurvival`): its own Topstep days, from its balance and floor as they stand now; the
 floor trails every high close and locks at the starting balance, so a run that gives back what its
 highs gained ends on it where a fixed percentage floor would not; a day that reaches the DLL is
@@ -1005,26 +1006,9 @@ have different subjects, so folding `tilt_week` into `revenge_trade` — or `siz
 `unusual_size` — would put a week's id where a trade id belongs. They stay separate for that reason
 rather than for a good story about causes.
 
-**FTMO mode** is per account: daily loss, overall loss, profit target and minimum trading days.
-Breaching a rule freezes the account for **new exposure**, not for the record: a plan can neither be
-created (`/trades/new`) nor activated or sized up until the challenge is reset in Settings, while a
-trade logged after it closed (`/trades/log`, `origin: "log"` on `createTrade`, accepted only when
-the trade is closed) still goes in — refusing it would refuse the very trade that broke the rule.
-Notes and review stay editable, and the import writes around this guard, as the record it is.
-
-The daily limit has a **configurable basis**, because real FTMO accounts differ on it: fixed (a
-percentage of the starting balance, for the whole challenge) for the 2-Step type, or rolling (a
-percentage of the previous trading day's closing balance) for the 1-Step type. The overall loss
-(drawdown floor) is always fixed to the starting balance — that part is common to both.
-
-Alongside the verdict, `evaluateFtmo` returns `headroomPct` — how much room is left from the
-**closest approach** to any enabled limit across the whole challenge. It is the third part of the Survival axis
-(§ Process · Survival · Edge), and the only number in the application that tells an account that passed apart
-from one that passed by a hair.
-
 ### Topstep
 
-**Topstep mode** is per account and excludes FTMO mode (`tj_accounts_one_prop_firm`). Its rules are
+**Topstep mode** is per account. Its rules are
 money per plan, not percentages, so they live in their own module (`topstep.ts`, read off
 help.topstep.com on 28.09.2026):
 
@@ -1042,11 +1026,10 @@ help.topstep.com on 28.09.2026):
   same day the calendar, `/daily` and the tracker file the account's trades under (§ Attributing to days).
 - **Consistency**: the best day must stay at or below 55 % of the target; past that the target grows
   to best day ÷ 0.55.
-- **Closed trades only**, as with FTMO: Topstep watches both limits intraday with open P&L, so a
+- **Closed trades only**: Topstep watches both limits intraday with open P&L, so a
   position that went through the floor and came back reads here as a survived day. The platform's
   risk engine is the record.
-- **Reaching the MLL blocks a new plan, never the record** — the same rule as a frozen FTMO account:
-  `/trades/new` refuses (`isTopstepAccountFailed` in `topstep-status.ts`), an edit that adds a
+- **Reaching the MLL blocks new exposure, never the record**: `/trades/new` refuses (`isTopstepAccountFailed` in `topstep-status.ts`), an edit that adds a
   position or size is refused, while `/trades/log` only warns above the form and logs the trade. The
   banner turns red and says on which day; **Reset account…** under the account's Topstep rules in
   Settings writes `topstep_reset_at`, from which the balance starts again and the MLL is cleared.
@@ -1433,9 +1416,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-3,125 tests across 187 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,486 tests in 126 files) and `components` (environment `jsdom`, files `*.test.tsx`, 639
-tests in 61 files). The rule is the extension, so no file can land in both. The split exists so that
+3,094 tests across 185 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,460 tests in 125 files) and `components` (environment `jsdom`, files `*.test.tsx`, 634
+tests in 60 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves

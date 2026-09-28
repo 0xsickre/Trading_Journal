@@ -41,7 +41,7 @@ describe("registry integrity", () => {
     const locked = DASHBOARD_WIDGETS.filter((w) => !w.hideable).map((w) => w.id);
     // Two warnings about the reader's money and the headline row. A page that
     // can be configured into lying is worse than one with no configuration.
-    expect(locked.sort()).toEqual(["ftmo", "headline", "unpriced"]);
+    expect(locked.sort()).toEqual(["headline", "topstep", "unpriced"]);
   });
 });
 
@@ -60,8 +60,8 @@ describe("visibleWidgets", () => {
   it("KEEPS LOCKED WIDGETS however the store was written", () => {
     // Not merely un-clickable in the popover: a hand-edited localStorage value
     // naming them must still render them.
-    const v = visibleWidgets(["ftmo", "unpriced", "headline"]);
-    expect(v.has("ftmo")).toBe(true);
+    const v = visibleWidgets(["topstep", "unpriced", "headline"]);
+    expect(v.has("topstep")).toBe(true);
     expect(v.has("unpriced")).toBe(true);
     expect(v.has("headline")).toBe(true);
   });
@@ -75,7 +75,7 @@ describe("visibleWidgets", () => {
 
   it("survives a store naming EVERY id — the headline row still renders", () => {
     const v = visibleWidgets(WIDGET_IDS);
-    expect([...v].sort()).toEqual(["ftmo", "headline", "unpriced"]);
+    expect([...v].sort()).toEqual(["headline", "topstep", "unpriced"]);
   });
 });
 
@@ -90,7 +90,7 @@ describe("toggleWidget", () => {
     // Returned untouched rather than throwing: a caller asking for something
     // impossible gets a no-op, which is the behaviour that cannot cascade.
     expect(toggleWidget(["equity"], "headline")).toEqual(["equity"]);
-    expect(toggleWidget([], "ftmo")).toEqual([]);
+    expect(toggleWidget([], "topstep")).toEqual([]);
   });
 
   it("ignores an unknown id", () => {

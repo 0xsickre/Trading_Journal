@@ -1008,7 +1008,7 @@ const money = (label: string) =>
 /**
  * The columns `updateAccount` may write, with their ranges.
  *
- * FTMO limits are percentages and live in 0–100; costs and balances are not
+ * Percentages live in 0–100; costs and balances are not
  * negative; the breakeven band may be (a loss-side edge). Anything outside
  * these, or any column not listed, is refused rather than stored.
  */
@@ -1030,17 +1030,6 @@ const accountPatchSchema = z
     default_swap_per_day: z.number().finite().optional(),
     default_stop_pct: pct("Default stop").nullable().optional(),
     default_target_pct: pct("Default target").nullable().optional(),
-    ftmo_mode: z.boolean().optional(),
-    ftmo_daily_loss_enabled: z.boolean().optional(),
-    ftmo_daily_loss_pct: pct("Daily loss limit").optional(),
-    ftmo_daily_loss_basis: z.enum(["starting_balance", "prev_close"]).optional(),
-    ftmo_max_loss_enabled: z.boolean().optional(),
-    ftmo_max_loss_pct: pct("Max loss limit").optional(),
-    ftmo_profit_target_enabled: z.boolean().optional(),
-    ftmo_profit_target_pct: pct("Profit target").optional(),
-    ftmo_min_days_enabled: z.boolean().optional(),
-    ftmo_min_days: z.number().int("Minimum days is a whole number.").min(0).max(365).optional(),
-    ftmo_reset_at: z.string().nullable().optional(),
     topstep_mode: z.boolean().optional(),
     topstep_plan: z.enum(["50K", "100K", "150K"]).optional(),
     topstep_payout_at: z.string().nullable().optional(),
@@ -1070,17 +1059,6 @@ export async function updateAccount(
     default_swap_per_day?: number;
     default_stop_pct?: number | null;
     default_target_pct?: number | null;
-    ftmo_mode?: boolean;
-    ftmo_daily_loss_enabled?: boolean;
-    ftmo_daily_loss_pct?: number;
-    ftmo_daily_loss_basis?: "starting_balance" | "prev_close";
-    ftmo_max_loss_enabled?: boolean;
-    ftmo_max_loss_pct?: number;
-    ftmo_profit_target_enabled?: boolean;
-    ftmo_profit_target_pct?: number;
-    ftmo_min_days_enabled?: boolean;
-    ftmo_min_days?: number;
-    ftmo_reset_at?: string | null;
     topstep_mode?: boolean;
     topstep_plan?: "50K" | "100K" | "150K";
     topstep_payout_at?: string | null;
@@ -1097,12 +1075,6 @@ export async function updateAccount(
     return { ok: false, error: parsedPatch.error.issues[0]?.message ?? "Invalid account settings." };
   patch = parsedPatch.data;
 
-  // One prop firm's rules at a time: FTMO's percentages and Topstep's trailing
-  // money limits describe different accounts, and both on one would read as two
-  // sets of limits the same balance has to satisfy.
-  if (patch.ftmo_mode === true && patch.topstep_mode === true) {
-    return { ok: false, error: "An account follows FTMO rules or Topstep rules, not both." };
-  }
   if (patch.risk_rule_min != null && patch.risk_rule_max != null && patch.risk_rule_min > patch.risk_rule_max) {
     return { ok: false, error: "Risk per trade: the minimum must not exceed the maximum." };
   }
@@ -1168,7 +1140,7 @@ export async function updateAccount(
   }
 
   // starting_balance is a historical fact, not a setting: it is the denominator
-  // behind every drawdown percentage, the base of every FTMO threshold and the
+  // behind every drawdown percentage, the start of the Topstep floor and the
   // opening point of the equity curve. Changing it silently re-bases all of
   // them. A negative one would invert them, so that much is refused outright;
   // an honest correction is still allowed, but it is worth knowing it rewrites
@@ -1199,25 +1171,10 @@ export async function updateAccount(
   return { ok: true };
 }
 
-/** Restart the FTMO challenge: trades before now stop counting toward breaches. */
-export async function resetFtmoChallenge(id: string) {
-  const supabase = await createClient();
-  const { data: updated, error } = await supabase
-    .from("tj_accounts")
-    .update({ ftmo_reset_at: new Date().toISOString() })
-    .eq("id", id)
-    .select("id");
-  if (error) return { ok: false as const, error: error.message };
-  if (!updated || updated.length === 0) return { ok: false as const, error: "Account not found." };
-  revalidateAll();
-  return { ok: true as const };
-}
-
 /**
  * Reset a Topstep account: trades closed before now stop counting toward the
- * MLL, DLL and target (`evaluateTopstep` reads `topstep_reset_at`). The Topstep
- * twin of `resetFtmoChallenge` — a new plan on an account past its MLL is
- * refused until this runs.
+ * MLL, DLL and target (`evaluateTopstep` reads `topstep_reset_at`). A new plan
+ * on an account past its MLL is refused until this runs.
  */
 export async function resetTopstepAccount(id: string) {
   const supabase = await createClient();
@@ -1238,9 +1195,9 @@ export async function resetTopstepAccount(id: string) {
  * The dialog asks for what decides how every trade on the account reads —
  * name, Live or Backtest, currency, starting balance, timezone — instead of the
  * blank "New Account" this used to make on one click. `copyFrom` copies the
- * rest (breakeven, costs, FTMO rules) from another account: many prop-firm
- * challenges share one rule set, and retyping it per account is how two of
- * them end up with different limits.
+ * rest (breakeven, costs, Topstep rules) from another account: several
+ * Combines share one rule set, and retyping it per account is how two of them
+ * end up with different limits.
  */
 export async function addAccount(input: {
   name: string;

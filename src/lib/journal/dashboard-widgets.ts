@@ -47,8 +47,8 @@ export type DashboardWidget = {
 /**
  * Why three widgets refuse to be hidden.
  *
- * Two of them are warnings about the reader's own money: the FTMO banner
- * announces a prop-firm breach, and the unpriced-trades notice says *the
+ * Two of them are warnings about the reader's own money: the Topstep banner
+ * announces a reached MLL, and the unpriced-trades notice says *the
  * numbers on this page are incomplete*. A display preference must not be able
  * to silence either — a page that can be configured into lying is worse than a
  * page with no configuration at all.
@@ -73,7 +73,7 @@ export const LOCKED_REASON =
  */
 export const DASHBOARD_WIDGETS: DashboardWidget[] = [
   // Locked.
-  { id: "ftmo", label: "Challenge status", group: "headline", span: 4, hideable: false },
+  { id: "topstep", label: "Topstep status", group: "headline", span: 4, hideable: false },
   { id: "unpriced", label: "Incomplete-data warning", group: "headline", span: 4, hideable: false },
   { id: "headline", label: "Headline figures", group: "headline", span: 4, hideable: false },
 

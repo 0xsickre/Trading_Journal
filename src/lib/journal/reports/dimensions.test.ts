@@ -116,8 +116,8 @@ describe("trade column dimensions", () => {
 
   it("resolves an account id to its name when one is supplied", () => {
     const t = one([{ accountId: "acc-9" }]);
-    const ctx = dimCtx([], { accountNames: new Map([["acc-9", "FTMO 100k"]]) });
-    expect(bucketsOf(getDimension("account")!, t, ctx)).toEqual(["FTMO 100k"]);
+    const ctx = dimCtx([], { accountNames: new Map([["acc-9", "Topstep 50K"]]) });
+    expect(bucketsOf(getDimension("account")!, t, ctx)).toEqual(["Topstep 50K"]);
   });
 });
 

@@ -82,7 +82,7 @@ describe("todayIn — a plain zone", () => {
   it("answers the account's calendar day, not UTC's", () => {
     // 01:30 UTC is still the previous evening in New York and already mid-morning
     // in Tokyo. Every day key in this app — the report date, the tracker heatmap,
-    // the FTMO daily limit — is the ACCOUNT's day, so reading `new Date()` and
+    // the prop-firm daily limit — is the ACCOUNT's day, so reading `new Date()` and
     // slicing the ISO string would file a late-evening report under tomorrow.
     vi.useFakeTimers();
     try {

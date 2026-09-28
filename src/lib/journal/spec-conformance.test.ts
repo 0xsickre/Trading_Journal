@@ -453,7 +453,7 @@ describe("the scorecard — README §Process, Survival, Edge", () => {
     expect(at(UNDER_WATER_FLOOR_DAYS * 3)).toBe(0);
   });
 
-  it("takes FTMO headroom as it comes, and drops it when no challenge runs", () => {
+  it("takes prop-firm headroom as it comes, and drops it when no account has one", () => {
     // README: "the room left against a prop-firm limit"… absent, not 100, when
     // nothing is running.
     const at = (propHeadroomPct: number | null) =>

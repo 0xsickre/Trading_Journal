@@ -83,19 +83,6 @@ describe("QuickLogForm on a blown prop-firm account", () => {
     expect(createTradeMock.mock.calls[0][0].origin).toBe("log");
   });
 
-  it("says the same for a frozen FTMO account", () => {
-    render(
-      <QuickLogForm
-        accounts={[ACCOUNT]}
-        instruments={[MNQ]}
-        playbooks={[PLAYBOOK]}
-        optionsMap={OPTIONS}
-        ftmoFailedAccountIds={[ACCOUNT.id]}
-      />,
-    );
-    expect(screen.getByRole("alert")).toHaveTextContent(/FTMO account is frozen/);
-  });
-
   it("shows no warning on a healthy account", () => {
     renderLog();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();

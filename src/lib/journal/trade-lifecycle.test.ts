@@ -286,7 +286,7 @@ describe("overExitMessage", () => {
   });
 });
 
-describe("addsExposure (the FTMO freeze)", () => {
+describe("addsExposure (the blown-account guard)", () => {
   it("lets a closed trade's record be edited", () => {
     expect(addsExposure({ status: "closed", entryQty: 1 }, { status: "closed", entryQty: 1 })).toBe(false);
   });

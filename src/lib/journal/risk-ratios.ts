@@ -219,8 +219,8 @@ const EMPTY_DAILY_DD: DailyDrawdownStats = {
  * running total walks the day's closes in order, and the day's drawdown is the
  * deepest drop below the best point reached so far THAT DAY. Carrying the peak
  * across days would just reproduce the account-wide max drawdown one day at a
- * time; the daily rule is the one an FTMO-style limit actually enforces, and
- * `tj_accounts.ftmo_daily_loss_pct` already exists to be checked against it.
+ * time; the daily rule is the one a prop firm's daily loss limit actually
+ * enforces (Topstep's DLL).
  *
  * Days that never went underwater count as 0 and stay in the denominator.
  * Averaging over losing days only would answer "how bad are my bad days", which

@@ -79,7 +79,7 @@ describe("survival", () => {
   });
 
   it("takes the prop-firm headroom in without a trade gate", () => {
-    // The evidence rides with the producer: `evaluateFtmo` answers null for a
+    // The evidence rides with the producer: `evaluateTopstep` answers null for a
     // window with nothing closed, so a figure here is already earned.
     const s = computeScorecard(
       input({ trades: 0, propHeadroomPct: 40, decidedRs: [] }),

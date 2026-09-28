@@ -21,8 +21,8 @@ export type AccountTopstep = { account: Account; result: TopstepResult };
 /**
  * Topstep state for the accounts in that mode — the room above the MLL and the
  * DLL left today, which the trade form sizes a planned trade from, and the
- * dashboard banner shows. Same shape and the same complete read as
- * `ftmo-status.ts`: a truncated page could omit the trade that moved the floor.
+ * dashboard banner shows. The complete read, never a page of it: a truncated
+ * one could omit the trade that moved the floor.
  */
 export async function getTopstepStatuses(accountIds?: string[]): Promise<AccountTopstep[]> {
   const accounts = await getAccounts();
@@ -102,8 +102,8 @@ export async function getFailedTopstepAccountIds(): Promise<Set<string>> {
 }
 
 /**
- * Whether one account has hit its MLL — the Topstep twin of
- * `isFtmoAccountFrozen`, and evaluated the same way: one account, not the book.
+ * Whether one account has hit its MLL — the write path checks one account, so
+ * this evaluates one account, not the book.
  */
 export async function isTopstepAccountFailed(accountId: string | null | undefined): Promise<boolean> {
   if (!accountId) return false;

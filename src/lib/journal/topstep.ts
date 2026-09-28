@@ -1,11 +1,10 @@
 /**
  * Topstep account rules — pure, from realized (closed) trades.
  *
- * The FTMO module (`ftmo.ts`) measures percentages of a fixed starting balance.
- * Topstep measures none of that: its limits are fixed money per plan, and the one
- * that ends an account — the Maximum Loss Limit — TRAILS the highest END-OF-DAY
+ * Topstep's limits are fixed money per plan, not percentages, and the one that
+ * ends an account — the Maximum Loss Limit — TRAILS the highest END-OF-DAY
  * balance and never comes down. A percentage floor fixed at the start cannot
- * describe it, so this is its own module rather than a mode of the other.
+ * describe it.
  *
  * Rules, read off help.topstep.com on 28.09.2026:
  *
@@ -26,7 +25,7 @@
  *   - Consistency: the best day must stay at or below 55 % of the profit target;
  *     past that the target grows to best day ÷ 0.55.
  *
- * Approximation, as in ftmo.ts: Topstep watches the MLL and DLL INTRADAY with
+ * Approximation: Topstep watches the MLL and DLL INTRADAY with
  * unrealized P&L. A journal only knows closed trades, so a position that went
  * through the floor and came back shows here as a survived day. Good enough to
  * plan with and to review discipline; the platform's own risk engine is the
@@ -96,8 +95,8 @@ export type TopstepResult = {
   /**
    * The closest the account ever came to its floor: the smallest room seen,
    * after every close and every overnight trail, as a share of the plan's MLL
-   * (0–100). The Topstep twin of `evaluateFtmo`'s `headroomPct` — a trailing
-   * floor has no fixed percentage, so the measure is the room itself. Null
+   * (0–100) — a trailing floor has no fixed percentage, so the measure is the
+   * room itself. Null
    * with no trades: nothing was tested.
    */
   headroomPct: number | null;

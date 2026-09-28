@@ -47,14 +47,26 @@ describe("primaryAccount", () => {
 });
 
 describe("duplicateSettings", () => {
-  it("copies how the account trades, renames it, and restarts the challenge", () => {
-    const src = acc({ id: "s", name: "FTMO 100k", ftmo_mode: true, ftmo_max_loss_pct: 10, ftmo_reset_at: "2026-05-01T00:00:00Z", starting_balance: 100000 });
+  it("copies how the account trades, renames it, and starts a fresh Combine", () => {
+    const src = acc({
+      id: "s",
+      name: "Topstep 50K",
+      topstep_mode: true,
+      topstep_plan: "50K",
+      risk_rule_max: 250,
+      topstep_reset_at: "2026-09-01T00:00:00Z",
+      topstep_payout_at: "2026-09-10T00:00:00Z",
+      starting_balance: 50000,
+    });
     const d = duplicateSettings(src);
-    expect(d.name).toBe("FTMO 100k (copy)");
-    expect(d.ftmo_mode).toBe(true);
-    expect(d.ftmo_max_loss_pct).toBe(10);
-    expect(d.starting_balance).toBe(100000);
-    expect("ftmo_reset_at" in d).toBe(false);
+    expect(d.name).toBe("Topstep 50K (copy)");
+    expect(d.topstep_mode).toBe(true);
+    expect(d.risk_rule_max).toBe(250);
+    expect(d.starting_balance).toBe(50000);
+    expect("topstep_reset_at" in d).toBe(false);
+    expect("topstep_payout_at" in d).toBe(false);
+    // FTMO is gone (H1): a duplicate carries none of its columns.
+    expect(Object.keys(d).some((k) => k.startsWith("ftmo_"))).toBe(false);
   });
 });
 

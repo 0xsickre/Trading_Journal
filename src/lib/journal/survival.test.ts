@@ -174,27 +174,17 @@ describe("dayReturnsFrom", () => {
   });
 });
 
-describe("thresholdsFor — the same engine, two sources of limits", () => {
-  it("takes the challenge's rules when the challenge is on", () => {
-    expect(
-      thresholdsFor({
-        ftmoEnabled: true,
-        ftmoMaxLossPct: 10,
-        ftmoDailyLossPct: 5,
-        ftmoProfitTargetPct: 10,
-        ownMaxLossPct: 25,
-      }),
-    ).toEqual({ maxLossPct: 10, dailyLossPct: 5, profitTargetPct: 10 });
-  });
-
-  it("takes the trader's own drawdown when there is no challenge", () => {
-    expect(
-      thresholdsFor({ ftmoEnabled: false, ftmoMaxLossPct: 10, ownMaxLossPct: 20 }),
-    ).toEqual({ maxLossPct: 20, dailyLossPct: null, profitTargetPct: null });
+describe("thresholdsFor — the trader's own floor on an account without prop-firm rules", () => {
+  it("takes the trader's own drawdown", () => {
+    expect(thresholdsFor({ ownMaxLossPct: 20 })).toEqual({
+      maxLossPct: 20,
+      dailyLossPct: null,
+      profitTargetPct: null,
+    });
   });
 
   it("asks nothing of a book with no limit chosen at all", () => {
-    expect(thresholdsFor({ ftmoEnabled: false })).toEqual({
+    expect(thresholdsFor({})).toEqual({
       maxLossPct: null,
       dailyLossPct: null,
       profitTargetPct: null,

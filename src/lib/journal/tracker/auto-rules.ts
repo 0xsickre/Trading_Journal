@@ -329,7 +329,7 @@ function limitFor(pct: number | undefined, equity: number | null): number | null
 /**
  * Net max loss for the whole day, over trades CLOSED that day.
  *
- * Boundary is inclusive (`net <= limit`), matching `evaluateFtmo`: a day
+ * Boundary is inclusive (`net <= limit`), as Topstep counts its DLL: a day
  * exactly at your limit is a day you hit your limit.
  */
 function evalPctDayLoss(

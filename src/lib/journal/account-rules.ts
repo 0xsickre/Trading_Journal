@@ -39,8 +39,8 @@ export function primaryAccount<T extends Pick<Account, "is_active" | "archived_a
 /**
  * The settings a duplicate copies: everything that describes HOW the account
  * trades, nothing that describes what it holds. The name gets " (copy)", the
- * starting balance is the source's (a new challenge of the same size is the
- * usual reason to duplicate), and the challenge restarts — no `ftmo_reset_at`.
+ * starting balance is the source's (a new Combine of the same size is the
+ * usual reason to duplicate), and the Combine starts fresh — no reset or payout.
  */
 export function duplicateSettings(src: Account) {
   return {
@@ -58,16 +58,6 @@ export function duplicateSettings(src: Account) {
     default_swap_per_day: src.default_swap_per_day,
     default_stop_pct: src.default_stop_pct,
     default_target_pct: src.default_target_pct,
-    ftmo_mode: src.ftmo_mode,
-    ftmo_daily_loss_enabled: src.ftmo_daily_loss_enabled,
-    ftmo_daily_loss_pct: src.ftmo_daily_loss_pct,
-    ftmo_daily_loss_basis: src.ftmo_daily_loss_basis,
-    ftmo_max_loss_enabled: src.ftmo_max_loss_enabled,
-    ftmo_max_loss_pct: src.ftmo_max_loss_pct,
-    ftmo_profit_target_enabled: src.ftmo_profit_target_enabled,
-    ftmo_profit_target_pct: src.ftmo_profit_target_pct,
-    ftmo_min_days_enabled: src.ftmo_min_days_enabled,
-    ftmo_min_days: src.ftmo_min_days,
     // Topstep: the plan and the risk rule travel; a payout and a reset belong to
     // the account that had them, so the copy starts a fresh Combine.
     topstep_mode: src.topstep_mode,

@@ -27,7 +27,7 @@ import {
  *
  * The three locked widgets are listed rather than omitted, greyed out with the
  * reason attached. Hiding them from the list would leave a reader who wants
- * the FTMO banner gone hunting for a switch that does not exist; showing the
+ * the Topstep banner gone hunting for a switch that does not exist; showing the
  * switch disabled answers the question in place.
  *
  * LISTED IN PAGE ORDER, NOT GROUPED BY KIND. Grouping read better while the

@@ -7,8 +7,7 @@
  * "2 % of equity" allows less after every loss and the rule can never quite be
  * broken. Pegging it to the balance the day opened with — the previous day's
  * close — gives the day one fixed number to be judged against, which is also
- * the convention every prop firm uses and the one `ftmo.ts` already implements
- * as `prev_close`.
+ * the convention every prop firm uses.
  *
  * WHY IT CAN ANSWER `null`. An unpriced trade (an instrument with no point
  * value) makes the realized total unknown from that day on, and an unknown

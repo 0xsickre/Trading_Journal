@@ -78,16 +78,7 @@ function account(over: Partial<Account> & { id: string }): Account {
     default_swap_per_day: 0,
     default_stop_pct: null,
     default_target_pct: null,
-    ftmo_mode: false,
-    ftmo_daily_loss_enabled: false,
-    ftmo_daily_loss_pct: 0,
-    ftmo_max_loss_enabled: false,
-    ftmo_max_loss_pct: 0,
-    ftmo_profit_target_enabled: false,
-    ftmo_profit_target_pct: 0,
-    ftmo_min_days_enabled: false,
-    ftmo_min_days: 0,
-    ftmo_reset_at: null,
+
 
     topstep_mode: false,
 
@@ -562,42 +553,7 @@ describe("lifecycle buttons only appear where the action can actually succeed", 
   });
 });
 
-describe("FTMO-frozen account blocks a new trade before anything else is validated", () => {
-  it("disables Save trade outright — the reader cannot even attempt the submit", async () => {
-    const user = userEvent.setup({ delay: null });
-    render(
-      <TradeForm
-        optionsMap={{}}
-        instruments={[INSTRUMENT]}
-        accounts={[ACCOUNT]}
-        ftmoFailedAccountIds={["acc-1"]}
-      />,
-    );
-    const saveBtn = screen.getByRole("button", { name: /Save trade/ });
-    expect(saveBtn).toBeDisabled();
-
-    await user.click(saveBtn); // a disabled button fires no click handler
-    expect(createTradeMock).not.toHaveBeenCalled();
-    expect(toastErrorMock).not.toHaveBeenCalled();
-  });
-
-  it("editing an ALREADY-SAVED trade on a frozen account stays allowed", async () => {
-    render(
-      <TradeForm
-        optionsMap={{}}
-        instruments={[INSTRUMENT]}
-        accounts={[ACCOUNT]}
-        ftmoFailedAccountIds={["acc-1"]}
-        initial={baseInitial({ status: "planned", executions: [] })}
-      />,
-    );
-    // Freezing blocks NEW trades only — an existing one must stay editable,
-    // or a trader could never even correct a typo on a frozen account.
-    expect(screen.getByRole("button", { name: /Update trade/ })).toBeEnabled();
-  });
-});
-
-describe("a Topstep account that hit its MLL blocks a new plan, like a frozen FTMO one", () => {
+describe("a Topstep account that hit its MLL blocks a new plan", () => {
   it("disables Save trade and says why", async () => {
     const user = userEvent.setup({ delay: null });
     render(

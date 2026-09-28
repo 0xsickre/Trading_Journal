@@ -115,7 +115,6 @@ export function QuickLogForm({
   playbooks,
   optionsMap,
   review,
-  ftmoFailedAccountIds = [],
   topstepFailedAccountIds = [],
 }: {
   accounts: Account[];
@@ -124,11 +123,11 @@ export function QuickLogForm({
   optionsMap: OptionsMap;
   review?: ReviewTrade;
   /**
-   * Blown prop-firm accounts. A warning, never a block: a trade that already
-   * closed is the record, and refusing it would refuse the very trade that took
-   * the account through its limit. Only a new plan is refused (`createTrade`).
+   * Topstep accounts past their MLL. A warning, never a block: a trade that
+   * already closed is the record, and refusing it would refuse the very trade
+   * that took the account through its limit. Only a new plan is refused
+   * (`createTrade`).
    */
-  ftmoFailedAccountIds?: string[];
   topstepFailedAccountIds?: string[];
 }) {
   const router = useRouter();
@@ -144,9 +143,7 @@ export function QuickLogForm({
       ? null
       : topstepFailedAccountIds.includes(accountId)
         ? "This Topstep account hit its Maximum Loss Limit. The trade is logged as a record — no new plan until the account is reset in Settings."
-        : ftmoFailedAccountIds.includes(accountId)
-          ? "The FTMO account is frozen — a rule was breached. The trade is logged as a record — no new plan until the challenge is reset in Settings."
-          : null;
+        : null;
   const tz = account?.timezone ?? "UTC";
   const [symbol, setSymbol] = useState<string>(instruments[0]?.symbol ?? "");
   const instrument = instruments.find((i) => i.symbol === symbol) ?? null;

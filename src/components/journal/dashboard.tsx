@@ -199,8 +199,6 @@ import {
   weeklyExitEfficiency,
   type PnlMode,
 } from "@/lib/journal/analytics";
-import { evaluateFtmo, ftmoConfigFromAccount } from "@/lib/journal/ftmo";
-import { FtmoBanner } from "@/components/journal/ftmo-banner";
 import { TopstepBanner } from "@/components/journal/topstep-banner";
 import { evaluateTopstep, topstepConfigFromAccount, topstepRulesResolver, type TopstepResult } from "@/lib/journal/topstep";
 import { unpricedClosedCount } from "@/lib/journal/money-provenance";
@@ -754,23 +752,6 @@ export function Dashboard({
 
   const anchorYear = Number(anchor.slice(0, 4));
   const anchorQuarter = Math.floor((Number(anchor.slice(5, 7)) - 1) / 3) + 1;
-
-  // FTMO challenge status per account with the mode enabled.
-  const ftmoStatuses = useMemo(
-    () =>
-      accounts
-        .filter((a) => a.ftmo_mode)
-        .map((account) => {
-          const rows = toRealized(
-            trades.filter((t) => t.account_id === account.id),
-          ).map((r) => ({ closedAt: r.closedAt, net: r.net }));
-          return {
-            account,
-            result: evaluateFtmo(ftmoConfigFromAccount(account), rows),
-          };
-        }),
-    [accounts, trades],
-  );
 
   // Topstep status per account in that mode (topstep.ts): room above the MLL,
   // today's DLL, consistency, target.
@@ -1350,31 +1331,29 @@ export function Dashboard({
   );
 
   /**
-   * Worst prop-firm headroom across the accounts running a challenge.
+   * Worst prop-firm headroom across the Topstep accounts: the smallest room
+   * ever left above each one's trailing MLL, as a share of the MLL
+   * (`evaluateTopstep`, F3).
    *
-   * MINIMUM, NOT AVERAGE. The constraint that ends a challenge is whichever
-   * account came nearest to its own floor, and averaging two accounts lets a
-   * comfortable one paper over the one that sat a fraction of a percent from
-   * the end. `null` — the part drops and Survival averages the rest — when no
-   * account runs FTMO or Topstep rules, or when every window is still empty.
-   * A Topstep account's figure is the smallest room ever left above its
-   * trailing MLL, as a share of the MLL (`evaluateTopstep`, F3).
+   * MINIMUM, NOT AVERAGE. The constraint that ends an account is whichever came
+   * nearest to its own floor, and averaging two lets a comfortable one paper
+   * over the one that sat a few dollars from the end. `null` — the part drops
+   * and Survival averages the rest — when no account runs Topstep rules, or
+   * when every window is still empty.
    *
    * DELIBERATELY OUTSIDE THE PERIOD FILTER, unlike every other figure fed to
    * the scorecard, including the two Process halves above, which are windowed
-   * precisely so the card does not mix timeframes. The exception is
-   * not an oversight: a challenge window is defined by its own `ftmo_reset_at`
-   * and a fixed starting balance, and 4.5 % of a 5 % floor does not stop having
-   * been touched because the reader switched the view to the last 30 days.
-   * Recomputing it over the dashboard period would produce a number no prop
-   * firm would recognise.
+   * precisely so the card does not mix timeframes. The exception is not an
+   * oversight: an account's window is defined by its own `topstep_reset_at`
+   * and starting balance, and a floor nearly touched does not stop having been
+   * touched because the reader switched the view to the last 30 days.
    */
   const propHeadroomPct = useMemo(() => {
-    const rooms = [...ftmoStatuses, ...topstepStatuses]
+    const rooms = topstepStatuses
       .map(({ result }) => result.headroomPct)
       .filter((h): h is number => h != null);
     return rooms.length === 0 ? null : Math.min(...rooms);
-  }, [ftmoStatuses, topstepStatuses]);
+  }, [topstepStatuses]);
 
   /**
    * R of the trades expectancy is actually averaged over — decided, and
@@ -1475,12 +1454,10 @@ export function Dashboard({
   /**
    * The simulation behind the Survival card.
    *
-   * Its input is the book's own daily results as percentages of the equity each
-   * day opened with, so the run compounds the way the account does and every
-   * threshold is a percentage of the same thing. Thresholds come from the
-   * challenge when one is on, and from the trader's own worst historical
-   * drawdown when it is not — the simulation itself does not know the
-   * difference.
+   * On an account without prop-firm rules its input is the book's own daily
+   * results as percentages of the equity each day opened with, so the run
+   * compounds the way the account does, and the floor is the trader's own worst
+   * historical drawdown.
    *
    * A Topstep account is replayed in MONEY instead (`simulateTopstepSurvival`,
    * F3): its own Topstep days, from its balance and trailing floor as they stand
@@ -1523,17 +1500,10 @@ export function Dashboard({
     }
 
     const returns = dayReturnsFrom(daily, (day) => dayEquityOf(day));
-    const ftmoOn = account.ftmo_mode === true;
     const thresholds = thresholdsFor({
-      ftmoEnabled: ftmoOn,
-      ftmoMaxLossPct: account.ftmo_max_loss_enabled ? account.ftmo_max_loss_pct : null,
-      ftmoDailyLossPct: account.ftmo_daily_loss_enabled ? account.ftmo_daily_loss_pct : null,
-      ftmoProfitTargetPct: account.ftmo_profit_target_enabled
-        ? account.ftmo_profit_target_pct
-        : null,
-      // Without a challenge the floor is the one the book has already seen —
-      // the honest default for "a drawdown I would not accept", rounded up to
-      // the next whole percent and never below five.
+      // Without prop-firm rules the floor is the one the book has already
+      // seen — the honest default for "a drawdown I would not accept", rounded
+      // up to the next whole percent and never below five.
       ownMaxLossPct: Math.max(5, Math.ceil(drawdown.maxPctOfEquity || 0)),
     });
     return {
@@ -1543,7 +1513,7 @@ export function Dashboard({
         blockDays: survivalBlock,
         thresholds,
       }),
-      limitLabel: ftmoOn ? "the challenge floor" : `a ${thresholds.maxLossPct}% drawdown`,
+      limitLabel: `a ${thresholds.maxLossPct}% drawdown`,
     };
   }, [accounts, accountFilter, daily, dayEquityOf, drawdown, survivalBlock, topstepStatuses, realizedAll, tzOf]);
 
@@ -1667,14 +1637,6 @@ export function Dashboard({
         <div className="space-y-2">
           {topstepStatuses.map(({ account, result }) => (
             <TopstepBanner key={account.id} account={account} result={result} />
-          ))}
-        </div>
-      )}
-
-      {ftmoStatuses.length > 0 && (
-        <div className="space-y-2">
-          {ftmoStatuses.map(({ account, result }) => (
-            <FtmoBanner key={account.id} account={account} result={result} />
           ))}
         </div>
       )}
@@ -2274,7 +2236,7 @@ export function Dashboard({
             // No `equityBase` in the context passed here — on purpose.
             // Percentage mode's fallback in `formatMetric` is "no denominator,
             // show money", and there is no sound denominator for this one: a
-            // daily loss limit (the FTMO-style rule this metric mirrors, per
+            // daily loss limit (the prop-firm rule this metric mirrors, per
             // its own doc comment in risk-ratios.ts) is measured against a
             // FIXED reference such as starting balance, never against
             // TODAY's fluctuating equity. Rather than invent and ship an

@@ -218,7 +218,7 @@ export function trackerRuleMayHardDelete(input: {
 /**
  * A number typed into a Settings field, or the reason it was refused.
  *
- * `Number("10.000")` is 10 and `Number("")` is 0, so balances and FTMO limits
+ * `Number("10.000")` is 10 and `Number("")` is 0, so balances and limits
  * used to save as a different value — or as zero — with no word. The import
  * parser reads `10.000`, `10,000` and `-37,50` the way a trader means them and
  * refuses what it cannot read; empty is "no value", which the caller decides

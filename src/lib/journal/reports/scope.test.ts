@@ -13,8 +13,8 @@ const acc = (id: string, name: string, account_kind: "trading" | "backtest") => 
   name,
   account_kind,
 });
-const LIVE = acc("live-1", "FTMO 100k", "trading");
-const LIVE2 = acc("live-2", "FTMO 100k", "trading");
+const LIVE = acc("live-1", "Topstep 50K", "trading");
+const LIVE2 = acc("live-2", "Topstep 50K", "trading");
 const BT = acc("bt-1", "Gold backtest", "backtest");
 
 describe("report scope by account kind", () => {
@@ -47,11 +47,11 @@ describe("report scope by account kind", () => {
   });
 
   it("tells same-named accounts apart, and leaves unique names alone", () => {
-    const labels = accountLabels([LIVE, LIVE2, BT, acc("bt-2", "FTMO 100k", "backtest")]);
+    const labels = accountLabels([LIVE, LIVE2, BT, acc("bt-2", "Topstep 50K", "backtest")]);
     expect(labels.get("bt-1")).toBe("Gold backtest");
-    expect(labels.get("bt-2")).toBe("FTMO 100k · backtest");
-    expect(labels.get("live-1")).toBe("FTMO 100k · live · ve-1");
-    expect(labels.get("live-2")).toBe("FTMO 100k · live · ve-2");
+    expect(labels.get("bt-2")).toBe("Topstep 50K · backtest");
+    expect(labels.get("live-1")).toBe("Topstep 50K · live · ve-1");
+    expect(labels.get("live-2")).toBe("Topstep 50K · live · ve-2");
     expect(new Set(labels.values()).size).toBe(4);
   });
 });

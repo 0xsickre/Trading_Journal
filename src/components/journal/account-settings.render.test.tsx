@@ -21,14 +21,12 @@ const updateAccountMock = vi.fn();
 const addAccountMock = vi.fn();
 const archiveAccountMock = vi.fn();
 const restoreAccountMock = vi.fn();
-const resetFtmoChallengeMock = vi.fn();
 const resetTopstepAccountMock = vi.fn();
 vi.mock("@/app/(app)/settings/actions", () => ({
   updateAccount: (...a: unknown[]) => updateAccountMock(...a),
   addAccount: (...a: unknown[]) => addAccountMock(...a),
   archiveAccount: (...a: unknown[]) => archiveAccountMock(...a),
   restoreAccount: (...a: unknown[]) => restoreAccountMock(...a),
-  resetFtmoChallenge: (...a: unknown[]) => resetFtmoChallengeMock(...a),
   resetTopstepAccount: (...a: unknown[]) => resetTopstepAccountMock(...a),
   deleteAccount: (...a: unknown[]) => deleteAccountMock(...a),
   countAccountUsage: (...a: unknown[]) => countAccountUsageMock(...a),
@@ -54,17 +52,7 @@ const account = (over: Partial<Account> = {}): Account => ({
   default_swap_per_day: 0,
   default_stop_pct: null,
   default_target_pct: null,
-  ftmo_mode: false,
-  ftmo_daily_loss_enabled: false,
-  ftmo_daily_loss_pct: 0,
-  ftmo_daily_loss_basis: "starting_balance",
-  ftmo_max_loss_enabled: false,
-  ftmo_max_loss_pct: 0,
-  ftmo_profit_target_enabled: false,
-  ftmo_profit_target_pct: 0,
-  ftmo_min_days_enabled: false,
-  ftmo_min_days: 0,
-  ftmo_reset_at: null,
+
 
   topstep_mode: false,
 
@@ -91,7 +79,7 @@ const usage = (o: Partial<AccountUsage> = {}): AccountUsage => ({
   ...o,
 });
 
-const TWO = [account(), account({ id: "acc-2", name: "FTMO 100k", is_active: false })];
+const TWO = [account(), account({ id: "acc-2", name: "Combine 2", is_active: false })];
 
 async function openMenu(user: ReturnType<typeof userEvent.setup>, name: string) {
   await user.click(screen.getByRole("button", { name: `Actions for ${name}` }));
@@ -104,7 +92,6 @@ beforeEach(() => {
     addAccountMock,
     archiveAccountMock,
     restoreAccountMock,
-    resetFtmoChallengeMock,
     resetTopstepAccountMock,
   ])
     m.mockReset().mockResolvedValue({ ok: true });
@@ -120,7 +107,7 @@ describe("the list", () => {
     expect(within(row).getByText("$100,000.00")).toBeInTheDocument();
     expect(within(row).getByText("12")).toBeInTheDocument();
     // A failed count is a dash, never 0.
-    const other = screen.getByText("FTMO 100k").closest("tr")!;
+    const other = screen.getByText("Combine 2").closest("tr")!;
     expect(within(other).getByTitle("Count unavailable")).toBeInTheDocument();
   });
 
@@ -141,7 +128,7 @@ describe("archive and restore", () => {
   it("archives from the menu", async () => {
     const user = userEvent.setup({ delay: null });
     render(<AccountSettings accounts={TWO} />);
-    await openMenu(user, "FTMO 100k");
+    await openMenu(user, "Combine 2");
     await user.click(await screen.findByRole("menuitem", { name: /Archive/ }));
     await vi.waitFor(() => expect(archiveAccountMock).toHaveBeenCalledWith("acc-2"));
   });
@@ -189,22 +176,22 @@ describe("new account and duplicate", () => {
   it("duplicate prefills the dialog and copies from the source", async () => {
     const user = userEvent.setup({ delay: null });
     render(<AccountSettings accounts={TWO} />);
-    await openMenu(user, "FTMO 100k");
+    await openMenu(user, "Combine 2");
     await user.click(await screen.findByRole("menuitem", { name: /Duplicate/ }));
-    expect(screen.getByLabelText("Name")).toHaveValue("FTMO 100k (copy)");
+    expect(screen.getByLabelText("Name")).toHaveValue("Combine 2 (copy)");
     await user.click(screen.getByRole("button", { name: "Create" }));
     await vi.waitFor(() =>
       expect(addAccountMock).toHaveBeenCalledWith(expect.objectContaining({ copyFrom: "acc-2" })),
     );
   });
 
-  it("says a duplicate copies the prop-firm rules, FTMO or Topstep — both are copied", async () => {
+  it("says a duplicate copies the Topstep rules — FTMO is gone (H1)", async () => {
     const user = userEvent.setup({ delay: null });
     render(<AccountSettings accounts={TWO} />);
-    await openMenu(user, "FTMO 100k");
+    await openMenu(user, "Combine 2");
     await user.click(await screen.findByRole("menuitem", { name: /Duplicate/ }));
-    expect(screen.getByText(/costs and prop-firm rules \(FTMO or Topstep\)/)).toBeInTheDocument();
-    expect(screen.queryByText(/costs and FTMO rules/)).not.toBeInTheDocument();
+    expect(screen.getByText(/costs and Topstep rules/)).toBeInTheDocument();
+    expect(screen.queryByText(/FTMO/)).not.toBeInTheDocument();
   });
 });
 
@@ -249,6 +236,23 @@ describe("edit", () => {
   });
 });
 
+describe("FTMO is gone (H1, 28.09.2026)", () => {
+  it("the edit dialog offers Topstep rules and no FTMO challenge", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<AccountSettings accounts={[account()]} tradeCounts={{ "acc-1": 0 }} />);
+    await openMenu(user, "Main Account");
+    await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
+    expect(screen.getByText("Topstep rules (futures)")).toBeInTheDocument();
+    expect(screen.queryByText(/FTMO/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Restart challenge/ })).not.toBeInTheDocument();
+  });
+
+  it("the list names a Topstep account's plan in the Rules column", () => {
+    render(<AccountSettings accounts={[account({ topstep_mode: true })]} />);
+    expect(screen.getByText("Topstep 50K")).toBeInTheDocument();
+  });
+});
+
 describe("a Topstep account can be reset", () => {
   // A plan on a Topstep account past its MLL is refused until the account is
   // reset, so the reset has to exist where the refusal points: here.
@@ -262,7 +266,6 @@ describe("a Topstep account can be reset", () => {
     expect(screen.getByText(/stop counting toward the Topstep limits/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Reset" }));
     await vi.waitFor(() => expect(resetTopstepAccountMock).toHaveBeenCalledWith("acc-1"));
-    expect(resetFtmoChallengeMock).not.toHaveBeenCalled();
   });
 
   it("is not offered on an account outside Topstep mode", async () => {
@@ -278,7 +281,7 @@ describe("delete permanently", () => {
   async function openDelete(user: ReturnType<typeof userEvent.setup>, u: AccountUsage) {
     countAccountUsageMock.mockResolvedValue({ ok: true, usage: u });
     render(<AccountSettings accounts={TWO} />);
-    await openMenu(user, "FTMO 100k");
+    await openMenu(user, "Combine 2");
     await user.click(await screen.findByRole("menuitem", { name: /Delete permanently/ }));
   }
 
@@ -298,7 +301,7 @@ describe("delete permanently", () => {
     expect(await screen.findByText("7")).toBeInTheDocument();
     const button = screen.getByRole("button", { name: /Delete permanently/ });
     expect(button).toBeDisabled();
-    await user.type(screen.getByLabelText(/to confirm/), "FTMO 100k");
+    await user.type(screen.getByLabelText(/to confirm/), "Combine 2");
     expect(button).toBeEnabled();
   });
 
@@ -313,7 +316,7 @@ describe("delete permanently", () => {
     const user = userEvent.setup({ delay: null });
     countAccountUsageMock.mockReturnValue(new Promise(() => {}));
     render(<AccountSettings accounts={TWO} />);
-    await openMenu(user, "FTMO 100k");
+    await openMenu(user, "Combine 2");
     await user.click(await screen.findByRole("menuitem", { name: /Delete permanently/ }));
     expect(await screen.findByRole("button", { name: /Delete permanently/ })).toBeDisabled();
     expect(screen.getAllByText(/Checking what this account holds/).length).toBeGreaterThan(0);

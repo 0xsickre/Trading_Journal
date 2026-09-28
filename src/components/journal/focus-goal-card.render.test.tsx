@@ -3,14 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { FocusGoalCard } from "./focus-goal-card";
 import { daysOnActiveGoal, type FocusGoal } from "@/lib/journal/focus-goal";
 
-// `FtmoBanner` resets a challenge through a Settings action. Mocked so a render
-// test never loads the real actions module — and through it the Supabase server
-// client.
-vi.mock("@/app/(app)/settings/actions", () => ({
-  resetFtmoChallenge: vi.fn().mockResolvedValue({ ok: true }),
-}));
-
-// Same reason as `ftmo-banner.render.test.tsx`: no `AppRouterContext` in
+// No `AppRouterContext` in
 // jsdom, and the save/end actions themselves are not under test here.
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),

@@ -80,7 +80,7 @@ export function accountsInScope<A extends KindedAccount>(
 /**
  * A label per account that tells same-named accounts apart.
  *
- * Two accounts both called "FTMO 100k" — a challenge and the funded account —
+ * Two accounts both called "Topstep 50K" — a challenge and the funded account —
  * used to share one row in the Account breakdown and one entry in the picker.
  * A name used once stays as it is; a repeated name gets the kind and, if that
  * still repeats, the last four characters of the id.
