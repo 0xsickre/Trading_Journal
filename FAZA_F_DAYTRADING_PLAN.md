@@ -88,7 +88,7 @@ pogađa.
 |---|---|---|---|---|---|---|
 | **F1** | Tačnost odmah: ono što danas pogrešno ocenjuje, a ne traži nijednu veliku odluku | #2, #5, #21 | — | ne | Sonnet | ✅ `c0077e1` (28.09.2026) |
 | **F2** | Topstep dan (17:00 → 17:00 CT) kao ključ dana svuda gde se dan broji | #1 | F1 | ne (D2-A: izvedeno iz `topstep_mode`) | **Opus** | ✅ `3644c05` (28.09.2026) |
-| **F3** | Topstep pravila u tracker-u i Survival-u | #3, #4, #6 | F2 | da: `20260928160000` (`risk_budget_at_entry`) | **Opus** | ✅ `a8e63f9` (28.09.2026) — migracija čeka odobrenje za primenu, push posle nje |
+| **F3** | Topstep pravila u tracker-u i Survival-u | #3, #4, #6 | F2 | da: `20260928160000` (`risk_budget_at_entry`) | **Opus** | ✅ `a8e63f9` (28.09.2026) — migracija čeka odobrenje za primenu; kod radi i bez nje (budžet se tada izvodi) |
 | **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da (brief tabela, nova pravila, time stop, kategorije) | **Opus** | ⏳ **sledeća — detaljan plan napisan, čeka odluke G1–G6 i H1** |
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, swap, uzorak | #11–#15, #17, #18 | F2 | ne (sve izvedeno) | Sonnet, Opus za #13 | okvir |
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, legacy CFD u UI-ju, komentari, PARITY | #16, #19, #20, #22, #23 | F5 | možda (#16) | Sonnet | okvir |
@@ -296,8 +296,10 @@ iz naloga, ništa se ne upisuje; `tj_daily_reports` i `tj_tracker_checkins` osta
   −2.000, bio je pogrešan jer ga DLL s pravom seče.
 - `ftmoHeadroomPct` je postao `propHeadroomPct` („Prop-firm room" na kartici).
 - Gate zelen, 3.125 testova (+50), coverage pragovi (100 % za `survival.ts`) prolaze.
-- **Migracija `20260928160000` NIJE primenjena** — čeka odobrenje trejdera; kod čita kolonu, pa
-  push na `main` (Vercel) ide tek posle primene.
+- **Migracija `20260928160000` NIJE primenjena** — čeka odobrenje trejdera. Kod je bezbedan na obe
+  strane migracije: `updateTrade` čita prethodni red sa `select("*")` (imenovana nepostojeća kolona bi
+  oborila čitanje), `tj_save_trade` preskače kolonu koje nema, a tracker tada izvodi budžet. Posle
+  primene pečat počinje da se piše sam.
 
 
 **Ulaz:** `main` posle F2 (`3644c05`), gate zelen (3.075 testova). **Pročitati:** README § Process
@@ -387,7 +389,7 @@ tracking, § Topstep, § Survival, § Process · Survival · Edge; `tracker/auto
 
 ## F4 — Dnevni tok za day tradera (detaljno)
 
-**Ulaz:** `main` posle F3 (`a8e63f9`, migracija `20260928160000` primenjena). **Pročitati:** README
+**Ulaz:** `main` posle F3 (`a8e63f9`; migracija `20260928160000` primenjena pre F4 koda). **Pročitati:** README
 § Routes `/daily`, § Ratings, § Process tracking; `daily-report-form.tsx`, `open-positions-card.tsx`,
 `position-checkin.ts`, `form-config.ts`, `tracker-types.ts`, `tracker-rule-manager.tsx`,
 `tracker/auto-rules.ts`, seed migracija `20260919230000`; u `futures-trading`: `tools/brief/brief.py`,

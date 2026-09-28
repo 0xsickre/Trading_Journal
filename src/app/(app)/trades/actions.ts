@@ -407,11 +407,15 @@ export async function updateTrade(id: string, input: TradeInput) {
   // `custom` is read in the same round trip: a jsonb write replaces the whole
   // document, so the previous bag has to be the base or every key this form did
   // not render would be erased.
+  //
+  // `*` rather than a column list: `risk_budget_at_entry` (F3) may not exist yet
+  // on a database the migration has not reached, and naming it would fail the
+  // whole read — "Trade not found" on every edit. Absent, it reads as unsealed,
+  // the patch computes a budget, and `tj_save_trade` skips a column it does not
+  // have: the same code is safe on both sides of the migration.
   const { data: prevPos } = await supabase
     .from("tj_positions")
-    .select(
-      "instrument, point_value_at_trade, custom, max_drawdown_price, max_profit_price, equity_at_entry, risk_budget_at_entry, plan_snapshot, plan_amended_at",
-    )
+    .select("*")
     .eq("id", id)
     .maybeSingle();
 
