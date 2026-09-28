@@ -30,6 +30,21 @@ describe("normalizeInstrumentSymbol", () => {
     expect(normalizeInstrumentSymbol("US500.cash")).toBe("US500CASH");
   });
 
+  it("reads a futures contract as its catalog root, whatever platform wrote it", () => {
+    expect(normalizeInstrumentSymbol("MNQZ6")).toBe("MNQ");
+    expect(normalizeInstrumentSymbol("/MNQZ26")).toBe("MNQ"); // TopstepX
+    expect(normalizeInstrumentSymbol("NQ1!")).toBe("NQ"); // TradingView continuous
+    expect(normalizeInstrumentSymbol("ESH7")).toBe("ES");
+    expect(normalizeInstrumentSymbol("M6EZ6")).toBe("M6E");
+    expect(normalizeInstrumentSymbol("6E")).toBe("6E");
+  });
+
+  it("does not read the CFD index as the future, nor the future as the CFD", () => {
+    expect(normalizeInstrumentSymbol("NDX")).toBe("US100.cash");
+    expect(instrumentsMatch("NQZ6", "US100.cash")).toBe(false);
+    expect(instrumentsMatch("MNQZ6", "NQ")).toBe(false); // a micro is not its mini
+  });
+
   it("passes through canonical FX", () => {
     expect(normalizeInstrumentSymbol("eurusd")).toBe("EURUSD");
     expect(normalizeInstrumentSymbol("USDCAD")).toBe("USDCAD");

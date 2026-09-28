@@ -32,6 +32,13 @@ import {
   type Mt5Statement,
 } from "@/lib/journal/mt5-statement";
 import {
+  TOPSTEPX_COLUMNS,
+  isTopstepXTrades,
+  readTopstepXTrades,
+  topstepXImportRows,
+  type TopstepXTrade,
+} from "@/lib/journal/topstepx-export";
+import {
   TRADINGVIEW_SHEET,
   groupTradingViewPositions,
   isTradingViewTrades,
@@ -163,6 +170,26 @@ const MT5_MAP: Record<Canonical, string> = {
   profit: MT5_COLUMNS.profit,
   target: MT5_COLUMNS.target,
 };
+
+/**
+ * The same, for a TopstepX trades export. Its times carry their own offset, so
+ * no zone is asked for. The result is not mapped, exactly as for TradingView:
+ * the reader has just proven TopstepX's gross P&L equal to the price move ×
+ * the catalog's multiplier, so the money derived from prices is the same money.
+ */
+const TOPSTEPX_MAP: Record<Canonical, string> = {
+  instrument: TOPSTEPX_COLUMNS.symbol,
+  direction: TOPSTEPX_COLUMNS.side,
+  qty: TOPSTEPX_COLUMNS.volume,
+  entry_price: TOPSTEPX_COLUMNS.entryPrice,
+  entry_time: TOPSTEPX_COLUMNS.entryTime,
+  exit_price: TOPSTEPX_COLUMNS.exitPrice,
+  exit_time: TOPSTEPX_COLUMNS.exitTime,
+  fee: TOPSTEPX_COLUMNS.fee,
+  swap: "",
+  profit: "",
+  target: "",
+};
 /**
  * The row's own result, as a number the matcher can compare.
  *
@@ -269,6 +296,9 @@ export function ImportWizard({
   // Set when the file is an MT5 history report: three tables in one sheet, so
   // the header is not row 1 and the mapping cannot start from it.
   const [mt5, setMt5] = useState<Mt5Statement | null>(null);
+  // Set when the file is TopstepX's trades export: month-first dates the time
+  // parser would refuse, and two cost columns, so the layout is read directly.
+  const [topstepx, setTopstepx] = useState<TopstepXTrade[] | null>(null);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -276,6 +306,7 @@ export function ImportWizard({
     setFilename(file.name);
     setTv(null);
     setMt5(null);
+    setTopstepx(null);
     try {
       let parsed: Record<string, string>[] = [];
       // An MT5 report, read as a grid: its header is not the first row.
@@ -284,6 +315,7 @@ export function ImportWizard({
       // Excel serials, and formatted as text they come out as "9/20/23 14:00",
       // which the time parser rightly refuses as ambiguous.
       let tvRows: Record<string, unknown>[] | null = null;
+      let topstepxRows: Record<string, unknown>[] | null = null;
       if (file.name.toLowerCase().endsWith(".csv")) {
         const text = await file.text();
         const Papa = (await import("papaparse")).default;
@@ -293,6 +325,7 @@ export function ImportWizard({
         });
         parsed = res.data;
         if (parsed.length > 0 && isTradingViewTrades(Object.keys(parsed[0]))) tvRows = parsed;
+        else if (parsed.length > 0 && isTopstepXTrades(Object.keys(parsed[0]))) topstepxRows = parsed;
       } else {
         const buf = await file.arrayBuffer();
         const XLSX = await import("xlsx");
@@ -345,6 +378,20 @@ export function ImportWizard({
           return;
         }
         setTv({ symbol, data });
+        return;
+      }
+      if (topstepxRows) {
+        setHeaders([]);
+        setRows([]);
+        const trades = readTopstepXTrades(
+          topstepxRows,
+          (symbol) => instruments.find((i) => i.symbol === symbol)?.point_value ?? null,
+        );
+        if (trades.length === 0) {
+          toast.error("TopstepX export read, but it holds no trades for that date range.");
+          return;
+        }
+        setTopstepx(trades);
         return;
       }
       if (statement) {
@@ -508,6 +555,16 @@ export function ImportWizard({
     if (tv) {
       const flat = tradingViewRows();
       if (flat) buildFrom(flat.rows, TV_MAP, TV_ISSUE, flat.plans, fileTz);
+      return;
+    }
+    if (topstepx) {
+      // TopstepX accounts are in dollars; into a journal account of another
+      // currency the fees would be read as that one's.
+      if (account && account.currency !== "USD") {
+        toast.error(`TopstepX trades are in USD, "${account.name}" is in ${account.currency}. Pick a USD account.`);
+        return;
+      }
+      buildFrom(topstepXImportRows(topstepx), TOPSTEPX_MAP, TOPSTEPX_COLUMNS.issue, null, fileTz);
       return;
     }
     if (mt5) {
@@ -1014,7 +1071,9 @@ export function ImportWizard({
                     ? `${tv.data.trades.length} trades`
                     : mt5
                       ? `${mt5.positions.length} positions`
-                      : `${rows.length} rows`}
+                      : topstepx
+                        ? `${topstepx.length} trades`
+                        : `${rows.length} rows`}
                 </span>
               )}
             </div>
@@ -1097,6 +1156,22 @@ export function ImportWizard({
                     shown back in the account&apos;s zone.
                   </p>
                 </div>
+                <div className="flex justify-end">
+                  <Button onClick={buildItems}>
+                    Reconcile <ArrowRight className="size-4" />
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {topstepx && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  TopstepX trades export — {topstepx.length} trades. Times carry their own
+                  offset, fees and commissions are added into one cost, and each trade&apos;s
+                  P&amp;L is checked against its price move × the contract&apos;s multiplier.
+                  MAE/MFE is filled the next morning from the exchange&apos;s candles.
+                </p>
                 <div className="flex justify-end">
                   <Button onClick={buildItems}>
                     Reconcile <ArrowRight className="size-4" />

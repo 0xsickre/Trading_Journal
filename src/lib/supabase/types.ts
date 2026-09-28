@@ -1058,6 +1058,7 @@ export type Database = {
           direction: string | null
           entry_price: number | null
           equity_at_entry: number | null
+          excursion_note: string | null
           excursion_source: string | null
           execution_rating: number | null
           exit_reason: string | null
@@ -1108,6 +1109,7 @@ export type Database = {
           direction?: string | null
           entry_price?: number | null
           equity_at_entry?: number | null
+          excursion_note?: string | null
           excursion_source?: string | null
           execution_rating?: number | null
           exit_reason?: string | null
@@ -1158,6 +1160,7 @@ export type Database = {
           direction?: string | null
           entry_price?: number | null
           equity_at_entry?: number | null
+          excursion_note?: string | null
           excursion_source?: string | null
           execution_rating?: number | null
           exit_reason?: string | null

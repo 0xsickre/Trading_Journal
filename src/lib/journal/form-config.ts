@@ -258,13 +258,17 @@ const BASE_TABS: FormTab[] = [
             name: "max_drawdown_price",
             label: "MAE Price (max adverse)",
             type: "number",
-            placeholder: "Worst price against the position",
+            // On a future (NQ, MNQ, ES, MES, 6E, M6E) both prices are written
+            // the next morning from the exchange's candles in R2 and win over a
+            // typed value (futures-trading `tools/journal_mae.py`); typing here
+            // only matters for a CFD.
+            placeholder: "Worst price against the position (futures: from R2, next day)",
           },
           {
             name: "max_profit_price",
             label: "MFE Price (max favorable)",
             type: "number",
-            placeholder: "Best price in favour of the position",
+            placeholder: "Best price in favour of the position (futures: from R2, next day)",
           },
         ],
       },

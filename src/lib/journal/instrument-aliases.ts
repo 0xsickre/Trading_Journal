@@ -55,6 +55,13 @@ export function normalizeInstrumentSymbol(
   const aliased = INSTRUMENT_ALIAS_TO_CANONICAL[key];
   if (aliased && CANONICAL_SET.has(aliased)) return aliased;
 
+  // A futures contract — "MNQZ6", TopstepX "/MNQZ26", TradingView "NQ1!" — is
+  // its catalog root: every month shares one contract spec. Which month was
+  // traded is read back off the exchange's prices when MAE/MFE is measured
+  // (futures-trading `tools/journal_mae.py`), so nothing is lost here.
+  const future = /^(MNQ|NQ|MES|ES|M6E|6E)(?:[FGHJKMNQUVXZ]\d{1,2}|1)$/.exec(key);
+  if (future && CANONICAL_SET.has(future[1])) return future[1];
+
   const direct = DEFAULT_INSTRUMENT_SYMBOLS.find(
     (s) => cleanInstrumentKey(s) === key,
   );

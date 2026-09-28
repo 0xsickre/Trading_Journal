@@ -7,8 +7,8 @@ import { DEFAULT_INSTRUMENTS, DEFAULT_INSTRUMENT_SYMBOLS } from "./default-instr
  * here is a fact from those sheets, written a second way.
  */
 
-describe("the instrument catalog is this broker's book", () => {
-  it("holds exactly the ten instruments traded on it", () => {
+describe("the instrument catalog is the two books traded", () => {
+  it("holds exactly the ten CFDs of the FTMO book and the six Topstep futures", () => {
     expect(DEFAULT_INSTRUMENT_SYMBOLS).toEqual([
       "EURUSD",
       "GBPUSD",
@@ -20,6 +20,12 @@ describe("the instrument catalog is this broker's book", () => {
       "XAUUSD",
       "XCUUSD",
       "US100.cash",
+      "NQ",
+      "MNQ",
+      "ES",
+      "MES",
+      "6E",
+      "M6E",
     ]);
   });
 
@@ -51,6 +57,27 @@ describe("contract specs", () => {
     expect(bySymbol.get("US100.cash")!.point_value).toBe(1);
     for (const sym of ["XAUUSD", "XCUUSD", "US100.cash"]) {
       expect(bySymbol.get(sym)!.tick_size, sym).toBe(0.01); // two digits
+    }
+  });
+
+  it("the futures carry the CME multiplier and tick, a micro a tenth of its mini", () => {
+    const f = new Map(DEFAULT_INSTRUMENTS.map((i) => [i.symbol, i]));
+    const spec: [string, number, number][] = [
+      ["NQ", 20, 0.25],
+      ["MNQ", 2, 0.25],
+      ["ES", 50, 0.25],
+      ["MES", 5, 0.25],
+      ["6E", 125_000, 0.00005],
+      ["M6E", 12_500, 0.0001],
+    ];
+    for (const [sym, pv, tick] of spec) {
+      expect(f.get(sym)!.asset_class, sym).toBe("Futures");
+      expect(f.get(sym)!.point_value, sym).toBe(pv);
+      expect(f.get(sym)!.tick_size, sym).toBe(tick);
+      expect(f.get(sym)!.quote_currency, sym).toBe("USD");
+    }
+    for (const [mini, micro] of [["NQ", "MNQ"], ["ES", "MES"], ["6E", "M6E"]]) {
+      expect(f.get(micro)!.point_value * 10, micro).toBe(f.get(mini)!.point_value);
     }
   });
 
@@ -86,15 +113,33 @@ describe("what the broker charges", () => {
     expect(index.commission_per_lot + index.commission_pct).toBe(0);
   });
 
+  it("Topstep charges the futures per contract: half its round turn on each side", () => {
+    const roundTurn: Record<string, number> = { NQ: 3.78, MNQ: 1.22, ES: 3.78, MES: 1.22, "6E": 4.22, M6E: 1.0 };
+    for (const i of DEFAULT_INSTRUMENTS) {
+      if (i.asset_class !== "Futures") continue;
+      expect(i.commission_per_lot * 2, i.symbol).toBeCloseTo(roundTurn[i.symbol], 10);
+      expect(i.commission_pct, i.symbol).toBe(0);
+      expect(i.commission_currency, i.symbol).toBe("USD");
+    }
+  });
+
   it("the weekend is collected on Wednesday, except on the index where it is Friday", () => {
     for (const i of DEFAULT_INSTRUMENTS) {
       expect(i.swap_triple_day, i.symbol).toBe(i.symbol === "US100.cash" ? 5 : 3);
     }
   });
 
-  it("no swap is left at zero on both sides — that would be a row nobody filled in", () => {
+  it("no CFD swap is left at zero on both sides — that would be a row nobody filled in", () => {
     for (const i of DEFAULT_INSTRUMENTS) {
+      if (i.asset_class === "Futures") continue;
       expect(Math.abs(i.swap_long) + Math.abs(i.swap_short), i.symbol).toBeGreaterThan(0);
+    }
+  });
+
+  it("a future pays no swap — its financing is in the price", () => {
+    for (const i of DEFAULT_INSTRUMENTS) {
+      if (i.asset_class !== "Futures") continue;
+      expect([i.swap_long, i.swap_short], i.symbol).toEqual([0, 0]);
     }
   });
 });

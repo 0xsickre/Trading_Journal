@@ -159,9 +159,13 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- Bruto rezultat prepisan sa brokerovog izvoda umesto izvedenog iz cena
   -- (20260815210613). Vidi `money_overridden` u tj_position_stats.
   gross_pnl_override   numeric,
-  -- Ko je upisao MAE/MFE: manual | mt5 | tradingview. Ručno se nikad ne gazi
-  -- (20260919100000, 20260919140000, 20260919160000).
+  -- Ko je upisao MAE/MFE: manual | mt5 | tradingview | r2. Na CFD-u ručno se
+  -- nikad ne gazi; na fjučersu r2 (berzanske sveće iz R2) pobeđuje
+  -- (20260919100000, 20260919140000, 20260919160000, 20260928120000).
   excursion_source     text,
+  -- Odakle je automatski MAE/MFE pročitan: ugovor i rezolucija, npr.
+  -- "MNQZ6 · 1s" (20260928120000).
+  excursion_note       text,
   -- Equity naloga na POČETKU dana ulaska, u zoni naloga, zamrznut kad je trejd
   -- prvi put dobio entry fill (20260920160000). Imenilac svakog procenta rizika;
   -- jedini činilac tog računa koji se ne može rekonstruisati unazad.

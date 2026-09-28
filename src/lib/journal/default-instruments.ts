@@ -3,9 +3,10 @@
 // It used to be 91 rows: every major pair, every cross, futures for markets
 // nobody here trades. A trade form that offers HG, ZB and HK50 to someone who
 // trades ten CFDs is a list to scroll past, and worse, its specs were guesses
-// at "the MT5 convention most brokers keep". These ten are copied from the
+// at "the MT5 convention most brokers keep". The first ten are copied from the
 // contract sheets of the account's own broker, so the numbers are facts rather
-// than conventions. A symbol the broker adds later is added in Settings.
+// than conventions; the six futures at the end are the exchange's contracts on
+// the second book, Topstep. A symbol a broker adds later is added in Settings.
 //
 // EVERYTHING IS PER LOT. `point_value` is the money one full point of price is
 // worth for ONE lot, and `position_size` on a trade is counted in those same
@@ -155,6 +156,55 @@ export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
     is_active: true,
     sort_order: 20,
   },
+
+  // --------------------------------------------------------- Futures, Topstep
+  // The second book: CME futures traded on Topstep (TopstepX), added 28.09.2026
+  // when trading moved there. The contract terms are the exchange's, not a
+  // broker's: one lot is one contract, and `point_value` is the CME multiplier
+  // — 20 dollars a point on NQ, a tenth of that on the micro. The commission
+  // is Topstep's round turn halved into the per-side figure this catalog keeps
+  // (help.topstep.com, "TopstepX — Commissions and Fees", read 28.09.2026:
+  // 3.78 / 1.22 / 4.22 / 1.00 a round turn).
+  //
+  // There is no swap: a future carries its financing in the price, so both
+  // sides are zero on purpose, not left unfilled.
+  //
+  // MAE/MFE on these comes from the exchange's own prices, kept in Cloudflare
+  // R2 (futures-trading repo, `tools/journal_mae.py`), never typed.
+  futures("NQ", "E-mini Nasdaq 100", 20, 0.25, 1.89, 30),
+  futures("MNQ", "Micro E-mini Nasdaq 100", 2, 0.25, 0.61, 31),
+  futures("ES", "E-mini S&P 500", 50, 0.25, 1.89, 32),
+  futures("MES", "Micro E-mini S&P 500", 5, 0.25, 0.61, 33),
+  futures("6E", "Euro FX", 125_000, 0.00005, 2.11, 34),
+  futures("M6E", "Micro EUR/USD", 12_500, 0.0001, 0.5, 35),
 ];
+
+/** A CME future: one lot is one contract, the multiplier is `point_value`, no swap. */
+function futures(
+  symbol: string,
+  name: string,
+  pointValue: number,
+  tickSize: number,
+  commissionPerSide: number,
+  sort: number,
+): DefaultInstrument {
+  return {
+    symbol,
+    name,
+    asset_class: "Futures",
+    point_value: pointValue,
+    tick_size: tickSize,
+    tick_value: null,
+    quote_currency: "USD",
+    commission_per_lot: commissionPerSide,
+    commission_pct: 0,
+    commission_currency: "USD",
+    swap_long: 0,
+    swap_short: 0,
+    swap_triple_day: 3,
+    is_active: true,
+    sort_order: sort,
+  };
+}
 
 export const DEFAULT_INSTRUMENT_SYMBOLS = DEFAULT_INSTRUMENTS.map((i) => i.symbol);
