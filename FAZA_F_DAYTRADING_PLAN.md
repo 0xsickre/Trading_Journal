@@ -94,8 +94,8 @@ pogađa.
 | **F1** | Tačnost odmah: ono što danas pogrešno ocenjuje, a ne traži nijednu veliku odluku | #2, #5, #21 | — | ne | Sonnet | ✅ `c0077e1` (28.09.2026) |
 | **F2** | Topstep dan (17:00 → 17:00 CT) kao ključ dana svuda gde se dan broji | #1 | F1 | ne (D2-A: izvedeno iz `topstep_mode`) | **Opus** | ✅ `3644c05` (28.09.2026) |
 | **F3** | Topstep pravila u tracker-u i Survival-u | #3, #4, #6 | F2 | da: `20260928160000` (`risk_budget_at_entry`) | **Opus** | ✅ `a8e63f9` (28.09.2026) — migracija primenjena 28.09.2026 uz odobrenje trejdera |
-| **H1** | Uklanjanje FTMO / MT5 / swing koda (trejder, 28.09.2026) | #19 i delovi #13, #14 | F3 | ne (kolone ostaju) | **Opus** | ⏳ **sledeća — odluke donete** |
-| **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da (brief tabela, nova pravila, time stop, kategorije) | **Opus** | posle H1 — odluke donete (G1–G6) |
+| **H1** | Uklanjanje FTMO / MT5 / swing koda (trejder, 28.09.2026) | #19 i delovi #13, #14 | F3 | ne (kolone ostaju) | **Opus** | ✅ `09752cd` · `69e5124` · `67feff6` · `0fb9d3f` (28.09.2026) |
+| **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da (brief tabela, nova pravila, time stop, kategorije) | **Opus** | ⏳ **sledeća — odluke donete (G1–G6)** |
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, swap, uzorak | #11–#15, #17, #18 | F2 | ne (sve izvedeno) | Sonnet, Opus za #13 | okvir |
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, legacy CFD u UI-ju, komentari, PARITY | #16, #19, #20, #22, #23 | F5 | možda (#16) | Sonnet | okvir |
 
@@ -441,7 +441,7 @@ broj testova, insights i ruta), `PARITY.md` ako pominje obrisano, ovde H1 ✅, p
   (5 pravila), dimenzije `touched`/`thesis_state`/`weekend_hold`/`time_stop_breached`, polja
   `weekendHold`/`heldDays`/`timeStopDays`/`pastTimeStop` u `enriched-trade.ts`, nedeljni rekap bez
   vikend/check-in brojeva. `weekend-hold.ts` je ostao bez čitaoca pa je obrisan već ovde.
-- **H1.4** — metrika `total_swap` (38 → 37), red „Swap per holding day" i insight
+- **H1.4** `0fb9d3f` — metrika `total_swap` (38 → 37), red „Swap per holding day" i insight
   `swap_ate_the_trade` (24 → 23 pravila). Red „Swap" u kartici Costs ostaje, ali se prikazuje samo
   kad opseg ima swap (mapa #14): na CFD istoriji bi inače provizije bez njega davale pogrešan zbir
   ispod sebe. Swap po fill-u, `swap_long/short/triple_day` u katalogu instrumenata i swap u neto P&L-u
