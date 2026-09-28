@@ -1,5 +1,11 @@
 # Faza 8B — automatski MAE/MFE: trading preko MT5, backtest ručno
 
+**Status na 28.09.2026:** trgovanje je prešlo na CME fjučerse na Topstep-u. MAE/MFE fjučers trejda
+(NQ, MNQ, ES, MES, 6E, M6E) upisuje `futures-trading/tools/journal_mae.py` iz sveća tačnog ugovora u
+Cloudflare R2 (`excursion_source = 'r2'`, `excursion_note` npr. „MNQZ6 · 1s"; migracija
+`20260928120000`), i **R2 pobeđuje i nad ručno ukucanom vrednošću**. Sve ispod važi i dalje, ali samo
+za CFD istoriju (FTMO/MT5 i TradingView backtest). README § „MAE/MFE".
+
 **Status na 19.09.2026 (kraj dana):** trading nalozi dobijaju MAE/MFE iz FTMO MT5 terminala,
 `scripts/mt5_excursion.py` (README § „MAE/MFE comes from MT5 on live accounts"). Backtest nalozi
 dobijaju MAE/MFE iz TradingView izvoza pri uvozu (`tradingViewExcursion`), iz istih OANDA cena na

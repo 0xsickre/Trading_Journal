@@ -1570,3 +1570,13 @@ uvelo, oba sada pribijena testom koji pada na prethodnoj verziji:
 
 Nauk je zapisan uz pravilo: spojena grana mora da zadrži SVAKI slučaj koji su pravila hvatala,
 a jedini dozvoljeni gubitak je onaj koji se izričito obrazloži (kao `weak_win`).
+
+## Faza F — sa swing-a na day trading (plan, 28.09.2026.)
+
+Trgovanje je prešlo sa FTMO CFD swing-a na intraday CME fjučerse na Topstep-u. Isporučeno 28.09.:
+Topstep nalozi i veličina u ugovorima, katalog samo fjučersi, TopstepX uvoz, MAE/MFE iz R2,
+`/trades/log` (upis posle zatvaranja), „Bez pregleda" na `/daily` i „Napredak" na `/weekly`.
+Sve što je u kodu još uvek swing — dan u zoni naloga umesto Topstep dana, `thesis_written` koje
+quick-log obara, tracker limiti u %, Survival bez Topstep pravila, check-in po poziciji, korpe
+trajanja u danima, swing insights — popisano je sa prioritetima u
+[`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md).
