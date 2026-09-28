@@ -4,7 +4,7 @@ import { excursionSourcePatch } from "./excursion-source";
 describe("who wrote the MAE/MFE after a save", () => {
   const prev = { max_drawdown_price: 1321.9, max_profit_price: 1331.1 };
 
-  it("a save that did not change them says nothing — an MT5 value survives", () => {
+  it("a save that did not change them says nothing — a filled value survives", () => {
     expect(excursionSourcePatch({ max_drawdown_price: 1321.9, max_profit_price: 1331.1 }, prev)).toEqual({});
     expect(excursionSourcePatch({ thesis: "x" }, prev)).toEqual({});
   });
@@ -15,7 +15,7 @@ describe("who wrote the MAE/MFE after a save", () => {
     });
   });
 
-  it("clearing both hands the trade back to the MT5 fill", () => {
+  it("clearing both hands the trade back to the automatic fill", () => {
     expect(excursionSourcePatch({ max_drawdown_price: null, max_profit_price: "" }, prev)).toEqual({
       excursion_source: null,
     });

@@ -95,7 +95,7 @@ const KIND_LABEL: Record<Account["account_kind"], string> = {
   backtest: "Backtest",
 };
 const KIND_HELP: Record<Account["account_kind"], string> = {
-  trading: "Real money. MAE/MFE is filled from MT5 by the sync script.",
+  trading: "Real money. MAE/MFE on a future comes from the exchange's candles (R2), filled each evening.",
   backtest: "Replayed trades. MAE/MFE comes from the TradingView import.",
 };
 

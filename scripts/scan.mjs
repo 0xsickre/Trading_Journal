@@ -69,7 +69,7 @@ for (const path of walk(".")) {
   //    tokens looks like a space and is a different character; the parser is
   //    fine with it in a string and not fine with it anywhere else.
   //
-  //    Tests are exempt: NBSP is the thousands separator MT5 writes, and
+  //    Tests are exempt: NBSP is the thousands separator broker exports write, and
   //    `parseImportNumber` exists to read it, so the fixtures carry it on
   //    purpose.
   if (CODE_EXT.has(ext) && !isTest) {

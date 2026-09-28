@@ -10,9 +10,9 @@ one thing written from outside is MAE/MFE on a future, from the exchange's own c
 (§ MAE/MFE).
 
 **It was built as a swing journal** (FTMO CFDs on MT5, positions held for days), and the move to
-day trading is under way. **FTMO mode is gone** (H1, 28.09.2026: no FTMO or CFD trade was in the
-book); its columns stay in the database, only the code went. The MT5 and TradingView paths still
-work. What is still measured on swing terms — the day boundary, the `/daily` check-ins, the
+day trading is under way. **FTMO mode and the MT5 statement import are gone** (H1, 28.09.2026: no
+FTMO or CFD trade was in the book); their columns stay in the database, only the code went. The
+TradingView backtest path still works. What is still measured on swing terms — the day boundary, the `/daily` check-ins, the
 hold-time buckets, several insights — is listed item by item and split into six phases, F1–F6, in
 [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md). This README describes the code as it is,
 swing leftovers included.
@@ -164,14 +164,6 @@ NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 ```
 
-Only the MT5 script (`scripts/mt5_excursion.py`) needs two more, the journal login it signs in with.
-They stay in `.env.local`, which is never committed:
-
-```
-JOURNAL_EMAIL=<your login>
-JOURNAL_PASSWORD=<your password>
-```
-
 | Command | What it does |
 |---|---|
 | `npm run dev` | Development server |
@@ -180,7 +172,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 3,094 tests across 185 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 3,077 tests across 184 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -908,10 +900,11 @@ is a number out of the book.
 ### The missed setup gets a price
 
 `status = 'missed'` and `miss_reason` have existed since the beginning and cost nothing, which made
-hesitation the cheapest mistake to keep making. `scripts/mt5_excursion.py --missed` walks the same
-price history forward from the moment the plan was written — `time_stop_days` trading days, or five —
-and records what it would have met first: `missed_outcome`, `missed_r` (the planned reward, −1, or 0)
-and `missed_source`.
+hesitation the cheapest mistake to keep making. A price walk forward from the moment the plan was
+written records what it would have met first: `missed_outcome`, `missed_r` (the planned reward, −1,
+or 0) and `missed_source`. **It has no source today**: the walk ran over MT5 history
+(`mt5_excursion.py --missed`), which went with MT5 (H1, 28.09.2026), and the futures walk over the R2
+candles is still to be built (`FAZA_F_DAYTRADING_PLAN.md` #16). The panel says so.
 
 The entry has to be reached first; a plan whose price never came reads as never triggered and cost
 nothing. And **which came first is the whole question**, so a 1-minute bar holding both the target and
@@ -923,9 +916,8 @@ The `/reports` panel counts unmeasured misses separately instead of summing them
 how many plans are still unresolved — until those are taken or marked missed, the figure measures how
 tidily plans are filed rather than what hesitation cost.
 
-The price comes from the MT5 terminal, so only a **CFD** plan gets one. A missed futures plan stays
-unmeasured until the same walk runs over the R2 candles in `futures-trading`, to the end of the
-Topstep day rather than for days (`FAZA_F_DAYTRADING_PLAN.md` #16).
+Until then every miss is counted as unmeasured; the futures walk will run over the R2 candles in
+`futures-trading`, to the end of the Topstep day rather than for days.
 
 ## Process tracking
 
@@ -1227,32 +1219,6 @@ the journal carries one.
 The symbol exists only in the file name (`…_OANDA_XCUUSD_2026-09-18_….xlsx`), so a renamed file is
 refused.
 
-### MetaTrader 5 statements
-
-MT5 does not export a table, it exports a **report**: a title, four lines about the account, then
-three tables stacked on one sheet — Positions, Orders, Deals — each under its own banner, each ending
-in a totals row, followed by a balance summary, a chart and the Results block. Read through the
-wizard's header-is-row-1 rule it arrived as `Trade History Report | __EMPTY | __EMPTY_1 | …` with
-28 rows of prose under it, and nothing to map.
-
-`lib/journal/mt5-statement.ts` reads it the way it is written:
-
-- **Only the Positions table**, found by its banner. Orders includes orders that never filled; Deals
-  is one row per fill plus a row for the deposit. Positions is one row per position, with the open
-  and the close on it.
-- **The header names `Time` and `Price` twice** — open and close. Columns are taken by their POSITION
-  in the header row: keyed by name, the second pair overwrites the first and every trade imports with
-  its exit as its entry.
-- **Costs change sign.** MT5 writes what it took off the account (`-3.50`), while `net_pl` here is
-  `gross - total_fees - total_swap`, so a cost is a positive number. Imported as written, every trade
-  would read better than it was. A credit stays a credit.
-- **The account's currency** comes from the `Account:` line (`1514682848 (EUR, FTMO-Demo, …)`) and has
-  to match the journal account, because the profit, commission and swap are all in it.
-- **The clock is the broker's server**, and the report does not say which zone that is. The review
-  asks, defaulting to EET (`Europe/Athens`) — what FTMO and most CFD servers run.
-- A row that cannot be read is shown with the reason, never dropped; a position with no close keeps
-  its entry and has no exit; the stop is not imported, for the reason given above.
-
 **The file's times are the CHART's wall clock, not the account's**, and the export says nothing about
 which zone that was — so the review asks, defaulting to New York. It used to read them in the
 account's zone, and a chart on New York time imported into a Belgrade account put every fill six
@@ -1416,8 +1382,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-3,094 tests across 185 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,460 tests in 125 files) and `components` (environment `jsdom`, files `*.test.tsx`, 634
+3,077 tests across 184 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,443 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 634
 tests in 60 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
@@ -1507,62 +1473,21 @@ container does not have. It stays a later option, not an oversight.
 
 ## MAE/MFE
 
-**On a future, MAE/MFE comes from the exchange; on a CFD, from MT5 or TradingView.** Which one depends
+**On a future, MAE/MFE comes from the exchange; on a CFD backtest, from TradingView.** Which one depends
 on the instrument first and on the account's **type** (Settings → Accounts) second:
 
 | Trade | MAE/MFE source |
 |---|---|
 | **Future** (NQ, MNQ, ES, MES, 6E, M6E) — TopstepX import, `/trades/log` or a TradingView replay | The traded contract's own candles in Cloudflare R2, written by `futures-trading/tools/journal_mae.py`: exact from Databento every morning at 06:15 UTC, and provisional from Yahoo's 1-minute bars of the same contract hourly on weekday afternoons and evenings, so the evening review has them (`excursion_note` says `… · 1m privremeno` until the exact value replaces it). 1-second candles for a trading account, 1-minute for a backtest. The contract is the one in the name (`MNQZ6`) or the CME roll rule's, and it is the right one only if **every fill lies inside its own candle** (±1 tick) — otherwise the trade is refused with the reason |
 | **CFD backtest**: trades replayed on TradingView | TradingView's own excursions, on import (§ TradingView backtests); or typed |
-| **CFD trading**: live FTMO account | The broker's own MT5 terminal, via `scripts/mt5_excursion.py` |
 
-`tj_positions.excursion_source` records who wrote the two prices: `manual`, `mt5`, `tradingview` or
-`r2`, and `excursion_note` says what they were measured on (`MNQZ6 · 1s`).
+`tj_positions.excursion_source` records who wrote the two prices: `manual`, `tradingview` or `r2`
+(`mt5` on CFD history written before H1), and `excursion_note` says what they were measured on (`MNQZ6 · 1s`).
 
 **On a future, R2 wins — even over a typed value.** That is the trader's decision of 28.09.2026: the
 exchange's own prices are the record, and a number typed from a chart is a reading of them.
 
-**On a CFD, typed always wins.** On a trading account the MT5 script replaces a value a TradingView
-import wrote, because there the broker's own ticks are the record. The script writes only where both
-prices are empty (or, with `--recompute`, where MT5 wrote them before), and never over a value the
-trader typed. Clearing both hands a trade back to it.
-
-### MT5 (CFD history)
-
-**Running it.** On the Windows computer with the FTMO MT5 terminal open and logged in to *any* FTMO
-account (only prices by symbol and time are used, so a new trial or challenge needs no change):
-
-```bash
-pip install MetaTrader5 numpy
-python scripts/mt5_excursion.py --dry-run   # compute and print, write nothing
-python scripts/mt5_excursion.py             # fill
-```
-
-It signs in as the journal's user with `JOURNAL_EMAIL` and `JOURNAL_PASSWORD` from `.env.local`, so
-row-level security applies exactly as in the app, and it never prints a value from that file. It
-places no orders.
-
-**How a trade is measured:**
-
-- **FTMO's clock is New York + 7 hours** (UTC+3 in summer, UTC+2 in winter). The journal stores UTC, and
-  every request to the terminal is shifted into server time and back. The script checks the rule
-  against the terminal's newest tick before it writes anything: a clock that disagrees means another
-  broker, and nothing is filled.
-- **A long is valued at the bid, a short at the ask.** Those are the prices each could close at, the
-  same way MT5 shows a floating result.
-- **Each fill is found among the ticks.** The script takes the tick whose relevant side (ask when
-  buying, bid when selling) is closest to the fill price, searching the whole minute when the fill is
-  stamped to the minute. If nothing comes within 0.05%, the trade is refused with the reason printed:
-  the time, its zone or the symbol is wrong. Every tick between the entry tick and the last exit tick
-  counts, and so do the fills.
-- **Units are reconciled.** FTMO quotes copper in cents per pound (656.4), TradingView in dollars
-  (6.564). The hundredfold factor is read off the price level, the trade is measured in the terminal's
-  units, and the result is written back in the journal's.
-- **Ticks reach back about two years.** An older trade falls back to 1-minute bars, counting only full
-  minutes strictly inside the trade.
-
-Checked against the terminal's own ticks on XAUUSD, US100.cash and XCUUSD, long and short. The same
-trade shifted six hours is refused on all three.
+**On a CFD backtest, typed always wins** over what the TradingView import wrote.
 
 **Why CFD backtests do not use a candle feed.** (A futures backtest does: R2 holds the exchange's own
 prices, which are the prices a TradingView replay of a CME contract shows.) For a while CFD backtest

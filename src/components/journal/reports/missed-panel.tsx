@@ -67,7 +67,7 @@ export function MissedPanel({
             <>
               {cost.unmeasured} of these {cost.unmeasured === 1 ? "has" : "have"} no
               measured outcome and {cost.unmeasured === 1 ? "is" : "are"} not in the
-              total — run <code>scripts/mt5_excursion.py --missed</code> to price them.{" "}
+              total: there is no price source for a missed futures setup yet.{" "}
             </>
           )}
           {stalePlans > 0 && (

@@ -1,14 +1,13 @@
 /**
  * Who wrote the MAE/MFE after this save.
  *
- * A value the trader typed or changed is theirs — 'manual' — and the MT5 fill
- * never writes over it (`scripts/mt5_excursion.py`). Clearing both hands the
- * trade back to the MT5 fill. A save that did not touch them says nothing, so
- * an MT5 value survives an edit of the thesis.
+ * A value the trader typed or changed is marked 'manual'. Clearing both hands
+ * the trade back to the automatic fill. A save that did not touch them says
+ * nothing, so a filled value survives an edit of the thesis.
  *
- * On a FUTURE the rule is the other way round: 'manual' here is only a mark
- * that the next morning's R2 fill (futures-trading `tools/journal_mae.py`)
- * overwrites, because the exchange's candles are the one price source there.
+ * On a FUTURE 'manual' is only a mark that the next morning's R2 fill
+ * (futures-trading `tools/journal_mae.py`) overwrites, because the exchange's
+ * candles are the one price source there.
  */
 export function excursionSourcePatch(
   columns: Record<string, unknown>,

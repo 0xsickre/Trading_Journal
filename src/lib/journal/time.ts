@@ -154,7 +154,7 @@ export function utcToZonedInput(
 /**
  * Parse a broker-exported timestamp into UTC ISO. If the string carries an
  * explicit offset/Z it's respected; otherwise it's interpreted as wall-clock
- * time in the account `tz` (e.g. an MT5 export in broker-server/NY time).
+ * time in the account `tz` (e.g. a broker export in its server's time).
  *
  * **This function refuses to guess, and that is the whole design.**
  *

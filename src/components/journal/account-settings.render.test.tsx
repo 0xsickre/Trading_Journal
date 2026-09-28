@@ -223,6 +223,9 @@ describe("edit", () => {
     render(<AccountSettings accounts={TWO} tradeCounts={{ "acc-1": 0 }} />);
     await openMenu(user, "Main Account");
     await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
+    // A live account: MT5 is gone (H1) — its MAE/MFE comes from R2.
+    expect(screen.getByText(/from the exchange's candles \(R2\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/MT5/)).not.toBeInTheDocument();
     await user.click(screen.getByLabelText("Type"));
     await user.click(await screen.findByRole("option", { name: "Backtest" }));
     expect(screen.getByText(/from the TradingView import/)).toBeInTheDocument();

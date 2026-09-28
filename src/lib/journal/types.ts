@@ -86,7 +86,7 @@ export type Account = {
   name: string;
   broker: string | null;
   /**
-   * trading = a live account, MAE/MFE filled from MT5 (`scripts/mt5_excursion.py`).
+   * trading = a live account, MAE/MFE on a future from R2 candles (futures-trading `journal_mae.py`).
    * backtest = replayed trades, MAE/MFE from the TradingView import or typed.
    */
   account_kind: "trading" | "backtest";

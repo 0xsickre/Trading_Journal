@@ -1160,7 +1160,7 @@ describe("the planned size reaches the fill, and the exit cannot exceed it", () 
             stop_price: "90",
             position_size: 4.78,
           },
-          // What an MT5 statement imported over the plan: one lot, not 4.78.
+          // What a broker statement imported over the plan: one lot, not 4.78.
           executions: [
             { side: "entry", price: 100, qty: 1, executed_at: "2026-04-01T13:00:00Z", fee: 0, swap_funding: 0, source: "import" },
           ],

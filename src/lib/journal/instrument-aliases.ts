@@ -13,8 +13,8 @@ export function cleanInstrumentKey(raw: string): string {
  */
 const INSTRUMENT_ALIAS_TO_CANONICAL: Record<string, string> = {
   // The index, under every name a statement or a platform gives it. The
-  // canonical one is the broker's own — "US100.cash" — so an MT5 import matches
-  // without a mapping at all; these are for the exports that do not.
+  // canonical one is the old CFD broker's own — "US100.cash" — so CFD history
+  // and TradingView backtests keep matching; these are for the other names.
   US100CASH: "US100.cash",
   US100: "US100.cash",
   NAS100: "US100.cash",

@@ -12,12 +12,13 @@
  * figure on `/reports` about money that actually moved. This is its own small
  * path, read from the rows directly.
  *
- * MEASURABLE IS NOT THE SAME AS MEASURED. `missed_r` is written by
- * `scripts/mt5_excursion.py --missed` from price history, and most books will
- * have it on some trades and not others. The unmeasured ones are COUNTED and
- * said out loud rather than summed as zero — the same refusal `portfolio-heat`
- * makes for a position with no stop. Without the script, the panel's honest
- * output is "7 missed, none of them measured", which is still worth reading.
+ * MEASURABLE IS NOT THE SAME AS MEASURED. `missed_r` was written from price
+ * history by the MT5 script, which went with MT5 (H1, 28.09.2026); a futures
+ * source (R2 candles) is planned (`FAZA_F_DAYTRADING_PLAN.md` #16). The
+ * unmeasured ones are COUNTED and said out loud rather than summed as zero —
+ * the same refusal `portfolio-heat` makes for a position with no stop. Until
+ * then the panel's honest output is "7 missed, none of them measured", which
+ * is still worth reading.
  *
  * AND IT MEASURES DISCIPLINE, NOT ONLY HESITATION. A plan that was never
  * marked missed stays `planned` forever (`stalePlan` already says so), so this

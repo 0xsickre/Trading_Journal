@@ -25,13 +25,6 @@ import {
 } from "@/lib/journal/instrument-aliases";
 import { matchImportRow, type MatchCandidate } from "@/lib/journal/import-match";
 import {
-  MT5_COLUMNS,
-  isMt5Statement,
-  mt5ImportRows,
-  readMt5Statement,
-  type Mt5Statement,
-} from "@/lib/journal/mt5-statement";
-import {
   TOPSTEPX_COLUMNS,
   isTopstepXTrades,
   readTopstepXTrades,
@@ -142,34 +135,6 @@ const TV_MAP: Record<Canonical, string> = {
   target: "",
 };
 const TV_ISSUE = "Issue";
-
-/**
- * The clock an MT5 statement is written in: the broker's server, not the trader.
- *
- * FTMO, and most CFD brokers, run their servers on EET — UTC+2, UTC+3 over the
- * summer, which is what "Europe/Athens" means to `Intl`. It is a default, not a
- * fact about the file: the report does not carry a zone, so the select stays on
- * screen with this in it.
- */
-const MT5_SERVER_TZ = "Europe/Athens";
-
-/** The same, for the Positions table of an MT5 history report. */
-const MT5_MAP: Record<Canonical, string> = {
-  instrument: MT5_COLUMNS.symbol,
-  direction: MT5_COLUMNS.side,
-  qty: MT5_COLUMNS.volume,
-  entry_price: MT5_COLUMNS.entryPrice,
-  entry_time: MT5_COLUMNS.entryTime,
-  exit_price: MT5_COLUMNS.exitPrice,
-  exit_time: MT5_COLUMNS.exitTime,
-  fee: MT5_COLUMNS.fee,
-  swap: MT5_COLUMNS.swap,
-  // The broker's own gross result, in the account's currency. Written onto the
-  // trade rather than recomputed: MT5 knows the contract size of the symbol on
-  // that server, and the catalog only thinks it does.
-  profit: MT5_COLUMNS.profit,
-  target: MT5_COLUMNS.target,
-};
 
 /**
  * The same, for a TopstepX trades export. Its times carry their own offset, so
@@ -293,9 +258,6 @@ export function ImportWizard({
   // Set when the file is TradingView's list of trades; the column mapping is
   // then skipped, because the layout is known and a trade spans two rows.
   const [tv, setTv] = useState<{ symbol: string; data: TradingViewExport } | null>(null);
-  // Set when the file is an MT5 history report: three tables in one sheet, so
-  // the header is not row 1 and the mapping cannot start from it.
-  const [mt5, setMt5] = useState<Mt5Statement | null>(null);
   // Set when the file is TopstepX's trades export: month-first dates the time
   // parser would refuse, and two cost columns, so the layout is read directly.
   const [topstepx, setTopstepx] = useState<TopstepXTrade[] | null>(null);
@@ -305,12 +267,9 @@ export function ImportWizard({
     if (!file) return;
     setFilename(file.name);
     setTv(null);
-    setMt5(null);
     setTopstepx(null);
     try {
       let parsed: Record<string, string>[] = [];
-      // An MT5 report, read as a grid: its header is not the first row.
-      let statement: Mt5Statement | null = null;
       // TradingView's rows, read with their raw cell values: its dates are
       // Excel serials, and formatted as text they come out as "9/20/23 14:00",
       // which the time parser rightly refuses as ambiguous.
@@ -345,24 +304,11 @@ export function ImportWizard({
           // time and only here: TradingView's own path needs the raw serials.
           const dated = XLSX.read(buf, { type: "array", cellDates: true });
           const ws = dated.Sheets[dated.SheetNames[0]];
-          // The sheet as a grid first. MT5 writes a report, not a table: read
-          // through the header-is-row-1 rule below, its title row became the
-          // header and the trades never appeared at all.
-          const grid = XLSX.utils.sheet_to_json<unknown[]>(ws, {
-            header: 1,
+          parsed = XLSX.utils.sheet_to_json(ws, {
             defval: "",
             raw: false,
-            dateNF: "yyyy.mm.dd hh:mm:ss",
+            dateNF: "yyyy-mm-dd hh:mm:ss",
           });
-          if (isMt5Statement(grid)) {
-            statement = readMt5Statement(grid);
-          } else {
-            parsed = XLSX.utils.sheet_to_json(ws, {
-              defval: "",
-              raw: false,
-              dateNF: "yyyy-mm-dd hh:mm:ss",
-            });
-          }
         }
       }
       if (tvRows) {
@@ -392,24 +338,6 @@ export function ImportWizard({
           return;
         }
         setTopstepx(trades);
-        return;
-      }
-      if (statement) {
-        setHeaders([]);
-        setRows([]);
-        if (statement.positions.length === 0) {
-          toast.error(
-            "MT5 report read, but its Positions table is empty — this account has no " +
-              "closed trades yet. Orders and Deals are not imported.",
-          );
-          return;
-        }
-        setMt5(statement);
-        // MT5 stamps the SERVER's clock, which is not the account's zone and is
-        // nowhere in the file. EET is what FTMO and most CFD servers run; the
-        // select says so and stays on screen, because the trader is the only
-        // one who can confirm it.
-        setFileTz(MT5_SERVER_TZ);
         return;
       }
       if (parsed.length === 0) {
@@ -567,21 +495,6 @@ export function ImportWizard({
       buildFrom(topstepXImportRows(topstepx), TOPSTEPX_MAP, TOPSTEPX_COLUMNS.issue, null, fileTz);
       return;
     }
-    if (mt5) {
-      // The statement's money is the account's money — profit, commission and
-      // swap are all in the currency the MT5 account is denominated in. Into a
-      // journal account of another currency they would be read as that one's,
-      // with nothing on screen to say so.
-      if (account && mt5.currency && account.currency !== mt5.currency) {
-        toast.error(
-          `The MT5 account is in ${mt5.currency}, "${account.name}" is in ${account.currency}. ` +
-            `Pick a ${mt5.currency} account.`,
-        );
-        return;
-      }
-      buildFrom(mt5ImportRows(mt5), MT5_MAP, MT5_COLUMNS.issue, null, fileTz);
-      return;
-    }
     for (const req of ["instrument", "direction", "qty", "entry_price", "entry_time"] as Canonical[]) {
       if (!map[req]) {
         toast.error(`Map a column for "${req}"`);
@@ -596,7 +509,7 @@ export function ImportWizard({
     map: Record<Canonical, string>,
     issueCol: string | null,
     plans: FillPlan[] | null,
-    /** The zone the file's wall clock is in — the account's for a statement. */
+    /** The zone the file's wall clock is in — the account's by default. */
     timeZone: string = tz,
   ) {
     const built: ReviewItem[] =
@@ -1069,11 +982,9 @@ export function ImportWizard({
                   {filename} —{" "}
                   {tv
                     ? `${tv.data.trades.length} trades`
-                    : mt5
-                      ? `${mt5.positions.length} positions`
-                      : topstepx
-                        ? `${topstepx.length} trades`
-                        : `${rows.length} rows`}
+                    : topstepx
+                      ? `${topstepx.length} trades`
+                      : `${rows.length} rows`}
                 </span>
               )}
             </div>
@@ -1111,49 +1022,6 @@ export function ImportWizard({
                     The export has no timezone in it — pick the one set at the
                     bottom-right of the chart. Times are shown back in the
                     account&apos;s zone.
-                  </p>
-                </div>
-                <div className="flex justify-end">
-                  <Button onClick={buildItems}>
-                    Reconcile <ArrowRight className="size-4" />
-                  </Button>
-                </div>
-              </>
-            )}
-
-            {mt5 && (
-              <>
-                <p className="text-sm text-muted-foreground">
-                  MT5 history report — account <b>{mt5.account ?? "?"}</b>
-                  {mt5.currency ? `, ${mt5.currency}` : ""}, {mt5.positions.length} closed
-                  positions. Only the Positions table is read: Orders never filled, and
-                  Deals would be one row per fill and one for the deposit. Commission and
-                  swap are turned from what the broker took into what the trade cost.
-                </p>
-                <div className="max-w-xs space-y-1">
-                  <label className="text-xs text-muted-foreground" htmlFor="mt5-tz">
-                    Timezone of the MT5 server
-                  </label>
-                  <Select value={fileTz} onValueChange={setFileTz}>
-                    <SelectTrigger id="mt5-tz" aria-label="Timezone of the MT5 server">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from(new Set([MT5_SERVER_TZ, "UTC", "Europe/London", tz])).map(
-                        (zone) => (
-                          <SelectItem key={zone} value={zone}>
-                            {zone.replace("_", " ")}
-                            {zone === MT5_SERVER_TZ ? " (EET — FTMO)" : ""}
-                            {zone === tz ? " (account)" : ""}
-                          </SelectItem>
-                        ),
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    A statement carries the server&apos;s clock and not the zone it is in.
-                    Check one trade against the terminal if you are not sure. Times are
-                    shown back in the account&apos;s zone.
                   </p>
                 </div>
                 <div className="flex justify-end">
