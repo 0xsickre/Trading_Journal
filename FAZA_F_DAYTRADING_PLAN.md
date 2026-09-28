@@ -44,11 +44,32 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
    jedan red.
 6. Commit + push. Migracija se u bazi primenjuje tek posle zelenog gate-a.
 
+## Odluke (dnevnik)
+
+| Datum | Faza | Odluka |
+|---|---|---|
+| 28.09.2026 | F1.1 | `thesis_written` ocenjuje samo trejdove napravljene pre ulaza (opcija A); ostali `na/no_plans` |
+| 28.09.2026 | F1.2 | Probijen MLL / FTMO kršenje blokira samo plan (`origin: "plan"`), nikad upis posle zatvaranja — za oba moda |
+
+Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
+pogađa.
+
+## Kako nastaviti (nova AI sesija)
+
+1. Grana `claude/journal-swing-to-day-trading-a49d56` (dok se ne spoji u `main`). Isti naziv grane
+   postoji i u `0xsickre/futures-trading`, za delove koji diraju njega (F2: `journal_podsetnik.py`).
+2. Pročitaj ovaj fajl ceo, pa `AGENTS.md` (Next.js 16 — dokumentacija u `node_modules/next/dist/docs/`),
+   pa README sekcije koje faza navodi.
+3. Radi **samo prvu fazu u Mapi čiji status nije ✅**, po Protokolu. Ako faza nema sekciju
+   „Detaljno", prvo je napiši ovde, odluke koje traže trejdera upiši kao pitanja i stani.
+4. Na kraju faze: status ✅ + hash commita u Mapi, detaljan plan SLEDEĆE faze, README 1:1, push.
+5. Stani i traži jači model ako faza ispadne veća od procene (kolona Model).
+
 ## Mapa faza
 
 | Faza | Cilj | Stavke | Zavisi od | Migracija | Model | Status |
 |---|---|---|---|---|---|---|
-| **F1** | Tačnost odmah: ono što danas pogrešno ocenjuje, a ne traži nijednu veliku odluku | #2, #5, #21 | — | ne | Sonnet | ⏳ sledeća — **detaljno ispod** |
+| **F1** | Tačnost odmah: ono što danas pogrešno ocenjuje, a ne traži nijednu veliku odluku | #2, #5, #21 | — | ne | Sonnet | ⏳ **sledeća — odluke donete, spremna za rad** |
 | **F2** | Topstep dan (17:00 → 17:00 CT) kao ključ dana svuda gde se dan broji | #1 | F1 | verovatno ne (izvedeno iz zone i moda naloga) | **Opus** | okvir |
 | **F3** | Topstep pravila u tracker-u i Survival-u | #3, #4, #6 | F2 | da (config pravila u novcu) | **Opus** | okvir |
 | **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da (seed, nova pravila, time stop) | Opus za #10, Sonnet ostalo | okvir |
@@ -72,7 +93,7 @@ napravio samo TopstepX uvoz.
 **Odbačeno:** rečenicu upisati u `thesis`. Zapečatila bi se rečenica napisana posle zatvaranja kao
 „teza pre ulaza" — tačno ona racionalizacija zbog koje pravilo čita pečat.
 
-**Izmena (preporuka, opcija A):**
+**Izmena — opcija A, ODLUČENO 28.09.2026 (trejder):**
 - `TrackerTrade` dobija `plannedBeforeEntry: boolean` = `created_at` trejda ≤ `stats.opened_at`.
   Plan-first trejd (i plan koji je uvoz popunio) je napravljen pre fill-a; trejd upisan posle
   zatvaranja ili napravljen uvozom nije.
@@ -81,8 +102,8 @@ napravio samo TopstepX uvoz.
 - `tracker-checklist.tsx` dobija tekst za `no_plans` (srpski, kao ostali razlozi).
 - Ostala pravila se ne diraju: `stop_loss_set` i `playbook_linked` quick-log ispunjava sam.
 
-**Opcija B (bez koda):** trejder isključi `thesis_written` u Settings → Tracker. Jednostavnije, ali
-gubi se merenje za plan-first limite, gde teza ima smisla.
+~~Opcija B (bez koda): isključiti `thesis_written` u Settings → Tracker.~~ Odbačena: gubi se merenje
+za plan-first limite, gde teza ima smisla.
 
 **Testovi** (`tracker/auto-rules.test.ts`): trejd napravljen posle ulaza bez teze → `na/no_plans`;
 plan-first sa tezom → `pass`; plan-first bez teze → `fail`; dan sa oba → ocenjuje se samo plan-first;
@@ -94,8 +115,9 @@ kucani posle ulaza postaju `na`). Zaključani dani ostaju kakvi su.
 ### F1.2 — probijen MLL: blokira se plan, ne evidencija (#5)
 
 **Utvrđeno u kodu.** FTMO zamrzavanje je u `createTrade` (`isFtmoAccountFrozen`) i blokira svako
-kreiranje; `updateTrade` blokira samo izmenu koja dodaje izloženost (`addsExposure`). `/trades/log` i
-uvoz takođe zovu `createTrade`. Za Topstep ne postoji ništa; veličina se ionako ne računa kad nema
+kreiranje; `updateTrade` blokira samo izmenu koja dodaje izloženost (`addsExposure`). `/trades/log` takođe
+zove `createTrade`, pa FTMO blokada danas odbija i upis trejda posle zatvaranja. Uvoz piše direktno
+(`import/actions.ts`, `tj_positions` + `tj_replace_executions`) i ne prolazi kroz blokadu. Za Topstep ne postoji ništa; veličina se ionako ne računa kad nema
 prostora (`computeTopstepRisk` → `null`).
 
 **Izmena:**
@@ -104,16 +126,22 @@ prostora (`computeTopstepRisk` → `null`).
 - `createTrade` dobija poreklo upisa (`origin: "plan" | "log"`; `quick-log.ts` šalje `"log"`). Plan
   (`/trades/new`) na nalogu sa probijenim MLL-om → odbijen: „Topstep nalog je pao (MLL) — resetuj ga u
   Settings". Upis posle zatvaranja → prolazi.
+- **Isto za FTMO** (odlučeno, vidi dole): `isFtmoAccountFrozen` u `createTrade` važi samo za
+  `origin: "plan"`; poruka ostaje ista.
 - `updateTrade`: isti uslov kao FTMO (`addsExposure`) i za Topstep.
 - `trade-form.tsx`: nalog sa probijenim MLL-om se nudi kao kod FTMO-a (`topstepFailedAccountIds`).
   `quick-log-form.tsx`: samo upozorenje iznad forme, ne blokada.
-- Uvoz se ne blokira (evidencija).
+- Uvoz se ne dira: već ne prolazi kroz blokadu, i tako ostaje (evidencija).
 
 **Testovi:** `topstep.test.ts` za status već postoji; novi render testovi za formu (blokada plana,
-upozorenje u quick-logu) i test akcije za `origin`.
+upozorenje u quick-logu) i test akcije za `origin` — za Topstep i za FTMO (quick-log na zamrznutom
+FTMO nalogu sada prolazi; plan i dalje ne).
 
-**Odluka za trejdera:** da li i FTMO treba da propusti upis posle zatvaranja (isto obrazloženje).
-Preporuka: da — isti `origin`, jedno pravilo za oba moda.
+**Odluka (28.09.2026, trejder): da** — i FTMO propušta upis posle zatvaranja. Isti `origin`, jedno
+pravilo za oba moda: blokira se nova izloženost, nikad evidencija.
+
+README § Process tracking (pasus o FTMO modu: „a new trade can neither be created nor activated") se
+u izlazu iz F1 prepisuje u skladu s tim.
 
 ### F1.3 — tekst dupliranja naloga (#21)
 
@@ -178,7 +206,7 @@ pravilo rizika; test u `account-settings.render.test.tsx` čita tekst.
 | 2 | **Auto pravilo `thesis_written`** se ocenjuje na svakom trejdu | `/trades/log` piše rečenicu u `trade_journal_notes`, ne u `thesis` → svaki brzo upisan trejd pada pravilo i Process osa pada bez razloga. Ili rečenica ide u `thesis`, ili se pravilo gasi za quick-log/Topstep naloge (odluka trejdera) | `quick-log.ts`, `tracker/auto-rules.ts` |
 | 3 | **Tracker limiti u % equity-ja** (`max_loss_per_trade/day/week`, `risk_per_trade`) | Topstep limiti su **novac**: dnevni gubitak = DLL plana, rizik po trejdu = `computeTopstepRisk` (12,5 % prostora iznad MLL, min/max plana). Na Topstep nalogu pravila čitaju plan, a ne unet procenat | `tracker/auto-rules.ts`, `tracker-types.ts`, `topstep.ts` |
 | 4 | **`risk_matched_intent`** poredi veličinu sa izabranim `risk_pct` (0,25–1 %) | `/trades/log` ne pita `risk_pct`, pa pravilo daje `na` i ništa ne ocenjuje. Namera je iznos iz pravila rizika (`computeTopstepRisk`), ne % naloga; lista „Risk %" nema smisla na Topstep-u | `tracker/auto-rules.ts`, seed kategorija |
-| 5 | **MLL probijen ne zaključava nalog.** FTMO kršenje blokira `createTrade`, Topstep ne | **Ne prepisati FTMO zamrzavanje doslovno**: `/trades/log` i uvoz takođe zovu `createTrade`, a upis POSLE zatvaranja je evidencija, ne nova izloženost — doslovna kopija bi zabranila upis baš trejda koji je probio MLL. Blokira se samo plan-first ulaz (`/trades/new`), upis posle zatvaranja ostaje otvoren uz upozorenje (detalj u F1) | `trades/actions.ts`, `topstep-status.ts`, `trade-form.tsx`, `quick-log-form.tsx` |
+| 5 | **MLL probijen ne zaključava nalog.** FTMO kršenje blokira `createTrade`, Topstep ne | **Ne prepisati FTMO zamrzavanje doslovno**: `/trades/log` takođe zove `createTrade`, a upis POSLE zatvaranja je evidencija, ne nova izloženost — doslovna kopija bi zabranila upis baš trejda koji je probio MLL. Blokira se samo plan-first ulaz (`/trades/new`), upis posle zatvaranja ostaje otvoren uz upozorenje (detalj u F1) | `trades/actions.ts`, `topstep-status.ts`, `trade-form.tsx`, `quick-log-form.tsx` |
 | 6 | **Survival osa i simulacija znaju samo FTMO** (`headroomPct` iz `evaluateFtmo`, pragovi u `survival.ts`) | Topstep: pod = trailing MLL u novcu, dnevni limit = DLL, cilj = target (uz 55 % pravilo). Bez toga Survival na Topstep nalogu meri tuđa pravila ili sopstveni najgori DD | `survival.ts`, `scorecard.ts`, `survival-card.tsx` |
 
 ### P1 — dnevni tok (šta trejder stvarno radi)
