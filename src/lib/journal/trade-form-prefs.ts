@@ -3,6 +3,8 @@ const STORAGE_KEY = "tj:trade_form_prefs";
 export type TradeFormPrefs = {
   accountId?: string;
   riskPct?: string;
+  /** Last symbol logged after the fact — a day trader logs the same contract all day. */
+  instrument?: string;
 };
 
 export function getTradeFormPrefs(): TradeFormPrefs {

@@ -34,8 +34,11 @@ export type NavSection = {
  * So it leaves the list and becomes the sidebar's one primary action.
  */
 export const PRIMARY_ACTION: NavItem = {
-  href: "/trades/new",
-  label: "New Trade",
+  // Logging AFTER the trade, not planning before it: a day trader working a
+  // limit near price has no time for the plan form, and the trade gets logged
+  // once it is flat. The plan form is one link away from here and from /journal.
+  href: "/trades/log",
+  label: "Log Trade",
   icon: PlusCircle,
 };
 

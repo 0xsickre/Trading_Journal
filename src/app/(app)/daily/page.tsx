@@ -47,6 +47,8 @@ import type { TrackerDayData } from "@/components/journal/tracker-checklist";
 import type { OpenPositionView } from "@/components/journal/open-positions-card";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
+import { ReviewGapsCard } from "@/components/journal/review-gaps-card";
+import { reviewGaps } from "@/lib/journal/review-gaps";
 import { sharedCurrency } from "@/lib/journal/format";
 import { accountTimezoneResolver } from "@/lib/journal/time";
 
@@ -278,6 +280,10 @@ export default async function DailyPage({
         volume={dayVolume}
         trades={dayTradeRows}
         currency={pooledCurrency}
+      />
+
+      <ReviewGapsCard
+        gaps={reviewGaps(trades, reportDate, (t) => zonedDateKey(t.stats?.closed_at ?? null, tzOf(t)))}
       />
 
       <DailyReportForm

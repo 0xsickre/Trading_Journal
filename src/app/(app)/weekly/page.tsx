@@ -22,6 +22,9 @@ import { ExperimentCard } from "@/components/journal/experiment-card";
 import { getExperiments } from "@/lib/journal/experiment-queries";
 import { summarizeExperiments } from "@/lib/journal/experiments";
 import { PageHeader } from "@/components/app/page-header";
+import { ProgressCard } from "@/components/journal/progress-card";
+import { buildProgress } from "@/lib/journal/progress";
+import { getPlaybooks } from "@/lib/journal/playbooks";
 import type { RealizedTrade } from "@/lib/journal/analytics";
 import { accountTimezoneResolver } from "@/lib/journal/time";
 
@@ -70,6 +73,7 @@ export default async function WeeklyPage({
     review,
     previousReview,
     experiments,
+    playbooks,
   ] = await Promise.all([
     accountsPromise,
     weekPromise,
@@ -87,6 +91,8 @@ export default async function WeeklyPage({
     // Last week's answers, for the commitment this week has to live up to.
     weekPromise.then(({ weekStart }) => getWeeklyReview(addWeeksToWeekStart(weekStart, -1))),
     getExperiments(),
+    // Every setup ever named, so a retired one still has its name in last month's numbers.
+    getPlaybooks({ activeOnly: false, includeDeleted: true }),
   ]);
 
   /**
@@ -122,8 +128,9 @@ export default async function WeeklyPage({
     accountId === "all" ? trades : trades.filter((t) => t.account_id === accountId),
   );
 
+  const enriched = enrichTrades(realized, { tzOf, range: breakevenRange });
   const recap = buildWeekRecap(
-    enrichTrades(realized, { tzOf, range: breakevenRange }),
+    enriched,
     checkins,
     new Set(reportDates),
     weekStart,
@@ -145,7 +152,7 @@ export default async function WeeklyPage({
    */
   const experimentSummaries = summarizeExperiments(
     experiments,
-    enrichTrades(realized, { tzOf, range: breakevenRange }),
+    enriched,
     // Net, like every other figure on this page.
     { pnlBasis: "net", range: breakevenRange },
     currentWeekStart,
@@ -156,6 +163,12 @@ export default async function WeeklyPage({
    * account's own first week when nothing has been traded yet. Without it the
    * back arrow paged into empty weeks forever.
    */
+  // The six answers of the weekend review, this week beside the one before.
+  const playbookNames = Object.fromEntries(playbooks.map((p) => [p.id, p.name]));
+  const lastWeekStart = addWeeksToWeekStart(weekStart, -1);
+  const progress = buildProgress(enriched.filter((t) => t.closeWeek === weekStart), playbookNames);
+  const progressPrev = buildProgress(enriched.filter((t) => t.closeWeek === lastWeekStart), playbookNames);
+
   const firstDay = realized.reduce<string | null>((oldest, t) => {
     const day = zonedDateKey(t.row.stats?.opened_at ?? t.closedAt, tzOf(t));
     return day && (oldest == null || day < oldest) ? day : oldest;
@@ -172,6 +185,8 @@ export default async function WeeklyPage({
         title="Nedeljni osvrt"
         description="Pitanja iza kojih stoji ishod. Postavljaju se kada se nedelja završi, a ne svako veče usred držanja pozicije."
       />
+
+      <ProgressCard week={progress} prev={progressPrev} currency={currency} />
 
       <WeeklyReviewForm
         key={weekStart}

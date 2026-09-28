@@ -2,6 +2,7 @@
 
 import { excursionSourcePatch } from "@/lib/journal/excursion-source";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { revalidateTrades } from "@/lib/journal/revalidate";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
@@ -625,4 +626,68 @@ export async function bulkAddTag(ids: string[], kind: BulkTagKind, values: strin
   if (error) return { ok: false as const, error: error.message };
   revalidateTrades();
   return { ok: true as const };
+}
+
+const tradeReviewSchema = z.object({
+  playbook_id: z.uuid().nullable(),
+  execution_rating: z.number().int().min(1).max(5).nullable(),
+  mistake: z.array(z.string().trim().min(1).max(200)).max(20),
+  psychology_tags: z.array(z.string().trim().min(1).max(200)).max(20),
+  trade_journal_notes: z.string().max(20_000).nullable(),
+  /** Written only where the trade has none — never over the trader's own answer. */
+  exit_reason: z.string().trim().min(1).max(200).nullable(),
+  /** The exit chart; empty leaves the slot as it is. */
+  snapshot_url: z.string().nullable(),
+});
+
+export type TradeReviewInput = z.infer<typeof tradeReviewSchema>;
+
+/**
+ * The review half of a trade — setup, grade, mistakes, note, exit chart — and
+ * nothing else.
+ *
+ * For the trades the day's export brought in: their fills are already exact, so
+ * this must not go through `tj_save_trade`, which rewrites every fill and every
+ * rule answer on each save. One UPDATE of these columns, and the chart through
+ * the same upsert `TradeImages` uses.
+ */
+export async function saveTradeReview(id: string, input: TradeReviewInput) {
+  const parsed = tradeReviewSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: firstIssue(parsed.error) };
+  const r = parsed.data;
+
+  let snapshot: string | null = null;
+  if (r.snapshot_url && r.snapshot_url.trim()) {
+    const validated = validateTradingViewSnapshotUrl(r.snapshot_url);
+    if (!validated.ok) return { ok: false as const, error: validated.message };
+    snapshot = validated.url;
+  }
+
+  const supabase = await createClient();
+  const { data: prev } = await supabase.from("tj_positions").select("exit_reason").eq("id", id).maybeSingle();
+  if (!prev) return { ok: false as const, error: "Trade not found" };
+
+  const { error } = await supabase
+    .from("tj_positions")
+    .update({
+      playbook_id: r.playbook_id,
+      execution_rating: r.execution_rating,
+      mistake: r.mistake,
+      psychology_tags: r.psychology_tags,
+      trade_journal_notes: r.trade_journal_notes?.trim() || null,
+      ...(prev.exit_reason ? {} : { exit_reason: r.exit_reason }),
+    })
+    .eq("id", id);
+  if (error) return { ok: false as const, error: error.message };
+
+  if (snapshot) {
+    const { error: imgErr } = await supabase
+      .from("tj_trade_images")
+      .upsert({ position_id: id, kind: "ltf_post", image_url: snapshot }, { onConflict: "position_id,kind" });
+    if (imgErr) return { ok: false as const, error: imgErr.message };
+  }
+
+  revalidatePath(`/trades/${id}/edit`);
+  revalidateTrades();
+  return { ok: true as const, id };
 }

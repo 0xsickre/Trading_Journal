@@ -129,6 +129,7 @@ export function evaluateTopstep(
   const resetMs = config.resetAt == null ? null : toEpoch(config.resetAt);
   const payoutMs = config.payoutAt == null ? null : toEpoch(config.payoutAt);
 
+  const today = topstepTradingDay(now);
   const window = trades
     .filter((t) => t.closedAt != null && (resetMs == null || toEpoch(t.closedAt) >= resetMs))
     .sort((a, b) => compareInstants(a.closedAt, b.closedAt));
@@ -166,7 +167,9 @@ export function evaluateTopstep(
     if (bestDay == null || net > bestDay.net) bestDay = { day, net };
 
     // End of the trading day: the floor follows the highest close, never down,
-    // and stops at the starting balance.
+    // and stops at the starting balance. Today has not ended — a win this
+    // morning must not raise the floor the trader sizes the afternoon from.
+    if (day >= today) continue;
     highEod = Math.max(highEod, balance);
     if (!locked) {
       floor = Math.max(floor, Math.min(start, highEod - rules.mll));
@@ -178,7 +181,6 @@ export function evaluateTopstep(
     locked = true;
   }
 
-  const today = topstepTradingDay(now);
   const todayNet = (days.get(today) ?? []).reduce((s, t) => s + t.net, 0);
   const effectiveTarget = Math.max(
     rules.target,

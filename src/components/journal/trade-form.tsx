@@ -1196,6 +1196,15 @@ export function TradeForm({
             {initial ? "Edit Trade" : "New Trade"}
           </h1>
           <p className="text-sm text-muted-foreground">
+            {!initial && (
+              <>
+                Already traded?{" "}
+                <Link href="/trades/log" className="underline">
+                  Log it after the fact
+                </Link>{" "}
+                ·{" "}
+              </>
+            )}
             Times shown in {tz.replace("_", " ")} ({currency}).
             {isMissed && missedAt && (
               <>

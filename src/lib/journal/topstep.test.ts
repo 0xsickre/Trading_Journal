@@ -59,6 +59,16 @@ describe("the Maximum Loss Limit", () => {
     expect(r.mllFloor).toBe(48_500);
   });
 
+  it("today's win does not raise the floor before the day ends", () => {
+    // Up 1 000 this morning: the floor is still yesterday's, so the room is 3 000,
+    // not 2 000 — the afternoon is sized from what Topstep will actually allow.
+    const r = run([t("2026-09-30T14:00:00Z", 1000)]);
+    expect(r.mllFloor).toBe(48_000);
+    expect(r.room).toBe(3_000);
+    // The next morning it has: the day closed at 51 000.
+    expect(run([t("2026-09-30T14:00:00Z", 1000)], {}, "2026-10-01T15:00:00Z").mllFloor).toBe(49_000);
+  });
+
   it("never comes down after a losing day", () => {
     const r = run([t("2026-09-28T15:00:00Z", 1000), t("2026-09-29T15:00:00Z", -800)]);
     expect(r.mllFloor).toBe(49_000);
