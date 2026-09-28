@@ -18,8 +18,6 @@ import type { Insight, InsightRule } from "./types";
 const P = {
   /** Mental temperature below which entries are flagged. */
   LOW_MENTAL_TEMP: 3,
-  /** Swap above this share of gross P&L has eaten the trade. */
-  SWAP_SHARE_OF_GROSS: 0.15,
   /** Days a plan may sit unexecuted before it is stale. */
   STALE_PLAN_DAYS: 14,
   /** Trades needed before a category comparison is worth showing. */
@@ -182,39 +180,6 @@ export const missedASetup: Rule = {
   },
 };
 
-/** Swap that consumed a meaningful share of the gross result. */
-export const swapAteTheTrade: Rule = {
-  id: "swap_ate_the_trade",
-  level: "trade",
-  minSample: 0,
-  description: "Swap consumed a meaningful share of the gross result.",
-  evaluate: (ctx) =>
-    ctx.trades
-      .filter((e) => {
-        // Only a positive swap is a cost — `net_pl` is gross − fees − swap, so a
-        // negative value is carry you EARNED and must never read as damage.
-        const swap = e.trade.row.stats?.total_swap ?? 0;
-        const gross = Math.abs(e.trade.gross);
-        return swap > 0 && gross > 0 && swap / gross >= P.SWAP_SHARE_OF_GROSS;
-      })
-      .map((e) => {
-        const swap = e.trade.row.stats?.total_swap ?? 0;
-        const share = (Math.abs(swap) / Math.abs(e.trade.gross)) * 100;
-        return {
-          ruleId: "swap_ate_the_trade",
-          level: "trade" as const,
-          severity: "warning" as const,
-          title: "Swap ate the trade",
-          detail: `${fmtMoney(swap, ctx.currency)} of swap on ${fmtMoney(
-            e.trade.gross,
-            ctx.currency,
-          )} gross — ${share.toFixed(0)} %. Holding cost as much as a mistake would have.`,
-          subjectId: e.id,
-          subjectLabel: e.label,
-        };
-      }),
-};
-
 /** Plans left sitting without a fill. */
 export const stalePlan: Rule = {
   id: "stale_plan",
@@ -249,6 +214,5 @@ export const PROCESS_RULES: Rule[] = [
   cotChase,
   lowMentalTempEntry,
   missedASetup,
-  swapAteTheTrade,
   stalePlan,
 ];

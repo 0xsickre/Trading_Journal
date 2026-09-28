@@ -45,8 +45,10 @@ Izveštajni engine registruje **30 metrika**, i svaka nosi veličinu uzorka uz s
 `net_pnl` · `gross_pnl` · `trade_count` · `win_rate` · `profit_factor` · `expectancy` · `avg_r` ·
 `total_r` · `avg_win` · `avg_loss` · `avg_win_loss` · `best` · `worst` · `max_drawdown` ·
 `avg_daily_dd` · `recovery_factor` · `sharpe` · `sortino` · `calmar` · `consistency` · `avg_hold` ·
-`total_fees` · `total_swap` · `cost_pct_of_gross` · `avg_planned_r` · `delta_r` · `avg_mae_r` ·
+`total_fees` · `cost_pct_of_gross` · `avg_planned_r` · `delta_r` · `avg_mae_r` ·
 `target_attainment` · `breakeven_count` · `follow_rate`
+
+(`total_swap` je bio na ovoj listi do H1, 28.09.2026: fjučers nema swap, pa je metrika uklonjena.)
 
 > **Ispravka ovog dokumenta.** Ranija verzija je tvrdila da „nema metrike iz čeklista koja
 > nedostaje" dok su **Sharpe, Sortino, Calmar i avg daily drawdown stvarno nedostajali**. Tvrdnja
@@ -137,8 +139,9 @@ ulaze u skor. TZ nema procesni skor u kompozitu.
 
 ## 6. Prop firm
 
-FTMO mod po nalogu: dnevni limit, ukupni limit, profit target, minimalni broj dana, zamrzavanje
-naloga na proboj, banner sa stanjem.
+Topstep mod po nalogu (plan 50K / 100K / 150K): Daily Loss Limit, Maximum Loss Limit, profit
+target, maksimalna pozicija, zamrzavanje naloga na proboj, banner sa stanjem. FTMO mod je postojao
+do H1 (28.09.2026) i uklonjen je sa prelaskom na fjučerse.
 
 **Ograničenje napisano u README-u:** evaluacija se računa iz **realizovanog** neto P&L-a, dok pravi
 prop firm meri intraday equity uključujući plutajući P/L. Trenira disciplinu, ne zamenjuje brokerov
@@ -176,7 +179,7 @@ Iskreno i bez ublažavanja. Poređano po tome koliko stvarno menja svakodnevni r
 4. **Mentor mode.** Deljenje naloga sa mentorom uživo, i mentorov pogled na više učenika. Ovde
    postoji **mentor pack** — Markdown izvoz sa pre-izračunatim statistikama — što je fajl, ne
    zajednički pogled. Namerno: javni link je dvaput odbijen kao bezbednosna površina.
-5. **Prop firm sync.** Živa veza sa prop firm nalogom. Ovde su FTMO pravila ručno podešena.
+5. **Prop firm sync.** Živa veza sa prop firm nalogom. Ovde su Topstep pravila ručno podešena.
 6. **Monte Carlo simulator.** Kod njih stoji među alatima; ovde ga nema. Od svih kalkulatora, ovo je
    jedini koji bi u aplikaciji imao smisla kao stvarna funkcija.
 7. **Spaces** (`/spaces`). Iz sitemap-a se ne vidi šta je; verovatno saradnja ili zajednica.

@@ -265,7 +265,7 @@ const SHAPES: Record<string, TradeSpec[]> = {
 };
 
 describe("every metric through every shape of book", () => {
-  it("the registry holds thirty-eight metrics and no duplicate key", () => {
+  it("the registry holds thirty-seven metrics and no duplicate key", () => {
     // The count is hardcoded on purpose: the loop below runs EVERY metric
     // through every shape, so a metric added without thought quietly gains
     // twenty-one new assertions and no attention. This line is that attention —
@@ -277,9 +277,10 @@ describe("every metric through every shape of book", () => {
     // displayed. 33 → 34 with `setup_score`, when the setup grade stopped being
     // a typed letter and became the share of playbook criteria met. 34 → 38
     // with the four risk-taken metrics, when `equity_at_entry` made the risk a
-    // trade actually carried measurable for the first time.
-    expect(METRICS).toHaveLength(38);
-    expect(new Set(METRICS.map((m) => m.key)).size).toBe(38);
+    // trade actually carried measurable for the first time. 38 → 37 when
+    // `total_swap` left with the swing book (H1.4): a future carries no swap.
+    expect(METRICS).toHaveLength(37);
+    expect(new Set(METRICS.map((m) => m.key)).size).toBe(37);
   });
 
   for (const [shapeName, specs] of Object.entries(SHAPES)) {
@@ -382,7 +383,7 @@ describe("zero versus null", () => {
     // The other side of the same line: zero trades DID earn zero and pay zero
     // in commissions. Here a null would be the wrong answer.
     const empty = enrich([]);
-    for (const key of ["net_pnl", "gross_pnl", "total_r", "total_fees", "total_swap", "trade_count"]) {
+    for (const key of ["net_pnl", "gross_pnl", "total_r", "total_fees", "trade_count"]) {
       expect(getMetric(key)!.compute(empty, ctx, undefined), key).toBe(0);
     }
   });

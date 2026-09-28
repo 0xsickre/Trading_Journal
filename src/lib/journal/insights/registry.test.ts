@@ -131,14 +131,16 @@ describe("the swing insights are gone (H1, 28.09.2026)", () => {
       "unplanned_partial",
       "entry_without_thesis",
       "weekend_hold_record",
+      "swap_ate_the_trade",
     ]) {
       expect(ids.has(gone)).toBe(false);
     }
   });
 
-  it("24 rules remain: trade 13, day 6, week 3, portfolio 2", () => {
+  it("23 rules remain: trade 12, day 6, week 3, portfolio 2", () => {
+    // A future carries no swap, so the swap insight went with the rest (H1.4).
     const by = (level: string) => ALL_RULES.filter((r) => r.level === level).length;
-    expect(ALL_RULES).toHaveLength(24);
-    expect([by("trade"), by("day"), by("week"), by("portfolio")]).toEqual([13, 6, 3, 2]);
+    expect(ALL_RULES).toHaveLength(23);
+    expect([by("trade"), by("day"), by("week"), by("portfolio")]).toEqual([12, 6, 3, 2]);
   });
 });

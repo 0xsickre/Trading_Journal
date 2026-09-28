@@ -508,13 +508,6 @@ export const METRICS: ReportMetric[] = [
     compute: (g) => computeCostStats(realized(g)).totalFees,
   },
   {
-    key: "total_swap",
-    label: "Swap",
-    unit: "money",
-    higherIsBetter: false,
-    compute: (g) => computeCostStats(realized(g)).totalSwap,
-  },
-  {
     key: "cost_pct_of_gross",
     label: "Cost % of gross",
     unit: "pct",

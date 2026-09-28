@@ -95,11 +95,16 @@ export function CostReportCard({
           value={fmtMoney(costs.totalFees, currency)}
           cls={costs.totalFees !== 0 ? "text-[var(--loss)]" : undefined}
         />
-        <Row
-          label="Swap"
-          value={fmtMoney(costs.totalSwap, currency)}
-          cls={costs.totalSwap !== 0 ? "text-[var(--loss)]" : undefined}
-        />
+        {/* A future carries no swap. The row stays for a range that still
+            holds CFD rows from the swing history, where the fees alone would
+            not add up to the total below. */}
+        {costs.totalSwap !== 0 && (
+          <Row
+            label="Swap"
+            value={fmtMoney(costs.totalSwap, currency)}
+            cls="text-[var(--loss)]"
+          />
+        )}
         <Row
           label="Total cost"
           value={fmtMoney(costs.totalCosts, currency)}
@@ -109,15 +114,6 @@ export function CostReportCard({
           label="Cost as % of gross profit"
           value={costs.costPctOfGross != null ? fmtPct(costs.costPctOfGross) : "—"}
           hint="The denominator is the winners' gross profit — cost measured against what the edge actually produced."
-        />
-        <Row
-          label="Swap per holding day"
-          value={
-            costs.avgSwapPerHoldingDay != null
-              ? fmtMoney(costs.avgSwapPerHoldingDay, currency)
-              : "—"
-          }
-          hint={`Total swap spread across ${fmtNum(costs.holdingDays, 1)} days of exposure.`}
         />
       </CardContent>
     </Card>

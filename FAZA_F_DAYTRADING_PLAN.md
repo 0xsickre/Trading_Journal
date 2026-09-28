@@ -433,25 +433,42 @@ Gate zelen posle svakog koraka; coverage pragovi i dalje važe.
 **Izlaz:** README 1:1 (sve sekcije koje opisuju FTMO, MT5, check-in, swing insights, swap metriku;
 broj testova, insights i ruta), `PARITY.md` ako pominje obrisano, ovde H1 ✅, pa F4.
 
+### H1 urađeno (28.09.2026)
+
+- **H1.1** `09752cd` — FTMO mod obrisan; Settings nudi samo Topstep pravila, widget `ftmo` → `topstep`.
+- **H1.2** `69e5124` — MT5 statement uvoz i `mt5_excursion.py` obrisani.
+- **H1.3** `67feff6` — check-in kartica, `position-checkin*`, `open-positions.ts`, `swing-rules.ts`
+  (5 pravila), dimenzije `touched`/`thesis_state`/`weekend_hold`/`time_stop_breached`, polja
+  `weekendHold`/`heldDays`/`timeStopDays`/`pastTimeStop` u `enriched-trade.ts`, nedeljni rekap bez
+  vikend/check-in brojeva. `weekend-hold.ts` je ostao bez čitaoca pa je obrisan već ovde.
+- **H1.4** — metrika `total_swap` (38 → 37), red „Swap per holding day" i insight
+  `swap_ate_the_trade` (24 → 23 pravila). Red „Swap" u kartici Costs ostaje, ali se prikazuje samo
+  kad opseg ima swap (mapa #14): na CFD istoriji bi inače provizije bez njega davale pogrešan zbir
+  ispod sebe. Swap po fill-u, `swap_long/short/triple_day` u katalogu instrumenata i swap u neto P&L-u
+  ostaju. `PARITY.md`: FTMO → Topstep u §6 i §8, `total_swap` izbačen iz §1.
+- Procentualni tracker pragovi ostaju: backtest nalog nije Topstep i čita ih.
+
 ## F4 — Dnevni tok za day tradera (detaljno)
 
-**Ulaz:** `main` posle F3 (`a8e63f9`, `409858d`; migracija `20260928160000` primenjena). **Pročitati:** README
-§ Routes `/daily`, § Ratings, § Process tracking; `daily-report-form.tsx`, `open-positions-card.tsx`,
-`position-checkin.ts`, `form-config.ts`, `tracker-types.ts`, `tracker-rule-manager.tsx`,
+**Ulaz:** `main` posle H1 (F3: `a8e63f9`, `409858d`; migracija `20260928160000` primenjena). **Pročitati:** README
+§ Routes `/daily`, § Ratings, § Process tracking; `daily-report-form.tsx`, `form-config.ts`,
+`plan-snapshot.ts`, `tracker-types.ts`, `tracker-rule-manager.tsx`,
 `tracker/auto-rules.ts`, seed migracija `20260919230000`; u `futures-trading`: `tools/brief/brief.py`,
 `tools/journal_api.py`, README § Dnevni brief.
 
 ### Utvrđeno u kodu i bazi (28.09.2026, posle F3; baza samo čitana)
 
-- **`/daily`** ima „Bez pregleda", tri tracker faze, karticu „Pre nego što uđeš" (mentalno stanje u
-  zvezdicama + „ne otvaram ništa novo") i check-in po otvorenoj poziciji (`open-positions-card.tsx`,
-  `tj_position_checkins`) — swing ostatak: day trader je ravan do 15:10 CT.
+- **`/daily`** ima „Bez pregleda", tri tracker faze i karticu „Pre nego što uđeš" (mentalno stanje u
+  zvezdicama + „ne otvaram ništa novo"). Check-in po otvorenoj poziciji (G2-A) je uklonjen već u
+  H1.3; tabela `tj_position_checkins` ostaje kao istorija. Dan je „kompletan" kad postoji aktivan
+  fokus-cilj (`isDayComplete`).
 - **Brief** (`futures-trading`) pravi HTML u repou (`izlaz/brief/{datum}.html`) i Telegram poruku u
   06:40 BG: vesti sa crvenim prozorima (−5/+15 i −2/+5 min), očekivani raspon NQ/ES za Topstep dan i
   RTH, Topstep kraj dana (praznici, rani kraj), ugovori danas. **Journal ne dobija ništa
   strukturisano** — nema tabele ni polja; `journal_api.py` brief danas samo ČITA iz journala.
 - **Forma plana**: `thesis`, `invalidation`, `time_stop_days` (1–5 dana) u grupi „Why this trade"
-  (`form-config.ts`); `time_stop_days` čitaju plan pečat, `open-positions`, insights (`pastTimeStop`).
+  (`form-config.ts`); posle H1.3 `time_stop_days` čitaju samo plan pečat (`plan-snapshot.ts`), spajanje
+  pozicija, uvoz i šema unosa — nijedan insight ni dimenzija više.
 - **Kategorije trejdera u bazi su swing seed**: Entry TF `15m | 1h | 4h | 1D | 5m | 15`, HTF Bias,
   Exit „Time exit", greške „Overmanaged", „Against HTF bias", „Counter HTF trend", Risk %
   `0.25–1`. Seed (`tj_seed_categories`) puni samo PRAZNU knjigu — ova nije prazna, pa novi seed ne bi
@@ -468,7 +485,7 @@ broj testova, insights i ruta), `PARITY.md` ako pominje obrisano, ovde H1 ✅, p
   `[{od, do, naziv}]`, Topstep kraj dana, ugovori danas; `brief.py` je upisuje preko `journal_api`,
   `/daily` je čita. Bez nje `no_entry_in_red_window` i praznični `flat_by_close` nemaju izvor.
 - `/daily`: kartica „Pred sesiju" (raspon, crveni prozori, kraj dana, ugovori, DLL danas sa banera,
-  plan dana) umesto check-in kartice (G2); „Bez pregleda" ostaje.
+  plan dana) na mestu gde je bila check-in kartica (G2, uklonjena u H1.3); „Bez pregleda" ostaje.
 - Forma: time stop u minutima (G3); teza ostaje opciona (F1 je već ocenjuje samo na planu).
 - Kategorije (G4) i nova auto pravila (G5, G6) po odlukama.
 

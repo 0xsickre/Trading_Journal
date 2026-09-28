@@ -2,8 +2,9 @@
  * Cost report — commissions, swap, and what they take out of gross profit.
  *
  * `total_fees` and `total_swap` have always been in the position stats view and
- * on the trade form, but no aggregate ever read them. For a swing book this is
- * the report that decides whether a long hold was worth it.
+ * on the trade form, but no aggregate ever read them. A future carries no swap;
+ * it stays in the total for the CFD rows of the swing history, and the per-day
+ * swap figure went with the swing book (H1.4).
  *
  * On "no data" vs zero: the spec is emphatic that a missing commission must not
  * render as 0. Our schema defaults fees to 0, so a total of zero is genuinely
@@ -26,10 +27,6 @@ export type CostStats = {
   grossProfit: number;
   /** Costs as a share of gross profit. Null when there was no gross profit. */
   costPctOfGross: number | null;
-  /** Total swap divided by total days held — the swing-specific number. */
-  avgSwapPerHoldingDay: number | null;
-  /** Days of exposure the swap figure is spread over. */
-  holdingDays: number;
 };
 
 const EMPTY_COSTS: CostStats = {
@@ -40,8 +37,6 @@ const EMPTY_COSTS: CostStats = {
   withCostData: 0,
   grossProfit: 0,
   costPctOfGross: null,
-  avgSwapPerHoldingDay: null,
-  holdingDays: 0,
 };
 
 export function computeCostStats(trades: RealizedTrade[]): CostStats {
@@ -51,7 +46,6 @@ export function computeCostStats(trades: RealizedTrade[]): CostStats {
   let totalSwap = 0;
   let withCostData = 0;
   let grossProfit = 0;
-  let holdingDays = 0;
 
   for (const t of trades) {
     const fees = t.row.stats?.total_fees ?? 0;
@@ -63,9 +57,6 @@ export function computeCostStats(trades: RealizedTrade[]): CostStats {
     // Only winners contribute to gross profit; costs are measured against what
     // the edge actually produced, not against a net figure they already reduced.
     if (t.gross > 0) grossProfit += t.gross;
-
-    const secs = t.row.stats?.duration_seconds;
-    if (secs != null && secs > 0) holdingDays += secs / 86_400;
   }
 
   const totalCosts = totalFees + totalSwap;
@@ -80,7 +71,5 @@ export function computeCostStats(trades: RealizedTrade[]): CostStats {
     // Signed on purpose: a net carry CREDIT must read as a negative share, not
     // get flipped into a cost by an absolute value.
     costPctOfGross: grossProfit > 0 ? (totalCosts / grossProfit) * 100 : null,
-    avgSwapPerHoldingDay: holdingDays > 0 ? totalSwap / holdingDays : null,
-    holdingDays,
   };
 }

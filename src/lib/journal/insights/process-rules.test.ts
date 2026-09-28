@@ -5,7 +5,6 @@ import {
   lowMentalTempEntry,
   missedASetup,
   stalePlan,
-  swapAteTheTrade,
 } from "./process-rules";
 import { ctxOf, fired, mkGradedRow, mkReport, mkTrade } from "./test-helpers";
 import type { TradeRow } from "../types";
@@ -107,29 +106,6 @@ describe("missedASetup", () => {
 
   it("is silent when nothing was missed", () => {
     expect(missedASetup.evaluate(ctxOf([], { allRows: [] }))).toEqual([]);
-  });
-});
-
-describe("swapAteTheTrade", () => {
-  it("fires when swap took a meaningful share of gross", () => {
-    const ctx = ctxOf([mkTrade({ id: "a", gross: 100, net: 80, swap: 20 })]);
-    expect(fired(swapAteTheTrade, ctx)).toEqual(["a"]);
-  });
-
-  it("does not treat earned carry as damage", () => {
-    // Negative swap is a credit; an absolute value here would read it as a cost.
-    const ctx = ctxOf([mkTrade({ id: "a", gross: 100, net: 120, swap: -20 })]);
-    expect(fired(swapAteTheTrade, ctx)).toEqual([]);
-  });
-
-  it("does not fire for a negligible swap", () => {
-    const ctx = ctxOf([mkTrade({ id: "a", gross: 1000, net: 995, swap: 5 })]);
-    expect(fired(swapAteTheTrade, ctx)).toEqual([]);
-  });
-
-  it("does not fire when no swap was recorded", () => {
-    const ctx = ctxOf([mkTrade({ id: "a", gross: 100, net: 100, swap: 0 })]);
-    expect(fired(swapAteTheTrade, ctx)).toEqual([]);
   });
 });
 

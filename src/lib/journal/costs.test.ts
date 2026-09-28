@@ -76,20 +76,6 @@ describe("computeCostStats", () => {
     expect(someData.withCostData).toBe(1);
   });
 
-  it("spreads swap over days actually held", () => {
-    const c = computeCostStats([
-      trade("a", 100, 0, 20, 4 * DAY),
-      trade("b", 100, 0, 30, 6 * DAY),
-    ]);
-    expect(c.holdingDays).toBe(10);
-    expect(c.avgSwapPerHoldingDay).toBe(5);
-  });
-
-  it("gives no per-day swap when no duration is known", () => {
-    const c = computeCostStats([trade("a", 100, 0, 20, null)]);
-    expect(c.avgSwapPerHoldingDay).toBeNull();
-  });
-
   it("returns empty stats for an empty scope", () => {
     expect(computeCostStats([]).count).toBe(0);
   });

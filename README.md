@@ -12,7 +12,8 @@ one thing written from outside is MAE/MFE on a future, from the exchange's own c
 **It was built as a swing journal** (FTMO CFDs on MT5, positions held for days), and the move to
 day trading is under way. **FTMO mode and the MT5 statement import are gone** (H1, 28.09.2026: no
 FTMO or CFD trade was in the book); their columns stay in the database, only the code went. So are
-the per-position check-ins on `/daily` and the five swing insights (thesis, time stop, weekend). The
+the per-position check-ins on `/daily`, the five swing insights (thesis, time stop, weekend) and swap
+as a metric of its own. The
 TradingView backtest path still works. What is still measured on swing terms — the hold-time
 buckets, a few insights — is listed item by item and split into six phases, F1–F6, in
 [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md). This README describes the code as it is,
@@ -29,7 +30,7 @@ purpose — an applied migration is never edited here, and the comment inside on
 record of the day it was written.
 
 **The interface is deliberately half-and-half, and the line is a clean one.** At least 165 of the
-3,482 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+3,476 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
@@ -173,7 +174,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,975 tests across 179 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,964 tests across 179 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -401,12 +402,12 @@ two lists sorted separately and zipped is how a bucket's A row ends up beside an
 
 ## Metrics
 
-38 metrics in a single registry (`src/lib/journal/reports/metrics.ts`), 21 built-in dimensions across
+37 metrics in a single registry (`src/lib/journal/reports/metrics.ts`), 21 built-in dimensions across
 four groups (9 off the trade, 9 derived, 2 process, 1 insight) plus one per custom field. Any
 metric runs against any dimension — which is why there is one report engine instead of ten report
-pages. The tables below list all 38.
+pages. The tables below list all 37.
 
-**Three of them carry a confidence interval, and the other thirty-five do not.**
+**Three of them carry a confidence interval, and the other thirty-four do not.**
 A win rate, an expectancy and a profit factor are a rate, a mean and a ratio of sums — the figures a
 reader mistakes for facts. The rest are counts and sums, which are exactly what they say. The
 interval is **Wilson** for the rate (closed form, and it cannot produce a bound below 0 or above 100
@@ -446,9 +447,11 @@ drift from the module computing the same thing.
 **Why R is gross while money can be net.** They are deliberately two different questions. R measures
 the **setup**: did price go where the plan said, relative to the risk taken. Commission and swap are
 not a property of the setup but the cost of holding, and for the CFD swing book they were a separate
-line worth seeing on its own — hence their own tile (`Swap`) on `/reports`, and hence the net/gross
-toggle over money. A future carries no swap: on a Topstep trade the cost is the round-turn
-commission alone, and the swap tile reads 0 over a futures-only period.
+line worth seeing on its own — hence the net/gross toggle over money. A future carries no swap: on a
+Topstep trade the cost is the round-turn commission alone. The `Swap` metric, the swap-per-holding-day
+figure and the `swap_ate_the_trade` insight **left in H1**; swap stays in the net result and in total
+cost for the CFD rows of the swing history, and the Costs card shows its `Swap` row only for a range
+that carries some.
 
 A consequence worth knowing while reading the screen: **a trade can be a loss in money and positive
 in R.** A CFD held three days, price went your way by +0.03R, and carry ate even that — net
@@ -537,7 +540,7 @@ history has no seal and must not pretend to one.
 
 | Metric | Formula |
 |---|---|
-| Total commissions / swap | Sums over fills |
+| Total commissions | Sums over fills (swap has no metric of its own since H1; it stays inside net P&L and cost %) |
 | Cost % of gross | `costs / gross profit of winners × 100` |
 | Avg planned R | Average planned reward, over trades that have one |
 | Planned vs realized R | `avg realized R − avg planned R`, over the **same** trades |
@@ -973,7 +976,7 @@ verdicts are what stops compliance from following it.
 **Playbooks** hold groups of rules; answering their checklist writes `tj_position_rules`, which feeds
 the follow rate. An unanswered rule counts in neither the numerator nor the denominator.
 
-**Insights** are 24 rules at four levels — trade (13), day (6), week (3), portfolio (2) — reading the
+**Insights** are 23 rules at four levels — trade (12), day (6), week (3), portfolio (2) — reading the
 same enriched trades the reports do. Every rule declares a `minSample` and none fires at n=1. No
 insight is stored in the database: thresholds change, and a stored insight would go stale against a
 changed threshold while still looking authoritative.
@@ -999,9 +1002,10 @@ have different subjects, so folding `tilt_week` into `revenge_trade` — or `siz
 `unusual_size` — would put a week's id where a trade id belongs. They stay separate for that reason
 rather than for a good story about causes.
 
-**H1 removed five more** (28.09.2026), the swing rules that joined on the per-position check-in, the
+**H1 removed six more** (28.09.2026): five swing rules that joined on the per-position check-in, the
 time stop in days, the written thesis and the weekend: `acted_against_the_plan`, `past_time_stop`,
-`unplanned_partial`, `entry_without_thesis` and `weekend_hold_record`. With them went four report
+`unplanned_partial`, `entry_without_thesis` and `weekend_hold_record` — and then a sixth,
+`swap_ate_the_trade`, since a future carries no swap. With them went four report
 dimensions (`touched`, `thesis_state`, `weekend_hold`, `time_stop_breached`) and the weekly recap's
 weekend, checked, touched and thesis-slipped counts. A book that is flat by the close has none of
 those things to measure.
@@ -1390,8 +1394,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,975 tests across 179 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,360 tests in 120 files) and `components` (environment `jsdom`, files `*.test.tsx`, 615
+2,964 tests across 179 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,348 tests in 120 files) and `components` (environment `jsdom`, files `*.test.tsx`, 616
 tests in 59 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

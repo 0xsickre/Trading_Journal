@@ -169,11 +169,11 @@ describe("ordering", () => {
   it("sorts ascending for a metric where lower is better", () => {
     const r = run(
       enrich([
-        { instrument: "CHEAP", net: 100, swap: 1 },
-        { instrument: "PRICEY", net: 100, swap: 90 },
+        { instrument: "CHEAP", net: 100, fees: 1 },
+        { instrument: "PRICEY", net: 100, fees: 90 },
       ]),
       "instrument",
-      { metricKeys: ["total_swap"], sortBy: "total_swap" },
+      { metricKeys: ["total_fees"], sortBy: "total_fees" },
     )!;
     expect(r.rows.map((x) => x.bucket)).toEqual(["CHEAP", "PRICEY"]);
   });

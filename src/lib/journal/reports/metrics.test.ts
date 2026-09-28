@@ -201,7 +201,12 @@ describe("the values a reader would check by hand", () => {
 
   it("adds up the costs", () => {
     expect(val("total_fees")).toBeCloseTo(33, 10);
-    expect(val("total_swap")).toBeCloseTo(5, 10);
+  });
+
+  it("has no swap metric: a future carries none (H1.4)", () => {
+    // Swap still reaches the money through `net_pl` and `cost_pct_of_gross`
+    // on a CFD row; it is only no longer a column of its own.
+    expect(getMetric("total_swap")).toBeUndefined();
   });
 
   it("reports the worst peak-to-trough inside the group, not the whole book", () => {

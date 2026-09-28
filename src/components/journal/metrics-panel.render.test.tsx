@@ -89,11 +89,30 @@ describe("HoldTimeCard, CostReportCard, PlanVsRealityCard — presentation only,
       totalCosts: 0,
       grossProfit: 0,
       costPctOfGross: null,
-      avgSwapPerHoldingDay: null,
-      holdingDays: 0,
     };
     render(<CostReportCard costs={costs} currency="USD" />);
     expect(screen.getByText(/None of the 5 trades carries a cost/)).toBeInTheDocument();
+  });
+
+  it("CostReportCard shows swap only when the range carries some (H1.4)", () => {
+    const futures: CostStats = {
+      count: 5,
+      withCostData: 5,
+      totalFees: 25,
+      totalSwap: 0,
+      totalCosts: 25,
+      grossProfit: 280,
+      costPctOfGross: 8.9,
+    };
+    const { rerender } = render(<CostReportCard costs={futures} currency="USD" />);
+    expect(screen.queryByText("Swap")).not.toBeInTheDocument();
+    expect(screen.queryByText("Swap per holding day")).not.toBeInTheDocument();
+
+    // A CFD row from the swing history still carries swap, and without its row
+    // the fees would not add up to the total shown under them.
+    rerender(<CostReportCard costs={{ ...futures, totalSwap: 10, totalCosts: 35 }} currency="USD" />);
+    expect(screen.getByText("Swap")).toBeInTheDocument();
+    expect(screen.queryByText("Swap per holding day")).not.toBeInTheDocument();
   });
 
   it("CostReportCard reports actual costs, tinted as a loss, when data exists", () => {
@@ -105,8 +124,6 @@ describe("HoldTimeCard, CostReportCard, PlanVsRealityCard — presentation only,
       totalCosts: 35,
       grossProfit: 280,
       costPctOfGross: 12.5,
-      avgSwapPerHoldingDay: 2,
-      holdingDays: 5,
     };
     render(<CostReportCard costs={costs} currency="USD" />);
     expect(screen.getByText("$35.00")).toBeInTheDocument();
