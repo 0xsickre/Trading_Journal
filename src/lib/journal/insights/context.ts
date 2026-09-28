@@ -20,6 +20,7 @@ import {
 } from "../enriched-trade";
 import type { PositionCheckin } from "../position-checkin";
 import type { RuleLookup } from "../reports/rule-lookup";
+import type { DayZone } from "../time";
 import type { TradeRow } from "../types";
 
 // Re-exported because the definitions live in `enriched-trade.ts` — the report
@@ -103,7 +104,7 @@ export type BuildContextInput = {
   trades: RealizedTrade[];
   allRows?: TradeRow[];
   reports?: DailyReportLite[];
-  tzOf: (t: RealizedTrade) => string;
+  tzOf: (t: RealizedTrade) => DayZone;
   range?: BreakevenRange;
   pnlOf?: (t: RealizedTrade) => number;
   currency?: string;

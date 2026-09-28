@@ -5,8 +5,8 @@ import {
   isFriday,
   nextReportDate,
   prevReportDate,
-  todayInTz,
 } from "./daily-report";
+import { todayIn } from "./time";
 import { daysOnActiveGoal } from "./focus-goal";
 
 const goal = {
@@ -78,7 +78,7 @@ describe("daysOnActiveGoal", () => {
   });
 });
 
-describe("todayInTz", () => {
+describe("todayIn — a plain zone", () => {
   it("answers the account's calendar day, not UTC's", () => {
     // 01:30 UTC is still the previous evening in New York and already mid-morning
     // in Tokyo. Every day key in this app — the report date, the tracker heatmap,
@@ -87,9 +87,9 @@ describe("todayInTz", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date("2026-07-30T01:30:00Z"));
-      expect(todayInTz("UTC")).toBe("2026-07-30");
-      expect(todayInTz("America/New_York")).toBe("2026-07-29");
-      expect(todayInTz("Asia/Tokyo")).toBe("2026-07-30");
+      expect(todayIn("UTC")).toBe("2026-07-30");
+      expect(todayIn("America/New_York")).toBe("2026-07-29");
+      expect(todayIn("Asia/Tokyo")).toBe("2026-07-30");
     } finally {
       vi.useRealTimers();
     }

@@ -10,7 +10,7 @@
 import { computeStats, toRealized, type Stats } from "./analytics";
 import { sharedBreakevenRange } from "./breakeven";
 import { sharedCurrency } from "./format";
-import { addDaysToDayKey, zonedDateKey, zonedWeekStartKey } from "./time";
+import { addDaysToDayKey, dayKeyIn, weekKeyIn, type DayZone } from "./time";
 import type { Account, TradeRow } from "./types";
 
 // --- Period -----------------------------------------------------------------
@@ -45,17 +45,17 @@ export type DayBounds = { from: string | null; to: string | null };
 export function periodBounds(
   period: Period,
   now: Date,
-  tz: string,
+  tz: DayZone,
   custom: DayBounds = { from: null, to: null },
 ): DayBounds {
-  const today = zonedDateKey(now, tz);
+  const today = dayKeyIn(now, tz);
   switch (period) {
     case "all":
       return { from: null, to: null };
     case "today":
       return { from: today, to: today };
     case "week":
-      return { from: zonedWeekStartKey(now, tz), to: today };
+      return { from: weekKeyIn(now, tz), to: today };
     case "month":
       return { from: `${today.slice(0, 7)}-01`, to: today };
     case "30d":
@@ -83,8 +83,8 @@ export function inBounds(day: string, bounds: DayBounds): boolean {
  * account's timezone — the same instant the "Opened" column prints. A plan
  * with no fill yet falls back to when it was written.
  */
-export function tradeDayKey(t: TradeRow, tz: string): string {
-  return zonedDateKey(t.stats?.opened_at ?? t.created_at, tz);
+export function tradeDayKey(t: TradeRow, tz: DayZone): string {
+  return dayKeyIn(t.stats?.opened_at ?? t.created_at, tz);
 }
 
 // --- Summary ----------------------------------------------------------------

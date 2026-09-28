@@ -16,7 +16,7 @@
 import { winRateOf, type RealizedTrade } from "./analytics";
 import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
 import { isShortDirection } from "./plan-calculations";
-import { zonedDateKey } from "./time";
+import { dayKeyIn, type DayZone } from "./time";
 import type { TradeRow } from "./types";
 
 export type DirectionStats = {
@@ -97,13 +97,13 @@ export function countLoggedDays(
  */
 export function tradingDayKeysFromRows(
   rows: TradeRow[],
-  tzOf: (row: TradeRow) => string,
+  tzOf: (row: TradeRow) => DayZone,
 ): Set<string> {
   const days = new Set<string>();
   for (const row of rows) {
     const ref = row.stats?.opened_at ?? row.stats?.closed_at ?? null;
     if (!ref) continue;
-    const key = zonedDateKey(ref, tzOf(row));
+    const key = dayKeyIn(ref, tzOf(row));
     if (key) days.add(key);
   }
   return days;

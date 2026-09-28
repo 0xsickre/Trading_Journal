@@ -23,7 +23,7 @@
  * exists to stop printing without a warning.
  */
 
-import { zonedDateKey } from "./time";
+import { dayKeyIn, type DayZone } from "./time";
 import type { TradeRow } from "./types";
 
 /** Below this many shared days a coefficient is not reported at all. */
@@ -56,7 +56,7 @@ type Span = { instrument: string; openDay: string; closeDay: string | null };
  */
 export function spansOf(
   rows: readonly TradeRow[],
-  tzOf: (row: TradeRow) => string,
+  tzOf: (row: TradeRow) => DayZone,
   today: string,
 ): Span[] {
   const out: Span[] = [];
@@ -65,13 +65,13 @@ export function spansOf(
     const openedAt = row.stats?.opened_at ?? null;
     if (!instrument || !openedAt) continue;
     const tz = tzOf(row);
-    const openDay = zonedDateKey(openedAt, tz);
+    const openDay = dayKeyIn(openedAt, tz);
     if (!openDay) continue;
     const closedAt = row.stats?.closed_at ?? null;
     out.push({
       instrument,
       openDay,
-      closeDay: closedAt ? zonedDateKey(closedAt, tz) : today,
+      closeDay: closedAt ? dayKeyIn(closedAt, tz) : today,
     });
   }
   return out;
@@ -211,7 +211,7 @@ export function instrumentPairs(
 /** Realized P&L per day, per instrument — the correlation's input. */
 export function dailyPnlByInstrument(
   rows: readonly TradeRow[],
-  tzOf: (row: TradeRow) => string,
+  tzOf: (row: TradeRow) => DayZone,
   pnlOf: (row: TradeRow) => number | null,
 ): Map<string, Map<string, number>> {
   const out = new Map<string, Map<string, number>>();
@@ -220,7 +220,7 @@ export function dailyPnlByInstrument(
     const closedAt = row.stats?.closed_at ?? null;
     const pnl = pnlOf(row);
     if (!instrument || !closedAt || pnl == null) continue;
-    const day = zonedDateKey(closedAt, tzOf(row));
+    const day = dayKeyIn(closedAt, tzOf(row));
     if (!day) continue;
     const byDay = out.get(instrument) ?? new Map<string, number>();
     byDay.set(day, (byDay.get(day) ?? 0) + pnl);

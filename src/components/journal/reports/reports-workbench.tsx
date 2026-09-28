@@ -93,7 +93,7 @@ import {
 } from "@/lib/journal/reports/playbook-dimensions";
 import type { Playbook, PositionRule } from "@/lib/journal/playbook-types";
 import { buildBalanceTimeline, currentEquity, type CashEvent } from "@/lib/journal/balance";
-import { accountTimezoneResolver } from "@/lib/journal/time";
+import { accountDayZoneResolver } from "@/lib/journal/time";
 
 /**
  * Lazy for the same reason the dashboard's plots are: recharts is large, and
@@ -254,7 +254,9 @@ export function ReportsWorkbench({
 
   const tzOf = useMemo(() => {
     const primary = primaryAccount(accounts);
-    const resolve = accountTimezoneResolver(accounts, primary?.timezone);
+    // Each trade's day by its own account's rule — Topstep's trading day on a
+    // Topstep account — the same days the calendar and /daily file it under.
+    const resolve = accountDayZoneResolver(accounts, primary);
     return (t: { row: TradeRow }) => resolve(t.row.account_id);
   }, [accounts]);
 

@@ -6,8 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { THESIS_STATES, TOUCHED_STATES } from "@/lib/journal/position-checkin";
 import { getPrimaryAccount } from "@/lib/journal/accounts";
-import { todayInTz } from "@/lib/journal/daily-report";
-import { DEFAULT_TZ, isValidDayKey } from "@/lib/journal/time";
+import { isValidDayKey, todayFor } from "@/lib/journal/time";
 
 /**
  * The day being written must exist and must have started.
@@ -20,7 +19,7 @@ import { DEFAULT_TZ, isValidDayKey } from "@/lib/journal/time";
 async function dayError(reportDate: string): Promise<string | null> {
   if (!isValidDayKey(reportDate)) return "Neispravan datum.";
   const account = await getPrimaryAccount();
-  if (reportDate > todayInTz(account?.timezone ?? DEFAULT_TZ))
+  if (reportDate > todayFor(account))
     return "Budući dan još nije počeo.";
   return null;
 }

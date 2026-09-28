@@ -115,8 +115,8 @@ What `futures-trading` does with the journal, each described in its own README:
 - **MAE/MFE** for closed futures trades comes from the traded contract's candles in Cloudflare R2
   (`tools/journal_mae.py`, daily and hourly in the evening) (§ MAE/MFE).
 - **The evening reminder** at 21:25 Belgrade (`tools/journal_podsetnik.py`) lists the day's trades
-  with no setup or grade, or not yet confirmed by the TopstepX export — the same rule as the
-  "Bez pregleda" card on `/daily` (`review-gaps.ts`).
+  with no setup or grade, or not yet confirmed by the TopstepX export — the same rule, on the same
+  Topstep day (17:00 → 17:00 CT), as the "Bez pregleda" card on `/daily` (`review-gaps.ts`).
 
 The vault link is the swing-era one: HTF Bias records the vault's direction call **at the moment of
 entry**, and the instrument watchlist used to follow its `instrument_registry`. (`macro_align` /
@@ -137,7 +137,7 @@ The routine both repos are built around — the same five steps as "Dnevni tok j
 | Before and during the trade | TopstepX | Only a limit with an OCO bracket; contracts from the brief's "Ugovori danas". Nothing in the journal |
 | Right after the close | `/trades/log` | Four numbers (entry, stop, exit, contracts), setup, A/B/C, the mistake if not an A; a sentence and a chart optional. About a minute |
 | End of the day | `/import` | One TopstepX CSV: the trades logged by hand are recognised (entry ±0.05 %, ±10 min) and get the exact fills; the answers stay. MAE/MFE arrives on its own — provisional the same evening, exact the next morning |
-| 21:25 Belgrade | Telegram | A reminder if one of today's trades has no setup or grade, or was not confirmed by the CSV. The setup-and-grade half is the same rule as "Bez pregleda" on `/daily` |
+| 21:25 Belgrade | Telegram | A reminder if one of today's trades has no setup or grade, or was not confirmed by the CSV. The setup-and-grade half is the same rule as "Bez pregleda" on `/daily`, on the same Topstep day |
 | Weekend | `/weekly` → Napredak | Setups, the cost of each mistake, A against B/C, hour of entry, MAE/MFE, trade number in the day |
 
 A limit placed well before price reaches it can still be written plan-first on `/trades/new`; the
@@ -179,7 +179,7 @@ JOURNAL_PASSWORD=<your password>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 3,046 tests across 185 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 3,075 tests across 186 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -568,15 +568,24 @@ Get this wrong and nothing breaks — the numbers simply file themselves under d
 - **Decisions are dated by the OPEN day.** "Did every trade have a stop?" is a question about the
   moment of entry. Under close-dating, a still-open trade is invisible to that rule, so ten unlinked
   open trades would report a perfect day.
-- **Days are always in the ACCOUNT's timezone**, resolved on the server. A `new Date()` read in the
-  browser shifts the whole calendar by one column for anyone not sitting in the account's zone.
-- **Except Topstep's own day.** `topstep.ts` keys its Daily Loss Limit, its end-of-day MLL and its
-  best day on Topstep's trading day, **17:00 → 17:00 Chicago** (`topstepTradingDay`): a fill at 18:30 CT
-  on Monday is Tuesday's. The calendar, `/daily`, the tracker and the day-level insights still use
-  the account's zone. On the seeded New York account a fill between 18:00 and midnight ET files under
-  that calendar day while Topstep counts it in the next one, so the calendar's day and the banner's
-  "DLL today" can disagree about the same evening. Bringing those onto the Topstep day is
-  `FAZA_F_DAYTRADING_PLAN.md` #1.
+- **Days are the ACCOUNT's**, resolved on the server. A `new Date()` read in the browser shifts the
+  whole calendar by one column for anyone not sitting in the account's zone.
+- **A Topstep account counts Topstep's trading day, 17:00 → 17:00 Chicago**; any other account counts
+  the calendar day of its own zone. The rule comes from `topstep_mode` (`accountDayZone` in
+  `time.ts`), not from a separate setting: a fill at 18:30 CT on Monday is Tuesday's, and the Sunday
+  open is Monday's. One resolver (`accountDayZoneResolver`, a `DayZone` per account) dates every
+  trade for the calendar, `/daily` and "Bez pregleda", the tracker verdicts and the equity ladder,
+  `/weekly`, the dashboard, the reports and the day-level insights — the same day `topstep.ts` charges
+  its Daily Loss Limit to (`topstepTradingDay`) and the 21:25 reminder in `futures-trading` counts, so
+  the calendar and the banner's "DLL today" no longer disagree about an evening. In "All accounts"
+  **every trade keeps its own account's rule**: a day must not change with the filter on the screen.
+  The week is the week of that day (Sunday evening opens the new one), and the hour of entry is still
+  read on the account's clock. Computed in Chicago, whatever the account's zone: Belgrade matches it
+  most of the year and drifts by an hour in the weeks the two change clocks on different dates.
+- **"Today" is the primary account's day** (`todayFor`): on a Topstep primary, after 17:00 CT it is
+  already tomorrow, so `/daily` opens the session that has just started. Locked days keep the verdicts
+  they were frozen with; FTMO keeps its own day in its own zone, and `equity_at_entry` is still the
+  opening balance of the calendar day (`FAZA_F_DAYTRADING_PLAN.md` F3).
 - **ISO weekdays, 1 = Monday … 7 = Sunday.** Never `Date#getDay`.
 - **Dates are written day-first, clocks are 24-hour**: `18/09/2026 21:10`, or `18/09 21:10` in the
   import review, where every row is from one file. Three shapes, exported from
@@ -1021,7 +1030,8 @@ help.topstep.com on 28.09.2026):
   balance, and after the first payout (`topstep_payout_at`) it is the starting balance. Today's win
   does not raise it before the day ends — the afternoon would otherwise be sized from room Topstep
   has not taken yet.
-- **The DLL ends the day, not the account.**
+- **The DLL ends the day, not the account.** The day is Topstep's, 17:00 → 17:00 CT, and it is the
+  same day the calendar, `/daily` and the tracker file the account's trades under (§ Attributing to days).
 - **Consistency**: the best day must stay at or below 55 % of the target; past that the target grows
   to best day ÷ 0.55.
 - **Closed trades only**, as with FTMO: Topstep watches both limits intraday with open P&L, so a
@@ -1398,8 +1408,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-3,046 tests across 185 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,412 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 634
+3,075 tests across 186 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,441 tests in 125 files) and `components` (environment `jsdom`, files `*.test.tsx`, 634
 tests in 61 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

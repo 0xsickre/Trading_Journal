@@ -1,7 +1,6 @@
 import { accountFilterOptions, primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getDailyReportDatesInRange } from "@/lib/journal/daily-report-queries";
-import { todayInTz } from "@/lib/journal/daily-report";
 import { getPositionCheckinsInRange } from "@/lib/journal/position-checkin-queries";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getWeeklyReview } from "@/lib/journal/weekly-review-queries";
@@ -10,7 +9,7 @@ import { enrichTrades } from "@/lib/journal/enriched-trade";
 import { buildWeekRecap, weekDayRows } from "@/lib/journal/week-recap";
 import { sharedBreakevenRange } from "@/lib/journal/breakeven";
 import { sharedCurrency } from "@/lib/journal/format";
-import { DEFAULT_TZ, isValidDayKey, zonedDateKey } from "@/lib/journal/time";
+import { DEFAULT_TZ, dayKeyIn, isValidDayKey, todayFor, zonedDateKey } from "@/lib/journal/time";
 import {
   addWeeksToWeekStart,
   defaultWeekStart,
@@ -26,7 +25,7 @@ import { ProgressCard } from "@/components/journal/progress-card";
 import { buildProgress } from "@/lib/journal/progress";
 import { getPlaybooks } from "@/lib/journal/playbooks";
 import type { RealizedTrade } from "@/lib/journal/analytics";
-import { accountTimezoneResolver } from "@/lib/journal/time";
+import { accountDayZoneResolver } from "@/lib/journal/time";
 
 export default async function WeeklyPage({
   searchParams,
@@ -42,7 +41,8 @@ export default async function WeeklyPage({
   const weekPromise = accountsPromise.then((accounts) => {
     const primary = primaryAccount(accounts);
     const timezone = primary?.timezone ?? DEFAULT_TZ;
-    const today = todayInTz(timezone);
+    // On a Topstep primary the Sunday-evening session already opens next week.
+    const today = todayFor(primary);
     const currentWeekStart = weekStartOfDayKey(today);
 
     /**
@@ -116,7 +116,7 @@ export default async function WeeklyPage({
   // Per-trade timezone, not the primary account's: a trade on a NY account and
   // one on a London account close on different calendar days, and one zone for
   // both would file the week's money under the wrong week at the boundary.
-  const tzFor = accountTimezoneResolver(accounts, timezone);
+  const tzFor = accountDayZoneResolver(accounts, primary);
   const tzOf = (t: RealizedTrade) => tzFor(t.row.account_id);
 
   // The same band the dashboard classifies with, so a week's win/loss split here
@@ -170,7 +170,7 @@ export default async function WeeklyPage({
   const progressPrev = buildProgress(enriched.filter((t) => t.closeWeek === lastWeekStart), playbookNames);
 
   const firstDay = realized.reduce<string | null>((oldest, t) => {
-    const day = zonedDateKey(t.row.stats?.opened_at ?? t.closedAt, tzOf(t));
+    const day = dayKeyIn(t.row.stats?.opened_at ?? t.closedAt, tzOf(t));
     return day && (oldest == null || day < oldest) ? day : oldest;
   }, null);
   const accountStart = accounts.reduce<string | null>((oldest, a) => {

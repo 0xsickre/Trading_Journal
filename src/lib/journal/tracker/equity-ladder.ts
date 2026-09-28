@@ -18,7 +18,7 @@
  * measuring against a balance that is missing a trade.
  */
 
-import { zonedDateKey } from "../time";
+import { dayKeyIn, type DayZone } from "../time";
 import type { CashEvent } from "../balance";
 import type { TradeDayIndex } from "./auto-rules";
 
@@ -41,12 +41,12 @@ type Rung = {
  */
 export function cashByDay(
   events: readonly CashEvent[],
-  tzOf: (accountId: string) => string,
+  tzOf: (accountId: string) => DayZone,
 ): Map<string, number> {
   const out = new Map<string, number>();
   for (const e of events) {
     if (!e.occurred_at) continue;
-    const day = zonedDateKey(e.occurred_at, tzOf(e.account_id));
+    const day = dayKeyIn(e.occurred_at, tzOf(e.account_id));
     if (!day) continue;
     out.set(day, (out.get(day) ?? 0) + e.amount);
   }
@@ -134,7 +134,7 @@ export function bookEquityLadder(
   index: TradeDayIndex,
   accounts: readonly { starting_balance?: number | null }[],
   cashEvents: readonly CashEvent[],
-  tzOf: (accountId: string) => string,
+  tzOf: (accountId: string) => DayZone,
 ): EquityLadder {
   const startingBalance = accounts.reduce(
     (sum, a) => sum + (a.starting_balance ?? 0),

@@ -8,7 +8,7 @@
 
 import { winRateOf, type RealizedTrade } from "./analytics";
 import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
-import { zonedDateKey, zonedWeekStartKey } from "./time";
+import { dayKeyIn, weekKeyIn, type DayZone } from "./time";
 
 export type PeriodGranularity = "day" | "week" | "month";
 
@@ -112,7 +112,7 @@ export function tradeVolume(t: RealizedTrade): number {
 export function bucketByPeriod(
   trades: RealizedTrade[],
   granularity: PeriodGranularity,
-  tzOf: (t: RealizedTrade) => string,
+  tzOf: (t: RealizedTrade) => DayZone,
   range: BreakevenRange = EXACT_ZERO_RANGE,
   pnlOf: (t: RealizedTrade) => number = (t) => t.net,
 ): PeriodRow[] {
@@ -121,10 +121,10 @@ export function bucketByPeriod(
   for (const t of trades) {
     if (!t.closedAt) continue;
     const tz = tzOf(t);
-    const day = zonedDateKey(t.closedAt, tz);
+    const day = dayKeyIn(t.closedAt, tz);
     const key =
       granularity === "week"
-        ? zonedWeekStartKey(t.closedAt, tz)
+        ? weekKeyIn(t.closedAt, tz)
         : granularity === "day"
           ? day
           : day.slice(0, 7);

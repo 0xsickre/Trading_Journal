@@ -1,4 +1,4 @@
-import { daysBetweenDayKeys, zonedDateKey } from "./time";
+import { daysBetweenDayKeys, dayKeyIn, type DayZone } from "./time";
 import type { TradeRow } from "./types";
 
 /**
@@ -80,7 +80,7 @@ export function daysBetweenKeys(from: string, to: string): number {
 export function openPositionsOn(
   trades: readonly TradeRow[],
   dayKey: string,
-  tzOf: (row: TradeRow) => string,
+  tzOf: (row: TradeRow) => DayZone,
 ): OpenPosition[] {
   const out: OpenPosition[] = [];
 
@@ -91,12 +91,12 @@ export function openPositionsOn(
     if (!openedAt) continue;
 
     const tz = tzOf(row);
-    const openDay = zonedDateKey(openedAt, tz);
+    const openDay = dayKeyIn(openedAt, tz);
     if (!openDay || openDay > dayKey) continue;
 
     const closedAt = row.stats?.closed_at ?? null;
     if (closedAt) {
-      const closeDay = zonedDateKey(closedAt, tz);
+      const closeDay = dayKeyIn(closedAt, tz);
       if (closeDay && closeDay < dayKey) continue;
     }
 

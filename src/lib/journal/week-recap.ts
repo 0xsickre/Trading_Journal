@@ -2,7 +2,7 @@ import { computeStats, winRateOf, type RealizedTrade } from "./analytics";
 import type { BreakevenRange } from "./breakeven";
 import type { EnrichedTrade } from "./enriched-trade";
 import { bucketByPeriod, type PeriodRow } from "./period-stats";
-import { isTradingDayKey } from "./time";
+import { isTradingDayKey, type DayZone } from "./time";
 import { isInterference, type PositionCheckin } from "./position-checkin";
 import { weekDayKeys, weekEndOfWeekStart } from "./weekly-review";
 
@@ -161,7 +161,7 @@ export function buildWeekRecap(
 export function weekDayRows(
   weekStart: string,
   trades: readonly RealizedTrade[],
-  tzOf: (t: RealizedTrade) => string,
+  tzOf: (t: RealizedTrade) => DayZone,
   range?: BreakevenRange,
 ): (PeriodRow | null)[] {
   const byDay = new Map<string, PeriodRow>();

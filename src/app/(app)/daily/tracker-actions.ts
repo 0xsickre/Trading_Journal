@@ -5,8 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { getAccounts, getPrimaryAccount } from "@/lib/journal/accounts";
-import { todayInTz } from "@/lib/journal/daily-report";
-import { DEFAULT_TZ } from "@/lib/journal/time";
+import { accountDayZoneResolver, todayFor } from "@/lib/journal/time";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getTrackerRules } from "@/lib/journal/tracker/queries";
 import { bookEquityLadder } from "@/lib/journal/tracker/equity-ladder";
@@ -53,7 +52,7 @@ export async function setCheckin(
   if (!user) return { ok: false, error: "Nisi prijavljen." };
 
   const account = await getPrimaryAccount();
-  const today = todayInTz(account?.timezone ?? DEFAULT_TZ);
+  const today = todayFor(account);
   if (reportDate > today)
     return { ok: false, error: "Budući dan još nije počeo." };
 
@@ -139,14 +138,12 @@ export async function lockDay(reportDate: string): Promise<Result> {
   ]);
 
   const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
-  const timezone = primary?.timezone ?? DEFAULT_TZ;
-  if (reportDate > todayInTz(timezone))
+  if (reportDate > todayFor(primary))
     return { ok: false, error: "Budući dan se ne može zaključati." };
 
-  // Widened to accept null because a trade row's `account_id` is nullable; a
-  // cash event's is not, so the ladder's stricter signature is still satisfied.
-  const tzOf = (accountId: string | null) =>
-    accounts.find((a) => a.id === accountId)?.timezone ?? timezone;
+  // The same day rule per account as the page — a Topstep account's trading day,
+  // any other's calendar day — so what is locked is what was on screen.
+  const tzOf = accountDayZoneResolver(accounts, primary);
   const index = buildTradeDayIndex(trades, (row) => tzOf(row.account_id));
   // The same ladder the page used to show these verdicts. Locking freezes what
   // was on screen, so a different basis here would seal a number the trader

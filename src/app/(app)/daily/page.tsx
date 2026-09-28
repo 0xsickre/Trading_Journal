@@ -1,7 +1,6 @@
 import { primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getDailyReport } from "@/lib/journal/daily-report-queries";
-import { todayInTz } from "@/lib/journal/daily-report";
 import { getActiveFocusGoal } from "@/lib/journal/focus-goal-queries";
 import { getPositionCheckinsForDay } from "@/lib/journal/position-checkin-queries";
 import { openPositionsOn } from "@/lib/journal/open-positions";
@@ -33,8 +32,9 @@ import {
 import {
   DEFAULT_TZ,
   addDaysToDayKey,
+  dayKeyIn,
   isValidDayKey,
-  zonedDateKey,
+  todayFor,
 } from "@/lib/journal/time";
 import { FocusGoalCard } from "@/components/journal/focus-goal-card";
 import { DailyReportForm } from "@/components/journal/daily-report-form";
@@ -50,7 +50,7 @@ import { PageHeader } from "@/components/app/page-header";
 import { ReviewGapsCard } from "@/components/journal/review-gaps-card";
 import { reviewGaps } from "@/lib/journal/review-gaps";
 import { sharedCurrency } from "@/lib/journal/format";
-import { accountTimezoneResolver } from "@/lib/journal/time";
+import { accountDayZoneResolver } from "@/lib/journal/time";
 
 export default async function DailyPage({
   searchParams,
@@ -66,7 +66,9 @@ export default async function DailyPage({
   const dayPromise = accountsPromise.then((accounts) => {
     const primary = primaryAccount(accounts);
     const timezone = primary?.timezone ?? DEFAULT_TZ;
-    const today = todayInTz(timezone);
+    // Today by the primary account's day rule: on a Topstep account the
+    // evening session after 17:00 CT is already tomorrow's page.
+    const today = todayFor(primary);
     // `isValidDayKey`, not a shape regex: `2026-00-00` matches `\d{4}-\d{2}-\d{2}`
     // and then rolls backwards into December 2025, opening a day that does not
     // exist under a heading that says it does.
@@ -119,7 +121,11 @@ export default async function DailyPage({
   // Per-trade timezone, not the primary account's: a trade on a NY account and
   // one on a London account close on different calendar days, and attributing
   // both with one zone would misfile the money rules for the other.
-  const tzFor = accountTimezoneResolver(accounts, timezone);
+  //
+  // And per-trade DAY RULE: a Topstep account counts Topstep's trading day
+  // (17:00 → 17:00 CT), the day its DLL is charged to, so this page, the banner
+  // and the 21:25 reminder agree on which day an evening trade belongs to.
+  const tzFor = accountDayZoneResolver(accounts, primary);
   const tzOf = (row: TradeRow) => tzFor(row.account_id);
 
   const index = buildTradeDayIndex(trades, tzOf);
@@ -166,7 +172,7 @@ export default async function DailyPage({
   const breakevenRange = sharedBreakevenRange(accounts);
 
   const dayTrades = toRealized(trades).filter(
-    (t) => t.closedAt && zonedDateKey(t.closedAt, tzOf(t.row)) === reportDate,
+    (t) => t.closedAt && dayKeyIn(t.closedAt, tzOf(t.row)) === reportDate,
   );
   const dayStats = computeStats(dayTrades, "net", breakevenRange);
   const dayCosts = computeCostStats(dayTrades);
@@ -283,7 +289,7 @@ export default async function DailyPage({
       />
 
       <ReviewGapsCard
-        gaps={reviewGaps(trades, reportDate, (t) => zonedDateKey(t.stats?.closed_at ?? null, tzOf(t)))}
+        gaps={reviewGaps(trades, reportDate, (t) => dayKeyIn(t.stats?.closed_at ?? null, tzOf(t)))}
       />
 
       <DailyReportForm

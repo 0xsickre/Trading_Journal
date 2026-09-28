@@ -14,7 +14,7 @@
  */
 
 import { sealedNumber, sealedText } from "../plan-snapshot";
-import { addDaysToDayKey, zonedDateKey } from "../time";
+import { addDaysToDayKey, dayKeyIn, type DayZone } from "../time";
 import { weekStartOfDayKey } from "../weekly-review";
 import { matchedRiskIntent, riskMoneyAtEntry, riskPctTaken } from "../risk-taken";
 import type { EquityLadder } from "./equity-ladder";
@@ -131,15 +131,15 @@ const EXECUTED_STATUSES: ReadonlySet<string> = new Set([
   "closed",
 ]);
 
-function toTrackerTrade(row: TradeRow, tz: string): TrackerTrade | null {
+function toTrackerTrade(row: TradeRow, zone: DayZone): TrackerTrade | null {
   const openedAt = row.stats?.opened_at ?? null;
   if (!openedAt) return null;
   return {
     id: row.id,
     label: row.trade_no != null ? `#${row.trade_no}` : row.id.slice(0, 8),
     status: String(row.status ?? ""),
-    openDay: zonedDateKey(openedAt, tz),
-    closeDay: row.stats?.closed_at ? zonedDateKey(row.stats.closed_at, tz) : null,
+    openDay: dayKeyIn(openedAt, zone),
+    closeDay: row.stats?.closed_at ? dayKeyIn(row.stats.closed_at, zone) : null,
     netPl: row.stats?.net_pl ?? null,
     hasPlaybook: row.playbook_id != null && row.playbook_id !== "",
     hasStop: sealedNumber(row, "stop_price") != null,
@@ -181,7 +181,8 @@ function createdBy(createdAt: string | null | undefined, instant: string): boole
  */
 export function buildTradeDayIndex(
   rows: TradeRow[],
-  tzOf: (row: TradeRow) => string,
+  /** The account's day rule — a Topstep account counts Topstep's trading day. */
+  tzOf: (row: TradeRow) => DayZone,
 ): TradeDayIndex {
   const byOpenDay = new Map<string, TrackerTrade[]>();
   const byCloseDay = new Map<string, TrackerTrade[]>();

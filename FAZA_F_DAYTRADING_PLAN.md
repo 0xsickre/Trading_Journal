@@ -52,6 +52,10 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 28.09.2026 | F1.1 | `thesis_written` ocenjuje samo trejdove napravljene pre ulaza (opcija A); ostali `na/no_plans` |
 | 28.09.2026 | F1.2 | Probijen MLL / FTMO kršenje blokira samo plan (`origin: "plan"`), nikad upis posle zatvaranja — za oba moda |
 | 28.09.2026 | F1.2 | Settings dobija „Reset account…" za Topstep (upisuje `topstep_reset_at`, kao FTMO restart) — bez njega poruka „resetuj ga u Settings" nema kuda da vodi. Kolona već postoji, bez migracije |
+| 28.09.2026 | F2 | D1-A: svaki trejd ide u dan po pravilu SVOG naloga, i u „All accounts" pogledu |
+| 28.09.2026 | F2 | D2-A: pravilo dana se izvodi iz `topstep_mode` (Topstep nalog = 17:00 → 17:00 CT), bez nove kolone i bez migracije |
+| 28.09.2026 | F2 | D3-A: „danas" je Topstep dan kad je primarni nalog u Topstep režimu (posle 17:00 CT je već sutra) |
+| 28.09.2026 | F2 | D4-A: nedelja se broji po Topstep danu — nedeljno veče od 17:00 CT pripada novoj nedelji |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.

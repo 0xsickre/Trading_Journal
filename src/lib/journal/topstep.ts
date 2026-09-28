@@ -32,7 +32,7 @@
  * plan with and to review discipline; the platform's own risk engine is the
  * record.
  */
-import { compareInstants, toEpoch, zonedDateKey, zonedHour } from "./time";
+import { compareInstants, toEpoch, topstepTradingDay } from "./time";
 import type { Account } from "./types";
 
 export type TopstepPlan = "50K" | "100K" | "150K";
@@ -55,8 +55,6 @@ export const TOPSTEP_PLANS: Record<TopstepPlan, TopstepPlanRules> = {
 
 /** Best day at or below this share of the profit target. */
 export const TOPSTEP_CONSISTENCY = 0.55;
-
-const CHICAGO = "America/Chicago";
 
 export type TopstepConfig = {
   enabled: boolean;
@@ -108,15 +106,8 @@ export function topstepConfigFromAccount(account: Account): TopstepConfig {
   };
 }
 
-/** The Topstep trading day a moment belongs to: 17:00 CT starts the next one. */
-export function topstepTradingDay(iso: string | Date): string {
-  const day = zonedDateKey(iso, CHICAGO);
-  const hour = zonedHour(iso, CHICAGO);
-  if (!day || hour == null || hour < 17) return day;
-  const next = new Date(`${day}T12:00:00Z`);
-  next.setUTCDate(next.getUTCDate() + 1);
-  return next.toISOString().slice(0, 10);
-}
+/** The Topstep trading day a moment belongs to — lives in `time.ts`, next to every other day key. */
+export { topstepTradingDay };
 
 export function evaluateTopstep(
   config: TopstepConfig,

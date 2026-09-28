@@ -85,7 +85,7 @@ export function parseScopeKey(key: string | null | undefined): NoteScope {
  * field — delete it, append to it, or leave it.
  *
  * `dayKey` in, not a `Date`: the caller already resolved "today" against an
- * account's timezone (`todayInTz`), and re-deriving it from a `Date` here
+ * account's day rule (`todayFor`), and re-deriving it from a `Date` here
  * would risk the same off-by-one that day keys exist to avoid. `parseISO` on a
  * bare `yyyy-MM-dd` (no time, no zone) reads it as local midnight, which is
  * exactly right for a key that already IS a local calendar date — the same

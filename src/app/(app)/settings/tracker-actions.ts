@@ -7,8 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { getPrimaryAccount } from "@/lib/journal/accounts";
-import { todayInTz } from "@/lib/journal/daily-report";
-import { DEFAULT_TZ, zonedDateKey } from "@/lib/journal/time";
+import { DEFAULT_TZ, accountDayZone, dayKeyIn, todayIn } from "@/lib/journal/time";
 import { trackerRuleMayHardDelete } from "@/lib/journal/settings-rules";
 import {
   AUTO_RULES_NEEDING_PCT,
@@ -231,10 +230,12 @@ export async function deleteTrackerRule(id: string): Promise<Result> {
   if (countError)
     return { ok: false, error: "Could not check whether this rule was answered, so it was not changed. Try again." };
 
-  const tz = account?.timezone ?? DEFAULT_TZ;
+  // One day rule for both, the primary account's: "created today" and "today"
+  // must be the same day, on a Topstep account too.
+  const zone = account ? accountDayZone(account) : DEFAULT_TZ;
   const hardDelete = trackerRuleMayHardDelete({
-    createdDay: zonedDateKey(rule.created_at, tz),
-    today: todayInTz(tz),
+    createdDay: dayKeyIn(rule.created_at, zone),
+    today: todayIn(zone),
     answered: (count ?? 0) > 0,
     mandatory: rule.is_mandatory,
   });

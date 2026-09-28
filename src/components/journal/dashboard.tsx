@@ -102,9 +102,12 @@ import type {
   TrackerRule,
 } from "@/lib/journal/tracker-types";
 import {
-  accountTimezoneResolver,
+  accountDayZone,
+  accountDayZoneResolver,
   addDaysToDayKey,
-  dayKeyStartUtc,
+  dayKeyIn,
+  dayStartUtcIn,
+  zoneTz,
 } from "@/lib/journal/time";
 import {
   buildPlaybookLookup,
@@ -231,7 +234,7 @@ import {
   type MetricContext,
   type ViewMode,
 } from "@/lib/journal/units";
-import { DATE, fmtInTz, toEpoch, zonedDateKey } from "@/lib/journal/time";
+import { DATE, fmtInTz, toEpoch } from "@/lib/journal/time";
 import { hiddenByPeriod } from "@/lib/journal/default-period";
 import {
   DASHBOARD_PERIODS,
@@ -804,9 +807,13 @@ export function Dashboard({
    * The primary is "first active, else first" — the same rule
    * `getPrimaryAccount` applies on the server.
    */
+  //
+  // A DAY rule, not only a zone: a Topstep account counts Topstep's trading day
+  // (17:00 → 17:00 CT), the day its DLL is charged to. `zoneTz` of it is still
+  // the clock times are printed on.
   const tzForAccount = useMemo(() => {
     const primary = primaryAccount(accounts);
-    return accountTimezoneResolver(accounts, primary?.timezone);
+    return accountDayZoneResolver(accounts, primary);
   }, [accounts]);
 
   const tzOf = useCallback(
@@ -870,8 +877,14 @@ export function Dashboard({
    */
   const periodFrom = useMemo(() => periodStartKey(period, todayKey), [period, todayKey]);
   const cutoffMs = useMemo(
-    () => (periodFrom == null ? null : dayKeyStartUtc(periodFrom, timezone)),
-    [periodFrom, timezone],
+    // Where the first day of the period STARTS under the primary's day rule —
+    // 17:00 CT the evening before on a Topstep account.
+    () => {
+      if (periodFrom == null) return null;
+      const primary = primaryAccount(accounts);
+      return dayStartUtcIn(periodFrom, primary ? accountDayZone(primary) : timezone);
+    },
+    [periodFrom, accounts, timezone],
   );
 
   /** Every realized trade in account scope, ignoring the period filter. */
@@ -1179,14 +1192,14 @@ export function Dashboard({
   /**
    * Daily P&L points behind Sharpe, Sortino, Calmar and the daily drawdown.
    *
-   * Dated by CLOSE and in the account's own zone, matching every other money
+   * Dated by CLOSE and by the account's own day rule, matching every other money
    * figure on this page. A trade closed at 01:00 UTC belongs to the previous
    * New York day, and reading the calendar in the browser's zone would move it.
    */
   const dayPoints = useMemo<DayPnlPoint[]>(
     () =>
       realized.map((t) => ({
-        day: zonedDateKey(t.closedAt, tzOf(t)),
+        day: dayKeyIn(t.closedAt, tzOf(t)),
         at: t.closedAt,
         pnl: pnlOf(t),
       })),
@@ -1550,7 +1563,7 @@ export function Dashboard({
     const fromDay = fromISO ? fromISO.slice(0, 10) : null;
     const toDay = toISO ? toISO.slice(0, 10) : null;
     scoped = scoped.filter((t) => {
-      const day = zonedDateKey(
+      const day = dayKeyIn(
         t.stats?.closed_at ?? t.created_at ?? null,
         tzForAccount(t.account_id),
       );
@@ -2282,7 +2295,7 @@ export function Dashboard({
         "open-positions": show("open-positions") && (
           <OpenPositionsWidget
             rows={scopedRows}
-            tzOf={(t) => tzForAccount(t.account_id)}
+            tzOf={(t) => zoneTz(tzForAccount(t.account_id))}
             equityOf={(id) => equityByAccount[id] ?? null}
             currency={currency}
             perTradeLimitPct={perTradeRiskLimitPct}
@@ -2292,7 +2305,7 @@ export function Dashboard({
           <RecentTradesWidget
             trades={realized}
             mode={mode}
-            tzOf={tzOf}
+            tzOf={(t) => zoneTz(tzOf(t))}
             money={(v) => dashboardMoney(v, metricCtx, viewMode)}
           />
         ),

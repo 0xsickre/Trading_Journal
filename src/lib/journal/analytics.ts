@@ -1,5 +1,5 @@
 import type { TradeRow } from "./types";
-import { compareInstants, zonedDateKey, zonedWeekStartKey } from "./time";
+import { compareInstants, dayKeyIn, weekKeyIn, type DayZone } from "./time";
 import { slippageFromTrade } from "./entry-slippage";
 import { exitEfficiencyFromTrade } from "./exit-efficiency";
 import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
@@ -338,12 +338,12 @@ export function rHistogram(trades: RealizedTrade[]): RBucket[] {
 export function dailyPnl(
   trades: RealizedTrade[],
   mode: PnlMode,
-  tzOf: (t: RealizedTrade) => string,
+  tzOf: (t: RealizedTrade) => DayZone,
 ): Map<string, number> {
   const m = new Map<string, number>();
   for (const t of trades) {
     if (!t.closedAt) continue;
-    const key = zonedDateKey(t.closedAt, tzOf(t));
+    const key = dayKeyIn(t.closedAt, tzOf(t));
     const p = mode === "net" ? t.net : t.gross;
     m.set(key, (m.get(key) ?? 0) + p);
   }
@@ -447,7 +447,7 @@ export type WeeklySlippageRow = {
 /** Average adverse entry slippage (R) per calendar week in account TZ. */
 export function weeklySlippageR(
   trades: RealizedTrade[],
-  tzOf: (t: RealizedTrade) => string,
+  tzOf: (t: RealizedTrade) => DayZone,
 ): WeeklySlippageRow[] {
   const buckets = new Map<string, number[]>();
   for (const t of trades) {
@@ -455,7 +455,7 @@ export function weeklySlippageR(
     if (!ref) continue;
     const slip = slippageFromTrade(t.row);
     if (slip?.slippageR == null) continue;
-    const week = zonedWeekStartKey(ref, tzOf(t));
+    const week = weekKeyIn(ref, tzOf(t));
     if (!week) continue;
     const arr = buckets.get(week) ?? [];
     arr.push(slip.slippageR);
@@ -510,7 +510,7 @@ export type WeeklyExitEffRow = {
 
 export function weeklyExitEfficiency(
   trades: RealizedTrade[],
-  tzOf: (t: RealizedTrade) => string,
+  tzOf: (t: RealizedTrade) => DayZone,
 ): WeeklyExitEffRow[] {
   const buckets = new Map<string, number[]>();
   for (const t of trades) {
@@ -518,7 +518,7 @@ export function weeklyExitEfficiency(
     if (!ref) continue;
     const eff = exitEfficiencyFromTrade(t.row);
     if (eff == null) continue;
-    const week = zonedWeekStartKey(ref, tzOf(t));
+    const week = weekKeyIn(ref, tzOf(t));
     if (!week) continue;
     const arr = buckets.get(week) ?? [];
     arr.push(eff.pct);

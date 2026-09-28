@@ -1,4 +1,3 @@
-import { formatInTimeZone } from "date-fns-tz";
 import { addDays, format, parseISO, subDays } from "date-fns";
 import type { FocusGoal } from "./focus-goal";
 import { isoWeekdayOfDayKey } from "./time";
@@ -39,10 +38,6 @@ export type DailyReportInput = Omit<
   DailyReport,
   "id" | "user_id" | "created_at" | "updated_at" | "locked_at"
 >;
-
-export function todayInTz(timezone: string): string {
-  return formatInTimeZone(new Date(), timezone, "yyyy-MM-dd");
-}
 
 function formatDate(d: Date): string {
   return format(d, "yyyy-MM-dd");

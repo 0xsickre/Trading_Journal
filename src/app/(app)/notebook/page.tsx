@@ -8,8 +8,7 @@ import {
 import { isExpiredNote } from "@/lib/journal/notes/note-types";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getAccounts } from "@/lib/journal/accounts";
-import { todayInTz } from "@/lib/journal/daily-report";
-import { DEFAULT_TZ } from "@/lib/journal/time";
+import { todayFor } from "@/lib/journal/time";
 import { NotebookWorkbench } from "@/components/journal/notebook-workbench";
 import { PageHeader } from "@/components/app/page-header";
 
@@ -43,7 +42,7 @@ export default async function NotebookPage() {
   // The account's day, not the browser's — so a note's default title matches
   // the same calendar date every other screen would call "today".
   const primary = primaryAccount(accounts);
-  const todayKey = todayInTz(primary?.timezone ?? DEFAULT_TZ);
+  const todayKey = todayFor(primary);
 
   return (
     <div className="space-y-5">

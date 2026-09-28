@@ -100,7 +100,7 @@ import {
 import type { Playbook, PositionRule } from "@/lib/journal/playbook-types";
 import { cn } from "@/lib/utils";
 import type { Account, OptionsMap, TradeRow } from "@/lib/journal/types";
-import { fmtInTz, DATE_TIME, DEFAULT_TZ } from "@/lib/journal/time";
+import { accountDayZone, accountDayZoneResolver, fmtInTz, DATE_TIME, DEFAULT_TZ } from "@/lib/journal/time";
 import {
   fmtMoney,
   fmtNum,
@@ -493,6 +493,10 @@ export function JournalGrid({
       (t?.account_id && tzByAccount.get(t.account_id)) || DEFAULT_TZ,
     [tzByAccount],
   );
+  // The DAY a trade belongs to, for the period filter: its account's rule —
+  // Topstep's trading day on a Topstep account. `tzOf` stays the clock times
+  // are printed on.
+  const dayZoneOf = useMemo(() => accountDayZoneResolver(accounts), [accounts]);
   const curOf = useCallback(
     (t: TradeRow) => (t.account_id && currencyByAccount.get(t.account_id)) || "USD",
     [currencyByAccount],
@@ -565,14 +569,14 @@ export function JournalGrid({
     ];
   }, [trades, playbooks, gradeOf, outcomeOf]);
 
-  // The timezone "today" is counted in: the filtered account's, else the first
-  // active account's. Each trade's own day is still read in its own account tz.
+  // The day rule "today" is counted in: the filtered account's, else the first
+  // active account's. Each trade's own day is still read by its own account's rule.
   const scopeTz = useMemo(() => {
     const a =
       accounts.find((x) => x.id === accountFilter) ??
       accounts.find((x) => x.is_active) ??
       accounts[0];
-    return a?.timezone ?? DEFAULT_TZ;
+    return a ? accountDayZone(a) : DEFAULT_TZ;
   }, [accounts, accountFilter]);
 
   const bounds = useMemo(
@@ -586,7 +590,7 @@ export function JournalGrid({
     const q = deferredSearch.trim().toLowerCase();
     return trades.filter((t) => {
       if (accountFilter !== "all" && t.account_id !== accountFilter) return false;
-      if (!inBounds(tradeDayKey(t, tzOf(t)), bounds)) return false;
+      if (!inBounds(tradeDayKey(t, dayZoneOf(t.account_id)), bounds)) return false;
       for (const f of active) if (!f.match(t, filters[f.key])) return false;
       if (q) {
         const tagHay = ["technical_tags", "psychology_tags", "mistake"].flatMap(
@@ -610,7 +614,7 @@ export function JournalGrid({
       }
       return true;
     });
-  }, [trades, accountFilter, bounds, filterSpecs, filters, deferredSearch, tzOf, gradeOf, playbookOf]);
+  }, [trades, accountFilter, bounds, filterSpecs, filters, deferredSearch, dayZoneOf, gradeOf, playbookOf]);
 
   const summary = useMemo(() => summarizeTrades(filtered, accounts), [filtered, accounts]);
 

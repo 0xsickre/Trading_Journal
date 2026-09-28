@@ -17,8 +17,7 @@ import { toRealized } from "@/lib/journal/analytics";
 import { enrichTrades } from "@/lib/journal/enriched-trade";
 import { buildPlaybookLookup } from "@/lib/journal/reports/playbook-dimensions";
 import { sharedBreakevenRange } from "@/lib/journal/breakeven";
-import { accountTimezoneResolver, DEFAULT_TZ } from "@/lib/journal/time";
-import { todayInTz } from "@/lib/journal/daily-report";
+import { accountDayZoneResolver, todayFor } from "@/lib/journal/time";
 import { stringFieldValue } from "@/lib/journal/field-values";
 import { sharedCurrency } from "@/lib/journal/format";
 import type { RealizedTrade } from "@/lib/journal/analytics";
@@ -65,9 +64,9 @@ export default async function PlaybookDetailPage({
   const primary = primaryAccount(accounts);
   // Null when the accounts' currencies differ — see the list page.
   const currency = sharedCurrency(accounts);
-  const todayKey = todayInTz(primary?.timezone ?? DEFAULT_TZ);
+  const todayKey = todayFor(primary);
 
-  const tzFor = accountTimezoneResolver(accounts, primary?.timezone);
+  const tzFor = accountDayZoneResolver(accounts, primary);
   const tzOf = (t: RealizedTrade) => tzFor(t.row.account_id);
   const breakevenRange = sharedBreakevenRange(accounts);
 

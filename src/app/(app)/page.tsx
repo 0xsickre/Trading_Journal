@@ -11,8 +11,7 @@ import { getPositionCheckins } from "@/lib/journal/position-checkin-queries";
 import { getPlaybooks, getPositionRules } from "@/lib/journal/playbooks";
 import { getUserPrefs } from "@/lib/journal/user-prefs";
 import { getDashboardTemplates } from "@/lib/journal/dashboard-template-queries";
-import { todayInTz } from "@/lib/journal/daily-report";
-import { addDaysToDayKey, DEFAULT_TZ } from "@/lib/journal/time";
+import { addDaysToDayKey, DEFAULT_TZ, todayFor } from "@/lib/journal/time";
 import { Dashboard } from "@/components/journal/dashboard";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
@@ -27,7 +26,7 @@ export default async function DashboardPage() {
     // The account's day, not the browser's — every day key in the tracker is in
     // account time, and the heatmap grid is anchored to this.
     const primary = primaryAccount(accounts);
-    return { primary, todayKey: todayInTz(primary?.timezone ?? DEFAULT_TZ) };
+    return { primary, todayKey: todayFor(primary) };
   });
 
   // `tj_position_rules` is drained ONCE, and the per-rule counts are derived

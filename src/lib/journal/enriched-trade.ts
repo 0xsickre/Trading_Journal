@@ -15,7 +15,7 @@ import { daysBetweenKeys } from "./open-positions";
 import { spansWeekend } from "./weekend-hold";
 import { excursionFromTrade, type Excursion } from "./excursion";
 import { riskIntentGap, riskMoneyAtEntry, riskPctTaken } from "./risk-taken";
-import { zonedDateKey, zonedHour, zonedWeekStartKey } from "./time";
+import { dayKeyIn, weekKeyIn, zonedHour, zoneTz, type DayZone } from "./time";
 
 /**
  * The journal fields downstream consumers join against — process, not prose.
@@ -114,7 +114,8 @@ export type EnrichedTrade = {
 };
 
 export type EnrichOptions = {
-  tzOf: (t: RealizedTrade) => string;
+  /** The account's day rule; its clock (`zoneTz`) still reads the hours. */
+  tzOf: (t: RealizedTrade) => DayZone;
   range?: BreakevenRange;
   pnlOf?: (t: RealizedTrade) => number;
   fillCounts?: FillCounts;
@@ -139,8 +140,8 @@ export function enrichTrades(
     const tradeNo = t.row.trade_no;
     const instrument = (t.row.instrument as string) ?? null;
 
-    const openDay = zonedDateKey(t.row.stats?.opened_at ?? t.closedAt, tz);
-    const closeDay = zonedDateKey(t.closedAt, tz);
+    const openDay = dayKeyIn(t.row.stats?.opened_at ?? t.closedAt, tz);
+    const closeDay = dayKeyIn(t.closedAt, tz);
     const heldDays = daysBetweenKeys(openDay, closeDay);
     const timeStopDays = numField(t.row, "time_stop_days");
 
@@ -159,10 +160,10 @@ export function enrichTrades(
       openedAt: t.row.stats?.opened_at ?? null,
       closedAt: t.closedAt,
       openDay,
-      openHour: zonedHour(t.row.stats?.opened_at ?? null, tz),
+      openHour: zonedHour(t.row.stats?.opened_at ?? null, zoneTz(tz)),
       closeDay,
-      closeWeek: zonedWeekStartKey(t.closedAt, tz),
-      weekendHold: spansWeekend(t.row.stats?.opened_at ?? null, t.closedAt, tz),
+      closeWeek: weekKeyIn(t.closedAt, tz),
+      weekendHold: spansWeekend(t.row.stats?.opened_at ?? null, t.closedAt, zoneTz(tz)),
       heldDays,
       timeStopDays,
       pastTimeStop: timeStopDays != null && heldDays > timeStopDays,

@@ -15,7 +15,7 @@ import {
 import { PlaybooksScreen } from "@/components/journal/playbooks-screen";
 import { PageHeader } from "@/components/app/page-header";
 import type { RealizedTrade } from "@/lib/journal/analytics";
-import { accountTimezoneResolver } from "@/lib/journal/time";
+import { accountDayZoneResolver } from "@/lib/journal/time";
 import { stringFieldValue } from "@/lib/journal/field-values";
 import { sharedCurrency } from "@/lib/journal/format";
 
@@ -51,7 +51,7 @@ export default async function PlaybooksPage() {
   // money rather than print €500 + $300 as "$800".
   const currency = sharedCurrency(accounts);
 
-  const tzFor = accountTimezoneResolver(accounts, primary?.timezone);
+  const tzFor = accountDayZoneResolver(accounts, primary);
   const tzOf = (t: RealizedTrade) => tzFor(t.row.account_id);
 
   // The same band the dashboard and reports classify with, so a win rate here

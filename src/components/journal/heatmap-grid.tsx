@@ -15,7 +15,7 @@ export type HeatmapCell = { key: string; value: number | null };
  * timezone. For a trader in Belgrade on a New York account the last column was
  * routinely a day ahead, so "today" pointed at an empty cell and every value was
  * off by one column. `endDay` is passed in, computed on the server from
- * `todayInTz(account.timezone)`, and no `Date` is read in local time anywhere
+ * `todayFor(account)` (`time.ts`), and no `Date` is read in local time anywhere
  * below.
  *
  * Colour and tooltip are the caller's, on purpose: the two heatmaps differ in

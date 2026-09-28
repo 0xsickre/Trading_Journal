@@ -25,15 +25,14 @@ import { bucketByPeriod, type PeriodRow } from "@/lib/journal/period-stats";
 import {
   sharedBreakevenRange,
 } from "@/lib/journal/breakeven";
-import { todayInTz } from "@/lib/journal/daily-report";
-import { DEFAULT_TZ, isValidMonthKey } from "@/lib/journal/time";
+import { isValidMonthKey, todayFor } from "@/lib/journal/time";
 import { MonthCalendar, MonthSummaryBar } from "@/components/journal/month-calendar";
 import { sharedCurrency } from "@/lib/journal/format";
 import { summarizeMonth } from "@/lib/journal/calendar-view";
 import { MonthDayList } from "@/components/journal/month-day-list";
 import { CalendarViewToggle } from "@/components/journal/calendar-view-toggle";
 import { PageHeader } from "@/components/app/page-header";
-import { accountTimezoneResolver } from "@/lib/journal/time";
+import { accountDayZoneResolver } from "@/lib/journal/time";
 
 
 function indexBy(rows: PeriodRow[]): Map<string, PeriodRow> {
@@ -59,7 +58,7 @@ export default async function CalendarPage({
   ]);
 
   const primary = primaryAccount(accounts);
-  const todayKey = todayInTz(primary?.timezone ?? DEFAULT_TZ);
+  const todayKey = todayFor(primary);
   const currentMonth = todayKey.slice(0, 7);
 
   // Future months hold nothing and only invite the user to wander; clamp like
@@ -73,8 +72,9 @@ export default async function CalendarPage({
 
   // Per-trade timezone, not the primary account's: a trade on a NY account and
   // one on a London account close on different calendar days, and one zone for
-  // both would file them under the wrong cells.
-  const tzFor = accountTimezoneResolver(accounts, primary?.timezone);
+  // both would file them under the wrong cells. A Topstep account files by
+  // Topstep's trading day, 17:00 → 17:00 CT — the day its DLL is charged to.
+  const tzFor = accountDayZoneResolver(accounts, primary);
   const tzOf = (t: RealizedTrade) => tzFor(t.row.account_id);
   // The same resolver one level down: the auto-rule index works on raw rows,
   // including positions that never closed, which `RealizedTrade` excludes.

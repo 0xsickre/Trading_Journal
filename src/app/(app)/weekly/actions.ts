@@ -4,9 +4,8 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { getPrimaryAccount } from "@/lib/journal/accounts";
-import { todayInTz } from "@/lib/journal/daily-report";
 import { revalidateWeekly } from "@/lib/journal/revalidate";
-import { DEFAULT_TZ } from "@/lib/journal/time";
+import { todayFor } from "@/lib/journal/time";
 import {
   PREVIOUS_CHANGE_KEPT,
   weekLockRefusal,
@@ -69,7 +68,7 @@ function missingColumn(error: { code?: string; message: string } | null): boolea
 /** Today in the account's zone — the clock every refusal below is measured against. */
 async function todayKey(): Promise<string> {
   const account = await getPrimaryAccount();
-  return todayInTz(account?.timezone ?? DEFAULT_TZ);
+  return todayFor(account);
 }
 
 export async function saveWeeklyReview(
