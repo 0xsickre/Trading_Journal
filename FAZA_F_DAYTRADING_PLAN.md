@@ -7,7 +7,7 @@ ga zamenjuje. README opisuje stanje koda kakvo jeste — i swing ostatke — dok
 
 **Kako je fajl složen.** Posao je podeljen u **šest faza, F1–F6**; jedna faza = jedna sesija, sa
 jasnim ulazom i izlazom, da nijedna ne zavisi od konteksta koji živi samo u razgovoru. **Detaljan
-plan postoji samo za fazu koja je sledeća** (sada F4). Ostale imaju okvir — cilj, stavke, odluke koje
+plan postoji samo za fazu koja je sledeća** (sada H1, pa F4). Ostale imaju okvir — cilj, stavke, odluke koje
 treba doneti — i dobijaju detaljan plan tek kad dođu na red, jer svaka zavisi od onoga što je
 prethodna odlučila (npr. F3 i F4 čitaju dan koji F2 tek definiše). Stavke `#1–#23` su u katalogu na
 dnu i brojevi se ne menjaju, jer README upućuje na njih.
@@ -66,6 +66,11 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 28.09.2026 | F3 | E6-A: headroom = najbliži prilaz MLL podu u istoriji (min prostor ÷ MLL); Survival u „All accounts" simulira primarni nalog |
 | 28.09.2026 | F3 | E7: lista „Risk %" se ne nudi na Topstep fjučersu u formi plana |
 | 28.09.2026 | — | Trejder: FTMO, swing i CFD „verovatno se više neće koristiti", sme da se izbaci. Baza na taj dan: nijedan FTMO/CFD trejd. Obim uklanjanja se dogovara kao posebna faza, ne usput u F3 |
+| 28.09.2026 | F3 | Trejder odobrio migraciju `20260928160000`; primenjena istog dana |
+| 28.09.2026 | H1 | Uklanjanje FTMO/swing/CFD koda ide PRE F4, kao posebna faza, u predloženom obimu; kolone u bazi ostaju |
+| 28.09.2026 | F4 | G1-B (brief upisuje red u journal), G2-A (check-in kartica se uklanja), G3-A (`time_stop_minutes` + „do kraja sesije"), G6 → F5 |
+| 28.09.2026 | F4 | G4-A: migracija dodaje predložene day-trading stavke i gasi (ne briše) swing stavke u postojećim listama |
+| 28.09.2026 | F4 | G5: `max_trades_per_day` (N = 2), `stop_after_losses` (N = 2 uzastopna u Topstep danu), `flat_by_close`, `no_entry_in_red_window`; `walk_away_target` NE. Ručna pravila koja pokrivaju isto se penzionišu (`deleted_at`) |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -89,7 +94,8 @@ pogađa.
 | **F1** | Tačnost odmah: ono što danas pogrešno ocenjuje, a ne traži nijednu veliku odluku | #2, #5, #21 | — | ne | Sonnet | ✅ `c0077e1` (28.09.2026) |
 | **F2** | Topstep dan (17:00 → 17:00 CT) kao ključ dana svuda gde se dan broji | #1 | F1 | ne (D2-A: izvedeno iz `topstep_mode`) | **Opus** | ✅ `3644c05` (28.09.2026) |
 | **F3** | Topstep pravila u tracker-u i Survival-u | #3, #4, #6 | F2 | da: `20260928160000` (`risk_budget_at_entry`) | **Opus** | ✅ `a8e63f9` (28.09.2026) — migracija primenjena 28.09.2026 uz odobrenje trejdera |
-| **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da (brief tabela, nova pravila, time stop, kategorije) | **Opus** | ⏳ **sledeća — detaljan plan napisan, čeka odluke G1–G6 i H1** |
+| **H1** | Uklanjanje FTMO / MT5 / swing koda (trejder, 28.09.2026) | #19 i delovi #13, #14 | F3 | ne (kolone ostaju) | **Opus** | ⏳ **sledeća — odluke donete** |
+| **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da (brief tabela, nova pravila, time stop, kategorije) | **Opus** | posle H1 — odluke donete (G1–G6) |
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, swap, uzorak | #11–#15, #17, #18 | F2 | ne (sve izvedeno) | Sonnet, Opus za #13 | okvir |
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, legacy CFD u UI-ju, komentari, PARITY | #16, #19, #20, #22, #23 | F5 | možda (#16) | Sonnet | okvir |
 
@@ -388,6 +394,44 @@ tracking, § Topstep, § Survival, § Process · Survival · Edge; `tracker/auto
 - README: § Process tracking (četiri limita), § Topstep (pasus „The tracker's loss and risk rules
   do not read any of this yet" prepisan), § Survival, § Process · Survival · Edge.
 - Ovde: F3 ✅ sa commitom, detaljan plan za F4.
+
+## H1 — Uklanjanje FTMO / MT5 / swing koda (detaljno)
+
+**Ulaz:** `main` posle F3 (`c6fe8f1`), gate zelen (3.125 testova). **Odluka:** trejder 28.09.2026 —
+„verovatno se više neće koristiti"; baza tog dana nema nijedan FTMO ni CFD trejd (samo arhiviran
+prazan „Backtesting XAUUSD" i Topstep-practice). **Pravilo:** briše se KOD; kolone i tabele u bazi
+ostaju (migracije su aditivne), pa se ništa ne gubi i sve se može vratiti iz istorije gita.
+
+**Ostaje:** Topstep, TopstepX uvoz, TradingView backtest uvoz (backtest nalozi), procentualni
+tracker pragovi za naloge van Topstep-a (backtest nalog ih koristi), `swap_funding` na fill-u i u
+računu P&L-a (novčani moduli i view u bazi; na fjučersu je 0).
+
+**Koraci** (svaki: test koji pada → brisanje → gate → commit):
+
+- **H1.1 FTMO mod** — `ftmo.ts`, `ftmo-status.ts`, `ftmo-banner.tsx` i njihovi testovi; FTMO sekcija i
+  „Restart challenge" u Settings (`account-settings.tsx`, `resetFtmoChallenge`, FTMO polja u
+  `updateAccount` i `settings-rules.ts`); zamrzavanje u `createTrade`/`updateTrade` (ostaje Topstep
+  grana), `ftmoFailedAccountIds` u formi plana i quick-logu; FTMO baner i `ftmoStatuses` na dashboardu
+  (`dashboard-widgets.ts` widget `ftmo`), FTMO grana `thresholdsFor` u Survival-u i u prop headroom-u;
+  kopiranje FTMO pravila pri dupliranju (`account-rules.ts`); `ftmo_*` iz `Account` tipa i
+  `getAccounts` select-a; komentari koji upućuju na FTMO.
+- **H1.2 MT5 statement uvoz** — `mt5-statement.ts`, MT5 grana u `import-wizard.tsx` (EET zona),
+  `scripts/mt5_excursion.py`, MT5 izvor u `excursion-source.ts` i `missed-cost.ts` (samo ako nema
+  drugog čitaoca), `instrument-aliases.ts` FTMO/CFD aliasi; testovi.
+- **H1.3 Check-in po poziciji i swing insights** — `open-positions-card.tsx` (G2), `position-checkin*`,
+  akcija čuvanja check-in-a, `swing-rules.ts` (`SWING_RULES`: teza/prekid, `pastTimeStop`,
+  `weekendHoldRecord`, delimični izlaz), dimenzije `touched`, `thesis_state`, `weekend_hold` i
+  `time_stop_breached` u izveštajima, check-in u `insights/context.ts` i `enriched-trade.ts`.
+  `time_stop_days` ostaje dok ga F4 ne zameni minutima.
+- **H1.4 Swap kao metrika** — pločica i metrika swap-a, insight(i) o swap-u i trostrukom danu,
+  `weekend-hold.ts` ako posle H1.3 nema čitaoca. Troškovi po fill-u ostaju.
+
+**Testovi:** negativni render testovi (Settings ne nudi FTMO pravila, uvoz ne nudi MT5, `/daily` nema
+check-in, registar insights-a nema swing pravila), a postojeći testovi obrisanog koda idu sa njim.
+Gate zelen posle svakog koraka; coverage pragovi i dalje važe.
+
+**Izlaz:** README 1:1 (sve sekcije koje opisuju FTMO, MT5, check-in, swing insights, swap metriku;
+broj testova, insights i ruta), `PARITY.md` ako pominje obrisano, ovde H1 ✅, pa F4.
 
 ## F4 — Dnevni tok za day tradera (detaljno)
 
