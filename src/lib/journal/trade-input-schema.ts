@@ -85,7 +85,7 @@ const LABELS: Record<string, string> = {
  * asserted.
  *
  * Returns a message or null. The first error, not a list: the same pattern as
- * `validateTradingViewSnapshotUrl`, and the form shows one anyway.
+ * `validateTradeImageRef`, and the form shows one anyway.
  */
 export function invalidTradeNumber(
   columns: Record<string, unknown>,

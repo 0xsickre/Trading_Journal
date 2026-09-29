@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  isStoredImage,
   normalizeTradingViewSnapshotUrl,
   parseTradingViewSnapshotId,
   primaryTradeImageUrl,
+  storedImagePath,
   tradingViewSnapshotPngUrl,
+  validateTradeImageRef,
   validateTradingViewSnapshotUrl,
 } from "./tradingview-snapshot";
 
@@ -79,5 +82,29 @@ describe("primaryTradeImageUrl", () => {
         ltf_post: "https://www.tradingview.com/x/Cccccccc/",
       }),
     ).toBe("https://www.tradingview.com/x/Cccccccc/");
+  });
+});
+
+describe("an uploaded chart image (K6)", () => {
+  const uid = "0b7e4c1a-3f2d-4e5a-9b8c-1d2e3f4a5b6c";
+
+  it("is told apart from a link, and resolves to its path in the bucket", () => {
+    const ref = `storage:${uid}/chart.png`;
+    expect(isStoredImage(ref)).toBe(true);
+    expect(isStoredImage("https://www.tradingview.com/x/AbC123/")).toBe(false);
+    expect(storedImagePath(ref)).toBe(`${uid}/chart.png`);
+  });
+
+  it("is accepted as it is stored, and a malformed one is refused", () => {
+    expect(validateTradeImageRef(`storage:${uid}/chart.png`)).toEqual({ ok: true, url: `storage:${uid}/chart.png` });
+    expect(validateTradeImageRef("storage:../../etc/passwd").ok).toBe(false);
+    expect(storedImagePath("storage:../../etc/passwd")).toBeNull();
+  });
+
+  it("leaves a TradingView link to the link's own rules", () => {
+    expect(validateTradeImageRef("https://www.tradingview.com/x/AbC123")).toEqual({
+      ok: true,
+      url: "https://www.tradingview.com/x/AbC123/",
+    });
   });
 });

@@ -65,6 +65,37 @@ export function validateTradingViewSnapshotUrl(
   return { ok: true, url: normalized };
 }
 
+/**
+ * An uploaded chart image, as the row stores it: `storage:<user id>/<file>` in
+ * the private `trade-images` bucket (K6, 29.09.2026: "da se mogu čuvati slike
+ * za chartove, a ne linkovi"). The same column as a TradingView link, so every
+ * reader keeps one field; the prefix tells the two apart, and the database CHECK
+ * holds the path to the row's own user.
+ */
+export const STORED_IMAGE_PREFIX = "storage:";
+
+const STORED_IMAGE_RE = /^storage:[0-9a-f-]{36}\/[A-Za-z0-9._-]+$/;
+
+export function isStoredImage(ref: string | null | undefined): boolean {
+  return typeof ref === "string" && ref.startsWith(STORED_IMAGE_PREFIX);
+}
+
+/** The object path inside the bucket, or null for anything that is not a stored image. */
+export function storedImagePath(ref: string): string | null {
+  return STORED_IMAGE_RE.test(ref) ? ref.slice(STORED_IMAGE_PREFIX.length) : null;
+}
+
+/** A chart as the row will store it: an uploaded image, or a TradingView snapshot link. */
+export function validateTradeImageRef(input: string): ValidateSnapshotResult {
+  const raw = input.trim();
+  if (isStoredImage(raw)) {
+    return storedImagePath(raw)
+      ? { ok: true, url: raw }
+      : { ok: false, message: "That uploaded image reference is not valid — upload it again." };
+  }
+  return validateTradingViewSnapshotUrl(raw);
+}
+
 /** Primary link for journal grid: ltf_pre, else first available slot. */
 export function primaryTradeImageUrl(
   images: Partial<Record<TradeImageKind, string>>,

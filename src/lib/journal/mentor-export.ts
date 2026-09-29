@@ -3,6 +3,7 @@
 // feedback without any API integration — the numbers are pre-computed here
 // so the model interprets, it never has to calculate (or hallucinate) stats.
 
+import { isStoredImage } from "./tradingview-snapshot";
 import {
   toRealized,
   computeStats,
@@ -30,6 +31,16 @@ import { groupInsights } from "./insights/types";
 import { OMITTED_RULES, type RunResult } from "./insights/registry";
 import { computeExcursionStats, excursionFromTrade } from "./excursion";
 import type { RuleLookup } from "./reports/rule-lookup";
+
+/**
+ * A chart as the mentor can read it: a TradingView link as is; an image kept in
+ * the journal's private storage has no address outside it (K6), so it is named
+ * rather than printed as its `storage:` reference.
+ */
+function exportableImage(ref: string | undefined): string {
+  if (!ref) return "";
+  return isStoredImage(ref) ? "(slika u journal-u)" : ref;
+}
 
 // Fixed breakdowns. The user-defined fields are appended by `breakdownsFor`,
 // so a field added in Settings shows up in the mentor pack without an edit here.
@@ -171,9 +182,9 @@ function tradeDetail(
   const tv = t.tv_images ?? {};
   const enriched: TradeRow = {
     ...t,
-    tv_htf_pre: tv.htf_pre ?? "",
-    tv_ltf_pre: tv.ltf_pre ?? "",
-    tv_ltf_post: tv.ltf_post ?? "",
+    tv_htf_pre: exportableImage(tv.htf_pre),
+    tv_ltf_pre: exportableImage(tv.ltf_pre),
+    tv_ltf_post: exportableImage(tv.ltf_post),
   };
   const lines = detailFields.map((f) => {
     const v = val(enriched, f.key);

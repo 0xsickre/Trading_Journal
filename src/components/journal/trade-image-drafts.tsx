@@ -1,10 +1,8 @@
 "use client";
 
-import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
+import { ChartImageInput } from "@/components/journal/chart-image-input";
 import {
   TRADE_IMAGE_KIND_HINTS,
   TRADE_IMAGE_KIND_LABELS,
@@ -61,22 +59,13 @@ export function TradeImageDrafts({
   drafts: ImageDrafts;
   onChange: (kind: PreImageKind, url: string) => void;
 }) {
-  async function paste(kind: PreImageKind) {
-    try {
-      const text = await navigator.clipboard.readText();
-      onChange(kind, text.trim());
-    } catch {
-      toast.error("Clipboard access denied");
-    }
-  }
-
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Chart</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Paste TradingView snapshot links (camera → <i>Copy link to chart
-          image</i>). Saved with the trade.
+          Upload a screenshot, paste one from the clipboard, or paste a TradingView
+          snapshot link (camera → <i>Copy link to chart image</i>). Saved with the trade.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -88,21 +77,7 @@ export function TradeImageDrafts({
                 {TRADE_IMAGE_KIND_HINTS[kind]}
               </span>
             </Label>
-            <div className="flex gap-2">
-              <Input
-                value={drafts[kind] ?? ""}
-                onChange={(e) => onChange(kind, e.target.value)}
-                placeholder="https://www.tradingview.com/x/…"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => paste(kind)}
-              >
-                Paste
-              </Button>
-            </div>
+            <ChartImageInput value={drafts[kind] ?? ""} onChange={(ref) => onChange(kind, ref)} />
           </div>
         ))}
         {/* No preview here on purpose: a thumbnail would need the link to be

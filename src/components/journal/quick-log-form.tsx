@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangle, ClipboardPaste } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,8 @@ import { getTradeFormPrefs, setTradeFormPrefs } from "@/lib/journal/trade-form-p
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/journal/time";
 import type { Account, Instrument, OptionsMap } from "@/lib/journal/types";
 import type { Playbook } from "@/lib/journal/playbook-types";
+import { ChartImageInput } from "@/components/journal/chart-image-input";
+import { isStoredImage } from "@/lib/journal/tradingview-snapshot";
 
 /** A trade the export already brought in: its numbers are fixed, only the review is asked for. */
 export type ReviewTrade = {
@@ -228,14 +230,6 @@ export function QuickLogForm({
     const risk = input.stop != null ? Math.abs(input.entry - input.stop) : null;
     return { pts, money, r: risk ? pts / risk : null };
   })();
-
-  async function paste() {
-    try {
-      setSnapshot((await navigator.clipboard.readText()).trim());
-    } catch {
-      toast.error("The clipboard could not be read — paste into the box instead.");
-    }
-  }
 
   function resetAfterSave() {
     setEntry("");
@@ -503,14 +497,14 @@ export function QuickLogForm({
 
           <div className="space-y-1">
             <Label htmlFor="ql-snap" className="text-xs">
-              Exit chart — TradingView snapshot link (optional, Alt+S on the chart)
+              Exit chart — a screenshot, or a TradingView snapshot link (optional, Alt+S on the chart)
             </Label>
-            <div className="flex gap-2">
-              <Input id="ql-snap" value={snapshot} onChange={(e) => setSnapshot(e.target.value)} placeholder={review?.snapshot ?? ""} />
-              <Button type="button" variant="outline" size="sm" onClick={paste}>
-                <ClipboardPaste className="size-4" /> Paste
-              </Button>
-            </div>
+            <ChartImageInput
+              id="ql-snap"
+              value={snapshot}
+              onChange={setSnapshot}
+              placeholder={review?.snapshot && !isStoredImage(review.snapshot) ? review.snapshot : ""}
+            />
           </div>
         </CardContent>
       </Card>

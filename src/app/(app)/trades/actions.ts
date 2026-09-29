@@ -34,7 +34,7 @@ import {
 } from "@/lib/journal/trade-input-schema";
 import {
   TRADE_IMAGE_KINDS,
-  validateTradingViewSnapshotUrl,
+  validateTradeImageRef,
   type TradeImageKind,
 } from "@/lib/journal/tradingview-snapshot";
 
@@ -310,7 +310,7 @@ export async function createTrade(input: TradeInput) {
 /**
  * Check the chart links captured on a not-yet-saved trade, and normalise them.
  *
- * Re-validates with `validateTradingViewSnapshotUrl` — the same function the
+ * Re-validates with `validateTradeImageRef` — the same function the
  * client already ran. That is not duplication: the client check is there to
  * give a fast, specific message, and this one is there because a server action
  * is a public endpoint. The column also carries a CHECK, so a bad URL would be
@@ -332,7 +332,7 @@ function validateTradeImages(
     if (!TRADE_IMAGE_KINDS.includes(img.kind as TradeImageKind)) {
       return { ok: false, error: `Unknown chart slot: ${img.kind}` };
     }
-    const validated = validateTradingViewSnapshotUrl(img.image_url);
+    const validated = validateTradeImageRef(img.image_url);
     if (!validated.ok) return { ok: false, error: validated.message };
     rows.push({ kind: img.kind, image_url: validated.url });
   }
@@ -688,7 +688,7 @@ export async function saveTradeReview(id: string, input: TradeReviewInput) {
 
   let snapshot: string | null = null;
   if (r.snapshot_url && r.snapshot_url.trim()) {
-    const validated = validateTradingViewSnapshotUrl(r.snapshot_url);
+    const validated = validateTradeImageRef(r.snapshot_url);
     if (!validated.ok) return { ok: false as const, error: validated.message };
     snapshot = validated.url;
   }
