@@ -7,7 +7,7 @@ ga zamenjuje. README opisuje stanje koda kakvo jeste — i swing ostatke — dok
 
 **Kako je fajl složen.** Posao je podeljen u **šest faza, F1–F6**; jedna faza = jedna sesija, sa
 jasnim ulazom i izlazom, da nijedna ne zavisi od konteksta koji živi samo u razgovoru. **Detaljan
-plan postoji samo za fazu koja je sledeća** (sada F5). Ostale imaju okvir — cilj, stavke, odluke koje
+plan postoji samo za fazu koja je sledeća** (sada F6). Ostale imaju okvir — cilj, stavke, odluke koje
 treba doneti — i dobijaju detaljan plan tek kad dođu na red, jer svaka zavisi od onoga što je
 prethodna odlučila (npr. F3 i F4 čitaju dan koji F2 tek definiše). Stavke `#1–#23` su u katalogu na
 dnu i brojevi se ne menjaju, jer README upućuje na njih.
@@ -114,8 +114,8 @@ pogađa.
 | **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da: `20260929100000`, `…110000`, `…120000`, `…130000` | **Opus** | ✅ `80fceea` · `6dcf72b` · `94796d1` · `4dba3e9` + `132ce35` (futures-trading), 29.09.2026 — migracije primenjene uz odobrenje trejdera |
 | **H2** | Brisanje ostataka iz baze: check-in tabela, `time_stop_days`, swap, % pragovi, backtest grana | — | F4 | da, **briše**: `20260929140000` … `…190000` (šest) | **Opus** | ✅ `b3b6d7e` · `01eaf8b` · `9434f05` · `49dda83` · `cbca316` · `0cb6f55` + `c72f61d` (futures-trading), 29.09.2026 — migracije primenjene uz odobrenje trejdera |
 | **K** | Zahtevi trejdera od 29.09.2026: redosled pravila, tagovi na srpskom, uvoz puni plan, fiksni breakeven, vremenska zona, slike charta | — | H2 | da: `20260929200000`, `…210000`, `…220000`, `…230000` | **Opus** | ✅ `31030a9` · `286cc06` · `df91b1c` · `65d0817` · `576f574` · `a232849`, 29.09.2026 — migracije primenjene |
-| **F5** | Intraday analitika: sesija, trajanje u minutima, insights, uzorak | #11–#13, #15, #17, #18 (#14 zatvorio H2) | K | ne (sve izvedeno) | Sonnet, Opus za #13 | detaljan plan ispod |
-| **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, legacy CFD u UI-ju, komentari, PARITY | #16, #19, #20, #22, #23 | F5 | možda (#16) | Sonnet | okvir |
+| **F5** | Intraday analitika: sesija, trajanje u minutima, insights, uzorak | #11–#13, #15, #17, #18 (#14 zatvorio H2) | K | da: `20260929235000` (`time_underwater_pct`), `20260930000000` / `…000100` (`baseline_trades`) | Sonnet, Opus za #13 | ✅ `2e59f2e` · `5095e43` · `3183236` · `20f9626` + `8c35148` (futures-trading) · `ea0461b` · `d9ccf9c` · `8dff0cf`, 29.09.2026 — migracije primenjene |
+| **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, ostaci vault-a, komentari, PARITY | #16, #20, #22, #23 (#19 zatvorili H1/H2) | F5 | da (#16, možda #20) | Sonnet, Opus za #16 | detaljan plan ispod, čeka odluke M1–M3 |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -673,7 +673,7 @@ zahteva; rade se pre F5 jer ih je tražio izričito, jedan commit po zahtevu.
 | K5 | „timezone ne kucam — uvek moja evropska zona; sistem sam prepoznaje zonu CSV-a" | `Europe/Belgrade` podrazumevano za nalog i prikaz; polje u Settings bez kucanja. Uvoz: vreme sa offset-om (TopstepX) se čita tačno; vreme bez offset-a se čita u zoni naloga. **Topstep dan (17:00 CT) ostaje ključ dana** bez obzira na zonu prikaza |
 | K6 | „da se mogu čuvati slike za chartove, a ne linkovi" | Supabase Storage bucket (privatan, RLS po korisniku), upload u `trade-images`/quick-log, `tj_trade_images.image_url` → putanja u storage-u + potpisani URL za prikaz; TradingView link ostaje kao opcija |
 
-## F5–F6 — okvir (detaljno kad dođu na red)
+## F5–F6 (detaljno)
 
 ### K urađeno (29.09.2026)
 
@@ -725,10 +725,61 @@ sesijama, ne u danima i nedeljama.
   Insight ne zabranjuje ništa — meri cenu: R sledećeg trejda, minute do ponovnog ulaza, broj ugovora,
   i koliko je to koštalo u dolarima, u odnosu na trejdove koji ne dolaze posle niza gubitaka.
 
-### F6 — Nasleđe i `futures-trading` (#16, #19, #20, #22, #23)
-- **Cilj:** cena promašenog setupa iz R2 do kraja Topstep dana; FTMO/MT5/TradingView CFD ispod
-  „Legacy"; komentari „swing book" prepisani; PARITY i formulas-audit dopunjeni.
-- **Pročitati:** README § Learning, § MAE/MFE; `futures-trading` README § MAE/MFE.
+**F5 urađeno (29.09.2026).** Svi podkoraci ✅ (tabela iznad). Izvan plana: F5.3 je podeljen na
+F5.3a (pravila bez novih podataka) i F5.3b (vreme „pod vodom" iz R2 — nova kolona i
+`journal_mae.py`); F5.4 je tražio odluku trejdera (eksperiment u trejdovima, 40 pre početka); F5.6 je
+proširen na zahtev trejdera („da AI zna sve što treba"): stanje Topstep naloga, pravila i usklađenost,
+dnevni pregled, crveni prozori. Usput: `lang-count` više ne broji „Pre-open" kao srpsko. Gate zelen,
+2.906 testova. Prvo pravo pokretanje `journal_mae.py` posle F5.3b (29.09. uveče) upisalo je vreme
+pod vodom za sva četiri trejda, dopunilo jedan stariji.
+
+### F6 — Nasleđe i `futures-trading` (detaljno, napisano 29.09.2026 posle F5)
+
+**Ulaz:** `main` posle F5. **Cilj:** poslednja mesta gde journal još govori ili meri kao swing
+knjiga, i cena promašenog setupa za fjučerse.
+
+**Utvrđeno u kodu (29.09.2026):**
+- **#19 je zatvoren.** H1 je uklonio FTMO mod, MT5 uvoz i `mt5_excursion.py`, H2 backtest nalog,
+  TradingView replay i `ftmo_*` kolone; u knjizi nije bilo nijednog CFD trejda. „Legacy (CFD)" u
+  UI-ju nema šta da prikaže — stavka ostaje u katalogu samo kao istorija.
+- **#16:** `missed-cost.ts` ume da sabere `missed_r`, ali ga niko ne piše od H1 (izvor je bio MT5).
+  `tj_positions.missed_outcome` / `missed_r` / `missed_source` postoje (`20260921140000`); panel
+  danas kaže „N promašenih, nijedan izmeren". R2 sveće (1 s) i `journal_mae.py` već postoje.
+- **#20:** dva insight-a čitaju polja vault ciklusa: `against_macro_bias` (`macro_align`) i
+  `cot_chase` (`cot_filter`), plus kolona `cot_filter` i polje `macro_align` u `custom`.
+  README § „Where this sits" i dalje opisuje vault (makro bias, COT) kao izvor konteksta; za day
+  trading kontekst daje `futures-trading` brief. `stale_plan` smatra plan zastarelim posle
+  **14 dana** (`STALE_PLAN_DAYS`), a plan day tradera važi jedan trading dan.
+- **#22:** reč „swing" je još u komentarima 21 fajla (`survival.ts`, `period-stats.ts`,
+  `activity.ts`, `costs.ts`, `excursion-scan.ts`, `form-config.ts`, `dashboard.tsx`, …). Deo je
+  istorija („went with the swing book, H1") i ostaje; deo tvrdi da je knjiga swing i ide.
+- **#23:** `PARITY.md` (259 redova) i `docs/formulas-audit.md` (504) opisuju stanje pre F5: bez
+  sesija, trajanja u minutima, intraday insights-a, vremena pod vodom.
+
+**Podkoraci:**
+
+| Korak | Šta | Fajlovi |
+|---|---|---|
+| F6.1 | Cena promašenog setupa iz R2 (#16): `journal_mae.py` hoda od trenutka plana do kraja njegovog Topstep dana (ili do M1 prozora) i piše `missed_outcome` / `missed_r` / `missed_source = 'r2'`; journal samo čita | `futures-trading/tools/journal_mae.py`, `missed-cost.ts`, CHECK `missed_source` (migracija ako `'r2'` nije dozvoljen) |
+| F6.2 | Vault ostaci (#20) po odluci M2; `stale_plan` po odluci M3; README § „Where this sits" → brief | `insights/process-rules.ts`, README |
+| F6.3 | Komentari (#22): prepisati one koji tvrde da je knjiga swing; istorijske ostaviti | 21 fajl |
+| F6.4 | `PARITY.md` i `docs/formulas-audit.md` (#23): sesije, minuti, intraday insights, pod vodom, co-exposure u minutima, DLL | `PARITY.md`, `docs/formulas-audit.md` |
+| F6.5 | README 1:1, F6 ✅ — kraj Faze F | — |
+
+**Odluke koje traži trejder (pre koda):**
+- **M1 — Cena promašaja: kad setup „vredi".** (A, preporuka) Samo ako je cena **dodirnula ulaz**
+  plana posle trenutka plana; onda šta je prvo dodirnuto od toga: stop (−1R) ili target (+plan R);
+  ništa do kraja Topstep dana → „neither", 0. Promašaj koji nikad nije došao do ulaza nije koštao
+  ništa i broji se odvojeno („nije ni došlo do ulaza"). (B) Bez uslova ulaza: od trenutka plana, šta
+  je prvo dodirnuto, stop ili target.
+- **M2 — Vault polja.** (A, preporuka) `against_macro_bias` i `cot_chase` se gase, `macro_align` i
+  `cot_filter` ostaju u bazi za istoriju, bez prikaza u formi; bias dana dolazi iz brief-a
+  (`htf_bias`, F4). (B) Ostaju ako još koristiš vault za dnevni pravac.
+- **M3 — Zastareo plan.** (A, preporuka) Plan je zastareo kad prođe njegov Topstep trading dan
+  (17:00 CT) a nije ni otvoren ni označen promašenim. (B) Fiksno N sati.
+
+**Pročitati pre koda:** README § Learning („The missed setup gets a price"), § MAE/MFE;
+`futures-trading` README § MAE/MFE.
 
 ## Katalog stavki
 

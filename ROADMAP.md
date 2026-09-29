@@ -1594,3 +1594,7 @@ ulaza po nalogu, stop posle uzastopnih gubitaka, ravno do kraja dana, bez ulaza 
 tri ručna penzionisana. Kategorije za day tradera (swing stavke ugašene, ne obrisane). Time stop u
 minutima ili „close". Četiri migracije primenjene uz odobrenje. Sledi H2 — brisanje ostataka iz baze
 (`FAZA_F_DAYTRADING_PLAN.md`).
+
+- **H2 ✅ (29.09.2026):** iz baze obrisani check-in tabela, `time_stop_days`, swap, % pragovi trackera i nedeljno pravilo gubitka, `risk_pct`, backtest nalog i `ftmo_*` kolone. Knjiga je samo Topstep.
+- **K ✅ (29.09.2026):** šest zahteva trejdera — ručna pravila iznad automatskih, tagovi na srpskom, CSV uvoz puni plan, fiksni breakeven (±$25/38/56), zona Europe/Belgrade bez kucanja, slike charta u journal-u.
+- **F5 ✅ (29.09.2026):** analitika u minutima i sesijama — korpe trajanja, dimenzije sesije / minuta od otvaranja / rednog broja / posle gubitka, intraday insights (revenge 5 min, overtrading po danu, tilt posle 2 gubitka, strpljenje, vreme pod vodom iz R2), eksperiment u trejdovima, preklapanje u minutima, otvoreni rizik prema DLL-u, mentor pack za day tradera. Sledeća je F6 (cena promašaja iz R2, vault ostaci, komentari, PARITY), plan napisan, čeka odluke M1–M3.

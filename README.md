@@ -15,10 +15,12 @@ FTMO or CFD trade was in the book), with the per-position check-ins on `/daily` 
 insights (thesis, time stop, weekend). **H2 (29.09.2026) removed what they left in the database**:
 the check-in table, `time_stop_days`, swap (fills, instruments, net P&L), the percentage-of-equity
 tracker limits and the weekly loss rule, the `risk_pct` choice, the backtest account kind with the
-TradingView replay import, and the `ftmo_*` columns. The book is Topstep only. What is still
-measured on swing terms — a few insights — is listed item by item and split
-into phases F1–F6 in [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md). This README describes
-the code as it is, swing leftovers included.
+TradingView replay import, and the `ftmo_*` columns. The book is Topstep only. **F5 (29.09.2026)
+moved the analytics to the trading day**: hold time in minutes, session windows, intraday insights,
+time underwater, overlap in minutes, open risk against the DLL, a day trader's mentor pack. What is
+left — the missed-setup price from R2, the vault-era macro/COT fields, comments and the parity
+documents — is phase F6 in [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md). This README
+describes the code as it is, leftovers included.
 
 Built to cover what TradeZella does in metrics, notes and reports, minus the parts that only make
 sense for multi-user SaaS. Where it differs, the difference is written down and argued — here or in
@@ -502,7 +504,7 @@ both shapes: with no rungs it IS entry-to-target. Nothing about this depends on 
 from — a hand-typed scale-out has the same arithmetic and the same wrong answer without weighting.
 
 **The annualisation factor is measured, not assumed.** `periodsPerYear = (trading days × 365) /
-calendar days spanned` — derived from the data instead of hardcoded at 252. A swing trader with 40
+calendar days spanned` — derived from the data instead of hardcoded at 252. A trader with 40
 trading days over 300 calendar days gets their own factor; a hardcoded 252 would inflate every
 ratio. All three ratios return `null` below `MIN_RATIO_DAYS` (5).
 
@@ -563,8 +565,8 @@ and no dimension key becomes a special case.
 
 Get this wrong and nothing breaks — the numbers simply file themselves under days you did not live.
 
-- **Money is dated by the CLOSE day.** A swing opened Monday and closed Friday belongs to Friday,
-  because that is when the money arrived.
+- **Money is dated by the CLOSE day.** A position opened on one trading day and closed on the next
+  belongs to the next, because that is when the money arrived.
 - **Decisions are dated by the OPEN day.** "Did every trade have a stop?" is a question about the
   moment of entry. Under close-dating, a still-open trade is invisible to that rule, so ten unlinked
   open trades would report a perfect day.
