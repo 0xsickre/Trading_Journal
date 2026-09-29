@@ -314,8 +314,8 @@ function RuleRow({
             and the database refuses that combination outright.
 
             Per PLAYBOOK. The flag lives on the link, so the same rule can decide
-            the grade in a swing book and count as ordinary process in a scalp
-            one — which is what `criteriaByPlaybook` in the reports lookup was
+            the grade in an opening-drive playbook and count as ordinary process
+            in a lunch-scalp one — which is what `criteriaByPlaybook` in the reports lookup was
             already computing, from a flag that could not vary. */}
         <button
           type="button"

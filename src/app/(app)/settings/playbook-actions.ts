@@ -481,8 +481,8 @@ export async function unlinkRule(
  *
  * The move the old schema could not express. `updatePlaybookRule({ category })`
  * used to do this job by rewriting the rule itself, which moved it in every
- * playbook at once — so a rule that is "Entry" in the swing book could not be
- * "Exit" in the scalp book without being copied, and a copy is a second id with
+ * playbook at once — so a rule that is "Entry" in the opening-drive book could
+ * not be "Exit" in the scalp book without being copied, and a copy is a second id with
  * its own separate statistics.
  *
  * Appended at the end of the target section: a drop from a menu names no
@@ -521,8 +521,8 @@ export async function moveRuleToSection(
  *
  * Per link, because the derived grade is per playbook — `criteriaByPlaybook` in
  * `reports/rule-lookup.ts` was already keyed that way and only ever read a flag
- * that could not vary. "Sweep of a daily level" can decide the grade in a swing
- * book and be ordinary process in a scalp one.
+ * that could not vary. "Sweep of a daily level" can decide the grade in an
+ * opening-drive book and be ordinary process in a scalp one.
  *
  * The database refuses a criterion whose rule is not `show_when = 'always'`; a
  * raw trigger message would be unreadable, so the reason is spelled out here

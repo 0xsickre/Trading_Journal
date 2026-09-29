@@ -1,9 +1,10 @@
 /**
  * Weekly and monthly layer.
  *
- * TradeZella's headline cadence metric is Day Win % — a day-trading unit. For a
- * swing book the day is a process unit and the week is the result unit, so the
- * same statistics are computed per ISO week and per calendar month instead.
+ * TradeZella's headline cadence metric is Day Win %. The same statistics are
+ * computed per day, per ISO week and per calendar month, each on the account's
+ * own day rule (a Topstep account's 17:00 → 17:00 CT), so the calendar's cells,
+ * side column and header answer the same question at three sizes.
  */
 
 import { winRateOf, type RealizedTrade } from "./analytics";
@@ -42,7 +43,7 @@ export type PeriodRow = {
 
 export type PeriodSummary = {
   periods: number;
-  /** Share of periods that finished positive. The swing answer to Day Win %. */
+  /** Share of periods that finished positive — Day Win % at the period's size. */
   winPct: number;
   winning: number;
   losing: number;
@@ -99,9 +100,10 @@ export function tradeVolume(t: RealizedTrade): number {
  * Bucket realized trades by period.
  *
  * Attribution is by CLOSE date, deliberately diverging from TradeZella, which
- * dates a trade to the day it was opened. That convention is harmless intraday
- * but would put a three-week swing's profit in the week the idea started rather
- * than the week the money arrived, which makes weekly P&L unusable. Activity
+ * dates a trade to the day it was opened. That convention is harmless for a
+ * trade closed the day it opened, and wrong for one carried past the 17:00 CT
+ * reopen: its money would land on the day the idea started rather than the
+ * day it arrived. Activity
  * metrics use the open date instead — see `activity.ts`.
  *
  * All three granularities go through this one function on purpose: the calendar

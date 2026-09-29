@@ -184,7 +184,7 @@ export function scanExcursion(input: ExcursionScanInput): ExcursionScan {
  * actually serves.
  *
  * The ladder is capped at one hour rather than continuing to 4h and 1d. A
- * multi-week swing does not need daily bars to find its extreme — hourly bars
+ * hold of days does not need daily bars to find its extreme — hourly bars
  * find the same high, and they keep the two discarded boundary bars from
  * costing two whole days of the trade.
  */

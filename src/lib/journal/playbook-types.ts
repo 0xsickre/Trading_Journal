@@ -71,8 +71,8 @@ export type PlaybookRule = {
  *
  * The three link-owned fields are the whole point of the split. `section_id`
  * lets the same rule sit under "Entry" in one book and "Exit" in another;
- * `is_setup_criterion` lets it grade the setup in a swing book and count as
- * plain process in a scalp one — which is what `criteriaByPlaybook` in
+ * `is_setup_criterion` lets it grade the setup in an opening-drive playbook and
+ * count as plain process in a lunch-scalp one — which is what `criteriaByPlaybook` in
  * `reports/rule-lookup.ts` was already computing per playbook, from a flag that
  * could not vary; and `link_sort` orders it within this book only.
  */

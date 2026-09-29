@@ -2125,8 +2125,9 @@ export function Dashboard({
             cls={pnlClass(stats.grossSum)}
           />
           {/* The basis, said where the number is read. R does not follow the
-              net/gross switch — that switch moves money only — and on a swing
-              book held through carry the two can disagree on a single trade.
+              net/gross switch — that switch moves money only — and after
+              fees the two can disagree on a single trade (a small gross win
+              that commissions turn red).
               Left undocumented, that reads as a bug rather than as the two
               separate questions it is. See README § Money and counting. */}
           <Stat

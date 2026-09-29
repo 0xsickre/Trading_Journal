@@ -18,9 +18,9 @@
  * exactly the structure the daily rule measures.
  *
  * WHY BLOCKS. Drawing single days assumes today tells you nothing about
- * tomorrow, and this book is a swing book — positions span days, tilt spans
- * sessions, and the run of losses that ends a challenge is not an unlucky draw
- * but a correlated stretch. Resampling CONSECUTIVE blocks of days keeps those
+ * tomorrow, and it does not: tilt spans sessions, a bad day is followed by a
+ * bad day more often than chance says, and the run of losses that ends a
+ * challenge is not an unlucky draw but a correlated stretch. Resampling CONSECUTIVE blocks of days keeps those
  * stretches intact. Block size is the trader's choice and is stated on screen,
  * because it changes the answer and hiding it would make an assumption look
  * like a measurement.

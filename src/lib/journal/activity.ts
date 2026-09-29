@@ -8,8 +8,8 @@
  *   P&L date    — the day a position was CLOSED, used everywhere money is
  *                 attributed (see period-stats.ts).
  *
- * Using the open date for money, as TradeZella does, would misdate a swing
- * book's returns by weeks. Using the close date for activity would claim you
+ * Using the open date for money, as TradeZella does, would misdate any trade
+ * carried across a day boundary. Using the close date for activity would claim you
  * traded on days you did nothing.
  */
 

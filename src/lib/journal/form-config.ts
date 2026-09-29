@@ -148,8 +148,8 @@ const BASE_TABS: FormTab[] = [
         ],
       },
       {
-        // The three swing fields stand as their own group rather than trailing
-        // the risk plan.
+        // The three plan fields (thesis, invalidation, time stop) stand as their
+        // own group rather than trailing the risk plan.
         //
         // They used to be appended to `risk_plan`, and that had a concrete bug:
         // `riskPlanFieldVisible` falls through to `true` for any name it does
