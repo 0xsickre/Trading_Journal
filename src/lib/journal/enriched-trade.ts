@@ -13,7 +13,8 @@ import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breake
 import { numberFieldValue as numField } from "./field-values";
 import { excursionFromTrade, type Excursion } from "./excursion";
 import { riskMoneyAtEntry, riskPctTaken } from "./risk-taken";
-import { dayKeyIn, weekKeyIn, zonedHour, zoneTz, type DayZone } from "./time";
+import { openOffsetBucket, sessionWindowOf } from "./session-window";
+import { dayKeyIn, toEpoch, weekKeyIn, zonedHour, zoneTz, type DayZone } from "./time";
 
 /**
  * The journal fields downstream consumers join against — process, not prose.
@@ -76,6 +77,24 @@ export type EnrichedTrade = {
   riskPctTaken: number | null;
   instrument: string | null;
   accountId: string | null;
+  /** The session window of the entry, on New York's clock (F5.2). */
+  sessionWindow: string | null;
+  /** How long after the 09:30 ET open the entry was taken (F5.2). */
+  openOffset: string | null;
+  /**
+   * Which entry of its day this is on its own account, from 1 — the day being
+   * the account's day (a Topstep account's is its 17:00 CT trading day).
+   * Null when the entry time is unknown.
+   */
+  tradeNoInDay: number | null;
+  /**
+   * Losses in a row that had already CLOSED when this trade was entered, on the
+   * same account and day — the streak the trader was standing in. 0 for a first
+   * trade or one after a win/scratch; null when the entry time is unknown. The
+   * same reading `stop_after_losses` grades (F4), so the tilt insight and the
+   * rule count the same thing.
+   */
+  lossStreakBefore: number | null;
 };
 
 export type EnrichOptions = {
@@ -97,7 +116,7 @@ export function enrichTrades(
     fillCounts,
   } = options;
 
-  return trades.map((t) => {
+  const rows = trades.map((t) => {
     const tz = tzOf(t);
     const pnl = pnlOf(t);
     const secs = t.row.stats?.duration_seconds ?? null;
@@ -133,8 +152,34 @@ export function enrichTrades(
       riskPctTaken: riskPctTaken(t.row),
       instrument,
       accountId: t.row.account_id ?? null,
-    };
+      sessionWindow: sessionWindowOf(t.row.stats?.opened_at ?? null),
+      openOffset: openOffsetBucket(t.row.stats?.opened_at ?? null),
+      tradeNoInDay: null,
+      lossStreakBefore: null,
+    } satisfies EnrichedTrade;
   });
+
+  // The day's sequence needs the whole book, so it is a second pass: the trades
+  // of one account and day, in the order they were entered.
+  const byDay = new Map<string, EnrichedTrade[]>();
+  for (const e of rows) {
+    if (e.openedAt == null || !Number.isFinite(toEpoch(e.openedAt))) continue;
+    const key = `${e.accountId ?? ""}|${e.openDay}`;
+    byDay.set(key, [...(byDay.get(key) ?? []), e]);
+  }
+  for (const day of byDay.values()) {
+    day.sort((a, b) => toEpoch(a.openedAt!) - toEpoch(b.openedAt!));
+    day.forEach((e, i) => {
+      e.tradeNoInDay = i + 1;
+      const closedBefore = day
+        .filter((c) => c.id !== e.id && c.closedAt != null && toEpoch(c.closedAt) < toEpoch(e.openedAt!))
+        .sort((a, b) => toEpoch(a.closedAt!) - toEpoch(b.closedAt!));
+      let run = 0;
+      for (let k = closedBefore.length - 1; k >= 0 && closedBefore[k].outcome === "loss"; k--) run++;
+      e.lossStreakBefore = run;
+    });
+  }
+  return rows;
 }
 
 // --- Shared descriptive statistics -----------------------------------------

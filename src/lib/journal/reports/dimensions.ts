@@ -18,6 +18,7 @@ import { SETUP_GRADES, scorable, setupScoreFromTrade } from "../setup-score";
 import type { RuleLookup } from "./rule-lookup";
 import type { EnrichedTrade } from "../enriched-trade";
 import type { DailyReportLite } from "../enriched-trade";
+import { OPEN_OFFSET_BUCKETS, SESSION_WINDOWS } from "../session-window";
 import { isoWeekdayOfDayKey } from "../time";
 
 /** Bucket shown when a trade has no value for the dimension. */
@@ -270,6 +271,15 @@ const RISK_PCT_EDGES = [
 
 /** Monday first, as every week in the journal starts (`closeWeek`, the weekly review). */
 /** "08:00–09:00" … one label per hour of the day, in clock order. */
+const ORDINALS = ["1st", "2nd", "3rd"] as const;
+const TRADE_NO_BUCKETS = [...ORDINALS, "4th +"] as const;
+const AFTER_LOSS_BUCKETS = [
+  "First trade of the day",
+  "After a win or scratch",
+  "After 1 loss",
+  "After 2+ losses",
+] as const;
+
 export const ENTRY_HOURS: readonly string[] = Array.from({ length: 24 }, (_, h) => {
   const p = (n: number) => String(n % 24).padStart(2, "0");
   return `${p(h)}:00–${p(h + 1)}:00`;
@@ -469,6 +479,50 @@ const derivedDimensions: Dimension[] = [
     group: "derived",
     order: ENTRY_HOURS,
     valueOf: (t) => (t.openHour == null ? null : ENTRY_HOURS[t.openHour]),
+  },
+  {
+    // The market's own windows, on New York's clock whatever zone the journal
+    // shows (F5.2, decision L1): "does the open pay, does the lunch hour cost".
+    key: "session_window",
+    label: "Session window",
+    group: "derived",
+    order: SESSION_WINDOWS,
+    valueOf: (t) => t.sessionWindow,
+  },
+  {
+    key: "minutes_from_open",
+    label: "Minutes after the open",
+    group: "derived",
+    order: OPEN_OFFSET_BUCKETS,
+    valueOf: (t) => t.openOffset,
+  },
+  {
+    // Which entry of the day, per account. The third and later are one bucket:
+    // a book with a two-trade rule cares that there was a third, not which.
+    key: "trade_no_in_day",
+    label: "Trade number in the day",
+    group: "derived",
+    order: TRADE_NO_BUCKETS,
+    valueOf: (t) => (t.tradeNoInDay == null ? null : t.tradeNoInDay >= 4 ? "4th +" : ORDINALS[t.tradeNoInDay - 1]),
+  },
+  {
+    // What the trader was standing in when they clicked: the losses in a row
+    // that had already closed on that account and day. The two-loss line is the
+    // trader's own `stop_after_losses` (decision L3).
+    key: "after_loss",
+    label: "After losses",
+    group: "derived",
+    order: AFTER_LOSS_BUCKETS,
+    valueOf: (t) =>
+      t.tradeNoInDay == null || t.lossStreakBefore == null
+        ? null
+        : t.tradeNoInDay === 1
+          ? "First trade of the day"
+          : t.lossStreakBefore === 0
+            ? "After a win or scratch"
+            : t.lossStreakBefore === 1
+              ? "After 1 loss"
+              : "After 2+ losses",
   },
   {
     key: "dow_exit",

@@ -45,6 +45,70 @@ describe("registry integrity", () => {
   });
 });
 
+describe("intraday dimensions (F5.2)", () => {
+  // 29.09.2026, US summer time: 09:30 ET = 13:30 UTC. `enrich` gives every trade
+  // account "acc" and the default zone unless a spec says otherwise.
+  const D = "2026-09-29";
+  const T = (id: string, open: string, close: string, net: number) => ({
+    id,
+    accountId: "a1",
+    openedAt: `${D}T${open}:00Z`,
+    closedAt: `${D}T${close}:00Z`,
+    net,
+  });
+  const bucket = (key: string, specs: ReturnType<typeof T>[], id: string) => {
+    const trades = enrich(specs);
+    return bucketsOf(getDimension(key)!, trades.find((t) => t.id === id)!, dimCtx());
+  };
+
+  it("groups by session window and by minutes after the open", () => {
+    const specs = [T("a", "13:35", "13:50", 10)];
+    expect(bucket("session_window", specs, "a")).toEqual(["Open 09:30–10:00"]);
+    expect(bucket("minutes_from_open", specs, "a")).toEqual(["0–15 min"]);
+  });
+
+  it("numbers the entries of a day per account, the fourth on as one bucket", () => {
+    const specs = [
+      T("a", "13:31", "13:40", 10),
+      T("b", "14:10", "14:20", 10),
+      T("c", "15:00", "15:10", 10),
+      T("d", "16:00", "16:10", 10),
+      T("e", "17:00", "17:10", 10),
+    ];
+    expect(["a", "b", "c", "d", "e"].map((id) => bucket("trade_no_in_day", specs, id)[0])).toEqual([
+      "1st",
+      "2nd",
+      "3rd",
+      "4th +",
+      "4th +",
+    ]);
+    // Another account's day starts again at the first.
+    const other = enrich([...specs, { ...T("z", "18:00", "18:10", 10), accountId: "a2" }]);
+    expect(bucketsOf(getDimension("trade_no_in_day")!, other.find((t) => t.id === "z")!, dimCtx())).toEqual(["1st"]);
+  });
+
+  it("says what the trader was standing in: losses that had already closed", () => {
+    const specs = [
+      T("a", "13:31", "13:40", -50),
+      T("b", "13:45", "13:55", -30),
+      T("c", "14:00", "14:10", -20),
+      T("d", "14:20", "14:30", 40),
+      T("e", "14:40", "14:50", 10),
+    ];
+    const of = (id: string) => bucket("after_loss", specs, id)[0];
+    expect(of("a")).toBe("First trade of the day");
+    expect(of("b")).toBe("After 1 loss");
+    expect(of("c")).toBe("After 2+ losses");
+    expect(of("d")).toBe("After 2+ losses");
+    expect(of("e")).toBe("After a win or scratch");
+  });
+
+  it("does not count a loss that closed after the entry was taken", () => {
+    const specs = [T("a", "13:31", "14:30", -50), T("b", "13:45", "13:55", 10)];
+    expect(bucket("after_loss", specs, "b")).toEqual(["After a win or scratch"]);
+  });
+});
+
 describe("trade column dimensions", () => {
   it("groups by a plain column", () => {
     const t = one([{ instrument: "XAUUSD" }]);

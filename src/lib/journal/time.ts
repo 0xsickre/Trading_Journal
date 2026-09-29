@@ -298,6 +298,16 @@ export function zonedHour(
   return Number(formatInTimeZone(iso, safeTz(tz), "H"));
 }
 
+/** Minutes since midnight (0–1439) of `iso` on the clock of `tz`; null when unknown. */
+export function zonedMinuteOfDay(
+  iso: string | Date | null | undefined,
+  tz: string = DEFAULT_TZ,
+): number | null {
+  if (!iso || !Number.isFinite(toEpoch(iso))) return null;
+  const [h, m] = formatInTimeZone(iso, safeTz(tz), "H:m").split(":").map(Number);
+  return h * 60 + m;
+}
+
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
 /** Monday yyyy-MM-dd of the week containing `iso` in `tz` (ISO week, Mon start). */
