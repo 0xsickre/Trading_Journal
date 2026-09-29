@@ -105,21 +105,20 @@ describe("cost accrual matches the SQL view", () => {
       point_value: 1,
       fx_rate: 1,
       executions: [
-        { side: "entry", price: 100, qty: 1, fee: 2, swap_funding: 0 },
-        { side: "exit", price: 110, qty: 1, fee: 2, swap_funding: 1 },
+        { side: "entry", price: 100, qty: 1, fee: 2 },
+        { side: "exit", price: 110, qty: 1, fee: 2 },
         // A correction row carrying only a charge.
-        { side: "exit", price: 0, qty: 0, fee: 5, swap_funding: 0.5 },
+        { side: "exit", price: 0, qty: 0, fee: 5 },
       ],
     });
 
     expect(s.total_fees).toBe(9);
-    expect(s.total_swap).toBe(1.5);
     // The zero-qty row must not touch the price math...
     expect(s.exit_qty).toBe(1);
     expect(s.avg_exit).toBe(110);
     expect(s.gross_pl).toBe(10);
     // ...but must still be deducted from net.
-    expect(s.net_pl).toBe(10 - 9 - 1.5);
+    expect(s.net_pl).toBe(10 - 9);
   });
 
   it("still ignores unusable rows for quantity and price", () => {
@@ -130,9 +129,9 @@ describe("cost accrual matches the SQL view", () => {
       point_value: 1,
       fx_rate: 1,
       executions: [
-        { side: "entry", price: 100, qty: 2, fee: 0, swap_funding: 0 },
-        { side: "entry", price: Number.NaN, qty: 5, fee: 0, swap_funding: 0 },
-        { side: "entry", price: 100, qty: -3, fee: 0, swap_funding: 0 },
+        { side: "entry", price: 100, qty: 2, fee: 0 },
+        { side: "entry", price: Number.NaN, qty: 5, fee: 0 },
+        { side: "entry", price: 100, qty: -3, fee: 0 },
       ],
     });
     expect(s.entry_qty).toBe(2);
@@ -202,8 +201,8 @@ describe("golden vector read back off the live SQL view", () => {
     point_value: 2,
     fx_rate: 1,
     executions: [
-      { side: "entry", price: 101, qty: 3, fee: 1.0, swap_funding: 0.5 },
-      { side: "exit", price: 96, qty: 2, fee: 0.7, swap_funding: 0.2 },
+      { side: "entry", price: 101, qty: 3, fee: 1.0 },
+      { side: "exit", price: 96, qty: 2, fee: 0.7 },
     ],
   });
 
@@ -216,7 +215,6 @@ describe("golden vector read back off the live SQL view", () => {
 
   it("agrees on costs", () => {
     expect(stats.total_fees).toBeCloseTo(1.7, 10);
-    expect(stats.total_swap).toBeCloseTo(0.7, 10);
   });
 
   it("agrees on points and money, sign flip included", () => {
@@ -224,7 +222,7 @@ describe("golden vector read back off the live SQL view", () => {
     // gross_points is positive despite exit < entry.
     expect(stats.gross_points).toBeCloseTo(10, 10);
     expect(stats.gross_pl).toBeCloseTo(20, 10);
-    expect(stats.net_pl).toBeCloseTo(17.6, 10);
+    expect(stats.net_pl).toBeCloseTo(18.3, 10);
   });
 
   it("agrees on R, on the plan-vs-fill convention", () => {
@@ -233,7 +231,7 @@ describe("golden vector read back off the live SQL view", () => {
     // Diluted by the whole position, not the closed part — see the note at the
     // point of calculation.
     expect(stats.realized_r).toBeCloseTo(0.66666667, 8);
-    expect(stats.realized_r_net).toBeCloseTo(0.58666667, 8);
+    expect(stats.realized_r_net).toBeCloseTo(0.61, 8);
   });
 });
 

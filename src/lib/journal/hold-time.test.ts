@@ -117,7 +117,6 @@ describe("hold time in days", () => {
           gross_pl: 1,
           net_pl: 1,
           total_fees: 0,
-          total_swap: 0,
           realized_r: 1,
           realized_r_net: 1,
           opened_at: "2026-03-01T00:00:00Z",

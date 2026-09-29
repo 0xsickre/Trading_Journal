@@ -70,8 +70,4 @@ describe("what Topstep charges", () => {
       expect(i.commission_currency, i.symbol).toBe("USD");
     }
   });
-
-  it("no swap — a future's financing is in its price", () => {
-    for (const i of DEFAULT_INSTRUMENTS) expect([i.swap_long, i.swap_short], i.symbol).toEqual([0, 0]);
-  });
 });

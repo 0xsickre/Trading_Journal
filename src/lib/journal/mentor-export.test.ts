@@ -14,7 +14,6 @@ function trade(id: string, netPl: number): TradeRow {
     gross_pl: netPl,
     net_pl: netPl,
     total_fees: 0,
-    total_swap: 0,
     realized_r: netPl / 100,
     realized_r_net: null,
     opened_at: "2026-01-01T10:00:00Z",

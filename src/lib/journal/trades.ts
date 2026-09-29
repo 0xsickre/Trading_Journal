@@ -104,7 +104,7 @@ export async function getTradeForEdit(
     supabase.from("tj_positions").select("*").eq("id", id).maybeSingle(),
     supabase
       .from("tj_executions")
-      .select("side,price,qty,executed_at,fee,swap_funding,source")
+      .select("side,price,qty,executed_at,fee,source")
       .eq("position_id", id)
       .order("executed_at"),
     getTradeRuleAnswers(id),
@@ -167,7 +167,6 @@ export async function getTradeForEdit(
       qty: Number(e.qty),
       executed_at: e.executed_at as string,
       fee: Number(e.fee),
-      swap_funding: Number(e.swap_funding),
       source: asFillSource(e.source),
     })),
   };

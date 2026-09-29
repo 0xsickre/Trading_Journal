@@ -42,9 +42,6 @@ function inst(over: Partial<Instrument> = {}): Instrument {
     commission_per_lot: 0,
     commission_pct: 0.0007,
     commission_currency: "EUR",
-    swap_long: -83,
-    swap_short: -8.3,
-    swap_triple_day: 3,
     is_active: true,
     sort_order: 200,
     ...over,
@@ -230,38 +227,38 @@ describe("adding one the catalog does not carry", () => {
 });
 
 describe("what the broker charges", () => {
-  it("saves the commission and the swap alongside the contract spec", async () => {
+  it("saves the commission alongside the contract spec", async () => {
     const user = userEvent.setup({ delay: null });
     updateInstrument.mockResolvedValue({ ok: true });
     render(<InstrumentManager instruments={[inst()]} />);
 
     const row = rowOf("XAUUSD");
-    const swapLong = within(row).getByLabelText("Swap L");
-    await user.clear(swapLong);
-    await user.type(swapLong, "-90");
+    const commission = within(row).getByLabelText("% of notional");
+    await user.clear(commission);
+    await user.type(commission, "0.001");
     await user.click(within(row).getByRole("button", { name: "Save" }));
 
     await vi.waitFor(() =>
       expect(updateInstrument).toHaveBeenCalledWith(
         "i-gold",
-        expect.objectContaining({ swap_long: -90, commission_pct: 0.0007 }),
+        expect.objectContaining({ commission_pct: 0.001, commission_per_lot: 0 }),
       ),
     );
   });
 
-  it("says which side is charged and which night is tripled", () => {
+  it("says a round turn is charged on both sides", () => {
     render(<InstrumentManager instruments={[inst()]} />);
-    expect(screen.getByText(/charged three times on Wednesday/)).toBeInTheDocument();
+    expect(screen.getByText(/a round turn costs twice this/)).toBeInTheDocument();
   });
 
-  it("refuses a swap it cannot read, instead of saving a zero", async () => {
+  it("refuses a commission it cannot read, instead of saving a zero", async () => {
     const user = userEvent.setup({ delay: null });
     render(<InstrumentManager instruments={[inst()]} />);
 
     const row = rowOf("XAUUSD");
-    const swapShort = within(row).getByLabelText("Swap S");
-    await user.clear(swapShort);
-    await user.type(swapShort, "abc");
+    const commission = within(row).getByLabelText("% of notional");
+    await user.clear(commission);
+    await user.type(commission, "abc");
 
     expect(within(row).getByRole("button", { name: "Save" })).toBeDisabled();
     expect(updateInstrument).not.toHaveBeenCalled();

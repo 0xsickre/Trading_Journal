@@ -100,13 +100,8 @@ import {
 } from "@/lib/journal/plan-calculations";
 import { computePositionStats } from "@/lib/journal/position-stats";
 import { resolveFxRate } from "@/lib/journal/fx";
-import { utcToZonedInput, zonedInputToUtc, zonedDateKey, fmtInTz, DEFAULT_TZ, DATE_TIME } from "@/lib/journal/time";
-import {
-  NO_COST_DEFAULTS,
-  nightsBetween,
-  prefillFee,
-  prefillSwap,
-} from "@/lib/journal/cost-defaults";
+import { utcToZonedInput, zonedInputToUtc, fmtInTz, DEFAULT_TZ, DATE_TIME } from "@/lib/journal/time";
+import { NO_COST_DEFAULTS, prefillFee } from "@/lib/journal/cost-defaults";
 import {
   createTrade,
   updateTrade,
@@ -132,7 +127,7 @@ import {
   defaultRiskPctOption,
 } from "@/lib/journal/trade-form-prefs";
 import { cn } from "@/lib/utils";
-import { commissionPerSide, swapCharge } from "@/lib/journal/instrument-costs";
+import { commissionPerSide } from "@/lib/journal/instrument-costs";
 import { sizeUnitLabel } from "@/lib/journal/units";
 import { MICRO_OF, MINI_OF } from "@/lib/journal/default-instruments";
 import { topstepMaxContracts, type TopstepSizing } from "@/lib/journal/topstep";
@@ -154,7 +149,6 @@ type ExecRow = {
   qty: string;
   executedLocal: string;
   fee: string;
-  swap: string;
   /**
    * The stored instant and origin of a fill loaded for editing.
    *
@@ -167,17 +161,16 @@ type ExecRow = {
   originalLocal?: string;
   source?: FillSource;
   /**
-   * Whether Fee and Swap are still the journal's own suggestion.
+   * Whether Fee is still the journal's own suggestion.
    *
    * The costs are prefilled from the quantity, and the quantity is the box the
    * trader most often corrects. Without these flags the commission stayed at
    * whatever the size was when the row was ADDED: seed 4.78 lots, type 2, and
-   * the fee silently remained the one for 4.78. The moment either box is typed
+   * the fee silently remained the one for 4.78. The moment the box is typed
    * into it becomes the trader's own figure and is never recomputed again — a
    * broker's real charge must not be overwritten by our estimate of it.
    */
   feeAuto?: boolean;
-  swapAuto?: boolean;
 };
 
 export type FieldValue = string | number | string[] | null;
@@ -206,7 +199,6 @@ export type TradeFormInitial = {
     qty: number;
     executed_at: string;
     fee: number;
-    swap_funding: number;
     source?: FillSource;
   }[];
 };
@@ -396,7 +388,6 @@ export function TradeForm({
     ? {
         default_commission_per_unit: account.default_commission_per_unit,
         default_fee_fixed: account.default_fee_fixed,
-        default_swap_per_day: account.default_swap_per_day,
       }
     : NO_COST_DEFAULTS;
 
@@ -423,7 +414,6 @@ export function TradeForm({
           qty: String(e.qty),
           executedLocal: local,
           fee: String(e.fee ?? 0),
-          swap: String(e.swap_funding ?? 0),
           originalIso: e.executed_at,
           originalLocal: local,
           source: e.source,
@@ -552,7 +542,6 @@ export function TradeForm({
         price: n(e.price),
         qty: n(e.qty),
         fee: n(e.fee) ?? 0,
-        swap_funding: n(e.swap) ?? 0,
       }))
       .filter(isValidFill)
       .map((e) => ({ ...e, price: e.price!, qty: e.qty! }));
@@ -582,10 +571,9 @@ export function TradeForm({
       gross_pl: grossPl,
       net_pl: netPl,
       total_fees: totalFees,
-      total_swap: totalSwap,
       realized_r: r,
     } = posStats;
-    const fees = totalFees + totalSwap;
+    const fees = totalFees;
 
     const pt = n(String(fields.target_price ?? ""));
     const maePrice = n(String(fields.max_drawdown_price ?? ""));
@@ -743,7 +731,6 @@ export function TradeForm({
       // has to stop claiming there is.
       stop,
       totalFees,
-      totalSwap,
       fees,
       maeR,
       mfeR,
@@ -821,51 +808,20 @@ export function TradeForm({
    * when its quantity changes. It used to run only on the first — the
    * commission was a fact about the size the row was BORN with.
    */
-  function costPrefill(
-    side: "entry" | "exit",
-    qty: number,
-    rows: ExecRow[],
-    atIso: string,
-  ): { fee: number; swap: number } {
-    // Swap only accrues once a position has been open overnight, so it is
-    // suggested on exits, measured from the first entry fill.
-    const firstEntry = rows.find((e) => e.side === "entry");
-    const nights =
-      side === "exit" && firstEntry
-        ? nightsBetween(zonedInputToUtc(firstEntry.executedLocal, tz), atIso, tz)
-        : 0;
-
+  function costPrefill(qty: number): number {
     /**
      * The instrument's own costs win over the account's.
      *
-     * This broker charges 2.50 a lot on FX, a share of notional on the
-     * metals and nothing on the index; one account-wide number was wrong for
-     * two of the three. The account defaults stay as the fallback for a
-     * symbol whose costs nobody filled in.
+     * Topstep charges a different round turn per contract (MNQ is not NQ),
+     * so one account-wide number is wrong for all but one symbol. The account
+     * defaults stay as the fallback for a symbol whose costs nobody filled in.
      */
     const spec =
-      instrument &&
-      (instrument.commission_per_lot > 0 ||
-        instrument.commission_pct > 0 ||
-        instrument.swap_long !== 0 ||
-        instrument.swap_short !== 0)
+      instrument && (instrument.commission_per_lot > 0 || instrument.commission_pct > 0)
         ? instrument
         : null;
     const planPrice = n(String(fields.entry_price ?? "")) ?? 0;
-    const fee = spec
-      ? commissionPerSide(spec, qty, planPrice)
-      : prefillFee(qty, costDefaults);
-    const swap =
-      spec && side === "exit" && firstEntry
-        ? swapCharge({
-            spec,
-            lots: qty,
-            direction: String(fields.direction ?? "").toLowerCase() === "short" ? "short" : "long",
-            openDay: zonedDateKey(zonedInputToUtc(firstEntry.executedLocal, tz), tz),
-            closeDay: zonedDateKey(atIso, tz),
-          })
-        : prefillSwap(qty, nights, costDefaults);
-    return { fee, swap };
+    return spec ? commissionPerSide(spec, qty, planPrice) : prefillFee(qty, costDefaults);
   }
 
   /** A cost box holds a figure only when there is one — otherwise the placeholder 0. */
@@ -900,7 +856,7 @@ export function TradeForm({
         exitQty: totals.exitQty,
       });
       const qty = n(qtyStr) ?? 0;
-      const { fee, swap } = costPrefill(side, qty, prev, nowIso);
+      const fee = costPrefill(qty);
 
       return [
         ...prev,
@@ -910,9 +866,7 @@ export function TradeForm({
           qty: qtyStr,
           executedLocal: utcToZonedInput(nowIso, tz),
           fee: costToInput(fee),
-          swap: costToInput(swap),
           feeAuto: true,
-          swapAuto: true,
         },
       ];
     });
@@ -925,31 +879,15 @@ export function TradeForm({
         // Typing in a cost box claims it. From there it is the broker's figure,
         // not ours, and no later size change may touch it.
         const feeAuto = patch.fee !== undefined ? false : e.feeAuto;
-        const swapAuto = patch.swap !== undefined ? false : e.swapAuto;
-        const merged = { ...e, ...patch, feeAuto, swapAuto };
+        const merged = { ...e, ...patch, feeAuto };
 
         // Built, never mutated: a row spread out of state is still state as
         // far as the React Compiler is concerned, and writing a field on it
         // costs the whole component its memoization.
         const resized = patch.qty !== undefined || patch.side !== undefined;
-        if (!resized || (!feeAuto && !swapAuto)) return merged;
+        if (!resized || !feeAuto) return merged;
 
-        // The row time as a plain instant, rather than the whole row through
-        // `execInstant`. Handing a spread-of-state object to a helper from
-        // inside a state updater is enough for the React Compiler to abandon
-        // this component (`react-hooks/preserve-manual-memoization`), and the
-        // seconds `execInstant` preserves do not change a count of nights.
-        const { fee, swap } = costPrefill(
-          merged.side,
-          n(merged.qty) ?? 0,
-          prev,
-          zonedInputToUtc(merged.executedLocal, tz) ?? new Date().toISOString(),
-        );
-        return {
-          ...merged,
-          fee: feeAuto ? costToInput(fee) : merged.fee,
-          swap: swapAuto ? costToInput(swap) : merged.swap,
-        };
+        return { ...merged, fee: costToInput(costPrefill(n(merged.qty) ?? 0)) };
       }),
     );
   }
@@ -986,7 +924,6 @@ export function TradeForm({
         // `!` holds. It used to fall back to "now" — silently re-dating a fill.
         executed_at: execInstant(e)!,
         fee: n(e.fee) ?? 0,
-        swap_funding: n(e.swap) ?? 0,
         source: e.source,
       }));
   }
@@ -1592,11 +1529,7 @@ export function TradeForm({
                 )}
                 {/* One cost figure. "Gross → Net" used to sit beside it and
                     printed the same number again. */}
-                <Metric
-                  label="Costs"
-                  value={fmtMoney(metrics.fees, currency)}
-                  title={`Fees ${fmtMoney(metrics.totalFees, currency)} · Swap ${fmtMoney(metrics.totalSwap, currency)}`}
-                />
+                <Metric label="Costs" value={fmtMoney(metrics.fees, currency)} />
               </>
             )}
           </div>
@@ -2214,7 +2147,6 @@ function ExecutionsEditor({
     netPl: number | null;
     r: number | null;
     totalFees: number;
-    totalSwap: number;
     fees: number;
     plannedEntry: number | null;
     slippage: ReturnType<typeof computeEntrySlippage>;
@@ -2320,23 +2252,13 @@ function ExecutionsEditor({
                 onChange={(ev) => onSet(i, { executedLocal: ev.target.value })}
               />
             </div>
-            <div className="col-span-6 sm:col-span-2">
+            <div className="col-span-12 sm:col-span-3">
               <Label className="text-[11px] text-muted-foreground">Fee</Label>
               <Input
                 className="h-8"
                 inputMode="decimal"
                 value={e.fee}
                 onChange={(ev) => onSet(i, { fee: ev.target.value })}
-                placeholder="0"
-              />
-            </div>
-            <div className="col-span-6 sm:col-span-2">
-              <Label className="text-[11px] text-muted-foreground">Swap / Funding</Label>
-              <Input
-                className="h-8"
-                inputMode="decimal"
-                value={e.swap}
-                onChange={(ev) => onSet(i, { swap: ev.target.value })}
                 placeholder="0"
               />
             </div>
@@ -2412,12 +2334,7 @@ function ExecutionsEditor({
             {fmtMoney(metrics.netPl, currency, { sign: true })}
           </b>
         </span>
-        {/* One figure, split on hover. Fees, swap and their sum used to be
-            three separate entries in a row that already ran to two lines. */}
-        <span
-          className="text-muted-foreground"
-          title={`Fees ${fmtMoney(metrics.totalFees, currency)} · Swap ${fmtMoney(metrics.totalSwap, currency)}`}
-        >
+        <span className="text-muted-foreground">
           Costs: <b className="text-foreground">{fmtMoney(metrics.fees, currency)}</b>
         </span>
       </div>

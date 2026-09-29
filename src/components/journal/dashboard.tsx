@@ -974,7 +974,7 @@ export function Dashboard({
    * `realizedAll`, not `realized`: equity is what the account holds TODAY,
    * scoped by account but never by the period filter — the same reasoning
    * `/reports` documents for its own `equityBase`. Net P&L, not gross: fees
-   * and swap are real cash effects on the balance a percentage is measured
+   * are real cash effects on the balance a percentage is measured
    * against, gross P&L is not.
    */
   const equityBase = useMemo(() => {
@@ -1731,7 +1731,7 @@ export function Dashboard({
               variant={mode === m ? "secondary" : "ghost"}
               size="sm"
               className="h-7 capitalize"
-              title={m === "net" ? "After fees and swap" : "Price move only, before costs"}
+              title={m === "net" ? "After fees" : "Price move only, before costs"}
               onClick={() => setModeDeferred(m)}
             >
               {m}
@@ -2189,7 +2189,7 @@ export function Dashboard({
             label="Total costs"
             value={dashboardMoney(-costs.totalCosts, metricCtx, viewMode)}
             cls={costs.totalCosts !== 0 ? "text-[var(--loss)]" : undefined}
-            title="Commissions, fees and swap over the period — what the gross result paid to become net."
+            title="Commissions and fees over the period — what the gross result paid to become net."
           />
           {/* THE TWO DRAWDOWN TILES CLOSE THIS GRID RATHER THAN OPENING THEIR
               OWN. They were a `StatGroup` of their own for one round, and a

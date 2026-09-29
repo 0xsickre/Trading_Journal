@@ -240,7 +240,7 @@ const BASE_TABS: FormTab[] = [
             // correct.
             //
             // Empty = compute from prices, as before. Filled in = this number is
-            // GROSS; commissions and swap are still subtracted separately,
+            // GROSS; commissions are still subtracted separately,
             // because the broker's statement keeps them as separate columns too.
             //
             // R does NOT change: it is still measured from prices, so even with

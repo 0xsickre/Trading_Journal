@@ -101,8 +101,8 @@ describe("quickLogToTradeInput", () => {
   it("is one entry and one exit, commission per side, the plan columns and the review", () => {
     const t = quickLogToTradeInput(q(), EXIT_REASONS);
     expect(t.executions).toEqual([
-      { side: "entry", price: 30584, qty: 2, executed_at: "2026-09-28T13:40:00.000Z", fee: 1.22, swap_funding: 0, source: "manual" },
-      { side: "exit", price: 30600.25, qty: 2, executed_at: "2026-09-28T13:52:00.000Z", fee: 1.22, swap_funding: 0, source: "manual" },
+      { side: "entry", price: 30584, qty: 2, executed_at: "2026-09-28T13:40:00.000Z", fee: 1.22, source: "manual" },
+      { side: "exit", price: 30600.25, qty: 2, executed_at: "2026-09-28T13:52:00.000Z", fee: 1.22, source: "manual" },
     ]);
     expect(t.fields).toMatchObject({
       instrument: "MNQ",
@@ -158,7 +158,6 @@ describe("the day's export finds a trade logged by hand", () => {
           avgExit: 30600.25,
           entryQty: 2,
           totalFees: 2.44,
-          totalSwap: 0,
           grossPl: -32.5,
           netPl: -34.94,
         },

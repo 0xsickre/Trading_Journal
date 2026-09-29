@@ -6,7 +6,7 @@
  *
  * TradeZella's duration buckets are a day-trading artefact (minutes and hours).
  * These are scaled for swing: the question is whether a position that lived a
- * fortnight still earned its keep after swap.
+ * fortnight still earned its keep after costs.
  */
 
 import type { RealizedTrade } from "./analytics";

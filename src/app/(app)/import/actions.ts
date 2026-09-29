@@ -33,7 +33,6 @@ export type ImportExec = {
   qty: number;
   executed_at: string; // UTC ISO
   fee: number;
-  swap_funding: number;
 };
 
 /**
@@ -356,7 +355,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
   async function mergeRow(item: ImportItem, pid: string) {
     const { data: prevExecs, error: execErr } = await supabase
       .from("tj_executions")
-      .select("side,price,qty,executed_at,fee,swap_funding,source")
+      .select("side,price,qty,executed_at,fee,source")
       .eq("position_id", pid);
     if (execErr) throw new Error(execErr.message);
     const snapshot = (prevExecs ?? []) as unknown as SnapshotExec[];
@@ -649,7 +648,6 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
         qty: e.qty,
         executed_at: e.executed_at,
         fee: e.fee,
-        swap_funding: e.swap_funding,
         source: e.source ?? "manual",
       })),
       // The status the trade HAD, when the merge recorded it: computed from the

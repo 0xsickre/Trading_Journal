@@ -46,7 +46,6 @@ function account(over: Partial<Account> & { id: string }): Account {
     breakeven_unit: "currency",
     default_commission_per_unit: 0,
     default_fee_fixed: 0,
-    default_swap_per_day: 0,
     default_stop_pct: null,
     default_target_pct: null,
     topstep_mode: false,
@@ -164,7 +163,6 @@ describe("classification against existing trades", () => {
       avgExit: 1.205,
       openedAt: "2026-01-05T15:00:00Z", // 10:00 America/New_York
       totalFees: 2.5,
-      totalSwap: 0,
       grossPl: 502.5,
       netPl: 500,
     },
@@ -176,7 +174,6 @@ describe("classification against existing trades", () => {
       avgExit: 2100, // will differ from the imported 2050 → shows as "match"
       openedAt: "2026-01-06T15:00:00Z",
       totalFees: 0,
-      totalSwap: 0,
       grossPl: 200,
       netPl: 200,
     },
@@ -219,45 +216,43 @@ describe("classification against existing trades", () => {
     expect(within(row).getByText(/exit 2100.*2050/)).toBeInTheDocument();
   });
 
-  it("a statement corrects the profit and swap on a hand-entered trade", async () => {
+  it("a statement corrects the profit on a hand-entered trade", async () => {
     // This is the check that makes the import worth having even when the trades
     // are already entered: the broker is authoritative for money, the human for
-    // everything else. The trade in the database carries gross 200 and swap 0;
-    // the statement says 214.30 and 1.25.
+    // everything else. The trade in the database carries gross 200; the
+    // statement says 214.30.
     const user = userEvent.setup({ delay: null });
     render(<ImportWizard accounts={[ACCOUNT]} candidates={CANDIDATES} />);
     await upload(
       user,
       csvFile(
         "broker.csv",
-        "Symbol,Direction,Qty,Entry Price,Entry Time,Exit Price,Exit Time,Swap,Profit\n" +
-          "XAUUSD,Buy,1,2000,2026-01-06 10:00,2100,2026-01-06 14:00,1.25,214.30\n",
+        "Symbol,Direction,Qty,Entry Price,Entry Time,Exit Price,Exit Time,Profit\n" +
+          "XAUUSD,Buy,1,2000,2026-01-06 10:00,2100,2026-01-06 14:00,214.30\n",
       ),
     );
     await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
 
     const row = screen.getByText("XAUUSD").closest("tr")!;
     // The exit price MATCHES (2100), so the row would not be a 'match' if money
-    // were not compared — without these two checks it would be 'duplicate' and
+    // were not compared — without this check it would be 'duplicate' and
     // skipped.
     expect(within(row).getByText("match")).toBeInTheDocument();
     expect(within(row).getByText("Merge")).toBeInTheDocument();
     expect(row.textContent).toContain("profit 200→214.3");
-    expect(row.textContent).toContain("swap 0→1.25");
   });
 
-  it("fee and swap are compared separately, so they cannot cancel out", async () => {
-    // The trade carries fee 2.50 and swap 0. The statement says fee 0 and swap
-    // 2.50 — the sum is the same, so the earlier comparison (fee+swap as one
-    // number) saw this as a perfect match and skipped the row.
+  it("a statement corrects the fee on a hand-entered trade", async () => {
+    // The trade carries fee 2.50; the statement says 0. Every price matches, so
+    // without the fee check the row would be a 'duplicate' and skipped.
     const user = userEvent.setup({ delay: null });
     render(<ImportWizard accounts={[ACCOUNT]} candidates={CANDIDATES} />);
     await upload(
       user,
       csvFile(
         "broker.csv",
-        "Symbol,Direction,Qty,Entry Price,Entry Time,Exit Price,Exit Time,Fee,Swap\n" +
-          "EURUSD,Buy,1,1.2000,2026-01-05 10:00,1.2050,2026-01-05 14:00,0,2.50\n",
+        "Symbol,Direction,Qty,Entry Price,Entry Time,Exit Price,Exit Time,Fee\n" +
+          "EURUSD,Buy,1,1.2000,2026-01-05 10:00,1.2050,2026-01-05 14:00,0\n",
       ),
     );
     await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
@@ -265,7 +260,6 @@ describe("classification against existing trades", () => {
     const row = screen.getByText("EURUSD").closest("tr")!;
     expect(within(row).getByText("match")).toBeInTheDocument();
     expect(row.textContent).toContain("fee 2.5→0");
-    expect(row.textContent).toContain("swap 0→2.5");
   });
 
   it("a brand new instrument has nothing to merge into — Merge is disabled in its own row", async () => {
@@ -548,7 +542,6 @@ describe("a trade already typed by hand, recognised without the time", () => {
       avgExit: 1317.62,
       openedAt: "2026-09-19T01:10:00Z", // 21:10 America/New_York on 18 Sep
       totalFees: 0,
-      totalSwap: 0,
       grossPl: -983.4,
       netPl: -983.4,
       accountId: "acc-1",
@@ -673,7 +666,6 @@ describe("a merge is only offered when it is safe", () => {
       avgExit: 1317.62,
       openedAt: "2026-09-19T01:10:00Z",
       totalFees: 0,
-      totalSwap: 0,
       grossPl: -983.4,
       netPl: -983.4,
       accountId: "acc-1",

@@ -55,7 +55,6 @@ export function duplicateSettings(src: Account) {
     breakeven_unit: src.breakeven_unit,
     default_commission_per_unit: src.default_commission_per_unit,
     default_fee_fixed: src.default_fee_fixed,
-    default_swap_per_day: src.default_swap_per_day,
     default_stop_pct: src.default_stop_pct,
     default_target_pct: src.default_target_pct,
     // Topstep: the plan and the risk rule travel; a payout and a reset belong to

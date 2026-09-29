@@ -31,7 +31,6 @@ export default async function ImportPage() {
     avgExit: t.stats?.avg_exit ?? null,
     openedAt: t.stats?.opened_at ?? null,
     totalFees: t.stats?.total_fees ?? 0,
-    totalSwap: t.stats?.total_swap ?? 0,
     grossPl: t.stats?.gross_pl ?? null,
     netPl: t.stats?.net_pl ?? null,
     // For a plan written before its order filled: the limit it rests at and

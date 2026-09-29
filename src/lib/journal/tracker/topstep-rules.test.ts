@@ -80,7 +80,6 @@ function row(s: Spec): TradeRow {
       gross_pl: s.net ?? 0,
       net_pl: s.net === undefined ? 0 : s.net,
       total_fees: s.fees ?? 1.24 * qty,
-      total_swap: 0,
       realized_r: null,
       realized_r_net: null,
       opened_at: s.opened,

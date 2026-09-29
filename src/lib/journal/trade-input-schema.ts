@@ -137,7 +137,6 @@ export const executionSchema = z.object({
     .string()
     .refine((s) => Number.isFinite(Date.parse(s)), "Fill time is not a valid date."),
   fee: z.number().finite(),
-  swap_funding: z.number().finite(),
   /** Origin of the fill, carried through an edit so a save does not relabel it `manual`. */
   source: z.enum(FILL_SOURCES).optional(),
 });

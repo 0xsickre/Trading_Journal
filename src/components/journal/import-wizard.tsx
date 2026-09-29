@@ -60,7 +60,6 @@ type Canonical =
   | "exit_price"
   | "exit_time"
   | "fee"
-  | "swap"
   | "profit"
   | "target";
 
@@ -73,7 +72,6 @@ const CANONICAL: { key: Canonical; label: string; required?: boolean }[] = [
   { key: "exit_price", label: "Exit Price" },
   { key: "exit_time", label: "Exit Time" },
   { key: "fee", label: "Fee / Commission" },
-  { key: "swap", label: "Swap / Funding" },
   { key: "profit", label: "Profit / P&L (bruto)" },
   // Target, and deliberately NOT stop loss.
   //
@@ -96,11 +94,8 @@ const KEYWORDS: Record<Canonical, string[]> = {
   exit_price: ["exit price", "close price", "closeprice", "price out", "exit"],
   exit_time: ["exit time", "close time", "closetime", "time out", "exit date", "close"],
   fee: ["commission", "fee", "comm", "fees"],
-  swap: ["swap", "funding", "rollover"],
-  // Deliberately after `swap` in the auto-mapping order: broker statements
-  // often carry both "Swap" and "Profit", and `includes` on "profit" would also
-  // hit a "Gross profit" column. The order in CANONICAL decides who claims a
-  // header first.
+  // The order in CANONICAL decides who claims a header first: `includes` on
+  // "profit" would also hit a "Gross profit" column.
   profit: ["profit", "p/l", "pnl", "p&l", "net p", "gross p", "result", "realized"],
   target: ["t/p", "take profit", "takeprofit", "target"],
 };
@@ -126,7 +121,6 @@ const TV_MAP: Record<Canonical, string> = {
   exit_price: "Exit price",
   exit_time: "Exit time",
   fee: "Commission",
-  swap: "",
   // Not mapped on purpose: the money is derived from prices × point value ×
   // the account's rate, which the size check has just proven equal to
   // TradingView's own result. An override would also skip the FX conversion.
@@ -151,7 +145,6 @@ const TOPSTEPX_MAP: Record<Canonical, string> = {
   exit_price: TOPSTEPX_COLUMNS.exitPrice,
   exit_time: TOPSTEPX_COLUMNS.exitTime,
   fee: TOPSTEPX_COLUMNS.fee,
-  swap: "",
   profit: "",
   target: "",
 };
@@ -540,7 +533,6 @@ export function ImportWizard({
       if (map.exit_time && !exitTime && row[map.exit_time]?.trim())
         unreadable.push("exit time");
       const fee = (map.fee ? read(map.fee, "fee") : null) ?? 0;
-      const swap = (map.swap ? read(map.swap, "swap") : null) ?? 0;
       // No `?? 0`: an unmapped profit column means "compute from prices", while
       // a zero would mean "the trade finished flat". That difference is the
       // whole point of the field.
@@ -568,7 +560,6 @@ export function ImportWizard({
             qty,
             executed_at: entryTime,
             fee: plan.entryFee,
-            swap_funding: 0,
           });
         }
         for (const leg of plan.exits) {
@@ -577,7 +568,7 @@ export function ImportWizard({
             unreadable.push("exit time");
             continue;
           }
-          execs.push({ side: "exit", price: leg.price, qty: leg.qty, executed_at: at, fee: leg.fee, swap_funding: 0 });
+          execs.push({ side: "exit", price: leg.price, qty: leg.qty, executed_at: at, fee: leg.fee });
         }
       }
       const hasExit = exitPrice != null && (exitTime ?? entryTime) != null;
@@ -592,11 +583,10 @@ export function ImportWizard({
           // Costs go on the EXIT when there is an exit, otherwise on the entry.
           //
           // They used to sit on the exit unconditionally, so an open position —
-          // a statement row with no exit price — lost its commission and swap
+          // a statement row with no exit price — lost its commission
           // entirely. It was not a visible error: the trade imports, its net
           // result is simply too high by the amount actually paid.
           fee: hasExit ? 0 : fee,
-          swap_funding: hasExit ? 0 : swap,
         });
       }
       // `?? new Date()` used to close this branch, and it was the worst line in
@@ -616,7 +606,6 @@ export function ImportWizard({
           qty,
           executed_at: exitAt,
           fee,
-          swap_funding: swap,
         });
       }
 
@@ -694,14 +683,8 @@ export function ImportWizard({
           diff.push(`entry ${px(matched.avgEntry)}→${px(entryPrice)}`);
         if (avgExitPrice != null && matched.avgExit != null && differs(matched.avgExit, avgExitPrice))
           diff.push(`exit ${px(matched.avgExit)}→${px(avgExitPrice)}`);
-        // Commission and swap are compared SEPARATELY. They used to be summed
-        // into one number, so a statement correcting the swap but not the
-        // commission (or the other way round) passed as "fees match" whenever
-        // the two differences cancelled out.
         if (matched.totalFees != null && differs(matched.totalFees, fee))
           diff.push(`fee ${fmtNum(matched.totalFees, 2)}→${fmtNum(fee, 2)}`);
-        if (matched.totalSwap != null && differs(matched.totalSwap, swap))
-          diff.push(`swap ${fmtNum(matched.totalSwap, 2)}→${fmtNum(swap, 2)}`);
         // The statement's result against what the trade currently shows. This is
         // the check that makes an import worth running when the trades were
         // already entered by hand: the broker is authoritative for money, the

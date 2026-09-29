@@ -44,7 +44,6 @@ export type ExecutionInput = {
   qty: number;
   executed_at: string; // UTC ISO
   fee: number;
-  swap_funding: number;
   /** Origin of the fill. Absent means typed here — `manual`. */
   source?: FillSource;
 };
@@ -178,7 +177,6 @@ function cleanExecs(execs: ExecutionInput[]) {
       qty: Number(e.qty),
       executed_at: e.executed_at,
       fee: Number(e.fee) || 0,
-      swap_funding: Number(e.swap_funding) || 0,
       // Kept, not stamped. `tj_save_trade` replaces every fill on each save, so
       // hard-coding `manual` here relabelled an imported trade's fills the
       // first time anyone saved a note on it.

@@ -176,7 +176,6 @@ describe("a non-adverse excursion is zero, never negative", () => {
         gross_pl: 1000,
         net_pl: 1000,
         total_fees: 0,
-        total_swap: 0,
         realized_r: 2,
         realized_r_net: 2,
         opened_at: "2026-03-02T10:00:00Z",

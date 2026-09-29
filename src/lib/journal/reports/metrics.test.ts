@@ -203,9 +203,7 @@ describe("the values a reader would check by hand", () => {
     expect(val("total_fees")).toBeCloseTo(33, 10);
   });
 
-  it("has no swap metric: a future carries none (H1.4)", () => {
-    // Swap still reaches the money through `net_pl` and `cost_pct_of_gross`
-    // on a CFD row; it is only no longer a column of its own.
+  it("has no swap metric: a future carries none (H1.4, H2)", () => {
     expect(getMetric("total_swap")).toBeUndefined();
   });
 

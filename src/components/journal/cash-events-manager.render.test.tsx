@@ -35,7 +35,6 @@ const account = (over: Partial<Account> = {}): Account => ({
   breakeven_unit: "currency",
   default_commission_per_unit: 0,
   default_fee_fixed: 0,
-  default_swap_per_day: 0,
   default_stop_pct: null,
   default_target_pct: null,
   topstep_mode: false,

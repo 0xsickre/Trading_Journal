@@ -95,16 +95,6 @@ export function CostReportCard({
           value={fmtMoney(costs.totalFees, currency)}
           cls={costs.totalFees !== 0 ? "text-[var(--loss)]" : undefined}
         />
-        {/* A future carries no swap. The row stays for a range that still
-            holds CFD rows from the swing history, where the fees alone would
-            not add up to the total below. */}
-        {costs.totalSwap !== 0 && (
-          <Row
-            label="Swap"
-            value={fmtMoney(costs.totalSwap, currency)}
-            cls="text-[var(--loss)]"
-          />
-        )}
         <Row
           label="Total cost"
           value={fmtMoney(costs.totalCosts, currency)}

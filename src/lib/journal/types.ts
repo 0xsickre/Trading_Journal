@@ -72,11 +72,6 @@ export type Instrument = {
   commission_per_lot: number;
   commission_pct: number;
   commission_currency: string;
-  /** Swap in POINTS per lot per night; negative is a cost to the trader. */
-  swap_long: number;
-  swap_short: number;
-  /** ISO weekday charged three times, to collect the weekend (3 = Wed, 5 = Fri). */
-  swap_triple_day: number;
   is_active: boolean;
   sort_order: number;
 };
@@ -109,7 +104,6 @@ export type Account = {
   // Cost defaults applied to new execution rows in the trade form.
   default_commission_per_unit: number;
   default_fee_fixed: number;
-  default_swap_per_day: number;
   // Risk plan defaults applied when stop / target are left empty.
   default_stop_pct: number | null;
   default_target_pct: number | null;
@@ -182,7 +176,6 @@ export type PositionStat = Pick<
   | "gross_pl"
   | "net_pl"
   | "total_fees"
-  | "total_swap"
   | "realized_r"
   | "realized_r_net"
   | "opened_at"

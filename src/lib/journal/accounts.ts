@@ -9,7 +9,7 @@ async function readAccounts(): Promise<Account[]> {
   const { data } = await supabase
     .from("tj_accounts")
     .select(
-      "id,name,broker,account_kind,currency,starting_balance,default_asset_class,timezone,is_active,breakeven_from,breakeven_to,breakeven_unit,default_commission_per_unit,default_fee_fixed,default_swap_per_day,default_stop_pct,default_target_pct,topstep_mode,topstep_plan,topstep_payout_at,topstep_reset_at,risk_rule_pct,risk_rule_min,risk_rule_max,archived_at,created_at",
+      "id,name,broker,account_kind,currency,starting_balance,default_asset_class,timezone,is_active,breakeven_from,breakeven_to,breakeven_unit,default_commission_per_unit,default_fee_fixed,default_stop_pct,default_target_pct,topstep_mode,topstep_plan,topstep_payout_at,topstep_reset_at,risk_rule_pct,risk_rule_min,risk_rule_max,archived_at,created_at",
     )
     .order("created_at");
   return (data ?? []) as Account[];

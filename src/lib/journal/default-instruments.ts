@@ -20,7 +20,7 @@
 // The commission is Topstep's round turn halved into the per-side figure this
 // catalog keeps (help.topstep.com, "TopstepX — Commissions and Fees", read
 // 28.09.2026: 3.78 / 1.22 / 4.22 / 1.00 a round turn). There is no swap: a
-// future carries its financing in the price, so both sides are zero on purpose.
+// future carries its financing in the price.
 //
 // MAE/MFE on these comes from the exchange's own prices, kept in Cloudflare R2
 // (futures-trading repo, `tools/journal_mae.py`), never typed.
@@ -40,11 +40,6 @@ export type DefaultInstrument = {
   commission_pct: number;
   /** The currency the broker states the commission in. */
   commission_currency: string;
-  /** Swap in points per lot per night; negative is a cost to the trader. */
-  swap_long: number;
-  swap_short: number;
-  /** ISO weekday whose night is charged three times (3 = Wed, 5 = Fri). */
-  swap_triple_day: number;
   /**
    * Whether it is offered in the trade form. In the catalog it is always `true`.
    *
@@ -76,9 +71,6 @@ function futures(
     commission_per_lot: commissionPerSide,
     commission_pct: 0,
     commission_currency: "USD",
-    swap_long: 0,
-    swap_short: 0,
-    swap_triple_day: 3,
     is_active: true,
     sort_order: sort,
   };

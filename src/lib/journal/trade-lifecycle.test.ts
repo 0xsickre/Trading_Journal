@@ -23,7 +23,6 @@ const entry: ExecutionInput = {
   qty: 1,
   executed_at: "2026-01-01T00:00:00Z",
   fee: 0,
-  swap_funding: 0,
 };
 
 describe("computeStatus", () => {

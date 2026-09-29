@@ -56,7 +56,6 @@ const ACCOUNT: Account = {
   breakeven_unit: "currency",
   default_commission_per_unit: 0,
   default_fee_fixed: 0,
-  default_swap_per_day: 0,
   default_stop_pct: null,
   default_target_pct: null,
 
@@ -362,7 +361,6 @@ describe("Survival on a Topstep account is replayed against its MLL (F3, E6)", (
           gross_pl: i % 3 === 0 ? -150 : 120,
           net_pl: i % 3 === 0 ? -150 : 120,
           total_fees: 0,
-          total_swap: 0,
           realized_r: null,
           realized_r_net: null,
           opened_at: day,

@@ -51,7 +51,6 @@ const fill = (side: "entry" | "exit", qty = 1) => ({
   qty,
   executed_at: side === "entry" ? "2026-09-28T14:00:00.000Z" : "2026-09-28T14:10:00.000Z",
   fee: 0,
-  swap_funding: 0,
 });
 
 /** A limit written before price got there — no fills yet. */

@@ -177,7 +177,6 @@ export function quickLogToTradeInput(q: QuickLogInput, exitReasonOptions: readon
         qty,
         executed_at: q.enteredAt as string,
         fee: fee(q.entry as number),
-        swap_funding: 0,
         source: "manual" as const,
       },
       {
@@ -186,7 +185,6 @@ export function quickLogToTradeInput(q: QuickLogInput, exitReasonOptions: readon
         qty,
         executed_at: q.exitedAt as string,
         fee: fee(q.exit as number),
-        swap_funding: 0,
         source: "manual" as const,
       },
     ],

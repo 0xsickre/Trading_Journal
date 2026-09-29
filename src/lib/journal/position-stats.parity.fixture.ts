@@ -156,8 +156,8 @@ export const PARITY_CASES: ParityCase[] = [
     },
   },
   {
-    name: "T5 commissions and swap",
-    proves: "net = gross − commissions − swap ; realized_r stays on the GROSS basis",
+    name: "T5 commissions",
+    proves: "net = gross − commissions ; realized_r stays on the GROSS basis",
     input: {
       direction: "Long",
       entry_price: 5000,
@@ -165,21 +165,21 @@ export const PARITY_CASES: ParityCase[] = [
       point_value: 1,
       fx_rate: 1,
       executions: [
-        { side: "entry", price: 5000, qty: 1, fee: 2, swap_funding: 3 },
+        { side: "entry", price: 5000, qty: 1, fee: 2 },
         { side: "exit", price: 5030, qty: 1, fee: 2 },
       ],
     },
-    // gross 30 ; costs 4 + 3 = 7 ; net 23
-    // R = 30/10 = 3.0 (gross) ; R_net = 23/10 = 2.3 — two different bases, on purpose
+    // gross 30 ; costs 4 ; net 26
+    // R = 30/10 = 3.0 (gross) ; R_net = 26/10 = 2.6 — two different bases, on purpose
     paper: {
       avg_entry: 5000,
       avg_exit: 5030,
       gross_points: 30,
       gross_pl: 30,
-      net_pl: 23,
+      net_pl: 26,
       planned_risk_pts: 10,
       realized_r: 3,
-      realized_r_net: 2.3,
+      realized_r_net: 2.6,
     },
   },
   {
@@ -547,7 +547,7 @@ export const PARITY_CASES: ParityCase[] = [
   {
     name: "OV2 an override still pays the costs",
     proves:
-      "net = override − commissions − swap. An override is GROSS, not net — the " +
+      "net = override − commissions. An override is GROSS, not net — the " +
       "broker's statement keeps them as separate columns and that is how they " +
       "are entered",
     input: {
@@ -558,21 +558,21 @@ export const PARITY_CASES: ParityCase[] = [
       fx_rate: 1,
       gross_pnl_override: 250,
       executions: [
-        { side: "entry", price: 100, qty: 1, fee: 7, swap_funding: 3 },
+        { side: "entry", price: 100, qty: 1, fee: 7 },
         { side: "exit", price: 130, qty: 1 },
       ],
     },
-    // Computed it would be 30. Entered 250 → net 250 − 7 − 3 = 240.
+    // Computed it would be 30. Entered 250 → net 250 − 7 = 243.
     // R stays 30/10 = 3.0 because it is measured FROM PRICES, not from entered money.
     paper: {
       avg_entry: 100,
       avg_exit: 130,
       gross_points: 30,
       gross_pl: 250,
-      net_pl: 240,
+      net_pl: 243,
       planned_risk_pts: 10,
       realized_r: 3,
-      realized_r_net: 24,
+      realized_r_net: 24.3,
     },
   },
   {

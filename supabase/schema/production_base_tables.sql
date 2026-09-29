@@ -84,7 +84,6 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   breakeven_unit              text        NOT NULL DEFAULT 'currency',
   default_commission_per_unit numeric     NOT NULL DEFAULT 0,
   default_fee_fixed           numeric     NOT NULL DEFAULT 0,
-  default_swap_per_day        numeric     NOT NULL DEFAULT 0,
   default_stop_pct            numeric,
   default_target_pct          numeric,
   -- Od čega se meri dnevni gubitak: od početnog stanja ili od equity-ja na
@@ -280,7 +279,6 @@ CREATE TABLE IF NOT EXISTS public.tj_executions (
   qty          numeric     NOT NULL,
   executed_at  timestamptz NOT NULL,
   fee          numeric     NOT NULL DEFAULT 0,
-  swap_funding numeric     NOT NULL DEFAULT 0,
   source       text        NOT NULL DEFAULT 'manual',
   created_at   timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT tj_executions_pkey PRIMARY KEY (id),
@@ -326,11 +324,6 @@ CREATE TABLE IF NOT EXISTS public.tj_instruments (
   commission_per_lot  numeric  NOT NULL DEFAULT 0,
   commission_pct      numeric  NOT NULL DEFAULT 0,
   commission_currency text     NOT NULL DEFAULT 'USD',
-  -- Swap u POENIMA po lotu po noći; negativno je trošak za trejdera.
-  swap_long       numeric  NOT NULL DEFAULT 0,
-  swap_short      numeric  NOT NULL DEFAULT 0,
-  -- ISO dan čija se noć naplaćuje trostruko (3 = sreda, 5 = petak).
-  swap_triple_day smallint NOT NULL DEFAULT 3,
   is_active   boolean     NOT NULL DEFAULT true,
   sort_order  integer     NOT NULL DEFAULT 0,
   created_at  timestamptz NOT NULL DEFAULT now(),

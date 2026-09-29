@@ -9,18 +9,16 @@ function trade(
   id: string,
   gross: number,
   fees: number,
-  swap: number,
   durationSeconds: number | null = DAY,
 ): RealizedTrade {
   const stats = {
     total_fees: fees,
-    total_swap: swap,
     duration_seconds: durationSeconds,
   } as PositionStat;
   return {
     id,
     closedAt: "2026-01-10T00:00:00Z",
-    net: gross - fees - swap,
+    net: gross - fees,
     gross,
     r: null,
     row: { id, stats } as unknown as TradeRow,
@@ -28,50 +26,46 @@ function trade(
 }
 
 describe("computeCostStats", () => {
-  it("totals fees and swap separately and together", () => {
-    const c = computeCostStats([
-      trade("a", 1_000, 12, 30),
-      trade("b", -200, 8, 45),
-    ]);
+  it("totals the fees", () => {
+    const c = computeCostStats([trade("a", 1_000, 12), trade("b", -200, 8)]);
     expect(c.totalFees).toBe(20);
-    expect(c.totalSwap).toBe(75);
-    expect(c.totalCosts).toBe(95);
+    expect(c.totalCosts).toBe(20);
   });
 
   it("measures cost against gross profit, not against net", () => {
     // Only the winner contributes gross profit: 1000. Costs 100 → 10 %.
     const c = computeCostStats([
-      trade("win", 1_000, 50, 50),
-      trade("lose", -400, 0, 0),
+      trade("win", 1_000, 100),
+      trade("lose", -400, 0),
     ]);
     expect(c.grossProfit).toBe(1_000);
     expect(c.costPctOfGross).toBe(10);
   });
 
-  it("reports a net carry credit as a negative share, not a cost", () => {
-    // Negative swap is money earned on the carry; an absolute value here would
-    // flip it into an apparent expense.
-    const c = computeCostStats([trade("win", 1_000, 0, -50)]);
+  it("reports a fee rebate as a negative share, not a cost", () => {
+    // A negative fee is money credited back; an absolute value here would flip
+    // it into an apparent expense.
+    const c = computeCostStats([trade("win", 1_000, -50)]);
     expect(c.totalCosts).toBe(-50);
     expect(c.costPctOfGross).toBe(-5);
   });
 
   it("reports no cost ratio when there was no gross profit", () => {
-    const c = computeCostStats([trade("lose", -400, 10, 5)]);
+    const c = computeCostStats([trade("lose", -400, 15)]);
     expect(c.grossProfit).toBe(0);
     expect(c.costPctOfGross).toBeNull();
   });
 
   it("distinguishes zero costs from absent cost data", () => {
     // Totals are 0 either way, so the coverage count is what tells the truth.
-    const noData = computeCostStats([trade("a", 100, 0, 0), trade("b", 50, 0, 0)]);
+    const noData = computeCostStats([trade("a", 100, 0), trade("b", 50, 0)]);
     expect(noData.totalCosts).toBe(0);
     expect(noData.count).toBe(2);
     expect(noData.withCostData).toBe(0);
 
     const someData = computeCostStats([
-      trade("a", 100, 3, 0),
-      trade("b", 50, 0, 0),
+      trade("a", 100, 3),
+      trade("b", 50, 0),
     ]);
     expect(someData.withCostData).toBe(1);
   });

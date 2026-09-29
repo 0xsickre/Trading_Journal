@@ -123,7 +123,6 @@ describe("fill", () => {
     qty: 1,
     executed_at: "2026-03-02T14:00:00Z",
     fee: 0,
-    swap_funding: 0,
     ...over,
   });
 
@@ -208,7 +207,7 @@ describe("struktura submisije", () => {
 
   it("the message carries the path to the field", () => {
     const res = tradeInputSchema.safeParse(
-      input({ executions: [{ side: "entry", price: -1, qty: 1, executed_at: "2026-03-02T14:00:00Z", fee: 0, swap_funding: 0 }] }),
+      input({ executions: [{ side: "entry", price: -1, qty: 1, executed_at: "2026-03-02T14:00:00Z", fee: 0 }] }),
     );
     expect(res.success).toBe(false);
     if (!res.success) {
@@ -253,7 +252,6 @@ describe("uvoz", () => {
           qty: 1,
           executed_at: "2026-03-02T14:00:00Z",
           fee: 0,
-          swap_funding: 0,
         },
       ],
     };
@@ -283,7 +281,6 @@ describe("the target an import may fill in", () => {
         qty: 1,
         executed_at: "2026-03-02T14:00:00Z",
         fee: 0,
-        swap_funding: 0,
       },
     ],
   };

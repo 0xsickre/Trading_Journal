@@ -53,7 +53,6 @@ function mkRow(s: Spec): TradeRow {
       gross_pl: s.net ?? 0,
       net_pl: s.net === undefined ? 0 : s.net,
       total_fees: 0,
-      total_swap: 0,
       realized_r: null,
       realized_r_net: null,
       opened_at: s.opened,

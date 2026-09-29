@@ -28,7 +28,6 @@ export type Database = {
           default_commission_per_unit: number
           default_fee_fixed: number
           default_stop_pct: number | null
-          default_swap_per_day: number
           default_target_pct: number | null
           ftmo_daily_loss_basis: string
           ftmo_daily_loss_enabled: boolean
@@ -68,7 +67,6 @@ export type Database = {
           default_commission_per_unit?: number
           default_fee_fixed?: number
           default_stop_pct?: number | null
-          default_swap_per_day?: number
           default_target_pct?: number | null
           ftmo_daily_loss_basis?: string
           ftmo_daily_loss_enabled?: boolean
@@ -108,7 +106,6 @@ export type Database = {
           default_commission_per_unit?: number
           default_fee_fixed?: number
           default_stop_pct?: number | null
-          default_swap_per_day?: number
           default_target_pct?: number | null
           ftmo_daily_loss_basis?: string
           ftmo_daily_loss_enabled?: boolean
@@ -252,7 +249,6 @@ export type Database = {
           qty: number
           side: string
           source: string
-          swap_funding: number
           user_id: string
         }
         Insert: {
@@ -265,7 +261,6 @@ export type Database = {
           qty: number
           side: string
           source?: string
-          swap_funding?: number
           user_id?: string
         }
         Update: {
@@ -278,7 +273,6 @@ export type Database = {
           qty?: number
           side?: string
           source?: string
-          swap_funding?: number
           user_id?: string
         }
         Relationships: [
@@ -526,9 +520,6 @@ export type Database = {
           commission_currency: string
           commission_per_lot: number
           commission_pct: number
-          swap_long: number
-          swap_short: number
-          swap_triple_day: number
           created_at: string
           id: string
           is_active: boolean
@@ -546,9 +537,6 @@ export type Database = {
           commission_currency?: string
           commission_per_lot?: number
           commission_pct?: number
-          swap_long?: number
-          swap_short?: number
-          swap_triple_day?: number
           created_at?: string
           id?: string
           is_active?: boolean
@@ -566,9 +554,6 @@ export type Database = {
           commission_currency?: string
           commission_per_lot?: number
           commission_pct?: number
-          swap_long?: number
-          swap_short?: number
-          swap_triple_day?: number
           created_at?: string
           id?: string
           is_active?: boolean
@@ -1491,7 +1476,6 @@ export type Database = {
           status: string | null
           tick_size: number | null
           total_fees: number | null
-          total_swap: number | null
           user_id: string | null
         }
         Relationships: [

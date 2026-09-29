@@ -4,7 +4,6 @@ export type ExecutionInput = {
   qty: number;
   executed_at: string; // UTC ISO
   fee: number;
-  swap_funding: number;
 };
 
 /**
@@ -156,7 +155,7 @@ export type FillLike = {
  * The single definition, shared by the form's live preview, the form's submit
  * payload and the server's sanitizer. They previously used three different
  * predicates: the form accepted `qty = 0` while the server silently dropped
- * such rows — taking the fee and swap typed on them with it, so a user could
+ * such rows — taking the fee typed on them with it, so a user could
  * watch a commission disappear with no error.
  */
 export function isValidFill(e: FillLike): boolean {

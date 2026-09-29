@@ -30,7 +30,6 @@ const row = (over: Partial<StatsViewRow> = {}): StatsViewRow =>
     avg_entry: 5000,
     avg_exit: 5010,
     total_fees: 8,
-    total_swap: 0,
     opened_at: "2026-03-02T14:00:00Z",
     closed_at: "2026-03-02T15:00:00Z",
     duration_seconds: 3600,

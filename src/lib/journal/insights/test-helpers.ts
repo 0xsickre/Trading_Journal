@@ -57,7 +57,6 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     gross_pl: spec.gross ?? net,
     net_pl: net,
     total_fees: 0,
-    total_swap: spec.swap ?? 0,
     realized_r: spec.r === undefined ? net / 100 : spec.r,
     realized_r_net: null,
     opened_at: openedAt,

@@ -69,7 +69,6 @@ export type MatchCandidate = {
   avgExit: number | null;
   openedAt: string | null;
   totalFees: number | null;
-  totalSwap: number | null;
   grossPl: number | null;
   netPl: number | null;
   /** The account the trade is filed under; a suggestion never crosses accounts. */
@@ -121,8 +120,8 @@ export type ImportRowKey = {
   /** The row's own result. Null when the file states none. */
   pnl?: number | null;
   /**
-   * What `pnl` is: a broker's "Profit" column is GROSS (before commission and
-   * swap), TradingView's net P&L is NET. Compared against the trade's figure of
+   * What `pnl` is: a broker's "Profit" column is GROSS (before commission),
+   * TradingView's net P&L is NET. Compared against the trade's figure of
    * the same kind — a gross statement figure set against a net trade result
    * misses by exactly the costs, and a real trade went unrecognised.
    * Absent: net where the trade has one, else gross (the old behaviour).

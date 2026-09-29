@@ -75,7 +75,6 @@ function account(over: Partial<Account> & { id: string }): Account {
     breakeven_unit: "currency",
     default_commission_per_unit: 0,
     default_fee_fixed: 0,
-    default_swap_per_day: 0,
     default_stop_pct: null,
     default_target_pct: null,
 
@@ -119,10 +118,10 @@ const ACCOUNT = account({ id: "acc-1" });
 /** Two fills — entry 100 → exit 120, point value 1 — a deterministic 2.00R
  *  win (`realized_r = grossPoints / (riskPts × entryQty) = 20 / (10 × 1)`).
  *  `fee`/`swap` default to 0 unless overridden. */
-function twoFillExecutions(fee = 0, swap = 0): TradeFormInitial["executions"] {
+function twoFillExecutions(fee = 0): TradeFormInitial["executions"] {
   return [
-    { side: "entry", price: 100, qty: 1, executed_at: "2026-04-01T13:00:00Z", fee: 0, swap_funding: 0 },
-    { side: "exit", price: 120, qty: 1, executed_at: "2026-04-02T13:00:00Z", fee, swap_funding: swap },
+    { side: "entry", price: 100, qty: 1, executed_at: "2026-04-01T13:00:00Z", fee: 0 },
+    { side: "exit", price: 120, qty: 1, executed_at: "2026-04-02T13:00:00Z", fee },
   ];
 }
 
@@ -296,7 +295,6 @@ describe("plan vs realized, under 'How it exited'", () => {
               qty: 1,
               executed_at: "2026-04-01T13:00:00Z",
               fee: 0,
-              swap_funding: 0,
             },
           ],
         })}
@@ -396,14 +394,14 @@ describe("costs are shown once", () => {
         optionsMap={{}}
         instruments={[INSTRUMENT]}
         accounts={[ACCOUNT]}
-        initial={baseInitial({ executions: twoFillExecutions(5, 2) })}
+        initial={baseInitial({ executions: twoFillExecutions(7) })}
       />,
     );
     await goToExecutionTab(user);
 
-    // fees(5) + swap(2) = $7.00. "Gross → Net" printed gross(20) − net(13) —
-    // the same $7.00 again, by `net_pl = gross_pl − total_fees − total_swap` —
-    // so it was a second label for one number.
+    // fees = $7.00. "Gross → Net" printed gross(20) − net(13) — the same
+    // $7.00 again, by `net_pl = gross_pl − total_fees` — so it was a second
+    // label for one number.
     const costs = screen.getByText("Costs").closest("div")!;
     expect(costs.textContent).toContain("$7.00");
     expect(screen.queryByText("Gross → Net")).toBeNull();
@@ -427,7 +425,7 @@ describe("costs are shown once", () => {
         accounts={[ACCOUNT]}
         initial={baseInitial({
           fields: { ...baseInitial().fields, instrument: "USDJPY" },
-          executions: twoFillExecutions(5, 2),
+          executions: twoFillExecutions(7),
         })}
       />,
     );
@@ -931,8 +929,8 @@ describe("saving an edit does not rewrite the fills it did not touch", () => {
         accounts={[ACCOUNT]}
         initial={baseInitial({
           executions: [
-            { side: "entry", price: 100, qty: 1, executed_at: "2026-04-01T13:00:37.000Z", fee: 0, swap_funding: 0, source: "import" },
-            { side: "exit", price: 120, qty: 1, executed_at: "2026-04-02T13:00:59.000Z", fee: 0, swap_funding: 0, source: "import" },
+            { side: "entry", price: 100, qty: 1, executed_at: "2026-04-01T13:00:37.000Z", fee: 0, source: "import" },
+            { side: "exit", price: 120, qty: 1, executed_at: "2026-04-02T13:00:59.000Z", fee: 0, source: "import" },
           ],
         })}
       />,
@@ -959,8 +957,8 @@ describe("saving an edit does not rewrite the fills it did not touch", () => {
         accounts={[ACCOUNT]}
         initial={baseInitial({
           executions: [
-            { side: "entry", price: 100, qty: 1, executed_at: "2026-04-02T13:00:00Z", fee: 0, swap_funding: 0 },
-            { side: "exit", price: 120, qty: 1, executed_at: "2026-04-01T13:00:00Z", fee: 0, swap_funding: 0 },
+            { side: "entry", price: 100, qty: 1, executed_at: "2026-04-02T13:00:00Z", fee: 0 },
+            { side: "exit", price: 120, qty: 1, executed_at: "2026-04-01T13:00:00Z", fee: 0 },
           ],
         })}
       />,
@@ -985,9 +983,6 @@ describe("the planned size reaches the fill, and the exit cannot exceed it", () 
     ...INSTRUMENT,
     commission_per_lot: 2.5,
     commission_pct: 0,
-    swap_long: 0,
-    swap_short: 0,
-    swap_triple_day: 3,
   } as unknown as Instrument;
 
   function plan(over: Record<string, unknown> = {}) {
@@ -1164,7 +1159,7 @@ describe("the planned size reaches the fill, and the exit cannot exceed it", () 
           },
           // What a broker statement imported over the plan: one lot, not 4.78.
           executions: [
-            { side: "entry", price: 100, qty: 1, executed_at: "2026-04-01T13:00:00Z", fee: 0, swap_funding: 0, source: "import" },
+            { side: "entry", price: 100, qty: 1, executed_at: "2026-04-01T13:00:00Z", fee: 0, source: "import" },
           ],
         })}
       />,
@@ -1192,7 +1187,7 @@ describe("the planned size reaches the fill, and the exit cannot exceed it", () 
             position_size: 4.78,
           },
           executions: [
-            { side: "entry", price: 100, qty: 4.78, executed_at: "2026-04-01T13:00:00Z", fee: 0, swap_funding: 0 },
+            { side: "entry", price: 100, qty: 4.78, executed_at: "2026-04-01T13:00:00Z", fee: 0 },
           ],
         })}
       />,

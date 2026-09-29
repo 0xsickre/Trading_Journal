@@ -479,7 +479,6 @@ function EditAccountDialog({
 
   const [commPerUnit, setCommPerUnit] = useState(String(account.default_commission_per_unit));
   const [feeFixed, setFeeFixed] = useState(String(account.default_fee_fixed));
-  const [swapPerDay, setSwapPerDay] = useState(String(account.default_swap_per_day));
 
   const checks = {
     balance: parseSettingsNumber(balance, { min: 0 }),
@@ -487,7 +486,6 @@ function EditAccountDialog({
     beTo: parseSettingsNumber(beTo),
     comm: parseSettingsNumber(commPerUnit, { min: 0 }),
     fee: parseSettingsNumber(feeFixed, { min: 0 }),
-    swap: parseSettingsNumber(swapPerDay),
     riskPct: parseSettingsNumber(riskPct, { min: 0.1, max: 100 }),
     riskMin: parseSettingsNumber(riskMin, { min: 1, allowEmpty: true }),
     riskMax: parseSettingsNumber(riskMax, { min: 1, allowEmpty: true }),
@@ -529,7 +527,6 @@ function EditAccountDialog({
         breakeven_unit: beUnit,
         default_commission_per_unit: val("comm"),
         default_fee_fixed: val("fee"),
-        default_swap_per_day: val("swap"),
         topstep_mode: topstepMode,
         topstep_plan: topstepPlan,
         topstep_payout_at: payoutDate ? new Date(`${payoutDate}T00:00:00Z`).toISOString() : null,
@@ -648,12 +645,11 @@ function EditAccountDialog({
         <section className="space-y-2 rounded-md border p-3">
           <h3 className="text-sm font-medium">Default costs</h3>
           <p className="text-xs text-muted-foreground">
-            Pre-filled on every new fill. A positive swap is a cost.
+            Pre-filled on every new fill.
           </p>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <NumberField id={`com-${account.id}`} label="Commission per unit" value={commPerUnit} onChange={setCommPerUnit} error={err("comm")} />
             <NumberField id={`fee-${account.id}`} label="Fixed fee per fill" value={feeFixed} onChange={setFeeFixed} error={err("fee")} />
-            <NumberField id={`swp-${account.id}`} label="Swap per unit / night" value={swapPerDay} onChange={setSwapPerDay} error={err("swap")} />
           </div>
         </section>
 

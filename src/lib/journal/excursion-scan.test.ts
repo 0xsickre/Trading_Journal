@@ -275,7 +275,6 @@ describe("capture % can never exceed 100", () => {
       gross_pl: 20,
       net_pl: 20,
       total_fees: 0,
-      total_swap: 0,
       realized_r: 4,
       realized_r_net: 4,
       opened_at: at(10),

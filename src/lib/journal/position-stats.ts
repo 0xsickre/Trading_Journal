@@ -7,7 +7,6 @@ export type ExecutionFill = {
   price: number;
   qty: number;
   fee?: number;
-  swap_funding?: number;
 };
 
 export type PositionStatsInput = {
@@ -55,7 +54,6 @@ export type ComputedPositionStats = {
   avg_entry: number | null;
   avg_exit: number | null;
   total_fees: number;
-  total_swap: number;
   gross_points: number | null;
   gross_pl: number | null;
   net_pl: number | null;
@@ -97,7 +95,6 @@ export function computePositionStats(
   let entryNotional = 0;
   let exitNotional = 0;
   let totalFees = 0;
-  let totalSwap = 0;
 
   for (const e of input.executions) {
     const qty = e.qty;
@@ -108,7 +105,6 @@ export function computePositionStats(
     // stored figure for any fee-only or malformed fill — in a module whose
     // first line promises the two stay in sync.
     totalFees += e.fee ?? 0;
-    totalSwap += e.swap_funding ?? 0;
     if (!Number.isFinite(qty) || !Number.isFinite(price) || qty <= 0) continue;
     if (e.side === "entry") {
       entryQty += qty;
@@ -137,15 +133,15 @@ export function computePositionStats(
     // Money is null without a point value OR without a rate; points and R are
     // price-space quantities and survive both, exactly as the SQL view has them.
     //
-    // Commissions and swap are NOT multiplied by the rate: brokers book them in
+    // Commissions are NOT multiplied by the rate: brokers book them in
     // the deposit currency, and the defaults they are filled from sit on the
     // account. Hence `gross × rate − costs`, not `(gross − costs) × rate`.
     if (hasOverride) {
       grossPl = override;
-      netPl = grossPl - totalFees - totalSwap;
+      netPl = grossPl - totalFees;
     } else if (pointValue != null && fxRate != null) {
       grossPl = grossPoints * pointValue * fxRate;
-      netPl = grossPl - totalFees - totalSwap;
+      netPl = grossPl - totalFees;
     }
 
     if (riskPts != null && entryQty > 0) {
@@ -194,7 +190,6 @@ export function computePositionStats(
     avg_entry: avgEntry,
     avg_exit: avgExit,
     total_fees: totalFees,
-    total_swap: totalSwap,
     gross_points: grossPoints,
     gross_pl: grossPl,
     net_pl: netPl,

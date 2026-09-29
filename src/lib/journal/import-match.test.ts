@@ -26,7 +26,6 @@ const c = (over: Partial<MatchCandidate> = {}): MatchCandidate => ({
   avgExit: 5010,
   openedAt: "2026-03-02T14:00:00Z",
   totalFees: 4,
-  totalSwap: 0,
   grossPl: 500,
   netPl: 496,
   ...over,

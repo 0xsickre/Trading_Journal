@@ -89,8 +89,8 @@ describe("one trade, from form values to a report row", () => {
 
   // ---- 2. Fills arrive, status follows from them -------------------------
   const fills = [
-    { side: "entry" as const, price: 2401, qty: 2, executed_at: "2026-03-02T14:30:00Z", fee: 3, swap_funding: 0 },
-    { side: "exit" as const, price: 2421, qty: 2, executed_at: "2026-03-02T19:45:00Z", fee: 3, swap_funding: 0 },
+    { side: "entry" as const, price: 2401, qty: 2, executed_at: "2026-03-02T14:30:00Z", fee: 3 },
+    { side: "exit" as const, price: 2421, qty: 2, executed_at: "2026-03-02T19:45:00Z", fee: 3 },
   ];
 
   it("closes the position because the fills say so, not because a field does", () => {
@@ -125,7 +125,6 @@ describe("one trade, from form values to a report row", () => {
       gross_pl: stats.gross_pl,
       net_pl: stats.net_pl,
       total_fees: stats.total_fees,
-      total_swap: stats.total_swap,
       realized_r: stats.realized_r,
       realized_r_net: stats.realized_r_net,
       opened_at: fills[0].executed_at,
