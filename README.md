@@ -5,19 +5,20 @@
 A day-trading journal for a single trader: intraday CME index futures on Topstep — NQ / MNQ and
 ES / MES, with 6E / M6E in the catalog. No AI chat — a disciplined record of what was traded and
 how well the process was followed, plus honest arithmetic over that record. A trade is logged right
-after it closes (`/trades/log`) or imported from a file the platform or TradingView produced; the
+after it closes (`/trades/log`) or imported from the TopstepX trades export or a broker CSV; the
 one thing written from outside is MAE/MFE on a future, from the exchange's own candles
 (§ MAE/MFE).
 
 **It was built as a swing journal** (FTMO CFDs on MT5, positions held for days), and the move to
-day trading is under way. **FTMO mode and the MT5 statement import are gone** (H1, 28.09.2026: no
-FTMO or CFD trade was in the book); their columns stay in the database, only the code went. So are
-the per-position check-ins on `/daily`, the five swing insights (thesis, time stop, weekend) and swap
-as a metric of its own. The
-TradingView backtest path still works. What is still measured on swing terms — the hold-time
-buckets, a few insights — is listed item by item and split into six phases, F1–F6, in
-[`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md). This README describes the code as it is,
-swing leftovers included.
+day trading is under way. **FTMO mode and the MT5 statement import went in H1** (28.09.2026: no
+FTMO or CFD trade was in the book), with the per-position check-ins on `/daily` and the five swing
+insights (thesis, time stop, weekend). **H2 (29.09.2026) removed what they left in the database**:
+the check-in table, `time_stop_days`, swap (fills, instruments, net P&L), the percentage-of-equity
+tracker limits and the weekly loss rule, the `risk_pct` choice, the backtest account kind with the
+TradingView replay import, and the `ftmo_*` columns. The book is Topstep only. What is still
+measured on swing terms — the hold-time buckets, a few insights — is listed item by item and split
+into phases F1–F6 in [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md). This README describes
+the code as it is, swing leftovers included.
 
 Built to cover what TradeZella does in metrics, notes and reports, minus the parts that only make
 sense for multi-user SaaS. Where it differs, the difference is written down and argued — here or in
@@ -29,13 +30,13 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 186 of the
-3,537 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 183 of the
+3,400 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
 |---|---|
-| Daily (the "Pred sesiju" card included), weekly, tracker, focus goal | 131 |
+| Daily (the "Pred sesiju" card included), weekly, tracker, focus goal | 128 |
 | Mentor-export prompt | 33 |
 | Weekly "Napredak" (progress) and experiment cards | 18 |
 | Weekly insight sentence | 1 |
@@ -180,7 +181,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 3,005 tests across 182 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,855 tests across 180 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -258,7 +259,7 @@ changed:
 
 ## Data model
 
-29 tables and 1 view, all prefixed `tj_`. **Row-level security is enabled on all 29 tables**, every
+28 tables and 1 view, all prefixed `tj_`. **Row-level security is enabled on all 28 tables**, every
 policy following the same ownership pattern:
 
 ```sql
@@ -272,7 +273,7 @@ The central decision. A position is a parent row plus its fills:
 
 ```
 tj_positions  ──1:N──▶  tj_executions        entries and exits, each with its own price,
-     │                                        quantity, time, commission and swap
+     │                                        quantity, time and commission
      └──────────────▶  tj_position_stats     VIEW deriving average entry/exit, gross,
                                               net, R, duration — never written twice
 ```
@@ -292,7 +293,7 @@ shows before saving. A test holds both to the same inputs.
 | **Trades** | `tj_positions`, `tj_executions`, `tj_trade_images` |
 | **Accounts and money** | `tj_accounts`, `tj_cash_events`, `tj_instruments` |
 | **Configuration** | `tj_option_lists`, `tj_option_items`, `tj_field_defs`, `tj_user_prefs`, `tj_dashboard_templates` |
-| **Daily process** | `tj_daily_reports`, `tj_focus_goals`, `tj_session_briefs` (the morning brief, F4), `tj_position_checkins` (swing history: kept, no longer read or written since H1) |
+| **Daily process** | `tj_daily_reports`, `tj_focus_goals`, `tj_session_briefs` (the morning brief, F4) |
 | **Weekly process** | `tj_weekly_reviews`, `tj_experiments` |
 | **Tracker** | `tj_tracker_rules`, `tj_tracker_checkins` |
 | **Playbooks** | `tj_playbooks`, `tj_playbook_sections`, `tj_playbook_rules`, `tj_playbook_rule_links`, `tj_position_rules` |
@@ -322,7 +323,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | Route | What it is |
 |---|---|
 | `/` | Dashboard: a **Topstep banner** per Topstep account (room above the MLL, DLL left today, best day against the 55 % line, the target) then KPIs, equity curve, drawdown, heatmap calendars, breakdowns, the Process · Survival · Edge card, insights. Opens on **All** — the whole record first, narrowed on request; the scope last chosen is remembered per browser. Whenever the period leaves closed trades out, a notice above the figures says how many and how far back, with **Show all** (`default-period.ts`) |
-| `/journal` | Trade table — sorting, filtering, column picking. The date column carries the **year**, because a backtest's trades are years old and `07/03` without one reads as this spring |
+| `/journal` | Trade table — sorting, filtering, column picking. The date column carries the **year**, so a trade from last season does not read as this spring |
 | `/trades/new`, `/trades/[id]/edit` | Trade form: plan, fills, playbook checklist, psychology, images. In the **order of the decisions**: account, instrument, then the playbook and its checklist, and only then the prices and the risk. **There is no phase control**: planned or active is what the fills say — an entry fill means you are in the trade — so a select that could disagree with the record is gone, and so is "Move to active". The one lifecycle fact the fills cannot know, a MISSED plan, keeps its button. The instrument is **typed, not scrolled** — `instrument-select.tsx` filters the catalog on symbol, name and asset class. On a **Topstep account** the size is whole contracts: risk by the account's rule (§ Topstep), contracts rounded down with the round-turn commission counted and capped at the plan, stop and target in ticks for the TopstepX bracket — "2 MNQ · $202.44 at the stop incl. commission (stop 200 ticks)" — with the mini or micro alternative and a warning when the count is zero, capped, or three stops no longer fit today's DLL. This is the **plan-first** form, for a limit written well before price gets there; the everyday way in is `/trades/log` |
 | `/trades/log` | **Log Trade**, the sidebar's primary action: a trade logged **after it is flat**. Four numbers off the platform — contracts, entry, stop, exit (target optional) — with "N min ago" chips for the entry time; then the setup (playbook), **A / B / C** on execution (stored as `execution_rating` 5 / 3 / 1), what went wrong only on B or C ("No mistake" recorded on an A), emotions, one sentence (`trade_journal_notes`) and the exit chart. The exit reason is read off the prices — stop, target, breakeven or closed early — and written only when the trader's own Exit Reason list has that item (`quick-log.ts`). The numbers may be rough: the day's TopstepX export matches the trade (entry within 0.05 %, entry time within ten minutes) and replaces the fills, and the answers stay |
 | `/trades/[id]/review` | The same setup / A-B-C / mistake / sentence review for a trade that arrived only through the export. One UPDATE of the review columns (`saveTradeReview`), never `tj_save_trade`, which rewrites fills and rule answers on every save |
@@ -331,11 +332,11 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/weekly` | Weekly review: week rating, five questions, the week's figures split into money and process (`week-recap.ts`), last week's commitment with the answer to whether it held, and an account filter that refuses to sum two currencies. Unsaved answers are kept per week in the browser (`weekly-draft.ts`) and offered back; leaving a week with unsaved text asks first. **Napredak** (`progress.ts`) is the weekend review in six answers, each beside last week: R per setup, what each mistake cost, A against B/C, hour of entry, MAE of winners / MFE of losers / share of the move kept, and trade number in the day plus the trade after a loss |
 | `/playbooks` | Every setup as one table: Trades / Net P&L / Win Rate / Missed / Expectancy per row |
 | `/playbooks/[id]` | One playbook: identity, Stats, Rules (section and rule editor), Trades, Notes |
-| `/reports` | How each group of trades did — by setup, instrument, day or any tag; Live and Backtest kept apart (§ Reports) |
+| `/reports` | How each group of trades did — by setup, instrument, day or any tag (§ Reports) |
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
-| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments (the six futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional; swap in points per lot per night with the weekly triple day, zero on a future and kept for the CFD rows a trade still names), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — type Live or Backtest, which decides where MAE/MFE comes from, currency locked once it has trades, and **Topstep rules (futures)** — plan 50K / 100K / 150K, first payout, reset, the risk rule), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion and reset live under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
+| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments (the six futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, and **Topstep rules (futures)** — plan 50K / 100K / 150K, first payout, reset, the risk rule), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion and reset live under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
 | `/login` | Supabase auth |
 
 ---
@@ -345,12 +346,10 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 One page, one question: **how did each group of trades do?** Top to bottom:
 
 1. **The book.**
-   - `Live | Backtest | All`: backtests and live trading are separate books. The page opens on Live when
-     a live trade exists, otherwise on Backtest, and remembers the last choice (`scope.ts`,
-     `report-prefs.ts`).
-   - An account of that type, the dates, Net or Gross, `$` or `%`, and an eye that hides every amount.
+   - All accounts or one (`scope.ts`), the dates, Net or Gross, `$` or `%`, and an eye that hides every
+     amount. The Live / Backtest / All switch left with the backtest kind in H2.
    - Everything pooled across accounts (currency, % base, breakeven band) is taken over the accounts in
-     scope only, so a EUR live account never blocks a USD backtest.
+     scope only.
 2. **The question.** Group by any dimension, the table's columns, the minimum trades a group needs to
    be ranked, and filters. A filter is built in the panel and added only once it constrains
    something, and number bounds accept `-1.5`.
@@ -438,7 +437,7 @@ drift from the module computing the same thing.
 
 | Metric | Formula | Note |
 |---|---|---|
-| Net P&L | `Σ (gross − commissions − swap)` | Dated by the **close** day, in the account's timezone |
+| Net P&L | `Σ (gross − commissions)` | Dated by the **close** day, in the account's timezone |
 | Gross P&L | `Σ (exit − entry) × qty × point_value × direction` | |
 | Trades | Closed trades in scope | |
 | Win rate | `wins / (wins + losses) × 100` | **Breakeven trades are out of the denominator** |
@@ -451,18 +450,15 @@ drift from the module computing the same thing.
 | **R (everywhere)** | `gross points / (risk in points × entry qty)` | **R is always GROSS**, and does not follow the net/gross toggle — that toggle moves money only |
 
 **Why R is gross while money can be net.** They are deliberately two different questions. R measures
-the **setup**: did price go where the plan said, relative to the risk taken. Commission and swap are
-not a property of the setup but the cost of holding, and for the CFD swing book they were a separate
-line worth seeing on its own — hence the net/gross toggle over money. A future carries no swap: on a
-Topstep trade the cost is the round-turn commission alone. The `Swap` metric, the swap-per-holding-day
-figure and the `swap_ate_the_trade` insight **left in H1**; swap stays in the net result and in total
-cost for the CFD rows of the swing history, and the Costs card shows its `Swap` row only for a range
-that carries some.
+the **setup**: did price go where the plan said, relative to the risk taken. Commission is not a
+property of the setup but the cost of trading it — hence the net/gross toggle over money. A future
+carries no swap: the cost is the round-turn commission alone. The `Swap` metric, the
+swap-per-holding-day figure and the `swap_ate_the_trade` insight left in H1, and swap itself — the
+fill column, the instrument rates, the term in net P&L — in H2 (`20260929160000`).
 
 A consequence worth knowing while reading the screen: **a trade can be a loss in money and positive
-in R.** A CFD held three days, price went your way by +0.03R, and carry ate even that — net
-negative. On a future the same happens with commission alone: a one-tick scratch on two MNQ is
-positive in R and negative in money. That
+in R.** A one-tick scratch on two MNQ is positive in R and negative in money once the commission is
+paid. That
 is not an inconsistency but two correct answers to two questions: the setup did its job, the holding
 did not pay. `tj_position_stats` also computes `realized_r_net` in case a net R is ever needed, but
 no screen reads it on purpose — one R per book, so that two do not start to drift.
@@ -493,7 +489,6 @@ of quietly showing a number in the wrong unit. Accounts sharing a currency still
 | Avg risk taken | Mean of `riskPctTaken` over the group | The stop distance at the size filled, over the equity the entry day opened with. `null` for a trade with no stop, an unpriced instrument or an unknown entry-day equity — never 0 |
 | Max risk taken | The largest of the same | The single biggest bet in the group |
 | Risk dispersion | Population σ of `riskPctTaken` | The sizing-discipline number. `null` under two trades: one trade has no spread |
-| Risk vs intent | Mean of \|taken − chosen\| in percentage points | Unsigned on purpose: averaged with its sign, a book that alternates half-size and double-size reads as perfectly disciplined |
 
 **Planned reward is WEIGHTED when the exit is scaled.** Entry-to-target is the whole plan only when
 the entire position leaves at one price. Take 30 % at 1R, 30 % at 2R and the rest at 3R and the plan
@@ -528,8 +523,8 @@ Two different drawdown denominators exist on purpose:
 
 Every figure in the next table compares a trade against its plan, and the plan used to be editable
 forever with no history. It is now **sealed**: on the save that first gives a trade fills,
-`tj_positions.plan_snapshot` captures `entry_price`, `stop_price`, `target_price`, `risk_pct`,
-`time_stop` (and, on older trades, `time_stop_days`), `thesis`, `invalidation` and `scale_out_levels` as they stood, with
+`tj_positions.plan_snapshot` captures `entry_price`, `stop_price`, `target_price`, `time_stop`,
+`thesis`, `invalidation` and `scale_out_levels` as they stood, with
 `plan_sealed_at`. Written once, never overwritten, cleared if the last fill is removed.
 
 A snapshot rather than a lock, on purpose. A lock only moves the edit to "unlock, then change" while
@@ -546,7 +541,7 @@ history has no seal and must not pretend to one.
 
 | Metric | Formula |
 |---|---|
-| Total commissions | Sums over fills (swap has no metric of its own since H1; it stays inside net P&L and cost %) |
+| Total commissions | Sums over fills (a future carries no swap) |
 | Cost % of gross | `costs / gross profit of winners × 100` |
 | Avg planned R | Average planned reward, over trades that have one |
 | Planned vs realized R | `avg realized R − avg planned R`, over the **same** trades |
@@ -842,7 +837,7 @@ better nor worse than "5 days", it is a different number. So `NumberChoice` draw
 only the chosen one — and the day trade's time stop, `ChipChoice`, draws its five labels the same way.
 It is stored as TEXT (`5`, `15`, `30`, `60`, `close`), not as an integer with a magic number for the
 close: "held to the close" and "not recorded" are different answers, and NULL can only be one of them.
-`time_stop_days` is no longer offered; old trades keep it until H2 removes the column.
+`time_stop_days`, the swing time stop, left the database in H2 (`20260929150000`).
 
 **Clicking the selected value clears it.** With no path back to `null`, the first mis-click would
 stay forever as a value nobody meant, and "not recorded" and "1" are different answers.
@@ -934,10 +929,14 @@ Until then every miss is counted as unmeasured; the futures walk will run over t
 
 ## Process tracking
 
-**Tracker rules** are daily obligations, per weekday. **Twelve** are scored automatically from data —
-max loss per trade, per day and per week, every trade linked to a playbook, every trade has a stop,
-every trade has a written thesis, no entry risked more than the ceiling, every entry was sized to
-its own planned risk, and the four day-trading rules below — and the rest are ticked by hand.
+**Tracker rules** are daily obligations, per weekday. **Eleven** are scored automatically from data —
+max loss per trade and per day, every trade linked to a playbook, every trade has a stop, every
+trade has a thesis written before entry, no entry risked more than the budget, every entry was the
+contract count the budget gave, and the four day-trading rules below — and the rest are ticked by
+hand. The money rules read the **Topstep plan only** (§ Topstep): a trade on any other account is not
+graded by them (`no_topstep_trades`). The weekly loss rule and the percentage-of-equity limits left in
+H2 (`20260929170000`) — Topstep has no weekly limit, and the book has no other account. The same
+migration named the three rules still in English in Serbian.
 
 **The day trader's four (F4, `20260929110000`).** Each is a decision taken at entry, so each is
 charged to the Topstep day the trade was OPENED on:
@@ -951,7 +950,9 @@ charged to the Topstep day the trade was OPENED on:
 
 **Counted per account**, as the Topstep limits are: two trades on each of two accounts is not four
 trades. **N is a `count` config** (Settings → Tracker, a whole number from 1 to 20, the same bound as
-the database CHECK); the migration set both at 2, the trader's own number. The close is the brief's
+the database CHECK); the migration set both at 2, the trader's own number. Until H2 the rule reader
+kept only `pct` from a rule's config, so both counts read as unset and the two rules were never
+scored; `parseConfig` in `tracker/queries.ts` now reads `count`. The close is the brief's
 (`flat_by`: holiday, early close), else 15:10 CT — a default that can only be later than a holiday
 close, so a missing brief can miss a breach but never invent one. The red windows are only the
 brief's: there is no fixed fifteen minutes, and a day without a brief grades nothing rather than
@@ -970,23 +971,16 @@ trejd nije planiran pre ulaza"), not `pass`. The quick log's sentence goes to `t
 never to `thesis`: sealed as the reason before entry, a sentence written after the close would be
 exactly the rationalisation the rule reads the seal to catch. Unlocked past days re-read under this
 meaning (a CFD trade typed after its entry is now `na` there); locked days keep their frozen verdicts.
-`risk_matched_intent` compares the size with the `risk_pct` chosen on the plan form; on a Topstep
-account it compares the contracts with the count the form would have given (§ Topstep).
+`risk_matched_intent` compares the contracts with the count the form would have given at entry
+(§ Topstep).
 
 **The two risk rules grade the SIZE, the loss rules grade the outcome**, and both are kept for that reason.
 `max_loss_per_trade` reads the realized loss on the close day, so a trade sized at three times the
 intended risk that ran to target is invisible to it and one closed early passes; `risk_per_trade`
-reads the stop distance against the equity the entry day opened with
-(`tj_positions.equity_at_entry`), on the day the decision was made. Rewriting the old rule instead of
+reads the money at the stop against the budget the risk rule gave at entry, on the day the decision
+was made. Rewriting the old rule instead of
 adding a new one would have restated every locked day in the history under a meaning it was never
 scored with.
-
-The four limits are a **percentage of the day's opening equity, not an amount of money** (migration
-`20260822190000`) — on every account except a Topstep one, whose trades read their plan's money
-(§ Topstep). The equity is that of the accounts NOT in Topstep mode: a 50K Topstep balance is not
-capital a percentage limit is a share of, so its balance, cash and trades stay out of the ladder. A fixed €200 is a different rule on a 5,000 account than on a 50,000 one, so a
-limit set once stops describing the trader's risk the moment the account grows — and the number that
-has to be re-typed to stay honest is the number nobody re-types.
 
 Which rules applied on a given day is decided by comparing the day against the rule's `created_at`
 and `deleted_at`; that is why those are timestamps and why the table has no `is_active` boolean. A
@@ -1075,15 +1069,14 @@ a 50K, 120–600 on a 100K, 180–900 on a 150K, so three stops fit in the DLL �
 is left of today's DLL. `risk_rule_pct`, `risk_rule_min` and `risk_rule_max` on the account override
 the three. The brief in `futures-trading` prints the same figure each morning.
 
-**The tracker grades a Topstep account's trades by its plan**, each account on its own, while every
-other account keeps its percentages (§ Process tracking); a day fails if either side does, and the
-checklist names which rule the limit came from:
+**The tracker grades a Topstep account's trades by its plan**, each account on its own; a trade on
+any other account is not graded by these rules (§ Process tracking), and the checklist names which
+of the plan's numbers the limit came from:
 
 | Rule | On a Topstep account |
 |---|---|
 | Max loss per day | The plan's DLL, per account and per Topstep day — two 50Ks each down 600 are two survived days |
 | Max loss per trade | The risk budget at entry **+ 10 %** for slippage (`TOPSTEP_SLIPPAGE_TOLERANCE`) |
-| Max loss per week | Not graded — Topstep has no weekly limit; a week of only Topstep trades says so |
 | Risk per trade | The risk at the stop against the budget at entry |
 | Sized to intent | The contracts equal the count the form would have given from that budget (rounded down, commission counted, capped at the plan) |
 
@@ -1093,8 +1086,9 @@ room and today's DLL as `topstepStateAt` reads them from everything closed befor
 the save that first gives a trade fills, never overwritten, 0 when there was no room (migration
 `20260928160000`); a later correction or late import cannot move the measure a decision was graded
 against. A trade with no seal — created by the import, or older than the column — reads the same
-budget derived at its entry. The plan form on a Topstep future does not offer the **Risk %** list:
-the size comes from the rule, and appears once entry and stop are in.
+budget derived at its entry. There is no **Risk %** list on the plan form (removed in H2 with the
+`risk_pct` column and the playbook's default risk): the size comes from the rule, and appears once
+entry and stop are in. An account that is not in Topstep mode gets no size suggestion.
 
 ---
 
@@ -1162,8 +1156,8 @@ no trade, so it can no longer stand in for a merge.
 ### Recognising a trade you already typed
 
 `sameTrade` needs the entry time to agree within ten minutes, which is right for a statement arriving
-the same day and useless for the way this journal is used: a trade typed by hand while reading a
-backtest carries the moment it was **typed**, the file carries the moment it was **traded**. Months
+the same day and useless for a trade typed by hand long after it happened: the row carries the
+moment it was **typed**, the file carries the moment it was **traded**. Months
 apart, same trade — two positions, and merging two positions afterwards is a separate operation
 (§ Merging two trades).
 
@@ -1175,8 +1169,8 @@ believes it is (`same trade as #5 · 09/18 21:10 · 1327.45→1317.62 · −983.
 `opened 09/18 21:10→03/07 09:00`.
 
 **Size OR money, not both**, because the two sources disagree about size more often than they
-disagree about the trade: TradingView sizes a backtest off its own risk model while the trader types
-the lots they meant, so 1.00 and 1.73 lots can be one trade — and the P&L then agrees to the cent,
+disagree about the trade: a statement can state the size in other units than the trader typed, so
+1.00 and 1.73 can be one trade — and the P&L then agrees to the cent,
 because both describe the same price move. Requiring both would refuse exactly the case this exists
 for.
 
@@ -1228,63 +1222,13 @@ Two levels sit between those categories, and they are treated differently:
   trader does — importing that number would overwrite the stop the risk was actually taken with, and
   every R on the trade would be recomputed against a stop nobody ever risked.
 
-### TradingView backtests
+### TradingView backtests (removed)
 
-A Strategy Tester or Bar Replay export ("List of trades" → Excel) is recognised by its header and
-imported without column mapping (`lib/journal/tradingview-export.ts`). Import it into a separate
-account, so backtest numbers never mix with live ones. Four things about the export would each
-produce a confidently wrong trade through the generic mapping, and each is handled:
-
-- **A trade is two rows**, "Entry long" and "Exit long" under one trade number. They are joined into
-  one trade. A trade that does not pair cleanly is shown, named and skipped by default, never
-  dropped. An exit signalled `Open` is a mark at the last bar, so it is not imported as a fill.
-- **A partial exit is a separate trade.** A long closed in two parts is exported as two trade numbers,
-  each with its own entry row at the same time, price and order. They are joined into one position:
-  one entry for the whole size and one exit per part, each with its own time, size and commission.
-  A trade with a problem is never joined, so its problem stays on its own row.
-- **The trades are on the second sheet.** The first one, "Performance", is a summary.
-- **Size is in TradingView's units**: pounds of copper, ounces of gold, contracts for futures. A fill
-  here is counted in lots. The scale is read from the export's own money: gross result ÷ (move ×
-  size) is 1 when TradingView counts units, and the point value when it counts contracts. Every
-  trade is then held to that scale. An instrument missing from the catalog, an account in a
-  different currency from the export's, or a scale that is neither of the two is refused with the
-  figure found.
-
-**Money converted into the chart's currency is refused, and named.** TradingView converts the RESULT
-into the currency of the chart and leaves the PRICES in the symbol's: gold on a EUR chart exports
-`Price USD` beside `Net PnL EUR`. Since the scale above is read by dividing money by a price move,
-such an export looks exactly like a wrong contract size — and was refused as one, with "P&L is 0.932
-per 1.00 per unit of size, which is neither 1 nor 1", a sentence that says nothing about the currency
-that caused it. The reader now keeps both currencies (`priceCurrency`), and the refusal says which is
-which and which setting fixes it. It is not converted: the rate is the day's, and neither the file nor
-the journal carries one.
-
-The symbol exists only in the file name (`…_OANDA_XCUUSD_2026-09-18_….xlsx`), so a renamed file is
-refused.
-
-**The file's times are the CHART's wall clock, not the account's**, and the export says nothing about
-which zone that was — so the review asks, defaulting to New York. It used to read them in the
-account's zone, and a chart on New York time imported into a Belgrade account put every fill six
-hours early. That was found by checking each fill against the market's own 1-minute candles: under
-the Belgrade reading 1 of 7 fills landed in a bar that traded its price, under New York 7 of 7. The
-seven fills already imported that way were corrected by re-reading the same wall clock as New York.
-
-**MAE/MFE comes from TradingView's own excursions** (`tradingViewExcursion`). The export gives each
-trade's favorable and adverse excursion in money, net of the entry commission (half of the trade's
-commission). Putting that commission back and dividing by the size gives the distance from the entry.
-On the three gold trades whose MFE had been typed by hand from the same files, the result is equal to
-the cent.
-
-TradingView measures over whole bars of the chart, so the bar a stop was hit in reaches past the stop.
-A long stopped at 1326.629 shows an adverse excursion down to 1324.26, the rest of a 4-hour bar after
-the position was already closed. So when the last exit is a stop **at a loss**, the MAE is held to the
-stop, and when it is a take profit, the MFE is held to the target. A stop at breakeven or better is not
-a bound: it was moved there, and before it moved the price was free to go further. A position closed in
-parts takes the furthest excursion of its legs.
-
-The prices are written as `excursion_source = 'tradingview'`: onto a new trade, and onto an existing one
-only where none stand or an earlier TradingView import wrote them. Typed always wins. Undo empties
-them again where this import wrote them (`tj_import_rows.excursion_written`).
+The TradingView "List of trades" import — a Strategy Tester or Bar Replay export joined into positions,
+its size rescaled to lots and its excursions written as MAE/MFE — left in H2 with the backtest account
+kind (decision I5-A: the book is Topstep only). `tj_positions.excursion_source` still reads
+`tradingview` on no trade; `tj_import_rows.excursion_written` and the `clear_excursion` branch of
+`tj_undo_import_batch` stay for batches written before it.
 
 ---
 
@@ -1342,7 +1286,7 @@ the trades without one** — still in every total, with no currency to convert t
 rows first, in one transaction. Proven against a live database inside a rolled-back transaction: an
 account with 21 trades leaves **0 orphaned** positions, and 0 fills, rule answers and images.
 
-**Reset everything** (`tj_reset_my_data`). Deletes all 29 tables for the caller, then calls
+**Reset everything** (`tj_reset_my_data`). Deletes all 28 tables for the caller, then calls
 `tj_seed_my_defaults()` — the same seed the dashboard runs on an empty account, so "reset" and "first
 load ever" end in the same state. It asks for `RESET EVERYTHING` to be typed.
 
@@ -1390,18 +1334,23 @@ project.
 
 ## Migrations
 
-128 files in `supabase/migrations/`, named `YYYYMMDDHHMMSS_description.sql`.
+134 files in `supabase/migrations/`, named `YYYYMMDDHHMMSS_description.sql`.
 
 - **Additive.** An applied migration is never edited — a new delta is written instead.
 - **A migration explains itself.** Each one opens with a comment saying what was wrong and what
   breaks without the change. Those files are the only record of why the schema looks the way it does.
 - **Dropping a column a view depends on** means `DROP VIEW` → `DROP COLUMN` → `CREATE VIEW` →
-  `ALTER VIEW ... SET (security_invoker = on)`. Forgetting that last line silently changes whose RLS
-  filters the view.
+  `ALTER VIEW ... SET (security_invoker = on)` → `GRANT SELECT`. Forgetting either of the last two
+  silently changes who can read the view, or whose RLS filters it.
+- **H2 (29.09.2026) is six deletions, each its own migration** (decision I1-B), applied as soon as
+  its code was on `main`: `20260929140000` (check-ins), `20260929150000` (`time_stop_days`),
+  `20260929160000` (swap), `20260929170000` (percentage limits, weekly rule), `20260929180000`
+  (`risk_pct`), `20260929190000` (backtest kind, FTMO columns). The code stopped reading each column
+  before the migration dropped it, so no deploy ran against a missing column.
 
 ### Security model
 
-- **RLS on all 29 tables**, ownership pattern, verified against the live database.
+- **RLS on all 28 tables**, ownership pattern, verified against the live database.
 - **`SECURITY DEFINER` plus a uuid argument is a hole**, because any signed-in user can call it with
   somebody else's id. All five seed functions of that shape — `tj_seed_defaults`,
   `tj_seed_instruments_defaults`, `tj_seed_playbooks`, `tj_seed_tracker_rules`,
@@ -1428,8 +1377,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-3,005 tests across 182 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,379 tests in 122 files) and `components` (environment `jsdom`, files `*.test.tsx`, 626
+2,855 tests across 180 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,245 tests in 120 files) and `components` (environment `jsdom`, files `*.test.tsx`, 610
 tests in 60 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
@@ -1508,7 +1457,7 @@ container does not have. It stays a later option, not an oversight.
 
 | Not built | Why |
 |---|---|
-| Backtesting and trade replay | Done directly in TradingView. An embed does not help: Bar Replay lives in their application, and the widget is a black box the code cannot step through. Its results come back through import (§ Import → TradingView backtests) |
+| Backtesting and trade replay | Done directly in TradingView. An embed does not help: Bar Replay lives in their application, and the widget is a black box the code cannot step through. The journal no longer imports its results (H2: Topstep only) |
 | Broker sync that fills in a whole trade | Manual entry is a choice and an advantage — it forces the trade to be read once more. A statement import corrects the objective numbers afterwards; everything that is a judgement is still typed |
 | Spaces, mentor, leaderboard | Single-user system |
 | AI chat and agents | The mentor-pack export and the insight rules give the same thing without the API cost |
@@ -1519,31 +1468,23 @@ container does not have. It stays a later option, not an oversight.
 
 ## MAE/MFE
 
-**On a future, MAE/MFE comes from the exchange; on a CFD backtest, from TradingView.** Which one depends
-on the instrument first and on the account's **type** (Settings → Accounts) second:
+**MAE/MFE comes from the exchange.** Every trade in the book is a future, and its two prices are
+written from the traded contract's own candles:
 
 | Trade | MAE/MFE source |
 |---|---|
-| **Future** (NQ, MNQ, ES, MES, 6E, M6E) — TopstepX import, `/trades/log` or a TradingView replay | The traded contract's own candles in Cloudflare R2, written by `futures-trading/tools/journal_mae.py`: exact from Databento every morning at 06:15 UTC, and provisional from Yahoo's 1-minute bars of the same contract hourly on weekday afternoons and evenings, so the evening review has them (`excursion_note` says `… · 1m privremeno` until the exact value replaces it). 1-second candles for a trading account, 1-minute for a backtest. The contract is the one in the name (`MNQZ6`) or the CME roll rule's, and it is the right one only if **every fill lies inside its own candle** (±1 tick) — otherwise the trade is refused with the reason |
-| **CFD backtest**: trades replayed on TradingView | TradingView's own excursions, on import (§ TradingView backtests); or typed |
+| **Future** (NQ, MNQ, ES, MES, 6E, M6E) — TopstepX import or `/trades/log` | The traded contract's own candles in Cloudflare R2, written by `futures-trading/tools/journal_mae.py`: exact from Databento every morning at 06:15 UTC, and provisional from Yahoo's 1-minute bars of the same contract hourly on weekday afternoons and evenings, so the evening review has them (`excursion_note` says `… · 1m privremeno` until the exact value replaces it). 1-second candles. The contract is the one in the name (`MNQZ6`) or the CME roll rule's, and it is the right one only if **every fill lies inside its own candle** (±1 tick) — otherwise the trade is refused with the reason |
 
-`tj_positions.excursion_source` records who wrote the two prices: `manual`, `tradingview` or `r2`
-(`mt5` on CFD history written before H1), and `excursion_note` says what they were measured on (`MNQZ6 · 1s`).
+`tj_positions.excursion_source` records who wrote the two prices: `manual` or `r2` (`mt5` and
+`tradingview` on history written before H1 / H2), and `excursion_note` says what they were measured
+on (`MNQZ6 · 1s`).
 
-**On a future, R2 wins — even over a typed value.** That is the trader's decision of 28.09.2026: the
-exchange's own prices are the record, and a number typed from a chart is a reading of them.
+**R2 wins — even over a typed value.** That is the trader's decision of 28.09.2026: the exchange's
+own prices are the record, and a number typed from a chart is a reading of them.
 
-**On a CFD backtest, typed always wins** over what the TradingView import wrote.
-
-**Why CFD backtests do not use a candle feed.** (A futures backtest does: R2 holds the exchange's own
-prices, which are the prices a TradingView replay of a CME contract shows.) For a while CFD backtest
-accounts were filled from Dukascopy's
-free 1-minute candles. The feed is not the broker the trades were replayed on, so each trade's
-difference had to be inferred from its own fills. On 1-hour copper bars that could not be done, and it
-refused more than it filled. It was removed on 19.09.2026 (`20260919140000`), and the TradingView
-export's own excursions replaced it the same day: they come from the same OANDA prices the backtest
-was replayed on. The one trade Dukascopy had filled keeps its prices, now marked as typed. `excursion-scan.ts`, the older scanner, is unchanged and still takes candles from
-anywhere.
+The CFD backtest sources — Dukascopy's 1-minute candles (removed 19.09.2026, `20260919140000`) and
+the TradingView export's own excursions (removed with the import in H2) — are gone.
+`excursion-scan.ts`, the older scanner, is unchanged and still takes candles from anywhere.
 
 ---
 

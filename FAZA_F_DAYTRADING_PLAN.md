@@ -7,7 +7,7 @@ ga zamenjuje. README opisuje stanje koda kakvo jeste — i swing ostatke — dok
 
 **Kako je fajl složen.** Posao je podeljen u **šest faza, F1–F6**; jedna faza = jedna sesija, sa
 jasnim ulazom i izlazom, da nijedna ne zavisi od konteksta koji živi samo u razgovoru. **Detaljan
-plan postoji samo za fazu koja je sledeća** (sada H2). Ostale imaju okvir — cilj, stavke, odluke koje
+plan postoji samo za fazu koja je sledeća** (sada K, pa F5). Ostale imaju okvir — cilj, stavke, odluke koje
 treba doneti — i dobijaju detaljan plan tek kad dođu na red, jer svaka zavisi od onoga što je
 prethodna odlučila (npr. F3 i F4 čitaju dan koji F2 tek definiše). Stavke `#1–#23` su u katalogu na
 dnu i brojevi se ne menjaju, jer README upućuje na njih.
@@ -84,6 +84,8 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 29.09.2026 | — | Grane: posle punog (ne plitkog) preuzimanja sve udaljene grane oba repoa su već sadržane u `main`; dve kojima je jedini commit već bio na `main` kao isti patch spojene su merge commit-om bez promene sadržaja (Trading_Journal `claude/supabase-migrations-apply-pynzxn`, futures-trading `claude/journal-swing-to-day-trading-a49d56`) |
 | 29.09.2026 | — | Migracije: 14 fajlova bez zapisa u `schema_migrations` su u bazi (puštene ručno — objekti postoje); dve nisu bile: `drop_dead_ratings` (`conviction`, `setup_grade`, funkcija spajanja) i `drop_daily_prose` (`macro_note`, impulse kolone). Kolone prazne, kod ih ne čita; primenjene po nalogu trejdera („migracije koje nije pokrenuo prethodni agent ako treba primeni") |
 | 29.09.2026 | H2 | Odluke I1–I5 izvedene iz trejderovih poruka („Koristi odgovore sa slike i moje poruke"): **I1-B** svaka grupa svoja migracija; **I2 da** FTMO kolone se brišu („ništa od ovog mi ne treba"); **I3 da** swap izlazi i iz neto P&L-a (isto); **I4-A** `max_loss_per_week` se penzioniše, `risk_pct` i lista „Risk %" se brišu; **I5-A** backtest odlazi — `account_kind`, TradingView backtest uvoz i prazan arhivirani „Backtesting XAUUSD" („Ne, samo Topstep") |
+| 29.09.2026 | H2 | „Obriši taj backtest nalog slobodno, samo Topstep ostavi" — potvrda I5-A; nalog je bio aktivan (podrazumevani), pa je „Topstep-practice" postao podrazumevani |
+| 29.09.2026 | K | Šest zahteva trejdera tokom H2 (redosled pravila, tagovi na srpskom, uvoz puni plan, fiksni breakeven, zona, slike) → faza **K** pre F5 |
 | 29.09.2026 | F4 | Trejder: `/daily` nema logike („Oba pitanja…", a pitanja nema; prošlo vreme; upućuje na karticu koje nema). Stranica je preuređena hronološki (1 · Pre sesije, 2 · Tokom sesije, 3 · Posle sesije), kartica „Pre nego što uđeš" ima dva numerisana pitanja u budućem vremenu, faze pravila na srpskom |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
@@ -110,8 +112,9 @@ pogađa.
 | **F3** | Topstep pravila u tracker-u i Survival-u | #3, #4, #6 | F2 | da: `20260928160000` (`risk_budget_at_entry`) | **Opus** | ✅ `a8e63f9` (28.09.2026) — migracija primenjena 28.09.2026 uz odobrenje trejdera |
 | **H1** | Uklanjanje FTMO / MT5 / swing koda (trejder, 28.09.2026) | #19 i delovi #13, #14 | F3 | ne (kolone ostaju) | **Opus** | ✅ `09752cd` · `69e5124` · `67feff6` · `0fb9d3f` (28.09.2026) |
 | **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da: `20260929100000`, `…110000`, `…120000`, `…130000` | **Opus** | ✅ `80fceea` · `6dcf72b` · `94796d1` · `4dba3e9` + `132ce35` (futures-trading), 29.09.2026 — migracije primenjene uz odobrenje trejdera |
-| **H2** | Brisanje ostataka iz baze: check-in tabela, `time_stop_days`, swap, % pragovi, backtest grana | — | F4 | da, **briše** (nepovratno, uz odobrenje) | **Opus** | ⏳ **u radu — odluke I1–I5 donete 29.09.2026** |
-| **F5** | Intraday analitika: sesija, trajanje u minutima, insights, swap, uzorak | #11–#15, #17, #18 | F2 | ne (sve izvedeno) | Sonnet, Opus za #13 | okvir |
+| **H2** | Brisanje ostataka iz baze: check-in tabela, `time_stop_days`, swap, % pragovi, backtest grana | — | F4 | da, **briše**: `20260929140000` … `…190000` (šest) | **Opus** | ✅ `b3b6d7e` · `01eaf8b` · `9434f05` · `49dda83` · `cbca316` · `0cb6f55` + `c72f61d` (futures-trading), 29.09.2026 — migracije primenjene uz odobrenje trejdera |
+| **K** | Zahtevi trejdera od 29.09.2026: redosled pravila, tagovi na srpskom, uvoz puni plan, fiksni breakeven, vremenska zona, slike charta | — | H2 | da (tagovi, breakeven, slike) | **Opus** | ⏳ sledeće |
+| **F5** | Intraday analitika: sesija, trajanje u minutima, insights, uzorak | #11–#13, #15, #17, #18 (#14 zatvorio H2) | K | ne (sve izvedeno) | Sonnet, Opus za #13 | detaljan plan ispod |
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, legacy CFD u UI-ju, komentari, PARITY | #16, #19, #20, #22, #23 | F5 | možda (#16) | Sonnet | okvir |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
@@ -582,7 +585,7 @@ ne pad stranice (Vercel objavljuje `main` odmah).
   `futures-trading` README § Dnevni brief (upis u journal).
 - Ovde: F4 ✅, detaljan plan sledeće faze.
 
-## H2 — Brisanje ostataka iz baze (detaljno)
+## H2 — Brisanje ostataka iz baze (detaljno) — ✅ 29.09.2026
 
 **Ulaz:** `main` posle F4 (`4dba3e9`), gate zelen (3.003 testa). **Odluka (29.09.2026):** trejderu ne
 trebaju check-in tabela, `time_stop_days`, swap (fill, katalog, neto P&L) ni % tracker pragovi, a ni
@@ -641,15 +644,73 @@ piše, proverava na lokalnom Postgres-u sa redovima žive knjige, a primenjuje t
 - Gate zelen; migracije primenjene uz odobrenje; README 1:1 (Data model, Migrations, Costs, Import,
   Process tracking, Reset); ovde H2 ✅ i detaljan plan F5.
 
+### H2 urađeno (29.09.2026)
+
+| Korak | Commit | Migracija | Šta |
+|---|---|---|---|
+| H2.1 | `b3b6d7e` | `20260929140000` | `tj_position_checkins` obrisana; spajanje i reset bez nje (28 tabela) |
+| H2.2 | `01eaf8b` | `20260929150000` | `time_stop_days` obrisan; spajanje popunjava `time_stop` |
+| H2.3 | `9434f05` | `20260929160000` | Swap iz fill-ova, kataloga, naloga, view-a (neto = bruto − provizije) i UI-ja |
+| H2.4a | `49dda83` | `20260929170000` | Novčana pravila tracker-a samo po Topstep planu; `max_loss_per_week` i `pct` obrisani; tri pravila na srpskom. **Usput nađen bag iz F4:** `parseConfig` je čitao samo `pct`, pa `max_trades_per_day` i `stop_after_losses` nikad nisu bili ocenjeni — sada čita `count` |
+| H2.4b | `cbca316` | `20260929180000` | `risk_pct`, lista „Risk %", podrazumevani rizik playbook-a, grana veličine po % equity-ja u formi, metrika `risk_intent_gap` |
+| H2.5 | `0cb6f55` + `c72f61d` (futures-trading) | `20260929190000` | `account_kind`, prekidač Live/Backtest u izveštajima, TradingView uvoz (i njegov MAE/MFE), 11 `ftmo_*` kolona; prazan „Backtesting XAUUSD" obrisan (bio je AKTIVAN, ne arhiviran kako je plan pisao), „Topstep-practice" postao podrazumevani nalog. `journal_mae.py` prestao da čita `account_kind` pre brisanja kolone |
+
+Ostaje (namerno): `tj_import_rows.excursion_written` i grana `clear_excursion` u
+`tj_undo_import_batch` — za batch-eve pre H2; `excursion_source = 'tradingview'` nije ni na jednom
+trejdu.
+
+## K — Zahtevi trejdera od 29.09.2026 (detaljno)
+
+**Ulaz:** `main` posle H2 (`0cb6f55`), gate zelen (2.855 testova). Trejder je tokom H2 poslao šest
+zahteva; rade se pre F5 jer ih je tražio izričito, jedan commit po zahtevu.
+
+| Korak | Zahtev (trejderovim rečima, skraćeno) | Plan |
+|---|---|---|
+| K1 | „pravila koja idu automatski uvek ispod ovih što se čekiraju, i kad se nova dodaju" | `TrackerStageSection`: ručna pravila prva, automatska ispod, `sort_order` važi unutar grupe. Samo prikaz na `/daily` |
+| K2 | „sve tagove koji postoje prevesti na srpski" | Migracija: `label` stavki seed lista (Technical tags, Exit reason, Miss reason, Emotion, Discipline, Mistake) i nazivi lista/polja na srpski; `value` ostaje (trejdovi ga čuvaju kao tekst) — ili se prevodi i `value` uz UPDATE trejdova. **Proveriti** kako grid i filteri čitaju `value` vs `label` pre odluke; `tj_seed_categories` isto |
+| K3 | „ako uvezem trejd preko CSV-a, u planned treba da se popune TP, SL i entry, ako ga pre nisam uneo" | Novi trejd iz uvoza: `entry_price` = prosečan ulaz, `stop_price` i `target_price` iz fajla kad ih ima (TopstepX nema stop kolonu — proveriti koje kolone izvoz nosi), pa pečat plana. Postojeći trejd: ne dira se (README § Import: „Stop. Not imported" važi za MERGE) |
+| K4 | „breakeven range po defaultu, profesionalan, da se ne može menjati" | Predlog: **±1 tik × broj ugovora × vrednost tika, plus provizija** — trejd čiji je neto unutar troška jednog tika je scratch. Jednostavnija alternativa: fiksno ±$10 po ugovoru. Polja u Settings postaju read-only tekst |
+| K5 | „timezone ne kucam — uvek moja evropska zona; sistem sam prepoznaje zonu CSV-a" | `Europe/Belgrade` podrazumevano za nalog i prikaz; polje u Settings bez kucanja. Uvoz: vreme sa offset-om (TopstepX) se čita tačno; vreme bez offset-a se čita u zoni naloga. **Topstep dan (17:00 CT) ostaje ključ dana** bez obzira na zonu prikaza |
+| K6 | „da se mogu čuvati slike za chartove, a ne linkovi" | Supabase Storage bucket (privatan, RLS po korisniku), upload u `trade-images`/quick-log, `tj_trade_images.image_url` → putanja u storage-u + potpisani URL za prikaz; TradingView link ostaje kao opcija |
+
 ## F5–F6 — okvir (detaljno kad dođu na red)
 
-### F5 — Intraday analitika (#11–#15, #17, #18)
-- **Cilj:** dimenzije sesija / minuti od otvaranja / redni broj u danu / posle gubitka; trajanje u
-  minutima; insights u intraday obliku i vraćanje izostavljenih; swap sakriven na fjučersima;
-  tekstovi o uzorku; co-exposure u minutima; mentor export za day tradera.
-- **Odluke:** granice sesijskih prozora (ET); koji swing insights se gase, a koji ostaju za CFD.
-- **Pročitati:** README § Metrics, § Process tracking (Insights); `reports/dimensions.ts`,
-  `progress.ts`, `insights/*`.
+### F5 — Intraday analitika (detaljno, napisano 29.09.2026 posle H2)
+
+**Ulaz:** `main` posle K. **Cilj:** izveštaji, insights i tekstovi mere dan tradera u minutima i
+sesijama, ne u danima i nedeljama.
+
+**Utvrđeno u kodu (29.09.2026):**
+- `reports/dimensions.ts`: vremenske dimenzije su `month`, `dow_entry`, `entry_hour`, `dow_exit`,
+  `hold_duration` (korpe iz `hold-time.ts`: `<1d`, `1–3d`, `3–7d`, `1–2w`, `>2w` — na day trading-u
+  SVAKI trejd pada u `<1d`). Nema sesijskog prozora, minuta od otvaranja, rednog broja u danu.
+- `progress.ts` već računa redni broj trejda u danu i „trejd posle gubitka" za Napredak — logika
+  postoji, samo nije dimenzija.
+- `insights/registry.ts` → `OMITTED_RULES`: `most_time_in_drawdown`, `deep_in_drawdown_day`,
+  `patience_paid_off` isključeni zbog „nema feed-a"; R2 sveće sada postoje.
+- `co-exposure.ts` meri preklapanje u **danima** i korelaciju po danima zatvaranja („40–70 trejdova
+  godišnje" u komentarima); `risk-ratios.ts` izvodi periode godišnje iz podataka (ostaje).
+- `mentor-export.ts` (33 srpska stringa) pita swing pitanja.
+
+**Podkoraci:**
+
+| Korak | Šta | Fajlovi |
+|---|---|---|
+| F5.1 | Korpe trajanja u minutima: `<1m`, `1–5m`, `5–15m`, `15–60m`, `>60m`; prikaz min:s | `hold-time.ts`, `units.ts`, `reports/dimensions.ts`, `insights/trade-rules.ts` (`exceed_avg_hold_time`) |
+| F5.2 | Nove dimenzije: sesijski prozor (ET), minuti od otvaranja 09:30 ET, redni broj trejda u danu po nalogu, posle gubitka (iz `progress.ts`) | `reports/dimensions.ts`, `progress.ts` |
+| F5.3 | Insights intraday: revenge u minutima, overtrading po danu, tilt posle N gubitaka u sesiji; vratiti tri izostavljena pravila preko R2 (ako traže sveće, podatak piše `futures-trading`) | `insights/*`, `registry.ts` |
+| F5.4 | Tekstovi o uzorku („40–70 trejdova godišnje"), eksperiment pre/posle u sesijama ili trejdovima | `experiments.ts`, `uncertainty.ts`, `co-exposure.ts` komentari |
+| F5.5 | Co-exposure u minutima; zbirni rizik otvorenih ugovora prema DLL-u | `co-exposure.ts`, `portfolio-heat.ts` |
+| F5.6 | Mentor export za day tradera: sesija, redni broj, posle gubitka, A/B/C, DLL | `mentor-export.ts` |
+| F5.7 | README 1:1, plan F5 ✅ i detaljan plan F6 | — |
+
+**Odluke koje traži trejder (pre koda):**
+- **L1 — Granice sesijskih prozora (ET).** Predlog: Globex noć 18:00–08:00, pre-open 08:00–09:30,
+  otvaranje 09:30–10:00, jutro 10:00–11:30, ručak 11:30–13:30, popodne 13:30–15:00, poslednji sat
+  15:00–16:00 (Topstep kraj 15:10 CT = 16:10 ET). Potvrdi ili ispravi.
+- **L2 — Korpe trajanja.** Predlog iz F5.1; potvrdi.
+- **L3 — Tilt.** Posle koliko gubitaka u nizu u istoj sesiji insight kaže „tilt"? Predlog: 2 (isto
+  kao `stop_after_losses`).
 
 ### F6 — Nasleđe i `futures-trading` (#16, #19, #20, #22, #23)
 - **Cilj:** cena promašenog setupa iz R2 do kraja Topstep dana; FTMO/MT5/TradingView CFD ispod
