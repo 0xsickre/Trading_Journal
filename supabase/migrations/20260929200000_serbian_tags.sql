@@ -17,7 +17,7 @@
 -- `autoExitReason` picks (`quick-log.ts`). `tj_seed_categories` is restated from 20260929180000 with
 -- the Serbian values, so a new book starts in Serbian.
 
-CREATE TEMP TABLE tj_tag_map (list_key text, en text, sr text) ON COMMIT DROP;
+CREATE TEMP TABLE tj_tag_map (list_key text, en text, sr text);
 INSERT INTO tj_tag_map (list_key, en, sr) VALUES
   ('htf_bias', 'Neutral', 'Neutralno'),
   ('htf_bias', 'Bullish', 'Bikovski'),
@@ -111,6 +111,8 @@ UPDATE public.tj_positions p
    SET custom = jsonb_set(p.custom, '{htf_bias}', to_jsonb(m.sr))
   FROM tj_tag_map m
  WHERE m.list_key = 'htf_bias' AND p.custom ->> 'htf_bias' = m.en;
+
+DROP TABLE tj_tag_map;
 
 -- 3) The seed for a new book.
 CREATE OR REPLACE FUNCTION public.tj_seed_categories(target uuid)
