@@ -17,10 +17,10 @@ the check-in table, `time_stop_days`, swap (fills, instruments, net P&L), the pe
 tracker limits and the weekly loss rule, the `risk_pct` choice, the backtest account kind with the
 TradingView replay import, and the `ftmo_*` columns. The book is Topstep only. **F5 (29.09.2026)
 moved the analytics to the trading day**: hold time in minutes, session windows, intraday insights,
-time underwater, overlap in minutes, open risk against the DLL, a day trader's mentor pack. What is
-left — the missed-setup price from R2, the vault-era macro/COT fields, comments and the parity
-documents — is phase F6 in [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md). This README
-describes the code as it is, leftovers included.
+time underwater, overlap in minutes, open risk against the DLL, a day trader's mentor pack. **F6
+closed the move**: the missed-setup price from R2, the vault-era insights retired, a plan stale after
+its trading day, and the parity documents rewritten. The whole move, phase by phase with every
+decision the trader took, is [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md).
 
 Built to cover what TradeZella does in metrics, notes and reports, minus the parts that only make
 sense for multi-user SaaS. Where it differs, the difference is written down and argued — here or in
@@ -1581,7 +1581,7 @@ the TradingView export's own excursions (removed with the import in H2) — are 
 | [`CODE_REVIEW.md`](CODE_REVIEW.md) | Rounds 2b, 3 and 4 plus the render-layer execution (Phase 10), every finding with its outcome |
 | [`docs/formulas-audit.md`](docs/formulas-audit.md) | Every formula checked against outside practice, with a verdict each (Serbian) |
 | [`PARITY.md`](PARITY.md) | A comparison against TradeZella, item by item (Serbian) |
-| [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md) | The move from swing to day trading: six phases F1–F6, a detailed plan for the next one, and every place the code still measures swing (Serbian) |
+| [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md) | The move from swing to day trading (completed 29.09.2026): phases F1–F6, H1, H2, K, each with its plan, decisions and commits (Serbian) |
 | [`FAZA_8B_PLAN.md`](FAZA_8B_PLAN.md) | Automatic MAE/MFE: MT5 for CFDs, R2 for futures, and why the cTrader plan was withdrawn (Serbian) |
 | [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md) | AI entry point (Cursor / Claude Code) |
 | [futures-trading](https://github.com/0xsickre/futures-trading/blob/main/README.md) | Morning brief, contracts per day, MAE/MFE from R2, the evening journal reminder, the daily journal routine |

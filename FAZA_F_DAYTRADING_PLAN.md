@@ -7,7 +7,7 @@ ga zamenjuje. README opisuje stanje koda kakvo jeste — i swing ostatke — dok
 
 **Kako je fajl složen.** Posao je podeljen u **šest faza, F1–F6**; jedna faza = jedna sesija, sa
 jasnim ulazom i izlazom, da nijedna ne zavisi od konteksta koji živi samo u razgovoru. **Detaljan
-plan postoji samo za fazu koja je sledeća** (sada F6). Ostale imaju okvir — cilj, stavke, odluke koje
+plan postoji samo za fazu koja je sledeća** (Faza F je završena 29.09.2026 — F1–F6 i H1, H2, K ✅). Ostale imaju okvir — cilj, stavke, odluke koje
 treba doneti — i dobijaju detaljan plan tek kad dođu na red, jer svaka zavisi od onoga što je
 prethodna odlučila (npr. F3 i F4 čitaju dan koji F2 tek definiše). Stavke `#1–#23` su u katalogu na
 dnu i brojevi se ne menjaju, jer README upućuje na njih.
@@ -116,7 +116,7 @@ pogađa.
 | **H2** | Brisanje ostataka iz baze: check-in tabela, `time_stop_days`, swap, % pragovi, backtest grana | — | F4 | da, **briše**: `20260929140000` … `…190000` (šest) | **Opus** | ✅ `b3b6d7e` · `01eaf8b` · `9434f05` · `49dda83` · `cbca316` · `0cb6f55` + `c72f61d` (futures-trading), 29.09.2026 — migracije primenjene uz odobrenje trejdera |
 | **K** | Zahtevi trejdera od 29.09.2026: redosled pravila, tagovi na srpskom, uvoz puni plan, fiksni breakeven, vremenska zona, slike charta | — | H2 | da: `20260929200000`, `…210000`, `…220000`, `…230000` | **Opus** | ✅ `31030a9` · `286cc06` · `df91b1c` · `65d0817` · `576f574` · `a232849`, 29.09.2026 — migracije primenjene |
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, uzorak | #11–#13, #15, #17, #18 (#14 zatvorio H2) | K | da: `20260929235000` (`time_underwater_pct`), `20260930000000` / `…000100` (`baseline_trades`) | Sonnet, Opus za #13 | ✅ `2e59f2e` · `5095e43` · `3183236` · `20f9626` + `8c35148` (futures-trading) · `ea0461b` · `d9ccf9c` · `8dff0cf`, 29.09.2026 — migracije primenjene |
-| **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, ostaci vault-a, komentari, PARITY | #16, #20, #22, #23 (#19 zatvorili H1/H2) | F5 | da (#16, možda #20) | Sonnet, Opus za #16 | detaljan plan ispod; odluke M1–M3 donete (A, A, A) |
+| **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, ostaci vault-a, komentari, PARITY | #16, #20, #22, #23 (#19 zatvorili H1/H2) | F5 | da: `20260930010000` (`no_entry`, `r2`) | Sonnet, Opus za #16 | ✅ `16c3a04` + `a59307d` (futures-trading) · `e515552` · `a5a8ff3` · `db9c3b3` + F6.5, 29.09.2026 — migracija primenjena |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -765,7 +765,7 @@ knjiga, i cena promašenog setupa za fjučerse.
 | F6.2 ✅ | Vault ostaci (#20) po odluci M2; `stale_plan` po odluci M3; README § „Where this sits" → brief | `insights/process-rules.ts`, README |
 | F6.3 ✅ | Komentari (#22): prepisati one koji tvrde da je knjiga swing; istorijske ostaviti | 21 fajl |
 | F6.4 ✅ | `PARITY.md` i `docs/formulas-audit.md` (#23): sesije, minuti, intraday insights, pod vodom, co-exposure u minutima, DLL | `PARITY.md`, `docs/formulas-audit.md` |
-| F6.5 | README 1:1, F6 ✅ — kraj Faze F | — |
+| F6.5 ✅ | README 1:1, F6 ✅ — kraj Faze F | — |
 
 **Odluke koje traži trejder (pre koda):**
 - **M1 — Cena promašaja: kad setup „vredi".** (A, preporuka) Samo ako je cena **dodirnula ulaz**
@@ -781,6 +781,22 @@ knjiga, i cena promašenog setupa za fjučerse.
 
 **Pročitati pre koda:** README § Learning („The missed setup gets a price"), § MAE/MFE;
 `futures-trading` README § MAE/MFE.
+
+**F6 urađeno (29.09.2026).** Sva četiri podkoraka po planu, odluke M1–M3 = A. Izvan plana: M2-A nije
+tražio promenu forme — polja `macro_align` / `cot_filter` već nisu postojala kao definicije polja u
+bazi, pa su dva insight-a samo uklonjena. Gate zelen, 2.907 testova; `futures-trading` 43.
+
+## Faza F — završeno (29.09.2026)
+
+Svaka stavka kataloga #1–#23 je isporučena ili svesno zatvorena (#14 i #19 u H1/H2). Journal meri
+intraday Topstep knjigu: Topstep dan, pravila i veličinu u novcu plana, dnevni tok sa brief-om,
+analitiku u minutima i sesijama, cenu promašaja i vreme pod vodom iz berzanskih sveća. Nova
+sesija koja otvori ovaj fajl nema otvorenu fazu; novi zahtevi trejdera idu kao nova faza ili kao
+zahtev u stilu K, sa odlukama u dnevniku pre koda.
+
+**Otvoreno van koda:** Cloudflare Worker (precizan okidač poslova u `futures-trading`) nije objavljen —
+korak objave traži tajne `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `GH_DISPATCH_TOKEN`; do tada
+brief, `pokretaci` i `popodne` zavise od GitHub cron-a, koji kasni satima ili preskače.
 
 ## Katalog stavki
 
