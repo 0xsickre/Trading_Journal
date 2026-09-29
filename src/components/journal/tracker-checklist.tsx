@@ -360,7 +360,12 @@ export function TrackerStageSection({
    */
   boxed?: boolean;
 }) {
-  const inStage = data.rules.filter((r) => r.stage === stage);
+  // The rules to tick first, the ones the journal scores below them — a rule
+  // the trader adds lands with its own kind, whatever its `sort_order`. The
+  // order the trader chose still holds inside each group.
+  const inStage = data.rules
+    .filter((r) => r.stage === stage)
+    .sort((a, b) => Number(a.auto_key != null) - Number(b.auto_key != null));
   if (inStage.length === 0) return null;
 
   const rows = (

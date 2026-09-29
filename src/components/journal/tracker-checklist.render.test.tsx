@@ -316,6 +316,24 @@ describe("each stage names itself", () => {
   });
 });
 
+describe("the rules to tick come first, the scored ones below (K1)", () => {
+  it("puts every manual rule above every auto rule, keeping each group's own order", () => {
+    // As the trader saw it on 29.09.2026: auto rules first, then three manual
+    // ones, then two more auto rules added later with a higher sort_order.
+    const R = [
+      rule({ id: "a1", text: "Auto one", stage: "trade", auto_key: "playbook_linked", sort_order: 1 }),
+      rule({ id: "m1", text: "Manual one", stage: "trade", sort_order: 2 }),
+      rule({ id: "a2", text: "Auto two", stage: "trade", auto_key: "stop_loss_set", sort_order: 3 }),
+      rule({ id: "m2", text: "Manual two", stage: "trade", sort_order: 4 }),
+    ];
+    render(<TrackerStageSection stage="trade" data={data({ rules: R })} />);
+    const order = screen
+      .getAllByText(/^(Auto|Manual) (one|two)$/)
+      .map((el) => el.textContent);
+    expect(order).toEqual(["Manual one", "Manual two", "Auto one", "Auto two"]);
+  });
+});
+
 describe("the day-trading rules say counts, times and windows — not money (F4)", () => {
   const autoRule = (id: string, auto_key: TrackerRule["auto_key"]) =>
     rule({ id, text: id, stage: "trade", auto_key, config: { count: 2 } });
