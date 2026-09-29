@@ -30,8 +30,8 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 183 of the
-3,400 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 185 of the
+3,396 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
@@ -40,7 +40,8 @@ on a screen the trader writes into or reviews in their own words:
 | Mentor-export prompt | 33 |
 | Weekly "Napredak" (progress) and experiment cards | 18 |
 | Weekly insight sentence | 1 |
-| TradingView snapshot helper, trade images | 3 |
+| Chart image helper (`tradingview-snapshot.ts`) | 2 |
+| The seeded tag values Log Trade writes (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2) | 3 |
 | Dashboard, `/reports`, journal grid, playbooks, **`/settings`**, `/trades/log`, Topstep banner | **0** |
 
 Settings joined that last row on 20.09.2026. It had held the stage names of the daily checklist
@@ -181,7 +182,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,855 tests across 180 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,871 tests across 182 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -324,10 +325,10 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 |---|---|
 | `/` | Dashboard: a **Topstep banner** per Topstep account (room above the MLL, DLL left today, best day against the 55 % line, the target) then KPIs, equity curve, drawdown, heatmap calendars, breakdowns, the Process · Survival · Edge card, insights. Opens on **All** — the whole record first, narrowed on request; the scope last chosen is remembered per browser. Whenever the period leaves closed trades out, a notice above the figures says how many and how far back, with **Show all** (`default-period.ts`) |
 | `/journal` | Trade table — sorting, filtering, column picking. The date column carries the **year**, so a trade from last season does not read as this spring |
-| `/trades/new`, `/trades/[id]/edit` | Trade form: plan, fills, playbook checklist, psychology, images. In the **order of the decisions**: account, instrument, then the playbook and its checklist, and only then the prices and the risk. **There is no phase control**: planned or active is what the fills say — an entry fill means you are in the trade — so a select that could disagree with the record is gone, and so is "Move to active". The one lifecycle fact the fills cannot know, a MISSED plan, keeps its button. The instrument is **typed, not scrolled** — `instrument-select.tsx` filters the catalog on symbol, name and asset class. On a **Topstep account** the size is whole contracts: risk by the account's rule (§ Topstep), contracts rounded down with the round-turn commission counted and capped at the plan, stop and target in ticks for the TopstepX bracket — "2 MNQ · $202.44 at the stop incl. commission (stop 200 ticks)" — with the mini or micro alternative and a warning when the count is zero, capped, or three stops no longer fit today's DLL. This is the **plan-first** form, for a limit written well before price gets there; the everyday way in is `/trades/log` |
+| `/trades/new`, `/trades/[id]/edit` | Trade form: plan, fills, playbook checklist, psychology, images — each chart slot (and Log Trade's exit chart) takes an **uploaded screenshot, an image pasted from the clipboard or a TradingView link** (K6, `chart-image-input.tsx`): an image goes to the private `trade-images` bucket under the user's own folder and is stored as `storage:<uid>/<file>` in `tj_trade_images.image_url`, shown through a one-hour signed URL; the CHECK ties the folder to the row's user (`20260929220000`). In the **order of the decisions**: account, instrument, then the playbook and its checklist, and only then the prices and the risk. **There is no phase control**: planned or active is what the fills say — an entry fill means you are in the trade — so a select that could disagree with the record is gone, and so is "Move to active". The one lifecycle fact the fills cannot know, a MISSED plan, keeps its button. The instrument is **typed, not scrolled** — `instrument-select.tsx` filters the catalog on symbol, name and asset class. On a **Topstep account** the size is whole contracts: risk by the account's rule (§ Topstep), contracts rounded down with the round-turn commission counted and capped at the plan, stop and target in ticks for the TopstepX bracket — "2 MNQ · $202.44 at the stop incl. commission (stop 200 ticks)" — with the mini or micro alternative and a warning when the count is zero, capped, or three stops no longer fit today's DLL. This is the **plan-first** form, for a limit written well before price gets there; the everyday way in is `/trades/log` |
 | `/trades/log` | **Log Trade**, the sidebar's primary action: a trade logged **after it is flat**. Four numbers off the platform — contracts, entry, stop, exit (target optional) — with "N min ago" chips for the entry time; then the setup (playbook), **A / B / C** on execution (stored as `execution_rating` 5 / 3 / 1), what went wrong only on B or C ("No mistake" recorded on an A), emotions, one sentence (`trade_journal_notes`) and the exit chart. The exit reason is read off the prices — stop, target, breakeven or closed early — and written only when the trader's own Exit Reason list has that item (`quick-log.ts`). The numbers may be rough: the day's TopstepX export matches the trade (entry within 0.05 %, entry time within ten minutes) and replaces the fills, and the answers stay |
 | `/trades/[id]/review` | The same setup / A-B-C / mistake / sentence review for a trade that arrived only through the export. One UPDATE of the review columns (`saveTradeReview`), never `tj_save_trade`, which rewrites fills and rule answers on every save |
-| `/daily` | **The day in the order it is lived**, in three numbered parts under the day's heading and its streak (`daily-report-form.tsx`). **1 · Pre sesije**: the morning brief ("Pred sesiju", `tj_session_briefs`, `session-brief-card.tsx` — the Topstep close on the account's clock, "berza zatvorena" when the brief says so, the red windows, the expected NQ / ES range and, on today's page only, the DLL left on the primary Topstep account; without a brief it says so and shows the ordinary 15:10 CT close, and a window it cannot read is dropped and counted, never guessed), the focus goal, then **"Pre nego što uđeš"** — two questions, numbered and about the day ahead: *1. Kako si danas?* (mental state, 5 stars, a warning under 3) and *2. Da li danas trguješ?* ("Danas ne trgujem", a decision taken before the session) — and the preparation rules. **2 · Tokom sesije**: the trading rules, scored from the trades and the brief. **3 · Posle sesije**: **Bez pregleda** (the day's closed trades still missing a setup or an A/B/C grade, each a link to its review, `review-gaps.ts`; the 15:20 CT Telegram reminder in `futures-trading` applies the same rule), the day's result, the review rules, then save and lock. Until 29.09.2026 the page opened with the day's money and asked "before you enter" only after the trading rules, with a no-trade box in the past tense that pointed at a position card H1 had removed. The rules are grouped as "Pravila pripreme / trgovanja / osvrta" here, in the page's language; Settings edits them under the English stage names. The day is complete once a focus goal is active |
+| `/daily` | **The day in the order it is lived**, in three numbered parts under the day's heading and its streak (`daily-report-form.tsx`). **1 · Pre sesije**: the morning brief ("Pred sesiju", `tj_session_briefs`, `session-brief-card.tsx` — the Topstep close on the account's clock, "berza zatvorena" when the brief says so, the red windows, the expected NQ / ES range and, on today's page only, the DLL left on the primary Topstep account; without a brief it says so and shows the ordinary 15:10 CT close, and a window it cannot read is dropped and counted, never guessed), the focus goal, then **"Pre nego što uđeš"** — two questions, numbered and about the day ahead: *1. Kako si danas?* (mental state, 5 stars, a warning under 3) and *2. Da li danas trguješ?* ("Danas ne trgujem", a decision taken before the session) — and the preparation rules. **2 · Tokom sesije**: the trading rules, scored from the trades and the brief. **3 · Posle sesije**: **Bez pregleda** (the day's closed trades still missing a setup or an A/B/C grade, each a link to its review, `review-gaps.ts`; the 15:20 CT Telegram reminder in `futures-trading` applies the same rule), the day's result, the review rules, then save and lock. Until 29.09.2026 the page opened with the day's money and asked "before you enter" only after the trading rules, with a no-trade box in the past tense that pointed at a position card H1 had removed. The rules are grouped as "Pravila pripreme / trgovanja / osvrta" here, in the page's language, and within each group **the rules to tick come first and the scored ones below** (K1) — a new rule lands in its own half whatever its order; Settings edits them under the English stage names. The day is complete once a focus goal is active |
 | `/calendar` | Monthly P&L grid by day, weekly totals |
 | `/weekly` | Weekly review: week rating, five questions, the week's figures split into money and process (`week-recap.ts`), last week's commitment with the answer to whether it held, and an account filter that refuses to sum two currencies. Unsaved answers are kept per week in the browser (`weekly-draft.ts`) and offered back; leaving a week with unsaved text asks first. **Napredak** (`progress.ts`) is the weekend review in six answers, each beside last week: R per setup, what each mistake cost, A against B/C, hour of entry, MAE of winners / MFE of losers / share of the move kept, and trade number in the day plus the trade after a loss |
 | `/playbooks` | Every setup as one table: Trades / Net P&L / Win Rate / Missed / Expectancy per row |
@@ -336,7 +337,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
-| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both), Tracker, Instruments (the six futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, and **Topstep rules (futures)** — plan 50K / 100K / 150K, first payout, reset, the risk rule), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion and reset live under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
+| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both; the seeded tags are Serbian since K2, `20260929200000`, which rewrote the trades that carried them), Tracker, Instruments (the six futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, the **timezone** shown, not typed: every time is in Europe/Belgrade (`DEFAULT_TZ`, K5, `20260929210000`), a file with its own offset is converted on import, and a Topstep account still counts its days by 17:00 CT; the **breakeven range** shown, not typed (§ Metrics, K4), and **Topstep rules (futures)** — plan 50K / 100K / 150K, first payout, reset, the risk rule), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion and reset live under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
 | `/login` | Supabase auth |
 
 ---
@@ -446,7 +447,7 @@ drift from the module computing the same thing.
 | Profit factor | `gross profit / gross loss` | `Infinity` when there is no loss — a real maximum, not missing data. `null` only when there is nothing to divide |
 | Expectancy | `winRate × avgWinR + (1 − winRate) × avgLossR` | Computed over the R population only — only a trade with a stop has an R |
 | Best / worst | Largest and smallest single net result | |
-| Breakeven | Trades inside the account's breakeven band | |
+| Breakeven | Trades inside the account's breakeven band | On a Topstep account the band is **fixed** (K4): ±0.1R of the plan's starting risk budget (12.5 % of the room above the MLL) — ±$25 on a 50K, ±$38 on a 100K, ±$56 on a 150K (`topstepBreakevenBand`). Settings shows it and offers nothing to type |
 | **R (everywhere)** | `gross points / (risk in points × entry qty)` | **R is always GROSS**, and does not follow the net/gross toggle — that toggle moves money only |
 
 **Why R is gross while money can be net.** They are deliberately two different questions. R measures
@@ -1217,10 +1218,14 @@ Two levels sit between those categories, and they are treated differently:
 - **Target.** Mapped from a `T/P` column and written **only onto a trade that has none**. A target
   already on the trade is the trader's plan; a missing one is simply not recorded yet. Undo empties
   the ones this import wrote (`tj_import_rows.target_written`) and leaves the rest alone.
-- **Stop.** Not imported at all, and there is no column for it. A statement states the levels as they
-  stood **at the end**, and a stop pulled to breakeven mid-trade is the commonest thing a
-  trader does — importing that number would overwrite the stop the risk was actually taken with, and
-  every R on the trade would be recomputed against a stop nobody ever risked.
+- **Stop.** Mapped from an `S/L` column and written **only onto a trade the import creates** — never in
+  a merge. A statement states the levels as they stood **at the end**, and a stop pulled to breakeven
+  mid-trade is the commonest thing a trader does — merging that number would overwrite the stop the
+  risk was actually taken with.
+- **Entry (K3).** A trade the import creates — one never written as a plan — takes its planned entry
+  from the size-weighted entry fills, with the stop and target above when the file has them
+  (`importedPlan` in `import-commit.ts`). Live columns only; the seal is unchanged. The TopstepX trades
+  export carries no stop or target, so such a trade gets its entry and nothing else.
 
 ### TradingView backtests (removed)
 
@@ -1299,11 +1304,12 @@ migration — it already fell through the cascade from `tj_playbooks`, but the l
 what "reset everything" means, and a reader should not have to trace foreign keys to believe it.
 
 What actually comes back, counted from the seed functions rather than assumed from their names:
-**1 Main Account (USD, `America/New_York`, asset class Futures), the six futures, 11 lists holding 58 options,
-14 tracker rules, 7 custom fields, 3 note folders.** The lists are the day trader's since F4
-(`20260929120000`): Entry TF 1m / 2m / 5m / 15m, "Bias dana (brief)" Long / Short / Neutral, Exit Reason
-with "Flat by close", and the day trader's mistakes (Overtrading, Trade after DLL plan, Revenge
-re-entry, Traded red window). In an existing book the same migration added those items and switched
+**1 Main Account (USD, `Europe/Belgrade`, asset class Futures), the six futures, 10 lists holding 54 options,
+13 tracker rules, 7 custom fields, 3 note folders.** The lists are the day trader's since F4
+(`20260929120000`), in Serbian since K2 (`20260929200000`): Entry TF 1m / 2m / 5m / 15m, "Bias dana
+(brief)" Long / Short / Neutralno, Exit Reason with "Zatvoreno do kraja dana", and the day trader's
+mistakes (Previše trejdova, Trejd posle DLL plana, Osvetnički ponovni ulaz, Trejd u crvenom prozoru).
+The "Risk %" list left in H2. In an existing book the same migration added those items and switched
 the swing ones off — `is_active = false`, not deleted, because trades keep tags as text.
 
 **An instrument you delete stays deleted, since 20.09.2026.** `tj_seed_instruments_defaults` inserted
@@ -1334,7 +1340,7 @@ project.
 
 ## Migrations
 
-134 files in `supabase/migrations/`, named `YYYYMMDDHHMMSS_description.sql`.
+138 files in `supabase/migrations/`, named `YYYYMMDDHHMMSS_description.sql`.
 
 - **Additive.** An applied migration is never edited — a new delta is written instead.
 - **A migration explains itself.** Each one opens with a comment saying what was wrong and what
@@ -1377,9 +1383,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,855 tests across 180 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,245 tests in 120 files) and `components` (environment `jsdom`, files `*.test.tsx`, 610
-tests in 60 files). The rule is the extension, so no file can land in both. The split exists so that
+2,871 tests across 182 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,256 tests in 121 files) and `components` (environment `jsdom`, files `*.test.tsx`, 615
+tests in 61 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves

@@ -7,7 +7,7 @@ ga zamenjuje. README opisuje stanje koda kakvo jeste — i swing ostatke — dok
 
 **Kako je fajl složen.** Posao je podeljen u **šest faza, F1–F6**; jedna faza = jedna sesija, sa
 jasnim ulazom i izlazom, da nijedna ne zavisi od konteksta koji živi samo u razgovoru. **Detaljan
-plan postoji samo za fazu koja je sledeća** (sada K, pa F5). Ostale imaju okvir — cilj, stavke, odluke koje
+plan postoji samo za fazu koja je sledeća** (sada F5). Ostale imaju okvir — cilj, stavke, odluke koje
 treba doneti — i dobijaju detaljan plan tek kad dođu na red, jer svaka zavisi od onoga što je
 prethodna odlučila (npr. F3 i F4 čitaju dan koji F2 tek definiše). Stavke `#1–#23` su u katalogu na
 dnu i brojevi se ne menjaju, jer README upućuje na njih.
@@ -113,7 +113,7 @@ pogađa.
 | **H1** | Uklanjanje FTMO / MT5 / swing koda (trejder, 28.09.2026) | #19 i delovi #13, #14 | F3 | ne (kolone ostaju) | **Opus** | ✅ `09752cd` · `69e5124` · `67feff6` · `0fb9d3f` (28.09.2026) |
 | **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da: `20260929100000`, `…110000`, `…120000`, `…130000` | **Opus** | ✅ `80fceea` · `6dcf72b` · `94796d1` · `4dba3e9` + `132ce35` (futures-trading), 29.09.2026 — migracije primenjene uz odobrenje trejdera |
 | **H2** | Brisanje ostataka iz baze: check-in tabela, `time_stop_days`, swap, % pragovi, backtest grana | — | F4 | da, **briše**: `20260929140000` … `…190000` (šest) | **Opus** | ✅ `b3b6d7e` · `01eaf8b` · `9434f05` · `49dda83` · `cbca316` · `0cb6f55` + `c72f61d` (futures-trading), 29.09.2026 — migracije primenjene uz odobrenje trejdera |
-| **K** | Zahtevi trejdera od 29.09.2026: redosled pravila, tagovi na srpskom, uvoz puni plan, fiksni breakeven, vremenska zona, slike charta | — | H2 | da (tagovi, breakeven, slike) | **Opus** | ⏳ sledeće |
+| **K** | Zahtevi trejdera od 29.09.2026: redosled pravila, tagovi na srpskom, uvoz puni plan, fiksni breakeven, vremenska zona, slike charta | — | H2 | da: `20260929200000`, `…210000`, `…220000`, `…230000` | **Opus** | ✅ `31030a9` · `286cc06` · `df91b1c` · `65d0817` · `576f574` · `a232849`, 29.09.2026 — migracije primenjene |
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, uzorak | #11–#13, #15, #17, #18 (#14 zatvorio H2) | K | ne (sve izvedeno) | Sonnet, Opus za #13 | detaljan plan ispod |
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, legacy CFD u UI-ju, komentari, PARITY | #16, #19, #20, #22, #23 | F5 | možda (#16) | Sonnet | okvir |
 
@@ -659,7 +659,7 @@ Ostaje (namerno): `tj_import_rows.excursion_written` i grana `clear_excursion` u
 `tj_undo_import_batch` — za batch-eve pre H2; `excursion_source = 'tradingview'` nije ni na jednom
 trejdu.
 
-## K — Zahtevi trejdera od 29.09.2026 (detaljno)
+## K — Zahtevi trejdera od 29.09.2026 (detaljno) — ✅ 29.09.2026
 
 **Ulaz:** `main` posle H2 (`0cb6f55`), gate zelen (2.855 testova). Trejder je tokom H2 poslao šest
 zahteva; rade se pre F5 jer ih je tražio izričito, jedan commit po zahtevu.
@@ -674,6 +674,17 @@ zahteva; rade se pre F5 jer ih je tražio izričito, jedan commit po zahtevu.
 | K6 | „da se mogu čuvati slike za chartove, a ne linkovi" | Supabase Storage bucket (privatan, RLS po korisniku), upload u `trade-images`/quick-log, `tj_trade_images.image_url` → putanja u storage-u + potpisani URL za prikaz; TradingView link ostaje kao opcija |
 
 ## F5–F6 — okvir (detaljno kad dođu na red)
+
+### K urađeno (29.09.2026)
+
+| Korak | Commit | Migracija | Šta je urađeno |
+|---|---|---|---|
+| K1 | `31030a9` | — | `/daily`: ručna pravila prva, automatska ispod, u svakoj fazi |
+| K2 | `286cc06` · `335106b` | `20260929200000` | Stavke i VREDNOSTI tagova na srpskom (i na postojećim trejdovima); Long/Short, ICT skraćenice, FOMO, ocene i TF ostaju. `NO_MISTAKE` = „Bez greške", razlozi izlaza u `quick-log.ts` na srpskom |
+| K3 | `df91b1c` | — | Nov trejd iz uvoza: entry iz fill-ova, SL/TP iz S/L i T/P kolona. **TopstepX „Trades" izvoz nema stop ni target** — za njih bi trebao TopstepX „Orders" izvoz (otvoreno pitanje za trejdera) |
+| K4 | `65d0817` | — | Breakeven fiksan: ±0,1R početnog budžeta rizika plana — ±$25 (50K), ±$38 (100K), ±$56 (150K); Settings ga samo prikazuje |
+| K5 | `576f574` | `20260929210000`, `…230000` | `DEFAULT_TZ` = Europe/Belgrade, nalog i seed prebačeni; zona se ne kuca; fajl sa offset-om se konvertuje; Topstep dan ostaje 17:00 CT |
+| K6 | `a232849` | `20260929220000` | Slike charta: upload / paste iz clipboard-a / TradingView link; privatni bucket po korisniku, `storage:<uid>/<fajl>`, potpisani URL |
 
 ### F5 — Intraday analitika (detaljno, napisano 29.09.2026 posle H2)
 
