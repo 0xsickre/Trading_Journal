@@ -720,8 +720,9 @@ sesijama, ne u danima i nedeljama.
   pre-open 08:00–09:30, otvaranje 09:30–10:00, jutro 10:00–11:30, ručak 11:30–13:30, popodne
   13:30–15:00, poslednji sat 15:00–16:00 (Topstep kraj 15:10 CT = 16:10 ET).
 - **L2 — Korpe trajanja.** ✅ prihvaćeno 29.09.2026: `<1m`, `1–5m`, `5–15m`, `15–60m`, `>60m`.
-- **L3 — Tilt.** Posle koliko gubitaka u nizu u istoj sesiji insight kaže „tilt"? Predlog: 2 (isto
-  kao `stop_after_losses`).
+- **L3 — Tilt.** ✅ 29.09.2026: **2** gubitka zaredom u istoj sesiji, na istom nalogu (trejder: „Ok 2").
+  Insight ne zabranjuje ništa — meri cenu: R sledećeg trejda, minute do ponovnog ulaza, broj ugovora,
+  i koliko je to koštalo u dolarima, u odnosu na trejdove koji ne dolaze posle niza gubitaka.
 
 ### F6 — Nasleđe i `futures-trading` (#16, #19, #20, #22, #23)
 - **Cilj:** cena promašenog setupa iz R2 do kraja Topstep dana; FTMO/MT5/TradingView CFD ispod
