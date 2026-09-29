@@ -968,57 +968,6 @@ export type Database = {
         }
         Relationships: []
       }
-      tj_position_checkins: {
-        Row: {
-          created_at: string
-          id: string
-          note: string | null
-          position_id: string
-          report_date: string
-          thesis_state: string | null
-          touched: string | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          note?: string | null
-          position_id: string
-          report_date: string
-          thesis_state?: string | null
-          touched?: string | null
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          note?: string | null
-          position_id?: string
-          report_date?: string
-          thesis_state?: string | null
-          touched?: string | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tj_position_checkins_position_id_fkey"
-            columns: ["position_id"]
-            isOneToOne: false
-            referencedRelation: "tj_position_stats"
-            referencedColumns: ["position_id"]
-          },
-          {
-            foreignKeyName: "tj_position_checkins_position_id_fkey"
-            columns: ["position_id"]
-            isOneToOne: false
-            referencedRelation: "tj_positions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       tj_position_rules: {
         Row: {
           created_at: string

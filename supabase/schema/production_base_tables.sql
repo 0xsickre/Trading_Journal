@@ -268,8 +268,7 @@ COMMENT ON COLUMN public.tj_positions.point_value_at_trade IS
 COMMENT ON COLUMN public.tj_positions.tick_size_at_trade IS
   'Instrument tick size captured when the trade was written.';
 COMMENT ON COLUMN public.tj_positions.scale_out_plan IS
-  'Planned scale-out, free text. Read against tj_position_checkins.touched = '
-  '''partial_exit'' to tell a planned reduction from an early exit.';
+  'Planned scale-out, free text.';
 
 
 -- -----------------------------------------------------------------------------

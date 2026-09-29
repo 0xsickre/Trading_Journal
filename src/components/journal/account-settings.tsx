@@ -176,7 +176,7 @@ function DeleteAccountDialog({
                 <>
                   <li>
                     <strong>{usage.trades}</strong> trades, with their fills,
-                    playbook answers, check-ins and chart images
+                    playbook answers and chart images
                   </li>
                   <li>
                     <strong>{usage.cashEvents}</strong> deposits / withdrawals
