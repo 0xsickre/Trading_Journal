@@ -39,9 +39,9 @@ describe("registry integrity", () => {
   it("declares order values that its own bucketing can actually produce", () => {
     // A stale `order` entry silently sorts a bucket to the bottom forever.
     const dim = getDimension("hold_duration")!;
-    expect(dim.order).toEqual(["<1d", "1–3d", "3–7d", "1–2w", ">2w"]);
-    const t = one([{ durationSeconds: 5 * DAY }]);
-    expect(bucketsOf(dim, t, dimCtx())).toEqual(["3–7d"]);
+    expect(dim.order).toEqual(["<1m", "1–5m", "5–15m", "15–60m", ">60m"]);
+    const t = one([{ durationSeconds: 8 * 60 }]);
+    expect(bucketsOf(dim, t, dimCtx())).toEqual(["5–15m"]);
   });
 });
 

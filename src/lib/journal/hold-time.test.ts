@@ -4,7 +4,7 @@ import { resolveBreakevenRange } from "./breakeven";
 import type { RealizedTrade } from "./analytics";
 import type { PositionStat, TradeRow } from "./types";
 
-const DAY = 86_400;
+const MIN = 60;
 
 function trade(
   id: string,
@@ -25,14 +25,14 @@ function trade(
 describe("computeHoldTime", () => {
   it("splits average hold time by outcome", () => {
     const stats = computeHoldTime([
-      trade("w1", 100, 2 * DAY),
-      trade("w2", 50, 4 * DAY),
-      trade("l1", -80, 10 * DAY),
+      trade("w1", 100, 2 * MIN),
+      trade("w2", 50, 4 * MIN),
+      trade("l1", -80, 10 * MIN),
     ]);
     expect(stats.count).toBe(3);
-    expect(stats.avgSeconds).toBe((16 / 3) * DAY);
-    expect(stats.avgWinnerSeconds).toBe(3 * DAY);
-    expect(stats.avgLoserSeconds).toBe(10 * DAY);
+    expect(stats.avgSeconds).toBe((16 / 3) * MIN);
+    expect(stats.avgWinnerSeconds).toBe(3 * MIN);
+    expect(stats.avgLoserSeconds).toBe(10 * MIN);
     expect(stats.avgBreakevenSeconds).toBeNull();
   });
 
@@ -44,31 +44,31 @@ describe("computeHoldTime", () => {
       starting_balance: 10_000,
     });
     const stats = computeHoldTime(
-      [trade("w1", 500, 1 * DAY), trade("be", -12.4, 9 * DAY)],
+      [trade("w1", 500, 1 * MIN), trade("be", -12.4, 9 * MIN)],
       range,
     );
-    expect(stats.avgBreakevenSeconds).toBe(9 * DAY);
+    expect(stats.avgBreakevenSeconds).toBe(9 * MIN);
     expect(stats.avgLoserSeconds).toBeNull();
   });
 
   it("identifies the longest trade", () => {
     const stats = computeHoldTime([
-      trade("a", 10, 3 * DAY),
-      trade("b", 10, 21 * DAY),
-      trade("c", 10, 1 * DAY),
+      trade("a", 10, 3 * MIN),
+      trade("b", 10, 21 * MIN),
+      trade("c", 10, 1 * MIN),
     ]);
-    expect(stats.longestSeconds).toBe(21 * DAY);
+    expect(stats.longestSeconds).toBe(21 * MIN);
     expect(stats.longestTradeId).toBe("b");
-    expect(stats.maxDays).toBe(21);
+    expect(stats.maxMinutes).toBe(21);
   });
 
   it("skips trades with no duration instead of counting them as zero", () => {
     const stats = computeHoldTime([
-      trade("a", 10, 4 * DAY),
+      trade("a", 10, 4 * MIN),
       trade("b", 10, null),
     ]);
     expect(stats.count).toBe(1);
-    expect(stats.avgDays).toBe(4);
+    expect(stats.avgMinutes).toBe(4);
   });
 
   it("returns empty stats when nothing has a duration", () => {
@@ -79,16 +79,17 @@ describe("computeHoldTime", () => {
 });
 
 describe("durationBucket", () => {
-  it("buckets on swing boundaries", () => {
-    expect(durationBucket(3600)).toBe("<1d");
-    expect(durationBucket(1 * DAY)).toBe("1–3d");
-    expect(durationBucket(2.9 * DAY)).toBe("1–3d");
-    expect(durationBucket(3 * DAY)).toBe("3–7d");
-    expect(durationBucket(6.9 * DAY)).toBe("3–7d");
-    expect(durationBucket(7 * DAY)).toBe("1–2w");
-    expect(durationBucket(13.9 * DAY)).toBe("1–2w");
-    expect(durationBucket(14 * DAY)).toBe(">2w");
-    expect(durationBucket(60 * DAY)).toBe(">2w");
+  it("buckets on minute boundaries (F5.1, decision L2)", () => {
+    expect(durationBucket(30)).toBe("<1m");
+    expect(durationBucket(59.9)).toBe("<1m");
+    expect(durationBucket(1 * MIN)).toBe("1–5m");
+    expect(durationBucket(4.9 * MIN)).toBe("1–5m");
+    expect(durationBucket(5 * MIN)).toBe("5–15m");
+    expect(durationBucket(14.9 * MIN)).toBe("5–15m");
+    expect(durationBucket(15 * MIN)).toBe("15–60m");
+    expect(durationBucket(59.9 * MIN)).toBe("15–60m");
+    expect(durationBucket(60 * MIN)).toBe(">60m");
+    expect(durationBucket(6 * 3600)).toBe(">60m");
   });
 
   it("returns null rather than a bucket for missing data", () => {
@@ -97,8 +98,8 @@ describe("durationBucket", () => {
   });
 });
 
-describe("hold time in days", () => {
-  it("derives days from seconds for both the average and the longest", () => {
+describe("hold time in minutes", () => {
+  it("derives minutes from seconds for both the average and the longest", () => {
     const t = (id: string, secs: number) =>
       ({
         id,
@@ -129,18 +130,18 @@ describe("hold time in days", () => {
       }) as never;
 
     const h = computeHoldTime(
-      [{ row: t("a", 86_400), net: 1, gross: 1, r: 1, id: "a", closedAt: "2026-03-02T00:00:00Z" }, // 1d
-       { row: t("b", 3 * 86_400), net: 1, gross: 1, r: 1, id: "b", closedAt: "2026-03-04T00:00:00Z" }] as never,
+      [{ row: t("a", 60), net: 1, gross: 1, r: 1, id: "a", closedAt: "2026-03-02T00:00:00Z" }, // 1 min
+       { row: t("b", 3 * 60), net: 1, gross: 1, r: 1, id: "b", closedAt: "2026-03-04T00:00:00Z" }] as never,
       resolveBreakevenRange({ breakeven_from: 0, breakeven_to: 0, breakeven_unit: "currency", starting_balance: 0 } as never),
     );
-    expect(h.avgDays).toBeCloseTo(2, 10);
-    expect(h.maxDays).toBeCloseTo(3, 10);
+    expect(h.avgMinutes).toBeCloseTo(2, 10);
+    expect(h.maxMinutes).toBeCloseTo(3, 10);
     expect(h.longestTradeId).toBe("b");
   });
 
-  it("leaves the day figures null when nothing has a duration", () => {
+  it("leaves the minute figures null when nothing has a duration", () => {
     const h = computeHoldTime([], resolveBreakevenRange({ breakeven_from: 0, breakeven_to: 0, breakeven_unit: "currency", starting_balance: 0 } as never));
-    expect(h.avgDays).toBeNull();
-    expect(h.maxDays).toBeNull();
+    expect(h.avgMinutes).toBeNull();
+    expect(h.maxMinutes).toBeNull();
   });
 });

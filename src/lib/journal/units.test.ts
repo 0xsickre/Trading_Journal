@@ -6,7 +6,6 @@ import {
   formatMetric,
   metric,
   pipSize,
-  secondsToDays,
 } from "./units";
 
 const forex = {
@@ -154,6 +153,9 @@ describe("formatDuration", () => {
   it("scales from seconds to days", () => {
     expect(formatDuration(30)).toBe("30s");
     expect(formatDuration(45 * 60)).toBe("45m");
+    // Seconds stay visible under an hour: a scalp of 3m 44s is not "3m" (F5.1).
+    expect(formatDuration(3 * 60 + 44)).toBe("3m 44s");
+    expect(formatDuration(59 * 60 + 59.6)).toBe("1h");
     expect(formatDuration(5 * 3600 + 20 * 60)).toBe("5h 20m");
     expect(formatDuration(3 * 86400 + 4 * 3600)).toBe("3d 4h");
     expect(formatDuration(3 * 86400)).toBe("3d");
@@ -162,15 +164,6 @@ describe("formatDuration", () => {
   it("returns an em dash for missing or negative input", () => {
     expect(formatDuration(null)).toBe("—");
     expect(formatDuration(-5)).toBe("—");
-  });
-});
-
-describe("secondsToDays", () => {
-  it("converts and rejects nonsense", () => {
-    expect(secondsToDays(86_400)).toBe(1);
-    expect(secondsToDays(43_200)).toBe(0.5);
-    expect(secondsToDays(null)).toBeNull();
-    expect(secondsToDays(-1)).toBeNull();
   });
 });
 

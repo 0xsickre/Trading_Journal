@@ -707,7 +707,7 @@ sesijama, ne u danima i nedeljama.
 
 | Korak | Šta | Fajlovi |
 |---|---|---|
-| F5.1 | Korpe trajanja u minutima: `<1m`, `1–5m`, `5–15m`, `15–60m`, `>60m`; prikaz min:s | `hold-time.ts`, `units.ts`, `reports/dimensions.ts`, `insights/trade-rules.ts` (`exceed_avg_hold_time`) |
+| F5.1 ✅ | Korpe trajanja u minutima: `<1m`, `1–5m`, `5–15m`, `15–60m`, `>60m`; prikaz min:s. `avgDays`/`maxDays` → `avgMinutes`/`maxMinutes`, `durationDays` → `durationMinutes`, filter `duration_minutes`. `tilt_week` čita minute uz staru granicu od 1440 (dan) — zamenjuje ga F5.3 | `hold-time.ts`, `units.ts`, `reports/dimensions.ts`, `insights/trade-rules.ts` (`exceed_avg_hold_time`) |
 | F5.2 | Nove dimenzije: sesijski prozor (ET), minuti od otvaranja 09:30 ET, redni broj trejda u danu po nalogu, posle gubitka (iz `progress.ts`) | `reports/dimensions.ts`, `progress.ts` |
 | F5.3 | Insights intraday: revenge u minutima, overtrading po danu, tilt posle N gubitaka u sesiji; vratiti tri izostavljena pravila preko R2 (ako traže sveće, podatak piše `futures-trading`) | `insights/*`, `registry.ts` |
 | F5.4 | Tekstovi o uzorku („40–70 trejdova godišnje"), eksperiment pre/posle u sesijama ili trejdovima | `experiments.ts`, `uncertainty.ts`, `co-exposure.ts` komentari |

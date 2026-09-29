@@ -63,8 +63,8 @@ export function HoldTimeCard({ stats }: { stats: HoldTimeStats }) {
         />
         <Row label="Longest" value={formatDuration(stats.longestSeconds)} />
         <Row
-          label="Average in days"
-          value={stats.avgDays != null ? `${fmtNum(stats.avgDays, 1)} d` : "—"}
+          label="Average in minutes"
+          value={stats.avgMinutes != null ? `${fmtNum(stats.avgMinutes, 1)} min` : "—"}
         />
       </CardContent>
     </Card>

@@ -42,7 +42,7 @@ export type EnrichedTrade = {
   outcome: "win" | "loss" | "breakeven";
   excursion: Excursion;
   durationSeconds: number | null;
-  durationDays: number | null;
+  durationMinutes: number | null;
   openedAt: string | null;
   closedAt: string | null;
   /** Day key of the OPEN, in account tz — the trading day. */
@@ -119,7 +119,7 @@ export function enrichTrades(
       outcome: classifyOutcome(pnl, range),
       excursion: excursionFromTrade(t.row),
       durationSeconds: secs,
-      durationDays: secs != null ? secs / 86_400 : null,
+      durationMinutes: secs != null ? secs / 60 : null,
       openedAt: t.row.stats?.opened_at ?? null,
       closedAt: t.closedAt,
       openDay,

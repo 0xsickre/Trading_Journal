@@ -7,7 +7,7 @@ import {
   toSearchParams,
   type FilterSet,
 } from "./filters";
-import { DAY, dimCtx, enrich } from "./test-helpers";
+import { dimCtx, enrich } from "./test-helpers";
 
 const ids = (list: { id: string }[]) => list.map((t) => t.id);
 
@@ -76,11 +76,11 @@ describe("between", () => {
 
   it("drops trades with no value for the field", () => {
     const trades = enrich([
-      { id: "known", durationSeconds: 5 * DAY },
+      { id: "known", durationSeconds: 5 * 60 },
       { id: "unknown", durationSeconds: null },
     ]);
     const f: FilterSet = {
-      clauses: [{ field: "duration_days", op: "between", min: 1 }],
+      clauses: [{ field: "duration_minutes", op: "between", min: 1 }],
     };
     expect(ids(applyFilters(trades, f, dimCtx()))).toEqual(["known"]);
   });
@@ -254,7 +254,7 @@ describe("date bounds use the account timezone, not UTC", () => {
 describe("between reaches every numeric field, not just R", () => {
   // Each field in `NUMERIC_FIELDS` is its own accessor into a different corner
   // of the enriched trade — money, size, and the two excursion figures each
-  // come from a different place. Only `r` and `duration_days` were exercised,
+  // come from a different place. Only `r` and `duration_minutes` were exercised,
   // so an accessor wired to the wrong property would have filtered on the wrong
   // number with nothing to say so.
   const book = () =>

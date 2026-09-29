@@ -16,7 +16,7 @@ insights (thesis, time stop, weekend). **H2 (29.09.2026) removed what they left 
 the check-in table, `time_stop_days`, swap (fills, instruments, net P&L), the percentage-of-equity
 tracker limits and the weekly loss rule, the `risk_pct` choice, the backtest account kind with the
 TradingView replay import, and the `ftmo_*` columns. The book is Topstep only. What is still
-measured on swing terms — the hold-time buckets, a few insights — is listed item by item and split
+measured on swing terms — a few insights — is listed item by item and split
 into phases F1–F6 in [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md). This README describes
 the code as it is, swing leftovers included.
 
@@ -551,7 +551,7 @@ history has no seal and must not pretend to one.
 | Avg entry slip | Planned entry against average fill, in R against the planned stop. Negative means the fill was worse than planned |
 | Total slip R | Every R given up to entry slippage in the period, added together |
 | Setup score | Share of setup criteria met (§ The setup grade is derived) |
-| Avg hold | Average holding time in seconds |
+| Avg hold | Average holding time in seconds, shown as `44s` / `3m 44s` / `5h 20m`. The Hold duration dimension and the Hold-time card's "Average in minutes" use minute buckets: `<1m`, `1–5m`, `5–15m`, `15–60m`, `>60m` (F5.1, L2). The report filter is `Duration (minutes)` |
 | Follow rate | Playbook rules kept / **answered** rules × 100 |
 
 `follow_rate` is the only metric whose meaning depends on which bucket it is in: on a per-rule report

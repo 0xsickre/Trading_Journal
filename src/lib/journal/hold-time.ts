@@ -4,9 +4,9 @@
  * `duration_seconds` has been computed by the `tj_position_stats` view since it
  * was created and never read by anything. Every number here comes from it.
  *
- * TradeZella's duration buckets are a day-trading artefact (minutes and hours).
- * These are scaled for swing: the question is whether a position that lived a
- * fortnight still earned its keep after costs.
+ * The buckets are minutes (F5.1, decision L2, 29.09.2026): a Topstep position is
+ * flat by 15:10 CT, so every trade lives well under a day, and the question is
+ * whether a scalp of a minute and a position held an hour behave differently.
  */
 
 import type { RealizedTrade } from "./analytics";
@@ -22,8 +22,8 @@ export type HoldTimeStats = {
   avgBreakevenSeconds: number | null;
   longestSeconds: number | null;
   longestTradeId: string | null;
-  avgDays: number | null;
-  maxDays: number | null;
+  avgMinutes: number | null;
+  maxMinutes: number | null;
 };
 
 const EMPTY: HoldTimeStats = {
@@ -34,8 +34,8 @@ const EMPTY: HoldTimeStats = {
   avgBreakevenSeconds: null,
   longestSeconds: null,
   longestTradeId: null,
-  avgDays: null,
-  maxDays: null,
+  avgMinutes: null,
+  maxMinutes: null,
 };
 
 const mean = (xs: number[]): number | null =>
@@ -80,18 +80,12 @@ export function computeHoldTime(
     avgBreakevenSeconds: mean(breakeven),
     longestSeconds,
     longestTradeId,
-    avgDays: avgSeconds != null ? avgSeconds / 86_400 : null,
-    maxDays: longestSeconds != null ? longestSeconds / 86_400 : null,
+    avgMinutes: avgSeconds != null ? avgSeconds / 60 : null,
+    maxMinutes: longestSeconds != null ? longestSeconds / 60 : null,
   };
 }
 
-export const DURATION_BUCKETS = [
-  "<1d",
-  "1–3d",
-  "3–7d",
-  "1–2w",
-  ">2w",
-] as const;
+export const DURATION_BUCKETS = ["<1m", "1–5m", "5–15m", "15–60m", ">60m"] as const;
 
 export type DurationBucket = (typeof DURATION_BUCKETS)[number];
 
@@ -100,10 +94,10 @@ export function durationBucket(
   seconds: number | null | undefined,
 ): DurationBucket | null {
   if (seconds == null || Number.isNaN(seconds) || seconds < 0) return null;
-  const days = seconds / 86_400;
-  if (days < 1) return "<1d";
-  if (days < 3) return "1–3d";
-  if (days < 7) return "3–7d";
-  if (days < 14) return "1–2w";
-  return ">2w";
+  const minutes = seconds / 60;
+  if (minutes < 1) return "<1m";
+  if (minutes < 5) return "1–5m";
+  if (minutes < 15) return "5–15m";
+  if (minutes < 60) return "15–60m";
+  return ">60m";
 }

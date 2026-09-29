@@ -21,7 +21,7 @@ const W = {
   /** Losses in a week that, with short holds, look like tilt. */
   TILT_MIN_LOSSES: 3,
   /** Hold time below which a swing trade was abandoned rather than managed. */
-  TILT_MAX_HOLD_DAYS: 1,
+  TILT_MAX_HOLD_MINUTES: 1440,
 } as const;
 
 type Rule = InsightRule<InsightContext>;
@@ -105,18 +105,18 @@ export const tiltWeek: Rule = {
       .filter((w) => {
         if (w.net >= 0 || w.losses < W.TILT_MIN_LOSSES) return false;
         const held = w.trades
-          .map((e) => e.durationDays)
+          .map((e) => e.durationMinutes)
           .filter((d): d is number => d != null);
         if (held.length === 0) return false;
-        const avgDays = held.reduce((a, b) => a + b, 0) / held.length;
-        return avgDays < W.TILT_MAX_HOLD_DAYS;
+        const avgMinutes = held.reduce((a, b) => a + b, 0) / held.length;
+        return avgMinutes < W.TILT_MAX_HOLD_MINUTES;
       })
       .map((w) => {
         const held = w.trades
-          .map((e) => e.durationDays)
+          .map((e) => e.durationMinutes)
           .filter((d): d is number => d != null);
         const avgSeconds =
-          (held.reduce((a, b) => a + b, 0) / held.length) * 86_400;
+          (held.reduce((a, b) => a + b, 0) / held.length) * 60;
         return weekInsight(w, {
           ruleId: "tilt_week",
           severity: "critical",

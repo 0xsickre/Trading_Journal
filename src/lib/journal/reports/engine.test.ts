@@ -145,13 +145,13 @@ describe("ordering", () => {
     // Sorting a duration ladder by P&L would destroy what the sequence means.
     const r = run(
       enrich([
-        { durationSeconds: 20 * 86_400, net: 900 },
-        { durationSeconds: 3_600, net: 10 },
-        { durationSeconds: 4 * 86_400, net: 100 },
+        { durationSeconds: 90 * 60, net: 900 },
+        { durationSeconds: 30, net: 10 },
+        { durationSeconds: 8 * 60, net: 100 },
       ]),
       "hold_duration",
     )!;
-    expect(r.rows.map((x) => x.bucket)).toEqual(["<1d", "3–7d", ">2w"]);
+    expect(r.rows.map((x) => x.bucket)).toEqual(["<1m", "5–15m", ">60m"]);
   });
 
   it("sorts a non-ordinal dimension by the leading metric, descending", () => {

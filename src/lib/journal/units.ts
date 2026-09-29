@@ -213,12 +213,18 @@ export function formatMetric(v: MetricValue, mode: ViewMode = "dollars"): string
   }
 }
 
-/** Humanised duration: "3d 4h", "5h 20m", "45m". */
+/** Humanised duration: "44s", "3m 44s", "5h 20m", "3d 4h" — seconds shown under an hour (F5.1). */
 export function formatDuration(seconds: number | null | undefined): string {
   if (seconds == null || Number.isNaN(seconds) || seconds < 0) return "—";
   if (seconds < 60) return `${Math.round(seconds)}s`;
 
-  const totalMinutes = Math.floor(seconds / 60);
+  // Rounded first, so 59m 59.6s reads as an hour rather than "59m 60s".
+  const whole = Math.round(seconds);
+  const totalMinutes = Math.floor(whole / 60);
+  if (totalMinutes < 60) {
+    const secs = whole - totalMinutes * 60;
+    return secs > 0 ? `${totalMinutes}m ${secs}s` : `${totalMinutes}m`;
+  }
   const days = Math.floor(totalMinutes / 1440);
   const hours = Math.floor((totalMinutes % 1440) / 60);
   const minutes = totalMinutes % 60;
@@ -226,10 +232,4 @@ export function formatDuration(seconds: number | null | undefined): string {
   if (days > 0) return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
   if (hours > 0) return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
   return `${minutes}m`;
-}
-
-/** Duration in whole days, for swing-oriented readouts. */
-export function secondsToDays(seconds: number | null | undefined): number | null {
-  if (seconds == null || Number.isNaN(seconds) || seconds < 0) return null;
-  return seconds / 86_400;
 }

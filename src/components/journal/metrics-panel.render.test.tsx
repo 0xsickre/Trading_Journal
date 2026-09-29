@@ -70,8 +70,8 @@ describe("HoldTimeCard, CostReportCard, PlanVsRealityCard — presentation only,
     avgBreakevenSeconds: null,
     longestSeconds: 7200,
     longestTradeId: "t1",
-    avgDays: 0.5,
-    maxDays: 1,
+    avgMinutes: 60,
+    maxMinutes: 120,
   };
 
   it("HoldTimeCard formats every duration and leaves breakeven as a dash when unset", () => {
