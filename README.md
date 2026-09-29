@@ -31,7 +31,7 @@ purpose — an applied migration is never edited here, and the comment inside on
 record of the day it was written.
 
 **The interface is deliberately half-and-half, and the line is a clean one.** At least 186 of the
-3,441 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+3,444 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
@@ -852,7 +852,10 @@ stay forever as a value nobody meant, and "not recorded" and "1" are different a
 now (`portfolio-heat.ts`). Per account and never summed across them: 2 % of a €5,000 account plus 2 %
 of a $100,000 one is not 4 % of anything. A half-closed position carries its REMAINING risk, and a
 position with no stop is counted separately — "3 of 4 measured" — because treating an unmeasurable
-position as zero would turn "I do not know" into "it is safe".
+position as zero would turn "I do not know" into "it is safe". **On a Topstep account it is also read
+against the DLL left today** (F5.5): the share of what the Daily Loss Limit still allows that the open
+stops would take if every one were hit now — "25 % of DLL left ($400)", in the loss colour at 100 %
+and over, when one bad minute would end the day by the firm's rule, or "no DLL left today".
 
 **The survival simulation** (`survival.ts`) is the only forward-looking figure in the application. It
 replays the account's own daily results — as percentages of the equity each day opened with — a few
@@ -875,13 +878,14 @@ floor, not a sum no floor applies to. It is seeded from the data, so the same bo
 always gets the same answer, and it states its assumptions beside the number: a probability with a
 hidden assumption reads as a measurement.
 
-**Held at the same time** (`co-exposure.ts`) answers whether three positions are really one. It gives
-two numbers per pair, because the familiar one is the weaker: the OVERLAP is days both instruments
-were open, which is a fact about exposure; the CORRELATION compares days on which both *closed*
-something, which on a swing book is a much smaller set. The coefficient carries a Fisher-z interval
-and is withheld entirely below five shared days. Both are counted in **days**, which suits positions
-held for days and says little about NQ and ES held in the same ten minutes; the intraday version
-(overlap in minutes, open contracts against the DLL) is `FAZA_F_DAYTRADING_PLAN.md` #17.
+**Held at the same time** (`co-exposure.ts`, `/reports`) answers whether two positions are really one.
+It gives two numbers per pair, because the familiar one is the weaker. The OVERLAP is the **time**
+both instruments had a position open, from the fills' own instants (F5.5 — it was counted in days,
+and on a day trader's book every position shares its day with every other); an instrument's own
+overlapping positions count once, and each instrument's total time held is beside it. The
+CORRELATION compares realized P&L over trading days on which both *closed* something — whether their
+days went the same way, a narrower question. It carries a Fisher-z interval and is withheld entirely
+below five shared days.
 
 ## Learning
 

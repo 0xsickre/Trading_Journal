@@ -26,16 +26,18 @@ const row = (
 const tzOf = () => "UTC";
 const netOf = (r: TradeRow) => r.stats?.net_pl ?? null;
 
+const NOW = Date.parse("2026-09-29T15:00:00Z");
+
 describe("spansOf", () => {
-  it("runs an open position up to today, because the exposure is still on", () => {
-    const [span] = spansOf([row("XAUUSD", "2026-03-02T09:00:00Z", null)], tzOf, "2026-03-06");
-    expect(span.openDay).toBe("2026-03-02");
-    expect(span.closeDay).toBe("2026-03-06");
+  it("runs an open position up to now, because the exposure is still on", () => {
+    const [span] = spansOf([row("MNQ", "2026-09-29T14:00:00Z", null)], NOW);
+    expect(span.from).toBe(Date.parse("2026-09-29T14:00:00Z"));
+    expect(span.to).toBe(NOW);
   });
 
   it("ignores a position with no entry instant — it was never exposed", () => {
-    const planned = { id: "p", instrument: "XAUUSD", stats: { opened_at: null } } as unknown as TradeRow;
-    expect(spansOf([planned], tzOf, "2026-03-06")).toEqual([]);
+    const planned = { id: "p", instrument: "MNQ", stats: { opened_at: null } } as unknown as TradeRow;
+    expect(spansOf([planned], NOW)).toEqual([]);
   });
 });
 
@@ -96,36 +98,41 @@ describe("fisherInterval", () => {
   });
 });
 
-describe("instrumentPairs", () => {
-  /** Gold and the index held side by side for a week; copper alone, later. */
+describe("instrumentPairs — held together, in minutes (F5.5)", () => {
+  /** NQ and ES in the same morning; CL alone, in the afternoon. */
   const rows = [
-    row("XAUUSD", "2026-03-02T09:00:00Z", "2026-03-09T15:00:00Z"),
-    row("US100.cash", "2026-03-03T09:00:00Z", "2026-03-06T15:00:00Z"),
-    row("XCUUSD", "2026-04-06T09:00:00Z", "2026-04-08T15:00:00Z"),
+    row("NQ", "2026-09-29T13:35:00Z", "2026-09-29T14:05:00Z"),
+    row("ES", "2026-09-29T13:50:00Z", "2026-09-29T14:20:00Z"),
+    row("CL", "2026-09-29T17:00:00Z", "2026-09-29T17:10:00Z"),
   ];
 
-  it("counts the days two instruments were open together", () => {
-    const pairs = instrumentPairs(spansOf(rows, tzOf, "2026-04-10"), new Map());
-    const goldIndex = pairs.find((p) => p.a === "US100.cash" && p.b === "XAUUSD")!;
-    // 3 Mar to 6 Mar inclusive.
-    expect(goldIndex.overlapDays).toBe(4);
-    const goldCopper = pairs.find((p) => p.b === "XCUUSD" && p.a === "XAUUSD")!;
-    expect(goldCopper.overlapDays).toBe(0);
+  it("counts the minutes two instruments were open together", () => {
+    const pairs = instrumentPairs(spansOf(rows, NOW), new Map());
+    const nqEs = pairs.find((p) => p.a === "ES" && p.b === "NQ")!;
+    // 13:50 to 14:05.
+    expect(nqEs.overlapMinutes).toBe(15);
+    expect([nqEs.aMinutes, nqEs.bMinutes]).toEqual([30, 30]);
+    expect(pairs.find((p) => p.a === "CL" && p.b === "NQ")!.overlapMinutes).toBe(0);
   });
 
-  it("puts the pairs held together most often first", () => {
-    const pairs = instrumentPairs(spansOf(rows, tzOf, "2026-04-10"), new Map());
-    expect(pairs[0].overlapDays).toBeGreaterThanOrEqual(pairs[pairs.length - 1].overlapDays);
+  it("does not count one instrument twice when two of its positions overlap", () => {
+    const twice = [...rows, row("NQ", "2026-09-29T13:40:00Z", "2026-09-29T13:55:00Z")];
+    const nqEs = instrumentPairs(spansOf(twice, NOW), new Map()).find((p) => p.a === "ES" && p.b === "NQ")!;
+    expect(nqEs.overlapMinutes).toBe(15);
+    expect(nqEs.bMinutes).toBe(30);
+  });
+
+  it("puts the pairs held together longest first", () => {
+    const pairs = instrumentPairs(spansOf(rows, NOW), new Map());
+    expect(pairs[0]).toMatchObject({ a: "ES", b: "NQ" });
   });
 
   it("withholds a coefficient below the shared-day gate, and says how many it had", () => {
     const pnl = new Map([
-      ["XAUUSD", new Map([["2026-03-09", 100], ["2026-03-10", -50]])],
-      ["US100.cash", new Map([["2026-03-09", 80], ["2026-03-10", -40]])],
+      ["NQ", new Map([["2026-03-09", 100], ["2026-03-10", -50]])],
+      ["ES", new Map([["2026-03-09", 80], ["2026-03-10", -40]])],
     ]);
-    const pair = instrumentPairs(spansOf(rows, tzOf, "2026-04-10"), pnl).find(
-      (p) => p.a === "US100.cash" && p.b === "XAUUSD",
-    )!;
+    const pair = instrumentPairs(spansOf(rows, NOW), pnl).find((p) => p.a === "ES" && p.b === "NQ")!;
     expect(pair.sharedCloseDays).toBe(2);
     expect(pair.sharedCloseDays).toBeLessThan(MIN_SHARED_DAYS);
     expect(pair.correlation).toBeNull();
@@ -135,12 +142,10 @@ describe("instrumentPairs", () => {
   it("reports the coefficient with its interval once there are enough days", () => {
     const days = ["03-02", "03-03", "03-04", "03-05", "03-06", "03-09"];
     const pnl = new Map([
-      ["XAUUSD", new Map(days.map((d, i) => [`2026-${d}`, (i - 2) * 100]))],
-      ["US100.cash", new Map(days.map((d, i) => [`2026-${d}`, (i - 2) * 70 + 10]))],
+      ["NQ", new Map(days.map((d, i) => [`2026-${d}`, (i - 2) * 100]))],
+      ["ES", new Map(days.map((d, i) => [`2026-${d}`, (i - 2) * 70 + 10]))],
     ]);
-    const pair = instrumentPairs(spansOf(rows, tzOf, "2026-04-10"), pnl).find(
-      (p) => p.a === "US100.cash" && p.b === "XAUUSD",
-    )!;
+    const pair = instrumentPairs(spansOf(rows, NOW), pnl).find((p) => p.a === "ES" && p.b === "NQ")!;
     expect(pair.sharedCloseDays).toBe(6);
     expect(pair.correlation).toBeCloseTo(1, 6);
     expect(pair.correlationLo).not.toBeNull();
@@ -148,7 +153,7 @@ describe("instrumentPairs", () => {
   });
 
   it("has no pairs at all with one instrument", () => {
-    expect(instrumentPairs(spansOf([rows[0]], tzOf, "2026-03-10"), new Map())).toEqual([]);
+    expect(instrumentPairs(spansOf([rows[0]], NOW), new Map())).toEqual([]);
   });
 });
 

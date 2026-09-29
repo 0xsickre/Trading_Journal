@@ -18,8 +18,8 @@ const MAX_ROWS = 6;
 /**
  * Positions still on, in the dashboard's account scope.
  *
- * The page's figures are all REALIZED, so a trader holding three swings saw
- * nothing of them here. This is not money — an open position has no final P&L
+ * The page's figures are all REALIZED, so a position still on showed nothing
+ * of itself here. This is not money — an open position has no final P&L
  * and there is no live price to mark it against — it is exposure: what is on,
  * since when, how much is left, and where the stop sits.
  */
@@ -28,6 +28,7 @@ export function OpenPositionsWidget({
   tzOf,
   now: nowProp,
   equityOf,
+  dllLeftOf,
   currency = "USD",
 }: {
   rows: TradeRow[];
@@ -36,6 +37,8 @@ export function OpenPositionsWidget({
   now?: number;
   /** Current equity per account — the denominator of the heat figure. */
   equityOf?: (accountId: string) => number | null;
+  /** Today's Daily Loss Limit left per Topstep account — the heat's second yardstick. */
+  dllLeftOf?: (accountId: string) => number | null;
   currency?: string;
 }) {
   // Read once per mount: "held for" is a glance, not a ticking clock.
@@ -51,7 +54,7 @@ export function OpenPositionsWidget({
    * Open risk, per account and never summed across them: 2 % of a 5,000
    * account and 2 % of a 100,000 one are not 4 % of anything that exists.
    */
-  const heats = equityOf ? heatByAccount(open, equityOf) : [];
+  const heats = equityOf ? heatByAccount(open, equityOf, dllLeftOf) : [];
 
   return (
     <Card className="h-full">
@@ -86,6 +89,16 @@ export function OpenPositionsWidget({
                           counted here rather than added as a zero. */}
                       {h.unpriced > 0 && ` · ${h.priced} of ${h.priced + h.unpriced} measured`}
                     </span>
+                    {h.dllLeft != null && (
+                      <span
+                        className={`ml-2 ${h.dllUsedPct == null || h.dllUsedPct >= 100 ? "text-[var(--loss)]" : "text-muted-foreground"}`}
+                        title="If every open stop were hit now, this share of today's Daily Loss Limit would be gone."
+                      >
+                        {h.dllUsedPct != null
+                          ? `${h.dllUsedPct.toFixed(0)}% of DLL left (${fmtMoney(h.dllLeft, currency)})`
+                          : "no DLL left today"}
+                      </span>
+                    )}
                   </span>
                 </p>
               );

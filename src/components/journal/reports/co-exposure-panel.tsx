@@ -2,17 +2,17 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MIN_SHARED_DAYS, type InstrumentPair } from "@/lib/journal/co-exposure";
+import { formatDuration } from "@/lib/journal/units";
 
 /**
  * Which instruments were held at the same time, and whether they moved
  * together.
  *
  * Two answers on purpose, because the familiar one is the weaker one here. The
- * OVERLAP is a fact about exposure: these two were open on the same days, so a
- * bad session hit both. The CORRELATION compares days on which both closed
- * something, which on a swing book is a much smaller set — two positions that
- * ran side by side for three weeks and closed on different days correlate at
- * nothing while having been one bet.
+ * OVERLAP is a fact about exposure: the minutes both were open, so one move of
+ * the tape hit both. The CORRELATION compares trading days on which both closed
+ * something, and says whether those days went the same way — a narrower
+ * question than whether the positions ran side by side.
  *
  * So the coefficient is withheld below five shared days rather than printed
  * with a caveat, and shown with its interval above them.
@@ -20,6 +20,7 @@ import { MIN_SHARED_DAYS, type InstrumentPair } from "@/lib/journal/co-exposure"
 export function CoExposurePanel({ pairs }: { pairs: InstrumentPair[] }) {
   if (pairs.length === 0) return null;
   const shown = pairs.slice(0, 10);
+  const minutes = (m: number) => (m > 0 ? formatDuration(m * 60) : "—");
 
   return (
     <Card>
@@ -32,7 +33,7 @@ export function CoExposurePanel({ pairs }: { pairs: InstrumentPair[] }) {
             <thead className="text-muted-foreground">
               <tr className="border-b text-left text-xs">
                 <th className="py-2 pr-3 font-medium">Pair</th>
-                <th className="py-2 pr-3 text-right font-medium">Days together</th>
+                <th className="py-2 pr-3 text-right font-medium">Time together</th>
                 <th className="py-2 pr-3 text-right font-medium">Of each</th>
                 <th className="py-2 text-right font-medium">Correlation</th>
               </tr>
@@ -43,9 +44,9 @@ export function CoExposurePanel({ pairs }: { pairs: InstrumentPair[] }) {
                   <td className="py-2 pr-3">
                     {p.a} · {p.b}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums">{p.overlapDays}</td>
+                  <td className="py-2 pr-3 text-right tabular-nums">{minutes(p.overlapMinutes)}</td>
                   <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
-                    {p.aDays} / {p.bDays}
+                    {minutes(p.aMinutes)} / {minutes(p.bMinutes)}
                   </td>
                   <td className="py-2 text-right tabular-nums">
                     {p.correlation == null ? (
@@ -70,9 +71,9 @@ export function CoExposurePanel({ pairs }: { pairs: InstrumentPair[] }) {
           </table>
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
-          Days together counts exposure — both positions open on the same day. The coefficient only
-          compares days on which both closed a trade, so it answers a narrower question and is left
-          blank under {MIN_SHARED_DAYS} of them.
+          Time together counts exposure — both instruments open in the same minutes. The coefficient
+          only compares trading days on which both closed a trade, so it answers a narrower question
+          and is left blank under {MIN_SHARED_DAYS} of them.
         </p>
       </CardContent>
     </Card>

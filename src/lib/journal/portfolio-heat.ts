@@ -4,9 +4,14 @@
  * THE GAP THIS CLOSES. Every risk figure in this journal is per trade: the
  * tracker grades each entry against a ceiling, and the reports group them. None
  * of them adds up what is open at the same moment. Three positions at 1 % are
- * not 3 % of anything if they gap together — and this is a swing book that
- * holds overnight and over weekends, where one Sunday open can move all three
- * at once.
+ * not 3 % of anything if they move together — and a day trader running NQ and
+ * ES in the same minute is holding one idea twice.
+ *
+ * AGAINST THE DLL (F5.5). On a Topstep account the number that ends the day is
+ * not a percentage of equity but the Daily Loss Limit left today. So the heat
+ * also says what share of that the open stops would take if all were hit at
+ * once — past 100 % one bad minute ends the day by the firm's rule, not the
+ * trader's.
  *
  * PER ACCOUNT, NEVER ACROSS. A percentage has a denominator, and two accounts
  * do not share one: 2 % of a €5,000 account plus 2 % of a $100,000 account is
@@ -43,6 +48,10 @@ export type BookHeat = {
   totalRiskPct: number | null;
   priced: number;
   unpriced: number;
+  /** Topstep: what the DLL still allows today; null off Topstep. */
+  dllLeft: number | null;
+  /** The measured open risk as a share of that; null without a DLL or with none left to divide by. */
+  dllUsedPct: number | null;
 };
 
 /**
@@ -76,6 +85,7 @@ export function heatForAccount(
   accountId: string,
   openRows: readonly TradeRow[],
   equityNow: number | null,
+  dllLeft: number | null = null,
 ): BookHeat {
   const positions: HeatPosition[] = openRows.map((row) => {
     const riskMoney = openRiskMoney(row);
@@ -104,6 +114,8 @@ export function heatForAccount(
         : null,
     priced: priced.length,
     unpriced: positions.length - priced.length,
+    dllLeft,
+    dllUsedPct: dllLeft != null && dllLeft > 0 ? (totalRiskMoney / dllLeft) * 100 : null,
   };
 }
 
@@ -117,6 +129,8 @@ export function heatForAccount(
 export function heatByAccount(
   openRows: readonly TradeRow[],
   equityOf: (accountId: string) => number | null,
+  /** Today's DLL left per Topstep account; null for any other. */
+  dllLeftOf: (accountId: string) => number | null = () => null,
 ): BookHeat[] {
   const byAccount = new Map<string, TradeRow[]>();
   for (const row of openRows) {
@@ -127,6 +141,6 @@ export function heatByAccount(
     byAccount.set(id, arr);
   }
   return [...byAccount.entries()].map(([id, rows]) =>
-    heatForAccount(id, rows, equityOf(id)),
+    heatForAccount(id, rows, equityOf(id), dllLeftOf(id)),
   );
 }

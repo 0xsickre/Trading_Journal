@@ -1,103 +1,113 @@
 /**
- * Are my three positions actually one position?
+ * Were two instruments one bet?
  *
- * A swing book that holds overnight carries several instruments at once, and
- * "1 % each" is only 3 % of risk if the three move independently. In a risk-off
- * session they do not: gold, the index and copper answer the same headline, and
- * one gap opens all three at the same time.
+ * A day trader who runs NQ and ES in the same morning is not diversified: the
+ * two answer the same tape, and "1 R each" is closer to 2 R on one idea. The
+ * question is how much of the time they were held TOGETHER (F5.5: in minutes,
+ * not in days — every intraday position shares its day with every other).
  *
  * TWO ANSWERS, BECAUSE ONE OF THEM IS NOT ENOUGH.
  *
- *   - **Overlap** is the honest one for this book: how many days two
- *     instruments were open AT THE SAME TIME. It asks about exposure, it needs
- *     nothing but the positions, and it cannot be wrong.
+ *   - **Overlap** is the honest one: the minutes in which both instruments had
+ *     a position open, from the fills' own times. It asks about exposure, it
+ *     needs nothing but the positions, and it cannot be wrong.
  *   - **Correlation** of realized daily P&L is the familiar one, and it answers
- *     a narrower question than it appears to: it compares days on which both
- *     instruments CLOSED something. A three-week gold swing and a three-week
- *     index swing that ran side by side and closed on different days correlate
- *     at zero here while having been the same bet throughout.
+ *     a narrower question than it appears to: it compares trading days on which
+ *     both instruments CLOSED something, and says whether their days went the
+ *     same way — not whether the positions ran side by side.
  *
- * So the pair carries both, and the correlation carries its own interval. On a
- * book of forty to seventy trades a year the shared days are few, and a
- * coefficient of 0.82 over six of them is the kind of number this whole phase
- * exists to stop printing without a warning.
+ * So the pair carries both, and the correlation carries its own interval. Days
+ * on which both instruments closed a trade stay few even on a busy book, and a
+ * coefficient of 0.82 over six of them is the kind of number this journal
+ * refuses to print without a warning.
  */
 
-import { dayKeyIn, type DayZone } from "./time";
+import { dayKeyIn, toEpoch, type DayZone } from "./time";
 import type { TradeRow } from "./types";
 
-/** Below this many shared days a coefficient is not reported at all. */
+/** Below this many shared close days a coefficient is not reported at all. */
 export const MIN_SHARED_DAYS = 5;
 
 export type InstrumentPair = {
   a: string;
   b: string;
-  /** Days both instruments held an open position. */
-  overlapDays: number;
-  /** Days each was open, for the share the overlap represents. */
-  aDays: number;
-  bDays: number;
+  /** Minutes both instruments held an open position at the same time. */
+  overlapMinutes: number;
+  /** Minutes each was held, for the share the overlap represents. */
+  aMinutes: number;
+  bMinutes: number;
   /** Pearson r of realized daily P&L over shared CLOSE days; null below the gate. */
   correlation: number | null;
   /** 95 % Fisher-z interval around it, null when the coefficient is. */
   correlationLo: number | null;
   correlationHi: number | null;
-  /** Days that fed the coefficient — not the same as `overlapDays`. */
+  /** Trading days that fed the coefficient — a different thing from the overlap. */
   sharedCloseDays: number;
 };
 
-type Span = { instrument: string; openDay: string; closeDay: string | null };
+type Span = { instrument: string; from: number; to: number };
 
 /**
- * The days each position was open, as day keys in the account's zone.
+ * When each position was open, as epoch milliseconds.
  *
- * A still-open position runs to `today`, which is what makes the overlap a
- * statement about now as well as about history.
+ * A still-open position runs to `now`, which is what makes the overlap a
+ * statement about the present as well as about history.
  */
-export function spansOf(
-  rows: readonly TradeRow[],
-  tzOf: (row: TradeRow) => DayZone,
-  today: string,
-): Span[] {
+export function spansOf(rows: readonly TradeRow[], now: number): Span[] {
   const out: Span[] = [];
   for (const row of rows) {
     const instrument = (row.instrument as string) ?? "";
-    const openedAt = row.stats?.opened_at ?? null;
-    if (!instrument || !openedAt) continue;
-    const tz = tzOf(row);
-    const openDay = dayKeyIn(openedAt, tz);
-    if (!openDay) continue;
+    const from = toEpoch(row.stats?.opened_at ?? null);
+    if (!instrument || !Number.isFinite(from)) continue;
     const closedAt = row.stats?.closed_at ?? null;
-    out.push({
-      instrument,
-      openDay,
-      closeDay: closedAt ? dayKeyIn(closedAt, tz) : today,
-    });
+    const to = closedAt ? toEpoch(closedAt) : now;
+    if (!Number.isFinite(to) || to < from) continue;
+    out.push({ instrument, from, to });
   }
   return out;
 }
 
-/** Day keys an instrument was exposed on, deduped across its positions. */
-function daysByInstrument(spans: readonly Span[]): Map<string, Set<string>> {
-  const out = new Map<string, Set<string>>();
-  for (const s of spans) {
-    const set = out.get(s.instrument) ?? new Set<string>();
-    // Walked as keys rather than as instants: a position open over a weekend
-    // is exposed on the weekend, whatever the market did.
-    for (let d = s.openDay; d <= (s.closeDay ?? s.openDay); d = nextDay(d)) {
-      set.add(d);
-      if (d === s.closeDay) break;
+type Interval = [number, number];
+
+/**
+ * An instrument's exposure as disjoint intervals: two positions on the same
+ * instrument at once (a scale-in written as two trades, two accounts) are one
+ * stretch of exposure, not twice the minutes.
+ */
+function exposureByInstrument(spans: readonly Span[]): Map<string, Interval[]> {
+  const raw = new Map<string, Interval[]>();
+  for (const s of spans) raw.set(s.instrument, [...(raw.get(s.instrument) ?? []), [s.from, s.to]]);
+  const out = new Map<string, Interval[]>();
+  for (const [name, list] of raw) {
+    const merged: Interval[] = [];
+    for (const [a, b] of list.sort((x, y) => x[0] - y[0])) {
+      const last = merged.at(-1);
+      if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+      else merged.push([a, b]);
     }
-    out.set(s.instrument, set);
+    out.set(name, merged);
   }
   return out;
 }
 
-function nextDay(day: string): string {
-  const t = Date.parse(`${day}T00:00:00Z`);
-  if (!Number.isFinite(t)) return day;
-  return new Date(t + 86_400_000).toISOString().slice(0, 10);
+const lengthOf = (list: readonly Interval[]) => list.reduce((s, [a, b]) => s + (b - a), 0);
+
+/** Length of the time two sets of disjoint, sorted intervals share. */
+function sharedLength(x: readonly Interval[], y: readonly Interval[]): number {
+  let i = 0;
+  let j = 0;
+  let total = 0;
+  while (i < x.length && j < y.length) {
+    const lo = Math.max(x[i][0], y[j][0]);
+    const hi = Math.min(x[i][1], y[j][1]);
+    if (hi > lo) total += hi - lo;
+    if (x[i][1] < y[j][1]) i++;
+    else j++;
+  }
+  return total;
 }
+
+const MINUTE = 60_000;
 
 /**
  * Pearson correlation over the days BOTH series have a value for.
@@ -169,7 +179,7 @@ export function instrumentPairs(
   spans: readonly Span[],
   dailyPnlByInstrument: ReadonlyMap<string, ReadonlyMap<string, number>>,
 ): InstrumentPair[] {
-  const exposure = daysByInstrument(spans);
+  const exposure = exposureByInstrument(spans);
   const names = [...exposure.keys()].sort();
   const out: InstrumentPair[] = [];
 
@@ -177,25 +187,23 @@ export function instrumentPairs(
     for (let j = i + 1; j < names.length; j++) {
       const a = names[i];
       const b = names[j];
-      const aDays = exposure.get(a)!;
-      const bDays = exposure.get(b)!;
-      let overlap = 0;
-      for (const d of aDays) if (bDays.has(d)) overlap++;
+      const aSpans = exposure.get(a)!;
+      const bSpans = exposure.get(b)!;
 
       const pnlA = dailyPnlByInstrument.get(a);
       const pnlB = dailyPnlByInstrument.get(b);
       const corr = pnlA && pnlB ? pearson(pnlA, pnlB) : null;
       // Below the gate the coefficient is withheld entirely rather than shown
-      // with a caveat: six shared days cannot carry a number this suggestive.
+      // with a caveat: five shared days cannot carry a number this suggestive.
       const reportable = corr != null && corr.n >= MIN_SHARED_DAYS ? corr : null;
       const ci = reportable ? fisherInterval(reportable.r, reportable.n) : null;
 
       out.push({
         a,
         b,
-        overlapDays: overlap,
-        aDays: aDays.size,
-        bDays: bDays.size,
+        overlapMinutes: sharedLength(aSpans, bSpans) / MINUTE,
+        aMinutes: lengthOf(aSpans) / MINUTE,
+        bMinutes: lengthOf(bSpans) / MINUTE,
         correlation: reportable?.r ?? null,
         correlationLo: ci?.lo ?? null,
         correlationHi: ci?.hi ?? null,
@@ -203,12 +211,12 @@ export function instrumentPairs(
       });
     }
   }
-  // The pairs that were open together most often come first: that is the
-  // question — which of these am I holding at the same time.
-  return out.sort((x, y) => y.overlapDays - x.overlapDays || x.a.localeCompare(y.a));
+  // The pairs held together longest come first: that is the question — which
+  // of these am I holding at the same time.
+  return out.sort((x, y) => y.overlapMinutes - x.overlapMinutes || x.a.localeCompare(y.a));
 }
 
-/** Realized P&L per day, per instrument — the correlation's input. */
+/** Realized P&L per trading day (the account's day), per instrument — the correlation's input. */
 export function dailyPnlByInstrument(
   rows: readonly TradeRow[],
   tzOf: (row: TradeRow) => DayZone,

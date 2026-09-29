@@ -371,18 +371,18 @@ export function ReportsWorkbench({
    * Which instruments were carried at the same time.
    *
    * Built from the filtered set, so it answers about the book on screen. The
-   * spans run to today, which for a closed book is simply the last day each
-   * position was open.
+   * spans run to the page's mount — a glance, not a ticking clock — which for a
+   * closed book is simply each position's exit.
    */
+  const [mountedAt] = useState(() => Date.now());
   const pairs = useMemo(() => {
     const rows = scopedBook.map((t) => t.trade.row);
     const tz = (row: TradeRow) => tzOf({ row });
-    const today = new Date().toISOString().slice(0, 10);
     return instrumentPairs(
-      spansOf(rows, tz, today),
+      spansOf(rows, mountedAt),
       dailyPnlByInstrument(rows, tz, (row) => row.stats?.net_pl ?? null),
     );
-  }, [scopedBook, tzOf]);
+  }, [scopedBook, tzOf, mountedAt]);
 
 
   /**

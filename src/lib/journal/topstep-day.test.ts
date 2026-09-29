@@ -149,9 +149,9 @@ describe("cash and exposure use the same day", () => {
     expect([...cashByDay([ev], zoneOf).keys()]).toEqual(["2026-09-29"]);
   });
 
-  it("spans and per-instrument days", () => {
-    expect(spansOf([tsEvening], zoneOfRow, "2026-09-30")).toEqual([
-      { instrument: "MNQ", openDay: "2026-09-29", closeDay: "2026-09-29" },
+  it("spans are instants, and per-instrument P&L lands on the Topstep day", () => {
+    expect(spansOf([tsEvening], Date.parse("2026-09-30T00:00:00Z"))).toEqual([
+      { instrument: "MNQ", from: Date.parse(EVENING_OPEN), to: Date.parse(EVENING_CLOSE) },
     ]);
     expect([...(dailyPnlByInstrument([tsEvening], zoneOfRow, (r) => r.stats?.net_pl ?? null).get("MNQ")?.keys() ?? [])]).toEqual([
       "2026-09-29",

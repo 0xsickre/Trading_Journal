@@ -148,3 +148,23 @@ describe("heatByAccount — percentages of different denominators are never adde
     expect(heatByAccount([orphan], () => 1000)).toEqual([]);
   });
 });
+
+describe("heat against the DLL left today (F5.5)", () => {
+  it("states what share of the DLL the open stops would take if all were hit", () => {
+    // 10 contracts × 10 points = 100 of risk; 400 left today → 25 %.
+    const [heat] = heatByAccount([row({ id: "a", entryQty: 10 })], () => 50_000, () => 400);
+    expect(heat.dllLeft).toBe(400);
+    expect(heat.dllUsedPct).toBe(25);
+  });
+
+  it("passes 100 % when a full stop-out would breach the DLL", () => {
+    const heat = heatForAccount("acc-1", [row({ id: "a", entryQty: 50 })], 50_000, 400);
+    expect(heat.dllUsedPct).toBe(125);
+  });
+
+  it("has no share off Topstep, nor with nothing left to divide by", () => {
+    expect(heatForAccount("acc-1", [row({ id: "a" })], 1000).dllUsedPct).toBeNull();
+    const spent = heatForAccount("acc-1", [row({ id: "a" })], 1000, 0);
+    expect([spent.dllLeft, spent.dllUsedPct]).toEqual([0, null]);
+  });
+});

@@ -2277,6 +2277,9 @@ export function Dashboard({
             rows={scopedRows}
             tzOf={(t) => zoneTz(tzForAccount(t.account_id))}
             equityOf={(id) => equityByAccount[id] ?? null}
+            dllLeftOf={(id) =>
+              topstepStatuses.find((s) => s.account.id === id)?.result.dllLeftToday ?? null
+            }
             currency={currency}
           />
         ),
