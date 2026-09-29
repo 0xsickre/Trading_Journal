@@ -49,6 +49,8 @@ import { drawdownDuration, drawdownEpisodes } from "@/lib/journal/balance";
  */
 /** What `insightResult` answers while its panel is switched off. */
 const EMPTY_INSIGHTS = { insights: [], skipped: [] };
+/** A stable empty default, so the tracker memo does not recompute on every render. */
+const NO_BRIEFS: SessionBrief[] = [];
 
 const chartLoading = () => (
   <div className="h-full w-full animate-pulse rounded-md bg-muted/40" />
@@ -199,6 +201,7 @@ import {
   type PnlMode,
 } from "@/lib/journal/analytics";
 import { TopstepBanner } from "@/components/journal/topstep-banner";
+import { briefResolver, type SessionBrief } from "@/lib/journal/session-brief";
 import { evaluateTopstep, topstepConfigFromAccount, topstepRulesResolver, type TopstepResult } from "@/lib/journal/topstep";
 import { unpricedClosedCount } from "@/lib/journal/money-provenance";
 import {
@@ -389,6 +392,7 @@ export function Dashboard({
   fieldDefs = [],
   trackerRules = [],
   checkins = [],
+  briefs = NO_BRIEFS,
   todayKey,
   timezone,
   playbooks = [],
@@ -409,6 +413,8 @@ export function Dashboard({
   /** Including retired ones — a rule live on a past day still scored that day. */
   trackerRules?: TrackerRule[];
   checkins?: TrackerCheckin[];
+  /** The morning briefs of the tracker span — two rules read their windows and close. */
+  briefs?: SessionBrief[];
   /**
    * Today in the ACCOUNT's timezone, resolved on the server.
    *
@@ -1260,6 +1266,8 @@ export function Dashboard({
       tzForAccount,
     );
 
+    const briefOf = briefResolver(briefs);
+
     const byDate = new Map<string, Map<string, TrackerCheckin>>();
     for (const c of checkins) {
       const day = byDate.get(c.report_date) ?? new Map<string, TrackerCheckin>();
@@ -1284,6 +1292,7 @@ export function Dashboard({
           index,
           configsFromRules(rulesLiveOn(trackerRules, d)),
           equityOf,
+          { briefOf },
         ),
         byDate.get(d) ?? new Map(),
       ),
@@ -1291,6 +1300,7 @@ export function Dashboard({
   }, [
     trackerRules,
     checkins,
+    briefs,
     trades,
     accounts,
     scopedCashEvents,

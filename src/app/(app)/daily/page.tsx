@@ -160,7 +160,7 @@ export default async function DailyPage({
     dayRules,
     // `dayRules`, not `rules`: the limits scored here must be the ones in force
     // on this day, not a retired rule's leftovers.
-    evaluateAutoRulesForDay(reportDate, index, configsFromRules(dayRules), equityOf),
+    evaluateAutoRulesForDay(reportDate, index, configsFromRules(dayRules), equityOf, { briefOf }),
     checkins,
   );
 
@@ -232,6 +232,7 @@ export default async function DailyPage({
           index,
           configsFromRules(rulesLiveOn(rules, d)),
           equityOf,
+          { briefOf },
         ),
         checkinsByDay.get(d) ?? new Map(),
       ),

@@ -24,6 +24,13 @@ export const AUTO_RULE_KEYS = [
   "thesis_written",
   "risk_per_trade",
   "risk_matched_intent",
+  // F4, the day trader's rules (G5): an entry count and a losing run per
+  // account, flat by the Topstep close, and no entry inside a red window of
+  // the day's brief.
+  "max_trades_per_day",
+  "stop_after_losses",
+  "flat_by_close",
+  "no_entry_in_red_window",
 ] as const;
 export type AutoRuleKey = (typeof AUTO_RULE_KEYS)[number];
 
@@ -50,6 +57,15 @@ export const AUTO_RULES_NEEDING_PCT: ReadonlySet<AutoRuleKey> = new Set([
   "risk_per_trade",
 ]);
 
+/**
+ * Auto rules that need a whole number before they can say anything: how many
+ * entries a day, how many losses in a row. Counted per account (G9).
+ */
+export const AUTO_RULES_NEEDING_COUNT: ReadonlySet<AutoRuleKey> = new Set([
+  "max_trades_per_day",
+  "stop_after_losses",
+]);
+
 /** ISO weekday numbering, 1=Mon … 7=Sun — never `Date#getDay`'s 0=Sun. */
 export const ISO_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
@@ -71,7 +87,7 @@ export type TrackerRule = {
   active_days: number[];
   /** NULL for a manual rule. */
   auto_key: AutoRuleKey | null;
-  config: { pct?: number };
+  config: { pct?: number; count?: number };
   is_mandatory: boolean;
   sort_order: number;
   /**

@@ -10,6 +10,7 @@ import { getPrimaryAccount } from "@/lib/journal/accounts";
 import { DEFAULT_TZ, accountDayZone, dayKeyIn, todayIn } from "@/lib/journal/time";
 import { trackerRuleMayHardDelete } from "@/lib/journal/settings-rules";
 import {
+  AUTO_RULES_NEEDING_COUNT,
   AUTO_RULES_NEEDING_PCT,
   TRACKER_STAGES,
   type AutoRuleKey,
@@ -40,11 +41,20 @@ type Result = { ok: true } | { ok: false; error: string };
 const pctConfig = z
   .object({ pct: z.number().finite().positive().max(100).optional() })
   .strict();
+/**
+ * A whole number of entries or losses. Capped at 20: no day trader's rule is
+ * "stop after twenty-one losses", and a stray keypress turning 2 into 200 would
+ * switch the rule off rather than tighten it — the same guard as the 100 % cap.
+ */
+const countConfig = z
+  .object({ count: z.number().int().positive().max(20).optional() })
+  .strict();
 const emptyConfig = z.object({}).strict();
 
 function configSchema(autoKey: AutoRuleKey | null) {
   if (autoKey == null) return emptyConfig;
-  return AUTO_RULES_NEEDING_PCT.has(autoKey) ? pctConfig : emptyConfig;
+  if (AUTO_RULES_NEEDING_PCT.has(autoKey)) return pctConfig;
+  return AUTO_RULES_NEEDING_COUNT.has(autoKey) ? countConfig : emptyConfig;
 }
 
 /**
@@ -171,7 +181,9 @@ export async function updateTrackerRule(
         error:
           current.auto_key == null
             ? "A manual rule has nothing to configure."
-            : "The limit must be a positive number.",
+            : AUTO_RULES_NEEDING_COUNT.has(current.auto_key as AutoRuleKey)
+              ? "The count must be a whole number from 1 to 20."
+              : "The limit must be a positive number.",
       };
     }
     next.config = parsed.data;

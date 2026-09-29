@@ -6,7 +6,7 @@ import {
   type AutoConfigs,
 } from "./auto-rules";
 import type { TradeRow } from "../types";
-import { AUTO_RULE_KEYS, AUTO_RULES_NEEDING_PCT } from "../tracker-types";
+import { AUTO_RULE_KEYS, AUTO_RULES_NEEDING_COUNT, AUTO_RULES_NEEDING_PCT } from "../tracker-types";
 
 type Spec = {
   id: string;
@@ -85,6 +85,8 @@ const LIMITS: AutoConfigs = {
   max_loss_per_trade: { pct: 2 },
   max_loss_per_week: { pct: 6 },
   risk_per_trade: { pct: 2 },
+  max_trades_per_day: { count: 2 },
+  stop_after_losses: { count: 2 },
 };
 
 const evalDay = (day: string, specs: Spec[], configs: AutoConfigs = LIMITS, tz = "UTC") =>
@@ -375,6 +377,10 @@ describe("the closed set of auto rules", () => {
     for (const key of AUTO_RULE_KEYS) expect(verdicts()[key].key, key).toBe(key);
   });
 
+  it("asks for a count on the two count rules and only on those", () => {
+    expect([...AUTO_RULES_NEEDING_COUNT].sort()).toEqual(["max_trades_per_day", "stop_after_losses"]);
+  });
+
   it("asks for a limit on the money rules and only on those", () => {
     expect([...AUTO_RULES_NEEDING_PCT].sort()).toEqual([
       "max_loss_per_day",
@@ -387,7 +393,7 @@ describe("the closed set of auto rules", () => {
     // reasons, and the checklist shows each of them to the user.
     for (const key of AUTO_RULE_KEYS) {
       expect(verdicts()[key].reason, key).toBe(
-        AUTO_RULES_NEEDING_PCT.has(key) ? "unconfigured" : "no_trades",
+        AUTO_RULES_NEEDING_PCT.has(key) || AUTO_RULES_NEEDING_COUNT.has(key) ? "unconfigured" : "no_trades",
       );
     }
   });

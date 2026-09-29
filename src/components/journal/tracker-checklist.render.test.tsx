@@ -340,3 +340,57 @@ describe("each stage names itself", () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+describe("the day-trading rules say counts, times and windows — not money (F4)", () => {
+  const autoRule = (id: string, auto_key: TrackerRule["auto_key"]) =>
+    rule({ id, text: id, stage: "trade", auto_key, config: { count: 2 } });
+
+  it("names the entries, the losing run, the close in CT and the window", () => {
+    const rules = [
+      autoRule("a", "max_trades_per_day"),
+      autoRule("b", "stop_after_losses"),
+      autoRule("c", "flat_by_close"),
+      autoRule("d", "no_entry_in_red_window"),
+    ];
+    const fail = { verdict: "fail" as const, reason: "violated" as const, offenders: ["t"], observed: null, limit: null };
+    render(
+      <TrackerStageSection
+        stage="trade"
+        data={data({
+          rules,
+          auto: {
+            max_trades_per_day: { ...fail, key: "max_trades_per_day", counted: { observed: 3, limit: 2 } },
+            stop_after_losses: { ...fail, key: "stop_after_losses", counted: { observed: 2, limit: 2 } },
+            flat_by_close: { ...fail, key: "flat_by_close", at: "2026-04-06T20:10:00.000Z" },
+            no_entry_in_red_window: { ...fail, key: "no_entry_in_red_window", window: "USD CPI m/m" },
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText(/3 ulaza na jednom nalogu, dozvoljeno 2/)).toBeInTheDocument();
+    expect(screen.getByText(/ulaz posle 2 uzastopna gubitka/)).toBeInTheDocument();
+    expect(screen.getByText(/posle kraja Topstep dana \(15:10 CT\)/)).toBeInTheDocument();
+    expect(screen.getByText(/ulaz u crvenom prozoru \(USD CPI m\/m\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+  });
+
+  it("says why a rule could not be scored", () => {
+    const na = { verdict: "na" as const, offenders: [], observed: null, limit: null };
+    render(
+      <TrackerStageSection
+        stage="trade"
+        data={data({
+          rules: [autoRule("d", "no_entry_in_red_window"), autoRule("c", "flat_by_close"), autoRule("a", "max_trades_per_day")],
+          auto: {
+            no_entry_in_red_window: { ...na, key: "no_entry_in_red_window", reason: "no_brief" },
+            flat_by_close: { ...na, key: "flat_by_close", reason: "not_yet", at: "2026-04-06T20:10:00.000Z" },
+            max_trades_per_day: { ...na, key: "max_trades_per_day", reason: "unconfigured" },
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText(/Brief za ovaj dan nije stigao/)).toBeInTheDocument();
+    expect(screen.getByText(/Pozicija je još otvorena — ocenjuje se posle kraja Topstep dana \(15:10 CT\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Broj nije podešen/)).toBeInTheDocument();
+  });
+});

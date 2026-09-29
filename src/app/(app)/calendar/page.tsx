@@ -34,6 +34,8 @@ import { CalendarViewToggle } from "@/components/journal/calendar-view-toggle";
 import { PageHeader } from "@/components/app/page-header";
 import { accountDayZoneResolver } from "@/lib/journal/time";
 import { topstepRulesResolver } from "@/lib/journal/topstep";
+import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
+import { briefResolver } from "@/lib/journal/session-brief";
 
 
 function indexBy(rows: PeriodRow[]): Map<string, PeriodRow> {
@@ -136,7 +138,7 @@ export default async function CalendarPage({
     const from = days[0];
     const to = days[days.length - 1];
 
-    const [reports, rules, checkinsByDay] = await Promise.all([
+    const [reports, rules, checkinsByDay, briefs] = await Promise.all([
       getDailyReportsInRange(from, to),
       // Retired rules included, and `rulesLiveOn` filters per day — a rule that
       // was live in March still judged March, and dropping it would raise that
@@ -146,7 +148,10 @@ export default async function CalendarPage({
       // date range, which was computed above, so awaiting it separately bought
       // nothing but a round trip.
       getCheckins(from, to),
+      // The month's briefs, for the rules that read the red windows and the close.
+      getSessionBriefs(from, to),
     ]);
+    const briefOf = briefResolver(briefs);
 
     const index = buildTradeDayIndex(trades, tzOfRow, topstepRulesResolver(accounts));
     const equityOf = bookEquityLadder(index, accounts, cashEvents, tzFor);
@@ -158,7 +163,7 @@ export default async function CalendarPage({
         const live = rulesLiveOn(rules, d);
         return resolveAutoResults(
           live,
-          evaluateAutoRulesForDay(d, index, configsFromRules(live), equityOf),
+          evaluateAutoRulesForDay(d, index, configsFromRules(live), equityOf, { briefOf }),
           checkinsByDay.get(d) ?? new Map(),
         );
       },

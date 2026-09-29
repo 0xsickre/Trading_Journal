@@ -7,6 +7,8 @@ import { getCurrentUser } from "@/lib/supabase/user";
 import { getAccounts, getPrimaryAccount } from "@/lib/journal/accounts";
 import { accountDayZoneResolver, todayFor } from "@/lib/journal/time";
 import { topstepRulesResolver } from "@/lib/journal/topstep";
+import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
+import { briefResolver } from "@/lib/journal/session-brief";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getTrackerRules } from "@/lib/journal/tracker/queries";
 import { bookEquityLadder } from "@/lib/journal/tracker/equity-ladder";
@@ -131,11 +133,14 @@ export async function lockDay(reportDate: string): Promise<Result> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Nisi prijavljen." };
 
-  const [accounts, rules, trades, cashEvents] = await Promise.all([
+  const [accounts, rules, trades, cashEvents, briefs] = await Promise.all([
     getAccounts(),
     getTrackerRules({ includeRetired: true }),
     getTradesWithStats(),
     getCashEvents(),
+    // The day's brief, for the two rules that read it — what is frozen is what
+    // the page showed, and the page read the same row.
+    getSessionBriefs(reportDate, reportDate),
   ]);
 
   const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
@@ -156,6 +161,7 @@ export async function lockDay(reportDate: string): Promise<Result> {
     index,
     configsFromRules(rulesLiveOn(rules, reportDate)),
     equityOf,
+    { briefOf: briefResolver(briefs) },
   );
 
   const { error } = await supabase.rpc("tj_lock_day", {

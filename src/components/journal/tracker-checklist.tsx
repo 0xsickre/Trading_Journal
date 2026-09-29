@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { fmtMoney } from "@/lib/journal/format";
+import { fmtInTz } from "@/lib/journal/time";
 import {
   STAGE_LABELS,
   type TrackerRule,
@@ -36,6 +37,44 @@ const BASIS_TEXT: Record<LimitBasis, string> = {
   topstep_budget_slippage: "budžet rizika na ulazu + 10 % za proklizavanje",
 };
 
+/** A close time on Chicago's clock — Topstep states its day there. */
+const ctTime = (iso: string) => `${fmtInTz(iso, "America/Chicago", "HH:mm")} CT`;
+
+/**
+ * The verdict of a day-trading rule (F4), whose numbers are counts, a time or a
+ * window rather than money. Null for every other rule and for the reasons the
+ * generic text already says right.
+ */
+function dayTradingText(res: AutoRuleResult): string | null {
+  const c = res.counted;
+  const verdict = res.reason === "violated" || res.reason === "ok";
+  if (!verdict) return null;
+  const broke = res.reason === "violated";
+  switch (res.key) {
+    case "max_trades_per_day":
+      if (!c) return null;
+      return broke
+        ? `Prekršeno: ${c.observed} ulaza na jednom nalogu, dozvoljeno ${c.limit}.`
+        : `U okviru — najviše ${c.observed} od ${c.limit} ulaza po nalogu.`;
+    case "stop_after_losses":
+      if (!c) return null;
+      return broke
+        ? `Prekršeno: ulaz posle ${c.observed} uzastopna gubitka (stop posle ${c.limit}).`
+        : `U okviru — nijedan ulaz posle ${c.limit} uzastopna gubitka.`;
+    case "flat_by_close":
+      if (!res.at) return null;
+      return broke
+        ? `Prekršeno: pozicija otvorena posle kraja Topstep dana (${ctTime(res.at)}).`
+        : `Sve pozicije zatvorene pre kraja Topstep dana (${ctTime(res.at)}).`;
+    case "no_entry_in_red_window":
+      return broke
+        ? `Prekršeno: ulaz u crvenom prozoru${res.window ? ` (${res.window})` : ""}.`
+        : "Nijedan ulaz u crvenom prozoru brief-a.";
+    default:
+      return null;
+  }
+}
+
 /**
  * Why an auto rule reached its verdict.
  *
@@ -53,8 +92,13 @@ function autoReasonText(
   // balance the day opened with.
   const limit = res.limit ?? null;
 
+  const day = dayTradingText(res);
+  if (day) return day;
+
   switch (res.reason) {
     case "unconfigured":
+      if (res.key === "max_trades_per_day" || res.key === "stop_after_losses")
+        return "Broj nije podešen — podesi ga u Settings › Tracker da bi pravilo počelo da se ocenjuje.";
       return "Limit nije podešen — podesi ga u Settings › Tracker da bi pravilo počelo da se ocenjuje.";
     case "no_equity":
       return "Nema equity-ja od kog bi se procenat računao — upiši početni balans naloga u Settings › Accounts.";
@@ -66,6 +110,16 @@ function autoReasonText(
       return "Nijedan trejd ovog dana nije planiran pre ulaza — upisan posle zatvaranja ili uvozom, pa teza pre ulaza nije mogla da postoji. Ocenjuju se samo trejdovi otvoreni iz plana.";
     case "unpriced":
       return "Trejd bez vrednosti poena — rezultat je nepoznat, pa se dan po ovom pravilu ne ocenjuje.";
+    case "no_brief":
+      return "Brief za ovaj dan nije stigao u journal — bez njegovih crvenih prozora pravilo nema po čemu da oceni.";
+    case "market_closed":
+      return "Po brief-u je berza ovog dana zatvorena — nema kraja dana po kome bi se ocenilo.";
+    case "not_yet":
+      return res.at
+        ? `Pozicija je još otvorena — ocenjuje se posle kraja Topstep dana (${ctTime(res.at)}).`
+        : "Pozicija je još otvorena — ocenjuje se posle kraja Topstep dana.";
+    case "no_topstep_trades":
+      return "Pravilo važi za Topstep naloge; ovog dana nije bilo Topstep trejdova.";
     case "frozen":
       return "Zamrznuto kad je dan zaključan. Ispravka trejda pomera P&L, ali ne i ocenu ovog dana.";
     case "violated":

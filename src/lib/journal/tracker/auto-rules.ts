@@ -25,6 +25,7 @@ import {
   type TopstepTrade,
 } from "../topstep";
 import { addDaysToDayKey, dayKeyIn, type DayZone } from "../time";
+import { flatByFor, redWindowAt, type SessionBrief } from "../session-brief";
 import { weekStartOfDayKey } from "../weekly-review";
 import { matchedRiskIntent, riskMoneyAtEntry, riskPctTaken } from "../risk-taken";
 import type { EquityLadder } from "./equity-ladder";
@@ -65,7 +66,15 @@ export type AutoReason =
    * Only Topstep trades, and Topstep has no such rule — the weekly loss limit.
    * The rule grades the other accounts; this week had none of theirs.
    */
-  | "not_on_topstep";
+  | "not_on_topstep"
+  /** A rule that reads the morning brief, on a day the brief did not reach the journal. */
+  | "no_brief"
+  /** The brief says the exchange was closed that day — there is no close to be flat by. */
+  | "market_closed"
+  /** A Topstep position still open, and the close not reached yet. */
+  | "not_yet"
+  /** `flat_by_close` is a Topstep rule; the day had no Topstep trade. */
+  | "no_topstep_trades";
 
 /**
  * Where a money limit came from when it is not a percentage of equity: a
@@ -93,6 +102,16 @@ export type AutoRuleResult = {
   limit?: number | null;
   /** Set when `limit` is a Topstep plan's money rather than a percentage. */
   basis?: LimitBasis;
+  /**
+   * A count rule's numbers — entries on the busiest account, or the losing run
+   * an entry followed — beside the configured count. Kept apart from
+   * `observed`/`limit`, which the checklist reads as money.
+   */
+  counted?: { observed: number; limit: number };
+  /** `flat_by_close`: the close the day was graded against, ISO UTC. */
+  at?: string | null;
+  /** `no_entry_in_red_window`: the window of the first offending entry. */
+  window?: string;
 };
 
 /** Everything the evaluators need, and nothing else. */
@@ -101,6 +120,9 @@ export type TrackerTrade = {
   accountId: string | null;
   label: string;
   status: string;
+  /** Instants, ISO — the order of entries and exits within a day is the whole of two rules. */
+  openedAt: string;
+  closedAt: string | null;
   /** Account-timezone day the position was opened. */
   openDay: string;
   /** Account-timezone day it closed, null while still open. */
@@ -155,7 +177,19 @@ export type TradeDayIndex = {
   byCloseDay: Map<string, TrackerTrade[]>;
 };
 
-export type AutoConfigs = Partial<Record<AutoRuleKey, { pct?: number }>>;
+export type AutoConfigs = Partial<Record<AutoRuleKey, { pct?: number; count?: number }>>;
+
+/**
+ * What the day-trading rules read besides the trades: the morning brief of a
+ * Topstep day, and the present moment (a position still open is only late once
+ * the close has passed). Both optional — a caller without them gets `no_brief`
+ * and the default 15:10 CT close, never a guess.
+ */
+export type AutoContext = {
+  briefOf?: (day: string) => SessionBrief | null;
+  /** Epoch ms; defaults to the moment of evaluation. */
+  now?: number;
+};
 
 /**
  * Positions that count as executed discipline.
@@ -211,6 +245,8 @@ function toTrackerTrade(row: TradeRow, zone: DayZone, book: TopstepBook | null):
     accountId: row.account_id,
     label: row.trade_no != null ? `#${row.trade_no}` : row.id.slice(0, 8),
     status: String(row.status ?? ""),
+    openedAt,
+    closedAt: row.stats?.closed_at ?? null,
     openDay: dayKeyIn(openedAt, zone),
     closeDay: row.stats?.closed_at ? dayKeyIn(row.stats.closed_at, zone) : null,
     netPl: row.stats?.net_pl ?? null,
@@ -745,6 +781,156 @@ function evalRiskMatchedIntent(trades: TrackerTrade[]): AutoRuleResult {
   return { key, verdict: "pass", reason: "ok", offenders: [], observed: null, limit: null };
 }
 
+// --- The day trader's rules (F4: G5, G7, G9) -----------------------------------
+
+const epoch = (iso: string | null | undefined) => Date.parse(String(iso ?? ""));
+const byOpened = (a: TrackerTrade, b: TrackerTrade) => epoch(a.openedAt) - epoch(b.openedAt);
+
+/** Trades grouped by account, in first-seen order — the count rules are per account (G9). */
+function byAccount(trades: TrackerTrade[]): TrackerTrade[][] {
+  const groups = new Map<string, TrackerTrade[]>();
+  for (const t of trades) groups.set(t.accountId ?? "", [...(groups.get(t.accountId ?? "") ?? []), t]);
+  return [...groups.values()];
+}
+
+/**
+ * At most N entries per account on the day they were OPENED.
+ *
+ * The offenders are the entries past the N-th, in the order they were taken —
+ * the first two trades of a day were within the rule; the third was the breach.
+ */
+function evalMaxTradesPerDay(opened: TrackerTrade[], count: number | undefined): AutoRuleResult {
+  const key: AutoRuleKey = "max_trades_per_day";
+  if (count == null) return na(key, "unconfigured");
+  if (opened.length === 0) return na(key, "no_trades");
+  const offenders: string[] = [];
+  let busiest = 0;
+  for (const group of byAccount(opened)) {
+    const sorted = [...group].sort(byOpened);
+    busiest = Math.max(busiest, sorted.length);
+    offenders.push(...sorted.slice(count).map((t) => t.id));
+  }
+  const breached = offenders.length > 0;
+  return {
+    key,
+    verdict: breached ? "fail" : "pass",
+    reason: breached ? "violated" : "ok",
+    offenders,
+    observed: null,
+    limit: null,
+    counted: { observed: busiest, limit: count },
+  };
+}
+
+/**
+ * No entry after N losses in a row on the same account, that day.
+ *
+ * A loss counts only once it has CLOSED before the entry — the decision to take
+ * the next trade is made with the losses the trader already has. The run is
+ * broken by any trade that was not a loss (a win or an exact scratch), and a
+ * trade with no price leaves every entry after it unknown: the missing result
+ * may be the loss that completed the run, or the win that broke it.
+ */
+function evalStopAfterLosses(
+  opened: TrackerTrade[],
+  closedToday: TrackerTrade[],
+  count: number | undefined,
+): AutoRuleResult {
+  const key: AutoRuleKey = "stop_after_losses";
+  if (count == null) return na(key, "unconfigured");
+  if (opened.length === 0) return na(key, "no_trades");
+  const offenders: string[] = [];
+  let unknown = false;
+  let worst = 0;
+  for (const t of [...opened].sort(byOpened)) {
+    const before = closedToday
+      .filter((c) => c.id !== t.id && c.accountId === t.accountId && epoch(c.closedAt) < epoch(t.openedAt))
+      .sort((a, b) => epoch(a.closedAt) - epoch(b.closedAt));
+    let run = 0;
+    let runUnknown = false;
+    for (let i = before.length - 1; i >= 0; i--) {
+      const net = before[i].netPl;
+      if (net == null) {
+        runUnknown = true;
+        break;
+      }
+      if (net >= 0) break;
+      run++;
+    }
+    worst = Math.max(worst, run);
+    if (run >= count) offenders.push(t.id);
+    else if (runUnknown) unknown = true;
+  }
+  if (offenders.length === 0 && unknown) return na(key, "unpriced");
+  const breached = offenders.length > 0;
+  return {
+    key,
+    verdict: breached ? "fail" : "pass",
+    reason: breached ? "violated" : "ok",
+    offenders,
+    observed: null,
+    limit: null,
+    counted: { observed: worst, limit: count },
+  };
+}
+
+/**
+ * Every Topstep position opened on the day is flat by that Topstep day's close:
+ * the brief's time (a holiday or an early close), else 15:10 CT.
+ *
+ * A position still open is late only once the close has passed; before that it
+ * is `not_yet`, not a pass — nothing about it has been decided.
+ */
+function evalFlatByClose(day: string, opened: TrackerTrade[], ctx: Required<AutoContext>): AutoRuleResult {
+  const key: AutoRuleKey = "flat_by_close";
+  if (opened.length === 0) return na(key, "no_trades");
+  const topstep = opened.filter((t) => t.topstep);
+  if (topstep.length === 0) return na(key, "no_topstep_trades");
+  const flat = flatByFor(day, ctx.briefOf(day));
+  if (flat.at == null) return na(key, "market_closed");
+  const close = epoch(flat.at);
+  const offenders: string[] = [];
+  let pending = 0;
+  for (const t of topstep) {
+    const out = t.closedAt != null ? epoch(t.closedAt) : null;
+    if (out != null ? out > close : ctx.now > close) offenders.push(t.id);
+    else if (out == null) pending++;
+  }
+  if (offenders.length === 0 && pending === topstep.length) return { ...na(key, "not_yet"), at: flat.at };
+  const breached = offenders.length > 0;
+  return {
+    key,
+    verdict: breached ? "fail" : "pass",
+    reason: breached ? "violated" : "ok",
+    offenders,
+    observed: null,
+    limit: null,
+    at: flat.at,
+  };
+}
+
+/** No entry inside a red window of the day's brief — the brief's own windows only (G7). */
+function evalNoEntryInRedWindow(day: string, opened: TrackerTrade[], ctx: Required<AutoContext>): AutoRuleResult {
+  const key: AutoRuleKey = "no_entry_in_red_window";
+  if (opened.length === 0) return na(key, "no_trades");
+  const brief = ctx.briefOf(day);
+  if (!brief) return na(key, "no_brief");
+  const hits = [...opened]
+    .sort(byOpened)
+    .map((t) => ({ t, w: redWindowAt(t.openedAt, brief.redWindows) }))
+    .filter((h) => h.w != null);
+  const breached = hits.length > 0;
+  return {
+    key,
+    verdict: breached ? "fail" : "pass",
+    reason: breached ? "violated" : "ok",
+    offenders: hits.map((h) => h.t.id),
+    observed: null,
+    limit: null,
+    ...(breached ? { window: hits[0].w?.title } : {}),
+  };
+}
+
 /**
  * Verdicts for one day.
  *
@@ -767,10 +953,16 @@ export function evaluateAutoRulesForDay(
    * report `no_equity`, which is the truthful answer rather than a silent pass.
    */
   equityOf: EquityLadder = () => null,
+  /** The brief and the present moment, for the day-trading rules. */
+  context: AutoContext = {},
 ): Record<AutoRuleKey, AutoRuleResult> {
   const closed = index.byCloseDay.get(day) ?? [];
   const opened = index.byOpenDay.get(day) ?? [];
   const equity = equityOf(day);
+  const ctx: Required<AutoContext> = {
+    briefOf: context.briefOf ?? (() => null),
+    now: context.now ?? Date.now(),
+  };
 
   return {
     max_loss_per_day: evalMaxLossPerDay(
@@ -808,12 +1000,19 @@ export function evaluateAutoRulesForDay(
     // has already been spent.
     risk_per_trade: evalRiskPerTrade(opened, configs.risk_per_trade?.pct, equity),
     risk_matched_intent: evalRiskMatchedIntent(opened),
+    // Open day: each is a decision taken at entry — a third trade, a trade after
+    // the run of losses, an entry in a red window. The losing run reads the
+    // day's CLOSED trades, since a loss only exists once it has closed.
+    max_trades_per_day: evalMaxTradesPerDay(opened, configs.max_trades_per_day?.count),
+    stop_after_losses: evalStopAfterLosses(opened, closed, configs.stop_after_losses?.count),
+    flat_by_close: evalFlatByClose(day, opened, ctx),
+    no_entry_in_red_window: evalNoEntryInRedWindow(day, opened, ctx),
   };
 }
 
 /** Configs keyed by `auto_key`, for the evaluator. */
 export function configsFromRules(
-  rules: readonly { auto_key: AutoRuleKey | null; config: { pct?: number } }[],
+  rules: readonly { auto_key: AutoRuleKey | null; config: { pct?: number; count?: number } }[],
 ): AutoConfigs {
   const out: AutoConfigs = {};
   for (const r of rules) {

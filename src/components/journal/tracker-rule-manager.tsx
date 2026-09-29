@@ -25,11 +25,13 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
+  AUTO_RULES_NEEDING_COUNT,
   AUTO_RULES_NEEDING_PCT,
   ISO_WEEKDAYS,
   STAGE_LABELS,
   TRACKER_STAGES,
   WEEKDAY_LABELS,
+  type AutoRuleKey,
   type TrackerRule,
   type TrackerStage,
 } from "@/lib/journal/tracker-types";
@@ -41,6 +43,20 @@ import {
   restoreTrackerRule,
   updateTrackerRule,
 } from "@/app/(app)/settings/tracker-actions";
+
+/** What the count means, said beside the number — "2" alone is not a rule. */
+const COUNT_UNITS: Partial<Record<AutoRuleKey, string>> = {
+  max_trades_per_day: "entries / day / account",
+  stop_after_losses: "losses in a row",
+};
+
+/** An auto rule that cannot be scored until the trader sets its number. */
+function isUnconfigured(r: TrackerRule): boolean {
+  if (r.auto_key == null) return false;
+  if (AUTO_RULES_NEEDING_PCT.has(r.auto_key)) return r.config.pct == null;
+  if (AUTO_RULES_NEEDING_COUNT.has(r.auto_key)) return r.config.count == null;
+  return false;
+}
 
 // Every tracker action revalidates /settings itself, so no router.refresh().
 function useAction() {
@@ -114,11 +130,31 @@ function RuleRow({
   const [pct, setPct] = useState(
     rule.config.pct != null ? String(rule.config.pct) : "",
   );
+  const [count, setCount] = useState(
+    rule.config.count != null ? String(rule.config.count) : "",
+  );
 
   const retired = rule.deleted_at != null;
   const isAuto = rule.auto_key != null;
   const needsPct = rule.auto_key != null && AUTO_RULES_NEEDING_PCT.has(rule.auto_key);
-  const unconfigured = needsPct && rule.config.pct == null;
+  const needsCount = rule.auto_key != null && AUTO_RULES_NEEDING_COUNT.has(rule.auto_key);
+  const unconfigured = isUnconfigured(rule);
+
+  function saveCount() {
+    const raw = count.trim();
+    if (raw === "") {
+      if (rule.config.count != null) run(() => clearTrackerRuleLimit(rule.id));
+      return;
+    }
+    const n = Number(raw);
+    // Mirrors the server schema, in the same words.
+    if (!Number.isInteger(n) || n < 1 || n > 20) {
+      toast.error("The count must be a whole number from 1 to 20.");
+      return;
+    }
+    if (n === rule.config.count) return;
+    run(() => updateTrackerRule(rule.id, { config: { count: n } }));
+  }
 
   function savePct() {
     const raw = pct.trim();
@@ -188,6 +224,25 @@ function RuleRow({
               basis, and the basis is the balance the DAY OPENED with — see
               `equity-ladder.ts`. */}
           <span className="text-xs text-muted-foreground">% of equity</span>
+        </div>
+      )}
+
+      {needsCount && (
+        <div className="flex shrink-0 items-center gap-1">
+          <Input
+            inputMode="numeric"
+            value={count}
+            onChange={(e) => setCount(e.target.value)}
+            onBlur={saveCount}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+            placeholder="Count"
+            aria-label={COUNT_UNITS[rule.auto_key as AutoRuleKey] ?? "Count"}
+            className={cn("h-8 w-16", unconfigured && "border-amber-500/60")}
+            disabled={pending || retired}
+          />
+          <span className="text-xs text-muted-foreground">{COUNT_UNITS[rule.auto_key as AutoRuleKey]}</span>
         </div>
       )}
 
@@ -342,9 +397,7 @@ function AddRuleForm({ stage }: { stage: TrackerStage }) {
 export function TrackerRuleManager({ rules }: { rules: TrackerRule[] }) {
   const live = rules.filter((r) => r.deleted_at == null);
   const retired = rules.filter((r) => r.deleted_at != null);
-  const unconfigured = live.filter(
-    (r) => r.auto_key != null && AUTO_RULES_NEEDING_PCT.has(r.auto_key) && r.config.pct == null,
-  ).length;
+  const unconfigured = live.filter(isUnconfigured).length;
 
   return (
     <div className="space-y-4">
