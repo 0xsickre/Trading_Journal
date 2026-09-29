@@ -81,6 +81,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 29.09.2026 | F4.5 | Time stop je kolona `time_stop` (tekst, CHECK na 5 vrednosti), ne `time_stop_minutes`: „do kraja sesije" je pravi izbor, a ne magičan broj, i razlikuje se od „nije upisano" (NULL). Uvoz (`import/actions.ts`) ima eksplicitan spisak kolona; `time_stop` je dodat posle primene migracije |
 | 29.09.2026 | H2 | Backtest nalozi više ne trebaju (samo Topstep) → % pragovi i ne-Topstep grana tracker-a idu u H2 |
 | 29.09.2026 | F4 | Trejder odobrio primenu četiri F4 migracije; primenjene istog dana |
+| 29.09.2026 | F4 | Trejder: `/daily` nema logike („Oba pitanja…", a pitanja nema; prošlo vreme; upućuje na karticu koje nema). Stranica je preuređena hronološki (1 · Pre sesije, 2 · Tokom sesije, 3 · Posle sesije), kartica „Pre nego što uđeš" ima dva numerisana pitanja u budućem vremenu, faze pravila na srpskom |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.

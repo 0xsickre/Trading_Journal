@@ -168,7 +168,7 @@ function GoalDialog({
         <Textarea
           value={draft}
           onChange={(e) => onDraftChange(e.target.value)}
-          placeholder='npr. "Bez novih pozicija kad je mentalno stanje ispod 5"'
+          placeholder='npr. "Nijedan ulaz kad je mentalno stanje ispod 3"'
           rows={3}
         />
         <DialogFooter>

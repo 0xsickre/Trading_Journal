@@ -11,7 +11,6 @@ import { cn } from "@/lib/utils";
 import { fmtMoney } from "@/lib/journal/format";
 import { fmtInTz } from "@/lib/journal/time";
 import {
-  STAGE_LABELS,
   type TrackerRule,
   type TrackerStage,
 } from "@/lib/journal/tracker-types";
@@ -28,6 +27,18 @@ const STATUS_LABELS: Record<DayStatus, string> = {
   broken: "Dan prekršen",
   skipped: "Nema pravila za ovaj dan",
   pending: "Dan u toku",
+};
+
+/**
+ * The stages as `/daily` names them. Settings edits rules under the English
+ * `STAGE_LABELS`; this page is the Serbian half, and it groups the rules under
+ * the part of the day they belong to. Still one name per stage — never chosen
+ * by the caller (see `boxed`).
+ */
+const DAILY_STAGE_LABELS: Record<TrackerStage, string> = {
+  prepare: "Pravila pripreme",
+  trade: "Pravila trgovanja",
+  reflect: "Pravila osvrta",
 };
 
 /** Where a Topstep limit came from, said after the amount. */
@@ -397,7 +408,7 @@ export function TrackerStageSection({
     return (
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">{STAGE_LABELS[stage]}</CardTitle>
+          <CardTitle className="text-base">{DAILY_STAGE_LABELS[stage]}</CardTitle>
         </CardHeader>
         <CardContent>{rows}</CardContent>
       </Card>
@@ -406,7 +417,7 @@ export function TrackerStageSection({
 
   return (
     <div className="space-y-2 border-t pt-4">
-      <p className="text-sm font-medium">{STAGE_LABELS[stage]}</p>
+      <p className="text-sm font-medium">{DAILY_STAGE_LABELS[stage]}</p>
       {rows}
     </div>
   );

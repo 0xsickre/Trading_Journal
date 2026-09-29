@@ -255,34 +255,7 @@ export default async function DailyPage({
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title="Dnevna prijava"
-        description="Pre sesije: šta brief kaže o danu i u kakvom si stanju. Posle: da li je svaki trejd pregledan i da li su pravila ispoštovana. Osvrt na nedelju je na nedeljnoj stranici."
-      />
-
-      <SessionBriefCard day={reportDate} brief={briefOf(reportDate)} tz={timezone} dllLeft={dllLeft} />
-
-      <FocusGoalCard goal={activeGoal} reportDate={reportDate} />
-
-      {/* Above the day's money on purpose. The streak is what this page is FOR
-          — the P&L is the outcome of decisions the checklist below governs, and
-          putting the run first says which of the two the day is judged on. */}
-      <DailyStreakStrip
-        current={streak.current}
-        meanPct={meanCompliance(series)}
-        scoredDays={series.filter((d) => d.pct != null).length}
-        hasRules={rules.length > 0}
-      />
-
-      <DayStatsCard
-        key={`stats:${reportDate}`}
-        stats={dayStats}
-        costs={dayCosts}
-        volume={dayVolume}
-        trades={dayTradeRows}
-        currency={pooledCurrency}
-      />
-
-      <ReviewGapsCard
-        gaps={reviewGaps(trades, reportDate, (t) => dayKeyIn(t.stats?.closed_at ?? null, tzOf(t)))}
+        description="Dan u tri koraka: pre sesije, tokom nje i posle nje. Osvrt na nedelju je na nedeljnoj stranici."
       />
 
       <DailyReportForm
@@ -293,6 +266,37 @@ export default async function DailyPage({
         timezone={timezone}
         activeGoal={activeGoal}
         tracker={tracker}
+        // Above the rest on purpose: the streak is what this page is FOR — the
+        // P&L is the outcome of decisions the checklist governs.
+        streak={
+          <DailyStreakStrip
+            current={streak.current}
+            meanPct={meanCompliance(series)}
+            scoredDays={series.filter((d) => d.pct != null).length}
+            hasRules={rules.length > 0}
+          />
+        }
+        beforeSession={
+          <>
+            <SessionBriefCard day={reportDate} brief={briefOf(reportDate)} tz={timezone} dllLeft={dllLeft} />
+            <FocusGoalCard goal={activeGoal} reportDate={reportDate} />
+          </>
+        }
+        afterSession={
+          <>
+            <ReviewGapsCard
+              gaps={reviewGaps(trades, reportDate, (t) => dayKeyIn(t.stats?.closed_at ?? null, tzOf(t)))}
+            />
+            <DayStatsCard
+              key={`stats:${reportDate}`}
+              stats={dayStats}
+              costs={dayCosts}
+              volume={dayVolume}
+              trades={dayTradeRows}
+              currency={pooledCurrency}
+            />
+          </>
+        }
       />
     </div>
   );

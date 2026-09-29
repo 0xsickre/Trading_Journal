@@ -238,7 +238,7 @@ describe("moving between days", () => {
     // this uses the checkbox rather than the prose that used to be here.
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     drawOn("2026-04-02", "2026-04-10");
-    fireEvent.click(screen.getByRole("checkbox", { name: /Danas bez novog ulaska/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Danas ne trgujem/ }));
 
     const prev = screen.getByLabelText("Prethodni dan");
     const click = new MouseEvent("click", { bubbles: true, cancelable: true });
@@ -257,5 +257,49 @@ describe("moving between days", () => {
     screen.getByLabelText("Prethodni dan").dispatchEvent(click);
     expect(confirmSpy).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
+  });
+});
+
+describe("the day reads in the order it is lived", () => {
+  it("before the session, during it, after it — in that order", () => {
+    render(
+      <DailyReportForm
+        report={null}
+        reportDate="2026-04-06"
+        today="2026-04-06"
+        timezone="America/New_York"
+        activeGoal={null}
+        tracker={trackerData()}
+        beforeSession={<p>BRIEF</p>}
+        afterSession={<p>REVIEW GAPS</p>}
+      />,
+    );
+    const text = document.body.textContent ?? "";
+    const at = (s: string) => text.indexOf(s);
+    expect(at("Pre sesije")).toBeGreaterThan(-1);
+    expect(at("Pre sesije")).toBeLessThan(at("BRIEF"));
+    expect(at("BRIEF")).toBeLessThan(at("Pre nego što uđeš"));
+    expect(at("Pre nego što uđeš")).toBeLessThan(at("Tokom sesije"));
+    expect(at("Tokom sesije")).toBeLessThan(at("Posle sesije"));
+    expect(at("Posle sesije")).toBeLessThan(at("REVIEW GAPS"));
+  });
+
+  it("asks its two questions as questions, about the day ahead", () => {
+    render(
+      <DailyReportForm
+        report={null}
+        reportDate="2026-04-06"
+        today="2026-04-06"
+        timezone="America/New_York"
+        activeGoal={null}
+        tracker={trackerData()}
+      />,
+    );
+    expect(screen.getByText("1. Kako si danas?")).toBeInTheDocument();
+    expect(screen.getByText("2. Da li danas trguješ?")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /Danas ne trgujem/ })).toBeInTheDocument();
+    // Nothing points at a card that no longer exists, or speaks of the day as past.
+    expect(screen.queryByText(/Otvorene pozicije iznad/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Nisam otvorio/)).not.toBeInTheDocument();
   });
 });

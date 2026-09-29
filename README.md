@@ -29,13 +29,13 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 181 of the
-3,526 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 186 of the
+3,537 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
 |---|---|
-| Daily (the "Pred sesiju" card included), weekly, tracker, focus goal | 126 |
+| Daily (the "Pred sesiju" card included), weekly, tracker, focus goal | 131 |
 | Mentor-export prompt | 33 |
 | Weekly "Napredak" (progress) and experiment cards | 18 |
 | Weekly insight sentence | 1 |
@@ -142,7 +142,7 @@ The routine both repos are built around — the same five steps as "Dnevni tok j
 
 | When | Where | What |
 |---|---|---|
-| Before the session | `/daily` → Pred sesiju | The brief's red windows, the Topstep close, the expected range and, today, the DLL left |
+| Before the session | `/daily` → 1 · Pre sesije | The brief's red windows, the Topstep close, the expected range and, today, the DLL left; then two questions — how you are, and whether you trade today |
 | Before and during the trade | TopstepX | Only a limit with an OCO bracket; contracts from the brief's "Ugovori danas". Nothing in the journal |
 | Right after the close | `/trades/log` | Four numbers (entry, stop, exit, contracts), setup, A/B/C, the mistake if not an A; a sentence and a chart optional. About a minute |
 | End of the day | `/import` | One TopstepX CSV: the trades logged by hand are recognised (entry ±0.05 %, ±10 min) and get the exact fills; the answers stay. MAE/MFE arrives on its own — provisional the same evening, exact the next morning |
@@ -180,7 +180,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 3,003 tests across 182 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 3,005 tests across 182 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -326,7 +326,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/trades/new`, `/trades/[id]/edit` | Trade form: plan, fills, playbook checklist, psychology, images. In the **order of the decisions**: account, instrument, then the playbook and its checklist, and only then the prices and the risk. **There is no phase control**: planned or active is what the fills say — an entry fill means you are in the trade — so a select that could disagree with the record is gone, and so is "Move to active". The one lifecycle fact the fills cannot know, a MISSED plan, keeps its button. The instrument is **typed, not scrolled** — `instrument-select.tsx` filters the catalog on symbol, name and asset class. On a **Topstep account** the size is whole contracts: risk by the account's rule (§ Topstep), contracts rounded down with the round-turn commission counted and capped at the plan, stop and target in ticks for the TopstepX bracket — "2 MNQ · $202.44 at the stop incl. commission (stop 200 ticks)" — with the mini or micro alternative and a warning when the count is zero, capped, or three stops no longer fit today's DLL. This is the **plan-first** form, for a limit written well before price gets there; the everyday way in is `/trades/log` |
 | `/trades/log` | **Log Trade**, the sidebar's primary action: a trade logged **after it is flat**. Four numbers off the platform — contracts, entry, stop, exit (target optional) — with "N min ago" chips for the entry time; then the setup (playbook), **A / B / C** on execution (stored as `execution_rating` 5 / 3 / 1), what went wrong only on B or C ("No mistake" recorded on an A), emotions, one sentence (`trade_journal_notes`) and the exit chart. The exit reason is read off the prices — stop, target, breakeven or closed early — and written only when the trader's own Exit Reason list has that item (`quick-log.ts`). The numbers may be rough: the day's TopstepX export matches the trade (entry within 0.05 %, entry time within ten minutes) and replaces the fills, and the answers stay |
 | `/trades/[id]/review` | The same setup / A-B-C / mistake / sentence review for a trade that arrived only through the export. One UPDATE of the review columns (`saveTradeReview`), never `tj_save_trade`, which rewrites fills and rule answers on every save |
-| `/daily` | **Pred sesiju** first — the day's morning brief (`tj_session_briefs`, `session-brief-card.tsx`): the Topstep close on the account's clock ("berza zatvorena" when the brief says so), the red windows, the expected NQ / ES range and, on today's page only, the DLL left on the primary Topstep account. Without a brief it says the brief has not arrived and shows the ordinary 15:10 CT close; a window the journal cannot read is dropped and counted on the card, never guessed. Then **Bez pregleda**: the day's closed trades still missing a setup or an A/B/C grade, each a link to its review (`review-gaps.ts`; the 15:20 CT Telegram reminder in `futures-trading` applies the same rule). Then the day's **pre-market gate** — mental temperature and "am I opening anything new" — the tracker checklist, and the lock. Two answers, down from twenty-one: the rest moved to the position or to the weekly review, and the last six (a macro note and four Douglas-fear checkboxes) **left in Phase E** because nothing ever read them. The day is complete once a focus goal is active. The per-position check-ins **left in H1**: a day trader is flat by the close, so there is no position to check in on |
+| `/daily` | **The day in the order it is lived**, in three numbered parts under the day's heading and its streak (`daily-report-form.tsx`). **1 · Pre sesije**: the morning brief ("Pred sesiju", `tj_session_briefs`, `session-brief-card.tsx` — the Topstep close on the account's clock, "berza zatvorena" when the brief says so, the red windows, the expected NQ / ES range and, on today's page only, the DLL left on the primary Topstep account; without a brief it says so and shows the ordinary 15:10 CT close, and a window it cannot read is dropped and counted, never guessed), the focus goal, then **"Pre nego što uđeš"** — two questions, numbered and about the day ahead: *1. Kako si danas?* (mental state, 5 stars, a warning under 3) and *2. Da li danas trguješ?* ("Danas ne trgujem", a decision taken before the session) — and the preparation rules. **2 · Tokom sesije**: the trading rules, scored from the trades and the brief. **3 · Posle sesije**: **Bez pregleda** (the day's closed trades still missing a setup or an A/B/C grade, each a link to its review, `review-gaps.ts`; the 15:20 CT Telegram reminder in `futures-trading` applies the same rule), the day's result, the review rules, then save and lock. Until 29.09.2026 the page opened with the day's money and asked "before you enter" only after the trading rules, with a no-trade box in the past tense that pointed at a position card H1 had removed. The rules are grouped as "Pravila pripreme / trgovanja / osvrta" here, in the page's language; Settings edits them under the English stage names. The day is complete once a focus goal is active |
 | `/calendar` | Monthly P&L grid by day, weekly totals |
 | `/weekly` | Weekly review: week rating, five questions, the week's figures split into money and process (`week-recap.ts`), last week's commitment with the answer to whether it held, and an account filter that refuses to sum two currencies. Unsaved answers are kept per week in the browser (`weekly-draft.ts`) and offered back; leaving a week with unsaved text asks first. **Napredak** (`progress.ts`) is the weekend review in six answers, each beside last week: R per setup, what each mistake cost, A against B/C, hour of entry, MAE of winners / MFE of losers / share of the move kept, and trade number in the day plus the trade after a loss |
 | `/playbooks` | Every setup as one table: Trades / Net P&L / Win Rate / Missed / Expectancy per row |
@@ -1428,9 +1428,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-3,003 tests across 182 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,379 tests in 122 files) and `components` (environment `jsdom`, files `*.test.tsx`, 616
-tests in 59 files). The rule is the extension, so no file can land in both. The split exists so that
+3,005 tests across 182 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,379 tests in 122 files) and `components` (environment `jsdom`, files `*.test.tsx`, 626
+tests in 60 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves

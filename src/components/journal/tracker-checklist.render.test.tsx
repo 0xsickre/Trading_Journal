@@ -317,9 +317,11 @@ describe("each stage names itself", () => {
     data({ rules: [rule({ id: `r-${stage}`, text: `Rule for ${stage}`, stage })] });
 
   it.each([
-    ["prepare", "Prepare"],
-    ["trade", "Trade"],
-    ["reflect", "Review"],
+    // In the page's own language: /daily is the Serbian half; Settings keeps
+    // the English stage names it edits them under.
+    ["prepare", "Pravila pripreme"],
+    ["trade", "Pravila trgovanja"],
+    ["reflect", "Pravila osvrta"],
   ] as const)("labels the %s stage %s", (stage, heading) => {
     render(<TrackerStageSection stage={stage} data={ofStage(stage)} />);
     expect(screen.getByText(heading)).toBeInTheDocument();
@@ -330,7 +332,7 @@ describe("each stage names itself", () => {
     // The whole point of splitting `title` into `boxed`: a caller can no longer
     // hand one stage another stage's name, or two stages the same name.
     render(<TrackerStageSection stage="trade" data={ofStage("trade")} boxed />);
-    expect(screen.getByText("Trade")).toBeInTheDocument();
+    expect(screen.getByText("Pravila trgovanja")).toBeInTheDocument();
   });
 
   it("renders nothing at all for a stage with no rules", () => {

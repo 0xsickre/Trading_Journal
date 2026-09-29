@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition, type MouseEvent } from "react";
+import { useEffect, useState, useTransition, type MouseEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { srLatn } from "date-fns/locale/sr-Latn";
@@ -69,6 +69,9 @@ export function DailyReportForm({
   timezone,
   activeGoal,
   tracker,
+  streak,
+  beforeSession,
+  afterSession,
 }: {
   report: DailyReport | null;
   reportDate: string;
@@ -85,6 +88,12 @@ export function DailyReportForm({
    * ticked rule is stored the moment you tick it, the report only on Save.
    */
   tracker: TrackerDayData;
+  /** The run of days behind this one — under the day's heading. */
+  streak?: ReactNode;
+  /** The page's own cards for the start of the day: the morning brief, the focus goal. */
+  beforeSession?: ReactNode;
+  /** The page's own cards for the end of it: trades still to review, the day's result. */
+  afterSession?: ReactNode;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -217,109 +226,127 @@ export function DailyReportForm({
         </div>
       </div>
 
-      {/* One `disabled` on the wrapper instead of threading it through forty
-          controls. The tracker rows inside go read-only the same way — the answer
-          buttons are form controls, so the browser disables them too, and the
-          database trigger refuses the write regardless. Links stay clickable,
-          which is what you want: a sealed day is still readable. */}
-      <fieldset
-        disabled={tracker.locked}
-        className="m-0 min-w-0 space-y-6 border-0 p-0 disabled:opacity-100"
+      {streak}
+
+      {tracker.locked && (
+        <Alert>
+          <AlertDescription>
+            {/* Explicit `{" "}` — see the same banner in
+                `weekly-review-form.tsx`: the plain space written here did not
+                reach the DOM and the sentence ran together at the bracket. */}
+            Ovaj dan je zaključan {lockedAt && `(${lockedAt})`}{" "}
+            i njegov dnevnik se više ne menja. Trejdovi ostaju izmenjivi —
+            ispravka P&amp;L-a je i dalje ispravka činjenice, ali ne pomera
+            ocenu ovog dana.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* The day in the order it is lived: before the session, during it,
+          after it. It used to open with the day's money and the trades still to
+          review, and ask "before you enter" only after the trading rules —
+          answering the morning's questions below the evening's result. */}
+      <DaySection
+        n={1}
+        title="Pre sesije"
+        hint="Šta brief kaže o danu, u kakvom si stanju i da li uopšte trguješ — pre prvog ulaza."
       >
-        {tracker.locked && (
-          <Alert>
-            <AlertDescription>
-              {/* Explicit `{" "}` — see the same banner in
-                  `weekly-review-form.tsx`: the plain space written here did not
-                  reach the DOM and the sentence ran together at the bracket. */}
-              Ovaj dan je zaključan {lockedAt && `(${lockedAt})`}{" "}
-              i njegov dnevnik se više ne menja. Trejdovi ostaju izmenjivi —
-              ispravka P&amp;L-a je i dalje ispravka činjenice, ali ne pomera
-              ocenu ovog dana.
-            </AlertDescription>
-          </Alert>
-        )}
-
-      {/* The tracker checklist is the backbone of the day, not an extra — it is
-          what `tj_lock_day` scores. The trade-stage rules stand on their own
-          because they still apply on a day you did not trade: "I only trade in
-          my defined hours" is answerable, and answerable well, on a flat day,
-          and hiding them would quietly drop rules from the denominator on
-          exactly the days discipline matters most. */}
-      <TrackerStageSection stage="prepare" data={tracker} />
-      {/* Boxed, unlike the other two: this is the biggest stage by far and a
-          card keeps six rules from reading as a run-on of the section above. */}
-      <TrackerStageSection stage="trade" data={tracker} boxed />
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Pre nego što uđeš</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Filter, ne dnevnik. Oba pitanja su o tome šta ćeš tek uraditi.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {lowMental && (
-            <Alert>
-              <AlertDescription>
-                Mentalno stanje ispod 3 zvezdice — razmisli o manjoj veličini
-                pozicije, ili ostani po strani dok se ne osetiš spremnije.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <div className="space-y-2">
-            <Label>Mentalno stanje</Label>
-            {/* Stars, not 1–10. Ten levels is a precision nobody has about their
-                own head; asked for, it produces noise that then feeds a report
-                dimension and an insight rule as if it were signal. */}
-            <StarRating
-              label="Mentalno stanje"
-              value={form.mental_temp}
-              onChange={(next) => patch("mental_temp", next)}
-            />
-          </div>
-
-          <div className="flex items-start gap-2 rounded-md border border-dashed p-3">
-            <Checkbox
-              id="no_trade_day"
-              checked={form.no_trade_day}
-              onCheckedChange={(c) => toggleNoTradeDay(c === true)}
-              className="mt-0.5"
-            />
-            <div>
-              <label
-                htmlFor="no_trade_day"
-                className="cursor-pointer text-sm font-medium"
-              >
-                Danas bez novog ulaska
-              </label>
-              <p className="text-xs text-muted-foreground">
-                Nisam otvorio ništa novo. Otvorene pozicije iznad su i dalje
-                prijavljene — držanje je takođe odluka.
+        {beforeSession}
+        {/* One `disabled` per block instead of threading it through every
+            control. The tracker rows go read-only the same way — the answer
+            buttons are form controls, so the browser disables them too, and the
+            database trigger refuses the write regardless. Links stay clickable:
+            a sealed day is still readable. The page's own cards sit outside
+            these blocks, since they are not part of the day's sealed record. */}
+        <fieldset disabled={tracker.locked} className="m-0 min-w-0 space-y-6 border-0 p-0 disabled:opacity-100">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Pre nego što uđeš</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Dva pitanja pre prvog ulaza. Odgovori su filter za danas, ne dnevnik —
+                čuvaju se dugmetom „Sačuvaj izveštaj“.
               </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="space-y-2">
+                <Label>1. Kako si danas?</Label>
+                {/* Stars, not 1–10. Ten levels is a precision nobody has about
+                    their own head; asked for, it produces noise that then feeds a
+                    report dimension and an insight rule as if it were signal. */}
+                <StarRating
+                  label="Mentalno stanje"
+                  value={form.mental_temp}
+                  onChange={(next) => patch("mental_temp", next)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Mentalno stanje: 1 = umoran ili rastrojen, 5 = odmoran i miran.
+                </p>
+                {lowMental && (
+                  <Alert>
+                    <AlertDescription>
+                      Ispod 3 zvezdice — razmisli o manjoj veličini pozicije, ili ostani
+                      po strani dok se ne osetiš spremnije.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
 
-      {/* The "Kontrola impulsa" card stood here: four Douglas fears as
-          checkboxes and a note. Removed in Phase E, and not because the
-          question is wrong — because NOTHING EVER READ THE ANSWER. No
-          dimension grouped on it, no insight rule joined it, no metric counted
-          it; four booleans and a note were written every trading day and
-          rendered back as four badges in the month list. The same question
-          lives on the trade as `psychology_tags`, which IS a dimension and can
-          be grouped, filtered and compared. */}
+              <div className="space-y-2">
+                <Label>2. Da li danas trguješ?</Label>
+                <div className="flex items-start gap-2 rounded-md border border-dashed p-3">
+                  <Checkbox
+                    id="no_trade_day"
+                    checked={form.no_trade_day}
+                    onCheckedChange={(c) => toggleNoTradeDay(c === true)}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <label htmlFor="no_trade_day" className="cursor-pointer text-sm font-medium">
+                      Danas ne trgujem
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      Odluka pre sesije, ne izgovor posle nje. Dan bez ulaza je i dalje
+                      dan: pravila pripreme i osvrta se ocenjuju, a pravila trgovanja
+                      nemaju šta da ocene.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* What used to be the "Evening · debrief" card lived here      {/* What used to be the "Evening · debrief" card lived here: what I learned,
-          what I will change tomorrow, the day overview, whether I broke a rule.
-          Five prose fields, asked daily, mid-hold. All five moved to the weekly
-          review — a debrief written before the position is closed is a debrief
-          written without the outcome, and asking for one every evening is how a
-          journal turns into homework. */}
-      <TrackerStageSection stage="reflect" data={tracker} />
-      </fieldset>
+          <TrackerStageSection stage="prepare" data={tracker} />
+        </fieldset>
+      </DaySection>
+
+      <DaySection
+        n={2}
+        title="Tokom sesije"
+        hint="Automatska pravila se ocenjuju sama — iz trejdova i iz brief-a. Ručna čekaju tvoj odgovor."
+      >
+        {/* The trade-stage rules stand even on a day you did not trade: "I
+            only trade in my defined hours" is answerable, and answerable well,
+            on a flat day, and hiding them would quietly drop rules from the
+            denominator on exactly the days discipline matters most. Boxed: the
+            biggest stage by far. */}
+        <fieldset disabled={tracker.locked} className="m-0 min-w-0 border-0 p-0 disabled:opacity-100">
+          <TrackerStageSection stage="trade" data={tracker} boxed />
+        </fieldset>
+      </DaySection>
+
+      <DaySection
+        n={3}
+        title="Posle sesije"
+        hint="Pregledaj svaki trejd, pogledaj rezultat dana, odgovori na osvrt — pa sačuvaj i zaključaj dan."
+      >
+        {afterSession}
+        {/* The debrief prose (what I learned, what I change tomorrow) and the
+            four Douglas-fear checkboxes left in Phase E: nothing read them. The
+            week's review asks those questions, with the week's outcome in hand. */}
+        <fieldset disabled={tracker.locked} className="m-0 min-w-0 border-0 p-0 disabled:opacity-100">
+          <TrackerStageSection stage="reflect" data={tracker} />
+        </fieldset>
+      </DaySection>
 
       <div
         className={cn(
@@ -355,6 +382,22 @@ export function DailyReportForm({
         </div>
       </div>
     </div>
+  );
+}
+
+/** One part of the day — before, during or after the session — with a number and one line on what it holds. */
+function DaySection({ n, title, hint, children }: { n: number; title: string; hint: string; children: ReactNode }) {
+  return (
+    <section className="space-y-4">
+      <div className="border-b pb-2">
+        <h2 className="text-base font-semibold">
+          <span className="mr-2 text-muted-foreground tabular-nums">{n}</span>
+          {title}
+        </h2>
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      </div>
+      {children}
+    </section>
   );
 }
 
