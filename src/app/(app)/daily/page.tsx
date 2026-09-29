@@ -49,6 +49,10 @@ import { reviewGaps } from "@/lib/journal/review-gaps";
 import { sharedCurrency } from "@/lib/journal/format";
 import { accountDayZoneResolver } from "@/lib/journal/time";
 import { topstepRulesResolver } from "@/lib/journal/topstep";
+import { getTopstepSizing } from "@/lib/journal/topstep-status";
+import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
+import { briefResolver, briefWindow } from "@/lib/journal/session-brief";
+import { SessionBriefCard } from "@/components/journal/session-brief-card";
 
 export default async function DailyPage({
   searchParams,
@@ -88,6 +92,8 @@ export default async function DailyPage({
     report,
     activeGoal,
     checkinsByDay,
+    briefs,
+    sizing,
   ] = await Promise.all([
     accountsPromise,
     dayPromise,
@@ -106,7 +112,21 @@ export default async function DailyPage({
     dayPromise.then(({ reportDate }) =>
       getCheckins(addDaysToDayKey(reportDate, -(TRACKER_SPAN_DAYS - 1)), reportDate),
     ),
+    // The same window as the check-ins: the card reads the day in view, and the
+    // tracker rules that read the brief score every day of the streak behind it.
+    dayPromise.then(({ reportDate }) => {
+      const w = briefWindow(reportDate, TRACKER_SPAN_DAYS);
+      return getSessionBriefs(w.from, w.to);
+    }),
+    // Room and DLL as they stand NOW — shown on today's page only.
+    getTopstepSizing(),
   ]);
+  const briefOf = briefResolver(briefs);
+  const primarySizing = primary?.topstep_mode ? sizing[primary.id] : undefined;
+  const dllLeft =
+    reportDate === today && primarySizing
+      ? { amount: primarySizing.dllLeftToday, of: primarySizing.plan.dll, currency: primary?.currency ?? "USD" }
+      : null;
   // The day's money is summed across accounts, so it needs ONE currency;
   // with two it is left unsummed rather than printed in the primary's.
   const pooledCurrency = sharedCurrency(accounts);
@@ -234,8 +254,10 @@ export default async function DailyPage({
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title="Dnevna prijava"
-        description="Da li je razlog za držanje svake pozicije preživeo današnji dan i da li si je dirao. Osvrt na to kako je nedelja prošla je na nedeljnoj stranici."
+        description="Pre sesije: šta brief kaže o danu i u kakvom si stanju. Posle: da li je svaki trejd pregledan i da li su pravila ispoštovana. Osvrt na nedelju je na nedeljnoj stranici."
       />
+
+      <SessionBriefCard day={reportDate} brief={briefOf(reportDate)} tz={timezone} dllLeft={dllLeft} />
 
       <FocusGoalCard goal={activeGoal} reportDate={reportDate} />
 

@@ -1252,6 +1252,45 @@ export type Database = {
           },
         ]
       }
+      tj_session_briefs: {
+        Row: {
+          created_at: string
+          day_note: string | null
+          flat_by: string | null
+          id: string
+          ranges: Json
+          red_windows: Json
+          source_url: string | null
+          trading_day: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          day_note?: string | null
+          flat_by?: string | null
+          id?: string
+          ranges?: Json
+          red_windows?: Json
+          source_url?: string | null
+          trading_day: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          day_note?: string | null
+          flat_by?: string | null
+          id?: string
+          ranges?: Json
+          red_windows?: Json
+          source_url?: string | null
+          trading_day?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tj_tracker_checkins: {
         Row: {
           auto_evaluated: boolean

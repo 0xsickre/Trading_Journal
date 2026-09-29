@@ -537,7 +537,7 @@ ne pad stranice (Vercel objavljuje `main` odmah).
 
 | Korak | Šta | Repo | Status |
 |---|---|---|---|
-| F4.1 | `tj_session_briefs` (migracija: tabela, RLS, reset lista); `session-brief.ts` (čist: red → brief, prozori, `flat_by` sa podrazumevanih 15:10 CT); upit; kartica **„Pred sesiju"** na `/daily` (raspon NQ/ES, crveni prozori, kraj dana; „brief nije stigao" kad reda nema); opis `/daily` bez swing teksta | journal | ⏳ |
+| F4.1 | `tj_session_briefs` (migracija: tabela, RLS, reset lista); `session-brief.ts` (čist: red → brief, prozori, `flat_by` sa podrazumevanih 15:10 CT); upit; kartica **„Pred sesiju"** na `/daily` (raspon NQ/ES, crveni prozori, kraj dana; „brief nije stigao" kad reda nema); opis `/daily` bez swing teksta | journal | ✅ kod; migracija `20260929100000` napisana, NIJE primenjena |
 | F4.2 | `brief.py`: prozori kao UTC trenuci (`prozor_utc`), red za journal (čista funkcija + test), `Journal.upsert`, upis posle HTML-a; `--bez-journala` i u probi; greška upisa ne ruši brief (glasno u izlazu) | futures-trading (`main`) | ⏳ |
 | F4.3 | Auto pravila `max_trades_per_day`, `stop_after_losses` (config `count`, po nalogu, G9), `flat_by_close` (Topstep kraj dana iz brief-a, inače 15:10 CT), `no_entry_in_red_window` (samo brief, G7; bez brief-a `na/no_brief`); kontekst `briefOf` + `now` za sve pozivaoce (i zaključavanje dana); Settings menja `count`; migracija: CHECK, 4 pravila za postojeće knjige i seed, penzionisanje 3 ručna (G8) | journal | ⏳ |
 | F4.4 | Kategorije (G4-A, G10): migracija dodaje day-trading stavke i gasi swing stavke; seed za nove knjige | journal | ⏳ |
