@@ -87,8 +87,10 @@ Oba postoje, oba su kolone u gridu i oba idu u izvoz.
 ## 2. Grupisanje, filtriranje, izveštaji
 
 Report engine sa **pivotom** i obaveznim `n` u svakoj ćeliji. Dimenzije: `direction`, `account`,
-`hold_duration`, `r_bucket`, `size_bucket`, `outcome`, `month`, `dow_entry`, `dow_exit`, `insight`,
-**plus svako korisničko polje automatski**, plus `playbook`, `playbook_rule` i `conviction`.
+`hold_duration` (u minutima od F5), `r_bucket`, `size_bucket`, `outcome`, `month`, `dow_entry`,
+`entry_hour`, `dow_exit`, `insight`, intraday od F5: **`session_window`** (sesija po ET),
+**`minutes_from_open`**, **`trade_no_in_day`**, **`after_loss`** — **plus svako korisničko polje
+automatski**, plus `playbook`, `playbook_rule` i `conviction`.
 
 Filteri podržavaju negaciju. Kolone se biraju kroz URL. Izvoz u CSV i XLSX.
 
@@ -131,16 +133,20 @@ opsegu naloga, i klikom na dan koji vodi na pun dnevni pregled.
 | Trading checklist | ✅ tracker pravila po fazi dana, sa danima u nedelji |
 | **Zaključavanje dana** | ✅ **nepovratno, DB trigerom** |
 
-**Verdikt: pokriveno, i preko toga.** Četiri tracker pravila se **ocenjuju automatski iz podataka**
-(max gubitak po trejdu i po danu, playbook vezan, stop unet), a niz doslednosti i Process Adherence
+**Verdikt: pokriveno, i preko toga.** Jedanaest tracker pravila se **ocenjuje automatski iz podataka**
+(gubitak po trejdu i po danu prema Topstep planu, rizik po trejdu i veličina prema pravilu rizika,
+playbook vezan, stop unet, teza, max trejdova dnevno, stop posle N gubitaka zaredom, ravno do kraja
+dana, bez ulaza u crvenom prozoru brief-a), a niz doslednosti i Process Adherence
 ulaze u skor. TZ nema procesni skor u kompozitu.
 
 ---
 
 ## 6. Prop firm
 
-Topstep mod po nalogu (plan 50K / 100K / 150K): Daily Loss Limit, Maximum Loss Limit, profit
-target, maksimalna pozicija, zamrzavanje naloga na proboj, banner sa stanjem. FTMO mod je postojao
+Topstep mod po nalogu (plan 50K / 100K / 150K): Daily Loss Limit, Maximum Loss Limit (trailing po
+EOD, zaključava se na početnom balansu), profit target sa pravilom konzistentnosti 55 %, maksimalna
+pozicija, veličina u celim ugovorima iz pravila rizika, blokada plana na proboj MLL-a, banner sa
+stanjem, Survival simulacija u novcu i otvoreni rizik prema DLL-u. FTMO mod je postojao
 do H1 (28.09.2026) i uklonjen je sa prelaskom na fjučerse.
 
 **Ograničenje napisano u README-u:** evaluacija se računa iz **realizovanog** neto P&L-a, dok pravi
@@ -153,8 +159,10 @@ obračun.
 
 ## 7. Import
 
-CSV i XLSX, auto-detekcija kolona po ključnim rečima, rekonsilijacija sa postojećim pozicijama,
-istorija import batch-eva i **undo**.
+CSV i XLSX, auto-detekcija kolona po ključnim rečima, **TopstepX trades export bez mapiranja** (sa
+automatskim prepoznavanjem zone vremena iz fajla, K5), rekonsilijacija sa postojećim pozicijama i
+planovima (uvoz popunjava plan koji je limit ispunio), istorija import batch-eva i **undo**. MT5
+statement uvoz je uklonjen u H1.
 
 **Verdikt: pokriveno za ručni import.** Brokerski preseti (`tj_column_mappings`) su tabela bez koda —
 ostalo u roadmap-u.
@@ -170,10 +178,9 @@ Iskreno i bez ublažavanja. Poređano po tome koliko stvarno menja svakodnevni r
    **najveća funkcionalna razlika u dnevnoj upotrebi**, iako je „integracija" a ne metrika.
 2. **Backtesting modul.** `/backtesting` je njihov drugi stub proizvoda — ručni backtest sa bar
    replay-om, sesije, statistika backtesta odvojena od live knjige. Ovde se backtest radi u
-   TradingView-u, a **rezultat ulazi kroz uvoz**: export „List of trades" se prepoznaje po zaglavlju,
-   spaja u jedan trejd po poziciji i veličina mu se proverava protiv njegovog sopstvenog P&L-a
-   (README § Import → TradingView backtests). Odvajanje od live knjige je pitanje naloga: backtest
-   ide na svoj nalog. **Ne postoji** sam bar replay niti sesije backtesta.
+   TradingView-u. Uvoz TradingView „List of trades" i backtest nalog su postojali do H2
+   (29.09.2026) i uklonjeni su na zahtev trejdera — knjiga je samo Topstep. **Ne postoji** ni bar
+   replay, ni sesije backtesta, ni uvoz backtesta.
 3. **Trade replay.** Reprodukcija izvršenog trejda na grafikonu. Ovde postoje samo TradingView
    snapshot slike po trejdu.
 4. **Mentor mode.** Deljenje naloga sa mentorom uživo, i mentorov pogled na više učenika. Ovde
@@ -198,15 +205,19 @@ edukacija, ne funkcije.
 
 Iz §7 ROADMAP-a, i sve provereno u kodu:
 
-1. **Procesni dnevnik** kao prvorazredna struktura — jutro / tokom dana / veče, Douglas mantre,
-   kontrola impulsa, micromanage praćenje, ocena dana vezana za aktivan cilj fokusa.
+1. **Procesni dnevnik** kao prvorazredna struktura — kartica „Pred sesiju" iz jutarnjeg brief-a
+   (kraj dana, crveni prozori, raspon), Douglas mantre, kontrola impulsa, „Bez pregleda" posle
+   sesije, ocena dana vezana za aktivan cilj fokusa. (Micromanage praćenje po poziciji je otišlo sa
+   swing knjigom u H1.)
 2. **`missed` kao prvorazredan status** — propušteni setap je podatak sa razlogom, pa se može pitati
    „beže li mi sistematski A-setapi".
 3. **Cena nediscipline izražena u R** — entry slippage i target attainment odvojeni od P&L-a.
 4. **Per-rule atribucija edge-a** — koje pravilo iz playbook-a nosi zaradu, a koje je ritual.
 5. **Process Adherence u kompozitnom skoru** — sedma komponenta, 15%.
 6. **Nepovratno zaključavanje dana**, sprovedeno u bazi, sa zamrzavanjem automatskih ocena.
-7. **Insight engine** sa 31 pravilom i **obaveznim pragom uzorka** na svakom nalazu.
+7. **Insight engine** sa 24 pravila (posle Faze F: intraday revenge, overtrading po danu, tilt posle
+   2 gubitka sa cenom, strpljenje, vreme pod vodom iz berzanskih sveća) i **obaveznim pragom uzorka**
+   na svakom nalazu.
 8. **Korisnička polja** koja odmah postaju dimenzije izveštaja, bez ijedne izmene engine-a.
 9. **Uplate i isplate** odvojene od P&L-a, sa dva imenioca za drawdown.
 
@@ -257,3 +268,32 @@ Ono što runda 4 jeste dodala paritetu, uzgred, jeste **poštenje prikaza**: kad
 izračuna, ekran sada kaže zašto (`unpriced`, `no FX`, `no account`), a kad je bruto prepisan sa
 brokerovog izvoda umesto izračunat iz cena, i to piše (`broker`). Nijedan poznat konkurent ne
 razlikuje ta četiri stanja; to nije paritetna stavka nego razlika u korist ovog journal-a.
+
+---
+
+## Dopuna posle Faze F (29.09.2026) — sa swing-a na day trading
+
+Knjiga je prešla sa FTMO CFD swing-a na intraday CME fjučerse na Topstep-u. Za paritet to znači
+nešto što ovaj dokument ranije nije mogao da tvrdi: **TradeZella-ine intraday metrike ponovo su
+relevantne, i većina sada postoji.**
+
+| TZ (intraday) | Ovde posle Faze F |
+|---|---|
+| Day Win %, dnevni P&L | ✅ po Topstep danu (17:00 → 17:00 CT), ne kalendarskom |
+| Izveštaj po satu / danu / trajanju | ✅ `entry_hour`, `dow_entry`, `hold_duration` u minutima — plus sesijski prozor po ET i minuti od otvaranja, što TZ nema kao dimenziju |
+| Revenge trading | ✅ `revenge_trade` — gubitnički ulaz ≤ 5 min posle gubitka, isti nalog |
+| Overtrading / low efficiency | ✅ po danu, prema sopstvenom proseku (10 dana istorije) |
+| Tilt | ✅ `tilt_after_losses` — svaki ulaz posle 2 gubitka zaredom, sa cenom (R, $, minuti do ponovnog ulaza, ugovori) |
+| Patience paid off | ✅ vraćen (prvi ulaz 30+ min posle 09:30 ET, zelen dan) |
+| Most time in drawdown / deep in drawdown day | ✅ vraćeni — vreme pod vodom iz 1 s berzanskih sveća (R2, `futures-trading`) |
+| Maximize your profit (dan) | ❌ i dalje svesno izostavljen: traži vrh dnevnog zbirnog P&L-a; `gave_back_profit` pokriva ponašanje iz MFE |
+| Prop firm (Topstep) | ✅ MLL trailing po EOD, DLL, konzistentnost 55 %, veličina u ugovorima, otvoreni rizik prema DLL-u |
+| Mentor | ✅ mentor pack za day tradera (Topstep stanje, pravila, dnevni pregled, sesije, svaki trejd sa kontekstom) — i dalje fajl, ne zajednički pogled |
+
+Šta je Faza F **uklonila** a ranije je bilo u ovom dokumentu: FTMO mod, MT5 uvoz, TradingView
+backtest uvoz i backtest nalog, swap, dva insight-a iz vault ciklusa (`against_macro_bias`,
+`cot_chase`). Cena propuštenog setupa (§9.2) više nije samo status: od F6.1 se meri iz R2 sveća do
+kraja Topstep dana plana, i računa se tek ako je cena dodirnula ulaz.
+
+**Metod ostaje isti kao gore:** TradeZella-ine stranice i dalje nisu viđene iz sesije; kolona „TZ" je
+izvedena iz čeklista, kolona „Ovde" je proverena u kodu i pod testom.

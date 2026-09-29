@@ -764,7 +764,7 @@ knjiga, i cena promašenog setupa za fjučerse.
 | F6.1 ✅ | Cena promašenog setupa iz R2 (#16): `journal_mae.py` hoda od trenutka plana do kraja njegovog Topstep dana (ili do M1 prozora) i piše `missed_outcome` / `missed_r` / `missed_source = 'r2'`; journal samo čita | `futures-trading/tools/journal_mae.py`, `missed-cost.ts`, CHECK `missed_source` (migracija ako `'r2'` nije dozvoljen) |
 | F6.2 ✅ | Vault ostaci (#20) po odluci M2; `stale_plan` po odluci M3; README § „Where this sits" → brief | `insights/process-rules.ts`, README |
 | F6.3 ✅ | Komentari (#22): prepisati one koji tvrde da je knjiga swing; istorijske ostaviti | 21 fajl |
-| F6.4 | `PARITY.md` i `docs/formulas-audit.md` (#23): sesije, minuti, intraday insights, pod vodom, co-exposure u minutima, DLL | `PARITY.md`, `docs/formulas-audit.md` |
+| F6.4 ✅ | `PARITY.md` i `docs/formulas-audit.md` (#23): sesije, minuti, intraday insights, pod vodom, co-exposure u minutima, DLL | `PARITY.md`, `docs/formulas-audit.md` |
 | F6.5 | README 1:1, F6 ✅ — kraj Faze F | — |
 
 **Odluke koje traži trejder (pre koda):**
