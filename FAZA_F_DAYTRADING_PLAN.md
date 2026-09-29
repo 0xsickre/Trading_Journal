@@ -681,7 +681,7 @@ zahteva; rade se pre F5 jer ih je tražio izričito, jedan commit po zahtevu.
 |---|---|---|---|
 | K1 | `31030a9` | — | `/daily`: ručna pravila prva, automatska ispod, u svakoj fazi |
 | K2 | `286cc06` · `335106b` | `20260929200000` | Stavke i VREDNOSTI tagova na srpskom (i na postojećim trejdovima); Long/Short, ICT skraćenice, FOMO, ocene i TF ostaju. `NO_MISTAKE` = „Bez greške", razlozi izlaza u `quick-log.ts` na srpskom |
-| K3 | `df91b1c` | — | Nov trejd iz uvoza: entry iz fill-ova, SL/TP iz S/L i T/P kolona. **TopstepX „Trades" izvoz nema stop ni target** — za njih bi trebao TopstepX „Orders" izvoz (otvoreno pitanje za trejdera) |
+| K3 | `df91b1c` | — | Nov trejd iz uvoza: entry iz fill-ova, SL/TP iz S/L i T/P kolona. **TopstepX „Trades" izvoz nema stop ni target**; uvoz „Orders" izvoza se NE pravi (trejder, 29.09.2026) |
 | K4 | `65d0817` | — | Breakeven fiksan: ±0,1R početnog budžeta rizika plana — ±$25 (50K), ±$38 (100K), ±$56 (150K); Settings ga samo prikazuje |
 | K5 | `576f574` | `20260929210000`, `…230000` | `DEFAULT_TZ` = Europe/Belgrade, nalog i seed prebačeni; zona se ne kuca; fajl sa offset-om se konvertuje; Topstep dan ostaje 17:00 CT |
 | K6 | `a232849` | `20260929220000` | Slike charta: upload / paste iz clipboard-a / TradingView link; privatni bucket po korisniku, `storage:<uid>/<fajl>`, potpisani URL |
@@ -716,10 +716,10 @@ sesijama, ne u danima i nedeljama.
 | F5.7 | README 1:1, plan F5 ✅ i detaljan plan F6 | — |
 
 **Odluke koje traži trejder (pre koda):**
-- **L1 — Granice sesijskih prozora (ET).** Predlog: Globex noć 18:00–08:00, pre-open 08:00–09:30,
-  otvaranje 09:30–10:00, jutro 10:00–11:30, ručak 11:30–13:30, popodne 13:30–15:00, poslednji sat
-  15:00–16:00 (Topstep kraj 15:10 CT = 16:10 ET). Potvrdi ili ispravi.
-- **L2 — Korpe trajanja.** Predlog iz F5.1; potvrdi.
+- **L1 — Granice sesijskih prozora (ET).** ✅ prihvaćeno 29.09.2026: Globex noć 18:00–08:00,
+  pre-open 08:00–09:30, otvaranje 09:30–10:00, jutro 10:00–11:30, ručak 11:30–13:30, popodne
+  13:30–15:00, poslednji sat 15:00–16:00 (Topstep kraj 15:10 CT = 16:10 ET).
+- **L2 — Korpe trajanja.** ✅ prihvaćeno 29.09.2026: `<1m`, `1–5m`, `5–15m`, `15–60m`, `>60m`.
 - **L3 — Tilt.** Posle koliko gubitaka u nizu u istoj sesiji insight kaže „tilt"? Predlog: 2 (isto
   kao `stop_after_losses`).
 
