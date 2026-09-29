@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { OPEN_OFFSET_BUCKETS, openOffsetBucket, sessionWindowOf, SESSION_WINDOWS } from "./session-window";
+import {
+  minutesAfterOpen,
+  OPEN_OFFSET_BUCKETS,
+  openOffsetBucket,
+  sessionWindowOf,
+  SESSION_WINDOWS,
+} from "./session-window";
 
 // 29.09.2026 is US summer time: 09:30 ET = 13:30 UTC.
 const at = (hhmmUtc: string) => `2026-09-29T${hhmmUtc}:00Z`;
@@ -56,5 +62,14 @@ describe("minutes after the 09:30 open", () => {
       expect(OPEN_OFFSET_BUCKETS).toContain(openOffsetBucket(`2026-09-29T${String(h).padStart(2, "0")}:00:00Z`));
     }
     expect(openOffsetBucket(null)).toBeNull();
+  });
+
+  it("counts the minutes themselves, with nothing before the open or in the evening", () => {
+    expect(minutesAfterOpen(at("13:30"))).toBe(0);
+    expect(minutesAfterOpen(at("14:15"))).toBe(45);
+    expect(minutesAfterOpen(winter("15:10"))).toBe(40);
+    expect(minutesAfterOpen(at("13:29"))).toBeNull();
+    expect(minutesAfterOpen(at("22:30"))).toBeNull();
+    expect(minutesAfterOpen("not a date")).toBeNull();
   });
 });

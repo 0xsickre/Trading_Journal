@@ -3,12 +3,14 @@ import {
   flipFlopDay,
   highConvictionDay,
   leftMoneyOnTable,
+  lowEfficiencyDay,
   overconfidence,
+  overtradingDay,
+  patiencePaidOff,
   perfectDay,
   sizingProblemDay,
 } from "./day-rules";
-import { lowEfficiencyWeek, overtradingWeek, tiltWeek } from "./week-rules";
-import { ctxOf, DAY, fired, mkTrade } from "./test-helpers";
+import { ctxOf, fired, mkTrade } from "./test-helpers";
 
 const on = (day: string) => ({
   openedAt: `${day}T09:00:00Z`,
@@ -173,88 +175,65 @@ describe("overconfidence", () => {
   });
 });
 
-// Five distinct weeks of ordinary activity, so week baselines are meaningful.
-function baselineWeeks() {
-  const mondays = [
-    "2026-01-05",
-    "2026-01-12",
-    "2026-01-19",
-    "2026-01-26",
-    "2026-02-02",
-  ];
-  return mondays.flatMap((m, wi) =>
-    Array.from({ length: 2 }, (_, i) =>
+// Ten ordinary trading days of two trades each, so the day baselines mean something.
+function baselineDays() {
+  return Array.from({ length: 10 }, (_, di) => {
+    const day = `2026-09-${String(di + 1).padStart(2, "0")}`;
+    return Array.from({ length: 2 }, (_, i) =>
       mkTrade({
-        id: `b${wi}-${i}`,
+        id: `b${di}-${i}`,
         net: 200,
-        closedAt: `${m}T12:00:00Z`,
-        durationSeconds: 4 * DAY,
+        openedAt: `${day}T14:00:00Z`,
+        closedAt: `${day}T14:30:00Z`,
+        durationSeconds: 1800,
       }),
-    ),
-  );
+    );
+  }).flat();
 }
 
-describe("overtradingWeek", () => {
-  it("fires for a week far above the weekly average", () => {
-    const busy = Array.from({ length: 12 }, (_, i) =>
-      mkTrade({
-        id: `busy${i}`,
-        net: -20,
-        r: -0.2,
-        closedAt: "2026-02-09T12:00:00Z",
-      }),
-    );
-    const ctx = ctxOf([...baselineWeeks(), ...busy]);
-    expect(fired(overtradingWeek, ctx)).toContain("2026-02-09");
+const onDay = (day: string, id: string, net: number) =>
+  mkTrade({ id, net, r: net / 100, openedAt: `${day}T14:00:00Z`, closedAt: `${day}T14:10:00Z`, durationSeconds: 600 });
+
+describe("overtradingDay", () => {
+  it("fires for a day far above the daily average", () => {
+    const busy = Array.from({ length: 8 }, (_, i) => onDay("2026-09-21", `busy${i}`, -20));
+    const ctx = ctxOf([...baselineDays(), ...busy]);
+    expect(fired(overtradingDay, ctx)).toEqual(["2026-09-21"]);
+    expect(overtradingDay.evaluate(ctx)[0].severity).toBe("critical");
   });
 
-  it("does not fire on an ordinary week", () => {
-    const ctx = ctxOf(baselineWeeks());
-    expect(fired(overtradingWeek, ctx)).toEqual([]);
+  it("does not fire on an ordinary day, nor before ten days of history", () => {
+    expect(fired(overtradingDay, ctxOf(baselineDays()))).toEqual([]);
+    const young = Array.from({ length: 8 }, (_, i) => onDay("2026-09-21", `y${i}`, -20));
+    expect(fired(overtradingDay, ctxOf([...baselineDays().slice(0, 6), ...young]))).toEqual([]);
   });
 });
 
-describe("lowEfficiencyWeek", () => {
-  it("fires when many trades produced a fraction of a normal green week", () => {
-    const grind = Array.from({ length: 5 }, (_, i) =>
-      mkTrade({
-        id: `g${i}`,
-        net: 4,
-        r: 0.04,
-        closedAt: "2026-02-09T12:00:00Z",
-      }),
-    );
-    const ctx = ctxOf([...baselineWeeks(), ...grind]);
-    expect(fired(lowEfficiencyWeek, ctx)).toContain("2026-02-09");
+describe("lowEfficiencyDay", () => {
+  it("fires when many trades produced a fraction of a normal green day", () => {
+    const grind = Array.from({ length: 5 }, (_, i) => onDay("2026-09-21", `g${i}`, 4));
+    const ctx = ctxOf([...baselineDays(), ...grind]);
+    expect(fired(lowEfficiencyDay, ctx)).toEqual(["2026-09-21"]);
   });
 });
 
-describe("tiltWeek", () => {
-  it("fires on a losing week of unusually short holds", () => {
-    const tilt = Array.from({ length: 4 }, (_, i) =>
-      mkTrade({
-        id: `t${i}`,
-        net: -100,
-        r: -1,
-        closedAt: "2026-02-09T12:00:00Z",
-        durationSeconds: 0.2 * DAY,
-      }),
-    );
-    const ctx = ctxOf([...baselineWeeks(), ...tilt]);
-    expect(fired(tiltWeek, ctx)).toContain("2026-02-09");
+describe("patiencePaidOff", () => {
+  // 29.09.2026 is US summer time: 09:30 ET = 13:30 UTC.
+  const day = (openedAt: string, net: number) =>
+    mkTrade({ id: openedAt, net, openedAt, closedAt: "2026-09-29T19:00:00Z", durationSeconds: 600 });
+
+  it("fires on a green day whose first entry came after the opening half hour", () => {
+    const ctx = ctxOf([day("2026-09-29T14:15:00Z", 300)]);
+    expect(fired(patiencePaidOff, ctx)).toEqual(["2026-09-29"]);
+    expect(patiencePaidOff.evaluate(ctx)[0].detail).toContain("45 min after the 09:30 ET open");
   });
 
-  it("does not fire on a losing week that was held normally", () => {
-    const slow = Array.from({ length: 4 }, (_, i) =>
-      mkTrade({
-        id: `s${i}`,
-        net: -100,
-        r: -1,
-        closedAt: "2026-02-09T12:00:00Z",
-        durationSeconds: 6 * DAY,
-      }),
-    );
-    const ctx = ctxOf([...baselineWeeks(), ...slow]);
-    expect(fired(tiltWeek, ctx)).toEqual([]);
+  it("reads the day's FIRST entry, and needs a green day", () => {
+    expect(fired(patiencePaidOff, ctxOf([day("2026-09-29T14:15:00Z", 300), day("2026-09-29T13:35:00Z", 50)]))).toEqual([]);
+    expect(fired(patiencePaidOff, ctxOf([day("2026-09-29T14:15:00Z", -300)]))).toEqual([]);
+  });
+
+  it("does not count a pre-open or overnight first entry as patience", () => {
+    expect(fired(patiencePaidOff, ctxOf([day("2026-09-29T12:00:00Z", 300)]))).toEqual([]);
   });
 });

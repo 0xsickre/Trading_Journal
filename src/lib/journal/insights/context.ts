@@ -40,14 +40,6 @@ export type DayBucket = {
   report: DailyReportLite | null;
 };
 
-export type WeekBucket = {
-  key: string;
-  trades: EnrichedTrade[];
-  net: number;
-  wins: number;
-  losses: number;
-};
-
 export type InsightBaseline = {
   /** 75th percentile hold time of WINNERS, seconds. */
   winnerHoldP75: number | null;
@@ -60,10 +52,10 @@ export type InsightBaseline = {
   avgMfeR: number | null;
   /** 75th percentile position size. */
   sizeP75: number | null;
-  /** Mean trades per week over the window. */
-  weeklyTradeCountAvg: number | null;
-  /** Mean net of profitable weeks. */
-  greenWeekAvgNet: number | null;
+  /** Mean trades per trading day with a close, over the window. */
+  dailyTradeCountAvg: number | null;
+  /** Mean net of profitable days. */
+  greenDayAvgNet: number | null;
   /** Number of realized trades the baselines were built from. */
   sample: number;
 };
@@ -73,7 +65,6 @@ export type InsightContext = {
   /** All positions, including planned / missed / open. */
   allRows: TradeRow[];
   days: DayBucket[];
-  weeks: WeekBucket[];
   reports: DailyReportLite[];
   reportByDate: Map<string, DailyReportLite>;
   baseline: InsightBaseline;
@@ -141,21 +132,7 @@ export function buildInsightContext(input: BuildContextInput): InsightContext {
     dayMap.set(e.closeDay, b);
   }
 
-  const weekMap = new Map<string, WeekBucket>();
-  for (const e of enriched) {
-    if (!e.closeWeek) continue;
-    const b =
-      weekMap.get(e.closeWeek) ??
-      { key: e.closeWeek, trades: [], net: 0, wins: 0, losses: 0 };
-    b.trades.push(e);
-    b.net += e.pnl;
-    if (e.outcome === "win") b.wins++;
-    else if (e.outcome === "loss") b.losses++;
-    weekMap.set(e.closeWeek, b);
-  }
-
   const days = [...dayMap.values()].sort((a, b) => a.key.localeCompare(b.key));
-  const weeks = [...weekMap.values()].sort((a, b) => a.key.localeCompare(b.key));
 
   const winners = enriched.filter((e) => e.outcome === "win");
   const losers = enriched.filter((e) => e.outcome === "loss");
@@ -177,8 +154,8 @@ export function buildInsightContext(input: BuildContextInput): InsightContext {
       enriched.map((e) => e.size).filter((s): s is number => s != null && s > 0),
       0.75,
     ),
-    weeklyTradeCountAvg: mean(weeks.map((w) => w.trades.length)),
-    greenWeekAvgNet: mean(weeks.filter((w) => w.net > 0).map((w) => w.net)),
+    dailyTradeCountAvg: mean(days.map((d) => d.trades.length)),
+    greenDayAvgNet: mean(days.filter((d) => d.net > 0).map((d) => d.net)),
     sample: enriched.length,
   };
 
@@ -186,7 +163,6 @@ export function buildInsightContext(input: BuildContextInput): InsightContext {
     trades: enriched,
     allRows,
     days,
-    weeks,
     reports,
     reportByDate,
     baseline,

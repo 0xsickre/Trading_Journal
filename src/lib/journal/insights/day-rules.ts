@@ -1,12 +1,15 @@
 /**
  * Day-level insight rules.
  *
- * A "day" here is a close date — the day bucket answers what the day produced,
- * and production is realization.
+ * A "day" here is a close date on the account's own day — a Topstep account's
+ * runs 17:00→17:00 CT — because the day bucket answers what the day produced,
+ * and production is realization. Overtrading and efficiency were measured per
+ * WEEK while the book was swing; for a day trader the day is the unit (F5.3).
  */
 
 import { fmtMoney } from "../format";
 import { isShortDirection } from "../plan-calculations";
+import { minutesAfterOpen } from "../session-window";
 import type { DayBucket, InsightContext } from "./context";
 import type { Insight, InsightRule } from "./types";
 import { winRateOf } from "../analytics";
@@ -22,6 +25,19 @@ const D = {
   OVERCONFIDENCE_MULTIPLE: 1.5,
   /** Consecutive wins before an escalation counts as a streak. */
   OVERCONFIDENCE_STREAK: 2,
+  /** Trades above this multiple of your daily average is overtrading. */
+  OVERTRADING_MULTIPLE: 2,
+  /** Trading days needed before "your average day" means anything. */
+  BASELINE_DAYS: 10,
+  /** Net below this share of your average green day is low efficiency. */
+  LOW_EFFICIENCY_SHARE: 0.25,
+  /** Trades needed in a day before efficiency is worth judging. */
+  LOW_EFFICIENCY_MIN_TRADES: 4,
+  /**
+   * Minutes after the 09:30 ET open before the first entry counts as patient —
+   * the whole Open window (09:30–10:00, L1) left alone.
+   */
+  PATIENCE_MINUTES: 30,
 } as const;
 
 type Rule = InsightRule<InsightContext>;
@@ -231,6 +247,98 @@ export const overconfidence: Rule = {
   },
 };
 
+export const overtradingDay: Rule = {
+  id: "overtrading_day",
+  level: "day",
+  minSample: D.BASELINE_DAYS,
+  description: "Trade count far above your daily average.",
+  evaluate: (ctx) => {
+    const avg = ctx.baseline.dailyTradeCountAvg;
+    if (avg == null || ctx.days.length < D.BASELINE_DAYS) return [];
+    return ctx.days
+      .filter((d) => d.trades.length > avg * D.OVERTRADING_MULTIPLE)
+      .map((d) =>
+        dayInsight(d, {
+          ruleId: "overtrading_day",
+          severity: d.net < 0 ? "critical" : "warning",
+          title: "Overtrading day",
+          detail: `${d.trades.length} trades against an average of ${avg.toFixed(
+            1,
+          )} a day — result ${fmtMoney(d.net, ctx.currency)}.`,
+          sample: ctx.days.length,
+        }),
+      );
+  },
+};
+
+export const lowEfficiencyDay: Rule = {
+  id: "low_efficiency_day",
+  level: "day",
+  minSample: D.BASELINE_DAYS,
+  description: "Many trades, a small result compared with your average green day.",
+  evaluate: (ctx) => {
+    const greenAvg = ctx.baseline.greenDayAvgNet;
+    if (greenAvg == null || !(greenAvg > 0) || ctx.days.length < D.BASELINE_DAYS) return [];
+    return ctx.days
+      .filter(
+        (d) =>
+          d.trades.length >= D.LOW_EFFICIENCY_MIN_TRADES &&
+          d.net > 0 &&
+          d.net < greenAvg * D.LOW_EFFICIENCY_SHARE,
+      )
+      .map((d) =>
+        dayInsight(d, {
+          ruleId: "low_efficiency_day",
+          severity: "warning",
+          title: "Poor efficiency",
+          detail: `${d.trades.length} trades for ${fmtMoney(
+            d.net,
+            ctx.currency,
+          )} — your average green day carries ${fmtMoney(
+            greenAvg,
+            ctx.currency,
+          )}. Mnogo rada za malo.`,
+          sample: ctx.days.length,
+        }),
+      );
+  },
+};
+
+/** The day's first entry, or null when no entry time is known. */
+function firstEntry(d: DayBucket): string | null {
+  const opened = d.trades
+    .map((e) => e.openedAt)
+    .filter((o): o is string => o != null)
+    .sort();
+  return opened[0] ?? null;
+}
+
+export const patiencePaidOff: Rule = {
+  id: "patience_paid_off",
+  level: "day",
+  minSample: 0,
+  description:
+    "A green day whose first entry came after the opening half hour (09:30–10:00 ET).",
+  evaluate: (ctx) =>
+    ctx.days
+      .map((d) => ({ d, after: minutesAfterOpen(firstEntry(d)) }))
+      .filter(
+        (x): x is { d: DayBucket; after: number } =>
+          x.after != null && x.after >= D.PATIENCE_MINUTES && x.d.net > 0,
+      )
+      .map(({ d, after }) =>
+        dayInsight(d, {
+          ruleId: "patience_paid_off",
+          severity: "good",
+          title: "Patience paid off",
+          detail: `First entry ${after} min after the 09:30 ET open, and the day closed ${fmtMoney(
+            d.net,
+            ctx.currency,
+          )}. The opening swings were left alone.`,
+        }),
+      ),
+};
+
 export const DAY_RULES: Rule[] = [
   perfectDay,
   highConvictionDay,
@@ -238,4 +346,7 @@ export const DAY_RULES: Rule[] = [
   flipFlopDay,
   leftMoneyOnTable,
   overconfidence,
+  overtradingDay,
+  lowEfficiencyDay,
+  patiencePaidOff,
 ];

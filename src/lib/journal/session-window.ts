@@ -50,13 +50,21 @@ export const OPEN_OFFSET_BUCKETS = [
   "2 h +",
 ] as const;
 
+/**
+ * Minutes after the 09:30 ET open, or null before it — the evening session (from
+ * 18:00) belongs to the NEXT day's open — and for an unreadable instant.
+ */
+export function minutesAfterOpen(iso: string | null | undefined): number | null {
+  const m = zonedMinuteOfDay(iso, SESSION_TZ);
+  if (m == null || m >= 18 * 60 || m < OPEN) return null;
+  return m - OPEN;
+}
+
 /** How long after the 09:30 ET open an entry was taken; the evening/night before it is "Before the open". */
 export function openOffsetBucket(iso: string | null | undefined): (typeof OPEN_OFFSET_BUCKETS)[number] | null {
-  const m = zonedMinuteOfDay(iso, SESSION_TZ);
-  if (m == null) return null;
-  // The evening session (from 18:00) belongs to the NEXT day's open.
-  if (m >= 18 * 60 || m < OPEN) return "Before the open";
-  const after = m - OPEN;
+  if (zonedMinuteOfDay(iso, SESSION_TZ) == null) return null;
+  const after = minutesAfterOpen(iso);
+  if (after == null) return "Before the open";
   if (after < 15) return "0–15 min";
   if (after < 30) return "15–30 min";
   if (after < 60) return "30–60 min";

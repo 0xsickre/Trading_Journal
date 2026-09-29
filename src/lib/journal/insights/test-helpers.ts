@@ -36,6 +36,7 @@ export type TradeSpec = {
   cotFilter?: string;
   instrument?: string;
   tradeNo?: number;
+  accountId?: string;
 };
 
 let seq = 0;
@@ -80,7 +81,7 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
 
   const row = {
     id,
-    account_id: "acc",
+    account_id: spec.accountId ?? "acc",
     trade_no: spec.tradeNo ?? null,
     status: "closed",
     source: "manual",

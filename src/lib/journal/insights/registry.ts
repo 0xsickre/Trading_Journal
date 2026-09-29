@@ -2,7 +2,7 @@
  * Rule registry and runner.
  *
  * The registry is also the honest record of what this engine does NOT do.
- * Four TradeZella patterns are deliberately absent rather than approximated,
+ * Three TradeZella patterns are deliberately absent rather than approximated,
  * and the reason is listed with each — see `OMITTED_RULES`. A percentage
  * invented from data we do not have would be worse than a missing one.
  */
@@ -11,13 +11,12 @@ import type { InsightContext } from "./context";
 import { DAY_RULES } from "./day-rules";
 import { PROCESS_RULES } from "./process-rules";
 import { TRADE_RULES } from "./trade-rules";
-import { WEEK_RULES } from "./week-rules";
 import { sortInsights, type Insight, type InsightRule } from "./types";
 
 export type Rule = InsightRule<InsightContext>;
 
 /** TradeZella patterns implemented here. */
-export const TZ_RULES: Rule[] = [...TRADE_RULES, ...DAY_RULES, ...WEEK_RULES];
+export const TZ_RULES: Rule[] = [...TRADE_RULES, ...DAY_RULES];
 
 /**
  * Patterns this journal has that TradeZella structurally cannot. The swing
@@ -48,11 +47,6 @@ export const OMITTED_RULES: OmittedRule[] = [
     id: "deep_in_drawdown_day",
     reason:
       "The daily version of the same — same missing data, same decision.",
-  },
-  {
-    id: "patience_paid_off",
-    reason:
-      "Measures how late in the SESSION the first entry falls. An intraday notion with no meaningful swing equivalent.",
   },
   {
     id: "maximize_your_profit_day",

@@ -39,7 +39,7 @@ on a screen the trader writes into or reviews in their own words:
 | Daily (the "Pred sesiju" card included), weekly, tracker, focus goal | 128 |
 | Mentor-export prompt | 33 |
 | Weekly "Napredak" (progress) and experiment cards | 18 |
-| Weekly insight sentence | 1 |
+| Day insight sentence (`low_efficiency_day`) | 1 |
 | Chart image helper (`tradingview-snapshot.ts`) | 2 |
 | The seeded tag values Log Trade writes (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2) | 3 |
 | Dashboard, `/reports`, journal grid, playbooks, **`/settings`**, `/trades/log`, Topstep banner | **0** |
@@ -1002,7 +1002,7 @@ verdicts are what stops compliance from following it.
 **Playbooks** hold groups of rules; answering their checklist writes `tj_position_rules`, which feeds
 the follow rate. An unanswered rule counts in neither the numerator nor the denominator.
 
-**Insights** are 23 rules at four levels — trade (12), day (6), week (3), portfolio (2) — reading the
+**Insights** are 24 rules at three levels — trade (13), day (9), portfolio (2) — reading the
 same enriched trades the reports do. Every rule declares a `minSample` and none fires at n=1. No
 insight is stored in the database: thresholds change, and a stored insight would go stale against a
 changed threshold while still looking authoritative.
@@ -1024,9 +1024,22 @@ same observation at two degrees and could never both fire. Four merges:
 
 Each merged rule fires **once per trade, at the worst cause that applies**, and names the cause in
 its title. Rules were only merged **within one level**: a week-level finding and a trade-level one
-have different subjects, so folding `tilt_week` into `revenge_trade` — or `sizing_problem_day` into
-`unusual_size` — would put a week's id where a trade id belongs. They stay separate for that reason
-rather than for a good story about causes.
+have different subjects, so folding `sizing_problem_day` into `unusual_size` would put a day's key
+where a trade id belongs. They stay separate for that reason rather than for a good story about
+causes.
+
+**F5.3 moved them to the trading day** (29.09.2026). The three week rules were swing translations of
+TradeZella's day rules; for a day trader the day is the unit again, so `overtrading_week` and
+`low_efficiency_week` became `overtrading_day` (more than 2× your daily average) and
+`low_efficiency_day` (4+ trades, green, under a quarter of your average green day), both waiting for
+ten trading days of history. `revenge_trade` looks for a losing entry within **5 minutes** of a loss
+on the **same account**, not within a day. `tilt_week` (a losing week of short holds) became
+`tilt_after_losses` (decision L3): every entry an account takes on a day after **2 losses in a row**
+that day — the point `stop_after_losses` grades — is flagged with the time to re-entry, the size
+against the trade before it, its R and money, and the average R of every trade outside tilt. It forbids
+nothing; it prices the continuation, and as a trade-level rule it is also a filter in `/reports`.
+`patience_paid_off` came back from the omitted list: a green day whose first entry came 30+ minutes
+after the 09:30 ET open (the Open window left alone; a pre-open or overnight first entry does not count).
 
 **H1 removed six more** (28.09.2026): five swing rules that joined on the per-position check-in, the
 time stop in days, the written thesis and the weekend: `acted_against_the_plan`, `past_time_stop`,
@@ -1470,7 +1483,7 @@ container does not have. It stays a later option, not an oversight.
 | Options (DTE, strike, expiry) | Not traded |
 | Intraday dimensions | **Built in F5.2 (29.09.2026).** `/reports` groups by **Session window** (Globex night 18:00–08:00, Pre-open, Open 09:30–10:00, Morning, Lunch, Afternoon, Last hour — on New York's clock whatever zone the journal shows, `session-window.ts`), **Minutes after the open** (before the open, 0–15, 15–30, 30–60 min, 1–2 h, 2 h +), **Trade number in the day** (per account; the 4th on is one bucket) and **After losses** (first trade of the day, after a win or scratch, after 1 loss, after 2+ — the losses that had already closed when the entry was taken, the same reading `stop_after_losses` grades). The weekly "Napredak" card still has its own hour and trade-number rows |
 | Economic calendar | Lives in `futures-trading`: the morning brief carries the day's releases with their red windows |
-| Running P&L curve per trade | Needs a price feed inside the journal. The R2 minute and second candles in `futures-trading` now exist, so the intraday insights left out — `most_time_in_drawdown` and `deep_in_drawdown_day` for want of a feed, `patience_paid_off` as "an intraday notion" — can come back (`FAZA_F_DAYTRADING_PLAN.md` #13) |
+| Running P&L curve per trade | Needs a price feed inside the journal. The R2 minute and second candles in `futures-trading` now exist, so `most_time_in_drawdown` and `deep_in_drawdown_day`, left out for want of a feed, can come back (`FAZA_F_DAYTRADING_PLAN.md` F5.3); `patience_paid_off` already has (F5.3) |
 
 ## MAE/MFE
 
