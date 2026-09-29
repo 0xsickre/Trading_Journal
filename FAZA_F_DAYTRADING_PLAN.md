@@ -71,6 +71,14 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 28.09.2026 | F4 | G1-B (brief upisuje red u journal), G2-A (check-in kartica se uklanja), G3-A (`time_stop_minutes` + „do kraja sesije"), G6 → F5 |
 | 28.09.2026 | F4 | G4-A: migracija dodaje predložene day-trading stavke i gasi (ne briše) swing stavke u postojećim listama |
 | 28.09.2026 | F4 | G5: `max_trades_per_day` (N = 2), `stop_after_losses` (N = 2 uzastopna u Topstep danu), `flat_by_close`, `no_entry_in_red_window`; `walk_away_target` NE. Ručna pravila koja pokrivaju isto se penzionišu (`deleted_at`) |
+| 28.09.2026 | F4 | G7: `no_entry_in_red_window` čita **samo prozore iz brief-a** (visoke −5/+15, srednje −2/+5 min, po modelu brief-a), ne fiksnih 15 min |
+| 28.09.2026 | F4 | G8: penzionišu se ručna pravila „Dnevni limit trejdova (max 2)", „15 min oko crvenih vesti", „Max Daily Loss (USD)"; „Walk Away Target" ostaje ručno |
+| 28.09.2026 | F4 | G9: `max_trades_per_day` i `stop_after_losses` se broje **po nalogu** (dan pada ako padne bilo koji nalog, kao E1) |
+| 28.09.2026 | F4 | G10: Exit „Time exit" ostaje; Entry TF „15" (duplikat „15m") se gasi |
+| 28.09.2026 | F4 | G11: brief NE upisuje broj ugovora — journal ga računa sam iz `topstep.ts` (jedno mesto, bez druge kopije) |
+| 29.09.2026 | — | F4 rad posle `3ba08d7` (tabela za brief, kartica, upis iz brief.py) nije bio pushovan i izgubljen je sa kontejnerom sesije; F4 kreće ponovo od `main`. Odluke G7–G11 su sačuvane iz razgovora |
+| 29.09.2026 | H2 | Trejderu ne trebaju ostaci: `tj_position_checkins`, `time_stop_days`, swap kolone (fill, katalog, neto P&L), % tracker pragovi. Posebna faza **H2 posle F4**, migracija koja briše (nepovratno) — primena tek uz odobrenje |
+| 29.09.2026 | H2 | Backtest nalozi više ne trebaju (samo Topstep) → % pragovi i ne-Topstep grana tracker-a idu u H2 |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -96,6 +104,7 @@ pogađa.
 | **F3** | Topstep pravila u tracker-u i Survival-u | #3, #4, #6 | F2 | da: `20260928160000` (`risk_budget_at_entry`) | **Opus** | ✅ `a8e63f9` (28.09.2026) — migracija primenjena 28.09.2026 uz odobrenje trejdera |
 | **H1** | Uklanjanje FTMO / MT5 / swing koda (trejder, 28.09.2026) | #19 i delovi #13, #14 | F3 | ne (kolone ostaju) | **Opus** | ✅ `09752cd` · `69e5124` · `67feff6` · `0fb9d3f` (28.09.2026) |
 | **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da (brief tabela, nova pravila, time stop, kategorije) | **Opus** | ⏳ **sledeća — odluke donete (G1–G6)** |
+| **H2** | Brisanje ostataka iz baze: check-in tabela, `time_stop_days`, swap, % pragovi, backtest grana | — | F4 | da, **briše** (nepovratno, uz odobrenje) | **Opus** | posle F4 |
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, swap, uzorak | #11–#15, #17, #18 | F2 | ne (sve izvedeno) | Sonnet, Opus za #13 | okvir |
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, legacy CFD u UI-ju, komentari, PARITY | #16, #19, #20, #22, #23 | F5 | možda (#16) | Sonnet | okvir |
 
