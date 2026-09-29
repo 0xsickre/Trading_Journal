@@ -2,15 +2,19 @@
  * Process insights — the ones TradeZella structurally cannot have.
  *
  * They all join trade outcomes against the daily process journal or against
- * fields that record a decision made before entry (macro alignment, COT filter,
- * setup grade). That join is the whole reason this journal exists: it prices
- * discipline in R instead of describing it in prose.
+ * a decision made before entry (the setup grade, the plan). That join is the
+ * whole reason this journal exists: it prices discipline in R instead of
+ * describing it in prose.
+ *
+ * `against_macro_bias` and `cot_chase` read the swing cycle's vault fields
+ * (`macro_align`, `cot_filter`); the day trader's bias comes from the brief, and
+ * no form asks for either field any more, so both rules left in F6 (decision
+ * M2-A). The values stay on the trades that carry them.
  */
 
-import { stringFieldValue } from "../field-values";
-import { winRateOf } from "../analytics";
 import { setupScoreFromTrade } from "../setup-score";
 import { fmtMoney } from "../format";
+import { planDayEndsAt } from "../session-brief";
 import type { TradeRow } from "../types";
 import type { InsightContext } from "./context";
 import type { Insight, InsightRule } from "./types";
@@ -18,80 +22,9 @@ import type { Insight, InsightRule } from "./types";
 const P = {
   /** Mental temperature below which entries are flagged. */
   LOW_MENTAL_TEMP: 3,
-  /** Days a plan may sit unexecuted before it is stale. */
-  STALE_PLAN_DAYS: 14,
-  /** Trades needed before a category comparison is worth showing. */
-  MIN_CATEGORY_SAMPLE: 4,
 } as const;
 
 type Rule = InsightRule<InsightContext>;
-
-/** Reads through the field accessor: the value may be a column or a custom one. */
-function strField(row: Record<string, unknown>, key: string): string {
-  return stringFieldValue(row, key) ?? "";
-}
-
-const norm = (s: string) => s.trim().toLowerCase();
-
-/** Entering against the macro bias recorded at the time. */
-export const againstMacroBias: Rule = {
-  id: "against_macro_bias",
-  level: "trade",
-  minSample: P.MIN_CATEGORY_SAMPLE,
-  description: "An entry against the macro bias, with that category's historical result.",
-  evaluate: (ctx) => {
-    const against = ctx.trades.filter((e) =>
-      norm(strField(e.trade.row, "macro_align")).includes("protiv"),
-    );
-    if (against.length < P.MIN_CATEGORY_SAMPLE) return [];
-
-    const net = against.reduce((s, e) => s + e.pnl, 0);
-    const wins = against.filter((e) => e.outcome === "win").length;
-    const losses = against.filter((e) => e.outcome === "loss").length;
-    const winPct = winRateOf(wins, losses) ?? 0;
-
-    return [
-      {
-        ruleId: "against_macro_bias",
-        level: "portfolio",
-        severity: net < 0 ? "warning" : "info",
-        title: "Trades against the macro bias",
-        detail: `${against.length} trades against the bias: ${fmtMoney(
-          net,
-          ctx.currency,
-        )}, win rate ${winPct.toFixed(0)} %. ${
-          net < 0
-            ? "The category is in the red — that is a filter, not an opinion."
-            : "The category is positive — the bias is not an absolute ban."
-        }`,
-        subjectId: "against_macro_bias",
-        sample: against.length,
-      },
-    ];
-  },
-};
-
-/** Entering after the COT filter said not to chase. */
-export const cotChase: Rule = {
-  id: "cot_chase",
-  level: "trade",
-  minSample: 0,
-  description: "An entry despite the COT filter saying not to chase.",
-  evaluate: (ctx) =>
-    ctx.trades
-      .filter((e) => norm(strField(e.trade.row, "cot_filter")).includes("ne chase"))
-      .map((e) => ({
-        ruleId: "cot_chase",
-        level: "trade" as const,
-        severity: e.outcome === "loss" ? ("warning" as const) : ("info" as const),
-        title: "Chased despite the COT filter",
-        detail: `The COT filter said "do not chase", and you entered anyway. Outcome: ${
-          e.r != null ? `${e.r.toFixed(2)}R` : fmtMoney(e.pnl, ctx.currency)
-        }.`,
-        subjectId: e.id,
-        subjectLabel: e.label,
-      })),
-};
 
 /** Entering on a day you rated your own head below par. */
 export const lowMentalTempEntry: Rule = {
@@ -185,14 +118,13 @@ export const stalePlan: Rule = {
   id: "stale_plan",
   level: "portfolio",
   minSample: 0,
-  description: "Planned trades older than the threshold with no fill at all.",
+  description: "Planned trades whose trading day is over, with no fill and not marked missed.",
   evaluate: (ctx) => {
     const now = Date.now();
     const stale = ctx.allRows.filter((r) => {
       if (r.status !== "planned") return false;
-      const created = r.created_at ? new Date(r.created_at).getTime() : NaN;
-      if (Number.isNaN(created)) return false;
-      return (now - created) / 86_400_000 > P.STALE_PLAN_DAYS;
+      const ends = planDayEndsAt(r.created_at == null ? null : String(r.created_at));
+      return Number.isFinite(ends) && ends < now;
     });
     if (stale.length === 0) return [];
     return [
@@ -201,7 +133,7 @@ export const stalePlan: Rule = {
         level: "portfolio",
         severity: "info",
         title: "Plans without execution",
-        detail: `${stale.length} plans older than ${P.STALE_PLAN_DAYS} days with no fill at all. Either mark them as missed or close them — dead plans corrupt the missed-setup statistics.`,
+        detail: `${stale.length} plans whose trading day is over, with no fill. Mark them as missed — then R2 prices what they would have done — or delete them; a plan left open hides what hesitation cost.`,
         subjectId: "stale_plan",
         sample: stale.length,
       },
@@ -210,8 +142,6 @@ export const stalePlan: Rule = {
 };
 
 export const PROCESS_RULES: Rule[] = [
-  againstMacroBias,
-  cotChase,
   lowMentalTempEntry,
   missedASetup,
   stalePlan,

@@ -33,7 +33,7 @@ purpose — an applied migration is never edited here, and the comment inside on
 record of the day it was written.
 
 **The interface is deliberately half-and-half, and the line is a clean one.** At least 246 of the
-3,530 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+3,524 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
@@ -110,7 +110,7 @@ security applies to it exactly as to the browser.
 
 | Repo | Answers | Data direction |
 |------|---------|----------------|
-| [`futures-trading`](https://github.com/0xsickre/futures-trading) | What is the day (news, red windows, expected NQ/ES range)? How many contracts today? | Reads Topstep accounts and trades; writes MAE/MFE (`excursion_source = 'r2'`) and the day's brief (`tj_session_briefs`) |
+| [`futures-trading`](https://github.com/0xsickre/futures-trading) | What is the day (news, red windows, expected NQ/ES range)? How many contracts today? | Reads Topstep accounts and trades; writes MAE/MFE and time underwater (`excursion_source = 'r2'`), the price of a missed setup (`missed_source = 'r2'`) and the day's brief (`tj_session_briefs`) |
 | **`Trading_Journal`** (this repo) | What did I trade, and with what discipline? | Write (you, after each trade) |
 | [`trading-fundamental-vault`](https://github.com/0xsickre/trading-fundamental-vault) | Macro direction, COT filter — the swing cycle (F0–F5) | None; semantic only |
 | [`trading-dashboard`](https://github.com/0xsickre/trading-dashboard) | Where did the vault's cycle stop? | None; read-only view of the vault |
@@ -124,17 +124,19 @@ What `futures-trading` does with the journal, each described in its own README:
   instants, the Topstep close (15:10 CT, earlier on a holiday or an early close) and the expected
   NQ / ES range — which `/daily` shows and two tracker rules read (§ Process tracking). Not the
   contract count: the journal computes that itself, so there is one number, not two.
-- **MAE/MFE** for closed futures trades comes from the traded contract's candles in Cloudflare R2
-  (`tools/journal_mae.py`, daily and hourly in the evening) (§ MAE/MFE).
+- **MAE/MFE** and time underwater for closed futures trades come from the traded contract's candles
+  in Cloudflare R2 (`tools/journal_mae.py`, hourly) (§ MAE/MFE), and so does the price of a missed
+  setup once its trading day is over (§ The missed setup gets a price).
 - **The evening reminder** at 15:20 CT, ten minutes after the Topstep close (22:20 Belgrade;
   `tools/journal_podsetnik.py`), lists the day's trades
   with no setup or grade, or not yet confirmed by the TopstepX export — the same rule, on the same
   Topstep day (17:00 → 17:00 CT), as the "Bez pregleda" card on `/daily` (`review-gaps.ts`).
 
-The vault link is the swing-era one: HTF Bias records the vault's direction call **at the moment of
-entry**, and the instrument watchlist used to follow its `instrument_registry`. (`macro_align` /
-`cot_filter` are no longer seeded; add them back as your own categories under Settings if you want
-them on the trade.)
+The vault link is the swing-era one, and **the day trader's context comes from the brief**: the
+day's bias is "Bias dana (brief)" (`htf_bias`), the red windows and the Topstep close are read from
+`tj_session_briefs`. The vault's `macro_align` / `cot_filter` are no longer seeded or asked for, and
+the two insights that read them (`against_macro_bias`, `cot_chase`) left in F6 (decision M2-A); the
+values stay on the older trades that carry them.
 
 The thesis: **P&L is the consequence, process is the cause.** So the daily rating measures progress
 on the active process goal, never earnings, and the analytics decompose the result along dimensions
@@ -1048,7 +1050,7 @@ verdicts are what stops compliance from following it.
 **Playbooks** hold groups of rules; answering their checklist writes `tj_position_rules`, which feeds
 the follow rate. An unanswered rule counts in neither the numerator nor the denominator.
 
-**Insights** are 26 rules at three levels — trade (14), day (10), portfolio (2) — reading the
+**Insights** are 24 rules at three levels — trade (12), day (10), portfolio (2) — reading the
 same enriched trades the reports do. Every rule declares a `minSample` and none fires at n=1. No
 insight is stored in the database: thresholds change, and a stored insight would go stale against a
 changed threshold while still looking authoritative.
@@ -1096,6 +1098,12 @@ a loss; on a winner an observation that the entry came early); `deep_in_drawdown
 trade of a day by its length and fires from 75 % too, and only when every trade of the day was
 measured. `maximize_your_profit_day` stays out: it needs the peak of the day's cumulative P&L, and
 `gave_back_profit` covers the behaviour from MFE.
+
+**F6 (29.09.2026)** removed the two vault-era rules (`against_macro_bias`, `cot_chase`; decision
+M2-A) and moved `stale_plan` to the trading day (decision M3-A): a plan is stale once its Topstep day
+is over — 15:10 CT on the day it was written, or on the next trading day when it was written after
+that — with no fill and not marked missed (`planTradingDay` in `session-brief.ts`, the same rule
+`futures-trading` prices a miss by). The `/reports` missed panel counts stale plans the same way.
 
 **H1 removed six more** (28.09.2026): five swing rules that joined on the per-position check-in, the
 time stop in days, the written thesis and the weekend: `acted_against_the_plan`, `past_time_stop`,

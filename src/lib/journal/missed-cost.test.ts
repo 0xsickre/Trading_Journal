@@ -112,17 +112,26 @@ describe("missedCost", () => {
 });
 
 describe("stalePlanCount — the denominator that keeps the sum honest", () => {
-  it("counts plans left unresolved past the window", () => {
+  // Tuesday 29.09.2026: 15:10 CT = 20:10 UTC ends the Topstep day.
+  const at = (iso: string) => Date.parse(iso);
+
+  it("counts a plan once its trading day is over, not before (M3-A)", () => {
     const rows = [
-      row({ id: "old", status: "planned", createdAt: "2026-02-01T09:00:00Z" }),
-      row({ id: "fresh", status: "planned", createdAt: "2026-03-01T09:00:00Z" }),
+      row({ id: "morning", status: "planned", createdAt: "2026-09-29T13:00:00Z" }),
       row({ id: "missed" }),
     ];
-    expect(stalePlanCount(rows, "2026-03-05")).toBe(1);
+    expect(stalePlanCount(rows, at("2026-09-29T20:00:00Z"))).toBe(0);
+    expect(stalePlanCount(rows, at("2026-09-29T20:11:00Z"))).toBe(1);
+  });
+
+  it("gives a plan written after the flat the next trading day", () => {
+    const evening = [row({ id: "e", status: "planned", createdAt: "2026-09-29T21:00:00Z" })];
+    expect(stalePlanCount(evening, at("2026-09-30T12:00:00Z"))).toBe(0);
+    expect(stalePlanCount(evening, at("2026-09-30T20:11:00Z"))).toBe(1);
   });
 
   it("says nothing about a plan with no written date", () => {
     const noDate = { ...row({ id: "x", status: "planned" }), created_at: null } as unknown as TradeRow;
-    expect(stalePlanCount([noDate], "2026-03-05")).toBe(0);
+    expect(stalePlanCount([noDate], at("2026-10-05T00:00:00Z"))).toBe(0);
   });
 });

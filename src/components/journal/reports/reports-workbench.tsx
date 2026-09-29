@@ -394,9 +394,8 @@ export function ReportsWorkbench({
    */
   const missed = useMemo(() => {
     const rows = trades.filter((t) => t.account_id != null && scopeIds.has(t.account_id));
-    const today = new Date().toISOString().slice(0, 10);
-    return { cost: missedCost(rows), stalePlans: stalePlanCount(rows, today) };
-  }, [trades, scopeIds]);
+    return { cost: missedCost(rows), stalePlans: stalePlanCount(rows, mountedAt) };
+  }, [trades, scopeIds, mountedAt]);
 
   /**
    * The report itself — WITHOUT the sort.

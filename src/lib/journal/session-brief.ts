@@ -12,7 +12,7 @@
  * window that cannot be read is dropped and COUNTED, never guessed into shape,
  * and a range without a number is left out. Pure — no I/O here.
  */
-import { addDaysToDayKey, isValidDayKey, zonedInputToUtc } from "./time";
+import { addDaysToDayKey, isValidDayKey, topstepTradingDay, zonedInputToUtc } from "./time";
 
 export type RedWindow = {
   /** ISO UTC, inclusive. */
@@ -122,6 +122,29 @@ export function parseSessionBrief(row: unknown): SessionBrief | null {
 export function defaultFlatBy(tradingDay: string): string {
   if (!isValidDayKey(tradingDay)) return "";
   return zonedInputToUtc(`${tradingDay}T${TOPSTEP_FLAT_BY_CT}`, CHICAGO) ?? "";
+}
+
+/**
+ * The Topstep day a plan written at `iso` is for (F6, decision M3-A): the day it
+ * falls in, or the next one when it was written after that day's 15:10 CT flat;
+ * a Saturday or Sunday moves to Monday. The same rule `futures-trading` prices a
+ * missed plan by (`journal_mae.py` `prozor_plana`). "" for an unreadable instant.
+ */
+export function planTradingDay(iso: string | null | undefined): string {
+  let day = topstepTradingDay(iso);
+  if (!day) return "";
+  if (Date.parse(String(iso)) >= Date.parse(defaultFlatBy(day))) day = addDaysToDayKey(day, 1);
+  for (let dow = new Date(`${day}T12:00:00Z`).getUTCDay(); dow === 0 || dow === 6; ) {
+    day = addDaysToDayKey(day, 1);
+    dow = new Date(`${day}T12:00:00Z`).getUTCDay();
+  }
+  return day;
+}
+
+/** When a plan's trading day ends (its 15:10 CT flat), epoch ms; NaN for an unreadable instant. */
+export function planDayEndsAt(iso: string | null | undefined): number {
+  const day = planTradingDay(iso);
+  return day ? Date.parse(defaultFlatBy(day)) : NaN;
 }
 
 /**

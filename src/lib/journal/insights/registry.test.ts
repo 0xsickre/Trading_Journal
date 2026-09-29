@@ -130,6 +130,8 @@ describe("the swing insights are gone (H1, 28.09.2026)", () => {
       "past_time_stop",
       "unplanned_partial",
       "entry_without_thesis",
+      "against_macro_bias",
+      "cot_chase",
       "weekend_hold_record",
       "swap_ate_the_trade",
     ]) {
@@ -137,13 +139,14 @@ describe("the swing insights are gone (H1, 28.09.2026)", () => {
     }
   });
 
-  it("26 rules remain: trade 14, day 10, portfolio 2", () => {
+  it("24 rules remain: trade 12, day 10, portfolio 2", () => {
     // A future carries no swap, so the swap insight went with the rest (H1.4).
     // The three week rules became day rules and tilt a trade rule (F5.3a); the
-    // time-underwater pair came back from the omitted list (F5.3b).
+    // time-underwater pair came back from the omitted list (F5.3b); the two
+    // vault-era rules left (F6, M2-A).
     const by = (level: string) => ALL_RULES.filter((r) => r.level === level).length;
-    expect(ALL_RULES).toHaveLength(26);
-    expect([by("trade"), by("day"), by("week"), by("portfolio")]).toEqual([14, 10, 0, 2]);
+    expect(ALL_RULES).toHaveLength(24);
+    expect([by("trade"), by("day"), by("week"), by("portfolio")]).toEqual([12, 10, 0, 2]);
   });
 });
 

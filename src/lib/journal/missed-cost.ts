@@ -30,6 +30,7 @@
  */
 
 import { numberFieldValue, stringFieldValue } from "./field-values";
+import { planDayEndsAt } from "./session-brief";
 import type { TradeRow } from "./types";
 
 /** What the plan would have met first. */
@@ -119,27 +120,16 @@ export function missedCost(rows: readonly TradeRow[]): MissedCost {
  *
  * The denominator this panel needs to be honest about itself: a book that
  * never marks anything missed has a missed cost of zero for the wrong reason.
- * `olderThanDays` is counted against the day the plan was written.
+ * A plan is stale once its Topstep trading day is over (decision M3-A): a day
+ * trader's plan is for one session, and the missed-setup price is measured
+ * over that same day.
  */
-export function stalePlanCount(
-  rows: readonly TradeRow[],
-  todayKey: string,
-  olderThanDays = 14,
-): number {
+export function stalePlanCount(rows: readonly TradeRow[], now: number): number {
   let n = 0;
   for (const row of rows) {
     if (String(row.status) !== "planned") continue;
-    const day = String(row.created_at ?? "").slice(0, 10);
-    if (day === "" || daysBetween(day, todayKey) < olderThanDays) continue;
-    n++;
+    const ends = planDayEndsAt(row.created_at == null ? null : String(row.created_at));
+    if (Number.isFinite(ends) && ends < now) n++;
   }
   return n;
-}
-
-/** Whole days between two `YYYY-MM-DD` keys; negative when `to` is earlier. */
-function daysBetween(from: string, to: string): number {
-  const a = Date.parse(`${from}T00:00:00Z`);
-  const b = Date.parse(`${to}T00:00:00Z`);
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
-  return Math.round((b - a) / 86_400_000);
 }

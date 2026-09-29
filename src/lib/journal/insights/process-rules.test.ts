@@ -1,54 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  againstMacroBias,
-  cotChase,
   lowMentalTempEntry,
   missedASetup,
   stalePlan,
 } from "./process-rules";
 import { ctxOf, fired, mkGradedRow, mkReport, mkTrade } from "./test-helpers";
 import type { TradeRow } from "../types";
-
-describe("againstMacroBias", () => {
-  it("stays silent below the category sample threshold", () => {
-    const ctx = ctxOf([
-      mkTrade({ id: "a", macroAlign: "Protiv bias", net: -100, r: -1 }),
-      mkTrade({ id: "b", macroAlign: "Protiv bias", net: -100, r: -1 }),
-    ]);
-    expect(againstMacroBias.evaluate(ctx)).toEqual([]);
-  });
-
-  it("reports the category result once there is a sample", () => {
-    const trades = Array.from({ length: 4 }, (_, i) =>
-      mkTrade({ id: `a${i}`, macroAlign: "Protiv bias", net: -100, r: -1 }),
-    );
-    const out = againstMacroBias.evaluate(ctxOf(trades));
-    expect(out).toHaveLength(1);
-    expect(out[0].sample).toBe(4);
-    expect(out[0].severity).toBe("warning");
-  });
-
-  it("softens to info when the category is actually profitable", () => {
-    const trades = Array.from({ length: 4 }, (_, i) =>
-      mkTrade({ id: `a${i}`, macroAlign: "Protiv bias", net: 200, r: 2 }),
-    );
-    expect(againstMacroBias.evaluate(ctxOf(trades))[0].severity).toBe("info");
-  });
-});
-
-describe("cotChase", () => {
-  it("fires when the COT filter said not to chase", () => {
-    const ctx = ctxOf([
-      mkTrade({ id: "a", cotFilter: "Ne chase", net: -100, r: -1 }),
-    ]);
-    expect(fired(cotChase, ctx)).toEqual(["a"]);
-  });
-
-  it("does not fire for other filter values", () => {
-    const ctx = ctxOf([mkTrade({ id: "a", cotFilter: "Chase OK" })]);
-    expect(fired(cotChase, ctx)).toEqual([]);
-  });
-});
 
 describe("lowMentalTempEntry", () => {
   it("reads the OPEN day, not the close day", () => {
@@ -110,7 +67,7 @@ describe("missedASetup", () => {
 });
 
 describe("stalePlan", () => {
-  it("counts plans older than the threshold with no fills", () => {
+  it("counts plans whose trading day is over, with no fills (M3-A)", () => {
     const old = new Date(Date.now() - 40 * 86_400_000).toISOString();
     const rows = [
       { status: "planned", created_at: old },

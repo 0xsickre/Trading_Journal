@@ -5,6 +5,8 @@ import {
   flatByFor,
   parseSessionBrief,
   redWindowAt,
+  planDayEndsAt,
+  planTradingDay,
 } from "./session-brief";
 
 const row = (over: Record<string, unknown> = {}) => ({
@@ -105,5 +107,25 @@ describe("briefResolver", () => {
     const of = briefResolver([b]);
     expect(of("2026-09-29")).toBe(b);
     expect(of("2026-09-30")).toBeNull();
+  });
+});
+
+describe("a plan's trading day (F6, M3-A — the same rule as futures-trading prozor_plana)", () => {
+  it("is the Topstep day it was written in, until that day's 15:10 CT flat", () => {
+    expect(planTradingDay("2026-09-29T13:00:00Z")).toBe("2026-09-29");
+    expect(planDayEndsAt("2026-09-29T13:00:00Z")).toBe(Date.parse("2026-09-29T20:10:00Z"));
+  });
+
+  it("moves to the next day after the flat, and past the weekend", () => {
+    // 16:00 CT, after the flat and before the 17:00 reopen.
+    expect(planTradingDay("2026-09-29T21:00:00Z")).toBe("2026-09-30");
+    // Friday 16:30 CT and Sunday 18:00 CT both plan Monday.
+    expect(planTradingDay("2026-10-02T21:30:00Z")).toBe("2026-10-05");
+    expect(planTradingDay("2026-10-04T23:00:00Z")).toBe("2026-10-05");
+  });
+
+  it("has no day for an unreadable instant", () => {
+    expect(planTradingDay(null)).toBe("");
+    expect(Number.isNaN(planDayEndsAt("nope"))).toBe(true);
   });
 });
