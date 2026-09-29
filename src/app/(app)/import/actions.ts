@@ -124,6 +124,7 @@ type PositionBefore = {
   stop_price: number | null;
   risk_pct: string | null;
   time_stop_days: number | null;
+  time_stop: string | null;
   thesis: string | null;
   invalidation: string | null;
   scale_out_levels: Json | null;
@@ -364,7 +365,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
     const { data: prevPos, error: posErr } = await supabase
       .from("tj_positions")
       .select(
-        "status, needs_review, gross_pnl_override, target_price, max_drawdown_price, max_profit_price, excursion_source, equity_at_entry, plan_snapshot, entry_price, stop_price, risk_pct, time_stop_days, thesis, invalidation, scale_out_levels",
+        "status, needs_review, gross_pnl_override, target_price, max_drawdown_price, max_profit_price, excursion_source, equity_at_entry, plan_snapshot, entry_price, stop_price, risk_pct, time_stop_days, time_stop, thesis, invalidation, scale_out_levels",
       )
       .eq("id", pid)
       .maybeSingle();

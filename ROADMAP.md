@@ -1585,3 +1585,12 @@ trajanja u danima, swing insights — popisano je i podeljeno u šest faza (F1�
 - **F2 ✅ (`3644c05`, 28.09.2026):** Topstep nalog broji Topstep dan (17:00 → 17:00 CT) svuda gde se dan broji; „danas" po primarnom nalogu; svaki trejd po pravilu svog naloga i u „All accounts". Sledeća je F3 (Topstep pravila u tracker-u i Survival-u), plan napisan, čeka odluke E1–E7.
 - **F3 ✅ (`a8e63f9`, 28.09.2026):** Topstep trejdovi se u tracker-u ocenjuju po planu (DLL, budžet rizika na ulazu +10 %, broj ugovora); procenti ostalih naloga bez Topstep kapitala; Survival u novcu sa trailing MLL-om. Migracija `20260928160000` primenjena istog dana. Sledeća je F4 (dnevni tok), plan napisan, čeka odluke G1–G6 i H1 (uklanjanje FTMO/swing/CFD).
 - **H1 ✅ (`09752cd`, `69e5124`, `67feff6`, `0fb9d3f`, 28.09.2026):** uklonjeni FTMO mod, MT5 statement uvoz, check-in po poziciji, swing insights (5) i dimenzije (4), swap kao metrika i insight; kolone i tabele u bazi ostaju kao istorija. Sledeća je F4 (dnevni tok), odluke G1–G6 donete.
+
+### F4 — dnevni tok za day tradera (29.09.2026.) ✅
+
+Brief iz `futures-trading` upisuje red u journal (`tj_session_briefs`): kraj Topstep dana, crveni
+prozori, očekivani raspon; `/daily` počinje karticom „Pred sesiju". Četiri nova auto pravila (max
+ulaza po nalogu, stop posle uzastopnih gubitaka, ravno do kraja dana, bez ulaza u crvenom prozoru),
+tri ručna penzionisana. Kategorije za day tradera (swing stavke ugašene, ne obrisane). Time stop u
+minutima ili „close". Četiri migracije primenjene uz odobrenje. Sledi H2 — brisanje ostataka iz baze
+(`FAZA_F_DAYTRADING_PLAN.md`).

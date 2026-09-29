@@ -7,7 +7,7 @@ ga zamenjuje. README opisuje stanje koda kakvo jeste — i swing ostatke — dok
 
 **Kako je fajl složen.** Posao je podeljen u **šest faza, F1–F6**; jedna faza = jedna sesija, sa
 jasnim ulazom i izlazom, da nijedna ne zavisi od konteksta koji živi samo u razgovoru. **Detaljan
-plan postoji samo za fazu koja je sledeća** (sada H1, pa F4). Ostale imaju okvir — cilj, stavke, odluke koje
+plan postoji samo za fazu koja je sledeća** (sada H2). Ostale imaju okvir — cilj, stavke, odluke koje
 treba doneti — i dobijaju detaljan plan tek kad dođu na red, jer svaka zavisi od onoga što je
 prethodna odlučila (npr. F3 i F4 čitaju dan koji F2 tek definiše). Stavke `#1–#23` su u katalogu na
 dnu i brojevi se ne menjaju, jer README upućuje na njih.
@@ -78,8 +78,9 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 28.09.2026 | F4 | G11: brief NE upisuje broj ugovora — journal ga računa sam iz `topstep.ts` (jedno mesto, bez druge kopije) |
 | 29.09.2026 | — | F4 rad posle `3ba08d7` (tabela za brief, kartica, upis iz brief.py) nije bio pushovan i izgubljen je sa kontejnerom sesije; F4 kreće ponovo od `main`. Odluke G7–G11 su sačuvane iz razgovora |
 | 29.09.2026 | H2 | Trejderu ne trebaju ostaci: `tj_position_checkins`, `time_stop_days`, swap kolone (fill, katalog, neto P&L), % tracker pragovi. Posebna faza **H2 posle F4**, migracija koja briše (nepovratno) — primena tek uz odobrenje |
-| 29.09.2026 | F4.5 | Time stop je kolona `time_stop` (tekst, CHECK na 5 vrednosti), ne `time_stop_minutes`: „do kraja sesije" je pravi izbor, a ne magičan broj, i razlikuje se od „nije upisano" (NULL). Uvoz (`import/actions.ts`) ga ne čita pre primene migracije — spisak kolona je eksplicitan; dodaje se posle primene |
+| 29.09.2026 | F4.5 | Time stop je kolona `time_stop` (tekst, CHECK na 5 vrednosti), ne `time_stop_minutes`: „do kraja sesije" je pravi izbor, a ne magičan broj, i razlikuje se od „nije upisano" (NULL). Uvoz (`import/actions.ts`) ima eksplicitan spisak kolona; `time_stop` je dodat posle primene migracije |
 | 29.09.2026 | H2 | Backtest nalozi više ne trebaju (samo Topstep) → % pragovi i ne-Topstep grana tracker-a idu u H2 |
+| 29.09.2026 | F4 | Trejder odobrio primenu četiri F4 migracije; primenjene istog dana |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -104,8 +105,8 @@ pogađa.
 | **F2** | Topstep dan (17:00 → 17:00 CT) kao ključ dana svuda gde se dan broji | #1 | F1 | ne (D2-A: izvedeno iz `topstep_mode`) | **Opus** | ✅ `3644c05` (28.09.2026) |
 | **F3** | Topstep pravila u tracker-u i Survival-u | #3, #4, #6 | F2 | da: `20260928160000` (`risk_budget_at_entry`) | **Opus** | ✅ `a8e63f9` (28.09.2026) — migracija primenjena 28.09.2026 uz odobrenje trejdera |
 | **H1** | Uklanjanje FTMO / MT5 / swing koda (trejder, 28.09.2026) | #19 i delovi #13, #14 | F3 | ne (kolone ostaju) | **Opus** | ✅ `09752cd` · `69e5124` · `67feff6` · `0fb9d3f` (28.09.2026) |
-| **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da (brief tabela, nova pravila, time stop, kategorije) | **Opus** | ⏳ **sledeća — odluke donete (G1–G6)** |
-| **H2** | Brisanje ostataka iz baze: check-in tabela, `time_stop_days`, swap, % pragovi, backtest grana | — | F4 | da, **briše** (nepovratno, uz odobrenje) | **Opus** | posle F4 |
+| **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da: `20260929100000`, `…110000`, `…120000`, `…130000` | **Opus** | ✅ `80fceea` · `6dcf72b` · `94796d1` · `4dba3e9` + `132ce35` (futures-trading), 29.09.2026 — migracije primenjene uz odobrenje trejdera |
+| **H2** | Brisanje ostataka iz baze: check-in tabela, `time_stop_days`, swap, % pragovi, backtest grana | — | F4 | da, **briše** (nepovratno, uz odobrenje) | **Opus** | ⏳ **sledeća — detaljan plan ispod, čeka odluke I1–I5** |
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, swap, uzorak | #11–#15, #17, #18 | F2 | ne (sve izvedeno) | Sonnet, Opus za #13 | okvir |
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, legacy CFD u UI-ju, komentari, PARITY | #16, #19, #20, #22, #23 | F5 | možda (#16) | Sonnet | okvir |
 
@@ -458,7 +459,24 @@ broj testova, insights i ruta), `PARITY.md` ako pominje obrisano, ovde H1 ✅, p
   ostaju. `PARITY.md`: FTMO → Topstep u §6 i §8, `total_swap` izbačen iz §1.
 - Procentualni tracker pragovi ostaju: backtest nalog nije Topstep i čita ih.
 
-## F4 — Dnevni tok za day tradera (detaljno)
+## F4 — Dnevni tok za day tradera (detaljno) — ✅ `80fceea` · `132ce35` (futures-trading) · `6dcf72b` · `94796d1` · `4dba3e9`
+
+**Isporučeno po odlukama G1–G11 (29.09.2026).** Van plana ili drugačije od predloga:
+- Rad posle `3ba08d7` iz prethodne sesije nije bio pushovan i izgubljen je; F4 je urađen ponovo od
+  `main`, podkorak po podkorak, svaki pushovan čim je bio zelen.
+- **Time stop je kolona `time_stop` (tekst, 5 vrednosti), ne `time_stop_minutes`** — vidi dnevnik.
+- **Brief ne upisuje link** (`source_url` ostaje prazan): HTML živi u repou `futures-trading`, a link na
+  GitHub prikaz HTML-a pokazuje izvorni kod, ne stranicu. Kolona ostaje za kasnije.
+- **Crveni prozori uključuju i vesti važne samo za 6E** (brief ih tako prikazuje; G7 = „samo prozori iz
+  brief-a"); `impact` ih označava sa „6E …". Ako NQ/ES ulaz u 6E prozoru ne treba da pada, to je nova
+  odluka.
+- Provera migracija: lokalni Postgres 16 sa redovima žive knjige — sve četiri se primenjuju i ponovo
+  primenjuju čisto; CHECK za `count` odbija 0, 1,5, 21 i „2"; upsert brief-a menja isti red pod RLS-om,
+  drugi korisnik ne vidi ništa; seed nove knjige daje 14 pravila i 58 stavki.
+- **Primenjeno na živu bazu 29.09.2026** (odobrio trejder): u bazi zabeleženo kao `session_briefs`,
+  `day_trading_tracker_rules`, `day_trading_categories`, `time_stop`. Stanje posle: 4 nova auto
+  pravila (count 2), 3 ručna penzionisana, „Walk Away" ostao; stavke dodate, swing stavke ugašene.
+- Gate zelen, 3.003 testa (+39 u odnosu na 2.964 posle H1); `futures-trading`: 32 unit testa, ruff.
 
 **Ulaz:** `main` posle H1 (F3: `a8e63f9`, `409858d`; migracija `20260928160000` primenjena). **Pročitati:** README
 § Routes `/daily`, § Ratings, § Process tracking; `daily-report-form.tsx`, `form-config.ts`,
@@ -538,12 +556,12 @@ ne pad stranice (Vercel objavljuje `main` odmah).
 
 | Korak | Šta | Repo | Status |
 |---|---|---|---|
-| F4.1 | `tj_session_briefs` (migracija: tabela, RLS, reset lista); `session-brief.ts` (čist: red → brief, prozori, `flat_by` sa podrazumevanih 15:10 CT); upit; kartica **„Pred sesiju"** na `/daily` (raspon NQ/ES, crveni prozori, kraj dana; „brief nije stigao" kad reda nema); opis `/daily` bez swing teksta | journal | ✅ kod; migracija `20260929100000` napisana, NIJE primenjena |
+| F4.1 | `tj_session_briefs` (migracija: tabela, RLS, reset lista); `session-brief.ts` (čist: red → brief, prozori, `flat_by` sa podrazumevanih 15:10 CT); upit; kartica **„Pred sesiju"** na `/daily` (raspon NQ/ES, crveni prozori, kraj dana; „brief nije stigao" kad reda nema); opis `/daily` bez swing teksta | journal | ✅ kod; migracija `20260929100000` primenjena 29.09.2026 |
 | F4.2 | `brief.py`: prozori kao UTC trenuci (`prozor_utc`), red za journal (čista funkcija + test), `Journal.upsert`, upis posle HTML-a; `--bez-journala` i u probi; greška upisa ne ruši brief (glasno u izlazu) | futures-trading (`main`) | ✅ `132ce35` |
-| F4.3 | Auto pravila `max_trades_per_day`, `stop_after_losses` (config `count`, po nalogu, G9), `flat_by_close` (Topstep kraj dana iz brief-a, inače 15:10 CT), `no_entry_in_red_window` (samo brief, G7; bez brief-a `na/no_brief`); kontekst `briefOf` + `now` za sve pozivaoce (i zaključavanje dana); Settings menja `count`; migracija: CHECK, 4 pravila za postojeće knjige i seed, penzionisanje 3 ručna (G8) | journal | ✅ kod; migracija `20260929110000` napisana, NIJE primenjena |
-| F4.4 | Kategorije (G4-A, G10): migracija dodaje day-trading stavke i gasi swing stavke; seed za nove knjige | journal | ✅ migracija `20260929120000` napisana, NIJE primenjena |
-| F4.5 | Time stop u minutima + „do kraja sesije" (G3-A); `time_stop_days` se više ne nudi (briše ga H2) | journal | ✅ kod; migracija `20260929130000` napisana, NIJE primenjena. Kolona je `time_stop` (tekst: `5`/`15`/`30`/`60`/`close`), ne celobrojni `time_stop_minutes` — vidi dnevnik |
-| F4.6 | README 1:1, `futures-trading` README, ROADMAP, plan: F4 ✅ i detaljan plan H2; primena migracija uz odobrenje | oba | ⏳ |
+| F4.3 | Auto pravila `max_trades_per_day`, `stop_after_losses` (config `count`, po nalogu, G9), `flat_by_close` (Topstep kraj dana iz brief-a, inače 15:10 CT), `no_entry_in_red_window` (samo brief, G7; bez brief-a `na/no_brief`); kontekst `briefOf` + `now` za sve pozivaoce (i zaključavanje dana); Settings menja `count`; migracija: CHECK, 4 pravila za postojeće knjige i seed, penzionisanje 3 ručna (G8) | journal | ✅ kod; migracija `20260929110000` primenjena 29.09.2026 |
+| F4.4 | Kategorije (G4-A, G10): migracija dodaje day-trading stavke i gasi swing stavke; seed za nove knjige | journal | ✅ migracija `20260929120000` primenjena 29.09.2026 |
+| F4.5 | Time stop u minutima + „do kraja sesije" (G3-A); `time_stop_days` se više ne nudi (briše ga H2) | journal | ✅ kod; migracija `20260929130000` primenjena 29.09.2026. Kolona je `time_stop` (tekst: `5`/`15`/`30`/`60`/`close`), ne celobrojni `time_stop_minutes` — vidi dnevnik |
+| F4.6 | README 1:1, `futures-trading` README, ROADMAP, plan: F4 ✅ i detaljan plan H2; primena migracija uz odobrenje | oba | ✅ |
 
 ### Testovi (prvo padaju)
 
@@ -559,6 +577,65 @@ ne pad stranice (Vercel objavljuje `main` odmah).
 - README § Routes `/daily`, § Process tracking (broj auto pravila), § A trading day; u
   `futures-trading` README § Dnevni brief (upis u journal).
 - Ovde: F4 ✅, detaljan plan sledeće faze.
+
+## H2 — Brisanje ostataka iz baze (detaljno)
+
+**Ulaz:** `main` posle F4 (`4dba3e9`), gate zelen (3.003 testa). **Odluka (29.09.2026):** trejderu ne
+trebaju check-in tabela, `time_stop_days`, swap (fill, katalog, neto P&L) ni % tracker pragovi, a ni
+backtest nalozi — samo Topstep. **Za razliku od H1, ovde se briše iz BAZE** (nepovratno): migracija se
+piše, proverava na lokalnom Postgres-u sa redovima žive knjige, a primenjuje tek uz izričito odobrenje.
+
+### Utvrđeno u bazi i kodu (29.09.2026, samo čitanje)
+
+- **Podataka nema, gubitka nema:** 0 redova u `tj_position_checkins`, 0 trejdova sa `time_stop_days`,
+  0 fill-ova i 0 instrumenata sa swap-om, 0 trejdova sa `risk_pct`, 0 FTMO naloga. Backtest nalog je
+  jedan, arhiviran i prazan („Backtesting XAUUSD").
+- **Ali ih šest SQL funkcija i view referencira** — pre `DROP COLUMN` svaka se prepisuje:
+  `tj_merge_positions`, `tj_replace_executions`, `tj_save_trade`, `tj_undo_import_batch`,
+  `tj_reset_my_data`, `tj_seed_instruments_defaults`, i view `tj_position_stats` (neto =
+  bruto − provizije − swap). View: `DROP VIEW` → `DROP COLUMN` → `CREATE VIEW` →
+  `security_invoker = on` (README § Migrations), a njegov TypeScript blizanac `position-stats.ts` i
+  test koji ih drži zajedno menjaju se u istom koraku.
+- Kod: `swap_funding` u `trade-form`, `scale-out-editor`, `import-wizard`, `costs.ts`,
+  `instrument-costs.ts`, `instrument-manager`, `cost-defaults.ts`; `time_stop_days` u
+  `plan-snapshot`, `merge-positions`, `trade-input-schema`, `reserved-keys`, `import/actions`;
+  % pragovi u `tracker/auto-rules.ts` (`evalPct*`), `equity-ladder.ts`, `tracker-types.ts`
+  (`AUTO_RULES_NEEDING_PCT`), Settings → Tracker; `account_kind` i TradingView backtest uvoz.
+  Novčani moduli imaju 100 % coverage prag — brisanje ide sa njihovim testovima.
+
+### Podkoraci (svaki: test koji pada → kod → gate → commit + push; migracija na kraju)
+
+| Korak | Šta |
+|---|---|
+| H2.1 | `tj_position_checkins`: `DROP TABLE`; iz `tj_merge_positions` i `tj_reset_my_data` (lista po imenu) |
+| H2.2 | `time_stop_days`: kod (pečat, spajanje, uvoz, šema, rezervisani ključevi), `tj_merge_positions`, `tj_save_trade` (ako ga imenuje), `DROP COLUMN` + CHECK |
+| H2.3 | Swap: view i `position-stats.ts` (neto = bruto − provizije), `tj_replace_executions`, `tj_undo_import_batch`, seed instrumenata; kolone `tj_executions.swap_funding`, `tj_instruments.swap_*`, `tj_accounts.default_swap_per_day`; UI (forma, uvoz, katalog) |
+| H2.4 | % pragovi i ne-Topstep grana tracker-a: evaluatori samo po Topstep planu; `max_loss_per_week` (Topstep nema nedeljni limit) i `pct` config po odluci I4 |
+| H2.5 | Backtest i ostatak FTMO-a po odlukama I5 |
+| H2.6 | README 1:1, plan: H2 ✅ i detaljan plan F5 |
+
+### Odluke koje traži trejder (pre koda)
+
+- **I1 — Obim brisanja iz baze.** (A) sve četiri grupe odjednom (check-in, `time_stop_days`, swap,
+  % pragovi) u jednoj migraciji posle svih podkoraka; (B) svaka grupa svoja migracija, primenjena čim
+  je njen podkorak zelen. Preporuka: **B** — manji korak, lakše vraćanje ako nešto zapne.
+- **I2 — FTMO kolone na nalogu** (`ftmo_mode`, `ftmo_*`, 12 kolona; H1 je obrisao samo kod). Obrisati
+  i njih u H2? Preporuka: **da** — 0 FTMO naloga.
+- **I3 — Swap u neto P&L-u.** Posle H2 neto = bruto − provizije. Na fjučersu je isto kao danas (swap je
+  0); CFD istorije nema. Potvrdi.
+- **I4 — Pravilo `max_loss_per_week`.** Topstep nema nedeljni limit, a bez % pragova pravilo nema šta da
+  meri. (A) penzionisati ga (`deleted_at`, istorija ostaje); (B) nedeljni limit u dolarima kao novo
+  podešavanje. Preporuka: **A**. Uz to: `risk_pct` kolona i lista „Risk %" — obrisati (0 trejdova ih ima)?
+  Preporuka: **da**.
+- **I5 — Backtest.** (A) obrisati `account_kind` (svaki nalog je Topstep/trading), TradingView backtest
+  uvoz i arhivirani prazan „Backtesting XAUUSD"; (B) zadržati TradingView replay fjučersa kao backtest
+  (MAE/MFE iz R2 ga već meri, 1-minutne sveće). Preporuka: **B ako ćeš ikad raditi replay na
+  TradingView-u, inače A** — to je tvoja odluka.
+
+### Izlaz iz H2
+
+- Gate zelen; migracije primenjene uz odobrenje; README 1:1 (Data model, Migrations, Costs, Import,
+  Process tracking, Reset); ovde H2 ✅ i detaljan plan F5.
 
 ## F5–F6 — okvir (detaljno kad dođu na red)
 
