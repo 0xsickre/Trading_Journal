@@ -28,6 +28,8 @@ const T = {
   REVENGE_WINDOW_MINUTES: 5,
   /** Losses in a row on one account and day after which the day should have ended (L3, 29.09.2026). */
   TILT_LOSSES: 2,
+  /** Share of a trade's time underwater (%) from which it was "mostly underwater". */
+  MOSTLY_UNDERWATER_PCT: 75,
 } as const;
 
 /**
@@ -472,6 +474,32 @@ export const unusualSize: Rule = {
   },
 };
 
+export const mostTimeInDrawdown: Rule = {
+  id: "most_time_in_drawdown",
+  level: "trade",
+  minSample: 0,
+  description:
+    "The running P&L sat below zero for most of the trade (measured from the R2 candles).",
+  evaluate: (ctx) =>
+    ctx.trades
+      .filter((e) => e.underwaterPct != null && e.underwaterPct >= T.MOSTLY_UNDERWATER_PCT)
+      .map((e) => {
+        const held = e.durationSeconds != null ? ` (${formatDuration(e.durationSeconds)})` : "";
+        return insight(e, {
+          ruleId: "most_time_in_drawdown",
+          severity: e.outcome === "loss" ? "warning" : "info",
+          title: e.outcome === "loss" ? "Underwater most of the trade" : "Paid, after sitting underwater",
+          detail:
+            e.outcome === "loss"
+              ? `In the red for ${e.underwaterPct}% of the trade${held}, closed ${fmtMoney(e.pnl, ctx.currency)}.`
+              : `In the red for ${e.underwaterPct}% of the trade${held} before it closed ${fmtMoney(
+                  e.pnl,
+                  ctx.currency,
+                )} — the entry came early.`,
+        });
+      }),
+};
+
 export const TRADE_RULES: Rule[] = [
   drawdownExceedsProfit,
   cleanHold,
@@ -480,6 +508,7 @@ export const TRADE_RULES: Rule[] = [
   gaveBackProfit,
   revengeTrade,
   tiltAfterLosses,
+  mostTimeInDrawdown,
   scaleIn,
   scaleOut,
   unusualSize,

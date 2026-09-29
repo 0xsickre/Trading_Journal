@@ -4,6 +4,7 @@ import {
   drawdownExceedsProfit,
   exceedAvgHoldTime,
   gaveBackProfit,
+  mostTimeInDrawdown,
   redToGreen,
   revengeTrade,
   scaleIn,
@@ -319,5 +320,23 @@ describe("unusualSize", () => {
       Array.from({ length: 9 }, (_, i) => mkTrade({ id: `n${i}`, size: null })),
     );
     expect(fired(unusualSize, ctx)).toEqual([]);
+  });
+});
+
+describe("mostTimeInDrawdown — time underwater from the R2 candles (F5.3b)", () => {
+  it("fires from 75% of the trade underwater, milder when it still paid", () => {
+    const ctx = ctxOf([
+      mkTrade({ id: "lost", net: -100, r: -1, underwaterPct: 90, durationSeconds: 600 }),
+      mkTrade({ id: "paid", net: 200, r: 2, underwaterPct: 80, durationSeconds: 600 }),
+      mkTrade({ id: "fine", net: 200, r: 2, underwaterPct: 20 }),
+      mkTrade({ id: "unmeasured", net: -100, r: -1 }),
+    ]);
+    const out = mostTimeInDrawdown.evaluate(ctx);
+    expect(out.map((i) => [i.subjectId, i.severity])).toEqual([
+      ["lost", "warning"],
+      ["paid", "info"],
+    ]);
+    expect(out[0].detail).toBe("In the red for 90% of the trade (10m), closed -$100.00.");
+    expect(out[1].detail).toContain("the entry came early");
   });
 });

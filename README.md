@@ -1002,7 +1002,7 @@ verdicts are what stops compliance from following it.
 **Playbooks** hold groups of rules; answering their checklist writes `tj_position_rules`, which feeds
 the follow rate. An unanswered rule counts in neither the numerator nor the denominator.
 
-**Insights** are 24 rules at three levels — trade (13), day (9), portfolio (2) — reading the
+**Insights** are 26 rules at three levels — trade (14), day (10), portfolio (2) — reading the
 same enriched trades the reports do. Every rule declares a `minSample` and none fires at n=1. No
 insight is stored in the database: thresholds change, and a stored insight would go stale against a
 changed threshold while still looking authoritative.
@@ -1040,6 +1040,16 @@ against the trade before it, its R and money, and the average R of every trade o
 nothing; it prices the continuation, and as a trade-level rule it is also a filter in `/reports`.
 `patience_paid_off` came back from the omitted list: a green day whose first entry came 30+ minutes
 after the 09:30 ET open (the Open window left alone; a pre-open or overnight first entry does not count).
+
+**F5.3b brought back the time-underwater pair.** `futures-trading`'s `journal_mae.py` now writes
+`tj_positions.time_underwater_pct` in the same write as the R2 MAE/MFE: the share of the trade's time,
+first entry to last exit, in which the running P&L — realized on the exits so far plus the open
+contracts at the price, fees left out — was below zero, from the same candles (a quiet second carries
+the last price). The journal only reads it. `most_time_in_drawdown` fires from **75 %** (a warning on
+a loss; on a winner an observation that the entry came early); `deep_in_drawdown_day` weights each
+trade of a day by its length and fires from 75 % too, and only when every trade of the day was
+measured. `maximize_your_profit_day` stays out: it needs the peak of the day's cumulative P&L, and
+`gave_back_profit` covers the behaviour from MFE.
 
 **H1 removed six more** (28.09.2026): five swing rules that joined on the per-position check-in, the
 time stop in days, the written thesis and the weekend: `acted_against_the_plan`, `past_time_stop`,
@@ -1483,7 +1493,7 @@ container does not have. It stays a later option, not an oversight.
 | Options (DTE, strike, expiry) | Not traded |
 | Intraday dimensions | **Built in F5.2 (29.09.2026).** `/reports` groups by **Session window** (Globex night 18:00–08:00, Pre-open, Open 09:30–10:00, Morning, Lunch, Afternoon, Last hour — on New York's clock whatever zone the journal shows, `session-window.ts`), **Minutes after the open** (before the open, 0–15, 15–30, 30–60 min, 1–2 h, 2 h +), **Trade number in the day** (per account; the 4th on is one bucket) and **After losses** (first trade of the day, after a win or scratch, after 1 loss, after 2+ — the losses that had already closed when the entry was taken, the same reading `stop_after_losses` grades). The weekly "Napredak" card still has its own hour and trade-number rows |
 | Economic calendar | Lives in `futures-trading`: the morning brief carries the day's releases with their red windows |
-| Running P&L curve per trade | Needs a price feed inside the journal. The R2 minute and second candles in `futures-trading` now exist, so `most_time_in_drawdown` and `deep_in_drawdown_day`, left out for want of a feed, can come back (`FAZA_F_DAYTRADING_PLAN.md` F5.3); `patience_paid_off` already has (F5.3) |
+| Running P&L curve per trade in the journal | The journal still holds no prices. `futures-trading` walks the curve over the R2 candles and writes the one number the insights need, `time_underwater_pct` (F5.3b); the peak of a day's cumulative P&L, which `maximize_your_profit_day` would need, is measured by no one |
 
 ## MAE/MFE
 
@@ -1496,7 +1506,8 @@ written from the traded contract's own candles:
 
 `tj_positions.excursion_source` records who wrote the two prices: `manual` or `r2` (`mt5` and
 `tradingview` on history written before H1 / H2), and `excursion_note` says what they were measured
-on (`MNQZ6 · 1s`).
+on (`MNQZ6 · 1s`). `time_underwater_pct` comes with the R2 prices (F5.3b); a trade R2 measured before
+that column existed gets it once, on the next run.
 
 **R2 wins — even over a typed value.** That is the trader's decision of 28.09.2026: the exchange's
 own prices are the record, and a number typed from a chart is a reading of them.

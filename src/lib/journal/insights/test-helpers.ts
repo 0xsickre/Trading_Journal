@@ -37,6 +37,8 @@ export type TradeSpec = {
   instrument?: string;
   tradeNo?: number;
   accountId?: string;
+  /** Share of the trade's time underwater, as `futures-trading` writes it. */
+  underwaterPct?: number | null;
 };
 
 let seq = 0;
@@ -92,6 +94,7 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     stop_price: stop,
     max_drawdown_price: spec.mae ?? null,
     max_profit_price: spec.mfe ?? null,
+    time_underwater_pct: spec.underwaterPct ?? null,
     position_size: spec.size ?? null,
     // The grade is DERIVED from playbook criteria since Phase E dropped the
     // column. A fixture asking for one names the shared graded playbook and

@@ -137,23 +137,32 @@ describe("the swing insights are gone (H1, 28.09.2026)", () => {
     }
   });
 
-  it("24 rules remain: trade 13, day 9, portfolio 2", () => {
+  it("26 rules remain: trade 14, day 10, portfolio 2", () => {
     // A future carries no swap, so the swap insight went with the rest (H1.4).
-    // The three week rules became day rules and tilt a trade rule (F5.3).
+    // The three week rules became day rules and tilt a trade rule (F5.3a); the
+    // time-underwater pair came back from the omitted list (F5.3b).
     const by = (level: string) => ALL_RULES.filter((r) => r.level === level).length;
-    expect(ALL_RULES).toHaveLength(24);
-    expect([by("trade"), by("day"), by("week"), by("portfolio")]).toEqual([13, 9, 0, 2]);
+    expect(ALL_RULES).toHaveLength(26);
+    expect([by("trade"), by("day"), by("week"), by("portfolio")]).toEqual([14, 10, 0, 2]);
   });
 });
 
 describe("intraday insights (F5.3)", () => {
-  it("measures the day in minutes and sessions, not weeks", () => {
+  it("measures the day in minutes and sessions, not weeks, and leaves one rule out", () => {
     const ids = new Set(ALL_RULES.map((r) => r.id));
     for (const gone of ["overtrading_week", "low_efficiency_week", "tilt_week"]) {
       expect(ids.has(gone)).toBe(false);
     }
-    for (const now of ["overtrading_day", "low_efficiency_day", "tilt_after_losses", "patience_paid_off"]) {
+    for (const now of [
+      "overtrading_day",
+      "low_efficiency_day",
+      "tilt_after_losses",
+      "patience_paid_off",
+      "most_time_in_drawdown",
+      "deep_in_drawdown_day",
+    ]) {
       expect(ids.has(now)).toBe(true);
     }
+    expect(OMITTED_RULES.map((o) => o.id)).toEqual(["maximize_your_profit_day"]);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  deepInDrawdownDay,
   flipFlopDay,
   highConvictionDay,
   leftMoneyOnTable,
@@ -235,5 +236,24 @@ describe("patiencePaidOff", () => {
 
   it("does not count a pre-open or overnight first entry as patience", () => {
     expect(fired(patiencePaidOff, ctxOf([day("2026-09-29T12:00:00Z", 300)]))).toEqual([]);
+  });
+});
+
+describe("deepInDrawdownDay — the day's time in trades underwater (F5.3b)", () => {
+  const t = (id: string, net: number, underwaterPct: number | null, durationSeconds: number) =>
+    mkTrade({ id, net, underwaterPct, durationSeconds, closedAt: "2026-09-29T15:00:00Z" });
+
+  it("weights each trade by its length", () => {
+    // 90% of 30 min + 10% of 10 min = 28 of 40 min = 70% — under the line.
+    expect(fired(deepInDrawdownDay, ctxOf([t("a", -100, 90, 1800), t("b", 50, 10, 600)]))).toEqual([]);
+    // 90% of 30 min + 50% of 10 min = 32 of 40 min = 80%.
+    const ctx = ctxOf([t("a", -100, 90, 1800), t("b", 50, 50, 600)]);
+    expect(fired(deepInDrawdownDay, ctx)).toEqual(["2026-09-29"]);
+    expect(deepInDrawdownDay.evaluate(ctx)[0]).toMatchObject({ severity: "critical" });
+    expect(deepInDrawdownDay.evaluate(ctx)[0].detail).toContain("80% of the time in them in the red");
+  });
+
+  it("says nothing unless every trade of the day was measured", () => {
+    expect(fired(deepInDrawdownDay, ctxOf([t("a", -100, 95, 1800), t("b", 50, null, 600)]))).toEqual([]);
   });
 });

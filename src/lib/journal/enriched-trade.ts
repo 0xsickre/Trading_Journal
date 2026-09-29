@@ -95,6 +95,11 @@ export type EnrichedTrade = {
    * rule count the same thing.
    */
   lossStreakBefore: number | null;
+  /**
+   * Share of the trade's time (%) its running P&L spent below zero, measured
+   * from the R2 candles by `futures-trading` (F5.3b). Null until measured.
+   */
+  underwaterPct: number | null;
 };
 
 export type EnrichOptions = {
@@ -156,6 +161,7 @@ export function enrichTrades(
       openOffset: openOffsetBucket(t.row.stats?.opened_at ?? null),
       tradeNoInDay: null,
       lossStreakBefore: null,
+      underwaterPct: numField(t.row, "time_underwater_pct"),
     } satisfies EnrichedTrade;
   });
 

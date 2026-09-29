@@ -2,8 +2,8 @@
  * Rule registry and runner.
  *
  * The registry is also the honest record of what this engine does NOT do.
- * Three TradeZella patterns are deliberately absent rather than approximated,
- * and the reason is listed with each — see `OMITTED_RULES`. A percentage
+ * One TradeZella pattern is deliberately absent rather than approximated, and
+ * the reason is listed with it — see `OMITTED_RULES`. A percentage
  * invented from data we do not have would be worse than a missing one.
  */
 
@@ -33,21 +33,11 @@ export type OmittedRule = {
 };
 
 /**
- * Deliberately not implemented. Each needs a running P&L series per trade,
- * which needs an intraday price feed — the one piece of infrastructure this
- * project has decided not to buy.
+ * Deliberately not implemented. The time-underwater pair came back in F5.3b,
+ * measured from the R2 candles by `futures-trading`; what is left needs the
+ * peak of the DAY's cumulative P&L, which no one measures.
  */
 export const OMITTED_RULES: OmittedRule[] = [
-  {
-    id: "most_time_in_drawdown",
-    reason:
-      "Needs the share of TIME spent underwater, so the full running P&L curve. MAE/MFE shows how deep, not how long.",
-  },
-  {
-    id: "deep_in_drawdown_day",
-    reason:
-      "The daily version of the same — same missing data, same decision.",
-  },
   {
     id: "maximize_your_profit_day",
     reason:

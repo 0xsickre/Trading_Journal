@@ -38,6 +38,8 @@ const D = {
    * the whole Open window (09:30–10:00, L1) left alone.
    */
   PATIENCE_MINUTES: 30,
+  /** Share of the day's time in trades spent underwater (%) that makes it a deep day. */
+  DEEP_UNDERWATER_PCT: 75,
 } as const;
 
 type Rule = InsightRule<InsightContext>;
@@ -339,6 +341,45 @@ export const patiencePaidOff: Rule = {
       ),
 };
 
+/**
+ * The day's time in trades spent underwater, weighted by each trade's length —
+ * or null unless EVERY trade of the day was measured: a share of part of the
+ * day would be a share of something else.
+ */
+function dayUnderwaterPct(d: DayBucket): number | null {
+  let under = 0;
+  let total = 0;
+  for (const e of d.trades) {
+    if (e.underwaterPct == null || e.durationSeconds == null) return null;
+    under += (e.underwaterPct / 100) * e.durationSeconds;
+    total += e.durationSeconds;
+  }
+  return total > 0 ? (100 * under) / total : null;
+}
+
+export const deepInDrawdownDay: Rule = {
+  id: "deep_in_drawdown_day",
+  level: "day",
+  minSample: 0,
+  description:
+    "Most of the day's time in trades was spent underwater (every trade measured from the R2 candles).",
+  evaluate: (ctx) =>
+    ctx.days
+      .map((d) => ({ d, pct: dayUnderwaterPct(d) }))
+      .filter((x): x is { d: DayBucket; pct: number } => x.pct != null && x.pct >= D.DEEP_UNDERWATER_PCT)
+      .map(({ d, pct }) =>
+        dayInsight(d, {
+          ruleId: "deep_in_drawdown_day",
+          severity: d.net < 0 ? "critical" : "warning",
+          title: "Underwater most of the day",
+          detail: `${d.trades.length} trades, ${Math.round(pct)}% of the time in them in the red — the day closed ${fmtMoney(
+            d.net,
+            ctx.currency,
+          )}.`,
+        }),
+      ),
+};
+
 export const DAY_RULES: Rule[] = [
   perfectDay,
   highConvictionDay,
@@ -349,4 +390,5 @@ export const DAY_RULES: Rule[] = [
   overtradingDay,
   lowEfficiencyDay,
   patiencePaidOff,
+  deepInDrawdownDay,
 ];

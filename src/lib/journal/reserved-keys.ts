@@ -63,6 +63,7 @@ export const RESERVED_KEYS = new Set([
   "scale_out_plan",
   "excursion_source",
   "excursion_note",
+  "time_underwater_pct",
   "equity_at_entry",
   "risk_budget_at_entry",
   "plan_snapshot",

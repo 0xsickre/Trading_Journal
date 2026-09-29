@@ -158,6 +158,9 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- Odakle je automatski MAE/MFE pročitan: ugovor i rezolucija, npr.
   -- "MNQZ6 · 1s" (20260928120000).
   excursion_note       text,
+  -- Udeo trajanja trejda (%) sa tekućim P&L < 0, iz istih R2 sveća; piše ga samo
+  -- `futures-trading` journal_mae.py (20260929235000). NULL = nije izmereno.
+  time_underwater_pct  numeric,
   -- Equity naloga na POČETKU dana ulaska, u zoni naloga, zamrznut kad je trejd
   -- prvi put dobio entry fill (20260920160000). Imenilac svakog procenta rizika;
   -- jedini činilac tog računa koji se ne može rekonstruisati unazad.
@@ -201,6 +204,8 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
     CHECK (equity_at_entry IS NULL OR equity_at_entry > 0),
   CONSTRAINT tj_positions_risk_budget_at_entry_nonnegative
     CHECK (risk_budget_at_entry IS NULL OR risk_budget_at_entry >= 0),
+  CONSTRAINT tj_positions_time_underwater_pct_check
+    CHECK (time_underwater_pct IS NULL OR (time_underwater_pct >= 0 AND time_underwater_pct <= 100)),
   CONSTRAINT tj_positions_time_stop_choice
     CHECK (time_stop IS NULL OR time_stop IN ('5', '15', '30', '60', 'close')),
   CONSTRAINT tj_positions_plan_snapshot_object

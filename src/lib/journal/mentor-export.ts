@@ -478,7 +478,7 @@ export function buildMentorPack(
     if (OMITTED_RULES.length > 0) {
       out.push("");
       out.push(
-        `_Svesno neimplementirano (traži intraday cenovni feed): ${OMITTED_RULES.map(
+        `_Svesno neimplementirano (traži vrh dnevnog P&L-a, koji niko ne meri): ${OMITTED_RULES.map(
           (o) => o.id,
         ).join(", ")}._`,
       );
