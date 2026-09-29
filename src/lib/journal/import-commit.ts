@@ -63,3 +63,27 @@ export function mergeRefusal(
   }
   return null;
 }
+
+/**
+ * The plan a trade CREATED by the import gets from the file (K3).
+ *
+ * A trade that was never written as a plan in the journal used to arrive with
+ * an empty plan — no entry, no stop, no target — so its R, its slippage and
+ * the `stop_loss_set` rule had nothing to read. The entry is the size-weighted
+ * average of the entry fills (the price the trade was taken at); the stop and
+ * the target are the file's when it carries them, and absent otherwise. Only a
+ * key with a value is returned, so nothing is written as null.
+ */
+export function importedPlan(item: {
+  executions: readonly { side: "entry" | "exit"; price: number; qty: number }[];
+  stop_price?: number | null;
+  target_price?: number | null;
+}): { entry_price?: number; stop_price?: number; target_price?: number } {
+  const entries = item.executions.filter((e) => e.side === "entry" && e.qty > 0 && e.price > 0);
+  const qty = entries.reduce((s, e) => s + e.qty, 0);
+  const out: { entry_price?: number; stop_price?: number; target_price?: number } = {};
+  if (qty > 0) out.entry_price = entries.reduce((s, e) => s + e.price * e.qty, 0) / qty;
+  if (item.stop_price != null && item.stop_price > 0) out.stop_price = item.stop_price;
+  if (item.target_price != null && item.target_price > 0) out.target_price = item.target_price;
+  return out;
+}

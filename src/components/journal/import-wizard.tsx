@@ -49,7 +49,8 @@ type Canonical =
   | "exit_time"
   | "fee"
   | "profit"
-  | "target";
+  | "target"
+  | "stop";
 
 const CANONICAL: { key: Canonical; label: string; required?: boolean }[] = [
   { key: "instrument", label: "Instrument", required: true },
@@ -61,16 +62,13 @@ const CANONICAL: { key: Canonical; label: string; required?: boolean }[] = [
   { key: "exit_time", label: "Exit Time" },
   { key: "fee", label: "Fee / Commission" },
   { key: "profit", label: "Profit / P&L (bruto)" },
-  // Target, and deliberately NOT stop loss.
-  //
-  // A statement states the stop AS IT STOOD AT THE END. A stop moved to
-  // breakeven during the trade is the commonest thing a swing trader does, and
-  // importing that number would overwrite the stop the risk was actually taken
-  // with — every R on the trade recomputed against a stop that was never risked.
-  // The target has no such trap: it is where the trade was aiming, and a trade
-  // that has none gains one from the file rather than losing one it had (see
-  // `commitImport`).
+  // Target and stop fill in the plan of a NEW trade only (K3: a trade not
+  // entered as a plan beforehand gets its entry, stop and target from the
+  // file). A merge never takes them over what the trader wrote: a statement
+  // states the stop AS IT STOOD AT THE END, and a stop moved to breakeven would
+  // replace the one the risk was taken with (see `commitImport`).
   { key: "target", label: "Target / T/P" },
+  { key: "stop", label: "Stop / S/L" },
 ];
 
 const KEYWORDS: Record<Canonical, string[]> = {
@@ -86,6 +84,7 @@ const KEYWORDS: Record<Canonical, string[]> = {
   // "profit" would also hit a "Gross profit" column.
   profit: ["profit", "p/l", "pnl", "p&l", "net p", "gross p", "result", "realized"],
   target: ["t/p", "take profit", "takeprofit", "target"],
+  stop: ["s/l", "stop loss", "stoploss", "stop price"],
 };
 
 function autoMap(headers: string[]): Record<Canonical, string> {
@@ -115,6 +114,7 @@ const TOPSTEPX_MAP: Record<Canonical, string> = {
   fee: TOPSTEPX_COLUMNS.fee,
   profit: "",
   target: "",
+  stop: "",
 };
 /**
  * A row under review. `_blocked` is set when a key cell could not be read:
@@ -325,6 +325,8 @@ export function ImportWizard({
       const profit = map.profit ? read(map.profit, "profit") : null;
       // Written only onto a trade that has no target yet — see `commitImport`.
       const target = map.target ? read(map.target, "target") : null;
+      // Written only onto a trade this import creates — see `commitImport`.
+      const stop = map.stop ? read(map.stop, "stop") : null;
 
       // A quantity of zero is the same as an unread cell, and has to be seen as
       // one. `read` flagged only a cell the parser COULD NOT read; a literal
@@ -502,6 +504,7 @@ export function ImportWizard({
         executions: execs,
         gross_pnl_override: profit,
         target_price: target != null && target > 0 ? target : null,
+        stop_price: stop != null && stop > 0 ? stop : null,
         raw: row,
         _blocked: blocked,
         // After the duplicate check above, so an unreadable cell never changes

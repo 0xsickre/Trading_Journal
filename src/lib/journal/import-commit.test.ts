@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeImportSummary, mergeRefusal, type ImportSummary } from "./import-commit";
+import { importedPlan, mergeImportSummary, mergeRefusal, type ImportSummary } from "./import-commit";
 
 const chunk = (over: Partial<ImportSummary> = {}): ImportSummary => ({
   total: 50,
@@ -54,5 +54,25 @@ describe("when a merge must not run", () => {
 
   it("otherwise it may", () => {
     expect(mergeRefusal({ matched_position_id: "p", executions: fills }, new Set(["q"]))).toBeNull();
+  });
+});
+
+describe("a trade the import creates gets its plan from the file (K3)", () => {
+  const fill = (side: "entry" | "exit", price: number, qty: number) => ({ side, price, qty });
+
+  it("takes the entry the trade was filled at, size-weighted over the entry fills", () => {
+    expect(
+      importedPlan({ executions: [fill("entry", 100, 1), fill("entry", 106, 2), fill("exit", 120, 3)] }),
+    ).toEqual({ entry_price: 104 });
+  });
+
+  it("adds the stop and the target when the file carries them", () => {
+    expect(
+      importedPlan({ executions: [fill("entry", 100, 1)], stop_price: 95, target_price: 110 }),
+    ).toEqual({ entry_price: 100, stop_price: 95, target_price: 110 });
+  });
+
+  it("writes nothing it does not have — never a null or a zero", () => {
+    expect(importedPlan({ executions: [], stop_price: null, target_price: 0 })).toEqual({});
   });
 });

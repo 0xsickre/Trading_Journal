@@ -447,8 +447,8 @@ describe("a trade already typed by hand, recognised without the time", () => {
   });
 });
 
-describe("the target comes from the file, the stop never does", () => {
-  it("maps a T/P column and sends it with the row", async () => {
+describe("a new trade takes its stop and target from the file (K3)", () => {
+  it("maps the S/L and T/P columns and sends both with the row", async () => {
     const user = userEvent.setup({ delay: null });
     render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} />);
     await upload(
@@ -465,11 +465,9 @@ describe("the target comes from the file, the stop never does", () => {
     await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
     const [item] = commitImportMock.mock.calls[0][0].items;
     expect(item.target_price).toBe(1.22);
-  });
-
-  it("has no stop column at all — a stop pulled to breakeven would rewrite the risk", () => {
-    render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} />);
-    expect(screen.queryByText(/Stop/)).not.toBeInTheDocument();
+    // Written onto a trade the import CREATES only; a merge never takes it
+    // (`importedPlan` in `import-commit.ts`, called on the create path alone).
+    expect(item.stop_price).toBe(1.195);
   });
 });
 

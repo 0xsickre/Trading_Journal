@@ -11,6 +11,7 @@ import { computeStatus } from "@/lib/journal/trade-lifecycle";
 import { normalizeInstrumentSymbol } from "@/lib/journal/instrument-aliases";
 import { planUndo } from "@/lib/journal/import-undo";
 import {
+  importedPlan,
   mergeImportSummary,
   mergeRefusal,
   type ImportSummary,
@@ -71,6 +72,12 @@ export type ImportItem = {
    * plan; one that is missing is simply not recorded yet.
    */
   target_price: number | null;
+  /**
+   * The stop off the file, written only onto a trade this import CREATES (K3).
+   * A merge never takes it: the trader's plan already carries the stop the risk
+   * was taken with, and a statement's stop is the one that stood at the end.
+   */
+  stop_price?: number | null;
   raw: Record<string, string>;
 };
 
@@ -262,7 +269,12 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
             needs_review: item.executions.length === 0,
             status: statusOf(item.executions),
             gross_pnl_override: item.gross_pnl_override,
-            ...(item.target_price != null ? { target_price: item.target_price } : {}),
+            // A trade nobody planned in the journal gets its plan from the file
+            // (K3): the entry it was filled at, and the stop and target when the
+            // file carries them. Live columns only — the seal below still holds
+            // just what it held before, so a stop the trader corrects later is
+            // read as written, not as an amendment of a plan they never made.
+            ...importedPlan(item),
             ...instrumentSnapshot(instrument, specs, accountCurrency),
             // A trade that arrives already filled had no plan in this journal,
             // and that is what gets sealed: an empty seal, or the target the

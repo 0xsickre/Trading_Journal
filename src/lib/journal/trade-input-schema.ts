@@ -210,6 +210,8 @@ export const importItemSchema = z.object({
    * one thing the field does. Absent and null mean the same: no target.
    */
   target_price: z.number().finite().positive().nullable().optional(),
+  /** The stop off the file — written only onto a trade the import creates (K3). */
+  stop_price: z.number().finite().positive().nullable().optional(),
   raw: z.record(z.string(), z.string()),
 });
 
