@@ -97,6 +97,13 @@ describe("prices on a position", () => {
     expect(invalidTradeNumber({ gross_pnl_override: Number.NaN })).toBeTruthy();
   });
 
+  it("time_stop is one of the five chips, or nothing", () => {
+    for (const ok of ["5", "15", "30", "60", "close"]) expect(invalidTradeNumber({ time_stop: ok })).toBeNull();
+    expect(invalidTradeNumber({ time_stop: null })).toBeNull();
+    expect(invalidTradeNumber({ time_stop: "45" })).toBeTruthy();
+    expect(invalidTradeNumber({ time_stop: "3" })).toBeTruthy();
+  });
+
   it("time_stop_days has to be an integer greater than zero", () => {
     expect(invalidTradeNumber({ time_stop_days: 0 })).toBeTruthy();
     expect(invalidTradeNumber({ time_stop_days: -3 })).toBeTruthy();

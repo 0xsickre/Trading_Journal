@@ -46,6 +46,14 @@ export const POSITIVE_TRADE_NUMBERS = [
   "position_size",
 ] as const;
 
+/**
+ * The time stop of a day trade (F4, G3-A): minutes, or the session's close.
+ * Text, not an integer with a magic value for "close" — "until the close" and
+ * "not recorded" are different answers, and the DB CHECK holds the same five.
+ */
+export const TIME_STOP_CHOICES = ["5", "15", "30", "60", "close"] as const;
+export type TimeStopChoice = (typeof TIME_STOP_CHOICES)[number];
+
 /** Columns that must be a positive INTEGER. The database carries the same CHECK. */
 export const POSITIVE_TRADE_INTEGERS = [
   "time_stop_days",
@@ -97,6 +105,10 @@ export function invalidTradeNumber(
     if (typeof v !== "number" || !Number.isInteger(v) || v <= 0) {
       return `${LABELS[key]} must be a whole number greater than zero.`;
     }
+  }
+  const stop = columns.time_stop;
+  if (stop != null && !(TIME_STOP_CHOICES as readonly unknown[]).includes(stop)) {
+    return "Time stop must be 5, 15, 30 or 60 minutes, or the close.";
   }
   const override = columns.gross_pnl_override;
   if (override != null && (typeof override !== "number" || !Number.isFinite(override))) {

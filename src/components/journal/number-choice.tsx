@@ -73,3 +73,49 @@ export function NumberChoice({
     </div>
   );
 }
+
+/**
+ * The same control for a short list of labelled values — a day trade's time
+ * stop (5m / 15m / 30m / 60m / Close). Clicking the chosen one clears it, for
+ * the reason `NumberChoice` gives: "not recorded" is not the first option.
+ */
+export function ChipChoice<T extends string>({
+  value,
+  onChange,
+  options,
+  label,
+  disabled,
+}: {
+  value: T | null;
+  onChange: (next: T | null) => void;
+  options: readonly { value: T; label: string }[];
+  label: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex w-fit rounded-md border p-0.5">
+      {options.map((o) => {
+        const active = value === o.value;
+        return (
+          <Button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            variant="ghost"
+            size="sm"
+            disabled={disabled}
+            title={active ? "Click again to clear" : undefined}
+            onClick={() => onChange(active ? null : o.value)}
+            className={cn(
+              "h-7 px-2 tabular-nums",
+              active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground",
+            )}
+          >
+            {o.label}
+          </Button>
+        );
+      })}
+    </div>
+  );
+}

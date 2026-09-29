@@ -614,7 +614,7 @@ describe("the plan reveals one decision at a time", () => {
     expect(
       screen.queryByText("Invalidation — what would prove me wrong"),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText("Time stop (days)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Time stop")).not.toBeInTheDocument();
   });
 
   it("the reasoning appears once entry and stop define a trade", async () => {
@@ -628,11 +628,13 @@ describe("the plan reveals one decision at a time", () => {
     );
     expect(screen.getByText("Why this trade")).toBeInTheDocument();
     expect(screen.getByText("Thesis")).toBeInTheDocument();
-    expect(screen.getByText("Time stop (days)")).toBeInTheDocument();
+    expect(screen.getByText("Time stop")).toBeInTheDocument();
+    // The swing field is gone from the form; old trades keep their value.
+    expect(screen.queryByText("Time stop (days)")).not.toBeInTheDocument();
   });
 
   /**
-   * The time stop is five buttons, not a free number.
+   * The time stop is five chips — minutes, and the session's end (G3-A, F4).
    *
    * Two things are asserted rather than one, and the second is the one that
    * matters: clicking the SAME value again clears it. Without that path back to
@@ -640,7 +642,7 @@ describe("the plan reveals one decision at a time", () => {
    * stops nobody meant — the same reason `StarRating` and `TriButton` both
    * behave this way.
    */
-  it("offers exactly 1..5 as buttons, and a mis-click can be taken back", async () => {
+  it("offers 5, 15, 30, 60 minutes and the close, and a mis-click can be taken back", async () => {
     const user = userEvent.setup({ delay: null });
     render(
       <TradeForm
@@ -651,9 +653,9 @@ describe("the plan reveals one decision at a time", () => {
       />,
     );
 
-    const group = screen.getByRole("radiogroup", { name: "Time stop (days)" });
+    const group = screen.getByRole("radiogroup", { name: "Time stop" });
     const days = within(group).getAllByRole("radio");
-    expect(days.map((b) => b.textContent)).toEqual(["1", "2", "3", "4", "5"]);
+    expect(days.map((b) => b.textContent)).toEqual(["5m", "15m", "30m", "60m", "Close"]);
     // Nothing is preselected: "no time stop" is a real answer and must not be
     // spelled as "1 day".
     expect(days.every((b) => b.getAttribute("aria-checked") === "false")).toBe(true);

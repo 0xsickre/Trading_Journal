@@ -37,6 +37,8 @@ export type FieldType =
   | "rating"
   /** One number from a short range, picked by clicking. Digits, not stars — see `NumberChoice`. */
   | "days"
+  /** A day trade's time stop: 5 / 15 / 30 / 60 minutes or the close — `TimeStopChoice`. */
+  | "timestop"
   | "computed";
 
 export type FieldConfig = {
@@ -182,17 +184,13 @@ const BASE_TABS: FormTab[] = [
             placeholder: "The level, the close, the event that ends this…",
           },
           {
-            // Five buttons, not a free number: holds longer than a week are no
-            // longer taken, so anything the input could accept beyond 5 was a
-            // typo waiting to happen. The database now refuses those too.
-            //
-            // The hint names where the number does its work. Nothing happens on
-            // THIS screen when you set it, and both effects live on other pages
-            // — without saying so the field reads as decoration.
-            name: "time_stop_days",
-            label: "Time stop (days)",
-            type: "days",
-            placeholder: "Daily check-in shows „day 3 of N\" and warns past it",
+            // Minutes, or the close (F4, G3-A). `time_stop_days` was the swing
+            // version — a position held for days — and is no longer offered;
+            // old trades keep it until H2 removes the column.
+            name: "time_stop",
+            label: "Time stop",
+            type: "timestop",
+            placeholder: "Not working by then, out. Sealed with the plan at entry.",
           },
         ],
       },

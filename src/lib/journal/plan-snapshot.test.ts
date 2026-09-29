@@ -28,6 +28,7 @@ const plan = (over: PlanSnapshot = {}): PlanSnapshot => ({
   target_price: 130,
   risk_pct: "1%",
   time_stop_days: 5,
+  time_stop: "15",
   thesis: "Sweep of Friday's low, then reclaim",
   invalidation: "Close back below the low",
   scale_out_levels: null,
@@ -205,5 +206,12 @@ describe("sealedValue — the shapes that are neither a number nor a line of tex
     // the row's own.
     const r = row({ scale_out_levels: [{ pct: 50, price: 120 }], plan_snapshot: { target_price: 130 } });
     expect(sealedValue(r, "scale_out_levels")).toEqual([{ pct: 50, price: 120 }]);
+  });
+});
+
+describe("the day trade's time stop is part of the seal (F4, G3-A)", () => {
+  it("seals the chosen chip, the close included, as written", () => {
+    expect(sealedText(row({ time_stop: "close", plan_snapshot: { time_stop: "close" } }), "time_stop")).toBe("close");
+    expect(planFieldsOf({ ...plan({ time_stop: "60" }) }).time_stop).toBe("60");
   });
 });

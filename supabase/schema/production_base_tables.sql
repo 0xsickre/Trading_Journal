@@ -159,6 +159,8 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   thesis               text,
   invalidation         text,
   time_stop_days       smallint,
+  -- Time stop dnevnog trejda: 5 / 15 / 30 / 60 minuta ili kraj sesije (20260929130000).
+  time_stop            text,
   scale_out_plan       text,
   scale_out_levels     jsonb       NOT NULL DEFAULT '[]'::jsonb,
   -- Valuta kotacije i kurs zamrznuti pri upisu, iz istog razloga kao
@@ -221,6 +223,8 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
     CHECK (equity_at_entry IS NULL OR equity_at_entry > 0),
   CONSTRAINT tj_positions_risk_budget_at_entry_nonnegative
     CHECK (risk_budget_at_entry IS NULL OR risk_budget_at_entry >= 0),
+  CONSTRAINT tj_positions_time_stop_choice
+    CHECK (time_stop IS NULL OR time_stop IN ('5', '15', '30', '60', 'close')),
   CONSTRAINT tj_positions_plan_snapshot_object
     CHECK (plan_snapshot IS NULL OR jsonb_typeof(plan_snapshot) = 'object'),
   CONSTRAINT tj_positions_missed_outcome_check

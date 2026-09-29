@@ -50,6 +50,7 @@ export const PLAN_FIELDS = [
   "target_price",
   "risk_pct",
   "time_stop_days",
+  "time_stop",
   "thesis",
   "invalidation",
   "scale_out_levels",

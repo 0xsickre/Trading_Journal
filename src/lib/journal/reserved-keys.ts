@@ -61,6 +61,7 @@ export const RESERVED_KEYS = new Set([
   "thesis",
   "invalidation",
   "time_stop_days",
+  "time_stop",
   "scale_out_plan",
   "excursion_source",
   "excursion_note",

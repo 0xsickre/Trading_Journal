@@ -78,6 +78,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 28.09.2026 | F4 | G11: brief NE upisuje broj ugovora — journal ga računa sam iz `topstep.ts` (jedno mesto, bez druge kopije) |
 | 29.09.2026 | — | F4 rad posle `3ba08d7` (tabela za brief, kartica, upis iz brief.py) nije bio pushovan i izgubljen je sa kontejnerom sesije; F4 kreće ponovo od `main`. Odluke G7–G11 su sačuvane iz razgovora |
 | 29.09.2026 | H2 | Trejderu ne trebaju ostaci: `tj_position_checkins`, `time_stop_days`, swap kolone (fill, katalog, neto P&L), % tracker pragovi. Posebna faza **H2 posle F4**, migracija koja briše (nepovratno) — primena tek uz odobrenje |
+| 29.09.2026 | F4.5 | Time stop je kolona `time_stop` (tekst, CHECK na 5 vrednosti), ne `time_stop_minutes`: „do kraja sesije" je pravi izbor, a ne magičan broj, i razlikuje se od „nije upisano" (NULL). Uvoz (`import/actions.ts`) ga ne čita pre primene migracije — spisak kolona je eksplicitan; dodaje se posle primene |
 | 29.09.2026 | H2 | Backtest nalozi više ne trebaju (samo Topstep) → % pragovi i ne-Topstep grana tracker-a idu u H2 |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
@@ -541,7 +542,7 @@ ne pad stranice (Vercel objavljuje `main` odmah).
 | F4.2 | `brief.py`: prozori kao UTC trenuci (`prozor_utc`), red za journal (čista funkcija + test), `Journal.upsert`, upis posle HTML-a; `--bez-journala` i u probi; greška upisa ne ruši brief (glasno u izlazu) | futures-trading (`main`) | ✅ `132ce35` |
 | F4.3 | Auto pravila `max_trades_per_day`, `stop_after_losses` (config `count`, po nalogu, G9), `flat_by_close` (Topstep kraj dana iz brief-a, inače 15:10 CT), `no_entry_in_red_window` (samo brief, G7; bez brief-a `na/no_brief`); kontekst `briefOf` + `now` za sve pozivaoce (i zaključavanje dana); Settings menja `count`; migracija: CHECK, 4 pravila za postojeće knjige i seed, penzionisanje 3 ručna (G8) | journal | ✅ kod; migracija `20260929110000` napisana, NIJE primenjena |
 | F4.4 | Kategorije (G4-A, G10): migracija dodaje day-trading stavke i gasi swing stavke; seed za nove knjige | journal | ✅ migracija `20260929120000` napisana, NIJE primenjena |
-| F4.5 | Time stop u minutima + „do kraja sesije" (G3-A); `time_stop_days` se više ne nudi (briše ga H2) | journal | ⏳ |
+| F4.5 | Time stop u minutima + „do kraja sesije" (G3-A); `time_stop_days` se više ne nudi (briše ga H2) | journal | ✅ kod; migracija `20260929130000` napisana, NIJE primenjena. Kolona je `time_stop` (tekst: `5`/`15`/`30`/`60`/`close`), ne celobrojni `time_stop_minutes` — vidi dnevnik |
 | F4.6 | README 1:1, `futures-trading` README, ROADMAP, plan: F4 ✅ i detaljan plan H2; primena migracija uz odobrenje | oba | ⏳ |
 
 ### Testovi (prvo padaju)

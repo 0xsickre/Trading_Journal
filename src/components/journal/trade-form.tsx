@@ -43,7 +43,9 @@ import {
   type ScaleOutRow,
 } from "@/lib/journal/scale-out";
 import { PlaybookChecklist } from "@/components/journal/playbook-checklist";
-import { NumberChoice } from "@/components/journal/number-choice";
+import { ChipChoice, NumberChoice } from "@/components/journal/number-choice";
+import { TIME_STOP_CHOICES, type TimeStopChoice } from "@/lib/journal/trade-input-schema";
+
 import { StarRating } from "@/components/journal/star-rating";
 import { ScaleOutEditor } from "@/components/journal/scale-out-editor";
 import {
@@ -142,6 +144,9 @@ import {
 } from "@/lib/journal/fill-defaults";
 import { pickableAccounts, primaryAccount } from "@/lib/journal/account-rules";
 import { InstrumentSelect } from "@/components/journal/instrument-select";
+
+/** The time stop chips, in the order a trade gets to work. */
+const TIME_STOP_OPTIONS = TIME_STOP_CHOICES.map((value) => ({ value, label: value === "close" ? "Close" : `${value}m` }));
 
 type ExecRow = {
   side: "entry" | "exit";
@@ -2087,6 +2092,24 @@ function FieldRenderer({
           label={field.label}
           value={n != null && Number.isFinite(n) ? n : null}
           onChange={(next) => onChange(next == null ? "" : String(next))}
+        />
+        {field.placeholder && (
+          <p className="text-xs text-muted-foreground">{field.placeholder}</p>
+        )}
+      </div>
+    );
+  }
+
+  if (field.type === "timestop") {
+    const v = typeof value === "string" && (TIME_STOP_CHOICES as readonly string[]).includes(value) ? (value as TimeStopChoice) : null;
+    return (
+      <div className={`space-y-1.5 ${colSpan}`}>
+        <Label className="text-xs">{field.label}</Label>
+        <ChipChoice
+          label={field.label}
+          value={v}
+          options={TIME_STOP_OPTIONS}
+          onChange={(next) => onChange(next ?? "")}
         />
         {field.placeholder && (
           <p className="text-xs text-muted-foreground">{field.placeholder}</p>

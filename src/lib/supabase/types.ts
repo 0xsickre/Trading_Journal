@@ -1119,6 +1119,7 @@ export type Database = {
           thesis: string | null
           tick_size_at_trade: number | null
           time_stop_days: number | null
+          time_stop: string | null
           trade_journal_notes: string | null
           trade_no: number | null
           updated_at: string
@@ -1171,6 +1172,7 @@ export type Database = {
           thesis?: string | null
           tick_size_at_trade?: number | null
           time_stop_days?: number | null
+          time_stop?: string | null
           trade_journal_notes?: string | null
           trade_no?: number | null
           updated_at?: string
@@ -1223,6 +1225,7 @@ export type Database = {
           thesis?: string | null
           tick_size_at_trade?: number | null
           time_stop_days?: number | null
+          time_stop?: string | null
           trade_journal_notes?: string | null
           trade_no?: number | null
           updated_at?: string
