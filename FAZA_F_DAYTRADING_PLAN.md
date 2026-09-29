@@ -81,6 +81,9 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 29.09.2026 | F4.5 | Time stop je kolona `time_stop` (tekst, CHECK na 5 vrednosti), ne `time_stop_minutes`: „do kraja sesije" je pravi izbor, a ne magičan broj, i razlikuje se od „nije upisano" (NULL). Uvoz (`import/actions.ts`) ima eksplicitan spisak kolona; `time_stop` je dodat posle primene migracije |
 | 29.09.2026 | H2 | Backtest nalozi više ne trebaju (samo Topstep) → % pragovi i ne-Topstep grana tracker-a idu u H2 |
 | 29.09.2026 | F4 | Trejder odobrio primenu četiri F4 migracije; primenjene istog dana |
+| 29.09.2026 | — | Grane: posle punog (ne plitkog) preuzimanja sve udaljene grane oba repoa su već sadržane u `main`; dve kojima je jedini commit već bio na `main` kao isti patch spojene su merge commit-om bez promene sadržaja (Trading_Journal `claude/supabase-migrations-apply-pynzxn`, futures-trading `claude/journal-swing-to-day-trading-a49d56`) |
+| 29.09.2026 | — | Migracije: 14 fajlova bez zapisa u `schema_migrations` su u bazi (puštene ručno — objekti postoje); dve nisu bile: `drop_dead_ratings` (`conviction`, `setup_grade`, funkcija spajanja) i `drop_daily_prose` (`macro_note`, impulse kolone). Kolone prazne, kod ih ne čita; primenjene po nalogu trejdera („migracije koje nije pokrenuo prethodni agent ako treba primeni") |
+| 29.09.2026 | H2 | Odluke I1–I5 izvedene iz trejderovih poruka („Koristi odgovore sa slike i moje poruke"): **I1-B** svaka grupa svoja migracija; **I2 da** FTMO kolone se brišu („ništa od ovog mi ne treba"); **I3 da** swap izlazi i iz neto P&L-a (isto); **I4-A** `max_loss_per_week` se penzioniše, `risk_pct` i lista „Risk %" se brišu; **I5-A** backtest odlazi — `account_kind`, TradingView backtest uvoz i prazan arhivirani „Backtesting XAUUSD" („Ne, samo Topstep") |
 | 29.09.2026 | F4 | Trejder: `/daily` nema logike („Oba pitanja…", a pitanja nema; prošlo vreme; upućuje na karticu koje nema). Stranica je preuređena hronološki (1 · Pre sesije, 2 · Tokom sesije, 3 · Posle sesije), kartica „Pre nego što uđeš" ima dva numerisana pitanja u budućem vremenu, faze pravila na srpskom |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
@@ -107,7 +110,7 @@ pogađa.
 | **F3** | Topstep pravila u tracker-u i Survival-u | #3, #4, #6 | F2 | da: `20260928160000` (`risk_budget_at_entry`) | **Opus** | ✅ `a8e63f9` (28.09.2026) — migracija primenjena 28.09.2026 uz odobrenje trejdera |
 | **H1** | Uklanjanje FTMO / MT5 / swing koda (trejder, 28.09.2026) | #19 i delovi #13, #14 | F3 | ne (kolone ostaju) | **Opus** | ✅ `09752cd` · `69e5124` · `67feff6` · `0fb9d3f` (28.09.2026) |
 | **F4** | Dnevni tok: pred-sesija umesto check-in-a, forma, kategorije, nova auto pravila | #7, #8, #9, #10 | F2, F3 | da: `20260929100000`, `…110000`, `…120000`, `…130000` | **Opus** | ✅ `80fceea` · `6dcf72b` · `94796d1` · `4dba3e9` + `132ce35` (futures-trading), 29.09.2026 — migracije primenjene uz odobrenje trejdera |
-| **H2** | Brisanje ostataka iz baze: check-in tabela, `time_stop_days`, swap, % pragovi, backtest grana | — | F4 | da, **briše** (nepovratno, uz odobrenje) | **Opus** | ⏳ **sledeća — detaljan plan ispod, čeka odluke I1–I5** |
+| **H2** | Brisanje ostataka iz baze: check-in tabela, `time_stop_days`, swap, % pragovi, backtest grana | — | F4 | da, **briše** (nepovratno, uz odobrenje) | **Opus** | ⏳ **u radu — odluke I1–I5 donete 29.09.2026** |
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, swap, uzorak | #11–#15, #17, #18 | F2 | ne (sve izvedeno) | Sonnet, Opus za #13 | okvir |
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, legacy CFD u UI-ju, komentari, PARITY | #16, #19, #20, #22, #23 | F5 | možda (#16) | Sonnet | okvir |
 
