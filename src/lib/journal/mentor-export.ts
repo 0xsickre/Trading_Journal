@@ -25,12 +25,27 @@ import {
   exitEfficiencyFromTrade,
   fmtExitEfficiencyPct,
 } from "./exit-efficiency";
-import { compareInstants } from "./time";
+import { compareInstants, fmtInTz, type DayZone } from "./time";
 import type { TradeRow } from "./types";
 import { groupInsights } from "./insights/types";
 import { OMITTED_RULES, type RunResult } from "./insights/registry";
 import { computeExcursionStats, excursionFromTrade } from "./excursion";
 import type { RuleLookup } from "./reports/rule-lookup";
+import { enrichTrades, type DailyReportLite, type EnrichedTrade } from "./enriched-trade";
+import type { SessionBrief } from "./session-brief";
+import { TOPSTEP_CONSISTENCY } from "./topstep";
+import type { DayCompliance } from "./tracker/compliance";
+import type { TrackerRule } from "./tracker-types";
+import {
+  dailySection,
+  dayShapeRows,
+  intradaySection,
+  rulesSection,
+  SMALL_SAMPLE,
+  topstepSection,
+  tradeContextLines,
+  type MentorTopstep,
+} from "./mentor-intraday";
 
 /**
  * A chart as the mentor can read it: a TradingView link as is; an image kept in
@@ -100,6 +115,7 @@ function statsTable(
   realized: RealizedTrade[],
   ccy: string,
   range: BreakevenRange,
+  extraRows: readonly string[] = [],
 ): string {
   const s = computeStats(realized, "net", range);
   const slip = computeSlippageStats(realized);
@@ -145,6 +161,7 @@ function statsTable(
     `| Winner target attainment | ${exitEffWinner} (${exitEff.winnerCount} wins) |`,
     `| Avg MAE (R) | ${excMae} |`,
     `| Avg MFE (R) | ${excMfe} |`,
+    ...extraRows,
   ].join("\n");
 }
 
@@ -172,9 +189,16 @@ function tradeDetail(
   t: TradeRow,
   ccy: string,
   detailFields: { key: string; label: string }[],
+  /** The intraday lines (`tradeContextLines`), placed right under the heading. */
+  context: readonly string[] = [],
+  displayTz?: string,
 ): string {
   const s = t.stats;
-  const when = s?.closed_at ? s.closed_at.slice(0, 16).replace("T", " ") : "open";
+  const when = s?.closed_at
+    ? displayTz
+      ? fmtInTz(s.closed_at, displayTz, "yyyy-MM-dd HH:mm")
+      : s.closed_at.slice(0, 16).replace("T", " ")
+    : "open";
   const no = t.trade_no != null ? `#${t.trade_no}` : t.id.slice(0, 8);
   const rr = s?.realized_r != null ? `${r2(s.realized_r)}R` : "—";
   const net = s?.net_pl != null ? money(s.net_pl, ccy) : "—";
@@ -186,10 +210,15 @@ function tradeDetail(
     tv_ltf_pre: exportableImage(tv.ltf_pre),
     tv_ltf_post: exportableImage(tv.ltf_post),
   };
-  const lines = detailFields.map((f) => {
-    const v = val(enriched, f.key);
-    return v ? `- **${f.label}:** ${v}` : "";
-  }).filter(Boolean);
+  const lines = [
+    ...context,
+    ...detailFields
+      .map((f) => {
+        const v = val(enriched, f.key);
+        return v ? `- **${f.label}:** ${v}` : "";
+      })
+      .filter(Boolean),
+  ];
   const slip = slippageFromTrade(t);
   if (slip) {
     const rPart =
@@ -341,6 +370,25 @@ export type MentorPackOpts = {
    * field is silently absent — so callers that have them must pass them.
    */
   fieldDefs?: FieldDef[];
+  /**
+   * Each trade's account day rule (a Topstep account's 17:00 CT day). With it
+   * the pack carries the intraday sections (F5.6); without it, UTC days and
+   * none of them — the swing-era pack, which the tests of its other parts use.
+   */
+  tzOf?: (row: TradeRow) => DayZone;
+  /** The trader's own clock for every printed time, e.g. "Europe/Belgrade". */
+  displayTz?: string;
+  /** Topstep accounts in scope, with their state as it stands now. */
+  topstep?: MentorTopstep[];
+  /** The trader's daily tracker rules, and each day's verdict on them. */
+  trackerRules?: TrackerRule[];
+  compliance?: DayCompliance[];
+  /** The futures-trading brief per trading day: news windows. */
+  briefs?: SessionBrief[];
+  /** The daily report per day: mental temperature. */
+  reports?: DailyReportLite[];
+  /** Account id → name, printed on each trade when the scope has several. */
+  accountNames?: Map<string, string>;
 };
 
 export function buildMentorPack(
@@ -382,6 +430,32 @@ export function buildMentorPack(
       ),
     );
 
+  // The intraday half needs each trade's own day rule; without one the pack
+  // is the swing-era document and says nothing about sessions or days.
+  const intraday = opts.tzOf != null;
+  const displayTz = opts.displayTz ?? "UTC";
+  const enriched: EnrichedTrade[] = intraday
+    ? enrichTrades(realized, { tzOf: (t) => opts.tzOf!(t.row), range, pnlOf: (t) => t.net })
+    : [];
+  const enrichedById = new Map(enriched.map((e) => [e.id, e]));
+  const briefByDay = new Map((opts.briefs ?? []).map((b) => [b.tradingDay, b]));
+  const insightsByTrade = new Map<string, string[]>();
+  for (const i of opts.insights?.insights ?? []) {
+    if (i.level !== "trade") continue;
+    insightsByTrade.set(i.subjectId, [...(insightsByTrade.get(i.subjectId) ?? []), i.title]);
+  }
+  const multiAccount = new Set(trades.map((t) => t.account_id)).size > 1;
+  const contextOf = (t: TradeRow): string[] => {
+    const e = enrichedById.get(t.id);
+    if (!e) return [];
+    return tradeContextLines(e, {
+      displayTz,
+      brief: briefByDay.get(e.openDay),
+      insightTitles: insightsByTrade.get(t.id),
+      accountName: multiAccount && t.account_id ? opts.accountNames?.get(t.account_id) : undefined,
+    });
+  };
+
   const out: string[] = [];
 
   out.push(`# Trading Journal — Mentor Pack`);
@@ -396,32 +470,63 @@ export function buildMentorPack(
     context.push(
       `Breakeven pojas: ${range.from.toFixed(2)} do ${range.to.toFixed(2)} ${ccy}`,
     );
+  if (intraday) context.push(`Vremena: ${displayTz} (tvoja zona); sesije po ET (New York)`);
   if (context.length > 0) out.push(`_${context.join(" · ")}_`);
   out.push("");
 
   // --- Instructions / persona for the model -------------------------------
   out.push(`## Uputstvo za tebe (AI mentor)`);
   out.push(
-    [
-      "Ti si moj lični **ICT trading mentor**. Ovaj fajl je izvoz iz mog trading žurnala.",
-      "Svi brojevi su već izračunati — **ne preračunavaj** ih; koristi ih onakve kakvi jesu.",
-      "",
-      "Tvoj zadatak:",
-      "- Nađi **obrasce** u mojim rezultatima (koji setapi/tagovi/psihologija donose profit, a koji gube).",
-      "- Budi **kritičan i direktan** — istakni crvene zastavice, nemoj mi laskati.",
-      "- Fokus na **proces i disciplinu**, ne na predviđanje tržišta.",
-      "- Uzmi u obzir veličinu uzorka — ne izvlači jake zaključke iz par trejdova.",
-      "",
-      "**Strukturiraj odgovor ovako:**",
-      "1. **Kratak rezime** — stanje na 3–4 rečenice (edge, disciplina, glavni rizik).",
-      "2. **Šta radim dobro** — konkretno, uz brojeve iz fajla.",
-      "3. **Crvene zastavice** — najskuplje greške/obrasci, poređane po uticaju.",
-      "4. **Obrasci po kategorijama** — setapi/tagovi/psihologija koji nose profit vs. gubitak.",
-      "5. **2–3 konkretna zadatka** za sledeću nedelju (merljiva, procesna).",
-      "",
-      "Šta NE radiš: ne daješ buy/sell signale, ne predviđaš cenu, ne daješ finansijski/regulatorni savet.",
-      "Odgovaraj na srpskom.",
-    ].join("\n"),
+    (intraday
+      ? [
+          "Ti si moj lični **mentor za intraday trgovanje CME fjučersima** (NQ/MNQ, ES/MES, 6E/M6E) na **Topstep** nalogu, sa ICT pristupom (likvidnost, MSS, FVG, OTE, sesije).",
+          "Ovaj fajl je izvoz iz mog trading žurnala. Svi brojevi su već izračunati — **ne preračunavaj** ih i ne izmišljaj one kojih nema; ako ti nešto fali, reci tačno šta da izvezem.",
+          "",
+          "Kako da čitaš fajl:",
+          "- Prvo **Topstep stanje**: koliko sam daleko od MLL-a i DLL-a, i da li sam u granici konzistentnosti. Preživljavanje naloga je iznad svega.",
+          "- Zatim **Dnevni pregled**: dan je jedinica. Traži dane sa previše trejdova, trgovanje posle 2 gubitka zaredom, dane kad je DLL dostignut i prekršena pravila.",
+          "- Zatim **Kada i kako trgujem**: koji sesijski prozor, sat, redni broj trejda i stanje posle gubitka nose ili gube novac.",
+          "- Na kraju **trejdovi hronološki**: svaki ima vreme u mojoj zoni i u ET, sesiju, redni broj u danu, gubitke pre ulaza, trajanje, ugovore, rizik, MAE/MFE, vreme u minusu, crveni prozor (vesti) i zapažanja koja su okinula.",
+          `- Grupe označene ⚠ imaju manje od ${SMALL_SAMPLE} trejdova: iz njih izvodi **hipoteze za proveru**, ne zaključke. Kad citiraš obrazac, navedi broj trejdova i trejdove po broju (#).`,
+          "",
+          "Tvoj zadatak:",
+          "- Oceni **proces i disciplinu** pre rezultata: pravila, stop posle gubitaka, broj trejdova, veličinu pozicije prema pravilu rizika, trejdove u crvenim prozorima.",
+          "- Nađi **gde je edge a gde curi novac** (sesija, vreme, setup/tag, instrument, smer) i koliko to košta u R i dolarima.",
+          "- Oceni **izvršenje**: slippage na ulazu, MAE/MFE, koliko sam dugo bio u minusu, izlazak pre cilja ili vraćen profit.",
+          "- Budi **kritičan i direktan** — nemoj mi laskati.",
+          "",
+          "**Strukturiraj odgovor ovako:**",
+          "1. **Rezime** — 3–4 rečenice: edge, disciplina, najveći rizik za nalog.",
+          "2. **Topstep rizik** — prostor do MLL-a i DLL-a, konzistentnost, i šta to znači za veličinu pozicije sutra.",
+          "3. **Šta radim dobro** — konkretno, sa brojevima i # trejdova.",
+          "4. **Crvene zastavice** — najskuplji obrasci, poređani po ceni u R/dolarima.",
+          "5. **Kada trgujem** — prozori/sati/redni broj trejda koje treba zadržati, ograničiti ili izbaciti (uz veličinu uzorka).",
+          "6. **2–3 pravila za sledeću nedelju** — merljiva i procesna, tako da ih tracker može proveriti (npr. „max 3 trejda dnevno“, „ne ulazim u prvih 15 min“).",
+          "",
+          "Šta NE radiš: ne daješ buy/sell signale, ne predviđaš cenu, ne daješ finansijski/regulatorni savet.",
+          "Odgovaraj na srpskom.",
+        ]
+      : [
+          "Ti si moj lični **ICT trading mentor**. Ovaj fajl je izvoz iz mog trading žurnala.",
+          "Svi brojevi su već izračunati — **ne preračunavaj** ih; koristi ih onakve kakvi jesu.",
+          "",
+          "Tvoj zadatak:",
+          "- Nađi **obrasce** u mojim rezultatima (koji setapi/tagovi/psihologija donose profit, a koji gube).",
+          "- Budi **kritičan i direktan** — istakni crvene zastavice, nemoj mi laskati.",
+          "- Fokus na **proces i disciplinu**, ne na predviđanje tržišta.",
+          "- Uzmi u obzir veličinu uzorka — ne izvlači jake zaključke iz par trejdova.",
+          "",
+          "**Strukturiraj odgovor ovako:**",
+          "1. **Kratak rezime** — stanje na 3–4 rečenice (edge, disciplina, glavni rizik).",
+          "2. **Šta radim dobro** — konkretno, uz brojeve iz fajla.",
+          "3. **Crvene zastavice** — najskuplje greške/obrasci, poređane po uticaju.",
+          "4. **Obrasci po kategorijama** — setapi/tagovi/psihologija koji nose profit vs. gubitak.",
+          "5. **2–3 konkretna zadatka** za sledeću nedelju (merljiva, procesna).",
+          "",
+          "Šta NE radiš: ne daješ buy/sell signale, ne predviđaš cenu, ne daješ finansijski/regulatorni savet.",
+          "Odgovaraj na srpskom.",
+        ]
+    ).join("\n"),
   );
   out.push("");
 
@@ -442,11 +547,30 @@ export function buildMentorPack(
       "- Sve vrednosti su u valuti/TZ naloga; **net** = posle provizija, **gross** = samo kretanje cene.",
     ].join("\n"),
   );
+  if (intraday) {
+    out.push(
+      [
+        "- **Trading dan** — Topstep dan traje 17:00–17:00 po Čikagu (CT): večernja Globex sesija pripada SLEDEĆEM danu. Svi dnevni brojevi su po tom danu.",
+        "- **MLL** (Maximum Loss Limit) — trailing pod ispod najvišeg balansa na kraju dana; kad dostigne početni balans, zaključava se. Pad ispod njega = nalog je izgubljen.",
+        "- **DLL** (Daily Loss Limit) — najveći dozvoljeni gubitak u jednom trading danu; Topstep tada zatvara pozicije i dan je gotov (nalog nije izgubljen).",
+        `- **Konzistentnost** — najbolji dan sme biti najviše ${Math.round(TOPSTEP_CONSISTENCY * 100)}% cilja; preko toga cilj raste na najbolji dan ÷ ${TOPSTEP_CONSISTENCY}.`,
+        "- **Sesijski prozori (ET)** — Globex noć 18:00–08:00, Pre-open 08:00–09:30, Open 09:30–10:00, Morning 10:00–11:30, Lunch 11:30–13:30, Afternoon 13:30–15:00, Last hour 15:00–.",
+        "- **Posle gubitaka** — koliko je gubitaka zaredom već bilo zatvoreno tog dana na istom nalogu u trenutku ulaza. Moje pravilo: posle 2 gubitka zaredom dan je gotov; svaki ulaz posle toga je tilt.",
+        "- **Vreme u minusu** — % trajanja trejda u kome je tekući P&L bio ispod nule, iz berzanskih sveća (1 s).",
+        "- **Crveni prozor** — vesti visokog uticaja iz jutarnjeg brief-a (futures-trading), u kojima ne ulazim.",
+        "- **Veličina** — broj ugovora; mikro (MNQ/MES/M6E) je 1/10 mini ugovora.",
+      ].join("\n"),
+    );
+  }
   out.push("");
+
+  // --- The account and the trader's own rules ------------------------------
+  out.push(...topstepSection(opts.topstep ?? [], ccy));
+  out.push(...rulesSection(opts.trackerRules ?? [], opts.compliance ?? []));
 
   // --- Overall stats ------------------------------------------------------
   out.push(`## Ukupna statistika`);
-  out.push(statsTable(realized, ccy, range));
+  out.push(statsTable(realized, ccy, range, dayShapeRows(enriched, ccy)));
   out.push("");
 
   // --- Insights -----------------------------------------------------------
@@ -486,6 +610,23 @@ export function buildMentorPack(
     out.push("");
   }
 
+  // --- The trading day ----------------------------------------------------
+  if (intraday) {
+    const topstepDllDays = new Set((opts.topstep ?? []).flatMap((a) => a.result.dllDays));
+    out.push(
+      ...dailySection(enriched, {
+        ccy,
+        range,
+        compliance: new Map((opts.compliance ?? []).map((c) => [c.date, c])),
+        ruleText: new Map((opts.trackerRules ?? []).map((r) => [r.id, r.text])),
+        dllDays: topstepDllDays,
+        reportByDate: new Map((opts.reports ?? []).map((r) => [r.report_date, r])),
+        briefByDay,
+      }),
+    );
+    out.push(...intradaySection(enriched, range));
+  }
+
   // --- Breakdowns ---------------------------------------------------------
   out.push(`## Performanse po kategorijama`);
   for (const b of breakdownsFor(defs)) {
@@ -498,7 +639,7 @@ export function buildMentorPack(
   if (openReview.length > 0) {
     out.push(`## Otvorene / za pregled (${openReview.length})`);
     for (const t of openReview.slice(0, 20))
-      out.push(tradeDetail(t, ccy, detailFields));
+      out.push(tradeDetail(t, ccy, detailFields, contextOf(t), opts.displayTz));
     out.push("");
   }
 
@@ -507,17 +648,22 @@ export function buildMentorPack(
     out.push(`_Planirani trejdovi koji nikad nisu otvoreni — bez PnL._`);
     out.push("");
     for (const t of missedSetups.slice(0, 30))
-      out.push(tradeDetail(t, ccy, detailFields));
+      out.push(tradeDetail(t, ccy, detailFields, [], opts.displayTz));
     out.push("");
   }
 
   // --- Full trade detail (everything entered) -----------------------------
   out.push(`## Zatvoreni trejdovi — puni detalji (${detail.length})`);
   out.push(
-    `_Svako polje koje si uneo je ispod. Prazna polja su izostavljena._`,
+    intraday
+      ? `_Hronološki, od najstarijeg: dan se čita kao priča. Svako polje koje si uneo je ispod; prazna su izostavljena._`
+      : `_Svako polje koje si uneo je ispod. Prazna polja su izostavljena._`,
   );
   out.push("");
-  for (const t of detail) out.push(tradeDetail(t, ccy, detailFields));
+  // The newest `detailCap` trades; on an intraday pack told oldest first, so
+  // the model reads each day in the order it happened.
+  const ordered = intraday ? [...detail].reverse() : detail;
+  for (const t of ordered) out.push(tradeDetail(t, ccy, detailFields, contextOf(t), opts.displayTz), "");
   if (truncated > 0)
     out.push(`\n_(+${truncated} starijih trejdova nije prošireno — suzi period za pun detalj.)_`);
   out.push("");

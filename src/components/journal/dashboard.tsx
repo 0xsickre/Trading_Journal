@@ -202,7 +202,13 @@ import {
 } from "@/lib/journal/analytics";
 import { TopstepBanner } from "@/components/journal/topstep-banner";
 import { briefResolver, type SessionBrief } from "@/lib/journal/session-brief";
-import { evaluateTopstep, topstepConfigFromAccount, topstepRulesResolver, type TopstepResult } from "@/lib/journal/topstep";
+import {
+  evaluateTopstep,
+  riskRuleFromAccount,
+  topstepConfigFromAccount,
+  topstepRulesResolver,
+  type TopstepResult,
+} from "@/lib/journal/topstep";
 import { unpricedClosedCount } from "@/lib/journal/money-provenance";
 import {
   buildMentorPack,
@@ -1589,6 +1595,27 @@ export function Dashboard({
       breakevenRange,
       startingBalance: scopedAccount?.starting_balance ?? null,
       fieldDefs,
+      // The day trader's half (F5.6): each trade's own day, the trader's clock,
+      // the account against the firm's limits, the trader's rules and how each
+      // day kept them, the brief's news windows and the day's mental note.
+      tzOf: (row) => tzForAccount(row.account_id),
+      displayTz: timezone,
+      topstep: topstepStatuses
+        .filter((s) => accountFilter === "all" || s.account.id === accountFilter)
+        .map((s) => ({
+          accountName: s.account.name,
+          plan: s.account.topstep_plan ?? "50K",
+          startingBalance: s.account.starting_balance,
+          riskRulePct: riskRuleFromAccount(s.account).pct,
+          result: s.result,
+        })),
+      trackerRules,
+      compliance: trackerSeries.filter(
+        (d) => (fromDay == null || d.date >= fromDay) && (toDay == null || d.date <= toDay),
+      ),
+      briefs,
+      reports: dailyReports,
+      accountNames: new Map(accounts.map((a) => [a.id, a.name])),
     });
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);

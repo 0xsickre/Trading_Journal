@@ -30,14 +30,14 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 186 of the
-3,444 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 246 of the
+3,530 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
 |---|---|
 | Daily (the "Pred sesiju" card included), weekly, tracker, focus goal | 128 |
-| Mentor-export prompt | 33 |
+| Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 93 |
 | Weekly "Napredak" (progress) and experiment cards | 19 |
 | Day insight sentence (`low_efficiency_day`) | 1 |
 | Chart image helper (`tradingview-snapshot.ts`) | 2 |
@@ -65,7 +65,7 @@ lexes every `.ts`/`.tsx` outside tests into comment / string / code regions, kee
 that read as prose rather than as machinery, and scores those for Serbian by diacritics and by a word
 list. A single Serbian word carrying no diacritic can still slip past that, and JSX text between tags
 is not a string literal (the "Bez pregleda" card on `/daily` is Serbian and not in the count), so
-**186 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
+**246 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
 name, read as the Serbian "pre" until F5.4. Three earlier versions of this paragraph said "about 46 of some 1,700", then "153 of
 1,663", then "185 of 2,191" — each counted by hand, and each had to be replaced rather than quietly
 corrected. That is why the method now ships as a script: a number nobody can re-run is a number
@@ -935,6 +935,40 @@ tidily plans are filed rather than what hesitation cost.
 
 Until then every miss is counted as unmeasured; the futures walk will run over the R2 candles in
 `futures-trading`, to the end of the Topstep day rather than for days.
+
+### The mentor pack reads a day trader's day
+
+**Export for Claude** on the dashboard writes one Markdown file for the chosen period and account
+scope (`mentor-export.ts`), to be uploaded into a chat: every number is computed here, so the model
+interprets and never calculates. Since F5.6 (29.09.2026) it carries what decides an intraday Topstep
+book, from values the screens already derive (`mentor-intraday.ts`):
+
+- **The instructions and the legend** are a futures day trader's: read the account's survival first,
+  then the day, then the timing, then each trade; treat a group marked ⚠ (under 10 trades) as a
+  hypothesis; cite trades by number; end with two or three rules the tracker can check. The legend
+  explains the Topstep trading day (17:00–17:00 CT), the trailing MLL and its lock, the DLL, the 55 %
+  consistency rule, the session windows, "after losses" and the tilt line, time underwater and news
+  windows.
+- **Topstep account**: balance, MLL floor and room, the closest it came, the DLL and what is left
+  today, the days it was hit, the target after consistency, best day against 55 %, maximum
+  position, and the trader's risk rule — as it stands now, not only for the period.
+- **The trader's rules**: every live tracker rule (manual or automatic, with its count), the
+  period's mean compliance and the rules broken most often.
+- **Day shape** in the statistics: trading days green and red, trades per day (mean and most),
+  the average green and red day, the median hold, the average size.
+- **Daily review**: one row per trading day — trades, W/L/BE, net, R, first entry in ET, the longest
+  losing run, entries taken after 2+ losses, most contracts, rules kept (and which were missed),
+  and notes: DLL reached, entries inside a news window, the brief's day note, mental temperature.
+- **When and how** tables by session window, minutes after the open, trade number in the day, state
+  before the entry, hold time, entry hour and weekday — each group with its size and the ⚠ mark.
+- **Every trade oldest first**, headed with its close time on the trader's clock, then: entry and
+  exit in the trader's zone and in ET, session window, minutes after the open, the account (when
+  the scope holds several), trade number in the day, losses in a row before it, hold time,
+  contracts, risk to the stop, time underwater, the news window it was entered in, and the insights
+  that fired on it — before every field the trader typed.
+
+Without a day rule (`tzOf`) the pack is the earlier, account-agnostic document; its tests cover
+those parts on their own.
 
 ## Process tracking
 
