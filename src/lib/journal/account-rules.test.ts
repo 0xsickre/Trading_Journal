@@ -12,7 +12,6 @@ import type { Account } from "./types";
 const acc = (over: Partial<Account> & { id: string }): Account =>
   ({
     name: over.id,
-    account_kind: "trading",
     currency: "USD",
     starting_balance: 0,
     timezone: "America/New_York",

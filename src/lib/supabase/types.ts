@@ -16,7 +16,6 @@ export type Database = {
     Tables: {
       tj_accounts: {
         Row: {
-          account_kind: string
           archived_at: string | null
           breakeven_from: number
           breakeven_to: number
@@ -29,17 +28,6 @@ export type Database = {
           default_fee_fixed: number
           default_stop_pct: number | null
           default_target_pct: number | null
-          ftmo_daily_loss_basis: string
-          ftmo_daily_loss_enabled: boolean
-          ftmo_daily_loss_pct: number
-          ftmo_max_loss_enabled: boolean
-          ftmo_max_loss_pct: number
-          ftmo_min_days: number
-          ftmo_min_days_enabled: boolean
-          ftmo_mode: boolean
-          ftmo_profit_target_enabled: boolean
-          ftmo_profit_target_pct: number
-          ftmo_reset_at: string | null
           risk_rule_max: number | null
           risk_rule_min: number | null
           risk_rule_pct: number
@@ -55,7 +43,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          account_kind?: string
           archived_at?: string | null
           breakeven_from?: number
           breakeven_to?: number
@@ -68,17 +55,6 @@ export type Database = {
           default_fee_fixed?: number
           default_stop_pct?: number | null
           default_target_pct?: number | null
-          ftmo_daily_loss_basis?: string
-          ftmo_daily_loss_enabled?: boolean
-          ftmo_daily_loss_pct?: number
-          ftmo_max_loss_enabled?: boolean
-          ftmo_max_loss_pct?: number
-          ftmo_min_days?: number
-          ftmo_min_days_enabled?: boolean
-          ftmo_mode?: boolean
-          ftmo_profit_target_enabled?: boolean
-          ftmo_profit_target_pct?: number
-          ftmo_reset_at?: string | null
           risk_rule_max?: number | null
           risk_rule_min?: number | null
           risk_rule_pct?: number
@@ -94,7 +70,6 @@ export type Database = {
           user_id?: string
         }
         Update: {
-          account_kind?: string
           archived_at?: string | null
           breakeven_from?: number
           breakeven_to?: number
@@ -107,17 +82,6 @@ export type Database = {
           default_fee_fixed?: number
           default_stop_pct?: number | null
           default_target_pct?: number | null
-          ftmo_daily_loss_basis?: string
-          ftmo_daily_loss_enabled?: boolean
-          ftmo_daily_loss_pct?: number
-          ftmo_max_loss_enabled?: boolean
-          ftmo_max_loss_pct?: number
-          ftmo_min_days?: number
-          ftmo_min_days_enabled?: boolean
-          ftmo_mode?: boolean
-          ftmo_profit_target_enabled?: boolean
-          ftmo_profit_target_pct?: number
-          ftmo_reset_at?: string | null
           risk_rule_max?: number | null
           risk_rule_min?: number | null
           risk_rule_pct?: number

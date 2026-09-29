@@ -79,11 +79,6 @@ export type Account = {
   id: string;
   name: string;
   broker: string | null;
-  /**
-   * trading = a live account, MAE/MFE on a future from R2 candles (futures-trading `journal_mae.py`).
-   * backtest = replayed trades, MAE/MFE from the TradingView import or typed.
-   */
-  account_kind: "trading" | "backtest";
   currency: string;
   starting_balance: number;
   default_asset_class: string | null;

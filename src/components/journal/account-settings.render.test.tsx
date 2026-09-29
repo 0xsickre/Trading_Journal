@@ -38,7 +38,6 @@ const account = (over: Partial<Account> = {}): Account => ({
   id: "acc-1",
   name: "Main Account",
   broker: null,
-  account_kind: "trading",
   currency: "USD",
   starting_balance: 100_000,
   default_asset_class: null,
@@ -98,10 +97,9 @@ beforeEach(() => {
 });
 
 describe("the list", () => {
-  it("shows one compact row per account, with its type, balance and trades", () => {
+  it("shows one compact row per account, with its balance and trades", () => {
     render(<AccountSettings accounts={TWO} tradeCounts={{ "acc-1": 12, "acc-2": null }} />);
     const row = screen.getByText("Main Account").closest("tr")!;
-    expect(within(row).getByText("Live")).toBeInTheDocument();
     expect(within(row).getByText("Default")).toBeInTheDocument();
     expect(within(row).getByText("$100,000.00")).toBeInTheDocument();
     expect(within(row).getByText("12")).toBeInTheDocument();
@@ -152,7 +150,7 @@ describe("archive and restore", () => {
 });
 
 describe("new account and duplicate", () => {
-  it("creates an account from the dialog with its type, currency, balance and timezone", async () => {
+  it("creates an account from the dialog with its currency, balance and timezone", async () => {
     const user = userEvent.setup({ delay: null });
     render(<AccountSettings accounts={TWO} />);
     await user.click(screen.getByRole("button", { name: /New account/ }));
@@ -163,7 +161,6 @@ describe("new account and duplicate", () => {
       expect(addAccountMock).toHaveBeenCalledWith(
         expect.objectContaining({
           name: "Swing live",
-          account_kind: "trading",
           currency: "USD",
           starting_balance: 25000,
           copyFrom: null,
@@ -217,24 +214,13 @@ describe("edit", () => {
     expect(screen.getByText(/Locked: the trades on this account/)).toBeInTheDocument();
   });
 
-  it("saves the type with the account", async () => {
+  it("offers no Live / Backtest type — the book is Topstep only (H2)", async () => {
     const user = userEvent.setup({ delay: null });
     render(<AccountSettings accounts={TWO} tradeCounts={{ "acc-1": 0 }} />);
     await openMenu(user, "Main Account");
     await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
-    // A live account: MT5 is gone (H1) — its MAE/MFE comes from R2.
-    expect(screen.getByText(/from the exchange's candles \(R2\)/)).toBeInTheDocument();
-    expect(screen.queryByText(/MT5/)).not.toBeInTheDocument();
-    await user.click(screen.getByLabelText("Type"));
-    await user.click(await screen.findByRole("option", { name: "Backtest" }));
-    expect(screen.getByText(/from the TradingView import/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Save" }));
-    await vi.waitFor(() =>
-      expect(updateAccountMock).toHaveBeenCalledWith(
-        "acc-1",
-        expect.objectContaining({ account_kind: "backtest", starting_balance: 100000 }),
-      ),
-    );
+    expect(screen.queryByLabelText("Type")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Backtest/)).not.toBeInTheDocument();
   });
 });
 

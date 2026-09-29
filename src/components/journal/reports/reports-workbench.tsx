@@ -1,7 +1,7 @@
 "use client";
 
 import { primaryAccount } from "@/lib/journal/account-rules";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { Columns3, Eye, EyeOff, GitCompare, RotateCcw } from "lucide-react";
@@ -69,15 +69,9 @@ import {
   type FilterSlot,
 } from "@/lib/journal/reports/filters";
 import {
-  REPORT_KINDS,
   accountLabels,
   accountsInScope,
-  accountsOfKind,
-  asReportKind,
-  defaultKind,
-  type ReportKind,
 } from "@/lib/journal/reports/scope";
-import { getStoredReportKind, setStoredReportKind } from "@/lib/journal/report-prefs";
 import type { ViewMode } from "@/lib/journal/units";
 import { BookOverviewPanel } from "@/components/journal/reports/book-overview";
 import { FilterBar } from "@/components/journal/reports/filter-bar";
@@ -126,7 +120,7 @@ const DEFAULT_COLUMNS = [
 /** Every metric but the trade count, which the table always shows on its own. */
 const COLUMN_CHOICES = METRICS.filter((m) => m.key !== "trade_count");
 const COLUMN_KEYS = new Set(COLUMN_CHOICES.map((m) => m.key));
-/** Matches no account: a kind with no accounts reports on nothing, not on all. */
+/** Matches no account: a book with no accounts reports on nothing, not on all. */
 const NO_ACCOUNT = "__none__";
 
 /**
@@ -189,36 +183,8 @@ export function ReportsWorkbench({
     [params, replaceUrl],
   );
 
-  // The kind: a link that names one wins, then the one last shown, then the
-  // data's own answer (Live when live trades exist).
-  const [storedKind, setStoredKind] = useState<ReportKind | null>(null);
-  useEffect(() => {
-    const k = getStoredReportKind();
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- external-store init
-    if (k) setStoredKind(k);
-  }, []);
-  const dataKind = useMemo(
-    () =>
-      defaultKind(
-        accounts,
-        trades.filter((t) => t.status === "closed").map((t) => t.account_id),
-      ),
-    [accounts, trades],
-  );
-  const kind: ReportKind = asReportKind(params.get("kind")) ?? storedKind ?? dataKind;
-
-  const chooseKind = (next: ReportKind) => {
-    setStoredReportKind(next);
-    setStoredKind(next);
-    setParam({ kind: next, acc: undefined });
-  };
-
   const accountId = params.get("acc");
-  const kindAccounts = useMemo(() => accountsOfKind(accounts, kind), [accounts, kind]);
-  const scopeAccounts = useMemo(
-    () => accountsInScope(accounts, kind, accountId),
-    [accounts, kind, accountId],
-  );
+  const scopeAccounts = useMemo(() => accountsInScope(accounts, accountId), [accounts, accountId]);
   const selectedAccount =
     accountId && scopeAccounts.length === 1 && scopeAccounts[0].id === accountId ? accountId : "all";
 
@@ -256,9 +222,8 @@ export function ReportsWorkbench({
     return (t: { row: TradeRow }) => resolve(t.row.account_id);
   }, [accounts]);
 
-  // Pooled over the accounts IN SCOPE, never over all of them: a EUR live
-  // account used to block a USD backtest report, and a live account's balance
-  // used to sit in a backtest's percentage base.
+  // Pooled over the accounts IN SCOPE, never over all of them: one account's
+  // balance must not sit in another account's percentage base.
   const range = useMemo(() => sharedBreakevenRange(scopeAccounts), [scopeAccounts]);
   const mixedCurrency = scopeAccounts.length > 1 && sharedCurrency(scopeAccounts) == null;
   const currency = sharedCurrency(scopeAccounts) ?? scopeAccounts[0]?.currency ?? "USD";
@@ -514,8 +479,8 @@ export function ReportsWorkbench({
   function resetReport() {
     setChartKey(null);
     setResetKey((k) => k + 1);
-    // The book stays the same; the report questions go back to their defaults.
-    replaceUrl(new URLSearchParams(params.get("kind") ? { kind: params.get("kind")! } : {}));
+    // The report questions go back to their defaults.
+    replaceUrl(new URLSearchParams());
   }
 
   /**
@@ -556,20 +521,12 @@ export function ReportsWorkbench({
     setParam({ cols: ordered.join(",") });
   }
 
-  const kindName = kind === "all" ? "" : `${kind} `;
-
   // --- Render ---------------------------------------------------------------------
 
   return (
     <div className="space-y-4">
       {/* The book: which accounts, which dates, and how money is shown. */}
       <div className="flex flex-wrap items-center gap-2">
-        <Segmented
-          label="Account type"
-          value={kind}
-          options={REPORT_KINDS}
-          onChange={(v) => chooseKind(v as ReportKind)}
-        />
         <Select
           value={selectedAccount}
           onValueChange={(v) => setParam({ acc: v === "all" ? undefined : v })}
@@ -578,8 +535,8 @@ export function ReportsWorkbench({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All {kindName}accounts</SelectItem>
-            {kindAccounts.map((a) => (
+            <SelectItem value="all">All accounts</SelectItem>
+            {accounts.map((a) => (
               <SelectItem key={a.id} value={a.id}>
                 {dimensionContext.accountNames?.get(a.id) ?? a.name}
               </SelectItem>
@@ -820,7 +777,7 @@ export function ReportsWorkbench({
             <p className="text-sm text-muted-foreground">
               {filtering
                 ? "No trades match these filters."
-                : `No closed ${kindName}trades yet.`}
+                : "No closed trades yet."}
             </p>
             {filtering && (
               <Button variant="outline" size="sm" onClick={() => setParam({ from: undefined, to: undefined, f: undefined })}>

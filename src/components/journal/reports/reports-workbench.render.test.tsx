@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ReportsWorkbench } from "./reports-workbench";
 import { mkTrade, type TradeSpec } from "@/lib/journal/reports/test-helpers";
@@ -23,11 +23,10 @@ vi.mock("@/components/journal/reports/report-chart", () => ({
   ),
 }));
 
-const account = (id: string, kind: "trading" | "backtest", currency = "USD"): Account =>
+const account = (id: string, currency = "USD"): Account =>
   ({
     id,
     name: id,
-    account_kind: kind,
     currency,
     starting_balance: 10_000,
     timezone: "UTC",
@@ -39,8 +38,8 @@ const account = (id: string, kind: "trading" | "backtest", currency = "USD"): Ac
 
 const rows = (specs: TradeSpec[]): TradeRow[] => specs.map((s) => mkTrade(s).row);
 
-const BACKTEST = account("bt", "backtest");
-const LIVE = account("live", "trading");
+const OTHER = account("bt");
+const LIVE = account("live");
 const replaceState = vi.fn();
 
 beforeEach(() => {
@@ -55,78 +54,47 @@ const lastUrl = () => String(replaceState.mock.calls.at(-1)?.[2] ?? "");
 /** The overview's trade count — the first "Trades" on the page; the table header is the second. */
 const bookCount = () => screen.getAllByText("Trades")[0].nextSibling;
 
-describe("which book the report opens on", () => {
-  it("a journal of backtests opens on Backtest", () => {
-    render(
-      <ReportsWorkbench
-        accounts={[BACKTEST, LIVE]}
-        trades={rows([
-          { accountId: "bt", net: 100 },
-          { accountId: "bt", net: -40 },
-          { accountId: "bt", net: 60 },
-        ])}
-      />,
-    );
-    expect(screen.getByRole("button", { name: "Backtest" })).toHaveAttribute("aria-pressed", "true");
-    expect(bookCount()).toHaveTextContent("3");
-  });
-
-  it("opens on Live once a live trade exists, and keeps backtests out of it", () => {
-    render(
-      <ReportsWorkbench
-        accounts={[BACKTEST, LIVE]}
-        trades={rows([
-          { accountId: "bt", net: 100 },
-          { accountId: "live", net: -40 },
-        ])}
-      />,
-    );
-    expect(screen.getByRole("button", { name: "Live" })).toHaveAttribute("aria-pressed", "true");
+describe("which book the report covers", () => {
+  it("every account by default, and one when a link names it", () => {
+    const trades = rows([
+      { accountId: "bt", net: 100 },
+      { accountId: "live", net: -40 },
+    ]);
+    render(<ReportsWorkbench accounts={[OTHER, LIVE]} trades={trades} />);
+    expect(bookCount()).toHaveTextContent("2");
+    cleanup();
+    search = new URLSearchParams("acc=live");
+    render(<ReportsWorkbench accounts={[OTHER, LIVE]} trades={trades} />);
     expect(bookCount()).toHaveTextContent("1");
   });
 
-  it("switching the kind writes the URL, never the server, and forgets the account", async () => {
-    const user = userEvent.setup({ delay: null });
-    search = new URLSearchParams("kind=live&acc=live");
-    render(<ReportsWorkbench accounts={[BACKTEST, LIVE]} trades={rows([{ accountId: "live" }])} />);
-    await user.click(screen.getByRole("button", { name: "Backtest" }));
-    expect(lastUrl()).toBe("/reports?kind=backtest");
-    expect(localStorage.getItem("tj:reports_kind")).toBe("backtest");
-  });
-
-  it("a EUR live account does not block a USD backtest", () => {
-    render(
-      <ReportsWorkbench
-        accounts={[BACKTEST, account("eur", "trading", "EUR")]}
-        trades={rows([{ accountId: "bt", net: 100 }])}
-      />,
-    );
-    expect(screen.queryByText(/different currencies/)).not.toBeInTheDocument();
-    expect(bookCount()).toHaveTextContent("1");
+  it("offers no Live / Backtest choice — the book is Topstep only (H2)", () => {
+    render(<ReportsWorkbench accounts={[LIVE]} trades={rows([{ accountId: "live" }])} />);
+    expect(screen.queryByRole("button", { name: "Backtest" })).not.toBeInTheDocument();
   });
 });
 
 describe("nothing to show says so once", () => {
   it("an empty journal", () => {
-    render(<ReportsWorkbench accounts={[BACKTEST]} trades={[]} />);
+    render(<ReportsWorkbench accounts={[OTHER]} trades={[]} />);
     expect(screen.getByText("No closed trades yet.")).toBeInTheDocument();
     expect(screen.queryByTestId("chart")).not.toBeInTheDocument();
   });
 
   it("filters that exclude everything offer to clear them", async () => {
     const user = userEvent.setup({ delay: null });
-    search = new URLSearchParams("kind=backtest&from=2030-01-01");
-    render(<ReportsWorkbench accounts={[BACKTEST]} trades={rows([{ accountId: "bt" }])} />);
+    search = new URLSearchParams("from=2030-01-01");
+    render(<ReportsWorkbench accounts={[OTHER]} trades={rows([{ accountId: "bt" }])} />);
     expect(screen.getByText("No trades match these filters.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Clear filters" }));
-    expect(lastUrl()).toBe("/reports?kind=backtest");
+    expect(lastUrl()).not.toContain("from=");
   });
 });
 
 describe("controls", () => {
   const book = () => (
     <ReportsWorkbench
-      accounts={[BACKTEST]}
+      accounts={[OTHER]}
       trades={rows([
         { accountId: "bt", net: 100 },
         { accountId: "bt", net: -40 },
@@ -154,12 +122,12 @@ describe("controls", () => {
     expect(await screen.findByTestId("chart")).toHaveTextContent("Win %");
   });
 
-  it("Reset keeps the book and drops every report choice", async () => {
+  it("Reset drops every report choice", async () => {
     const user = userEvent.setup({ delay: null });
-    search = new URLSearchParams("kind=backtest&dim=instrument&sort=net_pnl:asc&min=1&hide=1");
+    search = new URLSearchParams("dim=instrument&sort=net_pnl:asc&min=1&hide=1");
     render(book());
     await user.click(screen.getByRole("button", { name: /Reset/ }));
-    expect(lastUrl()).toBe("/reports?kind=backtest");
+    expect(lastUrl()).toBe("/reports");
   });
 
   it("an unknown dimension in a link falls back instead of blanking the page", () => {

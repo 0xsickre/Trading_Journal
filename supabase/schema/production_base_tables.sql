@@ -58,26 +58,12 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   user_id                     uuid        NOT NULL DEFAULT auth.uid(),
   name                        text        NOT NULL,
   broker                      text,
-  -- trading | backtest — trading dobija MAE/MFE iz MT5, backtest se unosi ručno
-  -- (20260919100000, 20260919140000).
-  account_kind                text        NOT NULL DEFAULT 'trading',
   currency                    text        NOT NULL DEFAULT 'USD',
   starting_balance            numeric     NOT NULL DEFAULT 0,
   default_asset_class         text,
   timezone                    text        NOT NULL DEFAULT 'America/New_York',
   is_active                   boolean     NOT NULL DEFAULT true,
   created_at                  timestamptz NOT NULL DEFAULT now(),
-  -- FTMO / prop-firm režim (20260721150000_ftmo_account_mode.sql)
-  ftmo_mode                   boolean     NOT NULL DEFAULT false,
-  ftmo_daily_loss_enabled     boolean     NOT NULL DEFAULT true,
-  ftmo_daily_loss_pct         numeric     NOT NULL DEFAULT 5,
-  ftmo_max_loss_enabled       boolean     NOT NULL DEFAULT true,
-  ftmo_max_loss_pct           numeric     NOT NULL DEFAULT 10,
-  ftmo_profit_target_enabled  boolean     NOT NULL DEFAULT true,
-  ftmo_profit_target_pct      numeric     NOT NULL DEFAULT 10,
-  ftmo_min_days_enabled       boolean     NOT NULL DEFAULT true,
-  ftmo_min_days               integer     NOT NULL DEFAULT 4,
-  ftmo_reset_at               timestamptz,
   -- Breakeven pojas i podrazumevani troškovi (20260727121000)
   breakeven_from              numeric     NOT NULL DEFAULT 0,
   breakeven_to                numeric     NOT NULL DEFAULT 0,
@@ -86,13 +72,10 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   default_fee_fixed           numeric     NOT NULL DEFAULT 0,
   default_stop_pct            numeric,
   default_target_pct          numeric,
-  -- Od čega se meri dnevni gubitak: od početnog stanja ili od equity-ja na
-  -- početku dana (20260822144309).
-  ftmo_daily_loss_basis       text        NOT NULL DEFAULT 'starting_balance',
   -- Arhiviran nalog: skriven iz birača, trejdovi i dalje broje (20260919220000).
   archived_at                 timestamptz,
-  -- Topstep režim (20260928140000): pravila po planu u src/lib/journal/topstep.ts;
-  -- isključiv sa ftmo_mode. Pravilo rizika: % prostora iznad MLL-a, između min i max
+  -- Topstep režim (20260928140000): pravila po planu u src/lib/journal/topstep.ts.
+  -- Pravilo rizika: % prostora iznad MLL-a, između min i max
   -- (null = granice plana).
   topstep_mode                boolean     NOT NULL DEFAULT false,
   topstep_plan                text        NOT NULL DEFAULT '50K',

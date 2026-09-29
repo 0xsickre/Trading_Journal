@@ -60,7 +60,7 @@ BEGIN
 
   -- 2) Children with a unique key per position ---------------------------------
   --
-  -- Each of these three has a UNIQUE (position_id, <something>), so a row can
+  -- Each of these two has a UNIQUE (position_id, <something>), so a row can
   -- only move across when the survivor has nothing under that key. The rest go
   -- with the delete at the end — the survivor's own answer wins, because it is
   -- the one whose judgement is being kept.
@@ -79,10 +79,6 @@ BEGIN
        SELECT 1 FROM public.tj_position_rules k
         WHERE k.position_id = p_keep AND k.rule_id = r.rule_id
      );
-
-  -- A check-in on a LOCKED day cannot move, and its guard raises rather than
-  -- skipping. That is the right answer: a locked day is a day the trader
-  -- declared finished, and this transaction stops instead of half-merging.
 
   UPDATE public.tj_notes       SET position_id = p_keep WHERE position_id = p_fills_from;
   UPDATE public.tj_import_rows SET matched_position_id = p_keep WHERE matched_position_id = p_fills_from;

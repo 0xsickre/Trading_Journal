@@ -1009,7 +1009,6 @@ const accountPatchSchema = z
   .object({
     name: z.string().trim().min(1, "The name cannot be empty.").max(80).optional(),
     broker: z.string().max(80).nullable().optional(),
-    account_kind: z.enum(["trading", "backtest"]).optional(),
     currency: z.string().trim().regex(/^[A-Za-z]{3}$/, "Currency is a three-letter code.").transform((c) => c.toUpperCase()).optional(),
     starting_balance: money("Starting balance").optional(),
     default_asset_class: z.string().max(60).nullable().optional(),
@@ -1037,7 +1036,6 @@ export async function updateAccount(
   patch: {
     name?: string;
     broker?: string | null;
-    account_kind?: "trading" | "backtest";
     currency?: string;
     starting_balance?: number;
     default_asset_class?: string | null;
@@ -1184,7 +1182,7 @@ export async function resetTopstepAccount(id: string) {
  * Create an account, from the new-account dialog or as a duplicate.
  *
  * The dialog asks for what decides how every trade on the account reads —
- * name, Live or Backtest, currency, starting balance, timezone — instead of the
+ * name, currency, starting balance, timezone — instead of the
  * blank "New Account" this used to make on one click. `copyFrom` copies the
  * rest (breakeven, costs, Topstep rules) from another account: several
  * Combines share one rule set, and retyping it per account is how two of them
@@ -1192,7 +1190,6 @@ export async function resetTopstepAccount(id: string) {
  */
 export async function addAccount(input: {
   name: string;
-  account_kind?: "trading" | "backtest";
   currency?: string;
   starting_balance?: number;
   timezone?: string;
@@ -1230,7 +1227,6 @@ export async function addAccount(input: {
     .insert({
       ...copied,
       name,
-      account_kind: input.account_kind ?? copied.account_kind ?? "trading",
       currency,
       starting_balance: balance,
       timezone: input.timezone ?? copied.timezone ?? DEFAULT_TZ,

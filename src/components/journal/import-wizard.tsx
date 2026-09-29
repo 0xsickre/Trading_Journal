@@ -32,18 +32,6 @@ import {
   type TopstepXTrade,
 } from "@/lib/journal/topstepx-export";
 import {
-  TRADINGVIEW_SHEET,
-  groupTradingViewPositions,
-  isTradingViewTrades,
-  readTradingViewExport,
-  resolveTradingViewScale,
-  symbolFromTradingViewFilename,
-  tradingViewConvertedMoney,
-  tradingViewExcursion,
-  tradingViewPnlMismatch,
-  type TradingViewExport,
-} from "@/lib/journal/tradingview-export";
-import {
   commitImport,
   type ImportExec,
   type ImportItem,
@@ -111,29 +99,9 @@ function autoMap(headers: string[]): Record<Canonical, string> {
   return map;
 }
 
-/** Columns of the one-row-per-trade table a TradingView export is flattened into. */
-const TV_MAP: Record<Canonical, string> = {
-  instrument: "Symbol",
-  direction: "Side",
-  qty: "Qty",
-  entry_price: "Entry price",
-  entry_time: "Entry time",
-  exit_price: "Exit price",
-  exit_time: "Exit time",
-  fee: "Commission",
-  // Not mapped on purpose: the money is derived from prices × point value ×
-  // the account's rate, which the size check has just proven equal to
-  // TradingView's own result. An override would also skip the FX conversion.
-  profit: "",
-  // TradingView exports fills, not orders: there is no T/P column to map.
-  target: "",
-};
-const TV_ISSUE = "Issue";
-
 /**
- * The same, for a TopstepX trades export. Its times carry their own offset, so
- * no zone is asked for. The result is not mapped, exactly as for TradingView:
- * the reader has just proven TopstepX's gross P&L equal to the price move ×
+ * The columns of a TopstepX trades export. Its times carry their own offset, so
+ * no zone is asked for. The result is not mapped: the reader has just proven TopstepX's gross P&L equal to the price move ×
  * the catalog's multiplier, so the money derived from prices is the same money.
  */
 const TOPSTEPX_MAP: Record<Canonical, string> = {
@@ -148,28 +116,6 @@ const TOPSTEPX_MAP: Record<Canonical, string> = {
   profit: "",
   target: "",
 };
-/**
- * The row's own result, as a number the matcher can compare.
- *
- * Not the `profit` mapping: that one is a broker's GROSS figure and is written
- * onto the trade. This is only ever read, to recognise a hand-typed trade whose
- * size was stated differently — see `import-match.ts`.
- */
-const NET_RESULT = "Net result";
-
-/**
- * The fills of a row whose source already knows them one by one — a position
- * TradingView closed in several exits. The flat row cannot carry more than one
- * exit, so these travel beside it, in the same order.
- */
-type FillPlan = {
-  /** Commission of legs still open, charged on the entry. */
-  entryFee: number;
-  exits: { price: number; qty: number; time: string; fee: number }[];
-  /** MAE/MFE prices off TradingView's own excursions, when every leg closed. */
-  excursion: { mae: number; mfe: number } | null;
-};
-
 /**
  * A row under review. `_blocked` is set when a key cell could not be read:
  * "merge" means the row may be created by hand but never merged, "all" that it
@@ -197,7 +143,7 @@ function differs(a: number, b: number): boolean {
   return Math.abs(a - b) > 1e-9 * Math.max(1, Math.abs(a));
 }
 
-/** An instrument's point value, the one figure the TradingView size check needs. */
+/** An instrument's point value, the one figure the TopstepX P&L check needs. */
 export type ImportInstrument = { symbol: string; point_value: number | null };
 
 function normDirection(v: string | undefined): string | null {
@@ -227,20 +173,6 @@ export function ImportWizard({
   );
   const account = accounts.find((a) => a.id === accountId) ?? null;
   const tz = account?.timezone ?? DEFAULT_TZ;
-  /**
-   * The zone the TradingView chart was in, which is NOT the account's.
-   *
-   * The export writes the chart's wall clock with no offset. It used to be read
-   * in the account's zone, and a chart on New York time imported into a
-   * Belgrade account put every fill six hours early — checked against the
-   * market's own 1-minute candles, 1 of 7 fills landed in a bar that traded its
-   * price under that reading, and 7 of 7 under New York. New York is the
-   * default because it is where TradingView users on US instruments and on
-   * forex most often leave the chart; it is a select because it is a fact
-   * about the chart that only the trader knows.
-   */
-  const [fileTz, setFileTz] = useState("America/New_York");
-
   const [filename, setFilename] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<Record<string, string>[]>([]);
@@ -248,9 +180,6 @@ export function ImportWizard({
     {} as Record<Canonical, string>,
   );
   const [items, setItems] = useState<ReviewItem[]>([]);
-  // Set when the file is TradingView's list of trades; the column mapping is
-  // then skipped, because the layout is known and a trade spans two rows.
-  const [tv, setTv] = useState<{ symbol: string; data: TradingViewExport } | null>(null);
   // Set when the file is TopstepX's trades export: month-first dates the time
   // parser would refuse, and two cost columns, so the layout is read directly.
   const [topstepx, setTopstepx] = useState<TopstepXTrade[] | null>(null);
@@ -259,14 +188,9 @@ export function ImportWizard({
     const file = e.target.files?.[0];
     if (!file) return;
     setFilename(file.name);
-    setTv(null);
     setTopstepx(null);
     try {
       let parsed: Record<string, string>[] = [];
-      // TradingView's rows, read with their raw cell values: its dates are
-      // Excel serials, and formatted as text they come out as "9/20/23 14:00",
-      // which the time parser rightly refuses as ambiguous.
-      let tvRows: Record<string, unknown>[] | null = null;
       let topstepxRows: Record<string, unknown>[] | null = null;
       if (file.name.toLowerCase().endsWith(".csv")) {
         const text = await file.text();
@@ -276,48 +200,20 @@ export function ImportWizard({
           skipEmptyLines: true,
         });
         parsed = res.data;
-        if (parsed.length > 0 && isTradingViewTrades(Object.keys(parsed[0]))) tvRows = parsed;
-        else if (parsed.length > 0 && isTopstepXTrades(Object.keys(parsed[0]))) topstepxRows = parsed;
+        if (parsed.length > 0 && isTopstepXTrades(Object.keys(parsed[0]))) topstepxRows = parsed;
       } else {
         const buf = await file.arrayBuffer();
         const XLSX = await import("xlsx");
-        const wb = XLSX.read(buf, { type: "array" });
-        const tvSheet = wb.Sheets[TRADINGVIEW_SHEET];
-        if (tvSheet) {
-          const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(tvSheet, {
-            defval: "",
-            raw: true,
-          });
-          if (raw.length > 0 && isTradingViewTrades(Object.keys(raw[0]))) tvRows = raw;
-        }
-        if (!tvRows) {
-          // A statement's dates as real dates, written out unambiguously. Read as
-          // text they came out in whatever short form the cell was formatted with
-          // ("3/5/26 14:30"), which the time parser rightly refuses. Read a second
-          // time and only here: TradingView's own path needs the raw serials.
-          const dated = XLSX.read(buf, { type: "array", cellDates: true });
-          const ws = dated.Sheets[dated.SheetNames[0]];
-          parsed = XLSX.utils.sheet_to_json(ws, {
-            defval: "",
-            raw: false,
-            dateNF: "yyyy-mm-dd hh:mm:ss",
-          });
-        }
-      }
-      if (tvRows) {
-        const symbol = symbolFromTradingViewFilename(file.name);
-        const data = readTradingViewExport(tvRows);
-        setHeaders([]);
-        setRows([]);
-        if (!symbol || !data) {
-          toast.error(
-            "TradingView export, but the symbol could not be read from the file name. " +
-              "Keep the name TradingView gave it (…_EXCHANGE_SYMBOL_date_….xlsx).",
-          );
-          return;
-        }
-        setTv({ symbol, data });
-        return;
+        // A statement's dates as real dates, written out unambiguously. Read as
+        // text they came out in whatever short form the cell was formatted with
+        // ("3/5/26 14:30"), which the time parser rightly refuses.
+        const dated = XLSX.read(buf, { type: "array", cellDates: true });
+        const ws = dated.Sheets[dated.SheetNames[0]];
+        parsed = XLSX.utils.sheet_to_json(ws, {
+          defval: "",
+          raw: false,
+          dateNF: "yyyy-mm-dd hh:mm:ss",
+        });
       }
       if (topstepxRows) {
         setHeaders([]);
@@ -348,110 +244,6 @@ export function ImportWizard({
   }
 
   /**
-   * TradingView trades as the flat table the row builder reads, or `null`
-   * after saying why the file as a whole cannot be imported.
-   */
-  function tradingViewRows(): { rows: Record<string, string>[]; plans: FillPlan[] } | null {
-    if (!tv) return null;
-    const currency = tv.data.currency;
-    // Before the account and before the scale: a converted export fails the
-    // scale check for a reason that has nothing to do with the contract size.
-    const converted = tradingViewConvertedMoney(tv.data);
-    if (converted) {
-      toast.error(converted);
-      return null;
-    }
-    if (account && account.currency !== currency) {
-      toast.error(
-        `TradingView's money is in ${currency}, the account "${account.name}" is in ${account.currency}. ` +
-          `Pick a ${currency} account.`,
-      );
-      return null;
-    }
-    const instrument = normalizeInstrumentSymbol(tv.symbol);
-    const pointValue = instruments.find((i) => i.symbol === instrument)?.point_value ?? null;
-    if (pointValue == null) {
-      toast.error(
-        `${instrument ?? tv.symbol} is not in the instrument catalog. Add it in Settings → Instruments ` +
-          "with its contract size, then import again — the size cannot be converted without it.",
-      );
-      return null;
-    }
-    const scale = resolveTradingViewScale(tv.data.trades, pointValue);
-    if (!scale.ok) {
-      toast.error(`The size cannot be matched to ${instrument}: ${scale.error}.`);
-      return null;
-    }
-    // Each TradingView trade is held to the scale first, then the ones split
-    // off one entry are joined back into one position.
-    const checked = tv.data.trades.map((t) => ({
-      ...t,
-      problem: t.problem ?? tradingViewPnlMismatch(t, scale, pointValue),
-    }));
-    const byNumber = new Map(checked.map((t) => [t.number, t]));
-    const lots = (size: number) => Number((size / scale.divisor).toFixed(8));
-    const list = (f: (t: (typeof checked)[number]) => number | null, numbers: string[]) =>
-      numbers.map((n) => f(byNumber.get(n)!)).map((v) => (v == null ? "" : String(v))).join(", ");
-
-    const rows: Record<string, string>[] = [];
-    const plans: FillPlan[] = [];
-    for (const pos of groupTradingViewPositions(checked)) {
-      const exits = pos.exits.map((e) => ({
-        price: e.price,
-        qty: lots(e.size),
-        time: e.time,
-        fee: e.commission,
-      }));
-      const openQty = pos.numbers
-        .map((n) => byNumber.get(n)!)
-        .filter((t) => t.exitPrice == null)
-        .reduce((sum, t) => sum + lots(t.size), 0);
-      // The entry is summed from the same rounded legs the exits carry, in the
-      // same order `computeStatus` sums them, so a fully closed position reads
-      // closed and not "partial" by a rounding residue.
-      const qty = exits.reduce((sum, e) => sum + e.qty, 0) + openQty;
-      const exitQty = exits.reduce((sum, e) => sum + e.qty, 0);
-      const avgExit = exitQty > 0
-        ? exits.reduce((sum, e) => sum + e.price * e.qty, 0) / exitQty
-        : null;
-      const fees = exits.reduce((sum, e) => sum + e.fee, 0) + pos.openCommission;
-      // TradingView's money per 1.00 of price per 1 of its size.
-      const excursion = tradingViewExcursion(
-        pos.numbers.map((n) => byNumber.get(n)!),
-        scale.unit === "units" ? 1 : pointValue,
-      );
-      rows.push({
-        Symbol: tv.symbol,
-        Side: pos.direction,
-        Qty: String(qty),
-        "Entry price": String(pos.entryPrice),
-        "Entry time": pos.entryTime,
-        // Read by the row builder only for matching and the review's
-        // differences; the fills themselves come from the plan.
-        "Exit price": avgExit == null ? "" : String(avgExit),
-        "Exit time": exits.at(-1)?.time ?? "",
-        Commission: String(fees),
-        "TradingView trade": pos.numbers.join(", "),
-        "TradingView size": list((t) => t.size, pos.numbers),
-        "TradingView net P&L": list((t) => t.netPnl, pos.numbers),
-        [NET_RESULT]: pos.exits.length > 0
-          ? String(
-              pos.numbers
-                .map((n) => byNumber.get(n)!.netPnl)
-                .reduce((sum: number, v) => sum + (v ?? 0), 0),
-            )
-          : "",
-        "TradingView favorable excursion": list((t) => t.favorable, pos.numbers),
-        "TradingView adverse excursion": list((t) => t.adverse, pos.numbers),
-        "MAE / MFE": excursion ? `${excursion.mae} / ${excursion.mfe}` : "",
-        [TV_ISSUE]: pos.problem ?? "",
-      });
-      plans.push({ entryFee: pos.openCommission, exits, excursion });
-    }
-    return { rows, plans };
-  }
-
-  /**
    * How an existing trade is named on screen.
    *
    * A suggestion asks the reader to recognise their own trade, so it has to
@@ -473,11 +265,6 @@ export function ImportWizard({
   }
 
   function buildItems() {
-    if (tv) {
-      const flat = tradingViewRows();
-      if (flat) buildFrom(flat.rows, TV_MAP, TV_ISSUE, flat.plans, fileTz);
-      return;
-    }
     if (topstepx) {
       // TopstepX accounts are in dollars; into a journal account of another
       // currency the fees would be read as that one's.
@@ -485,7 +272,7 @@ export function ImportWizard({
         toast.error(`TopstepX trades are in USD, "${account.name}" is in ${account.currency}. Pick a USD account.`);
         return;
       }
-      buildFrom(topstepXImportRows(topstepx), TOPSTEPX_MAP, TOPSTEPX_COLUMNS.issue, null, fileTz);
+      buildFrom(topstepXImportRows(topstepx), TOPSTEPX_MAP, TOPSTEPX_COLUMNS.issue);
       return;
     }
     for (const req of ["instrument", "direction", "qty", "entry_price", "entry_time"] as Canonical[]) {
@@ -494,19 +281,18 @@ export function ImportWizard({
         return;
       }
     }
-    buildFrom(rows, map, null, null);
+    buildFrom(rows, map, null);
   }
 
   function buildFrom(
     rows: Record<string, string>[],
     map: Record<Canonical, string>,
     issueCol: string | null,
-    plans: FillPlan[] | null,
-    /** The zone the file's wall clock is in — the account's by default. */
-    timeZone: string = tz,
   ) {
+    /** The zone a file's wall clock is read in when it carries no offset: the account's. */
+    const timeZone = tz;
     const built: ReviewItem[] =
-      rows.map((row, index) => {
+      rows.map((row) => {
       const instrument =
         normalizeInstrumentSymbol(row[map.instrument] ?? "") ?? null;
       const direction = normDirection(row[map.direction]);
@@ -549,32 +335,10 @@ export function ImportWizard({
       if (qty <= 0 && !unreadable.includes("qty")) unreadable.push("qty");
 
       const execs: ImportExec[] = [];
-      const plan = plans?.[index] ?? null;
-      if (plan) {
-        // Fills known one by one: the entry, then each exit with its own time,
-        // size and commission.
-        if (entryPrice != null && entryTime && qty > 0) {
-          execs.push({
-            side: "entry",
-            price: entryPrice,
-            qty,
-            executed_at: entryTime,
-            fee: plan.entryFee,
-          });
-        }
-        for (const leg of plan.exits) {
-          const at = parseImportTime(leg.time, timeZone);
-          if (!at) {
-            unreadable.push("exit time");
-            continue;
-          }
-          execs.push({ side: "exit", price: leg.price, qty: leg.qty, executed_at: at, fee: leg.fee });
-        }
-      }
       const hasExit = exitPrice != null && (exitTime ?? entryTime) != null;
       // A fill of zero size is not built: the server refuses it, and one such
       // fill used to fail the whole row with an `executions.0.qty` error.
-      if (!plan && entryPrice != null && entryTime && qty > 0) {
+      if (entryPrice != null && entryTime && qty > 0) {
         execs.push({
           side: "entry",
           price: entryPrice,
@@ -599,7 +363,7 @@ export function ImportWizard({
       // real observation about this trade, just a less precise one. Inventing
       // "now" is not an observation about anything.
       const exitAt = exitTime ?? entryTime;
-      if (!plan && exitPrice != null && exitAt && qty > 0) {
+      if (exitPrice != null && exitAt && qty > 0) {
         execs.push({
           side: "exit",
           price: exitPrice,
@@ -628,10 +392,9 @@ export function ImportWizard({
           entryTime,
           entryQty: qty > 0 ? qty : null,
           exitPrice: avgExitPrice,
-          pnl: row[NET_RESULT] ? num(row[NET_RESULT]) : profit,
-          // Which money that is, so it is held to the same figure on the trade:
-          // TradingView's result is net, a broker's profit column gross.
-          pnlBasis: row[NET_RESULT] ? "net" : profit != null ? "gross" : undefined,
+          pnl: profit,
+          // A broker's profit column is gross, and is held to the gross figure.
+          pnlBasis: profit != null ? "gross" : undefined,
           accountId,
         },
         candidates,
@@ -739,9 +502,6 @@ export function ImportWizard({
         executions: execs,
         gross_pnl_override: profit,
         target_price: target != null && target > 0 ? target : null,
-        excursion: plan?.excursion
-          ? { mae_price: plan.excursion.mae, mfe_price: plan.excursion.mfe }
-          : null,
         raw: row,
         _blocked: blocked,
         // After the duplicate check above, so an unreadable cell never changes
@@ -914,7 +674,7 @@ export function ImportWizard({
                 setRows([]);
                 setItems([]);
                 setFilename("");
-                setTv(null);
+                setTopstepx(null);
               }}
             >
               Import another
@@ -963,57 +723,10 @@ export function ImportWizard({
               {filename && (
                 <span className="text-sm text-muted-foreground">
                   {filename} —{" "}
-                  {tv
-                    ? `${tv.data.trades.length} trades`
-                    : topstepx
-                      ? `${topstepx.length} trades`
-                      : `${rows.length} rows`}
+                  {topstepx ? `${topstepx.length} trades` : `${rows.length} rows`}
                 </span>
               )}
             </div>
-
-            {tv && (
-              <>
-                <div className="space-y-1 text-sm text-muted-foreground">
-                  <p>
-                    TradingView export — <b>{tv.symbol}</b>, {tv.data.trades.length} trades,
-                    money in {tv.data.currency}. Entry and exit rows are joined into one
-                    trade, and the size is converted to lots and checked against each
-                    trade&apos;s own P&amp;L.
-                  </p>
-                </div>
-                <div className="max-w-xs space-y-1">
-                  <label className="text-xs text-muted-foreground">
-                    Timezone of the TradingView chart
-                  </label>
-                  <Select value={fileTz} onValueChange={setFileTz}>
-                    <SelectTrigger aria-label="Timezone of the TradingView chart">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from(
-                        new Set(["America/New_York", "UTC", "Europe/London", tz]),
-                      ).map((zone) => (
-                        <SelectItem key={zone} value={zone}>
-                          {zone.replace("_", " ")}
-                          {zone === tz ? " (account)" : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    The export has no timezone in it — pick the one set at the
-                    bottom-right of the chart. Times are shown back in the
-                    account&apos;s zone.
-                  </p>
-                </div>
-                <div className="flex justify-end">
-                  <Button onClick={buildItems}>
-                    Reconcile <ArrowRight className="size-4" />
-                  </Button>
-                </div>
-              </>
-            )}
 
             {topstepx && (
               <>

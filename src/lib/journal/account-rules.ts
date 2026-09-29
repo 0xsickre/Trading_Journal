@@ -45,7 +45,6 @@ export function primaryAccount<T extends Pick<Account, "is_active" | "archived_a
 export function duplicateSettings(src: Account) {
   return {
     name: `${src.name} (copy)`,
-    account_kind: src.account_kind,
     currency: src.currency,
     starting_balance: src.starting_balance,
     timezone: src.timezone,

@@ -90,15 +90,6 @@ function allTimezones(): string[] {
 
 const CURRENCIES = ["USD", "EUR", "GBP", "CHF", "JPY", "AUD", "CAD"];
 
-const KIND_LABEL: Record<Account["account_kind"], string> = {
-  trading: "Live",
-  backtest: "Backtest",
-};
-const KIND_HELP: Record<Account["account_kind"], string> = {
-  trading: "Real money. MAE/MFE on a future comes from the exchange's candles (R2), filled each evening.",
-  backtest: "Replayed trades. MAE/MFE comes from the TradingView import.",
-};
-
 // --- Delete permanently -------------------------------------------------------
 
 /**
@@ -238,7 +229,6 @@ function CreateAccountDialog({
   const [pending, start] = useTransition();
   const seed = source ? duplicateSettings(source) : null;
   const [name, setName] = useState(seed?.name ?? "");
-  const [kind, setKind] = useState<Account["account_kind"]>(seed?.account_kind ?? "trading");
   const [currency, setCurrency] = useState(seed?.currency ?? "USD");
   const [balance, setBalance] = useState(seed ? String(seed.starting_balance) : "");
   const [tz, setTz] = useState(seed?.timezone ?? "America/New_York");
@@ -252,7 +242,6 @@ function CreateAccountDialog({
     start(async () => {
       const res = await addAccount({
         name,
-        account_kind: kind,
         currency,
         starting_balance: balanceCheck.value ?? 0,
         timezone: tz,
@@ -282,7 +271,6 @@ function CreateAccountDialog({
             <Label htmlFor="new-name">Name</Label>
             <Input id="new-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </div>
-          <KindField value={kind} onChange={setKind} id="new-kind" />
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="new-currency">Currency</Label>
@@ -324,32 +312,6 @@ function CreateAccountDialog({
 }
 
 // --- Shared fields ------------------------------------------------------------
-
-function KindField({
-  id,
-  value,
-  onChange,
-}: {
-  id: string;
-  value: Account["account_kind"];
-  onChange: (v: Account["account_kind"]) => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>Type</Label>
-      <Select value={value} onValueChange={(v) => onChange(v as Account["account_kind"])}>
-        <SelectTrigger id={id}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="trading">Live</SelectItem>
-          <SelectItem value="backtest">Backtest</SelectItem>
-        </SelectContent>
-      </Select>
-      <p className="text-xs text-muted-foreground">{KIND_HELP[value]}</p>
-    </div>
-  );
-}
 
 /** A searchable timezone input that shows the current value even when it is not in the short list. */
 function TimezoneField({
@@ -460,7 +422,6 @@ function EditAccountDialog({
   const hasTrades = trades == null || trades > 0;
 
   const [name, setName] = useState(account.name);
-  const [kind, setKind] = useState<Account["account_kind"]>(account.account_kind ?? "trading");
   const [tz, setTz] = useState(account.timezone);
   const [currency, setCurrency] = useState(account.currency);
   const [balance, setBalance] = useState(String(account.starting_balance));
@@ -518,7 +479,6 @@ function EditAccountDialog({
     start(async () => {
       const res = await updateAccount(account.id, {
         name: name.trim(),
-        account_kind: kind,
         timezone: tz,
         currency,
         starting_balance: val("balance"),
@@ -566,7 +526,6 @@ function EditAccountDialog({
             <Label htmlFor={`name-${account.id}`}>Name</Label>
             <Input id={`name-${account.id}`} value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-          <KindField id={`kind-${account.id}`} value={kind} onChange={setKind} />
 
           <div className="space-y-1.5">
             <Label htmlFor={`cur-${account.id}`}>Currency</Label>
@@ -814,9 +773,6 @@ function AccountRow({
           {account.is_active && !archived && <Badge variant="secondary">Default</Badge>}
         </div>
       </td>
-      <td className="px-3 py-2">
-        <Badge variant="outline">{KIND_LABEL[account.account_kind ?? "trading"]}</Badge>
-      </td>
       <td className="px-3 py-2 text-muted-foreground">{account.currency}</td>
       <td className="px-3 py-2 text-right tabular-nums">
         {fmtMoney(account.starting_balance, account.currency)}
@@ -885,7 +841,6 @@ function AccountTable({
         <thead>
           <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
             <th className="px-3 py-2 font-medium">Account</th>
-            <th className="px-3 py-2 font-medium">Type</th>
             <th className="px-3 py-2 font-medium">Currency</th>
             <th className="px-3 py-2 text-right font-medium">Starting balance</th>
             <th className="px-3 py-2 font-medium">Rules</th>
@@ -987,8 +942,7 @@ export function AccountSettings({
           {showArchived && (
             <>
               <p className="text-xs text-muted-foreground">
-                Hidden from every account picker. Their trades still count under All and under
-                Live / Backtest.
+                Hidden from every account picker. Their trades still count under All accounts.
               </p>
               {table(archived)}
             </>

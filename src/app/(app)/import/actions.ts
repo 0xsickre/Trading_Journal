@@ -71,12 +71,6 @@ export type ImportItem = {
    * plan; one that is missing is simply not recorded yet.
    */
   target_price: number | null;
-  /**
-   * MAE/MFE prices off TradingView's own excursions (`tradingViewExcursion`).
-   * Written onto a new trade, and onto an existing one only where no prices
-   * stand or an earlier TradingView import wrote them: typed always wins.
-   */
-  excursion?: { mae_price: number; mfe_price: number } | null;
   raw: Record<string, string>;
 };
 
@@ -239,7 +233,6 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
         prev_executions: (extra.prev_executions as Json | undefined) ?? null,
         prev_gross_pnl_override: (extra.prev_gross_pnl_override as number | null | undefined) ?? null,
         target_written: extra.target_written === true,
-        excursion_written: extra.excursion_written === true,
       })
       .select("id")
       .single();
@@ -270,13 +263,6 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
             status: statusOf(item.executions),
             gross_pnl_override: item.gross_pnl_override,
             ...(item.target_price != null ? { target_price: item.target_price } : {}),
-            ...(item.excursion
-              ? {
-                  max_drawdown_price: item.excursion.mae_price,
-                  max_profit_price: item.excursion.mfe_price,
-                  excursion_source: "tradingview",
-                }
-              : {}),
             ...instrumentSnapshot(instrument, specs, accountCurrency),
             // A trade that arrives already filled had no plan in this journal,
             // and that is what gets sealed: an empty seal, or the target the
@@ -372,18 +358,12 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
 
     // Only onto an empty target, and recorded so undo can empty it again.
     const targetWritten = item.target_price != null && before.target_price == null;
-    // MAE/MFE the same way, except that one an earlier TradingView import
-    // wrote is rewritten: the fills it followed are being replaced.
-    const prevEmpty = before.max_drawdown_price == null && before.max_profit_price == null;
-    const writeExcursion =
-      item.excursion != null && (prevEmpty || before.excursion_source === "tradingview");
 
     const { data: auditRow, error: auditErr } = await audit(item, {
       matched_position_id: pid,
       prev_executions: snapshot,
       prev_gross_pnl_override: before.gross_pnl_override,
       target_written: targetWritten,
-      excursion_written: writeExcursion && prevEmpty,
       prev: { status: before.status, needs_review: before.needs_review },
     });
     if (auditErr || !auditRow) throw new Error(auditErr?.message ?? "Could not record the merge.");
@@ -403,13 +383,6 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
           // mapped leaves the existing value alone rather than clearing it.
           ...(item.gross_pnl_override != null ? { gross_pnl_override: item.gross_pnl_override } : {}),
           ...(targetWritten ? { target_price: item.target_price } : {}),
-          ...(writeExcursion && item.excursion
-            ? {
-                max_drawdown_price: item.excursion.mae_price,
-                max_profit_price: item.excursion.mfe_price,
-                excursion_source: "tradingview",
-              }
-            : {}),
           // The same moment seals the plan: a plan the statement turns into a
           // position is sealed as the trader wrote it, including a target this
           // very merge is writing — sealing the old null would make the next

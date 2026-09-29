@@ -1,57 +1,24 @@
 import { describe, expect, it } from "vitest";
-import {
-  accountLabels,
-  accountsInScope,
-  accountsOfKind,
-  asReportKind,
-  defaultKind,
-  kindOf,
-} from "./scope";
+import { accountLabels, accountsInScope } from "./scope";
 
-const acc = (id: string, name: string, account_kind: "trading" | "backtest") => ({
-  id,
-  name,
-  account_kind,
-});
-const LIVE = acc("live-1", "Topstep 50K", "trading");
-const LIVE2 = acc("live-2", "Topstep 50K", "trading");
-const BT = acc("bt-1", "Gold backtest", "backtest");
+const acc = (id: string, name: string) => ({ id, name });
+const A = acc("acc-1", "Topstep 50K");
+const B = acc("acc-2", "Topstep 50K");
+const C = acc("acc-3", "Topstep 100K");
 
-describe("report scope by account kind", () => {
-  it("anything not marked backtest is live", () => {
-    expect(kindOf(LIVE)).toBe("live");
-    expect(kindOf(BT)).toBe("backtest");
-  });
-
-  it("reads a kind from the URL or storage, and nothing else", () => {
-    expect(asReportKind("backtest")).toBe("backtest");
-    expect(asReportKind("Backtest")).toBeNull();
-    expect(asReportKind(null)).toBeNull();
-  });
-
-  it("opens on Live when a live trade exists, else Backtest, else All", () => {
-    expect(defaultKind([LIVE, BT], ["bt-1", "live-1"])).toBe("live");
-    expect(defaultKind([LIVE, BT], ["bt-1"])).toBe("backtest");
-    // A live account with no trade does not pull the report onto an empty page.
-    expect(defaultKind([LIVE, BT], ["bt-1", null])).toBe("backtest");
-    expect(defaultKind([LIVE, BT], [])).toBe("all");
-  });
-
-  it("scopes to the chosen account only when it is of the kind", () => {
-    expect(accountsOfKind([LIVE, BT], "backtest")).toEqual([BT]);
-    expect(accountsOfKind([LIVE, BT], "all")).toEqual([LIVE, BT]);
-    expect(accountsInScope([LIVE, LIVE2, BT], "live", "live-2")).toEqual([LIVE2]);
-    // A backtest id under Live is a stale link: the whole kind, not nothing.
-    expect(accountsInScope([LIVE, LIVE2, BT], "live", "bt-1")).toEqual([LIVE, LIVE2]);
-    expect(accountsInScope([LIVE, BT], "backtest", null)).toEqual([BT]);
+describe("report scope", () => {
+  it("covers the chosen account, else the whole book", () => {
+    expect(accountsInScope([A, B, C], "acc-2")).toEqual([B]);
+    expect(accountsInScope([A, B, C], null)).toEqual([A, B, C]);
+    // A stale link: the whole book, not nothing.
+    expect(accountsInScope([A, B, C], "gone")).toEqual([A, B, C]);
   });
 
   it("tells same-named accounts apart, and leaves unique names alone", () => {
-    const labels = accountLabels([LIVE, LIVE2, BT, acc("bt-2", "Topstep 50K", "backtest")]);
-    expect(labels.get("bt-1")).toBe("Gold backtest");
-    expect(labels.get("bt-2")).toBe("Topstep 50K · backtest");
-    expect(labels.get("live-1")).toBe("Topstep 50K · live · ve-1");
-    expect(labels.get("live-2")).toBe("Topstep 50K · live · ve-2");
-    expect(new Set(labels.values()).size).toBe(4);
+    const labels = accountLabels([A, B, C]);
+    expect(labels.get("acc-3")).toBe("Topstep 100K");
+    expect(labels.get("acc-1")).toBe("Topstep 50K · cc-1");
+    expect(labels.get("acc-2")).toBe("Topstep 50K · cc-2");
+    expect(new Set(labels.values()).size).toBe(3);
   });
 });
