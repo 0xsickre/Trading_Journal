@@ -184,9 +184,8 @@ const BASE_TABS: FormTab[] = [
             placeholder: "The level, the close, the event that ends this…",
           },
           {
-            // Minutes, or the close (F4, G3-A). `time_stop_days` was the swing
-            // version — a position held for days — and is no longer offered;
-            // old trades keep it until H2 removes the column.
+            // Minutes, or the close (F4, G3-A). It replaced `time_stop_days`,
+            // the swing version for a position held for days (dropped in H2).
             name: "time_stop",
             label: "Time stop",
             type: "timestop",

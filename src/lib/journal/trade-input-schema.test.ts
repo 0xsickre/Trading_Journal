@@ -104,13 +104,6 @@ describe("prices on a position", () => {
     expect(invalidTradeNumber({ time_stop: "3" })).toBeTruthy();
   });
 
-  it("time_stop_days has to be an integer greater than zero", () => {
-    expect(invalidTradeNumber({ time_stop_days: 0 })).toBeTruthy();
-    expect(invalidTradeNumber({ time_stop_days: -3 })).toBeTruthy();
-    expect(invalidTradeNumber({ time_stop_days: 2.5 })).toBeTruthy();
-    expect(invalidTradeNumber({ time_stop_days: 3 })).toBeNull();
-  });
-
   it("execution_rating has to be an integer greater than zero", () => {
     // Zero and half a star are not ratings. The upper bound (5) is held by the
     // DB CHECK and is unreachable from a UI with exactly five buttons, so it is

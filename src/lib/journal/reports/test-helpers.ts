@@ -35,7 +35,6 @@ export type TradeSpec = {
   mae?: number | null;
   mfe?: number | null;
   /** The exit deadline written at entry, in sessions. */
-  timeStopDays?: number | null;
   /** The reason for the trade, in writing. */
   thesis?: string | null;
   /** The playbook the trade was taken from — what a setup score is graded against. */
@@ -181,7 +180,6 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     mistake: spec.mistake ?? [],
     execution_rating: spec.executionRating ?? null,
     planned_rr: spec.plannedRr ?? null,
-    time_stop_days: spec.timeStopDays ?? null,
     thesis: spec.thesis ?? null,
     // A graded fixture names the graded playbook, unless it named its own.
     playbook_id: spec.playbookId ?? (spec.setupGrade ? GRADED_PLAYBOOK_ID : null),

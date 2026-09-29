@@ -59,7 +59,7 @@ export const MERGE_COALESCE_COLUMNS = [
   "exit_reason",
   "thesis",
   "invalidation",
-  "time_stop_days",
+  "time_stop",
   "scale_out_plan",
   "trade_journal_notes",
   "playbook_id",

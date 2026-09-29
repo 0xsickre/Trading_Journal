@@ -27,7 +27,6 @@ const plan = (over: PlanSnapshot = {}): PlanSnapshot => ({
   stop_price: 90,
   target_price: 130,
   risk_pct: "1%",
-  time_stop_days: 5,
   time_stop: "15",
   thesis: "Sweep of Friday's low, then reclaim",
   invalidation: "Close back below the low",
@@ -181,8 +180,8 @@ describe("sealedPlan — the one place that chooses seal or live row", () => {
 
   it("reads a field the seal does not carry from the live row", () => {
     // A seal taken before a plan field existed: the old snapshot has no key.
-    const r = row({ time_stop_days: 7, plan_snapshot: { entry_price: 100 } });
-    expect(sealedNumber(r, "time_stop_days")).toBe(7);
+    const r = row({ target_price: 140, plan_snapshot: { entry_price: 100 } });
+    expect(sealedNumber(r, "target_price")).toBe(140);
     expect(sealedText(r, "invalidation")).toBe("Close back below the low");
   });
 });

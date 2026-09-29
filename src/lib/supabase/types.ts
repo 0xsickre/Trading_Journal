@@ -1067,7 +1067,6 @@ export type Database = {
           technical_tags: string[]
           thesis: string | null
           tick_size_at_trade: number | null
-          time_stop_days: number | null
           time_stop: string | null
           trade_journal_notes: string | null
           trade_no: number | null
@@ -1120,7 +1119,6 @@ export type Database = {
           technical_tags?: string[]
           thesis?: string | null
           tick_size_at_trade?: number | null
-          time_stop_days?: number | null
           time_stop?: string | null
           trade_journal_notes?: string | null
           trade_no?: number | null
@@ -1173,7 +1171,6 @@ export type Database = {
           technical_tags?: string[]
           thesis?: string | null
           tick_size_at_trade?: number | null
-          time_stop_days?: number | null
           time_stop?: string | null
           trade_journal_notes?: string | null
           trade_no?: number | null

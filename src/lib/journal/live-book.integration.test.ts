@@ -177,7 +177,6 @@ const TRADES: TradeRow[] = RAW.map(
       source: "manual",
       needs_review: false,
       created_at: "2026-08-16T10:30:42.912437+00:00",
-      time_stop_days: r.trade_no === 6 ? 3 : null,
       stats: r.stats ? narrowPositionStat(r.stats as StatsRow) : null,
     }) as unknown as TradeRow,
 );

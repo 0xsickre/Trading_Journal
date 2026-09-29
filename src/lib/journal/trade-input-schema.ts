@@ -56,7 +56,6 @@ export type TimeStopChoice = (typeof TIME_STOP_CHOICES)[number];
 
 /** Columns that must be a positive INTEGER. The database carries the same CHECK. */
 export const POSITIVE_TRADE_INTEGERS = [
-  "time_stop_days",
   // The lower bound and integerness are caught by this loop; the UPPER bound (5)
   // is held by the DB CHECK and is unreachable from a UI with exactly five
   // buttons. It lives here rather than as its own
@@ -73,7 +72,6 @@ const LABELS: Record<string, string> = {
   max_drawdown_price: "MAE price",
   max_profit_price: "MFE price",
   position_size: "Position size",
-  time_stop_days: "Time stop (days)",
   execution_rating: "Execution rating",
 };
 

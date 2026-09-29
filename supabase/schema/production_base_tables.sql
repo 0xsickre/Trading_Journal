@@ -158,7 +158,6 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   execution_rating     smallint,
   thesis               text,
   invalidation         text,
-  time_stop_days       smallint,
   -- Time stop dnevnog trejda: 5 / 15 / 30 / 60 minuta ili kraj sesije (20260929130000).
   time_stop            text,
   scale_out_plan       text,
@@ -217,8 +216,6 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
     CHECK (execution_rating IS NULL OR (execution_rating >= 1 AND execution_rating <= 5)),
   CONSTRAINT tj_positions_scale_out_levels_check
     CHECK (jsonb_typeof(scale_out_levels) = 'array'),
-  CONSTRAINT tj_positions_time_stop_days_positive
-    CHECK (time_stop_days IS NULL OR time_stop_days > 0),
   CONSTRAINT tj_positions_equity_at_entry_positive
     CHECK (equity_at_entry IS NULL OR equity_at_entry > 0),
   CONSTRAINT tj_positions_risk_budget_at_entry_nonnegative

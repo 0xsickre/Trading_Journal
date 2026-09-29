@@ -60,7 +60,6 @@ export const RESERVED_KEYS = new Set([
   "gross_pnl_override",
   "thesis",
   "invalidation",
-  "time_stop_days",
   "time_stop",
   "scale_out_plan",
   "excursion_source",
