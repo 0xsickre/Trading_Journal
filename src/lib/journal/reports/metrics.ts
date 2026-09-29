@@ -641,13 +641,13 @@ export const METRICS: ReportMetric[] = [
 
   // --- Risk actually taken -------------------------------------------------
   //
-  // The four below all answer from `riskPctTaken`, which is null for any trade
+  // The three below all answer from `riskPctTaken`, which is null for any trade
   // whose risk cannot be known — no stop, no fills, an unpriced instrument, or
   // an entry day whose opening equity could not be established. Those trades
   // drop out of the average rather than entering it as zeros: a zero would
   // report a riskless trade, which is a claim, not a gap.
   //
-  // `higherIsBetter: false` on all four. Unlike P&L, none of these is a score —
+  // `higherIsBetter: false` on all three. Unlike P&L, none of these is a score —
   // more risk is not better, and a book that cannot hold its own size is not
   // improving when the number grows.
   {
@@ -681,17 +681,6 @@ export const METRICS: ReportMetric[] = [
       "by trade.",
     higherIsBetter: false,
     compute: (g) => riskDispersion(g.map((t) => t.riskPctTaken)),
-  },
-  {
-    key: "risk_intent_gap",
-    label: "Risk vs intent",
-    unit: "pct",
-    hint:
-      "Average distance between the risk taken and the risk chosen, in points " +
-      "of equity. Unsigned: oversizing and undersizing are both misses and must " +
-      "not cancel.",
-    higherIsBetter: false,
-    compute: (g) => mean(g.map((t) => t.riskIntentGap)),
   },
 ];
 

@@ -12,7 +12,7 @@ import type { RealizedTrade } from "./analytics";
 import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
 import { numberFieldValue as numField } from "./field-values";
 import { excursionFromTrade, type Excursion } from "./excursion";
-import { riskIntentGap, riskMoneyAtEntry, riskPctTaken } from "./risk-taken";
+import { riskMoneyAtEntry, riskPctTaken } from "./risk-taken";
 import { dayKeyIn, weekKeyIn, zonedHour, zoneTz, type DayZone } from "./time";
 
 /**
@@ -71,13 +71,9 @@ export type EnrichedTrade = {
    * That risk as a percentage of the equity the entry day opened with.
    *
    * The answer to "how much of the account did this decision actually put at
-   * stake", which the journal could not ask until `equity_at_entry` existed:
-   * `risk_pct` on the row is the risk the trader CHOSE, and nothing compared
-   * the two.
+   * stake", which the journal could not ask until `equity_at_entry` existed.
    */
   riskPctTaken: number | null;
-  /** Unsigned distance between the risk taken and the risk chosen, in points of equity. */
-  riskIntentGap: number | null;
   instrument: string | null;
   accountId: string | null;
 };
@@ -135,7 +131,6 @@ export function enrichTrades(
       size: numField(t.row, "position_size"),
       riskMoney: riskMoneyAtEntry(t.row),
       riskPctTaken: riskPctTaken(t.row),
-      riskIntentGap: riskIntentGap(t.row),
       instrument,
       accountId: t.row.account_id ?? null,
     };

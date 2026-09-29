@@ -1,19 +1,17 @@
 import { getCategoryOrder, getOptionsMap } from "@/lib/journal/options";
 import { getInstruments } from "@/lib/journal/instruments";
 import { getAccounts } from "@/lib/journal/accounts";
-import { getAccountEquities } from "@/lib/journal/equity";
 import { getFailedTopstepAccountIds, getTopstepSizing } from "@/lib/journal/topstep-status";
 import { getFieldDefs } from "@/lib/journal/field-defs";
 import { getPlaybooks } from "@/lib/journal/playbooks";
 import { TradeForm } from "@/components/journal/trade-form";
 
 export default async function NewTradePage() {
-  const [optionsMap, instruments, accounts, accountEquity, fieldDefs, playbooks, categoryOrder, topstepSizing, failedTopstep] =
+  const [optionsMap, instruments, accounts, fieldDefs, playbooks, categoryOrder, topstepSizing, failedTopstep] =
     await Promise.all([
       getOptionsMap(true),
       getInstruments(true),
       getAccounts(),
-      getAccountEquities(),
       // Active only: a deactivated field must not be offered for NEW input.
       getFieldDefs(true),
       // Active only: a retired playbook must not be offered for a NEW trade.
@@ -34,7 +32,6 @@ export default async function NewTradePage() {
       fieldDefs={fieldDefs}
       playbooks={playbooks}
       topstepFailedAccountIds={[...failedTopstep]}
-      accountEquity={accountEquity}
       topstepSizing={topstepSizing}
       categoryOrder={categoryOrder}
     />

@@ -34,13 +34,6 @@ export function inferDirectionFromPrices(
   return null;
 }
 
-/** Parse risk % from option value (e.g. "1%" → 1). */
-export function parseRiskPct(value: string | number | null | undefined): number | null {
-  if (value == null || value === "") return null;
-  const n = Number(String(value).replace("%", "").trim());
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
 /**
  * Reward multiple (R) from planned prices.
  * Long: (target - entry) / (entry - stop)
@@ -87,65 +80,6 @@ export function computePlannedRewardR(params: {
   return reward > 0 ? reward / risk : null;
 }
 
-/**
- * Lots/units: (balance × risk%) / (stop distance × point value).
- *
- * `pointValue` is nullable and a null REFUSES to size, rather than standing in
- * a 1. A missing contract spec used to arrive here as a literal 1 — the same
- * fallback `tj_position_stats` deliberately dropped — and because 1 passes the
- * `> 0` guard the function returned a confident number instead of nothing. On
- * an ES trade that is a suggestion 50× too large, and the trade form writes the
- * suggestion into `position_size`. A sizing calculator has to be the last place
- * in the system that guesses.
- */
-export function computePositionSize(params: {
-  balance: number;
-  riskPct: number | null;
-  entry: number | null;
-  stop: number | null;
-  pointValue: number | null;
-}): number | null {
-  const { balance, riskPct, entry, stop, pointValue } = params;
-  if (
-    riskPct == null ||
-    entry == null ||
-    stop == null ||
-    balance <= 0 ||
-    pointValue == null ||
-    pointValue <= 0
-  ) {
-    return null;
-  }
-  const stopDist = Math.abs(entry - stop);
-  if (stopDist <= 0) return null;
-  const riskAmount = computeRiskAmount({ balance, riskPct });
-  if (riskAmount == null) return null;
-  return riskAmount / (stopDist * pointValue);
-}
-
-/**
- * What "1 %" is actually worth, in account currency.
- *
- * Extracted from `computePositionSize`, which computed it inline and threw it
- * away — the sizing formula's first step is the number the trader most needs to
- * see. A percentage is an abstraction you can agree to without flinching; the
- * same risk written as money is the one that makes you check the stop again.
- *
- * Reads CURRENT equity, not the starting balance, for the same reason position
- * size does: risk is a share of what the account is worth now.
- *
- * Null rather than 0 on bad input, matching every other calculator here — a
- * refusal to answer must not render as a confident zero.
- */
-export function computeRiskAmount(params: {
-  balance: number;
-  riskPct: number | null;
-}): number | null {
-  const { balance, riskPct } = params;
-  if (riskPct == null || !Number.isFinite(balance) || balance <= 0) return null;
-  return (balance * riskPct) / 100;
-}
-
 /** Store/display reward multiple as plain decimal string (e.g. "2.45"). */
 export function formatPlannedRewardR(r: number): string {
   return r.toFixed(2);
@@ -166,25 +100,21 @@ export function parsePlannedRewardR(
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-/** Progressive Risk Plan UI: which price/risk fields to show. */
+/**
+ * Progressive Risk Plan UI: which price/risk fields to show.
+ *
+ * The size is the Topstep risk rule's (`computeTopstepRisk`), so it waits for
+ * nothing but the entry and the stop — there is no "Risk %" to choose (H2).
+ */
 export function riskPlanFieldVisible(
   fieldName: string,
   entry: number | null,
   stop: number | null,
   target: number | null,
-  riskPct: number | null,
-  /**
-   * A Topstep future (F3, E7): the size comes from the account's risk rule
-   * (`computeTopstepRisk`), so a "Risk %" of the balance is never asked, and the
-   * size does not wait for one.
-   */
-  options: { sizedByRule?: boolean } = {},
 ): boolean {
   const hasEntry = entry != null;
   const hasStop = stop != null;
   const hasTarget = target != null;
-  const hasRisk = riskPct != null || options.sizedByRule === true;
-  if (options.sizedByRule && fieldName === "risk_pct") return false;
 
   switch (fieldName) {
     case "entry_price":
@@ -192,12 +122,9 @@ export function riskPlanFieldVisible(
     case "stop_price":
       return hasEntry;
     case "direction":
-      return hasEntry && hasStop;
     case "target_price":
-    case "risk_pct":
-      return hasEntry && hasStop;
     case "position_size":
-      return hasEntry && hasStop && hasRisk;
+      return hasEntry && hasStop;
     case "planned_rr":
     // How much comes off on the way is part of the same decision as where you
     // are going — it appears with the target, not before there is one.
@@ -209,29 +136,9 @@ export function riskPlanFieldVisible(
 }
 
 /**
- * The risk-% option that stands for a playbook's default.
- *
- * The field is a SELECT over the user's own `risk_pct` list, so a default of 1
- * has to be matched to whatever that list calls it — "1%", "1 %", "1.0%". Values
- * are compared as numbers through `parseRiskPct`, never as strings.
- *
- * Null when nothing matches, and the caller then offers nothing. Writing "1%"
- * into a select that has no such option would leave the control blank while the
- * form believed a risk was chosen — worse than leaving it empty, because the
- * blank looks answered.
- */
-export function matchRiskOption(
-  options: readonly { value: string }[],
-  pct: number | null | undefined,
-): string | null {
-  if (pct == null) return null;
-  return options.find((o) => parseRiskPct(o.value) === pct)?.value ?? null;
-}
-
-/**
  * Is the "Why this trade" group answerable yet?
  *
- * The same gate as `risk_pct` and `target_price`: entry and stop define the
+ * The same gate as `target_price`: entry and stop define the
  * trade, and until they exist there is nothing to write a thesis about.
  *
  * Its own function rather than three more cases in `riskPlanFieldVisible`,
@@ -359,7 +266,7 @@ export function computeTopstepRisk(params: {
  * less than the budget and that is the number to read before sending the order.
  *
  * Null when a price, the point value or the stop distance is missing: sizing
- * refuses rather than guesses, like `computePositionSize`.
+ * refuses rather than guesses.
  */
 export function computeFuturesContracts(params: {
   riskAmount: number | null;

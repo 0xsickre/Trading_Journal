@@ -27,7 +27,6 @@ const BOOK: Playbook = {
   icon: null,
   is_active: true,
   sort_order: 0,
-  default_risk_pct: null,
   a_plus_criteria: null,
   sections: [],
   rules: [],
@@ -49,32 +48,19 @@ describe("the playbook's details are editable", () => {
     render(<PlaybookIdentityHeader book={BOOK} />);
     await user.click(screen.getByRole("button", { name: /Edit details/ }));
     await user.type(screen.getByLabelText("Description"), "Sweep of London high");
-    await user.type(screen.getByLabelText("Default risk %"), "0,5");
     await user.type(screen.getByLabelText("A+ criteria"), "HTF bias + sweep + FVG");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await vi.waitFor(() =>
       expect(updateMock).toHaveBeenCalledWith("pb-1", {
         description: "Sweep of London high",
-        default_risk_pct: 0.5,
         a_plus_criteria: "HTF bias + sweep + FVG",
       }),
     );
   });
 
-  it("refuses a default risk outside 0–100 before any round trip", async () => {
-    const user = userEvent.setup({ delay: null });
-    render(<PlaybookIdentityHeader book={BOOK} />);
-    await user.click(screen.getByRole("button", { name: /Edit details/ }));
-    await user.type(screen.getByLabelText("Default risk %"), "150");
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-  });
-
-  it("shows the default risk and the A+ line once they are set", () => {
-    render(
-      <PlaybookIdentityHeader book={{ ...BOOK, default_risk_pct: 1, a_plus_criteria: "Clean sweep" }} />,
-    );
-    expect(screen.getByText("Risk 1%")).toBeInTheDocument();
+  it("shows the A+ line once it is set", () => {
+    render(<PlaybookIdentityHeader book={{ ...BOOK, a_plus_criteria: "Clean sweep" }} />);
     expect(screen.getByText("Clean sweep")).toBeInTheDocument();
   });
 });

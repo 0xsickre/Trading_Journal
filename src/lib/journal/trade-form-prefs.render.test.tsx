@@ -16,14 +16,14 @@ describe("getTradeFormPrefs / setTradeFormPrefs — real localStorage", () => {
   });
 
   it("round-trips what was set", () => {
-    setTradeFormPrefs({ accountId: "acc-1", riskPct: "1%" });
-    expect(getTradeFormPrefs()).toEqual({ accountId: "acc-1", riskPct: "1%" });
+    setTradeFormPrefs({ accountId: "acc-1", instrument: "MNQ" });
+    expect(getTradeFormPrefs()).toEqual({ accountId: "acc-1", instrument: "MNQ" });
   });
 
   it("merges rather than overwriting on a second write", () => {
     setTradeFormPrefs({ accountId: "acc-1" });
-    setTradeFormPrefs({ riskPct: "2%" });
-    expect(getTradeFormPrefs()).toEqual({ accountId: "acc-1", riskPct: "2%" });
+    setTradeFormPrefs({ instrument: "MES" });
+    expect(getTradeFormPrefs()).toEqual({ accountId: "acc-1", instrument: "MES" });
   });
 
   it("returns {} instead of throwing on malformed stored JSON", () => {

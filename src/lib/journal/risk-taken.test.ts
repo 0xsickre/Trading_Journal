@@ -1,12 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  RISK_INTENT_TOLERANCE,
   equityAtEntry,
-  matchedRiskIntent,
   riskDispersion,
-  riskIntentGap,
-  riskIntentPct,
   riskMoneyAtEntry,
   riskPctTaken,
 } from "./risk-taken";
@@ -32,7 +28,6 @@ function mkRow(
     created_at: "2026-03-02T09:00:00Z",
     entry_price: 100,
     stop_price: 90,
-    risk_pct: "1%",
     equity_at_entry: 10_000,
     ...overrides,
     stats:
@@ -119,53 +114,6 @@ describe("riskPctTaken", () => {
   });
 });
 
-describe("riskIntentPct", () => {
-  it("parses the dropdown's own spelling", () => {
-    expect(riskIntentPct(mkRow({ risk_pct: "1.5%" }))).toBe(1.5);
-  });
-
-  it("is null when nothing was chosen", () => {
-    expect(riskIntentPct(mkRow({ risk_pct: null }))).toBeNull();
-    expect(riskIntentPct(mkRow({ risk_pct: "" }))).toBeNull();
-  });
-});
-
-describe("riskIntentGap", () => {
-  it("is zero when the trade sized itself to its own plan", () => {
-    expect(riskIntentGap(mkRow())).toBe(0);
-  });
-
-  it("is unsigned, so oversizing and undersizing cannot cancel", () => {
-    // 2 % taken against 1 % intended, and 0.5 % against 1 %: both are misses,
-    // and averaging them with a sign would report a perfectly sized book.
-    const over = riskIntentGap(mkRow({}, { entry_qty: 2 }));
-    const under = riskIntentGap(mkRow({}, { entry_qty: 0.5 }));
-    expect(over).toBeCloseTo(1, 10);
-    expect(under).toBeCloseTo(0.5, 10);
-  });
-
-  it("is null when either side is unknown", () => {
-    expect(riskIntentGap(mkRow({ risk_pct: null }))).toBeNull();
-    expect(riskIntentGap(mkRow({ equity_at_entry: null }))).toBeNull();
-  });
-});
-
-describe("matchedRiskIntent", () => {
-  it("forgives lot granularity", () => {
-    // 1.005 lots' worth of risk against a 1 % intention.
-    expect(matchedRiskIntent(mkRow({}, { entry_qty: 1 + RISK_INTENT_TOLERANCE / 2 }))).toBe(true);
-  });
-
-  it("refuses a decision-sized miss", () => {
-    expect(matchedRiskIntent(mkRow({}, { entry_qty: 1.5 }))).toBe(false);
-  });
-
-  it("answers null rather than false when the risk is unknown", () => {
-    // Unknown is not a breach: the tracker reports it as not scored.
-    expect(matchedRiskIntent(mkRow({ stop_price: null }))).toBeNull();
-  });
-});
-
 describe("riskDispersion", () => {
   it("is the population sigma of the risks taken", () => {
     // mean 2, deviations ±1 → sigma 1.
@@ -199,24 +147,15 @@ describe("the sealed plan is what the risk is measured against", () => {
     expect(riskMoneyAtEntry(row)).toBe(100);
   });
 
-  it("reads the intent as it was chosen, not as it was re-chosen", () => {
-    const row = mkRow({ risk_pct: "3%", plan_snapshot: { risk_pct: "1%" } });
-    expect(riskIntentPct(row)).toBe(1);
-    // 100 of risk on 10,000 of equity is the 1 % that was intended.
-    expect(matchedRiskIntent(row)).toBe(true);
-  });
-
   it("falls back to the live columns for a trade written before the seal", () => {
     expect(riskMoneyAtEntry(mkRow({ plan_snapshot: null }))).toBe(100);
-    expect(riskIntentPct(mkRow({ plan_snapshot: null }))).toBe(1);
   });
 
   it("reads a field an import's seal never carried from the live row", () => {
-    // An imported trade seals only what the file knew. The risk it was sized
+    // An imported trade seals only what the file knew. The stop it was sized
     // at is still readable from the plan typed around it.
     const row = mkRow({ plan_snapshot: { target_price: 130 } });
     expect(riskMoneyAtEntry(row)).toBe(100);
-    expect(riskIntentPct(row)).toBe(1);
   });
 });
 

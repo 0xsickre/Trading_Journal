@@ -3,7 +3,7 @@
  *
  * THE HOLE THIS CLOSES. The day locks. The week locks. The trade plan never
  * did: `entry_price`, `stop_price`, `target_price`, `thesis`, `invalidation`,
- * the time stop and `risk_pct` stayed editable forever, with no history. And
+ * and the time stop stayed editable forever, with no history. And
  * every "plan versus reality" figure is built on them — entry slippage, target
  * attainment, delta R, the `thesis_written` rule. On a single-user system that
  * makes the whole comparison falsifiable by the only person it measures: move
@@ -48,7 +48,6 @@ export const PLAN_FIELDS = [
   "entry_price",
   "stop_price",
   "target_price",
-  "risk_pct",
   "time_stop",
   "thesis",
   "invalidation",

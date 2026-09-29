@@ -913,7 +913,6 @@ export type Database = {
           a_plus_criteria: string | null
           color: string | null
           created_at: string
-          default_risk_pct: number | null
           description: string | null
           icon: string | null
           id: string
@@ -927,7 +926,6 @@ export type Database = {
           a_plus_criteria?: string | null
           color?: string | null
           created_at?: string
-          default_risk_pct?: number | null
           description?: string | null
           icon?: string | null
           id?: string
@@ -941,7 +939,6 @@ export type Database = {
           a_plus_criteria?: string | null
           color?: string | null
           created_at?: string
-          default_risk_pct?: number | null
           description?: string | null
           icon?: string | null
           id?: string
@@ -1042,7 +1039,6 @@ export type Database = {
           psychology_tags: string[]
           quote_currency_at_trade: string | null
           risk_budget_at_entry: number | null
-          risk_pct: string | null
           scale_out_levels: Json
           scale_out_plan: string | null
           source: string
@@ -1094,7 +1090,6 @@ export type Database = {
           psychology_tags?: string[]
           quote_currency_at_trade?: string | null
           risk_budget_at_entry?: number | null
-          risk_pct?: string | null
           scale_out_levels?: Json
           scale_out_plan?: string | null
           source?: string
@@ -1146,7 +1141,6 @@ export type Database = {
           psychology_tags?: string[]
           quote_currency_at_trade?: string | null
           risk_budget_at_entry?: number | null
-          risk_pct?: string | null
           scale_out_levels?: Json
           scale_out_plan?: string | null
           source?: string

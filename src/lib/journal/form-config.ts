@@ -5,7 +5,7 @@
 //   STRUCTURE lives here, in code. Tabs, the progressive risk plan, the
 //   missed-setup review, the outcome block — those are BEHAVIOUR. `trade-form`
 //   branches on `risk_plan`, `plan_review` and `psychology_notes` by name, and
-//   the metrics panel reads `entry_price` / `stop_price` / `risk_pct` literally.
+//   the metrics panel reads `entry_price` / `stop_price` literally.
 //   Making those data would not make the form configurable, it would only move
 //   the hardcoding somewhere the type checker cannot see it.
 //
@@ -121,12 +121,11 @@ const BASE_TABS: FormTab[] = [
             type: "computed",
             placeholder: "Auto from entry vs stop",
           },
-          { name: "risk_pct", label: "Risk %", type: "select", listKey: "risk_pct" },
           {
             name: "position_size",
             label: "Position Size",
             type: "computed",
-            placeholder: "Auto from risk % and stop",
+            placeholder: "Auto from the Topstep risk rule and stop",
           },
           { name: "target_price", label: "Target Price", type: "number" },
           {

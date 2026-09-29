@@ -49,8 +49,6 @@ export type TradeSpec = {
   entryQty?: number | null;
   /** The account's opening balance on the entry day, frozen on the row. */
   equityAtEntry?: number | null;
-  /** The risk the trader chose, as the dropdown stores it ("1%"). */
-  riskPct?: string | null;
 };
 
 let seq = 0;
@@ -183,7 +181,6 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     // A graded fixture names the graded playbook, unless it named its own.
     playbook_id: spec.playbookId ?? (spec.setupGrade ? GRADED_PLAYBOOK_ID : null),
     equity_at_entry: spec.equityAtEntry ?? null,
-    risk_pct: spec.riskPct ?? null,
     stats,
   } as unknown as TradeRow;
 

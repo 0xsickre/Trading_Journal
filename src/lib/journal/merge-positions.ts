@@ -52,7 +52,6 @@ export const MERGE_COALESCE_COLUMNS = [
   "entry_price",
   "stop_price",
   "target_price",
-  "risk_pct",
   "planned_rr",
   "position_size",
   "execution_rating",

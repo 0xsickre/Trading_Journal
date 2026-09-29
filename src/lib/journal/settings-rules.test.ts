@@ -23,10 +23,6 @@ describe("listProtection — the seeded categories cannot be deleted (A2)", () =
     },
   );
 
-  it("risk_pct stays protected as a built-in field", () => {
-    expect(listProtection("risk_pct", [], BUILT_IN)).not.toBeNull();
-  });
-
   it("a list backing a column-backed definition is protected whatever its key", () => {
     expect(
       listProtection("renamed_list", [{ key: "mistake", list_key: "renamed_list" }], BUILT_IN),

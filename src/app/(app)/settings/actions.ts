@@ -761,8 +761,8 @@ export async function countListUsage(
   if (fieldError) return { ok: false, error: fieldError.message };
 
   // `listProtection`, not `isListBuiltIn(getAllFormFields([]))` alone: with no
-  // definitions merged in, that call knows only `risk_pct`, so the seeded
-  // categories read as the trader's own and the dialog offered to delete them.
+  // definitions merged in, that call knows none of the seeded categories, so
+  // they read as the trader's own and the dialog offered to delete them.
   const protectedReason = listProtection(list.key, fieldDefs ?? [], getAllFormFields([]));
   return {
     ok: true,

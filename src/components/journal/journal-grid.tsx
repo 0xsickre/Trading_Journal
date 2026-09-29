@@ -93,9 +93,7 @@ import { moneyProvenance } from "@/lib/journal/money-provenance";
 import { buildPlaybookLookup } from "@/lib/journal/reports/rule-lookup";
 import { setupScoreFromTrade } from "@/lib/journal/setup-score";
 import {
-  riskIntentPct,
   riskPctTaken,
-  RISK_INTENT_TOLERANCE,
 } from "@/lib/journal/risk-taken";
 import type { Playbook, PositionRule } from "@/lib/journal/playbook-types";
 import { cn } from "@/lib/utils";
@@ -786,8 +784,7 @@ export function JournalGrid({
       // print two decimals, so an FX entry and exit could read identical.
       /**
        * What the trade actually put at stake, as a share of the equity its
-       * entry day opened with — not the `risk_pct` chosen from the dropdown.
-       * The dropdown is the intention; this is the size that was filled.
+       * entry day opened with — the size that was filled.
        */
       {
         id: "risk_pct",
@@ -799,20 +796,7 @@ export function JournalGrid({
           // or an unknown entry-day equity has no measurable risk, and a zero
           // there would read as a trade that risked nothing.
           if (pct == null) return <span className="text-muted-foreground">—</span>;
-          const intent = riskIntentPct(row.original);
-          const off = intent != null && Math.abs(pct - intent) > RISK_INTENT_TOLERANCE;
-          return (
-            <span
-              className={cn("tabular-nums", off && "text-amber-600 dark:text-amber-500")}
-              title={
-                intent != null
-                  ? `Planned ${intent}% · taken ${pct.toFixed(2)}%`
-                  : `Taken ${pct.toFixed(2)}%`
-              }
-            >
-              {pct.toFixed(2)}%
-            </span>
-          );
+          return <span className="tabular-nums">{pct.toFixed(2)}%</span>;
         },
       },
       {

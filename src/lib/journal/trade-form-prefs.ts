@@ -2,7 +2,6 @@ const STORAGE_KEY = "tj:trade_form_prefs";
 
 export type TradeFormPrefs = {
   accountId?: string;
-  riskPct?: string;
   /** Last symbol logged after the fact — a day trader logs the same contract all day. */
   instrument?: string;
 };
@@ -30,18 +29,4 @@ export function setTradeFormPrefs(prefs: TradeFormPrefs) {
   } catch {
     // ignore quota / private mode
   }
-}
-
-/** Pick first risk_pct option that looks like 1%. */
-export function defaultRiskPctOption(
-  options: { value: string; label: string }[],
-): string | undefined {
-  const match = options.find(
-    (o) =>
-      o.value === "1%" ||
-      o.label === "1%" ||
-      /^1\s*%$/.test(o.label.trim()) ||
-      /^1\s*%$/.test(o.value.trim()),
-  );
-  return match?.value ?? options[0]?.value;
 }

@@ -789,16 +789,14 @@ describe("a playbook's Trades tab keeps its own view", () => {
 describe("the Risk % column", () => {
   const ACCOUNT = account({ id: "acc-1" });
 
-  it("prints the risk actually taken, not the one chosen from the dropdown", () => {
+  it("prints the risk actually taken", () => {
     // Default fixture: entry 100, stop 90, point value 1 — so qty 2 risks 20,
     // which is 2 % of the 1,000 the entry day opened with.
     const trades = rowsOf([
-      mkTrade({ id: "t1", instrument: "EURUSD", entryQty: 2, equityAtEntry: 1000, riskPct: "1%" }),
+      mkTrade({ id: "t1", instrument: "EURUSD", entryQty: 2, equityAtEntry: 1000 }),
     ]);
     render(<JournalGrid trades={trades} accounts={[ACCOUNT]} />);
     expect(screen.getByText("2.00%")).toBeInTheDocument();
-    // The intention is still visible, as the reason the figure is flagged.
-    expect(screen.getByTitle("Planned 1% · taken 2.00%")).toBeInTheDocument();
   });
 
   it("shows a dash, never a zero, when the risk cannot be measured", () => {

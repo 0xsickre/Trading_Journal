@@ -107,7 +107,6 @@ describe("field inventory", () => {
       "entry_price",
       "stop_price",
       "direction",
-      "risk_pct",
       "position_size",
       "target_price",
       "planned_rr",
@@ -151,12 +150,11 @@ describe("risk plan reads as the arithmetic", () => {
     riskPlan.indexOf(a) < riskPlan.indexOf(b);
 
   it("puts every computed field after the inputs it falls out of", () => {
-    // Direction comes from entry vs stop; size from risk % and the stop
-    // distance; R:R from the target. Reading top to bottom should read as the
+    // Direction comes from entry vs stop; size from the Topstep risk rule and
+    // the stop distance; R:R from the target. Reading top to bottom should read as the
     // calculation, which is the whole reason for the order.
     expect(before("entry_price", "direction")).toBe(true);
     expect(before("stop_price", "direction")).toBe(true);
-    expect(before("risk_pct", "position_size")).toBe(true);
     expect(before("stop_price", "position_size")).toBe(true);
     expect(before("target_price", "planned_rr")).toBe(true);
   });

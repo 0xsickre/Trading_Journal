@@ -26,7 +26,6 @@ const plan = (over: PlanSnapshot = {}): PlanSnapshot => ({
   entry_price: 100,
   stop_price: 90,
   target_price: 130,
-  risk_pct: "1%",
   time_stop: "15",
   thesis: "Sweep of Friday's low, then reclaim",
   invalidation: "Close back below the low",

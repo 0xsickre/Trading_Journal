@@ -38,7 +38,6 @@ function book(rules: LinkedRule[]): Playbook {
     icon: null,
     is_active: true,
     sort_order: 0,
-    default_risk_pct: null,
     a_plus_criteria: null,
     // Every rule below files under this one heading unless it says otherwise.
     // The section list is the BOOK's now, so a fixture has to supply it.

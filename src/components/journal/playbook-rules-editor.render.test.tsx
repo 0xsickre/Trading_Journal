@@ -69,7 +69,6 @@ function book(rules: LinkedRule[], sections: PlaybookSection[]): Playbook {
     icon: null,
     is_active: true,
     sort_order: 0,
-    default_risk_pct: 1,
     a_plus_criteria: null,
     sections,
     rules,

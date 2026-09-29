@@ -25,7 +25,6 @@ const book = (id: string, name: string): Playbook =>
     icon: null,
     is_active: true,
     sort_order: 0,
-    default_risk_pct: null,
     a_plus_criteria: null,
     sections: [],
     rules: [],

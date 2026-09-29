@@ -87,14 +87,10 @@ import {
 import {
   computeFuturesContracts,
   computePlannedRewardR,
-  computePositionSize,
-  computeRiskAmount,
   computeTopstepRisk,
   ticksBetween,
   formatPlannedRewardR,
   inferDirectionFromPrices,
-  matchRiskOption,
-  parseRiskPct,
   riskPlanFieldVisible,
   thesisGroupVisible,
 } from "@/lib/journal/plan-calculations";
@@ -121,11 +117,7 @@ import {
   type FillSource,
   type TradePhase,
 } from "@/lib/journal/trade-lifecycle";
-import {
-  getTradeFormPrefs,
-  setTradeFormPrefs,
-  defaultRiskPctOption,
-} from "@/lib/journal/trade-form-prefs";
+import { getTradeFormPrefs, setTradeFormPrefs } from "@/lib/journal/trade-form-prefs";
 import { cn } from "@/lib/utils";
 import { commissionPerSide } from "@/lib/journal/instrument-costs";
 import { sizeUnitLabel } from "@/lib/journal/units";
@@ -236,7 +228,6 @@ export function TradeForm({
   playbooks = [],
   initial,
   topstepFailedAccountIds = [],
-  accountEquity = {},
   topstepSizing = {},
   categoryOrder,
 }: {
@@ -253,12 +244,6 @@ export function TradeForm({
    * already closed goes through `/trades/log`.
    */
   topstepFailedAccountIds?: string[];
-  /**
-   * Current equity per account id — starting balance + realized P&L + cash
-   * flow. Risk % is a share of what the account is worth NOW, not of what it
-   * opened with.
-   */
-  accountEquity?: Record<string, number>;
   /**
    * Per Topstep account: the room above the MLL, today's DLL left and the plan
    * (`topstep-status.ts`). A planned FUTURES trade on such an account is sized
@@ -334,29 +319,9 @@ export function TradeForm({
   );
 
 
-  /**
-   * Picking a playbook offers its default risk — into an EMPTY field only.
-   *
-   * A suggestion, never a correction. A deliberate 0.5 % on a marginal setup is
-   * the trader overriding their own default, and a prefill that overwrote it
-   * would be the form arguing with the person filling it in.
-   *
-   * The option list is the source of truth for what "1 %" looks like as a
-   * value: the field is a select over `risk_pct` options, so a playbook default
-   * that has no matching option cannot be offered at all rather than being
-   * written as a string the picker will not show.
-   */
   function pickPlaybook(id: string | null) {
     setDirty(true);
     setPlaybookId(id);
-    const book = playbooks.find((p) => p.id === id);
-    const pct = book?.default_risk_pct;
-    if (pct == null) return;
-    setFields((prev) => {
-      if (prev.risk_pct != null && prev.risk_pct !== "") return prev;
-      const match = matchRiskOption(optionsMap.risk_pct ?? [], pct);
-      return match ? { ...prev, risk_pct: match } : prev;
-    });
   }
 
   function setRuleAnswer(ruleId: string, followed: boolean | null) {
@@ -462,17 +427,7 @@ export function TradeForm({
       // eslint-disable-next-line react-hooks/set-state-in-effect -- external-store init
       setAccountId(prefs.accountId);
     }
-    setFields((prev) => {
-      if (prev.risk_pct != null && prev.risk_pct !== "") return prev;
-      const riskOptions = optionsMap.risk_pct ?? [];
-      const fromPrefs =
-        prefs.riskPct && riskOptions.some((o) => o.value === prefs.riskPct)
-          ? prefs.riskPct
-          : defaultRiskPctOption(riskOptions);
-      if (!fromPrefs) return prev;
-      return { ...prev, risk_pct: fromPrefs };
-    });
-  }, [initial, accounts, optionsMap.risk_pct]);
+  }, [initial, accounts]);
 
   const inferredDirection = useMemo(
     () =>
@@ -596,33 +551,11 @@ export function TradeForm({
       stats: { avg_entry: avgEntry, realized_r: r },
     } as unknown as TradeRow);
 
-    const riskPct = parseRiskPct(fields.risk_pct as string | number | null);
-    // Current equity, falling back to the opening balance only when the
-    // account has no history yet. Sizing off starting_balance forever meant
-    // "risk 1%" drifted further from 1% with every trade.
-    const balance =
-      (account ? accountEquity[account.id] : undefined) ??
-      account?.starting_balance ??
-      0;
-    const sizeSuggestion = computePositionSize({
-      balance,
-      riskPct,
-      entry: pe,
-      stop,
-      pointValue,
-    });
-    // Computed even when sizing is impossible. A missing point value blocks the
-    // SIZE, not the risk: "1 % of this account is 420" is true whether or not
-    // the instrument spec is on file, and it is the half of the answer worth
-    // showing while the other half is unavailable.
-    const riskAmount = computeRiskAmount({ balance, riskPct });
-
     // A FUTURE is sized in whole contracts, rounded down, commission counted
-    // (plan-calculations `computeFuturesContracts`). On a Topstep account the
-    // budget is the trader's rule — a share of the room above the MLL, between
-    // the plan's bounds, never past today's DLL — because a share of the whole
-    // balance is not money a prop account can lose. Elsewhere it stays the
-    // risk % of equity above.
+    // (plan-calculations `computeFuturesContracts`). The budget is the Topstep
+    // rule — a share of the room above the MLL, between the plan's bounds,
+    // never past today's DLL. Any other account has no budget, so no size is
+    // suggested (H2: the book is Topstep only).
     const isFuture = (instrument?.asset_class ?? "") === "Futures";
     const ts = isFuture && account ? topstepSizing[account.id] : undefined;
     const topstepRisk =
@@ -635,7 +568,7 @@ export function TradeForm({
             dllLeft: ts.dllLeftToday,
           })
         : null;
-    const futuresBudget = ts ? (topstepRisk?.amount ?? 0) : riskAmount;
+    const futuresBudget = ts ? (topstepRisk?.amount ?? 0) : null;
     // Topstep counts a micro as a tenth of a mini: its cap is ten times as many.
     const capFor = (sym: string) => (ts ? topstepMaxContracts(ts.plan, sym) : null);
     const futures =
@@ -716,8 +649,7 @@ export function TradeForm({
       r,
       plannedRR,
       // A future's suggestion is its whole-contract count; zero is no suggestion.
-      sizeSuggestion: isFuture ? (futures && futures.contracts > 0 ? futures.contracts : null) : sizeSuggestion,
-      riskAmount,
+      sizeSuggestion: futures && futures.contracts > 0 ? futures.contracts : null,
       isFuture,
       futures,
       futuresPair,
@@ -747,7 +679,7 @@ export function TradeForm({
     // scaleOutRows is a dependency because the planned reward now weighs it:
     // without it the figure would freeze at whatever the levels were when some
     // other field last changed.
-  }, [execs, fields, pointValue, fx.rate, account, accountEquity, scaleOutRows, instrument, instruments, topstepSizing]);
+  }, [execs, fields, pointValue, fx.rate, account, scaleOutRows, instrument, instruments, topstepSizing]);
 
   /**
    * The size this trade planned, in lots — the figure the plan tab prints.
@@ -1043,10 +975,7 @@ export function TradeForm({
         toast.error(res.error);
         return;
       }
-      setTradeFormPrefs({
-        accountId: accountId ?? undefined,
-        riskPct: String(fieldsToSave.risk_pct ?? ""),
-      });
+      setTradeFormPrefs({ accountId: accountId ?? undefined });
       toast.success(initial ? "Trade updated" : "Trade saved");
       setDirty(false);
       // No `router.refresh()` after it: the action already revalidated the
@@ -1243,8 +1172,6 @@ export function TradeForm({
                         setAccountId(id);
                       }}
                       showAccount={tab.id === "plan" && group.id === "meta"}
-                      // A Topstep future is sized by the risk rule: no Risk % list.
-                      sizedByRule={metrics.topstep != null}
                       tradePhase={tradePhase}
                       isMissed={isMissed}
                       computedDisplay={
@@ -1316,26 +1243,11 @@ export function TradeForm({
                             }
                           : undefined
                       }
-                      // The percentage in money. A share of equity is an
-                      // abstraction you can agree to without flinching; the same
-                      // risk as a figure is what makes you re-check the stop.
-                      //
-                      // Two wordings, because before a stop is entered the
-                      // figure is a BUDGET and after it is a CONSEQUENCE. On a
-                      // blank form the old single sentence read "Risking $12.32
-                      // if the stop is hit" — naming the loss of a stop that
-                      // did not exist, on the screen where the plan is still
-                      // being written. The number was right (a share of
-                      // equity); the claim around it was not.
+                      // The budget in money, and the contracts it buys:
+                      // what makes you re-check the stop.
                       riskNote={
                         tab.id === "plan" && group.id === "risk_plan" && metrics.isFuture
                           ? futuresRiskNote(metrics, instrument?.symbol ?? "", currency)
-                          : tab.id === "plan" &&
-                        group.id === "risk_plan" &&
-                        metrics.riskAmount != null
-                          ? metrics.stop != null
-                            ? `Risking ${fmtMoney(metrics.riskAmount, currency)} if the stop is hit.`
-                            : `Risk budget ${fmtMoney(metrics.riskAmount, currency)} — set a stop to commit to it.`
                           : null
                       }
                     />
@@ -1660,7 +1572,6 @@ function FormGroupSection({
   accounts,
   onAccountChange,
   showAccount,
-  sizedByRule = false,
   onAddEntryFill,
   tradePhase,
   isMissed,
@@ -1680,15 +1591,13 @@ function FormGroupSection({
   accounts?: Account[];
   onAccountChange?: (id: string) => void;
   showAccount?: boolean;
-  /** A Topstep future: the size comes from the account's risk rule, so Risk % is not offered (F3, E7). */
-  sizedByRule?: boolean;
   onAddEntryFill?: () => void;
   /** Only to hide the review note on a trade that has not happened yet. */
   tradePhase?: TradePhase;
   isMissed?: boolean;
   computedDisplay?: Record<string, string>;
   fieldHints?: Record<string, string>;
-  /** What the chosen risk % is worth in money — the number that makes you look twice. */
+  /** The risk budget in money, and the contracts it buys — the number that makes you look twice. */
   riskNote?: string | null;
   /** A line of context for the whole group, shown under its fields. */
   /**
@@ -1712,12 +1621,11 @@ function FormGroupSection({
   const entry = n(String(fields.entry_price ?? ""));
   const stop = n(String(fields.stop_price ?? ""));
   const target = n(String(fields.target_price ?? ""));
-  const riskPct = parseRiskPct(fields.risk_pct as string | number | null);
 
   const fieldsToRender =
     group.id === "risk_plan"
       ? group.fields.filter((field) =>
-          riskPlanFieldVisible(field.name, entry, stop, target, riskPct, { sizedByRule }),
+          riskPlanFieldVisible(field.name, entry, stop, target),
         )
       : group.id === "psychology_notes" &&
             (isMissed || tradePhase === "planned")
@@ -1852,7 +1760,7 @@ function FormGroupSection({
           a target to scale out toward. */}
       {scaleOut &&
         group.id === "risk_plan" &&
-        riskPlanFieldVisible("scale_out_plan", entry, stop, target, riskPct) && (
+        riskPlanFieldVisible("scale_out_plan", entry, stop, target) && (
           <ScaleOutEditor
             rows={scaleOut.rows}
             onChange={scaleOut.onChange}

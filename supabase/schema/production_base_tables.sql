@@ -128,9 +128,8 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   entry_price          numeric,
   stop_price           numeric,
   target_price         numeric,
-  -- risk_pct i planned_rr su TEXT: čuvaju "1%" i "2.45" kako ih forma nudi.
-  -- Jedina validacija je parsePlannedRewardR / parseRiskPct u lib/.
-  risk_pct             text,
+  -- planned_rr je TEXT: čuva "2.45" kako ga forma nudi.
+  -- Jedina validacija je parsePlannedRewardR u lib/.
   planned_rr           text,
   position_size        numeric,
   exit_reason          text,

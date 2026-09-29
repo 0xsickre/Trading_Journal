@@ -86,7 +86,7 @@ export async function getPlaybooks(
       supabase
         .from("tj_playbooks")
         .select(
-          "id,name,description,color,icon,is_active,sort_order,default_risk_pct,a_plus_criteria",
+          "id,name,description,color,icon,is_active,sort_order,a_plus_criteria",
         )
         .order("sort_order")
         .order("id"),

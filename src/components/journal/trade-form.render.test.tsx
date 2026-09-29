@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TradeForm, type TradeFormInitial } from "./trade-form";
 import type { Account, Instrument } from "@/lib/journal/types";
@@ -486,7 +486,7 @@ describe("lifecycle buttons only appear where the action can actually succeed", 
         accounts={[ACCOUNT]}
         playbooks={[{
           id: "pb1", name: "WPO3", description: null, a_plus_criteria: null,
-          default_risk_pct: null, sort_order: 0, is_active: true, sections: [], rules: [],
+          sort_order: 0, is_active: true, sections: [], rules: [],
         } as never]}
       />,
     );
@@ -694,7 +694,7 @@ describe("the plan reveals one decision at a time", () => {
   });
 });
 
-describe("a Topstep future is sized by the risk rule — no Risk % list (F3, E7)", () => {
+describe("a Topstep future is sized by the risk rule — there is no Risk % list (F3, E7; H2)", () => {
   const FUTURE = { ...INSTRUMENT, id: "i2", symbol: "MNQ", asset_class: "Futures", point_value: 2 } as Instrument;
   const form = (acc: Account) =>
     render(
@@ -716,74 +716,12 @@ describe("a Topstep future is sized by the risk rule — no Risk % list (F3, E7)
       />,
     );
 
-  it("does not offer Risk % on a Topstep account", () => {
+  it("does not offer Risk % on any account", () => {
     form(account({ id: "ts", topstep_mode: true }));
     expect(screen.queryByText("Risk %")).not.toBeInTheDocument();
-  });
-
-  it("still does on any other account", () => {
+    cleanup();
     form(account({ id: "plain" }));
-    expect(screen.getByText("Risk %")).toBeInTheDocument();
-  });
-});
-
-describe("the risk is shown in money, not only as a percentage", () => {
-  it("prints what the chosen percentage costs if the stop is hit", async () => {
-    render(
-      <TradeForm
-        optionsMap={{}}
-        instruments={[INSTRUMENT]}
-        accounts={[ACCOUNT]}
-        accountEquity={{ "acc-1": 42_000 }}
-        initial={baseInitial({
-          status: "planned",
-          fields: {
-            instrument: "EURUSD",
-            entry_price: "100",
-            stop_price: "90",
-            risk_pct: "1%",
-          },
-        })}
-      />,
-    );
-    // 1 % of 42 000 equity. A percentage is easy to agree to; the figure is
-    // what makes a trader re-check the stop.
-    expect(screen.getByText(/Risking .*420/)).toBeInTheDocument();
-  });
-
-  it("WITHOUT A STOP it is a budget, not a loss — nothing can be 'hit' yet", async () => {
-    // The blank-form bug: the note named the loss a stop would produce while no
-    // stop had been entered. The figure itself was always right (a share of
-    // equity), so the fix is the sentence around it, not the arithmetic.
-    render(
-      <TradeForm
-        optionsMap={{}}
-        instruments={[INSTRUMENT]}
-        accounts={[ACCOUNT]}
-        accountEquity={{ "acc-1": 42_000 }}
-        initial={baseInitial({
-          status: "planned",
-          fields: { instrument: "EURUSD", risk_pct: "1%" },
-        })}
-      />,
-    );
-
-    expect(screen.queryByText(/if the stop is hit/)).not.toBeInTheDocument();
-    // Same number, honestly framed — the budget is still worth seeing early.
-    expect(screen.getByText(/Risk budget .*420/)).toBeInTheDocument();
-  });
-
-  it("says nothing when no risk % has been chosen", async () => {
-    render(
-      <TradeForm
-        optionsMap={{}}
-        instruments={[INSTRUMENT]}
-        accounts={[ACCOUNT]}
-        accountEquity={{ "acc-1": 42_000 }}
-        initial={baseInitial({ status: "planned" })}
-      />,
-    );
-    expect(screen.queryByText(/Risking/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Risk %")).not.toBeInTheDocument();
   });
 });
 
@@ -833,7 +771,7 @@ describe("the chart can be attached before the trade exists", () => {
   });
 });
 
-describe("the playbook offers its risk, and never argues with you", () => {
+describe("the playbook's A+ criterion", () => {
   const BOOK = {
     id: "pb1",
     name: "ICT 2022",
@@ -842,55 +780,15 @@ describe("the playbook offers its risk, and never argues with you", () => {
     icon: null,
     is_active: true,
     sort_order: 0,
-    default_risk_pct: 1,
     a_plus_criteria: "Sweep of a daily level, MSS with displacement",
     // A book with no sections and no rules — which is what a new playbook is.
     sections: [],
     rules: [],
   };
-  const RISK_OPTIONS = {
-    risk_pct: [
-      { id: "o1", value: "0.5%", label: "0.5%", color: null, is_active: true, sort_order: 0 },
-      { id: "o2", value: "1%", label: "1%", color: null, is_active: true, sort_order: 1 },
-    ],
-  } as never;
-
-  // The "fills an empty field" half is asserted in plan-calculations.test.ts via
-  // `matchRiskOption`. Driving it here would mean opening a Radix Select in
-  // jsdom — a test that fails on the widget rather than on the behaviour.
-
-  it("does NOT overwrite a risk % already chosen", async () => {
-    // The whole contract. A deliberate 0.5 % on a marginal setup is the trader
-    // overriding their own default; a prefill that replaced it would be the
-    // form arguing with the person filling it in.
-    render(
-      <TradeForm
-        optionsMap={RISK_OPTIONS}
-        instruments={[INSTRUMENT]}
-        accounts={[ACCOUNT]}
-        playbooks={[BOOK]}
-        accountEquity={{ "acc-1": 42_000 }}
-        initial={baseInitial({
-          status: "planned",
-          playbook_id: "pb1",
-          fields: {
-            instrument: "EURUSD",
-            entry_price: "100",
-            stop_price: "90",
-            risk_pct: "0.5%",
-          },
-        })}
-      />,
-    );
-    // 0.5 % of 42 000 = 210. If the playbook's 1 % had overwritten it, this
-    // would read 420.
-    expect(screen.getByText(/Risking .*210/)).toBeInTheDocument();
-  });
-
   it("puts the playbook's A+ criterion in front of the setup grade", async () => {
     render(
       <TradeForm
-        optionsMap={RISK_OPTIONS}
+        optionsMap={{}}
         instruments={[INSTRUMENT]}
         accounts={[ACCOUNT]}
         playbooks={[BOOK]}
@@ -905,7 +803,7 @@ describe("the playbook offers its risk, and never argues with you", () => {
   it("says nothing when the playbook has no A+ criterion", async () => {
     render(
       <TradeForm
-        optionsMap={RISK_OPTIONS}
+        optionsMap={{}}
         instruments={[INSTRUMENT]}
         accounts={[ACCOUNT]}
         playbooks={[{ ...BOOK, a_plus_criteria: null }]}
@@ -971,12 +869,6 @@ describe("saving an edit does not rewrite the fills it did not touch", () => {
 });
 
 describe("the planned size reaches the fill, and the exit cannot exceed it", () => {
-  /**
-   * 1 % of 4 780 is 47.80; over a ten-point stop at point value 1 that is
-   * 4.78 lots — the figure the Plan tab prints, and the one every assertion
-   * below expects to find in the Qty box.
-   */
-  const EQUITY = { "acc-1": 4_780 };
 
   /** The same symbol, with the costs this broker actually charges on FX. */
   const PRICED: Instrument = {
@@ -993,7 +885,8 @@ describe("the planned size reaches the fill, and the exit cannot exceed it", () 
         direction: "Long",
         entry_price: "100",
         stop_price: "90",
-        risk_pct: "1%",
+        // The planned size: the figure every assertion below expects in Qty.
+        position_size: 4.78,
         ...over,
       },
     });
@@ -1005,7 +898,6 @@ describe("the planned size reaches the fill, and the exit cannot exceed it", () 
         optionsMap={{}}
         instruments={[instrument]}
         accounts={[ACCOUNT]}
-        accountEquity={EQUITY}
         initial={plan(over)}
       />,
     );
@@ -1015,8 +907,8 @@ describe("the planned size reaches the fill, and the exit cannot exceed it", () 
   function row(i: number): HTMLElement {
     return screen.getByLabelText(`Remove fill ${i}`).closest("div.grid") as HTMLElement;
   }
-  /** Price, Qty, Fee, Swap are the row's four text boxes, in that order. */
-  function box(i: number, which: 0 | 1 | 2 | 3): HTMLInputElement {
+  /** Price, Qty and Fee are the row's three text boxes, in that order. */
+  function box(i: number, which: 0 | 1 | 2): HTMLInputElement {
     return within(row(i)).getAllByRole("textbox")[which] as HTMLInputElement;
   }
   const qty = (i: number) => box(i, 1);
@@ -1030,7 +922,6 @@ describe("the planned size reaches the fill, and the exit cannot exceed it", () 
   it("an entry fill opens at the planned size, not at the number 1", async () => {
     const user = userEvent.setup({ delay: null });
     renderPlan();
-    expect(screen.getAllByDisplayValue("4.78 lots").length).toBeGreaterThan(0);
 
     await goToExecutionTab(user);
     await user.click(screen.getByRole("button", { name: /Entry fill/ }));
@@ -1121,18 +1012,16 @@ describe("the planned size reaches the fill, and the exit cannot exceed it", () 
     expect(qty(1)).toHaveAttribute("aria-invalid", "false");
   });
 
-  it("without a contract spec it offers nothing rather than a 1", async () => {
-    // An imported broker symbol that resolves to no instrument: the plan
-    // cannot be sized, so the fill is not sized either. A 1 here is the guess
-    // `computePositionSize` refuses to make.
+  it("without a planned size it offers nothing rather than a 1", async () => {
+    // A plan with no size — an imported broker symbol that resolves to no
+    // instrument cannot be sized — so the fill is not sized either.
     const user = userEvent.setup({ delay: null });
     render(
       <TradeForm
         optionsMap={{}}
         instruments={[INSTRUMENT]}
         accounts={[ACCOUNT]}
-        accountEquity={EQUITY}
-        initial={plan({ instrument: "GBPJPY.pro" })}
+        initial={plan({ instrument: "GBPJPY.pro", position_size: null })}
       />,
     );
     await goToExecutionTab(user);
@@ -1147,7 +1036,6 @@ describe("the planned size reaches the fill, and the exit cannot exceed it", () 
         optionsMap={{}}
         instruments={[INSTRUMENT]}
         accounts={[ACCOUNT]}
-        accountEquity={EQUITY}
         initial={baseInitial({
           status: "open",
           fields: {
@@ -1176,7 +1064,6 @@ describe("the planned size reaches the fill, and the exit cannot exceed it", () 
         optionsMap={{}}
         instruments={[INSTRUMENT]}
         accounts={[ACCOUNT]}
-        accountEquity={EQUITY}
         initial={baseInitial({
           status: "open",
           fields: {

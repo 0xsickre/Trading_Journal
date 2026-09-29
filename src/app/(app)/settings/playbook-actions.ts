@@ -84,7 +84,6 @@ export async function updatePlaybook(
     name?: string;
     description?: string | null;
     is_active?: boolean;
-    default_risk_pct?: number | null;
     a_plus_criteria?: string | null;
   },
 ): Promise<Result> {
@@ -92,7 +91,6 @@ export async function updatePlaybook(
     name?: string;
     description?: string | null;
     is_active?: boolean;
-    default_risk_pct?: number | null;
     a_plus_criteria?: string | null;
   } = {};
   if (patch.name != null) {
@@ -105,15 +103,6 @@ export async function updatePlaybook(
   if (patch.is_active != null) next.is_active = patch.is_active;
   if (patch.a_plus_criteria !== undefined)
     next.a_plus_criteria = patch.a_plus_criteria?.trim() || null;
-  if (patch.default_risk_pct !== undefined) {
-    const r = patch.default_risk_pct;
-    // Mirrors the DB CHECK so the user reads a sentence, not a constraint. Zero
-    // is refused rather than stored: "risk nothing" is not a default, it is a
-    // cleared field, and null already says that.
-    if (r != null && (!Number.isFinite(r) || r <= 0 || r > 100))
-      return { ok: false, error: "Default risk must be between 0 and 100 %." };
-    next.default_risk_pct = r;
-  }
   if (Object.keys(next).length === 0) return { ok: true };
 
   const supabase = await createClient();

@@ -45,7 +45,7 @@ export type DefShape = { key: string; list_key: string | null };
  *
  * `builtInFields` is what `getAllFormFields([])` returns — the hardcoded
  * fields only. That call alone was the whole check before, and with no
- * definitions merged in it knows one list, `risk_pct`; Technical tags, Mistake,
+ * definitions merged in it knows none of the lists; Technical tags, Mistake,
  * Emotion, Discipline, Exit reason and Miss reason could all be deleted,
  * leaving their columns with an empty dropdown on every trade from then on.
  */

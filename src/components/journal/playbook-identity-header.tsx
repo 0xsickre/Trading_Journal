@@ -100,11 +100,6 @@ export function PlaybookIdentityHeader({ book }: { book: Playbook }) {
               disabled={pending}
             />
             {!book.is_active && <Badge variant="outline">inactive</Badge>}
-            {book.default_risk_pct != null && (
-              <Badge variant="secondary" title="Prefilled on a new trade that picks this playbook">
-                Risk {book.default_risk_pct}%
-              </Badge>
-            )}
           </div>
           {book.description && (
             <p className="text-sm text-muted-foreground">{book.description}</p>
@@ -184,7 +179,6 @@ export function PlaybookIdentityHeader({ book }: { book: Playbook }) {
 
 type DetailsPatch = {
   description: string | null;
-  default_risk_pct: number | null;
   a_plus_criteria: string | null;
 };
 
@@ -202,11 +196,7 @@ function PlaybookDetailsDialog({
   onSave: (patch: DetailsPatch) => void;
 }) {
   const [description, setDescription] = useState(book.description ?? "");
-  const [risk, setRisk] = useState(book.default_risk_pct != null ? String(book.default_risk_pct) : "");
   const [aPlus, setAPlus] = useState(book.a_plus_criteria ?? "");
-
-  const riskNum = risk.trim() === "" ? null : Number(risk.replace(",", "."));
-  const riskInvalid = riskNum != null && (!Number.isFinite(riskNum) || riskNum <= 0 || riskNum > 100);
 
   return (
     <Dialog
@@ -215,7 +205,6 @@ function PlaybookDetailsDialog({
         // Reopening starts from what is saved, not from an abandoned edit.
         if (v) {
           setDescription(book.description ?? "");
-          setRisk(book.default_risk_pct != null ? String(book.default_risk_pct) : "");
           setAPlus(book.a_plus_criteria ?? "");
         }
         onOpenChange(v);
@@ -225,8 +214,8 @@ function PlaybookDetailsDialog({
         <DialogHeader>
           <DialogTitle>Playbook details</DialogTitle>
           <DialogDescription>
-            What the setup is. The default risk and the A+ line show up on the trade form
-            when this playbook is picked.
+            What the setup is. The A+ line shows up on the trade form when this playbook is
+            picked.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -239,23 +228,6 @@ function PlaybookDetailsDialog({
               placeholder="What this setup is, in a sentence"
               className="min-h-20"
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="pb-risk">Default risk %</Label>
-            <Input
-              id="pb-risk"
-              inputMode="decimal"
-              value={risk}
-              onChange={(e) => setRisk(e.target.value)}
-              placeholder="e.g. 0.5"
-              className="w-32"
-              aria-invalid={riskInvalid}
-            />
-            <p className="text-xs text-muted-foreground">
-              {riskInvalid
-                ? "Between 0 and 100."
-                : "Prefilled into an empty risk field on a new trade. Leave empty for none."}
-            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="pb-aplus">A+ criteria</Label>
@@ -273,11 +245,10 @@ function PlaybookDetailsDialog({
             Cancel
           </Button>
           <Button
-            disabled={pending || riskInvalid}
+            disabled={pending}
             onClick={() =>
               onSave({
                 description: description.trim() || null,
-                default_risk_pct: riskNum,
                 a_plus_criteria: aPlus.trim() || null,
               })
             }

@@ -101,11 +101,6 @@ export type Playbook = {
   icon: string | null;
   is_active: boolean;
   sort_order: number;
-  /**
-   * Suggested risk for this setup. Prefills the trade form only into an EMPTY
-   * field — a deliberate 0.5 % on a marginal setup is never overwritten.
-   */
-  default_risk_pct: number | null;
   /** What earns an A+ grade here. Shown beside the grade on the checklist. */
   a_plus_criteria: string | null;
   /** This book's own headings, in the trader's order. Empty on a new playbook. */

@@ -36,9 +36,8 @@ export type OptionList = {
    * `null` when NO field def reads the list, and that is a real distinction
    * rather than a missing value: those categories are wired into the form by
    * code — `exit_reason` on the outcome block, `miss_reason` only on a missed
-   * setup, `risk_pct` inside the risk plan's progressive reveal. Their place is
-   * behaviour, not a setting, and offering a phase picker for them would be a
-   * control that silently does nothing.
+   * setup. Their place is behaviour, not a setting, and offering a phase
+   * picker for them would be a control that silently does nothing.
    */
   show_phase: FieldDefPhase | null;
   /**

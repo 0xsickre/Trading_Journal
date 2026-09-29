@@ -33,7 +33,6 @@ export const RESERVED_KEYS = new Set([
   "entry_price",
   "stop_price",
   "target_price",
-  "risk_pct",
   "planned_rr",
   "position_size",
   "technical_tags",
