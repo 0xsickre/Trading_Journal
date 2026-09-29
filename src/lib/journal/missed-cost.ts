@@ -12,13 +12,15 @@
  * figure on `/reports` about money that actually moved. This is its own small
  * path, read from the rows directly.
  *
- * MEASURABLE IS NOT THE SAME AS MEASURED. `missed_r` was written from price
- * history by the MT5 script, which went with MT5 (H1, 28.09.2026); a futures
- * source (R2 candles) is planned (`FAZA_F_DAYTRADING_PLAN.md` #16). The
+ * WHERE THE PRICE COMES FROM (F6.1, decision M1-A). `futures-trading`'s
+ * `journal_mae.py` walks the contract's R2 candles through the plan's Topstep
+ * trading day, once that day is over and the exact data is out: nothing counts
+ * until price touches the plan's entry; then the stop first is −1R, the target
+ * first the planned reward, neither 0. A plan whose entry was never reached is
+ * `no_entry` — it cost nothing, and it is counted apart from the misses that
+ * did, so hesitation and a setup that never came are not one line. The
  * unmeasured ones are COUNTED and said out loud rather than summed as zero —
- * the same refusal `portfolio-heat` makes for a position with no stop. Until
- * then the panel's honest output is "7 missed, none of them measured", which
- * is still worth reading.
+ * the same refusal `portfolio-heat` makes for a position with no stop.
  *
  * AND IT MEASURES DISCIPLINE, NOT ONLY HESITATION. A plan that was never
  * marked missed stays `planned` forever (`stalePlan` already says so), so this
@@ -31,7 +33,7 @@ import { numberFieldValue, stringFieldValue } from "./field-values";
 import type { TradeRow } from "./types";
 
 /** What the plan would have met first. */
-export type MissedOutcome = "target" | "stop" | "neither";
+export type MissedOutcome = "target" | "stop" | "neither" | "no_entry";
 
 export type MissedTrade = {
   id: string;
@@ -55,9 +57,11 @@ export type MissedCost = {
   byReason: { reason: string; totalR: number; n: number }[];
   /** How many of the measured ones would have hit their target. */
   wouldHaveWorked: number;
+  /** Measured, and price never came back to the entry: these cost nothing. */
+  neverReached: number;
 };
 
-const OUTCOMES: ReadonlySet<string> = new Set(["target", "stop", "neither"]);
+const OUTCOMES: ReadonlySet<string> = new Set(["target", "stop", "neither", "no_entry"]);
 
 /** The rows this panel is about: plans that were marked missed. */
 export function missedRows(rows: readonly TradeRow[]): TradeRow[] {
@@ -106,6 +110,7 @@ export function missedCost(rows: readonly TradeRow[]): MissedCost {
       // biggest number, because a missed WINNER is what a miss costs.
       .sort((a, b) => b.totalR - a.totalR || a.reason.localeCompare(b.reason)),
     wouldHaveWorked: measured.filter((t) => t.outcome === "target").length,
+    neverReached: measured.filter((t) => t.outcome === "no_entry").length,
   };
 }
 

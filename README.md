@@ -919,24 +919,26 @@ is a number out of the book.
 ### The missed setup gets a price
 
 `status = 'missed'` and `miss_reason` have existed since the beginning and cost nothing, which made
-hesitation the cheapest mistake to keep making. A price walk forward from the moment the plan was
-written records what it would have met first: `missed_outcome`, `missed_r` (the planned reward, −1,
-or 0) and `missed_source`. **It has no source today**: the walk ran over MT5 history
-(`mt5_excursion.py --missed`), which went with MT5 (H1, 28.09.2026), and the futures walk over the R2
-candles is still to be built (`FAZA_F_DAYTRADING_PLAN.md` #16). The panel says so.
+hesitation the cheapest mistake to keep making. **Since F6.1 (29.09.2026) the price comes from R2**:
+`futures-trading`'s `journal_mae.py` walks the contract's candles through the plan's Topstep trading
+day — from the moment the plan was written to 15:10 CT; a plan written after that belongs to the
+next day — once that day is over and the exact data is out, and writes `missed_outcome`, `missed_r`
+and `missed_source = 'r2'` (a hand-entered miss is left alone; `mt5` stays on history).
 
-The entry has to be reached first; a plan whose price never came reads as never triggered and cost
-nothing. And **which came first is the whole question**, so a 1-minute bar holding both the target and
-the stop is refused rather than guessed — a stopped-out plan written down as a winner would make the
-figure worse than not having it. The database refuses the same pair independently: `stop` with a
-positive `missed_r` violates a CHECK.
+The rule is the trader's (decision M1-A). **Nothing counts until price touches the plan's entry**;
+from there the stop first is −1R, the target first is the planned reward, neither by the end of the
+day is 0 (`neither`). A plan whose entry was never reached is **`no_entry`**: it cost nothing, and
+the panel counts it apart ("N never came back to the entry") so a setup that never came is not read
+as hesitation. And **which came first is the whole question**: the walk is on 1-minute bars, and a
+minute that holds two of the entry, the stop and the target is walked again on 1-second bars; a
+second that still holds both the stop and the target is refused with its reason rather than guessed
+(an entry and a stop in the same second is a stop). The database refuses a wrong pair independently:
+`stop` with a positive `missed_r`, or `no_entry` / `neither` with anything but 0, violates a CHECK.
 
-The `/reports` panel counts unmeasured misses separately instead of summing them as zero, and states
-how many plans are still unresolved — until those are taken or marked missed, the figure measures how
-tidily plans are filed rather than what hesitation cost.
-
-Until then every miss is counted as unmeasured; the futures walk will run over the R2 candles in
-`futures-trading`, to the end of the Topstep day rather than for days.
+The `/reports` panel counts unmeasured misses separately instead of summing them as zero — a plan
+without an entry, a stop and a target cannot be priced, and one whose day is not over is not priced
+yet — and states how many plans are still unresolved: until those are taken or marked missed, the
+figure measures how tidily plans are filed rather than what hesitation cost.
 
 ### The mentor pack reads a day trader's day
 

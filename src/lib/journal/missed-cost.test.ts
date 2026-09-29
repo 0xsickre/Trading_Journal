@@ -77,6 +77,17 @@ describe("missedCost", () => {
     expect(missedCost([row({ id: "a", outcome: "maybe", r: 3 })]).measured).toBe(0);
   });
 
+  it("counts a setup that never came back to its entry as measured, at 0R, apart", () => {
+    const c = missedCost([
+      row({ id: "a", outcome: "target", r: 2 }),
+      row({ id: "b", outcome: "no_entry", r: 0 }),
+    ]);
+    expect(c.measured).toBe(2);
+    expect(c.totalR).toBe(2);
+    expect(c.neverReached).toBe(1);
+    expect(c.wouldHaveWorked).toBe(1);
+  });
+
   it("splits by reason, the most expensive first", () => {
     const cost = missedCost([
       row({ id: "a", reason: "Oklevanje", r: 3 }),

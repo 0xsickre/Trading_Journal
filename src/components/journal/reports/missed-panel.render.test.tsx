@@ -33,10 +33,14 @@ describe("MissedPanel", () => {
   it("shows an em dash, not a zero, when nothing has been measured", () => {
     panel([row({ missed_outcome: null, missed_r: null })]);
     expect(screen.getByText("—")).toBeInTheDocument();
-    // The MT5 pricing script went with MT5 (H1); futures are priced from R2
-    // candles later (plan #16). Until then the panel says there is no source.
-    expect(screen.getByText(/no price source for a missed futures setup yet/)).toBeInTheDocument();
+    // Priced from the R2 candles once the plan's trading day is over (F6.1).
+    expect(screen.getByText(/prices a miss from the R2 candles once its trading day/)).toBeInTheDocument();
     expect(screen.queryByText(/mt5_excursion/)).not.toBeInTheDocument();
+  });
+
+  it("says how many never came back to the entry — they cost nothing", () => {
+    panel([row(), row({ id: "m2", missed_outcome: "no_entry", missed_r: 0 })]);
+    expect(screen.getByText(/1 never came back to the entry \(0R, not hesitation\)/)).toBeInTheDocument();
   });
 
   it("warns that unresolved plans make the figure measure filing, not hesitation", () => {

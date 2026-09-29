@@ -22,7 +22,7 @@ export function MissedPanel({
   stalePlans,
 }: {
   cost: MissedCost;
-  /** Plans left unresolved for more than a fortnight. */
+  /** Plans left unresolved after their trading day. */
   stalePlans: number;
 }) {
   if (cost.trades.length === 0 && stalePlans === 0) return null;
@@ -47,6 +47,8 @@ export function MissedPanel({
           {cost.measured > 0 && (
             <span className="text-xs text-muted-foreground">
               {cost.wouldHaveWorked} of {cost.measured} measured would have reached target
+              {cost.neverReached > 0 &&
+                ` · ${cost.neverReached} never came back to the entry (0R, not hesitation)`}
             </span>
           )}
         </div>
@@ -67,7 +69,9 @@ export function MissedPanel({
             <>
               {cost.unmeasured} of these {cost.unmeasured === 1 ? "has" : "have"} no
               measured outcome and {cost.unmeasured === 1 ? "is" : "are"} not in the
-              total: there is no price source for a missed futures setup yet.{" "}
+              total: futures-trading prices a miss from the R2 candles once its trading day
+              is over and the exact data is out, and only a plan with an entry, a stop and a
+              target.{" "}
             </>
           )}
           {stalePlans > 0 && (

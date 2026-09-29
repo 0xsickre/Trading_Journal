@@ -87,6 +87,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 29.09.2026 | H2 | „Obriši taj backtest nalog slobodno, samo Topstep ostavi" — potvrda I5-A; nalog je bio aktivan (podrazumevani), pa je „Topstep-practice" postao podrazumevani |
 | 29.09.2026 | K | Šest zahteva trejdera tokom H2 (redosled pravila, tagovi na srpskom, uvoz puni plan, fiksni breakeven, zona, slike) → faza **K** pre F5 |
 | 29.09.2026 | F4 | Trejder: `/daily` nema logike („Oba pitanja…", a pitanja nema; prošlo vreme; upućuje na karticu koje nema). Stranica je preuređena hronološki (1 · Pre sesije, 2 · Tokom sesije, 3 · Posle sesije), kartica „Pre nego što uđeš" ima dva numerisana pitanja u budućem vremenu, faze pravila na srpskom |
+| 29.09.2026 | F6 | M1-A: promašaj „košta" samo ako je cena posle plana dodirnula ulaz; onda prvi od stop (−1R) / target (+R plana) do kraja Topstep dana, inače 0; bez dodira ulaza → `no_entry`, broji se odvojeno. M2-A: `against_macro_bias` i `cot_chase` se gase, polja ostaju u bazi. M3-A: plan je zastareo kad prođe njegov Topstep dan (trejder: „A, A, A") |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -115,7 +116,7 @@ pogađa.
 | **H2** | Brisanje ostataka iz baze: check-in tabela, `time_stop_days`, swap, % pragovi, backtest grana | — | F4 | da, **briše**: `20260929140000` … `…190000` (šest) | **Opus** | ✅ `b3b6d7e` · `01eaf8b` · `9434f05` · `49dda83` · `cbca316` · `0cb6f55` + `c72f61d` (futures-trading), 29.09.2026 — migracije primenjene uz odobrenje trejdera |
 | **K** | Zahtevi trejdera od 29.09.2026: redosled pravila, tagovi na srpskom, uvoz puni plan, fiksni breakeven, vremenska zona, slike charta | — | H2 | da: `20260929200000`, `…210000`, `…220000`, `…230000` | **Opus** | ✅ `31030a9` · `286cc06` · `df91b1c` · `65d0817` · `576f574` · `a232849`, 29.09.2026 — migracije primenjene |
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, uzorak | #11–#13, #15, #17, #18 (#14 zatvorio H2) | K | da: `20260929235000` (`time_underwater_pct`), `20260930000000` / `…000100` (`baseline_trades`) | Sonnet, Opus za #13 | ✅ `2e59f2e` · `5095e43` · `3183236` · `20f9626` + `8c35148` (futures-trading) · `ea0461b` · `d9ccf9c` · `8dff0cf`, 29.09.2026 — migracije primenjene |
-| **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, ostaci vault-a, komentari, PARITY | #16, #20, #22, #23 (#19 zatvorili H1/H2) | F5 | da (#16, možda #20) | Sonnet, Opus za #16 | detaljan plan ispod, čeka odluke M1–M3 |
+| **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, ostaci vault-a, komentari, PARITY | #16, #20, #22, #23 (#19 zatvorili H1/H2) | F5 | da (#16, možda #20) | Sonnet, Opus za #16 | detaljan plan ispod; odluke M1–M3 donete (A, A, A) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -760,7 +761,7 @@ knjiga, i cena promašenog setupa za fjučerse.
 
 | Korak | Šta | Fajlovi |
 |---|---|---|
-| F6.1 | Cena promašenog setupa iz R2 (#16): `journal_mae.py` hoda od trenutka plana do kraja njegovog Topstep dana (ili do M1 prozora) i piše `missed_outcome` / `missed_r` / `missed_source = 'r2'`; journal samo čita | `futures-trading/tools/journal_mae.py`, `missed-cost.ts`, CHECK `missed_source` (migracija ako `'r2'` nije dozvoljen) |
+| F6.1 ✅ | Cena promašenog setupa iz R2 (#16): `journal_mae.py` hoda od trenutka plana do kraja njegovog Topstep dana (ili do M1 prozora) i piše `missed_outcome` / `missed_r` / `missed_source = 'r2'`; journal samo čita | `futures-trading/tools/journal_mae.py`, `missed-cost.ts`, CHECK `missed_source` (migracija ako `'r2'` nije dozvoljen) |
 | F6.2 | Vault ostaci (#20) po odluci M2; `stale_plan` po odluci M3; README § „Where this sits" → brief | `insights/process-rules.ts`, README |
 | F6.3 | Komentari (#22): prepisati one koji tvrde da je knjiga swing; istorijske ostaviti | 21 fajl |
 | F6.4 | `PARITY.md` i `docs/formulas-audit.md` (#23): sesije, minuti, intraday insights, pod vodom, co-exposure u minutima, DLL | `PARITY.md`, `docs/formulas-audit.md` |
