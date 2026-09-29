@@ -12,7 +12,7 @@ import {
 import { matchImportRow } from "./import-match";
 
 const MNQ = { symbol: "MNQ", point_value: 2, tick_size: 0.25, commission_per_lot: 0.61, commission_pct: 0 };
-const EXIT_REASONS = ["Target hit", "Stop hit", "Breakeven", "Trailing stop", "Closed early", "Time exit"];
+const EXIT_REASONS = ["Pogođen target", "Pogođen stop", "Na nuli", "Prateći stop", "Zatvoreno ranije", "Izlaz po vremenu"];
 
 function q(over: Partial<QuickLogInput> = {}): QuickLogInput {
   return {
@@ -28,7 +28,7 @@ function q(over: Partial<QuickLogInput> = {}): QuickLogInput {
     exitedAt: "2026-09-28T13:52:00.000Z",
     playbookId: "00000000-0000-4000-8000-0000000000aa",
     grade: "B",
-    mistakes: ["Moved stop"],
+    mistakes: ["Pomerio stop"],
     emotions: [],
     note: "  chased the second push ",
     snapshotUrl: "",
@@ -78,18 +78,18 @@ describe("quickLogProblem", () => {
 describe("autoExitReason", () => {
   const base = { direction: "Short", entry: 30584, stop: 30604, target: 30544, tickSize: 0.25, options: EXIT_REASONS };
   it("reads the stop, the target, break-even and a manual close off the exit price", () => {
-    expect(autoExitReason({ ...base, exit: 30604.5 })).toBe("Stop hit");
-    expect(autoExitReason({ ...base, exit: 30544 })).toBe("Target hit");
-    expect(autoExitReason({ ...base, exit: 30584.25 })).toBe("Breakeven");
-    expect(autoExitReason({ ...base, exit: 30600.25 })).toBe("Closed early");
+    expect(autoExitReason({ ...base, exit: 30604.5 })).toBe("Pogođen stop");
+    expect(autoExitReason({ ...base, exit: 30544 })).toBe("Pogođen target");
+    expect(autoExitReason({ ...base, exit: 30584.25 })).toBe("Na nuli");
+    expect(autoExitReason({ ...base, exit: 30600.25 })).toBe("Zatvoreno ranije");
   });
   it("writes nothing the trader's list does not offer", () => {
     expect(autoExitReason({ ...base, exit: 30604, options: ["Stopped"] })).toBeNull();
     expect(autoExitReason({ ...base, exit: null })).toBeNull();
   });
   it("without a tick size only an exact price counts", () => {
-    expect(autoExitReason({ ...base, tickSize: null, exit: 30604 })).toBe("Stop hit");
-    expect(autoExitReason({ ...base, tickSize: null, exit: 30604.25 })).toBe("Closed early");
+    expect(autoExitReason({ ...base, tickSize: null, exit: 30604 })).toBe("Pogođen stop");
+    expect(autoExitReason({ ...base, tickSize: null, exit: 30604.25 })).toBe("Zatvoreno ranije");
   });
 });
 
@@ -111,8 +111,8 @@ describe("quickLogToTradeInput", () => {
       stop_price: 30604,
       target_price: 30544,
       execution_rating: 3,
-      mistake: ["Moved stop"],
-      exit_reason: "Closed early",
+      mistake: ["Pomerio stop"],
+      exit_reason: "Zatvoreno ranije",
       trade_journal_notes: "chased the second push",
     });
     expect(t.fields).not.toHaveProperty("psychology_tags");

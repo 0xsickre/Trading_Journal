@@ -40,7 +40,7 @@ export function gradeFromRating(rating: number | null | undefined): Grade | null
 }
 
 /** The mistake list's own "nothing went wrong" item, recorded on an A so a clean trade is counted as one. */
-export const NO_MISTAKE = "No mistake";
+export const NO_MISTAKE = "Bez greške";
 
 export type QuickLogInput = {
   accountId: string | null;
@@ -121,10 +121,11 @@ export function autoExitReason(params: {
   const tol = 2 * (params.tickSize && params.tickSize > 0 ? params.tickSize : 0);
   const near = (a: number | null) => a != null && a > 0 && Math.abs(exit - a) <= tol + 1e-9;
   const pick = (v: string) => (options.includes(v) ? v : null);
-  if (near(stop)) return pick("Stop hit");
-  if (near(target)) return pick("Target hit");
-  if (near(entry)) return pick("Breakeven");
-  return pick("Closed early");
+  // The seeded exit reasons, in Serbian since K2 (`20260929200000`).
+  if (near(stop)) return pick("Pogođen stop");
+  if (near(target)) return pick("Pogođen target");
+  if (near(entry)) return pick("Na nuli");
+  return pick("Zatvoreno ranije");
 }
 
 /** Entry time N minutes before `now`, as UTC ISO. */

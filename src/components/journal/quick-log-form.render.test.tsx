@@ -44,9 +44,9 @@ const PLAYBOOK = { id: "00000000-0000-4000-8000-0000000000aa", name: "OR breakou
 
 const item = (value: string) => ({ id: value, value, label: value, color: null, description: null, sort_order: 0, is_active: true });
 const OPTIONS = {
-  mistake: ["No mistake", "Moved stop", "Chased price"].map(item),
+  mistake: ["Bez greške", "Pomerio stop", "Jurio cenu"].map(item),
   emotion: ["FOMO", "Revenge"].map(item),
-  exit_reason: ["Target hit", "Stop hit", "Breakeven", "Closed early"].map(item),
+  exit_reason: ["Pogođen target", "Pogođen stop", "Na nuli", "Zatvoreno ranije"].map(item),
 } as unknown as OptionsMap;
 
 function renderLog() {
@@ -100,7 +100,7 @@ describe("QuickLogForm — logging after the trade", () => {
     expect(screen.queryByText(/thesis/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/MAE|MFE/)).not.toBeInTheDocument();
     // Mistakes only once the trade was not by plan.
-    expect(screen.queryByText("Moved stop")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pomerio stop")).not.toBeInTheDocument();
   });
 
   it("the save waits for the numbers", () => {
@@ -121,7 +121,7 @@ describe("QuickLogForm — logging after the trade", () => {
     await user.click(screen.getByRole("button", { name: "5 min ago" }));
     await user.click(screen.getByText("OR breakout"));
     await user.click(screen.getByRole("button", { name: /^B/ }));
-    await user.click(screen.getByText("Moved stop"));
+    await user.click(screen.getByText("Pomerio stop"));
     await user.click(screen.getByText("FOMO"));
     await user.click(screen.getByRole("button", { name: "Log trade" }));
 
@@ -132,9 +132,9 @@ describe("QuickLogForm — logging after the trade", () => {
       entry_price: 30584,
       stop_price: 30604,
       execution_rating: 3,
-      mistake: ["Moved stop"],
+      mistake: ["Pomerio stop"],
       psychology_tags: ["FOMO"],
-      exit_reason: "Stop hit",
+      exit_reason: "Pogođen stop",
     });
     expect(input.playbook_id).toBe(PLAYBOOK.id);
     expect(input.executions.map((e: { side: string; qty: number; fee: number }) => [e.side, e.qty, e.fee])).toEqual([
@@ -154,7 +154,7 @@ describe("QuickLogForm — logging after the trade", () => {
     await user.type(screen.getByLabelText("Exit"), "30620");
     await user.click(screen.getByRole("button", { name: /^A/ }));
     await user.click(screen.getByRole("button", { name: "Log trade" }));
-    expect(createTradeMock.mock.calls[1][0].fields).toMatchObject({ execution_rating: 5, mistake: ["No mistake"] });
+    expect(createTradeMock.mock.calls[1][0].fields).toMatchObject({ execution_rating: 5, mistake: ["Bez greške"] });
   });
 });
 
@@ -187,15 +187,15 @@ describe("QuickLogForm — reviewing an imported trade", () => {
     expect(screen.queryByLabelText("Entry")).not.toBeInTheDocument();
     await user.click(screen.getByText("OR breakout"));
     await user.click(screen.getByRole("button", { name: /^C/ }));
-    await user.click(screen.getByText("Chased price"));
+    await user.click(screen.getByText("Jurio cenu"));
     await user.click(screen.getByRole("button", { name: "Save review" }));
     expect(saveTradeReviewMock).toHaveBeenCalledWith(trade.id, {
       playbook_id: PLAYBOOK.id,
       execution_rating: 1,
-      mistake: ["Chased price"],
+      mistake: ["Jurio cenu"],
       psychology_tags: [],
       trade_journal_notes: "",
-      exit_reason: "Closed early",
+      exit_reason: "Zatvoreno ranije",
       snapshot_url: null,
     });
     expect(pushMock).toHaveBeenCalledWith("/daily");

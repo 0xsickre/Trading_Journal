@@ -190,7 +190,7 @@ export function QuickLogForm({
   const toggle = (set: (f: (p: string[]) => string[]) => void) => (v: string) =>
     set((p) => (p.includes(v) ? p.filter((x) => x !== v) : [...p, v]));
 
-  // A clean trade records "No mistake" — so a clean week is counted, not just empty.
+  // A clean trade records NO_MISTAKE ("Bez greške") — so a clean week is counted, not just empty.
   const mistakesToSave = grade === "A" ? (hasNoMistake ? [NO_MISTAKE] : []) : mistakes;
   const emotionsToSave = grade === "A" ? [] : emotions;
 

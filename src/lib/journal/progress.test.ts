@@ -46,9 +46,9 @@ function trade(t: T): EnrichedTrade {
 
 const WEEK = [
   // Monday: a clean win, then a loss, then a revenge trade after the loss.
-  trade({ id: "1", day: "2026-09-28", at: "13:35", pnl: 200, r: 2, setup: "orb", rating: 5, mistake: ["No mistake"], mae: 0.4, capture: 80 }),
+  trade({ id: "1", day: "2026-09-28", at: "13:35", pnl: 200, r: 2, setup: "orb", rating: 5, mistake: ["Bez greške"], mae: 0.4, capture: 80 }),
   trade({ id: "2", day: "2026-09-28", at: "14:10", pnl: -100, r: -1, setup: "orb", rating: 3, mistake: ["Early entry"], mfe: 0.6 }),
-  trade({ id: "3", day: "2026-09-28", at: "14:40", pnl: -150, r: -1.5, setup: "vwap", rating: 1, mistake: ["Moved stop", "Oversized"] }),
+  trade({ id: "3", day: "2026-09-28", at: "14:40", pnl: -150, r: -1.5, setup: "vwap", rating: 1, mistake: ["Pomerio stop", "Oversized"] }),
   trade({ id: "4", day: "2026-09-28", at: "15:05", pnl: 50, r: 0.5, setup: null, rating: null }),
   // Tuesday: one trade, no stop.
   trade({ id: "5", day: "2026-09-29", at: "13:40", pnl: 120, r: null, setup: "vwap", rating: 5, hour: null }),
@@ -80,7 +80,7 @@ describe("buildProgress", () => {
 
   it("mistakes: most expensive first, 'No mistake' is not one, two mistakes count in both", () => {
     expect(p.mistakes.map((m) => [m.label, m.net])).toEqual([
-      ["Moved stop", -150],
+      ["Pomerio stop", -150],
       ["Oversized", -150],
       ["Early entry", -100],
     ]);
