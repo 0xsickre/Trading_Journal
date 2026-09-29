@@ -191,6 +191,18 @@ describe("new account and duplicate", () => {
   });
 });
 
+describe("the breakeven range is fixed (K4)", () => {
+  it("shows the plan's band and offers nothing to type", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<AccountSettings accounts={[account({ topstep_mode: true, topstep_plan: "50K" })]} tradeCounts={{ "acc-1": 0 }} />);
+    await openMenu(user, "Main Account");
+    await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
+    expect(screen.getByText("±$25.00")).toBeInTheDocument();
+    expect(screen.queryByLabelText("From")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("To")).not.toBeInTheDocument();
+  });
+});
+
 describe("edit", () => {
   it("names a number it cannot read and blocks the save", async () => {
     const user = userEvent.setup({ delay: null });

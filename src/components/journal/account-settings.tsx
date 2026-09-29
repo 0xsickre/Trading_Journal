@@ -51,7 +51,12 @@ import type { Account } from "@/lib/journal/types";
 import { parseSettingsNumber } from "@/lib/journal/settings-rules";
 import { duplicateSettings, isArchived } from "@/lib/journal/account-rules";
 import { fmtMoney } from "@/lib/journal/format";
-import { TOPSTEP_PLANS, type TopstepPlan } from "@/lib/journal/topstep";
+import {
+  TOPSTEP_DEFAULT_RISK_PCT,
+  TOPSTEP_PLANS,
+  topstepBreakevenBand,
+  type TopstepPlan,
+} from "@/lib/journal/topstep";
 import { isValidTimeZone } from "@/lib/journal/time";
 import {
   updateAccount,
@@ -262,7 +267,7 @@ function CreateAccountDialog({
           <DialogTitle>{source ? `Duplicate "${source.name}"` : "New account"}</DialogTitle>
           <DialogDescription>
             {source
-              ? "Copies the type, currency, timezone, breakeven range, costs and Topstep rules. Trades and deposits are not copied, and the challenge starts fresh."
+              ? "Copies the currency, timezone, costs and Topstep rules. Trades and deposits are not copied, and the challenge starts fresh."
               : "These decide how every trade on the account reads. Everything else can be set later."}
           </DialogDescription>
         </DialogHeader>
@@ -434,17 +439,11 @@ function EditAccountDialog({
   const [riskMax, setRiskMax] = useState(account.risk_rule_max == null ? "" : String(account.risk_rule_max));
   const plan = TOPSTEP_PLANS[topstepPlan];
 
-  const [beFrom, setBeFrom] = useState(String(account.breakeven_from));
-  const [beTo, setBeTo] = useState(String(account.breakeven_to));
-  const [beUnit, setBeUnit] = useState(account.breakeven_unit);
-
   const [commPerUnit, setCommPerUnit] = useState(String(account.default_commission_per_unit));
   const [feeFixed, setFeeFixed] = useState(String(account.default_fee_fixed));
 
   const checks = {
     balance: parseSettingsNumber(balance, { min: 0 }),
-    beFrom: parseSettingsNumber(beFrom),
-    beTo: parseSettingsNumber(beTo),
     comm: parseSettingsNumber(commPerUnit, { min: 0 }),
     fee: parseSettingsNumber(feeFixed, { min: 0 }),
     riskPct: parseSettingsNumber(riskPct, { min: 0.1, max: 100 }),
@@ -456,10 +455,6 @@ function EditAccountDialog({
     const r = checks[k];
     return r.ok ? (r.value ?? 0) : 0;
   };
-  const beOrder =
-    checks.beFrom.ok && checks.beTo.ok && val("beFrom") > val("beTo")
-      ? "'From' must be less than or equal to 'to'."
-      : null;
   const nullable = (k: "riskMin" | "riskMax") => {
     const r = checks[k];
     return r.ok ? r.value : null;
@@ -469,7 +464,7 @@ function EditAccountDialog({
       ? "The minimum is above the maximum."
       : null;
   const invalid =
-    Object.values(checks).some((c) => !c.ok) || beOrder != null || riskOrder != null || !isValidTimeZone(tz) || !name.trim();
+    Object.values(checks).some((c) => !c.ok) || riskOrder != null || !isValidTimeZone(tz) || !name.trim();
 
   const balanceChanged = checks.balance.ok && val("balance") !== account.starting_balance;
   const tzChanged = tz !== account.timezone;
@@ -482,9 +477,6 @@ function EditAccountDialog({
         timezone: tz,
         currency,
         starting_balance: val("balance"),
-        breakeven_from: val("beFrom"),
-        breakeven_to: val("beTo"),
-        breakeven_unit: beUnit,
         default_commission_per_unit: val("comm"),
         default_fee_fixed: val("fee"),
         topstep_mode: topstepMode,
@@ -575,30 +567,18 @@ function EditAccountDialog({
           </div>
         </div>
 
-        <section className="space-y-2 rounded-md border p-3">
+        <section className="space-y-1 rounded-md border p-3">
           <h3 className="text-sm font-medium">Breakeven range</h3>
-          <p className="text-xs text-muted-foreground">
-            A trade whose net P&amp;L lands in this range counts as breakeven. Usually
-            from minus your costs to 0.
+          <p className="text-sm tabular-nums">
+            {topstepMode
+              ? `±${fmtMoney(topstepBreakevenBand(topstepPlan), currency)}`
+              : `${fmtMoney(account.breakeven_from, currency)} to ${fmtMoney(account.breakeven_to, currency)}`}
           </p>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <NumberField id={`bef-${account.id}`} label="From" value={beFrom} onChange={setBeFrom} error={err("beFrom") ?? beOrder} />
-            <NumberField id={`bet-${account.id}`} label="To" value={beTo} onChange={setBeTo} error={err("beTo")} />
-            <div className="space-y-1.5">
-              <Label htmlFor={`beu-${account.id}`} className="text-xs">
-                Unit
-              </Label>
-              <Select value={beUnit} onValueChange={(v) => setBeUnit(v as "currency" | "pct")}>
-                <SelectTrigger id={`beu-${account.id}`} className="h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="currency">{currency}</SelectItem>
-                  <SelectItem value="pct">% of balance</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <p className="text-xs text-muted-foreground">
+            Fixed, not a setting: a trade whose net P&amp;L is within 0.1R of the plan&apos;s
+            starting risk budget ({TOPSTEP_DEFAULT_RISK_PCT} % of the room above the MLL) is a
+            scratch, so the win rate never moves with a number typed here.
+          </p>
         </section>
 
         <section className="space-y-2 rounded-md border p-3">

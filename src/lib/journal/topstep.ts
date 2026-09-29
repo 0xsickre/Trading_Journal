@@ -240,12 +240,31 @@ export function topstepStateAt(
   return r.status === "off" ? null : (r as TopstepResult);
 }
 
+/** The share of the room the risk rule takes when the account sets none — the trader's rule. */
+export const TOPSTEP_DEFAULT_RISK_PCT = 12.5;
+
+/**
+ * The breakeven band, as a share of R (K4, 29.09.2026: fixed, not a setting).
+ *
+ * A trade whose net result is within a tenth of the risk it was sized to is a
+ * scratch — neither the setup's win nor its loss. The R is the plan's starting
+ * risk budget, `TOPSTEP_DEFAULT_RISK_PCT` of the room a fresh account has above
+ * its MLL, so the band is one fixed amount per plan and the win rate does not
+ * move with a setting.
+ */
+export const TOPSTEP_BREAKEVEN_R = 0.1;
+
+/** The breakeven half-width in dollars for a plan: ±$25 on a 50K, ±$38 on a 100K, ±$56 on a 150K. */
+export function topstepBreakevenBand(plan: TopstepPlan): number {
+  return Math.round(TOPSTEP_BREAKEVEN_R * (TOPSTEP_DEFAULT_RISK_PCT / 100) * TOPSTEP_PLANS[plan].mll);
+}
+
 /** The trader's risk rule on an account: a share of the room, and optional money bounds. */
 export type TopstepRiskRule = { pct: number; min: number | null; max: number | null };
 
 export function riskRuleFromAccount(account: Account): TopstepRiskRule {
   return {
-    pct: account.risk_rule_pct ?? 12.5,
+    pct: account.risk_rule_pct ?? TOPSTEP_DEFAULT_RISK_PCT,
     min: account.risk_rule_min ?? null,
     max: account.risk_rule_max ?? null,
   };

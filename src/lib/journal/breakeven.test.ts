@@ -79,3 +79,28 @@ describe("hasBreakevenBand", () => {
     expect(hasBreakevenBand({ from: -37.5, to: 0 })).toBe(true);
   });
 });
+
+describe("a Topstep account's band is fixed by its plan (K4)", () => {
+  const topstep = (plan: string) => ({ ...cfg(-500, 500), topstep_mode: true, topstep_plan: plan });
+
+  it("is ±0.1R of the plan's starting risk budget, whatever the columns say", () => {
+    // 12.5 % of the room above the MLL: 250 on a 50K, 375 on a 100K, 562.5 on a 150K.
+    expect(resolveBreakevenRange(topstep("50K"))).toEqual({ from: -25, to: 25 });
+    expect(resolveBreakevenRange(topstep("100K"))).toEqual({ from: -38, to: 38 });
+    expect(resolveBreakevenRange(topstep("150K"))).toEqual({ from: -56, to: 56 });
+  });
+
+  it("classifies a scratch as breakeven and a real result as a win or a loss", () => {
+    const band = resolveBreakevenRange(topstep("50K"));
+    expect(classifyOutcome(-24.5, band)).toBe("breakeven");
+    expect(classifyOutcome(26, band)).toBe("win");
+    expect(classifyOutcome(-30, band)).toBe("loss");
+  });
+
+  it("an account not in Topstep mode keeps its own columns", () => {
+    expect(resolveBreakevenRange({ ...cfg(-10, 0), topstep_mode: false, topstep_plan: "50K" })).toEqual({
+      from: -10,
+      to: 0,
+    });
+  });
+});

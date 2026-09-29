@@ -1001,9 +1001,9 @@ const money = (label: string) =>
 /**
  * The columns `updateAccount` may write, with their ranges.
  *
- * Percentages live in 0–100; costs and balances are not
- * negative; the breakeven band may be (a loss-side edge). Anything outside
- * these, or any column not listed, is refused rather than stored.
+ * Percentages live in 0–100; costs and balances are not negative. The
+ * breakeven band is not here: it is fixed by the Topstep plan (K4). Anything
+ * outside these, or any column not listed, is refused rather than stored.
  */
 const accountPatchSchema = z
   .object({
@@ -1014,9 +1014,6 @@ const accountPatchSchema = z
     default_asset_class: z.string().max(60).nullable().optional(),
     timezone: z.string().min(1).max(64).optional(),
     is_active: z.boolean().optional(),
-    breakeven_from: z.number().finite().optional(),
-    breakeven_to: z.number().finite().optional(),
-    breakeven_unit: z.enum(["currency", "pct"]).optional(),
     default_commission_per_unit: money("Commission").optional(),
     default_fee_fixed: money("Fixed fee").optional(),
     default_stop_pct: pct("Default stop").nullable().optional(),
@@ -1041,9 +1038,6 @@ export async function updateAccount(
     default_asset_class?: string | null;
     timezone?: string;
     is_active?: boolean;
-    breakeven_from?: number;
-    breakeven_to?: number;
-    breakeven_unit?: "currency" | "pct";
     default_commission_per_unit?: number;
     default_fee_fixed?: number;
     default_stop_pct?: number | null;
@@ -1068,16 +1062,6 @@ export async function updateAccount(
     return { ok: false, error: "Risk per trade: the minimum must not exceed the maximum." };
   }
 
-  if (
-    patch.breakeven_from != null &&
-    patch.breakeven_to != null &&
-    patch.breakeven_from > patch.breakeven_to
-  ) {
-    return {
-      ok: false,
-      error: "Breakeven range: 'from' must be less than or equal to 'to'.",
-    };
-  }
 
   const supabase = await createClient();
 

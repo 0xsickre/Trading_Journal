@@ -2,13 +2,15 @@
  * Outcome classification against the account's breakeven band.
  *
  * Before this module, a trade counted as breakeven only when net P&L equalled
- * exactly 0 — tested on a float that already carries fees and swap. That is
+ * exactly 0 — tested on a float that already carries fees. That is
  * practically never true, so the breakeven bucket was always empty and win rate
  * had nothing to exclude from its denominator.
  *
  * The band is asymmetric on purpose: "-37.50 to 0" is a normal configuration
  * (costs ate the trade but the idea was flat), not a symmetric tolerance.
  */
+
+import { TOPSTEP_PLANS, topstepBreakevenBand, type TopstepPlan } from "./topstep";
 
 export type Outcome = "win" | "loss" | "breakeven";
 
@@ -20,6 +22,9 @@ export type BreakevenConfig = {
   breakeven_to: number;
   breakeven_unit: BreakevenUnit;
   starting_balance: number;
+  /** A Topstep account's band is fixed by its plan (K4) and the three columns above are not read. */
+  topstep_mode?: boolean | null;
+  topstep_plan?: string | null;
 };
 
 /** Band resolved into account currency, ready to compare against net P&L. */
@@ -32,6 +37,10 @@ export function resolveBreakevenRange(
   config: BreakevenConfig | null | undefined,
 ): BreakevenRange {
   if (!config) return EXACT_ZERO_RANGE;
+  if (config.topstep_mode && config.topstep_plan && config.topstep_plan in TOPSTEP_PLANS) {
+    const band = topstepBreakevenBand(config.topstep_plan as TopstepPlan);
+    return { from: -band, to: band };
+  }
   const { breakeven_from, breakeven_to, breakeven_unit, starting_balance } =
     config;
   if (breakeven_unit === "pct") {
