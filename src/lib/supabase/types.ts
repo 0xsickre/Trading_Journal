@@ -258,7 +258,7 @@ export type Database = {
       }
       tj_experiments: {
         Row: {
-          baseline_weeks: number
+          baseline_trades: number
           created_at: string
           ended_week: string | null
           hypothesis: string
@@ -270,7 +270,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          baseline_weeks?: number
+          baseline_trades?: number
           created_at?: string
           ended_week?: string | null
           hypothesis: string
@@ -282,7 +282,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          baseline_weeks?: number
+          baseline_trades?: number
           created_at?: string
           ended_week?: string | null
           hypothesis?: string

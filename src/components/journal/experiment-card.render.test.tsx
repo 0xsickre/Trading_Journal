@@ -17,7 +17,7 @@ const summary = (over: Partial<ExperimentSummary> = {}): ExperimentSummary => ({
     started_week: "2026-03-02",
     hypothesis: "Ne trgujem prvi sat",
     metric_key: "win_rate",
-    baseline_weeks: 4,
+    baseline_trades: 40,
     ended_week: null,
     status: "running",
   },
@@ -65,6 +65,13 @@ describe("ExperimentCard", () => {
     // The sample it is worth, and the refusal in words.
     expect(screen.getByText(/još ne znaš/)).toBeInTheDocument();
     expect(screen.getByText(/n=12/)).toBeInTheDocument();
+  });
+
+  it("dates the baseline by its trades, and says when there were none", () => {
+    card([summary()]);
+    expect(screen.getByText("Pre (2026-02-02 → 2026-02-23)")).toBeInTheDocument();
+    card([summary({ window: { beforeFrom: null, beforeTo: null, afterFrom: "2026-03-02", afterTo: "2026-03-30" } })]);
+    expect(screen.getByText("Pre (nema trejdova)")).toBeInTheDocument();
   });
 
   it("says what it does not control, every time", () => {

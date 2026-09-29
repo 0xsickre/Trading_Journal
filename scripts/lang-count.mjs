@@ -41,7 +41,8 @@ const WORDS = [
   "upisi", "vec", "vise", "za", "zato", "sto",
 ];
 const DIACRITICS = /[čćšžđČĆŠŽĐ]/;
-const WORD_RE = new RegExp(`(^|[^\\p{L}])(${WORDS.join("|")})([^\\p{L}]|$)`, "iu");
+// A hyphen does not end a word: "Pre-open" is the English session name, not "pre".
+const WORD_RE = new RegExp(`(^|[^\\p{L}])(${WORDS.join("|")})([^\\p{L}-]|$)`, "iu");
 
 /** Files, newest-first order is irrelevant — sorted for a stable report. */
 function walk(dir) {

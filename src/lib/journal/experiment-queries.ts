@@ -31,7 +31,7 @@ export async function getExperiments(): Promise<Experiment[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("tj_experiments")
-    .select("id, started_week, hypothesis, metric_key, baseline_weeks, ended_week, status")
+    .select("id, started_week, hypothesis, metric_key, baseline_trades, ended_week, status")
     .order("started_week", { ascending: false });
 
   if (error) {

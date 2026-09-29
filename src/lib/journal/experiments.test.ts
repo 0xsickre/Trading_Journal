@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_BASELINE_WEEKS,
+  DEFAULT_BASELINE_TRADES,
   EXPERIMENT_METRIC_KEYS,
   MIN_WINDOW_TRADES,
   experimentWindows,
@@ -24,7 +24,7 @@ const exp = (over: Partial<Experiment> = {}): Experiment => ({
   started_week: START,
   hypothesis: "Stop trading the first hour",
   metric_key: "win_rate",
-  baseline_weeks: DEFAULT_BASELINE_WEEKS,
+  baseline_trades: DEFAULT_BASELINE_TRADES,
   ended_week: null,
   status: "running",
   ...over,
@@ -52,11 +52,11 @@ describe("EXPERIMENT_METRIC_KEYS", () => {
   });
 });
 
-describe("experimentWindows", () => {
-  it("looks back the baseline, and forward to the week running now", () => {
+describe("experimentWindows — the baseline is trades, not weeks (F5.4)", () => {
+  it("runs forward to the week running now, and has no baseline dates without trades", () => {
     const w = experimentWindows(exp(), [], NOW);
-    expect(w.beforeFrom).toBe("2026-02-02");
-    expect(w.beforeTo).toBe("2026-02-23");
+    expect(w.beforeFrom).toBeNull();
+    expect(w.beforeTo).toBeNull();
     expect(w.afterFrom).toBe(START);
     expect(w.afterTo).toBe(NOW);
   });
@@ -66,28 +66,24 @@ describe("experimentWindows", () => {
     expect(w.afterTo).toBe("2026-03-16");
   });
 
-  it("splits trades by the week they CLOSED in", () => {
+  it("takes the LAST baseline_trades trades closed before the start, however far back", () => {
     const w = experimentWindows(
-      exp(),
-      book(week("2026-02-09", 1, 2), week("2026-03-09", 1, 3)),
+      exp({ baseline_trades: 10 }),
+      // Four long before the start, eight just before it: the newest ten count.
+      book(week("2025-12-01", 1, 4), week("2026-02-23", 1, 8), week("2026-03-09", 1, 3)),
       NOW,
     );
-    expect(w.before).toHaveLength(2);
+    expect(w.before).toHaveLength(10);
+    expect(w.before.filter((t) => t.closeWeek === "2025-12-01")).toHaveLength(2);
+    expect(w.beforeFrom).toBe("2025-12-01");
+    expect(w.beforeTo).toBe("2026-02-23");
     expect(w.after).toHaveLength(3);
   });
 
-  it("leaves out a week on either side of the two windows", () => {
-    const w = experimentWindows(
-      exp(),
-      // Long before the baseline, and after a finished experiment.
-      book(week("2025-12-01", 1, 2), week("2026-03-23", 1, 2)),
-      NOW,
-    );
-    expect(w.before).toHaveLength(0);
-    expect(w.after).toHaveLength(2);
-
+  it("keeps a trade after a finished experiment out of both windows", () => {
     const ended = experimentWindows(exp({ ended_week: "2026-03-09" }), book(week("2026-03-23", 1, 2)), NOW);
     expect(ended.after).toHaveLength(0);
+    expect(ended.before).toHaveLength(0);
   });
 });
 
@@ -127,7 +123,7 @@ describe("measureExperiment", () => {
 
   it("calls it better only once the gap has cleared zero", () => {
     const m = measureExperiment(
-      exp({ baseline_weeks: 4 }),
+      exp({ baseline_trades: 40 }),
       winRate,
       book(
         week("2026-02-02", 4, 30),

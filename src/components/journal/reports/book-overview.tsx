@@ -14,10 +14,9 @@ import type { EnrichedTrade } from "@/lib/journal/enriched-trade";
  * trade, no plan, no answered rule), and their hints say which.
  *
  * WHAT LEFT THIS ROW, and why it is a cut rather than a deletion: Sharpe,
- * Sortino, Calmar and recovery factor are annualised risk-adjusted ratios, and
- * this book trades forty to seventy times a year. Their `periodsPerYear` is
- * measured from the data because a swing trader is not in the market every
- * day, which — as `docs/formulas-audit.md` says in the first row of its summary
+ * Sortino, Calmar and recovery factor are annualised risk-adjusted ratios.
+ * Their `periodsPerYear` is measured from the data because a trader is not in
+ * the market every day, which — as `docs/formulas-audit.md` says in the first row of its summary
  * — makes them incomparable with any published figure. Three numbers nobody can
  * act on were sitting where four measurable ones now are. They stay in the
  * metric registry: anyone who wants one turns on the column.

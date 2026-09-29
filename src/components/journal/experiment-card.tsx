@@ -15,6 +15,7 @@ import {
 import { formatMetric, metric as toMetric } from "@/lib/journal/units";
 import { getMetric } from "@/lib/journal/reports/metrics";
 import {
+  DEFAULT_BASELINE_TRADES,
   EXPERIMENT_METRIC_KEYS,
   MIN_WINDOW_TRADES,
   type ExperimentSummary,
@@ -25,8 +26,8 @@ import { startExperiment, endExperiment } from "@/app/(app)/weekly/actions";
  * "Jednu stvar menjam" — sa ishodom.
  *
  * Kartica postoji da bi ODBILA presudu. Dok interval razlike obuhvata nulu,
- * piše da ne znaš, i to je na knjizi od 40–70 trejdova godišnje najčešći
- * odgovor. Merenje se radi na serveru (`experiments.ts`); ovde se samo
+ * piše da ne znaš, i to je na nekoliko desetina trejdova sa svake strane
+ * najčešći odgovor. Merenje se radi na serveru (`experiments.ts`); ovde se samo
  * ispisuje, zajedno sa onim što ne kontroliše.
  */
 
@@ -114,7 +115,11 @@ function RunningExperiment({
 
       <div className="grid grid-cols-3 gap-2 text-center">
         <Figure
-          label={`Pre (${summary.window.beforeFrom} → ${summary.window.beforeTo})`}
+          label={
+            summary.window.beforeFrom
+              ? `Pre (${summary.window.beforeFrom} → ${summary.window.beforeTo})`
+              : "Pre (nema trejdova)"
+          }
           value={fmt(summary.before)}
           note={`${summary.beforeN} trejdova`}
         />
@@ -246,7 +251,8 @@ function StartForm({
       </div>
       <p className="text-xs text-muted-foreground">
         Bira se samo metrika koja nosi interval — eksperiment bez intervala je
-        anegdota sa datumom. Prozor „pre” je četiri nedelje pre ove.
+        anegdota sa datumom. Prozor „pre” je tvojih poslednjih {DEFAULT_BASELINE_TRADES} trejdova
+        zatvorenih pre ove nedelje.
       </p>
     </div>
   );

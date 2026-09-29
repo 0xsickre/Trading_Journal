@@ -2,9 +2,9 @@
  * How sure a number is — the half of every statistic this journal never showed.
  *
  * THE PROBLEM. A profit factor of 2.4 over twelve trades and one over three
- * hundred render identically, and on a book of forty to seventy trades a year
- * the reports table hands out findings that are noise: "XAUUSD on Mondays is my
- * best setup", n = 6. `sickre-score.ts` already admits it in a comment — a win
+ * hundred render identically, and a day trader's few hundred trades a year, cut
+ * by session, weekday and instrument, still leave the reports table handing out
+ * findings that are noise: "MNQ in the lunch window is my best setup", n = 6. `sickre-score.ts` already admits it in a comment — a win
  * rate over five decided trades carries a confidence interval about forty points
  * wide — and then prints the point estimate anyway.
  *

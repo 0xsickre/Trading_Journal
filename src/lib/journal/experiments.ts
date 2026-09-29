@@ -18,9 +18,17 @@
  * date. Net P&L over four weeks against six would always be "different", and
  * would always be noise.
  *
+ * THE BASELINE IS TRADES, NOT WEEKS (F5.4, the trader's choice 29.09.2026).
+ * "Before" is your last `baseline_trades` trades closed before the start, 40
+ * unless said otherwise. The interval depends on n, not on the calendar: four
+ * weeks held twenty trades in a quiet month and a hundred and twenty in a busy
+ * one, so two experiments on the same book were compared on different ground.
+ * The start stays a Monday because the weekly review is where the change is
+ * written; "after" is every trade closed since.
+ *
  * THE VERDICT IS WITHHELD while the interval of the difference still contains
- * zero — which, on forty to seventy trades a year, is the usual answer and is
- * meant to be. The card says "you do not know yet, n = …" instead of naming a
+ * zero — which, on a few dozen trades a side, is the usual answer and is meant
+ * to be. The card says "you do not know yet, n = …" instead of naming a
  * winner, because naming one here is precisely how a journal manufactures
  * confidence.
  *
@@ -35,7 +43,6 @@ import type { EnrichedTrade } from "./enriched-trade";
 import type { Interval } from "./uncertainty";
 import { getMetric, type MetricContext, type ReportMetric } from "./reports/metrics";
 import type { MetricUnit } from "./units";
-import { addWeeksToWeekStart } from "./weekly-review";
 
 /** Running, or finished with a decision. */
 export type ExperimentStatus = "running" | "kept" | "dropped";
@@ -47,7 +54,8 @@ export type Experiment = {
   hypothesis: string;
   /** One of `EXPERIMENT_METRIC_KEYS`. */
   metric_key: string;
-  baseline_weeks: number;
+  /** How many trades before the start the "before" window holds. */
+  baseline_trades: number;
   /** The Monday of the last week it covers; null while it runs. */
   ended_week: string | null;
   status: ExperimentStatus;
@@ -62,8 +70,8 @@ export type Experiment = {
  */
 export const EXPERIMENT_METRIC_KEYS = ["win_rate", "profit_factor", "expectancy"] as const;
 
-/** Weeks of history the "before" window uses when nothing else is said. */
-export const DEFAULT_BASELINE_WEEKS = 4;
+/** Trades of history the "before" window holds when nothing else is said. */
+export const DEFAULT_BASELINE_TRADES = 40;
 
 /**
  * Fewest trades either window needs before a difference is stated at all.
@@ -79,23 +87,27 @@ export const MIN_WINDOW_TRADES = 5;
 export type ExperimentWindows = {
   before: EnrichedTrade[];
   after: EnrichedTrade[];
-  /** The Mondays the two windows span, inclusive — what the card says out loud. */
-  beforeFrom: string;
-  beforeTo: string;
+  /**
+   * What the card says out loud: the close days of the oldest and newest
+   * baseline trade (null when there is none), and the Mondays "after" spans.
+   */
+  beforeFrom: string | null;
+  beforeTo: string | null;
   afterFrom: string;
   afterTo: string;
 };
 
 /**
- * The two windows, by the week a trade CLOSED in.
+ * The two windows, by when a trade CLOSED.
  *
  * Closed, not opened: a change to how trades are managed shows up in how they
  * end. A position opened the Friday before the experiment and closed inside it
  * was managed under the new rule, and belongs to the "after".
  *
- * "After" accumulates — every week from the start to today, not the latest
- * week alone. One week is four to seven trades, and a verdict from that is the
- * noise this module exists to refuse.
+ * "Before" is the last `baseline_trades` trades closed before the start week.
+ * "After" accumulates — every trade from the start week to today, not the
+ * latest week alone: a verdict from one week is the noise this module exists
+ * to refuse.
  */
 export function experimentWindows(
   exp: Experiment,
@@ -103,20 +115,20 @@ export function experimentWindows(
   /** The Monday of the week that is running now. */
   currentWeek: string,
 ): ExperimentWindows {
-  const beforeFrom = addWeeksToWeekStart(exp.started_week, -Math.max(1, exp.baseline_weeks));
-  const beforeTo = addWeeksToWeekStart(exp.started_week, -1);
   const afterFrom = exp.started_week;
   // A finished experiment stops where it stopped; a running one runs to now.
   const afterTo = exp.ended_week ?? currentWeek;
 
-  const inWindow = (t: EnrichedTrade, from: string, to: string) =>
-    t.closeWeek >= from && t.closeWeek <= to;
+  const before = trades
+    .filter((t) => t.closeWeek < afterFrom)
+    .sort((a, b) => (a.closedAt ?? "").localeCompare(b.closedAt ?? "") || a.id.localeCompare(b.id))
+    .slice(-Math.max(1, exp.baseline_trades));
 
   return {
-    before: trades.filter((t) => inWindow(t, beforeFrom, beforeTo)),
-    after: trades.filter((t) => inWindow(t, afterFrom, afterTo)),
-    beforeFrom,
-    beforeTo,
+    before,
+    after: trades.filter((t) => t.closeWeek >= afterFrom && t.closeWeek <= afterTo),
+    beforeFrom: before[0]?.closeDay ?? null,
+    beforeTo: before.at(-1)?.closeDay ?? null,
     afterFrom,
     afterTo,
   };
@@ -200,7 +212,7 @@ function verdictOf(
  * One experiment, in a shape that can cross to the browser.
  *
  * `ExperimentMeasure` carries the two windows of trades, which is exactly what
- * a server component must not serialize: the card needs four week keys and six
+ * a server component must not serialize: the card needs four dates and six
  * numbers, and shipping a few hundred enriched trades to render them would
  * make the weekly page pay for the whole book twice.
  */
@@ -216,8 +228,8 @@ export type ExperimentSummary = {
   beforeN: number;
   afterN: number;
   verdict: ExperimentVerdict;
-  /** The Mondays each window spans, inclusive — printed, not implied. */
-  window: { beforeFrom: string; beforeTo: string; afterFrom: string; afterTo: string };
+  /** What each window spans, inclusive — printed, not implied. */
+  window: { beforeFrom: string | null; beforeTo: string | null; afterFrom: string; afterTo: string };
 };
 
 export function summarizeExperiments(

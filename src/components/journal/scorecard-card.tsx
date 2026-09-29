@@ -94,9 +94,10 @@ export function ScorecardCard({ card }: { card: Scorecard }) {
           {edge.inconclusive && edge.expectancyR != null ? (
             <>
               The interval around your expectancy still includes zero, so this
-              book has not yet shown an edge one way or the other. On forty to
-              seventy trades a year that is the usual answer, and it is not a
-              verdict against the strategy — it is the sample speaking.{" "}
+              book has not yet shown an edge one way or the other. A small edge
+              needs several hundred trades before its interval clears zero, so
+              this is the usual answer, and it is not a verdict against the
+              strategy — it is the sample speaking.{" "}
             </>
           ) : null}
           {card.provisional && (

@@ -138,8 +138,8 @@ export default async function WeeklyPage({
   /**
    * The experiments, measured over the WHOLE book rather than this week's.
    *
-   * An experiment compares four weeks of history against every week since it
-   * started, so it needs the book — and `recap` above already enriches only
+   * An experiment compares its last trades before the start against every
+   * trade since, so it needs the book — and `recap` above already enriches only
    * what the week needs. Two windows, computed here, and only the numbers
    * cross to the browser: the trades themselves would be the whole book sent
    * twice to render six figures.

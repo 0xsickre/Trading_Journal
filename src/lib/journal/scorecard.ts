@@ -25,8 +25,9 @@
  *     confidence interval and its sample. Deliberately not squeezed onto a
  *     0–100 band: turning an interval into a grade throws away exactly the
  *     information Phase B added, and "0.32R, and the interval still includes
- *     zero" is the honest sentence. A book of forty to seventy trades a year
- *     will say that for a long time.
+ *     zero" is the honest sentence. Even a few hundred trades a year say it
+ *     for a long time: an edge of a tenth of an R, at the usual spread of R,
+ *     needs several hundred trades before its interval clears zero.
  *
  * WHAT LEFT ENTIRELY. Consistency, average win/loss and recovery factor were
  * components of the composite and are now nothing but report metrics. Each is

@@ -30,15 +30,15 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 185 of the
-3,396 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 186 of the
+3,441 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
 |---|---|
 | Daily (the "Pred sesiju" card included), weekly, tracker, focus goal | 128 |
 | Mentor-export prompt | 33 |
-| Weekly "Napredak" (progress) and experiment cards | 18 |
+| Weekly "Napredak" (progress) and experiment cards | 19 |
 | Day insight sentence (`low_efficiency_day`) | 1 |
 | Chart image helper (`tradingview-snapshot.ts`) | 2 |
 | The seeded tag values Log Trade writes (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2) | 3 |
@@ -65,7 +65,8 @@ lexes every `.ts`/`.tsx` outside tests into comment / string / code regions, kee
 that read as prose rather than as machinery, and scores those for Serbian by diacritics and by a word
 list. A single Serbian word carrying no diacritic can still slip past that, and JSX text between tags
 is not a string literal (the "Bez pregleda" card on `/daily` is Serbian and not in the count), so
-**165 is a floor, not a ceiling**. Three earlier versions of this paragraph said "about 46 of some 1,700", then "153 of
+**186 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
+name, read as the Serbian "pre" until F5.4. Three earlier versions of this paragraph said "about 46 of some 1,700", then "153 of
 1,663", then "185 of 2,191" — each counted by hand, and each had to be replaced rather than quietly
 corrected. That is why the method now ships as a script: a number nobody can re-run is a number
 nobody can check. The figure moved again when the bot bridge was removed, and this time by re-running
@@ -895,9 +896,12 @@ sentence, and ONE metric that would move if the change worked.
 
 The metric can only be win rate, profit factor or expectancy — the three that carry a confidence
 interval. An experiment without one is an anecdote with a start date, and the table's CHECK enforces
-that rather than leaving it to convention. "Before" is the four weeks before it started; "after" is
-every week since, accumulating, keyed on the week a trade CLOSED in — a change to how trades are
-managed shows up in how they end.
+that rather than leaving it to convention. **"Before" is your last 40 trades** closed before the start
+week (`baseline_trades`, F5.4 — the trader's choice of trades over weeks, 29.09.2026: the interval
+depends on n, and four weeks held twenty trades in one month and a hundred and twenty in another);
+"after" is every trade closed since, accumulating. Both are keyed on when a trade CLOSED — a change to
+how trades are managed shows up in how they end. The card dates "before" by its oldest and newest
+trade, or says there were none.
 
 **The verdict is withheld while the interval of the difference still contains zero**, and on a small
 book that is the usual answer. The card says "still don't know, n = …" rather than

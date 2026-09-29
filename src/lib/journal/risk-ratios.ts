@@ -19,8 +19,8 @@
  *
  *   2. The annualization factor is MEASURED, not assumed. Convention multiplies
  *      a daily Sharpe by sqrt(252) for equities or sqrt(365) for crypto. Both
- *      assume you are in the market every session. A swing trader closing on
- *      forty days a year is not, and sqrt(252) would inflate the number by more
+ *      assume you are in the market every session. A trader closing on forty
+ *      days a year is not, and sqrt(252) would inflate the number by more
  *      than a factor of two. So the periods per year come out of the data:
  *      trading days divided by the span they cover. Trade forty days a year and
  *      the factor is sqrt(40), which is the honest one.

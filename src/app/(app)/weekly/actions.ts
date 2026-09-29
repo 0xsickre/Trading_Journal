@@ -13,7 +13,7 @@ import {
   weekStartOfDayKey,
 } from "@/lib/journal/weekly-review";
 import {
-  DEFAULT_BASELINE_WEEKS,
+  DEFAULT_BASELINE_TRADES,
   EXPERIMENT_METRIC_KEYS,
 } from "@/lib/journal/experiments";
 
@@ -188,7 +188,7 @@ const experimentSchema = z.object({
   metric_key: z.enum(EXPERIMENT_METRIC_KEYS, {
     message: "Eksperiment se meri samo metrikom koja nosi interval.",
   }),
-  baseline_weeks: z.number().int().min(1).max(26).optional(),
+  baseline_trades: z.number().int().min(10).max(500).optional(),
 });
 
 export type StartExperimentInput = z.infer<typeof experimentSchema>;
@@ -218,7 +218,7 @@ export async function startExperiment(
     started_week: weekStart,
     hypothesis: parsed.data.hypothesis,
     metric_key: parsed.data.metric_key,
-    baseline_weeks: parsed.data.baseline_weeks ?? DEFAULT_BASELINE_WEEKS,
+    baseline_trades: parsed.data.baseline_trades ?? DEFAULT_BASELINE_TRADES,
   });
 
   if (error) {
