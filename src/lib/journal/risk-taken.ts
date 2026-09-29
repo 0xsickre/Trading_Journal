@@ -24,7 +24,7 @@
  */
 
 import { numberFieldValue } from "./field-values";
-import { sealedNumber } from "./plan-snapshot";
+import { plannedEntryOf, sealedNumber } from "./plan-snapshot";
 import { plannedRiskPts } from "./position-stats";
 import type { TradeRow } from "./types";
 
@@ -43,8 +43,9 @@ export function riskMoneyAtEntry(row: TradeRow): number | null {
   // The PLANNED stop distance as it was sealed at entry: this is the
   // denominator of every R on the trade, and a stop widened after the fact
   // would shrink every loss measured against it.
+  // Measured from the average fill for a trade logged after its entry.
   const riskPts = plannedRiskPts(
-    sealedNumber(row, "entry_price"),
+    plannedEntryOf(row),
     sealedNumber(row, "stop_price"),
     stats.avg_entry,
   );

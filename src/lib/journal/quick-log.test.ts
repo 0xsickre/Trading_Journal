@@ -87,9 +87,26 @@ describe("autoExitReason", () => {
     expect(autoExitReason({ ...base, exit: 30604, options: ["Stopped"] })).toBeNull();
     expect(autoExitReason({ ...base, exit: null })).toBeNull();
   });
-  it("without a tick size only an exact price counts", () => {
+  it("a stop-market fill THROUGH the stop is still the stop, however many ticks", () => {
+    // Short, stop 30604: a fast tape fills it at 30606 — eight ticks through.
+    expect(autoExitReason({ ...base, exit: 30606 })).toBe("Pogođen stop");
+    expect(autoExitReason({ ...base, direction: "Long", entry: 30584, stop: 30564, target: 30624, exit: 30561.5 })).toBe(
+      "Pogođen stop",
+    );
+    // A target filled better than written is the target too.
+    expect(autoExitReason({ ...base, exit: 30540 })).toBe("Pogođen target");
+  });
+  it("without a tick size the stop still counts at or past it, and nothing short of it", () => {
     expect(autoExitReason({ ...base, tickSize: null, exit: 30604 })).toBe("Pogođen stop");
-    expect(autoExitReason({ ...base, tickSize: null, exit: 30604.25 })).toBe("Zatvoreno ranije");
+    expect(autoExitReason({ ...base, tickSize: null, exit: 30604.25 })).toBe("Pogođen stop");
+    expect(autoExitReason({ ...base, tickSize: null, exit: 30603.75 })).toBe("Zatvoreno ranije");
+  });
+  it("reads the side off the stop when no direction is given, and a stop moved into profit", () => {
+    expect(autoExitReason({ ...base, direction: null, exit: 30606 })).toBe("Pogođen stop");
+    // Long with the stop trailed above the entry: filled through it is still the stop.
+    expect(autoExitReason({ ...base, direction: "Long", entry: 30584, stop: 30594, target: 30624, exit: 30593 })).toBe(
+      "Pogođen stop",
+    );
   });
 });
 

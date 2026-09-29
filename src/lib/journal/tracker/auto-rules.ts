@@ -15,7 +15,7 @@
 
 import { numberFieldValue } from "../field-values";
 import { computeFuturesContracts } from "../plan-calculations";
-import { sealedNumber, sealedText } from "../plan-snapshot";
+import { plannedEntryOf, sealedNumber, sealedText } from "../plan-snapshot";
 import {
   riskBudgetAt,
   TOPSTEP_PLANS,
@@ -193,7 +193,7 @@ function expectedContracts(row: TradeRow, budget: number | null, book: TopstepBo
   const pointValue = (stats.point_value ?? 0) * (stats.fx_rate ?? 1);
   const out = computeFuturesContracts({
     riskAmount: budget,
-    entry: sealedNumber(row, "entry_price") ?? stats.avg_entry,
+    entry: plannedEntryOf(row) ?? stats.avg_entry,
     stop: sealedNumber(row, "stop_price"),
     pointValue: pointValue > 0 ? pointValue : null,
     // Per side and per contract, as the form counts it: the trade's fees are

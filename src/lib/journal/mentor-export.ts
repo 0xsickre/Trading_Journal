@@ -540,7 +540,7 @@ export function buildMentorPack(
       "- **Profit factor** — bruto profit ÷ bruto gubitak. > 1 profitabilno; ∞ (beskonačno) = nema gubitaka u uzorku.",
       "- **Avg win / Avg loss** — prosečan dobitak/gubitak u **R**.",
       "- **Max drawdown** — najveći pad kapitala od vrha, u novcu (po izabranom net/gross modu).",
-      "- **Entry slippage** — koliko je stvarni ulaz gori od planiranog, u **R** (negativno = trošak lošijeg ulaza).",
+      "- **Entry slippage** — koliko je stvarni ulaz gori od planiranog, u **R** (negativno = trošak lošijeg ulaza). Samo za trejdove planirane PRE ulaza (limit); market nalog upisan posle nema planiranu cenu, pa se kod njega R i rizik mere od stvarnog fill-a, a slippage se ne navodi.",
       "- **Target attainment (exit efficiency)** — realizovani R ÷ planirani reward R (koliko sam od plana ciljanog poteza zapravo uzeo).",
       "- **MAE / MFE (R)** — maksimalni nepovoljni / povoljni pomak tokom trejda, u R, na istoj osnovi kao realizovani R (stvarni ulaz naspram planiranog rizika). \"MAE Price\"/\"MFE Price\" ispod svakog trejda su SIROVE cene sa grafikona, ne R — MAE/MFE (R) red je prevod tih cena u R.",
       "- **Sve R vrednosti (Total R, Avg R, Expectancy, MAE/MFE, slippage, target attainment) su uvek bruto (gross)** — kretanje cene, bez provizija — bez obzira na net/gross mod. Samo novčani redovi (Net P/L, Avg win/loss u valuti, Max drawdown) su net. Pozitivan expectancy u R zato NE znači da troškovi ne jedu edge — to pokazuje samo Net P/L red.",

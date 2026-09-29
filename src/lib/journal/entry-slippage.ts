@@ -1,4 +1,4 @@
-import { sealedNumber } from "./plan-snapshot";
+import { plannedEntryOf, sealedNumber } from "./plan-snapshot";
 import { tradeDirectionMultiplier } from "./position-stats";
 import type { TradeRow } from "./types";
 
@@ -67,9 +67,13 @@ export function computeEntrySlippage(input: SlippageInput): SlippageResult | nul
  * today. Moving the planned entry afterwards used to improve this number — the
  * exact edit `plan-snapshot.ts` exists to make harmless. A trade with no seal
  * (everything before that shipped) falls back to the live columns.
+ *
+ * None for a trade logged after its entry (a market order written up after the
+ * close): there was no planned price, and the typed one against the statement's
+ * fill measures the typing, not the market.
  */
 export function slippageFromTrade(row: TradeRow): SlippageResult | null {
-  const plannedEntry = sealedNumber(row, "entry_price");
+  const plannedEntry = plannedEntryOf(row);
   const stopPrice = sealedNumber(row, "stop_price");
   const direction = typeof row.direction === "string" ? row.direction : null;
   const avgEntry = row.stats?.avg_entry ?? null;

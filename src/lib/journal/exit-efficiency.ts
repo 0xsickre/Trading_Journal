@@ -1,4 +1,4 @@
-import { sealedNumber, sealedValue } from "./plan-snapshot";
+import { loggedAfterEntry, sealedNumber, sealedValue } from "./plan-snapshot";
 import type { TradeRow } from "./types";
 import {
   blendedPlannedRewardR,
@@ -49,7 +49,10 @@ const MIN_PLANNED_REWARD_R = 0.1;
  * same function for both shapes: with no levels it IS entry-to-target.
  */
 export function plannedRewardFromTrade(row: TradeRow): number | null {
-  const parsed = parsePlannedRewardR(row.planned_rr as string | null);
+  // A trade logged after its entry has no planned entry: the stored ratio was
+  // worked out from the typed price, so the reward is measured from the fill.
+  const afterEntry = loggedAfterEntry(row);
+  const parsed = afterEntry ? null : parsePlannedRewardR(row.planned_rr as string | null);
   if (parsed != null) return parsed;
 
   // The sealed plan, for the same reason the stored `planned_rr` wins over
@@ -57,7 +60,7 @@ export function plannedRewardFromTrade(row: TradeRow): number | null {
   // target after the close must not raise the score.
   return blendedPlannedRewardR({
     direction: (row.direction as string) ?? null,
-    entry: sealedNumber(row, "entry_price"),
+    entry: afterEntry ? (row.stats?.avg_entry ?? null) : sealedNumber(row, "entry_price"),
     stop: sealedNumber(row, "stop_price"),
     target: sealedNumber(row, "target_price"),
     levels: parseScaleOutLevels(sealedValue(row, "scale_out_levels")),

@@ -88,6 +88,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 29.09.2026 | K | Šest zahteva trejdera tokom H2 (redosled pravila, tagovi na srpskom, uvoz puni plan, fiksni breakeven, zona, slike) → faza **K** pre F5 |
 | 29.09.2026 | F4 | Trejder: `/daily` nema logike („Oba pitanja…", a pitanja nema; prošlo vreme; upućuje na karticu koje nema). Stranica je preuređena hronološki (1 · Pre sesije, 2 · Tokom sesije, 3 · Posle sesije), kartica „Pre nego što uđeš" ima dva numerisana pitanja u budućem vremenu, faze pravila na srpskom |
 | 29.09.2026 | F6 | M1-A: promašaj „košta" samo ako je cena posle plana dodirnula ulaz; onda prvi od stop (−1R) / target (+R plana) do kraja Topstep dana, inače 0; bez dodira ulaza → `no_entry`, broji se odvojeno. M2-A: `against_macro_bias` i `cot_chase` se gase, polja ostaju u bazi. M3-A: plan je zastareo kad prođe njegov Topstep dan (trejder: „A, A, A") |
+| 29.09.2026 | posle F | Trejder ulazi uglavnom market nalogom („uradi sva tri"): (1) trejd upisan posle prvog fill-a meri R, rizik, planirani reward i MAE/MFE od prosečnog fill-a, ne od ukucane cene (view `risk_pts`, `20260930020000`; `plannedEntryOf`); (2) entry slippage se za njega ne navodi; (3) izlaz na stopu ili kroz njega = „Pogođen stop", target na ili preko = „Pogođen target" |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.

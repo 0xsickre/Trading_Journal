@@ -171,6 +171,35 @@ export function sealedNumber(row: TradeRow, key: PlanField): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * Was the trade written into the journal AFTER its first fill?
+ *
+ * The market-order day trader's way in: `/trades/log` after the close, or a
+ * statement import. Such a trade had no planned entry — the price typed was a
+ * reading of the fill, and the day's TopstepX export replaces the fills with the
+ * exact ones while the typed number stays. Measured against it, R, risk, target
+ * attainment and "entry slippage" would all be measuring the typing.
+ *
+ * The same test the tracker's `thesis_written` uses (a plan written by the
+ * entry), and the one `tj_position_stats` applies to `risk_pts` since
+ * `20260930020000`: `created_at` after the first entry fill.
+ */
+export function loggedAfterEntry(row: TradeRow): boolean {
+  const created = Date.parse(String(row.created_at ?? ""));
+  const opened = Date.parse(String(row.stats?.opened_at ?? ""));
+  return Number.isFinite(created) && Number.isFinite(opened) && created > opened;
+}
+
+/**
+ * The planned entry a plan-versus-reality figure is measured from — the sealed
+ * one, or null for a trade logged after its entry, whose reference is then the
+ * average fill (every caller falls back to `avg_entry`, as the view does). A
+ * trade planned before its entry — a limit that waited — keeps its plan.
+ */
+export function plannedEntryOf(row: TradeRow): number | null {
+  return loggedAfterEntry(row) ? null : sealedNumber(row, "entry_price");
+}
+
 /** A planned text field as it was sealed — `thesis`, `invalidation`. */
 export function sealedText(row: TradeRow, key: PlanField): string | null {
   const plan = sealedPlan(row);

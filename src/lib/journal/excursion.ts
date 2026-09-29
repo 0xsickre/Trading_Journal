@@ -12,6 +12,7 @@
 
 import type { TradeRow } from "./types";
 import { numberFieldValue as num } from "./field-values";
+import { plannedEntryOf, sealedNumber } from "./plan-snapshot";
 import { plannedRiskPts, tradeDirectionMultiplier } from "./position-stats";
 
 export type Excursion = {
@@ -44,11 +45,9 @@ export function excursionFromTrade(row: TradeRow): Excursion {
   const empty: Excursion = { maeR: null, mfeR: null, capturePct: null };
 
   const avgEntry = row.stats?.avg_entry ?? null;
-  const riskPts = plannedRiskPts(
-    num(row, "entry_price"),
-    num(row, "stop_price"),
-    avgEntry,
-  );
+  // The same denominator as `realized_r` in the view: the sealed plan, and the
+  // average fill for a trade logged after its entry.
+  const riskPts = plannedRiskPts(plannedEntryOf(row), sealedNumber(row, "stop_price"), avgEntry);
   if (avgEntry == null || riskPts == null || !(riskPts > 0)) return empty;
 
   const dir = tradeDirectionMultiplier((row.direction as string) ?? null);

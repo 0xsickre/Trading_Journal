@@ -102,10 +102,13 @@ export function quickLogWarnings(q: QuickLogInput): string[] {
 }
 
 /**
- * Why the trade ended, read off the prices: within two ticks of the stop is the
- * stop, of the target the target, of the entry break-even; anything else was
- * closed by hand. Returned only when the trader's own exit-reason list has that
- * item, so a renamed list is never written a value it does not offer.
+ * Why the trade ended, read off the prices. The stop is hit when the exit is AT
+ * OR PAST it on the losing side (or within two ticks short of it): a stop-market
+ * order in a fast NQ tape fills several ticks through the stop, and that is a
+ * stop, not a hand close. The target likewise at or past it, or within two
+ * ticks; the entry within two ticks is break-even; anything else was closed by
+ * hand. Returned only when the trader's own exit-reason list has that item, so
+ * a renamed list is never written a value it does not offer.
  */
 export function autoExitReason(params: {
   direction: string | null;
@@ -120,10 +123,21 @@ export function autoExitReason(params: {
   if (entry == null || exit == null) return null;
   const tol = 2 * (params.tickSize && params.tickSize > 0 ? params.tickSize : 0);
   const near = (a: number | null) => a != null && a > 0 && Math.abs(exit - a) <= tol + 1e-9;
+  // +1 long, −1 short: the direction as written, else the side the stop is on.
+  const dir = params.direction
+    ? params.direction.toLowerCase().startsWith("short")
+      ? -1
+      : 1
+    : stop != null && stop > entry
+      ? -1
+      : 1;
+  const set = (a: number | null): a is number => a != null && a > 0;
+  const pastStop = set(stop) && dir * (exit - stop) <= tol + 1e-9;
+  const pastTarget = set(target) && dir * (exit - target) >= -tol - 1e-9;
   const pick = (v: string) => (options.includes(v) ? v : null);
   // The seeded exit reasons, in Serbian since K2 (`20260929200000`).
-  if (near(stop)) return pick("Pogođen stop");
-  if (near(target)) return pick("Pogođen target");
+  if (pastStop) return pick("Pogođen stop");
+  if (pastTarget) return pick("Pogođen target");
   if (near(entry)) return pick("Na nuli");
   return pick("Zatvoreno ranije");
 }
