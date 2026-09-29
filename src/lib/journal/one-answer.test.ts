@@ -163,7 +163,7 @@ describe("the account zone — one fallback chain", () => {
 
   it("with no primary account it falls back to DEFAULT_TZ", () => {
     const tz = accountTimezoneResolver([], null);
-    expect(tz(null)).toBe("America/New_York");
+    expect(tz(null)).toBe("Europe/Belgrade");
   });
 });
 

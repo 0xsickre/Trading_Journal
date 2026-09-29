@@ -191,6 +191,18 @@ describe("new account and duplicate", () => {
   });
 });
 
+describe("the timezone is the trader's, not a field (K5)", () => {
+  it("shows Europe/Belgrade and offers nothing to type", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<AccountSettings accounts={[account()]} tradeCounts={{ "acc-1": 0 }} />);
+    await openMenu(user, "Main Account");
+    await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
+    expect(screen.getByText("Europe/Belgrade")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Timezone" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Timezone")).not.toBeInTheDocument();
+  });
+});
+
 describe("the breakeven range is fixed (K4)", () => {
   it("shows the plan's band and offers nothing to type", async () => {
     const user = userEvent.setup({ delay: null });

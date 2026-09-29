@@ -1,6 +1,12 @@
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
-export const DEFAULT_TZ = "America/New_York";
+/**
+ * The trader's zone, and the zone every time in the journal is shown in (K5,
+ * 29.09.2026). Not a setting any more: a file that carries its own offset is
+ * converted on import (`parseImportTime`), and a Topstep account keys its days
+ * by Topstep's 17:00 CT day whatever this says.
+ */
+export const DEFAULT_TZ = "Europe/Belgrade";
 
 /**
  * A timezone name the platform actually knows, or the default.

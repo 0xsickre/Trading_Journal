@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   Archive,
@@ -57,7 +57,7 @@ import {
   topstepBreakevenBand,
   type TopstepPlan,
 } from "@/lib/journal/topstep";
-import { isValidTimeZone } from "@/lib/journal/time";
+import { DEFAULT_TZ } from "@/lib/journal/time";
 import {
   updateAccount,
   addAccount,
@@ -67,31 +67,6 @@ import {
   countAccountUsage,
   deleteAccount,
 } from "@/app/(app)/settings/actions";
-
-const COMMON_TIMEZONES = [
-  "America/New_York",
-  "America/Chicago",
-  "America/Los_Angeles",
-  "UTC",
-  "Europe/London",
-  "Europe/Belgrade",
-  "Europe/Berlin",
-  "Asia/Dubai",
-  "Asia/Tokyo",
-  "Australia/Sydney",
-];
-
-/** Every zone the browser knows, for the searchable list; the common ones first. */
-function allTimezones(): string[] {
-  let all: string[] = [];
-  try {
-    all = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] })
-      .supportedValuesOf?.("timeZone") ?? [];
-  } catch {
-    all = [];
-  }
-  return [...new Set([...COMMON_TIMEZONES, ...all])];
-}
 
 const CURRENCIES = ["USD", "EUR", "GBP", "CHF", "JPY", "AUD", "CAD"];
 
@@ -236,11 +211,9 @@ function CreateAccountDialog({
   const [name, setName] = useState(seed?.name ?? "");
   const [currency, setCurrency] = useState(seed?.currency ?? "USD");
   const [balance, setBalance] = useState(seed ? String(seed.starting_balance) : "");
-  const [tz, setTz] = useState(seed?.timezone ?? "America/New_York");
 
   const balanceCheck = parseSettingsNumber(balance, { min: 0 });
-  const tzOk = isValidTimeZone(tz);
-  const canCreate = name.trim() !== "" && balanceCheck.ok && tzOk;
+  const canCreate = name.trim() !== "" && balanceCheck.ok;
 
   function create() {
     if (!balanceCheck.ok) return;
@@ -249,7 +222,8 @@ function CreateAccountDialog({
         name,
         currency,
         starting_balance: balanceCheck.value ?? 0,
-        timezone: tz,
+        // Always the trader's zone (K5); a duplicate does not carry another.
+        timezone: DEFAULT_TZ,
         copyFrom: source?.id ?? null,
       });
       if (!res.ok) toast.error(res.error);
@@ -301,7 +275,7 @@ function CreateAccountDialog({
               hint={balanceCheck.ok && balanceCheck.value != null ? fmtMoney(balanceCheck.value, currency) : undefined}
             />
           </div>
-          <TimezoneField id="new-tz" value={tz} onChange={setTz} />
+          <TimezoneNote />
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
@@ -318,43 +292,21 @@ function CreateAccountDialog({
 
 // --- Shared fields ------------------------------------------------------------
 
-/** A searchable timezone input that shows the current value even when it is not in the short list. */
-function TimezoneField({
-  id,
-  value,
-  onChange,
-  warning,
-}: {
-  id: string;
-  value: string;
-  onChange: (v: string) => void;
-  warning?: string | null;
-}) {
-  const zones = useMemo(() => allTimezones(), []);
-  const ok = isValidTimeZone(value);
+/**
+ * The zone every time is shown in — the trader's, always (K5, 29.09.2026: "uvek
+ * moja zona po defaultu"). Not a setting: a file that states its own offset is
+ * read in that offset on import, and a Topstep account counts its days by
+ * Topstep's 17:00 CT whatever the zone shows.
+ */
+function TimezoneNote() {
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>Timezone</Label>
-      <Input
-        id={id}
-        list={`${id}-list`}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-invalid={!ok}
-        autoComplete="off"
-      />
-      <datalist id={`${id}-list`}>
-        {zones.map((z) => (
-          <option key={z} value={z} />
-        ))}
-      </datalist>
-      {!ok ? (
-        <p className="text-xs text-destructive">Unknown timezone — pick one from the list.</p>
-      ) : warning ? (
-        <p className="text-xs text-amber-600 dark:text-amber-500">{warning}</p>
-      ) : (
-        <p className="text-xs text-muted-foreground">Decides which day every trade belongs to.</p>
-      )}
+    <div className="space-y-1">
+      <Label>Timezone</Label>
+      <p className="text-sm">{DEFAULT_TZ.replace("_", " ")}</p>
+      <p className="text-xs text-muted-foreground">
+        Every time is shown in your zone. An imported file with its own offset is converted; the
+        Topstep day still runs 17:00 → 17:00 CT.
+      </p>
     </div>
   );
 }
@@ -427,7 +379,6 @@ function EditAccountDialog({
   const hasTrades = trades == null || trades > 0;
 
   const [name, setName] = useState(account.name);
-  const [tz, setTz] = useState(account.timezone);
   const [currency, setCurrency] = useState(account.currency);
   const [balance, setBalance] = useState(String(account.starting_balance));
 
@@ -464,17 +415,15 @@ function EditAccountDialog({
       ? "The minimum is above the maximum."
       : null;
   const invalid =
-    Object.values(checks).some((c) => !c.ok) || riskOrder != null || !isValidTimeZone(tz) || !name.trim();
+    Object.values(checks).some((c) => !c.ok) || riskOrder != null || !name.trim();
 
   const balanceChanged = checks.balance.ok && val("balance") !== account.starting_balance;
-  const tzChanged = tz !== account.timezone;
 
   function save() {
     if (invalid) return;
     start(async () => {
       const res = await updateAccount(account.id, {
         name: name.trim(),
-        timezone: tz,
         currency,
         starting_balance: val("balance"),
         default_commission_per_unit: val("comm"),
@@ -554,16 +503,7 @@ function EditAccountDialog({
             }
           />
           <div className="sm:col-span-2">
-            <TimezoneField
-              id={`tz-${account.id}`}
-              value={tz}
-              onChange={setTz}
-              warning={
-                tzChanged && hasTrades
-                  ? "Past trades will be re-dated to this timezone's days."
-                  : null
-              }
-            />
+            <TimezoneNote />
           </div>
         </div>
 

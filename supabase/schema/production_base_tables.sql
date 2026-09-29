@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   currency                    text        NOT NULL DEFAULT 'USD',
   starting_balance            numeric     NOT NULL DEFAULT 0,
   default_asset_class         text,
-  timezone                    text        NOT NULL DEFAULT 'America/New_York',
+  timezone                    text        NOT NULL DEFAULT 'Europe/Belgrade',
   is_active                   boolean     NOT NULL DEFAULT true,
   created_at                  timestamptz NOT NULL DEFAULT now(),
   -- Breakeven pojas i podrazumevani troškovi (20260727121000)

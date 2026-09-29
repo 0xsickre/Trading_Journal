@@ -466,10 +466,11 @@ describe("today (D3)", () => {
     expect(todayIn(NY, now)).toBe("2026-09-28");
   });
 
-  it("todayFor reads the rule off the account, New York when there is none", () => {
+  it("todayFor reads the rule off the account, the trader's zone when there is none", () => {
     const now = new Date("2026-09-28T22:30:00Z");
     expect(todayFor({ timezone: NY, topstep_mode: true }, now)).toBe("2026-09-29");
     expect(todayFor({ timezone: NY, topstep_mode: false }, now)).toBe("2026-09-28");
-    expect(todayFor(null, now)).toBe("2026-09-28");
+    // 22:30 UTC is already 00:30 on the 29th in Belgrade (K5).
+    expect(todayFor(null, now)).toBe("2026-09-29");
   });
 });
