@@ -21,17 +21,15 @@ type RuleRow = {
   deleted_at: string | null;
 };
 
-/** jsonb comes back as `unknown`; only a numeric `amount` is meaningful. */
 /**
- * `pct` only. A row still carrying the old money `amount` reads as
- * unconfigured, which is what the migration to percentages leaves behind on
- * purpose: a limit whose unit changed under it must be re-stated by the trader,
- * not reinterpreted by the reader.
+ * jsonb comes back as `unknown`; only a whole-number `count` is meaningful —
+ * the entries or losses a count rule allows (F4). Anything else reads as
+ * unconfigured rather than being reinterpreted.
  */
-function parseConfig(raw: unknown): { pct?: number } {
+export function parseConfig(raw: unknown): { count?: number } {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-  const pct = (raw as Record<string, unknown>).pct;
-  return typeof pct === "number" && Number.isFinite(pct) ? { pct } : {};
+  const count = (raw as Record<string, unknown>).count;
+  return typeof count === "number" && Number.isInteger(count) && count > 0 ? { count } : {};
 }
 
 function toRule(r: RuleRow): TrackerRule {

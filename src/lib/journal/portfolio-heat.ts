@@ -130,22 +130,3 @@ export function heatByAccount(
     heatForAccount(id, rows, equityOf(id)),
   );
 }
-
-/**
- * Whether the open risk has passed the ceiling the trader set for a SINGLE
- * trade — the only limit this journal stores.
- *
- * Deliberately not a new setting. The tracker's `risk_per_trade` percentage is
- * the number they already chose to describe their risk appetite, and a book
- * carrying more open risk than one trade is allowed to take is worth saying
- * out loud even though the two are not the same question. Null when no ceiling
- * is configured: an unset limit must never render as "within limits".
- */
-export function heatExceedsPerTradeLimit(
-  heat: BookHeat,
-  perTradeLimitPct: number | null | undefined,
-): boolean | null {
-  if (perTradeLimitPct == null || !(perTradeLimitPct > 0)) return null;
-  if (heat.totalRiskPct == null) return null;
-  return heat.totalRiskPct > perTradeLimitPct;
-}

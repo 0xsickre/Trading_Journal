@@ -5,8 +5,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { fmtMoney, fmtNum, fmtPrice } from "@/lib/journal/format";
-import { heatByAccount, heatExceedsPerTradeLimit } from "@/lib/journal/portfolio-heat";
-import { cn } from "@/lib/utils";
+import { heatByAccount } from "@/lib/journal/portfolio-heat";
 import { numberFieldValue } from "@/lib/journal/field-values";
 import { formatDuration } from "@/lib/journal/units";
 import { openQty } from "@/lib/journal/trade-lifecycle";
@@ -30,7 +29,6 @@ export function OpenPositionsWidget({
   now: nowProp,
   equityOf,
   currency = "USD",
-  perTradeLimitPct = null,
 }: {
   rows: TradeRow[];
   tzOf: (t: TradeRow) => string;
@@ -39,8 +37,6 @@ export function OpenPositionsWidget({
   /** Current equity per account — the denominator of the heat figure. */
   equityOf?: (accountId: string) => number | null;
   currency?: string;
-  /** The tracker's own per-trade ceiling, when one is configured. */
-  perTradeLimitPct?: number | null;
 }) {
   // Read once per mount: "held for" is a glance, not a ticking clock.
   const [now] = useState(() => nowProp ?? Date.now());
@@ -74,7 +70,6 @@ export function OpenPositionsWidget({
         {heats.length > 0 && (
           <div className="mb-2 space-y-0.5 border-b pb-2">
             {heats.map((h) => {
-              const over = heatExceedsPerTradeLimit(h, perTradeLimitPct);
               return (
                 <p key={h.accountId} className="flex items-baseline justify-between text-xs">
                   <span className="text-muted-foreground">
@@ -82,7 +77,7 @@ export function OpenPositionsWidget({
                     {heats.length > 1 && ` · ${h.accountId.slice(0, 8)}`}
                   </span>
                   <span
-                    className={cn("tabular-nums", over && "font-medium text-amber-600 dark:text-amber-500")}
+                    className="tabular-nums"
                   >
                     {h.totalRiskPct != null ? `${h.totalRiskPct.toFixed(2)}%` : "—"}
                     <span className="ml-1 text-muted-foreground">

@@ -11,7 +11,6 @@ import { DEFAULT_TZ, accountDayZone, dayKeyIn, todayIn } from "@/lib/journal/tim
 import { trackerRuleMayHardDelete } from "@/lib/journal/settings-rules";
 import {
   AUTO_RULES_NEEDING_COUNT,
-  AUTO_RULES_NEEDING_PCT,
   TRACKER_STAGES,
   type AutoRuleKey,
   type TrackerStage,
@@ -28,23 +27,15 @@ type Result = { ok: true } | { ok: false; error: string };
 /**
  * Config schema per `auto_key`.
  *
- * `.strict()` on purpose: a future `{"basis":"pct"}` must fail loudly until an
+ * `.strict()` on purpose: a key no evaluator reads must fail loudly until an
  * evaluator knows what to do with it, rather than being stored and silently
  * ignored. A manual rule has nothing to configure at all, which the DB also
  * enforces.
  */
 /**
- * Capped at 100: a limit of "lose more than all of it" is not a limit, and a
- * stray keypress turning 2 into 200 would silently switch the rule off rather
- * than tighten it.
- */
-const pctConfig = z
-  .object({ pct: z.number().finite().positive().max(100).optional() })
-  .strict();
-/**
  * A whole number of entries or losses. Capped at 20: no day trader's rule is
  * "stop after twenty-one losses", and a stray keypress turning 2 into 200 would
- * switch the rule off rather than tighten it — the same guard as the 100 % cap.
+ * switch the rule off rather than tighten it.
  */
 const countConfig = z
   .object({ count: z.number().int().positive().max(20).optional() })
@@ -53,7 +44,6 @@ const emptyConfig = z.object({}).strict();
 
 function configSchema(autoKey: AutoRuleKey | null) {
   if (autoKey == null) return emptyConfig;
-  if (AUTO_RULES_NEEDING_PCT.has(autoKey)) return pctConfig;
   return AUTO_RULES_NEEDING_COUNT.has(autoKey) ? countConfig : emptyConfig;
 }
 

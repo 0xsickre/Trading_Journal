@@ -295,48 +295,48 @@ describe("rulesLiveOn is what every per-day computation starts from", () => {
     // so a retired rule and its replacement coexist under one key.
     // `configsFromRules` lets the last one win, and the order is `sort_order`,
     // which the user can drag around. Built once for a whole span, the dead
-    // 4 % limit was scoring days the 10 % limit governs.
+    // count of 4 was scoring days the count of 10 governs.
     const retired = rule({
       id: "old",
-      auto_key: "max_loss_per_day",
-      config: { pct: 4 },
+      auto_key: "max_trades_per_day",
+      config: { count: 4 },
       deleted_at: "2026-06-01T00:00:00Z",
       sort_order: 9,
     });
     const live = rule({
       id: "new",
-      auto_key: "max_loss_per_day",
-      config: { pct: 10 },
+      auto_key: "max_trades_per_day",
+      config: { count: 10 },
       created_at: "2026-06-01T00:00:00Z",
       sort_order: 1,
     });
     const both = [live, retired]; // as `sort_order` would order them
 
-    expect(configsFromRules(both).max_loss_per_day).toEqual({ pct: 4 });
+    expect(configsFromRules(both).max_trades_per_day).toEqual({ count: 4 });
     expect(
-      configsFromRules(rulesLiveOn(both, TODAY)).max_loss_per_day,
-    ).toEqual({ pct: 10 });
+      configsFromRules(rulesLiveOn(both, TODAY)).max_trades_per_day,
+    ).toEqual({ count: 10 });
   });
 
   it("still answers with the OLD limit for a day the old rule governed", () => {
-    // Not merely "prefer the live rule": a day in May was lived under the 4 %
-    // limit and must keep being scored against it.
+    // Not merely "prefer the live rule": a day in May was lived under the count of 4
+    // and and must keep being scored against it.
     const retired = rule({
       id: "old",
-      auto_key: "max_loss_per_day",
-      config: { pct: 4 },
+      auto_key: "max_trades_per_day",
+      config: { count: 4 },
       created_at: "2026-01-01T00:00:00Z",
       deleted_at: "2026-06-01T00:00:00Z",
     });
     const live = rule({
       id: "new",
-      auto_key: "max_loss_per_day",
-      config: { pct: 10 },
+      auto_key: "max_trades_per_day",
+      config: { count: 10 },
       created_at: "2026-06-01T00:00:00Z",
     });
     expect(
-      configsFromRules(rulesLiveOn([live, retired], "2026-05-20")).max_loss_per_day,
-    ).toEqual({ pct: 4 });
+      configsFromRules(rulesLiveOn([live, retired], "2026-05-20")).max_trades_per_day,
+    ).toEqual({ count: 4 });
   });
 });
 

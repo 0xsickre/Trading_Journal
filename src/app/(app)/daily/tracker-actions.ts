@@ -11,8 +11,6 @@ import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
 import { briefResolver } from "@/lib/journal/session-brief";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getTrackerRules } from "@/lib/journal/tracker/queries";
-import { bookEquityLadder } from "@/lib/journal/tracker/equity-ladder";
-import { getCashEvents } from "@/lib/journal/cash-events";
 import {
   buildTradeDayIndex,
   configsFromRules,
@@ -133,11 +131,10 @@ export async function lockDay(reportDate: string): Promise<Result> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Nisi prijavljen." };
 
-  const [accounts, rules, trades, cashEvents, briefs] = await Promise.all([
+  const [accounts, rules, trades, briefs] = await Promise.all([
     getAccounts(),
     getTrackerRules({ includeRetired: true }),
     getTradesWithStats(),
-    getCashEvents(),
     // The day's brief, for the two rules that read it — what is frozen is what
     // the page showed, and the page read the same row.
     getSessionBriefs(reportDate, reportDate),
@@ -151,16 +148,11 @@ export async function lockDay(reportDate: string): Promise<Result> {
   // any other's calendar day — so what is locked is what was on screen.
   const tzOf = accountDayZoneResolver(accounts, primary);
   const index = buildTradeDayIndex(trades, (row) => tzOf(row.account_id), topstepRulesResolver(accounts));
-  // The same ladder the page used to show these verdicts. Locking freezes what
-  // was on screen, so a different basis here would seal a number the trader
-  // never saw.
-  const equityOf = bookEquityLadder(index, accounts, cashEvents, tzOf);
   // The limits in force ON THIS DAY, not whatever a retired rule still carries.
   const auto = evaluateAutoRulesForDay(
     reportDate,
     index,
     configsFromRules(rulesLiveOn(rules, reportDate)),
-    equityOf,
     { briefOf: briefResolver(briefs) },
   );
 

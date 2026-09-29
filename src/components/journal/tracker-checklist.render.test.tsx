@@ -170,7 +170,6 @@ describe("auto rules show a verdict but never a manual control", () => {
         id: "r1",
         text: "Max loss per trade",
         auto_key: "max_loss_per_trade",
-        config: { pct: 5 },
       }),
     ];
     render(
@@ -184,10 +183,11 @@ describe("auto rules show a verdict but never a manual control", () => {
               verdict: "fail",
               reason: "violated",
               observed: -620,
-              // The money the percentage worked out to on this day. It comes
-              // from the evaluator now, not from the rule's config: only the
-              // evaluator knows the balance the day opened with.
+              // The budget the risk rule gave at entry, plus the slippage
+              // tolerance — from the evaluator, which knows the closed trades
+              // at that moment.
               limit: -500,
+              basis: "topstep_budget_slippage",
               offenders: ["trade-1"],
             },
           },
@@ -196,11 +196,8 @@ describe("auto rules show a verdict but never a manual control", () => {
       />,
     );
     expect(screen.getByText("prekršeno")).toBeInTheDocument();
-    // Both figures, and the percentage behind the second — "5 %" alone would
-    // not tell the reader how much room the day actually had.
-    expect(
-      screen.getByText(/-\$620\.00.*-\$500\.00.*5 % equity-ja/),
-    ).toBeInTheDocument();
+    // Both figures, and which of the plan's numbers the second one is.
+    expect(screen.getByText(/-\$620\.00.*-\$500\.00 \(/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "#12 EURUSD" })).toHaveAttribute(
       "href",
       "/trades/trade-1/edit",
@@ -209,15 +206,15 @@ describe("auto rules show a verdict but never a manual control", () => {
   });
 
   it("an unconfigured auto rule says so instead of silently reading as passed", () => {
-    const R = [rule({ id: "r1", text: "Max loss per trade", auto_key: "max_loss_per_trade" })];
+    const R = [rule({ id: "r1", text: "Max trades per day", auto_key: "max_trades_per_day" })];
     render(
       <TrackerStageSection
         stage="prepare"
         data={data({
           rules: R,
           auto: {
-            max_loss_per_trade: {
-              key: "max_loss_per_trade",
+            max_trades_per_day: {
+              key: "max_trades_per_day",
               verdict: "na",
               reason: "unconfigured",
               observed: null,
@@ -228,13 +225,11 @@ describe("auto rules show a verdict but never a manual control", () => {
       />,
     );
     expect(screen.getByText("nije ocenjeno")).toBeInTheDocument();
-    expect(screen.getByText(/Limit nije podešen/)).toBeInTheDocument();
+    expect(screen.getByText(/Broj nije podešen/)).toBeInTheDocument();
   });
 
-  it("a Topstep limit names the plan, not a percentage of equity", () => {
-    // The rule is configured at 2 %, but this breach was the plan's DLL on a
-    // Topstep account — "(2 % equity-ja)" would be a false sentence.
-    const R = [rule({ id: "r1", text: "Max loss per day", auto_key: "max_loss_per_day", config: { pct: 2 } })];
+  it("a Topstep limit names the plan", () => {
+    const R = [rule({ id: "r1", text: "Max loss per day", auto_key: "max_loss_per_day" })];
     render(
       <TrackerStageSection
         stage="prepare"
@@ -256,28 +251,6 @@ describe("auto rules show a verdict but never a manual control", () => {
     );
     expect(screen.getByText(/DLL Topstep plana/)).toBeInTheDocument();
     expect(screen.queryByText(/equity-ja/)).not.toBeInTheDocument();
-  });
-
-  it("a week with only Topstep trades says Topstep has no weekly limit", () => {
-    const R = [rule({ id: "r1", text: "Max loss per week", auto_key: "max_loss_per_week" })];
-    render(
-      <TrackerStageSection
-        stage="prepare"
-        data={data({
-          rules: R,
-          auto: {
-            max_loss_per_week: {
-              key: "max_loss_per_week",
-              verdict: "na",
-              reason: "not_on_topstep",
-              observed: null,
-              offenders: [],
-            },
-          },
-        })}
-      />,
-    );
-    expect(screen.getByText(/Topstep nema nedeljni limit/)).toBeInTheDocument();
   });
 
   it("a thesis rule with no planned trade says why nothing was graded", () => {

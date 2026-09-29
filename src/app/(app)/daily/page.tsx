@@ -5,8 +5,6 @@ import { getActiveFocusGoal } from "@/lib/journal/focus-goal-queries";
 import { stringFieldValue } from "@/lib/journal/field-values";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getCheckins, getTrackerRules } from "@/lib/journal/tracker/queries";
-import { bookEquityLadder } from "@/lib/journal/tracker/equity-ladder";
-import { getCashEvents } from "@/lib/journal/cash-events";
 import {
   buildTradeDayIndex,
   configsFromRules,
@@ -88,7 +86,6 @@ export default async function DailyPage({
     { primary, timezone, today, reportDate },
     rules,
     trades,
-    cashEvents,
     report,
     activeGoal,
     checkinsByDay,
@@ -102,7 +99,6 @@ export default async function DailyPage({
     // which is exactly why it takes the day as an argument.
     getTrackerRules({ includeRetired: true }),
     getTradesWithStats(),
-    getCashEvents(),
     dayPromise.then(({ reportDate }) => getDailyReport(reportDate)),
     getActiveFocusGoal(),
     // The whole window, not just this day. The streak strip needs the run
@@ -144,12 +140,8 @@ export default async function DailyPage({
   const tzFor = accountDayZoneResolver(accounts, primary);
   const tzOf = (row: TradeRow) => tzFor(row.account_id);
 
-  // A Topstep account's trades are graded by its plan, the rest by percentage.
+  // A Topstep account's trades are graded by its plan.
   const index = buildTradeDayIndex(trades, tzOf, topstepRulesResolver(accounts));
-  // The percentage limits are a percentage of the balance each day OPENED with;
-  // the ladder is what knows that balance. Built once for both evaluations
-  // below, so the day in view and the streak behind it agree on it.
-  const equityOf = bookEquityLadder(index, accounts, cashEvents, tzFor);
   const dayRules = rulesLiveOn(rules, reportDate);
 
   // Live verdicts, then the frozen ones on top. On an unlocked day the overlay is
@@ -160,7 +152,7 @@ export default async function DailyPage({
     dayRules,
     // `dayRules`, not `rules`: the limits scored here must be the ones in force
     // on this day, not a retired rule's leftovers.
-    evaluateAutoRulesForDay(reportDate, index, configsFromRules(dayRules), equityOf, { briefOf }),
+    evaluateAutoRulesForDay(reportDate, index, configsFromRules(dayRules), { briefOf }),
     checkins,
   );
 
@@ -231,7 +223,6 @@ export default async function DailyPage({
           d,
           index,
           configsFromRules(rulesLiveOn(rules, d)),
-          equityOf,
           { briefOf },
         ),
         checkinsByDay.get(d) ?? new Map(),

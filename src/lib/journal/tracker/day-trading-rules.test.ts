@@ -80,7 +80,7 @@ const index = (specs: Spec[]) =>
   buildTradeDayIndex(specs.map(row), (r) => zoneOf(r.account_id), topstepRulesResolver(ACCOUNTS));
 const COUNTS: AutoConfigs = { max_trades_per_day: { count: 2 }, stop_after_losses: { count: 2 } };
 const evalDay = (specs: Spec[], ctx: { briefs?: SessionBrief[]; now?: number } = {}, configs = COUNTS) =>
-  evaluateAutoRulesForDay(DAY, index(specs), configs, () => null, {
+  evaluateAutoRulesForDay(DAY, index(specs), configs, {
     briefOf: briefResolver(ctx.briefs ?? []),
     now: ctx.now ?? Date.parse("2026-09-30T12:00:00Z"),
   });

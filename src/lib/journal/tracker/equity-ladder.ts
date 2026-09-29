@@ -1,20 +1,16 @@
 /**
- * Equity at the START of each day, which is what a percentage limit is a
- * percentage OF.
+ * Equity at the START of each day — the denominator of the Survival card's
+ * simulation on the dashboard.
  *
- * WHY THE OPENING AND NOT THE LIVE FIGURE. A limit measured against equity as
- * it stands right now is a moving target: lose money and the limit shrinks, so
- * "2 % of equity" allows less after every loss and the rule can never quite be
- * broken. Pegging it to the balance the day opened with — the previous day's
- * close — gives the day one fixed number to be judged against, which is also
- * the convention every prop firm uses.
+ * WHY THE OPENING AND NOT THE LIVE FIGURE. A share measured against equity as
+ * it stands right now is a moving target: lose money and the base shrinks.
+ * Pegging it to the balance the day opened with — the previous day's close —
+ * gives the day one fixed number, which is also the convention every prop firm
+ * uses. (The tracker's money rules read the Topstep plan instead since H2.)
  *
  * WHY IT CAN ANSWER `null`. An unpriced trade (an instrument with no point
  * value) makes the realized total unknown from that day on, and an unknown
- * denominator cannot produce an honest percentage. Returning `null` lets the
- * evaluator report the rule as not scored, which is the same answer
- * `auto-rules.ts` already gives for an unpriced day — rather than quietly
- * measuring against a balance that is missing a trade.
+ * denominator cannot produce an honest percentage.
  */
 
 import { dayKeyIn, type DayZone } from "../time";

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   heatByAccount,
-  heatExceedsPerTradeLimit,
   heatForAccount,
   openRiskMoney,
 } from "./portfolio-heat";
@@ -147,21 +146,5 @@ describe("heatByAccount — percentages of different denominators are never adde
   it("skips a row with no account at all rather than inventing one", () => {
     const orphan = { ...row({ id: "x" }), account_id: null } as unknown as TradeRow;
     expect(heatByAccount([orphan], () => 1000)).toEqual([]);
-  });
-});
-
-describe("heatExceedsPerTradeLimit", () => {
-  const heat = (pct: number | null) =>
-    ({ totalRiskPct: pct }) as ReturnType<typeof heatForAccount>;
-
-  it("compares the open total against the ceiling one trade is allowed", () => {
-    expect(heatExceedsPerTradeLimit(heat(2.4), 1)).toBe(true);
-    expect(heatExceedsPerTradeLimit(heat(0.8), 1)).toBe(false);
-  });
-
-  it("says nothing rather than 'within limits' when there is no limit or no figure", () => {
-    expect(heatExceedsPerTradeLimit(heat(2.4), null)).toBeNull();
-    expect(heatExceedsPerTradeLimit(heat(2.4), 0)).toBeNull();
-    expect(heatExceedsPerTradeLimit(heat(null), 1)).toBeNull();
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { accountDayZoneResolver, dayKeyIn, type DayZone } from "./time";
 import { buildTradeDayIndex, evaluateAutoRulesForDay } from "./tracker/auto-rules";
+import { topstepRulesResolver } from "./topstep";
 import { resolveAutoResults } from "./tracker/compliance";
 import type { TrackerCheckin, TrackerRule } from "./tracker-types";
 import { cashByDay } from "./tracker/equity-ladder";
@@ -12,7 +13,7 @@ import { periodBounds, tradeDayKey } from "./trades-view";
 import { reviewGaps } from "./review-gaps";
 import { dailyPnlByInstrument, spansOf } from "./co-exposure";
 import type { CashEvent } from "./balance";
-import type { TradeRow } from "./types";
+import type { Account, TradeRow } from "./types";
 
 /**
  * F2: ONE day per account, everywhere a day is counted.
@@ -26,9 +27,10 @@ import type { TradeRow } from "./types";
 
 const NY = "America/New_York";
 const accounts = [
-  { id: "ts", timezone: NY, topstep_mode: true },
+  { id: "ts", timezone: NY, topstep_mode: true, topstep_plan: "50K", starting_balance: 50_000, risk_rule_pct: 12.5 },
   { id: "cfd", timezone: NY, topstep_mode: false },
-];
+] as unknown as Account[];
+const topstepOf = topstepRulesResolver(accounts);
 const zoneOf = accountDayZoneResolver(accounts, accounts[0]);
 const zoneOfRow = (row: TradeRow): DayZone => zoneOf(row.account_id);
 
@@ -86,13 +88,13 @@ describe("the tracker counts the Topstep day (D1: each trade by its own account)
   });
 
   it("charges max loss per day to the day Topstep charges its DLL to", () => {
-    const equity = () => 10_000;
-    const tue = evaluateAutoRulesForDay("2026-09-29", index, { max_loss_per_day: { pct: 5 } }, equity);
-    expect(tue.max_loss_per_day.verdict).toBe("fail");
+    const graded = buildTradeDayIndex(rows, zoneOfRow, topstepOf);
+    const tue = evaluateAutoRulesForDay("2026-09-29", graded, {});
     expect(tue.max_loss_per_day.observed).toBe(-600);
-    const mon = evaluateAutoRulesForDay("2026-09-28", index, { max_loss_per_day: { pct: 5 } }, equity);
+    // Monday holds the Sunday open's +50; the CFD evening is not graded (H2).
+    const mon = evaluateAutoRulesForDay("2026-09-28", graded, {});
     expect(mon.max_loss_per_day.verdict).toBe("pass");
-    expect(mon.max_loss_per_day.observed).toBe(-50);
+    expect(mon.max_loss_per_day.observed).toBe(50);
   });
 });
 
@@ -180,8 +182,8 @@ describe("a locked day keeps what it was locked with", () => {
     // Locked before F2, Monday carried the -600 evening trade and failed its daily
     // limit. Read live under the Topstep day, Monday no longer holds that trade —
     // but the frozen row is what Monday was scored with, and it stays.
-    const index = buildTradeDayIndex(rows, zoneOfRow);
-    const live = evaluateAutoRulesForDay("2026-09-28", index, { max_loss_per_day: { pct: 5 } }, () => 10_000);
+    const index = buildTradeDayIndex(rows, zoneOfRow, topstepOf);
+    const live = evaluateAutoRulesForDay("2026-09-28", index, {});
     expect(live.max_loss_per_day.verdict).toBe("pass");
 
     const rule = { id: "r-dll", auto_key: "max_loss_per_day" } as unknown as TrackerRule;

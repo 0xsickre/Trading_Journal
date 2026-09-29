@@ -93,14 +93,9 @@ function dayTradingText(res: AutoRuleResult): string | null {
  * both actionable and neither is a failure: `unconfigured` means you never set a
  * limit, `no_trades` means the rule had nothing to judge.
  */
-function autoReasonText(
-  res: AutoRuleResult,
-  currency: string,
-  pct: number | undefined,
-): string {
-  // The limit the percentage worked out to on THIS day, from the evaluator —
-  // the component cannot recompute it, because only the evaluator knows the
-  // balance the day opened with.
+function autoReasonText(res: AutoRuleResult, currency: string): string {
+  // The limit the plan gave on THIS day, from the evaluator — the budget at
+  // entry depends on the account's closed trades at that moment.
   const limit = res.limit ?? null;
 
   const day = dayTradingText(res);
@@ -108,15 +103,9 @@ function autoReasonText(
 
   switch (res.reason) {
     case "unconfigured":
-      if (res.key === "max_trades_per_day" || res.key === "stop_after_losses")
-        return "Broj nije podešen — podesi ga u Settings › Tracker da bi pravilo počelo da se ocenjuje.";
-      return "Limit nije podešen — podesi ga u Settings › Tracker da bi pravilo počelo da se ocenjuje.";
-    case "no_equity":
-      return "Nema equity-ja od kog bi se procenat računao — upiši početni balans naloga u Settings › Accounts.";
+      return "Broj nije podešen — podesi ga u Settings › Tracker da bi pravilo počelo da se ocenjuje.";
     case "no_trades":
       return "Nema trejdova po kojima bi se ovo pravilo ocenilo ovog dana.";
-    case "not_on_topstep":
-      return "Topstep nema nedeljni limit gubitka — pravilo ocenjuje samo naloge van Topstep-a, a ove nedelje ih nije bilo.";
     case "no_plans":
       return "Nijedan trejd ovog dana nije planiran pre ulaza — upisan posle zatvaranja ili uvozom, pa teza pre ulaza nije mogla da postoji. Ocenjuju se samo trejdovi otvoreni iz plana.";
     case "unpriced":
@@ -134,13 +123,10 @@ function autoReasonText(
     case "frozen":
       return "Zamrznuto kad je dan zaključan. Ispravka trejda pomera P&L, ali ne i ocenu ovog dana.";
     case "violated":
-      // Both numbers, and the percentage that produced the second one: "2 %"
-      // alone does not tell you how much room today had.
-      // On a Topstep account the limit is the plan's money, not the rule's
-      // percentage — naming the percentage there would be a false sentence.
+      // Both numbers, and which of the plan's numbers the second one is.
       return res.observed != null && limit != null
         ? `Prekršeno: ${fmtMoney(res.observed, currency)} od dozvoljenih ${fmtMoney(limit, currency)}${
-            res.basis ? ` (${BASIS_TEXT[res.basis]})` : pct != null ? ` (${pct} % equity-ja)` : ""
+            res.basis ? ` (${BASIS_TEXT[res.basis]})` : ""
           }.`
         : "Prekršeno.";
     case "ok":
@@ -307,7 +293,7 @@ function AutoRow({
           </p>
           {res && (
             <p className="text-xs text-muted-foreground">
-              {autoReasonText(res, currency, rule.config.pct)}
+              {autoReasonText(res, currency)}
             </p>
           )}
         </div>

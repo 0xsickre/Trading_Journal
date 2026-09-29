@@ -100,10 +100,10 @@ const index = (specs: Spec[]) =>
   buildTradeDayIndex(specs.map(row), (r) => zoneOf(r.account_id), topstepOf);
 const ladder = (specs: Spec[]) => bookEquityLadder(index(specs), ACCOUNTS, [], zoneOf);
 const evalDay = (specs: Spec[], configs: AutoConfigs = {}) =>
-  evaluateAutoRulesForDay(DAY, index(specs), configs, ladder(specs));
+  evaluateAutoRulesForDay(DAY, index(specs), configs);
 
 describe("daily loss on a Topstep account is the plan's DLL (E1)", () => {
-  it("fails at the DLL, with no percentage configured at all", () => {
+  it("fails at the DLL, with nothing configured on the rule", () => {
     const out = evalDay([{ id: "a", account: "ts", opened: AT, net: -1_000 }]);
     expect(out.max_loss_per_day.verdict).toBe("fail");
     expect(out.max_loss_per_day.observed).toBe(-1_000);
@@ -124,22 +124,23 @@ describe("daily loss on a Topstep account is the plan's DLL (E1)", () => {
     expect(out.max_loss_per_day.verdict).toBe("pass");
   });
 
-  it("a mixed day fails when either side breaks its own rule", () => {
-    // CFD: 1 % of the CFD capital (10 000, not 70 000) is -100; -150 breaks it.
-    const out = evalDay(
-      [
-        { id: "ts-ok", account: "ts", opened: AT, net: -500 },
-        { id: "cfd-bad", account: "cfd", opened: AT, net: -150 },
-      ],
-      { max_loss_per_day: { pct: 1 } },
-    );
-    expect(out.max_loss_per_day.verdict).toBe("fail");
-    expect(out.max_loss_per_day.offenders).toEqual(["cfd-bad"]);
-    expect(out.max_loss_per_day.limit).toBe(-100);
+  it("grades only the Topstep account on a mixed day (H2, I4)", () => {
+    const out = evalDay([
+      { id: "ts-ok", account: "ts", opened: AT, net: -500 },
+      { id: "cfd-big", account: "cfd", opened: AT, net: -5_000 },
+    ]);
+    expect(out.max_loss_per_day.verdict).toBe("pass");
+    expect(out.max_loss_per_day.observed).toBe(-500);
+  });
+
+  it("a day with only other accounts' trades is not graded, and says why", () => {
+    const out = evalDay([{ id: "c", account: "cfd", opened: AT, net: -5_000 }]);
+    expect(out.max_loss_per_day.reason).toBe("no_topstep_trades");
+    expect(out.max_loss_per_trade.reason).toBe("no_topstep_trades");
   });
 });
 
-describe("the percentage basis leaves Topstep capital out (E1)", () => {
+describe("the Survival ladder leaves Topstep capital out (E1)", () => {
   it("opens on the CFD accounts' balance only, and moves only with their trades", () => {
     const l = ladder([
       { id: "ts-win", account: "ts", opened: "2026-09-28T15:00:00Z", net: 2_000 },
@@ -169,28 +170,6 @@ describe("loss per trade: the budget at entry, plus 10 % for slippage (E3)", () 
     const out = evalDay([{ id: "a", account: "ts", opened: AT, net: -280 }]);
     expect(out.max_loss_per_trade.verdict).toBe("fail");
     expect(out.max_loss_per_trade.limit).toBeCloseTo(-275);
-  });
-});
-
-describe("weekly loss does not grade Topstep trades (E2)", () => {
-  it("a week of only Topstep trades is not scored, and says why", () => {
-    const out = evalDay([{ id: "a", account: "ts", opened: AT, net: -5_000 }], {
-      max_loss_per_week: { pct: 1 },
-    });
-    expect(out.max_loss_per_week.verdict).toBe("na");
-    expect(out.max_loss_per_week.reason).toBe("not_on_topstep");
-  });
-
-  it("the CFD side of the week is still graded, without the Topstep loss in it", () => {
-    const out = evalDay(
-      [
-        { id: "ts", account: "ts", opened: AT, net: -5_000 },
-        { id: "cfd", account: "cfd", opened: AT, net: -50 },
-      ],
-      { max_loss_per_week: { pct: 1 } },
-    );
-    expect(out.max_loss_per_week.verdict).toBe("pass");
-    expect(out.max_loss_per_week.observed).toBe(-50);
   });
 });
 

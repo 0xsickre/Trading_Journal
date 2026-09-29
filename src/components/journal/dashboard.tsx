@@ -954,18 +954,6 @@ export function Dashboard({
   }, [accounts, realizedAll, cashEvents]);
 
   /**
-   * The ceiling the trader set for a single trade, when the tracker carries
-   * one. Heat is a different question, but a book holding more open risk than
-   * one entry is allowed to take is worth saying out loud.
-   */
-  const perTradeRiskLimitPct = useMemo(() => {
-    const rule = trackerRules.find(
-      (r) => r.auto_key === "risk_per_trade" && r.deleted_at == null,
-    );
-    return rule?.config?.pct ?? null;
-  }, [trackerRules]);
-
-  /**
    * Denominator for Percentage view mode — current equity, not starting
    * balance. Built through `buildBalanceTimeline`/`currentEquity` exactly like
    * `/reports` does (`reports-workbench.tsx`), so the two screens cannot
@@ -1255,17 +1243,6 @@ export function Dashboard({
       (row) => tzForAccount(row.account_id),
       topstepOf,
     );
-    // Scoped to the same accounts and cash the rest of this panel is scoped to,
-    // so a filtered dashboard judges the limits against the filtered book.
-    const equityOf = bookEquityLadder(
-      index,
-      accountFilter === "all"
-        ? accounts
-        : accounts.filter((a) => a.id === accountFilter),
-      scopedCashEvents,
-      tzForAccount,
-    );
-
     const briefOf = briefResolver(briefs);
 
     const byDate = new Map<string, Map<string, TrackerCheckin>>();
@@ -1291,7 +1268,6 @@ export function Dashboard({
           d,
           index,
           configsFromRules(rulesLiveOn(trackerRules, d)),
-          equityOf,
           { briefOf },
         ),
         byDate.get(d) ?? new Map(),
@@ -1302,8 +1278,6 @@ export function Dashboard({
     checkins,
     briefs,
     trades,
-    accounts,
-    scopedCashEvents,
     accountFilter,
     tzForAccount,
     topstepOf,
@@ -2304,7 +2278,6 @@ export function Dashboard({
             tzOf={(t) => zoneTz(tzForAccount(t.account_id))}
             equityOf={(id) => equityByAccount[id] ?? null}
             currency={currency}
-            perTradeLimitPct={perTradeRiskLimitPct}
           />
         ),
         "recent-trades": show("recent-trades") && (

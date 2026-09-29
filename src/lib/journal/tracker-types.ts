@@ -18,7 +18,6 @@ export const STAGE_LABELS: Record<TrackerStage, string> = {
 export const AUTO_RULE_KEYS = [
   "max_loss_per_trade",
   "max_loss_per_day",
-  "max_loss_per_week",
   "playbook_linked",
   "stop_loss_set",
   "thesis_written",
@@ -33,29 +32,6 @@ export const AUTO_RULE_KEYS = [
   "no_entry_in_red_window",
 ] as const;
 export type AutoRuleKey = (typeof AUTO_RULE_KEYS)[number];
-
-/**
- * Auto rules that need a percentage before they can say anything.
- *
- * A PERCENTAGE OF EQUITY, not an amount of money, and the change is not
- * cosmetic. A fixed 200 EUR limit is a different rule at a 5 000 account than
- * at a 50 000 one, so a limit set once stops describing the trader's risk the
- * moment the account grows — and the number that has to be re-typed to stay
- * honest is the number nobody re-types. A percentage keeps its meaning.
- *
- * The basis is the day's OPENING equity; see `equity-ladder.ts` for why it is
- * not the live figure.
- */
-export const AUTO_RULES_NEEDING_PCT: ReadonlySet<AutoRuleKey> = new Set([
-  "max_loss_per_trade",
-  "max_loss_per_day",
-  "max_loss_per_week",
-  // The risk limit is the one percentage that describes a DECISION rather than
-  // an outcome: how much of the account a single entry was allowed to put at
-  // stake. `risk_matched_intent` is deliberately absent — its tolerance is a
-  // constant (`RISK_INTENT_TOLERANCE`), not something to configure per user.
-  "risk_per_trade",
-]);
 
 /**
  * Auto rules that need a whole number before they can say anything: how many
@@ -87,7 +63,7 @@ export type TrackerRule = {
   active_days: number[];
   /** NULL for a manual rule. */
   auto_key: AutoRuleKey | null;
-  config: { pct?: number; count?: number };
+  config: { count?: number };
   is_mandatory: boolean;
   sort_order: number;
   /**

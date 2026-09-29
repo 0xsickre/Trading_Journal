@@ -3,8 +3,8 @@
  *
  * After Phase 4 the database already knows whether a trade carried a playbook
  * and whether it had a stop, so asking the trader to tick those boxes is a
- * ritual, not a check. It also knows every realized loss, so the two money
- * limits are checkable too.
+ * ritual, not a check. It also knows every realized loss, so the Topstep
+ * plan's money limits are checkable too.
  *
  * The one thing that must not be got wrong here is WHICH DAY a trade belongs
  * to, because it differs per rule. Money is realized on the CLOSE day; a
@@ -24,11 +24,9 @@ import {
   type TopstepRules,
   type TopstepTrade,
 } from "../topstep";
-import { addDaysToDayKey, dayKeyIn, type DayZone } from "../time";
+import { dayKeyIn, type DayZone } from "../time";
 import { flatByFor, redWindowAt, type SessionBrief } from "../session-brief";
-import { weekStartOfDayKey } from "../weekly-review";
-import { matchedRiskIntent, riskMoneyAtEntry, riskPctTaken } from "../risk-taken";
-import type { EquityLadder } from "./equity-ladder";
+import { riskMoneyAtEntry } from "../risk-taken";
 import type { AutoRuleKey } from "../tracker-types";
 import type { TradeRow } from "../types";
 
@@ -39,7 +37,7 @@ export type AutoVerdict = "pass" | "fail" | "na";
 export type AutoReason =
   | "ok"
   | "violated"
-  /** No limit configured — the rule cannot say anything yet. */
+  /** No count configured — the rule cannot say anything yet. */
   | "unconfigured"
   /** Nothing happened on this day that the rule could judge. */
   | "no_trades"
@@ -51,35 +49,18 @@ export type AutoReason =
   | "no_plans"
   /** A contributing trade has no price, so the answer is unknown. */
   | "unpriced"
-  /**
-   * No opening equity to take a percentage of.
-   *
-   * Distinct from `unconfigured`, which is the trader not having set a limit.
-   * This is the limit being set and the BASIS being missing — no starting
-   * balance recorded, or an unpriced trade earlier in the book that makes every
-   * later balance unknowable. Different sentence, different fix.
-   */
-  | "no_equity"
   /** The day is locked; the verdict is the one frozen at lock time. */
   | "frozen"
-  /**
-   * Only Topstep trades, and Topstep has no such rule — the weekly loss limit.
-   * The rule grades the other accounts; this week had none of theirs.
-   */
-  | "not_on_topstep"
   /** A rule that reads the morning brief, on a day the brief did not reach the journal. */
   | "no_brief"
   /** The brief says the exchange was closed that day — there is no close to be flat by. */
   | "market_closed"
   /** A Topstep position still open, and the close not reached yet. */
   | "not_yet"
-  /** `flat_by_close` is a Topstep rule; the day had no Topstep trade. */
+  /** A Topstep rule, on a day that had no Topstep trade. */
   | "no_topstep_trades";
 
-/**
- * Where a money limit came from when it is not a percentage of equity: a
- * Topstep account's plan. Absent on a percentage limit.
- */
+/** Which of the Topstep plan's numbers a money limit is. */
 export type LimitBasis = "topstep_dll" | "topstep_budget" | "topstep_budget_slippage";
 
 export type AutoRuleResult = {
@@ -91,16 +72,12 @@ export type AutoRuleResult = {
   /** Worst observed money for the loss rules; null otherwise. */
   observed: number | null;
   /**
-   * The money the percentage worked out to on this day. Negative; null for
-   * rules that are not money limits, or when the basis was unknown.
-   *
-   * Stored rather than recomputed in the UI because a percentage alone tells
-   * the trader nothing about the day in front of them — "2 %" has to be said as
-   * "240 EUR" against the balance the day actually opened with, and only the
-   * evaluator knows what that balance was.
+   * The money the rule allowed on this day: the plan's DLL, or the budget the
+   * risk rule gave at entry. Negative for a loss limit; null for rules that
+   * are not money limits, or when the budget was unknown.
    */
   limit?: number | null;
-  /** Set when `limit` is a Topstep plan's money rather than a percentage. */
+  /** Which Topstep number `limit` is. */
   basis?: LimitBasis;
   /**
    * A count rule's numbers — entries on the busiest account, or the losing run
@@ -143,20 +120,18 @@ export type TrackerTrade = {
    */
   plannedBeforeEntry: boolean;
   /**
-   * Risk taken at entry, in account currency and as a share of the equity the
-   * entry day opened with. Null when any factor is unknown — no stop, an
-   * unpriced instrument, or an entry day whose equity could not be established.
+   * Risk taken at entry, in account currency. Null when any factor is unknown
+   * — no stop, or an unpriced instrument.
    */
   riskMoney: number | null;
-  riskPctTaken: number | null;
   /**
-   * Whether the size matched the `risk_pct` chosen for the trade. Null when
-   * either half is unknown, which is not the same as "no".
+   * Whether the size was the contract count the risk rule gave at entry. Null
+   * when either half is unknown, which is not the same as "no".
    */
   matchedIntent: boolean | null;
   /**
    * On a Topstep account, the plan's money rules this trade is graded by; null
-   * on any other account, whose limits are percentages of equity.
+   * on any other account, which no money rule grades.
    */
   topstep: {
     /** The plan's Daily Loss Limit, positive. */
@@ -177,7 +152,7 @@ export type TradeDayIndex = {
   byCloseDay: Map<string, TrackerTrade[]>;
 };
 
-export type AutoConfigs = Partial<Record<AutoRuleKey, { pct?: number; count?: number }>>;
+export type AutoConfigs = Partial<Record<AutoRuleKey, { count?: number }>>;
 
 /**
  * What the day-trading rules read besides the trades: the morning brief of a
@@ -262,14 +237,9 @@ function toTrackerTrade(row: TradeRow, zone: DayZone, book: TopstepBook | null):
     hasThesis: (sealedText(row, "thesis") ?? "").trim() !== "",
     plannedBeforeEntry: createdBy(row.created_at, openedAt),
     riskMoney: riskMoneyAtEntry(row),
-    riskPctTaken: riskPctTaken(row),
-    // On Topstep the intent is the rule's budget, and a whole-contract size
-    // can only match it by being the count the form would have given.
-    matchedIntent: book
-      ? expected == null
-        ? null
-        : (row.stats?.entry_qty ?? null) === expected
-      : matchedRiskIntent(row),
+    // The intent is the rule's budget, and a whole-contract size can only
+    // match it by being the count the form would have given.
+    matchedIntent: expected == null ? null : (row.stats?.entry_qty ?? null) === expected,
     topstep: book ? { dll: TOPSTEP_PLANS[book.rules.config.plan].dll, budget } : null,
   };
 }
@@ -349,153 +319,13 @@ const na = (key: AutoRuleKey, reason: AutoReason): AutoRuleResult => ({
   limit: null,
 });
 
-/**
- * The money a percentage limit allows to be lost on a given day.
- *
- * Negative, because every comparison below is against a loss. `null` when
- * either half of the question is missing — no percentage configured, or an
- * opening equity that cannot be known — and the caller turns that into a rule
- * that is not scored rather than one that passes.
- */
-function limitFor(pct: number | undefined, equity: number | null): number | null {
-  if (pct == null || equity == null || equity <= 0) return null;
-  return -(equity * Math.abs(pct)) / 100;
-}
-
-/**
- * Net max loss for the whole day, over trades CLOSED that day.
- *
- * Boundary is inclusive (`net <= limit`), as Topstep counts its DLL: a day
- * exactly at your limit is a day you hit your limit.
- */
-function evalPctDayLoss(
-  trades: TrackerTrade[],
-  pct: number | undefined,
-  equity: number | null,
-): AutoRuleResult {
-  const key: AutoRuleKey = "max_loss_per_day";
-  const limit = limitFor(pct, equity);
-  if (limit == null) return na(key, pct == null ? "unconfigured" : "no_equity");
-  if (trades.length === 0) return na(key, "no_trades");
-
-  // Any unpriced trade makes the SUM unknown. The tempting shortcut — "if the
-  // priced subset already breaks the limit, call it a fail" — is wrong: the
-  // unknown trade may be a large winner that brings the day back above the
-  // limit. The honest answer is that we do not know.
-  if (trades.some((t) => t.netPl == null)) return na(key, "unpriced");
-
-  const net = trades.reduce((s, t) => s + (t.netPl ?? 0), 0);
-  const breached = net <= limit;
-  return {
-    key,
-    verdict: breached ? "fail" : "pass",
-    reason: breached ? "violated" : "ok",
-    offenders: breached ? trades.map((t) => t.id) : [],
-    observed: net,
-    limit,
-  };
-}
-
-/**
- * Net max loss over the ISO week the day belongs to, up to and including it.
- *
- * SCORED EVERY DAY, not once on Sunday, and cumulatively from Monday. A weekly
- * budget you only hear about after the week is over is a report, not a limit —
- * the point is that Thursday can tell you the week is already spent. The same
- * week therefore fails on every day from the breach onwards, which is the
- * honest reading: the budget stayed blown.
- *
- * The week runs Monday–Sunday, the same one `/weekly` reviews, so the number
- * here and the number on the review page describe the same seven days.
- */
-function evalMaxLossPerWeek(
-  day: string,
-  index: TradeDayIndex,
-  pct: number | undefined,
-  equity: number | null,
-): AutoRuleResult {
-  const key: AutoRuleKey = "max_loss_per_week";
-  const limit = limitFor(pct, equity);
-  const weekStart = weekStartOfDayKey(day);
-
-  // Topstep has no weekly limit (E2), so its trades are not graded here — and a
-  // week that held nothing else says so rather than reading as empty.
-  const all: TrackerTrade[] = [];
-  for (let d = weekStart; weekStart && d <= day; d = addDaysToDayKey(d, 1)) {
-    for (const t of index.byCloseDay.get(d) ?? []) all.push(t);
-  }
-  if (all.length > 0 && all.every((t) => t.topstep)) return na(key, "not_on_topstep");
-  if (limit == null) return na(key, pct == null ? "unconfigured" : "no_equity");
-  if (!weekStart) return na(key, "no_trades");
-  const soFar = all.filter((t) => !t.topstep);
-
-  if (soFar.length === 0) return na(key, "no_trades");
-  if (soFar.some((t) => t.netPl == null)) return na(key, "unpriced");
-
-  const net = soFar.reduce((s, t) => s + (t.netPl ?? 0), 0);
-  const breached = net <= limit;
-  return {
-    key,
-    verdict: breached ? "fail" : "pass",
-    reason: breached ? "violated" : "ok",
-    offenders: breached ? soFar.map((t) => t.id) : [],
-    observed: net,
-    limit,
-  };
-}
-
-/**
- * Net max loss on any single trade closed that day.
- *
- * Diverges from the daily rule on unpriced trades, deliberately: this rule is
- * per trade, so an unknown trade clouds only itself. A priced trade that
- * breaches is a breach regardless of what the unknown one turns out to be.
- */
-function evalPctTradeLoss(
-  trades: TrackerTrade[],
-  pct: number | undefined,
-  equity: number | null,
-): AutoRuleResult {
-  const key: AutoRuleKey = "max_loss_per_trade";
-  const limit = limitFor(pct, equity);
-  if (limit == null) return na(key, pct == null ? "unconfigured" : "no_equity");
-  if (trades.length === 0) return na(key, "no_trades");
-
-  const priced = trades.filter((t) => t.netPl != null);
-  const offenders = priced.filter((t) => (t.netPl as number) <= limit);
-
-  if (offenders.length > 0) {
-    return {
-      key,
-      verdict: "fail",
-      reason: "violated",
-      offenders: offenders.map((t) => t.id),
-      observed: Math.min(...offenders.map((t) => t.netPl as number)),
-      limit,
-    };
-  }
-  // No priced trade breached, but an unpriced one might have.
-  if (priced.length < trades.length) return na(key, "unpriced");
-
-  return {
-    key,
-    verdict: "pass",
-    reason: "ok",
-    offenders: [],
-    observed:
-      priced.length > 0 ? Math.min(...priced.map((t) => t.netPl as number)) : null,
-    limit,
-  };
-}
-
-// --- Topstep accounts: the plan's money, per account (F3, E1–E5) --------------
+// --- The Topstep plan's money, per account (F3, E1–E5; H2, I4) -----------------
 //
-// A Topstep account's limits are money from its plan, not percentages of equity,
-// and they belong to that ACCOUNT: two 50Ks each down 600 are two survived days,
-// not one lost 1 200. So a rule's trades are split — each Topstep account on its
-// own, every other account together on the percentage — each part is graded,
-// and the parts are folded into one verdict. A book with no Topstep trade never
-// reaches this code: the percentage evaluators above answer exactly as before.
+// The limits are money from the account's plan, and they belong to that
+// ACCOUNT: two 50Ks each down 600 are two survived days, not one lost 1 200. So
+// a rule's trades are split per Topstep account, each part is graded, and the
+// parts are folded into one verdict. A trade on any other account is not
+// graded by a money rule at all — the book is Topstep only since H2.
 
 /** How close a result came to its limit: observed ÷ limit, same sign on both sides. */
 function usage(r: AutoRuleResult): number {
@@ -610,32 +440,26 @@ function topstepRisk(t: TrackerTrade): AutoRuleResult {
   };
 }
 
-function evalMaxLossPerDay(trades: TrackerTrade[], pct: number | undefined, equity: number | null): AutoRuleResult {
-  if (!trades.some((t) => t.topstep)) return evalPctDayLoss(trades, pct, equity);
-  const others = trades.filter((t) => !t.topstep);
-  return combine("max_loss_per_day", [
-    ...byTopstepAccount(trades).map(topstepDayLoss),
-    ...(others.length > 0 ? [evalPctDayLoss(others, pct, equity)] : []),
-  ]);
+/** A money rule's parts, or why there are none: no trade, or none on Topstep. */
+function topstepParts(
+  key: AutoRuleKey,
+  trades: TrackerTrade[],
+  grade: (ts: TrackerTrade[]) => AutoRuleResult[],
+): AutoRuleResult {
+  if (trades.length === 0) return na(key, "no_trades");
+  const topstep = trades.filter((t) => t.topstep);
+  if (topstep.length === 0) return na(key, "no_topstep_trades");
+  return combine(key, grade(topstep));
 }
 
-function evalMaxLossPerTrade(trades: TrackerTrade[], pct: number | undefined, equity: number | null): AutoRuleResult {
-  if (!trades.some((t) => t.topstep)) return evalPctTradeLoss(trades, pct, equity);
-  const others = trades.filter((t) => !t.topstep);
-  return combine("max_loss_per_trade", [
-    ...trades.filter((t) => t.topstep).map(topstepTradeLoss),
-    ...(others.length > 0 ? [evalPctTradeLoss(others, pct, equity)] : []),
-  ]);
-}
+const evalMaxLossPerDay = (trades: TrackerTrade[]) =>
+  topstepParts("max_loss_per_day", trades, (ts) => byTopstepAccount(ts).map(topstepDayLoss));
 
-function evalRiskPerTrade(trades: TrackerTrade[], pct: number | undefined, equity: number | null): AutoRuleResult {
-  if (!trades.some((t) => t.topstep)) return evalPctRisk(trades, pct, equity);
-  const others = trades.filter((t) => !t.topstep);
-  return combine("risk_per_trade", [
-    ...trades.filter((t) => t.topstep).map(topstepRisk),
-    ...(others.length > 0 ? [evalPctRisk(others, pct, equity)] : []),
-  ]);
-}
+const evalMaxLossPerTrade = (trades: TrackerTrade[]) =>
+  topstepParts("max_loss_per_trade", trades, (ts) => ts.map(topstepTradeLoss));
+
+const evalRiskPerTrade = (trades: TrackerTrade[]) =>
+  topstepParts("risk_per_trade", trades, (ts) => ts.map(topstepRisk));
 
 /** A yes/no property of every trade OPENED that day. */
 function evalOpenDayFlag(
@@ -676,88 +500,14 @@ function evalThesisWritten(trades: TrackerTrade[]): AutoRuleResult {
 }
 
 /**
- * Risk taken at entry against the trader's own ceiling, on the OPEN day.
- *
- * The counterpart to `max_loss_per_trade`, and the reason both exist: this one
- * grades the size while the risk is still in front of the trader, the other
- * grades the loss once it is behind them. A trade sized at three times the
- * limit that ran to target fails here and passes there — correctly, in both
- * cases.
- *
- * Money, not percentages, in `observed` and `limit`: the checklist renders both
- * with `fmtMoney`, and "risked 520 of the allowed 240" is the sentence a trader
- * can act on. Positive, because money at risk is not a loss yet.
- *
- * The comparison carries a tiny epsilon. Sizing to exactly the limit is the
- * plan, not a breach, and lot granularity puts "1 %" on 1.0000000002 as often
- * as on 1.
- */
-function evalPctRisk(
-  trades: TrackerTrade[],
-  pct: number | undefined,
-  equity: number | null,
-): AutoRuleResult {
-  const key: AutoRuleKey = "risk_per_trade";
-  if (pct == null) return na(key, "unconfigured");
-  if (trades.length === 0) return na(key, "no_trades");
-
-  const priced = trades.filter((t) => t.riskPctTaken != null && t.riskMoney != null);
-
-  /**
-   * The percentage is judged against the equity FROZEN ON EACH TRADE, not
-   * against the ladder's reading for the day: `equity_at_entry` is that same
-   * opening figure, stored when the position opened, and a trade that carries
-   * it can be graded even on a day the ladder cannot price (an unpriced trade
-   * earlier in the book breaks the ladder from that point on).
-   *
-   * The ladder's figure is used only to say the limit in money, and derived
-   * from a priced trade when the ladder has nothing — the two are the same
-   * number by construction.
-   */
-  const dayEquity =
-    equity != null && equity > 0
-      ? equity
-      : priced.length > 0
-        ? ((priced[0].riskMoney as number) / (priced[0].riskPctTaken as number)) * 100
-        : null;
-  const limit = dayEquity != null ? (dayEquity * Math.abs(pct)) / 100 : null;
-  const offenders = priced.filter((t) => (t.riskPctTaken as number) > Math.abs(pct) + 1e-9);
-
-  if (offenders.length > 0) {
-    return {
-      key,
-      verdict: "fail",
-      reason: "violated",
-      offenders: offenders.map((t) => t.id),
-      observed: Math.max(...offenders.map((t) => t.riskMoney as number)),
-      limit,
-    };
-  }
-  // Nothing measurable breached, but an unmeasurable trade might have.
-  if (priced.length < trades.length) return na(key, "unpriced");
-
-  return {
-    key,
-    verdict: "pass",
-    reason: "ok",
-    offenders: [],
-    observed: priced.length > 0 ? Math.max(...priced.map((t) => t.riskMoney as number)) : null,
-    limit,
-  };
-}
-
-/**
- * Was each entry sized to the risk it was planned at, within
- * `RISK_INTENT_TOLERANCE`?
+ * Was each entry sized to the contract count the risk rule gave at entry?
  *
  * Not an `evalOpenDayFlag`, because "unknown" is a third answer here: a trade
- * with no stop, an unpriced instrument or no `risk_pct` chosen cannot be judged,
- * and a flag rule would count it as a miss. A day whose every trade is
- * unmeasurable is `na`, not a fail.
+ * with no stop, an unpriced instrument or no budget cannot be judged, and a
+ * flag rule would count it as a miss. A day whose every trade is unmeasurable
+ * is `na`, not a fail.
  *
- * No `observed`: the miss is a distance in percentage points and the checklist
- * renders `observed` as money. The offenders carry the finding — they are the
- * trades to open.
+ * The offenders carry the finding — they are the trades to open.
  */
 function evalRiskMatchedIntent(trades: TrackerTrade[]): AutoRuleResult {
   const key: AutoRuleKey = "risk_matched_intent";
@@ -945,43 +695,19 @@ export function evaluateAutoRulesForDay(
   day: string,
   index: TradeDayIndex,
   configs: AutoConfigs,
-  /**
-   * Equity the day opened with, for the percentage limits.
-   *
-   * Defaulted so the flag rules — which have no basis to speak of — can still
-   * be evaluated by a caller that has no balance in hand. The money rules then
-   * report `no_equity`, which is the truthful answer rather than a silent pass.
-   */
-  equityOf: EquityLadder = () => null,
   /** The brief and the present moment, for the day-trading rules. */
   context: AutoContext = {},
 ): Record<AutoRuleKey, AutoRuleResult> {
   const closed = index.byCloseDay.get(day) ?? [];
   const opened = index.byOpenDay.get(day) ?? [];
-  const equity = equityOf(day);
   const ctx: Required<AutoContext> = {
     briefOf: context.briefOf ?? (() => null),
     now: context.now ?? Date.now(),
   };
 
   return {
-    max_loss_per_day: evalMaxLossPerDay(
-      closed,
-      configs.max_loss_per_day?.pct,
-      equity,
-    ),
-    max_loss_per_trade: evalMaxLossPerTrade(
-      closed,
-      configs.max_loss_per_trade?.pct,
-      equity,
-    ),
-    // The whole week to date, not just this day — see `evalMaxLossPerWeek`.
-    max_loss_per_week: evalMaxLossPerWeek(
-      day,
-      index,
-      configs.max_loss_per_week?.pct,
-      equity,
-    ),
+    max_loss_per_day: evalMaxLossPerDay(closed),
+    max_loss_per_trade: evalMaxLossPerTrade(closed),
     // Open day, not close day. Decisive counter-case: on close-day attribution a
     // still-open trade is INVISIBLE to the rule, so ten unlinked open trades
     // would report a perfect day.
@@ -998,7 +724,7 @@ export function evaluateAutoRulesForDay(
     // Open day, like the flags and for the same reason: the size is the decision
     // taken at entry. Grading it on the close day would grade it once the risk
     // has already been spent.
-    risk_per_trade: evalRiskPerTrade(opened, configs.risk_per_trade?.pct, equity),
+    risk_per_trade: evalRiskPerTrade(opened),
     risk_matched_intent: evalRiskMatchedIntent(opened),
     // Open day: each is a decision taken at entry — a third trade, a trade after
     // the run of losses, an entry in a red window. The losing run reads the
@@ -1012,7 +738,7 @@ export function evaluateAutoRulesForDay(
 
 /** Configs keyed by `auto_key`, for the evaluator. */
 export function configsFromRules(
-  rules: readonly { auto_key: AutoRuleKey | null; config: { pct?: number; count?: number } }[],
+  rules: readonly { auto_key: AutoRuleKey | null; config: { count?: number } }[],
 ): AutoConfigs {
   const out: AutoConfigs = {};
   for (const r of rules) {

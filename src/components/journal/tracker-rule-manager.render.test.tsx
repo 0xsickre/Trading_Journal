@@ -205,7 +205,7 @@ describe("a count rule is configured with a whole number (F4)", () => {
         rules={[rule({ text: "Dnevni limit ulaza po nalogu", stage: "trade", auto_key: "max_trades_per_day", config: {} })]}
       />,
     );
-    expect(screen.getByText(/1 rule has no limit set/)).toBeInTheDocument();
+    expect(screen.getByText(/1 rule has no count set/)).toBeInTheDocument();
     expect(screen.getByText("entries / day / account")).toBeInTheDocument();
     const input = screen.getByLabelText("entries / day / account");
     await user.type(input, "3");

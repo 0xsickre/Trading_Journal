@@ -26,7 +26,6 @@ import {
 import { cn } from "@/lib/utils";
 import {
   AUTO_RULES_NEEDING_COUNT,
-  AUTO_RULES_NEEDING_PCT,
   ISO_WEEKDAYS,
   STAGE_LABELS,
   TRACKER_STAGES,
@@ -53,7 +52,6 @@ const COUNT_UNITS: Partial<Record<AutoRuleKey, string>> = {
 /** An auto rule that cannot be scored until the trader sets its number. */
 function isUnconfigured(r: TrackerRule): boolean {
   if (r.auto_key == null) return false;
-  if (AUTO_RULES_NEEDING_PCT.has(r.auto_key)) return r.config.pct == null;
   if (AUTO_RULES_NEEDING_COUNT.has(r.auto_key)) return r.config.count == null;
   return false;
 }
@@ -127,16 +125,12 @@ function RuleRow({
   const { pending, run } = useAction();
   const [text, setText] = useState(rule.text);
   const [confirming, setConfirming] = useState(false);
-  const [pct, setPct] = useState(
-    rule.config.pct != null ? String(rule.config.pct) : "",
-  );
   const [count, setCount] = useState(
     rule.config.count != null ? String(rule.config.count) : "",
   );
 
   const retired = rule.deleted_at != null;
   const isAuto = rule.auto_key != null;
-  const needsPct = rule.auto_key != null && AUTO_RULES_NEEDING_PCT.has(rule.auto_key);
   const needsCount = rule.auto_key != null && AUTO_RULES_NEEDING_COUNT.has(rule.auto_key);
   const unconfigured = isUnconfigured(rule);
 
@@ -154,27 +148,6 @@ function RuleRow({
     }
     if (n === rule.config.count) return;
     run(() => updateTrackerRule(rule.id, { config: { count: n } }));
-  }
-
-  function savePct() {
-    const raw = pct.trim();
-    if (raw === "") {
-      if (rule.config.pct != null) run(() => clearTrackerRuleLimit(rule.id));
-      return;
-    }
-    const n = Number(raw);
-    if (!Number.isFinite(n) || n <= 0) {
-      toast.error("The limit must be a positive number.");
-      return;
-    }
-    // Mirrors the server schema. Said here too so a typo is caught before a
-    // round trip, and said in the same words so the two never disagree.
-    if (n > 100) {
-      toast.error("A limit above 100 % of equity is not a limit.");
-      return;
-    }
-    if (n === rule.config.pct) return;
-    run(() => updateTrackerRule(rule.id, { config: { pct: n } }));
   }
 
   return (
@@ -203,28 +176,6 @@ function RuleRow({
         <Badge variant="outline" className="gap-1 shrink-0">
           <Zap className="size-3" /> Auto
         </Badge>
-      )}
-
-      {needsPct && (
-        <div className="flex shrink-0 items-center gap-1">
-          <Input
-            inputMode="decimal"
-            value={pct}
-            onChange={(e) => setPct(e.target.value)}
-            onBlur={savePct}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur();
-            }}
-            placeholder="Limit"
-            aria-label="Limit, % of equity"
-            className={cn("h-8 w-20", unconfigured && "border-amber-500/60")}
-            disabled={pending || retired}
-          />
-          {/* "% of equity", not just "%": the number is meaningless without its
-              basis, and the basis is the balance the DAY OPENED with — see
-              `equity-ladder.ts`. */}
-          <span className="text-xs text-muted-foreground">% of equity</span>
-        </div>
       )}
 
       {needsCount && (
@@ -390,10 +341,9 @@ function AddRuleForm({ stage }: { stage: TrackerStage }) {
  *   - `auto_key` is not editable at all. It picks which evaluator runs, so
  *     changing it would re-interpret every check-in already recorded.
  */
-// No `currency` any more: the limits are percentages of equity, so this screen
-// no longer states an amount in money. The figure a percentage works out to on
-// a given day is shown where it means something — on the daily checklist, from
-// the evaluator that knows that day's opening balance.
+// No `currency`: the money limits come from the Topstep plan, and the figure
+// they work out to on a given day is shown on the daily checklist, from the
+// evaluator that knows the account's closed trades at each entry.
 export function TrackerRuleManager({ rules }: { rules: TrackerRule[] }) {
   const live = rules.filter((r) => r.deleted_at == null);
   const retired = rules.filter((r) => r.deleted_at != null);
@@ -408,7 +358,7 @@ export function TrackerRuleManager({ rules }: { rules: TrackerRule[] }) {
       {unconfigured > 0 && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-sm text-amber-700 dark:text-amber-400">
           {unconfigured}{" "}
-          {unconfigured === 1 ? "rule has no" : "rules have no"} limit set, so{" "}
+          {unconfigured === 1 ? "rule has no" : "rules have no"} count set, so{" "}
           {unconfigured === 1 ? "it is" : "they are"} not scored.
         </p>
       )}
