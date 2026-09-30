@@ -153,11 +153,12 @@ that are actually under your control.
 
 ### A trading day
 
-The routine both repos are built around — the same five steps as "Dnevni tok journala" in the
+The routine both repos are built around — the same steps as "Dnevni tok journala" in the
 `futures-trading` README:
 
 | When | Where | What |
 |---|---|---|
+| After London, 11:12 Belgrade | Telegram | The levels from `futures-trading` (`tools/brief/nivoi.py`): which of PDH/PDL (RTH and the whole Topstep day), PWH/PWL, PMH/PML and the Asia range London took, and what is left above and below the price. The morning brief carries the same levels without London |
 | Before the session | `/daily` → 1 · Pre sesije | The brief's red windows, the Topstep close, the expected range and, today, the DLL left; then two questions — how you are, and whether you trade today |
 | Before and during the trade | TopstepX | Only a limit with an OCO bracket; contracts from the brief's "Ugovori danas". Nothing in the journal |
 | Right after the close | `/trades/log` | Four numbers (entry, stop, exit, contracts), setup, A/B/C, the mistake if not an A; a sentence and a chart optional. About a minute |
