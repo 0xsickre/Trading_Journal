@@ -128,7 +128,7 @@ pogađa.
 | **K** | Zahtevi trejdera od 29.09.2026: redosled pravila, tagovi na srpskom, uvoz puni plan, fiksni breakeven, vremenska zona, slike charta | — | H2 | da: `20260929200000`, `…210000`, `…220000`, `…230000` | **Opus** | ✅ `31030a9` · `286cc06` · `df91b1c` · `65d0817` · `576f574` · `a232849`, 29.09.2026 — migracije primenjene |
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, uzorak | #11–#13, #15, #17, #18 (#14 zatvorio H2) | K | da: `20260929235000` (`time_underwater_pct`), `20260930000000` / `…000100` (`baseline_trades`) | Sonnet, Opus za #13 | ✅ `2e59f2e` · `5095e43` · `3183236` · `20f9626` + `8c35148` (futures-trading) · `ea0461b` · `d9ccf9c` · `8dff0cf`, 29.09.2026 — migracije primenjene |
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, ostaci vault-a, komentari, PARITY | #16, #20, #22, #23 (#19 zatvorili H1/H2) | F5 | da: `20260930010000` (`no_entry`, `r2`) | Sonnet, Opus za #16 | ✅ `16c3a04` + `a59307d` (futures-trading) · `e515552` · `a5a8ff3` · `db9c3b3` + F6.5, 29.09.2026 — migracija primenjena |
-| **L** | Šta bi bilo: SL × TP mreža, posle izlaza, posle stopa — iz berzanskih sveća | — | F6 | da: `20260930080000` (`scenario`) | **Opus** | u radu (30.09.2026) |
+| **L** | Šta bi bilo: SL × TP mreža, posle izlaza, posle stopa — iz berzanskih sveća | — | F6 | da: `20260930080000` (`scenario`) | **Opus** | ✅ `89915aa` · futures-trading `f60b5ea`, 30.09.2026 — migracija primenjena |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
