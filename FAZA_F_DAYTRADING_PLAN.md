@@ -135,7 +135,7 @@ pogađa.
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, ostaci vault-a, komentari, PARITY | #16, #20, #22, #23 (#19 zatvorili H1/H2) | F5 | da: `20260930010000` (`no_entry`, `r2`) | Sonnet, Opus za #16 | ✅ `16c3a04` + `a59307d` (futures-trading) · `e515552` · `a5a8ff3` · `db9c3b3` + F6.5, 29.09.2026 — migracija primenjena |
 | **L** | Šta bi bilo: SL × TP mreža, posle izlaza, posle stopa — iz berzanskih sveća | — | F6 | da: `20260930080000` (`scenario`) | **Opus** | ✅ `89915aa` · futures-trading `f60b5ea`, 30.09.2026 — migracija primenjena |
 | **R** | Rizik blizu MLL-a i proklizavanje stopa u veličini (journal + brief isto) | — | L | ne | **Opus** | ✅ `7f14d81` · futures-trading `2870b3d`, 30.09.2026 — bez migracije |
-| **S** | „Šta bi bilo“ i cena promašaja realno: TP / limit ulaz kroz nivo, tik na stopu | — | L, R | ne | **Opus** | u radu (30.09.2026) |
+| **S** | „Šta bi bilo“ i cena promašaja realno: TP / limit ulaz kroz nivo, tik na stopu | — | L, R | ne | **Opus** | ✅ `95c63e7` · futures-trading `aacc20b`, 30.09.2026 — bez migracije |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -912,7 +912,7 @@ izmerena. Odluke R1–R4 u dnevniku.
 Forma, tracker i brief daju isti broj ugovora, sa tikom proklizavanja; blizu MLL-a rizik pada sa prostorom. README oba
 repoa 1:1, ovde ✅ + commit, `ROADMAP.md` jedan red.
 
-## S — „Šta bi bilo“ realno (detaljno, 30.09.2026)
+## S — „Šta bi bilo“ realno (detaljno, 30.09.2026) — ✅ `95c63e7` · `aacc20b` (futures-trading)
 
 **Povod:** pregled repoa (30.09.2026). Mreža SL × TP, „posle izlaza“ i cena promašenog setupa računaju TP i limit ulaz
 kao izvršen čim ga cena **dodirne** (`high ≥ target`). Limit na dodiru se često ne izvrši (red čekanja na toj ceni), a
