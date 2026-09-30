@@ -647,6 +647,12 @@ export function TradeForm({
       grossPl,
       netPl,
       r,
+      // Risk to the stop in account currency: the breakeven band of a
+      // Topstep account is a share of it, as in every report.
+      riskMoney:
+        posStats.planned_risk_pts != null && entryQty != null && pointValue != null && fx.rate != null
+          ? posStats.planned_risk_pts * entryQty * pointValue * fx.rate
+          : null,
       plannedRR,
       // A future's suggestion is its whole-contract count; zero is no suggestion.
       sizeSuggestion: futures && futures.contracts > 0 ? futures.contracts : null,
@@ -716,7 +722,7 @@ export function TradeForm({
     const book = playbooks.find((p) => p.id === playbookId);
     if (!book) return {};
     const outcome =
-      metrics.netPl == null ? null : classifyOutcome(metrics.netPl, breakevenRange);
+      metrics.netPl == null ? null : classifyOutcome(metrics.netPl, breakevenRange, metrics.riskMoney);
 
     const out: Record<string, boolean> = {};
     for (const rule of book.rules) {
@@ -730,7 +736,7 @@ export function TradeForm({
       out[rule.id] = v === true;
     }
     return out;
-  }, [playbooks, playbookId, ruleAnswers, metrics.netPl, breakevenRange]);
+  }, [playbooks, playbookId, ruleAnswers, metrics.netPl, metrics.riskMoney, breakevenRange]);
 
   /**
    * What this fill would cost, at this size.
@@ -1271,6 +1277,7 @@ export function TradeForm({
                         answers={ruleAnswers}
                         onAnswerChange={setRuleAnswer}
                         netPl={metrics.netPl}
+                        riskMoney={metrics.riskMoney}
                         breakevenRange={breakevenRange}
                       />
                     )}
@@ -1288,6 +1295,7 @@ export function TradeForm({
                     answers={ruleAnswers}
                     onAnswerChange={setRuleAnswer}
                     netPl={metrics.netPl}
+                    riskMoney={metrics.riskMoney}
                     breakevenRange={breakevenRange}
                   />
                 )}

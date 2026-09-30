@@ -10,7 +10,7 @@
  */
 
 import type { RealizedTrade } from "./analytics";
-import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
+import { EXACT_ZERO_RANGE, tradeOutcome, type BreakevenRange } from "./breakeven";
 
 export type HoldTimeStats = {
   /** Trades that have both an open and a close timestamp. */
@@ -63,7 +63,7 @@ export function computeHoldTime(
       longestTradeId = t.id;
     }
 
-    const outcome = classifyOutcome(pnlOf(t), range);
+    const outcome = tradeOutcome(t.row, pnlOf(t), range);
     if (outcome === "win") winners.push(secs);
     else if (outcome === "loss") losers.push(secs);
     else breakeven.push(secs);

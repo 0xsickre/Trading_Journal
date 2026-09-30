@@ -51,6 +51,7 @@ export function PlaybookChecklist({
   answers,
   onAnswerChange,
   netPl,
+  riskMoney = null,
   breakevenRange = EXACT_ZERO_RANGE,
 }: {
   playbooks: Playbook[];
@@ -60,6 +61,8 @@ export function PlaybookChecklist({
   onAnswerChange: (ruleId: string, followed: boolean | null) => void;
   /** Live net P&L, or null while the trade is still a plan. */
   netPl: number | null;
+  /** Risk to the stop in money: a Topstep band is a share of it. */
+  riskMoney?: number | null;
   /**
    * The account's breakeven band. The statistics classify with it, so the
    * checklist must too: without it a +$8 scratch offered the "winner" rules
@@ -74,8 +77,8 @@ export function PlaybookChecklist({
   // winner run" is not a question you can answer before there is a winner.
   const outcome = useMemo<"win" | "loss" | "breakeven" | null>(() => {
     if (netPl == null) return null;
-    return classifyOutcome(netPl, breakevenRange);
-  }, [netPl, breakevenRange]);
+    return classifyOutcome(netPl, breakevenRange, riskMoney);
+  }, [netPl, breakevenRange, riskMoney]);
 
   // Bucketed by THIS book's own sections, in the order its owner put them in.
   // The sections used to come from one account-wide list, which is why the

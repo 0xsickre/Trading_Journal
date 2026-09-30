@@ -57,6 +57,8 @@ Prost max/min i brojanje uzastopnih pobeda/gubitaka.
 ## 2. Breakeven pojas (`breakeven.ts`)
 Asimetričan pojas (različita gornja/donja granica), inkluzivan na oba kraja, sa `EXACT_ZERO_RANGE` fallback-om kad se nalozi u obuhvatu ne slažu oko pojasa.
 
+**Topstep nalog (30.09.2026):** trejd sa stopom je breakeven ako je |P&L| ≤ 0,1 × **njegov** rizik do stopa (`riskShare` u `BreakevenRange`, `tradeOutcome`); bez stopa, i za dan/nedelju u kalendaru, važi novčani pojas plana. Ceo stop na mikro ugovoru se tako broji kao gubitak, ne kao scratch.
+
 **Verdikt: ⚪ Bespoke/interno.** Ne postoji spoljni "standard" za širinu breakeven pojasa — to je pitanje ličnog/journal pravila. Logika (inkluzivnost, fallback na tačnu nulu kad nema saglasnosti) je interno konzistentna i konzervativna. Nema nalaza.
 
 ---
@@ -238,7 +240,7 @@ MLL pod   = najviši EOD balans − MLL plana (trailing samo na KRAJU dana), zak
 DLL       = gubitak Topstep dana (17:00 → 17:00 CT) ≥ DLL plana → dan je stao (nalog nije izgubljen)
 konzist.  = najbolji dan ≤ 55 % cilja; inače cilj raste na najbolji dan ÷ 0,55
 rizik     = computeTopstepRisk: % prostora do MLL-a (podrazumevano 12,5 %) u granicama plana, ≤ DLL ostatak
-breakeven = ±round(0,1 × 12,5 % × MLL plana) → 25 / 38 / 56 $ (K4, fiksno)
+breakeven = |P&L| ≤ 0,1 × rizik trejda do stopa; bez stopa ±round(0,1 × 12,5 % × MLL plana) → 25 / 38 / 56 $ (K4, fiksno; po trejdu od 30.09.2026)
 ```
 
 **Verdikt: ✅ Poravnato sa help.topstep.com (28.09.2026) — sa jednim poznatim ograničenjem.**

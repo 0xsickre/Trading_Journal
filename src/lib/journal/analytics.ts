@@ -2,7 +2,7 @@ import type { TradeRow } from "./types";
 import { compareInstants, dayKeyIn, weekKeyIn, type DayZone } from "./time";
 import { slippageFromTrade } from "./entry-slippage";
 import { exitEfficiencyFromTrade } from "./exit-efficiency";
-import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
+import { EXACT_ZERO_RANGE, tradeOutcome, type BreakevenRange } from "./breakeven";
 import { buildBalanceTimeline, computeDrawdown } from "./balance";
 import { enrichTrades } from "./enriched-trade";
 import { runReport } from "./reports/engine";
@@ -171,7 +171,7 @@ export function computeStats(
     if (p > 0) posProfit += p;
     else if (p < 0) negProfit += Math.abs(p);
 
-    const outcome = classifyOutcome(p, range);
+    const outcome = tradeOutcome(t.row, p, range);
     if (outcome === "win") {
       wins++;
       winMoneySum += p;

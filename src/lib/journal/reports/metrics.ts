@@ -29,7 +29,7 @@ import {
   computeRiskRatios,
   type DayPnlPoint,
 } from "../risk-ratios";
-import { classifyOutcome, type BreakevenRange } from "../breakeven";
+import { tradeOutcome, type BreakevenRange } from "../breakeven";
 import type { EnrichedTrade } from "../enriched-trade";
 import type { MetricUnit } from "../units";
 import { scorable, setupScoreFromTrade } from "../setup-score";
@@ -176,7 +176,7 @@ function outcomes(group: EnrichedTrade[], ctx: MetricContext): { wins: number; l
   let wins = 0;
   let losses = 0;
   for (const t of group) {
-    const o = classifyOutcome(pnlOf(t, ctx), ctx.range);
+    const o = tradeOutcome(t.trade.row, pnlOf(t, ctx), ctx.range);
     if (o === "win") wins++;
     else if (o === "loss") losses++;
   }
@@ -194,7 +194,7 @@ function decidedRs(group: EnrichedTrade[], ctx: MetricContext): number[] {
   const out: number[] = [];
   for (const t of group) {
     if (t.r == null) continue;
-    const o = classifyOutcome(pnlOf(t, ctx), ctx.range);
+    const o = tradeOutcome(t.trade.row, pnlOf(t, ctx), ctx.range);
     if (o === "win" || o === "loss") out.push(t.r);
   }
   return out;

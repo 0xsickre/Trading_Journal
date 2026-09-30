@@ -8,7 +8,7 @@
  */
 
 import { winRateOf, type RealizedTrade } from "./analytics";
-import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
+import { EXACT_ZERO_RANGE, tradeOutcome, type BreakevenRange } from "./breakeven";
 import { dayKeyIn, weekKeyIn, type DayZone } from "./time";
 
 export type PeriodGranularity = "day" | "week" | "month";
@@ -158,7 +158,7 @@ export function bucketByPeriod(
       row.r += t.r;
       row.rTrades++;
     }
-    const outcome = classifyOutcome(p, range);
+    const outcome = tradeOutcome(t.row, p, range);
     if (outcome === "win") row.wins++;
     else if (outcome === "loss") row.losses++;
     else row.breakeven++;

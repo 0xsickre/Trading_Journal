@@ -10,7 +10,9 @@
  * (costs ate the trade but the idea was flat), not a symmetric tolerance.
  */
 
-import { TOPSTEP_PLANS, topstepBreakevenBand, type TopstepPlan } from "./topstep";
+import { riskMoneyAtEntry } from "./risk-taken";
+import type { TradeRow } from "./types";
+import { TOPSTEP_BREAKEVEN_R, TOPSTEP_PLANS, topstepBreakevenBand, type TopstepPlan } from "./topstep";
 
 export type Outcome = "win" | "loss" | "breakeven";
 
@@ -27,8 +29,18 @@ export type BreakevenConfig = {
   topstep_plan?: string | null;
 };
 
-/** Band resolved into account currency, ready to compare against net P&L. */
-export type BreakevenRange = { from: number; to: number };
+/**
+ * Band resolved into account currency, ready to compare against net P&L.
+ *
+ * `riskShare` (a Topstep account, decided 30.09.2026): a trade whose risk is
+ * known is judged against ITS OWN risk — breakeven while |P&L| is at most this
+ * share of it — and `from`/`to` are only the fallback for a trade with no stop.
+ * The dollar band is a tenth of the plan's nominal risk; a micro trade risks a
+ * fraction of that, so a full stop on one MES contract (−1.13R, −$22.25) sat
+ * inside ±$25 and was filed as a scratch, leaving the loss out of the win rate
+ * and the expectancy.
+ */
+export type BreakevenRange = { from: number; to: number; riskShare?: number };
 
 /** Reproduces the old exact-zero behaviour — used when no account is in scope. */
 export const EXACT_ZERO_RANGE: BreakevenRange = { from: 0, to: 0 };
@@ -39,7 +51,7 @@ export function resolveBreakevenRange(
   if (!config) return EXACT_ZERO_RANGE;
   if (config.topstep_mode && config.topstep_plan && config.topstep_plan in TOPSTEP_PLANS) {
     const band = topstepBreakevenBand(config.topstep_plan as TopstepPlan);
-    return { from: -band, to: band };
+    return { from: -band, to: band, riskShare: TOPSTEP_BREAKEVEN_R };
   }
   const { breakeven_from, breakeven_to, breakeven_unit, starting_balance } =
     config;
@@ -53,13 +65,41 @@ export function resolveBreakevenRange(
 /**
  * Classify realized P&L. The band is inclusive on both ends, so a 0..0 band
  * classifies exactly-zero as breakeven and behaves like the previous code.
+ *
+ * `riskMoney` is the trade's risk to its stop in account currency. Given, and
+ * the range carries a `riskShare`, the band is that share of it; otherwise the
+ * range's own money band. A day or a week has no single risk and passes none.
  */
 export function classifyOutcome(
   netPnl: number,
   range: BreakevenRange = EXACT_ZERO_RANGE,
+  riskMoney?: number | null,
 ): Outcome {
+  if (range.riskShare != null && riskMoney != null && riskMoney > 0) {
+    if (Math.abs(netPnl) <= range.riskShare * riskMoney) return "breakeven";
+    return netPnl > 0 ? "win" : "loss";
+  }
   if (netPnl >= range.from && netPnl <= range.to) return "breakeven";
   return netPnl > range.to ? "win" : "loss";
+}
+
+// Risk per row, read once: the reports engine classifies the same trade in
+// every group it sits in, and the rows are stable objects between renders.
+const riskCache = new WeakMap<object, number | null>();
+
+/** A trade's outcome, judged against its own risk to the stop where the range says so. */
+export function tradeOutcome(
+  row: TradeRow,
+  pnl: number,
+  range: BreakevenRange = EXACT_ZERO_RANGE,
+): Outcome {
+  if (range.riskShare == null) return classifyOutcome(pnl, range);
+  let risk = riskCache.get(row);
+  if (risk === undefined) {
+    risk = riskMoneyAtEntry(row);
+    riskCache.set(row, risk);
+  }
+  return classifyOutcome(pnl, range, risk);
 }
 
 /** True when the account has an actual band configured (not the 0..0 default). */
@@ -90,6 +130,8 @@ export function sharedBreakevenRange(
   if (accounts.length === 0) return EXACT_ZERO_RANGE;
   const ranges = accounts.map((a) => resolveBreakevenRange(a));
   const first = ranges[0];
-  const uniform = ranges.every((r) => r.from === first.from && r.to === first.to);
+  const uniform = ranges.every(
+    (r) => r.from === first.from && r.to === first.to && r.riskShare === first.riskShare,
+  );
   return uniform ? first : EXACT_ZERO_RANGE;
 }

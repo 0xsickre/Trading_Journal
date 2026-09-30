@@ -9,7 +9,7 @@
  */
 
 import type { RealizedTrade } from "./analytics";
-import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
+import { EXACT_ZERO_RANGE, tradeOutcome, type BreakevenRange } from "./breakeven";
 import { numberFieldValue as numField } from "./field-values";
 import { excursionFromTrade, type Excursion } from "./excursion";
 import { riskMoneyAtEntry, riskPctTaken } from "./risk-taken";
@@ -140,7 +140,7 @@ export function enrichTrades(
       }`,
       pnl,
       r: t.r,
-      outcome: classifyOutcome(pnl, range),
+      outcome: tradeOutcome(t.row, pnl, range),
       excursion: excursionFromTrade(t.row),
       durationSeconds: secs,
       durationMinutes: secs != null ? secs / 60 : null,

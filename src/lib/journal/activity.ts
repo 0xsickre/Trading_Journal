@@ -14,7 +14,7 @@
  */
 
 import { winRateOf, type RealizedTrade } from "./analytics";
-import { classifyOutcome, EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
+import { EXACT_ZERO_RANGE, tradeOutcome, type BreakevenRange } from "./breakeven";
 import { isShortDirection } from "./plan-calculations";
 import { dayKeyIn, type DayZone } from "./time";
 import type { TradeRow } from "./types";
@@ -54,7 +54,7 @@ export function computeDirectionSplit(
     bucket.count++;
     // Follows the selected basis, so a gross/net switch moves this number too.
     bucket.net += pnlOf(t);
-    const outcome = classifyOutcome(pnlOf(t), range);
+    const outcome = tradeOutcome(t.row, pnlOf(t), range);
     if (outcome === "win") bucket.wins++;
     else if (outcome === "loss") bucket.losses++;
     else bucket.breakeven++;

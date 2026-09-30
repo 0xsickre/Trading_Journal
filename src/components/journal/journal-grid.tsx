@@ -84,9 +84,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TagMultiSelect } from "@/components/journal/tag-multi-select";
 import {
-  classifyOutcome,
   resolveBreakevenRange,
   EXACT_ZERO_RANGE,
+  tradeOutcome,
 } from "@/lib/journal/breakeven";
 import { Badge } from "@/components/ui/badge";
 import { moneyProvenance } from "@/lib/journal/money-provenance";
@@ -458,7 +458,7 @@ export function JournalGrid({
       const range =
         (t.account_id ? rangeByAccount.get(t.account_id) : null) ??
         EXACT_ZERO_RANGE;
-      return classifyOutcome(net, range);
+      return tradeOutcome(t, net, range);
     },
     [rangeByAccount],
   );

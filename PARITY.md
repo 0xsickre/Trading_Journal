@@ -75,7 +75,8 @@ izričito. Tri koje treba znati:
 - **Max drawdown se računa u dve osnove**, imenovane odvojeno: `maxDrawdownPctOfEquity` ide u UI,
   `maxDrawdownPctOfPeakPnl` **isključivo** u skor — da skor ostane uporediv sa TZ-ovim.
 - **Breakeven opseg deli brojanje od novca.** Broj trejdova poštuje opseg, sume novca prate stvarni
-  predznak. Da nije tako, profit factor bi bio tiho naduvan.
+  predznak. Da nije tako, profit factor bi bio tiho naduvan. Na Topstep nalogu opseg je po trejdu
+  (30.09.2026): ±0,1R rizika tog trejda do stopa, a novčani ±$25/38/56 samo bez stopa.
 
 **„Zella Scale"** (potencijal vs stvarno) kod TZ-a je par *target attainment* + *MFE capture*.
 Oba postoje, oba su kolone u gridu i oba idu u izvoz.

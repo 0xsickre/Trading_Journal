@@ -33,7 +33,7 @@ purpose — an applied migration is never edited here, and the comment inside on
 record of the day it was written.
 
 **The interface is deliberately half-and-half, and the line is a clean one.** At least 253 of the
-3,537 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+3,538 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
@@ -452,7 +452,7 @@ drift from the module computing the same thing.
 | Profit factor | `gross profit / gross loss` | `Infinity` when there is no loss — a real maximum, not missing data. `null` only when there is nothing to divide |
 | Expectancy | `winRate × avgWinR + (1 − winRate) × avgLossR` | Computed over the R population only — only a trade with a stop has an R |
 | Best / worst | Largest and smallest single net result | |
-| Breakeven | Trades inside the account's breakeven band | On a Topstep account the band is **fixed** (K4): ±0.1R of the plan's starting risk budget (12.5 % of the room above the MLL) — ±$25 on a 50K, ±$38 on a 100K, ±$56 on a 150K (`topstepBreakevenBand`). Settings shows it and offers nothing to type |
+| Breakeven | Trades inside the account's breakeven band | On a Topstep account the band is **fixed** (K4) and **per trade** (30.09.2026): net P&L within ±0.1R of **the trade's own risk to the stop** (`riskMoneyAtEntry`; `tradeOutcome` in `breakeven.ts`). A trade with no stop, and a day or a week, fall back to 0.1R of the plan's starting risk budget (12.5 % of the room above the MLL) — ±$25 on a 50K, ±$38 on a 100K, ±$56 on a 150K (`topstepBreakevenBand`). Settings shows it and offers nothing to type |
 | **R (everywhere)** | `gross points / (risk in points × entry qty)` | **R is always GROSS**, and does not follow the net/gross toggle — that toggle moves money only |
 
 **Why R is gross while money can be net.** They are deliberately two different questions. R measures
@@ -472,6 +472,15 @@ no screen reads it on purpose — one R per book, so that two do not start to dr
 **The breakeven band** is per account (`breakeven_from`, `breakeven_to`, in currency or percent). A
 ±$20 scratch is neither a win nor a loss, and it is dropped from the win rate instead of being
 counted as a loss — which would understate a book full of scratches by several points.
+
+**On a Topstep account a trade is judged against its own risk** (decided 30.09.2026). The dollar
+band is a tenth of the plan's nominal risk, and a micro trade risks a fraction of that: in the mock
+book one MES contract stopped out for −$22.25, which is −1.13R, sat inside ±$25 and was filed as a
+scratch — left out of the win rate and of the expectancy, which read +1.27R where the book averaged
++0.91R. Every per-trade classification (statistics, reports, insights, journal grid, the playbook
+checklist in the form) now asks `tradeOutcome`, which compares the P&L with 0.1 × the trade's risk
+to the stop, and uses the money band only when there is no stop. Days and weeks on the calendar have
+no single risk and keep the money band.
 
 **"All accounts" does not add different currencies.** €500 and $300 are not $800. When the accounts
 in scope have no common currency, the dashboard, `/reports` and "Export for Claude" refuse to

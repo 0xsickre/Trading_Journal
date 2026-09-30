@@ -511,13 +511,14 @@ function EditAccountDialog({
           <h3 className="text-sm font-medium">Breakeven range</h3>
           <p className="text-sm tabular-nums">
             {topstepMode
-              ? `±${fmtMoney(topstepBreakevenBand(topstepPlan), currency)}`
+              ? `±0.1R of the trade's risk · ±${fmtMoney(topstepBreakevenBand(topstepPlan), currency)} without a stop`
               : `${fmtMoney(account.breakeven_from, currency)} to ${fmtMoney(account.breakeven_to, currency)}`}
           </p>
           <p className="text-xs text-muted-foreground">
-            Fixed, not a setting: a trade whose net P&amp;L is within 0.1R of the plan&apos;s
-            starting risk budget ({TOPSTEP_DEFAULT_RISK_PCT} % of the room above the MLL) is a
-            scratch, so the win rate never moves with a number typed here.
+            Fixed, not a setting: a trade whose net P&amp;L is within 0.1R of its own risk to
+            the stop is a scratch — a full stop on one micro contract is a loss, however few
+            dollars it is. A trade with no stop, and a day or a week, use 0.1R of the plan&apos;s
+            starting risk budget ({TOPSTEP_DEFAULT_RISK_PCT} % of the room above the MLL).
           </p>
         </section>
 
