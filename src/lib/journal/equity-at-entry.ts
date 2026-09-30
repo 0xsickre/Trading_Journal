@@ -105,3 +105,21 @@ export function riskBudgetAtEntryPatch(
   if (budget == null || !(budget >= 0)) return {};
   return { risk_budget_at_entry: budget };
 }
+
+/**
+ * When `tj_positions.room_at_entry` is written — the Topstep account's room
+ * above its MLL at the entry, the denominator of that trade's Risk %
+ * (30.09.2026). The same rules as `risk_budget_at_entry`, 0 included: an
+ * account on its floor had no room, and that is a fact about the entry.
+ */
+export function roomAtEntryPatch(
+  nextStatus: PositionStatus,
+  prev: { room_at_entry?: number | null } | null,
+  room: number | null,
+): { room_at_entry?: number | null } {
+  const had = prev?.room_at_entry ?? null;
+  if (!ENTERED.has(nextStatus)) return had == null ? {} : { room_at_entry: null };
+  if (had != null) return {};
+  if (room == null || !(room >= 0)) return {};
+  return { room_at_entry: room };
+}

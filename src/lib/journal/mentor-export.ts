@@ -596,7 +596,7 @@ export function buildMentorPack(
         "- **DLL** (Daily Loss Limit) — najveći dozvoljeni gubitak u jednom trading danu; Topstep tada zatvara pozicije i dan je gotov (nalog nije izgubljen).",
         `- **Konzistentnost** — najbolji dan sme biti najviše ${Math.round(TOPSTEP_CONSISTENCY * 100)}% cilja; preko toga cilj raste na najbolji dan ÷ ${TOPSTEP_CONSISTENCY}.`,
         "- **Sesijski prozori (ET)** — Globex noć 18:00–08:00, Pre-open 08:00–09:30, Open 09:30–10:00, Morning 10:00–11:30, Lunch 11:30–13:30, Afternoon 13:30–15:00, Last hour 15:00–.",
-        "- **Posle gubitaka** — koliko je gubitaka zaredom već bilo zatvoreno tog dana na istom nalogu u trenutku ulaza. Moje pravilo: posle 2 gubitka zaredom dan je gotov; svaki ulaz posle toga je tilt.",
+        "- **Posle gubitaka** — koliko je gubitaka zaredom već bilo zatvoreno tog dana na istom nalogu u trenutku ulaza. Samo analitika: broj trejdova ne ograničavam — dan se zaustavlja na novcu (lični dnevni limit gubitka i dnevni cilj profita, kao u TopstepX Risk Limits).",
         "- **Vreme u minusu** — % trajanja trejda u kome je tekući P&L bio ispod nule, iz berzanskih sveća (1 s).",
         "- **Crveni prozor** — vesti visokog uticaja iz jutarnjeg brief-a (futures-trading), u kojima ne ulazim.",
         "- **Veličina** — broj ugovora; mikro (MNQ/MES/M6E) je 1/10 mini ugovora.",

@@ -150,27 +150,26 @@ describe("the swing insights are gone (H1, 28.09.2026)", () => {
     }
   });
 
-  it("24 rules remain: trade 12, day 10, portfolio 2", () => {
+  it("23 rules remain: trade 11, day 10, portfolio 2", () => {
     // A future carries no swap, so the swap insight went with the rest (H1.4).
     // The three week rules became day rules and tilt a trade rule (F5.3a); the
     // time-underwater pair came back from the omitted list (F5.3b); the two
-    // vault-era rules left (F6, M2-A).
+    // vault-era rules left (F6, M2-A); tilt left with the count rules (30.09.2026).
     const by = (level: string) => ALL_RULES.filter((r) => r.level === level).length;
-    expect(ALL_RULES).toHaveLength(24);
-    expect([by("trade"), by("day"), by("week"), by("portfolio")]).toEqual([12, 10, 0, 2]);
+    expect(ALL_RULES).toHaveLength(23);
+    expect([by("trade"), by("day"), by("week"), by("portfolio")]).toEqual([11, 10, 0, 2]);
   });
 });
 
 describe("intraday insights (F5.3)", () => {
   it("measures the day in minutes and sessions, not weeks, and leaves one rule out", () => {
     const ids = new Set(ALL_RULES.map((r) => r.id));
-    for (const gone of ["overtrading_week", "low_efficiency_week", "tilt_week"]) {
+    for (const gone of ["overtrading_week", "low_efficiency_week", "tilt_week", "tilt_after_losses"]) {
       expect(ids.has(gone)).toBe(false);
     }
     for (const now of [
       "overtrading_day",
       "low_efficiency_day",
-      "tilt_after_losses",
       "patience_paid_off",
       "most_time_in_drawdown",
       "deep_in_drawdown_day",

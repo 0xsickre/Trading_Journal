@@ -16,6 +16,8 @@ const cfg = (over: Partial<TopstepConfig> = {}): TopstepConfig => ({
   startingBalance: 50_000,
   payoutAt: null,
   resetAt: null,
+  personalDll: null,
+  dailyTarget: null,
   ...over,
 });
 const t = (closedAt: string, net: number): TopstepTrade => ({ closedAt, net });
@@ -158,7 +160,7 @@ describe("off and reset", () => {
 });
 
 describe("reading an account", () => {
-  it("takes the plan, balance, payout and reset off the account row", async () => {
+  it("takes the plan, balance, payout, reset and personal limits off the account row", async () => {
     const { topstepConfigFromAccount } = await import("./topstep");
     const c = topstepConfigFromAccount({
       topstep_mode: true,
@@ -166,8 +168,18 @@ describe("reading an account", () => {
       starting_balance: 150_000,
       topstep_payout_at: null,
       topstep_reset_at: "2026-09-01T00:00:00Z",
+      topstep_personal_dll: 2_000,
+      topstep_daily_target: null,
     } as never);
-    expect(c).toEqual({ enabled: true, plan: "150K", startingBalance: 150_000, payoutAt: null, resetAt: "2026-09-01T00:00:00Z" });
+    expect(c).toEqual({
+      enabled: true,
+      plan: "150K",
+      startingBalance: 150_000,
+      payoutAt: null,
+      resetAt: "2026-09-01T00:00:00Z",
+      personalDll: 2_000,
+      dailyTarget: null,
+    });
   });
 
   it("a trade closed after the payout already stands on the starting balance as its floor", () => {
@@ -258,5 +270,40 @@ describe("headroom: the closest the account came to its floor (F3, E6)", () => {
 
   it("is 0 once the floor was touched", () => {
     expect(run([t("2026-09-28T15:00:00Z", -2_100)]).headroomPct).toBe(0);
+  });
+});
+
+describe("TopstepX Risk Limits: the personal daily loss limit and profit target (30.09.2026)", () => {
+  it("makes the personal limit the day's DLL where it is tighter than the plan's", () => {
+    const r = run([t("2026-09-30T14:00:00Z", -300)], { personalDll: 600 });
+    expect(r.rules.dll).toBe(600);
+    expect(r.personalDll).toBe(true);
+    expect(r.dllLeftToday).toBe(300);
+  });
+
+  it("keeps the plan's DLL when the personal one is looser — Topstep still stops there", () => {
+    const r = run([], { personalDll: 5_000 });
+    expect(r.rules.dll).toBe(1_000);
+    expect(r.personalDll).toBe(false);
+  });
+
+  it("counts a stopped day at the personal limit", () => {
+    const r = run([t("2026-09-29T14:00:00Z", -700)], { personalDll: 600 });
+    expect(r.dllDays).toEqual(["2026-09-29"]);
+  });
+
+  it("says how much of the daily target is still missing today, and 0 once banked", () => {
+    expect(run([t("2026-09-30T14:00:00Z", 200)], { dailyTarget: 500 }).targetLeftToday).toBe(300);
+    expect(run([t("2026-09-30T14:00:00Z", 650)], { dailyTarget: 500 }).targetLeftToday).toBe(0);
+    const none = run([]);
+    expect(none.dailyTarget).toBeNull();
+    expect(none.targetLeftToday).toBeNull();
+  });
+
+  it("sizes from the personal DLL left today", () => {
+    // 50K: room 2 000 → 12.5 % = 250; the personal 600 already lost 450, so 150 is left.
+    const trades = [t("2026-09-30T14:00:00Z", -450)];
+    const budget = riskBudgetAt(cfg({ personalDll: 600 }), { pct: 12.5, min: null, max: null }, trades, "2026-09-30T15:00:00Z");
+    expect(budget).toBeLessThanOrEqual(150);
   });
 });

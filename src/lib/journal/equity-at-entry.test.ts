@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { equityAtEntryPatch, riskBudgetAtEntryPatch } from "./equity-at-entry";
+import { equityAtEntryPatch, riskBudgetAtEntryPatch, roomAtEntryPatch } from "./equity-at-entry";
 
 describe("equityAtEntryPatch", () => {
   it("stamps the denominator when a plan becomes a position", () => {
@@ -67,5 +67,22 @@ describe("riskBudgetAtEntryPatch (F3, E4) — the same three rules", () => {
 
   it("writes nothing it does not know — not a Topstep account, or no entry instant", () => {
     expect(riskBudgetAtEntryPatch("closed", null, null)).toEqual({});
+  });
+});
+
+describe("roomAtEntryPatch (30.09.2026) — the same three rules", () => {
+  it("writes the room on the save that first gives the trade an entry, 0 included", () => {
+    expect(roomAtEntryPatch("closed", null, 4_500)).toEqual({ room_at_entry: 4_500 });
+    expect(roomAtEntryPatch("open", { room_at_entry: null }, 0)).toEqual({ room_at_entry: 0 });
+  });
+
+  it("never overwrites a sealed room, and clears it on the way back to a plan", () => {
+    expect(roomAtEntryPatch("closed", { room_at_entry: 4_500 }, 3_000)).toEqual({});
+    expect(roomAtEntryPatch("planned", { room_at_entry: 4_500 }, null)).toEqual({ room_at_entry: null });
+    expect(roomAtEntryPatch("planned", null, null)).toEqual({});
+  });
+
+  it("writes nothing when the room is unknown", () => {
+    expect(roomAtEntryPatch("closed", null, null)).toEqual({});
   });
 });

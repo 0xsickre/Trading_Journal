@@ -256,4 +256,9 @@ describe("a Topstep account: money, a trailing floor and a DLL (F3, E6)", () => 
     const r2 = topstep(Array(20).fill(2_500), { horizonDays: 2 })!;
     expect(r2.pTarget).toBe(100);
   });
+  it("a personal daily profit target caps a day where TopstepX would stop it", () => {
+    // +2 500 days capped at the personal +1 000: one day is +2 % of 50 000.
+    const r = topstep(Array(20).fill(2_500), { horizonDays: 1, dailyTarget: 1_000 })!;
+    expect(r.percentiles.p50).toBeCloseTo(2);
+  });
 });

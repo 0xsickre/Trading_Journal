@@ -2,19 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { revalidateDaily } from "@/lib/journal/revalidate";
-import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import type { Json } from "@/lib/supabase/types";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { getPrimaryAccount } from "@/lib/journal/accounts";
 import { DEFAULT_TZ, accountDayZone, dayKeyIn, todayIn } from "@/lib/journal/time";
 import { trackerRuleMayHardDelete } from "@/lib/journal/settings-rules";
-import {
-  AUTO_RULES_NEEDING_COUNT,
-  TRACKER_STAGES,
-  type AutoRuleKey,
-  type TrackerStage,
-} from "@/lib/journal/tracker-types";
+import { TRACKER_STAGES, type TrackerStage } from "@/lib/journal/tracker-types";
 
 function revalidateAll() {
   revalidatePath("/settings");
@@ -23,29 +16,6 @@ function revalidateAll() {
 }
 
 type Result = { ok: true } | { ok: false; error: string };
-
-/**
- * Config schema per `auto_key`.
- *
- * `.strict()` on purpose: a key no evaluator reads must fail loudly until an
- * evaluator knows what to do with it, rather than being stored and silently
- * ignored. A manual rule has nothing to configure at all, which the DB also
- * enforces.
- */
-/**
- * A whole number of entries or losses. Capped at 20: no day trader's rule is
- * "stop after twenty-one losses", and a stray keypress turning 2 into 200 would
- * switch the rule off rather than tighten it.
- */
-const countConfig = z
-  .object({ count: z.number().int().positive().max(20).optional() })
-  .strict();
-const emptyConfig = z.object({}).strict();
-
-function configSchema(autoKey: AutoRuleKey | null) {
-  if (autoKey == null) return emptyConfig;
-  return AUTO_RULES_NEEDING_COUNT.has(autoKey) ? countConfig : emptyConfig;
-}
 
 /**
  * Normalize `active_days`.
@@ -122,16 +92,12 @@ export async function updateTrackerRule(
     text?: string;
     stage?: TrackerStage;
     active_days?: number[];
-    config?: Record<string, unknown>;
   },
 ): Promise<Result> {
   const next: {
     text?: string;
     stage?: string;
     active_days?: number[];
-    // `Json` rather than a plain record: the zod schema has already narrowed
-    // this to a validated shape, and PostgREST serializes it as jsonb.
-    config?: Json;
   } = {};
 
   if (patch.text != null) {
@@ -150,50 +116,10 @@ export async function updateTrackerRule(
     next.active_days = days;
   }
 
-  const supabase = await createClient();
-
-  if (patch.config != null) {
-    // The schema depends on which evaluator the rule runs, so the rule has to be
-    // read before its config can be validated.
-    const { data: current } = await supabase
-      .from("tj_tracker_rules")
-      .select("auto_key")
-      .eq("id", id)
-      .maybeSingle();
-    if (!current) return { ok: false, error: "Rule not found." };
-
-    const parsed = configSchema(
-      (current.auto_key as AutoRuleKey | null) ?? null,
-    ).safeParse(patch.config);
-    if (!parsed.success) {
-      return {
-        ok: false,
-        error:
-          current.auto_key == null
-            ? "A manual rule has nothing to configure."
-            : AUTO_RULES_NEEDING_COUNT.has(current.auto_key as AutoRuleKey)
-              ? "The count must be a whole number from 1 to 20."
-              : "The limit must be a positive number.",
-      };
-    }
-    next.config = parsed.data;
-  }
-
   if (Object.keys(next).length === 0) return { ok: true };
 
-  const { error } = await supabase.from("tj_tracker_rules").update(next).eq("id", id);
-  if (error) return { ok: false, error: error.message };
-  revalidateAll();
-  return { ok: true };
-}
-
-/** Clear a money limit, which puts the rule back to "not applicable". */
-export async function clearTrackerRuleLimit(id: string): Promise<Result> {
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("tj_tracker_rules")
-    .update({ config: {} })
-    .eq("id", id);
+  const { error } = await supabase.from("tj_tracker_rules").update(next).eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidateAll();
   return { ok: true };

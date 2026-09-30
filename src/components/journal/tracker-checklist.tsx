@@ -44,34 +44,30 @@ const DAILY_STAGE_LABELS: Record<TrackerStage, string> = {
 /** Where a Topstep limit came from, said after the amount. */
 const BASIS_TEXT: Record<LimitBasis, string> = {
   topstep_dll: "DLL Topstep plana",
+  personal_dll: "lični dnevni limit gubitka",
   topstep_budget: "budžet rizika na ulazu",
   topstep_budget_slippage: "budžet rizika na ulazu + 10 % za proklizavanje",
+  daily_target: "lični dnevni cilj profita",
 };
 
 /** A close time on Chicago's clock — Topstep states its day there. */
 const ctTime = (iso: string) => `${fmtInTz(iso, "America/Chicago", "HH:mm")} CT`;
 
 /**
- * The verdict of a day-trading rule (F4), whose numbers are counts, a time or a
- * window rather than money. Null for every other rule and for the reasons the
- * generic text already says right.
+ * The verdict of a day-trading rule (F4), whose numbers are a time, a window or
+ * the day's banked profit rather than a loss. Null for every other rule and for
+ * the reasons the generic text already says right.
  */
-function dayTradingText(res: AutoRuleResult): string | null {
-  const c = res.counted;
+function dayTradingText(res: AutoRuleResult, currency: string): string | null {
   const verdict = res.reason === "violated" || res.reason === "ok";
   if (!verdict) return null;
   const broke = res.reason === "violated";
   switch (res.key) {
-    case "max_trades_per_day":
-      if (!c) return null;
+    case "no_entry_after_daily_target":
+      if (res.observed == null || res.limit == null) return null;
       return broke
-        ? `Prekršeno: ${c.observed} ulaza na jednom nalogu, dozvoljeno ${c.limit}.`
-        : `U okviru — najviše ${c.observed} od ${c.limit} ulaza po nalogu.`;
-    case "stop_after_losses":
-      if (!c) return null;
-      return broke
-        ? `Prekršeno: ulaz posle ${c.observed} uzastopna gubitka (stop posle ${c.limit}).`
-        : `U okviru — nijedan ulaz posle ${c.limit} uzastopna gubitka.`;
+        ? `Prekršeno: ulaz posle ${fmtMoney(res.observed, currency)} zatvorenog profita, a dnevni cilj je ${fmtMoney(res.limit, currency)}.`
+        : `U okviru — pre ulaza najviše ${fmtMoney(res.observed, currency)} od cilja ${fmtMoney(res.limit, currency)}.`;
     case "flat_by_close":
       if (!res.at) return null;
       return broke
@@ -98,12 +94,12 @@ function autoReasonText(res: AutoRuleResult, currency: string): string {
   // entry depends on the account's closed trades at that moment.
   const limit = res.limit ?? null;
 
-  const day = dayTradingText(res);
+  const day = dayTradingText(res, currency);
   if (day) return day;
 
   switch (res.reason) {
     case "unconfigured":
-      return "Broj nije podešen — podesi ga u Settings › Tracker da bi pravilo počelo da se ocenjuje.";
+      return "Nalog nema lični dnevni cilj profita — upiši ga u Settings › Accounts (Topstep) da bi pravilo počelo da se ocenjuje.";
     case "no_trades":
       return "Nema trejdova po kojima bi se ovo pravilo ocenilo ovog dana.";
     case "no_plans":

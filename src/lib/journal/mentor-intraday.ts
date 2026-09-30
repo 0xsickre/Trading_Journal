@@ -156,10 +156,10 @@ export function dailySection(trades: readonly EnrichedTrade[], ctx: DailyContext
   const shown = keys.slice(-DAY_ROWS_CAP);
   const out = [
     `## Dnevni pregled (${days.size} trading dana)`,
-    `_Dan = trading dan naloga (Topstep: 17:00–17:00 CT). „Posle 2+ gubitka“ = trejdovi otvoreni kad su već 2 gubitka zaredom bila zatvorena tog dana na istom nalogu (tvoje pravilo stop posle 2). Pravila = % tvojih pravila iz dnevnog trackera koja su ispoštovana; u zagradi propuštena._`,
+    `_Dan = trading dan naloga (Topstep: 17:00–17:00 CT). Pravila = % tvojih pravila iz dnevnog trackera koja su ispoštovana; u zagradi propuštena._`,
     "",
-    `| Dan | Trejdova | W/L/BE | Net | R | Prvi ulaz (ET) | Najduži niz gubitaka | Posle 2+ gubitka | Max ugovora | Pravila | Napomena |`,
-    `| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |`,
+    `| Dan | Trejdova | W/L/BE | Net | R | Prvi ulaz (ET) | Najduži niz gubitaka | Max ugovora | Pravila | Napomena |`,
+    `| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |`,
   ];
   for (const day of shown) {
     const list = days.get(day)!;
@@ -170,7 +170,6 @@ export function dailySection(trades: readonly EnrichedTrade[], ctx: DailyContext
       .filter((o): o is string => o != null)
       .sort()[0];
     const sizes = list.map((t) => t.size).filter((v): v is number => v != null);
-    const tilt = list.filter((t) => (t.lossStreakBefore ?? 0) >= 2).length;
     const c = ctx.compliance?.get(day);
     const missed = (c?.missedRuleIds ?? []).map((id) => ctx.ruleText?.get(id) ?? id);
     const rules =
@@ -186,7 +185,7 @@ export function dailySection(trades: readonly EnrichedTrade[], ctx: DailyContext
     out.push(
       `| ${day} | ${list.length} | ${s.wins}/${s.losses}/${s.breakeven} | ${s.netSum.toFixed(2)} | ${r2(s.totalR)}R | ${
         first ? fmtInTz(first, SESSION_TZ, "HH:mm") : "—"
-      } | ${longestLossRun(list)} | ${tilt || "—"} | ${sizes.length ? Math.max(...sizes) : "—"} | ${cell(rules)} | ${cell(
+      } | ${longestLossRun(list)} | ${sizes.length ? Math.max(...sizes) : "—"} | ${cell(rules)} | ${cell(
         notes.join(", ") || "—",
       )} |`,
     );
@@ -226,7 +225,8 @@ export function topstepSection(accounts: readonly MentorTopstep[], ccy: string):
       `| Balans / početni | ${m(r.balance)} / ${m(a.startingBalance)} (profit ${signed(r.profit, ccy)}) |`,
       `| MLL (trailing) | pod ${m(r.mllFloor)}${r.mllLocked ? " — zaključan na početnom balansu" : ""}; prostor do njega ${m(r.room)} od ${m(r.rules.mll)} |`,
       `| Najbliže MLL-u ikad | ${r.headroomPct == null ? "—" : `${r.headroomPct.toFixed(0)}% prostora je ostalo u najgorem trenutku`} |`,
-      `| DLL | ${m(r.rules.dll)} dnevno; danas ${signed(r.todayNet, ccy)}, ostalo ${m(r.dllLeftToday)} |`,
+      `| DLL | ${m(r.rules.dll)} dnevno${r.personalDll ? " (lični limit, uži od plana)" : ""}; danas ${signed(r.todayNet, ccy)}, ostalo ${m(r.dllLeftToday)} |`,
+      `| Dnevni cilj profita | ${r.dailyTarget == null ? "nije postavljen" : `${m(r.dailyTarget)}; do njega danas ${m(r.targetLeftToday ?? 0)}`} |`,
       `| Dani kad je DLL dostignut | ${r.dllDays.length ? `${r.dllDays.length}: ${r.dllDays.join(", ")}` : "nijedan"} |`,
       `| Cilj | ${m(r.effectiveTarget)}${r.effectiveTarget > r.rules.target ? ` (porastao sa ${m(r.rules.target)} zbog pravila konzistentnosti)` : ""}; do cilja ${m(Math.max(0, r.effectiveTarget - r.profit))} |`,
       `| Najbolji dan / granica konzistentnosti | ${r.bestDay ? `${signed(r.bestDay.net, ccy)} (${r.bestDay.day})` : "—"} / ${m(consistencyCap)} (${Math.round(TOPSTEP_CONSISTENCY * 100)}% cilja) — ${r.consistencyOk ? "u redu" : "PREKORAČENO"} |`,
@@ -247,7 +247,7 @@ const STAGE_LABEL: Record<TrackerRule["stage"], string> = {
 
 function ruleLine(rule: TrackerRule): string {
   const auto = rule.auto_key
-    ? ` · automatski: \`${rule.auto_key}\`${rule.config.count != null ? ` = ${rule.config.count}` : ""}`
+    ? ` · automatski: \`${rule.auto_key}\``
     : " · ručno štikliram";
   const days =
     rule.active_days.length === 7 ? "svaki dan" : rule.active_days.map((d) => WEEKDAY_LABELS[d] ?? d).join(", ");

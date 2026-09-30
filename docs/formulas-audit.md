@@ -294,7 +294,7 @@ nightsBetween — broji KALENDARSKE ROLLOVER-e pređene (ne 24h blokove)
 
 ## 15. Compliance / process adherence (`tracker/compliance.ts`, `tracker/process-adherence.ts`, `tracker/auto-rules.ts`)
 
-Dnevni compliance % = prost neponderisani odnos ispunjeno/primenjivo po danu (`na` isključeno iz oba); `PROCESS_BLEND = {tracker:60, follow:40}`; auto-pravila (`max_loss_per_day/trade`) evaluirana na NETO P&L bazi. **Od F3/H2 limiti su novac Topstep plana**, ne procenat equity-ja: dnevni gubitak = DLL, gubitak po trejdu i rizik po trejdu = budžet pravila rizika na ulazu (`risk_budget_at_entry`, +10 % za slippage), a `risk_matched_intent` pita da li je veličina bila broj ugovora koji je pravilo dalo. F4 je dodao `max_trades_per_day`, `stop_after_losses` (uzastopni gubici po nalogu, zatvoreni pre ulaza), `flat_by_close` i `no_entry_in_red_window` (iz brief-a).
+Dnevni compliance % = prost neponderisani odnos ispunjeno/primenjivo po danu (`na` isključeno iz oba); `PROCESS_BLEND = {tracker:60, follow:40}`; auto-pravila (`max_loss_per_day/trade`) evaluirana na NETO P&L bazi. **Od F3/H2 limiti su novac Topstep plana**, ne procenat equity-ja: dnevni gubitak = DLL, gubitak po trejdu i rizik po trejdu = budžet pravila rizika na ulazu (`risk_budget_at_entry`, +10 % za slippage), a `risk_matched_intent` pita da li je veličina bila broj ugovora koji je pravilo dalo. F4 je dodao `flat_by_close` i `no_entry_in_red_window` (iz brief-a); 30.09.2026 `max_trades_per_day` i `stop_after_losses` su obrisani (dan se ne ograničava brojem trejdova), a došao je `no_entry_after_daily_target`: ulaz posle zatvorenog neto P&L-a naloga u Topstep danu ≥ ličnog dnevnog cilja profita. Dnevni gubitak = lični dnevni limit gde je uži od DLL-a plana (`topstepPlanRulesFor`).
 
 **Verdikt: ⚪ Bespoke/interno, bez nalaza.** Ovo su interna journaling pravila (nema akademskog standarda za "koliko treba da se ponderiše tracker vs. followed-rules disciplina") — logika je unutrašnje konzistentna. Evaluacija na NETO bazi (uključuje troškove) je razumnija/strožija varijanta od bruto, što je konzervativan i opravdan izbor za risk-limit proveru.
 
@@ -305,7 +305,8 @@ Dnevni compliance % = prost neponderisani odnos ispunjeno/primenjivo po danu (`n
 ```
 riskMoney  = plannedRiskPts(entry_price, stop_price, avg_entry)
            × entry_qty × point_value × fx_rate
-riskPct    = riskMoney / equity_at_entry × 100
+riskPct    = riskMoney / room_at_entry × 100      (Topstep, 30.09.2026: prostor iznad MLL-a na ulazu; 0 → null)
+           = riskMoney / equity_at_entry × 100    (bez pečata room_at_entry)
 dispersion = populaciona σ od riskPct
 ```
 
@@ -548,8 +549,8 @@ sesija          = prozor ulaza po ET (New York): Globex noć 18:00–08:00, Pre-
                   Morning, Lunch 11:30–13:30, Afternoon, Last hour 15:00–   (L1)
 min od otvaranja = ulaz − 09:30 ET; pre otvaranja / večernja sesija → „Before the open"
 redni broj       = redosled ulaza u danu, po nalogu i trading danu
-gubici pre ulaza = uzastopni gubici ZATVORENI pre ulaza, isti nalog i dan (isto što ocenjuje stop_after_losses)
-tilt             = svaki ulaz dana posle prvog sa ≥ 2 gubitka pre ulaza (L3)
+gubici pre ulaza = uzastopni gubici ZATVORENI pre ulaza, isti nalog i dan (samo dimenzija, ne pravilo)
+tilt             = uklonjen 30.09.2026 — dan se zaustavlja na novcu, ne na broju gubitaka
 revenge          = gubitnički ulaz ≤ 5 min posle gubitka na istom nalogu
 pod vodom %      = Σ trajanja sa tekućim P&L < 0 / trajanje trejda × 100
                    tekući P&L = ostvareno na izlazima + otvoreni ugovori po ceni (bez provizije),

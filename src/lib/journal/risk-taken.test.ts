@@ -112,6 +112,15 @@ describe("riskPctTaken", () => {
   it("is null when the numerator cannot be computed", () => {
     expect(riskPctTaken(mkRow({ stop_price: null }))).toBeNull();
   });
+  it("on a Topstep trade, measures against the room above the MLL at entry (30.09.2026)", () => {
+    // $100 on the stop with $2 000 of room is 5 % of what the account can lose,
+    // not 1 % of a balance it can never spend.
+    expect(riskPctTaken(mkRow({ room_at_entry: 2_000 }))).toBe(5);
+  });
+
+  it("has no share of nothing: a trade entered with no room left reads null", () => {
+    expect(riskPctTaken(mkRow({ room_at_entry: 0 }))).toBeNull();
+  });
 });
 
 describe("riskDispersion", () => {

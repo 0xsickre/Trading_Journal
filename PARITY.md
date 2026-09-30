@@ -134,17 +134,18 @@ opsegu naloga, i klikom na dan koji vodi na pun dnevni pregled.
 | Trading checklist | ✅ tracker pravila po fazi dana, sa danima u nedelji |
 | **Zaključavanje dana** | ✅ **nepovratno, DB trigerom** |
 
-**Verdikt: pokriveno, i preko toga.** Jedanaest tracker pravila se **ocenjuje automatski iz podataka**
-(gubitak po trejdu i po danu prema Topstep planu, rizik po trejdu i veličina prema pravilu rizika,
-playbook vezan, stop unet, teza, max trejdova dnevno, stop posle N gubitaka zaredom, ravno do kraja
-dana, bez ulaza u crvenom prozoru brief-a), a niz doslednosti i Process Adherence
+**Verdikt: pokriveno, i preko toga.** Deset tracker pravila se **ocenjuje automatski iz podataka**
+(gubitak po trejdu i po danu prema Topstep planu ili ličnom dnevnom limitu, rizik po trejdu i veličina
+prema pravilu rizika, playbook vezan, stop unet, teza, ravno do kraja dana, bez ulaza u crvenom
+prozoru brief-a, bez ulaza posle ličnog dnevnog cilja profita; broj trejdova se ne ograničava), a niz doslednosti i Process Adherence
 ulaze u skor. TZ nema procesni skor u kompozitu.
 
 ---
 
 ## 6. Prop firm
 
-Topstep mod po nalogu (plan 50K / 100K / 150K): Daily Loss Limit, Maximum Loss Limit (trailing po
+Topstep mod po nalogu (plan 50K / 100K / 150K): Daily Loss Limit (i lični iz TopstepX Risk Limits, uz
+lični dnevni cilj profita), Maximum Loss Limit (trailing po
 EOD, zaključava se na početnom balansu), profit target sa pravilom konzistentnosti 55 %, maksimalna
 pozicija, veličina u celim ugovorima iz pravila rizika, blokada plana na proboj MLL-a, banner sa
 stanjem, Survival simulacija u novcu i otvoreni rizik prema DLL-u. FTMO mod je postojao
@@ -216,8 +217,8 @@ Iz §7 ROADMAP-a, i sve provereno u kodu:
 4. **Per-rule atribucija edge-a** — koje pravilo iz playbook-a nosi zaradu, a koje je ritual.
 5. **Process Adherence u kompozitnom skoru** — sedma komponenta, 15%.
 6. **Nepovratno zaključavanje dana**, sprovedeno u bazi, sa zamrzavanjem automatskih ocena.
-7. **Insight engine** sa 24 pravila (posle Faze F: intraday revenge, overtrading po danu, tilt posle
-   2 gubitka sa cenom, strpljenje, vreme pod vodom iz berzanskih sveća) i **obaveznim pragom uzorka**
+7. **Insight engine** sa 23 pravila (posle Faze F: intraday revenge, overtrading po danu,
+   strpljenje, vreme pod vodom iz berzanskih sveća) i **obaveznim pragom uzorka**
    na svakom nalazu.
 8. **Korisnička polja** koja odmah postaju dimenzije izveštaja, bez ijedne izmene engine-a.
 9. **Uplate i isplate** odvojene od P&L-a, sa dva imenioca za drawdown.
@@ -284,7 +285,7 @@ relevantne, i većina sada postoji.**
 | Izveštaj po satu / danu / trajanju | ✅ `entry_hour`, `dow_entry`, `hold_duration` u minutima — plus sesijski prozor po ET i minuti od otvaranja, što TZ nema kao dimenziju |
 | Revenge trading | ✅ `revenge_trade` — gubitnički ulaz ≤ 5 min posle gubitka, isti nalog |
 | Overtrading / low efficiency | ✅ po danu, prema sopstvenom proseku (10 dana istorije) |
-| Tilt | ✅ `tilt_after_losses` — svaki ulaz posle 2 gubitka zaredom, sa cenom (R, $, minuti do ponovnog ulaza, ugovori) |
+| Tilt | ➖ svesno bez pravila (30.09.2026): dan se zaustavlja na novcu (lični dnevni limit gubitka i cilj profita), ne na broju gubitaka; „After losses" ostaje dimenzija u `/reports` |
 | Patience paid off | ✅ vraćen (prvi ulaz 30+ min posle 09:30 ET, zelen dan) |
 | Most time in drawdown / deep in drawdown day | ✅ vraćeni — vreme pod vodom iz 1 s berzanskih sveća (R2, `futures-trading`) |
 | Maximize your profit (dan) | ❌ i dalje svesno izostavljen: traži vrh dnevnog zbirnog P&L-a; `gave_back_profit` pokriva ponašanje iz MFE |

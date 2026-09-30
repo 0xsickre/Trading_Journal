@@ -5,8 +5,8 @@
  * arithmetic, and every one of them should be arguable without touching logic.
  *
  * Day-trading cadence (F5.3). The revenge window is minutes on the same
- * account, and the tilt rule reads the loss streak the trader was standing in
- * when they entered — the same count the `stop_after_losses` rule grades (L3).
+ * account. No rule counts trades or losses in a row (30.09.2026): the day
+ * stops on money — the daily loss limit and the daily profit target.
  * The hold-time rule compares against the 75th percentile of your own winners.
  */
 
@@ -26,8 +26,6 @@ const T = {
   CLEAN_HOLD_MULTIPLE: 2,
   /** Minutes after a loss, on the same account, within which a re-entry counts as reactive. */
   REVENGE_WINDOW_MINUTES: 5,
-  /** Losses in a row on one account and day after which the day should have ended (L3, 29.09.2026). */
-  TILT_LOSSES: 2,
   /** Share of a trade's time underwater (%) from which it was "mostly underwater". */
   MOSTLY_UNDERWATER_PCT: 75,
 } as const;
@@ -333,83 +331,6 @@ export const revengeTrade: Rule = {
   },
 };
 
-/**
- * Every entry of an account's day from the first one taken after `TILT_LOSSES`
- * losses in a row — the point where the day should have ended. What follows it
- * is the tilt, whatever it made: the rule measures the cost, it forbids nothing.
- */
-function tiltEntries(trades: EnrichedTrade[]): Set<string> {
-  const byDay = new Map<string, EnrichedTrade[]>();
-  for (const e of trades) {
-    if (e.lossStreakBefore == null) continue;
-    const key = `${e.accountId}|${e.openDay}`;
-    byDay.set(key, [...(byDay.get(key) ?? []), e]);
-  }
-  const out = new Set<string>();
-  for (const day of byDay.values()) {
-    day.sort((a, b) => (a.openedAt ?? "").localeCompare(b.openedAt ?? ""));
-    const from = day.findIndex((e) => e.lossStreakBefore! >= T.TILT_LOSSES);
-    if (from >= 0) for (const e of day.slice(from)) out.add(e.id);
-  }
-  return out;
-}
-
-export const tiltAfterLosses: Rule = {
-  id: "tilt_after_losses",
-  level: "trade",
-  minSample: 0,
-  description:
-    "An entry after two losses in a row on the same account and day — with what it cost.",
-  evaluate: (ctx) => {
-    const tilt = tiltEntries(ctx.trades);
-    if (tilt.size === 0) return [];
-
-    // "Otherwise": the R of every trade that was not taken in tilt.
-    const elsewhere = ctx.trades
-      .filter((e) => !tilt.has(e.id) && e.r != null)
-      .map((e) => e.r!);
-    const avgElsewhere =
-      elsewhere.length > 0 ? elsewhere.reduce((a, b) => a + b, 0) / elsewhere.length : null;
-
-    return ctx.trades
-      .filter((e) => tilt.has(e.id))
-      .map((e) => {
-        const opened = new Date(e.openedAt!).getTime();
-        // The trade just before it on the same account and day: the last close
-        // the trader re-entered from, and the size they had been trading.
-        const before = ctx.trades
-          .filter(
-            (p) =>
-              p.id !== e.id &&
-              p.accountId === e.accountId &&
-              p.openDay === e.openDay &&
-              p.closedAt != null &&
-              new Date(p.closedAt).getTime() <= opened,
-          )
-          .sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? ""))[0];
-        const parts = [
-          `After ${T.TILT_LOSSES}+ losses in a row on this account that day`,
-          before
-            ? `re-entered ${formatDuration((opened - new Date(before.closedAt!).getTime()) / 1000)} after the last close`
-            : null,
-          e.size != null
-            ? `${e.size} contracts${before?.size != null ? ` (${before.size} before)` : ""}`
-            : null,
-          `${e.r != null ? `${r2(e.r)}R, ` : ""}${fmtMoney(e.pnl, ctx.currency)}`,
-        ].filter((p): p is string => p != null);
-        return insight(e, {
-          ruleId: "tilt_after_losses",
-          severity: e.pnl < 0 ? "critical" : "warning",
-          title: "Traded on after the loss limit",
-          detail: `${parts.join(" — ")}.${
-            avgElsewhere != null ? ` Your other trades average ${r2(avgElsewhere)}R.` : ""
-          }`,
-          sample: elsewhere.length,
-        });
-      });
-  },
-};
-
 export const scaleIn: Rule = {
   id: "scale_in",
   level: "trade",
@@ -507,7 +428,6 @@ export const TRADE_RULES: Rule[] = [
   exceedAvgHoldTime,
   gaveBackProfit,
   revengeTrade,
-  tiltAfterLosses,
   mostTimeInDrawdown,
   scaleIn,
   scaleOut,

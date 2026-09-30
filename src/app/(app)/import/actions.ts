@@ -21,6 +21,7 @@ import {
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
 import { getAccountCurrency, getAccounts } from "@/lib/journal/accounts";
 import { equityAtEntryPatch, firstEntryAt } from "@/lib/journal/equity-at-entry";
+import { getTopstepEntryPatch } from "@/lib/journal/topstep-status";
 import { planFieldsOf, planSnapshotPatch } from "@/lib/journal/plan-snapshot";
 import { getDayOpeningEquities } from "@/lib/journal/equity";
 import { accountTimezoneResolver, zonedDateKey } from "@/lib/journal/time";
@@ -123,6 +124,8 @@ type PositionBefore = {
   max_profit_price: number | null;
   excursion_source: string | null;
   equity_at_entry: number | null;
+  risk_budget_at_entry: number | null;
+  room_at_entry: number | null;
   // The plan, and the seal over it: a statement that fills a plan seals what
   // the trader had written before the file arrived.
   plan_snapshot: Json | null;
@@ -297,6 +300,9 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
               planFieldsOf(item.target_price != null ? { target_price: item.target_price } : {}),
             ),
             ...equityPatchFor(item, null),
+            // Topstep: the budget and the room above the MLL at the entry, read
+            // after the rows before it in this file were saved.
+            ...(await getTopstepEntryPatch(input.account_id, statusOf(item.executions), item.executions, null)),
           })
           .select("id")
           .single();
@@ -370,7 +376,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
     const { data: prevPos, error: posErr } = await supabase
       .from("tj_positions")
       .select(
-        "status, exit_reason, direction, tick_size_at_trade, needs_review, gross_pnl_override, target_price, max_drawdown_price, max_profit_price, excursion_source, equity_at_entry, plan_snapshot, entry_price, stop_price, time_stop, thesis, invalidation, scale_out_levels",
+        "status, exit_reason, direction, tick_size_at_trade, needs_review, gross_pnl_override, target_price, max_drawdown_price, max_profit_price, excursion_source, equity_at_entry, risk_budget_at_entry, room_at_entry, plan_snapshot, entry_price, stop_price, time_stop, thesis, invalidation, scale_out_levels",
       )
       .eq("id", pid)
       .maybeSingle();
@@ -437,6 +443,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
           // denominator here; one that already had an entry keeps its own.
           // `before` carries the column, so the rollback below restores it.
           ...equityPatchFor(item, before),
+          ...(await getTopstepEntryPatch(input.account_id, statusOf(item.executions), item.executions, before)),
         })
         .eq("id", pid);
       if (stErr) throw new Error(stErr.message);

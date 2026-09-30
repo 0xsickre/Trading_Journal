@@ -260,13 +260,15 @@ const SIZE_EDGES = [
  * `size_bucket` above counts LOTS, which is not the same question: two lots of
  * copper and two lots of gold are different fractions of the same account.
  */
+// On the Topstep scale (30.09.2026): Risk % is a share of the room above the
+// MLL, and the trader's rule takes 12.5 % of it — the edges sit around that.
 const RISK_PCT_EDGES = [
-  { min: -Infinity, label: "< 0.5%" },
-  { min: 0.5, label: "0.5 – 1%" },
-  { min: 1, label: "1 – 1.5%" },
-  { min: 1.5, label: "1.5 – 2%" },
-  { min: 2, label: "2 – 3%" },
-  { min: 3, label: "≥ 3%" },
+  { min: -Infinity, label: "< 5%" },
+  { min: 5, label: "5 – 10%" },
+  { min: 10, label: "10 – 12.5%" },
+  { min: 12.5, label: "12.5 – 15%" },
+  { min: 15, label: "15 – 20%" },
+  { min: 20, label: "≥ 20%" },
 ] as const;
 
 /** Monday first, as every week in the journal starts (`closeWeek`, the weekly review). */
@@ -507,8 +509,8 @@ const derivedDimensions: Dimension[] = [
   },
   {
     // What the trader was standing in when they clicked: the losses in a row
-    // that had already closed on that account and day. The two-loss line is the
-    // trader's own `stop_after_losses` (decision L3).
+    // that had already closed on that account and day. A measure, not a rule:
+    // the day stops on money, never on a count (30.09.2026).
     key: "after_loss",
     label: "After losses",
     group: "derived",

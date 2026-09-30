@@ -10,8 +10,9 @@ import type { Account } from "@/lib/journal/types";
  * One Topstep account on the dashboard: the numbers that decide the next trade.
  *
  * Room first — balance minus the Maximum Loss Limit is what the account can
- * really lose, and the trade form sizes from it — then today's Daily Loss Limit,
- * the best day against the 55 % consistency line, and the way to the target.
+ * really lose, and the trade form sizes from it — then today's Daily Loss Limit
+ * (the personal one where it is tighter), the personal daily profit target, the
+ * best day against the 55 % consistency line, and the way to the target.
  * Closed trades only (see topstep.ts): the platform's own risk engine, which
  * also counts open P&L, is the record.
  */
@@ -58,9 +59,17 @@ export function TopstepBanner({ account, result }: { account: Account; result: T
           {fmtMoney(result.mllFloor, ccy)}
           {result.mllLocked ? ", locked" : ""})
         </span>
-        <span>
-          DLL today: {fmtMoney(result.dllLeftToday, ccy)} of {fmtMoney(result.rules.dll, ccy)} left
+        <span className={cn(result.dllLeftToday <= 0 && "font-medium text-[var(--loss)]")}>
+          {result.personalDll ? "Daily loss limit" : "DLL"} today: {fmtMoney(result.dllLeftToday, ccy)} of{" "}
+          {fmtMoney(result.rules.dll, ccy)} left{result.dllLeftToday <= 0 ? " — done for today" : ""}
         </span>
+        {result.dailyTarget != null && (
+          <span className={cn(result.targetLeftToday === 0 && "font-medium text-[var(--profit)]")}>
+            {result.targetLeftToday === 0
+              ? `Daily target ${fmtMoney(result.dailyTarget, ccy)} reached — done for today`
+              : `Daily target: ${fmtMoney(result.targetLeftToday ?? 0, ccy)} of ${fmtMoney(result.dailyTarget, ccy)} to go`}
+          </span>
+        )}
         <span>
           P/L: {fmtMoney(result.profit, ccy, { sign: true })} of {fmtMoney(result.effectiveTarget, ccy)} target
         </span>

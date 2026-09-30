@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTradeDayIndex, evaluateAutoRulesForDay, type AutoConfigs } from "./auto-rules";
+import { buildTradeDayIndex, evaluateAutoRulesForDay } from "./auto-rules";
 import { bookEquityLadder } from "./equity-ladder";
 import { topstepRulesResolver } from "../topstep";
 import { accountDayZoneResolver } from "../time";
@@ -99,8 +99,7 @@ const DAY = "2026-09-29";
 const index = (specs: Spec[]) =>
   buildTradeDayIndex(specs.map(row), (r) => zoneOf(r.account_id), topstepOf);
 const ladder = (specs: Spec[]) => bookEquityLadder(index(specs), ACCOUNTS, [], zoneOf);
-const evalDay = (specs: Spec[], configs: AutoConfigs = {}) =>
-  evaluateAutoRulesForDay(DAY, index(specs), configs);
+const evalDay = (specs: Spec[]) => evaluateAutoRulesForDay(DAY, index(specs));
 
 describe("daily loss on a Topstep account is the plan's DLL (E1)", () => {
   it("fails at the DLL, with nothing configured on the rule", () => {

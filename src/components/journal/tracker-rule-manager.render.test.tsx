@@ -192,38 +192,16 @@ describe("adding a rule", () => {
   });
 });
 
-describe("a count rule is configured with a whole number (F4)", () => {
-  beforeEach(() => {
-    updateTrackerRule.mockReset();
-    updateTrackerRule.mockResolvedValue({ ok: true });
-  });
-
-  it("saves the count and says what it counts", async () => {
-    const user = userEvent.setup();
+describe("no rule asks for a count (30.09.2026)", () => {
+  it("shows an auto rule with no number to set", () => {
     render(
       <TrackerRuleManager
-        rules={[rule({ text: "Dnevni limit ulaza po nalogu", stage: "trade", auto_key: "max_trades_per_day", config: {} })]}
+        rules={[rule({ text: "Bez ulaza posle dnevnog cilja profita", stage: "trade", auto_key: "no_entry_after_daily_target" })]}
       />,
     );
-    expect(screen.getByText(/1 rule has no count set/)).toBeInTheDocument();
-    expect(screen.getByText("entries / day / account")).toBeInTheDocument();
-    const input = screen.getByLabelText("entries / day / account");
-    await user.type(input, "3");
-    await user.tab();
-    expect(updateTrackerRule).toHaveBeenCalledWith("r1", { config: { count: 3 } });
-  });
-
-  it("refuses a fraction before any round trip", async () => {
-    const user = userEvent.setup();
-    render(
-      <TrackerRuleManager
-        rules={[rule({ text: "Stop posle uzastopnih gubitaka", stage: "trade", auto_key: "stop_after_losses", config: { count: 2 } })]}
-      />,
-    );
-    const input = screen.getByLabelText("losses in a row");
-    await user.clear(input);
-    await user.type(input, "1.5");
-    await user.tab();
-    expect(updateTrackerRule).not.toHaveBeenCalled();
+    expect(screen.getByDisplayValue("Bez ulaza posle dnevnog cilja profita")).toBeDisabled();
+    expect(screen.queryByPlaceholderText("Count")).not.toBeInTheDocument();
+    expect(screen.queryByText(/count set/)).not.toBeInTheDocument();
   });
 });
+

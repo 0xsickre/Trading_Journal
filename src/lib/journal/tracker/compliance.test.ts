@@ -21,7 +21,7 @@ import {
   monthGridDays,
 } from "../time";
 import { canEditDay, type TrackerCheckin, type TrackerRule } from "../tracker-types";
-import { configsFromRules, type AutoRuleKey, type AutoVerdict } from "./auto-rules";
+import type { AutoRuleKey, AutoVerdict } from "./auto-rules";
 
 const TODAY = "2026-07-29"; // a Wednesday
 
@@ -290,53 +290,29 @@ describe("series and aggregates", () => {
 });
 
 describe("rulesLiveOn is what every per-day computation starts from", () => {
-  it("hands the evaluator the limit in force that day, not a retired one", () => {
-    // The unique index on `auto_key` is PARTIAL — it covers live rules only —
-    // so a retired rule and its replacement coexist under one key.
-    // `configsFromRules` lets the last one win, and the order is `sort_order`,
-    // which the user can drag around. Built once for a whole span, the dead
-    // count of 4 was scoring days the count of 10 governs.
-    const retired = rule({
-      id: "old",
-      auto_key: "max_trades_per_day",
-      config: { count: 4 },
-      deleted_at: "2026-06-01T00:00:00Z",
-      sort_order: 9,
-    });
-    const live = rule({
-      id: "new",
-      auto_key: "max_trades_per_day",
-      config: { count: 10 },
-      created_at: "2026-06-01T00:00:00Z",
-      sort_order: 1,
-    });
-    const both = [live, retired]; // as `sort_order` would order them
-
-    expect(configsFromRules(both).max_trades_per_day).toEqual({ count: 4 });
-    expect(
-      configsFromRules(rulesLiveOn(both, TODAY)).max_trades_per_day,
-    ).toEqual({ count: 10 });
+  // The unique index on `auto_key` is PARTIAL — it covers live rules only — so
+  // a retired rule and its replacement coexist under one key. Only the day
+  // decides which of them counts.
+  const retired = rule({
+    id: "old",
+    auto_key: "no_entry_after_daily_target",
+    created_at: "2026-01-01T00:00:00Z",
+    deleted_at: "2026-06-01T00:00:00Z",
+    sort_order: 9,
+  });
+  const live = rule({
+    id: "new",
+    auto_key: "no_entry_after_daily_target",
+    created_at: "2026-06-01T00:00:00Z",
+    sort_order: 1,
   });
 
-  it("still answers with the OLD limit for a day the old rule governed", () => {
-    // Not merely "prefer the live rule": a day in May was lived under the count of 4
-    // and and must keep being scored against it.
-    const retired = rule({
-      id: "old",
-      auto_key: "max_trades_per_day",
-      config: { count: 4 },
-      created_at: "2026-01-01T00:00:00Z",
-      deleted_at: "2026-06-01T00:00:00Z",
-    });
-    const live = rule({
-      id: "new",
-      auto_key: "max_trades_per_day",
-      config: { count: 10 },
-      created_at: "2026-06-01T00:00:00Z",
-    });
-    expect(
-      configsFromRules(rulesLiveOn([live, retired], "2026-05-20")).max_trades_per_day,
-    ).toEqual({ count: 4 });
+  it("hands today the live rule, not the retired one", () => {
+    expect(rulesLiveOn([live, retired], TODAY).map((r) => r.id)).toEqual(["new"]);
+  });
+
+  it("still answers with the OLD rule for a day the old rule governed", () => {
+    expect(rulesLiveOn([live, retired], "2026-05-20").map((r) => r.id)).toEqual(["old"]);
   });
 });
 

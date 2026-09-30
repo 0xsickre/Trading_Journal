@@ -13,7 +13,6 @@ import {
 } from "@/lib/journal/tracker/compliance";
 import {
   buildTradeDayIndex,
-  configsFromRules,
   evaluateAutoRulesForDay,
 } from "@/lib/journal/tracker/auto-rules";
 import { buildMonthDayList, monthDays } from "@/lib/journal/month-day-list";
@@ -159,7 +158,7 @@ export default async function CalendarPage({
         const live = rulesLiveOn(rules, d);
         return resolveAutoResults(
           live,
-          evaluateAutoRulesForDay(d, index, configsFromRules(live), { briefOf }),
+          evaluateAutoRulesForDay(d, index, { briefOf }),
           checkinsByDay.get(d) ?? new Map(),
         );
       },

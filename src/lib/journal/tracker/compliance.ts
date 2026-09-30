@@ -68,13 +68,9 @@ export function ruleIsLiveOn(rule: TrackerRule, day: string): boolean {
 /**
  * The rules in force on day D.
  *
- * Every per-day computation must start here, and that includes reading a rule's
- * CONFIG, not only whether it is counted. `configsFromRules` keys by `auto_key`
- * and lets the last rule win, and the unique index on `auto_key` is partial —
- * it only covers live rules — so a retired rule and its replacement coexist
- * under one key. Ordered by `sort_order`, which the user can reorder freely,
- * the retired one can come last and hand a dead limit to every day the
- * evaluator scores, today included.
+ * Every per-day computation must start here. The unique index on `auto_key` is
+ * partial — it only covers live rules — so a retired rule and its replacement
+ * coexist under one key, and only the day decides which of them counts.
  */
 export function rulesLiveOn(
   rules: readonly TrackerRule[],

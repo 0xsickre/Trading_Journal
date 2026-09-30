@@ -73,11 +73,11 @@ const brief: SessionBrief = {
 
 const rule: TrackerRule = {
   id: "r-stop",
-  text: "Stop posle 2 gubitka",
+  text: "Bez ulaza posle dnevnog cilja",
   stage: "trade",
   active_days: [1, 2, 3, 4, 5],
-  auto_key: "stop_after_losses",
-  config: { count: 2 },
+  auto_key: "no_entry_after_daily_target",
+  config: {},
   is_mandatory: true,
   sort_order: 0,
   created_at: "2026-09-01T00:00:00Z",
@@ -90,16 +90,16 @@ const compliance: DayCompliance[] = [
 ];
 
 const tiltInsight: Insight = {
-  ruleId: "tilt_after_losses",
+  ruleId: "revenge_trade",
   level: "trade",
   severity: "critical",
-  title: "Traded on after the loss limit",
+  title: "Revenge entry",
   detail: "x",
   subjectId: book[2].id,
 };
 
 const topstep = evaluateTopstep(
-  { enabled: true, plan: "50K", startingBalance: 50_000, payoutAt: null, resetAt: null },
+  { enabled: true, plan: "50K", startingBalance: 50_000, payoutAt: null, resetAt: null, personalDll: null, dailyTarget: null },
   toRealized(book).map((r) => ({ closedAt: r.closedAt, net: r.net })),
   "2026-09-30T20:00:00Z",
 );
@@ -138,18 +138,18 @@ describe("mentor pack for a day trader (F5.6)", () => {
 
   it("lists the trader's rules and the ones broken most", () => {
     const md = pack();
-    expect(md).toContain("- Stop posle 2 gubitka (trgovanje, obavezno · automatski: `stop_after_losses` = 2 · Mon, Tue, Wed, Thu, Fri)");
+    expect(md).toContain("- Bez ulaza posle dnevnog cilja (trgovanje, obavezno · automatski: `no_entry_after_daily_target` · Mon, Tue, Wed, Thu, Fri)");
     expect(md).toContain("prosek **75%** na 2 dana; 1 dan bez ijednog prekršaja");
-    expect(md).toContain("- Stop posle 2 gubitka — 1 dan");
+    expect(md).toContain("- Bez ulaza posle dnevnog cilja — 1 dan");
   });
 
   it("gives one row per trading day with what a day trader is judged on", () => {
     const md = pack();
     expect(md).toContain("## Dnevni pregled (2 trading dana)");
-    // 3 trades, all lost, first at 09:40 ET, a run of 3, one entry after two losses,
-    // two contracts at most, half the rules kept, the mental note.
+    // 3 trades, all lost, first at 09:40 ET, a run of 3, two contracts at
+    // most, half the rules kept, the mental note. No count of trades after losses.
     expect(md).toContain(
-      "| 2026-09-29 | 3 | 0/3/0 | -400.00 | -4.00R | 09:40 | 3 | 1 | 2 | 50% (Stop posle 2 gubitka) | 1 ulaz u crvenom prozoru, mentalno 4/5 |",
+      "| 2026-09-29 | 3 | 0/3/0 | -400.00 | -4.00R | 09:40 | 3 | 2 | 50% (Bez ulaza posle dnevnog cilja) | 1 ulaz u crvenom prozoru, mentalno 4/5 |",
     );
   });
 
@@ -168,7 +168,7 @@ describe("mentor pack for a day trader (F5.6)", () => {
     );
     expect(md).toContain("3. trejd dana · pre ulaza 2 gubitka zaredom · plan pre ulaza · trajanje 10m · 2 ugovora");
     expect(md).toContain("- **Ulaz u crvenom prozoru:** CPI (visok) 09:58–10:05 ET");
-    expect(md).toContain("- **Zapažanja na ovom trejdu:** Traded on after the loss limit");
+    expect(md).toContain("- **Zapažanja na ovom trejdu:** Revenge entry");
     expect(md.indexOf("### Trade #1")).toBeLessThan(md.indexOf("### Trade #4"));
     // The heading's close time is on the trader's clock, not UTC.
     expect(md).toContain("### Trade #3 — MNQ Long · 2026-09-29 16:10");

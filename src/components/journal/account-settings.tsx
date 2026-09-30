@@ -388,6 +388,12 @@ function EditAccountDialog({
   const [riskPct, setRiskPct] = useState(String(account.risk_rule_pct ?? 12.5));
   const [riskMin, setRiskMin] = useState(account.risk_rule_min == null ? "" : String(account.risk_rule_min));
   const [riskMax, setRiskMax] = useState(account.risk_rule_max == null ? "" : String(account.risk_rule_max));
+  const [personalDll, setPersonalDll] = useState(
+    account.topstep_personal_dll == null ? "" : String(account.topstep_personal_dll),
+  );
+  const [dailyTarget, setDailyTarget] = useState(
+    account.topstep_daily_target == null ? "" : String(account.topstep_daily_target),
+  );
   const plan = TOPSTEP_PLANS[topstepPlan];
 
   const [commPerUnit, setCommPerUnit] = useState(String(account.default_commission_per_unit));
@@ -400,13 +406,15 @@ function EditAccountDialog({
     riskPct: parseSettingsNumber(riskPct, { min: 0.1, max: 100 }),
     riskMin: parseSettingsNumber(riskMin, { min: 1, allowEmpty: true }),
     riskMax: parseSettingsNumber(riskMax, { min: 1, allowEmpty: true }),
+    personalDll: parseSettingsNumber(personalDll, { min: 1, allowEmpty: true }),
+    dailyTarget: parseSettingsNumber(dailyTarget, { min: 1, allowEmpty: true }),
   };
   const err = (k: keyof typeof checks) => (checks[k].ok ? null : checks[k].error);
   const val = (k: keyof typeof checks) => {
     const r = checks[k];
     return r.ok ? (r.value ?? 0) : 0;
   };
-  const nullable = (k: "riskMin" | "riskMax") => {
+  const nullable = (k: "riskMin" | "riskMax" | "personalDll" | "dailyTarget") => {
     const r = checks[k];
     return r.ok ? r.value : null;
   };
@@ -434,6 +442,8 @@ function EditAccountDialog({
         risk_rule_pct: val("riskPct"),
         risk_rule_min: nullable("riskMin"),
         risk_rule_max: nullable("riskMax"),
+        topstep_personal_dll: nullable("personalDll"),
+        topstep_daily_target: nullable("dailyTarget"),
       });
       if (!res.ok) toast.error(res.error);
       else {
@@ -582,6 +592,28 @@ function EditAccountDialog({
                 locking at the starting balance · daily loss {fmtMoney(plan.dll, "USD")} · target{" "}
                 {fmtMoney(plan.target, "USD")}, best day at most 55 % of it · at most {plan.maxMini} mini /{" "}
                 {plan.maxMini * 10} micro.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <NumberField
+                  id={`pdll-${account.id}`}
+                  label="Personal daily loss limit (empty = the plan's DLL)"
+                  value={personalDll}
+                  onChange={setPersonalDll}
+                  error={err("personalDll")}
+                />
+                <NumberField
+                  id={`ptgt-${account.id}`}
+                  label="Personal daily profit target (empty = none)"
+                  value={dailyTarget}
+                  onChange={setDailyTarget}
+                  error={err("dailyTarget")}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                The same two numbers as TopstepX › Risk Limits. Either one ends the trading day: the
+                banner counts down to both, and the tracker grades the day&apos;s loss against the
+                tighter of the two loss limits and any entry taken after the target was banked. There
+                is no limit on the number of trades.
               </p>
               <div className="grid gap-3 sm:grid-cols-3">
                 <NumberField

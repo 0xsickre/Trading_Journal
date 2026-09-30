@@ -1026,6 +1026,8 @@ const accountPatchSchema = z
     risk_rule_pct: z.number().finite().gt(0, "Risk share must be above 0 %.").max(100).optional(),
     risk_rule_min: money("Minimum risk").nullable().optional(),
     risk_rule_max: money("Maximum risk").nullable().optional(),
+    topstep_personal_dll: z.number().finite().gt(0, "The personal daily loss limit must be above 0.").nullable().optional(),
+    topstep_daily_target: z.number().finite().gt(0, "The personal daily profit target must be above 0.").nullable().optional(),
   })
   .strict();
 
@@ -1050,6 +1052,8 @@ export async function updateAccount(
     risk_rule_pct?: number;
     risk_rule_min?: number | null;
     risk_rule_max?: number | null;
+    topstep_personal_dll?: number | null;
+    topstep_daily_target?: number | null;
   },
 ) {
   // Whitelisted and ranged. The patch used to go straight to the update, so any

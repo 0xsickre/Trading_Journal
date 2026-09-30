@@ -226,7 +226,10 @@ export type TopstepSurvivalInput = {
   horizonDays: number;
   blockDays: number;
   iters?: number;
+  /** The account's rules — `rules.dll` is already the personal limit where tighter. */
   rules: TopstepPlanRules;
+  /** The personal daily profit target: TopstepX ends the day there. Null = none. */
+  dailyTarget?: number | null;
   startingBalance: number;
   now: TopstepNow;
 };
@@ -243,7 +246,8 @@ export type TopstepSurvivalInput = {
  *     because "will this account survive" is about the room it has now;
  *   - a day that reaches the DLL is counted and STOPS there: Topstep liquidates
  *     at the Daily Loss Limit, so a −1 500 day in the history is a −1 000 day on
- *     a 50K. The day ends, the account does not;
+ *     a 50K. The day ends, the account does not. The DLL is the personal one
+ *     where tighter, and a personal daily profit target caps a day the same way;
  *   - the floor ends the run: an account on its MLL is over, and the balance it
  *     ended on is its final one.
  * The target grows with the best day (55 % consistency), the same as the banner.
@@ -290,6 +294,7 @@ export function simulateTopstepSurvival(input: TopstepSurvivalInput): SurvivalRe
           dailyBreached = true;
           r = -rules.dll;
         }
+        if (input.dailyTarget != null && input.dailyTarget > 0 && r > input.dailyTarget) r = input.dailyTarget;
         balance += r;
         if (r > best) best = r;
         if (balance > peak) peak = balance;

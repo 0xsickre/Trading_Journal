@@ -43,6 +43,8 @@ const account = (over: Partial<Account> = {}): Account => ({
   risk_rule_pct: 12.5,
   risk_rule_min: null,
   risk_rule_max: null,
+  topstep_personal_dll: null,
+  topstep_daily_target: null,
   archived_at: null,
   created_at: "2026-01-05T15:00:00Z",
   ...over,

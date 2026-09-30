@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { buildTradeDayIndex, evaluateAutoRulesForDay, type AutoConfigs } from "./auto-rules";
+import { buildTradeDayIndex, evaluateAutoRulesForDay } from "./auto-rules";
 import { topstepRulesResolver } from "../topstep";
 import { accountDayZoneResolver } from "../time";
 import { briefResolver, parseSessionBrief, type SessionBrief } from "../session-brief";
 import type { Account, TradeRow } from "../types";
 
 /**
- * F4: the four day-trading rules (decisions G5, G7, G9, 28.09.2026).
+ * The day-trading rules (F4, G5/G7; 30.09.2026: money, never a count).
  *
- *   - max_trades_per_day: at most N entries per ACCOUNT per Topstep day;
- *   - stop_after_losses: no entry after N consecutive losses on that account
- *     that day — the losses must have CLOSED before the entry;
+ *   - no_entry_after_daily_target: no entry once the account's day has closed
+ *     its personal daily profit target — the profit must have CLOSED before;
+ *   - max_loss_per_day: the personal daily loss limit where tighter;
  *   - flat_by_close: a Topstep position is flat by the end of the Topstep day
  *     (15:10 CT, or the brief's holiday / early close);
  *   - no_entry_in_red_window: no entry inside a red window of the day's brief,
@@ -18,7 +18,7 @@ import type { Account, TradeRow } from "../types";
  */
 
 const NY = "America/New_York";
-const acc = (id: string, topstep: boolean) =>
+const acc = (id: string, topstep: boolean, limits: { dll?: number; target?: number } = {}) =>
   ({
     id,
     timezone: NY,
@@ -30,12 +30,16 @@ const acc = (id: string, topstep: boolean) =>
     risk_rule_pct: 12.5,
     risk_rule_min: null,
     risk_rule_max: null,
+    topstep_personal_dll: limits.dll ?? null,
+    topstep_daily_target: limits.target ?? null,
   }) as unknown as Account;
 
 const TS = acc("ts", true);
 const TS2 = acc("ts2", true);
 const CFD = acc("cfd", false);
-const ACCOUNTS = [TS, TS2, CFD];
+/** TopstepX Risk Limits: personal DLL 800 (plan 1 000), daily target 500. */
+const TGT = acc("tgt", true, { dll: 800, target: 500 });
+const ACCOUNTS = [TS, TS2, CFD, TGT];
 const zoneOf = accountDayZoneResolver(ACCOUNTS, TS);
 
 type Spec = { id: string; account?: string; opened: string; closed?: string | null; net?: number | null };
@@ -78,9 +82,8 @@ function row(s: Spec): TradeRow {
 const DAY = "2026-09-29";
 const index = (specs: Spec[]) =>
   buildTradeDayIndex(specs.map(row), (r) => zoneOf(r.account_id), topstepRulesResolver(ACCOUNTS));
-const COUNTS: AutoConfigs = { max_trades_per_day: { count: 2 }, stop_after_losses: { count: 2 } };
-const evalDay = (specs: Spec[], ctx: { briefs?: SessionBrief[]; now?: number } = {}, configs = COUNTS) =>
-  evaluateAutoRulesForDay(DAY, index(specs), configs, {
+const evalDay = (specs: Spec[], ctx: { briefs?: SessionBrief[]; now?: number } = {}) =>
+  evaluateAutoRulesForDay(DAY, index(specs), {
     briefOf: briefResolver(ctx.briefs ?? []),
     now: ctx.now ?? Date.parse("2026-09-30T12:00:00Z"),
   });
@@ -88,96 +91,61 @@ const evalDay = (specs: Spec[], ctx: { briefs?: SessionBrief[]; now?: number } =
 // 29.09.2026 is in US summer time: 10:00 New York = 14:00 UTC, 15:10 CT = 20:10 UTC.
 const at = (hhmm: string) => `${DAY}T${hhmm}:00Z`;
 
-describe("max_trades_per_day", () => {
-  it("fails the entry past N on one account, and names only that one", () => {
+describe("no_entry_after_daily_target", () => {
+  it("fails an entry taken after the day's closed profit reached the target", () => {
     const r = evalDay([
-      { id: "a", opened: at("14:00") },
-      { id: "b", opened: at("14:30") },
-      { id: "c", opened: at("15:00") },
-    ]).max_trades_per_day;
+      { id: "w1", account: "tgt", opened: at("13:40"), closed: at("13:50"), net: 300 },
+      { id: "w2", account: "tgt", opened: at("14:00"), closed: at("14:20"), net: 250 },
+      { id: "more", account: "tgt", opened: at("14:40"), closed: at("15:00"), net: -100 },
+    ]).no_entry_after_daily_target;
     expect(r.verdict).toBe("fail");
-    expect(r.offenders).toEqual(["c"]);
-    expect(r.counted).toEqual({ observed: 3, limit: 2 });
+    expect(r.offenders).toEqual(["more"]);
+    expect(r.observed).toBe(550);
+    expect(r.limit).toBe(500);
+    expect(r.basis).toBe("daily_target");
   });
 
-  it("counts per account: two and two on two accounts is not four (G9)", () => {
+  it("does not count a win still open at the entry, nor limit how many trades are taken", () => {
     const r = evalDay([
-      { id: "a", opened: at("14:00") },
-      { id: "b", opened: at("14:30") },
-      { id: "c", account: "ts2", opened: at("14:10") },
-      { id: "d", account: "ts2", opened: at("14:40") },
-    ]).max_trades_per_day;
+      { id: "a", account: "tgt", opened: at("13:40"), closed: at("13:50"), net: 100 },
+      { id: "b", account: "tgt", opened: at("14:00"), closed: at("14:50"), net: 600 },
+      { id: "c", account: "tgt", opened: at("14:10"), closed: at("14:20"), net: -50 },
+      { id: "d", account: "tgt", opened: at("14:30"), closed: at("14:40"), net: 20 },
+    ]).no_entry_after_daily_target;
     expect(r.verdict).toBe("pass");
-    expect(r.counted).toEqual({ observed: 2, limit: 2 });
+    expect(r.observed).toBe(100);
   });
 
-  it("counts the Sunday evening entry in Monday's Topstep day", () => {
-    // Sunday 27.09 18:30 New York = 22:30 UTC, after 17:00 CT: Monday 28.09.
-    const idx = index([
-      { id: "sun", opened: "2026-09-27T22:30:00Z" },
-      { id: "m1", opened: "2026-09-28T14:00:00Z" },
-      { id: "m2", opened: "2026-09-28T15:00:00Z" },
-    ]);
-    const r = evaluateAutoRulesForDay("2026-09-28", idx, COUNTS).max_trades_per_day;
-    expect(r.verdict).toBe("fail");
-    expect(r.offenders).toEqual(["m2"]);
+  it("is unknown when an unpriced close precedes the entry", () => {
+    const r = evalDay([
+      { id: "x", account: "tgt", opened: at("13:40"), closed: at("13:50"), net: null },
+      { id: "y", account: "tgt", opened: at("14:00"), closed: at("14:20"), net: 10 },
+    ]).no_entry_after_daily_target;
+    expect(r.reason).toBe("unpriced");
   });
 
-  it("is not scored without a count, and not on a day with no entries", () => {
-    expect(evalDay([{ id: "a", opened: at("14:00") }], {}, {}).max_trades_per_day.reason).toBe("unconfigured");
-    expect(evalDay([]).max_trades_per_day.reason).toBe("no_trades");
+  it("is not scored on an account without a target, nor on a day with no entries", () => {
+    expect(evalDay([{ id: "a", opened: at("14:00") }]).no_entry_after_daily_target.reason).toBe("unconfigured");
+    expect(evalDay([]).no_entry_after_daily_target.reason).toBe("no_trades");
   });
 });
 
-describe("stop_after_losses", () => {
-  it("fails the entry that follows N losses closed before it", () => {
+describe("max_loss_per_day with a personal daily loss limit", () => {
+  it("grades the day against the personal limit where it is tighter than the plan's", () => {
     const r = evalDay([
-      { id: "l1", opened: at("13:40"), closed: at("13:50"), net: -120 },
-      { id: "l2", opened: at("14:00"), closed: at("14:20"), net: -80 },
-      { id: "next", opened: at("14:40"), closed: at("15:00"), net: 200 },
-    ]).stop_after_losses;
+      { id: "l1", account: "tgt", opened: at("13:40"), closed: at("13:50"), net: -500 },
+      { id: "l2", account: "tgt", opened: at("14:00"), closed: at("14:20"), net: -300 },
+    ]).max_loss_per_day;
     expect(r.verdict).toBe("fail");
-    expect(r.offenders).toEqual(["next"]);
-    expect(r.counted).toEqual({ observed: 2, limit: 2 });
+    expect(r.limit).toBe(-800);
+    expect(r.basis).toBe("personal_dll");
   });
 
-  it("a win or a scratch between two losses breaks the run", () => {
-    for (const between of [150, 0]) {
-      const r = evalDay([
-        { id: "l1", opened: at("13:40"), closed: at("13:50"), net: -120 },
-        { id: "w", opened: at("14:00"), closed: at("14:10"), net: between },
-        { id: "l2", opened: at("14:20"), closed: at("14:30"), net: -80 },
-        { id: "next", opened: at("14:40"), closed: at("15:00"), net: 50 },
-      ]).stop_after_losses;
-      expect(r.verdict, String(between)).toBe("pass");
-    }
-  });
-
-  it("does not count a loss that closed after the entry was taken", () => {
-    const r = evalDay([
-      { id: "l1", opened: at("13:40"), closed: at("13:50"), net: -120 },
-      { id: "l2", opened: at("14:00"), closed: at("14:45"), net: -80 },
-      { id: "overlap", opened: at("14:30"), closed: at("15:00"), net: 40 },
-    ]).stop_after_losses;
+  it("keeps the plan's DLL on an account without one", () => {
+    const r = evalDay([{ id: "l1", opened: at("13:40"), closed: at("13:50"), net: -800 }]).max_loss_per_day;
     expect(r.verdict).toBe("pass");
-  });
-
-  it("counts per account: losses on one account do not stop the other", () => {
-    const r = evalDay([
-      { id: "l1", opened: at("13:40"), closed: at("13:50"), net: -120 },
-      { id: "l2", opened: at("14:00"), closed: at("14:20"), net: -80 },
-      { id: "other", account: "ts2", opened: at("14:40"), closed: at("15:00"), net: 10 },
-    ]).stop_after_losses;
-    expect(r.verdict).toBe("pass");
-  });
-
-  it("an unpriced trade in the run leaves the answer unknown, not passed", () => {
-    const r = evalDay([
-      { id: "l1", opened: at("13:40"), closed: at("13:50"), net: -120 },
-      { id: "u", opened: at("14:00"), closed: at("14:20"), net: null },
-      { id: "next", opened: at("14:40"), closed: at("15:00"), net: 10 },
-    ]).stop_after_losses;
-    expect(r.reason).toBe("unpriced");
+    expect(r.limit).toBe(-1000);
+    expect(r.basis).toBe("topstep_dll");
   });
 });
 

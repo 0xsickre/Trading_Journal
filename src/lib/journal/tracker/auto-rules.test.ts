@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildTradeDayIndex,
-  configsFromRules,
-  evaluateAutoRulesForDay,
-  type AutoConfigs,
-} from "./auto-rules";
+import { buildTradeDayIndex, evaluateAutoRulesForDay } from "./auto-rules";
 import type { TradeRow } from "../types";
-import { AUTO_RULE_KEYS, AUTO_RULES_NEEDING_COUNT } from "../tracker-types";
+import { AUTO_RULE_KEYS } from "../tracker-types";
 
 type Spec = {
   id: string;
@@ -61,13 +56,7 @@ function mkRow(s: Spec): TradeRow {
 const index = (specs: Spec[], tz = "UTC") =>
   buildTradeDayIndex(specs.map(mkRow), () => tz);
 
-const LIMITS: AutoConfigs = {
-  max_trades_per_day: { count: 2 },
-  stop_after_losses: { count: 2 },
-};
-
-const evalDay = (day: string, specs: Spec[], configs: AutoConfigs = LIMITS, tz = "UTC") =>
-  evaluateAutoRulesForDay(day, index(specs, tz), configs);
+const evalDay = (day: string, specs: Spec[], tz = "UTC") => evaluateAutoRulesForDay(day, index(specs, tz));
 
 describe("day attribution", () => {
   const swing: Spec = {
@@ -116,7 +105,6 @@ describe("day attribution", () => {
     const day = evaluateAutoRulesForDay(
       "2026-03-02",
       buildTradeDayIndex([backfilled], () => "UTC"),
-      LIMITS,
     );
     expect(day.stop_loss_set.verdict).toBe("fail");
     expect(day.thesis_written.verdict).toBe("fail");
@@ -141,7 +129,6 @@ describe("day attribution", () => {
     const out = evaluateAutoRulesForDay(
       "2026-03-02",
       buildTradeDayIndex([blank as TradeRow], () => "UTC"),
-      LIMITS,
     );
     expect(out.thesis_written.verdict).toBe("fail");
     expect(out.thesis_written.offenders).toEqual(["blank"]);
@@ -183,9 +170,9 @@ describe("day attribution", () => {
       playbook: false,
     };
     // 02:00 UTC is still the previous evening in New York.
-    const ny = evalDay("2026-03-01", [t], LIMITS, "America/New_York");
+    const ny = evalDay("2026-03-01", [t], "America/New_York");
     expect(ny.playbook_linked.verdict).toBe("fail");
-    expect(evalDay("2026-03-02", [t], LIMITS, "America/New_York").playbook_linked.reason).toBe(
+    expect(evalDay("2026-03-02", [t], "America/New_York").playbook_linked.reason).toBe(
       "no_trades",
     );
   });
@@ -209,25 +196,6 @@ describe("the no-trade day", () => {
     expect(d.playbook_linked.verdict).toBe("na");
     expect(d.stop_loss_set.verdict).toBe("na");
     expect(d.playbook_linked.verdict).not.toBe("fail");
-  });
-});
-
-describe("configuration", () => {
-  it("is not applicable while no count is set, even with trades", () => {
-    const d = evalDay("2026-03-02", [{ id: "t", opened: "2026-03-02T14:00:00Z" }], {});
-    expect(d.max_trades_per_day.reason).toBe("unconfigured");
-    expect(d.stop_after_losses.reason).toBe("unconfigured");
-    // The flag rules need no config and still evaluate.
-    expect(d.playbook_linked.verdict).toBe("pass");
-  });
-
-  it("reads limits off the rule rows", () => {
-    const cfg = configsFromRules([
-      { auto_key: "max_trades_per_day", config: { count: 3 } },
-      { auto_key: null, config: {} },
-    ]);
-    expect(cfg.max_trades_per_day).toEqual({ count: 3 });
-    expect(cfg.stop_after_losses).toBeUndefined();
   });
 });
 
@@ -262,7 +230,7 @@ describe("the closed set of auto rules", () => {
    * three are that promise, written down as assertions.
    */
   const empty = () => buildTradeDayIndex([], () => "UTC");
-  const verdicts = () => evaluateAutoRulesForDay("2026-03-02", empty(), {});
+  const verdicts = () => evaluateAutoRulesForDay("2026-03-02", empty());
 
   it("has an evaluator for every key, and a key for every evaluator", () => {
     expect(Object.keys(verdicts()).sort()).toEqual([...AUTO_RULE_KEYS].sort());
@@ -275,16 +243,13 @@ describe("the closed set of auto rules", () => {
     for (const key of AUTO_RULE_KEYS) expect(verdicts()[key].key, key).toBe(key);
   });
 
-  it("asks for a count on the two count rules and only on those", () => {
-    expect([...AUTO_RULES_NEEDING_COUNT].sort()).toEqual(["max_trades_per_day", "stop_after_losses"]);
+  it("has no rule that counts trades or losses in a row (30.09.2026)", () => {
+    expect(AUTO_RULE_KEYS).not.toContain("max_trades_per_day");
+    expect(AUTO_RULE_KEYS).not.toContain("stop_after_losses");
   });
 
-  it("with no config and no trades, only the count rules lack a number", () => {
-    // A count rule cannot answer for want of its number; every other rule for
-    // want of trades. Two different reasons, and the checklist shows each.
-    for (const key of AUTO_RULE_KEYS) {
-      expect(verdicts()[key].reason, key).toBe(AUTO_RULES_NEEDING_COUNT.has(key) ? "unconfigured" : "no_trades");
-    }
+  it("with no trades, every rule says so", () => {
+    for (const key of AUTO_RULE_KEYS) expect(verdicts()[key].reason, key).toBe("no_trades");
   });
 });
 
@@ -368,7 +333,6 @@ describe("thesis_written grades only trades planned before entry", () => {
     const out = evaluateAutoRulesForDay(
       "2026-03-02",
       buildTradeDayIndex([row], () => "UTC"),
-      LIMITS,
     );
     expect(out.thesis_written.verdict).toBe("na");
     expect(out.thesis_written.reason).toBe("no_plans");

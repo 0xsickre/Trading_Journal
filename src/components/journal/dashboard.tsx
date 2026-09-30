@@ -89,14 +89,12 @@ const ExitEfficiencyChart = dynamic(
 );
 import {
   buildTradeDayIndex,
-  configsFromRules,
   evaluateAutoRulesForDay,
 } from "@/lib/journal/tracker/auto-rules";
 import {
   computeComplianceSeries,
   meanCompliance,
   resolveAutoResults,
-  rulesLiveOn,
   TRACKER_SPAN_DAYS,
 } from "@/lib/journal/tracker/compliance";
 import type {
@@ -1267,15 +1265,7 @@ export function Dashboard({
       // the money and leaves that day's compliance where it was.
       resolveAutoResults(
         trackerRules,
-        // Configs are resolved PER DAY: a retired rule and its replacement share
-        // one `auto_key`, so a set built once for the whole span can hand a dead
-        // limit to every day in it.
-        evaluateAutoRulesForDay(
-          d,
-          index,
-          configsFromRules(rulesLiveOn(trackerRules, d)),
-          { briefOf },
-        ),
+        evaluateAutoRulesForDay(d, index, { briefOf }),
         byDate.get(d) ?? new Map(),
       ),
     todayKey);
@@ -1474,6 +1464,7 @@ export function Dashboard({
           horizonDays: SURVIVAL_HORIZON_DAYS,
           blockDays: survivalBlock,
           rules: status.rules,
+          dailyTarget: status.dailyTarget,
           startingBalance: account.starting_balance,
           now: {
             balance: status.balance,

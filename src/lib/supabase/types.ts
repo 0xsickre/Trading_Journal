@@ -35,6 +35,8 @@ export type Database = {
           topstep_payout_at: string | null
           topstep_plan: string
           topstep_reset_at: string | null
+          topstep_personal_dll: number | null
+          topstep_daily_target: number | null
           id: string
           is_active: boolean
           name: string
@@ -62,6 +64,8 @@ export type Database = {
           topstep_payout_at?: string | null
           topstep_plan?: string
           topstep_reset_at?: string | null
+          topstep_personal_dll?: number | null
+          topstep_daily_target?: number | null
           id?: string
           is_active?: boolean
           name: string
@@ -89,6 +93,8 @@ export type Database = {
           topstep_payout_at?: string | null
           topstep_plan?: string
           topstep_reset_at?: string | null
+          topstep_personal_dll?: number | null
+          topstep_daily_target?: number | null
           id?: string
           is_active?: boolean
           name?: string
@@ -1003,6 +1009,7 @@ export type Database = {
           psychology_tags: string[]
           quote_currency_at_trade: string | null
           risk_budget_at_entry: number | null
+          room_at_entry: number | null
           scale_out_levels: Json
           scale_out_plan: string | null
           source: string
@@ -1055,6 +1062,7 @@ export type Database = {
           psychology_tags?: string[]
           quote_currency_at_trade?: string | null
           risk_budget_at_entry?: number | null
+          room_at_entry?: number | null
           scale_out_levels?: Json
           scale_out_plan?: string | null
           source?: string
@@ -1107,6 +1115,7 @@ export type Database = {
           psychology_tags?: string[]
           quote_currency_at_trade?: string | null
           risk_budget_at_entry?: number | null
+          room_at_entry?: number | null
           scale_out_levels?: Json
           scale_out_plan?: string | null
           source?: string

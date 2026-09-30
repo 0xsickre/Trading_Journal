@@ -23,24 +23,15 @@ export const AUTO_RULE_KEYS = [
   "thesis_written",
   "risk_per_trade",
   "risk_matched_intent",
-  // F4, the day trader's rules (G5): an entry count and a losing run per
-  // account, flat by the Topstep close, and no entry inside a red window of
-  // the day's brief.
-  "max_trades_per_day",
-  "stop_after_losses",
+  // F4, the day trader's rules (G5): flat by the Topstep close, and no entry
+  // inside a red window of the day's brief.
   "flat_by_close",
   "no_entry_in_red_window",
+  // 30.09.2026: the day stops on money, never on a count of trades — no entry
+  // once the account's personal daily profit target is banked.
+  "no_entry_after_daily_target",
 ] as const;
 export type AutoRuleKey = (typeof AUTO_RULE_KEYS)[number];
-
-/**
- * Auto rules that need a whole number before they can say anything: how many
- * entries a day, how many losses in a row. Counted per account (G9).
- */
-export const AUTO_RULES_NEEDING_COUNT: ReadonlySet<AutoRuleKey> = new Set([
-  "max_trades_per_day",
-  "stop_after_losses",
-]);
 
 /** ISO weekday numbering, 1=Mon … 7=Sun — never `Date#getDay`'s 0=Sun. */
 export const ISO_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
@@ -63,7 +54,8 @@ export type TrackerRule = {
   active_days: number[];
   /** NULL for a manual rule. */
   auto_key: AutoRuleKey | null;
-  config: { count?: number };
+  /** No rule reads a setting since the count rules left (30.09.2026); always `{}`. */
+  config: Record<string, unknown>;
   is_mandatory: boolean;
   sort_order: number;
   /**

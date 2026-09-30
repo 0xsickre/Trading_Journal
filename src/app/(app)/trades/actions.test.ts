@@ -38,7 +38,7 @@ vi.mock("@/lib/journal/instruments", async (importOriginal) => ({
 }));
 vi.mock("@/lib/journal/topstep-status", () => ({
   isTopstepAccountFailed: (id: string | null | undefined) => topstepFailed(id),
-  getRiskBudgetAtEntryPatch: (...a: unknown[]) => budgetPatch(...a),
+  getTopstepEntryPatch: (...a: unknown[]) => budgetPatch(...a),
 }));
 
 const { createTrade, updateTrade } = await import("./actions");

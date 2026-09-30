@@ -56,7 +56,12 @@ vi.mock("@/app/(app)/settings/actions", () => ({
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     from: () => ({
-      select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }),
+      // `.order()` twice (sort_order, then id): a list that chains and resolves empty.
+      select: () => {
+        const empty = Promise.resolve({ data: [], error: null });
+        const q = Object.assign(empty, { order: () => q });
+        return { eq: () => q };
+      },
     }),
   }),
 }));

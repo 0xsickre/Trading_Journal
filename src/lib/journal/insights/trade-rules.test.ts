@@ -9,7 +9,6 @@ import {
   revengeTrade,
   scaleIn,
   scaleOut,
-  tiltAfterLosses,
   unusualSize,
 } from "./trade-rules";
 import { ctxOf, DAY, fired, firedTitles, mkTrade } from "./test-helpers";
@@ -241,52 +240,6 @@ describe("revengeTrade", () => {
       }),
     ]);
     expect(fired(revengeTrade, ctx)).toEqual([]);
-  });
-});
-
-describe("tiltAfterLosses — two losses in a row end the day (L3)", () => {
-  const entry = (id: string, hhmm: string, net: number, extra: Parameters<typeof mkTrade>[0] = {}) =>
-    mkTrade({
-      id,
-      net,
-      r: net / 100,
-      openedAt: `2026-09-29T${hhmm}:00Z`,
-      closedAt: `2026-09-29T${hhmm}:30Z`,
-      durationSeconds: 30,
-      size: 1,
-      ...extra,
-    });
-
-  it("flags every entry after the second loss, with re-entry time, size and cost", () => {
-    const ctx = ctxOf([
-      entry("l1", "14:00", -100),
-      entry("l2", "14:10", -100),
-      entry("t1", "14:13", -200, { size: 2 }),
-      entry("t2", "14:40", 150, { size: 2 }),
-      entry("ok", "15:00", 100, { openedAt: "2026-09-30T14:00:00Z", closedAt: "2026-09-30T14:05:00Z" }),
-    ]);
-    const out = tiltAfterLosses.evaluate(ctx);
-    expect(out.map((i) => i.subjectId)).toEqual(["t1", "t2"]);
-    const [first, second] = out;
-    expect(first.severity).toBe("critical");
-    expect(second.severity).toBe("warning");
-    // 14:10:30 → 14:13:00 is 2m 30s; 2 contracts against 1 before; −2R, −$200.
-    expect(first.detail).toContain("re-entered 2m 30s after the last close");
-    expect(first.detail).toContain("2 contracts (1 before)");
-    expect(first.detail).toContain("-2.00R");
-    // The trades outside tilt (−1, −1, +1) average −0.33R.
-    expect(first.detail).toContain("Your other trades average -0.33R");
-  });
-
-  it("does not fire when a win broke the streak, or on another account", () => {
-    const ctx = ctxOf([
-      entry("l1", "14:00", -100),
-      entry("w", "14:05", 100),
-      entry("l2", "14:10", -100),
-      entry("next", "14:20", -100),
-      entry("b1", "14:30", -100, { accountId: "b" }),
-    ]);
-    expect(fired(tiltAfterLosses, ctx)).toEqual([]);
   });
 });
 

@@ -24,6 +24,11 @@
  *     the wrong key, and on a Belgrade account it splits the US session in two.
  *   - Consistency: the best day must stay at or below 55 % of the profit target;
  *     past that the target grows to best day ÷ 0.55.
+ *   - TopstepX Risk Limits (30.09.2026): the trader's own Personal Daily Loss
+ *     Limit and Personal Daily Profit Target. Either one ends the trading day.
+ *     The personal DLL is the day's DLL wherever it is tighter than the plan's
+ *     (`topstepPlanRulesFor`); a looser one changes nothing, since Topstep
+ *     still stops the day at the plan's.
  *
  * Approximation: Topstep watches the MLL and DLL INTRADAY with
  * unrealized P&L. A journal only knows closed trades, so a position that went
@@ -63,6 +68,10 @@ export type TopstepConfig = {
   startingBalance: number;
   payoutAt: string | null;
   resetAt: string | null;
+  /** TopstepX Personal Daily Loss Limit, positive; null = the plan's DLL. */
+  personalDll: number | null;
+  /** TopstepX Personal Daily Profit Target, positive; null = none. */
+  dailyTarget: number | null;
 };
 
 export type TopstepTrade = { closedAt: string | null; net: number };
@@ -71,7 +80,13 @@ export type TopstepStatus = "off" | "active" | "passed" | "failed";
 
 export type TopstepResult = {
   status: TopstepStatus;
+  /** The plan's rules, with the day's DLL the personal one where that is tighter. */
   rules: TopstepPlanRules;
+  /** Whether `rules.dll` is the trader's personal limit rather than the plan's. */
+  personalDll: boolean;
+  /** The personal daily profit target, and what is still missing to it today; null when none is set. */
+  dailyTarget: number | null;
+  targetLeftToday: number | null;
   balance: number;
   /** The balance the account may not touch, as it stands now. */
   mllFloor: number;
@@ -102,8 +117,28 @@ export type TopstepResult = {
   headroomPct: number | null;
 };
 
-/** What the trade form sizes from, per Topstep account: the room, today's DLL left, the plan. */
-export type TopstepSizing = { room: number; dllLeftToday: number; plan: TopstepPlanRules };
+/**
+ * The plan's rules as they apply to this account: the plan's own, with the
+ * DLL replaced by the trader's personal one where that is tighter.
+ */
+export function topstepPlanRulesFor(config: Pick<TopstepConfig, "plan" | "personalDll">): TopstepPlanRules {
+  const plan = TOPSTEP_PLANS[config.plan];
+  const personal = config.personalDll;
+  return personal != null && personal > 0 && personal < plan.dll ? { ...plan, dll: personal } : plan;
+}
+
+/**
+ * What the trade form sizes from, per Topstep account: the room, today's DLL
+ * left, the plan — and the personal daily target, which the day page shows.
+ */
+export type TopstepSizing = {
+  room: number;
+  dllLeftToday: number;
+  plan: TopstepPlanRules;
+  target?: { of: number; left: number } | null;
+};
+
+const positiveOrNull = (v: number | null | undefined) => (v != null && v > 0 ? Number(v) : null);
 
 export function topstepConfigFromAccount(account: Account): TopstepConfig {
   return {
@@ -112,6 +147,8 @@ export function topstepConfigFromAccount(account: Account): TopstepConfig {
     startingBalance: account.starting_balance,
     payoutAt: account.topstep_payout_at ?? null,
     resetAt: account.topstep_reset_at ?? null,
+    personalDll: positiveOrNull(account.topstep_personal_dll),
+    dailyTarget: positiveOrNull(account.topstep_daily_target),
   };
 }
 
@@ -124,7 +161,7 @@ export function evaluateTopstep(
   now: string | Date = new Date(),
 ): TopstepResult | { status: "off" } {
   if (!config.enabled) return { status: "off" };
-  const rules = TOPSTEP_PLANS[config.plan];
+  const rules = topstepPlanRulesFor(config);
   const start = config.startingBalance;
   const resetMs = config.resetAt == null ? null : toEpoch(config.resetAt);
   const payoutMs = config.payoutAt == null ? null : toEpoch(config.payoutAt);
@@ -204,6 +241,9 @@ export function evaluateTopstep(
   return {
     status,
     rules,
+    personalDll: rules.dll !== TOPSTEP_PLANS[config.plan].dll,
+    dailyTarget: config.dailyTarget,
+    targetLeftToday: config.dailyTarget == null ? null : Math.max(0, config.dailyTarget - todayNet),
     balance,
     mllFloor: floor,
     room: balance - floor,

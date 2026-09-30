@@ -3,12 +3,13 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { selectAllPages } from "@/lib/supabase/paginate";
 import { getAccounts } from "./accounts";
-import { firstEntryAt, riskBudgetAtEntryPatch } from "./equity-at-entry";
+import { firstEntryAt, riskBudgetAtEntryPatch, roomAtEntryPatch } from "./equity-at-entry";
 import {
   evaluateTopstep,
   riskBudgetAt,
   riskRuleFromAccount,
   topstepConfigFromAccount,
+  topstepStateAt,
   type TopstepResult,
   type TopstepSizing,
   type TopstepTrade,
@@ -58,27 +59,36 @@ async function closedTradesByAccount(accountIds: string[]): Promise<Map<string, 
   return byAccount;
 }
 
+type TopstepEntryPatch = { risk_budget_at_entry?: number | null; room_at_entry?: number | null };
+
 /**
- * The `risk_budget_at_entry` patch for one save (F3, E4): what the account's
- * risk rule allowed when the trade was entered, sealed on the save that first
- * gives it fills — `getEquityAtEntryPatch`'s twin. `{}` on any account not in
- * Topstep mode, and whenever the seal already stands.
+ * The Topstep seals for one save, taken at the entry on the save that first
+ * gives the trade fills — `getEquityAtEntryPatch`'s twin:
+ *   - `risk_budget_at_entry` (F3, E4): what the account's risk rule allowed;
+ *   - `room_at_entry` (30.09.2026): the room above the MLL, Risk %'s denominator.
+ * `{}` on any account not in Topstep mode, and for each seal that already stands.
  */
-export async function getRiskBudgetAtEntryPatch(
+export async function getTopstepEntryPatch(
   accountId: string | null | undefined,
   status: PositionStatus,
   execs: readonly { side: string; executed_at: string }[],
-  prev: { risk_budget_at_entry: number | null } | null,
-): Promise<{ risk_budget_at_entry?: number | null }> {
-  const settled = riskBudgetAtEntryPatch(status, prev, null);
-  if ("risk_budget_at_entry" in settled || (prev?.risk_budget_at_entry ?? null) != null) return settled;
+  prev: { risk_budget_at_entry: number | null; room_at_entry?: number | null } | null,
+): Promise<TopstepEntryPatch> {
+  const settled: TopstepEntryPatch = {
+    ...riskBudgetAtEntryPatch(status, prev, null),
+    ...roomAtEntryPatch(status, prev, null),
+  };
+  const sealed = (prev?.risk_budget_at_entry ?? null) != null && (prev?.room_at_entry ?? null) != null;
+  if (Object.keys(settled).length > 0 || sealed) return settled;
   const at = firstEntryAt(execs);
   if (at == null || !accountId) return settled;
   const account = (await getAccounts()).find((a) => a.id === accountId);
   if (!account?.topstep_mode) return settled;
   const closed = (await closedTradesByAccount([accountId])).get(accountId) ?? [];
-  const budget = riskBudgetAt(topstepConfigFromAccount(account), riskRuleFromAccount(account), closed, at);
-  return riskBudgetAtEntryPatch(status, prev, budget);
+  const config = topstepConfigFromAccount(account);
+  const budget = riskBudgetAt(config, riskRuleFromAccount(account), closed, at);
+  const room = topstepStateAt(config, closed, at)?.room ?? null;
+  return { ...riskBudgetAtEntryPatch(status, prev, budget), ...roomAtEntryPatch(status, prev, room) };
 }
 
 /**
@@ -90,7 +100,13 @@ const getAllTopstepStatuses = cache(() => getTopstepStatuses());
 export async function getTopstepSizing(): Promise<Record<string, TopstepSizing>> {
   const out: Record<string, TopstepSizing> = {};
   for (const { account, result } of await getAllTopstepStatuses()) {
-    out[account.id] = { room: result.room, dllLeftToday: result.dllLeftToday, plan: result.rules };
+    out[account.id] = {
+      room: result.room,
+      dllLeftToday: result.dllLeftToday,
+      plan: result.rules,
+      target:
+        result.dailyTarget == null ? null : { of: result.dailyTarget, left: result.targetLeftToday ?? 0 },
+    };
   }
   return out;
 }

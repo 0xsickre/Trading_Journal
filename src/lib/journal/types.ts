@@ -106,6 +106,12 @@ export type Account = {
   /** First payout: from then on the MLL floor is the starting balance (Topstep's "$0"). */
   topstep_payout_at: string | null;
   topstep_reset_at: string | null;
+  /**
+   * TopstepX's Personal Daily Loss Limit and Personal Daily Profit Target, in
+   * money; null = not set (the plan's DLL, no target). `topstep.ts` reads both.
+   */
+  topstep_personal_dll: number | null;
+  topstep_daily_target: number | null;
   /** Risk per trade as a share of the room above the MLL, in %. */
   risk_rule_pct: number;
   /** Risk-per-trade bounds in money; null = the plan's own (topstep.ts `TOPSTEP_PLANS`). */

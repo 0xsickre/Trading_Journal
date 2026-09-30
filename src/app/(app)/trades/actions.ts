@@ -23,7 +23,7 @@ import {
   planSnapshotPatch,
   type PlanSnapshot,
 } from "@/lib/journal/plan-snapshot";
-import { getRiskBudgetAtEntryPatch, isTopstepAccountFailed } from "@/lib/journal/topstep-status";
+import { getTopstepEntryPatch, isTopstepAccountFailed } from "@/lib/journal/topstep-status";
 import { parseScaleOutLevels } from "@/lib/journal/scale-out";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
 import { getAccountCurrency } from "@/lib/journal/accounts";
@@ -288,8 +288,9 @@ export async function createTrade(input: TradeInput) {
         null,
       )),
       // On a Topstep account, what the risk rule allowed at that entry — the
-      // measure its size is graded against (F3). Frozen like the equity above.
-      ...(await getRiskBudgetAtEntryPatch(
+      // measure its size is graded against (F3) — and the room above the MLL,
+      // its Risk %'s denominator. Frozen like the equity above.
+      ...(await getTopstepEntryPatch(
         input.account_id,
         String(statusPatch.status) as PositionStatus,
         execs,
@@ -460,7 +461,7 @@ export async function updateTrade(id: string, input: TradeInput) {
         execs,
         prevPos,
       )),
-      ...(await getRiskBudgetAtEntryPatch(
+      ...(await getTopstepEntryPatch(
         input.account_id,
         String(statusPatch.status) as PositionStatus,
         execs,

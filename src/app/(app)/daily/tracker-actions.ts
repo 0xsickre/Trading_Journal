@@ -13,13 +13,9 @@ import { getTradesWithStats } from "@/lib/journal/trades";
 import { getTrackerRules } from "@/lib/journal/tracker/queries";
 import {
   buildTradeDayIndex,
-  configsFromRules,
   evaluateAutoRulesForDay,
 } from "@/lib/journal/tracker/auto-rules";
-import {
-  freezeAutoCheckins,
-  rulesLiveOn,
-} from "@/lib/journal/tracker/compliance";
+import { freezeAutoCheckins } from "@/lib/journal/tracker/compliance";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -148,13 +144,7 @@ export async function lockDay(reportDate: string): Promise<Result> {
   // any other's calendar day — so what is locked is what was on screen.
   const tzOf = accountDayZoneResolver(accounts, primary);
   const index = buildTradeDayIndex(trades, (row) => tzOf(row.account_id), topstepRulesResolver(accounts));
-  // The limits in force ON THIS DAY, not whatever a retired rule still carries.
-  const auto = evaluateAutoRulesForDay(
-    reportDate,
-    index,
-    configsFromRules(rulesLiveOn(rules, reportDate)),
-    { briefOf: briefResolver(briefs) },
-  );
+  const auto = evaluateAutoRulesForDay(reportDate, index, { briefOf: briefResolver(briefs) });
 
   const { error } = await supabase.rpc("tj_lock_day", {
     p_date: reportDate,

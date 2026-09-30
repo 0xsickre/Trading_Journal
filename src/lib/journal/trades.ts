@@ -134,6 +134,7 @@ export async function getTradeForEdit(
   // the bag the form reasons about as though it were an answer the trader gave.
   delete flat.equity_at_entry;
   delete flat.risk_budget_at_entry;
+  delete flat.room_at_entry;
   // The seal, for the same reason — and these two are strings, so the loop
   // below would keep them and the form would reason about a timestamp as
   // though it were an answer the trader typed. They travel on their own keys.

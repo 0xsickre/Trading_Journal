@@ -40,8 +40,13 @@ export function SessionBriefCard({
   brief: SessionBrief | null;
   /** The clock times are shown on — the primary account's. */
   tz: string;
-  /** Today's page only: DLL left on the primary Topstep account. */
-  dllLeft?: { amount: number; of: number; currency: string } | null;
+  /** Today's page only: DLL left on the primary Topstep account, and its personal daily target. */
+  dllLeft?: {
+    amount: number;
+    of: number;
+    currency: string;
+    target?: { of: number; left: number } | null;
+  } | null;
 }) {
   const flat = flatByFor(day, brief);
   const ranges = RANGES.flatMap(({ key, label }) => (brief?.ranges[key] ? [{ label, range: brief.ranges[key] }] : []));
@@ -79,6 +84,20 @@ export function SessionBriefCard({
               <span className="font-medium">
                 {fmtMoney(dllLeft.amount, dllLeft.currency)} od {fmtMoney(dllLeft.of, dllLeft.currency)}
               </span>
+            </span>
+          )}
+          {dllLeft?.target && (
+            <span>
+              <span className="text-muted-foreground">Dnevni cilj: </span>
+              {dllLeft.target.left === 0 ? (
+                <span className="font-medium text-[var(--profit)]">
+                  dostignut ({fmtMoney(dllLeft.target.of, dllLeft.currency)}) — gotovo za danas
+                </span>
+              ) : (
+                <span className="font-medium">
+                  još {fmtMoney(dllLeft.target.left, dllLeft.currency)} od {fmtMoney(dllLeft.target.of, dllLeft.currency)}
+                </span>
+              )}
             </span>
           )}
         </div>

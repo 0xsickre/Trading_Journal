@@ -7,7 +7,6 @@ import { getTradesWithStats } from "@/lib/journal/trades";
 import { getCheckins, getTrackerRules } from "@/lib/journal/tracker/queries";
 import {
   buildTradeDayIndex,
-  configsFromRules,
   evaluateAutoRulesForDay,
 } from "@/lib/journal/tracker/auto-rules";
 import {
@@ -121,7 +120,12 @@ export default async function DailyPage({
   const primarySizing = primary?.topstep_mode ? sizing[primary.id] : undefined;
   const dllLeft =
     reportDate === today && primarySizing
-      ? { amount: primarySizing.dllLeftToday, of: primarySizing.plan.dll, currency: primary?.currency ?? "USD" }
+      ? {
+          amount: primarySizing.dllLeftToday,
+          of: primarySizing.plan.dll,
+          currency: primary?.currency ?? "USD",
+          target: primarySizing.target ?? null,
+        }
       : null;
   // The day's money is summed across accounts, so it needs ONE currency;
   // with two it is left unsummed rather than printed in the primary's.
@@ -152,7 +156,7 @@ export default async function DailyPage({
     dayRules,
     // `dayRules`, not `rules`: the limits scored here must be the ones in force
     // on this day, not a retired rule's leftovers.
-    evaluateAutoRulesForDay(reportDate, index, configsFromRules(dayRules), { briefOf }),
+    evaluateAutoRulesForDay(reportDate, index, { briefOf }),
     checkins,
   );
 
@@ -219,12 +223,7 @@ export default async function DailyPage({
     (d) =>
       resolveAutoResults(
         rulesLiveOn(rules, d),
-        evaluateAutoRulesForDay(
-          d,
-          index,
-          configsFromRules(rulesLiveOn(rules, d)),
-          { briefOf },
-        ),
+        evaluateAutoRulesForDay(d, index, { briefOf }),
         checkinsByDay.get(d) ?? new Map(),
       ),
     today,

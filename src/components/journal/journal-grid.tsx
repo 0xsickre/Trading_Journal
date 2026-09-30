@@ -788,8 +788,9 @@ export function JournalGrid({
       // Fill averages at the same precision as the plan columns. They used to
       // print two decimals, so an FX entry and exit could read identical.
       /**
-       * What the trade actually put at stake, as a share of the equity its
-       * entry day opened with — the size that was filled.
+       * What the trade actually put at stake, as a share of the room above the
+       * MLL at entry on a Topstep account (else of the equity its entry day
+       * opened with) — the size that was filled.
        */
       {
         id: "risk_pct",

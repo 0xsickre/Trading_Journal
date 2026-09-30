@@ -90,9 +90,8 @@ export type EnrichedTrade = {
   /**
    * Losses in a row that had already CLOSED when this trade was entered, on the
    * same account and day — the streak the trader was standing in. 0 for a first
-   * trade or one after a win/scratch; null when the entry time is unknown. The
-   * same reading `stop_after_losses` grades (F4), so the tilt insight and the
-   * rule count the same thing.
+   * trade or one after a win/scratch; null when the entry time is unknown.
+   * Analytics only — no rule stops the day on a count (30.09.2026).
    */
   lossStreakBefore: number | null;
   /**

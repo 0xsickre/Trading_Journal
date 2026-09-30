@@ -33,7 +33,7 @@ purpose — an applied migration is never edited here, and the comment inside on
 record of the day it was written.
 
 **The interface is deliberately half-and-half, and the line is a clean one.** At least 252 of the
-3,553 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+3,549 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
@@ -980,17 +980,18 @@ book, from values the screens already derive (`mentor-intraday.ts`):
   then the day, then the timing, then each trade; treat a group marked ⚠ (under 10 trades) as a
   hypothesis; cite trades by number; end with two or three rules the tracker can check. The legend
   explains the Topstep trading day (17:00–17:00 CT), the trailing MLL and its lock, the DLL, the 55 %
-  consistency rule, the session windows, "after losses" and the tilt line, time underwater and news
-  windows.
-- **Topstep account**: balance, MLL floor and room, the closest it came, the DLL and what is left
-  today, the days it was hit, the target after consistency, best day against 55 %, maximum
+  consistency rule, the session windows, "after losses" (analytics only — the day stops on money),
+  time underwater and news windows.
+- **Topstep account**: balance, MLL floor and room, the closest it came, the DLL (the personal one
+  where tighter) and what is left today, the personal daily profit target and what is missing to it,
+  the days the DLL was hit, the target after consistency, best day against 55 %, maximum
   position, and the trader's risk rule — as it stands now, not only for the period.
-- **The trader's rules**: every live tracker rule (manual or automatic, with its count), the
+- **The trader's rules**: every live tracker rule (manual or automatic, with its key), the
   period's mean compliance and the rules broken most often.
 - **Day shape** in the statistics: trading days green and red, trades per day (mean and most),
   the average green and red day, the median hold, the average size.
 - **Daily review**: one row per trading day — trades, W/L/BE, net, R, first entry in ET, the longest
-  losing run, entries taken after 2+ losses, most contracts, rules kept (and which were missed, by
+  losing run, most contracts, rules kept (and which were missed, by
   their short name — the text before the colon — marked "ukinuto" when deleted since), and notes: DLL
   reached, entries inside a news window, the brief's day note, mental temperature (out of 5).
 - **When and how** tables by session window, minutes after the open, trade number in the day, state
@@ -1012,38 +1013,37 @@ those parts on their own.
 
 ## Process tracking
 
-**Tracker rules** are daily obligations, per weekday. **Eleven** are scored automatically from data —
+**Tracker rules** are daily obligations, per weekday. **Ten** are scored automatically from data —
 max loss per trade and per day, every trade linked to a playbook, every trade has a stop, every
 trade has a thesis written before entry, no entry risked more than the budget, every entry was the
-contract count the budget gave, and the four day-trading rules below — and the rest are ticked by
-hand. The money rules read the **Topstep plan only** (§ Topstep): a trade on any other account is not
+contract count the budget gave, and the three day-trading rules below — and the rest are ticked by
+hand. **No rule counts trades or losses in a row** (30.09.2026, `20260930070000`): the day stops on
+money, as TopstepX's Risk Limits stop it — the daily loss limit, the daily profit target and the MLL.
+`max_trades_per_day` and `stop_after_losses` were deleted with the count setting in Settings ›
+Tracker (neither had a single answer), and so was the tilt insight that priced the same run. The money rules read the **Topstep plan only** (§ Topstep): a trade on any other account is not
 graded by them (`no_topstep_trades`). The weekly loss rule and the percentage-of-equity limits left in
 H2 (`20260929170000`) — Topstep has no weekly limit, and the book has no other account. The same
 migration named the three rules still in English in Serbian.
 
-**The day trader's four (F4, `20260929110000`).** Each is a decision taken at entry, so each is
-charged to the Topstep day the trade was OPENED on:
+**The day trader's three (F4 `20260929110000`, 30.09.2026 `20260930070000`).** Each is a decision
+taken at entry, so each is charged to the Topstep day the trade was OPENED on:
 
 | Rule | Fails when | Not scored (`na`) when |
 |---|---|---|
-| `max_trades_per_day` | an account has more than N entries that day; the entries past the N-th are named | no count set, or no entry |
-| `stop_after_losses` | an entry follows N losses in a row on the same account that had CLOSED before it; a win or an exact scratch breaks the run | no count set, or a trade in the run has no price |
 | `flat_by_close` | a Topstep position closed after that day's close, or is still open once the close has passed | the day had no Topstep trade, the brief says the exchange was closed, or a position is still open before the close |
 | `no_entry_in_red_window` | an entry falls inside a red window of the day's brief, both edges included | the day has no brief |
+| `no_entry_after_daily_target` | an entry on a Topstep account follows trades of that account and day, CLOSED before it, whose net reached the account's personal daily profit target | the account has no target (`unconfigured`), the day had no Topstep entry, or a trade closed before the entry has no price |
 
-**Counted per account**, as the Topstep limits are: two trades on each of two accounts is not four
-trades. **N is a `count` config** (Settings → Tracker, a whole number from 1 to 20, the same bound as
-the database CHECK); the migration set both at 2, the trader's own number. Until H2 the rule reader
-kept only `pct` from a rule's config, so both counts read as unset and the two rules were never
-scored; `parseConfig` in `tracker/queries.ts` now reads `count`. The close is the brief's
+**The target is per account**, as the Topstep limits are, and it reads only CLOSED money: a winner still open at the entry does not count toward it. The close is the brief's
 (`flat_by`: holiday, early close), else 15:10 CT — a default that can only be later than a holiday
 close, so a missing brief can miss a breach but never invent one. The red windows are only the
 brief's: there is no fixed fifteen minutes, and a day without a brief grades nothing rather than
-guessing. The checklist says counts, a CT time and a window, never money.
+guessing. The checklist says a CT time, a window, or the profit banked against the target.
 
 The three manual rules these replaced — "at most two trades a day", "no entry fifteen minutes around
 red news", "stop at the daily loss in USD" — were **retired, not deleted** (`deleted_at`), so every
-past day they were live on keeps its score. "Walk Away Target" stays a manual rule.
+past day they were live on keeps its score. "Walk Away Target" stays a manual rule beside
+`no_entry_after_daily_target`, which grades the same promise from the data once the account has a target.
 
 **`thesis_written` grades only trades planned before their entry** — `created_at` no later than the
 first fill (`plannedBeforeEntry` in `tracker/auto-rules.ts`): a plan-first trade, and a resting plan
@@ -1084,7 +1084,7 @@ verdicts are what stops compliance from following it.
 **Playbooks** hold groups of rules; answering their checklist writes `tj_position_rules`, which feeds
 the follow rate. An unanswered rule counts in neither the numerator nor the denominator.
 
-**Insights** are 24 rules at three levels — trade (12), day (10), portfolio (2) — reading the
+**Insights** are 23 rules at three levels — trade (11), day (10), portfolio (2) — reading the
 same enriched trades the reports do. Every rule declares a `minSample` and none fires at n=1. No
 insight is stored in the database: thresholds change, and a stored insight would go stale against a
 changed threshold while still looking authoritative. The panel and the mentor pack show one row per
@@ -1118,11 +1118,9 @@ TradeZella's day rules; for a day trader the day is the unit again, so `overtrad
 `low_efficiency_week` became `overtrading_day` (more than 2× your daily average) and
 `low_efficiency_day` (4+ trades, green, under a quarter of your average green day), both waiting for
 ten trading days of history. `revenge_trade` looks for a losing entry within **5 minutes** of a loss
-on the **same account**, not within a day. `tilt_week` (a losing week of short holds) became
-`tilt_after_losses` (decision L3): every entry an account takes on a day after **2 losses in a row**
-that day — the point `stop_after_losses` grades — is flagged with the time to re-entry, the size
-against the trade before it, its R and money, and the average R of every trade outside tilt. It forbids
-nothing; it prices the continuation, and as a trade-level rule it is also a filter in `/reports`.
+on the **same account**, not within a day. `tilt_week` (a losing week of short holds) left, and so did
+its successor `tilt_after_losses` (30.09.2026): the trader stops the day on money, never on a count of
+losses, and "After losses" stays a dimension in `/reports`, a measure rather than a rule.
 `patience_paid_off` came back from the omitted list: a green day whose first entry came 30+ minutes
 after the 09:30 ET open (the Open window left alone; a pre-open or overnight first entry does not count).
 
@@ -1168,6 +1166,14 @@ help.topstep.com on 28.09.2026):
   has not taken yet.
 - **The DLL ends the day, not the account.** The day is Topstep's, 17:00 → 17:00 CT, and it is the
   same day the calendar, `/daily` and the tracker file the account's trades under (§ Attributing to days).
+- **TopstepX Risk Limits** (30.09.2026): the account's **personal daily loss limit**
+  (`topstep_personal_dll`) and **personal daily profit target** (`topstep_daily_target`), set under
+  its Topstep rules in Settings. Either one ends the trading day. The personal limit is the day's DLL
+  wherever it is tighter than the plan's (`topstepPlanRulesFor`) — for the banner, the sizing, the
+  tracker, the day card on `/daily` and Survival; a looser one changes nothing, since Topstep still
+  stops the day at the plan's. The target shows as what is still missing today, is graded by
+  `no_entry_after_daily_target`, and caps a simulated day in Survival. **There is no limit on the
+  number of trades.**
 - **Consistency**: the best day must stay at or below 55 % of the target; past that the target grows
   to best day ÷ 0.55.
 - **Closed trades only**: Topstep watches both limits intraday with open P&L, so a
@@ -1190,7 +1196,7 @@ of the plan's numbers the limit came from:
 
 | Rule | On a Topstep account |
 |---|---|
-| Max loss per day | The plan's DLL, per account and per Topstep day — two 50Ks each down 600 are two survived days |
+| Max loss per day | The plan's DLL — or the personal daily loss limit where tighter — per account and per Topstep day; two 50Ks each down 600 are two survived days |
 | Max loss per trade | The risk budget at entry **+ 10 %** for slippage (`TOPSTEP_SLIPPAGE_TOLERANCE`) |
 | Risk per trade | The risk at the stop against the budget at entry |
 | Sized to intent | The contracts equal the count the form would have given from that budget (rounded down, commission counted, capped at the plan) |
@@ -1201,7 +1207,17 @@ room and today's DLL as `topstepStateAt` reads them from everything closed befor
 the save that first gives a trade fills, never overwritten, 0 when there was no room (migration
 `20260928160000`); a later correction or late import cannot move the measure a decision was graded
 against. A trade with no seal — created by the import, or older than the column — reads the same
-budget derived at its entry. There is no **Risk %** list on the plan form (removed in H2 with the
+budget derived at its entry. The import seals both (30.09.2026), read after the rows before it in the
+same file were saved.
+
+**Risk % on a Topstep trade is a share of the room above the MLL at entry** (30.09.2026): the
+journal's "Risk %" column, the "Risk taken" metrics and the `/reports` bucket divide the risk to
+the stop by `tj_positions.room_at_entry`, sealed next to the budget with the same three rules (0 when
+there was no room, which reads as no percentage). $345 on a stop with $4,500 of room is 7.7 %, not the
+0.23 % of a 150,000 balance the account can never spend. The buckets sit around the trader's 12.5 %
+(< 5 %, 5–10 %, 10–12.5 %, 12.5–15 %, 15–20 %, ≥ 20 %). A trade without the seal — entered on an
+account with closed trades before the column existed — keeps the old denominator, the equity the
+entry day opened with, until a save seals it. There is no **Risk %** list on the plan form (removed in H2 with the
 `risk_pct` column and the playbook's default risk): the size comes from the rule, and appears once
 entry and stop are in. An account that is not in Topstep mode gets no size suggestion.
 
@@ -1600,7 +1616,7 @@ container does not have. It stays a later option, not an oversight.
 | Spaces, mentor, leaderboard | Single-user system |
 | AI chat and agents | The mentor-pack export and the insight rules give the same thing without the API cost |
 | Options (DTE, strike, expiry) | Not traded |
-| Intraday dimensions | **Built in F5.2 (29.09.2026).** `/reports` groups by **Session window** (Globex night 18:00–08:00, Pre-open, Open 09:30–10:00, Morning, Lunch, Afternoon, Last hour — on New York's clock whatever zone the journal shows, `session-window.ts`), **Minutes after the open** (before the open, 0–15, 15–30, 30–60 min, 1–2 h, 2 h +), **Trade number in the day** (per account; the 4th on is one bucket) and **After losses** (first trade of the day, after a win or scratch, after 1 loss, after 2+ — the losses that had already closed when the entry was taken, the same reading `stop_after_losses` grades). The weekly "Napredak" card still has its own hour and trade-number rows |
+| Intraday dimensions | **Built in F5.2 (29.09.2026).** `/reports` groups by **Session window** (Globex night 18:00–08:00, Pre-open, Open 09:30–10:00, Morning, Lunch, Afternoon, Last hour — on New York's clock whatever zone the journal shows, `session-window.ts`), **Minutes after the open** (before the open, 0–15, 15–30, 30–60 min, 1–2 h, 2 h +), **Trade number in the day** (per account; the 4th on is one bucket) and **After losses** (first trade of the day, after a win or scratch, after 1 loss, after 2+ — the losses that had already closed when the entry was taken; a measure, not a rule). The weekly "Napredak" card still has its own hour and trade-number rows |
 | Economic calendar | Lives in `futures-trading`: the morning brief carries the day's releases with their red windows |
 | Running P&L curve per trade in the journal | The journal still holds no prices. `futures-trading` walks the curve over the R2 candles and writes the one number the insights need, `time_underwater_pct` (F5.3b); the peak of a day's cumulative P&L, which `maximize_your_profit_day` would need, is measured by no one |
 

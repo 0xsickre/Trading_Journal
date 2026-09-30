@@ -81,6 +81,9 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   topstep_plan                text        NOT NULL DEFAULT '50K',
   topstep_payout_at           timestamptz,
   topstep_reset_at            timestamptz,
+  -- TopstepX Risk Limits (30.09.2026): lični dnevni limit gubitka i cilj profita.
+  topstep_personal_dll        numeric,
+  topstep_daily_target        numeric,
   risk_rule_pct               numeric     NOT NULL DEFAULT 12.5,
   risk_rule_min               numeric,
   risk_rule_max               numeric,
@@ -92,7 +95,11 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   CONSTRAINT tj_accounts_breakeven_unit_check
     CHECK (breakeven_unit = ANY (ARRAY['currency'::text, 'pct'::text])),
   CONSTRAINT tj_accounts_starting_balance_non_negative
-    CHECK (starting_balance >= 0::numeric)
+    CHECK (starting_balance >= 0::numeric),
+  CONSTRAINT tj_accounts_topstep_personal_dll_positive
+    CHECK (topstep_personal_dll IS NULL OR topstep_personal_dll > 0),
+  CONSTRAINT tj_accounts_topstep_daily_target_positive
+    CHECK (topstep_daily_target IS NULL OR topstep_daily_target > 0)
 );
 CREATE INDEX IF NOT EXISTS tj_accounts_user_idx ON public.tj_accounts USING btree (user_id);
 
@@ -169,6 +176,7 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- zapečaćeno kad je trejd prvi put dobio entry fill; 0 = nalog nije imao prostora.
   -- NULL: nije Topstep nalog, ili trejd bez pečata — čitači izvode budžet iz timeline-a.
   risk_budget_at_entry numeric,
+  room_at_entry numeric,
   -- Plan kakav je bio kad je trejd prvi put dobio entry fill (20260921120000).
   -- Piše se jednom, nikad se ne prepisuje, briše se na povratak u `planned`.
   -- NULL znači da trejd prethodi pečatu — čitači tada padaju na živa polja.
@@ -204,6 +212,8 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
     CHECK (equity_at_entry IS NULL OR equity_at_entry > 0),
   CONSTRAINT tj_positions_risk_budget_at_entry_nonnegative
     CHECK (risk_budget_at_entry IS NULL OR risk_budget_at_entry >= 0),
+  CONSTRAINT tj_positions_room_at_entry_nonnegative
+    CHECK (room_at_entry IS NULL OR room_at_entry >= 0),
   CONSTRAINT tj_positions_time_underwater_pct_check
     CHECK (time_underwater_pct IS NULL OR (time_underwater_pct >= 0 AND time_underwater_pct <= 100)),
   CONSTRAINT tj_positions_time_stop_choice

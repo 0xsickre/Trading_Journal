@@ -14,23 +14,11 @@ type RuleRow = {
   stage: string;
   active_days: number[];
   auto_key: string | null;
-  config: unknown;
   is_mandatory: boolean;
   sort_order: number;
   created_at: string;
   deleted_at: string | null;
 };
-
-/**
- * jsonb comes back as `unknown`; only a whole-number `count` is meaningful —
- * the entries or losses a count rule allows (F4). Anything else reads as
- * unconfigured rather than being reinterpreted.
- */
-export function parseConfig(raw: unknown): { count?: number } {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-  const count = (raw as Record<string, unknown>).count;
-  return typeof count === "number" && Number.isInteger(count) && count > 0 ? { count } : {};
-}
 
 function toRule(r: RuleRow): TrackerRule {
   return {
@@ -39,7 +27,8 @@ function toRule(r: RuleRow): TrackerRule {
     stage: r.stage as TrackerStage,
     active_days: Array.isArray(r.active_days) ? r.active_days.map(Number) : [],
     auto_key: (r.auto_key as AutoRuleKey | null) ?? null,
-    config: parseConfig(r.config),
+    // No rule reads a setting since the count rules left (30.09.2026).
+    config: {},
     is_mandatory: r.is_mandatory,
     sort_order: r.sort_order,
     created_at: r.created_at,
@@ -71,7 +60,7 @@ export async function getTrackerRules(
   let q = supabase
     .from("tj_tracker_rules")
     .select(
-      "id,text,stage,active_days,auto_key,config,is_mandatory,sort_order,created_at,deleted_at",
+      "id,text,stage,active_days,auto_key,is_mandatory,sort_order,created_at,deleted_at",
     )
     .order("sort_order")
     .order("id");

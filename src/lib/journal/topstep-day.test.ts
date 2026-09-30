@@ -89,10 +89,10 @@ describe("the tracker counts the Topstep day (D1: each trade by its own account)
 
   it("charges max loss per day to the day Topstep charges its DLL to", () => {
     const graded = buildTradeDayIndex(rows, zoneOfRow, topstepOf);
-    const tue = evaluateAutoRulesForDay("2026-09-29", graded, {});
+    const tue = evaluateAutoRulesForDay("2026-09-29", graded);
     expect(tue.max_loss_per_day.observed).toBe(-600);
     // Monday holds the Sunday open's +50; the CFD evening is not graded (H2).
-    const mon = evaluateAutoRulesForDay("2026-09-28", graded, {});
+    const mon = evaluateAutoRulesForDay("2026-09-28", graded);
     expect(mon.max_loss_per_day.verdict).toBe("pass");
     expect(mon.max_loss_per_day.observed).toBe(50);
   });
@@ -183,7 +183,7 @@ describe("a locked day keeps what it was locked with", () => {
     // limit. Read live under the Topstep day, Monday no longer holds that trade —
     // but the frozen row is what Monday was scored with, and it stays.
     const index = buildTradeDayIndex(rows, zoneOfRow, topstepOf);
-    const live = evaluateAutoRulesForDay("2026-09-28", index, {});
+    const live = evaluateAutoRulesForDay("2026-09-28", index);
     expect(live.max_loss_per_day.verdict).toBe("pass");
 
     const rule = { id: "r-dll", auto_key: "max_loss_per_day" } as unknown as TrackerRule;
