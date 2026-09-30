@@ -120,7 +120,7 @@ import { cn } from "@/lib/utils";
 import { commissionPerSide } from "@/lib/journal/instrument-costs";
 import { sizeUnitLabel } from "@/lib/journal/units";
 import { MICRO_OF, MINI_OF } from "@/lib/journal/default-instruments";
-import { topstepMaxContracts, type TopstepSizing } from "@/lib/journal/topstep";
+import { topstepMaxContracts, topstepMinRiskFromRoom, type TopstepSizing } from "@/lib/journal/topstep";
 import {
   plannedSize,
   qtyToInput,
@@ -567,6 +567,7 @@ export function TradeForm({
             min: account.risk_rule_min ?? ts.plan.riskMin,
             max: account.risk_rule_max ?? ts.plan.riskMax,
             dllLeft: ts.dllLeftToday,
+            minFromRoom: topstepMinRiskFromRoom(ts.plan),
           })
         : null;
     const futuresBudget = ts ? (topstepRisk?.amount ?? 0) : null;
@@ -581,6 +582,7 @@ export function TradeForm({
             pointValue,
             commissionPerSide: instrument.commission_per_lot ?? 0,
             maxContracts: capFor(instrument.symbol),
+            tickSize: instrument.tick_size ?? null,
           })
         : null;
     const pairSymbol = instrument ? (MICRO_OF[instrument.symbol] ?? MINI_OF[instrument.symbol]) : undefined;
@@ -594,6 +596,7 @@ export function TradeForm({
             pointValue: pairInstrument.point_value,
             commissionPerSide: pairInstrument.commission_per_lot ?? 0,
             maxContracts: capFor(pairInstrument.symbol),
+            tickSize: pairInstrument.tick_size ?? null,
           })
         : null;
     const stopTicks = isFuture ? ticksBetween(pe, stop, instrument?.tick_size ?? null) : null;
@@ -2301,7 +2304,7 @@ function futuresRiskNote(
     .join(", ");
   if (m.futures.contracts > 0) {
     parts.unshift(
-      `${m.futures.contracts} ${symbol} — ${fmtMoney(m.futures.risk, currency)} at the stop incl. commission${bracket ? ` (${bracket})` : ""}.`,
+      `${m.futures.contracts} ${symbol} — ${fmtMoney(m.futures.risk, currency)} at the stop incl. commission and a tick of slippage${bracket ? ` (${bracket})` : ""}.`,
     );
   } else {
     parts.unshift(`0 ${symbol} at this stop${bracket ? ` (${bracket})` : ""} — one contract would lose more than the budget.`);

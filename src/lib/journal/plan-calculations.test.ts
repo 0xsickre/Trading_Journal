@@ -312,7 +312,8 @@ describe("blendedPlannedRewardR", () => {
  * The worked examples of that document are the tests.
  */
 describe("computeTopstepRisk", () => {
-  const rule = { pct: 12.5, min: 60, max: 300, dllLeft: 1000 };
+  // 50K: the floor holds from a third of the MLL up (R3, 30.09.2026).
+  const rule = { pct: 12.5, min: 60, max: 300, dllLeft: 1000, minFromRoom: 2_000 / 3 };
 
   it("example 1 — 50K on its first day: room 2 000 → 250", () => {
     expect(computeTopstepRisk({ ...rule, room: 50_000 - 48_000 })).toEqual({ amount: 250, threeStopsFitDll: true });
@@ -322,8 +323,23 @@ describe("computeTopstepRisk", () => {
     expect(computeTopstepRisk({ ...rule, room: 2_600 })!.amount).toBe(300);
   });
 
-  it("a small room is held at the floor of the range", () => {
-    expect(computeTopstepRisk({ ...rule, room: 400 })!.amount).toBe(60);
+  it("from a third of the MLL up, a small share is held at the floor of the range", () => {
+    expect(computeTopstepRisk({ ...rule, room: 400, minFromRoom: 400 })!.amount).toBe(60);
+    // 150K at 8 %: $2 000 of room is $160, lifted to the plan's $180.
+    expect(
+      computeTopstepRisk({ room: 2_000, pct: 8, min: 180, max: 900, dllLeft: 1_200, minFromRoom: 1_500 })!.amount,
+    ).toBe(180);
+  });
+
+  it("under a third of the MLL the floor is gone: the risk falls with the room (R3)", () => {
+    expect(computeTopstepRisk({ ...rule, room: 400 })!.amount).toBe(50);
+    // 150K, $400 left: 8 % is $32, not the plan's $180 — 45 % of what is left.
+    expect(
+      computeTopstepRisk({ room: 400, pct: 8, min: 180, max: 900, dllLeft: 1_200, minFromRoom: 1_500 })!.amount,
+    ).toBe(32);
+    expect(
+      computeTopstepRisk({ room: 1_500, pct: 8, min: 180, max: 900, dllLeft: 1_200, minFromRoom: 1_500 })!.amount,
+    ).toBe(180);
   });
 
   it("never more than today's DLL allows, and says when three stops no longer fit", () => {
@@ -331,7 +347,7 @@ describe("computeTopstepRisk", () => {
   });
 
   it("never more than the room itself", () => {
-    expect(computeTopstepRisk({ ...rule, room: 40 })!.amount).toBe(40);
+    expect(computeTopstepRisk({ ...rule, room: 40, minFromRoom: 0 })!.amount).toBe(40);
   });
 
   it("nothing to risk on the floor, or with the day's DLL spent", () => {
@@ -341,30 +357,48 @@ describe("computeTopstepRisk", () => {
 });
 
 describe("computeFuturesContracts", () => {
-  const mnq = { pointValue: 2, commissionPerSide: 0.61, maxContracts: 50 };
+  const mnq = { pointValue: 2, commissionPerSide: 0.61, maxContracts: 50, tickSize: 0.25 };
 
-  it("250 at a 50-point MNQ stop is 2 contracts — rounded down, commission in", () => {
+  it("250 at a 50-point MNQ stop is 2 contracts — rounded down, commission and a tick of slippage in", () => {
     const r = computeFuturesContracts({ ...mnq, riskAmount: 250, entry: 30_600, stop: 30_550 })!;
-    expect(r.contracts).toBe(2); // 250 / (50 × 2 + 1.22) = 2.47
-    expect(r.perContract).toBeCloseTo(101.22, 10);
-    expect(r.risk).toBeCloseTo(202.44, 10);
+    expect(r.contracts).toBe(2); // 250 / (50 × 2 + 1.22 + 0.50) = 2.46
+    expect(r.perContract).toBeCloseTo(101.72, 10);
+    expect(r.risk).toBeCloseTo(203.44, 10);
     expect(r.capped).toBe(false);
   });
 
   it("the mini at the same stop does not fit: 0 contracts, not a fraction", () => {
-    const r = computeFuturesContracts({ riskAmount: 250, entry: 30_600, stop: 30_550, pointValue: 20, commissionPerSide: 1.89, maxContracts: 5 })!;
+    const r = computeFuturesContracts({ riskAmount: 250, entry: 30_600, stop: 30_550, pointValue: 20, commissionPerSide: 1.89, maxContracts: 5, tickSize: 0.25 })!;
     expect(r.contracts).toBe(0);
     expect(r.risk).toBe(0);
   });
 
-  it("example 2 — 6E, 150 at an 8-pip stop: 1 6E, or 13 M6E", () => {
+  it("example 2 — 6E, 150 at an 8-pip stop: 1 6E, or 12 M6E once the stop's tick is counted", () => {
     const e = { riskAmount: 150, entry: 1.1400, stop: 1.1392 };
-    expect(computeFuturesContracts({ ...e, pointValue: 125_000, commissionPerSide: 2.11, maxContracts: 5 })!.contracts).toBe(1);
-    expect(computeFuturesContracts({ ...e, pointValue: 12_500, commissionPerSide: 0.5, maxContracts: 50 })!.contracts).toBe(13);
+    expect(computeFuturesContracts({ ...e, pointValue: 125_000, commissionPerSide: 2.11, maxContracts: 5, tickSize: 0.00005 })!.contracts).toBe(1);
+    // 150 / (10 + 1.00 + 1.25) = 12.2 — without the tick it was 13, and a slipped stop on 13 is $159.
+    expect(computeFuturesContracts({ ...e, pointValue: 12_500, commissionPerSide: 0.5, maxContracts: 50, tickSize: 0.0001 })!.contracts).toBe(12);
+  });
+
+  it("a tick of slippage on the stop is part of the loss (R4): 562.50 at a 10-point MNQ stop is 25, not 26", () => {
+    const r = computeFuturesContracts({ ...mnq, maxContracts: 150, riskAmount: 562.5, entry: 30_600, stop: 30_590 })!;
+    expect(r.perContract).toBeCloseTo(21.72, 10); // 10 × 2 + 1.22 + 0.25 × 2
+    expect(r.contracts).toBe(25);
+  });
+
+  it("on a tight ES stop the tick is an eighth of the loss", () => {
+    const es = { riskAmount: 900, entry: 6_700, stop: 6_698, pointValue: 50, commissionPerSide: 1.89, maxContracts: 15 };
+    expect(computeFuturesContracts({ ...es, tickSize: null })!.contracts).toBe(8); // 900 / 103.78
+    expect(computeFuturesContracts({ ...es, tickSize: 0.25 })!.contracts).toBe(7); // 900 / 116.28
+  });
+
+  it("without a tick size nothing is added — the old arithmetic, not a guessed tick", () => {
+    expect(computeFuturesContracts({ ...mnq, tickSize: null, riskAmount: 250, entry: 30_600, stop: 30_550 })!.perContract).toBeCloseTo(101.22, 10);
+    expect(computeFuturesContracts({ ...mnq, tickSize: 0, riskAmount: 250, entry: 30_600, stop: 30_550 })!.perContract).toBeCloseTo(101.22, 10);
   });
 
   it("an exact fit is not lost to floating point", () => {
-    expect(computeFuturesContracts({ riskAmount: 250, entry: 100, stop: 37.5, pointValue: 2, commissionPerSide: 0, maxContracts: null })!.contracts).toBe(2);
+    expect(computeFuturesContracts({ riskAmount: 250, entry: 100, stop: 37.5, pointValue: 2, commissionPerSide: 0, maxContracts: null, tickSize: null })!.contracts).toBe(2);
   });
 
   it("is capped at what the account may hold, and says so", () => {
@@ -384,7 +418,7 @@ describe("computeFuturesContracts", () => {
   });
 
   it("a negative commission is not a rebate on the stop", () => {
-    expect(computeFuturesContracts({ ...mnq, commissionPerSide: -5, riskAmount: 200, entry: 110, stop: 60 })!.perContract).toBe(100);
+    expect(computeFuturesContracts({ ...mnq, tickSize: null, commissionPerSide: -5, riskAmount: 200, entry: 110, stop: 60 })!.perContract).toBe(100);
   });
 });
 

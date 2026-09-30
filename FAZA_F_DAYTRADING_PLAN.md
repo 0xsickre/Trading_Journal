@@ -99,6 +99,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 30.09.2026 | posle F | Dan se zaustavlja na novcu, ne na broju trejdova (trejder: „ne treba uopšte da se ograniči broj trejdova, nego max daily loss i max daily profit, kao na Topstepu; i MLL"). Odgovori: `stop_after_losses` i tilt zapažanje **se brišu** zajedno sa `max_trades_per_day`; lični dnevni limit gubitka i cilj profita su **polja na Topstep nalogu + pravila** (lični DLL zamenjuje DLL plana gde je uži; novo pravilo `no_entry_after_daily_target`); **Risk % na Topstep-u = rizik ÷ prostor do MLL-a na ulazu** (`room_at_entry`). Spojeni MNQ trejd od 30.09. ostaje kako je upisan. Migracija `20260930070000`; brief (`racun.py`) računa isto |
 | 30.09.2026 | posle F | Isplata (trejder: „da buffer pada sa isplatom, a MLL ostaje gde je stao"). Provereno na Topstep pravilima: MLL prati balans na kraju dana i staje na početnom balansu (150K: od 145.500 do 150.000); posle prve isplate MLL = početni balans, a isplata izlazi iz balansa. Journal je do sada isplatu samo datumom zaključavao pod, a balans nije smanjivao — prostor i budžet rizika bili bi preveliki. Sada: isplata = cash event tipa Payout / Withdrawal na Topstep nalogu, oduzima se od balansa, prva je i datum isplate; brief isto. Bez migracije |
 | 30.09.2026 | L | Šta bi bilo (trejder): SL × TP mreža L1 (SL 0,5–2× stvarnog, TP 1–5R), horizont L2 do kraja Topstep dana (15:10 CT), L3 isti rizik u $ (rezultat u R varijante), L4 posle izlaza 15/30/60 min + kraj dana, posle stopa da li je pukao TP i koliki SL je trebao. Migracija `20260930080000` (`scenario`) |
+| 30.09.2026 | R | Rizik (trejder, posle pregleda oba repoa i simulacije `testovi/rizik/nalog.py`): **R1** rizik po trejdu 8 % prostora i **R2** lični DLL $1.200 dok journal nema 30+ trejdova — podešavanja naloga (Settings › Accounts › Topstep, TopstepX Risk Limits), ne kod; podrazumevanih 12,5 % se ne menja (na njemu stoji breakeven pojas, K4). **R3** donja granica rizika (`risk_rule_min` / min plana) važi samo dok je prostor ≥ trećine MLL-a plana (150K: $1.500); ispod toga rizik je čist procenat prostora. **R4** veličina u ugovorima uračunava 1 tik proklizavanja stopa po ugovoru, uz proviziju u oba smera |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -129,6 +130,7 @@ pogađa.
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, uzorak | #11–#13, #15, #17, #18 (#14 zatvorio H2) | K | da: `20260929235000` (`time_underwater_pct`), `20260930000000` / `…000100` (`baseline_trades`) | Sonnet, Opus za #13 | ✅ `2e59f2e` · `5095e43` · `3183236` · `20f9626` + `8c35148` (futures-trading) · `ea0461b` · `d9ccf9c` · `8dff0cf`, 29.09.2026 — migracije primenjene |
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, ostaci vault-a, komentari, PARITY | #16, #20, #22, #23 (#19 zatvorili H1/H2) | F5 | da: `20260930010000` (`no_entry`, `r2`) | Sonnet, Opus za #16 | ✅ `16c3a04` + `a59307d` (futures-trading) · `e515552` · `a5a8ff3` · `db9c3b3` + F6.5, 29.09.2026 — migracija primenjena |
 | **L** | Šta bi bilo: SL × TP mreža, posle izlaza, posle stopa — iz berzanskih sveća | — | F6 | da: `20260930080000` (`scenario`) | **Opus** | ✅ `89915aa` · futures-trading `f60b5ea`, 30.09.2026 — migracija primenjena |
+| **R** | Rizik blizu MLL-a i proklizavanje stopa u veličini (journal + brief isto) | — | L | ne | **Opus** | u radu (30.09.2026) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -858,6 +860,52 @@ odgovor za trejderove setupe može doći samo iz njegovih trejdova.
 Za svaki zatvoren trejd sa stopom: 42 „šta da je“ ishoda, pomeranje cene posle izlaza, da li je posle stopa došao TP i
 koliki je SL trebao. U izveštajima: koja kombinacija SL × TP daje najviše R po setupu i TF-u, sa oznakom malog uzorka
 (ispod 30 trejdova po grupi je hipoteza, ne nalaz).
+
+## R — Rizik blizu MLL-a i proklizavanje stopa (detaljno, 30.09.2026)
+
+**Povod:** pregled oba repoa (30.09.2026). Simulacija naloga 150K, 60 dana, ishod 45 % × 1,5R: sa 12,5 % prostora i
+DLL-om $2.000 nalog padne u ~30 % simulacija, sa 8 % i $1.200 u ~14 %. Journal još nema nijedan trejd, pa prednost nije
+izmerena. Odluke R1–R4 u dnevniku.
+
+**Utvrđeno u kodu (pre R):**
+- `computeTopstepRisk` (`plan-calculations.ts`) i `racun.rizik` (brief): `min(max(prostor × %, min), max, DLL danas, prostor)`.
+  Donja granica važi i kad je prostor mali: $400 prostora na 150K → rizik $180, 45 % onoga što je ostalo.
+- `computeFuturesContracts` i `racun.ugovora`: gubitak po ugovoru = stop × vrednost poena + 2 × provizija. Stop koji
+  prokliza tik ne ulazi; tracker posle toleriše +10 % (E3-B). Na ES stopu od 2 poena jedan tik je +12,5 % gubitka.
+- Iste dve funkcije zovu: forma trejda (veličina i par mini/micro), `riskBudgetAt` (budžet na ulazu za tracker),
+  `expectedContracts` u tracker-u (`risk_matched_intent`), brief (tabela ugovora, šum po zoni), PDF uputstvo i
+  simulacija naloga.
+
+### Izmena
+
+- **R3:** `computeTopstepRisk` dobija `minFromRoom` — prostor od kog važi donja granica; ispod njega
+  `min(prostor × %, max, DLL danas, prostor)`. Prag = `topstepMinRiskFromRoom(pravila)` = MLL plana ÷ 3
+  (50K $666,67, 100K $1.000, 150K $1.500). `racun.rizik` isto (`min_od`, obavezan argument, `racun.min_od(plan)`).
+- **R4:** `computeFuturesContracts` dobija `tickSize`: gubitak po ugovoru = stop × vrednost poena + 2 × provizija
+  + `STOP_SLIPPAGE_TICKS` (1) × tik × vrednost poena. Forma čita tik iz kataloga, tracker `tick_size_at_trade`
+  (zamrznut na trejdu). Bez tika (instrument van kataloga bez `tick_size`) proklizavanje je 0 — stari račun, ne pogađa
+  se. Brief: `racun.TIK` (CME tik po simbolu), `racun.po_ugovoru` jedino mesto formule; ista formula u tabeli, šumu po
+  zoni, PDF-u.
+- Bez migracije. Zapečaćen `risk_budget_at_entry` se ne menja; trejd bez pečata čita izvedeni budžet po novom pravilu,
+  a „Sized to intent" (`expectedContracts`) broji sa tikom — na nezaključanim prošlim danima očekivan broj ugovora
+  ponekad je za jedan manji; zaključani ostaju. Baza na 30.09.2026 nema nijedan trejd.
+- **Simulacija** (`futures-trading/testovi/rizik/nalog.py`): sa R3 rizik blizu MLL-a teži nuli, pa nalog skoro nikad ne
+  dotakne MLL — a trgovati se ne može. Zato najmanji trejd = 1 MNQ na stopu od 10 poena (sa provizijom i tikom); kad ga
+  prostor ne nosi, nalog je **zaglavljen** (broji se kao pad u isplatama); preživeo nalog sa prostorom ispod trećine MLL-a
+  je **oslabljen**. 150K, 8 % / $1.200, 45 % × 1,5R: 0 % pad, 2 % zaglavljen, 23 % oslabljen, cilj 32 % (pre R3 isto
+  podešavanje: 14 % pad).
+
+### Testovi (prvo padaju)
+
+- `plan-calculations.test.ts`: prostor ispod praga → čist procenat; na pragu → min; proklizavanje (MNQ 10 poena, $562,5 →
+  25, ne 26); bez tika → kao ranije.
+- `topstep.test.ts`: prag po planu; `riskBudgetAt` blizu MLL-a.
+- `racun.py --selftest`: isti primeri, isti brojevi.
+
+### Izlaz iz R
+
+Forma, tracker i brief daju isti broj ugovora, sa tikom proklizavanja; blizu MLL-a rizik pada sa prostorom. README oba
+repoa 1:1, ovde ✅ + commit, `ROADMAP.md` jedan red.
 
 ## Katalog stavki
 

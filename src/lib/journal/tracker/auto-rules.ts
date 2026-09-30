@@ -207,6 +207,8 @@ function expectedContracts(row: TradeRow, budget: number | null, book: TopstepBo
       TOPSTEP_PLANS[book.rules.config.plan],
       typeof row.instrument === "string" ? row.instrument : null,
     ),
+    // The tick frozen on the trade when it was written, as the form read it then.
+    tickSize: numberFieldValue(row, "tick_size_at_trade"),
   });
   return out?.contracts ?? null;
 }

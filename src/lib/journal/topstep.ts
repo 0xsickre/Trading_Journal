@@ -332,6 +332,16 @@ export function topstepStateAt(
   return r.status === "off" ? null : (r as TopstepResult);
 }
 
+/**
+ * The room from which the risk rule's money floor holds (R3, 30.09.2026): a
+ * third of the plan's MLL — $1 500 on a 150K. Under it the budget is the plain
+ * share of the room. The plan's MLL, not the personal DLL: the floor is about
+ * what is left of the account, not of the day.
+ */
+export function topstepMinRiskFromRoom(plan: TopstepPlanRules): number {
+  return plan.mll / 3;
+}
+
 /** The share of the room the risk rule takes when the account sets none — the trader's rule. */
 export const TOPSTEP_DEFAULT_RISK_PCT = 12.5;
 
@@ -382,6 +392,7 @@ export function riskBudgetAt(
     min: rule.min ?? s.rules.riskMin,
     max: rule.max ?? s.rules.riskMax,
     dllLeft: s.dllLeftToday,
+    minFromRoom: topstepMinRiskFromRoom(s.rules),
   });
   return risk?.amount ?? 0;
 }

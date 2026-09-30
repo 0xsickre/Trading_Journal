@@ -3,6 +3,7 @@ import {
   TOPSTEP_PLANS,
   evaluateTopstep,
   riskBudgetAt,
+  topstepMinRiskFromRoom,
   topstepStateAt,
   topstepTradingDay,
   type TopstepConfig,
@@ -242,6 +243,13 @@ describe("the risk budget at entry (F3, E4)", () => {
     expect(riskBudgetAt(cfg(), { pct: 12.5, min: null, max: 150 }, book, "2026-09-28T13:00:00Z")).toBe(150);
   });
 
+  it("near the MLL the plan's floor no longer holds: $500 of room risks 12.5 % of it, not $60 (R3)", () => {
+    const close = [t("2026-09-28T15:00:00Z", -1_500)];
+    expect(riskBudgetAt(cfg(), rule, close, "2026-09-29T15:00:00Z")).toBe(62.5);
+    const closer = [t("2026-09-28T15:00:00Z", -1_700)];
+    expect(riskBudgetAt(cfg(), rule, closer, "2026-09-29T15:00:00Z")).toBe(37.5);
+  });
+
   it("is 0 on an account with no room — nothing was allowed, which is an answer", () => {
     const blown = [t("2026-09-28T15:00:00Z", -2_000)];
     expect(riskBudgetAt(cfg(), rule, blown, "2026-09-29T15:00:00Z")).toBe(0);
@@ -392,5 +400,17 @@ describe("a payout leaves the balance; the MLL stays at the starting balance (30
       { at: "2026-09-10T15:00:00Z", amount: 300 },
       { at: "2026-09-28T15:00:00Z", amount: 2_000 },
     ]);
+  });
+});
+
+describe("the room the plan's risk floor holds from (R3, 30.09.2026)", () => {
+  it("is a third of the plan's MLL: 150K $1 500, 100K $1 000, 50K $666.67", () => {
+    expect(topstepMinRiskFromRoom(TOPSTEP_PLANS["150K"])).toBe(1_500);
+    expect(topstepMinRiskFromRoom(TOPSTEP_PLANS["100K"])).toBe(1_000);
+    expect(topstepMinRiskFromRoom(TOPSTEP_PLANS["50K"])).toBeCloseTo(666.67, 2);
+  });
+
+  it("does not move with a tighter personal DLL", () => {
+    expect(topstepMinRiskFromRoom({ ...TOPSTEP_PLANS["150K"], dll: 1_200 })).toBe(1_500);
   });
 });

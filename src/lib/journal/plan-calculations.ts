@@ -248,17 +248,33 @@ export function computeTopstepRisk(params: {
   min: number;
   max: number;
   dllLeft: number;
+  /**
+   * The room from which `min` holds (R3, 30.09.2026: `topstepMinRiskFromRoom`).
+   * Under it the risk is the plain share of the room: a floor that stays put
+   * while the room shrinks would spend a growing part of what is left.
+   */
+  minFromRoom: number;
 }): { amount: number; threeStopsFitDll: boolean } | null {
-  const { room, pct, min, max, dllLeft } = params;
+  const { room, pct, min, max, dllLeft, minFromRoom } = params;
   if (!(room > 0) || !(dllLeft > 0)) return null;
-  const amount = Math.min(Math.max(room * (pct / 100), min), max, dllLeft, room);
+  const floor = room >= minFromRoom ? min : 0;
+  const amount = Math.min(Math.max(room * (pct / 100), floor), max, dllLeft, room);
   return { amount, threeStopsFitDll: 3 * amount <= dllLeft };
 }
 
 /**
+ * Ticks a stop is assumed to slip, per contract (R4, 30.09.2026). A stop is a
+ * market order once touched, and the budget is what the trader may lose, not
+ * what the stop price says.
+ */
+export const STOP_SLIPPAGE_TICKS = 1;
+
+/**
  * Whole contracts for a futures position: what the risk buys at this stop,
- * ROUNDED DOWN, with the round-turn commission counted as part of the loss, and
- * no more than the account may hold.
+ * ROUNDED DOWN, with the round-turn commission and `STOP_SLIPPAGE_TICKS` of
+ * slippage on the stop counted as part of the loss, and no more than the
+ * account may hold. Without a tick size no slippage is added — the loss is the
+ * stop and the commission, as before R4, rather than a guessed tick.
  *
  * `maxContracts` is in THIS contract's units: a micro's cap is ten times its
  * mini's (Topstep counts micros 10:1). The loss the trader actually takes on
@@ -275,14 +291,16 @@ export function computeFuturesContracts(params: {
   pointValue: number | null;
   commissionPerSide: number;
   maxContracts: number | null;
+  tickSize: number | null;
 }): { contracts: number; perContract: number; risk: number; capped: boolean } | null {
-  const { riskAmount, entry, stop, pointValue, commissionPerSide, maxContracts } = params;
+  const { riskAmount, entry, stop, pointValue, commissionPerSide, maxContracts, tickSize } = params;
   if (riskAmount == null || entry == null || stop == null || pointValue == null || pointValue <= 0) {
     return null;
   }
   const dist = Math.abs(entry - stop);
   if (dist <= 0) return null;
-  const perContract = dist * pointValue + 2 * Math.max(0, commissionPerSide);
+  const slippage = tickSize != null && tickSize > 0 ? STOP_SLIPPAGE_TICKS * tickSize * pointValue : 0;
+  const perContract = dist * pointValue + 2 * Math.max(0, commissionPerSide) + slippage;
   // A hair of tolerance so $250 / $125.00 is 2, not 1.9999999.
   const byRisk = Math.max(0, Math.floor(riskAmount / perContract + 1e-9));
   const capped = maxContracts != null && byRisk > maxContracts;
