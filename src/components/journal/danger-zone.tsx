@@ -79,8 +79,9 @@ export function DangerZone() {
         <div className="space-y-1">
           <div className="text-sm font-medium">Delete everything and start over</div>
           <p className="text-sm text-muted-foreground">
-            Deletes every trade, report, note, import, deposit, playbook, rule,
-            category and account, then restores the defaults. There is no undo.
+            Deletes every trade with its chart images, report, note, import,
+            deposit, playbook, rule, category and account, then restores the
+            defaults. There is no undo.
           </p>
         </div>
         <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">

@@ -107,7 +107,7 @@ ne traži novi ekran.
 | Notebook sa folderima i šablonima | ✅ `/notebook` — folderi, šabloni po folderu, tagovi, markdown, korpa |
 | Dnevna beleška | ✅ `/daily` — strukturisan procesni dnevnik, jači od TZ-ove slobodne beleške |
 | Beleška uz trejd | ✅ `trade_journal_notes` na trejdu + beleška vezana za trejd preko `position_id` |
-| Nedeljni pregled | ✅ folder „Weekly Review" sa šablonom |
+| Nedeljni pregled | ✅ folder „Nedeljni osvrt" sa šablonom (fabrički od 30.09.2026, uz „Plan sesije" i „Osvrt na sesiju") |
 | Tagovi | ✅ dva odvojena rečnika — trejd tagovi i note tagovi, namerno se ne sinhronizuju |
 
 **Verdikt: pokriveno.** Markdown se čuva kao čist tekst i renderuje u React elemente, nikad u HTML

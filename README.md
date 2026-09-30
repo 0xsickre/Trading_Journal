@@ -33,7 +33,7 @@ purpose — an applied migration is never edited here, and the comment inside on
 record of the day it was written.
 
 **The interface is deliberately half-and-half, and the line is a clean one.** At least 253 of the
-3,538 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+3,540 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
@@ -1404,7 +1404,12 @@ account with 21 trades leaves **0 orphaned** positions, and 0 fills, rule answer
 
 **Reset everything** (`tj_reset_my_data`). Deletes all 28 tables for the caller, then calls
 `tj_seed_my_defaults()` — the same seed the dashboard runs on an empty account, so "reset" and "first
-load ever" end in the same state. It asks for `RESET EVERYTHING` to be typed.
+load ever" end in the same state. It asks for `RESET EVERYTHING` to be typed. **The chart image
+files go too** (30.09.2026): the SQL deletes the `tj_trade_images` rows, Supabase refuses a direct
+DELETE on `storage.objects`, so `resetAllData` then empties the user's folder in the `trade-images`
+bucket through the Storage API, 100 files a page. Files after rows, never before: a reset that fails
+leaves every picture its trades point at, and a file removal that fails says so rather than leaving
+orphans silently.
 
 The table list is maintained **by hand**, chosen over a catalog loop so that a table added later
 shows up as a visible omission rather than a silent survivor. That mechanism worked as designed right
@@ -1415,9 +1420,15 @@ migration — it already fell through the cascade from `tj_playbooks`, but the l
 what "reset everything" means, and a reader should not have to trace foreign keys to believe it.
 
 What actually comes back, counted from the seed functions rather than assumed from their names:
-**1 Main Account (USD, `Europe/Belgrade`, asset class Futures), the six futures, 10 lists holding 54 options,
-13 tracker rules, 7 custom fields, 3 note folders.** The lists are the day trader's since F4
-(`20260929120000`), in Serbian since K2 (`20260929200000`): Entry TF 1m / 2m / 5m / 15m, "Bias dana
+**1 Main Account (USD, `Europe/Belgrade`, asset class Futures, not in Topstep mode — the plan and
+balance are chosen in Settings), the six futures, 10 lists holding 56 options, 18 tracker rules,
+7 custom fields, 4 note folders.** Since `20260930030000` the factory set is the day trader's own:
+seven manual rules (before the session: calendar and HTF levels, mental check-in; while trading:
+trading hours, risk control, walk-away target; after it: journal and tags, screenshots) around the
+eleven automatic ones, and the note folders Plan sesije, Osvrt na sesiju, Trade Notes (the system
+folder a trade's note opens in) and Nedeljni osvrt, each with an intraday template. The lists are the
+day trader's since F4 (`20260929120000`), in Serbian since K2 (`20260929200000`): Entry TF 30s / 1m /
+2m / 5m / 15m / 1h, "Bias dana
 (brief)" Long / Short / Neutralno, Exit Reason with "Zatvoreno do kraja dana", and the day trader's
 mistakes (Previše trejdova, Trejd posle DLL plana, Osvetnički ponovni ulaz, Trejd u crvenom prozoru).
 The "Risk %" list left in H2. In an existing book the same migration added those items and switched

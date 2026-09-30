@@ -18,6 +18,7 @@ import {
 } from "@/lib/journal/option-usage-queries";
 import { getAllFormFields } from "@/lib/journal/form-config";
 import { RESET_PHRASE } from "@/lib/journal/reset-phrase";
+import { TRADE_IMAGE_BUCKET } from "@/lib/journal/trade-image-storage";
 import { isValidTimeZone, DEFAULT_TZ, toEpoch } from "@/lib/journal/time";
 import {
   fieldTypeForSelection,
@@ -1330,6 +1331,33 @@ export async function deleteAccount(id: string, confirmName?: string) {
 }
 
 /**
+ * Remove every chart image file under the user's folder in `trade-images`.
+ *
+ * The reset's SQL deletes the `tj_trade_images` rows, and Supabase refuses a
+ * direct DELETE on `storage.objects`, so the files go through the Storage API —
+ * the user's own session, which the bucket's policies let delete only its own
+ * folder. Listed a page at a time from the top, since each removal empties it.
+ * Returns an error message, or null when the folder is empty.
+ */
+async function removeAllStoredImages(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<string | null> {
+  const bucket = supabase.storage.from(TRADE_IMAGE_BUCKET);
+  const PAGE = 100;
+  for (;;) {
+    const { data: files, error } = await bucket.list(userId, { limit: PAGE });
+    if (error) return error.message;
+    const paths = (files ?? []).filter((f) => f.id != null).map((f) => `${userId}/${f.name}`);
+    if (paths.length === 0) return null;
+    const { data: removed, error: removeError } = await bucket.remove(paths);
+    if (removeError) return removeError.message;
+    // Nothing removed from a non-empty page would list the same page forever.
+    if (!removed || removed.length === 0) return "The chart images could not be deleted.";
+  }
+}
+
+/**
  * Delete everything this user owns and re-seed the defaults.
  *
  * Irreversible, and the only operation here that is. `RESET_PHRASE` is checked
@@ -1350,6 +1378,17 @@ export async function resetAllData(confirmPhrase: string) {
 
   const { error } = await supabase.rpc("tj_reset_my_data");
   if (error) return { ok: false as const, error: error.message };
+
+  // After the rows, not before: a failed reset must not have taken the files
+  // its trades still point at. A failure here leaves only unreferenced files.
+  const imageError = await removeAllStoredImages(supabase, user.id);
+  if (imageError) {
+    revalidateOptions();
+    return {
+      ok: false as const,
+      error: `Your data was reset, but the chart image files were not all deleted: ${imageError}`,
+    };
+  }
 
   // Every route reads something this just deleted, so the whole tree goes —
   // revalidating only /settings would leave the dashboard drawing a book that
