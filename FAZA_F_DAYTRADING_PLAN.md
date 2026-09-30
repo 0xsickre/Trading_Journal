@@ -98,6 +98,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 30.09.2026 | posle F | Spajanje trejdova ima dva načina: „isti trejd upisan dvaput“ (fill-ovi se zamene, kao ranije) i „dve pozicije, jedan trejd“ (fill-ovi se saberu: 2 + 2 = 4 ugovora). Podrazumevano sabiranje kad su fill-ovi oba trejda iz uvoza (`20260930060000`). Povod: trejder spojio dva reda TopstepX izvoza i dobio 2 umesto 4 ugovora |
 | 30.09.2026 | posle F | Dan se zaustavlja na novcu, ne na broju trejdova (trejder: „ne treba uopšte da se ograniči broj trejdova, nego max daily loss i max daily profit, kao na Topstepu; i MLL"). Odgovori: `stop_after_losses` i tilt zapažanje **se brišu** zajedno sa `max_trades_per_day`; lični dnevni limit gubitka i cilj profita su **polja na Topstep nalogu + pravila** (lični DLL zamenjuje DLL plana gde je uži; novo pravilo `no_entry_after_daily_target`); **Risk % na Topstep-u = rizik ÷ prostor do MLL-a na ulazu** (`room_at_entry`). Spojeni MNQ trejd od 30.09. ostaje kako je upisan. Migracija `20260930070000`; brief (`racun.py`) računa isto |
 | 30.09.2026 | posle F | Isplata (trejder: „da buffer pada sa isplatom, a MLL ostaje gde je stao"). Provereno na Topstep pravilima: MLL prati balans na kraju dana i staje na početnom balansu (150K: od 145.500 do 150.000); posle prve isplate MLL = početni balans, a isplata izlazi iz balansa. Journal je do sada isplatu samo datumom zaključavao pod, a balans nije smanjivao — prostor i budžet rizika bili bi preveliki. Sada: isplata = cash event tipa Payout / Withdrawal na Topstep nalogu, oduzima se od balansa, prva je i datum isplate; brief isto. Bez migracije |
+| 30.09.2026 | L | Šta bi bilo (trejder): SL × TP mreža L1 (SL 0,5–2× stvarnog, TP 1–5R), horizont L2 do kraja Topstep dana (15:10 CT), L3 isti rizik u $ (rezultat u R varijante), L4 posle izlaza 15/30/60 min + kraj dana, posle stopa da li je pukao TP i koliki SL je trebao. Migracija `20260930080000` (`scenario`) |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -127,6 +128,7 @@ pogađa.
 | **K** | Zahtevi trejdera od 29.09.2026: redosled pravila, tagovi na srpskom, uvoz puni plan, fiksni breakeven, vremenska zona, slike charta | — | H2 | da: `20260929200000`, `…210000`, `…220000`, `…230000` | **Opus** | ✅ `31030a9` · `286cc06` · `df91b1c` · `65d0817` · `576f574` · `a232849`, 29.09.2026 — migracije primenjene |
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, uzorak | #11–#13, #15, #17, #18 (#14 zatvorio H2) | K | da: `20260929235000` (`time_underwater_pct`), `20260930000000` / `…000100` (`baseline_trades`) | Sonnet, Opus za #13 | ✅ `2e59f2e` · `5095e43` · `3183236` · `20f9626` + `8c35148` (futures-trading) · `ea0461b` · `d9ccf9c` · `8dff0cf`, 29.09.2026 — migracije primenjene |
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, ostaci vault-a, komentari, PARITY | #16, #20, #22, #23 (#19 zatvorili H1/H2) | F5 | da: `20260930010000` (`no_entry`, `r2`) | Sonnet, Opus za #16 | ✅ `16c3a04` + `a59307d` (futures-trading) · `e515552` · `a5a8ff3` · `db9c3b3` + F6.5, 29.09.2026 — migracija primenjena |
+| **L** | Šta bi bilo: SL × TP mreža, posle izlaza, posle stopa — iz berzanskih sveća | — | F6 | da: `20260930080000` (`scenario`) | **Opus** | u radu (30.09.2026) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -807,6 +809,55 @@ zahtev u stilu K, sa odlukama u dnevniku pre koda.
 **Otvoreno van koda:** Cloudflare Worker (precizan okidač poslova u `futures-trading`) nije objavljen —
 korak objave traži tajne `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `GH_DISPATCH_TOKEN`; do tada
 brief, `pokretaci` i `popodne` zavise od GitHub cron-a, koji kasni satima ili preskače.
+
+## L — Šta bi bilo: SL × TP, posle izlaza, posle stopa (detaljno, 30.09.2026)
+
+**Zahtev trejdera:** „kako da merim da li je posle TP-a cena išla još, da li sam trebao da držim; na kom TF-u koji SL i TP;
+i da se meri posle SL-a da li je cena otišla u moj pravac i pukla TP — sve što je bitno.“
+
+**Utvrđeno u kodu (pre L):** MAE/MFE (`futures-trading/tools/journal_mae.py`) meri samo od ulaza do poslednjeg izlaza, pa
+posle TP-a nema šta da pokaže; „Capture %“ i „Target %“ čitaju isti prozor. Promašeni setup (F6.1) već ima hod kroz 1m
+sveće do kraja Topstep dana sa dvosmislenom minutom na 1 s (`prosetaj`) — L to koristi, ne pravi drugi sistem.
+Backtestovi u `futures-trading/testovi` mere nasumične ulaze i nivoe (sweep, OR, Turtle Soup), ne OB / FVG / OTE — pravi
+odgovor za trejderove setupe može doći samo iz njegovih trejdova.
+
+### Odluke (trejder, 30.09.2026)
+
+- **L1 — mreža:** SL 0,5× / 0,75× / 1× / 1,25× / 1,5× / 2× stvarnog stopa; TP 1 / 1,5 / 2 / 2,5 / 3 / 4 / 5 R te varijante (42 ćelije).
+- **L2 — horizont:** do kraja Topstep dana (15:10 CT); ni SL ni TP → zatvara se po ceni u 15:10 CT.
+- **L3 — poređenje:** isti rizik u $ — širi SL = manje ugovora; rezultat svake ćelije je u R TE varijante.
+- **L4 — posle izlaza:** 15 / 30 / 60 min i do kraja dana: najdalje u pravcu trejda i protiv, u poenima (R se računa
+  u journalu iz rizika trejda). Plus: posle SL-a da li je cena pogodila planirani TP (i za koliko minuta), a za svaki
+  trejd koliki je SL bio potreban da preživi do planiranog TP-a.
+
+### Tehničke odluke (bez uticaja na trejderov izbor, zapisane radi ponovljivosti)
+
+- Scenario kreće od **prosečne cene ulaza** u trenutku **prvog ulaznog fill-a**; stop je **zapečaćeni stop** (plan na ulazu),
+  target zapečaćeni target. R scenarija = |prosečan ulaz − stop|. Delimični izlazi i dodavanja se ne modeluju — scenario
+  pita „šta da je ceo ulaz imao ovaj SL i TP“.
+- Sveće: 1m tog Topstep dana (deli ih svaki trejd tog dana, ~$0,005 po ugovoru i danu), ostatak minute ulaza i izlaza na
+  1 s, dvosmislena minuta (i SL i TP) na 1 s; dvosmislena sekunda = **stop** (konzervativno — nikad pogođen dobitak).
+- Računa se tek kad se Topstep dan trejda završi i Databento objavi (8 h), samo tačni podaci (bez Yahoo privremenih).
+  Trejd bez stopa se preskače (nema R).
+- Upis: `tj_positions.scenario` (jsonb, verzija 1, izvor `r2`, ugovor, rezolucija); journal ga samo čita.
+
+### Podkoraci
+
+1. **L.1 futures-trading:** čist modul `tools/scenario.py` (mreža, posle izlaza, posle stopa, potreban SL) sa unit
+   testovima na veštačkim svećama; `journal_mae.py` ga poziva za zatvorene trejdove sa stopom posle kraja dana.
+2. **L.2 migracija** `20260930080000`: `tj_positions.scenario jsonb` (+ tipovi, rezervisani ključ, šema, spajanje ga ne nosi).
+3. **L.3 journal logika** `src/lib/journal/scenario.ts`: čitanje/provera jsonb-a, agregat mreže (prosečan R po ćeliji,
+   broj trejdova, % pogodaka), najbolja ćelija uz prag uzorka, poređenje sa stvarnim R, statistike posle izlaza i posle stopa.
+4. **L.4 prikaz:** kartica „Šta bi bilo“ na trejdu (posle izlaza, posle stopa, mreža tog trejda); panel „SL × TP“ u
+   `/reports` sa grupisanjem po setupu (playbook), Entry TF-u, sesijskom prozoru, instrumentu i smeru, uz postojeće filtere;
+   mentor pack dobija sažetak.
+5. **L.5 dokumentacija 1:1**, gate, push, primena migracije.
+
+### Izlaz iz L
+
+Za svaki zatvoren trejd sa stopom: 42 „šta da je“ ishoda, pomeranje cene posle izlaza, da li je posle stopa došao TP i
+koliki je SL trebao. U izveštajima: koja kombinacija SL × TP daje najviše R po setupu i TF-u, sa oznakom malog uzorka
+(ispod 30 trejdova po grupi je hipoteza, ne nalaz).
 
 ## Katalog stavki
 

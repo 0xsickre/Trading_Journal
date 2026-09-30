@@ -32,14 +32,14 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 252 of the
-3,549 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 269 of the
+3,615 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
 |---|---|
 | Daily (the "Pred sesiju" card included), weekly, tracker, focus goal | 127 |
-| Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 99 |
+| Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 116 |
 | Weekly "Napredak" (progress) and experiment cards | 19 |
 | Day insight sentence (`low_efficiency_day`) | 1 |
 | A new playbook's three starting sections (`playbook-types.ts`) | 3 |
@@ -1648,6 +1648,42 @@ own prices are the record, and a number typed from a chart is a reading of them.
 The CFD backtest sources — Dukascopy's 1-minute candles (removed 19.09.2026, `20260919140000`) and
 the TradingView export's own excursions (removed with the import in H2) — are gone.
 `excursion-scan.ts`, the older scanner, is unchanged and still takes candles from anywhere.
+
+
+### What would have happened — SL × TP, after the exit, after the stop (phase L)
+
+MAE/MFE stops at the exit, so it cannot say whether a target was left too early or whether a stop was
+followed by the target. **Phase L (30.09.2026, decisions L1–L4)** replays every closed futures trade
+with a stop on the same R2 candles, once its Topstep day is over and the exact data is out, and
+writes the result into `tj_positions.scenario` (jsonb, v1, `20260930080000`) from
+`futures-trading/tools/scenario.py` (called by `journal_mae.py`):
+
+- **The grid (L1–L3).** From the trade's average entry, at its first entry fill, with the stop at
+  0.5 / 0.75 / 1 / 1.25 / 1.5 / 2 × the real one (the sealed stop) and targets of 1 / 1.5 / 2 / 2.5 /
+  3 / 4 / 5 R of that stop: target first (+t), stop first (−1), or neither by 15:10 CT (the price
+  then). Every cell is in R of its own stop — the same money at risk, so a wider stop is fewer
+  contracts. The journal shows it net of the trade's own round-turn commission per contract, which in
+  R is larger for a tighter stop; slippage through the stop and partial exits are not modeled.
+- **After the exit (L4).** Furthest with the trade and against it at 15, 30 and 60 minutes and to
+  15:10 CT, from the exit price. After a stop: did the planned target come, and when. After a hand
+  exit: held, would the target or the old stop have come first.
+- **The stop that would have lived to the target** — the largest move against the trade before the
+  planned target's first touch, plus a tick — and **the furthest it went before the real stop** (MFE
+  before stop).
+
+Which came first is walked on 1-minute bars; the rest of the entry and exit minute and any minute
+that holds both a stop and a target are walked on 1-second bars, and a second that still holds both
+is a **stop** (never a guessed win). A trigger clears the scenario whenever the trade's fills or its
+sealed plan change (edit, merge, import, undo), and the next run measures it again.
+
+**Where it shows.** The trade page gets a *What would have happened* card (verdict, after-exit table,
+the stop needed for the target, the trade's grid with its planned target column marked). `/reports`
+gets an **SL × TP** panel over the filtered book: the mean grid with each cell's hit rate, the best
+cell, the best target on the real stop, the result as managed beside them, the after-exit medians
+and the after-stop / after-target / hand-exit counts — and the same figures **per bucket of the
+report's current grouping**, so setup, Entry TF, session window or instrument is the same click as
+any other report. A group under 30 trades is marked ⚠. The mentor pack gets a summary section and a
+*Šta bi bilo* line per trade.
 
 ---
 

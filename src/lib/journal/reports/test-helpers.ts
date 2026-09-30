@@ -49,6 +49,8 @@ export type TradeSpec = {
   entryQty?: number | null;
   /** The account's opening balance on the entry day, frozen on the row. */
   equityAtEntry?: number | null;
+  /** The what-if document futures-trading writes (phase L). */
+  scenario?: unknown;
 };
 
 let seq = 0;
@@ -181,6 +183,7 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     // A graded fixture names the graded playbook, unless it named its own.
     playbook_id: spec.playbookId ?? (spec.setupGrade ? GRADED_PLAYBOOK_ID : null),
     equity_at_entry: spec.equityAtEntry ?? null,
+    scenario: spec.scenario ?? null,
     stats,
   } as unknown as TradeRow;
 
@@ -246,3 +249,48 @@ export const metricCtx: MetricContext = {
   range: EXACT_ZERO_RANGE,
 
 };
+
+const SCENARIO_SL = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const SCENARIO_TP = [1, 1.5, 2, 2.5, 3, 4, 5];
+
+/**
+ * A what-if document as futures-trading writes it (tools/scenario.py, v1): a long
+ * from 100 with a 10-point stop, stopped out, the planned 2R target coming 40
+ * minutes after the stop. `cell` fills the grid; every cell a stop by default.
+ */
+export function scenarioDoc(
+  over: Record<string, unknown> = {},
+  cell: (i: number, j: number) => number = () => -1,
+): Record<string, unknown> {
+  return {
+    v: 1,
+    direction: "long",
+    entry: 100,
+    entry_at: "2026-09-29T14:00:10+00:00",
+    stop: 90,
+    risk_pts: 10,
+    target: 120,
+    target_r: 2,
+    exit: 90,
+    exit_at: "2026-09-29T14:05:00+00:00",
+    exit_kind: "stop",
+    horizon_end: "2026-09-29T20:10:00+00:00",
+    horizon_close: 130,
+    sl: SCENARIO_SL,
+    tp: SCENARIO_TP,
+    grid: SCENARIO_SL.map((_, i) => SCENARIO_TP.map((_, j) => cell(i, j))),
+    minutes: SCENARIO_SL.map(() => SCENARIO_TP.map(() => null)),
+    mfe_before_stop_r: 0.4,
+    sl_for_target_r: 1.3,
+    target_minutes: 55,
+    after_exit: {
+      windows: { "15": { fav: 12, adv: 2 }, "30": { fav: 25, adv: 2 }, "60": { fav: 31, adv: 2 }, eod: { fav: 40, adv: 2 } },
+      target_minutes: 40,
+      stop_first: null,
+    },
+    source: "r2",
+    contract: "MNQZ6",
+    ...over,
+  };
+}
+

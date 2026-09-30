@@ -19,6 +19,7 @@ import type { BreakevenRange } from "./breakeven";
 import type { DailyReportLite, EnrichedTrade } from "./enriched-trade";
 import { loggedAfterEntry } from "./plan-snapshot";
 import { getDimension, type DimensionContext } from "./reports/dimensions";
+import { afterExitR, scenarioOf, scenarioTrade, summarizeScenarios } from "./scenario";
 import type { RedWindow, SessionBrief } from "./session-brief";
 import { minutesAfterOpen, SESSION_TZ } from "./session-window";
 import { fmtInTz, toEpoch } from "./time";
@@ -99,6 +100,38 @@ export function intradaySection(trades: readonly EnrichedTrade[], range: Breakev
     out.push(`### ${d.label}`, dimensionTable(trades, d.key, range), "");
   }
   return out;
+}
+
+const rr = (r: number | null) => (r == null ? "—" : `${r > 0 ? "+" : ""}${r.toFixed(2)}R`);
+
+/**
+ * Šta bi bilo (faza L): mreža SL × TP nad izmerenim trejdovima i šta je cena radila posle izlaza i posle stopa.
+ * Prazno kad nijedan trejd nije izmeren — sekcija o ničemu je šum koji model mora da preskoči.
+ */
+export function scenarioSection(trades: readonly EnrichedTrade[]): string[] {
+  const ts = trades.map((t) => scenarioTrade(t.trade.row)).filter((x): x is NonNullable<typeof x> => x != null);
+  const s = summarizeScenarios(ts, true);
+  if (!s) return [];
+  const row = s.cells[s.realRow];
+  const j = row.reduce((b, c, k) => (c.meanR > row[b].meanR ? k : b), 0);
+  const best = s.best!;
+  return [
+    `## Šta bi bilo — SL × TP i cena posle izlaza (${s.n} ${sr(s.n, "izmeren trejd", "izmerena trejda", "izmerenih trejdova")}${s.n < SMALL_SAMPLE ? " ⚠" : ""})`,
+    `_Svaki trejd ponovljen iz berzanskih sveća od prosečnog ulaza do 15:10 CT, sa SL 0,5–2× stvarnog i TP 1–5R tog SL-a; isti rizik u $, neto posle provizije._`,
+    "",
+    `| Stavka | Vrednost |`,
+    `| --- | --- |`,
+    `| Kako sam stvarno vodio trejdove | ${rr(s.actualMeanR)} po trejdu |`,
+    `| Najbolja kombinacija | ${s.sl[best.i]}× SL, TP ${s.tp[best.j]}R → ${rr(best.meanR)} po trejdu |`,
+    `| Najbolji TP na mom SL-u | ${s.tp[j]}R → ${rr(row[j].meanR)} (planiran TP: medijana ${rr(s.plannedTargetR)}) |`,
+    `| Posle stopa došao planirani TP | ${s.afterStop.targetAfter} od ${s.afterStop.n} |`,
+    `| SL koji bi preživeo do TP-a | medijana ${rr(s.slForTarget.medianR)}, 8 od 10 do ${rr(s.slForTarget.p80R)} (TP došao u ${s.slForTarget.reached} od ${s.slForTarget.withTarget}) |`,
+    `| Posle TP-a nastavilo ≥ 1R | ${s.afterTarget.continuedOneR} od ${s.afterTarget.n} (medijana još ${rr(s.afterTarget.medianFavEodR)}) |`,
+    `| Ručni izlaz: da sam držao | TP bi došao ${s.afterHand.wouldHitTarget}, stop bi došao prvi ${s.afterHand.stopFirst} (od ${s.afterHand.n}) |`,
+    `| Posle izlaza, 30 min (medijana) | u mom pravcu ${rr(s.afterExit["30"].fav)}, protiv ${rr(s.afterExit["30"].adv)} |`,
+    `| U plus pre stopa (medijana / četvrtina preko) | ${rr(s.mfeBeforeStop.medianR)} / ${rr(s.mfeBeforeStop.p75R)} |`,
+    "",
+  ];
 }
 
 /** Trading-day figures a mentor asks for before any table: how the days go, not only the trades. */
@@ -343,6 +376,28 @@ export function tradeContextLines(
     lines.push(
       `- **Ulaz u crvenom prozoru:** ${cell(w.title)}${w.impact ? ` (${w.impact})` : ""} ${fmtInTz(w.from, SESSION_TZ, "HH:mm")}–${fmtInTz(w.to, SESSION_TZ, "HH:mm")} ET`,
     );
+  }
+  const sc = scenarioOf(e.trade.row);
+  if (sc) {
+    const a = afterExitR(sc);
+    const posle = [
+      a["30"] ? `30 min posle izlaza ${rr(a["30"].fav)} u mom pravcu / ${rr(-a["30"].adv)} protiv` : null,
+      sc.exitKind === "stop" && sc.target != null
+        ? sc.afterExit.targetMinutes != null
+          ? `posle stopa TP došao za ${Math.round(sc.afterExit.targetMinutes)} min`
+          : "posle stopa TP nije došao"
+        : null,
+      sc.exitKind === "other" && sc.target != null
+        ? sc.afterExit.stopFirst
+          ? "da sam držao, stop bi došao pre TP-a"
+          : sc.afterExit.targetMinutes != null
+            ? "da sam držao, TP bi došao"
+            : "da sam držao, ni TP ni stop do 15:10 CT"
+        : null,
+      sc.slForTargetR != null ? `SL za TP ${rr(sc.slForTargetR)}` : null,
+      `u plus pre stopa ${rr(sc.mfeBeforeStopR)}`,
+    ].filter((p): p is string => p != null);
+    lines.push(`- **Šta bi bilo:** ${posle.join(" · ")}`);
   }
   if (opts.insightTitles?.length) lines.push(`- **Zapažanja na ovom trejdu:** ${opts.insightTitles.join("; ")}`);
   return lines;

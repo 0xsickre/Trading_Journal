@@ -282,3 +282,21 @@ describe("ruleLabel", () => {
     ).toBe("Nema otvaranja novih pozicija 15 minuta pre i… (ukinuto)");
   });
 });
+
+describe("šta bi bilo u mentor pack-u (faza L)", () => {
+  it("sažima mrežu i ono što je došlo posle stopa, i ćuti bez izmerenih trejdova", async () => {
+    const { scenarioSection, tradeContextLines } = await import("./mentor-intraday");
+    const { enrich, scenarioDoc } = await import("./reports/test-helpers");
+    const trades = enrich([
+      { r: -1, scenario: scenarioDoc() },
+      { r: 2, scenario: scenarioDoc({}, (i, j) => (i === 2 && j <= 4 ? [1, 1.5, 2, 2.5, 3][j] : -1)) },
+    ]);
+    const md = scenarioSection(trades).join("\n");
+    expect(md).toContain("## Šta bi bilo — SL × TP i cena posle izlaza (2 izmerena trejda ⚠)");
+    expect(md).toContain("| Posle stopa došao planirani TP | 2 od 2 |");
+    expect(md).toContain("| Najbolji TP na mom SL-u | 3R →");
+    expect(scenarioSection(enrich([{ r: 1 }]))).toEqual([]);
+    const line = tradeContextLines(trades[0], { displayTz: "UTC" }).join("\n");
+    expect(line).toContain("- **Šta bi bilo:** 30 min posle izlaza +2.50R u mom pravcu / -0.20R protiv · posle stopa TP došao za 40 min · SL za TP +1.30R");
+  });
+});

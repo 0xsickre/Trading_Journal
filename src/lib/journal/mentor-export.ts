@@ -41,6 +41,7 @@ import {
   dailySection,
   dayShapeRows,
   intradaySection,
+  scenarioSection,
   ruleLabel,
   rulesSection,
   SMALL_SAMPLE,
@@ -666,6 +667,7 @@ export function buildMentorPack(
       }),
     );
     out.push(...intradaySection(enriched, range));
+    out.push(...scenarioSection(enriched));
   }
 
   // --- Breakdowns ---------------------------------------------------------

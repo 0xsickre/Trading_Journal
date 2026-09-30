@@ -567,6 +567,22 @@ poslovna procena i stoje kao konstante na vrhu svojih modula.
 
 ---
 
+## 23. Šta bi bilo (faza L): SL × TP, posle izlaza, posle stopa (`scenario.ts`, `futures-trading/tools/scenario.py`)
+
+```
+R_trejda   = |prosečan ulaz − zapečaćen stop|                       (poeni)
+varijanta  = SL k × R_trejda (k ∈ 0,5 · 0,75 · 1 · 1,25 · 1,5 · 2), TP t × (k × R_trejda) (t ∈ 1 · 1,5 · 2 · 2,5 · 3 · 4 · 5)
+ćelija     = +t ako TP prvi · −1 ako SL prvi · smer × (cena u 15:10 CT − ulaz) / (k × R_trejda) ako ništa   (R varijante)
+neto       = ćelija − provizija_krug_po_ugovoru / (k × R_trejda × vrednost_poena)   (isti rizik u $: širi SL = manje ugovora)
+posle izlaza (15/30/60 min, kraj dana): u pravcu = max(high) − izlaz (long) · protiv = izlaz − min(low); / R_trejda u journalu
+SL za TP   = (najveći pomak protiv od ulaza do prvog dodira planiranog TP-a + 1 tik) / R_trejda
+MFE do SL  = najdalje u plus pre dodira stvarnog stopa (ili do kraja dana) / R_trejda
+```
+
+Redosled unutar 1m sveće se ne pogađa: minuta sa SL i TP ide na 1 s; sekunda sa oba = SL (konzervativno). Ceo ulaz se
+tretira kao jedan (delimični izlazi se ne modeluju), proklizavanje kroz SL se ne modeluje — obe pretpostavke idu u korist
+varijante, pa mala prednost najbolje ćelije nad stvarnim rezultatom nije nalaz. Grupa ispod 30 trejdova je ⚠ hipoteza.
+
 ## Rezime — šta zahteva pažnju
 
 | # | Metrika | Verdikt | Akcija |

@@ -225,6 +225,7 @@ export function TradeForm({
   fieldDefs = [],
   playbooks = [],
   initial,
+  extra,
   topstepFailedAccountIds = [],
   topstepSizing = {},
   categoryOrder,
@@ -237,6 +238,8 @@ export function TradeForm({
   /** Playbooks with their rule checklists. */
   playbooks?: Playbook[];
   initial?: TradeFormInitial;
+  /** Shown above the charts of a saved trade — the what-if card (phase L). */
+  extra?: ReactNode;
   /**
    * Topstep accounts that hit their MLL — a new plan is blocked. A trade that
    * already closed goes through `/trades/log`.
@@ -1347,6 +1350,8 @@ export function TradeForm({
           </TabsContent>
         ))}
       </Tabs>
+
+      {extra}
 
       {initial ? (
         <TradeImages positionId={initial.id} />

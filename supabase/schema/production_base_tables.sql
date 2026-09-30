@@ -177,6 +177,7 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- NULL: nije Topstep nalog, ili trejd bez pečata — čitači izvode budžet iz timeline-a.
   risk_budget_at_entry numeric,
   room_at_entry numeric,
+  scenario jsonb,
   -- Plan kakav je bio kad je trejd prvi put dobio entry fill (20260921120000).
   -- Piše se jednom, nikad se ne prepisuje, briše se na povratak u `planned`.
   -- NULL znači da trejd prethodi pečatu — čitači tada padaju na živa polja.
@@ -214,6 +215,8 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
     CHECK (risk_budget_at_entry IS NULL OR risk_budget_at_entry >= 0),
   CONSTRAINT tj_positions_room_at_entry_nonnegative
     CHECK (room_at_entry IS NULL OR room_at_entry >= 0),
+  CONSTRAINT tj_positions_scenario_object
+    CHECK (scenario IS NULL OR jsonb_typeof(scenario) = 'object'),
   CONSTRAINT tj_positions_time_underwater_pct_check
     CHECK (time_underwater_pct IS NULL OR (time_underwater_pct >= 0 AND time_underwater_pct <= 100)),
   CONSTRAINT tj_positions_time_stop_choice

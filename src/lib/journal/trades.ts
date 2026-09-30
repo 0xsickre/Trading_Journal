@@ -7,6 +7,7 @@ import { getTradeRuleAnswers } from "./playbooks";
 import type { TradeFormInitial } from "@/components/journal/trade-form";
 import { narrowPositionStat } from "./types";
 import { asFillSource } from "./trade-lifecycle";
+import { scenarioTrade, type ScenarioTrade } from "./scenario";
 import type { PositionStat, TradeRow } from "./types";
 
 export type { TradeRow } from "./types";
@@ -97,6 +98,24 @@ async function readTradesWithStats(
 // was its own round trip to the database.
 export const getTradesWithStats = cache(readTradesWithStats);
 
+/**
+ * One trade's what-if (phase L) with the cost figures its grid is netted by —
+ * null until futures-trading has measured it.
+ */
+export async function getTradeScenario(id: string): Promise<ScenarioTrade | null> {
+  const supabase = await createClient();
+  const [{ data: pos }, { data: stats }] = await Promise.all([
+    supabase.from("tj_positions").select("id, scenario").eq("id", id).maybeSingle(),
+    supabase
+      .from("tj_position_stats")
+      .select("entry_qty, total_fees, point_value, fx_rate, realized_r, realized_r_net")
+      .eq("position_id", id)
+      .maybeSingle(),
+  ]);
+  if (!pos?.scenario) return null;
+  return scenarioTrade({ ...pos, stats } as unknown as TradeRow);
+}
+
 export async function getTradeForEdit(
   id: string,
 ): Promise<TradeFormInitial | null> {
@@ -135,6 +154,8 @@ export async function getTradeForEdit(
   delete flat.equity_at_entry;
   delete flat.risk_budget_at_entry;
   delete flat.room_at_entry;
+  // Written by futures-trading from exchange candles, never typed (phase L).
+  delete flat.scenario;
   // The seal, for the same reason — and these two are strings, so the loop
   // below would keep them and the form would reason about a timestamp as
   // though it were an answer the trader typed. They travel on their own keys.

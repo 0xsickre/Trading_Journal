@@ -67,6 +67,7 @@ export const RESERVED_KEYS = new Set([
   "equity_at_entry",
   "risk_budget_at_entry",
   "room_at_entry",
+  "scenario",
   "plan_snapshot",
   "plan_sealed_at",
   "plan_amended_at",

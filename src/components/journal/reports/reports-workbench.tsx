@@ -52,6 +52,7 @@ import {
 } from "@/lib/journal/co-exposure";
 import { CoExposurePanel } from "@/components/journal/reports/co-exposure-panel";
 import { MissedPanel } from "@/components/journal/reports/missed-panel";
+import { ScenarioPanel } from "@/components/journal/reports/scenario-panel";
 import { missedCost, stalePlanCount } from "@/lib/journal/missed-cost";
 import {
   MIN_SAMPLE_OPTIONS,
@@ -846,6 +847,7 @@ export function ReportsWorkbench({
                 onSort={(s) => setParam({ sort: s })}
               />
             )}
+            <ScenarioPanel trades={scopedBook} dimension={dimension} dimensionContext={dimensionContext} />
             <CoExposurePanel pairs={pairs} />
             <MissedPanel cost={missed.cost} stalePlans={missed.stalePlans} />
           </>
