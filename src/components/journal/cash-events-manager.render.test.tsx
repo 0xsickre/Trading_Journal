@@ -45,6 +45,7 @@ const account = (over: Partial<Account> = {}): Account => ({
   risk_rule_max: null,
   topstep_personal_dll: null,
   topstep_daily_target: null,
+  topstep_stage: "combine",
   archived_at: null,
   created_at: "2026-01-05T15:00:00Z",
   ...over,

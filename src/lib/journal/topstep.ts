@@ -34,6 +34,27 @@
  *     (`topstepPlanRulesFor`); a looser one changes nothing, since Topstep
  *     still stops the day at the plan's.
  *
+ * The Express Funded Account (phase T, 30.09.2026; account `topstep_stage`):
+ *
+ *   - It starts at $0 with the plan's MLL under it; the floor trails the
+ *     end-of-day balance and locks at $0, and after the first payout it is $0.
+ *   - No profit target and no 55 % rule. The Scaling Plan sets the most mini
+ *     contracts (a micro is a tenth) from the balance at the start of the
+ *     session — the last close — so a win raises the NEXT session's size:
+ *
+ *       balance       50K  100K  150K
+ *       < 1 500        2     3     3
+ *       1 500–1 999    3     4     4
+ *       2 000–2 999    5     5     5
+ *       3 000–4 499    5    10    10
+ *       ≥ 4 500        5    10    15
+ *
+ *   - A payout has two paths, counted from the last payout: Standard — five
+ *     winning days of $150 or more; Consistency — three traded days with the
+ *     best at most 40 % of the net profit. A request is at most half the
+ *     balance, capped at 2 000 / 3 000 (50K), 3 000 / 4 000 (100K), 5 000 /
+ *     6 000 (150K) for Standard / Consistency, and at least $125.
+ *
  * Approximation: Topstep watches the MLL and DLL INTRADAY with
  * unrealized P&L. A journal only knows closed trades, so a position that went
  * through the floor and came back shows here as a survived day. Good enough to
@@ -67,9 +88,53 @@ export const TOPSTEP_PLANS: Record<TopstepPlan, TopstepPlanRules> = {
 /** Best day at or below this share of the profit target. */
 export const TOPSTEP_CONSISTENCY = 0.55;
 
+/** Trading Combine or Express Funded Account (`tj_accounts.topstep_stage`). */
+export type TopstepStage = "combine" | "xfa";
+
+/** XFA Scaling Plan: [balance from, most mini contracts], lowest tier first. */
+export const TOPSTEP_XFA_SCALING: Record<TopstepPlan, readonly (readonly [number, number])[]> = {
+  "50K": [[-Infinity, 2], [1_500, 3], [2_000, 5]],
+  "100K": [[-Infinity, 3], [1_500, 4], [2_000, 5], [3_000, 10]],
+  "150K": [[-Infinity, 3], [1_500, 4], [2_000, 5], [3_000, 10], [4_500, 15]],
+};
+
+/** The most mini contracts the XFA Scaling Plan allows at this XFA balance. */
+export function topstepScalingMaxMini(plan: TopstepPlan, xfaBalance: number): number {
+  let max = TOPSTEP_XFA_SCALING[plan][0][1];
+  for (const [from, mini] of TOPSTEP_XFA_SCALING[plan]) if (xfaBalance >= from) max = mini;
+  return max;
+}
+
+/** XFA payout rules (Topstep, checked 30.09.2026). */
+export const TOPSTEP_XFA_PAYOUT = {
+  winningDay: 150,
+  winningDays: 5,
+  consistencyShare: 0.4,
+  consistencyDays: 3,
+  balanceShare: 0.5,
+  minimum: 125,
+  caps: {
+    "50K": { standard: 2_000, consistency: 3_000 },
+    "100K": { standard: 3_000, consistency: 4_000 },
+    "150K": { standard: 5_000, consistency: 6_000 },
+  } satisfies Record<TopstepPlan, { standard: number; consistency: number }>,
+} as const;
+
+/** Where an XFA stands on both payout paths, counted from the last payout (or the start). */
+export type TopstepXfaPayout = {
+  winningDays: number;
+  daysTraded: number;
+  bestDayNet: number | null;
+  netProfit: number;
+  standard: { eligible: boolean; maxPayout: number };
+  consistency: { eligible: boolean; bestShare: number | null; maxPayout: number };
+};
+
 export type TopstepConfig = {
   enabled: boolean;
   plan: TopstepPlan;
+  /** Combine unless set: the Scaling Plan and the payout paths apply to an XFA only. */
+  stage?: TopstepStage;
   startingBalance: number;
   /** First payout typed as a date only; the first payout event counts too, whichever is earlier. */
   payoutAt: string | null;
@@ -91,6 +156,11 @@ export type TopstepStatus = "off" | "active" | "passed" | "failed";
 
 export type TopstepResult = {
   status: TopstepStatus;
+  stage: TopstepStage;
+  /** The most mini contracts for the NEXT session: on an XFA the Scaling Plan tier of the balance now. */
+  nextMaxMini: number;
+  /** Payout paths on an XFA; null on a Combine. */
+  xfa: TopstepXfaPayout | null;
   /** The plan's rules, with the day's DLL the personal one where that is tighter. */
   rules: TopstepPlanRules;
   /** Whether `rules.dll` is the trader's personal limit rather than the plan's. */
@@ -181,6 +251,7 @@ export function topstepConfigFromAccount(account: Account, cash: readonly CashEv
     payouts: topstepPayoutsOf(account.id, cash),
     personalDll: positiveOrNull(account.topstep_personal_dll),
     dailyTarget: positiveOrNull(account.topstep_daily_target),
+    stage: account.topstep_stage === "xfa" ? "xfa" : "combine",
   };
 }
 
@@ -225,6 +296,8 @@ export function evaluateTopstep(
   for (const p of payouts) push(p.at, { at: p.at, net: 0, out: p.amount });
 
   let balance = start;
+  // The balance at the last close before today: the XFA Scaling Plan sizes the session from it.
+  let eodBalance = start;
   let paidOut = 0;
   let highEod = start;
   let floor = start - rules.mll;
@@ -264,6 +337,7 @@ export function evaluateTopstep(
     // and stops at the starting balance. Today has not ended — a win this
     // morning must not raise the floor the trader sizes the afternoon from.
     if (day >= today) continue;
+    eodBalance = balance;
     highEod = Math.max(highEod, balance);
     if (!locked) {
       floor = Math.max(floor, Math.min(start, highEod - rules.mll));
@@ -285,13 +359,19 @@ export function evaluateTopstep(
   );
   const profit = balance + paidOut - start;
 
+  const stage: TopstepStage = config.stage === "xfa" ? "xfa" : "combine";
+  const isXfa = stage === "xfa";
+
   let status: TopstepStatus = "active";
   if (breachDay != null) status = "failed";
-  else if (profit >= effectiveTarget) status = "passed";
+  else if (!isXfa && profit >= effectiveTarget) status = "passed";
 
   return {
     status,
-    rules,
+    stage,
+    nextMaxMini: isXfa ? topstepScalingMaxMini(config.plan, balance - start) : rules.maxMini,
+    xfa: isXfa ? xfaPayout(config.plan, window, payouts, balance - start) : null,
+    rules: isXfa ? { ...rules, maxMini: topstepScalingMaxMini(config.plan, eodBalance - start) } : rules,
     personalDll: rules.dll !== TOPSTEP_PLANS[config.plan].dll,
     dailyTarget: config.dailyTarget,
     targetLeftToday: config.dailyTarget == null ? null : Math.max(0, config.dailyTarget - todayNet),
@@ -311,6 +391,48 @@ export function evaluateTopstep(
     daysTraded: traded.size,
     headroomPct:
       minRoom == null ? null : Math.max(0, Math.min(100, (minRoom / rules.mll) * 100)),
+  };
+}
+
+/**
+ * Both XFA payout paths, counted from the last payout: each trading day's net
+ * of the trades closed after it. `xfaBalance` is what a request is half of.
+ */
+function xfaPayout(
+  plan: TopstepPlan,
+  trades: readonly TopstepTrade[],
+  payouts: readonly TopstepPayout[],
+  xfaBalance: number,
+): TopstepXfaPayout {
+  const P = TOPSTEP_XFA_PAYOUT;
+  const since = payouts.length > 0 ? Math.max(...payouts.map((p) => toEpoch(p.at))) : -Infinity;
+  const byDay = new Map<string, number>();
+  for (const t of trades) {
+    if (t.closedAt == null || toEpoch(t.closedAt) <= since) continue;
+    const day = topstepTradingDay(t.closedAt);
+    byDay.set(day, (byDay.get(day) ?? 0) + t.net);
+  }
+  const nets = [...byDay.values()];
+  const netProfit = nets.reduce((a, b) => a + b, 0);
+  const bestDayNet = nets.length > 0 ? Math.max(...nets) : null;
+  const bestShare = bestDayNet != null && netProfit > 0 ? Math.max(0, bestDayNet) / netProfit : null;
+  const half = Math.max(0, xfaBalance) * P.balanceShare;
+  const cap = (limit: number) => {
+    const amount = Math.min(half, limit);
+    return amount >= P.minimum ? amount : 0;
+  };
+  const winningDays = nets.filter((n) => n >= P.winningDay).length;
+  return {
+    winningDays,
+    daysTraded: nets.length,
+    bestDayNet,
+    netProfit,
+    standard: { eligible: winningDays >= P.winningDays, maxPayout: cap(P.caps[plan].standard) },
+    consistency: {
+      eligible: nets.length >= P.consistencyDays && bestShare != null && bestShare <= P.consistencyShare + 1e-12,
+      bestShare,
+      maxPayout: cap(P.caps[plan].consistency),
+    },
   };
 }
 

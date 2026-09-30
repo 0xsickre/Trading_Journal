@@ -21,6 +21,7 @@ import {
   TOPSTEP_PLANS,
   TOPSTEP_SLIPPAGE_TOLERANCE,
   topstepMaxContracts,
+  topstepStateAt,
   topstepPlanRulesFor,
   type TopstepRules,
   type TopstepTrade,
@@ -203,8 +204,9 @@ function expectedContracts(row: TradeRow, budget: number | null, book: TopstepBo
     // Per side and per contract, as the form counts it: the trade's fees are
     // both sides of every contract.
     commissionPerSide: qty > 0 ? (stats.total_fees ?? 0) / (2 * qty) : 0,
+    // The account's size at the entry: on an XFA the Scaling Plan tier of that session (phase T).
     maxContracts: topstepMaxContracts(
-      TOPSTEP_PLANS[book.rules.config.plan],
+      topstepStateAt(book.rules.config, book.closed, stats.opened_at ?? "")?.rules ?? TOPSTEP_PLANS[book.rules.config.plan],
       typeof row.instrument === "string" ? row.instrument : null,
     ),
     // The tick frozen on the trade when it was written, as the form read it then.

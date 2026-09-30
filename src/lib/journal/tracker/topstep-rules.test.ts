@@ -200,6 +200,21 @@ describe("sized to intent = the contracts the form would have computed (E5)", ()
     expect(evalDay([{ id: "a", account: "ts", opened: AT, qty: 3, budget: 250 }]).risk_matched_intent.verdict).toBe("fail");
   });
 
+  it("on an Express Funded Account the cap is the Scaling Plan at the entry, not the plan's (phase T)", () => {
+    // A fresh 50K XFA at $0: two minis = twenty micros, whatever the budget buys.
+    const XFA = { ...acc("xfa", true, 0), topstep_stage: "xfa" } as unknown as Account;
+    const accounts = [XFA];
+    const zone = accountDayZoneResolver(accounts, XFA);
+    const ix = (qty: number) =>
+      buildTradeDayIndex(
+        [row({ id: "a", account: "xfa", opened: AT, qty, budget: 6_100, stop: 19_950 })],
+        (r) => zone(r.account_id),
+        topstepRulesResolver(accounts),
+      );
+    expect(evaluateAutoRulesForDay(DAY, ix(20)).risk_matched_intent.verdict).toBe("pass");
+    expect(evaluateAutoRulesForDay(DAY, ix(50)).risk_matched_intent.verdict).toBe("fail");
+  });
+
   it("the plan's contract cap counts: 50 micros on a 50K is the most there is", () => {
     // A budget that would buy 60 micros: the cap of 50 is the plan.
     const out = evalDay([{ id: "a", account: "ts", opened: AT, qty: 50, budget: 6_100, stop: 19_950 }]);

@@ -4,6 +4,7 @@ import {
   evaluateTopstep,
   riskBudgetAt,
   topstepMinRiskFromRoom,
+  topstepScalingMaxMini,
   topstepStateAt,
   topstepTradingDay,
   type TopstepConfig,
@@ -171,6 +172,7 @@ describe("reading an account", () => {
       topstep_reset_at: "2026-09-01T00:00:00Z",
       topstep_personal_dll: 2_000,
       topstep_daily_target: null,
+      topstep_stage: "combine",
     } as never);
     expect(c).toEqual({
       enabled: true,
@@ -180,6 +182,7 @@ describe("reading an account", () => {
       resetAt: "2026-09-01T00:00:00Z",
       personalDll: 2_000,
       dailyTarget: null,
+      stage: "combine",
       payouts: [],
     });
   });
@@ -412,5 +415,98 @@ describe("the room the plan's risk floor holds from (R3, 30.09.2026)", () => {
 
   it("does not move with a tighter personal DLL", () => {
     expect(topstepMinRiskFromRoom({ ...TOPSTEP_PLANS["150K"], dll: 1_200 })).toBe(1_500);
+  });
+});
+
+describe("Express Funded Account: the Scaling Plan (phase T, 30.09.2026)", () => {
+  const xfa = (over: Partial<TopstepConfig> = {}) => ({ stage: "xfa" as const, startingBalance: 0, ...over });
+
+  it("the tiers are Topstep's, by the XFA balance", () => {
+    const tiers = (plan: "50K" | "100K" | "150K") =>
+      [-100, 0, 1_499.99, 1_500, 1_999.99, 2_000, 2_999.99, 3_000, 4_499.99, 4_500, 20_000].map((b) =>
+        topstepScalingMaxMini(plan, b),
+      );
+    expect(tiers("50K")).toEqual([2, 2, 2, 3, 3, 5, 5, 5, 5, 5, 5]);
+    expect(tiers("100K")).toEqual([3, 3, 3, 4, 4, 5, 5, 10, 10, 10, 10]);
+    expect(tiers("150K")).toEqual([3, 3, 3, 4, 4, 5, 5, 10, 10, 15, 15]);
+  });
+
+  it("a fresh XFA starts at $0 with the MLL under it, and holds the lowest tier", () => {
+    const r = run([], xfa());
+    expect(r.stage).toBe("xfa");
+    expect(r.balance).toBe(0);
+    expect(r.mllFloor).toBe(-2_000);
+    expect(r.rules.maxMini).toBe(2);
+    expect(r.nextMaxMini).toBe(2);
+  });
+
+  it("today's size is set by the balance at the last close; today's win raises the next session", () => {
+    const r = run([t("2026-09-29T15:00:00Z", 1_600), t("2026-09-30T14:00:00Z", 500)], xfa());
+    expect(r.rules.maxMini).toBe(3);                          // $1 600 at Tuesday's close
+    expect(r.nextMaxMini).toBe(5);                            // $2 100 now
+  });
+
+  it("a payout lowers the tier with the balance", () => {
+    const r = run(
+      [t("2026-09-28T15:00:00Z", 5_000)],
+      xfa({ plan: "150K", payouts: [{ at: "2026-09-29T18:00:00Z", amount: 2_000 }] }),
+    );
+    expect(r.balance).toBe(3_000);
+    expect(r.rules.maxMini).toBe(10);                         // not 15
+    expect(r.mllFloor).toBe(0);                               // after the first payout the floor is $0
+  });
+
+  it("a Combine keeps the plan's whole size from the first day", () => {
+    expect(run([]).rules.maxMini).toBe(5);
+    expect(run([]).stage).toBe("combine");
+    expect(run([]).xfa).toBeNull();
+  });
+});
+
+describe("Express Funded Account: no target, two payout paths (phase T)", () => {
+  const xfa = (over: Partial<TopstepConfig> = {}) => ({ stage: "xfa" as const, startingBalance: 0, ...over });
+  const days = (...nets: number[]) =>
+    ["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-28", "2026-09-29"]
+      .slice(0, nets.length)
+      .map((d, i) => t(`${d}T15:00:00Z`, nets[i]));
+
+  it("is never 'passed' — an XFA has no profit target", () => {
+    const r = run(days(1_500, 1_600), xfa());
+    expect(r.status).toBe("active");
+    expect(run(days(1_500, 1_600)).status).toBe("passed");   // the same on a Combine
+  });
+
+  it("Standard: five winning days of $150 or more", () => {
+    expect(run(days(150, 150, 150, 150, 150), xfa()).xfa!.standard.eligible).toBe(true);
+    const r = run(days(150, 150, 150, 150, 149), xfa());
+    expect(r.xfa!.winningDays).toBe(4);
+    expect(r.xfa!.standard.eligible).toBe(false);
+  });
+
+  it("Consistency: three traded days, the best at most 40 % of the net profit", () => {
+    const ok = run(days(100, 100, 50), xfa()).xfa!;
+    expect(ok.consistency.bestShare).toBeCloseTo(0.4, 10);
+    expect(ok.consistency.eligible).toBe(true);
+    expect(run(days(100, 100, 40), xfa()).xfa!.consistency.eligible).toBe(false);  // 41.7 %
+    expect(run(days(100, 100), xfa()).xfa!.consistency.eligible).toBe(false);      // two days
+  });
+
+  it("counting starts again after a payout", () => {
+    const r = run(days(900, 900, 900, 900, 900, 200, 200), xfa({ payouts: [{ at: "2026-09-25T20:00:00Z", amount: 2_000 }] }));
+    expect(r.xfa!.daysTraded).toBe(2);
+    expect(r.xfa!.winningDays).toBe(2);
+    expect(r.xfa!.netProfit).toBe(400);
+    expect(r.xfa!.standard.eligible).toBe(false);
+  });
+
+  it("the largest request: half the balance, capped by plan and path, at least $125", () => {
+    const r = run(days(1_000, 1_000, 1_000), xfa());                        // 50K, $3 000
+    expect(r.xfa!.standard.maxPayout).toBe(1_500);
+    expect(r.xfa!.consistency.maxPayout).toBe(1_500);
+    const big = run(days(4_000, 4_000), xfa());                              // $8 000
+    expect([big.xfa!.standard.maxPayout, big.xfa!.consistency.maxPayout]).toEqual([2_000, 3_000]);
+    const b150 = run(days(8_000, 8_000), xfa({ plan: "150K" }));            // $16 000
+    expect([b150.xfa!.standard.maxPayout, b150.xfa!.consistency.maxPayout]).toEqual([5_000, 6_000]);
+    expect(run(days(200), xfa()).xfa!.standard.maxPayout).toBe(0);          // half is $100 < $125
   });
 });

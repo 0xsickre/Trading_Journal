@@ -3,7 +3,7 @@
 import { AlertTriangle, CheckCircle2, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtMoney } from "@/lib/journal/format";
-import { TOPSTEP_CONSISTENCY, type TopstepResult } from "@/lib/journal/topstep";
+import { TOPSTEP_CONSISTENCY, TOPSTEP_XFA_PAYOUT, type TopstepResult } from "@/lib/journal/topstep";
 import type { Account } from "@/lib/journal/types";
 
 /**
@@ -15,6 +15,10 @@ import type { Account } from "@/lib/journal/types";
  * best day against the 55 % consistency line, and the way to the target.
  * Closed trades only (see topstep.ts): the platform's own risk engine, which
  * also counts open P&L, is the record.
+ *
+ * On an Express Funded Account (phase T) there is no target and no 55 % line:
+ * the banner shows the Scaling Plan's contracts for this session and the next,
+ * and where both payout paths stand since the last payout.
  */
 export function TopstepBanner({ account, result }: { account: Account; result: TopstepResult }) {
   const ccy = account.currency;
@@ -33,7 +37,8 @@ export function TopstepBanner({ account, result }: { account: Account; result: T
         {result.status === "passed" && <CheckCircle2 className="size-4 text-[var(--profit)]" />}
         {result.status === "active" && <Target className="size-4" />}
         <span className="min-w-0">
-          Topstep {account.topstep_plan} · {account.name}
+          Topstep {account.topstep_plan}
+          {result.stage === "xfa" ? " XFA" : ""} · {account.name}
         </span>
         <span
           className={cn(
@@ -70,11 +75,35 @@ export function TopstepBanner({ account, result }: { account: Account; result: T
               : `Daily target: ${fmtMoney(result.targetLeftToday ?? 0, ccy)} of ${fmtMoney(result.dailyTarget, ccy)} to go`}
           </span>
         )}
-        <span>
-          P/L: {fmtMoney(result.profit, ccy, { sign: true })} of {fmtMoney(result.effectiveTarget, ccy)} target
-        </span>
+        {result.stage === "xfa" ? (
+          <span className="font-medium text-foreground">
+            Contracts today: {result.rules.maxMini} mini / {result.rules.maxMini * 10} micro (Scaling Plan)
+            {result.nextMaxMini !== result.rules.maxMini ? ` · next session ${result.nextMaxMini}` : ""}
+          </span>
+        ) : (
+          <span>
+            P/L: {fmtMoney(result.profit, ccy, { sign: true })} of {fmtMoney(result.effectiveTarget, ccy)} target
+          </span>
+        )}
         {result.paidOut > 0 && <span>Paid out: {fmtMoney(result.paidOut, ccy)}</span>}
-        {result.bestDay && (
+        {result.xfa && (
+          <>
+            <span className={cn(result.xfa.standard.eligible && "font-medium text-[var(--profit)]")}>
+              Payout, Standard: {result.xfa.winningDays} of {TOPSTEP_XFA_PAYOUT.winningDays} days ≥{" "}
+              {fmtMoney(TOPSTEP_XFA_PAYOUT.winningDay, ccy)}
+              {result.xfa.standard.eligible ? ` — ready, up to ${fmtMoney(result.xfa.standard.maxPayout, ccy)}` : ""}
+            </span>
+            <span className={cn(result.xfa.consistency.eligible && "font-medium text-[var(--profit)]")}>
+              Payout, Consistency: {result.xfa.daysTraded} of {TOPSTEP_XFA_PAYOUT.consistencyDays} days, best day{" "}
+              {result.xfa.consistency.bestShare == null
+                ? "—"
+                : `${Math.round(result.xfa.consistency.bestShare * 100)} %`}{" "}
+              of the profit (at most {TOPSTEP_XFA_PAYOUT.consistencyShare * 100} %)
+              {result.xfa.consistency.eligible ? ` — ready, up to ${fmtMoney(result.xfa.consistency.maxPayout, ccy)}` : ""}
+            </span>
+          </>
+        )}
+        {result.stage === "combine" && result.bestDay && (
           <span className={cn(!result.consistencyOk && "text-[var(--loss)]")}>
             Best day: {fmtMoney(result.bestDay.net, ccy, { sign: true })} (limit {fmtMoney(bestLimit, ccy)}
             {!result.consistencyOk ? " — target raised" : ""})

@@ -37,6 +37,7 @@ export type Database = {
           topstep_reset_at: string | null
           topstep_personal_dll: number | null
           topstep_daily_target: number | null
+          topstep_stage: string
           id: string
           is_active: boolean
           name: string
@@ -66,6 +67,7 @@ export type Database = {
           topstep_reset_at?: string | null
           topstep_personal_dll?: number | null
           topstep_daily_target?: number | null
+          topstep_stage?: string
           id?: string
           is_active?: boolean
           name: string
@@ -95,6 +97,7 @@ export type Database = {
           topstep_reset_at?: string | null
           topstep_personal_dll?: number | null
           topstep_daily_target?: number | null
+          topstep_stage?: string
           id?: string
           is_active?: boolean
           name?: string

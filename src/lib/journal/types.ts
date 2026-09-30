@@ -112,6 +112,8 @@ export type Account = {
    */
   topstep_personal_dll: number | null;
   topstep_daily_target: number | null;
+  /** Combine or Express Funded Account (phase T): the XFA sizes by the Scaling Plan and pays out by path. */
+  topstep_stage: "combine" | "xfa";
   /** Risk per trade as a share of the room above the MLL, in %. */
   risk_rule_pct: number;
   /** Risk-per-trade bounds in money; null = the plan's own (topstep.ts `TOPSTEP_PLANS`). */

@@ -54,8 +54,11 @@ import { fmtMoney } from "@/lib/journal/format";
 import {
   TOPSTEP_DEFAULT_RISK_PCT,
   TOPSTEP_PLANS,
+  TOPSTEP_XFA_PAYOUT,
+  TOPSTEP_XFA_SCALING,
   topstepBreakevenBand,
   type TopstepPlan,
+  type TopstepStage,
 } from "@/lib/journal/topstep";
 import { DEFAULT_TZ } from "@/lib/journal/time";
 import {
@@ -384,6 +387,7 @@ function EditAccountDialog({
 
   const [topstepMode, setTopstepMode] = useState(account.topstep_mode === true);
   const [topstepPlan, setTopstepPlan] = useState<TopstepPlan>(account.topstep_plan ?? "50K");
+  const [topstepStage, setTopstepStage] = useState<TopstepStage>(account.topstep_stage === "xfa" ? "xfa" : "combine");
   const [payoutDate, setPayoutDate] = useState(account.topstep_payout_at ? account.topstep_payout_at.slice(0, 10) : "");
   const [riskPct, setRiskPct] = useState(String(account.risk_rule_pct ?? 12.5));
   const [riskMin, setRiskMin] = useState(account.risk_rule_min == null ? "" : String(account.risk_rule_min));
@@ -438,6 +442,7 @@ function EditAccountDialog({
         default_fee_fixed: val("fee"),
         topstep_mode: topstepMode,
         topstep_plan: topstepPlan,
+        topstep_stage: topstepStage,
         topstep_payout_at: payoutDate ? new Date(`${payoutDate}T00:00:00Z`).toISOString() : null,
         risk_rule_pct: val("riskPct"),
         risk_rule_min: nullable("riskMin"),
@@ -575,6 +580,20 @@ function EditAccountDialog({
                   </Select>
                 </div>
                 <div className="space-y-1.5">
+                  <Label htmlFor={`tsstage-${account.id}`} className="text-xs">
+                    Phase
+                  </Label>
+                  <Select value={topstepStage} onValueChange={(v) => setTopstepStage(v as TopstepStage)}>
+                    <SelectTrigger id={`tsstage-${account.id}`} className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="combine">Trading Combine</SelectItem>
+                      <SelectItem value="xfa">Express Funded Account</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
                   <Label htmlFor={`tspay-${account.id}`} className="text-xs">
                     First payout date (or record the payout under Deposits / withdrawals)
                   </Label>
@@ -587,12 +606,28 @@ function EditAccountDialog({
                   />
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Max loss {fmtMoney(plan.mll, "USD")}, trailing the highest end-of-day balance and
-                locking at the starting balance · daily loss {fmtMoney(plan.dll, "USD")} · target{" "}
-                {fmtMoney(plan.target, "USD")}, best day at most 55 % of it · at most {plan.maxMini} mini /{" "}
-                {plan.maxMini * 10} micro.
-              </p>
+              {topstepStage === "combine" ? (
+                <p className="text-xs text-muted-foreground">
+                  Max loss {fmtMoney(plan.mll, "USD")}, trailing the highest end-of-day balance and
+                  locking at the starting balance · daily loss {fmtMoney(plan.dll, "USD")} · target{" "}
+                  {fmtMoney(plan.target, "USD")}, best day at most 55 % of it · at most {plan.maxMini} mini /{" "}
+                  {plan.maxMini * 10} micro.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Starting balance $0 (TopstepX shows the XFA from $0) · max loss {fmtMoney(plan.mll, "USD")},
+                  trailing the end-of-day balance and locking at $0, and $0 for good after the first payout · no
+                  target. Contracts by the Scaling Plan, from the balance at the last close:{" "}
+                  {TOPSTEP_XFA_SCALING[topstepPlan]
+                    .map(([from, mini]) => `${Number.isFinite(from) ? `from ${fmtMoney(from, "USD")}` : "below"} ${mini}`)
+                    .join(" · ")}{" "}
+                  mini (a micro is a tenth). Payout: Standard — {TOPSTEP_XFA_PAYOUT.winningDays} days of{" "}
+                  {fmtMoney(TOPSTEP_XFA_PAYOUT.winningDay, "USD")}+; Consistency — {TOPSTEP_XFA_PAYOUT.consistencyDays}{" "}
+                  days, best day at most {TOPSTEP_XFA_PAYOUT.consistencyShare * 100} % of the profit; at most half the
+                  balance, up to {fmtMoney(TOPSTEP_XFA_PAYOUT.caps[topstepPlan].standard, "USD")} /{" "}
+                  {fmtMoney(TOPSTEP_XFA_PAYOUT.caps[topstepPlan].consistency, "USD")}.
+                </p>
+              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <NumberField
                   id={`pdll-${account.id}`}

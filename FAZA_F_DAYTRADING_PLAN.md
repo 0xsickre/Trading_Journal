@@ -104,6 +104,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 30.09.2026 | posle R | Nivoi (trejder: „svi bitni nivoi u brief, šta je London pokupio a šta je ostalo, weekly i monthly, Azija“): **posebna poruka posle Londona** (05:12 NY = 11:12 BG), **oba PDH/PDL** (RTH i ceo Topstep dan), **NQ i ES**. Definicije iz istraživanja (`testovi/profil_dana`, `sweep_nivoi`, `london_ny`); pokupljen = prošao nivo za tik. Samo `futures-trading` (`tools/brief/nivoi.py`), journal se ne menja |
 | 30.09.2026 | posle R | London u poruci (trejder: „do kad London traje samo do 11 BG?“ → „Oba“): **London jutro** 08–11 BG u 11:12 i **London do NY** od 09:00 BG (08:00 po Londonu) u 15:15 BG, pred otvaranje |
 | 30.09.2026 | S | „Šta bi bilo“ realno (trejder: „napravi plan za šta bi bilo i to samo popravi“): **S1** TP i planirani limit ulaz važe tek kad cena prođe nivo za 1 tik — dodir nije izvršenje. **S2** stop u mreži košta 1 tik proklizavanja (isto kao R4 u veličini). **S3** ulaz promašenog setupa je limit kad je cena pri pisanju plana s druge strane ulaza, inače stop-ulaz (dodir). **S4** scenario v2; stari v1 se sam preračuna, promašaji jednom ručno (`--recompute`) |
+| 30.09.2026 | T | Faza naloga (trejder: pravi nalog je **50K Combine**, 150K je praksa; put isplate „ne znam još“; samo TopstepX; 50K kupljen sa DLL-om; „da, kreni“): **T1** `tj_accounts.topstep_stage` combine / xfa (podrazumevano combine — ništa se ne menja dok se ne izabere XFA). **T2** XFA Scaling Plan: najviše mini ugovora po balansu na početku sesije (kraj prethodnog Topstep dana). **T3** XFA nema „passed“ ni 55 %: prate se OBA puta isplate od poslednje isplate (Standard: 5 dana ≥ $150; Konzistentnost: 3 dana, najbolji ≤ 40 % neto profita) i najveća isplata (50 % balansa, limit po planu i putu, min $125). **T4** DLL plana ostaje u računu i na XFA (oprezno; trejder ga ima). **T5** brief računa isto |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -136,6 +137,7 @@ pogađa.
 | **L** | Šta bi bilo: SL × TP mreža, posle izlaza, posle stopa — iz berzanskih sveća | — | F6 | da: `20260930080000` (`scenario`) | **Opus** | ✅ `89915aa` · futures-trading `f60b5ea`, 30.09.2026 — migracija primenjena |
 | **R** | Rizik blizu MLL-a i proklizavanje stopa u veličini (journal + brief isto) | — | L | ne | **Opus** | ✅ `7f14d81` · futures-trading `2870b3d`, 30.09.2026 — bez migracije |
 | **S** | „Šta bi bilo“ i cena promašaja realno: TP / limit ulaz kroz nivo, tik na stopu | — | L, R | ne | **Opus** | ✅ `95c63e7` · futures-trading `aacc20b`, 30.09.2026 — bez migracije |
+| **T** | Faza naloga Combine / XFA: Scaling Plan, oba puta isplate, bez „passed“ na XFA (journal + brief) | — | S | da: `20260930090000` (`topstep_stage`) | **Opus** | ✅ 30.09.2026 — migracija `20260930090000` primenjena |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -949,6 +951,54 @@ a promašaj izgleda skuplji nego što bi bio. Istraživanje u `testovi/` već ra
 ### Izlaz iz S
 Mreža i promašaj računaju izvršenje kao na berzi: limit tek kroz nivo, stop sa tikom. README oba repoa 1:1, ovde ✅ +
 commit, `ROADMAP.md` jedan red.
+
+## T — Faza naloga: Combine / XFA (detaljno, 30.09.2026) — ✅
+
+**Povod:** trejder je poslao pravila XFA (30.09.2026); provereno pretragom (help.topstep.com je iz okruženja blokiran,
+pa preko više nezavisnih izvora — spisak u odgovoru trejderu). Pravi nalog je 50K Combine; XFA dolazi posle prolaza.
+
+**Provereno (XFA):**
+- Balans kreće od $0; MLL $2.000 / $3.000 / $4.500 ispod, prati balans na **kraju dana**, zaključava se na $0; posle
+  prve isplate MLL = $0 zauvek. **Prati se uživo** (sa otvorenim P&L): dodir poda gasi nalog odmah — ne na kraju dana
+  (tekst koji je trejder dobio to greši).
+- **Scaling Plan** (mini; micro 10:1; novi limit važi od sledeće sesije):
+
+| balans XFA | 50K | 100K | 150K |
+|---|---|---|---|
+| < $1.500 | 2 | 3 | 3 |
+| $1.500–1.999 | 3 | 4 | 4 |
+| $2.000–2.999 | 5 | 5 | 5 |
+| $3.000–4.499 | 5 | 10 | 10 |
+| ≥ $4.500 | 5 | 10 | 15 |
+
+- **Isplate:** Standard = 5 dobitnih dana ≥ $150; Konzistentnost = bar 3 dana trgovanja i najbolji dan ≤ 40 % neto
+  profita; brojanje kreće od poslednje isplate. Po zahtevu najviše 50 % balansa, limit Standard / Konzistentnost:
+  50K $2.000 / $3.000, 100K $3.000 / $4.000, 150K $5.000 / $6.000; najmanje $125; 90 / 10.
+- DLL opcion na TopstepX-u ($1.000 / $2.000 / $3.000); do 5 XFA naloga; 30 dana bez trejda = zatvaranje.
+
+**Utvrđeno u kodu (pre T):** `topstep.ts` ima jedan skup pravila (Combine): `maxMini` fiksno po planu, status `passed`
+na cilju sa 55 % pravilom, isplata samo kao događaj (balans, MLL). `racun.py` isto; `nalog.py` isplata max $2.000.
+
+### Izmena
+- **T1** migracija `20260930090000`: `tj_accounts.topstep_stage` text NOT NULL DEFAULT 'combine', CHECK (combine, xfa);
+  tipovi, zapis šeme, `accounts.ts`, Settings (izbor „Faza“), dupliranje naloga je kopira.
+- **T2** `evaluateTopstep`: na XFA `rules.maxMini` = nivo Scaling Plana za balans na kraju poslednjeg završenog
+  Topstep dana (isplata ga spušta), `nextMaxMini` za sledeću sesiju. Forma trejda i tracker (`expectedContracts`,
+  stanje na ulazu) čitaju taj broj; `topstepMaxContracts` ostaje za mini / micro.
+- **T3** XFA: status samo `active` / `failed`; `xfa` = { od poslednje isplate: dobitnih dana ≥ $150, dana trgovanja,
+  najbolji dan, neto profit, oba puta ispunjena ili ne, najveća isplata po putu }. Baner prikazuje to umesto cilja.
+- **T4** DLL plana se i dalje računa (oprezno).
+- **T5** `racun.py`: `stanje(..., faza)` isto (Scaling Plan u tabeli ugovora, linija isplate); `nalog.py` limit
+  isplate po planu i putu.
+
+### Testovi (prvo padaju)
+- `topstep.test.ts`: nivoi Scaling Plana (granice), sledeća sesija, isplata spušta nivo; XFA nikad `passed`; Standard
+  5 dana ≥ $150 od poslednje isplate; Konzistentnost 40 % i 3 dana; najveća isplata (50 %, limit, $125).
+- `racun.py --selftest`: isti primeri.
+
+### Izlaz iz T
+Na XFA nalogu journal i brief ne predlažu više ugovora nego što Scaling Plan dozvoljava i pokazuju koji put isplate je
+ispunjen. README oba repoa 1:1, ovde ✅ + commit, `ROADMAP.md` jedan red; migracija u bazi posle zelenog gate-a.
 
 ## Katalog stavki
 

@@ -197,7 +197,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,975 tests across 191 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,988 tests across 192 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -338,7 +338,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 
 | Route | What it is |
 |---|---|
-| `/` | Dashboard: a **Topstep banner** per Topstep account (room above the MLL, DLL left today, best day against the 55 % line, the target) then KPIs, equity curve, drawdown, heatmap calendars, breakdowns, the Process · Survival · Edge card, insights. Opens on **All** — the whole record first, narrowed on request; the scope last chosen is remembered per browser. Whenever the period leaves closed trades out, a notice above the figures says how many and how far back, with **Show all** (`default-period.ts`) |
+| `/` | Dashboard: a **Topstep banner** per Topstep account (room above the MLL, DLL left today, best day against the 55 % line, the target — on an XFA the Scaling Plan's contracts and both payout paths instead) then KPIs, equity curve, drawdown, heatmap calendars, breakdowns, the Process · Survival · Edge card, insights. Opens on **All** — the whole record first, narrowed on request; the scope last chosen is remembered per browser. Whenever the period leaves closed trades out, a notice above the figures says how many and how far back, with **Show all** (`default-period.ts`) |
 | `/journal` | Trade table — sorting, filtering, column picking. The date column carries the **year**, so a trade from last season does not read as this spring |
 | `/trades/new`, `/trades/[id]/edit` | Trade form: plan, fills, playbook checklist, psychology, images — the charts are a **list the trader grows with "+ Add chart"** (30.09.2026, up to 20 per trade, in the order added — `tj_trade_images.sort_order`, `20260930050000`; the three fixed slots HTF pre / LTF pre / LTF post are gone), each one an **uploaded screenshot, an image pasted from the clipboard or a TradingView link** (K6, `chart-image-input.tsx`): an image goes to the private `trade-images` bucket under the user's own folder and is stored as `storage:<uid>/<file>` in `tj_trade_images.image_url`, shown through a one-hour signed URL; the CHECK ties the folder to the row's user (`20260929220000`). In the **order of the decisions**: account, instrument, then the playbook and its checklist, and only then the prices and the risk. **There is no phase control**: planned or active is what the fills say — an entry fill means you are in the trade — so a select that could disagree with the record is gone, and so is "Move to active". The one lifecycle fact the fills cannot know, a MISSED plan, keeps its button. The instrument is **typed, not scrolled** — `instrument-select.tsx` filters the catalog on symbol, name and asset class. On a **Topstep account** the size is whole contracts: risk by the account's rule (§ Topstep), contracts rounded down with the round-turn commission and a tick of slippage on the stop counted (R4) and capped at the plan, stop and target in ticks for the TopstepX bracket — "2 MNQ · $203.44 at the stop incl. commission and a tick of slippage (stop 200 ticks)" — with the mini or micro alternative and a warning when the count is zero, capped, or three stops no longer fit today's DLL. This is the **plan-first** form, for a limit written well before price gets there; the everyday way in is `/trades/log` |
 | `/trades/log` | **Log Trade**, the sidebar's primary action: a trade logged **after it is flat**. Four numbers off the platform — contracts, entry, stop, exit (target optional) — with "N min ago" chips for the entry time; then the setup (playbook), **A / B / C** on execution (stored as `execution_rating` 5 / 3 / 1), what went wrong only on B or C ("No mistake" recorded on an A), emotions, one sentence (`trade_journal_notes`) and **the charts — one field to paste into and "+ Add chart" for as many more as wanted** (entry, exit, higher timeframe…), in order; the review of an imported trade shows the ones it has and adds new ones after them. **A trade still running is logged without an exit** (30.09.2026): it is saved open with its entry fill only, and the day's TopstepX import pairs it on the entry time and price, puts in the exit fills and closes it. The exit reason is then read off the statement's exit (`exitReasonAfterMerge`), only where the trade has none, and an undo of that import empties it again (`clear_exit_reason`, `20260930040000`). On a Topstep account past its MLL an open trade is refused like a plan — it is exposure, not a record. The exit reason is read off the prices — stop, target, breakeven or closed early — and written only when the trader's own Exit Reason list has that item (`quick-log.ts`). An exit at or **through** the stop is the stop however many ticks it slipped (a stop-market order in a fast tape), and at or past the target is the target; within two ticks short of either counts too. The numbers may be rough: the day's TopstepX export matches the trade (entry within 0.05 %, entry time within ten minutes) and replaces the fills, and the answers stay |
@@ -1195,8 +1195,22 @@ help.topstep.com on 28.09.2026):
   stops the day at the plan's. The target shows as what is still missing today, is graded by
   `no_entry_after_daily_target`, and caps a simulated day in Survival. **There is no limit on the
   number of trades.**
-- **Consistency**: the best day must stay at or below 55 % of the target; past that the target grows
+- **Consistency** (Combine): the best day must stay at or below 55 % of the target; past that the target grows
   to best day ÷ 0.55.
+- **Combine or Express Funded Account** (phase T, 30.09.2026; `tj_accounts.topstep_stage`, migration
+  `20260930090000`, "Phase" in the account's Topstep rules). A Combine works as above. An XFA starts at
+  $0 on TopstepX (starting balance 0) with the plan's MLL under it, has **no target and no 55 % line**,
+  and is sized by the **Scaling Plan**: the most mini contracts (a micro is a tenth) from the balance at
+  the last close — 2 / 3 / 5 on a 50K, 3 / 4 / 5 / 10 on a 100K, 3 / 4 / 5 / 10 / 15 on a 150K, at
+  $1,500 / $2,000 / $3,000 / $4,500 — so today's win raises the next session and a payout lowers it
+  (`TOPSTEP_XFA_SCALING`, `topstepScalingMaxMini`; `rules.maxMini` carries it to the trade form and the
+  tracker's "Sized to intent", which reads the size at the entry). The banner shows today's and the
+  next session's contracts and **both payout paths** since the last payout (`xfa` on the result):
+  Standard — five winning days of $150 or more; Consistency — three traded days with the best at most
+  40 % of the net profit; each with the largest request, half the balance capped at $2,000 / $3,000
+  (50K), $3,000 / $4,000 (100K), $5,000 / $6,000 (150K), at least $125 (`TOPSTEP_XFA_PAYOUT`). The
+  brief computes the same (`racun.py`). The plan's DLL still counts on an XFA — optional on TopstepX,
+  kept as the cautious reading.
 - **Closed trades only**: Topstep watches both limits intraday with open P&L, so a
   position that went through the floor and came back reads here as a survived day. The platform's
   risk engine is the record.
@@ -1564,9 +1578,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,975 tests across 191 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,347 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 628
-tests in 64 files). The rule is the extension, so no file can land in both. The split exists so that
+2,988 tests across 192 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,358 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 630
+tests in 65 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves

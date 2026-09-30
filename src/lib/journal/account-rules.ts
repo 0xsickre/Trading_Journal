@@ -60,6 +60,7 @@ export function duplicateSettings(src: Account) {
     // the account that had them, so the copy starts a fresh Combine.
     topstep_mode: src.topstep_mode,
     topstep_plan: src.topstep_plan,
+    topstep_stage: src.topstep_stage,
     risk_rule_pct: src.risk_rule_pct,
     risk_rule_min: src.risk_rule_min,
     risk_rule_max: src.risk_rule_max,
