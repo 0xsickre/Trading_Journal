@@ -3,6 +3,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { selectAllPages } from "@/lib/supabase/paginate";
 import { getAccounts } from "./accounts";
+import { getCashEvents } from "./cash-events";
 import { firstEntryAt, riskBudgetAtEntryPatch, roomAtEntryPatch } from "./equity-at-entry";
 import {
   evaluateTopstep,
@@ -31,10 +32,10 @@ export async function getTopstepStatuses(accountIds?: string[]): Promise<Account
   const topstep = accounts.filter((a) => a.topstep_mode && (wanted == null || wanted.has(a.id)));
   if (topstep.length === 0) return [];
 
-  const byAccount = await closedTradesByAccount(topstep.map((a) => a.id));
+  const [byAccount, cash] = await Promise.all([closedTradesByAccount(topstep.map((a) => a.id)), getCashEvents()]);
 
   return topstep.flatMap((account) => {
-    const result = evaluateTopstep(topstepConfigFromAccount(account), byAccount.get(account.id) ?? []);
+    const result = evaluateTopstep(topstepConfigFromAccount(account, cash), byAccount.get(account.id) ?? []);
     return result.status === "off" ? [] : [{ account, result: result as TopstepResult }];
   });
 }
@@ -84,8 +85,9 @@ export async function getTopstepEntryPatch(
   if (at == null || !accountId) return settled;
   const account = (await getAccounts()).find((a) => a.id === accountId);
   if (!account?.topstep_mode) return settled;
-  const closed = (await closedTradesByAccount([accountId])).get(accountId) ?? [];
-  const config = topstepConfigFromAccount(account);
+  const [byAccount, cash] = await Promise.all([closedTradesByAccount([accountId]), getCashEvents(accountId)]);
+  const closed = byAccount.get(accountId) ?? [];
+  const config = topstepConfigFromAccount(account, cash);
   const budget = riskBudgetAt(config, riskRuleFromAccount(account), closed, at);
   const room = topstepStateAt(config, closed, at)?.room ?? null;
   return { ...riskBudgetAtEntryPatch(status, prev, budget), ...roomAtEntryPatch(status, prev, room) };

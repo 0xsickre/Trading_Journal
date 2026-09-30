@@ -222,7 +222,7 @@ export function topstepSection(accounts: readonly MentorTopstep[], ccy: string):
       `### ${cell(a.accountName)} — ${a.plan} · status: ${r.status}`,
       `| Stavka | Vrednost |`,
       `| --- | --- |`,
-      `| Balans / početni | ${m(r.balance)} / ${m(a.startingBalance)} (profit ${signed(r.profit, ccy)}) |`,
+      `| Balans / početni | ${m(r.balance)} / ${m(a.startingBalance)} (profit ${signed(r.profit, ccy)}${r.paidOut > 0 ? `, isplaćeno ${m(r.paidOut)}` : ""}) |`,
       `| MLL (trailing) | pod ${m(r.mllFloor)}${r.mllLocked ? " — zaključan na početnom balansu" : ""}; prostor do njega ${m(r.room)} od ${m(r.rules.mll)} |`,
       `| Najbliže MLL-u ikad | ${r.headroomPct == null ? "—" : `${r.headroomPct.toFixed(0)}% prostora je ostalo u najgorem trenutku`} |`,
       `| DLL | ${m(r.rules.dll)} dnevno${r.personalDll ? " (lični limit, uži od plana)" : ""}; danas ${signed(r.todayNet, ccy)}, ostalo ${m(r.dllLeftToday)} |`,

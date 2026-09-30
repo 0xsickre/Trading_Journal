@@ -1161,7 +1161,15 @@ help.topstep.com on 28.09.2026):
 | 150K | 4,500 | 3,000 | 9,000 | 15 mini / 150 micro |
 
 - **The MLL trails the highest END-OF-DAY balance** and never comes down; it locks at the starting
-  balance, and after the first payout (`topstep_payout_at`) it is the starting balance. Today's win
+  balance (a 150K: from 145,500 up to 150,000, reached once a day closes at 154,500), and after the
+  first payout it is the starting balance.
+- **A payout leaves the balance** (30.09.2026): record it under Settings › Deposits / withdrawals as a
+  Payout (or Withdrawal) on the Topstep account. `topstepPayoutsOf` reads those cash events; each one
+  lowers the balance — $6,000 with a $2,000 payout is $4,000 — so the room, the risk budget and
+  Survival shrink with it, and the first one is also the payout date (the account's "First payout
+  date" stays for a payout known only by its date; the earlier of the two counts). The banner shows
+  what was paid out, and the profit toward the target stays the traded profit. The brief in
+  `futures-trading` reads the same events. Today's win
   does not raise it before the day ends — the afternoon would otherwise be sized from room Topstep
   has not taken yet.
 - **The DLL ends the day, not the account.** The day is Topstep's, 17:00 → 17:00 CT, and it is the

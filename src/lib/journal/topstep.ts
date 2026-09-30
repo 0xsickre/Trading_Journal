@@ -18,6 +18,10 @@
  *     at its opening value, the Express Funded Account at its $0, which is the
  *     same place measured from its own start). After the first payout it IS the
  *     starting balance, whatever it was before.
+ *   - A payout leaves the balance (30.09.2026): $6 000 with a $2 000 payout is
+ *     $4 000, and with the MLL at the starting balance the room is what stayed.
+ *     Payouts are the account's cash events of type payout or withdrawal
+ *     (Settings › Accounts); the first one is also the payout date.
  *   - DLL: the trading day's net P&L. Reaching it ends the DAY, not the account.
  *   - A trading day runs 17:00 → 17:00 Chicago time, so a fill at 18:30 CT on a
  *     Monday belongs to Tuesday. The calendar day in the account's own zone is
@@ -39,6 +43,7 @@
 import { MINI_OF } from "./default-instruments";
 import { computeTopstepRisk } from "./plan-calculations";
 import { compareInstants, toEpoch, topstepTradingDay } from "./time";
+import type { CashEvent } from "./balance";
 import type { Account } from "./types";
 
 export type TopstepPlan = "50K" | "100K" | "150K";
@@ -66,8 +71,11 @@ export type TopstepConfig = {
   enabled: boolean;
   plan: TopstepPlan;
   startingBalance: number;
+  /** First payout typed as a date only; the first payout event counts too, whichever is earlier. */
   payoutAt: string | null;
   resetAt: string | null;
+  /** Money taken out of the account, in order: each lowers the balance, the first locks the MLL. */
+  payouts?: readonly TopstepPayout[];
   /** TopstepX Personal Daily Loss Limit, positive; null = the plan's DLL. */
   personalDll: number | null;
   /** TopstepX Personal Daily Profit Target, positive; null = none. */
@@ -75,6 +83,9 @@ export type TopstepConfig = {
 };
 
 export type TopstepTrade = { closedAt: string | null; net: number };
+
+/** A payout: when, and how much left the account (positive). */
+export type TopstepPayout = { at: string; amount: number };
 
 export type TopstepStatus = "off" | "active" | "passed" | "failed";
 
@@ -105,7 +116,10 @@ export type TopstepResult = {
   /** The target as it stands after the consistency rule (grows past a big day). */
   effectiveTarget: number;
   consistencyOk: boolean;
+  /** Trading profit: the balance plus everything paid out, minus the start. */
   profit: number;
+  /** Paid out so far, positive; 0 before the first payout. */
+  paidOut: number;
   daysTraded: number;
   /**
    * The closest the account ever came to its floor: the smallest room seen,
@@ -140,13 +154,31 @@ export type TopstepSizing = {
 
 const positiveOrNull = (v: number | null | undefined) => (v != null && v > 0 ? Number(v) : null);
 
-export function topstepConfigFromAccount(account: Account): TopstepConfig {
+/**
+ * The account's payouts from its cash events: payouts and withdrawals, as the
+ * positive amount that left. Deposits and adjustments do not exist on a Topstep
+ * account and are not read.
+ */
+export function topstepPayoutsOf(accountId: string, cash: readonly CashEvent[]): TopstepPayout[] {
+  return cash
+    .filter(
+      (c) =>
+        c.account_id === accountId &&
+        (c.event_type === "payout" || c.event_type === "withdrawal") &&
+        Number(c.amount) !== 0,
+    )
+    .map((c) => ({ at: c.occurred_at, amount: Math.abs(Number(c.amount)) }))
+    .sort((a, b) => compareInstants(a.at, b.at));
+}
+
+export function topstepConfigFromAccount(account: Account, cash: readonly CashEvent[] = []): TopstepConfig {
   return {
     enabled: account.topstep_mode === true,
     plan: account.topstep_plan ?? "50K",
     startingBalance: account.starting_balance,
     payoutAt: account.topstep_payout_at ?? null,
     resetAt: account.topstep_reset_at ?? null,
+    payouts: topstepPayoutsOf(account.id, cash),
     personalDll: positiveOrNull(account.topstep_personal_dll),
     dailyTarget: positiveOrNull(account.topstep_daily_target),
   };
@@ -164,21 +196,36 @@ export function evaluateTopstep(
   const rules = topstepPlanRulesFor(config);
   const start = config.startingBalance;
   const resetMs = config.resetAt == null ? null : toEpoch(config.resetAt);
-  const payoutMs = config.payoutAt == null ? null : toEpoch(config.payoutAt);
+  const nowMs = toEpoch(now);
+  const inWindow = (at: string | null) => at != null && (resetMs == null || toEpoch(at) >= resetMs);
 
   const today = topstepTradingDay(now);
-  const window = trades
-    .filter((t) => t.closedAt != null && (resetMs == null || toEpoch(t.closedAt) >= resetMs))
-    .sort((a, b) => compareInstants(a.closedAt, b.closedAt));
+  const window = trades.filter((t) => inWindow(t.closedAt));
+  // A reset starts a new account, and a payout after `now` has not happened yet.
+  const payouts = (config.payouts ?? []).filter((p) => inWindow(p.at) && toEpoch(p.at) <= nowMs);
+  // The first payout, typed as a date or recorded as money, whichever came first.
+  const firstPayoutMs = Math.min(
+    config.payoutAt == null ? Infinity : toEpoch(config.payoutAt),
+    payouts.length > 0 ? toEpoch(payouts[0].at) : Infinity,
+  );
+  const payoutMs = Number.isFinite(firstPayoutMs) ? firstPayoutMs : null;
 
-  // Trading days in order, each with its trades in order.
-  const days = new Map<string, TopstepTrade[]>();
+  // Trading days in order, each with its trades and payouts in time order.
+  type Step = { at: string; net: number; out: number };
+  const days = new Map<string, Step[]>();
+  const traded = new Set<string>();
+  const push = (at: string, step: Step) => {
+    const key = topstepTradingDay(at);
+    days.set(key, [...(days.get(key) ?? []), step]);
+  };
   for (const t of window) {
-    const key = topstepTradingDay(t.closedAt!);
-    days.set(key, [...(days.get(key) ?? []), t]);
+    push(t.closedAt!, { at: t.closedAt!, net: t.net, out: 0 });
+    traded.add(topstepTradingDay(t.closedAt!));
   }
+  for (const p of payouts) push(p.at, { at: p.at, net: 0, out: p.amount });
 
   let balance = start;
+  let paidOut = 0;
   let highEod = start;
   let floor = start - rules.mll;
   let locked = false;
@@ -191,23 +238,27 @@ export function evaluateTopstep(
     if (minRoom == null || room < minRoom) minRoom = room;
   };
 
-  for (const [day, dayTrades] of [...days.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+  for (const [day, steps] of [...days.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
     let net = 0;
-    for (const t of dayTrades) {
+    for (const step of [...steps].sort((a, b) => compareInstants(a.at, b.at))) {
       // After the first payout the floor is the starting balance, from that moment.
-      if (payoutMs != null && toEpoch(t.closedAt!) >= payoutMs) {
+      if (payoutMs != null && toEpoch(step.at) >= payoutMs) {
         floor = start;
         locked = true;
       }
-      net += t.net;
-      balance += t.net;
+      net += step.net;
+      balance += step.net - step.out;
+      paidOut += step.out;
       // Realized balance on or under the floor: the account is over. Intraday
-      // with open P&L it may have ended earlier — see the header.
-      if (breachDay == null && balance <= floor) breachDay = day;
+      // with open P&L it may have ended earlier — see the header. A payout
+      // that leaves nothing above the floor is room gone, not a lost account.
+      if (step.out === 0 && breachDay == null && balance <= floor) breachDay = day;
       seeRoom();
     }
-    if (net <= -rules.dll) dllDays.push(day);
-    if (bestDay == null || net > bestDay.net) bestDay = { day, net };
+    if (traded.has(day)) {
+      if (net <= -rules.dll) dllDays.push(day);
+      if (bestDay == null || net > bestDay.net) bestDay = { day, net };
+    }
 
     // End of the trading day: the floor follows the highest close, never down,
     // and stops at the starting balance. Today has not ended — a win this
@@ -222,7 +273,7 @@ export function evaluateTopstep(
     // moment the room shrinks too.
     seeRoom();
   }
-  if (payoutMs != null && toEpoch(now) >= payoutMs) {
+  if (payoutMs != null && nowMs >= payoutMs) {
     floor = start;
     locked = true;
   }
@@ -232,7 +283,7 @@ export function evaluateTopstep(
     rules.target,
     bestDay && bestDay.net > 0 ? bestDay.net / TOPSTEP_CONSISTENCY : 0,
   );
-  const profit = balance - start;
+  const profit = balance + paidOut - start;
 
   let status: TopstepStatus = "active";
   if (breachDay != null) status = "failed";
@@ -256,7 +307,8 @@ export function evaluateTopstep(
     effectiveTarget,
     consistencyOk: bestDay == null || bestDay.net <= rules.target * TOPSTEP_CONSISTENCY,
     profit,
-    daysTraded: days.size,
+    paidOut,
+    daysTraded: traded.size,
     headroomPct:
       minRoom == null ? null : Math.max(0, Math.min(100, (minRoom / rules.mll) * 100)),
   };
@@ -340,10 +392,12 @@ export type TopstepRules = { config: TopstepConfig; risk: TopstepRiskRule };
 /** Per account id: its Topstep rules, or null for any account not in Topstep mode. */
 export function topstepRulesResolver(
   accounts: readonly Account[],
+  /** The accounts' cash events: a payout lowers the balance every budget is derived from. */
+  cash: readonly CashEvent[] = [],
 ): (accountId: string | null | undefined) => TopstepRules | null {
   const byId = new Map<string, TopstepRules>();
   for (const a of accounts) {
-    if (a.topstep_mode) byId.set(a.id, { config: topstepConfigFromAccount(a), risk: riskRuleFromAccount(a) });
+    if (a.topstep_mode) byId.set(a.id, { config: topstepConfigFromAccount(a, cash), risk: riskRuleFromAccount(a) });
   }
   return (accountId) => (accountId ? (byId.get(accountId) ?? null) : null);
 }

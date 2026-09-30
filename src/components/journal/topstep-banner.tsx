@@ -73,6 +73,7 @@ export function TopstepBanner({ account, result }: { account: Account; result: T
         <span>
           P/L: {fmtMoney(result.profit, ccy, { sign: true })} of {fmtMoney(result.effectiveTarget, ccy)} target
         </span>
+        {result.paidOut > 0 && <span>Paid out: {fmtMoney(result.paidOut, ccy)}</span>}
         {result.bestDay && (
           <span className={cn(!result.consistencyOk && "text-[var(--loss)]")}>
             Best day: {fmtMoney(result.bestDay.net, ccy, { sign: true })} (limit {fmtMoney(bestLimit, ccy)}

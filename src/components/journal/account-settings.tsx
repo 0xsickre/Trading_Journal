@@ -576,7 +576,7 @@ function EditAccountDialog({
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor={`tspay-${account.id}`} className="text-xs">
-                    First payout (from then the floor is the starting balance)
+                    First payout date (or record the payout under Deposits / withdrawals)
                   </Label>
                   <Input
                     id={`tspay-${account.id}`}

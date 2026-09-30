@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { getAccounts, getPrimaryAccount } from "@/lib/journal/accounts";
+import { getCashEvents } from "@/lib/journal/cash-events";
 import { accountDayZoneResolver, todayFor } from "@/lib/journal/time";
 import { topstepRulesResolver } from "@/lib/journal/topstep";
 import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
@@ -127,13 +128,14 @@ export async function lockDay(reportDate: string): Promise<Result> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Nisi prijavljen." };
 
-  const [accounts, rules, trades, briefs] = await Promise.all([
+  const [accounts, rules, trades, briefs, cash] = await Promise.all([
     getAccounts(),
     getTrackerRules({ includeRetired: true }),
     getTradesWithStats(),
     // The day's brief, for the two rules that read it — what is frozen is what
     // the page showed, and the page read the same row.
     getSessionBriefs(reportDate, reportDate),
+    getCashEvents(),
   ]);
 
   const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
@@ -143,7 +145,7 @@ export async function lockDay(reportDate: string): Promise<Result> {
   // The same day rule per account as the page — a Topstep account's trading day,
   // any other's calendar day — so what is locked is what was on screen.
   const tzOf = accountDayZoneResolver(accounts, primary);
-  const index = buildTradeDayIndex(trades, (row) => tzOf(row.account_id), topstepRulesResolver(accounts));
+  const index = buildTradeDayIndex(trades, (row) => tzOf(row.account_id), topstepRulesResolver(accounts, cash));
   const auto = evaluateAutoRulesForDay(reportDate, index, { briefOf: briefResolver(briefs) });
 
   const { error } = await supabase.rpc("tj_lock_day", {

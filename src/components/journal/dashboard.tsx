@@ -770,9 +770,9 @@ export function Dashboard({
             closedAt: r.closedAt,
             net: r.net,
           }));
-          return { account, result: evaluateTopstep(topstepConfigFromAccount(account), rows) as TopstepResult };
+          return { account, result: evaluateTopstep(topstepConfigFromAccount(account, cashEvents), rows) as TopstepResult };
         }),
-    [accounts, trades],
+    [accounts, trades, cashEvents],
   );
 
   // Resolved export period, for a live preview of exactly what will be exported.
@@ -809,7 +809,7 @@ export function Dashboard({
     [tzForAccount],
   );
   // A Topstep account's tracker limits are its plan's money (F3).
-  const topstepOf = useMemo(() => topstepRulesResolver(accounts), [accounts]);
+  const topstepOf = useMemo(() => topstepRulesResolver(accounts, cashEvents), [accounts, cashEvents]);
 
   /**
    * "All accounts" pooling raw money across DIFFERENT currencies — €500 and

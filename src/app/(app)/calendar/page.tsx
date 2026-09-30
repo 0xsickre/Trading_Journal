@@ -1,5 +1,6 @@
 import { accountFilterOptions, primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
+import { getCashEvents } from "@/lib/journal/cash-events";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import {
   getDailyReportDates,
@@ -134,7 +135,7 @@ export default async function CalendarPage({
     const from = days[0];
     const to = days[days.length - 1];
 
-    const [reports, rules, checkinsByDay, briefs] = await Promise.all([
+    const [reports, rules, checkinsByDay, briefs, cash] = await Promise.all([
       getDailyReportsInRange(from, to),
       // Retired rules included, and `rulesLiveOn` filters per day — a rule that
       // was live in March still judged March, and dropping it would raise that
@@ -146,10 +147,11 @@ export default async function CalendarPage({
       getCheckins(from, to),
       // The month's briefs, for the rules that read the red windows and the close.
       getSessionBriefs(from, to),
+      getCashEvents(),
     ]);
     const briefOf = briefResolver(briefs);
 
-    const index = buildTradeDayIndex(trades, tzOfRow, topstepRulesResolver(accounts));
+    const index = buildTradeDayIndex(trades, tzOfRow, topstepRulesResolver(accounts, cash));
     const series = computeComplianceSeries(
       days,
       rules,

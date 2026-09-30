@@ -47,6 +47,7 @@ import { sharedCurrency } from "@/lib/journal/format";
 import { accountDayZoneResolver } from "@/lib/journal/time";
 import { topstepRulesResolver } from "@/lib/journal/topstep";
 import { getTopstepSizing } from "@/lib/journal/topstep-status";
+import { getCashEvents } from "@/lib/journal/cash-events";
 import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
 import { briefResolver, briefWindow } from "@/lib/journal/session-brief";
 import { SessionBriefCard } from "@/components/journal/session-brief-card";
@@ -90,6 +91,7 @@ export default async function DailyPage({
     checkinsByDay,
     briefs,
     sizing,
+    cash,
   ] = await Promise.all([
     accountsPromise,
     dayPromise,
@@ -115,6 +117,8 @@ export default async function DailyPage({
     }),
     // Room and DLL as they stand NOW — shown on today's page only.
     getTopstepSizing(),
+    // Payouts lower a Topstep balance, and with it the budgets the tracker derives.
+    getCashEvents(),
   ]);
   const briefOf = briefResolver(briefs);
   const primarySizing = primary?.topstep_mode ? sizing[primary.id] : undefined;
@@ -145,7 +149,7 @@ export default async function DailyPage({
   const tzOf = (row: TradeRow) => tzFor(row.account_id);
 
   // A Topstep account's trades are graded by its plan.
-  const index = buildTradeDayIndex(trades, tzOf, topstepRulesResolver(accounts));
+  const index = buildTradeDayIndex(trades, tzOf, topstepRulesResolver(accounts, cash));
   const dayRules = rulesLiveOn(rules, reportDate);
 
   // Live verdicts, then the frozen ones on top. On an unlocked day the overlay is

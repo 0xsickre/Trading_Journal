@@ -179,6 +179,7 @@ describe("reading an account", () => {
       resetAt: "2026-09-01T00:00:00Z",
       personalDll: 2_000,
       dailyTarget: null,
+      payouts: [],
     });
   });
 
@@ -305,5 +306,91 @@ describe("TopstepX Risk Limits: the personal daily loss limit and profit target 
     const trades = [t("2026-09-30T14:00:00Z", -450)];
     const budget = riskBudgetAt(cfg({ personalDll: 600 }), { pct: 12.5, min: null, max: null }, trades, "2026-09-30T15:00:00Z");
     expect(budget).toBeLessThanOrEqual(150);
+  });
+});
+
+describe("150K: the MLL trails to the starting balance and stops there (30.09.2026)", () => {
+  const big = (trades: TopstepTrade[], over: Partial<TopstepConfig> = {}) =>
+    run(trades, { plan: "150K", startingBalance: 150_000, ...over });
+
+  it("starts 4 500 under the start and follows the day's close up", () => {
+    expect(big([]).mllFloor).toBe(145_500);
+    const r = big([t("2026-09-28T15:00:00Z", 2_000)]);
+    expect(r.mllFloor).toBe(147_500);
+    expect(r.room).toBe(4_500);
+  });
+
+  it("stops at 150 000 once a day closes at 154 500, and stays through losses", () => {
+    const r = big([t("2026-09-24T15:00:00Z", 6_000), t("2026-09-25T15:00:00Z", -1_000)]);
+    expect(r.mllFloor).toBe(150_000);
+    expect(r.mllLocked).toBe(true);
+    expect(r.room).toBe(5_000);
+  });
+});
+
+describe("a payout leaves the balance; the MLL stays at the starting balance (30.09.2026)", () => {
+  const payout = (at: string, amount: number) => ({ at, amount });
+
+  it("$6 000 with a $2 000 payout is $4 000 of room above the start", () => {
+    // 50K: +6 000 over two days, then $2 000 paid out.
+    const r = run([t("2026-09-24T15:00:00Z", 3_000), t("2026-09-25T15:00:00Z", 3_000)], {
+      payouts: [payout("2026-09-28T15:00:00Z", 2_000)],
+    });
+    expect(r.balance).toBe(54_000);
+    expect(r.mllFloor).toBe(50_000);
+    expect(r.mllLocked).toBe(true);
+    expect(r.room).toBe(4_000);
+    expect(r.paidOut).toBe(2_000);
+    // The trading profit is still what was traded, not what is left.
+    expect(r.profit).toBe(6_000);
+    expect(r.status).not.toBe("failed");
+  });
+
+  it("the first payout locks the floor even before the trail reached the start", () => {
+    // +1 000: the floor had trailed only to 49 000; the payout puts it at 50 000.
+    const r = run([t("2026-09-24T15:00:00Z", 1_000)], { payouts: [payout("2026-09-28T15:00:00Z", 500)] });
+    expect(r.balance).toBe(50_500);
+    expect(r.mllFloor).toBe(50_000);
+    expect(r.room).toBe(500);
+  });
+
+  it("a loss after the payout is measured against the start", () => {
+    const r = run(
+      [t("2026-09-24T15:00:00Z", 3_000), t("2026-09-29T15:00:00Z", -1_200)],
+      { payouts: [payout("2026-09-28T15:00:00Z", 1_500)] },
+    );
+    expect(r.balance).toBe(50_300);
+    expect(r.room).toBe(300);
+  });
+
+  it("a payout still to come changes nothing yet, and one before a reset is forgotten", () => {
+    expect(run([], { payouts: [payout("2026-10-05T15:00:00Z", 500)] }).balance).toBe(50_000);
+    const r = run([], { resetAt: "2026-09-26T00:00:00Z", payouts: [payout("2026-09-25T15:00:00Z", 500)] });
+    expect(r.balance).toBe(50_000);
+    expect(r.mllFloor).toBe(48_000);
+  });
+
+  it("the budget at an entry after the payout comes from what is left", () => {
+    const trades = [t("2026-09-24T15:00:00Z", 3_000)];
+    const cfg2 = cfg({ payouts: [payout("2026-09-28T15:00:00Z", 2_000)] });
+    // Room 1 000 after the payout: 12.5 % = 125.
+    expect(riskBudgetAt(cfg2, { pct: 12.5, min: null, max: null }, trades, "2026-09-29T15:00:00Z")).toBe(125);
+  });
+
+  it("reads payouts and withdrawals off the account's cash events, not deposits", async () => {
+    const { topstepPayoutsOf } = await import("./topstep");
+    const ev = (id: string, account_id: string, event_type: string, amount: number, occurred_at: string) =>
+      ({ id, account_id, event_type, amount, occurred_at, note: null }) as never;
+    expect(
+      topstepPayoutsOf("a", [
+        ev("1", "a", "payout", -2_000, "2026-09-28T15:00:00Z"),
+        ev("2", "a", "deposit", 500, "2026-09-20T15:00:00Z"),
+        ev("3", "b", "payout", -900, "2026-09-21T15:00:00Z"),
+        ev("4", "a", "withdrawal", -300, "2026-09-10T15:00:00Z"),
+      ]),
+    ).toEqual([
+      { at: "2026-09-10T15:00:00Z", amount: 300 },
+      { at: "2026-09-28T15:00:00Z", amount: 2_000 },
+    ]);
   });
 });
