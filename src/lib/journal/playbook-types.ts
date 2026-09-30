@@ -37,6 +37,9 @@ export const SHOW_WHEN_LABELS: Record<ShowWhen, string> = {
  * owner gave it. Identity is the `id`, not the text, which is what makes
  * renaming free — nothing points at the label.
  */
+/** The headings a new playbook starts with (30.09.2026), in this order. */
+export const NEW_PLAYBOOK_SECTIONS = ["Zašto ulazim?", "Gde ulazim?", "Gde izlazim?"] as const;
+
 export type PlaybookSection = {
   id: string;
   label: string;

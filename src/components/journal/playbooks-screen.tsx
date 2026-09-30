@@ -42,8 +42,8 @@ import {
  * "+ Create Playbook", in its own dialog. TradeZella's two-field first step
  * (name, description) is worth the extra click for that one field. On
  * success this lands the trader straight on the new playbook's own page,
- * where its (empty) Rules tab is one click away — there is nothing left to
- * build on this screen.
+ * where its Rules tab — three empty sections, "Zašto ulazim?", "Gde ulazim?",
+ * "Gde izlazim?" — is one click away; there is nothing left to build here.
  */
 function CreatePlaybookDialog() {
   const router = useRouter();

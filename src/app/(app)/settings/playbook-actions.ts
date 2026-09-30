@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { SHOW_WHEN_VALUES, type ShowWhen } from "@/lib/journal/playbook-types";
+import { NEW_PLAYBOOK_SECTIONS } from "@/lib/journal/playbook-types";
 import {
   moveInOrder,
   moveRuleWithinSection,
@@ -70,10 +71,25 @@ export async function addPlaybook(
     };
   }
 
-  // Nothing is created alongside it: no sections, no rules. A playbook is a
-  // statement of how THIS setup is traded, and handing over five headings from
-  // somebody else's method — which is what the shared section list did — made
-  // every new book start as a form to fill rather than a page to write.
+  // Three empty sections, no rules (the trader's decision, 30.09.2026): the
+  // questions every day-trading setup answers — why, where in, where out. They
+  // are the book's own rows, renamed or deleted like any other section; the
+  // rules under them are still the trader's to write.
+  const { error: sectionError } = await supabase.from("tj_playbook_sections").insert(
+    NEW_PLAYBOOK_SECTIONS.map((label, i) => ({
+      user_id: user.id,
+      playbook_id: book.id,
+      label,
+      sort_order: i,
+    })),
+  );
+  if (sectionError) {
+    // A book without its headings is not what was asked for; take it back
+    // rather than leave half of it.
+    await supabase.from("tj_playbooks").delete().eq("id", book.id);
+    return { ok: false, error: sectionError.message };
+  }
+
   revalidateAll();
   return { ok: true, id: book.id };
 }

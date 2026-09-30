@@ -32,8 +32,8 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 253 of the
-3,540 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 256 of the
+3,543 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
@@ -43,6 +43,7 @@ on a screen the trader writes into or reviews in their own words:
 | Weekly "Napredak" (progress) and experiment cards | 19 |
 | Day insight sentence (`low_efficiency_day`) | 1 |
 | Chart image helper (`tradingview-snapshot.ts`) | 2 |
+| A new playbook's three starting sections (`playbook-types.ts`) | 3 |
 | The seeded tag values Log Trade writes (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2) | 3 |
 | Dashboard, `/reports`, journal grid, playbooks, **`/settings`**, `/trades/log`, Topstep banner | **0** |
 
@@ -67,7 +68,7 @@ lexes every `.ts`/`.tsx` outside tests into comment / string / code regions, kee
 that read as prose rather than as machinery, and scores those for Serbian by diacritics and by a word
 list. A single Serbian word carrying no diacritic can still slip past that, and JSX text between tags
 is not a string literal (the "Bez pregleda" card on `/daily` is Serbian and not in the count), so
-**253 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
+**256 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
 name, read as the Serbian "pre" until F5.4. Three earlier versions of this paragraph said "about 46 of some 1,700", then "153 of
 1,663", then "185 of 2,191" — each counted by hand, and each had to be replaced rather than quietly
 corrected. That is why the method now ships as a script: a number nobody can re-run is a number
@@ -731,7 +732,10 @@ playbook, and any row missed would have dropped out of its section.
 to leave it, find the right dropdown in settings, add a value and come back. The actions are
 `addPlaybookSection`, `updatePlaybookSection`, `deletePlaybookSection`, `movePlaybookSection` and
 `reorderPlaybookSections`, with `moveRuleToSection` and `setRuleCriterion` for the rules. A new book
-**starts empty** — you get sections by writing them.
+**starts with three empty sections** (30.09.2026, `NEW_PLAYBOOK_SECTIONS`): *Zašto ulazim?*, *Gde
+ulazim?*, *Gde izlazim?* — the questions every day-trading setup answers. They are the book's own rows,
+renamed or deleted like any other, and no rule comes with them: the rules are the trader's to write. If
+the sections cannot be written the new book is deleted again, so a book never exists half made.
 
 **Deleting a section never refuses.** `ON DELETE CASCADE` on `section_id` removes the **links**, not
 the rules: every rule stays in the library with every answer it ever collected, and every other
