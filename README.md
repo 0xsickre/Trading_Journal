@@ -33,7 +33,7 @@ purpose — an applied migration is never edited here, and the comment inside on
 record of the day it was written.
 
 **The interface is deliberately half-and-half, and the line is a clean one.** At least 252 of the
-3,541 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+3,553 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
@@ -1371,10 +1371,17 @@ a question the trader had to answer by working out which row was which, every ti
 | Plan, stop, target, grade, thesis, notes, playbook, MAE/MFE | The survivor's, and only its **empty** fields are filled in from the other |
 | Tags and mistakes | The union of both |
 | Custom fields | Merged key by key; the survivor's answer wins |
-| Images, rule answers, check-ins | Moved across where the survivor has no row for that key |
+| Images | All moved across, after the survivor's own (a list since 30.09.2026) |
+| Rule answers, check-ins | Moved across where the survivor has no row for that key |
 
-**The fills are taken whole, never combined.** The two rows describe the same trade, not two halves
-of one; adding them together would double the size and invent a P&L nobody traded.
+**Two kinds of merge (30.09.2026), chosen in the dialog.** *The same trade, recorded twice* (typed,
+then imported): the fills are taken whole, never combined — adding them together would double the size
+and invent a P&L nobody traded. *Two positions, one trade* (two orders opened together, two rows of the
+TopstepX export): both sets of fills stay and the trade is their sum — status from all the fills, the
+planned size and a typed-in result added (`p_combine`, `20260930060000`). Replacing there left 2 contracts
+of a 4-contract trade. The dialog proposes *combine* when every fill on both sides came from an import
+(`defaultMergeMode`) — the export lists each position once, so two of its rows are never the same trade —
+and *replace* otherwise.
 
 **There is no undo, and the dialog says so in those words.** A merge is reversible by re-importing
 the file the fills came from, which is where they were read from in the first place — an undo would

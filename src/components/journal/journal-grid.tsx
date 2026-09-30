@@ -130,10 +130,13 @@ import {
   bulkDeleteTrades,
   bulkAddTag,
   mergeTrades,
+  tradeFillSources,
   type BulkTagKind,
 } from "@/app/(app)/trades/actions";
 import {
   defaultMergeChoice,
+  defaultMergeMode,
+  type MergeMode,
   describeSide,
   mergeRefusal,
   type MergeSide,
@@ -415,6 +418,7 @@ export function JournalGrid({
   const [tagKind, setTagKind] = useState<BulkTagKind>("technical");
   const [tagValues, setTagValues] = useState<string[]>([]);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [mergeMode, setMergeMode] = useState<MergeMode>("replace");
 
   const columnVisibility = useMemo(
     // Only the hideable ids are listed; TanStack treats every column it does
@@ -1280,7 +1284,17 @@ export function JournalGrid({
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={!mergePair || mergeBlocked != null}
-                    onClick={() => setMergeDialogOpen(true)}
+                    onClick={() => {
+                      // The default depends on where the fills came from: two
+                      // sets from the export are two positions of one trade.
+                      if (!mergePair) return;
+                      const [a, b] = mergePair;
+                      setMergeMode("replace");
+                      setMergeDialogOpen(true);
+                      void tradeFillSources([a.id, b.id]).then((src) =>
+                        setMergeMode(defaultMergeMode(src[a.id] ?? [], src[b.id] ?? [])),
+                      );
+                    }}
                   >
                     <Merge className="size-4" /> Merge 2 trades…
                   </DropdownMenuItem>
@@ -1531,12 +1545,42 @@ export function JournalGrid({
           <DialogHeader>
             <DialogTitle>Merge two trades into one</DialogTitle>
             <DialogDescription>
-              The imported numbers correct the typed trade: times, entry, exit,
-              size and costs come from the import, anything the typed trade is
-              missing is filled in, and its grade, plan and notes stay. The
-              second row is then deleted. This cannot be undone.
+              Anything the kept trade is missing is filled in from the other, its
+              grade, plan and notes stay, and the other row is then deleted. This
+              cannot be undone.
             </DialogDescription>
           </DialogHeader>
+          <div role="radiogroup" aria-label="Kind of merge" className="grid gap-2 text-sm">
+            {(
+              [
+                [
+                  "replace",
+                  "The same trade, recorded twice",
+                  "Typed, then imported: the imported fills replace the typed ones — size stays as traded.",
+                ],
+                [
+                  "combine",
+                  "Two positions, one trade",
+                  "Opened together (two rows of the export): the fills are added — 2 + 2 contracts are 4.",
+                ],
+              ] as const
+            ).map(([mode, title, hint]) => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={mergeMode === mode}
+                onClick={() => setMergeMode(mode)}
+                className={cn(
+                  "rounded-md border p-2 text-left transition-colors",
+                  mergeMode === mode ? "border-primary bg-primary/10" : "hover:bg-accent",
+                )}
+              >
+                <div className="font-medium">{title}</div>
+                <div className="text-xs text-muted-foreground">{hint}</div>
+              </button>
+            ))}
+          </div>
           {mergePair && mergeChoice && (() => {
             const keep = mergePair.find((p) => p.id === mergeChoice.keepId)!;
             const from = mergePair.find((p) => p.id === mergeChoice.fillsFromId)!;
@@ -1547,12 +1591,16 @@ export function JournalGrid({
             return (
               <div className="space-y-2 text-sm">
                 <div className="rounded-md border p-2">
-                  <div className="text-xs text-muted-foreground">Stays, corrected</div>
+                  <div className="text-xs text-muted-foreground">
+                    {mergeMode === "combine" ? "Stays, with both sets of fills" : "Stays, corrected"}
+                  </div>
                   <div className="font-medium">{describeSide(keep, when)}</div>
                 </div>
                 <div className="rounded-md border border-dashed p-2 opacity-80">
                   <div className="text-xs text-muted-foreground">
-                    Its numbers are used, then it is deleted
+                    {mergeMode === "combine"
+                      ? "Its fills are added, then it is deleted"
+                      : "Its numbers are used, then it is deleted"}
                   </div>
                   <div className="font-medium">{describeSide(from, when)}</div>
                 </div>
@@ -1575,6 +1623,7 @@ export function JournalGrid({
                   const res = await mergeTrades(
                     mergeChoice.keepId,
                     mergeChoice.fillsFromId,
+                    mergeMode,
                   );
                   if (!res.ok) {
                     toast.error(res.error);

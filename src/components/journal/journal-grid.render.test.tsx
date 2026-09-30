@@ -24,13 +24,15 @@ const deleteTradeMock = vi.fn();
 const bulkDeleteTradesMock = vi.fn();
 const bulkAddTagMock = vi.fn();
 const mergeTradesMock = vi.fn();
+const fillSourcesMock = vi.fn();
 vi.mock("@/app/(app)/trades/actions", () => ({
   deleteTrade: (id: string) => deleteTradeMock(id),
   bulkDeleteTrades: (ids: string[]) => bulkDeleteTradesMock(ids),
   bulkAddTag: (ids: string[], kind: string, values: string[]) =>
     bulkAddTagMock(ids, kind, values),
-  mergeTrades: (keepId: string, fillsFromId: string) =>
-    mergeTradesMock(keepId, fillsFromId),
+  mergeTrades: (keepId: string, fillsFromId: string, mode?: string) =>
+    mergeTradesMock(keepId, fillsFromId, mode),
+  tradeFillSources: (ids: string[]) => fillSourcesMock(ids),
 }));
 
 // `TagMultiSelect` (used by the bulk "Add tag" dialog) imports this for its
@@ -134,6 +136,7 @@ beforeEach(() => {
   bulkDeleteTradesMock.mockReset().mockResolvedValue({ ok: true, deleted: 0 });
   bulkAddTagMock.mockReset().mockResolvedValue({ ok: true });
   mergeTradesMock.mockReset().mockResolvedValue({ ok: true });
+  fillSourcesMock.mockReset().mockResolvedValue({ typed: ["manual"], imported: ["import"] });
   setHiddenColumnsMock.mockReset().mockResolvedValue({ ok: true });
   unparseMock.mockClear();
   jsonToSheetMock.mockClear();
@@ -637,7 +640,33 @@ describe("merging two rows that are the same trade", () => {
 
     await user.click(screen.getByRole("button", { name: "Merge" }));
     await vi.waitFor(() => expect(mergeTradesMock).toHaveBeenCalled());
-    expect(mergeTradesMock).toHaveBeenCalledWith("typed", "imported");
+    expect(mergeTradesMock).toHaveBeenCalledWith("typed", "imported", "replace");
+  });
+
+  it("adds the fills of two imported positions — two export rows are one trade's parts", async () => {
+    fillSourcesMock.mockResolvedValue({ typed: ["import", "import"], imported: ["import", "import"] });
+    const user = userEvent.setup({ delay: null });
+    render(<JournalGrid trades={pair()} accounts={[ACCOUNT]} />);
+    await selectAll(user);
+    await user.click(screen.getByRole("button", { name: /Bulk actions/ }));
+    await user.click(await screen.findByText(/Merge 2 trades/));
+    expect(await screen.findByText("Stays, with both sets of fills")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Two positions, one trade/ })).toHaveAttribute("aria-checked", "true");
+    await user.click(screen.getByRole("button", { name: "Merge" }));
+    await vi.waitFor(() => expect(mergeTradesMock).toHaveBeenCalled());
+    expect(mergeTradesMock).toHaveBeenCalledWith("typed", "imported", "combine");
+  });
+
+  it("lets the trader switch the kind of merge", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<JournalGrid trades={pair()} accounts={[ACCOUNT]} />);
+    await selectAll(user);
+    await user.click(screen.getByRole("button", { name: /Bulk actions/ }));
+    await user.click(await screen.findByText(/Merge 2 trades/));
+    await user.click(screen.getByRole("radio", { name: /Two positions, one trade/ }));
+    await user.click(screen.getByRole("button", { name: "Merge" }));
+    await vi.waitFor(() => expect(mergeTradesMock).toHaveBeenCalled());
+    expect(mergeTradesMock).toHaveBeenCalledWith("typed", "imported", "combine");
   });
 
   it("asks nothing: the typed trade stays whichever order the rows were ticked in", async () => {
@@ -654,7 +683,7 @@ describe("merging two rows that are the same trade", () => {
     await user.click(screen.getByRole("button", { name: "Merge" }));
 
     await vi.waitFor(() => expect(mergeTradesMock).toHaveBeenCalled());
-    expect(mergeTradesMock).toHaveBeenCalledWith("typed", "imported");
+    expect(mergeTradesMock).toHaveBeenCalledWith("typed", "imported", "replace");
   });
 
   it("refuses two instruments — the item is there but cannot be used", async () => {

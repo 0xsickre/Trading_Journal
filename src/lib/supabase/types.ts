@@ -1494,7 +1494,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      tj_merge_positions: { Args: { p_fills_from: string; p_keep: string }; Returns: undefined }
+      tj_merge_positions: {
+        Args: { p_combine?: boolean; p_fills_from: string; p_keep: string }
+        Returns: undefined
+      }
       tj_bulk_add_tag: {
         Args: { p_ids: string[]; p_kind: string; p_values: string[] }
         Returns: undefined

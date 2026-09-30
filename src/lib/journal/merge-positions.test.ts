@@ -4,6 +4,7 @@ import {
   MERGE_COALESCE_COLUMNS,
   MERGE_UNION_COLUMNS,
   defaultMergeChoice,
+  defaultMergeMode,
   describeSide,
   mergeRefusal,
   type MergeSide,
@@ -138,6 +139,12 @@ describe("the migration and this module agree on the fields", () => {
     expect(sql).toContain("gross_pnl_override      = v_other.gross_pnl_override");
   });
 
+  it("combines the fills of two positions only when asked, and prices the sum", () => {
+    expect(sql).toContain("p_combine boolean DEFAULT false");
+    expect(sql).toMatch(/IF NOT p_combine THEN\s+DELETE FROM public\.tj_executions WHERE position_id = p_keep;/);
+    expect(sql).toContain("THEN v_keep.position_size + v_other.position_size");
+  });
+
   it("deletes the trade that gave up its fills", () => {
     expect(sql).toContain("DELETE FROM public.tj_positions WHERE id = p_fills_from");
   });
@@ -146,5 +153,16 @@ describe("the migration and this module agree on the fields", () => {
     expect(sql).toContain("Different instruments are not one trade.");
     expect(sql).toContain("A long and a short are not one trade.");
     expect(sql).toContain("These trades are on two different accounts.");
+  });
+});
+
+describe("which kind of merge the dialog proposes", () => {
+  it("adds up two sets of imported fills — two export rows are two positions", () => {
+    expect(defaultMergeMode(["import", "import"], ["import", "import"])).toBe("combine");
+  });
+  it("replaces when either side was typed, or has no fills", () => {
+    expect(defaultMergeMode(["manual", "manual"], ["import", "import"])).toBe("replace");
+    expect(defaultMergeMode(["import", "manual"], ["import"])).toBe("replace");
+    expect(defaultMergeMode([], ["import"])).toBe("replace");
   });
 });

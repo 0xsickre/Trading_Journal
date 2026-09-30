@@ -1,4 +1,12 @@
 /**
+ * Merging two rows into one trade — two kinds (30.09.2026).
+ *
+ *   replace  the same trade recorded twice (typed, then imported): one side's
+ *            fills win outright, as below.
+ *   combine  two positions of ONE trade (two orders opened together, two rows
+ *            of the TopstepX export): both sets of fills stay, and the trade is
+ *            their sum. Replacing there left 2 contracts of a 4-contract trade.
+ *
  * Merging two trades that are the same trade.
  *
  * The import can now recognise a hand-typed trade and merge into it
@@ -78,6 +86,24 @@ export const MERGE_UNION_COLUMNS = [
   "technical_tags",
   "psychology_tags",
 ] as const;
+
+export type MergeMode = "replace" | "combine";
+
+/**
+ * Which kind of merge the dialog proposes, from where each side's fills came.
+ *
+ * Two rows of the broker's export are never the same trade — the export lists
+ * every position once — so when every fill on both sides came from an import,
+ * the two are positions of one trade and their fills add up. Anything typed by
+ * hand on either side is the original case: the same trade twice.
+ */
+export function defaultMergeMode(
+  aFillSources: readonly string[],
+  bFillSources: readonly string[],
+): MergeMode {
+  const imported = (s: readonly string[]) => s.length > 0 && s.every((x) => x === "import");
+  return imported(aFillSources) && imported(bFillSources) ? "combine" : "replace";
+}
 
 export type MergeRefusal = string;
 

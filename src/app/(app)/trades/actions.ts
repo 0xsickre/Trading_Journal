@@ -27,6 +27,7 @@ import { getRiskBudgetAtEntryPatch, isTopstepAccountFailed } from "@/lib/journal
 import { parseScaleOutLevels } from "@/lib/journal/scale-out";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
 import { getAccountCurrency } from "@/lib/journal/accounts";
+import type { MergeMode } from "@/lib/journal/merge-positions";
 import {
   firstIssue,
   invalidTradeNumber,
@@ -618,14 +619,31 @@ export async function bulkDeleteTrades(ids: string[]) {
  * has is never overwritten. The decision of which side is which is made in
  * `merge-positions.ts` and shown in the dialog before this is called.
  *
+ * `mode` "combine" is the other kind of merge: two positions opened as one
+ * trade, whose fills are ADDED rather than one set replacing the other.
+ *
  * One RPC, one transaction: a merge that stopped halfway would leave fills on a
  * row that no longer describes them. There is no undo, and the dialog says so.
  */
-export async function mergeTrades(keepId: string, fillsFromId: string) {
+/**
+ * Where each trade's fills came from ('manual' | 'import'), for the merge
+ * dialog's default: two sets of imported fills are two positions of one trade.
+ */
+export async function tradeFillSources(ids: string[]): Promise<Record<string, string[]>> {
+  const out: Record<string, string[]> = Object.fromEntries(ids.map((id) => [id, []]));
+  if (ids.length === 0) return out;
+  const supabase = await createClient();
+  const { data } = await supabase.from("tj_executions").select("position_id, source").in("position_id", ids);
+  for (const row of data ?? []) out[row.position_id]?.push(row.source ?? "manual");
+  return out;
+}
+
+export async function mergeTrades(keepId: string, fillsFromId: string, mode: MergeMode = "replace") {
   const supabase = await createClient();
   const { error } = await supabase.rpc("tj_merge_positions", {
     p_keep: keepId,
     p_fills_from: fillsFromId,
+    p_combine: mode === "combine",
   });
   if (error) return { ok: false as const, error: error.message };
   revalidateTrades();
