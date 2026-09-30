@@ -67,7 +67,7 @@ lexes every `.ts`/`.tsx` outside tests into comment / string / code regions, kee
 that read as prose rather than as machinery, and scores those for Serbian by diacritics and by a word
 list. A single Serbian word carrying no diacritic can still slip past that, and JSX text between tags
 is not a string literal (the "Bez pregleda" card on `/daily` is Serbian and not in the count), so
-**252 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
+**269 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
 name, read as the Serbian "pre" until F5.4. Three earlier versions of this paragraph said "about 46 of some 1,700", then "153 of
 1,663", then "185 of 2,191" — each counted by hand, and each had to be replaced rather than quietly
 corrected. That is why the method now ships as a script: a number nobody can re-run is a number
@@ -127,6 +127,15 @@ What `futures-trading` does with the journal, each described in its own README:
 - **MAE/MFE** and time underwater for closed futures trades come from the traded contract's candles
   in Cloudflare R2 (`tools/journal_mae.py`, hourly) (§ MAE/MFE), and so does the price of a missed
   setup once its trading day is over (§ The missed setup gets a price).
+- **The nightly backup** at 04:10 Belgrade (`tools/journal_backup.py`) reads all 28 tables and the
+  chart images kept in Storage, as the journal's user, into Cloudflare R2
+  (`futures-trading/backup/journal/{date}/`). Every file is read back and compared before the day's
+  manifest is written; 35 days are kept, plus the first snapshot of each month for good.
+  `journal_backup.py sql DATE [--korisnik UUID]` writes the restore: one transaction, triggers off
+  (`session_replication_role = replica`), the user's rows deleted in all 28 tables, then the snapshot
+  inserted parents first — tested 30.09.2026 on a database built from all 149 migrations, row for row,
+  into the same user and into a new one. **A new `tj_` table must be added to its `TABELE`**; the
+  backup warns when PostgREST shows one it does not know.
 - **The evening reminder** at 15:20 CT, ten minutes after the Topstep close (22:20 Belgrade;
   `tools/journal_podsetnik.py`), lists the day's trades
   with no setup or grade, or not yet confirmed by the TopstepX export — the same rule, on the same
@@ -413,10 +422,11 @@ two lists sorted separately and zipped is how a bucket's A row ends up beside an
 
 ## Metrics
 
-37 metrics in a single registry (`src/lib/journal/reports/metrics.ts`), 21 built-in dimensions across
-four groups (9 off the trade, 9 derived, 2 process, 1 insight) plus one per custom field. Any
+36 metrics in a single registry (`src/lib/journal/reports/metrics.ts`), 25 built-in dimensions across
+four groups (9 off the trade, 13 derived, 2 process, 1 insight) plus one per custom field. Any
 metric runs against any dimension — which is why there is one report engine instead of ten report
-pages. The tables below list all 37.
+pages. The tables below cover all 36 (a pair such as Avg win / Avg loss shares a row, Avg R and Total R
+sit under R), plus the two drawdown durations the dashboard shows beside them.
 
 **Three of them carry a confidence interval, and the other thirty-four do not.**
 A win rate, an expectancy and a profit factor are a rate, a mean and a ratio of sums — the figures a
@@ -1453,7 +1463,9 @@ files go too** (30.09.2026): the SQL deletes the `tj_trade_images` rows, Supabas
 DELETE on `storage.objects`, so `resetAllData` then empties the user's folder in the `trade-images`
 bucket through the Storage API, 100 files a page. Files after rows, never before: a reset that fails
 leaves every picture its trades point at, and a file removal that fails says so rather than leaving
-orphans silently.
+orphans silently. **A reset is not the end of the record**: the nightly backup in `futures-trading`
+(§ Where this sits) keeps the book and its images for 35 days and a snapshot a month after that, and
+its restore SQL deletes what the reset seeded before putting the book back.
 
 The table list is maintained **by hand**, chosen over a catalog loop so that a table added later
 shows up as a visible omission rather than a silent survivor. That mechanism worked as designed right
@@ -1506,7 +1518,7 @@ project.
 
 ## Migrations
 
-138 files in `supabase/migrations/`, named `YYYYMMDDHHMMSS_description.sql`.
+149 files in `supabase/migrations/`, named `YYYYMMDDHHMMSS_description.sql`.
 
 - **Additive.** An applied migration is never edited — a new delta is written instead.
 - **A migration explains itself.** Each one opens with a comment saying what was wrong and what
@@ -1550,8 +1562,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 ## Tests
 
 2,974 tests across 191 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,256 tests in 121 files) and `components` (environment `jsdom`, files `*.test.tsx`, 615
-tests in 61 files). The rule is the extension, so no file can land in both. The split exists so that
+`*.test.ts`, 2,346 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 628
+tests in 64 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves
@@ -1569,7 +1581,7 @@ Alongside them sits a **third, per file**: nineteen modules that compute or guar
 individually. A layer average is allowed to hide one such file; a per-file floor is not.
 
 Why two floors and not one: `src/lib` is pure arithmetic and has stayed near 96 % since Phase 0.
-`src/components` is Phase 10's render layer — 57 of 98 files have a **dedicated** render test, and
+`src/components` is Phase 10's render layer — 61 of 102 files have a **dedicated** render test, and
 the rest are reached only incidentally, through whatever a tested component happens to import (many
 `src/components/ui` primitives export sub-parts — `DropdownMenuRadioItem`, `PopoverTitle` — that
 nothing in this app renders). A single blended number would either drag the library floor down to
@@ -1580,7 +1592,7 @@ Four things the numbers deliberately do **not** claim:
 
 1. **`src/components`'s floor is not "well tested".** 64/64/61/65 is the honest state of a layer that
    began this phase at zero and is not finished — Phase 10 covers the highest-risk components
-   (Tier 1 and 2 in `ROADMAP.md`), not all 98. Reading this floor as "the UI is 64 % correct" repeats
+   (Tier 1 and 2 in `ROADMAP.md`), not all 102. Reading this floor as "the UI is 64 % correct" repeats
    exactly the mistake the next point warns about, one layer up.
 2. **Exclusion has to be `exclude`, not `include`.** The same mistake was made and recorded:
    `include: ["src/lib/**"]` switches v8 from "files a test imported" to "every file that matches",
@@ -1591,7 +1603,7 @@ Four things the numbers deliberately do **not** claim:
    All three round-3 score defects lived in files at 100 % statements and functions — and all four
    Phase 10 findings (`W1`–`W4`) were found by a render test asserting that already-covered code
    produced the WRONG number, not by a line going unexecuted.
-4. **`src/app` (17 pages across 33 files) has no number at all**, and "no number" is not "0 %" — it is
+4. **`src/app` (17 pages across 35 files) has no number at all**, and "no number" is not "0 %" — it is
    "not measured". Routes are server components whose logic is `await getCurrentUser()` then
    `redirect()` then passing props along; the props are asserted on the other side, where a render
    test already reads them.
