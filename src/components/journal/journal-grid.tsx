@@ -115,7 +115,7 @@ import {
   fmtExitEfficiencyPct,
 } from "@/lib/journal/exit-efficiency";
 import { excursionFromTrade } from "@/lib/journal/excursion";
-import { isStoredImage, primaryTradeImageUrl } from "@/lib/journal/tradingview-snapshot";
+import { isStoredImage } from "@/lib/journal/tradingview-snapshot";
 import { openTradeImage } from "@/components/journal/chart-image-input";
 import { getAllFormFields } from "@/lib/journal/form-config";
 import type { FieldDef } from "@/lib/journal/field-def-types";
@@ -934,7 +934,8 @@ export function JournalGrid({
         header: "",
         enableSorting: false,
         cell: ({ row }) => {
-          const url = primaryTradeImageUrl(row.original.tv_images ?? {});
+          // The first chart the trader added.
+          const url = row.original.chart_images?.[0] ?? null;
           if (!url) return null;
           // A stored image opens through a signed URL, fetched on the click (K6).
           if (isStoredImage(url)) {

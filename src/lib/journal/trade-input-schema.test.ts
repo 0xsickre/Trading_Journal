@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MAX_TRADE_IMAGES } from "./tradingview-snapshot";
 import {
   commitImportSchema,
   executionSchema,
@@ -183,17 +184,12 @@ describe("struktura submisije", () => {
     expect(tradeInputSchema.safeParse(input({ trade_no: -2 })).success).toBe(false);
   });
 
-  it("nepoznat slot za grafik ne prolazi", () => {
+  it("slike su lista linkova, najviše MAX_TRADE_IMAGES", () => {
+    expect(tradeInputSchema.safeParse(input({ images: ["x", "y"] })).success).toBe(true);
     expect(
-      tradeInputSchema.safeParse(
-        input({ images: [{ kind: "htf_pre", image_url: "x" }] }),
-      ).success,
-    ).toBe(true);
-    expect(
-      tradeInputSchema.safeParse(
-        input({ images: [{ kind: "izmisljen", image_url: "x" }] }),
-      ).success,
+      tradeInputSchema.safeParse(input({ images: Array.from({ length: MAX_TRADE_IMAGES + 1 }, () => "x") })).success,
     ).toBe(false);
+    expect(tradeInputSchema.safeParse(input({ images: [{ kind: "htf_pre", image_url: "x" }] })).success).toBe(false);
   });
 
   it("origin is plan, log or absent — nothing else", () => {

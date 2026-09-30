@@ -26,7 +26,7 @@
  */
 
 import { z } from "zod";
-import { TRADE_IMAGE_KINDS } from "./tradingview-snapshot";
+import { MAX_TRADE_IMAGES } from "./tradingview-snapshot";
 import { FILL_SOURCES } from "./trade-lifecycle";
 
 /**
@@ -175,14 +175,7 @@ export const tradeInputSchema = z.object({
    * and "the rating was discarded" is visible.
    */
   rule_answers: z.record(z.uuid(), z.boolean()).optional(),
-  images: z
-    .array(
-      z.object({
-        kind: z.enum(TRADE_IMAGE_KINDS),
-        image_url: z.string(),
-      }),
-    )
-    .optional(),
+  images: z.array(z.string()).max(MAX_TRADE_IMAGES).optional(),
 });
 
 /**

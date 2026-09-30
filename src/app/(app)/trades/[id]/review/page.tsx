@@ -29,7 +29,7 @@ export default async function ReviewTradePage({ params }: { params: Promise<{ id
       .select("avg_entry, avg_exit, entry_qty, net_pl, realized_r, tick_size, account_currency")
       .eq("position_id", id)
       .maybeSingle(),
-    supabase.from("tj_trade_images").select("kind, image_url").eq("position_id", id).in("kind", ["ltf_pre", "ltf_post"]),
+    supabase.from("tj_trade_images").select("image_url").eq("position_id", id).order("sort_order").order("id"),
     getOptionsMap(true),
     getAccounts(),
     // Everything: this trade may name a setup since retired.
@@ -55,8 +55,7 @@ export default async function ReviewTradePage({ params }: { params: Promise<{ id
     mistake: strs(pos.mistake),
     psychology: strs(pos.psychology_tags),
     notes: pos.trade_journal_notes,
-    entrySnapshot: images?.find((i) => i.kind === "ltf_pre")?.image_url ?? null,
-    snapshot: images?.find((i) => i.kind === "ltf_post")?.image_url ?? null,
+    images: (images ?? []).map((i) => i.image_url),
   };
 
   return (

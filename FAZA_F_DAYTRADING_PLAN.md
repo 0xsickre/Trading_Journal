@@ -94,6 +94,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 30.09.2026 | posle F | „Delete all data“ briše i fajlove slika iz Storage-a (`trade-images/<uid>/`, posle redova). Fabrička podešavanja (`20260930030000`): nalog ostaje bez Topstep režima; Entry TF 30s/1m/2m/5m/15m/1h; ručna pravila trackera = trejderova sopstvena (7) uz 11 automatskih; folderi Plan sesije, Osvrt na sesiju, Trade Notes, Nedeljni osvrt sa intraday šablonima. Postojeći podaci se ne menjaju |
 | 30.09.2026 | posle F | Nov playbook odmah dobija tri prazne sekcije: „Zašto ulazim?“, „Gde ulazim?“, „Gde izlazim?“ (trejder). Pravila ispod njih piše trejder; sekcije se menjaju i brišu kao i sve druge. Postojeći playbook-ovi se ne menjaju |
 | 30.09.2026 | posle F | Log Trade: slika ulaza (`ltf_pre`) uz sliku izlaza. Trejd bez exita se čuva kao otvoren (samo fill ulaza); TopstepX uvoz ga upari po vremenu i ceni ulaza, doda exit i zatvori, i upiše razlog izlaska ako ga trejd nema (undo ga briše). Na nalogu preko MLL-a otvoren trejd se odbija kao plan |
+| 30.09.2026 | posle F | Slike charta kao lista (trejder: „jedan plus, koliko hoću“): „+ Add chart“ u Log Trade, pregledu uvezenog trejda, novoj i postojećoj formi; do 20 po trejdu, redom (`sort_order`). Tri fiksna slota (HTF pre / LTF pre / LTF post) i jedinstveni indeks po slotu uklonjeni (`20260930050000`); spajanje trejdova prenosi sve slike |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.

@@ -332,32 +332,32 @@ CREATE INDEX IF NOT EXISTS tj_instruments_user_idx
 
 
 -- -----------------------------------------------------------------------------
--- tj_trade_images — TradingView snapshot-i, jedan po vrsti po trejdu
+-- tj_trade_images — slike charta trejda, lista redom (`sort_order`, 20260930050000);
+-- uploadovana slika (`storage:<uid>/<fajl>`, K6) ili TradingView snapshot link
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.tj_trade_images (
   id          uuid        NOT NULL DEFAULT gen_random_uuid(),
   user_id     uuid        NOT NULL DEFAULT auth.uid(),
   position_id uuid        NOT NULL,
-  kind        text        NOT NULL DEFAULT 'ltf_pre',
+  kind        text        NOT NULL DEFAULT 'chart',
   caption     text,
   created_at  timestamptz NOT NULL DEFAULT now(),
   image_url   text        NOT NULL,
+  sort_order  integer     NOT NULL DEFAULT 0,
   CONSTRAINT tj_trade_images_pkey PRIMARY KEY (id),
   CONSTRAINT tj_trade_images_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,
   CONSTRAINT tj_trade_images_position_id_fkey FOREIGN KEY (position_id)
     REFERENCES public.tj_positions(id) ON DELETE CASCADE,
   CONSTRAINT tj_trade_images_kind_check CHECK (kind = ANY (ARRAY[
-    'htf_pre'::text, 'ltf_pre'::text, 'ltf_post'::text])),
+    'chart'::text, 'htf_pre'::text, 'ltf_pre'::text, 'ltf_post'::text])),
   CONSTRAINT tj_trade_images_url_check
-    CHECK (image_url ~* '^https://www\.tradingview\.com/x/[a-z0-9]+/?$'::text)
+    CHECK (image_url ~* '^https://www\.tradingview\.com/x/[a-z0-9]+/?$'::text OR (image_url ~ '^storage:[0-9a-f-]{36}/[A-Za-z0-9._-]+$'::text AND split_part(substr(image_url, 9), '/'::text, 1) = user_id::text))
 );
 CREATE INDEX IF NOT EXISTS tj_trade_images_user_idx
   ON public.tj_trade_images USING btree (user_id);
 CREATE INDEX IF NOT EXISTS tj_trade_images_position_idx
   ON public.tj_trade_images USING btree (position_id);
-CREATE UNIQUE INDEX IF NOT EXISTS tj_trade_images_position_kind_uidx
-  ON public.tj_trade_images USING btree (position_id, kind);
 
 
 -- -----------------------------------------------------------------------------

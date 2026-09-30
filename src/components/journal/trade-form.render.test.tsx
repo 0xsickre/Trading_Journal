@@ -745,15 +745,17 @@ describe("one question, one place", () => {
 });
 
 describe("the chart can be attached before the trade exists", () => {
-  it("a new trade offers the two pre-entry snapshot slots", async () => {
+  it("a new trade offers a chart list the trader grows with +", async () => {
+    const user = userEvent.setup({ delay: null });
     render(
       <TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} />,
     );
-    expect(screen.getByText("HTF Pre")).toBeInTheDocument();
-    expect(screen.getByText("LTF Pre")).toBeInTheDocument();
-    // Not the post-exit slot: that is a screenshot of something that has not
-    // happened.
-    expect(screen.queryByText("LTF Post")).not.toBeInTheDocument();
+    expect(screen.queryAllByPlaceholderText("https://www.tradingview.com/x/…")).toHaveLength(0);
+    await user.click(screen.getByRole("button", { name: "Add chart" }));
+    await user.click(screen.getByRole("button", { name: "Add chart" }));
+    expect(screen.getAllByPlaceholderText("https://www.tradingview.com/x/…")).toHaveLength(2);
+    await user.click(screen.getByRole("button", { name: "Remove chart 1" }));
+    expect(screen.getAllByPlaceholderText("https://www.tradingview.com/x/…")).toHaveLength(1);
   });
 
   it("keeps what is pasted, ready for the save", async () => {
@@ -765,6 +767,7 @@ describe("the chart can be attached before the trade exists", () => {
     render(
       <TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} />,
     );
+    await user.click(screen.getByRole("button", { name: "Add chart" }));
     const inputs = screen.getAllByPlaceholderText("https://www.tradingview.com/x/…");
     await user.type(inputs[0], "https://www.tradingview.com/x/AbC123/");
     expect(inputs[0]).toHaveValue("https://www.tradingview.com/x/AbC123/");

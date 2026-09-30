@@ -3,9 +3,10 @@ import {
   isStoredImage,
   normalizeTradingViewSnapshotUrl,
   parseTradingViewSnapshotId,
-  primaryTradeImageUrl,
+  MAX_TRADE_IMAGES,
   storedImagePath,
   tradingViewSnapshotPngUrl,
+  validateTradeImageList,
   validateTradeImageRef,
   validateTradingViewSnapshotUrl,
 } from "./tradingview-snapshot";
@@ -66,22 +67,20 @@ describe("validateTradingViewSnapshotUrl", () => {
   });
 });
 
-describe("primaryTradeImageUrl", () => {
-  it("prefers ltf_pre over htf_pre", () => {
+describe("validateTradeImageList", () => {
+  it("keeps the filled ones in order and drops blanks", () => {
     expect(
-      primaryTradeImageUrl({
-        htf_pre: "https://www.tradingview.com/x/Aaaaaaaa/",
-        ltf_pre: "https://www.tradingview.com/x/Bbbbbbbb/",
-      }),
-    ).toBe("https://www.tradingview.com/x/Bbbbbbbb/");
+      validateTradeImageList(["https://www.tradingview.com/x/Aaaaaaaa", " ", "storage:97edd6db-12db-4156-9f89-77d2dcaa66d7/a.png"]),
+    ).toEqual({
+      ok: true,
+      urls: ["https://www.tradingview.com/x/Aaaaaaaa/", "storage:97edd6db-12db-4156-9f89-77d2dcaa66d7/a.png"],
+    });
   });
 
-  it("falls back to any kind", () => {
-    expect(
-      primaryTradeImageUrl({
-        ltf_post: "https://www.tradingview.com/x/Cccccccc/",
-      }),
-    ).toBe("https://www.tradingview.com/x/Cccccccc/");
+  it("names the first bad one and refuses more than the cap", () => {
+    expect(validateTradeImageList(["https://www.tradingview.com/chart/X/"]).ok).toBe(false);
+    const many = Array.from({ length: MAX_TRADE_IMAGES + 1 }, () => "https://www.tradingview.com/x/Aaaaaaaa/");
+    expect(validateTradeImageList(many)).toEqual({ ok: false, error: `At most ${MAX_TRADE_IMAGES} charts on one trade.` });
   });
 });
 

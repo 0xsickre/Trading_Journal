@@ -1,7 +1,6 @@
 // Client-safe shared types (no server-only imports here).
 
 import type { Database } from "@/lib/supabase/types";
-import type { TradeImageKind } from "./tradingview-snapshot";
 import type {
   CategorySelection,
   FieldDefPhase,
@@ -215,8 +214,6 @@ export function narrowPositionStat(row: StatsViewRow): PositionStat | null {
   };
 }
 
-export type TradeTvImages = Partial<Record<TradeImageKind, string>>;
-
 export type TradeRow = {
   id: string;
   account_id: string | null;
@@ -226,5 +223,6 @@ export type TradeRow = {
   needs_review: boolean;
   created_at: string;
   stats: PositionStat | null;
-  tv_images?: TradeTvImages;
+  /** The trade's chart images, in the order they were added. */
+  chart_images?: string[];
 } & Record<string, unknown>;

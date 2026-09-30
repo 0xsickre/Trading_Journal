@@ -1280,6 +1280,7 @@ export type Database = {
           image_url: string
           kind: string
           position_id: string
+          sort_order: number
           user_id: string
         }
         Insert: {
@@ -1289,6 +1290,7 @@ export type Database = {
           image_url: string
           kind?: string
           position_id: string
+          sort_order?: number
           user_id?: string
         }
         Update: {
@@ -1298,6 +1300,7 @@ export type Database = {
           image_url?: string
           kind?: string
           position_id?: string
+          sort_order?: number
           user_id?: string
         }
         Relationships: [

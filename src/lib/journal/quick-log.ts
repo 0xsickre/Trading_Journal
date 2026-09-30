@@ -61,10 +61,8 @@ export type QuickLogInput = {
   mistakes: string[];
   emotions: string[];
   note: string;
-  /** The chart at the entry (`ltf_pre`); empty = none. */
-  entrySnapshotUrl: string;
-  /** The chart after the exit (`ltf_post`); empty = none. */
-  snapshotUrl: string;
+  /** Chart pictures, in the order added (the "+" list); blanks are dropped. */
+  images: string[];
 };
 
 /** No exit price: the trade is still running and is saved open. */
@@ -231,8 +229,6 @@ export function quickLogToTradeInput(q: QuickLogInput, exitReasonOptions: readon
   if (mistakes.length) fields.mistake = mistakes;
   if (q.emotions.length) fields.psychology_tags = q.emotions;
   if (exitReason) fields.exit_reason = exitReason;
-  const snapshot = q.snapshotUrl.trim();
-  const entrySnapshot = q.entrySnapshotUrl.trim();
   return {
     account_id: q.accountId,
     trade_no: null,
@@ -267,9 +263,6 @@ export function quickLogToTradeInput(q: QuickLogInput, exitReasonOptions: readon
     // exposure, and `createTrade` refuses it there like any plan.
     origin: "log" as const,
     playbook_id: q.playbookId,
-    images: [
-      ...(entrySnapshot ? [{ kind: "ltf_pre", image_url: entrySnapshot }] : []),
-      ...(snapshot ? [{ kind: "ltf_post", image_url: snapshot }] : []),
-    ],
+    images: q.images.map((i) => i.trim()).filter(Boolean),
   };
 }

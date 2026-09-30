@@ -33,9 +33,9 @@ import {
   tradeInputSchema,
 } from "@/lib/journal/trade-input-schema";
 import {
-  TRADE_IMAGE_KINDS,
-  validateTradeImageRef,
-  type TradeImageKind,
+  MAX_TRADE_IMAGES,
+  TRADE_IMAGE_KIND,
+  validateTradeImageList,
 } from "@/lib/journal/tradingview-snapshot";
 
 export type ExecutionInput = {
@@ -72,9 +72,10 @@ export type TradeInput = {
    *
    * Create only. Once the position has an id, `TradeImages` owns these rows and
    * writes them itself — accepting them on update as well would give one row two
-   * writers with no rule for which wins.
+   * writers with no rule for which wins. In order; each a stored image or a
+   * TradingView snapshot link.
    */
-  images?: { kind: string; image_url: string }[];
+  images?: string[];
 };
 
 /**
@@ -327,16 +328,9 @@ function validateTradeImages(
 ):
   | { ok: true; rows: { kind: string; image_url: string }[] }
   | { ok: false; error: string } {
-  const rows: { kind: string; image_url: string }[] = [];
-  for (const img of images ?? []) {
-    if (!TRADE_IMAGE_KINDS.includes(img.kind as TradeImageKind)) {
-      return { ok: false, error: `Unknown chart slot: ${img.kind}` };
-    }
-    const validated = validateTradeImageRef(img.image_url);
-    if (!validated.ok) return { ok: false, error: validated.message };
-    rows.push({ kind: img.kind, image_url: validated.url });
-  }
-  return { ok: true, rows };
+  const list = validateTradeImageList(images);
+  if (!list.ok) return list;
+  return { ok: true, rows: list.urls.map((image_url) => ({ kind: TRADE_IMAGE_KIND, image_url })) };
 }
 
 export async function updateTrade(id: string, input: TradeInput) {
@@ -666,10 +660,8 @@ const tradeReviewSchema = z.object({
   trade_journal_notes: z.string().max(20_000).nullable(),
   /** Written only where the trade has none — never over the trader's own answer. */
   exit_reason: z.string().trim().min(1).max(200).nullable(),
-  /** The exit chart; empty leaves the slot as it is. */
-  snapshot_url: z.string().nullable(),
-  /** The entry chart; empty leaves the slot as it is. */
-  entry_snapshot_url: z.string().nullable().optional(),
+  /** Charts to ADD, in order, after the ones the trade already has. */
+  images: z.array(z.string()).max(MAX_TRADE_IMAGES),
 });
 
 export type TradeReviewInput = z.infer<typeof tradeReviewSchema>;
@@ -680,26 +672,16 @@ export type TradeReviewInput = z.infer<typeof tradeReviewSchema>;
  *
  * For the trades the day's export brought in: their fills are already exact, so
  * this must not go through `tj_save_trade`, which rewrites every fill and every
- * rule answer on each save. One UPDATE of these columns, and the chart through
- * the same upsert `TradeImages` uses.
+ * rule answer on each save. One UPDATE of these columns, and new charts
+ * appended to the trade's list.
  */
 export async function saveTradeReview(id: string, input: TradeReviewInput) {
   const parsed = tradeReviewSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: firstIssue(parsed.error) };
   const r = parsed.data;
 
-  // Each slot written only when a picture was given: an empty field leaves
-  // what the trade already has.
-  const images: { kind: "ltf_pre" | "ltf_post"; url: string }[] = [];
-  for (const [kind, ref] of [
-    ["ltf_pre", r.entry_snapshot_url],
-    ["ltf_post", r.snapshot_url],
-  ] as const) {
-    if (!ref || !ref.trim()) continue;
-    const validated = validateTradeImageRef(ref);
-    if (!validated.ok) return { ok: false as const, error: validated.message };
-    images.push({ kind, url: validated.url });
-  }
+  const images = validateTradeImageList(r.images);
+  if (!images.ok) return { ok: false as const, error: images.error };
 
   const supabase = await createClient();
   const { data: prev } = await supabase.from("tj_positions").select("exit_reason").eq("id", id).maybeSingle();
@@ -718,10 +700,23 @@ export async function saveTradeReview(id: string, input: TradeReviewInput) {
     .eq("id", id);
   if (error) return { ok: false as const, error: error.message };
 
-  if (images.length > 0) {
-    const { error: imgErr } = await supabase.from("tj_trade_images").upsert(
-      images.map((i) => ({ position_id: id, kind: i.kind, image_url: i.url })),
-      { onConflict: "position_id,kind" },
+  if (images.urls.length > 0) {
+    // Appended after the trade's own: a review adds pictures, never replaces them.
+    const { data: last } = await supabase
+      .from("tj_trade_images")
+      .select("sort_order")
+      .eq("position_id", id)
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const start = (last?.sort_order ?? -1) + 1;
+    const { error: imgErr } = await supabase.from("tj_trade_images").insert(
+      images.urls.map((image_url, i) => ({
+        position_id: id,
+        kind: TRADE_IMAGE_KIND,
+        image_url,
+        sort_order: start + i,
+      })),
     );
     if (imgErr) return { ok: false as const, error: imgErr.message };
   }

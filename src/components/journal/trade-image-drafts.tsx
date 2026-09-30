@@ -1,89 +1,102 @@
 "use client";
 
+import { Plus, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { ChartImageInput } from "@/components/journal/chart-image-input";
-import {
-  TRADE_IMAGE_KIND_HINTS,
-  TRADE_IMAGE_KIND_LABELS,
-} from "@/lib/journal/tradingview-snapshot";
-
-/** The two slots that describe the setup BEFORE it is taken. */
-export const PRE_IMAGE_KINDS = ["htf_pre", "ltf_pre"] as const;
-export type PreImageKind = (typeof PRE_IMAGE_KINDS)[number];
-export type ImageDrafts = Partial<Record<PreImageKind, string>>;
+import { MAX_TRADE_IMAGES } from "@/lib/journal/tradingview-snapshot";
 
 /**
- * The drafts as `createTrade` wants them: only the slots actually filled.
+ * The drafts as `createTrade` wants them: the filled ones, trimmed, in order.
  *
- * A separate function rather than an inline `Object.entries` in the form's
- * submit, because it is the one part of this feature worth asserting directly.
- * Driving it through the UI would mean opening a Radix Select in jsdom to
- * satisfy the instrument check — a test that fails on the widget rather than on
- * the behaviour.
- *
- * Iterates `PRE_IMAGE_KINDS` instead of the object's own keys, so the payload
- * order is the display order and a stray key on the drafts object cannot reach
- * the server.
+ * A separate function rather than an inline filter in the form's submit,
+ * because it is the one part of this feature worth asserting directly — an
+ * untouched "+" field is not an intent to attach a blank chart.
  */
-export function imageDraftsToPayload(
-  drafts: ImageDrafts,
-): { kind: PreImageKind; image_url: string }[] {
-  return PRE_IMAGE_KINDS.flatMap((kind) => {
-    const url = (drafts[kind] ?? "").trim();
-    return url ? [{ kind, image_url: url }] : [];
-  });
+export function imageDraftsToPayload(drafts: readonly string[]): string[] {
+  return drafts.map((d) => d.trim()).filter(Boolean);
 }
 
 /**
- * Chart links on a trade that does not exist yet.
+ * Chart pictures as a list the trader grows with "+" (30.09.2026): each field
+ * takes an upload, a paste from the clipboard or a TradingView snapshot link.
+ * Holds strings only; whoever renders it decides when they are written.
+ */
+export function ChartImageListInput({
+  value,
+  onChange,
+  idPrefix,
+  addLabel = "Add chart",
+}: {
+  value: readonly string[];
+  onChange: (next: string[]) => void;
+  /** Ids for the fields, `${idPrefix}-0`, `-1`…, so a label can point at the first. */
+  idPrefix: string;
+  addLabel?: string;
+}) {
+  const set = (i: number, ref: string) => onChange(value.map((v, j) => (j === i ? ref : v)));
+  const remove = (i: number) => onChange(value.filter((_, j) => j !== i));
+  return (
+    <div className="space-y-2">
+      {value.map((ref, i) => (
+        <div key={i} className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <ChartImageInput id={`${idPrefix}-${i}`} value={ref} onChange={(r) => set(i, r)} />
+          </div>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="size-8 shrink-0"
+            aria-label={`Remove chart ${i + 1}`}
+            onClick={() => remove(i)}
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+      ))}
+      {value.length < MAX_TRADE_IMAGES && (
+        <Button type="button" size="sm" variant="outline" onClick={() => onChange([...value, ""])}>
+          <Plus className="size-4" /> {addLabel}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Charts on a trade that does not exist yet.
  *
  * A separate component from `TradeImages` rather than a mode flag on it, and
  * the split is by JOB, not by convenience. `TradeImages` owns rows: it reads
- * them, upserts them, deletes them, and every one of those needs a position id
- * to key on. This one owns two strings in form state and writes nothing —
- * `createTrade` persists them once the position has an id.
+ * them, inserts them, deletes them, and every one of those needs a position id
+ * to key on. This one owns strings in form state and writes nothing —
+ * `createTrade` persists them, in order, once the position has an id.
  *
- * It exists because the screenshot is taken at PLANNING time. The chart that
- * made you want the trade is the single most useful artifact of the plan, and
- * until now it could only be attached after saving — by which point the reader
- * has moved on and the annotated chart is a tab you already closed.
- *
- * Only the two `_pre` slots. `ltf_post` is a picture of an exit that has not
- * happened; offering it here would be asking for a screenshot of the future.
+ * It exists because the screenshot is taken at PLANNING time: the chart that
+ * made you want the trade is the most useful artifact of the plan.
  */
 export function TradeImageDrafts({
   drafts,
   onChange,
 }: {
-  drafts: ImageDrafts;
-  onChange: (kind: PreImageKind, url: string) => void;
+  drafts: readonly string[];
+  onChange: (next: string[]) => void;
 }) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Chart</CardTitle>
+        <CardTitle className="text-base">Charts</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Upload a screenshot, paste one from the clipboard, or paste a TradingView
-          snapshot link (camera → <i>Copy link to chart image</i>). Saved with the trade.
+          As many as you like: upload a screenshot, paste one from the clipboard, or paste a
+          TradingView snapshot link (camera → <i>Copy link to chart image</i>). Saved with the trade.
         </p>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {PRE_IMAGE_KINDS.map((kind) => (
-          <div key={kind} className="space-y-1.5">
-            <Label className="text-xs">
-              {TRADE_IMAGE_KIND_LABELS[kind]}
-              <span className="ml-2 font-normal text-muted-foreground">
-                {TRADE_IMAGE_KIND_HINTS[kind]}
-              </span>
-            </Label>
-            <ChartImageInput value={drafts[kind] ?? ""} onChange={(ref) => onChange(kind, ref)} />
-          </div>
-        ))}
+      <CardContent>
         {/* No preview here on purpose: a thumbnail would need the link to be
             valid, and the honest moment to reject a bad link is the save, where
-            the server validates it with the same function. A preview that
-            silently stays blank teaches nothing. */}
+            the server validates it with the same function. */}
+        <ChartImageListInput value={drafts} onChange={onChange} idPrefix="new-chart" />
       </CardContent>
     </Card>
   );

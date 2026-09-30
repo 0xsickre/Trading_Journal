@@ -32,8 +32,7 @@ function q(over: Partial<QuickLogInput> = {}): QuickLogInput {
     mistakes: ["Pomerio stop"],
     emotions: [],
     note: "  chased the second push ",
-    entrySnapshotUrl: "",
-    snapshotUrl: "",
+    images: [],
     ...over,
   };
 }
@@ -70,7 +69,7 @@ describe("quickLogProblem", () => {
     expect(quickLogProblem(q(over))).toContain(msg);
   });
   it("no exit is a trade still running: saved open, with only the entry fill", () => {
-    const open = q({ exit: null, exitedAt: null, snapshotUrl: "" });
+    const open = q({ exit: null, exitedAt: null });
     expect(quickLogProblem(open)).toBeNull();
     const t = quickLogToTradeInput(open, EXIT_REASONS);
     expect(t.executions.map((e) => e.side)).toEqual(["entry"]);
@@ -147,26 +146,23 @@ describe("quickLogToTradeInput", () => {
     expect(t.trade_phase).toBe("active");
     expect(t.images).toEqual([]);
   });
-  it("carries the snapshot as the exit chart and empty answers as nulls", () => {
+  it("carries the charts in order and empty answers as nulls", () => {
     const t = quickLogToTradeInput(
-      q({ grade: null, mistakes: [], note: " ", stop: null, target: null, snapshotUrl: " https://www.tradingview.com/x/abc/ " }),
+      q({ grade: null, mistakes: [], note: " ", stop: null, target: null, images: [" https://www.tradingview.com/x/abc/ ", ""] }),
       EXIT_REASONS,
     );
-    expect(t.images).toEqual([{ kind: "ltf_post", image_url: "https://www.tradingview.com/x/abc/" }]);
+    expect(t.images).toEqual(["https://www.tradingview.com/x/abc/"]);
     expect(t.fields.execution_rating).toBeNull();
     expect(t.fields.trade_journal_notes).toBeNull();
     expect(t.fields.stop_price).toBeNull();
     expect(t.fields).not.toHaveProperty("mistake");
   });
-  it("carries an entry chart as ltf_pre, before the exit chart", () => {
+  it("keeps as many charts as were added, in the order added", () => {
     const t = quickLogToTradeInput(
-      q({ entrySnapshotUrl: " storage:u/entry.png ", snapshotUrl: "https://www.tradingview.com/x/abc/" }),
+      q({ images: [" storage:u/entry.png ", "https://www.tradingview.com/x/abc/", "storage:u/exit.png"] }),
       EXIT_REASONS,
     );
-    expect(t.images).toEqual([
-      { kind: "ltf_pre", image_url: "storage:u/entry.png" },
-      { kind: "ltf_post", image_url: "https://www.tradingview.com/x/abc/" },
-    ]);
+    expect(t.images).toEqual(["storage:u/entry.png", "https://www.tradingview.com/x/abc/", "storage:u/exit.png"]);
   });
 });
 

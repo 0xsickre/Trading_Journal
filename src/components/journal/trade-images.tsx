@@ -6,65 +6,38 @@ import { Loader2, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { ChartImageInput, ChartThumb } from "@/components/journal/chart-image-input";
+import { ChartThumb } from "@/components/journal/chart-image-input";
+import { ChartImageListInput, imageDraftsToPayload } from "@/components/journal/trade-image-drafts";
 import { removeStoredImage } from "@/lib/journal/trade-image-storage";
 import {
-  TRADE_IMAGE_KINDS,
-  TRADE_IMAGE_KIND_HINTS,
-  TRADE_IMAGE_KIND_LABELS,
-  type TradeImageKind,
-  validateTradeImageRef,
+  MAX_TRADE_IMAGES,
+  TRADE_IMAGE_KIND,
+  validateTradeImageList,
 } from "@/lib/journal/tradingview-snapshot";
 
-type SlotRow = {
-  id: string;
-  kind: TradeImageKind;
-  image_url: string;
-};
+type ImageRow = { id: string; image_url: string; sort_order: number };
 
-type Drafts = Record<TradeImageKind, string>;
-
-const EMPTY_DRAFTS = (): Drafts => ({
-  htf_pre: "",
-  ltf_pre: "",
-  ltf_post: "",
-});
-
+/**
+ * The charts of a saved trade, as a list (30.09.2026): every picture it has, in
+ * the order added, each removable, and "+" for more. A new one goes after the
+ * last; removing one takes its uploaded file with it.
+ */
 export function TradeImages({ positionId }: { positionId: string }) {
-  const [slots, setSlots] = useState<Partial<Record<TradeImageKind, SlotRow>>>(
-    {},
-  );
-  const [drafts, setDrafts] = useState<Drafts>(EMPTY_DRAFTS);
+  const [rows, setRows] = useState<ImageRow[]>([]);
+  const [drafts, setDrafts] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [savingKind, setSavingKind] = useState<TradeImageKind | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const supabase = createClient();
     setLoading(true);
-    const { data: rows, error } = await supabase
+    const { data, error } = await createClient()
       .from("tj_trade_images")
-      .select("id, kind, image_url")
-      .eq("position_id", positionId);
-    if (error) {
-      toast.error(error.message);
-      setLoading(false);
-      return;
-    }
-    const next: Partial<Record<TradeImageKind, SlotRow>> = {};
-    const nextDrafts = EMPTY_DRAFTS();
-    for (const r of rows ?? []) {
-      const kind = r.kind as TradeImageKind;
-      if (!TRADE_IMAGE_KINDS.includes(kind)) continue;
-      next[kind] = {
-        id: r.id,
-        kind,
-        image_url: r.image_url,
-      };
-      nextDrafts[kind] = r.image_url;
-    }
-    setSlots(next);
-    setDrafts(nextDrafts);
+      .select("id, image_url, sort_order")
+      .eq("position_id", positionId)
+      .order("sort_order")
+      .order("id");
+    if (error) toast.error(error.message);
+    setRows(data ?? []);
     setLoading(false);
   }, [positionId]);
 
@@ -75,116 +48,98 @@ export function TradeImages({ positionId }: { positionId: string }) {
     load();
   }, [load]);
 
-  async function save(kind: TradeImageKind) {
-    const validated = validateTradeImageRef(drafts[kind]);
-    if (!validated.ok) {
-      toast.error(validated.message);
+  async function saveDrafts() {
+    const list = validateTradeImageList(imageDraftsToPayload(drafts));
+    if (!list.ok) {
+      toast.error(list.error);
       return;
     }
-    const before = slots[kind]?.image_url;
-    setSavingKind(kind);
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.from("tj_trade_images").upsert(
-        {
-          position_id: positionId,
-          kind,
-          image_url: validated.url,
-        },
-        { onConflict: "position_id,kind" },
-      );
-      if (error) throw error;
-      // The replaced image's file goes with it; a link has none.
-      if (before && before !== validated.url) await removeStoredImage(before);
-      toast.success(`${TRADE_IMAGE_KIND_LABELS[kind]} saved`);
-      await load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setSavingKind(null);
+    if (list.urls.length === 0) return;
+    if (rows.length + list.urls.length > MAX_TRADE_IMAGES) {
+      toast.error(`At most ${MAX_TRADE_IMAGES} charts on one trade.`);
+      return;
     }
+    setBusy(true);
+    const start = rows.reduce((m, r) => Math.max(m, r.sort_order), -1) + 1;
+    const { error } = await createClient()
+      .from("tj_trade_images")
+      .insert(
+        list.urls.map((image_url, i) => ({
+          position_id: positionId,
+          kind: TRADE_IMAGE_KIND,
+          image_url,
+          sort_order: start + i,
+        })),
+      );
+    setBusy(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(list.urls.length === 1 ? "Chart saved" : `${list.urls.length} charts saved`);
+    setDrafts([]);
+    await load();
   }
 
-  async function clear(kind: TradeImageKind) {
-    const row = slots[kind];
-    if (!row) {
-      setDrafts((d) => ({ ...d, [kind]: "" }));
+  async function remove(row: ImageRow) {
+    setBusy(true);
+    const { error } = await createClient().from("tj_trade_images").delete().eq("id", row.id);
+    if (error) {
+      setBusy(false);
+      toast.error(error.message);
       return;
     }
-    setSavingKind(kind);
-    try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("tj_trade_images")
-        .delete()
-        .eq("id", row.id);
-      if (error) throw error;
-      await removeStoredImage(row.image_url);
-      setSlots((prev) => {
-        const copy = { ...prev };
-        delete copy[kind];
-        return copy;
-      });
-      setDrafts((d) => ({ ...d, [kind]: "" }));
-      toast.success("Removed");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Remove failed");
-    } finally {
-      setSavingKind(null);
-    }
+    // The uploaded file goes with its row; a link has none.
+    await removeStoredImage(row.image_url);
+    setBusy(false);
+    setRows((prev) => prev.filter((r) => r.id !== row.id));
+    toast.success("Removed");
   }
+
+  const pending = imageDraftsToPayload(drafts).length;
 
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Chart snapshots</CardTitle>
+        <CardTitle className="text-base">Charts</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Upload a screenshot, paste one from the clipboard, or paste a TradingView
-          &quot;Copy link to chart image&quot; (<code className="text-xs">tradingview.com/x/…</code>).
+          As many as you like: upload a screenshot, paste one from the clipboard, or paste a
+          TradingView &quot;Copy link to chart image&quot; (<code className="text-xs">tradingview.com/x/…</code>).
           An uploaded image is kept in the journal, not on TradingView.
         </p>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : (
-          <div className="grid gap-4 md:grid-cols-3">
-            {TRADE_IMAGE_KINDS.map((kind) => {
-              const saved = slots[kind];
-              const busy = savingKind === kind;
-              return (
-                <div key={kind} className="space-y-2 rounded-md border p-3">
-                  <div>
-                    <Label htmlFor={`tv-${kind}`}>{TRADE_IMAGE_KIND_LABELS[kind]}</Label>
-                    <p className="text-xs text-muted-foreground">{TRADE_IMAGE_KIND_HINTS[kind]}</p>
-                  </div>
-                  {saved ? <ChartThumb imageRef={saved.image_url} label={TRADE_IMAGE_KIND_LABELS[kind]} /> : null}
-                  <ChartImageInput
-                    id={`tv-${kind}`}
-                    value={drafts[kind]}
-                    onChange={(ref) => setDrafts((d) => ({ ...d, [kind]: ref }))}
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" size="sm" disabled={busy} onClick={() => save(kind)}>
-                      {busy ? <Loader2 className="size-4 animate-spin" /> : "Save"}
+          rows.length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {rows.map((row, i) => (
+                <div key={row.id} className="space-y-2 rounded-md border p-2">
+                  <ChartThumb imageRef={row.image_url} label={`Chart ${i + 1}`} />
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Chart {i + 1}</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => remove(row)}
+                      aria-label={`Remove chart ${i + 1}`}
+                    >
+                      <Trash2 className="size-3.5" />
                     </Button>
-                    {(saved || drafts[kind]) && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        disabled={busy}
-                        onClick={() => clear(kind)}
-                        aria-label={`Remove ${TRADE_IMAGE_KIND_LABELS[kind]}`}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )
+        )}
+        <ChartImageListInput value={drafts} onChange={setDrafts} idPrefix={`chart-${positionId}`} />
+        {pending > 0 && (
+          <Button type="button" size="sm" disabled={busy} onClick={saveDrafts}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : pending === 1 ? "Save chart" : `Save ${pending} charts`}
+          </Button>
         )}
       </CardContent>
     </Card>

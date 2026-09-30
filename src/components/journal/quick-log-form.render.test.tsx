@@ -77,7 +77,7 @@ describe("QuickLogForm on a blown prop-firm account", () => {
     await user.type(screen.getByLabelText("Entry"), "30584");
     await user.type(screen.getByLabelText("Exit (empty = still open)"), "30604");
     await user.click(screen.getByRole("button", { name: "5 min ago" }));
-    await user.click(screen.getByRole("button", { name: /^A/ }));
+    await user.click(screen.getByRole("button", { name: /^A(?!dd chart)/ }));
     await user.click(screen.getByRole("button", { name: "Log trade" }));
     expect(createTradeMock).toHaveBeenCalledOnce();
     expect(createTradeMock.mock.calls[0][0].origin).toBe("log");
@@ -97,7 +97,7 @@ describe("QuickLogForm — a trade still running", () => {
     await user.type(screen.getByLabelText("Stop"), "30564");
     expect(screen.queryByLabelText("Exited at")).not.toBeInTheDocument();
     expect(screen.getByText(/the trade is saved open/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /^A/ }));
+    await user.click(screen.getByRole("button", { name: /^A(?!dd chart)/ }));
     await user.click(screen.getByRole("button", { name: "Log trade" }));
     const sent = createTradeMock.mock.calls[0][0];
     expect(sent.executions.map((e: { side: string }) => e.side)).toEqual(["entry"]);
@@ -112,7 +112,7 @@ describe("QuickLogForm — logging after the trade", () => {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
     expect(screen.getByText("OR breakout")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^A/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^A(?!dd chart)/ })).toBeInTheDocument();
     expect(screen.queryByText(/thesis/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/MAE|MFE/)).not.toBeInTheDocument();
     // Mistakes only once the trade was not by plan.
@@ -168,7 +168,7 @@ describe("QuickLogForm — logging after the trade", () => {
     await user.type(screen.getByLabelText("Entry"), "30584");
     await user.type(screen.getByLabelText("Stop"), "30564");
     await user.type(screen.getByLabelText("Exit (empty = still open)"), "30620");
-    await user.click(screen.getByRole("button", { name: /^A/ }));
+    await user.click(screen.getByRole("button", { name: /^A(?!dd chart)/ }));
     await user.click(screen.getByRole("button", { name: "Log trade" }));
     expect(createTradeMock.mock.calls[1][0].fields).toMatchObject({ execution_rating: 5, mistake: ["Bez greške"] });
   });
@@ -193,8 +193,7 @@ describe("QuickLogForm — reviewing an imported trade", () => {
     mistake: [],
     psychology: [],
     notes: null,
-    entrySnapshot: null,
-    snapshot: null,
+    images: [],
   };
 
   it("shows the fills as fixed and saves only the review", async () => {
@@ -213,8 +212,7 @@ describe("QuickLogForm — reviewing an imported trade", () => {
       psychology_tags: [],
       trade_journal_notes: "",
       exit_reason: "Zatvoreno ranije",
-      snapshot_url: null,
-      entry_snapshot_url: null,
+      images: [],
     });
     expect(pushMock).toHaveBeenCalledWith("/daily");
   });

@@ -30,8 +30,6 @@ import { TradeImages } from "@/components/journal/trade-images";
 import {
   TradeImageDrafts,
   imageDraftsToPayload,
-  type ImageDrafts,
-  type PreImageKind,
 } from "@/components/journal/trade-image-drafts";
 import {
   incompleteScaleOutRows,
@@ -363,10 +361,10 @@ export function TradeForm({
 
   // Only meaningful before the trade exists. Once it does, `TradeImages` owns
   // the rows and writes them itself, so this state is never read again.
-  const [imageDrafts, setImageDrafts] = useState<ImageDrafts>({});
-  function setImageDraft(kind: PreImageKind, url: string) {
+  const [imageDrafts, setImageDrafts] = useState<string[]>([]);
+  function changeImageDrafts(next: string[]) {
     setDirty(true);
-    setImageDrafts((prev) => ({ ...prev, [kind]: url }));
+    setImageDrafts(next);
   }
 
   const [execs, setExecs] = useState<ExecRow[]>(() => {
@@ -1353,7 +1351,7 @@ export function TradeForm({
       {initial ? (
         <TradeImages positionId={initial.id} />
       ) : (
-        <TradeImageDrafts drafts={imageDrafts} onChange={setImageDraft} />
+        <TradeImageDrafts drafts={imageDrafts} onChange={changeImageDrafts} />
       )}
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>

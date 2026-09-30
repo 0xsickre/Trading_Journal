@@ -1,18 +1,13 @@
-export const TRADE_IMAGE_KINDS = ["htf_pre", "ltf_pre", "ltf_post"] as const;
+/**
+ * A trade's charts are a LIST (30.09.2026): as many as the trader adds, in the
+ * order added (`sort_order`). They used to be three fixed slots — HTF before,
+ * LTF before, LTF after — one picture each; rows written then keep their
+ * `kind`, every new one is `chart`.
+ */
+export const TRADE_IMAGE_KIND = "chart";
 
-export type TradeImageKind = (typeof TRADE_IMAGE_KINDS)[number];
-
-export const TRADE_IMAGE_KIND_LABELS: Record<TradeImageKind, string> = {
-  htf_pre: "HTF Pre",
-  ltf_pre: "LTF Pre",
-  ltf_post: "LTF Post",
-};
-
-export const TRADE_IMAGE_KIND_HINTS: Record<TradeImageKind, string> = {
-  htf_pre: "Higher timeframe before entry",
-  ltf_pre: "Lower timeframe before entry",
-  ltf_post: "Lower timeframe after exit",
-};
+/** Enough for any trade, and a bound on what one request may write. */
+export const MAX_TRADE_IMAGES = 20;
 
 const SNAPSHOT_ID_RE = /tradingview\.com\/x\/([A-Za-z0-9]+)/i;
 const CHART_LAYOUT_RE = /tradingview\.com\/chart\//i;
@@ -96,14 +91,22 @@ export function validateTradeImageRef(input: string): ValidateSnapshotResult {
   return validateTradingViewSnapshotUrl(raw);
 }
 
-/** Primary link for journal grid: ltf_pre, else first available slot. */
-export function primaryTradeImageUrl(
-  images: Partial<Record<TradeImageKind, string>>,
-): string | null {
-  if (images.ltf_pre) return images.ltf_pre;
-  for (const kind of TRADE_IMAGE_KINDS) {
-    const url = images[kind];
-    if (url) return url;
+/**
+ * Validate a list of chart references for writing: blanks dropped, each one
+ * checked, at most `MAX_TRADE_IMAGES`. The first bad one names the problem.
+ */
+export function validateTradeImageList(
+  refs: readonly string[] | undefined,
+): { ok: true; urls: string[] } | { ok: false; error: string } {
+  const filled = (refs ?? []).map((r) => r.trim()).filter(Boolean);
+  if (filled.length > MAX_TRADE_IMAGES) {
+    return { ok: false, error: `At most ${MAX_TRADE_IMAGES} charts on one trade.` };
   }
-  return null;
+  const urls: string[] = [];
+  for (const ref of filled) {
+    const v = validateTradeImageRef(ref);
+    if (!v.ok) return { ok: false, error: v.message };
+    urls.push(v.url);
+  }
+  return { ok: true, urls };
 }

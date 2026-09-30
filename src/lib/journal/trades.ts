@@ -5,10 +5,9 @@ import { selectAllByIds, selectAllPages } from "@/lib/supabase/paginate";
 import { CUSTOM_FIELD_COLUMN, flattenCustom } from "./field-values";
 import { getTradeRuleAnswers } from "./playbooks";
 import type { TradeFormInitial } from "@/components/journal/trade-form";
-import type { TradeImageKind } from "./tradingview-snapshot";
 import { narrowPositionStat } from "./types";
 import { asFillSource } from "./trade-lifecycle";
-import type { PositionStat, TradeRow, TradeTvImages } from "./types";
+import type { PositionStat, TradeRow } from "./types";
 
 export type { TradeRow } from "./types";
 
@@ -55,19 +54,21 @@ async function readTradesWithStats(
     selectAllByIds(positionIds, (chunk, from, to) =>
       supabase
         .from("tj_trade_images")
-        .select("position_id, kind, image_url")
+        .select("position_id, image_url, sort_order, id")
         .in("position_id", chunk)
         .order("position_id")
+        .order("sort_order")
+        .order("id")
         .range(from, to),
     ),
   ]);
 
-  const imagesByPosition = new Map<string, TradeTvImages>();
+  // Already in order: by position, then as the trader added them.
+  const imagesByPosition = new Map<string, string[]>();
   for (const img of images) {
-    const kind = img.kind as TradeImageKind;
-    const bucket = imagesByPosition.get(img.position_id) ?? {};
-    bucket[kind] = img.image_url;
-    imagesByPosition.set(img.position_id, bucket);
+    const list = imagesByPosition.get(img.position_id) ?? [];
+    list.push(img.image_url);
+    imagesByPosition.set(img.position_id, list);
   }
 
   // `narrowPositionStat` instead of `statRows as PositionStat[]`. The cast
@@ -86,7 +87,7 @@ async function readTradesWithStats(
       ({
         ...p,
         stats: statById.get(p.id) ?? null,
-        tv_images: imagesByPosition.get(p.id) ?? {},
+        chart_images: imagesByPosition.get(p.id) ?? [],
       }) as TradeRow,
   );
 }

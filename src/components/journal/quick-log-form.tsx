@@ -32,8 +32,8 @@ import { getTradeFormPrefs, setTradeFormPrefs } from "@/lib/journal/trade-form-p
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/journal/time";
 import type { Account, Instrument, OptionsMap } from "@/lib/journal/types";
 import type { Playbook } from "@/lib/journal/playbook-types";
-import { ChartImageInput } from "@/components/journal/chart-image-input";
-import { isStoredImage } from "@/lib/journal/tradingview-snapshot";
+import { ChartThumb } from "@/components/journal/chart-image-input";
+import { ChartImageListInput, imageDraftsToPayload } from "@/components/journal/trade-image-drafts";
 
 /** A trade the export already brought in: its numbers are fixed, only the review is asked for. */
 export type ReviewTrade = {
@@ -55,8 +55,8 @@ export type ReviewTrade = {
   psychology: string[];
   notes: string | null;
   /** The entry chart already on the trade. */
-  entrySnapshot: string | null;
-  snapshot: string | null;
+  /** The charts the trade already has, in order. */
+  images: string[];
 };
 
 const GRADE_HINT: Record<Grade, string> = {
@@ -186,8 +186,8 @@ export function QuickLogForm({
   const [mistakes, setMistakes] = useState<string[]>((review?.mistake ?? []).filter((m) => m !== NO_MISTAKE));
   const [emotions, setEmotions] = useState<string[]>(review?.psychology ?? []);
   const [note, setNote] = useState(review?.notes ?? "");
-  const [entrySnapshot, setEntrySnapshot] = useState("");
-  const [snapshot, setSnapshot] = useState("");
+  // One empty field to paste into; "+" adds more.
+  const [images, setImages] = useState<string[]>([""]);
 
   const mistakeItems = (optionsMap.mistake ?? []).filter((o) => o.value !== NO_MISTAKE);
   const emotionItems = optionsMap.emotion ?? [];
@@ -216,8 +216,7 @@ export function QuickLogForm({
     mistakes: mistakesToSave,
     emotions: emotionsToSave,
     note,
-    entrySnapshotUrl: entrySnapshot,
-    snapshotUrl: snapshot,
+    images,
   };
   const problem = review ? null : quickLogProblem(input);
   const warnings = review
@@ -246,8 +245,7 @@ export function QuickLogForm({
     setMistakes([]);
     setEmotions([]);
     setNote("");
-    setEntrySnapshot("");
-    setSnapshot("");
+    setImages([""]);
     setEntryTime(utcToZonedInput(minutesAgo(5), tz).slice(11, 16));
     setExitTime(nowLocal().slice(11, 16));
   }
@@ -274,8 +272,7 @@ export function QuickLogForm({
             tickSize: review.tickSize,
             options: exitReasons,
           }),
-          snapshot_url: snapshot || null,
-          entry_snapshot_url: entrySnapshot || null,
+          images: imageDraftsToPayload(images),
         });
         if (!res.ok) {
           toast.error(res.error);
@@ -514,27 +511,17 @@ export function QuickLogForm({
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="ql-entry-snap" className="text-xs">
-              Entry chart — the setup as you took it (optional)
+            <Label htmlFor="ql-chart-0" className="text-xs">
+              Charts — entry, exit, as many as you like: a screenshot, or a TradingView snapshot link (optional, Alt+S on the chart)
             </Label>
-            <ChartImageInput
-              id="ql-entry-snap"
-              value={entrySnapshot}
-              onChange={setEntrySnapshot}
-              placeholder={review?.entrySnapshot && !isStoredImage(review.entrySnapshot) ? review.entrySnapshot : ""}
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label htmlFor="ql-snap" className="text-xs">
-              Exit chart — a screenshot, or a TradingView snapshot link (optional, Alt+S on the chart)
-            </Label>
-            <ChartImageInput
-              id="ql-snap"
-              value={snapshot}
-              onChange={setSnapshot}
-              placeholder={review?.snapshot && !isStoredImage(review.snapshot) ? review.snapshot : ""}
-            />
+            {review && review.images.length > 0 && (
+              <div className="grid gap-2 pb-1 sm:grid-cols-3">
+                {review.images.map((ref, i) => (
+                  <ChartThumb key={`${ref}-${i}`} imageRef={ref} label={`Chart ${i + 1}`} />
+                ))}
+              </div>
+            )}
+            <ChartImageListInput value={images} onChange={setImages} idPrefix="ql-chart" />
           </div>
         </CardContent>
       </Card>

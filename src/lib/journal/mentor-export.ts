@@ -102,9 +102,7 @@ function detailFieldsFor(defs: readonly FieldDef[]) {
   add("position_size", "Position size");
   add("miss_reason", "Miss reason");
   add("missed_at", "Missed at");
-  add("tv_htf_pre", "TV HTF Pre");
-  add("tv_ltf_pre", "TV LTF Pre");
-  add("tv_ltf_post", "TV LTF Post");
+  add("chart_images_text", "Charts");
   return out;
 }
 
@@ -208,12 +206,11 @@ function tradeDetail(
   const rr = s?.realized_r != null ? `${r2(s.realized_r)}R` : "—";
   const net = s?.net_pl != null ? money(s.net_pl, ccy) : "—";
   const head = `### Trade ${no} — ${val(t, "instrument") || "?"} ${val(t, "direction")} · ${when} · ${rr} · ${net} · ${t.status}`;
-  const tv = t.tv_images ?? {};
+  // Every chart, in the order added: a link as itself, an upload as a marker.
+  const charts = (t.chart_images ?? []).map(exportableImage).filter(Boolean);
   const enriched: TradeRow = {
     ...t,
-    tv_htf_pre: exportableImage(tv.htf_pre),
-    tv_ltf_pre: exportableImage(tv.ltf_pre),
-    tv_ltf_post: exportableImage(tv.ltf_post),
+    chart_images_text: charts.length ? `${charts.length} — ${charts.join(", ")}` : "",
   };
   const lines = [
     ...context,
