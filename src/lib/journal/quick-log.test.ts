@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   autoExitReason,
+  exitReasonAfterMerge,
   gradeFromRating,
   GRADE_RATING,
   minutesAgo,
@@ -59,7 +60,7 @@ describe("quickLogProblem", () => {
     [{ contracts: 0 }, "whole number"],
     [{ contracts: 1.5 }, "whole number"],
     [{ entry: null }, "Entry price"],
-    [{ exit: null }, "Exit price"],
+    [{ exit: 0 }, "Exit price"],
     [{ enteredAt: null }, "Entry time"],
     [{ exitedAt: "nope" }, "Exit time"],
     [{ enteredAt: "2026-09-28T14:00:00.000Z" }, "after the exit"],
@@ -67,6 +68,15 @@ describe("quickLogProblem", () => {
     [{ direction: "Long" as const, stop: 30570, target: 30500 }, "target above"],
   ])("refuses %o", (over, msg) => {
     expect(quickLogProblem(q(over))).toContain(msg);
+  });
+  it("no exit is a trade still running: saved open, with only the entry fill", () => {
+    const open = q({ exit: null, exitedAt: null, snapshotUrl: "" });
+    expect(quickLogProblem(open)).toBeNull();
+    const t = quickLogToTradeInput(open, EXIT_REASONS);
+    expect(t.executions.map((e) => e.side)).toEqual(["entry"]);
+    expect(t.fields).not.toHaveProperty("exit_reason");
+    // The side checks still apply to an open trade.
+    expect(quickLogProblem(q({ exit: null, stop: 30570 }))).toContain("stop above");
   });
   it("a missing stop is a warning, not a refusal", () => {
     const x = q({ stop: null, playbookId: null, grade: null });
@@ -193,5 +203,22 @@ describe("the day's export finds a trade logged by hand", () => {
       (a, b) => a.replace(/Z6$/, "") === b.replace(/Z6$/, ""),
     );
     expect(outcome.status).toBe("match");
+  });
+});
+
+describe("exitReasonAfterMerge — the export closes a trade logged while running", () => {
+  const base = { direction: "Short", stop: 30604, target: 30544, tickSize: 0.25, options: EXIT_REASONS };
+  const fills = (exit: number | null, exitQty = 2) => [
+    { side: "entry" as const, price: 30584, qty: 2 },
+    ...(exit == null ? [] : [{ side: "exit" as const, price: exit, qty: exitQty }]),
+  ];
+  it("reads the reason off the statement's exit", () => {
+    expect(exitReasonAfterMerge({ ...base, current: null, fills: fills(30604.5) })).toBe("Pogođen stop");
+    expect(exitReasonAfterMerge({ ...base, current: null, fills: fills(30544) })).toBe("Pogođen target");
+  });
+  it("leaves the trader's own reason, an open trade and a partial exit alone", () => {
+    expect(exitReasonAfterMerge({ ...base, current: "Prateći stop", fills: fills(30604.5) })).toBeNull();
+    expect(exitReasonAfterMerge({ ...base, current: null, fills: fills(null) })).toBeNull();
+    expect(exitReasonAfterMerge({ ...base, current: null, fills: fills(30544, 1) })).toBeNull();
   });
 });

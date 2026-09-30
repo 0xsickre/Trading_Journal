@@ -54,6 +54,7 @@ describe("planUndo", () => {
         executions: [],
         clearTarget: false,
         clearExcursion: false,
+        clearExitReason: false,
         prevStatus: null,
         prevNeedsReview: null,
       },
@@ -181,5 +182,21 @@ describe("several rows merged into one trade", () => {
   it("has no status to put back for a batch that predates recording it", () => {
     const plan = planUndo([{ matched_position_id: "p", prev_executions: [] }], []);
     expect(plan.restore[0].prevStatus).toBeNull();
+  });
+});
+
+describe("planUndo — the exit reason a merge wrote", () => {
+  it("empties it again only when this import wrote it", () => {
+    const plan = planUndo(
+      [
+        { matched_position_id: "t1", prev_executions: [], exit_reason_written: true },
+        { matched_position_id: "t2", prev_executions: [] },
+      ],
+      [],
+    );
+    expect(plan.restore.map((r) => [r.positionId, r.clearExitReason])).toEqual([
+      ["t1", true],
+      ["t2", false],
+    ]);
   });
 });

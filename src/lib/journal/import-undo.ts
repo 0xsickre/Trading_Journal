@@ -28,6 +28,8 @@ export type UndoAuditRow = {
   target_written?: boolean | null;
   /** Whether THIS row wrote MAE/MFE onto a position that had none — the same rule as the target. */
   excursion_written?: boolean | null;
+  /** Whether THIS row wrote the exit reason of a trade that closed with it — the same rule again. */
+  exit_reason_written?: boolean | null;
   /**
    * The position's status and review flag before THIS row merged into it.
    *
@@ -50,6 +52,7 @@ export type UndoPlan<T = unknown> = {
     executions: T[];
     clearTarget: boolean;
     clearExcursion: boolean;
+    clearExitReason: boolean;
     /** The status to put back, when the audit row recorded one. */
     prevStatus: string | null;
     prevNeedsReview: boolean | null;
@@ -107,6 +110,7 @@ export function planUndo<T = unknown>(
       executions: (first.prev_executions as T[]) ?? [],
       clearTarget: list.some((r) => r.target_written === true),
       clearExcursion: list.some((r) => r.excursion_written === true),
+      clearExitReason: list.some((r) => r.exit_reason_written === true),
       prevStatus: first.prev_status ?? null,
       prevNeedsReview: first.prev_needs_review ?? null,
     });

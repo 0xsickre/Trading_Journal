@@ -10,7 +10,9 @@
  *
  * The numbers may be rough. The day's TopstepX export matches this trade
  * (`import-match.ts`: entry within 0.05 %, entry time within ten minutes) and
- * replaces the fills with the exact ones; notes, setup and grade stay.
+ * replaces the fills with the exact ones; notes, setup and grade stay. A trade
+ * logged while still running has no exit yet: it is saved open, and the same
+ * match adds the exit and closes it.
  *
  * Pure: the form, its tests and the review page share it.
  */
@@ -65,6 +67,11 @@ export type QuickLogInput = {
   snapshotUrl: string;
 };
 
+/** No exit price: the trade is still running and is saved open. */
+export function isOpenLog(q: Pick<QuickLogInput, "exit">): boolean {
+  return q.exit == null;
+}
+
 /**
  * What stops the save — a sentence, or null. Only what makes the record wrong:
  * a missing stop is a warning (`quickLogWarnings`), not a refusal, because a
@@ -76,10 +83,14 @@ export function quickLogProblem(q: QuickLogInput): string | null {
     return "Contracts must be a whole number above zero.";
   }
   if (q.entry == null || !(q.entry > 0)) return "Entry price is missing.";
-  if (q.exit == null || !(q.exit > 0)) return "Exit price is missing.";
   if (!q.enteredAt || !Number.isFinite(Date.parse(q.enteredAt))) return "Entry time is missing.";
-  if (!q.exitedAt || !Number.isFinite(Date.parse(q.exitedAt))) return "Exit time is missing.";
-  if (Date.parse(q.enteredAt) > Date.parse(q.exitedAt)) return "The entry time is after the exit time.";
+  // No exit price is a trade still running: it is saved open, and the day's
+  // TopstepX export adds the exit fills and closes it.
+  if (!isOpenLog(q)) {
+    if (!(q.exit! > 0)) return "Exit price must be above zero.";
+    if (!q.exitedAt || !Number.isFinite(Date.parse(q.exitedAt))) return "Exit time is missing.";
+    if (Date.parse(q.enteredAt) > Date.parse(q.exitedAt)) return "The entry time is after the exit time.";
+  }
   if (q.stop != null && q.stop > 0 && q.stop !== q.entry) {
     const stopSide = q.stop < q.entry ? "Long" : "Short";
     if (stopSide !== q.direction) {
@@ -145,13 +156,50 @@ export function autoExitReason(params: {
   return pick("Zatvoreno ranije");
 }
 
+/**
+ * The exit reason an import writes when its fills close a trade that has none —
+ * a trade logged while it was still running got no reason, because there was no
+ * exit to read it from. Null when the trade already has one (the trader's word
+ * stands), when the fills do not close it, or when the list has no fitting item.
+ */
+export function exitReasonAfterMerge(params: {
+  current: string | null;
+  fills: readonly { side: "entry" | "exit"; price: number; qty: number }[];
+  direction: string | null;
+  stop: number | null;
+  target: number | null;
+  tickSize: number | null;
+  options: readonly string[];
+}): string | null {
+  if (params.current) return null;
+  const avg = (side: "entry" | "exit") => {
+    const f = params.fills.filter((x) => x.side === side && x.qty > 0);
+    const qty = f.reduce((s, x) => s + x.qty, 0);
+    return { qty, price: qty > 0 ? f.reduce((s, x) => s + x.price * x.qty, 0) / qty : null };
+  };
+  const entry = avg("entry");
+  const exit = avg("exit");
+  // Closed means every contract out; a partial exit is not an exit reason yet.
+  if (entry.price == null || exit.price == null || exit.qty < entry.qty) return null;
+  return autoExitReason({
+    direction: params.direction,
+    entry: entry.price,
+    exit: exit.price,
+    stop: params.stop,
+    target: params.target,
+    tickSize: params.tickSize,
+    options: params.options,
+  });
+}
+
 /** Entry time N minutes before `now`, as UTC ISO. */
 export function minutesAgo(n: number, now: Date = new Date()): string {
   return new Date(now.getTime() - n * 60_000).toISOString();
 }
 
 /**
- * The quick log as `createTrade` takes it: one entry fill and one exit fill,
+ * The quick log as `createTrade` takes it: one entry fill and one exit fill
+ * (only the entry while the trade is still running),
  * with the commission prefilled as the full form does, and the plan columns set
  * so the trade is sealed with its stop and gets an R.
  */
@@ -198,18 +246,25 @@ export function quickLogToTradeInput(q: QuickLogInput, exitReasonOptions: readon
         fee: fee(q.entry as number),
         source: "manual" as const,
       },
-      {
-        side: "exit" as const,
-        price: q.exit as number,
-        qty,
-        executed_at: q.exitedAt as string,
-        fee: fee(q.exit as number),
-        source: "manual" as const,
-      },
+      // No exit yet: one entry fill, and the trade is open until the export
+      // (or an edit) adds the exit.
+      ...(isOpenLog(q)
+        ? []
+        : [
+            {
+              side: "exit" as const,
+              price: q.exit as number,
+              qty,
+              executed_at: q.exitedAt as string,
+              fee: fee(q.exit as number),
+              source: "manual" as const,
+            },
+          ]),
     ],
     trade_phase: "active" as const,
     current_status: null,
-    // The record of a trade that already closed: a blown account lets it through.
+    // A record: a blown account lets a closed trade through. One still open is
+    // exposure, and `createTrade` refuses it there like any plan.
     origin: "log" as const,
     playbook_id: q.playbookId,
     images: [

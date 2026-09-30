@@ -10,6 +10,8 @@ import { selectAllByIds, selectAllPages } from "@/lib/supabase/paginate";
 import { computeStatus } from "@/lib/journal/trade-lifecycle";
 import { normalizeInstrumentSymbol } from "@/lib/journal/instrument-aliases";
 import { planUndo } from "@/lib/journal/import-undo";
+import { exitReasonAfterMerge } from "@/lib/journal/quick-log";
+import { getOptionsMap } from "@/lib/journal/options";
 import {
   importedPlan,
   mergeImportSummary,
@@ -110,6 +112,10 @@ function statusOf(execs: ImportExec[]) {
 /** The position fields a merge may change, as they stood before it. */
 type PositionBefore = {
   status: string;
+  /** Written by the merge only while empty (`exitReasonAfterMerge`). */
+  exit_reason: string | null;
+  direction: string | null;
+  tick_size_at_trade: number | null;
   needs_review: boolean;
   gross_pnl_override: number | null;
   target_price: number | null;
@@ -144,6 +150,10 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
   let prevSummary: unknown = null;
   // Trades a row of THIS batch already merged into, across chunks.
   const mergedInBatch = new Set<string>();
+  // The trader's exit-reason list, read once and only if a merge needs it.
+  let exitReasonList: string[] | null = null;
+  const exitReasonOptions = async () =>
+    (exitReasonList ??= ((await getOptionsMap(true)).exit_reason ?? []).map((o) => o.value));
   if (input.batch_id) {
     const { data: existing, error } = await supabase
       .from("tj_import_batches")
@@ -360,7 +370,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
     const { data: prevPos, error: posErr } = await supabase
       .from("tj_positions")
       .select(
-        "status, needs_review, gross_pnl_override, target_price, max_drawdown_price, max_profit_price, excursion_source, equity_at_entry, plan_snapshot, entry_price, stop_price, time_stop, thesis, invalidation, scale_out_levels",
+        "status, exit_reason, direction, tick_size_at_trade, needs_review, gross_pnl_override, target_price, max_drawdown_price, max_profit_price, excursion_source, equity_at_entry, plan_snapshot, entry_price, stop_price, time_stop, thesis, invalidation, scale_out_levels",
       )
       .eq("id", pid)
       .maybeSingle();
@@ -370,13 +380,28 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
 
     // Only onto an empty target, and recorded so undo can empty it again.
     const targetWritten = item.target_price != null && before.target_price == null;
+    // A trade logged while still running had no exit to read a reason from;
+    // the statement's exit fills give one. Recorded, so undo empties it again.
+    const exitReason = exitReasonAfterMerge({
+      current: before.exit_reason,
+      fills: item.executions,
+      direction: before.direction,
+      stop: before.stop_price,
+      target: targetWritten ? item.target_price : before.target_price,
+      tickSize: before.tick_size_at_trade,
+      options: await exitReasonOptions(),
+    });
 
     const { data: auditRow, error: auditErr } = await audit(item, {
       matched_position_id: pid,
       prev_executions: snapshot,
       prev_gross_pnl_override: before.gross_pnl_override,
       target_written: targetWritten,
-      prev: { status: before.status, needs_review: before.needs_review },
+      prev: {
+        status: before.status,
+        needs_review: before.needs_review,
+        ...(exitReason ? { exit_reason_written: true } : {}),
+      },
     });
     if (auditErr || !auditRow) throw new Error(auditErr?.message ?? "Could not record the merge.");
 
@@ -395,6 +420,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
           // mapped leaves the existing value alone rather than clearing it.
           ...(item.gross_pnl_override != null ? { gross_pnl_override: item.gross_pnl_override } : {}),
           ...(targetWritten ? { target_price: item.target_price } : {}),
+          ...(exitReason ? { exit_reason: exitReason } : {}),
           // The same moment seals the plan: a plan the statement turns into a
           // position is sealed as the trader wrote it, including a target this
           // very merge is writing — sealing the old null would make the next
@@ -546,8 +572,15 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
   const createdIds = new Set(createdRows.map((p) => p.id));
   const plan = planUndo<SnapshotExec>(
     rows.map((r) => {
-      const prev = (r.parsed as { prev?: { status?: string; needs_review?: boolean } } | null)?.prev;
-      return { ...r, prev_status: prev?.status ?? null, prev_needs_review: prev?.needs_review ?? null };
+      const prev = (
+        r.parsed as { prev?: { status?: string; needs_review?: boolean; exit_reason_written?: boolean } } | null
+      )?.prev;
+      return {
+        ...r,
+        prev_status: prev?.status ?? null,
+        prev_needs_review: prev?.needs_review ?? null,
+        exit_reason_written: prev?.exit_reason_written === true,
+      };
     }),
     createdIds,
   );
@@ -620,7 +653,7 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
   // The database function only carries that decision out.
   const { error: undoErr } = await supabase.rpc("tj_undo_import_batch", {
     p_batch_id: batchId,
-    p_restore: plan.restore.map(({ positionId, executions, clearTarget, clearExcursion, prevStatus, prevNeedsReview }) => ({
+    p_restore: plan.restore.map(({ positionId, executions, clearTarget, clearExcursion, clearExitReason, prevStatus, prevNeedsReview }) => ({
       position_id: positionId,
       // `source` is carried back. The snapshot holds it, and the function
       // collapses an absent one to `manual` — so listing the other six fields by
@@ -644,6 +677,7 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
       // back — this function only carries the decision out.
       clear_target: clearTarget,
       clear_excursion: clearExcursion,
+      clear_exit_reason: clearExitReason,
     })) as unknown as Json,
     p_delete_ids: plan.deleteIds,
   });

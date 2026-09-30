@@ -18,6 +18,7 @@ import {
   GRADE_RATING,
   GRADES,
   gradeFromRating,
+  isOpenLog,
   minutesAgo,
   NO_MISTAKE,
   QUICK_ENTRY_AGO_MIN,
@@ -290,7 +291,11 @@ export function QuickLogForm({
         return;
       }
       setTradeFormPrefs({ accountId: accountId ?? undefined, instrument: symbol });
-      toast.success("Trade logged — the day's TopstepX export will correct the numbers.");
+      toast.success(
+        isOpenLog(input)
+          ? "Trade logged as open — the day's TopstepX import adds the exit and closes it."
+          : "Trade logged — the day's TopstepX export will correct the numbers.",
+      );
       resetAfterSave();
       router.refresh();
     });
@@ -373,7 +378,7 @@ export function QuickLogForm({
                   ["ql-entry", "Entry", entry, setEntry],
                   ["ql-stop", "Stop", stop, setStop],
                   ["ql-target", "Target (optional)", target, setTarget],
-                  ["ql-exit", "Exit", exit, setExit],
+                  ["ql-exit", "Exit (empty = still open)", exit, setExit],
                 ] as const
               ).map(([id, label, value, set]) => (
                 <div key={id} className="space-y-1">
@@ -413,13 +418,20 @@ export function QuickLogForm({
                   </Button>
                 ))}
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="ql-out" className="text-xs">
-                  Exited at
-                </Label>
-                <Input id="ql-out" type="time" value={exitTime} onChange={(e) => setExitTime(e.target.value)} className="w-28" />
-              </div>
+              {!isOpenLog(input) && (
+                <div className="space-y-1">
+                  <Label htmlFor="ql-out" className="text-xs">
+                    Exited at
+                  </Label>
+                  <Input id="ql-out" type="time" value={exitTime} onChange={(e) => setExitTime(e.target.value)} className="w-28" />
+                </div>
+              )}
             </div>
+            {isOpenLog(input) && (
+              <p className="text-xs text-muted-foreground">
+                No exit: the trade is saved open, and the day&apos;s TopstepX import adds the exit and closes it.
+              </p>
+            )}
             {preview && (
               <p className="text-xs text-muted-foreground">
                 {preview.pts >= 0 ? "+" : ""}

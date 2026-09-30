@@ -75,7 +75,7 @@ describe("QuickLogForm on a blown prop-firm account", () => {
     );
     expect(screen.getByRole("alert")).toHaveTextContent(/hit its Maximum Loss Limit/);
     await user.type(screen.getByLabelText("Entry"), "30584");
-    await user.type(screen.getByLabelText("Exit"), "30604");
+    await user.type(screen.getByLabelText("Exit (empty = still open)"), "30604");
     await user.click(screen.getByRole("button", { name: "5 min ago" }));
     await user.click(screen.getByRole("button", { name: /^A/ }));
     await user.click(screen.getByRole("button", { name: "Log trade" }));
@@ -89,10 +89,26 @@ describe("QuickLogForm on a blown prop-firm account", () => {
   });
 });
 
+describe("QuickLogForm — a trade still running", () => {
+  it("saves it open with the entry fill only, and says the import will close it", async () => {
+    const user = userEvent.setup();
+    renderLog();
+    await user.type(screen.getByLabelText("Entry"), "30584");
+    await user.type(screen.getByLabelText("Stop"), "30564");
+    expect(screen.queryByLabelText("Exited at")).not.toBeInTheDocument();
+    expect(screen.getByText(/the trade is saved open/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^A/ }));
+    await user.click(screen.getByRole("button", { name: "Log trade" }));
+    const sent = createTradeMock.mock.calls[0][0];
+    expect(sent.executions.map((e: { side: string }) => e.side)).toEqual(["entry"]);
+    expect(sent.fields).not.toHaveProperty("exit_reason");
+  });
+});
+
 describe("QuickLogForm — logging after the trade", () => {
   it("asks for four numbers and three answers, nothing from the plan form", () => {
     renderLog();
-    for (const label of ["Contracts", "Entry", "Stop", "Target (optional)", "Exit"]) {
+    for (const label of ["Contracts", "Entry", "Stop", "Target (optional)", "Exit (empty = still open)"]) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
     expect(screen.getByText("OR breakout")).toBeInTheDocument();
@@ -117,7 +133,7 @@ describe("QuickLogForm — logging after the trade", () => {
     await user.type(screen.getByLabelText("Contracts"), "2");
     await user.type(screen.getByLabelText("Entry"), "30584");
     await user.type(screen.getByLabelText("Stop"), "30604");
-    await user.type(screen.getByLabelText("Exit"), "30604");
+    await user.type(screen.getByLabelText("Exit (empty = still open)"), "30604");
     await user.click(screen.getByRole("button", { name: "5 min ago" }));
     await user.click(screen.getByText("OR breakout"));
     await user.click(screen.getByRole("button", { name: /^B/ }));
@@ -151,7 +167,7 @@ describe("QuickLogForm — logging after the trade", () => {
     await user.click(screen.getByRole("button", { name: "Long" }));
     await user.type(screen.getByLabelText("Entry"), "30584");
     await user.type(screen.getByLabelText("Stop"), "30564");
-    await user.type(screen.getByLabelText("Exit"), "30620");
+    await user.type(screen.getByLabelText("Exit (empty = still open)"), "30620");
     await user.click(screen.getByRole("button", { name: /^A/ }));
     await user.click(screen.getByRole("button", { name: "Log trade" }));
     expect(createTradeMock.mock.calls[1][0].fields).toMatchObject({ execution_rating: 5, mistake: ["Bez greške"] });
