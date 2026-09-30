@@ -177,6 +177,7 @@ describe("QuickLogForm — reviewing an imported trade", () => {
     mistake: [],
     psychology: [],
     notes: null,
+    entrySnapshot: null,
     snapshot: null,
   };
 
@@ -197,6 +198,7 @@ describe("QuickLogForm — reviewing an imported trade", () => {
       trade_journal_notes: "",
       exit_reason: "Zatvoreno ranije",
       snapshot_url: null,
+      entry_snapshot_url: null,
     });
     expect(pushMock).toHaveBeenCalledWith("/daily");
   });

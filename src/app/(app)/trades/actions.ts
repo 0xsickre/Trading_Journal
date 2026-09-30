@@ -668,6 +668,8 @@ const tradeReviewSchema = z.object({
   exit_reason: z.string().trim().min(1).max(200).nullable(),
   /** The exit chart; empty leaves the slot as it is. */
   snapshot_url: z.string().nullable(),
+  /** The entry chart; empty leaves the slot as it is. */
+  entry_snapshot_url: z.string().nullable().optional(),
 });
 
 export type TradeReviewInput = z.infer<typeof tradeReviewSchema>;
@@ -686,11 +688,17 @@ export async function saveTradeReview(id: string, input: TradeReviewInput) {
   if (!parsed.success) return { ok: false as const, error: firstIssue(parsed.error) };
   const r = parsed.data;
 
-  let snapshot: string | null = null;
-  if (r.snapshot_url && r.snapshot_url.trim()) {
-    const validated = validateTradeImageRef(r.snapshot_url);
+  // Each slot written only when a picture was given: an empty field leaves
+  // what the trade already has.
+  const images: { kind: "ltf_pre" | "ltf_post"; url: string }[] = [];
+  for (const [kind, ref] of [
+    ["ltf_pre", r.entry_snapshot_url],
+    ["ltf_post", r.snapshot_url],
+  ] as const) {
+    if (!ref || !ref.trim()) continue;
+    const validated = validateTradeImageRef(ref);
     if (!validated.ok) return { ok: false as const, error: validated.message };
-    snapshot = validated.url;
+    images.push({ kind, url: validated.url });
   }
 
   const supabase = await createClient();
@@ -710,10 +718,11 @@ export async function saveTradeReview(id: string, input: TradeReviewInput) {
     .eq("id", id);
   if (error) return { ok: false as const, error: error.message };
 
-  if (snapshot) {
-    const { error: imgErr } = await supabase
-      .from("tj_trade_images")
-      .upsert({ position_id: id, kind: "ltf_post", image_url: snapshot }, { onConflict: "position_id,kind" });
+  if (images.length > 0) {
+    const { error: imgErr } = await supabase.from("tj_trade_images").upsert(
+      images.map((i) => ({ position_id: id, kind: i.kind, image_url: i.url })),
+      { onConflict: "position_id,kind" },
+    );
     if (imgErr) return { ok: false as const, error: imgErr.message };
   }
 

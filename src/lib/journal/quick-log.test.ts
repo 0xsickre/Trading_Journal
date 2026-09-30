@@ -31,6 +31,7 @@ function q(over: Partial<QuickLogInput> = {}): QuickLogInput {
     mistakes: ["Pomerio stop"],
     emotions: [],
     note: "  chased the second push ",
+    entrySnapshotUrl: "",
     snapshotUrl: "",
     ...over,
   };
@@ -146,6 +147,16 @@ describe("quickLogToTradeInput", () => {
     expect(t.fields.trade_journal_notes).toBeNull();
     expect(t.fields.stop_price).toBeNull();
     expect(t.fields).not.toHaveProperty("mistake");
+  });
+  it("carries an entry chart as ltf_pre, before the exit chart", () => {
+    const t = quickLogToTradeInput(
+      q({ entrySnapshotUrl: " storage:u/entry.png ", snapshotUrl: "https://www.tradingview.com/x/abc/" }),
+      EXIT_REASONS,
+    );
+    expect(t.images).toEqual([
+      { kind: "ltf_pre", image_url: "storage:u/entry.png" },
+      { kind: "ltf_post", image_url: "https://www.tradingview.com/x/abc/" },
+    ]);
   });
 });
 

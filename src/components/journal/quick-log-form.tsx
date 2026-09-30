@@ -53,6 +53,8 @@ export type ReviewTrade = {
   mistake: string[];
   psychology: string[];
   notes: string | null;
+  /** The entry chart already on the trade. */
+  entrySnapshot: string | null;
   snapshot: string | null;
 };
 
@@ -183,6 +185,7 @@ export function QuickLogForm({
   const [mistakes, setMistakes] = useState<string[]>((review?.mistake ?? []).filter((m) => m !== NO_MISTAKE));
   const [emotions, setEmotions] = useState<string[]>(review?.psychology ?? []);
   const [note, setNote] = useState(review?.notes ?? "");
+  const [entrySnapshot, setEntrySnapshot] = useState("");
   const [snapshot, setSnapshot] = useState("");
 
   const mistakeItems = (optionsMap.mistake ?? []).filter((o) => o.value !== NO_MISTAKE);
@@ -212,6 +215,7 @@ export function QuickLogForm({
     mistakes: mistakesToSave,
     emotions: emotionsToSave,
     note,
+    entrySnapshotUrl: entrySnapshot,
     snapshotUrl: snapshot,
   };
   const problem = review ? null : quickLogProblem(input);
@@ -241,6 +245,7 @@ export function QuickLogForm({
     setMistakes([]);
     setEmotions([]);
     setNote("");
+    setEntrySnapshot("");
     setSnapshot("");
     setEntryTime(utcToZonedInput(minutesAgo(5), tz).slice(11, 16));
     setExitTime(nowLocal().slice(11, 16));
@@ -269,6 +274,7 @@ export function QuickLogForm({
             options: exitReasons,
           }),
           snapshot_url: snapshot || null,
+          entry_snapshot_url: entrySnapshot || null,
         });
         if (!res.ok) {
           toast.error(res.error);
@@ -493,6 +499,18 @@ export function QuickLogForm({
               One sentence (optional)
             </Label>
             <Textarea id="ql-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="ql-entry-snap" className="text-xs">
+              Entry chart — the setup as you took it (optional)
+            </Label>
+            <ChartImageInput
+              id="ql-entry-snap"
+              value={entrySnapshot}
+              onChange={setEntrySnapshot}
+              placeholder={review?.entrySnapshot && !isStoredImage(review.entrySnapshot) ? review.entrySnapshot : ""}
+            />
           </div>
 
           <div className="space-y-1">

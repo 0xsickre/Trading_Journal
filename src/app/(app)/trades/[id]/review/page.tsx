@@ -16,7 +16,7 @@ const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => ty
 export default async function ReviewTradePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const [{ data: pos }, { data: stats }, { data: image }, optionsMap, accounts, playbooks] = await Promise.all([
+  const [{ data: pos }, { data: stats }, { data: images }, optionsMap, accounts, playbooks] = await Promise.all([
     supabase
       .from("tj_positions")
       .select(
@@ -29,7 +29,7 @@ export default async function ReviewTradePage({ params }: { params: Promise<{ id
       .select("avg_entry, avg_exit, entry_qty, net_pl, realized_r, tick_size, account_currency")
       .eq("position_id", id)
       .maybeSingle(),
-    supabase.from("tj_trade_images").select("image_url").eq("position_id", id).eq("kind", "ltf_post").maybeSingle(),
+    supabase.from("tj_trade_images").select("kind, image_url").eq("position_id", id).in("kind", ["ltf_pre", "ltf_post"]),
     getOptionsMap(true),
     getAccounts(),
     // Everything: this trade may name a setup since retired.
@@ -55,7 +55,8 @@ export default async function ReviewTradePage({ params }: { params: Promise<{ id
     mistake: strs(pos.mistake),
     psychology: strs(pos.psychology_tags),
     notes: pos.trade_journal_notes,
-    snapshot: image?.image_url ?? null,
+    entrySnapshot: images?.find((i) => i.kind === "ltf_pre")?.image_url ?? null,
+    snapshot: images?.find((i) => i.kind === "ltf_post")?.image_url ?? null,
   };
 
   return (

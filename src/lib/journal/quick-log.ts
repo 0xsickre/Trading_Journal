@@ -59,6 +59,9 @@ export type QuickLogInput = {
   mistakes: string[];
   emotions: string[];
   note: string;
+  /** The chart at the entry (`ltf_pre`); empty = none. */
+  entrySnapshotUrl: string;
+  /** The chart after the exit (`ltf_post`); empty = none. */
   snapshotUrl: string;
 };
 
@@ -181,6 +184,7 @@ export function quickLogToTradeInput(q: QuickLogInput, exitReasonOptions: readon
   if (q.emotions.length) fields.psychology_tags = q.emotions;
   if (exitReason) fields.exit_reason = exitReason;
   const snapshot = q.snapshotUrl.trim();
+  const entrySnapshot = q.entrySnapshotUrl.trim();
   return {
     account_id: q.accountId,
     trade_no: null,
@@ -208,6 +212,9 @@ export function quickLogToTradeInput(q: QuickLogInput, exitReasonOptions: readon
     // The record of a trade that already closed: a blown account lets it through.
     origin: "log" as const,
     playbook_id: q.playbookId,
-    images: snapshot ? [{ kind: "ltf_post", image_url: snapshot }] : [],
+    images: [
+      ...(entrySnapshot ? [{ kind: "ltf_pre", image_url: entrySnapshot }] : []),
+      ...(snapshot ? [{ kind: "ltf_post", image_url: snapshot }] : []),
+    ],
   };
 }
