@@ -691,7 +691,7 @@ export function buildMentorPack(
   if (missedSetups.length > 0) {
     out.push(`## Missed setup-i (${missedSetups.length})`);
     out.push(
-      `_Planirani trejdovi koji nikad nisu otvoreni — bez PnL. Ishod je hipotetički: R2 sveće kroz plan trading dana; broji se tek kad cena dotakne ulaz._`,
+      `_Planirani trejdovi koji nikad nisu otvoreni — bez PnL. Ishod je hipotetički: R2 sveće kroz plan trading dana; broji se tek kad je ulaz izvršen (limit: cena prošla ulaz za tik; proboj: dodir)._`,
     );
     out.push("");
     for (const t of missedSetups.slice(0, 30))

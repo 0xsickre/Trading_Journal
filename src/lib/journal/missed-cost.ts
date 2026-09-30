@@ -15,8 +15,10 @@
  * WHERE THE PRICE COMES FROM (F6.1, decision M1-A). `futures-trading`'s
  * `journal_mae.py` walks the contract's R2 candles through the plan's Topstep
  * trading day, once that day is over and the exact data is out: nothing counts
- * until price touches the plan's entry; then the stop first is −1R, the target
- * first the planned reward, neither 0. A plan whose entry was never reached is
+ * until the plan's entry fills — a limit (price was beyond the entry when the
+ * plan was written) a tick through it, a breakout entry on the touch (phase S);
+ * then the stop first is −1R, the target first (a tick through) the planned
+ * reward, neither 0. A plan whose entry was never reached is
  * `no_entry` — it cost nothing, and it is counted apart from the misses that
  * did, so hesitation and a setup that never came are not one line. The
  * unmeasured ones are COUNTED and said out loud rather than summed as zero —

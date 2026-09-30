@@ -527,18 +527,20 @@ bez njega „ništa nije promašeno" zapravo znači „ništa nije označeno".
 
 **Cena promašaja iz R2 (F6.1, odluka M1-A).** `futures-trading/tools/journal_mae.py` hoda kroz sveće
 ugovora od trenutka plana do kraja njegovog Topstep dana (15:10 CT; plan napisan posle toga važi za
-sledeći trading dan), tek kad je dan gotov i tačni podaci objavljeni. Ništa se ne računa dok cena ne
-dodirne ULAZ plana (preskok preko ulaza između dve sveće se računa kao dodir); zatim prvi od stop /
-target, inače `neither` 0. Ulaz nikad dodirnut → `no_entry`, 0R, broji se odvojeno.
+sledeći trading dan), tek kad je dan gotov i tačni podaci objavljeni. Ništa se ne računa dok ULAZ plana
+nije izvršen: **limit** (cena pri pisanju plana s druge strane ulaza) tek kad cena prođe ulaz za 1 tik, **proboj**
+(stop-ulaz) na dodir (preskok preko ulaza između dve sveće se računa kao dodir) — faza S, 30.09.2026; zatim prvi
+od stop (dodir) / target (tik kroz nivo), inače `neither` 0. Ulaz nikad izvršen → `no_entry`, 0R, broji se odvojeno.
 
 **Redosled je celo pitanje.** Hod ide po 1m svećama; minut u kome su dva događaja (ulaz i stop, ulaz
 i target, stop i target) ponovi se na 1 s. Sekunda sa stopom i targetom se ODBIJA umesto da se
 pogodi; ulaz i stop u istoj sekundi je stop (konzervativno). Baza odbija pogrešan par nezavisno
 (`stop` sa pozitivnim `missed_r`, `no_entry`/`neither` sa bilo čim osim 0 pada na CHECK).
 
-**Verdikt: ⚪ Bespoke, konzervativno.** Uslov dodira ulaza je strožiji od naivnog „šta je prvo
+**Verdikt: ⚪ Bespoke, konzervativno.** Uslov izvršenja ulaza je strožiji od naivnog „šta je prvo
 pogođeno od trenutka plana": bez njega bi limit koji nikad nije popunjen izgledao kao propušten
-dobitak.
+dobitak. Do faze S limit i target su važili na dodir — limit na dodiru se često ne izvrši (red na ceni),
+pa je promašaj izgledao skuplji nego što bi bio.
 
 ---
 
@@ -572,16 +574,18 @@ poslovna procena i stoje kao konstante na vrhu svojih modula.
 ```
 R_trejda   = |prosečan ulaz − zapečaćen stop|                       (poeni)
 varijanta  = SL k × R_trejda (k ∈ 0,5 · 0,75 · 1 · 1,25 · 1,5 · 2), TP t × (k × R_trejda) (t ∈ 1 · 1,5 · 2 · 2,5 · 3 · 4 · 5)
-ćelija     = +t ako TP prvi · −1 ako SL prvi · smer × (cena u 15:10 CT − ulaz) / (k × R_trejda) ako ništa   (R varijante)
+ćelija     = +t ako TP prvi (tik kroz nivo) · −(1 + tik / (k × R_trejda)) ako SL prvi · smer × (cena u 15:10 CT − ulaz) / (k × R_trejda) ako ništa   (R varijante)
 neto       = ćelija − provizija_krug_po_ugovoru / (k × R_trejda × vrednost_poena)   (isti rizik u $: širi SL = manje ugovora)
 posle izlaza (15/30/60 min, kraj dana): u pravcu = max(high) − izlaz (long) · protiv = izlaz − min(low); / R_trejda u journalu
-SL za TP   = (najveći pomak protiv od ulaza do prvog dodira planiranog TP-a + 1 tik) / R_trejda
+SL za TP   = (najveći pomak protiv od ulaza do prvog izvršenja planiranog TP-a (tik kroz nivo) + 1 tik) / R_trejda
 MFE do SL  = najdalje u plus pre dodira stvarnog stopa (ili do kraja dana) / R_trejda
 ```
 
 Redosled unutar 1m sveće se ne pogađa: minuta sa SL i TP ide na 1 s; sekunda sa oba = SL (konzervativno). Ceo ulaz se
-tretira kao jedan (delimični izlazi se ne modeluju), proklizavanje kroz SL se ne modeluje — obe pretpostavke idu u korist
-varijante, pa mala prednost najbolje ćelije nad stvarnim rezultatom nije nalaz. Grupa ispod 30 trejdova je ⚠ hipoteza.
+tretira kao jedan (delimični izlazi se ne modeluju). **Izvršenje kao na berzi (faza S, v2, 30.09.2026)**: TP je limit i
+važi tek kad cena prođe nivo za 1 tik; SL košta 1 tik proklizavanja. Do v2 TP je važio na dodir, a SL tačno −1 — obe
+pretpostavke su išle u korist varijante (najviše daleki TP i uski SL). Delimični izlazi i dalje nisu modelovani, pa mala
+prednost najbolje ćelije nad stvarnim rezultatom nije nalaz. Grupa ispod 30 trejdova je ⚠ hipoteza.
 
 ## Rezime — šta zahteva pažnju
 

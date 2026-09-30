@@ -103,6 +103,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 30.09.2026 | posle R | Backup (trejder: „i backup i readme reši“, Opus stavke kasnije): noćni snimak svih 28 tabela i slika charta u R2 (`futures-trading/tools/journal_backup.py`, 04:10 BG), provera čitanjem nazad, 35 dana + prvi snimak meseca; vraćanje = SQL u jednoj transakciji bez okidača, provereno na bazi iz svih migracija. README oba repoa: zastareli brojevi ispravljeni (migracije, testovi po projektu, metrike, dimenzije, jezik, fajlovi) |
 | 30.09.2026 | posle R | Nivoi (trejder: „svi bitni nivoi u brief, šta je London pokupio a šta je ostalo, weekly i monthly, Azija“): **posebna poruka posle Londona** (05:12 NY = 11:12 BG), **oba PDH/PDL** (RTH i ceo Topstep dan), **NQ i ES**. Definicije iz istraživanja (`testovi/profil_dana`, `sweep_nivoi`, `london_ny`); pokupljen = prošao nivo za tik. Samo `futures-trading` (`tools/brief/nivoi.py`), journal se ne menja |
 | 30.09.2026 | posle R | London u poruci (trejder: „do kad London traje samo do 11 BG?“ → „Oba“): **London jutro** 08–11 BG u 11:12 i **London do NY** od 09:00 BG (08:00 po Londonu) u 15:15 BG, pred otvaranje |
+| 30.09.2026 | S | „Šta bi bilo“ realno (trejder: „napravi plan za šta bi bilo i to samo popravi“): **S1** TP i planirani limit ulaz važe tek kad cena prođe nivo za 1 tik — dodir nije izvršenje. **S2** stop u mreži košta 1 tik proklizavanja (isto kao R4 u veličini). **S3** ulaz promašenog setupa je limit kad je cena pri pisanju plana s druge strane ulaza, inače stop-ulaz (dodir). **S4** scenario v2; stari v1 se sam preračuna, promašaji jednom ručno (`--recompute`) |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -134,6 +135,7 @@ pogađa.
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, ostaci vault-a, komentari, PARITY | #16, #20, #22, #23 (#19 zatvorili H1/H2) | F5 | da: `20260930010000` (`no_entry`, `r2`) | Sonnet, Opus za #16 | ✅ `16c3a04` + `a59307d` (futures-trading) · `e515552` · `a5a8ff3` · `db9c3b3` + F6.5, 29.09.2026 — migracija primenjena |
 | **L** | Šta bi bilo: SL × TP mreža, posle izlaza, posle stopa — iz berzanskih sveća | — | F6 | da: `20260930080000` (`scenario`) | **Opus** | ✅ `89915aa` · futures-trading `f60b5ea`, 30.09.2026 — migracija primenjena |
 | **R** | Rizik blizu MLL-a i proklizavanje stopa u veličini (journal + brief isto) | — | L | ne | **Opus** | ✅ `7f14d81` · futures-trading `2870b3d`, 30.09.2026 — bez migracije |
+| **S** | „Šta bi bilo“ i cena promašaja realno: TP / limit ulaz kroz nivo, tik na stopu | — | L, R | ne | **Opus** | u radu (30.09.2026) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -909,6 +911,44 @@ izmerena. Odluke R1–R4 u dnevniku.
 
 Forma, tracker i brief daju isti broj ugovora, sa tikom proklizavanja; blizu MLL-a rizik pada sa prostorom. README oba
 repoa 1:1, ovde ✅ + commit, `ROADMAP.md` jedan red.
+
+## S — „Šta bi bilo“ realno (detaljno, 30.09.2026)
+
+**Povod:** pregled repoa (30.09.2026). Mreža SL × TP, „posle izlaza“ i cena promašenog setupa računaju TP i limit ulaz
+kao izvršen čim ga cena **dodirne** (`high ≥ target`). Limit na dodiru se često ne izvrši (red čekanja na toj ceni), a
+stop strana je već konzervativna (dvosmisleno = stop). Zato mreža sistematski precenjuje daleke TP-ove i uske stopove,
+a promašaj izgleda skuplji nego što bi bio. Istraživanje u `testovi/` već računa ulaz i stop sa tikom.
+
+**Utvrđeno u kodu (pre S):**
+- `tools/scenario.py`: `_dodir` za stop i za target isto; `ishod`, `sl_za_target`, `posle_izlaza` čitaju target na dodir;
+  stop u mreži je tačno −1R.
+- `tools/journal_mae.py` (`korak`, `prosetaj`): ulaz promašaja na dodir (sa prethodnim zatvaranjem, za preskok), target
+  na dodir, stop na dodir.
+- Journal (`scenario.ts`) prepoznaje pogođen TP kao ćeliju jednaku `tp[j]`, stop ne prepoznaje po vrednosti — stop
+  −1 − tik/R ne menja brojanje. Parser prima samo `v: 1`.
+
+### Izmena
+- **S1**: target (limit) = izvršen kad sveća prođe nivo za 1 tik (long: high ≥ TP + tik; short: low ≤ TP − tik). Isto
+  za planirani limit ulaz promašaja (long: low ≤ ulaz − tik).
+- **S2**: stop u mreži = −(1 + tik ÷ R te varijante). Rezultat „ništa do kraja dana“ ostaje po ceni u 15:10 CT.
+- **S3**: vrsta ulaza promašaja iz cene u trenutku plana (otvaranje prve sveće): long sa cenom iznad ulaza (short:
+  ispod) = limit → kroz nivo; inače stop-ulaz → dodir (sa preskokom, kao do sada).
+- **S4**: `VERZIJA = 2`; `journal_mae.py` preračuna svaki scenario čija verzija nije 2. Journal prima v1 i v2 (isti
+  oblik). Promašaji nemaju verziju: posle objave jednom Actions → Journal MAE/MFE → `recompute` (na 30.09.2026 baza
+  nema nijedan promašaj).
+- Ostaje isto: dvosmislena minuta na 1 s, dvosmislena sekunda = stop, „SL za TP“ = najveći pomak protiv pre prvog
+  **izvršenja** TP-a + tik.
+
+### Testovi (prvo padaju)
+- `tests/test_scenario.py`: TP dodirnut tačno → ne računa se; tik preko → računa se; stop u mreži −1 − tik/R;
+  posle stopa TP samo kroz nivo; verzija 2.
+- `tests/test_alati.py` (promašaj): limit ulaz dodirnut tačno → `no_entry`; tik preko → ulaz; stop-ulaz na dodir;
+  target kroz nivo.
+- Journal: parser prima v2.
+
+### Izlaz iz S
+Mreža i promašaj računaju izvršenje kao na berzi: limit tek kroz nivo, stop sa tikom. README oba repoa 1:1, ovde ✅ +
+commit, `ROADMAP.md` jedan red.
 
 ## Katalog stavki
 

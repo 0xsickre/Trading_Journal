@@ -66,9 +66,15 @@ describe("scenarioOf", () => {
     expect(s.slForTargetR).toBe(1.3);
   });
 
+  it("reads v2 (phase S: a target fills a tick through, a stop costs a tick) in the same shape as v1", () => {
+    const s = scenarioOf(row(doc({ v: 2 }, (i, j) => (j === 0 ? -1.025 : TP[j]))))!;
+    expect(s.grid[0][0]).toBe(-1.025);
+    expect(s.grid[0][1]).toBe(1.5);
+  });
+
   it("refuses another version, a missing cell or no risk — never half a scenario", () => {
     expect(scenarioOf(row(null))).toBeNull();
-    expect(scenarioOf(row(doc({ v: 2 })))).toBeNull();
+    expect(scenarioOf(row(doc({ v: 3 })))).toBeNull();
     const holed = doc();
     (holed.grid as number[][])[2][3] = null as unknown as number;
     expect(scenarioOf(row(holed))).toBeNull();

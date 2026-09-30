@@ -197,7 +197,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,974 tests across 191 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,975 tests across 191 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -965,9 +965,11 @@ day — from the moment the plan was written to 15:10 CT; a plan written after t
 next day — once that day is over and the exact data is out, and writes `missed_outcome`, `missed_r`
 and `missed_source = 'r2'` (a hand-entered miss is left alone; `mt5` stays on history).
 
-The rule is the trader's (decision M1-A). **Nothing counts until price touches the plan's entry**;
-from there the stop first is −1R, the target first is the planned reward, neither by the end of the
-day is 0 (`neither`). A plan whose entry was never reached is **`no_entry`**: it cost nothing, and
+The rule is the trader's (decision M1-A). **Nothing counts until the plan's entry fills** — as an
+exchange fills it (phase S, 30.09.2026): a **limit** (price was beyond the entry when the plan was
+written) only once price trades a tick through it, a **breakout** entry on the touch; from there the
+stop first is −1R, the target first (a tick through) is the planned reward, neither by the end of the
+day is 0 (`neither`). A plan whose entry never filled is **`no_entry`**: it cost nothing, and
 the panel counts it apart ("N never came back to the entry") so a setup that never came is not read
 as hesitation. And **which came first is the whole question**: the walk is on 1-minute bars, and a
 minute that holds two of the entry, the stop and the target is walked again on 1-second bars; a
@@ -1562,8 +1564,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,974 tests across 191 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,346 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 628
+2,975 tests across 191 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,347 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 628
 tests in 64 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
@@ -1678,20 +1680,26 @@ the TradingView export's own excursions (removed with the import in H2) — are 
 MAE/MFE stops at the exit, so it cannot say whether a target was left too early or whether a stop was
 followed by the target. **Phase L (30.09.2026, decisions L1–L4)** replays every closed futures trade
 with a stop on the same R2 candles, once its Topstep day is over and the exact data is out, and
-writes the result into `tj_positions.scenario` (jsonb, v1, `20260930080000`) from
+writes the result into `tj_positions.scenario` (jsonb, v2 since phase S; v1 from `20260930080000`) from
 `futures-trading/tools/scenario.py` (called by `journal_mae.py`):
 
 - **The grid (L1–L3).** From the trade's average entry, at its first entry fill, with the stop at
   0.5 / 0.75 / 1 / 1.25 / 1.5 / 2 × the real one (the sealed stop) and targets of 1 / 1.5 / 2 / 2.5 /
-  3 / 4 / 5 R of that stop: target first (+t), stop first (−1), or neither by 15:10 CT (the price
-  then). Every cell is in R of its own stop — the same money at risk, so a wider stop is fewer
+  3 / 4 / 5 R of that stop: target first (+t), stop first (−1 and a tick), or neither by 15:10 CT (the
+  price then). Every cell is in R of its own stop — the same money at risk, so a wider stop is fewer
   contracts. The journal shows it net of the trade's own round-turn commission per contract, which in
-  R is larger for a tighter stop; slippage through the stop and partial exits are not modeled.
+  R is larger for a tighter stop; partial exits are not modeled.
+- **Fills as an exchange makes them (phase S, scenario v2, 30.09.2026).** The target is a limit: it
+  counts only once price trades **a tick through** it — a touch is not a fill, since a limit at the
+  touch often sits unfilled in the queue. The stop is a stop-market: the touch triggers it and it costs
+  **a tick of slippage**, so a stopped cell is −(1 + tick ÷ that variant's R). Until v2 both leaned the
+  grid's way (far targets and tight stops looked better than they fill); a v1 document is re-measured
+  on the next hourly run, and the journal reads v1 and v2 alike.
 - **After the exit (L4).** Furthest with the trade and against it at 15, 30 and 60 minutes and to
   15:10 CT, from the exit price. After a stop: did the planned target come, and when. After a hand
   exit: held, would the target or the old stop have come first.
 - **The stop that would have lived to the target** — the largest move against the trade before the
-  planned target's first touch, plus a tick — and **the furthest it went before the real stop** (MFE
+  planned target's first fill (a tick through), plus a tick — and **the furthest it went before the real stop** (MFE
   before stop).
 
 Which came first is walked on 1-minute bars; the rest of the entry and exit minute and any minute

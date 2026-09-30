@@ -10,11 +10,17 @@
  * THE GRID. From the trade's average entry, at the moment of its first entry
  * fill: had the whole position carried a stop k × the real one (k in `sl`) and a
  * target t × that stop (t in `tp`), what came first by the end of the Topstep
- * day — the target (+t), the stop (−1) or neither (the price at 15:10 CT). Every
+ * day — the target (+t), the stop (−1, and a tick more since v2) or neither (the price at 15:10 CT). Every
  * cell is in R OF ITS OWN VARIANT (decision L3: the same money at risk, so a
  * wider stop is fewer contracts). Measured gross; `net` takes the round-turn
  * commission off per contract, which in R is larger for a tighter stop — the
- * cost a small stop really carries. Slippage through the stop is not modeled.
+ * cost a small stop really carries.
+ *
+ * FILLS AS AN EXCHANGE MAKES THEM (phase S, v2, 30.09.2026). The target is a
+ * limit: it counts only once price trades a tick through it — a touch is not a
+ * fill. The stop is a stop-market: a touch triggers it and it costs a tick of
+ * slippage, so a stopped cell is −(1 + tick ÷ that variant's R). A v1 document
+ * (touch fills, a stop at exactly −1) is re-measured by futures-trading.
  *
  * A grid is a hypothesis per trade and a finding only over many: a group under
  * `SCENARIO_MIN_SAMPLE` trades is marked, never hidden.
@@ -54,7 +60,7 @@ export type TradeScenario = {
   mfeBeforeStopR: number;
   /** Smallest stop (R) that would have lived to the planned target; null when the target never came. */
   slForTargetR: number | null;
-  /** Minutes from the entry to the first touch of the planned target; null when it never came. */
+  /** Minutes from the entry to the planned target's first fill (a tick through); null when it never came. */
   targetMinutes: number | null;
   afterExit: {
     windows: Record<AfterExitWindow, Excursion | null>;
@@ -99,7 +105,8 @@ function excursion(v: unknown): Excursion | null {
  */
 export function scenarioOf(row: TradeRow): TradeScenario | null {
   const raw = (row as Record<string, unknown>).scenario;
-  if (!isObj(raw) || raw.v !== 1) return null;
+  // v2 (phase S) has v1's shape; only how a fill is counted changed, so both read the same.
+  if (!isObj(raw) || (raw.v !== 1 && raw.v !== 2)) return null;
   const sl = Array.isArray(raw.sl) ? raw.sl.map(num) : [];
   const tp = Array.isArray(raw.tp) ? raw.tp.map(num) : [];
   if (sl.length === 0 || tp.length === 0 || sl.some((x) => x == null) || tp.some((x) => x == null)) return null;
