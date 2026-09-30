@@ -82,11 +82,11 @@ export function InsightsPanel({ result }: { result: RunResult }) {
           </p>
         ) : (
           groups.map((g) => {
-            const open = expanded === g.ruleId;
+            const open = expanded === g.key;
             return (
-              <div key={g.ruleId} className="rounded-md border">
+              <div key={g.key} className="rounded-md border">
                 <button
-                  onClick={() => setExpanded(open ? null : g.ruleId)}
+                  onClick={() => setExpanded(open ? null : g.key)}
                   className="flex w-full items-center gap-3 p-3 text-left"
                 >
                   <span

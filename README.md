@@ -32,14 +32,14 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 246 of the
-3,524 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 253 of the
+3,537 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
 |---|---|
-| Daily (the "Pred sesiju" card included), weekly, tracker, focus goal | 128 |
-| Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 93 |
+| Daily (the "Pred sesiju" card included), weekly, tracker, focus goal | 127 |
+| Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 101 |
 | Weekly "Napredak" (progress) and experiment cards | 19 |
 | Day insight sentence (`low_efficiency_day`) | 1 |
 | Chart image helper (`tradingview-snapshot.ts`) | 2 |
@@ -67,7 +67,7 @@ lexes every `.ts`/`.tsx` outside tests into comment / string / code regions, kee
 that read as prose rather than as machinery, and scores those for Serbian by diacritics and by a word
 list. A single Serbian word carrying no diacritic can still slip past that, and JSX text between tags
 is not a string literal (the "Bez pregleda" card on `/daily` is Serbian and not in the count), so
-**246 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
+**253 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
 name, read as the Serbian "pre" until F5.4. Three earlier versions of this paragraph said "about 46 of some 1,700", then "153 of
 1,663", then "185 of 2,191" — each counted by hand, and each had to be replaced rather than quietly
 corrected. That is why the method now ships as a script: a number nobody can re-run is a number
@@ -671,7 +671,8 @@ Prop-firm headroom ("Prop-firm room" on the card, `propHeadroomPct`) is ungated 
 answers `null` for an account with nothing closed in its window, so the evidence rides with the
 producer. It is the **smallest room ever left above the trailing MLL, as a share of the plan's MLL**,
 after every close and every overnight trail — the closest the account came to ending. The worst
-Topstep account counts.
+Topstep account **in the account filter** counts: with one account picked, another account's close
+call is not this one's survival.
 
 **Phase E found the third bug still alive on the equity base.** `maxPctOfEquity` answered `0` when a
 fall had no positive peak equity to divide by — an account with no starting balance that never got
@@ -977,15 +978,22 @@ book, from values the screens already derive (`mentor-intraday.ts`):
 - **Day shape** in the statistics: trading days green and red, trades per day (mean and most),
   the average green and red day, the median hold, the average size.
 - **Daily review**: one row per trading day — trades, W/L/BE, net, R, first entry in ET, the longest
-  losing run, entries taken after 2+ losses, most contracts, rules kept (and which were missed),
-  and notes: DLL reached, entries inside a news window, the brief's day note, mental temperature.
+  losing run, entries taken after 2+ losses, most contracts, rules kept (and which were missed, by
+  their short name — the text before the colon — marked "ukinuto" when deleted since), and notes: DLL
+  reached, entries inside a news window, the brief's day note, mental temperature (out of 5).
 - **When and how** tables by session window, minutes after the open, trade number in the day, state
   before the entry, hold time, entry hour and weekday — each group with its size and the ⚠ mark.
 - **Every trade oldest first**, headed with its close time on the trader's clock, then: entry and
   exit in the trader's zone and in ET, session window, minutes after the open, the account (when
   the scope holds several), trade number in the day, losses in a row before it, hold time,
   contracts, risk to the stop, time underwater, the news window it was entered in, and the insights
-  that fired on it — before every field the trader typed.
+  that fired on it — before every field the trader typed. The context says whether the plan was
+  sealed before the entry or typed in after a market order, whose R and risk come from the fill.
+- **Missed setups** carry the R2 walk's hypothetical outcome — target, stop, neither, or price never
+  back at the entry — with its R, and when the plan was given up on the trader's clock.
+- **Category tables** print once per field (a custom field sharing a fixed one's key is not
+  repeated), a field nobody filled in is left out, and a group of breakeven trades only shows "—"
+  for its win rate rather than 0 %.
 
 Without a day rule (`tzOf`) the pack is the earlier, account-agnostic document; its tests cover
 those parts on their own.
@@ -1067,7 +1075,10 @@ the follow rate. An unanswered rule counts in neither the numerator nor the deno
 **Insights** are 24 rules at three levels — trade (12), day (10), portfolio (2) — reading the
 same enriched trades the reports do. Every rule declares a `minSample` and none fires at n=1. No
 insight is stored in the database: thresholds change, and a stored insight would go stale against a
-changed threshold while still looking authoritative.
+changed threshold while still looking authoritative. The panel and the mentor pack show one row per
+rule **branch** (rule, severity and title): `exceed_avg_hold_time` is a critical "Loser held too
+long" and an info "Longer than usual", and one row for both counted a winner held long as a critical
+loser.
 
 There were 37 until Phase E **grouped them by cause**, and the regrouping found two rules that could
 never have fired alone. (The review of that merge found two narrowings it had introduced, both now

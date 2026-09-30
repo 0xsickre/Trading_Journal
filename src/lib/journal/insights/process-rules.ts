@@ -133,7 +133,7 @@ export const stalePlan: Rule = {
         level: "portfolio",
         severity: "info",
         title: "Plans without execution",
-        detail: `${stale.length} plans whose trading day is over, with no fill. Mark them as missed — then R2 prices what they would have done — or delete them; a plan left open hides what hesitation cost.`,
+        detail: `${stale.length} ${stale.length === 1 ? "plan" : "plans"} whose trading day is over, with no fill. Mark ${stale.length === 1 ? "it" : "them"} as missed — then R2 prices what they would have done — or delete them; a plan left open hides what hesitation cost.`,
         subjectId: "stale_plan",
         sample: stale.length,
       },

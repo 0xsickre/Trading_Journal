@@ -467,7 +467,7 @@ export const unusualSize: Rule = {
           title: "Above-average size",
           detail: `Size ${e.size} is above the 75th percentile (${p75.toFixed(
             2,
-          )}) tvojih pozicija.`,
+          )}) of your positions.`,
           sample: ctx.baseline.sample,
         }),
       );

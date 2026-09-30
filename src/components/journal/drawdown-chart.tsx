@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TOOLTIP_PROPS } from "@/components/journal/chart-shell";
 import { fmtMoney, fmtPct } from "@/lib/journal/format";
 import type { DrawdownPoint, DrawdownStats } from "@/lib/journal/balance";
 
@@ -97,6 +98,7 @@ export function DrawdownChart({
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} minTickGap={40} />
                   <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={fmt} />
                   <Tooltip
+                    {...TOOLTIP_PROPS}
                     formatter={(v) => fmt(Number(v))}
                     labelFormatter={(l) => String(l)}
                   />

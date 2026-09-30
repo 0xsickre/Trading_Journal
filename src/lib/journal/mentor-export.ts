@@ -14,8 +14,9 @@ import {
 } from "./analytics";
 import { EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
 import type { FieldDef } from "./field-def-types";
-import { displayFieldValue } from "./field-values";
+import { displayFieldValue, stringFieldValue } from "./field-values";
 import { getAllFormFields } from "./form-config";
+import { missedCost, type MissedOutcome } from "./missed-cost";
 import {
   fmtSlippagePts,
   fmtSlippageR,
@@ -40,6 +41,7 @@ import {
   dailySection,
   dayShapeRows,
   intradaySection,
+  ruleLabel,
   rulesSection,
   SMALL_SAMPLE,
   topstepSection,
@@ -69,13 +71,16 @@ const FIXED_BREAKDOWNS: { field: string; label: string }[] = [
 ];
 
 function breakdownsFor(defs: readonly FieldDef[]) {
+  // A custom field can carry the key of a fixed one (the tag fields are also
+  // field definitions); one table per field, or the pack prints it twice.
+  const seen = new Set<string>();
   return [
     ...FIXED_BREAKDOWNS,
     // Free-text fields make useless breakdown tables — one row per trade.
     ...defs
       .filter((d) => d.field_type === "select" || d.field_type === "tags")
       .map((d) => ({ field: d.key, label: d.label })),
-  ];
+  ].filter((b) => !seen.has(b.field) && seen.add(b.field));
 }
 
 // Every user-entered field, in form order, plus the auto-computed ones and the
@@ -107,7 +112,7 @@ const val = (row: TradeRow, key: string): string =>
   displayFieldValue(row, key);
 
 const r2 = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(2));
-const pct = (n: number) => `${n.toFixed(1)}%`;
+const pct = (n: number | null) => (n == null ? "—" : `${n.toFixed(1)}%`);
 const money = (n: number, ccy: string) =>
   `${n >= 0 ? "+" : "-"}${Math.abs(n).toFixed(2)} ${ccy}`;
 
@@ -137,7 +142,7 @@ function statsTable(
     `| Metric | Value |`,
     `| --- | --- |`,
     `| Closed trades | ${s.count} |`,
-    `| Win rate | ${pct(s.winRate)} (${s.wins}W / ${s.losses}L / ${s.breakeven}BE) |`,
+    `| Win rate | ${pct(s.wins + s.losses > 0 ? s.winRate : null)} (${s.wins}W / ${s.losses}L / ${s.breakeven}BE) |`,
     `| Net P/L | ${money(s.netSum, ccy)} |`,
     `| Total R | ${r2(s.totalR)}R |`,
     `| Avg R / trade | ${r2(s.avgR)}R |`,
@@ -151,7 +156,7 @@ function statsTable(
     } |`,
     `| Avg win / Avg loss (R) | ${r2(s.avgWinR)}R / ${r2(s.avgLossR)}R |`,
     `| Avg win / Avg loss (${ccy}) | ${money(s.avgWinMoney, ccy)} / ${money(s.avgLossMoney, ccy)} |`,
-    `| Expectancy sample | ${s.expectancySample} of ${s.count} trades carry an R |`,
+    `| Expectancy sample | ${s.expectancySample} of ${s.count} trades (a won or lost trade with an R; breakeven is left out) |`,
     `| Best / Worst | ${money(s.best, ccy)} / ${money(s.worst, ccy)} |`,
     `| Max win / loss streak | ${s.maxWinStreak} / ${s.maxLossStreak} |`,
     `| Max drawdown | ${money(s.maxDrawdown, ccy)} |`,
@@ -170,11 +175,11 @@ function breakdownTable(
   field: string,
   range: BreakevenRange,
   rules?: RuleLookup,
-): string {
+): string | null {
   const rows = breakdownByField(realized, field, range, rules).filter(
     (r) => r.key !== "—" && r.count > 0,
   );
-  if (rows.length === 0) return "_no data_";
+  if (rows.length === 0) return null;
   const head = `| Value | Trades | Win % | Avg R | Total R | Net |\n| --- | --- | --- | --- | --- | --- |`;
   const body = rows
     .map(
@@ -246,6 +251,45 @@ function tradeDetail(
     lines.push(`- **MAE/MFE (R):** ${parts.join(" · ")}`);
   }
   return `${head}\n${lines.join("\n")}`;
+}
+
+const MISSED_OUTCOME_TEXT: Record<MissedOutcome, string> = {
+  target: "cena je došla do ulaza, pa do targeta",
+  stop: "cena je došla do ulaza, pa do stopa",
+  neither: "cena je došla do ulaza, ni stop ni target do kraja trading dana",
+  no_entry: "cena se nije vratila do ulaza — setup nije ni došao, to nije oklevanje",
+};
+
+/**
+ * A plan that was never taken. It has no fill, so the closed trade's heading
+ * ("open · — · —") said nothing; what the model needs is when it was given up
+ * and what it would have done, which is the R2 walk's outcome.
+ */
+function missedDetail(
+  t: TradeRow,
+  detailFields: { key: string; label: string }[],
+  displayTz?: string,
+): string {
+  const no = t.trade_no != null ? `#${t.trade_no}` : t.id.slice(0, 8);
+  const at = stringFieldValue(t, "missed_at");
+  const when =
+    at == null ? "—" : displayTz ? fmtInTz(at, displayTz, "yyyy-MM-dd HH:mm") : at.slice(0, 16).replace("T", " ");
+  const [m] = missedCost([t]).trades;
+  const outcome =
+    m?.outcome == null || m.r == null
+      ? "još nije izmereno (R2 meri posle kraja plana trading dana)"
+      : `${MISSED_OUTCOME_TEXT[m.outcome]}: ${m.r >= 0 ? "+" : ""}${r2(m.r)}R`;
+  const lines = [
+    `- **Hipotetički ishod (R2):** ${outcome}`,
+    ...detailFields
+      .filter((f) => f.key !== "missed_at")
+      .map((f) => {
+        const v = val(t, f.key);
+        return v ? `- **${f.label}:** ${v}` : "";
+      })
+      .filter(Boolean),
+  ];
+  return `### Trade ${no} — ${val(t, "instrument") || "?"} ${val(t, "direction")} · propušten ${when}\n${lines.join("\n")}`;
 }
 
 export type Granularity =
@@ -618,7 +662,7 @@ export function buildMentorPack(
         ccy,
         range,
         compliance: new Map((opts.compliance ?? []).map((c) => [c.date, c])),
-        ruleText: new Map((opts.trackerRules ?? []).map((r) => [r.id, r.text])),
+        ruleText: new Map((opts.trackerRules ?? []).map((r) => [r.id, ruleLabel(r)])),
         dllDays: topstepDllDays,
         reportByDate: new Map((opts.reports ?? []).map((r) => [r.report_date, r])),
         briefByDay,
@@ -629,10 +673,12 @@ export function buildMentorPack(
 
   // --- Breakdowns ---------------------------------------------------------
   out.push(`## Performanse po kategorijama`);
+  // A field nobody filled in is left out: a heading over "no data" is noise
+  // the model has to read past.
   for (const b of breakdownsFor(defs)) {
-    out.push(`### ${b.label}`);
-    out.push(breakdownTable(realized, b.field, range, rules));
-    out.push("");
+    const table = breakdownTable(realized, b.field, range, rules);
+    if (table == null) continue;
+    out.push(`### ${b.label}`, table, "");
   }
 
   // --- Open / needs-review ------------------------------------------------
@@ -645,10 +691,12 @@ export function buildMentorPack(
 
   if (missedSetups.length > 0) {
     out.push(`## Missed setup-i (${missedSetups.length})`);
-    out.push(`_Planirani trejdovi koji nikad nisu otvoreni — bez PnL._`);
+    out.push(
+      `_Planirani trejdovi koji nikad nisu otvoreni — bez PnL. Ishod je hipotetički: R2 sveće kroz plan trading dana; broji se tek kad cena dotakne ulaz._`,
+    );
     out.push("");
     for (const t of missedSetups.slice(0, 30))
-      out.push(tradeDetail(t, ccy, detailFields, [], opts.displayTz));
+      out.push(missedDetail(t, detailFields, opts.displayTz));
     out.push("");
   }
 

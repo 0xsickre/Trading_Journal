@@ -54,7 +54,7 @@ describe("TrackerStreakCard — real computeStreak/meanCompliance, on screen", (
     const series = [day("2026-04-06", "skipped", null)];
     render(<TrackerStreakCard series={series} endDay="2026-04-06" hasRules />);
     expect(statValue("Average consistency")).toBe("—");
-    expect(screen.getByText("0 ocenjenih dana")).toBeInTheDocument();
+    expect(screen.getByText("0 days scored")).toBeInTheDocument();
   });
 });
 

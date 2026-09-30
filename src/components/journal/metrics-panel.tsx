@@ -181,7 +181,7 @@ export function PeriodPerformanceCard({
       <CardHeader className="pb-2">
         <CardTitle className="text-base">{label}</CardTitle>
         <p className="text-xs text-muted-foreground">
-          {summary.periods} periods
+          {summary.periods} {summary.periods === 1 ? "period" : "periods"}
         </p>
       </CardHeader>
       <CardContent>

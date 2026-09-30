@@ -123,7 +123,7 @@ export function TrackerStreakCard({
                 // Mean of DAYS, not of pooled rule counts: a Monday with 12
                 // rules must not outweigh a Wednesday with 3, because the unit
                 // of process is the day.
-                hint={`${scored} ocenjenih dana`}
+                hint={`${scored} ${scored === 1 ? "day" : "days"} scored`}
               />
               <Stat
                 label="Last break"
@@ -135,7 +135,7 @@ export function TrackerStreakCard({
             <p className="text-xs text-muted-foreground">
               Last 26 weeks — stronger colour is higher consistency. A day with no
               rule at all (a weekend, or before the rule existed)
-              stoji prazan i ne prekida niz.
+              stays empty and does not break the streak.
             </p>
           </>
         )}

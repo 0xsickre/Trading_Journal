@@ -353,7 +353,8 @@ export function dailyPnl(
 export type BreakdownRow = {
   key: string;
   count: number;
-  winRate: number;
+  /** Null when every trade in the group is breakeven: no win rate, not 0 %. */
+  winRate: number | null;
   totalR: number;
   avgR: number;
   netSum: number;
@@ -408,7 +409,7 @@ export function breakdownByField(
   return result.rows.map((r) => ({
     key: r.bucket,
     count: r.n,
-    winRate: r.values.win_rate ?? 0,
+    winRate: r.values.win_rate ?? null,
     totalR: r.values.total_r ?? 0,
     avgR: r.values.avg_r ?? 0,
     netSum: r.values.net_pnl ?? 0,

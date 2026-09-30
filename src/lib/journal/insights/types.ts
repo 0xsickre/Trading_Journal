@@ -70,8 +70,18 @@ export function sortInsights(insights: Insight[]): Insight[] {
   });
 }
 
-/** Group for display: one row per rule, with the subjects that triggered it. */
+/**
+ * Group for display: one row per rule branch, with the subjects that triggered it.
+ *
+ * A rule can fire in more than one branch — `exceed_avg_hold_time` is a critical
+ * "Loser held too long" and an info "Longer than usual". Keyed by rule alone,
+ * the second branch was counted under the first one's title and severity, so a
+ * winner held long showed up as a critical loser and the row disagreed with the
+ * severity badges above it.
+ */
 export type InsightGroup = {
+  /** Stable row key: rule, severity and title. */
+  key: string;
   ruleId: string;
   title: string;
   severity: InsightSeverity;
@@ -83,7 +93,9 @@ export type InsightGroup = {
 export function groupInsights(insights: Insight[]): InsightGroup[] {
   const map = new Map<string, InsightGroup>();
   for (const i of insights) {
-    const g = map.get(i.ruleId) ?? {
+    const key = `${i.ruleId}|${i.severity}|${i.title}`;
+    const g = map.get(key) ?? {
+      key,
       ruleId: i.ruleId,
       title: i.title,
       severity: i.severity,
@@ -93,7 +105,7 @@ export function groupInsights(insights: Insight[]): InsightGroup[] {
     };
     g.count++;
     g.insights.push(i);
-    map.set(i.ruleId, g);
+    map.set(key, g);
   }
   return [...map.values()].sort((a, b) => {
     const bySeverity =

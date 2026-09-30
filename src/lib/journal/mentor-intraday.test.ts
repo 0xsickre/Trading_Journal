@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildMentorPack } from "./mentor-export";
-import { dimensionTable, SMALL_SAMPLE, sr } from "./mentor-intraday";
+import { dimensionTable, ruleLabel, SMALL_SAMPLE, sr } from "./mentor-intraday";
 import { enrichTrades } from "./enriched-trade";
 import { toRealized } from "./analytics";
 import { evaluateTopstep } from "./topstep";
@@ -9,6 +9,7 @@ import type { Insight } from "./insights/types";
 import type { SessionBrief } from "./session-brief";
 import type { TrackerRule } from "./tracker-types";
 import type { DayCompliance } from "./tracker/compliance";
+import type { FieldDef } from "./field-def-types";
 
 // 29.09.2026 is US summer time: 09:30 ET = 13:30 UTC = 15:30 in Belgrade.
 function trade(no: number, openedAt: string, closedAt: string, net: number, size = 1): TradeRow {
@@ -148,7 +149,7 @@ describe("mentor pack for a day trader (F5.6)", () => {
     // 3 trades, all lost, first at 09:40 ET, a run of 3, one entry after two losses,
     // two contracts at most, half the rules kept, the mental note.
     expect(md).toContain(
-      "| 2026-09-29 | 3 | 0/3/0 | -400.00 | -4.00R | 09:40 | 3 | 1 | 2 | 50% (Stop posle 2 gubitka) | 1 ulaz u crvenom prozoru, mentalno 4/10 |",
+      "| 2026-09-29 | 3 | 0/3/0 | -400.00 | -4.00R | 09:40 | 3 | 1 | 2 | 50% (Stop posle 2 gubitka) | 1 ulaz u crvenom prozoru, mentalno 4/5 |",
     );
   });
 
@@ -165,7 +166,7 @@ describe("mentor pack for a day trader (F5.6)", () => {
     expect(md).toContain(
       "- **Vreme:** ulaz 29.09. 16:00:00 · izlaz 16:10:00 · (Europe/Belgrade) = 10:00 ET · Morning 10:00–11:30 · 30 min posle otvaranja",
     );
-    expect(md).toContain("3. trejd dana · pre ulaza 2 gubitka zaredom · trajanje 10m · 2 ugovora");
+    expect(md).toContain("3. trejd dana · pre ulaza 2 gubitka zaredom · plan pre ulaza · trajanje 10m · 2 ugovora");
     expect(md).toContain("- **Ulaz u crvenom prozoru:** CPI (visok) 09:58–10:05 ET");
     expect(md).toContain("- **Zapažanja na ovom trejdu:** Traded on after the loss limit");
     expect(md.indexOf("### Trade #1")).toBeLessThan(md.indexOf("### Trade #4"));
@@ -206,5 +207,78 @@ describe("sr — Serbian plural", () => {
       "22 gubitka",
       "25 gubitaka",
     ]);
+  });
+});
+
+describe("mentor pack details found by the mock book (30.09.2026)", () => {
+  const missed = (no: number, outcome: string | null, r: number | null): TradeRow =>
+    ({
+      id: `00000000-0000-0000-0000-0000000001${no}`,
+      trade_no: no,
+      status: "missed",
+      source: "manual",
+      needs_review: false,
+      created_at: "2026-09-29T12:00:00Z",
+      missed_at: "2026-09-29T14:00:00Z",
+      instrument: "MNQ",
+      direction: "Long",
+      miss_reason: "Oklevao",
+      missed_outcome: outcome,
+      missed_r: r,
+      tv_images: {},
+    }) as unknown as TradeRow;
+
+  it("gives each missed setup its R2 outcome and the time on the trader's clock", () => {
+    const md = buildMentorPack([...book, missed(11, "target", 3), missed(12, "no_entry", 0), missed(13, null, null)], {
+      displayTz: "Europe/Belgrade",
+    });
+    expect(md).toContain("### Trade #11 — MNQ Long · propušten 2026-09-29 16:00");
+    expect(md).toContain("- **Hipotetički ishod (R2):** cena je došla do ulaza, pa do targeta: +3.00R");
+    expect(md).toContain("cena se nije vratila do ulaza — setup nije ni došao, to nije oklevanje: +0.00R");
+    expect(md).toContain("- **Hipotetički ishod (R2):** još nije izmereno");
+    expect(md).not.toContain("Missed at");
+  });
+
+  it("prints a category once, leaves empty ones out and gives an all-breakeven group no win rate", () => {
+    const tags: FieldDef = {
+      id: "f1",
+      key: "technical_tags",
+      label: "Technical Tags",
+      field_type: "tags",
+      list_key: "technical_tags",
+      show_phase: "always",
+      sort_order: 0,
+      is_active: true,
+      show_when: "always",
+    };
+    const scratch = trade(5, "2026-09-30T15:00:00Z", "2026-09-30T15:05:00Z", 0);
+    (scratch as unknown as { technical_tags: string[] }).technical_tags = ["FVG"];
+    const md = buildMentorPack([...book, scratch], { fieldDefs: [tags] });
+    expect(md.split("### Technical Tags").length - 1).toBe(1);
+    expect(md).toContain("| FVG | 1 | — |");
+    expect(md).not.toContain("### Setup Grade");
+    expect(md).not.toContain("_no data_");
+  });
+
+  it("marks a trade typed in after its fill, whose R is measured from the fill", () => {
+    const late = trade(6, "2026-09-30T16:00:00Z", "2026-09-30T16:10:00Z", 50);
+    (late as unknown as { created_at: string }).created_at = "2026-09-30T18:00:00Z";
+    const md = buildMentorPack([...book, late], { tzOf: () => "UTC", displayTz: "UTC" });
+    expect(md).toContain("upisan posle ulaza (market) — R od fill-a");
+  });
+});
+
+describe("ruleLabel", () => {
+  it("keeps the name before the colon, shortens a long sentence and marks a deleted rule", () => {
+    expect(ruleLabel({ text: "Dnevnik i tagovi: Unosim svaki trejd u aplikaciju", deleted_at: null })).toBe(
+      "Dnevnik i tagovi",
+    );
+    expect(ruleLabel({ text: "Svaki trejd ima unet stop loss", deleted_at: null })).toBe("Svaki trejd ima unet stop loss");
+    expect(
+      ruleLabel({
+        text: "Nema otvaranja novih pozicija 15 minuta pre i 15 minuta nakon važnih (crvenih) vesti.",
+        deleted_at: "2026-09-29T00:00:00Z",
+      }),
+    ).toBe("Nema otvaranja novih pozicija 15 minuta pre i… (ukinuto)");
   });
 });

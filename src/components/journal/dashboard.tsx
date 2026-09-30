@@ -1315,7 +1315,7 @@ export function Dashboard({
   );
 
   /**
-   * Worst prop-firm headroom across the Topstep accounts: the smallest room
+   * Worst prop-firm headroom across the Topstep accounts in view: the smallest room
    * ever left above each one's trailing MLL, as a share of the MLL
    * (`evaluateTopstep`, F3).
    *
@@ -1333,11 +1333,14 @@ export function Dashboard({
    * touched because the reader switched the view to the last 30 days.
    */
   const propHeadroomPct = useMemo(() => {
+    // The accounts in view only: with one account picked, another account's
+    // close call is not this one's survival.
     const rooms = topstepStatuses
+      .filter(({ account }) => accountFilter === "all" || account.id === accountFilter)
       .map(({ result }) => result.headroomPct)
       .filter((h): h is number => h != null);
     return rooms.length === 0 ? null : Math.min(...rooms);
-  }, [topstepStatuses]);
+  }, [topstepStatuses, accountFilter]);
 
   /**
    * R of the trades expectancy is actually averaged over — decided, and

@@ -77,7 +77,7 @@ export function MissedPanel({
           {stalePlans > 0 && (
             <>
               {stalePlans} {stalePlans === 1 ? "plan is" : "plans are"} still unresolved
-              after {stalePlans === 1 ? "its" : "their"} trading day; until they are marked
+              after {stalePlans === 1 ? "its" : "their"} trading day; until {stalePlans === 1 ? "it is" : "they are"} marked
               missed (or deleted), this figure
               measures how tidily you file plans rather than what hesitation cost.{" "}
             </>

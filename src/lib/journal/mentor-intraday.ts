@@ -17,6 +17,7 @@
 import { computeStats, type RealizedTrade } from "./analytics";
 import type { BreakevenRange } from "./breakeven";
 import type { DailyReportLite, EnrichedTrade } from "./enriched-trade";
+import { loggedAfterEntry } from "./plan-snapshot";
 import { getDimension, type DimensionContext } from "./reports/dimensions";
 import type { RedWindow, SessionBrief } from "./session-brief";
 import { minutesAfterOpen, SESSION_TZ } from "./session-window";
@@ -82,7 +83,8 @@ export function dimensionTable(
   const body = keys.map((k) => {
     const s = computeStats(buckets.get(k)!, "net", range);
     const n = s.count < SMALL_SAMPLE ? `${s.count} ⚠` : String(s.count);
-    return `| ${cell(k)} | ${n} | ${s.winRate.toFixed(1)}% | ${r2(s.avgR)}R | ${r2(s.totalR)}R | ${s.netSum.toFixed(2)} |`;
+    const win = s.wins + s.losses > 0 ? `${s.winRate.toFixed(1)}%` : "—";
+    return `| ${cell(k)} | ${n} | ${win} | ${r2(s.avgR)}R | ${r2(s.totalR)}R | ${s.netSum.toFixed(2)} |`;
   });
   return `${head}\n${body.join("\n")}`;
 }
@@ -180,7 +182,7 @@ export function dailySection(trades: readonly EnrichedTrade[], ctx: DailyContext
     const dayNote = ctx.briefByDay?.get(day)?.dayNote;
     if (dayNote) notes.push(dayNote);
     const rep = ctx.reportByDate?.get(day);
-    if (rep?.mental_temp != null) notes.push(`mentalno ${rep.mental_temp}/10`);
+    if (rep?.mental_temp != null) notes.push(`mentalno ${rep.mental_temp}/5`);
     out.push(
       `| ${day} | ${list.length} | ${s.wins}/${s.losses}/${s.breakeven} | ${s.netSum.toFixed(2)} | ${r2(s.totalR)}R | ${
         first ? fmtInTz(first, SESSION_TZ, "HH:mm") : "—"
@@ -252,6 +254,20 @@ function ruleLine(rule: TrackerRule): string {
   return `- ${cell(rule.text)} (${STAGE_LABEL[rule.stage]}${rule.is_mandatory ? ", obavezno" : ""}${auto} · ${days})`;
 }
 
+/**
+ * A rule as a daily-table cell: the name before the colon, or the first words.
+ * The full sentences are listed once under "Moja pravila"; repeated in every
+ * day's row they made the table unreadable. A rule deleted since still counts
+ * on the days it was live, and says so, because the list above no longer has it.
+ */
+export function ruleLabel(rule: Pick<TrackerRule, "text" | "deleted_at">): string {
+  const text = rule.text.trim();
+  const colon = text.indexOf(":");
+  const name =
+    colon > 0 && colon <= 48 ? text.slice(0, colon) : text.length <= 48 ? text : `${text.slice(0, 45).trimEnd()}…`;
+  return rule.deleted_at == null ? name : `${name} (ukinuto)`;
+}
+
 /** The trader's own rules, and how often each was broken in the period. */
 export function rulesSection(rules: readonly TrackerRule[], compliance: readonly DayCompliance[]): string[] {
   const live = rules.filter((r) => r.deleted_at == null);
@@ -312,6 +328,10 @@ export function tradeContextLines(
     e.lossStreakBefore != null && e.tradeNoInDay != null && e.tradeNoInDay > 1
       ? `pre ulaza ${e.lossStreakBefore} ${sr(e.lossStreakBefore, "gubitak", "gubitka", "gubitaka")} zaredom`
       : null,
+    // Which entry the R, risk and slippage are measured from: a plan sealed
+    // before the fill keeps its price; one typed in after a market order uses
+    // the fill, and its "Planned Entry Price" below is not a reference.
+    loggedAfterEntry(e.trade.row) ? "upisan posle ulaza (market) — R od fill-a" : "plan pre ulaza",
     e.durationSeconds != null ? `trajanje ${formatDuration(e.durationSeconds)}` : null,
     e.size != null ? `${e.size} ${sr(e.size, "ugovor", "ugovora", "ugovora")}` : null,
     e.riskMoney != null ? `rizik do stopa ${e.riskMoney.toFixed(2)}` : null,

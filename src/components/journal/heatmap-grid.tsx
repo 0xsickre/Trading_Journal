@@ -57,9 +57,12 @@ export function HeatmapGrid({
     return { columns: cols, max: maxAbs || 1 };
   }, [values, endDay, weeks]);
 
+  // Right-to-left on the scroller only: where 26 weeks are wider than the
+  // screen, it opens on the newest weeks instead of half a year ago. The grid
+  // inside is left-to-right again, so the columns keep their order.
   return (
-    <div className="min-w-0 max-w-full overflow-x-auto">
-      <div className="flex w-max gap-1">
+    <div className="min-w-0 max-w-full overflow-x-auto [direction:rtl]">
+      <div className="flex w-max gap-1 [direction:ltr]">
         {columns.map((week, wi) => (
           <div key={wi} className="flex flex-col gap-1">
             {week.map((cell) => (

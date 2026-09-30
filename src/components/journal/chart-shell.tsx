@@ -17,6 +17,21 @@ export const TOOLTIP_STYLE = {
   fontSize: 12,
 } as const;
 
+/**
+ * Everything a `<Tooltip>` needs to read on either theme. recharts paints each
+ * row in its series colour and falls back to black when a bar colours itself
+ * per `<Cell>` — black on the dark popover. Label and rows take the popover's
+ * own foreground instead.
+ */
+export const TOOLTIP_PROPS = {
+  contentStyle: TOOLTIP_STYLE,
+  labelStyle: { color: "var(--popover-foreground)" },
+  itemStyle: { color: "var(--popover-foreground)" },
+} as const;
+
+/** Hover band behind a bar; recharts' default is a light grey slab on the dark theme. */
+export const BAR_CURSOR = { fill: "var(--muted)", opacity: 0.4 } as const;
+
 /** Axis defaults, so every chart shares one tick size and colour. */
 export const AXIS_PROPS = {
   tick: { fontSize: 11 },

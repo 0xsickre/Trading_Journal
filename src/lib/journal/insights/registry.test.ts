@@ -120,6 +120,17 @@ describe("sortInsights / groupInsights", () => {
     expect(groups[0].count).toBe(2);
     expect(groups[1].ruleId).toBe("clean_hold");
   });
+
+  it("keeps a rule's branches apart, so each row matches its severity", () => {
+    const groups = groupInsights([
+      { ...mk("exceed_avg_hold_time", "critical"), title: "Loser held too long", subjectId: "t1" },
+      { ...mk("exceed_avg_hold_time", "info"), title: "Longer than usual", subjectId: "t2" },
+    ]);
+    expect(groups.map((g) => [g.title, g.severity, g.count])).toEqual([
+      ["Loser held too long", "critical", 1],
+      ["Longer than usual", "info", 1],
+    ]);
+  });
 });
 
 describe("the swing insights are gone (H1, 28.09.2026)", () => {

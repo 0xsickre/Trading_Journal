@@ -14,10 +14,11 @@ import {
 } from "recharts";
 import {
   AXIS_PROPS,
+  BAR_CURSOR,
   ChartShell,
   GRID_PROPS,
   SERIES_COLORS,
-  TOOLTIP_STYLE,
+  TOOLTIP_PROPS,
 } from "@/components/journal/chart-shell";
 import { formatMetric, metric, type ViewMode } from "@/lib/journal/units";
 import { bucketLabel } from "@/lib/journal/reports/dimensions";
@@ -111,8 +112,8 @@ export function ReportChart({
               tickFormatter={(v: number) => fmt(v)}
             />
             <Tooltip
-              contentStyle={TOOLTIP_STYLE}
-              cursor={{ fill: "var(--muted)", opacity: 0.4 }}
+              {...TOOLTIP_PROPS}
+              cursor={BAR_CURSOR}
               formatter={(_v, _name, item) => {
                 const raw = (item?.payload as { raw?: number | null } | undefined)?.raw ?? null;
                 return [raw === Infinity ? "∞" : fmt(raw), m.label];

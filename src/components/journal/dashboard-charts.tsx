@@ -15,8 +15,9 @@ import {
 } from "recharts";
 import {
   AXIS_PROPS,
+  BAR_CURSOR,
   GRID_PROPS,
-  TOOLTIP_STYLE,
+  TOOLTIP_PROPS,
 } from "@/components/journal/chart-shell";
 import { fmtMoney, fmtR } from "@/lib/journal/format";
 
@@ -66,9 +67,10 @@ export function EquityChart({
         </defs>
         <CartesianGrid {...GRID_PROPS} />
         <XAxis dataKey="i" {...AXIS_PROPS} />
-        <YAxis {...AXIS_PROPS} width={56} />
+        {/* Fitted to the curve: from zero, a $500 swing on a $50,000 balance is a flat line. */}
+        <YAxis {...AXIS_PROPS} width={56} domain={["auto", "auto"]} />
         <Tooltip
-          contentStyle={TOOLTIP_STYLE}
+          {...TOOLTIP_PROPS}
           formatter={(v) =>
             metric === "money" ? fmtMoney(Number(v), currency) : fmtR(Number(v))
           }
@@ -95,7 +97,7 @@ export function RDistributionChart({ data }: { data: RHistBucket[] }) {
         <XAxis dataKey="bucket" {...AXIS_PROPS} tick={{ fontSize: 10 }} />
         <YAxis allowDecimals={false} {...AXIS_PROPS} width={28} />
         <ReferenceLine x="-1..0" stroke="var(--border)" />
-        <Tooltip contentStyle={TOOLTIP_STYLE} />
+        <Tooltip {...TOOLTIP_PROPS} cursor={BAR_CURSOR} />
         <Bar dataKey="count" radius={[3, 3, 0, 0]}>
           {data.map((b, i) => (
             <Cell
@@ -141,7 +143,8 @@ export function SlippageChart({ weeks }: { weeks: SlippageWeek[] }) {
         />
         <ReferenceLine y={0} stroke="var(--border)" />
         <Tooltip
-          contentStyle={TOOLTIP_STYLE}
+          {...TOOLTIP_PROPS}
+          cursor={BAR_CURSOR}
           formatter={(v, _name, item) => {
             const payload = item.payload as {
               avgDisplayR: number;
@@ -194,7 +197,8 @@ export function ExitEfficiencyChart({ weeks }: { weeks: ExitEffWeek[] }) {
         />
         <ReferenceLine y={50} stroke="var(--border)" strokeDasharray="4 4" />
         <Tooltip
-          contentStyle={TOOLTIP_STYLE}
+          {...TOOLTIP_PROPS}
+          cursor={BAR_CURSOR}
           formatter={(v, _name, item) => {
             const payload = item.payload as {
               avgPct: number;
