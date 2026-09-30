@@ -136,9 +136,18 @@ export function SlippageChart({ weeks }: { weeks: SlippageWeek[] }) {
       <BarChart data={data} margin={{ left: 4, right: 8, top: 8 }}>
         <CartesianGrid {...GRID_PROPS} />
         <XAxis dataKey="week" {...AXIS_PROPS} tick={{ fontSize: 10 }} />
+        {/* Zero always in range: with every week on one side, recharts fitted the
+            axis to the data and the bars grew from -0.01R instead of from zero.
+            Ends rounded out to 0.05R and six ticks, so each tick is a round
+            hundredth instead of two labels reading the same after rounding. */}
         <YAxis
           {...AXIS_PROPS}
           width={40}
+          domain={[
+            (min: number) => Math.min(0, Math.floor(min * 20) / 20),
+            (max: number) => Math.max(0, Math.ceil(max * 20) / 20),
+          ]}
+          tickCount={6}
           tickFormatter={(v) => `${Number(v).toFixed(2)}R`}
         />
         <ReferenceLine y={0} stroke="var(--border)" />
