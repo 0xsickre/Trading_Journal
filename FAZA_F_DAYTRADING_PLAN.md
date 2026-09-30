@@ -130,7 +130,7 @@ pogađa.
 | **F5** | Intraday analitika: sesija, trajanje u minutima, insights, uzorak | #11–#13, #15, #17, #18 (#14 zatvorio H2) | K | da: `20260929235000` (`time_underwater_pct`), `20260930000000` / `…000100` (`baseline_trades`) | Sonnet, Opus za #13 | ✅ `2e59f2e` · `5095e43` · `3183236` · `20f9626` + `8c35148` (futures-trading) · `ea0461b` · `d9ccf9c` · `8dff0cf`, 29.09.2026 — migracije primenjene |
 | **F6** | Nasleđe i `futures-trading`: cena promašaja iz R2, ostaci vault-a, komentari, PARITY | #16, #20, #22, #23 (#19 zatvorili H1/H2) | F5 | da: `20260930010000` (`no_entry`, `r2`) | Sonnet, Opus za #16 | ✅ `16c3a04` + `a59307d` (futures-trading) · `e515552` · `a5a8ff3` · `db9c3b3` + F6.5, 29.09.2026 — migracija primenjena |
 | **L** | Šta bi bilo: SL × TP mreža, posle izlaza, posle stopa — iz berzanskih sveća | — | F6 | da: `20260930080000` (`scenario`) | **Opus** | ✅ `89915aa` · futures-trading `f60b5ea`, 30.09.2026 — migracija primenjena |
-| **R** | Rizik blizu MLL-a i proklizavanje stopa u veličini (journal + brief isto) | — | L | ne | **Opus** | u radu (30.09.2026) |
+| **R** | Rizik blizu MLL-a i proklizavanje stopa u veličini (journal + brief isto) | — | L | ne | **Opus** | ✅ `7f14d81` · futures-trading `2870b3d`, 30.09.2026 — bez migracije |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -861,7 +861,7 @@ Za svaki zatvoren trejd sa stopom: 42 „šta da je“ ishoda, pomeranje cene po
 koliki je SL trebao. U izveštajima: koja kombinacija SL × TP daje najviše R po setupu i TF-u, sa oznakom malog uzorka
 (ispod 30 trejdova po grupi je hipoteza, ne nalaz).
 
-## R — Rizik blizu MLL-a i proklizavanje stopa (detaljno, 30.09.2026)
+## R — Rizik blizu MLL-a i proklizavanje stopa (detaljno, 30.09.2026) — ✅ `7f14d81` · `2870b3d` (futures-trading)
 
 **Povod:** pregled oba repoa (30.09.2026). Simulacija naloga 150K, 60 dana, ishod 45 % × 1,5R: sa 12,5 % prostora i
 DLL-om $2.000 nalog padne u ~30 % simulacija, sa 8 % i $1.200 u ~14 %. Journal još nema nijedan trejd, pa prednost nije
