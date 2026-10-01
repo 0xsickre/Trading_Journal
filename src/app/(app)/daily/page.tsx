@@ -1,4 +1,4 @@
-import { primaryAccount } from "@/lib/journal/account-rules";
+import { inAllAccountsScope, primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getDailyReport } from "@/lib/journal/daily-report-queries";
 import { getActiveFocusGoal } from "@/lib/journal/focus-goal-queries";
@@ -85,7 +85,7 @@ export default async function DailyPage({
     accounts,
     { primary, timezone, today, reportDate },
     rules,
-    trades,
+    tradesAll,
     report,
     activeGoal,
     checkinsByDay,
@@ -147,6 +147,9 @@ export default async function DailyPage({
   // and the 21:25 reminder agree on which day an evening trade belongs to.
   const tzFor = accountDayZoneResolver(accounts, primary);
   const tzOf = (row: TradeRow) => tzFor(row.account_id);
+  // The real book only: Practice is kept apart (trader, 01.10.2026) — it is read by picking
+  // that account on the dashboard, trades, calendar and reports.
+  const trades = inAllAccountsScope(tradesAll, accounts);
 
   // A Topstep account's trades are graded by its plan.
   const index = buildTradeDayIndex(trades, tzOf, topstepRulesResolver(accounts, cash));

@@ -1,4 +1,4 @@
-import { accountFilterOptions, primaryAccount } from "@/lib/journal/account-rules";
+import { accountFilterOptions, allAccountsScope, inAllAccountsScope, primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getCashEvents } from "@/lib/journal/cash-events";
 import { getTradesWithStats } from "@/lib/journal/trades";
@@ -94,11 +94,12 @@ export default async function CalendarPage({
     accountParam && accounts.some((a) => a.id === accountParam) ? accountParam : "all";
   const mixedFallback = requested === "all" && accounts.length > 1 && pooledCurrency == null;
   const accountId = mixedFallback ? (primary?.id ?? "all") : requested;
+  // "All accounts" is the real book; Practice is read by choosing it (trader, 01.10.2026).
   const scopedAccounts =
-    accountId === "all" ? accounts : accounts.filter((a) => a.id === accountId);
+    accountId === "all" ? allAccountsScope(accounts) : accounts.filter((a) => a.id === accountId);
   const currency = sharedCurrency(scopedAccounts) ?? primary?.currency ?? "USD";
   const scopedTrades =
-    accountId === "all" ? trades : trades.filter((t) => t.account_id === accountId);
+    accountId === "all" ? inAllAccountsScope(trades, accounts) : trades.filter((t) => t.account_id === accountId);
 
   /**
    * Breakeven band, only when every account agrees on it.
@@ -151,7 +152,7 @@ export default async function CalendarPage({
     ]);
     const briefOf = briefResolver(briefs);
 
-    const index = buildTradeDayIndex(trades, tzOfRow, topstepRulesResolver(accounts, cash));
+    const index = buildTradeDayIndex(scopedTrades, tzOfRow, topstepRulesResolver(accounts, cash));
     const series = computeComplianceSeries(
       days,
       rules,

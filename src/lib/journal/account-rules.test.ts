@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   accountFilterOptions,
+  allAccountsScope,
+  inAllAccountsScope,
+  isPractice,
   cashRowsWithOpening,
   duplicateSettings,
   netFlowByCurrency,
@@ -114,5 +117,31 @@ describe("accountFilterOptions", () => {
       { value: "live", label: "Live" },
       { value: "old", label: "Old (archived)" },
     ]);
+  });
+});
+
+describe("Practice is kept apart from \"All accounts\" (trader, 01.10.2026)", () => {
+  const real = { id: "c", name: "Topstep 50K", archived_at: null, topstep_mode: true, topstep_stage: "combine" as const };
+  const xfa = { id: "x", name: "Topstep 50K XFA", archived_at: null, topstep_mode: true, topstep_stage: "xfa" as const };
+  const practice = { id: "p", name: "Topstep 150K", archived_at: null, topstep_mode: true, topstep_stage: "practice" as const };
+
+  it("All is the real accounts", () => {
+    expect(allAccountsScope([real, practice, xfa]).map((a) => a.id)).toEqual(["c", "x"]);
+    expect(isPractice(practice)).toBe(true);
+    expect(isPractice({ ...practice, topstep_mode: false })).toBe(false);
+  });
+
+  it("a book of nothing but practice shows it", () => {
+    expect(allAccountsScope([practice]).map((a) => a.id)).toEqual(["p"]);
+  });
+
+  it("rows of a practice account leave All; rows with no account stay", () => {
+    const rows = [{ account_id: "c" }, { account_id: "p" }, { account_id: null }];
+    expect(inAllAccountsScope(rows, [real, practice])).toEqual([{ account_id: "c" }, { account_id: null }]);
+    expect(inAllAccountsScope(rows, [practice])).toEqual(rows);
+  });
+
+  it("the picker says which one is practice", () => {
+    expect(accountFilterOptions([real, practice]).map((o) => o.label)).toEqual(["Topstep 50K", "Topstep 150K (practice)"]);
   });
 });

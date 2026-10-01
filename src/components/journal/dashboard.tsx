@@ -1,6 +1,6 @@
 "use client";
 
-import { accountFilterOptions, primaryAccount } from "@/lib/journal/account-rules";
+import { accountFilterOptions, allAccountsScope, inAllAccountsScope, primaryAccount } from "@/lib/journal/account-rules";
 import {
   useCallback,
   useEffect,
@@ -387,9 +387,9 @@ function breakdownFields(custom: readonly { key: string; label: string }[]) {
 }
 
 export function Dashboard({
-  trades,
-  accounts,
-  cashEvents = [],
+  trades: tradesAll,
+  accounts: accountsAll,
+  cashEvents: cashEventsAll = [],
   loggedDates = [],
   dailyReports = [],
   fillCounts,
@@ -658,6 +658,22 @@ export function Dashboard({
   const show = useCallback((id: string) => visible.has(id), [visible]);
 
   const [accountFilter, setAccountFilter] = useState("all");
+  // "All accounts" is the real book: a Practice account is read by choosing it
+  // (trader, 01.10.2026; `allAccountsScope`). Everything below that pools
+  // "all" reads these, so no tile can count practice by forgetting a filter;
+  // the picker and a chosen account read the whole list.
+  const accounts = useMemo(
+    () => (accountFilter === "all" ? allAccountsScope(accountsAll) : accountsAll),
+    [accountFilter, accountsAll],
+  );
+  const trades = useMemo(
+    () => (accountFilter === "all" ? inAllAccountsScope(tradesAll, accountsAll) : tradesAll),
+    [accountFilter, tradesAll, accountsAll],
+  );
+  const cashEvents = useMemo(
+    () => (accountFilter === "all" ? inAllAccountsScope(cashEventsAll, accountsAll) : cashEventsAll),
+    [accountFilter, cashEventsAll, accountsAll],
+  );
   // All time by default — the whole record first, narrowed on request. The
   // remembered scope (below) still reopens a tab on the period last chosen.
   const [period, setPeriod] = useState<DashboardPeriod>("all");
@@ -708,7 +724,7 @@ export function Dashboard({
   const scopeRestored = useRef(false);
   useEffect(() => {
     const stored = loadScope();
-    if (stored.account && (stored.account === "all" || accounts.some((a) => a.id === stored.account)))
+    if (stored.account && (stored.account === "all" || accountsAll.some((a) => a.id === stored.account)))
       // eslint-disable-next-line react-hooks/set-state-in-effect -- external-store init
       setAccountFilter(stored.account);
     if (stored.period) setPeriod(stored.period);
@@ -1691,14 +1707,14 @@ export function Dashboard({
           bar where two of the eight controls silently mean something else is a
           bar the reader has to learn instead of read. */}
       <div className="flex flex-wrap items-center gap-2">
-        {accounts.length > 1 && (
+        {accountsAll.length > 1 && (
           <Select value={accountFilter} onValueChange={setAccountFilterDeferred}>
             <SelectTrigger className="h-9 w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All accounts</SelectItem>
-              {accountFilterOptions(accounts).map((o) => (
+              {accountFilterOptions(accountsAll).map((o) => (
                 <SelectItem key={o.value} value={o.value}>
                   {o.label}
                 </SelectItem>

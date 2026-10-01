@@ -148,10 +148,37 @@ export function netFlowByCurrency(
  * `pickableAccounts` instead.
  */
 export function accountFilterOptions(
-  accounts: readonly Pick<Account, "id" | "name" | "archived_at">[],
+  accounts: readonly (Pick<Account, "id" | "name" | "archived_at"> & Partial<Pick<Account, "topstep_mode" | "topstep_stage">>)[],
 ): { value: string; label: string }[] {
+  const label = (a: (typeof accounts)[number]) => `${a.name}${isPractice(a) ? " (practice)" : ""}`;
   return [
-    ...accounts.filter((a) => !isArchived(a)).map((a) => ({ value: a.id, label: a.name })),
-    ...accounts.filter(isArchived).map((a) => ({ value: a.id, label: `${a.name} (archived)` })),
+    ...accounts.filter((a) => !isArchived(a)).map((a) => ({ value: a.id, label: label(a) })),
+    ...accounts.filter(isArchived).map((a) => ({ value: a.id, label: `${label(a)} (archived)` })),
   ];
+}
+
+/** A Topstep Practice account (trader, 01.10.2026): a Combine's rules, kept apart from the real book. */
+export function isPractice(a: Partial<Pick<Account, "topstep_mode" | "topstep_stage">>): boolean {
+  return a.topstep_mode === true && a.topstep_stage === "practice";
+}
+
+/**
+ * What "All accounts" means: the real accounts — Practice is kept apart and is
+ * read by choosing it in the picker (trader, 01.10.2026). A book with nothing
+ * but practice shows it, rather than an "All" that holds nothing.
+ */
+export function allAccountsScope<A extends Partial<Pick<Account, "topstep_mode" | "topstep_stage">>>(
+  accounts: readonly A[],
+): A[] {
+  const real = accounts.filter((a) => !isPractice(a));
+  return real.length > 0 ? real : [...accounts];
+}
+
+/** Rows (trades, cash events) in the "All accounts" scope: those of `allAccountsScope`, plus rows with no account. */
+export function inAllAccountsScope<R extends { account_id: string | null }>(
+  rows: readonly R[],
+  accounts: readonly (Pick<Account, "id"> & Partial<Pick<Account, "topstep_mode" | "topstep_stage">>)[],
+): R[] {
+  const out = new Set(accounts.filter((a) => !allAccountsScope(accounts).includes(a)).map((a) => a.id));
+  return out.size === 0 ? [...rows] : rows.filter((r) => r.account_id == null || !out.has(r.account_id));
 }

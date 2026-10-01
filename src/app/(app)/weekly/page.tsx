@@ -1,4 +1,4 @@
-import { accountFilterOptions, primaryAccount } from "@/lib/journal/account-rules";
+import { accountFilterOptions, allAccountsScope, inAllAccountsScope, primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getDailyReportDatesInRange } from "@/lib/journal/daily-report-queries";
 import { getTradesWithStats } from "@/lib/journal/trades";
@@ -104,8 +104,9 @@ export default async function WeeklyPage({
   const mixedFallback =
     requestedAccount === "all" && accounts.length > 1 && pooledCurrency == null;
   const accountId = mixedFallback ? (primary?.id ?? "all") : requestedAccount;
+  // "All accounts" is the real book; Practice is read by choosing it (trader, 01.10.2026).
   const scopedAccounts =
-    accountId === "all" ? accounts : accounts.filter((a) => a.id === accountId);
+    accountId === "all" ? allAccountsScope(accounts) : accounts.filter((a) => a.id === accountId);
   const currency = sharedCurrency(scopedAccounts) ?? primary?.currency ?? "USD";
 
   // Per-trade timezone, not the primary account's: a trade on a NY account and
@@ -120,7 +121,7 @@ export default async function WeeklyPage({
   const breakevenRange = sharedBreakevenRange(scopedAccounts);
 
   const realized = toRealized(
-    accountId === "all" ? trades : trades.filter((t) => t.account_id === accountId),
+    accountId === "all" ? inAllAccountsScope(trades, accounts) : trades.filter((t) => t.account_id === accountId),
   );
 
   const enriched = enrichTrades(realized, { tzOf, range: breakevenRange });

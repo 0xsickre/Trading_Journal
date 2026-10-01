@@ -4,6 +4,7 @@ import { revalidateDaily } from "@/lib/journal/revalidate";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
 import { getCurrentUser } from "@/lib/supabase/user";
+import { inAllAccountsScope } from "@/lib/journal/account-rules";
 import { getAccounts, getPrimaryAccount } from "@/lib/journal/accounts";
 import { getCashEvents } from "@/lib/journal/cash-events";
 import { accountDayZoneResolver, todayFor } from "@/lib/journal/time";
@@ -128,7 +129,7 @@ export async function lockDay(reportDate: string): Promise<Result> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Nisi prijavljen." };
 
-  const [accounts, rules, trades, briefs, cash] = await Promise.all([
+  const [accounts, rules, tradesAll, briefs, cash] = await Promise.all([
     getAccounts(),
     getTrackerRules({ includeRetired: true }),
     getTradesWithStats(),
@@ -145,6 +146,8 @@ export async function lockDay(reportDate: string): Promise<Result> {
   // The same day rule per account as the page — a Topstep account's trading day,
   // any other's calendar day — so what is locked is what was on screen.
   const tzOf = accountDayZoneResolver(accounts, primary);
+  // The same book as the page: Practice is kept apart (trader, 01.10.2026).
+  const trades = inAllAccountsScope(tradesAll, accounts);
   const index = buildTradeDayIndex(trades, (row) => tzOf(row.account_id), topstepRulesResolver(accounts, cash));
   const auto = evaluateAutoRulesForDay(reportDate, index, { briefOf: briefResolver(briefs) });
 

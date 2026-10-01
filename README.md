@@ -197,7 +197,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,989 tests across 192 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,995 tests across 192 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -1212,7 +1212,11 @@ help.topstep.com on 28.09.2026):
   brief computes the same (`racun.py`). The plan's DLL still counts on an XFA — optional on TopstepX,
   kept as the cautious reading. A **Practice** account (trader, 01.10.2026) keeps a Combine's rules and
   size, passes nothing and pays nothing; the banner says Practice, and the brief and the evening
-  reminder leave it out.
+  reminder leave it out. Its numbers are kept apart: **"All accounts" means the real accounts**
+  (`allAccountsScope` / `inAllAccountsScope` in `account-rules.ts`) on the dashboard, trades,
+  calendar, weekly and reports, and the account picker marks it "(practice)" — picking it shows its
+  own numbers. `/daily` (and its tracker lock) and the playbooks read the real book only. A book of
+  nothing but Practice accounts shows them, so a new journal is never blank.
 - **Closed trades only**: Topstep watches both limits intraday with open P&L, so a
   position that went through the floor and came back reads here as a survived day. The platform's
   risk engine is the record.
@@ -1580,8 +1584,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,989 tests across 192 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,359 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 630
+2,995 tests across 192 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,364 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 631
 tests in 65 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

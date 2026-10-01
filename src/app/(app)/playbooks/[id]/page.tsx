@@ -1,4 +1,4 @@
-import { primaryAccount } from "@/lib/journal/account-rules";
+import { inAllAccountsScope, primaryAccount } from "@/lib/journal/account-rules";
 import { notFound } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getAccounts } from "@/lib/journal/accounts";
@@ -46,7 +46,7 @@ export default async function PlaybookDetailPage({
   // everything else instead of awaited alone first, which cost a round trip.
   const positionRulesPromise = getPositionRules();
 
-  const [accounts, trades, playbooks, library, optionsMap, fieldDefs, notes, positionRules] =
+  const [accounts, tradesAll, playbooks, library, optionsMap, fieldDefs, notes, positionRules] =
     await Promise.all([
       getAccounts(),
       getTradesWithStats(),
@@ -61,6 +61,9 @@ export default async function PlaybookDetailPage({
   const book = playbooks.find((b) => b.id === id);
   if (!book) notFound();
 
+  // The real book only: Practice is kept apart (trader, 01.10.2026) — it is read by picking
+  // that account on the dashboard, trades, calendar and reports.
+  const trades = inAllAccountsScope(tradesAll, accounts);
   const primary = primaryAccount(accounts);
   // Null when the accounts' currencies differ — see the list page.
   const currency = sharedCurrency(accounts);

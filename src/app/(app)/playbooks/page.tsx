@@ -1,4 +1,4 @@
-import { primaryAccount } from "@/lib/journal/account-rules";
+import { inAllAccountsScope, primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import {
@@ -36,7 +36,7 @@ export default async function PlaybooksPage() {
   // page a round trip.
   const positionRulesPromise = getPositionRules();
 
-  const [accounts, trades, playbooks, library, positionRules] = await Promise.all([
+  const [accounts, tradesAll, playbooks, library, positionRules] = await Promise.all([
     getAccounts(),
     getTradesWithStats(),
     // Retired rules included: a rule taken off the checklist still owns the
@@ -46,6 +46,9 @@ export default async function PlaybooksPage() {
     positionRulesPromise,
   ]);
 
+  // The real book only: Practice is kept apart (trader, 01.10.2026) — it is read by picking
+  // that account on the dashboard, trades, calendar and reports.
+  const trades = inAllAccountsScope(tradesAll, accounts);
   const primary = primaryAccount(accounts);
   // Null when the accounts' currencies differ: the list then refuses to sum
   // money rather than print €500 + $300 as "$800".

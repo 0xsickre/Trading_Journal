@@ -1,6 +1,6 @@
 "use client";
 
-import { accountFilterOptions } from "@/lib/journal/account-rules";
+import { accountFilterOptions, allAccountsScope } from "@/lib/journal/account-rules";
 import {
   useCallback,
   useDeferredValue,
@@ -588,11 +588,18 @@ export function JournalGrid({
     [period, scopeTz, customFrom, customTo],
   );
 
+  // "All accounts" is the real book; a Practice account is listed when chosen (trader, 01.10.2026).
+  const outOfAll = useMemo(() => {
+    const inAll = new Set(allAccountsScope(accounts).map((a) => a.id));
+    return new Set(accounts.filter((a) => !inAll.has(a.id)).map((a) => a.id));
+  }, [accounts]);
+
   const filtered = useMemo(() => {
     const active = filterSpecs.filter((f) => filters[f.key] != null);
     const q = deferredSearch.trim().toLowerCase();
     return trades.filter((t) => {
-      if (accountFilter !== "all" && t.account_id !== accountFilter) return false;
+      if (accountFilter !== "all" ? t.account_id !== accountFilter : t.account_id != null && outOfAll.has(t.account_id))
+        return false;
       if (!inBounds(tradeDayKey(t, dayZoneOf(t.account_id)), bounds)) return false;
       for (const f of active) if (!f.match(t, filters[f.key])) return false;
       if (q) {
@@ -617,7 +624,7 @@ export function JournalGrid({
       }
       return true;
     });
-  }, [trades, accountFilter, bounds, filterSpecs, filters, deferredSearch, dayZoneOf, gradeOf, playbookOf]);
+  }, [trades, accountFilter, outOfAll, bounds, filterSpecs, filters, deferredSearch, dayZoneOf, gradeOf, playbookOf]);
 
   const summary = useMemo(() => summarizeTrades(filtered, accounts), [filtered, accounts]);
 

@@ -22,3 +22,12 @@ describe("report scope", () => {
     expect(new Set(labels.values()).size).toBe(3);
   });
 });
+
+describe("Practice stays out of the whole book (trader, 01.10.2026)", () => {
+  it("no account chosen = the real accounts; Practice when chosen", () => {
+    const real = { id: "r", name: "Topstep 50K", topstep_mode: true, topstep_stage: "combine" as const };
+    const pr = { id: "p", name: "Topstep 150K", topstep_mode: true, topstep_stage: "practice" as const };
+    expect(accountsInScope([real, pr], null)).toEqual([real]);
+    expect(accountsInScope([real, pr], "p")).toEqual([pr]);
+  });
+});

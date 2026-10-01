@@ -7,21 +7,23 @@
  * the breakeven band — is taken over the accounts in scope, never over all.
  */
 
+import { allAccountsScope } from "../account-rules";
 import type { Account } from "../types";
 
-type NamedAccount = Pick<Account, "id" | "name">;
+type NamedAccount = Pick<Account, "id" | "name"> & Partial<Pick<Account, "topstep_mode" | "topstep_stage">>;
 
 /**
- * The accounts a report covers: the one chosen, else every account. An id that
- * names no account (a stale link) falls back to the whole book rather than
- * producing a report about nothing.
+ * The accounts a report covers: the one chosen, else every real account —
+ * Practice is read by choosing it (`allAccountsScope`, trader 01.10.2026). An
+ * id that names no account (a stale link) falls back to that whole book rather
+ * than producing a report about nothing.
  */
 export function accountsInScope<A extends NamedAccount>(
   accounts: readonly A[],
   accountId: string | null | undefined,
 ): A[] {
   const chosen = accountId ? accounts.find((a) => a.id === accountId) : undefined;
-  return chosen ? [chosen] : [...accounts];
+  return chosen ? [chosen] : allAccountsScope(accounts);
 }
 
 /**
