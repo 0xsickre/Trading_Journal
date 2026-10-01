@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -391,7 +392,7 @@ export function QuickLogForm({
                 <Label htmlFor="ql-day" className="text-xs">
                   Day
                 </Label>
-                <Input id="ql-day" type="date" value={day} onChange={(e) => setDay(e.target.value)} className="w-40" />
+                <DateField id="ql-day" value={day} onChange={setDay} className="w-40" />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="ql-in" className="text-xs">

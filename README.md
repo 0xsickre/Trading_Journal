@@ -197,7 +197,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,995 tests across 192 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 3,000 tests across 193 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -634,13 +634,18 @@ Get this wrong and nothing breaks — the numbers simply file themselves under d
   nothing on screen said which. `date-format-conformance.test.ts` fails the build on `MM/dd`, on a
   12-hour clock and on a month name, because one such call added later looks ordinary in a diff and
   the wrong date it prints looks ordinary on screen.
-- **Machine-read dates stay ISO**: day keys (`yyyy-MM-dd`), `<input type="datetime-local">` values,
+- **Machine-read dates stay ISO**: day keys (`yyyy-MM-dd`), the `yyyy-MM-ddTHH:mm` value behind an execution's time,
   and the CSV/XLSX export. An export that changes shape with a display preference breaks somebody's
   spreadsheet, and a sort in a spreadsheet needs `yyyy-MM-dd` to be a sort at all.
-- **Native date pickers are the browser's**, not the journal's. `<input type="date">` and
-  `datetime-local` render in the browser's or the operating system's locale, so on a machine set to
-  US English those fields still show `MM/DD` and AM/PM while everything around them does not. Fixing
-  that means replacing the inputs, which is a separate piece of work and is not done.
+- **Date fields are the journal's, not the browser's** (trader, 01.10.2026). `<input type="date">`,
+  `"month"`, `"week"` and `"datetime-local"` draw their text in the browser's language — on a Serbian
+  system that was `дд.мм.гггг.` and Cyrillic months in an English journal. `DateField` and
+  `MonthField` (`components/ui/date-field.tsx`) replace all of them: the closed field reads `dd/MM/yyyy`
+  (`dayKeyLabel`) or "October 2026", the popup is a Monday-first month (or a year of months) in
+  English, with Today and, on an optional date, Clear. The values did not change shape (`yyyy-MM-dd`,
+  `yyyy-MM`), so no caller did. The dashboard's week picks any day and stores its Monday ("Week of …").
+  An execution's time is a `DateField` plus a native `type="time"`, which has no words to translate —
+  on a US-English system it still shows AM/PM.
 
 ---
 
@@ -1584,9 +1589,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,995 tests across 192 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,364 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 631
-tests in 65 files). The rule is the extension, so no file can land in both. The split exists so that
+3,000 tests across 193 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,365 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 635
+tests in 66 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves

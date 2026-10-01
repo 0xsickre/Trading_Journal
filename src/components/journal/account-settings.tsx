@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -598,12 +599,12 @@ function EditAccountDialog({
                   <Label htmlFor={`tspay-${account.id}`} className="text-xs">
                     First payout date (or record the payout under Deposits / withdrawals)
                   </Label>
-                  <Input
+                  <DateField
+                    clearable
                     id={`tspay-${account.id}`}
-                    type="date"
-                    className="h-8"
+                    className="h-8 w-full"
                     value={payoutDate}
-                    onChange={(e) => setPayoutDate(e.target.value)}
+                    onChange={setPayoutDate}
                   />
                 </div>
               </div>

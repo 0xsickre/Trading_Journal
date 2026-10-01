@@ -106,7 +106,9 @@ import {
   accountDayZoneResolver,
   addDaysToDayKey,
   dayKeyIn,
+  dayKeyLabel,
   dayStartUtcIn,
+  isoWeekdayOfDayKey,
   zoneTz,
 } from "@/lib/journal/time";
 import {
@@ -213,14 +215,7 @@ import {
   resolveCalendarRange,
   type Granularity,
 } from "@/lib/journal/mentor-export";
-import { Input } from "@/components/ui/input";
-import {
-  format,
-  getISOWeek,
-  getISOWeekYear,
-  setISOWeek,
-  startOfISOWeek,
-} from "date-fns";
+import { DateField, MonthField } from "@/components/ui/date-field";
 import {
   fmtMoney,
   fmtR,
@@ -356,21 +351,9 @@ const GRANULARITIES: { value: Granularity; label: string }[] = [
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
-/** anchor "YYYY-MM-DD" → `<input type="week">` value "YYYY-Www" (ISO week). */
-function anchorToWeekInput(anchor: string): string {
-  const d = new Date(`${anchor}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${getISOWeekYear(d)}-W${pad2(getISOWeek(d))}`;
-}
-
-/** `<input type="week">` value "YYYY-Www" → anchor of that week's Monday. */
-function weekInputToAnchor(value: string): string {
-  const m = value.match(/^(\d{4})-W(\d{2})$/);
-  if (!m) return value;
-  // Jan 4 is always in ISO week 1; move to the target week, then to its Monday.
-  const jan4 = new Date(Number(m[1]), 0, 4);
-  const monday = startOfISOWeek(setISOWeek(jan4, Number(m[2])));
-  return format(monday, "yyyy-MM-dd");
+/** The Monday of a day key's week — the anchor a picked week is stored as. */
+function weekMonday(day: string): string {
+  return addDaysToDayKey(day, -(isoWeekdayOfDayKey(day) - 1));
 }
 
 /**
@@ -1853,47 +1836,41 @@ export function Dashboard({
                 </Select>
                 {granularity === "custom" ? (
                   <>
-                    <Input
-                      type="date"
+                    <DateField
+                      clearable
                       value={customFrom}
-                      onChange={(e) => setCustomFrom(e.target.value)}
+                      onChange={setCustomFrom}
                       className="h-8 w-36"
                       aria-label="From date"
                     />
                     <span className="text-xs text-muted-foreground">→</span>
-                    <Input
-                      type="date"
+                    <DateField
+                      clearable
                       value={customTo}
-                      onChange={(e) => setCustomTo(e.target.value)}
+                      onChange={setCustomTo}
                       className="h-8 w-36"
                       aria-label="To date"
                     />
                   </>
                 ) : granularity === "day" ? (
-                  <Input
-                    type="date"
+                  <DateField
                     value={anchor}
-                    onChange={(e) => e.target.value && setAnchor(e.target.value)}
+                    onChange={(day) => day && setAnchor(day)}
                     className="h-8 w-36"
                     aria-label="Day"
                   />
                 ) : granularity === "week" ? (
-                  <Input
-                    type="week"
-                    value={anchorToWeekInput(anchor)}
-                    onChange={(e) =>
-                      e.target.value && setAnchor(weekInputToAnchor(e.target.value))
-                    }
+                  <DateField
+                    value={anchor}
+                    display={(day) => `Week of ${dayKeyLabel(weekMonday(day))}`}
+                    onChange={(day) => day && setAnchor(weekMonday(day))}
                     className="h-8 w-40"
                     aria-label="Week (Mon–Sun)"
                   />
                 ) : granularity === "month" ? (
-                  <Input
-                    type="month"
+                  <MonthField
                     value={anchor.slice(0, 7)}
-                    onChange={(e) =>
-                      e.target.value && setAnchor(`${e.target.value}-01`)
-                    }
+                    onChange={(month) => month && setAnchor(`${month}-01`)}
                     className="h-8 w-36"
                     aria-label="Month"
                   />

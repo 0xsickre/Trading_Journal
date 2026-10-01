@@ -129,9 +129,14 @@ describe("new entries", () => {
 
     await user.clear(amount);
     await user.type(amount, "1500");
-    const date = screen.getByLabelText("Date");
-    await user.clear(date);
-    await user.type(date, "2026-03-02");
+    // The date is the journal's own field (dd/MM/yyyy), picked in its month popup.
+    await user.click(screen.getByLabelText("Date"));
+    for (let i = 0; i < 120 && !screen.queryByText("March 2026"); i++) {
+      const before = new Date() < new Date("2026-03-01");
+      await user.click(screen.getByLabelText(before ? "Next month" : "Previous month"));
+    }
+    await user.click(screen.getByLabelText("02/03/2026"));
+    expect(screen.getByLabelText("Date")).toHaveTextContent("02/03/2026");
     await user.click(screen.getByRole("button", { name: /Add/ }));
     await vi.waitFor(() =>
       expect(addCashEventMock).toHaveBeenCalledWith(

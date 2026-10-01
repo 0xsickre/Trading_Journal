@@ -7,7 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { Columns3, Eye, EyeOff, GitCompare, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { DateField } from "@/components/ui/date-field";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -544,18 +544,18 @@ export function ReportsWorkbench({
           </SelectContent>
         </Select>
         <div className="flex items-center gap-1.5">
-          <Input
-            type="date"
+          <DateField
+            clearable
             value={urlFilters.dateFrom ?? ""}
-            onChange={(e) => setParam({ from: e.target.value })}
+            onChange={(day) => setParam({ from: day })}
             className="h-9 w-[9.5rem]"
             aria-label="From"
           />
           <span className="text-xs text-muted-foreground">→</span>
-          <Input
-            type="date"
+          <DateField
+            clearable
             value={urlFilters.dateTo ?? ""}
-            onChange={(e) => setParam({ to: e.target.value })}
+            onChange={(day) => setParam({ to: day })}
             className="h-9 w-[9.5rem]"
             aria-label="To"
           />
@@ -700,18 +700,18 @@ export function ReportsWorkbench({
         {comparing && (
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
             <span className="rounded bg-muted px-1.5 py-0.5">A</span>
-            <Input
-              type="date"
+            <DateField
+              clearable
               value={urlFilters.dateFrom ?? ""}
-              onChange={(e) => setParam({ from: e.target.value })}
+              onChange={(day) => setParam({ from: day })}
               className="h-8 w-[9.5rem]"
               aria-label="A from"
             />
             <span>→</span>
-            <Input
-              type="date"
+            <DateField
+              clearable
               value={urlFilters.dateTo ?? ""}
-              onChange={(e) => setParam({ to: e.target.value })}
+              onChange={(day) => setParam({ to: day })}
               className="h-8 w-[9.5rem]"
               aria-label="A to"
             />
@@ -729,18 +729,18 @@ export function ReportsWorkbench({
           <>
             <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <span className="rounded bg-muted px-1.5 py-0.5">B</span>
-              <Input
-                type="date"
+              <DateField
+                clearable
                 value={urlFiltersB.dateFrom ?? ""}
-                onChange={(e) => setParam({ from2: e.target.value })}
+                onChange={(day) => setParam({ from2: day })}
                 className="h-8 w-[9.5rem]"
                 aria-label="B from"
               />
               <span>→</span>
-              <Input
-                type="date"
+              <DateField
+                clearable
                 value={urlFiltersB.dateTo ?? ""}
-                onChange={(e) => setParam({ to2: e.target.value })}
+                onChange={(day) => setParam({ to2: day })}
                 className="h-8 w-[9.5rem]"
                 aria-label="B to"
               />

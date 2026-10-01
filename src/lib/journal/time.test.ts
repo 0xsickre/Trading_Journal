@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_TZ,
+  dayKeyLabel,
   fmtInTz,
   parseImportTime,
   utcToZonedInput,
@@ -472,5 +473,13 @@ describe("today (D3)", () => {
     expect(todayFor({ timezone: NY, topstep_mode: false }, now)).toBe("2026-09-28");
     // 22:30 UTC is already 00:30 on the 29th in Belgrade (K5).
     expect(todayFor(null, now)).toBe("2026-09-29");
+  });
+});
+
+describe("dayKeyLabel", () => {
+  it("writes a day key as DATE, by the string", () => {
+    expect(dayKeyLabel("2026-10-01")).toBe("01/10/2026");
+    expect(dayKeyLabel("2026-02-30")).toBe("");
+    expect(dayKeyLabel("")).toBe("");
   });
 });

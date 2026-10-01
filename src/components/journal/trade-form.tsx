@@ -12,6 +12,7 @@ import {
   PencilLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -94,6 +95,7 @@ import {
 } from "@/lib/journal/plan-calculations";
 import { computePositionStats } from "@/lib/journal/position-stats";
 import { resolveFxRate } from "@/lib/journal/fx";
+import { format } from "date-fns";
 import { utcToZonedInput, zonedInputToUtc, fmtInTz, DEFAULT_TZ, DATE_TIME } from "@/lib/journal/time";
 import { NO_COST_DEFAULTS, prefillFee } from "@/lib/journal/cost-defaults";
 import {
@@ -2167,12 +2169,23 @@ function ExecutionsEditor({
             </div>
             <div className="col-span-12 sm:col-span-3">
               <Label className="text-[11px] text-muted-foreground">Time</Label>
-              <Input
-                className="h-8"
-                type="datetime-local"
-                value={e.executedLocal}
-                onChange={(ev) => onSet(i, { executedLocal: ev.target.value })}
-              />
+              <div className="flex gap-1">
+                <DateField
+                  className="h-8 min-w-0 flex-1 px-2"
+                  aria-label="Date"
+                  value={e.executedLocal.slice(0, 10)}
+                  onChange={(day) => onSet(i, { executedLocal: `${day}T${e.executedLocal.slice(11, 16) || "00:00"}` })}
+                />
+                <Input
+                  className="h-8 w-[5.5rem]"
+                  type="time"
+                  aria-label="Time of day"
+                  value={e.executedLocal.slice(11, 16)}
+                  onChange={(ev) =>
+                    onSet(i, { executedLocal: `${e.executedLocal.slice(0, 10) || format(new Date(), "yyyy-MM-dd")}T${ev.target.value}` })
+                  }
+                />
+              </div>
             </div>
             <div className="col-span-12 sm:col-span-3">
               <Label className="text-[11px] text-muted-foreground">Fee</Label>

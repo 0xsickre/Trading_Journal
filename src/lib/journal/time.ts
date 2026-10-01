@@ -467,7 +467,7 @@ export const WEEKDAY_LABELS = [
   "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun",
 ] as const;
 
-const MONTH_NAMES = [
+export const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
@@ -487,6 +487,16 @@ const MONTH_NAMES = [
 export function monthLabel(monthKey: string): string {
   const [y, m] = monthKey.split("-").map(Number);
   return `${MONTH_NAMES[m - 1] ?? monthKey} ${y}`;
+}
+
+/**
+ * A day key as the screen writes it (`DATE`, dd/MM/yyyy), by string slicing — the
+ * key is already the day it names, and a `Date` read in the browser's zone could
+ * move it. Anything that is not a day key reads as "" (an empty field).
+ */
+export function dayKeyLabel(day: string): string {
+  if (!isValidDayKey(day)) return "";
+  return `${day.slice(8, 10)}/${day.slice(5, 7)}/${day.slice(0, 4)}`;
 }
 
 export function monthGridDays(monthKey: string): string[] {

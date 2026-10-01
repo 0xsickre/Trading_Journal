@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -239,12 +240,7 @@ export function CashEventsManager({
             <Label className="text-xs" htmlFor="cash-date">
               Date
             </Label>
-            <Input
-              id="cash-date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
+            <DateField id="cash-date" className="w-full" value={date} onChange={setDate} />
           </div>
 
           <div className="space-y-1.5">

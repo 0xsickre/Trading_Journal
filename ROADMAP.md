@@ -1607,3 +1607,4 @@ minutima ili „close". Četiri migracije primenjene uz odobrenje. Sledi H2 — 
 - **S ✅ (30.09.2026):** „šta bi bilo" i cena promašaja kao na berzi — TP i limit ulaz tek kad cena prođe nivo za tik, stop košta tik (scenario v2, stari se sami preračunaju).
 - **T ✅ (30.09.2026):** faza Topstep naloga (Combine / XFA) — na XFA-u Scaling Plan (ugovori po balansu na zatvaranju), bez cilja i 55 %, oba puta isplate od poslednje isplate sa najvećim zahtevom; journal i brief isto. Pravi nalog je 50K Combine.
 - **T+ ✅ (01.10.2026):** treća faza **Practice** — pravila kao Combine, ništa se ne prolazi; „All accounts“ = pravi nalozi na svim stranicama, Practice se bira u filteru („(practice)“); brief i podsetnik ga preskaču.
+- **Datumi ✅ (01.10.2026):** sva polja za datum su journalova (`DateField` / `MonthField`, dd/MM/yyyy, engleski meseci) — browserov `type="date"` je pisao ćirilicu na srpskom sistemu.

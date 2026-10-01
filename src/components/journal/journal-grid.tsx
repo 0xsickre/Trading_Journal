@@ -81,6 +81,7 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { TagMultiSelect } from "@/components/journal/tag-multi-select";
 import {
@@ -1197,23 +1198,23 @@ export function JournalGrid({
         </Select>
         {period === "custom" && (
           <div className="flex items-center gap-1">
-            <Input
-              type="date"
+            <DateField
+              clearable
               className="h-9 w-36"
               value={customFrom}
-              onChange={(e) => {
-                setCustomFrom(e.target.value);
+              onChange={(day) => {
+                setCustomFrom(day);
                 toFirstPage();
               }}
               aria-label="From"
             />
             <span className="text-muted-foreground">–</span>
-            <Input
-              type="date"
+            <DateField
+              clearable
               className="h-9 w-36"
               value={customTo}
-              onChange={(e) => {
-                setCustomTo(e.target.value);
+              onChange={(day) => {
+                setCustomTo(day);
                 toFirstPage();
               }}
               aria-label="To"
