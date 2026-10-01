@@ -55,11 +55,13 @@ export type DashboardScope = {
   account: string;
   period: DashboardPeriod;
   mode: "net" | "gross";
-  viewMode: "dollars" | "percentage" | "privacy";
+  viewMode: "dollars" | "percentage" | "points" | "ticks" | "privacy";
+  /** An instrument family (`futures-units.ts`), or "all". */
+  instrument: string;
 };
 
 const SCOPE_KEY = "tj.dashboard.scope.v1";
-const VIEW_MODES = ["dollars", "percentage", "privacy"] as const;
+const VIEW_MODES = ["dollars", "percentage", "points", "ticks", "privacy"] as const;
 
 /**
  * A stored scope, trusted field by field. Anything missing or malformed is
@@ -82,6 +84,7 @@ export function parseScope(raw: string | null): Partial<DashboardScope> {
   if (o.mode === "net" || o.mode === "gross") out.mode = o.mode;
   if (VIEW_MODES.includes(o.viewMode as DashboardScope["viewMode"]))
     out.viewMode = o.viewMode as DashboardScope["viewMode"];
+  if (typeof o.instrument === "string" && o.instrument) out.instrument = o.instrument;
   return out;
 }
 

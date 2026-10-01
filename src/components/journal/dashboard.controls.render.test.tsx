@@ -332,13 +332,18 @@ describe("the view-mode switcher reuses the /reports units layer, not a second d
     expect(statValue("Net P/L")).toBe("+$650.00");
   });
 
-  it("offers no Points, Ticks or Pips — a portfolio has no single instrument to convert through", () => {
-    // They were always-disabled buttons here. R left the page switcher too: the
+  it("offers no Pips; Points and Ticks only when the trades are one instrument", () => {
+    // Pips have no forex instrument here. R left the page switcher too: the
     // equity card carries its own $/R toggle, the one place R has a meaning.
+    // Points and Ticks came back (U, 01.10.2026): this book is one instrument
+    // with a point value and no tick size, so Points is on and Ticks says why it
+    // is off; a mixed book is in dashboard.render.test.tsx.
     renderIt();
-    for (const label of ["Points", "Ticks", "Pips"]) {
-      expect(screen.queryByRole("button", { name: label })).not.toBeInTheDocument();
-    }
+    expect(screen.queryByRole("button", { name: "Pips" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Points" })).toBeEnabled();
+    const ticks = screen.getByRole("button", { name: "Ticks" });
+    expect(ticks).toBeDisabled();
+    expect(ticks).toHaveAttribute("title", "Needs a point value and a tick size on every trade in scope.");
     expect(screen.getAllByRole("button", { name: "R" })).toHaveLength(1);
   });
 

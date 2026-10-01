@@ -34,6 +34,14 @@ describe("parseScope", () => {
     ).toEqual({ account: "acc-1", period: "week", mode: "gross" });
   });
 
+  it("remembers points, ticks and the instrument family (U, 01.10.2026)", () => {
+    expect(parseScope(JSON.stringify({ viewMode: "points", instrument: "NQ" }))).toEqual({
+      viewMode: "points",
+      instrument: "NQ",
+    });
+    expect(parseScope(JSON.stringify({ viewMode: "ticks", instrument: "" }))).toEqual({ viewMode: "ticks" });
+  });
+
   it("returns nothing for missing or broken storage", () => {
     expect(parseScope(null)).toEqual({});
     expect(parseScope("{oops")).toEqual({});

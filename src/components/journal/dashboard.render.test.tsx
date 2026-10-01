@@ -394,3 +394,41 @@ describe("Practice is kept apart from All accounts (trader, 01.10.2026)", () => 
     expect(statValue("Net P/L")).toBe("+$600.00");
   });
 });
+
+describe("Points and ticks (U, 01.10.2026)", () => {
+  // The book's ten trades as MNQ ($2 a point, 0.25 tick): +$600 = +300 points = +1,200 ticks.
+  const asFuture = (r: TradeRow, instrument: string, pv: number, id = r.id): TradeRow =>
+    ({ ...r, id, instrument, stats: r.stats && { ...r.stats, point_value: pv, tick_size: 0.25, fx_rate: 1 } }) as TradeRow;
+  const mnq = rowsOf(BOOK).map((r) => asFuture(r, "MNQ", 2));
+  const withEs = [...mnq, asFuture(rowsOf(BOOK)[0], "ES", 50, "es-1")];
+
+  it("shows the money as points × contracts, and ticks", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    renderDashboard(mnq);
+    expect(screen.getByRole("button", { name: "Points" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Points" }));
+    expect(statValue("Net P/L")).toBe("+300 pts");
+    await user.click(screen.getByRole("button", { name: "Ticks" }));
+    expect(statValue("Net P/L")).toBe("+1,200 ticks");
+    expect(statValue("Trades")).toBe("10");
+  });
+
+  it("an NQ point and an ES point do not add up: mixed, the buttons are off", () => {
+    renderDashboard(withEs);
+    expect(screen.getByRole("button", { name: "Points" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Ticks" })).toBeDisabled();
+    expect(statValue("Trades")).toBe("11");
+  });
+
+  it("one family picked, they work again (the scope remembers both)", () => {
+    window.sessionStorage.setItem(
+      "tj.dashboard.scope.v1",
+      JSON.stringify({ instrument: "NQ", viewMode: "points" }),
+    );
+    renderDashboard(withEs);
+    expect(screen.getByLabelText("Instrument")).toHaveTextContent("NQ / MNQ");
+    expect(statValue("Trades")).toBe("10");
+    expect(statValue("Net P/L")).toBe("+300 pts");
+  });
+});

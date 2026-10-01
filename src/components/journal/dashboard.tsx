@@ -127,6 +127,8 @@ import {
 } from "@/lib/journal/balance";
 import { computeHoldTime } from "@/lib/journal/hold-time";
 import { computeCostStats } from "@/lib/journal/costs";
+import { familiesOf, instrumentFamily, toUnits, type FuturesUnit } from "@/lib/journal/futures-units";
+import { MICRO_OF } from "@/lib/journal/default-instruments";
 import { computeExcursionStats } from "@/lib/journal/excursion";
 import {
   computeDirectionSplit,
@@ -277,6 +279,13 @@ function dashboardMoney(
   ctx: MetricContext,
   mode: ViewMode,
 ): string {
+  // Points and ticks arrive already converted, trade by trade (`futures-units.ts`):
+  // a sum of MNQ and NQ trades has no single point value to divide by afterwards.
+  if (mode === "points" || mode === "ticks") {
+    if (value == null || Number.isNaN(value)) return "—";
+    const n = fmtNum(value, mode === "points" ? 2 : 1);
+    return `${value > 0 ? "+" : ""}${n} ${mode === "points" ? "pts" : "ticks"}`;
+  }
   return mode === "dollars"
     ? fmtMoney(value, ctx.currency, { sign: true })
     : formatMetric(mkMetric(value, "money", ctx), mode);
@@ -330,13 +339,24 @@ function renderRows(
 }
 
 /**
- * The view modes offered here. `/reports` has seven; on a portfolio page R,
- * points, ticks and pips have no single instrument or planned risk to convert
- * through, so they were four buttons that were always disabled.
+ * The view modes offered here. R and pips have no single planned risk or forex
+ * instrument on a portfolio page, so they stay out. Points and ticks came back
+ * (U, 01.10.2026): converted trade by trade, they hold within one instrument
+ * family, which the instrument filter or a one-instrument book gives.
  */
 const DASHBOARD_VIEW_MODES = VIEW_MODES.filter(
-  (m) => m.value === "dollars" || m.value === "percentage" || m.value === "privacy",
+  (m) =>
+    m.value === "dollars" ||
+    m.value === "percentage" ||
+    m.value === "points" ||
+    m.value === "ticks" ||
+    m.value === "privacy",
 );
+
+/** An instrument family as the picker names it: the mini with its micro. */
+function familyLabel(family: string): string {
+  return MICRO_OF[family] ? `${family} / ${MICRO_OF[family]}` : family;
+}
 
 // Calendar granularities for the "Export for Claude" mentor pack.
 const GRANULARITIES: { value: Granularity; label: string }[] = [
@@ -692,6 +712,13 @@ export function Dashboard({
   // this bar (`period`, `accountFilter`, `mode`), not URL-synced: nothing else
   // here is either.
   const [viewMode, setViewMode] = useState<ViewMode>("dollars");
+  // One instrument family or all (U2): an NQ point and an ES point are not the
+  // same money, so points and ticks need the page narrowed to one of them.
+  const [instrumentFilter, setInstrumentFilter] = useState("all");
+  const setInstrumentFilterDeferred = useCallback(
+    (next: string) => startRecompute(() => setInstrumentFilter(next)),
+    [],
+  );
   // The equity chart's own $/R toggle. It used to be the page switcher read
   // narrowly, but that switcher could never enable R on a portfolio (there is
   // no single planned risk to convert through), so the R curve was
@@ -713,6 +740,7 @@ export function Dashboard({
     if (stored.period) setPeriod(stored.period);
     if (stored.mode) setMode(stored.mode);
     if (stored.viewMode) setViewMode(stored.viewMode);
+    if (stored.instrument) setInstrumentFilter(stored.instrument);
     scopeRestored.current = true;
     // Mount only: the stored scope is read once, then this page owns it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -724,9 +752,15 @@ export function Dashboard({
       period,
       mode,
       viewMode:
-        viewMode === "percentage" || viewMode === "privacy" ? viewMode : "dollars",
+        viewMode === "percentage" ||
+        viewMode === "points" ||
+        viewMode === "ticks" ||
+        viewMode === "privacy"
+          ? viewMode
+          : "dollars",
+      instrument: instrumentFilter,
     });
-  }, [accountFilter, period, mode, viewMode]);
+  }, [accountFilter, period, mode, viewMode, instrumentFilter]);
   const [breakdownField, setBreakdownField] = useState("setup_grade");
   // The user's own fields are groupable here exactly like a built-in column.
   const breakdownOptions = useMemo(
@@ -885,12 +919,28 @@ export function Dashboard({
     return toRealized(rows);
   }, [trades, accountFilter]);
 
+  /**
+   * The instrument families in account scope, and the account's trades of the
+   * one picked. The account's EQUITY (percentage view, Topstep, survival) keeps
+   * reading `realizedAll`: an instrument filter narrows the trades shown, not
+   * the money the account holds.
+   */
+  const families = useMemo(() => familiesOf(realizedAll), [realizedAll]);
+  const instrument = families.includes(instrumentFilter) ? instrumentFilter : "all";
+  const realizedScope = useMemo(
+    () =>
+      instrument === "all"
+        ? realizedAll
+        : realizedAll.filter((t) => instrumentFamily(t.row.instrument) === instrument),
+    [realizedAll, instrument],
+  );
+
   const realized = useMemo(
     () =>
       cutoffMs == null
-        ? realizedAll
-        : realizedAll.filter((t) => toEpoch(t.closedAt) >= cutoffMs),
-    [realizedAll, cutoffMs],
+        ? realizedScope
+        : realizedScope.filter((t) => toEpoch(t.closedAt) >= cutoffMs),
+    [realizedScope, cutoffMs],
   );
 
   /**
@@ -901,8 +951,8 @@ export function Dashboard({
    * here, and nothing on screen said it was the WINDOW, not the trade.
    */
   const outsidePeriod = useMemo(
-    () => hiddenByPeriod(realizedAll.map((t) => toEpoch(t.closedAt)), cutoffMs),
-    [realizedAll, cutoffMs],
+    () => hiddenByPeriod(realizedScope.map((t) => toEpoch(t.closedAt)), cutoffMs),
+    [realizedScope, cutoffMs],
   );
 
   /**
@@ -997,10 +1047,20 @@ export function Dashboard({
    */
   const viewModeRenderable = useMemo(() => {
     const probe = mkMetric(1, "money", metricCtx);
-    return Object.fromEntries(
+    const out = Object.fromEntries(
       VIEW_MODES.map((m) => [m.value, canRender(probe, m.value)]),
     ) as Record<ViewMode, boolean>;
-  }, [metricCtx]);
+    // Over the whole scope, not the period: an empty week must not grey the button out.
+    out.points = toUnits(realizedScope, "points") != null;
+    out.ticks = toUnits(realizedScope, "ticks") != null;
+    return out;
+  }, [metricCtx, realizedScope]);
+
+  /** Points or ticks when they can be shown; otherwise dollars, never a silent mix. */
+  const unit: FuturesUnit | null =
+    (viewMode === "points" || viewMode === "ticks") && viewModeRenderable[viewMode] ? viewMode : null;
+  const shownMode: ViewMode =
+    unit == null && (viewMode === "points" || viewMode === "ticks") ? "dollars" : viewMode;
 
   /**
    * The window's opening equity, and the cash events inside it.
@@ -1405,8 +1465,8 @@ export function Dashboard({
   // the period-filtered set it showed a 30-day view as 22 empty weeks — as if
   // nothing had been traded in them.
   const daily = useMemo(
-    () => dailyPnl(realizedAll, mode, tzOf),
-    [realizedAll, mode, tzOf],
+    () => dailyPnl(realizedScope, mode, tzOf),
+    [realizedScope, mode, tzOf],
   );
   /**
    * Equity as each day OPENED, for the simulation's denominators.
@@ -1498,6 +1558,30 @@ export function Dashboard({
     () => breakdownByField(realized, breakdownField, breakevenRange),
     [realized, breakdownField, breakevenRange],
   );
+
+  /**
+   * The money figures again, in points or ticks (U1): the same functions over the
+   * trades converted one by one. Only the money is read from them — counts, win
+   * rate and the breakeven band stay those of the dollar figures above.
+   */
+  const unitTrades = useMemo(
+    () => (unit == null ? null : realized.length === 0 ? [] : toUnits(realized, unit)),
+    [unit, realized],
+  );
+  const unitFigures = useMemo(() => {
+    if (unitTrades == null) return null;
+    return {
+      stats: computeStats(unitTrades, mode, breakevenRange),
+      costs: computeCostStats(unitTrades),
+      dailyDd: computeDailyDrawdown(
+        unitTrades.map((t) => ({ day: dayKeyIn(t.closedAt, tzOf(t)), at: t.closedAt, pnl: pnlOf(t) })),
+      ),
+      netByKey: new Map(
+        breakdownByField(unitTrades, breakdownField, breakevenRange).map((r) => [r.key, r.netSum]),
+      ),
+    };
+  }, [unitTrades, mode, breakevenRange, tzOf, pnlOf, breakdownField]);
+  const moneyStats = unitFigures?.stats ?? stats;
   const weeklySlip = useMemo(
     () => (show("execution-quality") ? weeklySlippageR(realized, tzOf) : []),
     [show, realized, tzOf],
@@ -1705,6 +1789,21 @@ export function Dashboard({
             </SelectContent>
           </Select>
         )}
+        {families.length > 1 && (
+          <Select value={instrument} onValueChange={setInstrumentFilterDeferred}>
+            <SelectTrigger className="h-9 w-40" aria-label="Instrument">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All instruments</SelectItem>
+              {families.map((f) => (
+                <SelectItem key={f} value={f}>
+                  {familyLabel(f)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <div className="flex rounded-md border p-0.5">
           {DASHBOARD_PERIODS.map((p) => (
             <Button
@@ -1742,11 +1841,23 @@ export function Dashboard({
           {DASHBOARD_VIEW_MODES.map((vm) => (
             <Button
               key={vm.value}
-              variant={viewMode === vm.value ? "secondary" : "ghost"}
+              variant={shownMode === vm.value ? "secondary" : "ghost"}
               size="sm"
               className="h-7"
               disabled={!viewModeRenderable[vm.value]}
-              title={vm.note}
+              title={
+                (vm.value === "points" || vm.value === "ticks") && !viewModeRenderable[vm.value]
+                  ? familiesOf(realizedScope).length > 1
+                    ? "Pick one instrument: an NQ point and an ES point are not the same money."
+                    : vm.value === "points"
+                      ? "Needs a point value on every trade in scope."
+                      : "Needs a point value and a tick size on every trade in scope."
+                  : vm.value === "points"
+                    ? "Points × contracts: the money divided by one contract's point value (2 MNQ over 10 points = 20). The charts stay in money."
+                    : vm.value === "ticks"
+                      ? "Ticks × contracts: the money divided by one contract's tick value. The charts stay in money."
+                      : vm.note
+              }
               onClick={() => setViewMode(vm.value)}
             >
               {vm.label}
@@ -1980,7 +2091,7 @@ export function Dashboard({
         <Stat
           size="hero"
           label="Net P/L"
-          value={dashboardMoney(stats.netSum, metricCtx, viewMode)}
+          value={dashboardMoney(moneyStats.netSum, metricCtx, shownMode)}
           cls={pnlClass(stats.netSum)}
           visual={
             <Sparkline
@@ -2066,15 +2177,15 @@ export function Dashboard({
           // same "Max drawdown" name would read as a contradiction, not a
           // second fact.
           value={
-            viewMode === "percentage" && drawdown.maxAt
+            shownMode === "percentage" && drawdown.maxAt
               ? formatMetric(
                   mkMetric(
                     drawdown.maxPctOfEquity == null ? null : -drawdown.maxPctOfEquity,
                     "pct",
                   ),
-                  viewMode,
+                  shownMode,
                 )
-              : dashboardMoney(stats.maxDrawdown, metricCtx, viewMode)
+              : dashboardMoney(moneyStats.maxDrawdown, metricCtx, shownMode)
           }
           cls="text-[var(--loss)]"
           title="Worst peak-to-trough drop in cumulative P&L. Deposits and withdrawals are not losses, so they do not move this number. In Percentage mode this shows the SAME peak-relative share as the 'Max drawdown %' tile below, not a share of today's equity — a drawdown's severity does not shrink just because the account has grown since."
@@ -2108,7 +2219,7 @@ export function Dashboard({
         <StatGroup id="result" title="Result and risk — detail" count={12}>
           <Stat
             label="Gross P/L"
-            value={dashboardMoney(stats.grossSum, metricCtx, viewMode)}
+            value={dashboardMoney(moneyStats.grossSum, metricCtx, shownMode)}
             cls={pnlClass(stats.grossSum)}
           />
           {/* The basis, said where the number is read. R does not follow the
@@ -2129,8 +2240,8 @@ export function Dashboard({
             cls={pnlClass(stats.avgR)}
             title="Plain mean R over every trade that has one. Includes breakeven trades, which is why it can sit below Expectancy — that one weights by win rate over decided trades only."
           />
-          <Stat label="Best" value={dashboardMoney(stats.best, metricCtx, viewMode)} cls={pnlClass(stats.best)} />
-          <Stat label="Worst" value={dashboardMoney(stats.worst, metricCtx, viewMode)} cls={pnlClass(stats.worst)} />
+          <Stat label="Best" value={dashboardMoney(moneyStats.best, metricCtx, shownMode)} cls={pnlClass(stats.best)} />
+          <Stat label="Worst" value={dashboardMoney(moneyStats.worst, metricCtx, shownMode)} cls={pnlClass(stats.worst)} />
           <Stat
             label="Streak W/L"
             value={`${stats.maxWinStreak} / ${stats.maxLossStreak}`}
@@ -2176,7 +2287,7 @@ export function Dashboard({
           />
           <Stat
             label="Total costs"
-            value={dashboardMoney(-costs.totalCosts, metricCtx, viewMode)}
+            value={dashboardMoney(-(unitFigures?.costs ?? costs).totalCosts, metricCtx, shownMode)}
             cls={costs.totalCosts !== 0 ? "text-[var(--loss)]" : undefined}
             title="Commissions and fees over the period — what the gross result paid to become net."
           />
@@ -2235,7 +2346,11 @@ export function Dashboard({
             // untested percentage basis, this tile opts out of the switcher
             // the same way Trades/Streak already do — Privacy still masks it,
             // since that check runs before the denominator is ever consulted.
-            value={formatMetric(mkMetric(dailyDd.avgMoney, "money", { currency }), viewMode)}
+            value={
+              unitFigures
+                ? dashboardMoney(unitFigures.dailyDd.avgMoney, metricCtx, shownMode)
+                : formatMetric(mkMetric(dailyDd.avgMoney, "money", { currency }), shownMode)
+            }
             cls={dailyDd.avgMoney < 0 ? "text-[var(--loss)]" : undefined}
             title={
               dailyDd.worstDay
@@ -2300,10 +2415,10 @@ export function Dashboard({
         ),
         "recent-trades": show("recent-trades") && (
           <RecentTradesWidget
-            trades={realized}
+            trades={unitTrades ?? realized}
             mode={mode}
             tzOf={(t) => zoneTz(tzOf(t))}
-            money={(v) => dashboardMoney(v, metricCtx, viewMode)}
+            money={(v) => dashboardMoney(v, metricCtx, shownMode)}
           />
         ),
 
@@ -2449,7 +2564,7 @@ export function Dashboard({
                     <td className={`py-2 pr-4 ${pnlClass(r.avgR)}`}>{fmtR(r.avgR)}</td>
                     <td className={`py-2 pr-4 ${pnlClass(r.totalR)}`}>{fmtR(r.totalR)}</td>
                     <td className={`py-2 pr-4 text-right ${pnlClass(r.netSum)}`}>
-                      {dashboardMoney(r.netSum, metricCtx, viewMode)}
+                      {dashboardMoney(unitFigures?.netByKey.get(r.key) ?? r.netSum, metricCtx, shownMode)}
                     </td>
                   </tr>
                 ))}

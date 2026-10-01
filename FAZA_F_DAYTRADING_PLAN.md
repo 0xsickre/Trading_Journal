@@ -140,7 +140,7 @@ pogađa.
 | **R** | Rizik blizu MLL-a i proklizavanje stopa u veličini (journal + brief isto) | — | L | ne | **Opus** | ✅ `7f14d81` · futures-trading `2870b3d`, 30.09.2026 — bez migracije |
 | **S** | „Šta bi bilo“ i cena promašaja realno: TP / limit ulaz kroz nivo, tik na stopu | — | L, R | ne | **Opus** | ✅ `95c63e7` · futures-trading `aacc20b`, 30.09.2026 — bez migracije |
 | **T** | Faza naloga Combine / XFA: Scaling Plan, oba puta isplate, bez „passed“ na XFA (journal + brief) | — | S | da: `20260930090000` (`topstep_stage`) | **Opus** | ✅ 30.09.2026 — migracija `20260930090000` primenjena |
-| **U** | Poeni i tikovi na dashboardu + filter instrumenta (NQ / ES) | — | T | ne | **Opus** | u toku (01.10.2026): odluke i `futures-units.ts` gotovi, dashboard i testovi nisu — bez migracije |
+| **U** | Poeni i tikovi na dashboardu + filter instrumenta (NQ / ES) | — | T | ne | **Opus** | ✅ 01.10.2026 — bez migracije |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1003,7 +1003,7 @@ na cilju sa 55 % pravilom, isplata samo kao događaj (balans, MLL). `racun.py` i
 Na XFA nalogu journal i brief ne predlažu više ugovora nego što Scaling Plan dozvoljava i pokazuju koji put isplate je
 ispunjen. README oba repoa 1:1, ovde ✅ + commit, `ROADMAP.md` jedan red; migracija u bazi posle zelenog gate-a.
 
-## U — Poeni i tikovi na dashboardu (detaljno, 01.10.2026) — u toku
+## U — Poeni i tikovi na dashboardu (detaljno, 01.10.2026) — ✅
 
 **Povod:** prekidač `$ · % · Privacy` na dashboardu (trejder: „da ovde dodamo tick i point“). Points / Ticks su ranije
 izbačeni jer portfelj više instrumenata nema jednu vrednost poena; odluke U1 i U2 to rešavaju.
