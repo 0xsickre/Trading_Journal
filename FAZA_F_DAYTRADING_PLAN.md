@@ -106,6 +106,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 30.09.2026 | S | „Šta bi bilo“ realno (trejder: „napravi plan za šta bi bilo i to samo popravi“): **S1** TP i planirani limit ulaz važe tek kad cena prođe nivo za 1 tik — dodir nije izvršenje. **S2** stop u mreži košta 1 tik proklizavanja (isto kao R4 u veličini). **S3** ulaz promašenog setupa je limit kad je cena pri pisanju plana s druge strane ulaza, inače stop-ulaz (dodir). **S4** scenario v2; stari v1 se sam preračuna, promašaji jednom ručno (`--recompute`) |
 | 30.09.2026 | T | Faza naloga (trejder: pravi nalog je **50K Combine**, 150K je praksa; put isplate „ne znam još“; samo TopstepX; 50K kupljen sa DLL-om; „da, kreni“): **T1** `tj_accounts.topstep_stage` combine / xfa (podrazumevano combine — ništa se ne menja dok se ne izabere XFA). **T2** XFA Scaling Plan: najviše mini ugovora po balansu na početku sesije (kraj prethodnog Topstep dana). **T3** XFA nema „passed“ ni 55 %: prate se OBA puta isplate od poslednje isplate (Standard: 5 dana ≥ $150; Konzistentnost: 3 dana, najbolji ≤ 40 % neto profita) i najveća isplata (50 % balansa, limit po planu i putu, min $125). **T4** DLL plana ostaje u računu i na XFA (oprezno; trejder ga ima). **T5** brief računa isto |
 | 01.10.2026 | T | Practice (trejder: „kako da razlikujem practice nalog od combine i xfa“): treća faza `practice` u istoj migraciji (još nije bila primenjena) — **pravila kao Combine**, ništa se ne „prolazi“; **statistika odvojeno** (podrazumevano samo pravi nalozi, Practice u filteru naloga sa oznakom „(practice)“ — urađeno na svim stranicama; /daily, tracker i playbooks čitaju samo prave naloge); **brief i podsetnik samo pravi nalozi** |
+| 01.10.2026 | U | Poeni i tikovi na dashboardu (trejder: „da ovde dodamo tick i point“): **U1** poen trejda = neto (ili bruto, po prekidaču) u $ ÷ vrednost poena ugovora — **puta broj ugovora** (2 MNQ × 10 poena = 20), pa zbir prati $; tik isto ÷ (vrednost poena × tik). **U2** NQ i ES nisu ista jedinica: na dashboard dolazi **filter instrumenta** po porodici (MNQ uz NQ, MES uz ES, M6E uz 6E); Points / Ticks rade kad su svi trejdovi u izboru iz jedne porodice, inače su siva |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -139,6 +140,7 @@ pogađa.
 | **R** | Rizik blizu MLL-a i proklizavanje stopa u veličini (journal + brief isto) | — | L | ne | **Opus** | ✅ `7f14d81` · futures-trading `2870b3d`, 30.09.2026 — bez migracije |
 | **S** | „Šta bi bilo“ i cena promašaja realno: TP / limit ulaz kroz nivo, tik na stopu | — | L, R | ne | **Opus** | ✅ `95c63e7` · futures-trading `aacc20b`, 30.09.2026 — bez migracije |
 | **T** | Faza naloga Combine / XFA: Scaling Plan, oba puta isplate, bez „passed“ na XFA (journal + brief) | — | S | da: `20260930090000` (`topstep_stage`) | **Opus** | ✅ 30.09.2026 — migracija `20260930090000` primenjena |
+| **U** | Poeni i tikovi na dashboardu + filter instrumenta (NQ / ES) | — | T | ne | **Opus** | u toku (01.10.2026): odluke i `futures-units.ts` gotovi, dashboard i testovi nisu — bez migracije |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1000,6 +1002,24 @@ na cilju sa 55 % pravilom, isplata samo kao događaj (balans, MLL). `racun.py` i
 ### Izlaz iz T
 Na XFA nalogu journal i brief ne predlažu više ugovora nego što Scaling Plan dozvoljava i pokazuju koji put isplate je
 ispunjen. README oba repoa 1:1, ovde ✅ + commit, `ROADMAP.md` jedan red; migracija u bazi posle zelenog gate-a.
+
+## U — Poeni i tikovi na dashboardu (detaljno, 01.10.2026) — u toku
+
+**Povod:** prekidač `$ · % · Privacy` na dashboardu (trejder: „da ovde dodamo tick i point“). Points / Ticks su ranije
+izbačeni jer portfelj više instrumenata nema jednu vrednost poena; odluke U1 i U2 to rešavaju.
+
+### Izmena
+- `futures-units.ts` (čisto): porodica instrumenta (mikro uz mini), faktor trejda (1 ÷ vrednost poena × kurs, za tik
+  još ÷ tik) i trejdovi prevedeni u poene / tikove (neto, bruto, troškovi); `null` kad nekom trejdu fali vrednost.
+- Dashboard: izbor instrumenta (samo kad ih ima više od jedne porodice) suzi trejdove na stranici; kapital (% i
+  Topstep) ga ne prati. Points / Ticks dostupni kad je izbor jedne porodice; menjaju iste brojeve koje menja `%`
+  (Net, Gross, Best, Worst, Max drawdown, Total costs, Avg daily DD, poslednji trejdovi, tabela po tagu); grafikoni
+  ostaju u $. Prekidač i instrument se pamte kao ostatak opsega.
+
+### Testovi (prvo padaju)
+- `futures-units.test.ts`: porodice (MNQZ6 → NQ, MES → ES), faktor sa i bez tika, 2 MNQ × 10 poena = 20, mešano → null.
+- `dashboard-view.test.ts`: opseg pamti points / ticks i instrument.
+- `dashboard.render.test.tsx`: filter instrumenta, Points pokazuje „pts“, mešan izbor gasi Points.
 
 ## Katalog stavki
 
