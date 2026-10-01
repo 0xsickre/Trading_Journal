@@ -387,7 +387,7 @@ function EditAccountDialog({
 
   const [topstepMode, setTopstepMode] = useState(account.topstep_mode === true);
   const [topstepPlan, setTopstepPlan] = useState<TopstepPlan>(account.topstep_plan ?? "50K");
-  const [topstepStage, setTopstepStage] = useState<TopstepStage>(account.topstep_stage === "xfa" ? "xfa" : "combine");
+  const [topstepStage, setTopstepStage] = useState<TopstepStage>(account.topstep_stage ?? "combine");
   const [payoutDate, setPayoutDate] = useState(account.topstep_payout_at ? account.topstep_payout_at.slice(0, 10) : "");
   const [riskPct, setRiskPct] = useState(String(account.risk_rule_pct ?? 12.5));
   const [riskMin, setRiskMin] = useState(account.risk_rule_min == null ? "" : String(account.risk_rule_min));
@@ -590,6 +590,7 @@ function EditAccountDialog({
                     <SelectContent>
                       <SelectItem value="combine">Trading Combine</SelectItem>
                       <SelectItem value="xfa">Express Funded Account</SelectItem>
+                      <SelectItem value="practice">Practice</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -606,7 +607,13 @@ function EditAccountDialog({
                   />
                 </div>
               </div>
-              {topstepStage === "combine" ? (
+              {topstepStage === "practice" && (
+                <p className="text-xs text-muted-foreground">
+                  Practice: the same rules as a {topstepPlan} Combine, to practise under them — nothing is passed or
+                  paid out. The morning brief and the evening reminder leave it out.
+                </p>
+              )}
+              {topstepStage !== "xfa" ? (
                 <p className="text-xs text-muted-foreground">
                   Max loss {fmtMoney(plan.mll, "USD")}, trailing the highest end-of-day balance and
                   locking at the starting balance · daily loss {fmtMoney(plan.dll, "USD")} · target{" "}

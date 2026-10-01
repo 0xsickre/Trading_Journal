@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   -- TopstepX Risk Limits (30.09.2026): lični dnevni limit gubitka i cilj profita.
   topstep_personal_dll        numeric,
   topstep_daily_target        numeric,
-  -- Faza naloga (20260930090000): combine ili xfa (Scaling Plan, putevi isplate).
+  -- Faza naloga (20260930090000): combine, xfa (Scaling Plan, putevi isplate) ili practice.
   topstep_stage               text        NOT NULL DEFAULT 'combine',
   risk_rule_pct               numeric     NOT NULL DEFAULT 12.5,
   risk_rule_min               numeric,
@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   CONSTRAINT tj_accounts_topstep_daily_target_positive
     CHECK (topstep_daily_target IS NULL OR topstep_daily_target > 0),
   CONSTRAINT tj_accounts_topstep_stage_check
-    CHECK (topstep_stage = ANY (ARRAY['combine'::text, 'xfa'::text]))
+    CHECK (topstep_stage = ANY (ARRAY['combine'::text, 'xfa'::text, 'practice'::text]))
 );
 CREATE INDEX IF NOT EXISTS tj_accounts_user_idx ON public.tj_accounts USING btree (user_id);
 

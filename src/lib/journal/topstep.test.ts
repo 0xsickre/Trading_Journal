@@ -510,3 +510,15 @@ describe("Express Funded Account: no target, two payout paths (phase T)", () => 
     expect(run(days(200), xfa()).xfa!.standard.maxPayout).toBe(0);          // half is $100 < $125
   });
 });
+
+describe("Practice (trader, 01.10.2026)", () => {
+  it("keeps a Combine's rules and size but never passes", () => {
+    const trades = [t("2026-09-28T15:00:00Z", 1_500), t("2026-09-29T15:00:00Z", 1_600)];
+    const r = run(trades, { stage: "practice" });
+    expect(r.status).toBe("active");
+    expect(r.stage).toBe("practice");
+    expect(r.rules.maxMini).toBe(5);
+    expect(r.xfa).toBeNull();
+    expect(r.mllFloor).toBe(run(trades).mllFloor);
+  });
+});

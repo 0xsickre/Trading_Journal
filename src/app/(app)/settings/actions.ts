@@ -1021,7 +1021,7 @@ const accountPatchSchema = z
     default_target_pct: pct("Default target").nullable().optional(),
     topstep_mode: z.boolean().optional(),
     topstep_plan: z.enum(["50K", "100K", "150K"]).optional(),
-    topstep_stage: z.enum(["combine", "xfa"]).optional(),
+    topstep_stage: z.enum(["combine", "xfa", "practice"]).optional(),
     topstep_payout_at: z.string().nullable().optional(),
     topstep_reset_at: z.string().nullable().optional(),
     risk_rule_pct: z.number().finite().gt(0, "Risk share must be above 0 %.").max(100).optional(),
@@ -1048,7 +1048,7 @@ export async function updateAccount(
     default_target_pct?: number | null;
     topstep_mode?: boolean;
     topstep_plan?: "50K" | "100K" | "150K";
-    topstep_stage?: "combine" | "xfa";
+    topstep_stage?: "combine" | "xfa" | "practice";
     topstep_payout_at?: string | null;
     topstep_reset_at?: string | null;
     risk_rule_pct?: number;

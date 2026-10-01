@@ -88,8 +88,12 @@ export const TOPSTEP_PLANS: Record<TopstepPlan, TopstepPlanRules> = {
 /** Best day at or below this share of the profit target. */
 export const TOPSTEP_CONSISTENCY = 0.55;
 
-/** Trading Combine or Express Funded Account (`tj_accounts.topstep_stage`). */
-export type TopstepStage = "combine" | "xfa";
+/**
+ * Trading Combine, Express Funded Account or Practice (`tj_accounts.topstep_stage`). Practice
+ * (trader, 01.10.2026) keeps a Combine's rules to practise under them, passes nothing, and is kept
+ * apart from the real accounts — the brief and the reminder leave it out.
+ */
+export type TopstepStage = "combine" | "xfa" | "practice";
 
 /** XFA Scaling Plan: [balance from, most mini contracts], lowest tier first. */
 export const TOPSTEP_XFA_SCALING: Record<TopstepPlan, readonly (readonly [number, number])[]> = {
@@ -251,7 +255,7 @@ export function topstepConfigFromAccount(account: Account, cash: readonly CashEv
     payouts: topstepPayoutsOf(account.id, cash),
     personalDll: positiveOrNull(account.topstep_personal_dll),
     dailyTarget: positiveOrNull(account.topstep_daily_target),
-    stage: account.topstep_stage === "xfa" ? "xfa" : "combine",
+    stage: account.topstep_stage === "xfa" || account.topstep_stage === "practice" ? account.topstep_stage : "combine",
   };
 }
 
@@ -359,12 +363,12 @@ export function evaluateTopstep(
   );
   const profit = balance + paidOut - start;
 
-  const stage: TopstepStage = config.stage === "xfa" ? "xfa" : "combine";
+  const stage: TopstepStage = config.stage ?? "combine";
   const isXfa = stage === "xfa";
 
   let status: TopstepStatus = "active";
   if (breachDay != null) status = "failed";
-  else if (!isXfa && profit >= effectiveTarget) status = "passed";
+  else if (stage === "combine" && profit >= effectiveTarget) status = "passed";
 
   return {
     status,

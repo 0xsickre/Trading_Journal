@@ -38,7 +38,7 @@ export function TopstepBanner({ account, result }: { account: Account; result: T
         {result.status === "active" && <Target className="size-4" />}
         <span className="min-w-0">
           Topstep {account.topstep_plan}
-          {result.stage === "xfa" ? " XFA" : ""} · {account.name}
+          {result.stage === "xfa" ? " XFA" : result.stage === "practice" ? " Practice" : ""} · {account.name}
         </span>
         <span
           className={cn(
@@ -80,6 +80,8 @@ export function TopstepBanner({ account, result }: { account: Account; result: T
             Contracts today: {result.rules.maxMini} mini / {result.rules.maxMini * 10} micro (Scaling Plan)
             {result.nextMaxMini !== result.rules.maxMini ? ` · next session ${result.nextMaxMini}` : ""}
           </span>
+        ) : result.stage === "practice" ? (
+          <span>P/L: {fmtMoney(result.profit, ccy, { sign: true })}</span>
         ) : (
           <span>
             P/L: {fmtMoney(result.profit, ccy, { sign: true })} of {fmtMoney(result.effectiveTarget, ccy)} target
