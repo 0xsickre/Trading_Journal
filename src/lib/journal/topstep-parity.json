@@ -1,0 +1,968 @@
+{
+  "_": [
+    "Topstep rules both sides must answer the same: the journal (src/lib/journal/topstep-parity.test.ts) and the brief",
+    "(futures-trading tests/test_topstep_parity.py). The file is copied byte for byte into both repositories and each test",
+    "pins its sha256 — a rule changes in both, with this file, or a test fails. Times UTC; money USD."
+  ],
+  "constants": {
+    "plans": {
+      "50K": {
+        "mll": 2000,
+        "dll": 1000,
+        "target": 3000,
+        "maxMini": 5,
+        "riskMin": 60,
+        "riskMax": 300
+      },
+      "100K": {
+        "mll": 3000,
+        "dll": 2000,
+        "target": 6000,
+        "maxMini": 10,
+        "riskMin": 120,
+        "riskMax": 600
+      },
+      "150K": {
+        "mll": 4500,
+        "dll": 3000,
+        "target": 9000,
+        "maxMini": 15,
+        "riskMin": 180,
+        "riskMax": 900
+      }
+    },
+    "xfaScaling": {
+      "50K": [
+        [
+          null,
+          2
+        ],
+        [
+          1500,
+          3
+        ],
+        [
+          2000,
+          5
+        ]
+      ],
+      "100K": [
+        [
+          null,
+          3
+        ],
+        [
+          1500,
+          4
+        ],
+        [
+          2000,
+          5
+        ],
+        [
+          3000,
+          10
+        ]
+      ],
+      "150K": [
+        [
+          null,
+          3
+        ],
+        [
+          1500,
+          4
+        ],
+        [
+          2000,
+          5
+        ],
+        [
+          3000,
+          10
+        ],
+        [
+          4500,
+          15
+        ]
+      ]
+    },
+    "xfaPayout": {
+      "winningDay": 150,
+      "winningDays": 5,
+      "consistencyShare": 0.4,
+      "consistencyDays": 3,
+      "balanceShare": 0.5,
+      "minimum": 125,
+      "caps": {
+        "50K": [
+          2000,
+          3000
+        ],
+        "100K": [
+          3000,
+          4000
+        ],
+        "150K": [
+          5000,
+          6000
+        ]
+      }
+    },
+    "stopSlippageTicks": 1,
+    "minRiskFromRoom": {
+      "50K": 666.6666666666666,
+      "100K": 1000,
+      "150K": 1500
+    }
+  },
+  "tradingDay": [
+    [
+      "2026-10-05T21:59:00Z",
+      "2026-10-05"
+    ],
+    [
+      "2026-10-05T22:00:00Z",
+      "2026-10-06"
+    ],
+    [
+      "2026-11-02T22:59:00Z",
+      "2026-11-02"
+    ],
+    [
+      "2026-11-02T23:00:00Z",
+      "2026-11-03"
+    ]
+  ],
+  "state": [
+    {
+      "name": "50K, nothing traded",
+      "plan": "50K",
+      "stage": "combine",
+      "start": 50000,
+      "now": "2026-10-05T05:00:00Z",
+      "trades": [],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 50000,
+        "floor": 48000,
+        "room": 2000,
+        "locked": false,
+        "todayNet": 0,
+        "dllLeftToday": 1000,
+        "maxMini": 5,
+        "nextMaxMini": 5,
+        "targetLeftToday": null,
+        "xfa": null
+      }
+    },
+    {
+      "name": "a win today does not raise the floor before the close",
+      "plan": "50K",
+      "stage": "combine",
+      "start": 50000,
+      "now": "2026-10-05T15:00:00Z",
+      "trades": [
+        [
+          "2026-10-05T14:00:00Z",
+          1000
+        ]
+      ],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 51000,
+        "floor": 48000,
+        "room": 3000,
+        "locked": false,
+        "todayNet": 1000,
+        "dllLeftToday": 2000,
+        "maxMini": 5,
+        "nextMaxMini": 5,
+        "targetLeftToday": null,
+        "xfa": null
+      }
+    },
+    {
+      "name": "the floor trails the close and stops at the start",
+      "plan": "50K",
+      "stage": "combine",
+      "start": 50000,
+      "now": "2026-10-05T05:00:00Z",
+      "trades": [
+        [
+          "2026-09-29T15:00:00Z",
+          2600
+        ]
+      ],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 52600,
+        "floor": 50000,
+        "room": 2600,
+        "locked": true,
+        "todayNet": 0,
+        "dllLeftToday": 1000,
+        "maxMini": 5,
+        "nextMaxMini": 5,
+        "targetLeftToday": null,
+        "xfa": null
+      }
+    },
+    {
+      "name": "150K: the floor stops at 150,000",
+      "plan": "150K",
+      "stage": "combine",
+      "start": 150000,
+      "now": "2026-10-05T05:00:00Z",
+      "trades": [
+        [
+          "2026-09-24T15:00:00Z",
+          6000
+        ],
+        [
+          "2026-09-25T15:00:00Z",
+          -1000
+        ]
+      ],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 155000,
+        "floor": 150000,
+        "room": 5000,
+        "locked": true,
+        "todayNet": 0,
+        "dllLeftToday": 3000,
+        "maxMini": 15,
+        "nextMaxMini": 15,
+        "targetLeftToday": null,
+        "xfa": null
+      }
+    },
+    {
+      "name": "a personal DLL tighter than the plan's",
+      "plan": "50K",
+      "stage": "combine",
+      "start": 50000,
+      "now": "2026-10-05T15:00:00Z",
+      "trades": [
+        [
+          "2026-10-05T14:00:00Z",
+          -300
+        ]
+      ],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": 600,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 49700,
+        "floor": 48000,
+        "room": 1700,
+        "locked": false,
+        "todayNet": -300,
+        "dllLeftToday": 300,
+        "maxMini": 5,
+        "nextMaxMini": 5,
+        "targetLeftToday": null,
+        "xfa": null
+      }
+    },
+    {
+      "name": "a personal DLL wider than the plan's changes nothing",
+      "plan": "50K",
+      "stage": "combine",
+      "start": 50000,
+      "now": "2026-10-05T05:00:00Z",
+      "trades": [],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": 5000,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 50000,
+        "floor": 48000,
+        "room": 2000,
+        "locked": false,
+        "todayNet": 0,
+        "dllLeftToday": 1000,
+        "maxMini": 5,
+        "nextMaxMini": 5,
+        "targetLeftToday": null,
+        "xfa": null
+      }
+    },
+    {
+      "name": "the daily target",
+      "plan": "50K",
+      "stage": "combine",
+      "start": 50000,
+      "now": "2026-10-05T15:00:00Z",
+      "trades": [
+        [
+          "2026-10-05T14:00:00Z",
+          200
+        ]
+      ],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": 500,
+      "expect": {
+        "balance": 50200,
+        "floor": 48000,
+        "room": 2200,
+        "locked": false,
+        "todayNet": 200,
+        "dllLeftToday": 1200,
+        "maxMini": 5,
+        "nextMaxMini": 5,
+        "targetLeftToday": 300,
+        "xfa": null
+      }
+    },
+    {
+      "name": "a payout lowers the balance and locks the floor",
+      "plan": "50K",
+      "stage": "combine",
+      "start": 50000,
+      "now": "2026-10-05T05:00:00Z",
+      "trades": [
+        [
+          "2026-09-24T15:00:00Z",
+          3000
+        ],
+        [
+          "2026-09-25T15:00:00Z",
+          3000
+        ]
+      ],
+      "payouts": [
+        [
+          "2026-09-28T15:00:00Z",
+          2000
+        ]
+      ],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 54000,
+        "floor": 50000,
+        "room": 4000,
+        "locked": true,
+        "todayNet": 0,
+        "dllLeftToday": 1000,
+        "maxMini": 5,
+        "nextMaxMini": 5,
+        "targetLeftToday": null,
+        "xfa": null
+      }
+    },
+    {
+      "name": "a first payout typed as a date locks the floor",
+      "plan": "50K",
+      "stage": "combine",
+      "start": 50000,
+      "now": "2026-10-05T05:00:00Z",
+      "trades": [
+        [
+          "2026-09-29T15:00:00Z",
+          500
+        ]
+      ],
+      "payouts": [],
+      "payoutAt": "2026-09-30T15:00:00Z",
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 50500,
+        "floor": 50000,
+        "room": 500,
+        "locked": true,
+        "todayNet": 0,
+        "dllLeftToday": 1000,
+        "maxMini": 5,
+        "nextMaxMini": 5,
+        "targetLeftToday": null,
+        "xfa": null
+      }
+    },
+    {
+      "name": "trades before a reset do not count",
+      "plan": "50K",
+      "stage": "combine",
+      "start": 50000,
+      "now": "2026-10-05T05:00:00Z",
+      "trades": [
+        [
+          "2026-09-29T15:00:00Z",
+          -1500
+        ],
+        [
+          "2026-10-02T15:00:00Z",
+          500
+        ]
+      ],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": "2026-10-01T00:00:00Z",
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 50500,
+        "floor": 48500,
+        "room": 2000,
+        "locked": false,
+        "todayNet": 0,
+        "dllLeftToday": 1000,
+        "maxMini": 5,
+        "nextMaxMini": 5,
+        "targetLeftToday": null,
+        "xfa": null
+      }
+    },
+    {
+      "name": "the day starts at 17:00 Chicago",
+      "plan": "50K",
+      "stage": "combine",
+      "start": 50000,
+      "now": "2026-10-05T23:00:00Z",
+      "trades": [
+        [
+          "2026-10-05T22:30:00Z",
+          -400
+        ]
+      ],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 49600,
+        "floor": 48000,
+        "room": 1600,
+        "locked": false,
+        "todayNet": -400,
+        "dllLeftToday": 600,
+        "maxMini": 5,
+        "nextMaxMini": 5,
+        "targetLeftToday": null,
+        "xfa": null
+      }
+    },
+    {
+      "name": "Practice keeps a Combine's rules",
+      "plan": "150K",
+      "stage": "practice",
+      "start": 150000,
+      "now": "2026-10-05T05:00:00Z",
+      "trades": [],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 150000,
+        "floor": 145500,
+        "room": 4500,
+        "locked": false,
+        "todayNet": 0,
+        "dllLeftToday": 3000,
+        "maxMini": 15,
+        "nextMaxMini": 15,
+        "targetLeftToday": null,
+        "xfa": null
+      }
+    },
+    {
+      "name": "XFA: today's size by the last close, tomorrow's by now",
+      "plan": "50K",
+      "stage": "xfa",
+      "start": 0,
+      "now": "2026-09-30T15:00:00Z",
+      "trades": [
+        [
+          "2026-09-29T15:00:00Z",
+          1600
+        ],
+        [
+          "2026-09-30T14:00:00Z",
+          500
+        ]
+      ],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 2100,
+        "floor": -400,
+        "room": 2500,
+        "locked": false,
+        "todayNet": 500,
+        "dllLeftToday": 1500,
+        "maxMini": 3,
+        "nextMaxMini": 5,
+        "targetLeftToday": null,
+        "xfa": {
+          "winningDays": 2,
+          "standard": false,
+          "standardMax": 1050,
+          "consistency": false,
+          "consistencyMax": 1050
+        }
+      }
+    },
+    {
+      "name": "XFA: a payout lowers the tier and locks the floor",
+      "plan": "150K",
+      "stage": "xfa",
+      "start": 0,
+      "now": "2026-09-30T15:00:00Z",
+      "trades": [
+        [
+          "2026-09-28T15:00:00Z",
+          5000
+        ]
+      ],
+      "payouts": [
+        [
+          "2026-09-29T18:00:00Z",
+          2000
+        ]
+      ],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 3000,
+        "floor": 0,
+        "room": 3000,
+        "locked": true,
+        "todayNet": 0,
+        "dllLeftToday": 3000,
+        "maxMini": 10,
+        "nextMaxMini": 10,
+        "targetLeftToday": null,
+        "xfa": {
+          "winningDays": 0,
+          "standard": false,
+          "standardMax": 1500,
+          "consistency": false,
+          "consistencyMax": 1500
+        }
+      }
+    },
+    {
+      "name": "XFA Standard: five days of 150",
+      "plan": "50K",
+      "stage": "xfa",
+      "start": 0,
+      "now": "2026-09-30T15:00:00Z",
+      "trades": [
+        [
+          "2026-09-21T15:00:00Z",
+          150
+        ],
+        [
+          "2026-09-22T15:00:00Z",
+          150
+        ],
+        [
+          "2026-09-23T15:00:00Z",
+          150
+        ],
+        [
+          "2026-09-24T15:00:00Z",
+          150
+        ],
+        [
+          "2026-09-25T15:00:00Z",
+          150
+        ]
+      ],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 750,
+        "floor": -1250,
+        "room": 2000,
+        "locked": false,
+        "todayNet": 0,
+        "dllLeftToday": 1000,
+        "maxMini": 2,
+        "nextMaxMini": 2,
+        "targetLeftToday": null,
+        "xfa": {
+          "winningDays": 5,
+          "standard": true,
+          "standardMax": 375,
+          "consistency": true,
+          "consistencyMax": 375
+        }
+      }
+    },
+    {
+      "name": "XFA Standard: 149 is not a winning day",
+      "plan": "50K",
+      "stage": "xfa",
+      "start": 0,
+      "now": "2026-09-30T15:00:00Z",
+      "trades": [
+        [
+          "2026-09-21T15:00:00Z",
+          150
+        ],
+        [
+          "2026-09-22T15:00:00Z",
+          150
+        ],
+        [
+          "2026-09-23T15:00:00Z",
+          150
+        ],
+        [
+          "2026-09-24T15:00:00Z",
+          150
+        ],
+        [
+          "2026-09-25T15:00:00Z",
+          149
+        ]
+      ],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 749,
+        "floor": -1251,
+        "room": 2000,
+        "locked": false,
+        "todayNet": 0,
+        "dllLeftToday": 1000,
+        "maxMini": 2,
+        "nextMaxMini": 2,
+        "targetLeftToday": null,
+        "xfa": {
+          "winningDays": 4,
+          "standard": false,
+          "standardMax": 374.5,
+          "consistency": true,
+          "consistencyMax": 374.5
+        }
+      }
+    },
+    {
+      "name": "XFA Consistency: best day exactly 40 %",
+      "plan": "50K",
+      "stage": "xfa",
+      "start": 0,
+      "now": "2026-09-30T15:00:00Z",
+      "trades": [
+        [
+          "2026-09-21T15:00:00Z",
+          100
+        ],
+        [
+          "2026-09-22T15:00:00Z",
+          100
+        ],
+        [
+          "2026-09-23T15:00:00Z",
+          50
+        ]
+      ],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 250,
+        "floor": -1750,
+        "room": 2000,
+        "locked": false,
+        "todayNet": 0,
+        "dllLeftToday": 1000,
+        "maxMini": 2,
+        "nextMaxMini": 2,
+        "targetLeftToday": null,
+        "xfa": {
+          "winningDays": 0,
+          "standard": false,
+          "standardMax": 125,
+          "consistency": true,
+          "consistencyMax": 125
+        }
+      }
+    },
+    {
+      "name": "XFA Consistency: 41.7 % is over",
+      "plan": "50K",
+      "stage": "xfa",
+      "start": 0,
+      "now": "2026-09-30T15:00:00Z",
+      "trades": [
+        [
+          "2026-09-21T15:00:00Z",
+          100
+        ],
+        [
+          "2026-09-22T15:00:00Z",
+          100
+        ],
+        [
+          "2026-09-23T15:00:00Z",
+          40
+        ]
+      ],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 240,
+        "floor": -1760,
+        "room": 2000,
+        "locked": false,
+        "todayNet": 0,
+        "dllLeftToday": 1000,
+        "maxMini": 2,
+        "nextMaxMini": 2,
+        "targetLeftToday": null,
+        "xfa": {
+          "winningDays": 0,
+          "standard": false,
+          "standardMax": 0,
+          "consistency": false,
+          "consistencyMax": 0
+        }
+      }
+    },
+    {
+      "name": "XFA: half the balance, capped per plan and path",
+      "plan": "50K",
+      "stage": "xfa",
+      "start": 0,
+      "now": "2026-09-30T15:00:00Z",
+      "trades": [
+        [
+          "2026-09-21T15:00:00Z",
+          4000
+        ],
+        [
+          "2026-09-22T15:00:00Z",
+          4000
+        ]
+      ],
+      "payouts": [],
+      "payoutAt": null,
+      "resetAt": null,
+      "personalDll": null,
+      "dailyTarget": null,
+      "expect": {
+        "balance": 8000,
+        "floor": 0,
+        "room": 8000,
+        "locked": true,
+        "todayNet": 0,
+        "dllLeftToday": 1000,
+        "maxMini": 5,
+        "nextMaxMini": 5,
+        "targetLeftToday": null,
+        "xfa": {
+          "winningDays": 2,
+          "standard": false,
+          "standardMax": 2000,
+          "consistency": false,
+          "consistencyMax": 3000
+        }
+      }
+    }
+  ],
+  "risk": [
+    {
+      "name": "50K fresh, 12.5 %",
+      "plan": "50K",
+      "room": 2000,
+      "dllLeft": 1000,
+      "pct": 12.5,
+      "expect": 250
+    },
+    {
+      "name": "capped at the plan's max",
+      "plan": "50K",
+      "room": 2600,
+      "dllLeft": 1000,
+      "pct": 12.5,
+      "expect": 300
+    },
+    {
+      "name": "after a -700 day",
+      "plan": "50K",
+      "room": 1300,
+      "dllLeft": 300,
+      "pct": 12.5,
+      "expect": 162.5
+    },
+    {
+      "name": "never over what the DLL leaves today",
+      "plan": "50K",
+      "room": 4200,
+      "dllLeft": 200,
+      "pct": 12.5,
+      "expect": 200
+    },
+    {
+      "name": "150K fresh, 12.5 %",
+      "plan": "150K",
+      "room": 4500,
+      "dllLeft": 3000,
+      "pct": 12.5,
+      "expect": 562.5
+    },
+    {
+      "name": "R3: under a third of the MLL, the plain share",
+      "plan": "150K",
+      "room": 400,
+      "dllLeft": 1200,
+      "pct": 8,
+      "expect": 32
+    },
+    {
+      "name": "R3: the floor holds from a third of the MLL",
+      "plan": "150K",
+      "room": 1500,
+      "dllLeft": 1200,
+      "pct": 8,
+      "expect": 180
+    },
+    {
+      "name": "R3: above it too",
+      "plan": "150K",
+      "room": 2000,
+      "dllLeft": 1200,
+      "pct": 8,
+      "expect": 180
+    },
+    {
+      "name": "no room, no risk",
+      "plan": "50K",
+      "room": 0,
+      "dllLeft": 1000,
+      "pct": 12.5,
+      "expect": null
+    },
+    {
+      "name": "DLL spent, no risk",
+      "plan": "50K",
+      "room": 2000,
+      "dllLeft": 0,
+      "pct": 12.5,
+      "expect": null
+    }
+  ],
+  "contracts": [
+    {
+      "name": "$250, MNQ stop 50 points",
+      "risk": 250,
+      "stop": 50,
+      "pointValue": 2,
+      "commission": 0.61,
+      "cap": 50,
+      "tick": 0.25,
+      "expect": 2
+    },
+    {
+      "name": "150K, MNQ 10 points (the slipped tick makes 25, not 26)",
+      "risk": 562.5,
+      "stop": 10,
+      "pointValue": 2,
+      "commission": 0.61,
+      "cap": 150,
+      "tick": 0.25,
+      "expect": 25
+    },
+    {
+      "name": "150K, NQ 10 points",
+      "risk": 562.5,
+      "stop": 10,
+      "pointValue": 20,
+      "commission": 1.89,
+      "cap": 15,
+      "tick": 0.25,
+      "expect": 2
+    },
+    {
+      "name": "the plan's cap",
+      "risk": 300,
+      "stop": 2,
+      "pointValue": 2,
+      "commission": 0.61,
+      "cap": 50,
+      "tick": 0.25,
+      "expect": 50
+    },
+    {
+      "name": "R4: ES 2 points, no tick size",
+      "risk": 900,
+      "stop": 2,
+      "pointValue": 50,
+      "commission": 1.89,
+      "cap": 15,
+      "tick": null,
+      "expect": 8
+    },
+    {
+      "name": "R4: ES 2 points, a tick of slippage",
+      "risk": 900,
+      "stop": 2,
+      "pointValue": 50,
+      "commission": 1.89,
+      "cap": 15,
+      "tick": 0.25,
+      "expect": 7
+    },
+    {
+      "name": "M6E 8 pips",
+      "risk": 150,
+      "stop": 0.0008,
+      "pointValue": 12500,
+      "commission": 0.5,
+      "cap": 50,
+      "tick": 0.0001,
+      "expect": 12
+    }
+  ]
+}

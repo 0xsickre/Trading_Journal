@@ -197,7 +197,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 3,000 tests across 193 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 3,042 tests across 194 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -1237,7 +1237,12 @@ is left of today's DLL. `risk_rule_pct`, `risk_rule_min` and `risk_rule_max` on 
 the three. **The floor holds only from a third of the plan's MLL up** (R3, 30.09.2026;
 `topstepMinRiskFromRoom`: $666.67 / $1,000 / $1,500): under it the budget is the plain share of the
 room, so near the MLL the risk shrinks with what is left instead of spending a fixed $180 of $400.
-The brief in `futures-trading` prints the same figure each morning.
+The brief in `futures-trading` prints the same figure each morning, and **a shared test keeps the two
+the same**: `topstep-parity.json` holds the cases — the plans' constants, MLL trail and lock, DLL and
+personal DLL, payouts, reset, the 17:00 CT day, Practice, the XFA Scaling Plan and both payout paths,
+the R3 risk and the R4 contracts — and both `topstep-parity.test.ts` here and `tests/test_topstep_parity.py`
+there run them. The file is the same bytes in both repositories (`.gitattributes` keeps it LF) and each
+test pins its sha256, so a rule changed on one side only fails a test.
 
 **Contracts count a tick of slippage on the stop** (R4, `STOP_SLIPPAGE_TICKS` in
 `plan-calculations.ts`): the loss per contract is stop × point value + the round-turn commission +
@@ -1589,8 +1594,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-3,000 tests across 193 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,365 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 635
+3,042 tests across 194 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,407 tests in 128 files) and `components` (environment `jsdom`, files `*.test.tsx`, 635
 tests in 66 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

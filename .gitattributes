@@ -1,0 +1,2 @@
+# The shared Topstep cases are pinned by sha256 in both repositories: the bytes must not change with the checkout
+src/lib/journal/topstep-parity.json text eol=lf
