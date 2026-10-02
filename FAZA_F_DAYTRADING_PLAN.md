@@ -141,6 +141,7 @@ pogađa.
 | **S** | „Šta bi bilo“ i cena promašaja realno: TP / limit ulaz kroz nivo, tik na stopu | — | L, R | ne | **Opus** | ✅ `95c63e7` · futures-trading `aacc20b`, 30.09.2026 — bez migracije |
 | **T** | Faza naloga Combine / XFA: Scaling Plan, oba puta isplate, bez „passed“ na XFA (journal + brief) | — | S | da: `20260930090000` (`topstep_stage`) | **Opus** | ✅ 30.09.2026 — migracija `20260930090000` primenjena |
 | **U** | Poeni i tikovi na dashboardu + filter instrumenta (NQ / ES) | — | T | ne | **Opus** | ✅ 01.10.2026 — bez migracije |
+| **V** | Pregled dana / nedelje od Claude-a: isti „Export for Claude“ paket preuzima futures-trading i šalje rutini | — | U | ne | **Opus** | plan (02.10.2026) — čeka odluke V1–V4 |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1020,6 +1021,66 @@ izbačeni jer portfelj više instrumenata nema jednu vrednost poena; odluke U1 i
 - `futures-units.test.ts`: porodice (MNQZ6 → NQ, MES → ES), faktor sa i bez tika, 2 MNQ × 10 poena = 20, mešano → null.
 - `dashboard-view.test.ts`: opseg pamti points / ticks i instrument.
 - `dashboard.render.test.tsx`: filter instrumenta, Points pokazuje „pts“, mešan izbor gasi Points.
+
+## V — Pregled dana i nedelje od Claude-a (detaljno, 02.10.2026) — plan
+
+**Povod** (trejder, 02.10.2026): „da Claude vidi moj journal sa rutinom jednom i da da komentar na protekli dan — da
+vidi moj week review i daily i moje trejdove i notes i sve". Dugme „Export for Claude" (`mentor-export.ts`) već pravi
+pun paket (trejdovi sa beleškama i ocenama, dnevni izveštaj, tracker pravila i ispunjenje, Topstep stanje, brief,
+propušteni setupi, zapažanja; brojevi izračunati u journal-u). Danas se paket sklapa samo u pregledaču
+(`dashboard.tsx` → `handleExportMentorPack`). Cilj: isti paket, bez klika, svako veče rutini „Futures — poruke"
+(futures-trading, `tools/claude_poruka.py`), koja uz njega ima i tržište dana, brief, vesti, dnevnik i svoju jutarnju
+procenu — i trejder dobija „📓 Pregled dana" na Telegram; subotom nedelja sa nedeljnim pregledom.
+
+**Princip:** jedno mesto računa. Paket se ne prepisuje u Python — futures-trading ga preuzima gotovog sa journal-a.
+Rutina ne dobija pristup bazi; dobija samo tekst paketa (samo čitanje, kroz `/fire` payload).
+
+### Izmena (predlog; posle odluka V1–V4)
+1. **Sklapanje paketa iz dashboarda u čistu funkciju** — `lib/journal/mentor-compose.ts`:
+   `composeMentorPack(podaci, opseg)` radi tačno ono što danas radi `handleExportMentorPack` (filtriranje po danu
+   naloga, insights za opseg, Topstep stanje, compliance, brief, dnevni izveštaji). Dashboard je zove; ponašanje
+   dugmeta se ne menja (test: isti Markdown pre i posle).
+2. **Serverski loader** — `lib/journal/mentor-data.ts`: učita sve što paket traži istim upitima kao
+   `app/(app)/page.tsx` (trejdovi sa statistikom, nalozi, cash eventi, dnevni izveštaji, field defs, tracker pravila
+   i check-in-i, playbook pravila, user prefs, brief-ovi) + nedeljni pregled (`tj_weekly_reviews`).
+3. **Nedeljni pregled u paketu** — nova sekcija „Nedeljni pregled" (ocena, šta je išlo dobro / loše, jedan obrazac,
+   jedna promena, da li je prošla promena zadržana, katalizatori sledeće nedelje) kad opseg obuhvata nedelju; i na
+   dugmetu.
+4. **Ruta** — `app/api/mentor-pack/route.ts` (GET, `?od=YYYY-MM-DD&do=YYYY-MM-DD`): auth samo `Authorization: Bearer
+   <Supabase access token>` (futures-trading se već prijavljuje tvojim nalogom, `journal_api.py`); RLS važi kao i u
+   aplikaciji; odgovor `text/markdown`. Proxy (`src/proxy.ts`) ne preusmerava tu rutu na /login (ruta sama proverava
+   token: bez važećeg → 401). Ne piše ništa u bazu. Pre koda: Next docs u `node_modules/next/dist/docs` za route
+   handlere i proxy (AGENTS.md).
+5. **futures-trading** (isti commit-niz, README 1:1 u oba repoa):
+   - `podsetnik.yml` (22:20 BG): preuzme paket za taj Topstep dan i doda ga podacima rutini; rutina piše „📓 Pregled
+     dana" (V1); paket ne ide u sirovu poruku ni u log;
+   - nedeljno (V2): paket za nedelju + nedeljni pregled → „📓 Pregled nedelje" (spaja se sa subotnjim pregledom
+     zapažanja iz `BAZA_PLAN.md` korak 3);
+   - `RUTINA.md`: šabloni „📓 Pregled dana / nedelje" — kao mentor: plan prema izvršenju, pravila (tracker), emocije
+     (dnevni izveštaj), stop / MAE, šta je bilo dobro i jedna stvar za popraviti; veže za tržište tog dana (linije od
+     ponoći, vesti, Zona 3); bez izmišljanja, mišljenje sa 🧠;
+   - tajna `JOURNAL_URL` (adresa journal-a na Vercel-u) u podsetniku.
+
+### Odluke — otvorene (pitati trejdera)
+- **V1** Pregled dana: posebna poruka „📓 Pregled dana" posle podsetnika, ili spojeno sa podsetnikom u jednu?
+  (predlog: posebna — duža je)
+- **V2** Pregled nedelje: subota ujutru ili petak uveče posle zatvaranja? (predlog: subota ujutru — nedeljni pregled
+  je obično napisan do tada)
+- **V3** Nalozi: samo pravi (Combine / XFA), bez Practice — kao brief i podsetnik (T, 01.10.2026)? (predlog: da)
+- **V4** Dan bez trejdova: kratka poruka (plan / dnevni izveštaj ako postoje, „nema trejdova") ili bez poruke?
+  (predlog: bez poruke, osim kad postoji dnevni izveštaj)
+
+### Testovi (prvo padaju)
+- `mentor-compose.test.ts`: isti Markdown kao današnji izvoz za isti ulaz (snimak), filtriranje po danu naloga,
+  Practice van opsega (V3).
+- `mentor-pack` ruta: bez tokena 401, pogrešan token 401, ispravan → Markdown samo za vlasnika (RLS), opseg dana.
+- Sekcija „Nedeljni pregled": prikazuje se kad je opseg nedelja, prazna polja se ne ispisuju.
+- futures-trading: payload podsetnika sadrži paket; bez `JOURNAL_URL` ili na grešku rute → red sa razlogom, poruka
+  ide; paket se ne ispisuje u log.
+
+### Izlaz iz V
+Trejder svako veče dobija „📓 Pregled dana" (i subotom nedelje) od Claude-a sa celim journal-om i tržištem dana;
+dugme „Export for Claude" daje isti paket kao ruta; README oba repoa 1:1.
 
 ## Katalog stavki
 
