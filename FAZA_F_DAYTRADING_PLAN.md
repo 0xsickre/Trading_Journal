@@ -119,7 +119,7 @@ pogađa.
    postoji i u `0xsickre/futures-trading`; F2 tamo ne menja kod (vidi F2 → „Utvrđeno u kodu").
 2. Pročitaj ovaj fajl ceo, pa `AGENTS.md` (Next.js 16 — dokumentacija u `node_modules/next/dist/docs/`),
    pa README sekcije koje faza navodi.
-3. Radi **samo prvu fazu u Mapi čiji status nije ✅**, po Protokolu. Ako faza nema sekciju
+3. Radi **samo prvu fazu u Mapi čiji status nije ✅ ni ⛔** (⛔ = trejder obustavio — ne dirati bez njegovog novog naloga), po Protokolu. Ako faza nema sekciju
    „Detaljno", prvo je napiši ovde, odluke koje traže trejdera upiši kao pitanja i stani.
 4. Na kraju faze: status ✅ + hash commita u Mapi, detaljan plan SLEDEĆE faze, README 1:1, push.
 5. Stani i traži jači model ako faza ispadne veća od procene (kolona Model).
@@ -142,7 +142,7 @@ pogađa.
 | **S** | „Šta bi bilo“ i cena promašaja realno: TP / limit ulaz kroz nivo, tik na stopu | — | L, R | ne | **Opus** | ✅ `95c63e7` · futures-trading `aacc20b`, 30.09.2026 — bez migracije |
 | **T** | Faza naloga Combine / XFA: Scaling Plan, oba puta isplate, bez „passed“ na XFA (journal + brief) | — | S | da: `20260930090000` (`topstep_stage`) | **Opus** | ✅ 30.09.2026 — migracija `20260930090000` primenjena |
 | **U** | Poeni i tikovi na dashboardu + filter instrumenta (NQ / ES) | — | T | ne | **Opus** | ✅ 01.10.2026 — bez migracije |
-| **V** | Pregled dana / nedelje od Claude-a: isti „Export for Claude“ paket preuzima futures-trading i šalje rutini | — | U | ne | **Opus** | u radu (02.10.2026) — odluke V1–V4 ✅ |
+| **V** | Pregled dana / nedelje od Claude-a: isti „Export for Claude“ paket preuzima futures-trading i šalje rutini | — | U | ne | **Opus** | ⛔ obustavljeno (trejder, 02.10.2026) — ne raditi bez novog naloga trejdera |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1023,7 +1023,11 @@ izbačeni jer portfelj više instrumenata nema jednu vrednost poena; odluke U1 i
 - `dashboard-view.test.ts`: opseg pamti points / ticks i instrument.
 - `dashboard.render.test.tsx`: filter instrumenta, Points pokazuje „pts“, mešan izbor gasi Points.
 
-## V — Pregled dana i nedelje od Claude-a (detaljno, 02.10.2026) — plan
+## V — Pregled dana i nedelje od Claude-a (detaljno, 02.10.2026) — ⛔ obustavljeno
+
+**Obustavljeno** (trejder, 02.10.2026: „obustavi, ne treba ništa“). Kod nije pisan. Plan i odluke ostaju zapisani
+ako se trejder predomisli; nijedna sesija ne kreće na V bez njegovog novog naloga.
+
 
 **Povod** (trejder, 02.10.2026): „da Claude vidi moj journal sa rutinom jednom i da da komentar na protekli dan — da
 vidi moj week review i daily i moje trejdove i notes i sve". Dugme „Export for Claude" (`mentor-export.ts`) već pravi
