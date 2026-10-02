@@ -30,7 +30,7 @@ const acc = (id: string, topstep: boolean, starting_balance: number) =>
     starting_balance,
     topstep_payout_at: null,
     topstep_reset_at: null,
-    risk_rule_pct: 12.5,
+    risk_rule_pct: 8,
     risk_rule_min: null,
     risk_rule_max: null,
   }) as unknown as Account;
@@ -165,10 +165,10 @@ describe("loss per trade: the budget at entry, plus 10 % for slippage (E3)", () 
   });
 
   it("without a sealed budget, reads the one the account allowed at entry (E4 fallback)", () => {
-    // Nothing closed before: room 2 000 → 12.5 % = 250 → limit -275.
-    const out = evalDay([{ id: "a", account: "ts", opened: AT, net: -280 }]);
+    // Nothing closed before: room 2 000 → 8 % = 160 → limit -176.
+    const out = evalDay([{ id: "a", account: "ts", opened: AT, net: -180 }]);
     expect(out.max_loss_per_trade.verdict).toBe("fail");
-    expect(out.max_loss_per_trade.limit).toBeCloseTo(-275);
+    expect(out.max_loss_per_trade.limit).toBeCloseTo(-176);
   });
 });
 

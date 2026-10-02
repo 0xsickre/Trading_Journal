@@ -261,12 +261,12 @@ const SIZE_EDGES = [
  * copper and two lots of gold are different fractions of the same account.
  */
 // On the Topstep scale (30.09.2026): Risk % is a share of the room above the
-// MLL, and the trader's rule takes 12.5 % of it — the edges sit around that.
+// MLL, and the trader's rule takes 8 % of it — the edges sit around that.
 const RISK_PCT_EDGES = [
   { min: -Infinity, label: "< 5%" },
-  { min: 5, label: "5 – 10%" },
-  { min: 10, label: "10 – 12.5%" },
-  { min: 12.5, label: "12.5 – 15%" },
+  { min: 5, label: "5 – 8%" },
+  { min: 8, label: "8 – 10%" },
+  { min: 10, label: "10 – 15%" },
   { min: 15, label: "15 – 20%" },
   { min: 20, label: "≥ 20%" },
 ] as const;

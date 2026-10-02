@@ -52,7 +52,7 @@ function account(over: Partial<Account> & { id: string }): Account {
     topstep_plan: "50K" as const,
     topstep_payout_at: null,
     topstep_reset_at: null,
-    risk_rule_pct: 12.5,
+    risk_rule_pct: 8,
     risk_rule_min: null,
     risk_rule_max: null,
     ...over,

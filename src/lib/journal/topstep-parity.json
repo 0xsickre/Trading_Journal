@@ -813,19 +813,19 @@
   ],
   "risk": [
     {
-      "name": "50K fresh, 12.5 %",
+      "name": "50K fresh, 8 %",
       "plan": "50K",
       "room": 2000,
       "dllLeft": 1000,
-      "pct": 12.5,
-      "expect": 250
+      "pct": 8,
+      "expect": 160
     },
     {
       "name": "capped at the plan's max",
       "plan": "50K",
-      "room": 2600,
+      "room": 5000,
       "dllLeft": 1000,
-      "pct": 12.5,
+      "pct": 8,
       "expect": 300
     },
     {
@@ -833,24 +833,24 @@
       "plan": "50K",
       "room": 1300,
       "dllLeft": 300,
-      "pct": 12.5,
-      "expect": 162.5
+      "pct": 8,
+      "expect": 104
     },
     {
       "name": "never over what the DLL leaves today",
       "plan": "50K",
       "room": 4200,
       "dllLeft": 200,
-      "pct": 12.5,
+      "pct": 8,
       "expect": 200
     },
     {
-      "name": "150K fresh, 12.5 %",
+      "name": "150K fresh, 8 %",
       "plan": "150K",
       "room": 4500,
       "dllLeft": 3000,
-      "pct": 12.5,
-      "expect": 562.5
+      "pct": 8,
+      "expect": 360
     },
     {
       "name": "R3: under a third of the MLL, the plain share",
@@ -881,7 +881,7 @@
       "plan": "50K",
       "room": 0,
       "dllLeft": 1000,
-      "pct": 12.5,
+      "pct": 8,
       "expect": null
     },
     {
@@ -889,7 +889,7 @@
       "plan": "50K",
       "room": 2000,
       "dllLeft": 0,
-      "pct": 12.5,
+      "pct": 8,
       "expect": null
     }
   ],

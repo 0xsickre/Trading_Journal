@@ -390,7 +390,7 @@ function EditAccountDialog({
   const [topstepPlan, setTopstepPlan] = useState<TopstepPlan>(account.topstep_plan ?? "50K");
   const [topstepStage, setTopstepStage] = useState<TopstepStage>(account.topstep_stage ?? "combine");
   const [payoutDate, setPayoutDate] = useState(account.topstep_payout_at ? account.topstep_payout_at.slice(0, 10) : "");
-  const [riskPct, setRiskPct] = useState(String(account.risk_rule_pct ?? 12.5));
+  const [riskPct, setRiskPct] = useState(String(account.risk_rule_pct ?? TOPSTEP_DEFAULT_RISK_PCT));
   const [riskMin, setRiskMin] = useState(account.risk_rule_min == null ? "" : String(account.risk_rule_min));
   const [riskMax, setRiskMax] = useState(account.risk_rule_max == null ? "" : String(account.risk_rule_max));
   const [personalDll, setPersonalDll] = useState(

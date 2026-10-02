@@ -89,38 +89,38 @@ describe("a Topstep account's band is fixed by its plan (K4)", () => {
   const topstep = (plan: string) => ({ ...cfg(-500, 500), topstep_mode: true, topstep_plan: plan });
 
   it("is ±0.1R of the plan's starting risk budget, whatever the columns say", () => {
-    // 12.5 % of the room above the MLL: 250 on a 50K, 375 on a 100K, 562.5 on a 150K.
-    expect(resolveBreakevenRange(topstep("50K"))).toEqual({ from: -25, to: 25, riskShare: 0.1 });
-    expect(resolveBreakevenRange(topstep("100K"))).toEqual({ from: -38, to: 38, riskShare: 0.1 });
-    expect(resolveBreakevenRange(topstep("150K"))).toEqual({ from: -56, to: 56, riskShare: 0.1 });
+    // 8 % of the room above the MLL: 160 on a 50K, 240 on a 100K, 360 on a 150K.
+    expect(resolveBreakevenRange(topstep("50K"))).toEqual({ from: -16, to: 16, riskShare: 0.1 });
+    expect(resolveBreakevenRange(topstep("100K"))).toEqual({ from: -24, to: 24, riskShare: 0.1 });
+    expect(resolveBreakevenRange(topstep("150K"))).toEqual({ from: -36, to: 36, riskShare: 0.1 });
   });
 
   it("classifies a scratch as breakeven and a real result as a win or a loss", () => {
     const band = resolveBreakevenRange(topstep("50K"));
-    expect(classifyOutcome(-24.5, band)).toBe("breakeven");
-    expect(classifyOutcome(26, band)).toBe("win");
+    expect(classifyOutcome(-15.5, band)).toBe("breakeven");
+    expect(classifyOutcome(17, band)).toBe("win");
     expect(classifyOutcome(-30, band)).toBe("loss");
   });
 
   it("judges a trade with a stop against its own risk, not the plan's (30.09.2026)", () => {
     const band = resolveBreakevenRange(topstep("50K"));
-    // One MES contract stopped out: −$22.25 on $18.75 of risk is −1.19R — a loss,
-    // though it sits inside ±$25.
-    expect(classifyOutcome(-22.25, band, 18.75)).toBe("loss");
+    // One MES contract stopped out: −$12.25 on $10 of risk is −1.23R — a loss,
+    // though it sits inside ±$16.
+    expect(classifyOutcome(-12.25, band, 10)).toBe("loss");
     // Two MES contracts out at +1 tick: +$0.50 on $40 of risk is a scratch.
     expect(classifyOutcome(0.5, band, 40)).toBe("breakeven");
     // The edge is inclusive, as the money band is.
     expect(classifyOutcome(4, band, 40)).toBe("breakeven");
     expect(classifyOutcome(4.01, band, 40)).toBe("win");
-    // A big position: $30 on $600 of risk is 0.05R, a scratch, though past ±$25.
+    // A big position: $30 on $600 of risk is 0.05R, a scratch, though past ±$16.
     expect(classifyOutcome(-30, band, 600)).toBe("breakeven");
   });
 
   it("falls back to the plan's money band for a trade with no known risk", () => {
     const band = resolveBreakevenRange(topstep("50K"));
-    expect(classifyOutcome(-22.25, band, null)).toBe("breakeven");
-    expect(classifyOutcome(-22.25, band, 0)).toBe("breakeven");
-    expect(classifyOutcome(-26, band)).toBe("loss");
+    expect(classifyOutcome(-15.25, band, null)).toBe("breakeven");
+    expect(classifyOutcome(-15.25, band, 0)).toBe("breakeven");
+    expect(classifyOutcome(-17, band)).toBe("loss");
   });
 
   it("an account's own columns ignore the trade's risk", () => {
@@ -177,6 +177,6 @@ describe("the book's statistics judge each trade against its own risk (30.09.202
 
   it("uses the money band for a trade with no stop", () => {
     const noStop = { ...mes("c", 1, 7704, -22.25, 7700.25), stop_price: null } as TradeRow;
-    expect(tradeOutcome(noStop, -22.25, band)).toBe("breakeven");
+    expect(tradeOutcome(noStop, -15.25, band)).toBe("breakeven");
   });
 });

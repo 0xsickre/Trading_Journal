@@ -231,26 +231,26 @@ describe("the account as it stood at a moment (F3)", () => {
 
 describe("the risk budget at entry (F3, E4)", () => {
   const book = [t("2026-09-28T15:00:00Z", 1_000), t("2026-09-29T14:00:00Z", -400)];
-  const rule = { pct: 12.5, min: null, max: null };
+  const rule = { pct: 8, min: null, max: null };
 
   it("is the trader's rule on the room and the DLL left at that moment", () => {
-    // Room 1 600 → 12.5 % = 200, inside 60–300, under DLL left 600.
-    expect(riskBudgetAt(cfg(), rule, book, "2026-09-29T15:00:00Z")).toBe(200);
+    // Room 1 600 → 8 % = 128, inside 60–300, under DLL left 600.
+    expect(riskBudgetAt(cfg(), rule, book, "2026-09-29T15:00:00Z")).toBe(128);
   });
 
-  it("before the Monday win the room was 2 000 → 250", () => {
-    expect(riskBudgetAt(cfg(), rule, book, "2026-09-28T13:00:00Z")).toBe(250);
+  it("before the Monday win the room was 2 000 → 160", () => {
+    expect(riskBudgetAt(cfg(), rule, book, "2026-09-28T13:00:00Z")).toBe(160);
   });
 
   it("the account's own overrides win over the plan's bounds", () => {
-    expect(riskBudgetAt(cfg(), { pct: 12.5, min: null, max: 150 }, book, "2026-09-28T13:00:00Z")).toBe(150);
+    expect(riskBudgetAt(cfg(), { pct: 8, min: null, max: 150 }, book, "2026-09-28T13:00:00Z")).toBe(150);
   });
 
-  it("near the MLL the plan's floor no longer holds: $500 of room risks 12.5 % of it, not $60 (R3)", () => {
+  it("near the MLL the plan's floor no longer holds: $500 of room risks 8 % of it, not $60 (R3)", () => {
     const close = [t("2026-09-28T15:00:00Z", -1_500)];
-    expect(riskBudgetAt(cfg(), rule, close, "2026-09-29T15:00:00Z")).toBe(62.5);
+    expect(riskBudgetAt(cfg(), rule, close, "2026-09-29T15:00:00Z")).toBe(40);
     const closer = [t("2026-09-28T15:00:00Z", -1_700)];
-    expect(riskBudgetAt(cfg(), rule, closer, "2026-09-29T15:00:00Z")).toBe(37.5);
+    expect(riskBudgetAt(cfg(), rule, closer, "2026-09-29T15:00:00Z")).toBe(24);
   });
 
   it("is 0 on an account with no room — nothing was allowed, which is an answer", () => {
@@ -313,9 +313,9 @@ describe("TopstepX Risk Limits: the personal daily loss limit and profit target 
   });
 
   it("sizes from the personal DLL left today", () => {
-    // 50K: room 2 000 → 12.5 % = 250; the personal 600 already lost 450, so 150 is left.
+    // 50K: room 2 000 → 8 % = 160; the personal 600 already lost 450, so 150 is left.
     const trades = [t("2026-09-30T14:00:00Z", -450)];
-    const budget = riskBudgetAt(cfg({ personalDll: 600 }), { pct: 12.5, min: null, max: null }, trades, "2026-09-30T15:00:00Z");
+    const budget = riskBudgetAt(cfg({ personalDll: 600 }), { pct: 8, min: null, max: null }, trades, "2026-09-30T15:00:00Z");
     expect(budget).toBeLessThanOrEqual(150);
   });
 });
@@ -384,8 +384,8 @@ describe("a payout leaves the balance; the MLL stays at the starting balance (30
   it("the budget at an entry after the payout comes from what is left", () => {
     const trades = [t("2026-09-24T15:00:00Z", 3_000)];
     const cfg2 = cfg({ payouts: [payout("2026-09-28T15:00:00Z", 2_000)] });
-    // Room 1 000 after the payout: 12.5 % = 125.
-    expect(riskBudgetAt(cfg2, { pct: 12.5, min: null, max: null }, trades, "2026-09-29T15:00:00Z")).toBe(125);
+    // Room 1 000 after the payout: 8 % = 80.
+    expect(riskBudgetAt(cfg2, { pct: 8, min: null, max: null }, trades, "2026-09-29T15:00:00Z")).toBe(80);
   });
 
   it("reads payouts and withdrawals off the account's cash events, not deposits", async () => {

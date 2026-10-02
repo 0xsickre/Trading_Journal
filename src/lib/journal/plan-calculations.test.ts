@@ -308,19 +308,19 @@ describe("blendedPlannedRewardR", () => {
 
 /**
  * The trader's own rule, from futures-trading izlaz/Uputstvo_rizik.pdf: risk is
- * 12.5 % of the room above the MLL, $60–$300 on a 50K, contracts ROUNDED DOWN.
+ * 8 % of the room above the MLL, $60–$300 on a 50K, contracts ROUNDED DOWN.
  * The worked examples of that document are the tests.
  */
 describe("computeTopstepRisk", () => {
   // 50K: the floor holds from a third of the MLL up (R3, 30.09.2026).
-  const rule = { pct: 12.5, min: 60, max: 300, dllLeft: 1000, minFromRoom: 2_000 / 3 };
+  const rule = { pct: 8, min: 60, max: 300, dllLeft: 1000, minFromRoom: 2_000 / 3 };
 
-  it("example 1 — 50K on its first day: room 2 000 → 250", () => {
-    expect(computeTopstepRisk({ ...rule, room: 50_000 - 48_000 })).toEqual({ amount: 250, threeStopsFitDll: true });
+  it("example 1 — 50K on its first day: room 2 000 → 160", () => {
+    expect(computeTopstepRisk({ ...rule, room: 50_000 - 48_000 })).toEqual({ amount: 160, threeStopsFitDll: true });
   });
 
-  it("example 4 — MLL locked at 50 000, balance 52 600: 12.5 % is 325, the ceiling is 300", () => {
-    expect(computeTopstepRisk({ ...rule, room: 2_600 })!.amount).toBe(300);
+  it("example 4 — MLL locked at 50 000, balance 55 000: 8 % is 400, the ceiling is 300", () => {
+    expect(computeTopstepRisk({ ...rule, room: 5_000 })!.amount).toBe(300);
   });
 
   it("from a third of the MLL up, a small share is held at the floor of the range", () => {
@@ -332,7 +332,7 @@ describe("computeTopstepRisk", () => {
   });
 
   it("under a third of the MLL the floor is gone: the risk falls with the room (R3)", () => {
-    expect(computeTopstepRisk({ ...rule, room: 400 })!.amount).toBe(50);
+    expect(computeTopstepRisk({ ...rule, room: 400 })!.amount).toBe(32);
     // 150K, $400 left: 8 % is $32, not the plan's $180 — 45 % of what is left.
     expect(
       computeTopstepRisk({ room: 400, pct: 8, min: 180, max: 900, dllLeft: 1_200, minFromRoom: 1_500 })!.amount,

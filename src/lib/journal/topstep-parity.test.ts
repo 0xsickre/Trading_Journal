@@ -21,7 +21,7 @@ import {
  * here or there, so a rule changes in both or in neither.
  */
 const raw = readFileSync(new URL("./topstep-parity.json", import.meta.url), "utf8");
-const SHA256 = "ae7be33b9bcb5404d18eff63424e0207429d7c71a2a55e424fb6bd90522f245d";
+const SHA256 = "39024ede29cbd2bd20db8cc2d587422ecb205fb970920da470f253772cfd9283";
 
 type Expect = {
   balance: number;

@@ -239,8 +239,8 @@ Topstep. Topstep model:
 MLL pod   = najviši EOD balans − MLL plana (trailing samo na KRAJU dana), zaključava se na početnom balansu
 DLL       = gubitak Topstep dana (17:00 → 17:00 CT) ≥ DLL plana → dan je stao (nalog nije izgubljen)
 konzist.  = najbolji dan ≤ 55 % cilja; inače cilj raste na najbolji dan ÷ 0,55
-rizik     = computeTopstepRisk: % prostora do MLL-a (podrazumevano 12,5 %) u granicama plana, ≤ DLL ostatak
-breakeven = |P&L| ≤ 0,1 × rizik trejda do stopa; bez stopa ±round(0,1 × 12,5 % × MLL plana) → 25 / 38 / 56 $ (K4, fiksno; po trejdu od 30.09.2026)
+rizik     = computeTopstepRisk: % prostora do MLL-a (podrazumevano 8 %) u granicama plana, ≤ DLL ostatak
+breakeven = |P&L| ≤ 0,1 × rizik trejda do stopa; bez stopa ±round(0,1 × 8 % × MLL plana) → 16 / 24 / 36 $ (K4, fiksno; po trejdu od 30.09.2026)
 ```
 
 **Verdikt: ✅ Poravnato sa help.topstep.com (28.09.2026) — sa jednim poznatim ograničenjem.**

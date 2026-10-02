@@ -37,7 +37,7 @@ export type BreakevenConfig = {
  * share of it — and `from`/`to` are only the fallback for a trade with no stop.
  * The dollar band is a tenth of the plan's nominal risk; a micro trade risks a
  * fraction of that, so a full stop on one MES contract (−1.13R, −$22.25) sat
- * inside ±$25 and was filed as a scratch, leaving the loss out of the win rate
+ * inside the band of the time (±$25) and was filed as a scratch, leaving the loss out of the win rate
  * and the expectancy.
  */
 export type BreakevenRange = { from: number; to: number; riskShare?: number };

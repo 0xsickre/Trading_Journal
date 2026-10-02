@@ -68,7 +68,7 @@ const ACCOUNT: Account = {
 
   topstep_reset_at: null,
 
-  risk_rule_pct: 12.5,
+  risk_rule_pct: 8,
 
   risk_rule_min: null,
 

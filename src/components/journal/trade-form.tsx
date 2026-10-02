@@ -122,7 +122,7 @@ import { cn } from "@/lib/utils";
 import { commissionPerSide } from "@/lib/journal/instrument-costs";
 import { sizeUnitLabel } from "@/lib/journal/units";
 import { MICRO_OF, MINI_OF } from "@/lib/journal/default-instruments";
-import { topstepMaxContracts, topstepMinRiskFromRoom, type TopstepSizing } from "@/lib/journal/topstep";
+import { TOPSTEP_DEFAULT_RISK_PCT, topstepMaxContracts, topstepMinRiskFromRoom, type TopstepSizing } from "@/lib/journal/topstep";
 import {
   plannedSize,
   qtyToInput,
@@ -565,7 +565,7 @@ export function TradeForm({
       ts && account
         ? computeTopstepRisk({
             room: ts.room,
-            pct: account.risk_rule_pct ?? 12.5,
+            pct: account.risk_rule_pct ?? TOPSTEP_DEFAULT_RISK_PCT,
             min: account.risk_rule_min ?? ts.plan.riskMin,
             max: account.risk_rule_max ?? ts.plan.riskMax,
             dllLeft: ts.dllLeftToday,
@@ -667,7 +667,7 @@ export function TradeForm({
       futuresPair,
       pairSymbol,
       futuresBudget,
-      topstep: ts ? { ...ts, risk: topstepRisk, pct: account?.risk_rule_pct ?? 12.5 } : null,
+      topstep: ts ? { ...ts, risk: topstepRisk, pct: account?.risk_rule_pct ?? TOPSTEP_DEFAULT_RISK_PCT } : null,
       stopTicks,
       targetTicks,
       // Exposed so the risk note can tell a BUDGET from a CONSEQUENCE: with no

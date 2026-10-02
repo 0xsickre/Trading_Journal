@@ -230,7 +230,7 @@ export function blendedPlannedRewardR(params: {
  * Maximum Loss Limit, held between the plan's bounds, and never more than the
  * Daily Loss Limit still allows today.
  *
- * The trader's own rule (futures-trading `izlaz/Uputstvo_rizik.pdf`): 12.5 % of
+ * The trader's own rule (futures-trading `izlaz/Uputstvo_rizik.pdf`): 8 % of
  * the room, at least $60 and at most $300 on a 50K — scaled with the plan, so
  * three stops always fit inside the DLL. A percentage of the whole balance is
  * the wrong base on a prop account: 1 % of $150 000 is $1 500, more than a 50K

@@ -60,7 +60,7 @@ const account = (over: Partial<Account> = {}): Account => ({
 
   topstep_reset_at: null,
 
-  risk_rule_pct: 12.5,
+  risk_rule_pct: 8,
 
   risk_rule_min: null,
 
@@ -212,7 +212,7 @@ describe("the breakeven range is fixed (K4)", () => {
     render(<AccountSettings accounts={[account({ topstep_mode: true, topstep_plan: "50K" })]} tradeCounts={{ "acc-1": 0 }} />);
     await openMenu(user, "Main Account");
     await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
-    expect(screen.getByText(/±0\.1R of the trade's risk/).textContent).toContain("±$25.00 without a stop");
+    expect(screen.getByText(/±0\.1R of the trade's risk/).textContent).toContain("±$16.00 without a stop");
     expect(screen.queryByLabelText("From")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("To")).not.toBeInTheDocument();
   });

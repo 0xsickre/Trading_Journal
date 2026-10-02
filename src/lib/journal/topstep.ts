@@ -469,7 +469,7 @@ export function topstepMinRiskFromRoom(plan: TopstepPlanRules): number {
 }
 
 /** The share of the room the risk rule takes when the account sets none — the trader's rule. */
-export const TOPSTEP_DEFAULT_RISK_PCT = 12.5;
+export const TOPSTEP_DEFAULT_RISK_PCT = 8;
 
 /**
  * The breakeven band, as a share of R (K4, 29.09.2026: fixed, not a setting).
@@ -482,7 +482,7 @@ export const TOPSTEP_DEFAULT_RISK_PCT = 12.5;
  */
 export const TOPSTEP_BREAKEVEN_R = 0.1;
 
-/** The breakeven half-width in dollars for a plan: ±$25 on a 50K, ±$38 on a 100K, ±$56 on a 150K. */
+/** The breakeven half-width in dollars for a plan: ±$16 on a 50K, ±$24 on a 100K, ±$36 on a 150K. */
 export function topstepBreakevenBand(plan: TopstepPlan): number {
   return Math.round(TOPSTEP_BREAKEVEN_R * (TOPSTEP_DEFAULT_RISK_PCT / 100) * TOPSTEP_PLANS[plan].mll);
 }

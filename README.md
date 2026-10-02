@@ -463,7 +463,7 @@ drift from the module computing the same thing.
 | Profit factor | `gross profit / gross loss` | `Infinity` when there is no loss — a real maximum, not missing data. `null` only when there is nothing to divide |
 | Expectancy | `winRate × avgWinR + (1 − winRate) × avgLossR` | Computed over the R population only — only a trade with a stop has an R |
 | Best / worst | Largest and smallest single net result | |
-| Breakeven | Trades inside the account's breakeven band | On a Topstep account the band is **fixed** (K4) and **per trade** (30.09.2026): net P&L within ±0.1R of **the trade's own risk to the stop** (`riskMoneyAtEntry`; `tradeOutcome` in `breakeven.ts`). A trade with no stop, and a day or a week, fall back to 0.1R of the plan's starting risk budget (12.5 % of the room above the MLL) — ±$25 on a 50K, ±$38 on a 100K, ±$56 on a 150K (`topstepBreakevenBand`). Settings shows it and offers nothing to type |
+| Breakeven | Trades inside the account's breakeven band | On a Topstep account the band is **fixed** (K4) and **per trade** (30.09.2026): net P&L within ±0.1R of **the trade's own risk to the stop** (`riskMoneyAtEntry`; `tradeOutcome` in `breakeven.ts`). A trade with no stop, and a day or a week, fall back to 0.1R of the plan's starting risk budget (8 % of the room above the MLL) — ±$16 on a 50K, ±$24 on a 100K, ±$36 on a 150K (`topstepBreakevenBand`). Settings shows it and offers nothing to type |
 | **R (everywhere)** | `gross points / (risk in points × entry qty)` | **R is always GROSS**, and does not follow the net/gross toggle — that toggle moves money only |
 
 **Why R is gross while money can be net.** They are deliberately two different questions. R measures
@@ -486,7 +486,7 @@ counted as a loss — which would understate a book full of scratches by several
 
 **On a Topstep account a trade is judged against its own risk** (decided 30.09.2026). The dollar
 band is a tenth of the plan's nominal risk, and a micro trade risks a fraction of that: in the mock
-book one MES contract stopped out for −$22.25, which is −1.13R, sat inside ±$25 and was filed as a
+book one MES contract stopped out for −$22.25, which is −1.13R, sat inside the band of the time (±$25) and was filed as a
 scratch — left out of the win rate and of the expectancy, which read +1.27R where the book averaged
 +0.91R. Every per-trade classification (statistics, reports, insights, journal grid, the playbook
 checklist in the form) now asks `tradeOutcome`, which compares the P&L with 0.1 × the trade's risk
@@ -1231,7 +1231,7 @@ help.topstep.com on 28.09.2026):
   Settings writes `topstep_reset_at`, from which the balance starts again and the MLL is cleared.
 
 **Risk per trade is the trader's own rule** (`computeTopstepRisk`, from `futures-trading`'s
-`Uputstvo_rizik.pdf`): **12.5 % of the room above the MLL**, held between the plan's bounds — 60–300 on
+`Uputstvo_rizik.pdf`): **8 % of the room above the MLL** (`TOPSTEP_DEFAULT_RISK_PCT`), held between the plan's bounds — 60–300 on
 a 50K, 120–600 on a 100K, 180–900 on a 150K, so three stops fit in the DLL — and never past what
 is left of today's DLL. `risk_rule_pct`, `risk_rule_min` and `risk_rule_max` on the account override
 the three. **The floor holds only from a third of the plan's MLL up** (R3, 30.09.2026;
@@ -1275,8 +1275,8 @@ same file were saved.
 journal's "Risk %" column, the "Risk taken" metrics and the `/reports` bucket divide the risk to
 the stop by `tj_positions.room_at_entry`, sealed next to the budget with the same three rules (0 when
 there was no room, which reads as no percentage). $345 on a stop with $4,500 of room is 7.7 %, not the
-0.23 % of a 150,000 balance the account can never spend. The buckets sit around the trader's 12.5 %
-(< 5 %, 5–10 %, 10–12.5 %, 12.5–15 %, 15–20 %, ≥ 20 %). A trade without the seal — entered on an
+0.23 % of a 150,000 balance the account can never spend. The buckets sit around the trader's 8 %
+(< 5 %, 5–8 %, 8–10 %, 10–15 %, 15–20 %, ≥ 20 %). A trade without the seal — entered on an
 account with closed trades before the column existed — keeps the old denominator, the equity the
 entry day opened with, until a save seals it. There is no **Risk %** list on the plan form (removed in H2 with the
 `risk_pct` column and the playbook's default risk): the size comes from the rule, and appears once

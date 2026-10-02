@@ -27,7 +27,7 @@ import type { Account, TradeRow } from "./types";
 
 const NY = "America/New_York";
 const accounts = [
-  { id: "ts", timezone: NY, topstep_mode: true, topstep_plan: "50K", starting_balance: 50_000, risk_rule_pct: 12.5 },
+  { id: "ts", timezone: NY, topstep_mode: true, topstep_plan: "50K", starting_balance: 50_000, risk_rule_pct: 8 },
   { id: "cfd", timezone: NY, topstep_mode: false },
 ] as unknown as Account[];
 const topstepOf = topstepRulesResolver(accounts);

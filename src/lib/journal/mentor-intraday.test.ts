@@ -116,7 +116,7 @@ const pack = () =>
     topstep:
       topstep.status === "off"
         ? []
-        : [{ accountName: "Topstep 50K", plan: "50K", startingBalance: 50_000, riskRulePct: 12.5, result: topstep }],
+        : [{ accountName: "Topstep 50K", plan: "50K", startingBalance: 50_000, riskRulePct: 8, result: topstep }],
   });
 
 describe("mentor pack for a day trader (F5.6)", () => {
@@ -133,7 +133,7 @@ describe("mentor pack for a day trader (F5.6)", () => {
     expect(md).toContain("## Topstep nalog — stanje i pravila firme");
     expect(md).toContain("### Topstep 50K — 50K · status: active");
     expect(md).toContain("| DLL | 1000.00 USD dnevno;");
-    expect(md).toContain("12.5% prostora do MLL-a");
+    expect(md).toContain("8% prostora do MLL-a");
   });
 
   it("lists the trader's rules and the ones broken most", () => {
