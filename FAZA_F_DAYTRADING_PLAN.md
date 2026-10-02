@@ -107,6 +107,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 30.09.2026 | T | Faza naloga (trejder: pravi nalog je **50K Combine**, 150K je praksa; put isplate „ne znam još“; samo TopstepX; 50K kupljen sa DLL-om; „da, kreni“): **T1** `tj_accounts.topstep_stage` combine / xfa (podrazumevano combine — ništa se ne menja dok se ne izabere XFA). **T2** XFA Scaling Plan: najviše mini ugovora po balansu na početku sesije (kraj prethodnog Topstep dana). **T3** XFA nema „passed“ ni 55 %: prate se OBA puta isplate od poslednje isplate (Standard: 5 dana ≥ $150; Konzistentnost: 3 dana, najbolji ≤ 40 % neto profita) i najveća isplata (50 % balansa, limit po planu i putu, min $125). **T4** DLL plana ostaje u računu i na XFA (oprezno; trejder ga ima). **T5** brief računa isto |
 | 01.10.2026 | T | Practice (trejder: „kako da razlikujem practice nalog od combine i xfa“): treća faza `practice` u istoj migraciji (još nije bila primenjena) — **pravila kao Combine**, ništa se ne „prolazi“; **statistika odvojeno** (podrazumevano samo pravi nalozi, Practice u filteru naloga sa oznakom „(practice)“ — urađeno na svim stranicama; /daily, tracker i playbooks čitaju samo prave naloge); **brief i podsetnik samo pravi nalozi** |
 | 01.10.2026 | U | Poeni i tikovi na dashboardu (trejder: „da ovde dodamo tick i point“): **U1** poen trejda = neto (ili bruto, po prekidaču) u $ ÷ vrednost poena ugovora — **puta broj ugovora** (2 MNQ × 10 poena = 20), pa zbir prati $; tik isto ÷ (vrednost poena × tik). **U2** NQ i ES nisu ista jedinica: na dashboard dolazi **filter instrumenta** po porodici (MNQ uz NQ, MES uz ES, M6E uz 6E); Points / Ticks rade kad su svi trejdovi u izboru iz jedne porodice, inače su siva |
+| 02.10.2026 | V | Pregled od Claude-a (trejder: „da Claude vidi moj journal sa rutinom … week review, daily, trejdove, notes“): **V1** posebna poruka „📓 Pregled dana“, **V2** nedelja subotom ujutru, **V3** samo pravi nalozi, **V4** dan bez trejdova bez poruke osim kad postoji dnevni izveštaj. Paket se sklapa samo u journal-u (jedno mesto računa), futures-trading ga preuzima preko rute sa Bearer tokenom; rutina ne dobija pristup bazi |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -141,7 +142,7 @@ pogađa.
 | **S** | „Šta bi bilo“ i cena promašaja realno: TP / limit ulaz kroz nivo, tik na stopu | — | L, R | ne | **Opus** | ✅ `95c63e7` · futures-trading `aacc20b`, 30.09.2026 — bez migracije |
 | **T** | Faza naloga Combine / XFA: Scaling Plan, oba puta isplate, bez „passed“ na XFA (journal + brief) | — | S | da: `20260930090000` (`topstep_stage`) | **Opus** | ✅ 30.09.2026 — migracija `20260930090000` primenjena |
 | **U** | Poeni i tikovi na dashboardu + filter instrumenta (NQ / ES) | — | T | ne | **Opus** | ✅ 01.10.2026 — bez migracije |
-| **V** | Pregled dana / nedelje od Claude-a: isti „Export for Claude“ paket preuzima futures-trading i šalje rutini | — | U | ne | **Opus** | plan (02.10.2026) — čeka odluke V1–V4 |
+| **V** | Pregled dana / nedelje od Claude-a: isti „Export for Claude“ paket preuzima futures-trading i šalje rutini | — | U | ne | **Opus** | u radu (02.10.2026) — odluke V1–V4 ✅ |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1061,14 +1062,11 @@ Rutina ne dobija pristup bazi; dobija samo tekst paketa (samo čitanje, kroz `/f
      ponoći, vesti, Zona 3); bez izmišljanja, mišljenje sa 🧠;
    - tajna `JOURNAL_URL` (adresa journal-a na Vercel-u) u podsetniku.
 
-### Odluke — otvorene (pitati trejdera)
-- **V1** Pregled dana: posebna poruka „📓 Pregled dana" posle podsetnika, ili spojeno sa podsetnikom u jednu?
-  (predlog: posebna — duža je)
-- **V2** Pregled nedelje: subota ujutru ili petak uveče posle zatvaranja? (predlog: subota ujutru — nedeljni pregled
-  je obično napisan do tada)
-- **V3** Nalozi: samo pravi (Combine / XFA), bez Practice — kao brief i podsetnik (T, 01.10.2026)? (predlog: da)
-- **V4** Dan bez trejdova: kratka poruka (plan / dnevni izveštaj ako postoje, „nema trejdova") ili bez poruke?
-  (predlog: bez poruke, osim kad postoji dnevni izveštaj)
+### Odluke (trejder, 02.10.2026)
+- **V1** Pregled dana je **posebna poruka** „📓 Pregled dana" posle podsetnika.
+- **V2** Pregled nedelje **subotom ujutru**.
+- **V3** **Samo pravi nalozi** (Combine / XFA), bez Practice — kao brief i podsetnik.
+- **V4** Dan bez trejdova: **bez poruke**, osim kad postoji dnevni izveštaj (tada Claude komentariše njega).
 
 ### Testovi (prvo padaju)
 - `mentor-compose.test.ts`: isti Markdown kao današnji izvoz za isti ulaz (snimak), filtriranje po danu naloga,
