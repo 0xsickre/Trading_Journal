@@ -109,6 +109,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 01.10.2026 | U | Poeni i tikovi na dashboardu (trejder: „da ovde dodamo tick i point“): **U1** poen trejda = neto (ili bruto, po prekidaču) u $ ÷ vrednost poena ugovora — **puta broj ugovora** (2 MNQ × 10 poena = 20), pa zbir prati $; tik isto ÷ (vrednost poena × tik). **U2** NQ i ES nisu ista jedinica: na dashboard dolazi **filter instrumenta** po porodici (MNQ uz NQ, MES uz ES, M6E uz 6E); Points / Ticks rade kad su svi trejdovi u izboru iz jedne porodice, inače su siva |
 | 02.10.2026 | V | Pregled od Claude-a (trejder: „da Claude vidi moj journal sa rutinom … week review, daily, trejdove, notes“): **V1** posebna poruka „📓 Pregled dana“, **V2** nedelja subotom ujutru, **V3** samo pravi nalozi, **V4** dan bez trejdova bez poruke osim kad postoji dnevni izveštaj. Paket se sklapa samo u journal-u (jedno mesto računa), futures-trading ga preuzima preko rute sa Bearer tokenom; rutina ne dobija pristup bazi |
 | 03.10.2026 | R | Podrazumevani rizik 8 % (trejder: „8 % koristim, 12,5 treba obrisati gde god da piše — to je zastarelo“). Zamenjuje deo odluke R1 od 30.09. („podrazumevanih 12,5 % se ne menja“): `TOPSTEP_DEFAULT_RISK_PCT` = 8, isto `racun.py` (`RIZIK_PCT`) i paritetni `topstep-parity.json`; default kolone `tj_accounts.risk_rule_pct` 8 (migracija `20261003010000`). Oba naloga su već imala 8, pa se njihov broj ugovora ne menja. Posledica: breakeven pojas bez stopa (K4) je 0,1 × 8 % × MLL = **±$16 / 24 / 36** (50K/100K/150K, bilo ±25/38/56); trejd sa stopom se i dalje sudi po svom riziku. Kante „Risk %” u izveštajima oko 8 % (< 5, 5–8, 8–10, 10–15, 15–20, ≥ 20). Forma trejda i podešavanja naloga više nemaju zakucanih 12,5 |
+| 08.10.2026 | M | Mentor tok (trejder: „weekly skroz da ga više nema, daily skrati, preuredi mentor pack“): refleksija (zatvaranje dana / nedelje, pravila) seli se u privatni repo `trading-mentor`, gde Claude ispituje trejdera prema mentor pack-u. Journal meri i izvozi, ne sudi. **M-a** `/weekly` (pregled, eksperimenti, Napredak) se briše sa tabelama `tj_weekly_reviews` i `tj_experiments`, **bez arhive** (ostaje noćni backup). **M-b** focus goal se briše sa tabelom `tj_focus_goals` (dupliran sa „domaćim“ iz `trading-mentor`). **M-c** /daily = brief, mentalna ocena, „ne trgujem“, tracker, review gaps, zaključavanje |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -144,6 +145,7 @@ pogađa.
 | **T** | Faza naloga Combine / XFA: Scaling Plan, oba puta isplate, bez „passed“ na XFA (journal + brief) | — | S | da: `20260930090000` (`topstep_stage`) | **Opus** | ✅ 30.09.2026 — migracija `20260930090000` primenjena |
 | **U** | Poeni i tikovi na dashboardu + filter instrumenta (NQ / ES) | — | T | ne | **Opus** | ✅ 01.10.2026 — bez migracije |
 | **V** | Pregled dana / nedelje od Claude-a: isti „Export for Claude“ paket preuzima futures-trading i šalje rutini | — | U | ne | **Opus** | ⛔ obustavljeno (trejder, 02.10.2026) — ne raditi bez novog naloga trejdera |
+| **M** | Mentor tok: bez /weekly, kraći /daily, compliance bez praznih dana, pun mentor pack (Dan / Nedelja) | — | U | da, **briše**: `tj_weekly_reviews`, `tj_experiments`, `tj_focus_goals` | **Opus** | u toku (08.10.2026) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1084,6 +1086,39 @@ Rutina ne dobija pristup bazi; dobija samo tekst paketa (samo čitanje, kroz `/f
 ### Izlaz iz V
 Trejder svako veče dobija „📓 Pregled dana" (i subotom nedelje) od Claude-a sa celim journal-om i tržištem dana;
 dugme „Export for Claude" daje isti paket kao ruta; README oba repoa 1:1.
+
+## M — Mentor tok (detaljno, 08.10.2026)
+
+**Povod** (trejder, 08.10.2026): zatvaranje dana i nedelje radi sa Claude-om u privatnom repou `trading-mentor`
+(ispitivanje, zapažanja, „domaći“), pa weekly pregled u journal-u postaje dupla evidencija, a daily treba da ostane
+samo merenje. Mentor pack mora da nosi sve što mentoru treba za ispitivanje — i dan bez trejdova. Ovo je drugačiji
+put od obustavljene faze V (nema rute ni rutine; trejder sam izvozi paket).
+
+### Utvrđeno u kodu (08.10.2026)
+- **Bug veličine:** `enriched-trade.ts` čita `position_size` (planirana veličina; prazna kod trejda upisanog posle
+  ulaza i kod uvoza), a stvarni broj ugovora je `stats.entry_qty` — paket je pisao „Max ugovora —“ i
+  „Prosečna veličina —“ za trejd sa 3 MNQ. Test fixture je postavljao oba polja, pa bug nije viđen.
+- **„29 % na 3 dana“:** radni dan bez trejdova i bez štikliranja broji ručna pravila kao prekršena (0 %);
+  `no_trade_day` ne utiče ni na šta iako forma kaže suprotno; današnji dan (`pending`) ulazi u prosek.
+- `/weekly` je zatvoren klaster: van njega ga čita samo dimenzija „Week rating“ u `/reports`. Eksperimenti nemaju
+  drugi dom. Focus goal živi samo na /daily.
+
+### Podkoraci (svaki: test koji pada → kod → gate → commit + push)
+- **M1** Brisanje `/weekly` (ruta, lib, komponente, testovi, nav, revalidate, „Week rating“ u /reports), README.
+- **M2** /daily skraćen (bez focus goal-a, statistike dana i streak trake); compliance: `no_trade_day` gasi ručna
+  pravila faze „trade“, prošli dan bez trejdova / check-in-a / izveštaja je „bez prijave“ (ne 0 %), `pending` dan
+  ne ulazi u prosek.
+- **M3** Migracija: `DROP` tri tabele + lock guard funkcije, `tj_reset_my_data` i `tj_delete_account` bez njih,
+  rollback skripta, `types.ts`; futures-trading `journal_backup.py` bez tri tabele. Primena posle zelenog gate-a
+  M1+M2 i deploy-a.
+- **M4** Mentor pack: veličina iz `entry_qty`; fill-ovi po trejdu (učitani pri izvozu); plan prema kraju
+  (pomeren stop); budžet rizika i prostor na ulazu; playbook; provizije; svaki radni dan u dnevnom pregledu;
+  tracker po danu i crveni prozori dana; uputstvo po periodu (Dan = ispitivanje, Nedelja = pregled + domaći).
+- **M5** `trading-mentor`: dnevni tok sa paketom za Dan; zapažanja Z-002 / Z-003.
+
+### Izlaz iz M
+Nema /weekly ni tabela; /daily je merenje; prosek pravila ne kažnjava dane bez sesije; paket za Dan i Nedelju
+nosi veličinu, fill-ove, plan prema kraju i svaki dan sa trackerom; README 1:1.
 
 ## Katalog stavki
 
