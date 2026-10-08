@@ -77,7 +77,7 @@ const num = (s: string) => {
   return s.trim() === "" || !Number.isFinite(v) ? null : v;
 };
 
-function Chips({
+export function Chips({
   items,
   selected,
   onToggle,

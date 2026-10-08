@@ -765,3 +765,62 @@ export async function saveTradeReview(id: string, input: TradeReviewInput) {
   revalidateTrades();
   return { ok: true as const, id };
 }
+
+const missedSetupSchema = z.object({
+  account_id: z.uuid(),
+  instrument: z.string().trim().min(1).max(40),
+  direction: z.enum(["Long", "Short"]),
+  entry_price: z.number().finite().positive(),
+  stop_price: z.number().finite().positive(),
+  target_price: z.number().finite().positive().nullable(),
+  seen_at: z.iso.datetime({ offset: true }),
+  playbook_id: z.uuid().nullable(),
+  miss_reason: z.string().trim().max(200).nullable(),
+  trade_journal_notes: z.string().max(20_000).nullable(),
+});
+
+export type MissedSetupPayload = z.infer<typeof missedSetupSchema>;
+
+/**
+ * A setup seen and not taken, written from the recording (phase O).
+ *
+ * `status = 'missed'` with no fills — what "Mark as missed" made of a plan — so
+ * the R2 walk in futures-trading prices it, and the reports, the playbooks and
+ * the mentor pack count it, unchanged. The contract spec is frozen onto it like
+ * any trade's.
+ */
+export async function createMissedSetup(input: MissedSetupPayload) {
+  const parsed = missedSetupSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: firstIssue(parsed.error) };
+  const m = parsed.data;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tj_positions")
+    .insert({
+      account_id: m.account_id,
+      instrument: m.instrument,
+      direction: m.direction,
+      status: "missed",
+      source: "manual",
+      needs_review: false,
+      entry_price: m.entry_price,
+      stop_price: m.stop_price,
+      target_price: m.target_price,
+      missed_at: m.seen_at,
+      miss_reason: m.miss_reason || null,
+      playbook_id: m.playbook_id,
+      trade_journal_notes: m.trade_journal_notes?.trim() || null,
+      ...instrumentSnapshot(
+        m.instrument,
+        await getInstrumentSpecs([m.instrument]),
+        await getAccountCurrency(m.account_id),
+      ),
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { ok: false as const, error: error?.message ?? "Could not save the setup." };
+
+  revalidateTrades();
+  return { ok: true as const, id: data.id };
+}
