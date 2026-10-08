@@ -113,6 +113,13 @@ export function DailyReportForm({
   }
 
   const isToday = reportDate === today;
+  // "Danas ne trgujem" with no trade taken: a rest day — the checklist goes away
+  // (trader, 08.10.2026). A trade taken anyway (any auto verdict) voids the flag,
+  // and the rules come back, as `computeDayCompliance` scores them.
+  const traded = Object.values(tracker.auto).some(
+    (v) => v?.verdict === "pass" || v?.verdict === "fail",
+  );
+  const restView = form.no_trade_day && !traded;
   const lowMental = form.mental_temp != null && form.mental_temp < 3;
   // In the ACCOUNT's zone, like every other time on this page. `format` read
   // the browser's clock, so the server and the client could print two times.
@@ -286,9 +293,9 @@ export function DailyReportForm({
                       Danas ne trgujem
                     </label>
                     <p className="text-xs text-muted-foreground">
-                      Odluka pre sesije, ne izgovor posle nje. Kad je sačuvano, ručna
-                      pravila trgovanja se za taj dan ne ocenjuju; pravila pripreme i
-                      osvrta važe.
+                      Odluka pre sesije, ne izgovor posle nje. Kad je sačuvano i nema
+                      trejda, dan je dan odmora: nijedno pravilo se ne traži i dan ne
+                      ulazi u prosek.
                     </p>
                   </div>
                 </div>
@@ -296,43 +303,50 @@ export function DailyReportForm({
             </CardContent>
           </Card>
 
-          <TrackerStageSection stage="prepare" data={tracker} />
+          {!restView && <TrackerStageSection stage="prepare" data={tracker} />}
         </fieldset>
       </DaySection>
 
-      <DaySection
-        n={2}
-        title="Tokom sesije"
-        hint="Automatska pravila se ocenjuju sama — iz trejdova i iz brief-a. Ručna čekaju tvoj odgovor."
-      >
-        {/* The trade-stage rules stand even on a day you did not trade: "I
-            only trade in my defined hours" is answerable, and answerable well,
-            on a flat day. Only a SAVED "Danas ne trgujem" takes the manual ones
-            out of the score (`computeDayCompliance`). Boxed: the biggest stage
-            by far. */}
-        {report?.no_trade_day && (
-          <p className="text-xs text-muted-foreground">
-            Danas ne trguješ: ručna pravila trgovanja se ne ocenjuju.
-          </p>
-        )}
-        <fieldset disabled={tracker.locked} className="m-0 min-w-0 border-0 p-0 disabled:opacity-100">
-          <TrackerStageSection stage="trade" data={tracker} boxed />
-        </fieldset>
-      </DaySection>
+      {restView ? (
+        <Card>
+          <CardContent className="py-4 text-sm text-muted-foreground">
+            Danas ne trguješ: nema pravila za štikliranje i dan je ispunjen. Ne ulazi u prosek
+            usklađenosti. Sačuvaj izveštaj da bi se računalo. Ako ipak uđeš u trejd, pravila se
+            vraćaju i dan se ocenjuje normalno.
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <DaySection
+            n={2}
+            title="Tokom sesije"
+            hint="Automatska pravila se ocenjuju sama — iz trejdova i iz brief-a. Ručna čekaju tvoj odgovor."
+          >
+            {/* The trade-stage rules stand even on a day you did not trade: "I
+                only trade in my defined hours" is answerable, and answerable well,
+                on a flat day. Only a SAVED "Danas ne trgujem" with no trade makes
+                the day a rest day (`computeDayCompliance`). Boxed: the biggest
+                stage by far. */}
+            <fieldset disabled={tracker.locked} className="m-0 min-w-0 border-0 p-0 disabled:opacity-100">
+              <TrackerStageSection stage="trade" data={tracker} boxed />
+            </fieldset>
+          </DaySection>
 
-      <DaySection
-        n={3}
-        title="Posle sesije"
-        hint="Pregledaj svaki trejd, odgovori na osvrt, sačuvaj i zaključaj dan. Zatvaranje dana je razgovor sa mentorom, iz mentor pack-a za Dan."
-      >
-        {afterSession}
-        {/* The debrief prose (what I learned, what I change tomorrow) and the
-            four Douglas-fear checkboxes left in Phase E: nothing read them. Those
-            questions are asked by the mentor now (phase M), with the pack in hand. */}
-        <fieldset disabled={tracker.locked} className="m-0 min-w-0 border-0 p-0 disabled:opacity-100">
-          <TrackerStageSection stage="reflect" data={tracker} />
-        </fieldset>
-      </DaySection>
+          <DaySection
+            n={3}
+            title="Posle sesije"
+            hint="Pregledaj svaki trejd, odgovori na osvrt, sačuvaj i zaključaj dan. Zatvaranje dana je razgovor sa mentorom, iz mentor pack-a za Dan."
+          >
+            {afterSession}
+            {/* The debrief prose (what I learned, what I change tomorrow) and the
+                four Douglas-fear checkboxes left in Phase E: nothing read them. Those
+                questions are asked by the mentor now (phase M), with the pack in hand. */}
+            <fieldset disabled={tracker.locked} className="m-0 min-w-0 border-0 p-0 disabled:opacity-100">
+              <TrackerStageSection stage="reflect" data={tracker} />
+            </fieldset>
+          </DaySection>
+        </>
+      )}
 
       <div
         className={cn(

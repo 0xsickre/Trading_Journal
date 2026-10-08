@@ -763,18 +763,29 @@ describe("the day's report (phase M)", () => {
   const reflect = rule({ id: "screens", stage: "reflect" });
   const rules = [prepare, tradeRule, reflect];
 
-  it("a no-trade day takes the manual trade-stage rules out of the denominator", () => {
-    const d = computeDayCompliance(
-      PAST,
-      rules,
-      checkins([["prep", true], ["screens", true]]),
-      {},
-      TODAY,
-      { report: { no_trade_day: true } },
-    );
-    expect(d.applicable).toBe(2);
-    expect(d.pct).toBe(100);
-    expect(d.status).toBe("compliant");
+  it("a no-trade day with no trade is a rest day: nothing to tick, nothing missed, out of the mean", () => {
+    const d = computeDayCompliance(PAST, rules, new Map(), autoOf({ playbook_linked: "na" }), TODAY, {
+      report: { no_trade_day: true },
+    });
+    expect(d.status).toBe("rest");
+    expect(d.pct).toBeNull();
+    expect(d.missedRuleIds).toEqual([]);
+    expect(d.unansweredRuleIds).toEqual([]);
+    expect(d.notApplicableRuleIds).toEqual(["prep", "hours", "screens"]);
+  });
+
+  it("is a rest day today as well, not 'pending'", () => {
+    const d = computeDayCompliance(TODAY, rules, new Map(), {}, TODAY, { report: { no_trade_day: true } });
+    expect(d.status).toBe("rest");
+  });
+
+  it("a trade on a declared no-trade day voids the flag: the day is scored as any other", () => {
+    const withAuto = [...rules, rule({ id: "pb", auto_key: "playbook_linked" })];
+    const d = computeDayCompliance(PAST, withAuto, new Map(), autoOf({ playbook_linked: "pass" }), TODAY, {
+      report: { no_trade_day: true },
+    });
+    expect(d.status).toBe("broken");
+    expect(d.applicable).toBe(4);
   });
 
   it("a flat day WITHOUT the flag still scores the trade-stage rules", () => {
@@ -840,6 +851,16 @@ describe("the day's report (phase M)", () => {
       { date: "d2", applicable: 2, satisfied: 0, pct: 0, status: "pending" as const, missedRuleIds: ["a", "b"], unansweredRuleIds: ["a", "b"] },
     ];
     expect(meanCompliance(s)).toBe(100);
+  });
+
+  it("a rest day neither breaks nor extends the streak", () => {
+    const base = { applicable: 1, satisfied: 1, missedRuleIds: [], unansweredRuleIds: [] };
+    const s = computeStreak([
+      { ...base, date: "2026-07-24", pct: 100, status: "compliant" },
+      { ...base, date: "2026-07-27", pct: null, status: "rest", applicable: 0, satisfied: 0 },
+      { ...base, date: "2026-07-28", pct: 100, status: "compliant" },
+    ]);
+    expect(s.current).toBe(2);
   });
 
   it("an unlogged day neither breaks nor extends the streak", () => {

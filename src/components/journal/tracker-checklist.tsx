@@ -28,6 +28,7 @@ const STATUS_LABELS: Record<DayStatus, string> = {
   skipped: "Nema pravila za ovaj dan",
   pending: "Dan u toku",
   unlogged: "Dan bez prijave",
+  rest: "Ne trguješ danas — dan ispunjen",
 };
 
 /**
@@ -428,14 +429,16 @@ export function TrackerDayBadge({
       )}
       <Badge
         variant={
-          compliance.status === "compliant"
+          compliance.status === "compliant" || compliance.status === "rest"
             ? "default"
             : compliance.status === "broken"
               ? "destructive"
               : "secondary"
         }
         title={
-          compliance.applicable === 0
+          compliance.status === "rest"
+            ? "Označeno „Danas ne trgujem“ i nema trejda: nijedno pravilo se ne traži, dan ne ulazi u prosek."
+            : compliance.applicable === 0
             ? "Nijedno pravilo se ne odnosi na ovaj dan."
             : "Dan se broji kao ispunjen samo na 100%. Pravila koja nisu ocenjena ne ulaze ni u brojilac ni u imenilac."
         }

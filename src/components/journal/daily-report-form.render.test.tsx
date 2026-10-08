@@ -308,6 +308,7 @@ describe("phase M: the page measures, the mentor judges", () => {
     );
     expect(screen.queryByText("Nacrt")).not.toBeInTheDocument();
     expect(screen.queryByText("Završeno")).not.toBeInTheDocument();
-    expect(screen.getByText(/ručna pravila trgovanja se ne ocenjuju/)).toBeInTheDocument();
+    expect(screen.getByText(/nema pravila za štikliranje i dan je ispunjen/)).toBeInTheDocument();
+    expect(screen.queryByText("Tokom sesije")).not.toBeInTheDocument();
   });
 });

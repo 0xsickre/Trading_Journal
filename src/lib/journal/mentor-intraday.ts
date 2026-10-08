@@ -195,6 +195,7 @@ export type DailyContext = {
 function rulesCell(c: DayCompliance | undefined, ruleText: ReadonlyMap<string, string> | undefined): string {
   if (!c) return "—";
   if (c.status === "unlogged") return "bez prijave";
+  if (c.status === "rest") return "ne trguje (odmor)";
   if (c.pct == null) return "—";
   if (c.status === "pending") return `u toku (${Math.round(c.pct)}%)`;
   const missed = c.missedRuleIds.map((id) => ruleText?.get(id) ?? id);
@@ -290,7 +291,14 @@ export function trackerByDaySection(
   ];
   for (const day of days.slice(-DAY_ROWS_CAP)) {
     const c = compliance.get(day);
-    const tag = c?.status === "unlogged" ? " · bez prijave" : c?.status === "pending" ? " · u toku" : "";
+    const tag =
+      c?.status === "unlogged"
+        ? " · bez prijave"
+        : c?.status === "rest"
+          ? " · ne trguje (odmor)"
+          : c?.status === "pending"
+            ? " · u toku"
+            : "";
     out.push(`### ${day}${tag}`);
     const brief = briefByDay.get(day);
     if (brief) {
@@ -401,6 +409,7 @@ export function rulesSection(rules: readonly TrackerRule[], compliance: readonly
   // "bez prijave" — both are named, neither is averaged (phase M).
   const judged = compliance.filter((c) => c.pct != null && c.status !== "pending");
   const unlogged = compliance.filter((c) => c.status === "unlogged").map((c) => c.date);
+  const rest = compliance.filter((c) => c.status === "rest").map((c) => c.date);
   const open = compliance.filter((c) => c.status === "pending").map((c) => c.date);
   if (judged.length > 0) {
     const avg = judged.reduce((s, c) => s + (c.pct as number), 0) / judged.length;
@@ -421,8 +430,12 @@ export function rulesSection(rules: readonly TrackerRule[], compliance: readonly
     out.push(
       `Bez prijave (nijedan trejd, nijedan odgovor, nijedan izveštaj): ${unlogged.length} ${sr(unlogged.length, "dan", "dana", "dana")} — ${unlogged.join(", ")}.`,
     );
+  if (rest.length)
+    out.push(
+      `Ne trguje (označeno „Danas ne trgujem“, bez trejda; ne ulazi u prosek): ${rest.length} ${sr(rest.length, "dan", "dana", "dana")} — ${rest.join(", ")}.`,
+    );
   if (open.length) out.push(`U toku (ne ulazi u prosek): ${open.join(", ")}.`);
-  if (judged.length || unlogged.length || open.length) out.push("");
+  if (judged.length || unlogged.length || rest.length || open.length) out.push("");
   return out;
 }
 

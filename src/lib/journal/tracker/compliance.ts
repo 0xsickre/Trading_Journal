@@ -23,6 +23,12 @@ export type DayStatus =
   /** Today, still open. Unanswered manual rules do not count against you yet. */
   | "pending"
   /**
+   * "Danas ne trgujem", saved, and no trade taken: a rest day. Every rule is
+   * n/a, nothing is missed, and the day is out of the mean and the streak
+   * (trader, 08.10.2026: a day off must not read as a day short of rules).
+   */
+  | "rest"
+  /**
    * A past weekday the trader never opened: no trade to judge, no box ticked,
    * no report saved. No opinion, like `skipped` — scoring it 0 % made a day off
    * read as a day of broken rules (phase M, 08.10.2026: "29 % over 3 days" with
@@ -167,10 +173,15 @@ export function computeDayCompliance(
   today: string,
   opts?: DayComplianceOpts,
 ): DayCompliance {
-  // "Danas ne trgujem", decided before the session: the trade-stage MANUAL rules
-  // have nothing to judge. A flat day without the flag keeps them — "I only
-  // trade in my hours" is answerable, and answered well, on a day you sat out.
-  const noTradeDay = opts?.report?.no_trade_day === true;
+  // Any auto verdict means a trade was taken that day.
+  const autoJudged = rules.some(
+    (r) => r.auto_key != null && ruleAppliesOn(r, date, auto),
+  );
+  // "Danas ne trgujem", saved, with no trade: a rest day — no rule of any stage
+  // is asked for (trader, 08.10.2026). A trade taken anyway voids the flag and
+  // the day is scored like any other. A flat day WITHOUT the flag keeps every
+  // rule: "I only trade in my hours" is answerable on a day you sat out.
+  const restDay = opts?.report?.no_trade_day === true && !autoJudged;
   let applicable = 0;
   let satisfied = 0;
   const missedRuleIds: string[] = [];
@@ -182,7 +193,7 @@ export function computeDayCompliance(
       if (ruleIsLiveOn(rule, date)) notApplicableRuleIds.push(rule.id);
       continue;
     }
-    if (noTradeDay && !rule.auto_key && rule.stage === "trade") {
+    if (restDay) {
       notApplicableRuleIds.push(rule.id);
       continue;
     }
@@ -204,12 +215,22 @@ export function computeDayCompliance(
     }
   }
 
+  if (restDay && notApplicableRuleIds.length > 0) {
+    return {
+      date,
+      applicable: 0,
+      satisfied: 0,
+      pct: null,
+      status: "rest",
+      missedRuleIds: [],
+      unansweredRuleIds: [],
+      notApplicableRuleIds,
+    };
+  }
+
   // Nothing at all happened on a past day: no auto verdict (no trades), no
   // check-in row (manual or frozen), no report. That is a day off, not a day of
   // broken rules.
-  const autoJudged = rules.some(
-    (r) => r.auto_key != null && ruleAppliesOn(r, date, auto),
-  );
   if (
     opts !== undefined &&
     opts.report === null &&
@@ -277,7 +298,7 @@ export function computeComplianceSeries(
   today: string,
   /**
    * The day's report, `null` when none was saved. Optional: without it no day is
-   * `unlogged` and "Danas ne trgujem" changes nothing — the scoring before phase M.
+   * `unlogged` or `rest` — the scoring before phase M.
    */
   reportOf?: (day: string) => DayReportFacts | null,
 ): DayCompliance[] {
@@ -318,7 +339,7 @@ export function computeStreak(series: readonly DayCompliance[]): StreakResult {
   let current = 0;
   for (let i = ordered.length - 1; i >= 0; i--) {
     const s = ordered[i].status;
-    if (s === "skipped" || s === "pending" || s === "unlogged") continue;
+    if (s === "skipped" || s === "pending" || s === "unlogged" || s === "rest") continue;
     if (s === "compliant") current++;
     else break;
   }
@@ -327,7 +348,7 @@ export function computeStreak(series: readonly DayCompliance[]): StreakResult {
   let run = 0;
   let lastBrokenOn: string | null = null;
   for (const day of ordered) {
-    if (day.status === "skipped" || day.status === "pending" || day.status === "unlogged") continue;
+    if (day.status === "skipped" || day.status === "pending" || day.status === "unlogged" || day.status === "rest") continue;
     if (day.status === "compliant") {
       run++;
       if (run > longest) longest = run;
