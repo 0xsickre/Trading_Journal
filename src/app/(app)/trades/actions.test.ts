@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * The blown-account guard on the two trade write paths.
+ * The blown-account guard on the trade edit path.
  *
- * A breached prop-firm account blocks NEW EXPOSURE, never the record: a plan
- * written on `/trades/new` is refused, a trade logged after it closed
- * (`/trades/log`, `origin: "log"`) goes through — including the very trade that
- * took the account through its limit.
+ * A breached prop-firm account blocks NEW EXPOSURE, never the record: an edit
+ * that turns a plan into a live position is refused, a record-only edit goes
+ * through. (Creating a trade by hand left with the plan form in phase O.)
  */
 
 const topstepFailed = vi.fn<(id: string | null | undefined) => Promise<boolean>>();
@@ -41,8 +40,8 @@ vi.mock("@/lib/journal/topstep-status", () => ({
   getTopstepEntryPatch: (...a: unknown[]) => budgetPatch(...a),
 }));
 
-const { createTrade, updateTrade } = await import("./actions");
-type Input = Parameters<typeof createTrade>[0];
+const { updateTrade } = await import("./actions");
+type Input = Parameters<typeof updateTrade>[1];
 
 const ACCOUNT = "11111111-1111-4111-8111-111111111111";
 const fill = (side: "entry" | "exit", qty = 1) => ({
@@ -67,7 +66,6 @@ const logged: Input = {
   ...plan,
   executions: [fill("entry"), fill("exit")],
   trade_phase: "active",
-  origin: "log",
 };
 
 beforeEach(() => {
@@ -75,51 +73,6 @@ beforeEach(() => {
   rpc.mockReset().mockResolvedValue({ data: "new-id", error: null });
   budgetPatch.mockReset().mockResolvedValue({});
   tableAnswers = {};
-});
-
-describe("createTrade on a Topstep account that hit its MLL", () => {
-  beforeEach(() => topstepFailed.mockResolvedValue(true));
-
-  it("refuses a plan", async () => {
-    const res = await createTrade(plan);
-    expect(res.ok).toBe(false);
-    expect(!res.ok && res.error).toMatch(/Topstep account hit its Maximum Loss Limit/);
-    expect(!res.ok && res.error).toMatch(/Settings/);
-    expect(rpc).not.toHaveBeenCalled();
-  });
-
-  it("treats an input with no origin as a plan", async () => {
-    const { origin: _origin, ...noOrigin } = logged;
-    const res = await createTrade(noOrigin);
-    expect(res.ok).toBe(false);
-    expect(rpc).not.toHaveBeenCalled();
-  });
-
-  it("lets a trade logged after the close through — the record, not new exposure", async () => {
-    const res = await createTrade(logged);
-    expect(res).toEqual({ ok: true, id: "new-id" });
-    expect(rpc).toHaveBeenCalledOnce();
-  });
-
-  it("does not let `log` carry a position that is still open", async () => {
-    // A server action is a public endpoint: the exemption is for a closed trade,
-    // and an entry with no exit is exposure whatever the caller calls it.
-    const res = await createTrade({ ...logged, executions: [fill("entry")] });
-    expect(res.ok).toBe(false);
-    expect(rpc).not.toHaveBeenCalled();
-  });
-});
-
-describe("createTrade on a healthy account", () => {
-  it("writes a plan", async () => {
-    expect(await createTrade(plan)).toEqual({ ok: true, id: "new-id" });
-  });
-
-  it("rejects an origin it does not know", async () => {
-    const res = await createTrade({ ...plan, origin: "import" as unknown as "log" });
-    expect(res.ok).toBe(false);
-    expect(rpc).not.toHaveBeenCalled();
-  });
 });
 
 describe("updateTrade on a Topstep account that hit its MLL", () => {
@@ -146,13 +99,6 @@ describe("updateTrade on a Topstep account that hit its MLL", () => {
 });
 
 describe("the risk budget at entry is sealed on the write (F3, E4)", () => {
-  it("createTrade carries the patch into tj_save_trade, from the fills it was given", async () => {
-    budgetPatch.mockResolvedValue({ risk_budget_at_entry: 250 });
-    await createTrade(logged);
-    expect(budgetPatch).toHaveBeenCalledWith(ACCOUNT, "closed", expect.any(Array), null);
-    expect(rpc.mock.calls[0][1].p_position).toMatchObject({ risk_budget_at_entry: 250 });
-  });
-
   it("updateTrade hands it the stored seal, so a sealed budget is never rewritten", async () => {
     tableAnswers = { tj_positions: [{ status: "closed", risk_budget_at_entry: 180, custom: {} }] };
     rpc.mockResolvedValue({ data: null, error: null });

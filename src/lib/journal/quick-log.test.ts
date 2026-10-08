@@ -5,38 +5,9 @@ import {
   exitReasonAfterMerge,
   gradeFromRating,
   GRADE_RATING,
-  minutesAgo,
-  quickLogProblem,
-  quickLogToTradeInput,
-  quickLogWarnings,
-  type QuickLogInput,
 } from "./quick-log";
-import { matchImportRow } from "./import-match";
 
-const MNQ = { symbol: "MNQ", point_value: 2, tick_size: 0.25, commission_per_lot: 0.61, commission_pct: 0 };
 const EXIT_REASONS = ["Pogođen target", "Pogođen stop", "Na nuli", "Prateći stop", "Zatvoreno ranije", "Izlaz po vremenu"];
-
-function q(over: Partial<QuickLogInput> = {}): QuickLogInput {
-  return {
-    accountId: "00000000-0000-4000-8000-000000000001",
-    instrument: MNQ,
-    direction: "Short",
-    contracts: 2,
-    entry: 30584,
-    stop: 30604,
-    target: 30544,
-    exit: 30600.25,
-    enteredAt: "2026-09-28T13:40:00.000Z",
-    exitedAt: "2026-09-28T13:52:00.000Z",
-    playbookId: "00000000-0000-4000-8000-0000000000aa",
-    grade: "B",
-    mistakes: ["Pomerio stop"],
-    emotions: [],
-    note: "  chased the second push ",
-    images: [],
-    ...over,
-  };
-}
 
 describe("grades", () => {
   it("A/B/C sit on the 1–5 execution rating and read back", () => {
@@ -48,41 +19,6 @@ describe("grades", () => {
     expect(gradeFromRating(1)).toBe("C");
     expect(gradeFromRating(null)).toBeNull();
     expect(gradeFromRating(0)).toBeNull();
-  });
-});
-
-describe("quickLogProblem", () => {
-  it("accepts a complete short", () => {
-    expect(quickLogProblem(q())).toBeNull();
-  });
-  it.each([
-    [{ instrument: null }, "Pick an instrument."],
-    [{ contracts: 0 }, "whole number"],
-    [{ contracts: 1.5 }, "whole number"],
-    [{ entry: null }, "Entry price"],
-    [{ exit: 0 }, "Exit price"],
-    [{ enteredAt: null }, "Entry time"],
-    [{ exitedAt: "nope" }, "Exit time"],
-    [{ enteredAt: "2026-09-28T14:00:00.000Z" }, "after the exit"],
-    [{ stop: 30570 }, "stop above"],
-    [{ direction: "Long" as const, stop: 30570, target: 30500 }, "target above"],
-  ])("refuses %o", (over, msg) => {
-    expect(quickLogProblem(q(over))).toContain(msg);
-  });
-  it("no exit is a trade still running: saved open, with only the entry fill", () => {
-    const open = q({ exit: null, exitedAt: null });
-    expect(quickLogProblem(open)).toBeNull();
-    const t = quickLogToTradeInput(open, EXIT_REASONS);
-    expect(t.executions.map((e) => e.side)).toEqual(["entry"]);
-    expect(t.fields).not.toHaveProperty("exit_reason");
-    // The side checks still apply to an open trade.
-    expect(quickLogProblem(q({ exit: null, stop: 30570 }))).toContain("stop above");
-  });
-  it("a missing stop is a warning, not a refusal", () => {
-    const x = q({ stop: null, playbookId: null, grade: null });
-    expect(quickLogProblem(x)).toBeNull();
-    expect(quickLogWarnings(x)).toHaveLength(3);
-    expect(quickLogWarnings(q())).toEqual([]);
   });
 });
 
@@ -118,88 +54,6 @@ describe("autoExitReason", () => {
     expect(autoExitReason({ ...base, direction: "Long", entry: 30584, stop: 30594, target: 30624, exit: 30593 })).toBe(
       "Pogođen stop",
     );
-  });
-});
-
-describe("quickLogToTradeInput", () => {
-  it("says it is a log, so a blown prop-firm account still takes the record", () => {
-    expect(quickLogToTradeInput(q(), EXIT_REASONS).origin).toBe("log");
-  });
-
-  it("is one entry and one exit, commission per side, the plan columns and the review", () => {
-    const t = quickLogToTradeInput(q(), EXIT_REASONS);
-    expect(t.executions).toEqual([
-      { side: "entry", price: 30584, qty: 2, executed_at: "2026-09-28T13:40:00.000Z", fee: 1.22, source: "manual" },
-      { side: "exit", price: 30600.25, qty: 2, executed_at: "2026-09-28T13:52:00.000Z", fee: 1.22, source: "manual" },
-    ]);
-    expect(t.fields).toMatchObject({
-      instrument: "MNQ",
-      direction: "Short",
-      entry_price: 30584,
-      stop_price: 30604,
-      target_price: 30544,
-      execution_rating: 3,
-      mistake: ["Pomerio stop"],
-      exit_reason: "Zatvoreno ranije",
-      trade_journal_notes: "chased the second push",
-    });
-    expect(t.fields).not.toHaveProperty("psychology_tags");
-    expect(t.trade_phase).toBe("active");
-    expect(t.images).toEqual([]);
-  });
-  it("carries the charts in order and empty answers as nulls", () => {
-    const t = quickLogToTradeInput(
-      q({ grade: null, mistakes: [], note: " ", stop: null, target: null, images: [" https://www.tradingview.com/x/abc/ ", ""] }),
-      EXIT_REASONS,
-    );
-    expect(t.images).toEqual(["https://www.tradingview.com/x/abc/"]);
-    expect(t.fields.execution_rating).toBeNull();
-    expect(t.fields.trade_journal_notes).toBeNull();
-    expect(t.fields.stop_price).toBeNull();
-    expect(t.fields).not.toHaveProperty("mistake");
-  });
-  it("keeps as many charts as were added, in the order added", () => {
-    const t = quickLogToTradeInput(
-      q({ images: [" storage:u/entry.png ", "https://www.tradingview.com/x/abc/", "storage:u/exit.png"] }),
-      EXIT_REASONS,
-    );
-    expect(t.images).toEqual(["storage:u/entry.png", "https://www.tradingview.com/x/abc/", "storage:u/exit.png"]);
-  });
-});
-
-describe("the day's export finds a trade logged by hand", () => {
-  it("rough prices and a rough entry time still MATCH the TopstepX row", () => {
-    const logged = quickLogToTradeInput(q({ enteredAt: minutesAgo(15, new Date("2026-09-28T13:55:00Z")) }), EXIT_REASONS);
-    const outcome = matchImportRow(
-      {
-        instrument: "MNQZ6",
-        direction: "Short",
-        accountId: logged.account_id,
-        entryTime: "2026-09-28T13:42:31.000Z",
-        entryPrice: 30583.5,
-        exitPrice: 30600.25,
-        entryQty: 2,
-        pnl: -35.72,
-        pnlBasis: "net",
-      },
-      [
-        {
-          id: "p1",
-          instrument: "MNQ",
-          direction: "Short",
-          accountId: logged.account_id,
-          openedAt: logged.executions[0].executed_at,
-          avgEntry: 30584,
-          avgExit: 30600.25,
-          entryQty: 2,
-          totalFees: 2.44,
-          grossPl: -32.5,
-          netPl: -34.94,
-        },
-      ],
-      (a, b) => a.replace(/Z6$/, "") === b.replace(/Z6$/, ""),
-    );
-    expect(outcome.status).toBe("match");
   });
 });
 

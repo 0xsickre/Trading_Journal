@@ -1,7 +1,6 @@
 import {
   LayoutDashboard,
   BookOpen,
-  PlusCircle,
   Upload,
   Settings,
   ClipboardCheck,
@@ -25,20 +24,15 @@ export type NavSection = {
 };
 
 /**
- * Logging a trade is the most frequent thing anyone does here, and it used to be
- * the SEVENTH entry in a flat list of nine — between Notebook and Import, where
- * nothing about the ordering suggested it mattered more than the rest. It was
- * also a duplicate: `/` and `/journal` both already carry a "New Trade" button.
- *
- * So it leaves the list and becomes the sidebar's one primary action.
+ * The sidebar's one primary action: the import. Since phase O (08.10.2026) it is
+ * the only way a trade enters the journal — the day's TopstepX trades and orders
+ * exports, then the details filled in from the recording. The plan form and the
+ * after-the-close log are gone; a setup not taken has its own small page.
  */
 export const PRIMARY_ACTION: NavItem = {
-  // Logging AFTER the trade, not planning before it: a day trader working a
-  // limit near price has no time for the plan form, and the trade gets logged
-  // once it is flat. The plan form is one link away from here and from /journal.
-  href: "/trades/log",
-  label: "Log Trade",
-  icon: PlusCircle,
+  href: "/import",
+  label: "Import",
+  icon: Upload,
 };
 
 /**
@@ -80,7 +74,6 @@ export const NAV_SECTIONS: NavSection[] = [
     id: "setup",
     label: "Setup",
     items: [
-      { href: "/import", label: "Import", icon: Upload },
       { href: "/settings", label: "Settings", icon: Settings },
     ],
   },

@@ -4,9 +4,10 @@
 
 A day-trading journal for a single trader: intraday CME index futures on Topstep — NQ / MNQ and
 ES / MES, with 6E / M6E in the catalog. No AI chat — a disciplined record of what was traded and
-how well the process was followed, plus honest arithmetic over that record. A trade is logged right
-after it closes (`/trades/log`) or imported from the TopstepX trades export or a broker CSV; the
-one thing written from outside is MAE/MFE on a future, from the exchange's own candles
+how well the process was followed, plus honest arithmetic over that record. **A trade comes in only
+through the import** (phase O, 08.10.2026): the TopstepX trades and orders exports (or a broker CSV),
+then the details filled in from the session's recording; a setup not taken has its own small page.
+The one thing written from outside is MAE/MFE on a future, from the exchange's own candles
 (§ MAE/MFE).
 
 **It was built as a swing journal** (FTMO CFDs on MT5, positions held for days), and the move to
@@ -33,7 +34,7 @@ purpose — an applied migration is never edited here, and the comment inside on
 record of the day it was written.
 
 **The interface is deliberately half-and-half, and the line is a clean one.** At least 230 of the
-3,571 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+3,485 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
@@ -42,10 +43,10 @@ on a screen the trader writes into or reviews in their own words:
 | Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 145 |
 | Day insight sentence (`low_efficiency_day`) | 1 |
 | A new playbook's three starting sections (`playbook-types.ts`) | 3 |
-| The seeded tag values Log Trade and the import write (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2) | 6 |
+| The seeded tag values the review and the import write (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2) | 6 |
 | "Dopuna iz snimka" — the review page and why it asks for the original stop (`stop-moved.ts`) | 5 |
 | "Propušten setup" — the missed-setup page and form (`/trades/missed/new`) | 3 |
-| Dashboard, `/reports`, journal grid, playbooks, **`/settings`**, `/trades/log`, Topstep banner | **0** |
+| Dashboard, `/reports`, journal grid, playbooks, **`/settings`**, `/import`, Topstep banner | **0** |
 
 Settings joined that last row on 20.09.2026. It had held the stage names of the daily checklist
 (`Priprema` / `Trgovanje` / `Osvrt`, which the checklist itself rendered), a paragraph of Serbian
@@ -161,14 +162,13 @@ The routine both repos are built around — the same steps as "Dnevni tok journa
 |---|---|---|
 | 11:12 and 15:15 Belgrade | Telegram | The levels from `futures-trading` (`tools/brief/nivoi.py`): which of PDH/PDL (RTH and the whole Topstep day), PWH/PWL, PMH/PML and the Asia range London took, and what is left above and below the price — at 11:12 for London's morning (08:00–11:00), at 15:15 for all of London until the New York open. The morning brief carries the same levels without London |
 | Before the session | `/daily` → 1 · Pre sesije | The brief's red windows, the Topstep close, the expected range and, today, the DLL left; then two questions — how you are, and whether you trade today |
-| Before and during the trade | TopstepX | Only a limit with an OCO bracket; contracts from the brief's "Ugovori danas". Nothing in the journal |
-| Right after the close | `/trades/log` | Four numbers (entry, stop, exit, contracts), setup, A/B/C, the mistake if not an A; a sentence and a chart optional. About a minute |
-| End of the day | `/import` | One TopstepX CSV: the trades logged by hand are recognised (entry ±0.05 %, ±10 min) and get the exact fills; the answers stay. MAE/MFE arrives on its own — provisional the same evening, exact the next morning |
+| Before and during the trade | TopstepX + OBS | The order with its bracket; contracts from the brief's "Ugovori danas". The session is recorded, and the setup, stop, target and reason are said out loud before the click ("Teza naglas"). Nothing in the journal |
+| End of the day | `/import`, then `/trades/[id]/review` | The TopstepX **trades and orders** exports together: the fills, the target, the stop's last price, how each trade ended. Then **Dopuna iz snimka** per trade — the original stop where it was moved, what was said before the click, setup, A/B/C, mistakes; `/trades/missed/new` for a setup seen and not taken. MAE/MFE arrives on its own — provisional the same evening, exact the next morning |
 | 15:20 CT (22:20 Belgrade) | Telegram | A reminder if one of today's trades has no setup or grade, or was not confirmed by the CSV. The setup-and-grade half is the same rule as "Bez pregleda" on `/daily`, on the same Topstep day |
 | Closing the day / the week | Dashboard → Export for Claude, then the private `trading-mentor` repo | The mentor pack for the day (or the week) goes to Claude, who asks the closing questions and keeps the record of rules and observations. The journal has no written review of its own |
 
-A limit placed well before price reaches it can still be written plan-first on `/trades/new`; the
-export then finds the plan it filled (§ Recognising a trade you already typed).
+The plan-first form (`/trades/new`) and the after-the-close log (`/trades/log`) left in phase O
+(08.10.2026): the import is the only way a trade comes in, and the full form edits what is there.
 
 ---
 
@@ -198,7 +198,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,987 tests across 189 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,946 tests across 189 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -340,8 +340,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 |---|---|
 | `/` | Dashboard: a **Topstep banner** per Topstep account (room above the MLL, DLL left today, best day against the 55 % line, the target — on an XFA the Scaling Plan's contracts and both payout paths instead) then KPIs, equity curve, drawdown, heatmap calendars, breakdowns, the Process · Survival · Edge card, insights. Opens on **All** — the whole record first, narrowed on request; the scope last chosen is remembered per browser. Whenever the period leaves closed trades out, a notice above the figures says how many and how far back, with **Show all** (`default-period.ts`). The amounts read in **`$` · `%` · Points · Ticks · Privacy**. Points and ticks (U, 01.10.2026) are the money divided by one contract's point (or tick) value, trade by trade, so they count every contract — two MNQ over ten points is 20 points — and a sum of them still follows the money (`futures-units.ts`). They hold within one instrument family only (MNQ with NQ, MES with ES, M6E with 6E): an **instrument picker** appears when the account has more than one, and until one is picked the two buttons are off. They change the same figures `%` does — Net, Gross, Best, Worst, Max drawdown, Total costs, Avg daily DD, the recent trades and the tag table; the charts stay in money. The picker narrows the trades shown, never the account's equity (percentage, Topstep, survival) |
 | `/journal` | Trade table — sorting, filtering, column picking. The date column carries the **year**, so a trade from last season does not read as this spring |
-| `/trades/new`, `/trades/[id]/edit` | Trade form: plan, fills, playbook checklist, psychology, images — the charts are a **list the trader grows with "+ Add chart"** (30.09.2026, up to 20 per trade, in the order added — `tj_trade_images.sort_order`, `20260930050000`; the three fixed slots HTF pre / LTF pre / LTF post are gone), each one an **uploaded screenshot, an image pasted from the clipboard or a TradingView link** (K6, `chart-image-input.tsx`): an image goes to the private `trade-images` bucket under the user's own folder and is stored as `storage:<uid>/<file>` in `tj_trade_images.image_url`, shown through a one-hour signed URL; the CHECK ties the folder to the row's user (`20260929220000`). In the **order of the decisions**: account, instrument, then the playbook and its checklist, and only then the prices and the risk. **There is no phase control**: planned or active is what the fills say — an entry fill means you are in the trade — so a select that could disagree with the record is gone, and so is "Move to active". The one lifecycle fact the fills cannot know, a MISSED plan, keeps its button. The instrument is **typed, not scrolled** — `instrument-select.tsx` filters the catalog on symbol, name and asset class. On a **Topstep account** the size is whole contracts: risk by the account's rule (§ Topstep), contracts rounded down with the round-turn commission and a tick of slippage on the stop counted (R4) and capped at the plan, stop and target in ticks for the TopstepX bracket — "2 MNQ · $203.44 at the stop incl. commission and a tick of slippage (stop 200 ticks)" — with the mini or micro alternative and a warning when the count is zero, capped, or three stops no longer fit today's DLL. This is the **plan-first** form, for a limit written well before price gets there; the everyday way in is `/trades/log` |
-| `/trades/log` | **Log Trade**, the sidebar's primary action: a trade logged **after it is flat**. Four numbers off the platform — contracts, entry, stop, exit (target optional) — with "N min ago" chips for the entry time; then the setup (playbook), **A / B / C** on execution (stored as `execution_rating` 5 / 3 / 1), what went wrong only on B or C ("No mistake" recorded on an A), emotions, one sentence (`trade_journal_notes`) and **the charts — one field to paste into and "+ Add chart" for as many more as wanted** (entry, exit, higher timeframe…), in order; the review of an imported trade shows the ones it has and adds new ones after them. **A trade still running is logged without an exit** (30.09.2026): it is saved open with its entry fill only, and the day's TopstepX import pairs it on the entry time and price, puts in the exit fills and closes it. The exit reason is then read off the statement's exit (`exitReasonAfterMerge`), only where the trade has none, and an undo of that import empties it again (`clear_exit_reason`, `20260930040000`). On a Topstep account past its MLL an open trade is refused like a plan — it is exposure, not a record. The exit reason is read off the prices — stop, target, breakeven or closed early — and written only when the trader's own Exit Reason list has that item (`quick-log.ts`). An exit at or **through** the stop is the stop however many ticks it slipped (a stop-market order in a fast tape), and at or past the target is the target; within two ticks short of either counts too. The numbers may be rough: the day's TopstepX export matches the trade (entry within 0.05 %, entry time within ten minutes) and replaces the fills, and the answers stay |
+| `/trades/[id]/edit` | Trade form, **for editing** a trade that is there (since phase O nothing is created here): plan, fills, playbook checklist, psychology, images — the charts are a **list the trader grows with "+ Add chart"** (30.09.2026, up to 20 per trade, in the order added — `tj_trade_images.sort_order`, `20260930050000`; the three fixed slots HTF pre / LTF pre / LTF post are gone), each one an **uploaded screenshot, an image pasted from the clipboard or a TradingView link** (K6, `chart-image-input.tsx`): an image goes to the private `trade-images` bucket under the user's own folder and is stored as `storage:<uid>/<file>` in `tj_trade_images.image_url`, shown through a one-hour signed URL; the CHECK ties the folder to the row's user (`20260929220000`). In the **order of the decisions**: account, instrument, then the playbook and its checklist, and only then the prices and the risk. **There is no phase control**: planned or active is what the fills say — an entry fill means you are in the trade — so a select that could disagree with the record is gone, and so is "Move to active". A missed setup stays missed (it is created on `/trades/missed/new`). The instrument is **typed, not scrolled** — `instrument-select.tsx` filters the catalog on symbol, name and asset class. On a **Topstep account** the size is whole contracts: risk by the account's rule (§ Topstep), contracts rounded down with the round-turn commission and a tick of slippage on the stop counted (R4) and capped at the plan, stop and target in ticks for the TopstepX bracket — "2 MNQ · $203.44 at the stop incl. commission and a tick of slippage (stop 200 ticks)" — with the mini or micro alternative and a warning when the count is zero, capped, or three stops no longer fit today's DLL. |
 | `/trades/[id]/review` | **Dopuna iz snimka** (phase O): the original stop and the target as they stood at the entry, what was said before the click, then setup / A-B-C / mistakes / sentence / charts, for a trade that arrived through the export; asks for the original stop when the orders file shows it was moved. One UPDATE of the review columns (`saveTradeReview`), never `tj_save_trade`, which rewrites fills and rule answers on every save |
 | `/trades/missed/new` | **Propušten setup** (phase O): a setup seen on the recording and not taken — entry, stop, target, time, setup, reason — saved as a `missed` position the R2 walk prices |
 | `/daily` | **The day in the order it is lived**, in three numbered parts under the day's heading (`daily-report-form.tsx`). **1 · Pre sesije**: the morning brief ("Pred sesiju", `tj_session_briefs`, `session-brief-card.tsx` — the Topstep close on the account's clock, "berza zatvorena" when the brief says so, the red windows, the expected NQ / ES range and, on today's page only, the DLL left on the primary Topstep account; without a brief it says so and shows the ordinary 15:10 CT close, and a window it cannot read is dropped and counted, never guessed), then **"Pre nego što uđeš"** — two questions, numbered and about the day ahead: *1. Kako si danas?* (mental state, 5 stars, a warning under 3) and *2. Da li danas trguješ?* ("Danas ne trgujem", a decision taken before the session; with it set and no trade taken the checklist disappears and the day is a rest day) — and the preparation rules. **2 · Tokom sesije**: the trading rules, scored from the trades and the brief. **3 · Posle sesije**: **Bez pregleda** (the day's closed trades still missing a setup or an A/B/C grade, each a link to its review, `review-gaps.ts`; the 15:20 CT Telegram reminder in `futures-trading` applies the same rule), the review rules, then save and lock. The focus goal, the day's result card and the streak strip left in phase M (08.10.2026): the page measures, and closing the day is the conversation with the mentor over the day's mentor pack. Until 29.09.2026 the page opened with the day's money and asked "before you enter" only after the trading rules, with a no-trade box in the past tense that pointed at a position card H1 had removed. The rules are grouped as "Pravila pripreme / trgovanja / osvrta" here, in the page's language, and within each group **the rules to tick come first and the scored ones below** (K1) — a new rule lands in its own half whatever its order; Settings edits them under the English stage names |
@@ -564,7 +563,7 @@ Trades written before this migration have no seal, and readers fall back to thei
 history has no seal and must not pretend to one.
 
 **A market order has no planned entry** (the trader, 29.09.2026: most entries are market orders). A
-trade written into the journal **after its first fill** — `/trades/log` after the close, or a
+trade written into the journal **after its first fill** — the former `/trades/log` after the close, or a
 statement import; `created_at` later than the first entry fill — is measured from the **average
 fill**, not from the price typed: the day's TopstepX export replaces the fills with the exact ones
 while the typed number stays, and a price typed 2.5 points off on a 20-point stop moved R, risk and
@@ -1076,7 +1075,7 @@ past day they were live on keeps its score. "Walk Away Target" stays a manual ru
 
 **`thesis_written` grades only trades planned before their entry** — `created_at` no later than the
 first fill (`plannedBeforeEntry` in `tracker/auto-rules.ts`): a plan-first trade, and a resting plan
-the import later filled. A trade logged after the close (`/trades/log`) or created by the import had
+the import later filled. A trade logged after the close (the former `/trades/log`) or created by the import had
 no "before" in which a thesis could exist — its seal is stamped at the moment of writing — so it is
 neither failed nor passed, and a day with only such trades is `na` with its own reason ("nijedan
 trejd nije planiran pre ulaza"), not `pass`. The quick log's sentence goes to `trade_journal_notes`,
@@ -1247,8 +1246,9 @@ help.topstep.com on 28.09.2026):
 - **Closed trades only**: Topstep watches both limits intraday with open P&L, so a
   position that went through the floor and came back reads here as a survived day. The platform's
   risk engine is the record.
-- **Reaching the MLL blocks new exposure, never the record**: `/trades/new` refuses (`isTopstepAccountFailed` in `topstep-status.ts`), an edit that adds a
-  position or size is refused, while `/trades/log` only warns above the form and logs the trade. The
+- **Reaching the MLL blocks new exposure, never the record**: an edit that adds a position or size is
+  refused (`isTopstepAccountFailed` in `topstep-status.ts`), while the import still records what the
+  platform filled. The
   banner turns red and says on which day; **Reset account…** under the account's Topstep rules in
   Settings writes `topstep_reset_at`, from which the balance starts again and the MLL is cleared.
 
@@ -1392,7 +1392,8 @@ for.
 pointed at a specific trade from a list that names each one. A wrong guess and a deliberate choice
 are different things; only the guess was ever the problem.
 
-**A third question finds the plan a limit filled.** A limit written plan-first (`/trades/new`) has no
+**A third question finds the plan a limit filled** (kept for the history; since phase O no plan is
+written in the journal). A limit written plan-first (the former `/trades/new`) has no
 fills, so neither question above can see it — both read the entry off fills — and the day's export
 used to create a second trade while the plan stayed behind with the playbook and the chart on it.
 When no trade with fills matches, a plan does if it is the same account, instrument and direction,
@@ -1417,7 +1418,7 @@ confidently wrong trade through the generic mapping, and each is handled:
   cost is their sum. `PnL` is gross and is checked against price move × multiplier × size, so a
   contract whose multiplier differs from the catalog's says so on its row instead of in the P&L.
 
-Each row then goes through the same matching as any file: a trade logged by hand on `/trades/log`
+Each row then goes through the same matching as any file: a trade already in the journal for
 that day is recognised (entry within 0.05 %, entry time within ten minutes) and its rough numbers
 are replaced by the exact fills, while setup, grade, mistakes and the sentence stay.
 
@@ -1656,8 +1657,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,987 tests across 189 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,387 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 600
+2,946 tests across 189 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,361 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 585
 tests in 62 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
@@ -1752,7 +1753,7 @@ written from the traded contract's own candles:
 
 | Trade | MAE/MFE source |
 |---|---|
-| **Future** (NQ, MNQ, ES, MES, 6E, M6E) — TopstepX import or `/trades/log` | The traded contract's own candles in Cloudflare R2, written by `futures-trading/tools/journal_mae.py`: exact from Databento every morning at 06:15 UTC, and provisional from Yahoo's 1-minute bars of the same contract hourly on weekday afternoons and evenings, so the evening review has them (`excursion_note` says `… · 1m privremeno` until the exact value replaces it). 1-second candles. The contract is the one in the name (`MNQZ6`) or the CME roll rule's, and it is the right one only if **every fill lies inside its own candle** (±1 tick) — otherwise the trade is refused with the reason |
+| **Future** (NQ, MNQ, ES, MES, 6E, M6E) — TopstepX import | The traded contract's own candles in Cloudflare R2, written by `futures-trading/tools/journal_mae.py`: exact from Databento every morning at 06:15 UTC, and provisional from Yahoo's 1-minute bars of the same contract hourly on weekday afternoons and evenings, so the evening review has them (`excursion_note` says `… · 1m privremeno` until the exact value replaces it). 1-second candles. The contract is the one in the name (`MNQZ6`) or the CME roll rule's, and it is the right one only if **every fill lies inside its own candle** (±1 tick) — otherwise the trade is refused with the reason |
 
 `tj_positions.excursion_source` records who wrote the two prices: `manual` or `r2` (`mt5` and
 `tradingview` on history written before H1 / H2), and `excursion_note` says what they were measured

@@ -29,10 +29,6 @@ import { EditableSelect } from "@/components/journal/editable-select";
 import { TagMultiSelect } from "@/components/journal/tag-multi-select";
 import { TradeImages } from "@/components/journal/trade-images";
 import {
-  TradeImageDrafts,
-  imageDraftsToPayload,
-} from "@/components/journal/trade-image-drafts";
-import {
   incompleteScaleOutRows,
   levelsToScaleOutRows,
   parseScaleOutLevels,
@@ -99,16 +95,11 @@ import { format } from "date-fns";
 import { utcToZonedInput, zonedInputToUtc, fmtInTz, DEFAULT_TZ, DATE_TIME } from "@/lib/journal/time";
 import { NO_COST_DEFAULTS, prefillFee } from "@/lib/journal/cost-defaults";
 import {
-  createTrade,
   updateTrade,
-  markTradeMissed,
-  restoreTradeToPlanned,
   deleteTrade,
   type ExecutionInput,
 } from "@/app/(app)/trades/actions";
 import {
-  canMarkMissed,
-  canRestoreToPlanned,
   fillTotals,
   isValidFill,
   overExitMessage,
@@ -228,7 +219,6 @@ export function TradeForm({
   playbooks = [],
   initial,
   extra,
-  topstepFailedAccountIds = [],
   topstepSizing = {},
   categoryOrder,
 }: {
@@ -239,14 +229,14 @@ export function TradeForm({
   fieldDefs?: FieldDef[];
   /** Playbooks with their rule checklists. */
   playbooks?: Playbook[];
-  initial?: TradeFormInitial;
+  /**
+   * The trade being edited. Required since phase O (08.10.2026): a trade enters
+   * the journal only through the import, a missed setup through its own page,
+   * and this form only corrects what is there.
+   */
+  initial: TradeFormInitial;
   /** Shown above the charts of a saved trade — the what-if card (phase L). */
   extra?: ReactNode;
-  /**
-   * Topstep accounts that hit their MLL — a new plan is blocked. A trade that
-   * already closed goes through `/trades/log`.
-   */
-  topstepFailedAccountIds?: string[];
   /**
    * Per Topstep account: the room above the MLL, today's DLL left and the plan
    * (`topstep-status.ts`). A planned FUTURES trade on such an account is sized
@@ -287,9 +277,8 @@ export function TradeForm({
   const [tradePhase, setTradePhase] = useState<TradePhase>(() =>
     initialTradePhase(initial),
   );
-  const [isMissed, setIsMissed] = useState(
-    () => initial?.status === "missed",
-  );
+  // A missed setup stays missed: the form edits it, it never changes the status.
+  const isMissed = initial.status === "missed";
 
   // Structure is fixed; the trader's categories are filled from the DB.
   //
@@ -343,10 +332,6 @@ export function TradeForm({
     initial?.account_id ?? primaryAccount(accounts)?.id ?? null,
   );
   const account = accounts.find((a) => a.id === accountId) ?? null;
-  // Block only NEW trades on a blown prop-firm account (editing existing is
-  // allowed, and so is logging a trade that already closed — `/trades/log`).
-  const topstepBlocked =
-    !initial && accountId != null && topstepFailedAccountIds.includes(accountId);
   const tz = account?.timezone ?? DEFAULT_TZ;
   const currency = account?.currency ?? "USD";
   // The account's breakeven band — the same classification every report uses,
@@ -363,14 +348,6 @@ export function TradeForm({
   const [fields, setFields] = useState<Record<string, FieldValue>>(
     initial?.fields ?? {},
   );
-
-  // Only meaningful before the trade exists. Once it does, `TradeImages` owns
-  // the rows and writes them itself, so this state is never read again.
-  const [imageDrafts, setImageDrafts] = useState<string[]>([]);
-  function changeImageDrafts(next: string[]) {
-    setDirty(true);
-    setImageDrafts(next);
-  }
 
   const [execs, setExecs] = useState<ExecRow[]>(() => {
     if (initial && initial.executions.length > 0) {
@@ -879,10 +856,6 @@ export function TradeForm({
   }
 
   function submit() {
-    if (topstepBlocked) {
-      toast.error("The Topstep account hit its Maximum Loss Limit. Reset it in Settings.");
-      return;
-    }
     if (!fields.instrument) {
       toast.error("Pick an instrument.");
       setActiveTab("plan");
@@ -970,65 +943,24 @@ export function TradeForm({
       current_status: isMissed ? "missed" : null,
       playbook_id: playbookId,
       scale_out_levels: scaleOutRowsToLevels(scaleOutRows),
-      // Only on create. An existing trade's images are owned by `TradeImages`,
-      // which writes them directly — sending them here too would give one row
-      // two writers.
-      images: initial ? undefined : imageDraftsToPayload(imageDrafts),
       // Only answers to rules the checklist actually offered. An answer to a
       // rule hidden by the current outcome would be recorded against a
       // population the trader was never shown.
       rule_answers: visibleRuleAnswers,
     };
     start(async () => {
-      const res = initial
-        ? await updateTrade(initial.id, payload)
-        : await createTrade(payload);
+      const res = await updateTrade(initial.id, payload);
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
       setTradeFormPrefs({ accountId: accountId ?? undefined });
-      toast.success(initial ? "Trade updated" : "Trade saved");
+      toast.success("Trade updated");
       setDirty(false);
       // No `router.refresh()` after it: the action already revalidated the
       // journal, which clears the client cache, so the push renders it fresh.
       // The refresh rendered the same page a second time.
       router.push("/journal");
-    });
-  }
-
-  function handleMarkMissed() {
-    if (!initial?.id) {
-      toast.error("Save the plan before marking it missed.");
-      return;
-    }
-    start(async () => {
-      const res = await markTradeMissed(initial.id, {
-        miss_reason: String(fields.miss_reason ?? "") || null,
-        notes: null,
-      });
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      setIsMissed(true);
-      toast.success("Trade marked as missed");
-      router.refresh();
-    });
-  }
-
-  function handleRestorePlanned() {
-    if (!initial?.id) return;
-    start(async () => {
-      const res = await restoreTradeToPlanned(initial.id);
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      setIsMissed(false);
-      setTradePhase("planned");
-      toast.success("Restored to planned");
-      router.refresh();
     });
   }
 
@@ -1047,25 +979,6 @@ export function TradeForm({
     });
   }
 
-  const isPlannedPhase = tradePhase === "planned" && !isMissed;
-
-  /**
-   * Lifecycle actions belong to a plan that EXISTS.
-   *
-   * On a new trade they were noise at best and broken at worst: the phase select
-   * at the top already says planned or active, "Move to active" only repeated it,
-   * and "Mark as missed" was offered but refused on click — `markTradeMissed`
-   * needs a row to mark, so it answered with an error toast. A button that is
-   * shown and cannot work is worse than no button.
-   *
-   * So: nothing while the trade is unsaved, and nothing once it is active —
-   * a trade you are already in cannot be missed, and it is already active.
-   */
-  const isSaved = initial != null;
-  const showMarkMissed =
-    isSaved && isPlannedPhase && canMarkMissed(execs.length, "planned");
-  const showRestorePlanned =
-    isMissed && canRestoreToPlanned(execs.length, "missed");
   const missedAt = initial?.missed_at ?? null;
   // The seal. `plan_sealed_at` is stamped on the save that first gives the
   // trade fills; `plan_amended_at` the first time a sealed field moved after
@@ -1078,18 +991,9 @@ export function TradeForm({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">
-            {initial ? "Edit Trade" : "New Trade"}
+            Edit Trade
           </h1>
           <p className="text-sm text-muted-foreground">
-            {!initial && (
-              <>
-                Already traded?{" "}
-                <Link href="/trades/log" className="underline">
-                  Log it after the fact
-                </Link>{" "}
-                ·{" "}
-              </>
-            )}
             Times shown in {tz.replace("_", " ")} ({currency}).
             {isMissed && missedAt && (
               <>
@@ -1316,40 +1220,6 @@ export function TradeForm({
                     What stays is the one lifecycle fact the fills cannot know:
                     that a plan was MISSED — the limit never hit, the setup never
                     came. */}
-                {tab.id === "plan" && (showMarkMissed || showRestorePlanned) && (
-                  <div className="mt-6 space-y-3 border-t pt-4">
-                    <div className="flex flex-wrap gap-2">
-                      {showMarkMissed && (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          disabled={pending}
-                          onClick={handleMarkMissed}
-                        >
-                          Mark as missed
-                        </Button>
-                      )}
-                      {showRestorePlanned && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={pending}
-                          onClick={handleRestorePlanned}
-                        >
-                          Restore to planned
-                        </Button>
-                      )}
-                    </div>
-                    {showMarkMissed && (
-                      <p className="text-xs text-muted-foreground">
-                        Miss = the plan was never opened (the limit never hit, the setup
-                        never came…).
-                      </p>
-                    )}
-                  </div>
-                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1358,11 +1228,7 @@ export function TradeForm({
 
       {extra}
 
-      {initial ? (
-        <TradeImages positionId={initial.id} />
-      ) : (
-        <TradeImageDrafts drafts={imageDrafts} onChange={changeImageDrafts} />
-      )}
+      <TradeImages positionId={initial.id} />
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
@@ -1462,27 +1328,15 @@ export function TradeForm({
             )}
           </div>
           <div className="flex flex-col items-end gap-1.5">
-            {topstepBlocked && (
-              <p className="text-xs text-[var(--loss)]">
-                Topstep account hit its Maximum Loss Limit — reset it in Settings
-                to plan new trades. A trade that already closed:{" "}
-                <Link href="/trades/log" className="underline">
-                  Log Trade
-                </Link>
-                .
-              </p>
-            )}
             <div className="flex gap-2">
-              {initial && (
-                <Button
-                  variant="ghost"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => setDeleteOpen(true)}
-                  disabled={pending}
-                >
-                  <Trash2 className="size-4" /> Delete
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setDeleteOpen(true)}
+                disabled={pending}
+              >
+                <Trash2 className="size-4" /> Delete
+              </Button>
               {/* A link to the list, not `router.back()`: opened from a
                   bookmark or a new tab, "back" left the app entirely. The list
                   restores its own filters and sort. */}
@@ -1496,8 +1350,8 @@ export function TradeForm({
                   Cancel
                 </Link>
               </Button>
-              <Button onClick={submit} disabled={pending || topstepBlocked}>
-                {pending ? "Saving…" : initial ? "Update trade" : "Save trade"}
+              <Button onClick={submit} disabled={pending}>
+                {pending ? "Saving…" : "Update trade"}
               </Button>
             </div>
           </div>

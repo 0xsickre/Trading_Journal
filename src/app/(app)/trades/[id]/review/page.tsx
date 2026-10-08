@@ -77,7 +77,7 @@ export default async function ReviewTradePage({ params }: { params: Promise<{ id
         title="Dopuna iz snimka"
         description="Stop i cilj kakvi su bili u platformi na ulazu, šta si rekao pre klika, setup i ocena — fill-ovi ostaju kako su uvezeni."
       />
-      <QuickLogForm accounts={accounts} instruments={[]} playbooks={playbooks} optionsMap={optionsMap} review={review} />
+      <QuickLogForm playbooks={playbooks} optionsMap={optionsMap} review={review} />
     </div>
   );
 }

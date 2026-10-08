@@ -148,7 +148,7 @@ pogađa.
 | **U** | Poeni i tikovi na dashboardu + filter instrumenta (NQ / ES) | — | T | ne | **Opus** | ✅ 01.10.2026 — bez migracije |
 | **V** | Pregled dana / nedelje od Claude-a: isti „Export for Claude“ paket preuzima futures-trading i šalje rutini | — | U | ne | **Opus** | ⛔ obustavljeno (trejder, 02.10.2026) — ne raditi bez novog naloga trejdera |
 | **M** | Mentor tok: bez /weekly, kraći /daily, compliance bez praznih dana, pun mentor pack (Dan / Nedelja) | — | U | da, **briše**: `tj_weekly_reviews`, `tj_experiments`, `tj_focus_goals` | **Opus** | ✅ 08.10.2026 — M1 `d6391df` · M2 `8076b93` · M3 `6be8e87` (migracija `20261008120000` primenjena) + futures-trading `6827ce7` · M4 `786a035` |
-| **O** | Prvo uvoz, pa dopuna iz snimka: izvoz naloga (stop, cilj, izlaz), dopuna iz snimka, propušten setup, bez plan-forme | — | M | da: `20261009090000` (aditivna) | **Opus** | u toku (08.10.2026) |
+| **O** | Prvo uvoz, pa dopuna iz snimka: izvoz naloga (stop, cilj, izlaz), dopuna iz snimka, propušten setup, bez plan-forme | — | M | da: `20261009090000` (aditivna) | **Opus** | ✅ 08.10.2026 — O1 `af9c0cc` (migracija `20261009090000` primenjena) · O2 `c15dc20` + futures-trading `bc1f28d` · O3 `800474d` · O4 (ovaj commit) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1123,7 +1123,7 @@ put od obustavljene faze V (nema rute ni rutine; trejder sam izvozi paket).
 Nema /weekly ni tabela; /daily je merenje; prosek pravila ne kažnjava dane bez sesije; paket za Dan i Nedelju
 nosi veličinu, fill-ove, plan prema kraju i svaki dan sa trackerom; README 1:1.
 
-## O — Prvo uvoz, pa dopuna iz snimka (detaljno, 08.10.2026)
+## O — Prvo uvoz, pa dopuna iz snimka (detaljno, 08.10.2026) — ✅
 
 **Povod** (trejder, 08.10.2026): ulazi marketom, stop stavlja ručno i pomera ga (i na BE), snima sesiju u OBS-u;
 journal treba da radi samo uvoz TopstepX fajlova i dopunu iz snimka. Izvoz trejdova nema stop ni cilj; izvoz naloga

@@ -94,8 +94,7 @@ export async function getTopstepEntryPatch(
 }
 
 /**
- * Every Topstep account's state, read once per request: `/trades/new` asks for
- * both the sizing and the failed accounts, and they are the same read.
+ * Every Topstep account's state, read once per request.
  */
 const getAllTopstepStatuses = cache(() => getTopstepStatuses());
 
@@ -111,12 +110,6 @@ export async function getTopstepSizing(): Promise<Record<string, TopstepSizing>>
     };
   }
   return out;
-}
-
-/** Account ids whose Topstep account has hit its Maximum Loss Limit. */
-export async function getFailedTopstepAccountIds(): Promise<Set<string>> {
-  const statuses = await getAllTopstepStatuses();
-  return new Set(statuses.filter((s) => s.result.status === "failed").map((s) => s.account.id));
 }
 
 /**

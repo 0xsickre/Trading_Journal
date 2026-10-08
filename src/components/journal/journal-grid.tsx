@@ -1449,8 +1449,8 @@ export function JournalGrid({
                   {trades.length === 0 ? (
                     <>
                       No trades yet.{" "}
-                      <Link href="/trades/new" className="underline">
-                        Log your first trade
+                      <Link href="/import" className="underline">
+                        Import your first trades
                       </Link>
                       .
                     </>

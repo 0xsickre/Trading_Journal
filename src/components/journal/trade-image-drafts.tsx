@@ -2,12 +2,11 @@
 
 import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartImageInput } from "@/components/journal/chart-image-input";
 import { MAX_TRADE_IMAGES } from "@/lib/journal/tradingview-snapshot";
 
 /**
- * The drafts as `createTrade` wants them: the filled ones, trimmed, in order.
+ * The drafts as a save wants them: the filled ones, trimmed, in order.
  *
  * A separate function rather than an inline filter in the form's submit,
  * because it is the one part of this feature worth asserting directly — an
@@ -61,43 +60,5 @@ export function ChartImageListInput({
         </Button>
       )}
     </div>
-  );
-}
-
-/**
- * Charts on a trade that does not exist yet.
- *
- * A separate component from `TradeImages` rather than a mode flag on it, and
- * the split is by JOB, not by convenience. `TradeImages` owns rows: it reads
- * them, inserts them, deletes them, and every one of those needs a position id
- * to key on. This one owns strings in form state and writes nothing —
- * `createTrade` persists them, in order, once the position has an id.
- *
- * It exists because the screenshot is taken at PLANNING time: the chart that
- * made you want the trade is the most useful artifact of the plan.
- */
-export function TradeImageDrafts({
-  drafts,
-  onChange,
-}: {
-  drafts: readonly string[];
-  onChange: (next: string[]) => void;
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Charts</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          As many as you like: upload a screenshot, paste one from the clipboard, or paste a
-          TradingView snapshot link (camera → <i>Copy link to chart image</i>). Saved with the trade.
-        </p>
-      </CardHeader>
-      <CardContent>
-        {/* No preview here on purpose: a thumbnail would need the link to be
-            valid, and the honest moment to reject a bad link is the save, where
-            the server validates it with the same function. */}
-        <ChartImageListInput value={drafts} onChange={onChange} idPrefix="new-chart" />
-      </CardContent>
-    </Card>
   );
 }

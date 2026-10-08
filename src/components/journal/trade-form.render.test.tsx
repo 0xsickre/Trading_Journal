@@ -30,15 +30,9 @@ vi.mock("sonner", () => ({
   },
 }));
 
-const createTradeMock = vi.fn();
 const updateTradeMock = vi.fn();
-const markTradeMissedMock = vi.fn();
-const restoreTradeToPlannedMock = vi.fn();
 vi.mock("@/app/(app)/trades/actions", () => ({
-  createTrade: (...a: unknown[]) => createTradeMock(...a),
   updateTrade: (...a: unknown[]) => updateTradeMock(...a),
-  markTradeMissed: (...a: unknown[]) => markTradeMissedMock(...a),
-  restoreTradeToPlanned: (...a: unknown[]) => restoreTradeToPlannedMock(...a),
   deleteTrade: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
@@ -152,7 +146,6 @@ beforeEach(() => {
   localStorage.clear();
   toastErrorMock.mockClear();
   toastSuccessMock.mockClear();
-  createTradeMock.mockReset().mockResolvedValue({ ok: true });
   updateTradeMock.mockReset().mockResolvedValue({ ok: true });
 });
 
@@ -448,37 +441,9 @@ describe("lifecycle buttons only appear where the action can actually succeed", 
     await user.click(screen.getByRole("tab", { name: /Plan & Setup/ }));
   }
 
-  it("an unsaved (new) trade shows none of the three buttons", async () => {
-    const user = userEvent.setup({ delay: null });
-    render(<TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} />);
-    await goToPlanTab(user);
-    expect(screen.queryByRole("button", { name: /Move to active trade/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Mark as missed/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Vrati u planned/ })).not.toBeInTheDocument();
-  });
-
-  it("a saved planned trade with no fills offers Mark missed, and no way to set the phase by hand", async () => {
-    // Planned or active is what the fills say. The only lifecycle fact the
-    // fills cannot know is that a plan was MISSED, so that is the only button.
-    const user = userEvent.setup({ delay: null });
-    render(
-      <TradeForm
-        optionsMap={{}}
-        instruments={[INSTRUMENT]}
-        accounts={[ACCOUNT]}
-        initial={baseInitial({ status: "planned", executions: [] })}
-      />,
-    );
-    await goToPlanTab(user);
-    expect(screen.getByRole("button", { name: /Mark as missed/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Move to active trade/ })).not.toBeInTheDocument();
-    expect(screen.queryByText("Trade phase")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Vrati u planned/ })).not.toBeInTheDocument();
-  });
-
   it("the execution tab is never locked — fills can be logged straight away", async () => {
     render(
-      <TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} />,
+      <TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} initial={baseInitial({ status: "planned", fields: {} })} />,
     );
     expect(screen.getByRole("tab", { name: /Execution/ })).not.toBeDisabled();
   });
@@ -489,6 +454,7 @@ describe("lifecycle buttons only appear where the action can actually succeed", 
         optionsMap={{}}
         instruments={[INSTRUMENT]}
         accounts={[ACCOUNT]}
+        initial={baseInitial({ status: "planned", fields: {} })}
         playbooks={[{
           id: "pb1", name: "WPO3", description: null, a_plus_criteria: null,
           sort_order: 0, is_active: true, sections: [], rules: [],
@@ -522,79 +488,6 @@ describe("lifecycle buttons only appear where the action can actually succeed", 
     expect(screen.queryByRole("button", { name: /Vrati u planned/ })).not.toBeInTheDocument();
   });
 
-  it("a missed trade offers only Restore to planned", async () => {
-    const user = userEvent.setup({ delay: null });
-    render(
-      <TradeForm
-        optionsMap={{}}
-        instruments={[INSTRUMENT]}
-        accounts={[ACCOUNT]}
-        initial={baseInitial({ status: "missed", executions: [] })}
-      />,
-    );
-    await goToPlanTab(user);
-    expect(screen.getByRole("button", { name: /Restore to planned/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Move to active trade/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Mark as missed/ })).not.toBeInTheDocument();
-  });
-
-  it("clicking Mark missed on the one state that offers it actually succeeds, not just shows", async () => {
-    const user = userEvent.setup({ delay: null });
-    markTradeMissedMock.mockResolvedValue({ ok: true });
-    render(
-      <TradeForm
-        optionsMap={{}}
-        instruments={[INSTRUMENT]}
-        accounts={[ACCOUNT]}
-        initial={baseInitial({ status: "planned", executions: [] })}
-      />,
-    );
-    await goToPlanTab(user);
-    await user.click(screen.getByRole("button", { name: /Mark as missed/ }));
-    expect(markTradeMissedMock).toHaveBeenCalledWith("t1", expect.anything());
-    expect(toastErrorMock).not.toHaveBeenCalled();
-  });
-});
-
-describe("a Topstep account that hit its MLL blocks a new plan", () => {
-  it("disables Save trade and says why", async () => {
-    const user = userEvent.setup({ delay: null });
-    render(
-      <TradeForm
-        optionsMap={{}}
-        instruments={[INSTRUMENT]}
-        accounts={[ACCOUNT]}
-        topstepFailedAccountIds={["acc-1"]}
-      />,
-    );
-    const saveBtn = screen.getByRole("button", { name: /Save trade/ });
-    expect(saveBtn).toBeDisabled();
-    expect(screen.getByText(/Topstep account hit its Maximum Loss Limit/)).toBeInTheDocument();
-    // The way out is named: the record of a closed trade is still open.
-    expect(screen.getByRole("link", { name: /Log Trade/ })).toHaveAttribute("href", "/trades/log");
-
-    await user.click(saveBtn);
-    expect(createTradeMock).not.toHaveBeenCalled();
-  });
-
-  it("editing an already-saved trade on that account stays allowed", () => {
-    render(
-      <TradeForm
-        optionsMap={{}}
-        instruments={[INSTRUMENT]}
-        accounts={[ACCOUNT]}
-        topstepFailedAccountIds={["acc-1"]}
-        initial={baseInitial({ status: "planned", executions: [] })}
-      />,
-    );
-    expect(screen.getByRole("button", { name: /Update trade/ })).toBeEnabled();
-  });
-
-  it("says nothing on a healthy account", () => {
-    render(<TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} />);
-    expect(screen.queryByText(/Maximum Loss Limit/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Save trade/ })).toBeEnabled();
-  });
 });
 
 describe("the plan reveals one decision at a time", () => {
@@ -609,7 +502,7 @@ describe("the plan reveals one decision at a time", () => {
    */
   it("a blank form asks for the entry and nothing about the reasoning", async () => {
     render(
-      <TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} />,
+      <TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} initial={baseInitial({ status: "planned", fields: {} })} />,
     );
     expect(screen.getByText("Planned Entry Price")).toBeInTheDocument();
     expect(screen.queryByText("Why this trade")).not.toBeInTheDocument();
@@ -746,36 +639,6 @@ describe("one question, one place", () => {
     );
     expect(screen.getByText("Thesis")).toBeInTheDocument();
     expect(screen.queryByText("Trade note")).not.toBeInTheDocument();
-  });
-});
-
-describe("the chart can be attached before the trade exists", () => {
-  it("a new trade offers a chart list the trader grows with +", async () => {
-    const user = userEvent.setup({ delay: null });
-    render(
-      <TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} />,
-    );
-    expect(screen.queryAllByPlaceholderText("https://www.tradingview.com/x/…")).toHaveLength(0);
-    await user.click(screen.getByRole("button", { name: "Add chart" }));
-    await user.click(screen.getByRole("button", { name: "Add chart" }));
-    expect(screen.getAllByPlaceholderText("https://www.tradingview.com/x/…")).toHaveLength(2);
-    await user.click(screen.getByRole("button", { name: "Remove chart 1" }));
-    expect(screen.getAllByPlaceholderText("https://www.tradingview.com/x/…")).toHaveLength(1);
-  });
-
-  it("keeps what is pasted, ready for the save", async () => {
-    // The payload mapping itself is asserted in `trade-image-drafts.test.ts`.
-    // Driving it through here would mean opening a Radix Select in jsdom to
-    // satisfy the instrument check — a test that fails on the widget rather
-    // than on the behaviour.
-    const user = userEvent.setup({ delay: null });
-    render(
-      <TradeForm optionsMap={{}} instruments={[INSTRUMENT]} accounts={[ACCOUNT]} />,
-    );
-    await user.click(screen.getByRole("button", { name: "Add chart" }));
-    const inputs = screen.getAllByPlaceholderText("https://www.tradingview.com/x/…");
-    await user.type(inputs[0], "https://www.tradingview.com/x/AbC123/");
-    expect(inputs[0]).toHaveValue("https://www.tradingview.com/x/AbC123/");
   });
 });
 

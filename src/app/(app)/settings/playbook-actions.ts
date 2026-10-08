@@ -16,7 +16,6 @@ import {
 function revalidateAll() {
   revalidatePath("/settings");
   revalidatePath("/playbooks");
-  revalidatePath("/trades/new");
   revalidatePath("/journal");
   revalidatePath("/reports");
   revalidateTrades();

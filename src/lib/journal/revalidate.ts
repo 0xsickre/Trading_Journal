@@ -50,7 +50,6 @@ const TRADE_ROUTES = [
  */
 const OPTION_ROUTES = [
   "/settings",
-  "/trades/new",
   "/journal",
   "/reports",
   "/",
