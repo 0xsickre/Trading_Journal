@@ -246,25 +246,6 @@ describe("process dimensions", () => {
     ]);
   });
 
-  it("reads the week grade from the week the trade CLOSED in", () => {
-    // A judgement made after the fact belongs to the week that had the fact —
-    // the same reason the old `day_grade` dimension read the close day.
-    const t = one([held]); // closes Fri 2026-01-09, week of Mon 2026-01-05
-    const ctx = dimCtx([], {
-      weekGradeByWeek: new Map([
-        ["2025-12-29", 1],
-        ["2026-01-05", 4],
-      ]),
-    });
-    expect(bucketsOf(getDimension("week_grade")!, t, ctx)).toEqual(["★4"]);
-  });
-
-  it("excludes a trade whose week was never reviewed", () => {
-    expect(
-      bucketsOf(getDimension("week_grade")!, one([held]), dimCtx()),
-    ).toEqual([]);
-  });
-
   it("excludes a trade with no entry rather than inventing a bucket", () => {
     // Unrecorded process is unknown, not a value — bucketing it would make an
     // absence look like a finding.
@@ -496,9 +477,7 @@ describe("every dimension buckets without throwing", () => {
   // duration, no account, no custom values.
   const bare = one([{ net: 0, r: null, durationSeconds: null, size: null, accountId: null }]);
 
-  const ctx = dimCtx([mkReport("2026-01-09", { mental_temp: 3 })], {
-    weekGradeByWeek: new Map([["2026-01-05", 4]]),
-  });
+  const ctx = dimCtx([mkReport("2026-01-09", { mental_temp: 3 })]);
 
   const all = [...DIMENSIONS, ...customFieldDimensions(TEST_FIELD_DEFS)];
 

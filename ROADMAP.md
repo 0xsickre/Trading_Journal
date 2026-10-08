@@ -1610,3 +1610,4 @@ minutima ili „close". Četiri migracije primenjene uz odobrenje. Sledi H2 — 
 - **Datumi ✅ (01.10.2026):** sva polja za datum su journalova (`DateField` / `MonthField`, dd/MM/yyyy, engleski meseci) — browserov `type="date"` je pisao ćirilicu na srpskom sistemu.
 - **Topstep paritet ✅ (01.10.2026):** zajednički `topstep-parity.json` (isti bajtovi u oba repoa, sha256 zakucan) — journal i brief moraju dati iste brojeve za MLL, DLL, isplate, XFA, Practice, rizik i ugovore.
 - **U ✅ (01.10.2026):** Points i Ticks na dashboardu (poeni × ugovori, trejd po trejd) i filter instrumenta po porodici (NQ / MNQ, ES / MES); dok su NQ i ES pomešani, dugmad su siva.
+- **M1 ✅ (08.10.2026):** `/weekly` uklonjen (pregled, eksperimenti, Napredak, dimenzija „Week rating“) — zatvaranje dana i nedelje radi Claude u privatnom `trading-mentor` repou iz mentor pack-a; tabele se brišu u M3.

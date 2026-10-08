@@ -3,7 +3,8 @@ import type { FocusGoal } from "./focus-goal";
 import { isoWeekdayOfDayKey } from "./time";
 
 // `DAY_GRADES`, `MICROMANAGE_*` and `MARKET_TYPE*` lived here. The grade moved
-// to the weekly review (rating a day mid-hold reads the P&L), and "did I touch
+// to the weekly review (rating a day mid-hold reads the P&L), which in turn
+// left the journal in phase M, and "did I touch
 // it" moved to a per-position check-in, which left with the swing book (H1) — a
 // day trader is flat by the close. Market type had no reader at all: nothing
 // grouped, scored or surfaced it.

@@ -48,7 +48,7 @@ export default async function NotebookPage() {
     <div className="space-y-5">
       <PageHeader
         title="Notebook"
-        description="Longer writing — a market observation, a thought about one trade, a plan for the month. The daily check-in and the weekly review stay forms with fixed questions; here you write freely."
+        description="Longer writing — a market observation, a thought about one trade, a plan for the month. The daily check-in stays a form with fixed questions; here you write freely."
       />
 
       <NotebookWorkbench

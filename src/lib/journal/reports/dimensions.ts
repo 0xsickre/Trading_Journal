@@ -29,14 +29,6 @@ export type DimensionGroup = "trade" | "derived" | "process" | "insight" | "cust
 export type DimensionContext = {
   reportByDate: Map<string, DailyReportLite>;
   /**
-   * Week start (`yyyy-MM-dd`, Monday) → the grade given in that week's review.
-   *
-   * Only the grade: the review's prose is written to be read, not grouped on,
-   * and shipping five paragraphs per week to the browser to render one letter
-   * would be paying for the whole review to draw a bucket label.
-   */
-  weekGradeByWeek?: Map<string, number>;
-  /**
    * Rules and their answers, for the DERIVED setup grade.
    *
    * Optional because not every caller loads playbooks. Absent, the setup grade
@@ -271,7 +263,7 @@ const RISK_PCT_EDGES = [
   { min: 20, label: "≥ 20%" },
 ] as const;
 
-/** Monday first, as every week in the journal starts (`closeWeek`, the weekly review). */
+/** Monday first, as every week in the journal starts (`closeWeek`). */
 /** "08:00–09:00" … one label per hour of the day, in clock order. */
 const ORDINALS = ["1st", "2nd", "3rd"] as const;
 const TRADE_NO_BUCKETS = [...ORDINALS, "4th +"] as const;
@@ -565,33 +557,7 @@ const mentalTempDimension: Dimension = {
   },
 };
 
-/**
- * The grade you gave the week this trade closed in.
- *
- * The successor to the `day_grade` dimension, which Phase 2 removed. It reads
- * the CLOSE week for the reason the old one read the close day — the grade is a
- * judgement made after the fact, so it belongs to the week that had the fact.
- *
- * What this can show that the daily version could not: whether the weeks you
- * rated highly are the weeks that actually paid, which is the check on whether
- * your own sense of a good week is calibrated at all.
- */
-const weekGradeDimension: Dimension = {
-  key: "week_grade",
-  label: "Week rating",
-  group: "process",
-  order: ["★1", "★2", "★3", "★4", "★5"],
-  valueOf: (t, ctx) => {
-    const v = ctx.weekGradeByWeek?.get(t.closeWeek);
-    if (v == null || v < 1 || v > 5) return null;
-    return `★${Math.round(v)}`;
-  },
-};
-
-const processDimensions: Dimension[] = [
-  weekGradeDimension,
-  mentalTempDimension,
-];
+const processDimensions: Dimension[] = [mentalTempDimension];
 
 // --- insight dimension -----------------------------------------------------
 

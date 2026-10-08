@@ -5,7 +5,6 @@ import {
   Upload,
   Settings,
   ClipboardCheck,
-  CalendarCheck,
   BookMarked,
   BarChart3,
   CalendarDays,
@@ -70,11 +69,10 @@ export const NAV_SECTIONS: NavSection[] = [
       // Beside Trades, not under Setup. A playbook is judged by what it did, so
       // it belongs with the record rather than with the dropdown lists.
       { href: "/playbooks", label: "Playbooks", icon: BookMarked },
-      // Daily then weekly, in the order they are written. The daily entry asks
-      // what is true right now; the weekly one asks what it added up to, and it
-      // is the second because it reads the first.
+      // Only the daily check-in: the weekly review left the journal. Closing a
+      // day or a week is a conversation with the mentor (`trading-mentor`),
+      // fed by the mentor pack; the journal measures and exports.
       { href: "/daily", label: "Daily Check-in", icon: ClipboardCheck },
-      { href: "/weekly", label: "Weekly Review", icon: CalendarCheck },
       { href: "/notebook", label: "Notebook", icon: NotebookPen },
     ],
   },

@@ -1,5 +1,5 @@
 /**
- * Which closed trades still lack the two answers the weekly review is built on:
+ * Which closed trades still lack the two answers the mentor pack is built on:
  * the setup (playbook) and the grade (A/B/C on `execution_rating`).
  *
  * Mostly the trades that reached the journal only through the day's export —

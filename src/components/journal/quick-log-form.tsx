@@ -111,8 +111,8 @@ function Chips({
 
 /**
  * Log a trade AFTER it closed (`/trades/log`), or review one the export brought
- * in (`/trades/[id]/review`). Four numbers, then only the answers the weekly
- * review reads: setup, A/B/C, what went wrong, one sentence, the exit chart.
+ * in (`/trades/[id]/review`). Four numbers, then only the answers the mentor
+ * pack reads: setup, A/B/C, what went wrong, one sentence, the exit chart.
  * Everything else lives in the full form and stays optional.
  */
 export function QuickLogForm({

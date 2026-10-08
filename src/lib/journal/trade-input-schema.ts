@@ -15,7 +15,7 @@
  * (`20260816...`), and it is the one that also stops a direct PostgREST write.
  * This copy exists so the user gets a sentence instead of the text "violates
  * check constraint tj_positions_prices_positive". The same bargain
- * `weekly/actions.ts` already applies to Mondays.
+ * the (since-removed) weekly review applied to Mondays.
  *
  * A DECISION WORTH KNOWING: a price must be > 0. There is a genuine exception —
  * WTI settled at −$37.63 on 20 April 2020. That was a futures settlement price

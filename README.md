@@ -32,15 +32,14 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 269 of the
-3,615 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 201 of the
+3,493 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
 |---|---|
-| Daily (the "Pred sesiju" card included), weekly, tracker, focus goal | 127 |
+| Daily (the "Pred sesiju" card included), tracker, focus goal | 78 |
 | Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 116 |
-| Weekly "Napredak" (progress) and experiment cards | 19 |
 | Day insight sentence (`low_efficiency_day`) | 1 |
 | A new playbook's three starting sections (`playbook-types.ts`) | 3 |
 | The seeded tag values Log Trade writes (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2) | 3 |
@@ -164,7 +163,7 @@ The routine both repos are built around — the same steps as "Dnevni tok journa
 | Right after the close | `/trades/log` | Four numbers (entry, stop, exit, contracts), setup, A/B/C, the mistake if not an A; a sentence and a chart optional. About a minute |
 | End of the day | `/import` | One TopstepX CSV: the trades logged by hand are recognised (entry ±0.05 %, ±10 min) and get the exact fills; the answers stay. MAE/MFE arrives on its own — provisional the same evening, exact the next morning |
 | 15:20 CT (22:20 Belgrade) | Telegram | A reminder if one of today's trades has no setup or grade, or was not confirmed by the CSV. The setup-and-grade half is the same rule as "Bez pregleda" on `/daily`, on the same Topstep day |
-| Weekend | `/weekly` → Napredak | Setups, the cost of each mistake, A against B/C, hour of entry, MAE/MFE, trade number in the day |
+| Closing the day / the week | Dashboard → Export for Claude, then the private `trading-mentor` repo | The mentor pack for the day (or the week) goes to Claude, who asks the closing questions and keeps the record of rules and observations. The journal has no written review of its own |
 
 A limit placed well before price reaches it can still be written plan-first on `/trades/new`; the
 export then finds the plan it filled (§ Recognising a trade you already typed).
@@ -197,7 +196,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 3,051 tests across 195 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,952 tests across 188 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -257,7 +256,7 @@ changed:
 - **One batch of reads per page.** Reads that waited on each other without needing to are started
   together:
   - the rule answers on `/journal`, `/reports` and `/playbooks`;
-  - the accounts on the dashboard, `/daily` and `/weekly`, where only the day or week waits on them;
+  - the accounts on the dashboard and `/daily`, where only the day waits on them;
   - the accounts and their trade counts on `/settings`;
   - the notebook's purge of expired notes.
 - **The shared reads are memoized per request** (React `cache`), so a page and its helpers asking for
@@ -345,7 +344,6 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/trades/[id]/review` | The same setup / A-B-C / mistake / sentence review for a trade that arrived only through the export. One UPDATE of the review columns (`saveTradeReview`), never `tj_save_trade`, which rewrites fills and rule answers on every save |
 | `/daily` | **The day in the order it is lived**, in three numbered parts under the day's heading and its streak (`daily-report-form.tsx`). **1 · Pre sesije**: the morning brief ("Pred sesiju", `tj_session_briefs`, `session-brief-card.tsx` — the Topstep close on the account's clock, "berza zatvorena" when the brief says so, the red windows, the expected NQ / ES range and, on today's page only, the DLL left on the primary Topstep account; without a brief it says so and shows the ordinary 15:10 CT close, and a window it cannot read is dropped and counted, never guessed), the focus goal, then **"Pre nego što uđeš"** — two questions, numbered and about the day ahead: *1. Kako si danas?* (mental state, 5 stars, a warning under 3) and *2. Da li danas trguješ?* ("Danas ne trgujem", a decision taken before the session) — and the preparation rules. **2 · Tokom sesije**: the trading rules, scored from the trades and the brief. **3 · Posle sesije**: **Bez pregleda** (the day's closed trades still missing a setup or an A/B/C grade, each a link to its review, `review-gaps.ts`; the 15:20 CT Telegram reminder in `futures-trading` applies the same rule), the day's result, the review rules, then save and lock. Until 29.09.2026 the page opened with the day's money and asked "before you enter" only after the trading rules, with a no-trade box in the past tense that pointed at a position card H1 had removed. The rules are grouped as "Pravila pripreme / trgovanja / osvrta" here, in the page's language, and within each group **the rules to tick come first and the scored ones below** (K1) — a new rule lands in its own half whatever its order; Settings edits them under the English stage names. The day is complete once a focus goal is active |
 | `/calendar` | Monthly P&L grid by day, weekly totals |
-| `/weekly` | Weekly review: week rating, five questions, the week's figures split into money and process (`week-recap.ts`), last week's commitment with the answer to whether it held, and an account filter that refuses to sum two currencies. Unsaved answers are kept per week in the browser (`weekly-draft.ts`) and offered back; leaving a week with unsaved text asks first. **Napredak** (`progress.ts`) is the weekend review in six answers, each beside last week: R per setup, what each mistake cost, A against B/C, hour of entry, MAE of winners / MFE of losers / share of the move kept, and trade number in the day plus the trade after a loss |
 | `/playbooks` | Every setup as one table: Trades / Net P&L / Win Rate / Missed / Expectancy per row |
 | `/playbooks/[id]` | One playbook: identity, Stats, Rules (section and rule editor), Trades, Notes |
 | `/reports` | How each group of trades did — by setup, instrument, day or any tag (§ Reports) |
@@ -423,8 +421,8 @@ two lists sorted separately and zipped is how a bucket's A row ends up beside an
 
 ## Metrics
 
-36 metrics in a single registry (`src/lib/journal/reports/metrics.ts`), 25 built-in dimensions across
-four groups (9 off the trade, 13 derived, 2 process, 1 insight) plus one per custom field. Any
+36 metrics in a single registry (`src/lib/journal/reports/metrics.ts`), 24 built-in dimensions across
+four groups (9 off the trade, 13 derived, 1 process, 1 insight) plus one per custom field. Any
 metric runs against any dimension — which is why there is one report engine instead of ten report
 pages. The tables below cover all 36 (a pair such as Avg win / Avg loss shares a row, Avg R and Total R
 sit under R), plus the two drawdown durations the dashboard shows beside them.
@@ -613,7 +611,7 @@ Get this wrong and nothing breaks — the numbers simply file themselves under d
   `time.ts`), not from a separate setting: a fill at 18:30 CT on Monday is Tuesday's, and the Sunday
   open is Monday's. One resolver (`accountDayZoneResolver`, a `DayZone` per account) dates every
   trade for the calendar, `/daily` and "Bez pregleda", the tracker verdicts and the equity ladder,
-  `/weekly`, the dashboard, the reports and the day-level insights — the same day `topstep.ts` charges
+  the dashboard, the reports and the day-level insights — the same day `topstep.ts` charges
   its Daily Loss Limit to (`topstepTradingDay`) and the 15:20 CT reminder in `futures-trading` counts, so
   the calendar and the banner's "DLL today" no longer disagree about an evening. In "All accounts"
   **every trade keeps its own account's rule**: a day must not change with the filter on the screen.
@@ -863,7 +861,7 @@ of question.
 |---|---|---|
 | Time stop | free number, **no upper bound in the database** | five buttons 1–5 days; since F4 five chips **5m / 15m / 30m / 60m / Close** (`time_stop`, `CHECK` on the five) |
 | Mental temperature | `Select` 1–10 | **5 stars** |
-| Week rating | `A–F` | **5 stars** |
+| Week rating | `A–F` | **5 stars**; the weekly review itself left in phase M |
 | Execution rating | 5 stars | unchanged |
 | Conviction | 1–5, with no field to enter it | **dropped in Phase E** |
 
@@ -936,30 +934,7 @@ below five shared days.
 
 ## Learning
 
-Two things the journal used to record and never check.
-
-### The weekly change gets an outcome
-
-The weekly review asks for "one thing I am changing" and the next week asks whether it was kept. Both
-answers are the trader's word about the trader's own behaviour; nothing asked the BOOK whether the
-change did anything. **Experiment** (`tj_experiments`, `experiments.ts`) is that question: a Monday, a
-sentence, and ONE metric that would move if the change worked.
-
-The metric can only be win rate, profit factor or expectancy — the three that carry a confidence
-interval. An experiment without one is an anecdote with a start date, and the table's CHECK enforces
-that rather than leaving it to convention. **"Before" is your last 40 trades** closed before the start
-week (`baseline_trades`, F5.4 — the trader's choice of trades over weeks, 29.09.2026: the interval
-depends on n, and four weeks held twenty trades in one month and a hundred and twenty in another);
-"after" is every trade closed since, accumulating. Both are keyed on when a trade CLOSED — a change to
-how trades are managed shows up in how they end. The card dates "before" by its oldest and newest
-trade, or says there were none.
-
-**The verdict is withheld while the interval of the difference still contains zero**, and on a small
-book that is the usual answer. The card says "still don't know, n = …" rather than
-naming a winner, and below five trades on either side it does not compare at all. What it does not
-control is printed beside it every time: instrument, volatility, and the fact of being watched. The
-self-reported "did I keep it" stays separate and labelled — one is a word about behaviour, the other
-is a number out of the book.
+One thing the journal used to record and never check.
 
 ### The missed setup gets a price
 
@@ -1219,7 +1194,7 @@ help.topstep.com on 28.09.2026):
   size, passes nothing and pays nothing; the banner says Practice, and the brief and the evening
   reminder leave it out. Its numbers are kept apart: **"All accounts" means the real accounts**
   (`allAccountsScope` / `inAllAccountsScope` in `account-rules.ts`) on the dashboard, trades,
-  calendar, weekly and reports, and the account picker marks it "(practice)" — picking it shows its
+  calendar and reports, and the account picker marks it "(practice)" — picking it shows its
   own numbers. `/daily` (and its tracker lock) and the playbooks read the real book only. A book of
   nothing but Practice accounts shows them, so a new journal is never blank.
 - **Closed trades only**: Topstep watches both limits intraday with open P&L, so a
@@ -1594,9 +1569,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-3,051 tests across 195 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,413 tests in 129 files) and `components` (environment `jsdom`, files `*.test.tsx`, 638
-tests in 66 files). The rule is the extension, so no file can land in both. The split exists so that
+2,952 tests across 188 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,344 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 608
+tests in 64 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves
@@ -1679,7 +1654,7 @@ container does not have. It stays a later option, not an oversight.
 | Spaces, mentor, leaderboard | Single-user system |
 | AI chat and agents | The mentor-pack export and the insight rules give the same thing without the API cost |
 | Options (DTE, strike, expiry) | Not traded |
-| Intraday dimensions | **Built in F5.2 (29.09.2026).** `/reports` groups by **Session window** (Globex night 18:00–08:00, Pre-open, Open 09:30–10:00, Morning, Lunch, Afternoon, Last hour — on New York's clock whatever zone the journal shows, `session-window.ts`), **Minutes after the open** (before the open, 0–15, 15–30, 30–60 min, 1–2 h, 2 h +), **Trade number in the day** (per account; the 4th on is one bucket) and **After losses** (first trade of the day, after a win or scratch, after 1 loss, after 2+ — the losses that had already closed when the entry was taken; a measure, not a rule). The weekly "Napredak" card still has its own hour and trade-number rows |
+| Intraday dimensions | **Built in F5.2 (29.09.2026).** `/reports` groups by **Session window** (Globex night 18:00–08:00, Pre-open, Open 09:30–10:00, Morning, Lunch, Afternoon, Last hour — on New York's clock whatever zone the journal shows, `session-window.ts`), **Minutes after the open** (before the open, 0–15, 15–30, 30–60 min, 1–2 h, 2 h +), **Trade number in the day** (per account; the 4th on is one bucket) and **After losses** (first trade of the day, after a win or scratch, after 1 loss, after 2+ — the losses that had already closed when the entry was taken; a measure, not a rule). |
 | Economic calendar | Lives in `futures-trading`: the morning brief carries the day's releases with their red windows |
 | Running P&L curve per trade in the journal | The journal still holds no prices. `futures-trading` walks the curve over the R2 candles and writes the one number the insights need, `time_underwater_pct` (F5.3b); the peak of a day's cumulative P&L, which `maximize_your_profit_day` would need, is measured by no one |
 

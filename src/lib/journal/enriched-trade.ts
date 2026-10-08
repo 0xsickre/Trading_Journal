@@ -21,7 +21,8 @@ import { dayKeyIn, toEpoch, weekKeyIn, zonedHour, zoneTz, type DayZone } from ".
  *
  * `micromanage`, `day_grade` and `rule_broken` used to be here. The first moved
  * to a per-position check-in, which left with the swing book (the code in H1,
- * the table in H2); the other two moved to the weekly review.
+ * the table in H2); the other two moved to the weekly review, which left the
+ * journal in phase M.
  * What is left is what a DAY can actually answer.
  */
 export type DailyReportLite = {

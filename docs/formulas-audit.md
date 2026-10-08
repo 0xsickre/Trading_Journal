@@ -491,6 +491,8 @@ trejdova dele, kao tvrdnju a ne kao fusnotu.
 
 ## 21. Eksperiment i cena promašaja (`experiments.ts`, `missed-cost.ts`)
 
+> **Eksperiment je uklonjen u fazi M (08.10.2026)** zajedno sa `/weekly`; formula ispod ostaje kao zapis. Cena promašaja važi i dalje.
+
 ```
 pre    = metrika nad poslednjih N trejdova zatvorenih pre početne nedelje (baseline_trades, 40; F5.4)
 posle  = metrika nad trejdovima od početne nedelje do danas      (akumulira se)

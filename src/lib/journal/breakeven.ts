@@ -111,7 +111,7 @@ export function hasBreakevenBand(range: BreakevenRange): boolean {
  * One breakeven band for a set of accounts.
  *
  * The same six-line block stood in five copies — `dashboard.tsx` and four
- * routes (`/daily`, `/calendar`, `/weekly`, `/playbooks`). While they are
+ * routes (`/daily`, `/calendar`, the since-removed `/weekly`, `/playbooks`). While they are
  * identical, duplication is merely a cost; the problem is that editing one
  * would silently pull the screens apart, and the win rate on the Dashboard and
  * on the calendar would start to differ over the same trades.

@@ -26,8 +26,8 @@ import { revalidatePath } from "next/cache";
 /**
  * Routes that read the trade book.
  *
- * All nine call `getTradesWithStats` — verified against their `page.tsx`. If a
- * tenth route starts reading trades it belongs here, and if one stops it should
+ * All eight call `getTradesWithStats` — verified against their `page.tsx`. If a
+ * ninth route starts reading trades it belongs here, and if one stops it should
  * come out.
  */
 const TRADE_ROUTES = [
@@ -36,7 +36,6 @@ const TRADE_ROUTES = [
   "/reports",
   "/calendar",
   "/daily",
-  "/weekly",
   "/playbooks",
   "/notebook",
   "/import",
@@ -81,15 +80,3 @@ export function revalidateDaily() {
   revalidatePath("/calendar");
 }
 
-/**
- * After a weekly review is saved or sealed.
- *
- * `/reports` and not only `/weekly`: the week rating is a report dimension
- * (`reports/dimensions.ts`, key `week_grade`), read through `getWeekGrades()`
- * on the reports page. Rating a week and finding the report still grouping it
- * under "no rating" was the bug this exists to prevent.
- */
-export function revalidateWeekly() {
-  revalidatePath("/weekly");
-  revalidatePath("/reports");
-}

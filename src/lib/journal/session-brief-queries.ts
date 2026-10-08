@@ -7,7 +7,7 @@ import { parseSessionBrief, type SessionBrief } from "./session-brief";
  *
  * `tj_session_briefs` arrives by a migration applied by hand, and `main` is
  * deployed on push: until the migration runs, `/daily` must still open and read
- * "the brief has not arrived" — the same tolerance `experiment-queries.ts` has.
+ * "the brief has not arrived".
  */
 function missingTable(error: { code?: string; message: string } | null): boolean {
   return (

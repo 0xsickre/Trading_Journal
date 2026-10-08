@@ -26,7 +26,7 @@ async function dayError(reportDate: string): Promise<string | null> {
 // Two fields, down from twenty-one.
 //
 // Most of what left moved rather than died: to the weekly review (the grade and
-// the debrief prose); the per-position check-in that took `micromanage` went
+// the debrief prose — itself gone in phase M, to the mentor conversation); the per-position check-in that took `micromanage` went
 // with the swing book (H1, 28.09.2026). Phase E took the last six — the macro note and
 // the four Douglas impulse checkboxes with their note — because nothing ever
 // READ them: no dimension, no insight rule, no metric. The same question is

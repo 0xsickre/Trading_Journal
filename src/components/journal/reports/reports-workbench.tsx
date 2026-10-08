@@ -139,7 +139,6 @@ export function ReportsWorkbench({
   trades,
   accounts,
   dailyReports = [],
-  weekGrades,
   fillCounts,
   cashEvents = [],
   fieldDefs = [],
@@ -150,8 +149,6 @@ export function ReportsWorkbench({
   trades: TradeRow[];
   accounts: Account[];
   dailyReports?: DailyReportLite[];
-  /** Week start → that week's review grade, for the `week_grade` dimension. */
-  weekGrades?: Map<string, number>;
   fillCounts?: FillCounts;
   cashEvents?: CashEvent[];
   /** User-defined fields — each becomes a groupable dimension on its own. */
@@ -314,14 +311,13 @@ export function ReportsWorkbench({
   const dimensionContext = useMemo<DimensionContext>(
     () => ({
       reportByDate: new Map(dailyReports.map((r) => [r.report_date, r])),
-      weekGradeByWeek: weekGrades,
       rules: playbookLookup.rules,
       insightsByTrade,
       // Labels that tell same-named accounts apart, so they do not share a row.
       accountNames: accountLabels(accounts),
       customDimensions: extraDimensions,
     }),
-    [dailyReports, weekGrades, playbookLookup, insightsByTrade, accounts, extraDimensions],
+    [dailyReports, playbookLookup, insightsByTrade, accounts, extraDimensions],
   );
 
   const metricContext = useMemo(

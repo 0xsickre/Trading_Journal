@@ -110,8 +110,8 @@ export function AppSidebar({ email }: { email: string | null }) {
 
   const floating = !pinned;
 
-  // Bars pinned to the bottom of a page (the trade form's totals, the daily and
-  // weekly save bars) start where the page does. That is past the sidebar only
+  // Bars pinned to the bottom of a page (the trade form's totals, the daily
+  // save bar) start where the page does. That is past the sidebar only
   // while it is pinned into the layout; hidden, the page — and the bar — take
   // the full width. They read the offset from this variable.
   useEffect(() => {

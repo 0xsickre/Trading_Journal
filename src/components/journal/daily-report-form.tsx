@@ -231,9 +231,8 @@ export function DailyReportForm({
       {tracker.locked && (
         <Alert>
           <AlertDescription>
-            {/* Explicit `{" "}` — see the same banner in
-                `weekly-review-form.tsx`: the plain space written here did not
-                reach the DOM and the sentence ran together at the bracket. */}
+            {/* Explicit `{" "}`: the plain space written here did not reach
+                the DOM and the sentence ran together at the bracket. */}
             Ovaj dan je zaključan {lockedAt && `(${lockedAt})`}{" "}
             i njegov dnevnik se više ne menja. Trejdovi ostaju izmenjivi —
             ispravka P&amp;L-a je i dalje ispravka činjenice, ali ne pomera

@@ -525,7 +525,7 @@ export function monthGridDays(monthKey: string): string[] {
  *
  *   dashboard.tsx   ?? "America/New_York"            ← no primary-account step
  *   /daily          ?? primary.timezone
- *   /weekly         ?? primary.timezone
+ *   /weekly         ?? primary.timezone          (route removed in phase M)
  *   /calendar       ?? primary?.timezone ?? DEFAULT_TZ
  *   /playbooks      ?? primary?.timezone ?? "America/New_York"
  *
