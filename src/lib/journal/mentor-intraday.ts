@@ -306,7 +306,11 @@ export function rulesSection(rules: readonly TrackerRule[], compliance: readonly
   const live = rules.filter((r) => r.deleted_at == null);
   if (live.length === 0) return [];
   const out = [`## Moja pravila (dnevni tracker)`, ...live.map(ruleLine), ""];
-  const judged = compliance.filter((c) => c.pct != null);
+  // Today while still open is not judged yet, and a weekday nobody opened is
+  // "bez prijave" — both are named, neither is averaged (phase M).
+  const judged = compliance.filter((c) => c.pct != null && c.status !== "pending");
+  const unlogged = compliance.filter((c) => c.status === "unlogged").map((c) => c.date);
+  const open = compliance.filter((c) => c.status === "pending").map((c) => c.date);
   if (judged.length > 0) {
     const avg = judged.reduce((s, c) => s + (c.pct as number), 0) / judged.length;
     const perfect = judged.filter((c) => c.pct === 100).length;
@@ -321,8 +325,13 @@ export function rulesSection(rules: readonly TrackerRule[], compliance: readonly
       out.push("Najčešće prekršeno:");
       for (const [id, n] of top) out.push(`- ${cell(text.get(id) ?? id)} — ${n} ${sr(n, "dan", "dana", "dana")}`);
     }
-    out.push("");
   }
+  if (unlogged.length)
+    out.push(
+      `Bez prijave (nijedan trejd, nijedan odgovor, nijedan izveštaj): ${unlogged.length} ${sr(unlogged.length, "dan", "dana", "dana")} — ${unlogged.join(", ")}.`,
+    );
+  if (open.length) out.push(`U toku (ne ulazi u prosek): ${open.join(", ")}.`);
+  if (judged.length || unlogged.length || open.length) out.push("");
   return out;
 }
 

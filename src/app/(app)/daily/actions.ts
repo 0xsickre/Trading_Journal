@@ -50,7 +50,7 @@ export async function saveDailyReport(
   reportDate: string,
   input: SaveDailyReportInput,
 ): Promise<
-  | { ok: true; updated_at: string; warnNoFocusGoal?: boolean }
+  | { ok: true; updated_at: string }
   | { ok: false; error: string }
 > {
   const parsed = dailyReportSchema.safeParse(input);
@@ -63,17 +63,6 @@ export async function saveDailyReport(
   const supabase = await createClient();
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Nisi prijavljen." };
-
-  const { data: activeGoal } = await supabase
-    .from("tj_focus_goals")
-    .select("id")
-    .eq("is_active", true)
-    .maybeSingle();
-
-  // Warned on any saved day rather than on a grade being set: the grade is gone,
-  // and the focus goal is now what the whole day is measured against, so a day
-  // journalled without one is the case worth naming.
-  const warnNoFocusGoal = !activeGoal ? true : undefined;
 
   // Checked so the user sees this sentence rather than the trigger's. The trigger
   // stays the real guard — PostgREST with the user's JWT is a live write path, so
@@ -101,71 +90,5 @@ export async function saveDailyReport(
   if (error) return { ok: false, error: error.message };
 
   revalidateDaily();
-  return { ok: true, updated_at: data.updated_at, warnNoFocusGoal };
-}
-
-export async function saveFocusGoal(
-  goalText: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const text = goalText.trim();
-  if (!text) return { ok: false, error: "Fokus cilj ne može biti prazan." };
-
-  const supabase = await createClient();
-  const user = await getCurrentUser();
-  if (!user) return { ok: false, error: "Nisi prijavljen." };
-
-  const today = new Date().toISOString().slice(0, 10);
-
-  const { data: current } = await supabase
-    .from("tj_focus_goals")
-    .select("id, goal_text")
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (current?.goal_text === text) {
-    return { ok: true };
-  }
-
-  if (current) {
-    const { error: endErr } = await supabase
-      .from("tj_focus_goals")
-      .update({ is_active: false, ended_at: today })
-      .eq("id", current.id);
-    if (endErr) return { ok: false, error: endErr.message };
-  }
-
-  const { error } = await supabase.from("tj_focus_goals").insert({
-    user_id: user.id,
-    goal_text: text,
-    started_at: today,
-    is_active: true,
-  });
-  if (error) return { ok: false, error: error.message };
-
-  revalidateDaily();
-  return { ok: true };
-}
-
-export async function endFocusGoal(): Promise<
-  { ok: true } | { ok: false; error: string }
-> {
-  const supabase = await createClient();
-  const today = new Date().toISOString().slice(0, 10);
-
-  const { data: current } = await supabase
-    .from("tj_focus_goals")
-    .select("id")
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (!current) return { ok: false, error: "Nema aktivnog fokus cilja." };
-
-  const { error } = await supabase
-    .from("tj_focus_goals")
-    .update({ is_active: false, ended_at: today })
-    .eq("id", current.id);
-  if (error) return { ok: false, error: error.message };
-
-  revalidateDaily();
-  return { ok: true };
+  return { ok: true, updated_at: data.updated_at };
 }

@@ -1,5 +1,4 @@
 import { addDays, format, parseISO, subDays } from "date-fns";
-import type { FocusGoal } from "./focus-goal";
 import { isoWeekdayOfDayKey } from "./time";
 
 // `DAY_GRADES`, `MICROMANAGE_*` and `MARKET_TYPE*` lived here. The grade moved
@@ -15,11 +14,9 @@ export type DailyReport = {
   report_date: string;
   mental_temp: number | null;
   /**
-   * What is on the calendar between now and the planned exit.
-   *
-   * Re-asked rather than renamed: the column used to mean "macro events today",
-   * which is the day trader's window. A position held to Thursday is exposed to
-   * Thursday's release whether or not it lands today.
+   * "Danas ne trgujem" — decided before the session. Compliance reads it: on
+   * such a day the trade-stage MANUAL rules have nothing to judge
+   * (`computeDayCompliance`, phase M).
    */
   no_trade_day: boolean;
   /**
@@ -64,20 +61,6 @@ export function nextReportDate(date: string): string {
  */
 export function isFriday(date: string): boolean {
   return isoWeekdayOfDayKey(date) === 5;
-}
-
-/**
- * Is there anything left to answer for this day?
- *
- * The grade and "did you break a rule" are weekly now, and the per-position
- * check-in went with the swing book (H1, 28.09.2026): a day trader is flat by
- * the close, so no position is left to judge. What remains is the focus goal —
- * the day is measured against it, and with no goal set there is nothing for
- * "complete" to mean. Inventing something else to answer is exactly the
- * friction that gets journals abandoned.
- */
-export function isDayComplete(activeGoal: FocusGoal | null): boolean {
-  return activeGoal != null;
 }
 
 export function emptyDailyReport(reportDate: string): DailyReportInput {

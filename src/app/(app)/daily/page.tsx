@@ -1,8 +1,6 @@
 import { inAllAccountsScope, primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getDailyReport } from "@/lib/journal/daily-report-queries";
-import { getActiveFocusGoal } from "@/lib/journal/focus-goal-queries";
-import { stringFieldValue } from "@/lib/journal/field-values";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getCheckins, getTrackerRules } from "@/lib/journal/tracker/queries";
 import {
@@ -10,34 +8,17 @@ import {
   evaluateAutoRulesForDay,
 } from "@/lib/journal/tracker/auto-rules";
 import {
-  TRACKER_SPAN_DAYS,
-  computeComplianceSeries,
   computeDayCompliance,
-  computeStreak,
-  meanCompliance,
   resolveAutoResults,
   rulesLiveOn,
 } from "@/lib/journal/tracker/compliance";
-import { computeStats, toRealized } from "@/lib/journal/analytics";
-import { computeCostStats } from "@/lib/journal/costs";
-import { tradeVolume } from "@/lib/journal/period-stats";
-import {
-  sharedBreakevenRange,
-} from "@/lib/journal/breakeven";
 import {
   DEFAULT_TZ,
-  addDaysToDayKey,
   dayKeyIn,
   isValidDayKey,
   todayFor,
 } from "@/lib/journal/time";
-import { FocusGoalCard } from "@/components/journal/focus-goal-card";
 import { DailyReportForm } from "@/components/journal/daily-report-form";
-import { DailyStreakStrip } from "@/components/journal/daily-streak-strip";
-import {
-  DayStatsCard,
-  type DayTradeRow,
-} from "@/components/journal/day-stats-card";
 import type { TrackerDayData } from "@/components/journal/tracker-checklist";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
@@ -49,7 +30,7 @@ import { topstepRulesResolver } from "@/lib/journal/topstep";
 import { getTopstepSizing } from "@/lib/journal/topstep-status";
 import { getCashEvents } from "@/lib/journal/cash-events";
 import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
-import { briefResolver, briefWindow } from "@/lib/journal/session-brief";
+import { briefResolver } from "@/lib/journal/session-brief";
 import { SessionBriefCard } from "@/components/journal/session-brief-card";
 
 export default async function DailyPage({
@@ -87,7 +68,6 @@ export default async function DailyPage({
     rules,
     tradesAll,
     report,
-    activeGoal,
     checkinsByDay,
     briefs,
     sizing,
@@ -101,20 +81,12 @@ export default async function DailyPage({
     getTrackerRules({ includeRetired: true }),
     getTradesWithStats(),
     dayPromise.then(({ reportDate }) => getDailyReport(reportDate)),
-    getActiveFocusGoal(),
-    // The whole window, not just this day. The streak strip needs the run
-    // leading UP TO the day in view, and the checklist's single day is the
-    // last entry of that same window — so one round trip serves both, and the
-    // two can never disagree about what was ticked.
-    dayPromise.then(({ reportDate }) =>
-      getCheckins(addDaysToDayKey(reportDate, -(TRACKER_SPAN_DAYS - 1)), reportDate),
-    ),
-    // The same window as the check-ins: the card reads the day in view, and the
-    // tracker rules that read the brief score every day of the streak behind it.
-    dayPromise.then(({ reportDate }) => {
-      const w = briefWindow(reportDate, TRACKER_SPAN_DAYS);
-      return getSessionBriefs(w.from, w.to);
-    }),
+    // The day in view only: the streak strip that read the 28 weeks behind it
+    // left in phase M — the run of days is the mentor's to read, from the pack.
+    dayPromise.then(({ reportDate }) => getCheckins(reportDate, reportDate)),
+    // The card reads the day in view, and so do the tracker rules that read
+    // the red windows and the close.
+    dayPromise.then(({ reportDate }) => getSessionBriefs(reportDate, reportDate)),
     // Room and DLL as they stand NOW — shown on today's page only.
     getTopstepSizing(),
     // Payouts lower a Topstep balance, and with it the budgets the tracker derives.
@@ -131,10 +103,9 @@ export default async function DailyPage({
           target: primarySizing.target ?? null,
         }
       : null;
-  // The day's money is summed across accounts, so it needs ONE currency;
-  // with two it is left unsummed rather than printed in the primary's.
-  const pooledCurrency = sharedCurrency(accounts);
-  const currency = pooledCurrency ?? primary?.currency ?? "USD";
+  // Money in the checklist's reasons needs ONE currency; with two the
+  // primary's is used.
+  const currency = sharedCurrency(accounts) ?? primary?.currency ?? "USD";
 
   const checkins = checkinsByDay.get(reportDate) ?? new Map();
 
@@ -182,67 +153,14 @@ export default async function DailyPage({
     tradeLabels[t.id] = t.label;
   }
 
-  /**
-   * The day's numbers.
-   *
-   * Scoped to trades CLOSED on this day — the same rule the calendar cell and
-   * `dailyPnl` use, so the two screens can never print different figures for the
-   * same date. `toRealized` already drops anything not fully closed.
-   */
-  const breakevenRange = sharedBreakevenRange(accounts);
-
-  const dayTrades = toRealized(trades).filter(
-    (t) => t.closedAt && dayKeyIn(t.closedAt, tzOf(t.row)) === reportDate,
-  );
-  const dayStats = computeStats(dayTrades, "net", breakevenRange);
-  const dayCosts = computeCostStats(dayTrades);
-  const dayVolume = dayTrades.reduce((s, t) => s + tradeVolume(t), 0);
-  const dayTradeRows: DayTradeRow[] = dayTrades.map((t) => ({
-    id: t.id,
-    label: t.row.trade_no != null ? `#${t.row.trade_no}` : t.id.slice(0, 8),
-    // `instrument`: a trade has no `symbol` column, so this read undefined and
-    // every row of the day's list printed a dash where the market should be.
-    symbol: stringFieldValue(t.row, "instrument"),
-    net: t.net,
-    r: t.r,
-    qty: tradeVolume(t),
-  }));
-
-  /**
-   * The run leading up to the day in view.
-   *
-   * Anchored on `reportDate`, NOT on today, and that is the point: opening a day
-   * in July should say what the streak was in July. Anchoring it on today would
-   * print a number about this week on a page about that one.
-   *
-   * `today` is still passed to the series so a day that is genuinely today can
-   * come back `pending` rather than `broken` for rules not yet answered.
-   */
-  const complianceDays: string[] = [];
-  for (let i = TRACKER_SPAN_DAYS - 1; i >= 0; i--) {
-    complianceDays.push(addDaysToDayKey(reportDate, -i));
-  }
-
-  const series = computeComplianceSeries(
-    complianceDays,
-    rules,
-    checkinsByDay,
-    (d) =>
-      resolveAutoResults(
-        rulesLiveOn(rules, d),
-        evaluateAutoRulesForDay(d, index, { briefOf }),
-        checkinsByDay.get(d) ?? new Map(),
-      ),
-    today,
-  );
-  const streak = computeStreak(series);
-
   const tracker: TrackerDayData = {
     reportDate,
     rules: dayRules,
     auto,
     answers,
-    compliance: computeDayCompliance(reportDate, dayRules, checkins, auto, today),
+    compliance: computeDayCompliance(reportDate, dayRules, checkins, auto, today, {
+      report: report ? { no_trade_day: report.no_trade_day } : null,
+    }),
     currency,
     tradeLabels,
     locked: report?.locked_at != null,
@@ -252,7 +170,7 @@ export default async function DailyPage({
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title="Dnevna prijava"
-        description="Dan u tri koraka: pre sesije, tokom nje i posle nje. Osvrt na nedelju je na nedeljnoj stranici."
+        description="Dan u tri koraka: pre sesije, tokom nje i posle nje. Zatvaranje dana i nedelje radiš sa mentorom, iz mentor pack-a."
       />
 
       <DailyReportForm
@@ -261,38 +179,14 @@ export default async function DailyPage({
         reportDate={reportDate}
         today={today}
         timezone={timezone}
-        activeGoal={activeGoal}
         tracker={tracker}
-        // Above the rest on purpose: the streak is what this page is FOR — the
-        // P&L is the outcome of decisions the checklist governs.
-        streak={
-          <DailyStreakStrip
-            current={streak.current}
-            meanPct={meanCompliance(series)}
-            scoredDays={series.filter((d) => d.pct != null).length}
-            hasRules={rules.length > 0}
-          />
-        }
         beforeSession={
-          <>
-            <SessionBriefCard day={reportDate} brief={briefOf(reportDate)} tz={timezone} dllLeft={dllLeft} />
-            <FocusGoalCard goal={activeGoal} reportDate={reportDate} />
-          </>
+          <SessionBriefCard day={reportDate} brief={briefOf(reportDate)} tz={timezone} dllLeft={dllLeft} />
         }
         afterSession={
-          <>
-            <ReviewGapsCard
-              gaps={reviewGaps(trades, reportDate, (t) => dayKeyIn(t.stats?.closed_at ?? null, tzOf(t)))}
-            />
-            <DayStatsCard
-              key={`stats:${reportDate}`}
-              stats={dayStats}
-              costs={dayCosts}
-              volume={dayVolume}
-              trades={dayTradeRows}
-              currency={pooledCurrency}
-            />
-          </>
+          <ReviewGapsCard
+            gaps={reviewGaps(trades, reportDate, (t) => dayKeyIn(t.stats?.closed_at ?? null, tzOf(t)))}
+          />
         }
       />
     </div>

@@ -32,14 +32,14 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 201 of the
-3,493 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 187 of the
+3,440 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
 |---|---|
-| Daily (the "Pred sesiju" card included), tracker, focus goal | 78 |
-| Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 116 |
+| Daily (the "Pred sesiju" card included) and tracker | 63 |
+| Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 117 |
 | Day insight sentence (`low_efficiency_day`) | 1 |
 | A new playbook's three starting sections (`playbook-types.ts`) | 3 |
 | The seeded tag values Log Trade writes (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2) | 3 |
@@ -196,7 +196,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,952 tests across 188 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,945 tests across 185 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -342,7 +342,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/trades/new`, `/trades/[id]/edit` | Trade form: plan, fills, playbook checklist, psychology, images — the charts are a **list the trader grows with "+ Add chart"** (30.09.2026, up to 20 per trade, in the order added — `tj_trade_images.sort_order`, `20260930050000`; the three fixed slots HTF pre / LTF pre / LTF post are gone), each one an **uploaded screenshot, an image pasted from the clipboard or a TradingView link** (K6, `chart-image-input.tsx`): an image goes to the private `trade-images` bucket under the user's own folder and is stored as `storage:<uid>/<file>` in `tj_trade_images.image_url`, shown through a one-hour signed URL; the CHECK ties the folder to the row's user (`20260929220000`). In the **order of the decisions**: account, instrument, then the playbook and its checklist, and only then the prices and the risk. **There is no phase control**: planned or active is what the fills say — an entry fill means you are in the trade — so a select that could disagree with the record is gone, and so is "Move to active". The one lifecycle fact the fills cannot know, a MISSED plan, keeps its button. The instrument is **typed, not scrolled** — `instrument-select.tsx` filters the catalog on symbol, name and asset class. On a **Topstep account** the size is whole contracts: risk by the account's rule (§ Topstep), contracts rounded down with the round-turn commission and a tick of slippage on the stop counted (R4) and capped at the plan, stop and target in ticks for the TopstepX bracket — "2 MNQ · $203.44 at the stop incl. commission and a tick of slippage (stop 200 ticks)" — with the mini or micro alternative and a warning when the count is zero, capped, or three stops no longer fit today's DLL. This is the **plan-first** form, for a limit written well before price gets there; the everyday way in is `/trades/log` |
 | `/trades/log` | **Log Trade**, the sidebar's primary action: a trade logged **after it is flat**. Four numbers off the platform — contracts, entry, stop, exit (target optional) — with "N min ago" chips for the entry time; then the setup (playbook), **A / B / C** on execution (stored as `execution_rating` 5 / 3 / 1), what went wrong only on B or C ("No mistake" recorded on an A), emotions, one sentence (`trade_journal_notes`) and **the charts — one field to paste into and "+ Add chart" for as many more as wanted** (entry, exit, higher timeframe…), in order; the review of an imported trade shows the ones it has and adds new ones after them. **A trade still running is logged without an exit** (30.09.2026): it is saved open with its entry fill only, and the day's TopstepX import pairs it on the entry time and price, puts in the exit fills and closes it. The exit reason is then read off the statement's exit (`exitReasonAfterMerge`), only where the trade has none, and an undo of that import empties it again (`clear_exit_reason`, `20260930040000`). On a Topstep account past its MLL an open trade is refused like a plan — it is exposure, not a record. The exit reason is read off the prices — stop, target, breakeven or closed early — and written only when the trader's own Exit Reason list has that item (`quick-log.ts`). An exit at or **through** the stop is the stop however many ticks it slipped (a stop-market order in a fast tape), and at or past the target is the target; within two ticks short of either counts too. The numbers may be rough: the day's TopstepX export matches the trade (entry within 0.05 %, entry time within ten minutes) and replaces the fills, and the answers stay |
 | `/trades/[id]/review` | The same setup / A-B-C / mistake / sentence review for a trade that arrived only through the export. One UPDATE of the review columns (`saveTradeReview`), never `tj_save_trade`, which rewrites fills and rule answers on every save |
-| `/daily` | **The day in the order it is lived**, in three numbered parts under the day's heading and its streak (`daily-report-form.tsx`). **1 · Pre sesije**: the morning brief ("Pred sesiju", `tj_session_briefs`, `session-brief-card.tsx` — the Topstep close on the account's clock, "berza zatvorena" when the brief says so, the red windows, the expected NQ / ES range and, on today's page only, the DLL left on the primary Topstep account; without a brief it says so and shows the ordinary 15:10 CT close, and a window it cannot read is dropped and counted, never guessed), the focus goal, then **"Pre nego što uđeš"** — two questions, numbered and about the day ahead: *1. Kako si danas?* (mental state, 5 stars, a warning under 3) and *2. Da li danas trguješ?* ("Danas ne trgujem", a decision taken before the session) — and the preparation rules. **2 · Tokom sesije**: the trading rules, scored from the trades and the brief. **3 · Posle sesije**: **Bez pregleda** (the day's closed trades still missing a setup or an A/B/C grade, each a link to its review, `review-gaps.ts`; the 15:20 CT Telegram reminder in `futures-trading` applies the same rule), the day's result, the review rules, then save and lock. Until 29.09.2026 the page opened with the day's money and asked "before you enter" only after the trading rules, with a no-trade box in the past tense that pointed at a position card H1 had removed. The rules are grouped as "Pravila pripreme / trgovanja / osvrta" here, in the page's language, and within each group **the rules to tick come first and the scored ones below** (K1) — a new rule lands in its own half whatever its order; Settings edits them under the English stage names. The day is complete once a focus goal is active |
+| `/daily` | **The day in the order it is lived**, in three numbered parts under the day's heading (`daily-report-form.tsx`). **1 · Pre sesije**: the morning brief ("Pred sesiju", `tj_session_briefs`, `session-brief-card.tsx` — the Topstep close on the account's clock, "berza zatvorena" when the brief says so, the red windows, the expected NQ / ES range and, on today's page only, the DLL left on the primary Topstep account; without a brief it says so and shows the ordinary 15:10 CT close, and a window it cannot read is dropped and counted, never guessed), then **"Pre nego što uđeš"** — two questions, numbered and about the day ahead: *1. Kako si danas?* (mental state, 5 stars, a warning under 3) and *2. Da li danas trguješ?* ("Danas ne trgujem", a decision taken before the session; once saved it takes the manual trading rules out of that day's score) — and the preparation rules. **2 · Tokom sesije**: the trading rules, scored from the trades and the brief. **3 · Posle sesije**: **Bez pregleda** (the day's closed trades still missing a setup or an A/B/C grade, each a link to its review, `review-gaps.ts`; the 15:20 CT Telegram reminder in `futures-trading` applies the same rule), the review rules, then save and lock. The focus goal, the day's result card and the streak strip left in phase M (08.10.2026): the page measures, and closing the day is the conversation with the mentor over the day's mentor pack. Until 29.09.2026 the page opened with the day's money and asked "before you enter" only after the trading rules, with a no-trade box in the past tense that pointed at a position card H1 had removed. The rules are grouped as "Pravila pripreme / trgovanja / osvrta" here, in the page's language, and within each group **the rules to tick come first and the scored ones below** (K1) — a new rule lands in its own half whatever its order; Settings edits them under the English stage names |
 | `/calendar` | Monthly P&L grid by day, weekly totals |
 | `/playbooks` | Every setup as one table: Trades / Net P&L / Win Rate / Missed / Expectancy per row |
 | `/playbooks/[id]` | One playbook: identity, Stats, Rules (section and rule editor), Trades, Notes |
@@ -1069,6 +1069,14 @@ you did not trade, and scoring that as a pass would let a 200-day streak be farm
 `na` drops out of both numerator and denominator, so a disciplined day with no trades still carries
 100 % on the rules it *could* answer.
 
+**A weekday nobody opened is "bez prijave", not 0 %** (phase M, 08.10.2026). A past day with no trade
+verdict, no check-in row and no saved report has status `unlogged`: no percentage, out of the mean and
+the streak, and named as such in the mentor pack — it used to score every manual rule as missed, so a
+week with one trading day read "29 % over 3 days". Any trace of the day (a ticked box, a saved report, a
+trade) makes it a judged day again, unticked rules included. **"Danas ne trgujem"**, once saved, takes
+the manual rules of the trading stage out of that day's score; preparation and review still count.
+**Today, while still pending**, is shown but not averaged.
+
 **Locking a day** freezes the automatic verdicts into rows and is irreversible — enforced by a trigger
 that fires on any edit to a locked report, so there is no unlock action that would need writing.
 Trades from a locked day stay editable: P&L is a fact that must remain correctable, and the frozen
@@ -1569,9 +1577,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,952 tests across 188 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,344 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 608
-tests in 64 files). The rule is the extension, so no file can land in both. The split exists so that
+2,945 tests across 185 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,349 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 596
+tests in 61 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves

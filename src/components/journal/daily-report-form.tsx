@@ -8,7 +8,6 @@ import { ChevronLeft, ChevronRight, Lock, Save } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,12 +25,10 @@ import { StarRating } from "@/components/journal/star-rating";
 import { cn } from "@/lib/utils";
 import {
   emptyDailyReport,
-  isDayComplete,
   nextReportDate,
   prevReportDate,
   type DailyReport,
 } from "@/lib/journal/daily-report";
-import type { FocusGoal } from "@/lib/journal/focus-goal";
 import {
   saveDailyReport,
   type SaveDailyReportInput,
@@ -67,9 +64,7 @@ export function DailyReportForm({
   reportDate,
   today,
   timezone,
-  activeGoal,
   tracker,
-  streak,
   beforeSession,
   afterSession,
 }: {
@@ -77,7 +72,6 @@ export function DailyReportForm({
   reportDate: string;
   today: string;
   timezone: string;
-  activeGoal: FocusGoal | null;
   /**
    * The tracker checklist for this same day.
    *
@@ -88,11 +82,9 @@ export function DailyReportForm({
    * ticked rule is stored the moment you tick it, the report only on Save.
    */
   tracker: TrackerDayData;
-  /** The run of days behind this one — under the day's heading. */
-  streak?: ReactNode;
-  /** The page's own cards for the start of the day: the morning brief, the focus goal. */
+  /** The page's own cards for the start of the day: the morning brief. */
   beforeSession?: ReactNode;
-  /** The page's own cards for the end of it: trades still to review, the day's result. */
+  /** The page's own cards for the end of it: trades still to review. */
   afterSession?: ReactNode;
 }) {
   const router = useRouter();
@@ -120,8 +112,6 @@ export function DailyReportForm({
       e.preventDefault();
   }
 
-  const complete = isDayComplete(activeGoal);
-
   const isToday = reportDate === today;
   const lowMental = form.mental_temp != null && form.mental_temp < 3;
   // In the ACCOUNT's zone, like every other time on this page. `format` read
@@ -146,9 +136,6 @@ export function DailyReportForm({
     if (!res.ok) {
       toast.error(res.error);
       return false;
-    }
-    if (res.warnNoFocusGoal) {
-      toast.warning("Postavi fokus cilj — u odnosu na njega se meri dan.");
     }
     setLastSaved(res.updated_at);
     setDirty(false);
@@ -220,13 +207,8 @@ export function DailyReportForm({
             compliance={tracker.compliance}
             locked={tracker.locked}
           />
-          <Badge variant={complete ? "default" : "secondary"}>
-            {complete ? "Završeno" : "Nacrt"}
-          </Badge>
         </div>
       </div>
-
-      {streak}
 
       {tracker.locked && (
         <Alert>
@@ -304,9 +286,9 @@ export function DailyReportForm({
                       Danas ne trgujem
                     </label>
                     <p className="text-xs text-muted-foreground">
-                      Odluka pre sesije, ne izgovor posle nje. Dan bez ulaza je i dalje
-                      dan: pravila pripreme i osvrta se ocenjuju, a pravila trgovanja
-                      nemaju šta da ocene.
+                      Odluka pre sesije, ne izgovor posle nje. Kad je sačuvano, ručna
+                      pravila trgovanja se za taj dan ne ocenjuju; pravila pripreme i
+                      osvrta važe.
                     </p>
                   </div>
                 </div>
@@ -325,9 +307,14 @@ export function DailyReportForm({
       >
         {/* The trade-stage rules stand even on a day you did not trade: "I
             only trade in my defined hours" is answerable, and answerable well,
-            on a flat day, and hiding them would quietly drop rules from the
-            denominator on exactly the days discipline matters most. Boxed: the
-            biggest stage by far. */}
+            on a flat day. Only a SAVED "Danas ne trgujem" takes the manual ones
+            out of the score (`computeDayCompliance`). Boxed: the biggest stage
+            by far. */}
+        {report?.no_trade_day && (
+          <p className="text-xs text-muted-foreground">
+            Danas ne trguješ: ručna pravila trgovanja se ne ocenjuju.
+          </p>
+        )}
         <fieldset disabled={tracker.locked} className="m-0 min-w-0 border-0 p-0 disabled:opacity-100">
           <TrackerStageSection stage="trade" data={tracker} boxed />
         </fieldset>
@@ -336,12 +323,12 @@ export function DailyReportForm({
       <DaySection
         n={3}
         title="Posle sesije"
-        hint="Pregledaj svaki trejd, pogledaj rezultat dana, odgovori na osvrt — pa sačuvaj i zaključaj dan."
+        hint="Pregledaj svaki trejd, odgovori na osvrt, sačuvaj i zaključaj dan. Zatvaranje dana je razgovor sa mentorom, iz mentor pack-a za Dan."
       >
         {afterSession}
         {/* The debrief prose (what I learned, what I change tomorrow) and the
-            four Douglas-fear checkboxes left in Phase E: nothing read them. The
-            week's review asks those questions, with the week's outcome in hand. */}
+            four Douglas-fear checkboxes left in Phase E: nothing read them. Those
+            questions are asked by the mentor now (phase M), with the pack in hand. */}
         <fieldset disabled={tracker.locked} className="m-0 min-w-0 border-0 p-0 disabled:opacity-100">
           <TrackerStageSection stage="reflect" data={tracker} />
         </fieldset>

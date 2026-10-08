@@ -1,36 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   emptyDailyReport,
-  isDayComplete,
   isFriday,
   nextReportDate,
   prevReportDate,
 } from "./daily-report";
 import { todayIn } from "./time";
-import { daysOnActiveGoal } from "./focus-goal";
-
-const goal = {
-  id: "g1",
-  user_id: "u1",
-  goal_text: "No trades below mental 5",
-  started_at: "2026-07-20",
-  is_active: true,
-  ended_at: null,
-  created_at: "2026-07-20T00:00:00Z",
-  updated_at: "2026-07-20T00:00:00Z",
-};
-
-describe("isDayComplete", () => {
-  it("is complete once a focus goal exists — no position is left to judge (H1)", () => {
-    expect(isDayComplete(goal)).toBe(true);
-  });
-
-  it("is never complete without an active focus goal", () => {
-    // The day is measured against the goal. With no goal set, "complete" has
-    // nothing to be complete against.
-    expect(isDayComplete(null)).toBe(false);
-  });
-});
 
 describe("date helpers", () => {
   it("shifts report dates", () => {
@@ -50,25 +25,6 @@ describe("emptyDailyReport", () => {
     expect(row.report_date).toBe("2026-07-22");
     expect(row.mental_temp).toBeNull();
     expect(row.no_trade_day).toBe(false);
-  });
-});
-
-describe("daysOnActiveGoal", () => {
-  it("is 1-based on start day", () => {
-    expect(daysOnActiveGoal(goal, "2026-07-20")).toBe(1);
-    expect(daysOnActiveGoal(goal, "2026-07-22")).toBe(3);
-  });
-
-  it("counts trading days only — a weekend adds nothing", () => {
-    // Started Monday 20 July 2026. Friday is day 5; Saturday and Sunday stay
-    // at 5; the next Monday is day 6.
-    expect(daysOnActiveGoal(goal, "2026-07-24")).toBe(5);
-    expect(daysOnActiveGoal(goal, "2026-07-26")).toBe(5);
-    expect(daysOnActiveGoal(goal, "2026-07-27")).toBe(6);
-  });
-
-  it("reads at least 1 for a goal set on a weekend", () => {
-    expect(daysOnActiveGoal({ started_at: "2026-07-25T10:00:00Z" }, "2026-07-25")).toBe(1);
   });
 });
 

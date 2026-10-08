@@ -27,6 +27,7 @@ const STATUS_LABELS: Record<DayStatus, string> = {
   broken: "Dan prekršen",
   skipped: "Nema pravila za ovaj dan",
   pending: "Dan u toku",
+  unlogged: "Dan bez prijave",
 };
 
 /**

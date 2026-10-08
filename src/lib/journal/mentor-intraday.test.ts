@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildMentorPack } from "./mentor-export";
-import { dimensionTable, ruleLabel, SMALL_SAMPLE, sr } from "./mentor-intraday";
+import { dimensionTable, ruleLabel, rulesSection, SMALL_SAMPLE, sr } from "./mentor-intraday";
 import { enrichTrades } from "./enriched-trade";
 import { toRealized } from "./analytics";
 import { evaluateTopstep } from "./topstep";
@@ -298,5 +298,41 @@ describe("šta bi bilo u mentor pack-u (faza L)", () => {
     expect(scenarioSection(enrich([{ r: 1 }]))).toEqual([]);
     const line = tradeContextLines(trades[0], { displayTz: "UTC" }).join("\n");
     expect(line).toContain("- **Šta bi bilo:** 30 min posle izlaza +2.50R u mom pravcu / -0.20R protiv · posle stopa TP došao za 40 min · SL za TP +1.30R");
+  });
+});
+
+describe("rulesSection (phase M)", () => {
+  const rule = {
+    id: "r1",
+    text: "Kalendar i HTF",
+    stage: "prepare" as const,
+    active_days: [1, 2, 3, 4, 5],
+    auto_key: null,
+    config: {},
+    is_mandatory: true,
+    sort_order: 0,
+    created_at: "2026-01-01T00:00:00Z",
+    deleted_at: null,
+  };
+  const day = (date: string, status: DayCompliance["status"], pct: number | null) => ({
+    date,
+    applicable: pct == null ? 0 : 1,
+    satisfied: pct === 100 ? 1 : 0,
+    pct,
+    status,
+    missedRuleIds: pct === 0 ? ["r1"] : [],
+    unansweredRuleIds: [],
+  });
+
+  it("averages only judged days and names the unlogged and the still-open ones", () => {
+    const text = rulesSection([rule], [
+      day("2026-10-05", "unlogged", null),
+      day("2026-10-06", "compliant", 100),
+      day("2026-10-07", "pending", 0),
+    ]).join("\n");
+    expect(text).toContain("prosek **100%** na 1 dan");
+    expect(text).toContain("Bez prijave (nijedan trejd, nijedan odgovor, nijedan izveštaj): 1 dan — 2026-10-05");
+    expect(text).toContain("U toku (ne ulazi u prosek): 2026-10-07");
+    expect(text).not.toContain("Najčešće prekršeno");
   });
 });

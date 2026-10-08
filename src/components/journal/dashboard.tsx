@@ -1294,6 +1294,10 @@ export function Dashboard({
    * consumer: the heatmap and streak want the whole span, the score wants the
    * period filter, and the two must never disagree about a day.
    */
+  const reportByDay = useMemo(
+    () => new Map(dailyReports.map((r) => [r.report_date, r])),
+    [dailyReports],
+  );
   const trackerSeries = useMemo(() => {
     if (trackerRules.length === 0) return [];
 
@@ -1327,9 +1331,16 @@ export function Dashboard({
         evaluateAutoRulesForDay(d, index, { briefOf }),
         byDate.get(d) ?? new Map(),
       ),
-    todayKey);
+    todayKey,
+    // The day's report: "Danas ne trgujem" and whether the day was logged at
+    // all — a weekday never opened is "bez prijave", not 0 % (phase M).
+    (d) => {
+      const r = reportByDay.get(d);
+      return r ? { no_trade_day: r.no_trade_day } : null;
+    });
   }, [
     trackerRules,
+    reportByDay,
     checkins,
     briefs,
     trades,

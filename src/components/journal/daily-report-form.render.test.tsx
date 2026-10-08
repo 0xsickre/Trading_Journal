@@ -104,7 +104,6 @@ describe("no check-in per position (H1, 28.09.2026)", () => {
         reportDate="2026-04-02"
         today="2026-04-02"
         timezone="America/New_York"
-        activeGoal={null}
         tracker={trackerData()}
       />,
     );
@@ -120,7 +119,6 @@ describe("a locked day disables everything, including the embedded tracker check
         reportDate="2026-04-02"
         today="2026-04-10"
         timezone="America/New_York"
-        activeGoal={null}
         tracker={trackerData({ locked: true, answers: { r1: true } })}
       />,
     );
@@ -136,7 +134,6 @@ describe("a locked day disables everything, including the embedded tracker check
         reportDate="2026-04-02"
         today="2026-04-10"
         timezone="America/New_York"
-        activeGoal={null}
         tracker={trackerData({ locked: true, answers: { r1: true } })}
       />,
     );
@@ -151,7 +148,6 @@ describe("a locked day disables everything, including the embedded tracker check
         reportDate="2026-04-02"
         today="2026-04-10"
         timezone="America/New_York"
-        activeGoal={null}
         tracker={trackerData({ locked: false })}
       />,
     );
@@ -179,7 +175,6 @@ describe("locking saves the report first, so it never seals empty text", () => {
         reportDate="2026-04-02"
         today="2026-04-10"
         timezone="America/New_York"
-        activeGoal={null}
         tracker={trackerData()}
       />,
     );
@@ -200,7 +195,6 @@ describe("locking saves the report first, so it never seals empty text", () => {
         reportDate="2026-04-02"
         today="2026-04-10"
         timezone="America/New_York"
-        activeGoal={null}
         tracker={trackerData()}
       />,
     );
@@ -220,7 +214,6 @@ describe("moving between days", () => {
         reportDate={reportDate}
         today={today}
         timezone="America/New_York"
-        activeGoal={null}
         tracker={trackerData()}
       />,
     );
@@ -268,7 +261,6 @@ describe("the day reads in the order it is lived", () => {
         reportDate="2026-04-06"
         today="2026-04-06"
         timezone="America/New_York"
-        activeGoal={null}
         tracker={trackerData()}
         beforeSession={<p>BRIEF</p>}
         afterSession={<p>REVIEW GAPS</p>}
@@ -291,7 +283,6 @@ describe("the day reads in the order it is lived", () => {
         reportDate="2026-04-06"
         today="2026-04-06"
         timezone="America/New_York"
-        activeGoal={null}
         tracker={trackerData()}
       />,
     );
@@ -301,5 +292,22 @@ describe("the day reads in the order it is lived", () => {
     // Nothing points at a card that no longer exists, or speaks of the day as past.
     expect(screen.queryByText(/Otvorene pozicije iznad/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Nisam otvorio/)).not.toBeInTheDocument();
+  });
+});
+
+describe("phase M: the page measures, the mentor judges", () => {
+  it("has no focus goal badge and says when the trade rules are off for the day", () => {
+    render(
+      <DailyReportForm
+        report={report({ no_trade_day: true })}
+        reportDate="2026-04-02"
+        today="2026-04-10"
+        timezone="America/New_York"
+        tracker={trackerData()}
+      />,
+    );
+    expect(screen.queryByText("Nacrt")).not.toBeInTheDocument();
+    expect(screen.queryByText("Završeno")).not.toBeInTheDocument();
+    expect(screen.getByText(/ručna pravila trgovanja se ne ocenjuju/)).toBeInTheDocument();
   });
 });

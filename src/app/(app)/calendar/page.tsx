@@ -152,6 +152,7 @@ export default async function CalendarPage({
     ]);
     const briefOf = briefResolver(briefs);
 
+    const reportOfDay = new Map(reports.map((r) => [r.report_date, r]));
     const index = buildTradeDayIndex(scopedTrades, tzOfRow, topstepRulesResolver(accounts, cash));
     const series = computeComplianceSeries(
       days,
@@ -166,6 +167,10 @@ export default async function CalendarPage({
         );
       },
       todayKey,
+      (d) => {
+        const r = reportOfDay.get(d);
+        return r ? { no_trade_day: r.no_trade_day } : null;
+      },
     );
 
     return buildMonthDayList(

@@ -177,8 +177,3 @@ export function briefResolver(briefs: readonly SessionBrief[]): (day: string) =>
   const byDay = new Map(briefs.map((b) => [b.tradingDay, b]));
   return (day) => byDay.get(day) ?? null;
 }
-
-/** The first and last day of a window that ends on `day`, for a ranged read. */
-export function briefWindow(day: string, spanDays: number): { from: string; to: string } {
-  return { from: addDaysToDayKey(day, -(Math.max(1, spanDays) - 1)), to: day };
-}
