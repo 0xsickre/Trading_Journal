@@ -212,3 +212,68 @@ describe("no_entry_in_red_window", () => {
     expect(evalDay([]).no_entry_in_red_window.reason).toBe("no_trades");
   });
 });
+
+describe("stop_after_two_losses (08.10.2026: two SL in a row end the day)", () => {
+  // Risk to the stop is $100 (50 points × $2), so the Topstep breakeven band is ±$10.
+  const rule = (specs: Spec[]) => evalDay(specs).stop_after_two_losses;
+
+  it("fails an entry taken after two losses in a row on the account", () => {
+    const r = rule([
+      { id: "l1", opened: at("13:40"), closed: at("13:50"), net: -100 },
+      { id: "l2", opened: at("14:00"), closed: at("14:10"), net: -100 },
+      { id: "third", opened: at("14:30"), closed: at("14:40"), net: 150 },
+    ]);
+    expect(r.verdict).toBe("fail");
+    expect(r.offenders).toEqual(["third"]);
+    expect(r.counted).toEqual({ observed: 2, limit: 2 });
+  });
+
+  it("a win between two losses breaks the run — not the end of the day", () => {
+    const r = rule([
+      { id: "l1", opened: at("13:40"), closed: at("13:50"), net: -100 },
+      { id: "w", opened: at("14:00"), closed: at("14:10"), net: 150 },
+      { id: "l2", opened: at("14:20"), closed: at("14:30"), net: -100 },
+      { id: "next", opened: at("14:40"), closed: at("14:50"), net: -100 },
+    ]);
+    expect(r.verdict).toBe("pass");
+    expect(r.counted).toEqual({ observed: 1, limit: 2 });
+  });
+
+  it("a scratch inside the breakeven band is not a stop loss and breaks the run too", () => {
+    const r = rule([
+      { id: "l1", opened: at("13:40"), closed: at("13:50"), net: -100 },
+      { id: "scratch", opened: at("14:00"), closed: at("14:10"), net: -5 },
+      { id: "l2", opened: at("14:20"), closed: at("14:30"), net: -100 },
+      { id: "next", opened: at("14:40"), closed: at("14:50"), net: 50 },
+    ]);
+    expect(r.verdict).toBe("pass");
+  });
+
+  it("counts each account on its own, and only losses closed before the entry", () => {
+    expect(
+      rule([
+        { id: "a", account: "ts", opened: at("13:40"), closed: at("13:50"), net: -100 },
+        { id: "b", account: "ts2", opened: at("14:00"), closed: at("14:10"), net: -100 },
+        { id: "c", account: "ts", opened: at("14:20"), closed: at("14:30"), net: -100 },
+      ]).verdict,
+    ).toBe("pass");
+    expect(
+      rule([
+        { id: "a", opened: at("13:40"), closed: at("13:50"), net: -100 },
+        { id: "b", opened: at("13:45"), closed: at("14:30"), net: -100 },
+        { id: "c", opened: at("14:00"), closed: at("14:10"), net: -100 },
+      ]).verdict,
+    ).toBe("pass");
+  });
+
+  it("is unknown behind an unpriced close, and not scored without entries", () => {
+    expect(
+      rule([
+        { id: "l1", opened: at("13:40"), closed: at("13:50"), net: -100 },
+        { id: "x", opened: at("14:00"), closed: at("14:10"), net: null },
+        { id: "next", opened: at("14:20"), closed: at("14:30"), net: 10 },
+      ]).reason,
+    ).toBe("unpriced");
+    expect(rule([]).reason).toBe("no_trades");
+  });
+});

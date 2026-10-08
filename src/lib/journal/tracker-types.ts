@@ -30,6 +30,9 @@ export const AUTO_RULE_KEYS = [
   // 30.09.2026: the day stops on money, never on a count of trades — no entry
   // once the account's personal daily profit target is banked.
   "no_entry_after_daily_target",
+  // 08.10.2026 (trader, with the mentor): two stop losses IN A ROW end the day.
+  // Not a count of trades — a win or a scratch in between breaks the run.
+  "stop_after_two_losses",
 ] as const;
 export type AutoRuleKey = (typeof AUTO_RULE_KEYS)[number];
 

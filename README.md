@@ -32,13 +32,13 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 214 of the
-3,490 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 216 of the
+3,492 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
 |---|---|
-| Daily (the "Pred sesiju" card included) and tracker | 65 |
+| Daily (the "Pred sesiju" card included) and tracker | 67 |
 | Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 142 |
 | Day insight sentence (`low_efficiency_day`) | 1 |
 | A new playbook's three starting sections (`playbook-types.ts`) | 3 |
@@ -196,7 +196,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,956 tests across 185 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,961 tests across 185 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -1028,25 +1028,29 @@ those parts on their own.
 
 ## Process tracking
 
-**Tracker rules** are daily obligations, per weekday. **Ten** are scored automatically from data —
+**Tracker rules** are daily obligations, per weekday. **Eleven** are scored automatically from data —
 max loss per trade and per day, every trade linked to a playbook, every trade has a stop, every
 trade has a thesis written before entry, no entry risked more than the budget, every entry was the
-contract count the budget gave, and the three day-trading rules below — and the rest are ticked by
-hand. **No rule counts trades or losses in a row** (30.09.2026, `20260930070000`): the day stops on
+contract count the budget gave, the three day-trading rules below and two stop losses in a row —
+and the rest are ticked by hand. **No rule counts trades** (30.09.2026, `20260930070000`): the day stops on
 money, as TopstepX's Risk Limits stop it — the daily loss limit, the daily profit target and the MLL.
 `max_trades_per_day` and `stop_after_losses` were deleted with the count setting in Settings ›
-Tracker (neither had a single answer), and so was the tilt insight that priced the same run. The money rules read the **Topstep plan only** (§ Topstep): a trade on any other account is not
+Tracker (neither had a single answer), and so was the tilt insight that priced the same run. On
+08.10.2026 the trader brought back one run, not a count: **two stop losses in a row end the day**
+(`stop_after_two_losses`, fixed at two, no setting), because two full stops at ~$300 leave room
+under a $650 personal DLL for a third entry. The money rules read the **Topstep plan only** (§ Topstep): a trade on any other account is not
 graded by them (`no_topstep_trades`). The weekly loss rule and the percentage-of-equity limits left in
 H2 (`20260929170000`) — Topstep has no weekly limit, and the book has no other account. The same
 migration named the three rules still in English in Serbian.
 
-**The day trader's three (F4 `20260929110000`, 30.09.2026 `20260930070000`).** Each is a decision
+**The day trader's four (F4 `20260929110000`, 30.09.2026 `20260930070000`, 08.10.2026 `20261008140000`).** Each is a decision
 taken at entry, so each is charged to the Topstep day the trade was OPENED on:
 
 | Rule | Fails when | Not scored (`na`) when |
 |---|---|---|
 | `flat_by_close` | a Topstep position closed after that day's close, or is still open once the close has passed | the day had no Topstep trade, the brief says the exchange was closed, or a position is still open before the close |
 | `no_entry_in_red_window` | an entry falls inside a red window of the day's brief, both edges included | the day has no brief |
+| `stop_after_two_losses` (08.10.2026, `20261008140000`) | an entry on an account follows two stop losses IN A ROW, closed before it that Topstep day — a loss is below the breakeven band (on Topstep a tenth of the trade's risk), so a win or a scratch in between breaks the run | the day had no entry, or a close before the entry has no price |
 | `no_entry_after_daily_target` | an entry on a Topstep account follows trades of that account and day, CLOSED before it, whose net reached the account's personal daily profit target | the account has no target (`unconfigured`), the day had no Topstep entry, or a trade closed before the entry has no price |
 
 **The target is per account**, as the Topstep limits are, and it reads only CLOSED money: a winner still open at the entry does not count toward it. The close is the brief's
@@ -1606,8 +1610,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,956 tests across 185 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,360 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 596
+2,961 tests across 185 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,365 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 596
 tests in 61 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

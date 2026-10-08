@@ -18,6 +18,8 @@ import { computeFuturesContracts } from "../plan-calculations";
 import { plannedEntryOf, sealedNumber, sealedText } from "../plan-snapshot";
 import {
   riskBudgetAt,
+  TOPSTEP_BREAKEVEN_R,
+  topstepBreakevenBand,
   TOPSTEP_PLANS,
   TOPSTEP_SLIPPAGE_TOLERANCE,
   topstepMaxContracts,
@@ -26,6 +28,7 @@ import {
   type TopstepRules,
   type TopstepTrade,
 } from "../topstep";
+import { tradeOutcome } from "../breakeven";
 import { dayKeyIn, type DayZone } from "../time";
 import { flatByFor, redWindowAt, type SessionBrief } from "../session-brief";
 import { riskMoneyAtEntry } from "../risk-taken";
@@ -92,6 +95,8 @@ export type AutoRuleResult = {
   at?: string | null;
   /** `no_entry_in_red_window`: the window of the first offending entry. */
   window?: string;
+  /** `stop_after_two_losses`: the longest losing run an entry followed, against the limit. */
+  counted?: { observed: number; limit: number };
 };
 
 /** Everything the evaluators need, and nothing else. */
@@ -109,6 +114,12 @@ export type TrackerTrade = {
   closeDay: string | null;
   /** Null when `point_value_source` is 'missing' — price unknown, not zero. */
   netPl: number | null;
+  /**
+   * A stop loss: below the breakeven band (on a Topstep account a tenth of the
+   * trade's risk, K4), not merely below zero — a scratch is not a stop. Null
+   * when the price is unknown.
+   */
+  isLoss: boolean | null;
   hasPlaybook: boolean;
   hasStop: boolean;
   /** A non-empty `thesis` in the SEALED plan — the reason, written beforehand. */
@@ -243,6 +254,16 @@ function toTrackerTrade(row: TradeRow, zone: DayZone, book: TopstepBook | null):
     openDay: dayKeyIn(openedAt, zone),
     closeDay: row.stats?.closed_at ? dayKeyIn(row.stats.closed_at, zone) : null,
     netPl: row.stats?.net_pl ?? null,
+    isLoss:
+      row.stats?.net_pl == null
+        ? null
+        : book
+          ? tradeOutcome(row, row.stats.net_pl, {
+              from: -topstepBreakevenBand(book.rules.config.plan),
+              to: topstepBreakevenBand(book.rules.config.plan),
+              riskShare: TOPSTEP_BREAKEVEN_R,
+            }) === "loss"
+          : row.stats.net_pl < 0,
     hasPlaybook: row.playbook_id != null && row.playbook_id !== "",
     hasStop: sealedNumber(row, "stop_price") != null,
     // Both read the SEALED plan, which is the whole content of these two rules:
@@ -606,6 +627,57 @@ function evalNoEntryAfterDailyTarget(opened: TrackerTrade[], closedToday: Tracke
   };
 }
 
+/** Two stop losses in a row end the day (08.10.2026). */
+export const STOP_AFTER_LOSSES = 2;
+
+/**
+ * No entry after two stop losses IN A ROW on the same account and day
+ * (trader, 08.10.2026: "2 SL kraj, ali uzastopna — ako jednu dobijem nakon
+ * gubitka nije kraj").
+ *
+ * The run is read from the trades CLOSED before the entry, newest first: it
+ * counts losses and stops at the first trade that is not one — a win or a
+ * scratch inside the breakeven band breaks it. A trade with no price stops the
+ * count as unknown: it might have been the second loss.
+ */
+function evalStopAfterTwoLosses(opened: TrackerTrade[], closedToday: TrackerTrade[]): AutoRuleResult {
+  const key: AutoRuleKey = "stop_after_two_losses";
+  if (opened.length === 0) return na(key, "no_trades");
+  const offenders: string[] = [];
+  let unknown = false;
+  let worst = 0;
+  for (const t of [...opened].sort(byOpened)) {
+    const before = closedToday
+      .filter((c) => c.id !== t.id && c.accountId === t.accountId && epoch(c.closedAt) < epoch(t.openedAt))
+      .sort((a, b) => epoch(a.closedAt) - epoch(b.closedAt));
+    let run = 0;
+    let runUnknown = false;
+    for (let i = before.length - 1; i >= 0; i--) {
+      const loss = before[i].isLoss;
+      if (loss == null) {
+        runUnknown = true;
+        break;
+      }
+      if (!loss) break;
+      run++;
+    }
+    worst = Math.max(worst, run);
+    if (run >= STOP_AFTER_LOSSES) offenders.push(t.id);
+    else if (runUnknown) unknown = true;
+  }
+  if (offenders.length === 0 && unknown) return na(key, "unpriced");
+  const breached = offenders.length > 0;
+  return {
+    key,
+    verdict: breached ? "fail" : "pass",
+    reason: breached ? "violated" : "ok",
+    offenders,
+    observed: null,
+    limit: null,
+    counted: { observed: worst, limit: STOP_AFTER_LOSSES },
+  };
+}
+
 /**
  * Every Topstep position opened on the day is flat by that Topstep day's close:
  * the brief's time (a holiday or an early close), else 15:10 CT.
@@ -713,5 +785,7 @@ export function evaluateAutoRulesForDay(
     flat_by_close: evalFlatByClose(day, opened, ctx),
     no_entry_in_red_window: evalNoEntryInRedWindow(day, opened, ctx),
     no_entry_after_daily_target: evalNoEntryAfterDailyTarget(opened, closed),
+    // Open day: the decision is the entry taken after the run.
+    stop_after_two_losses: evalStopAfterTwoLosses(opened, closed),
   };
 }

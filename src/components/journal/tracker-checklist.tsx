@@ -65,6 +65,11 @@ function dayTradingText(res: AutoRuleResult, currency: string): string | null {
   if (!verdict) return null;
   const broke = res.reason === "violated";
   switch (res.key) {
+    case "stop_after_two_losses":
+      if (!res.counted) return null;
+      return broke
+        ? `Prekršeno: ulaz posle ${res.counted.observed} SL zaredom — dan je bio gotov.`
+        : `U okviru — najduži niz SL pre ulaza: ${res.counted.observed} od ${res.counted.limit}.`;
     case "no_entry_after_daily_target":
       if (res.observed == null || res.limit == null) return null;
       return broke
