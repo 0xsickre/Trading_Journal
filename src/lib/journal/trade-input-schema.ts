@@ -205,6 +205,11 @@ export const importItemSchema = z.object({
   target_price: z.number().finite().positive().nullable().optional(),
   /** The stop off the file — written only onto a trade the import creates (K3). */
   stop_price: z.number().finite().positive().nullable().optional(),
+  /** From TopstepX's orders export (phase O): the stop's last price, how the entry was placed, how it ended. */
+  final_stop_price: z.number().finite().positive().nullable().optional(),
+  entry_order_type: z.enum(["market", "limit", "stop"]).nullable().optional(),
+  exit_kind: z.enum(["stop", "target", "manual"]).nullable().optional(),
+  stop_moved_to_profit: z.boolean().optional(),
   raw: z.record(z.string(), z.string()),
 });
 

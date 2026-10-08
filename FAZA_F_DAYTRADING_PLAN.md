@@ -111,6 +111,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 03.10.2026 | R | Podrazumevani rizik 8 % (trejder: „8 % koristim, 12,5 treba obrisati gde god da piše — to je zastarelo“). Zamenjuje deo odluke R1 od 30.09. („podrazumevanih 12,5 % se ne menja“): `TOPSTEP_DEFAULT_RISK_PCT` = 8, isto `racun.py` (`RIZIK_PCT`) i paritetni `topstep-parity.json`; default kolone `tj_accounts.risk_rule_pct` 8 (migracija `20261003010000`). Oba naloga su već imala 8, pa se njihov broj ugovora ne menja. Posledica: breakeven pojas bez stopa (K4) je 0,1 × 8 % × MLL = **±$16 / 24 / 36** (50K/100K/150K, bilo ±25/38/56); trejd sa stopom se i dalje sudi po svom riziku. Kante „Risk %” u izveštajima oko 8 % (< 5, 5–8, 8–10, 10–15, 15–20, ≥ 20). Forma trejda i podešavanja naloga više nemaju zakucanih 12,5 |
 | 08.10.2026 | M | Mentor tok (trejder: „weekly skroz da ga više nema, daily skrati, preuredi mentor pack“): refleksija (zatvaranje dana / nedelje, pravila) seli se u privatni repo `trading-mentor`, gde Claude ispituje trejdera prema mentor pack-u. Journal meri i izvozi, ne sudi. **M-a** `/weekly` (pregled, eksperimenti, Napredak) se briše sa tabelama `tj_weekly_reviews` i `tj_experiments`, **bez arhive** (ostaje noćni backup). **M-b** focus goal se briše sa tabelom `tj_focus_goals` (dupliran sa „domaćim“ iz `trading-mentor`). **M-c** /daily = brief, mentalna ocena, „ne trgujem“, tracker, review gaps, zaključavanje |
 | 08.10.2026 | posle M | Tracker pravila (trejder, sa mentorom; podaci, ne kod): penzionisana ručna „Provera kalendara i HTF-a“, „Mentalni check-in“, „Vreme trgovanja“, „Kontrola rizika“, „Walk Away Target“ (dupliraju automatska ili su nemerljiva); nova ručna: HTF nivoi i bias, vreme 03:00–16:00 ET, **dva SL zaredom = kraj dana** (isti dan trejder traži automatsko: `stop_after_two_losses`, fiksno 2, gubitak = ispod breakeven pojasa, migracija `20261008140000`; ručno penzionisano), iskreni tagovi. Lični DLL 650 namerno ostaje (prostor za provizije) |
+| 08.10.2026 | O | Prvo uvoz, pa dopuna iz snimka (trejder, OBS snimak sesije): **O-a** propušteni setupi ostaju kroz malu formu iz snimka; **O-b** `/trades/new` i `/trades/log` se uklanjaju; **O-c** TopstepX izvoz trejdova i naloga se uvoze odjednom. Test trejdera 08.10. (Practice, SL niže → BE): izvoz naloga čuva samo POSLEDNJU cenu stopa — originalni stop dolazi iz fajla samo kad nije mogao biti pomeren, inače sa snimka |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -147,6 +148,7 @@ pogađa.
 | **U** | Poeni i tikovi na dashboardu + filter instrumenta (NQ / ES) | — | T | ne | **Opus** | ✅ 01.10.2026 — bez migracije |
 | **V** | Pregled dana / nedelje od Claude-a: isti „Export for Claude“ paket preuzima futures-trading i šalje rutini | — | U | ne | **Opus** | ⛔ obustavljeno (trejder, 02.10.2026) — ne raditi bez novog naloga trejdera |
 | **M** | Mentor tok: bez /weekly, kraći /daily, compliance bez praznih dana, pun mentor pack (Dan / Nedelja) | — | U | da, **briše**: `tj_weekly_reviews`, `tj_experiments`, `tj_focus_goals` | **Opus** | ✅ 08.10.2026 — M1 `d6391df` · M2 `8076b93` · M3 `6be8e87` (migracija `20261008120000` primenjena) + futures-trading `6827ce7` · M4 `786a035` |
+| **O** | Prvo uvoz, pa dopuna iz snimka: izvoz naloga (stop, cilj, izlaz), dopuna iz snimka, propušten setup, bez plan-forme | — | M | da: `20261009090000` (aditivna) | **Opus** | u toku (08.10.2026) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1120,6 +1122,24 @@ put od obustavljene faze V (nema rute ni rutine; trejder sam izvozi paket).
 ### Izlaz iz M
 Nema /weekly ni tabela; /daily je merenje; prosek pravila ne kažnjava dane bez sesije; paket za Dan i Nedelju
 nosi veličinu, fill-ove, plan prema kraju i svaki dan sa trackerom; README 1:1.
+
+## O — Prvo uvoz, pa dopuna iz snimka (detaljno, 08.10.2026)
+
+**Povod** (trejder, 08.10.2026): ulazi marketom, stop stavlja ručno i pomera ga (i na BE), snima sesiju u OBS-u;
+journal treba da radi samo uvoz TopstepX fajlova i dopunu iz snimka. Izvoz trejdova nema stop ni cilj; izvoz naloga
+ima bracket, ali stop samo sa POSLEDNJOM cenom (test trejdera, 08.10).
+
+**Pravilo za stop:** pomeren je sigurno kad je poslednji SL na ulazu ili u profitu (pri uvozu) ili kad je MAE
+prošao poslednji SL a trejd nije izbačen stopom (pri čitanju, MAE stiže iz R2). Nepomeren → `stop_price` = poslednji
+SL iz fajla; pomeren → originalni sa snimka (dopuna, `/daily` „Bez pregleda“).
+
+### Podkoraci
+- **O1** Izvoz naloga u uvozu: `topstepx-orders.ts`, wizard sa dva fajla, `final_stop_price` / `entry_order_type`
+  (`20261009090000`), razlog izlaska iz naloga, merge samo na prazno + undo.
+- **O2** Dopuna iz snimka (originalni stop, cilj, „šta sam rekao pre klika“), `stop-moved.ts`, „Bez pregleda“ za
+  stop, mentor pack „Stop:“ linija, podsetnik u futures-trading.
+- **O3** Propušten setup iz snimka (`/trades/missed/new`).
+- **O4** Uklanjanje `/trades/new` i `/trades/log`, glavna akcija Uvoz, mrtvi kod, README.
 
 ## Katalog stavki
 

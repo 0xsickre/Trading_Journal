@@ -25,6 +25,7 @@
 
 import { normalizeInstrumentSymbol } from "./instrument-aliases";
 import { parseImportNumber } from "./import-number";
+import type { TopstepXBracket } from "./topstepx-orders";
 
 /** The export's header, in its own order. */
 export const TOPSTEPX_HEADERS = [
@@ -57,6 +58,13 @@ export const TOPSTEPX_COLUMNS = {
   fee: "Fees",
   profit: "Profit",
   issue: "Issue",
+  // From the orders export, when it was chosen with the trades (phase O).
+  stop: "Stop",
+  target: "Target",
+  finalStop: "Final stop",
+  entryOrder: "Entry order",
+  exitBy: "Exit by",
+  stopNote: "Stop note",
 } as const;
 
 export type TopstepXTrade = {
@@ -167,20 +175,50 @@ export function readTopstepXTrades(
     });
 }
 
-/** The trades as the one-row-per-trade table the wizard reads. */
-export function topstepXImportRows(trades: TopstepXTrade[]): Record<string, string>[] {
-  return trades.map((t) => ({
-    [TOPSTEPX_COLUMNS.ticket]: t.id,
-    [TOPSTEPX_COLUMNS.contract]: t.contract,
-    [TOPSTEPX_COLUMNS.symbol]: t.symbol,
-    [TOPSTEPX_COLUMNS.side]: t.direction,
-    [TOPSTEPX_COLUMNS.volume]: String(t.size),
-    [TOPSTEPX_COLUMNS.entryPrice]: String(t.entryPrice),
-    [TOPSTEPX_COLUMNS.entryTime]: t.entryTime,
-    [TOPSTEPX_COLUMNS.exitPrice]: String(t.exitPrice),
-    [TOPSTEPX_COLUMNS.exitTime]: t.exitTime,
-    [TOPSTEPX_COLUMNS.fee]: String(t.fees),
-    [TOPSTEPX_COLUMNS.profit]: String(t.pnl),
-    [TOPSTEPX_COLUMNS.issue]: t.problem ?? "",
-  }));
+/**
+ * The trades as the one-row-per-trade table the wizard reads.
+ *
+ * With the orders export, each row also carries its bracket: the target, the
+ * stop's last price, how the entry was placed and how the trade ended. The
+ * stop column — the one written as the trade's stop — is left empty when the
+ * last stop sits at the entry or in profit: that stop was moved, and the one the
+ * risk was taken with has to come from the recording.
+ */
+export function topstepXImportRows(
+  trades: TopstepXTrade[],
+  bracketOf?: (t: TopstepXTrade) => TopstepXBracket | null,
+): Record<string, string>[] {
+  const str = (n: number | null | undefined) => (n == null ? "" : String(n));
+  return trades.map((t) => {
+    const b = bracketOf?.(t) ?? null;
+    const note = !bracketOf
+      ? ""
+      : !b
+        ? "no orders for this trade in the orders file"
+        : b.stopMovedToProfit
+          ? `stop moved to ${b.finalStop === t.entryPrice ? "the entry" : "profit"} (${b.finalStop}) — take the original from the recording`
+          : b.finalStop == null
+            ? "no stop order — take the stop from the recording"
+            : "";
+    return {
+      [TOPSTEPX_COLUMNS.stop]: b && !b.stopMovedToProfit ? str(b.finalStop) : "",
+      [TOPSTEPX_COLUMNS.target]: str(b?.target),
+      [TOPSTEPX_COLUMNS.finalStop]: str(b?.finalStop),
+      [TOPSTEPX_COLUMNS.entryOrder]: b?.entryType ?? "",
+      [TOPSTEPX_COLUMNS.exitBy]: b?.exitKind ?? "",
+      [TOPSTEPX_COLUMNS.stopNote]: note,
+      [TOPSTEPX_COLUMNS.ticket]: t.id,
+      [TOPSTEPX_COLUMNS.contract]: t.contract,
+      [TOPSTEPX_COLUMNS.symbol]: t.symbol,
+      [TOPSTEPX_COLUMNS.side]: t.direction,
+      [TOPSTEPX_COLUMNS.volume]: String(t.size),
+      [TOPSTEPX_COLUMNS.entryPrice]: String(t.entryPrice),
+      [TOPSTEPX_COLUMNS.entryTime]: t.entryTime,
+      [TOPSTEPX_COLUMNS.exitPrice]: String(t.exitPrice),
+      [TOPSTEPX_COLUMNS.exitTime]: t.exitTime,
+      [TOPSTEPX_COLUMNS.fee]: String(t.fees),
+      [TOPSTEPX_COLUMNS.profit]: String(t.pnl),
+      [TOPSTEPX_COLUMNS.issue]: t.problem ?? "",
+    };
+  });
 }

@@ -155,6 +155,35 @@ export function autoExitReason(params: {
 }
 
 /**
+ * Why the trade ended, read off TopstepX's orders (phase O): the stop order
+ * filled is a stop — a trailing one when that stop had been moved to the entry
+ * or into profit — the target order filled is the target, and anything else was
+ * closed by hand, then named off the prices as `autoExitReason` names it.
+ */
+export function exitReasonFromBracket(params: {
+  exitKind: "stop" | "target" | "manual";
+  stopMovedToProfit: boolean;
+  direction: string | null;
+  entry: number | null;
+  exit: number | null;
+  tickSize: number | null;
+  options: readonly string[];
+}): string | null {
+  const pick = (v: string) => (params.options.includes(v) ? v : null);
+  if (params.exitKind === "stop") return params.stopMovedToProfit ? pick("Prateći stop") : pick("Pogođen stop");
+  if (params.exitKind === "target") return pick("Pogođen target");
+  return autoExitReason({
+    direction: params.direction,
+    entry: params.entry,
+    exit: params.exit,
+    stop: null,
+    target: null,
+    tickSize: params.tickSize,
+    options: params.options,
+  });
+}
+
+/**
  * The exit reason an import writes when its fills close a trade that has none —
  * a trade logged while it was still running got no reason, because there was no
  * exit to read it from. Null when the trade already has one (the trader's word

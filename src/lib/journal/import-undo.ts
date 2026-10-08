@@ -30,6 +30,10 @@ export type UndoAuditRow = {
   excursion_written?: boolean | null;
   /** Whether THIS row wrote the exit reason of a trade that closed with it — the same rule again. */
   exit_reason_written?: boolean | null;
+  /** The orders file's stop written onto an empty one (phase O). */
+  stop_written?: boolean | null;
+  /** The orders file's last stop / entry type written (phase O). */
+  orders_written?: boolean | null;
   /**
    * The position's status and review flag before THIS row merged into it.
    *
@@ -53,6 +57,8 @@ export type UndoPlan<T = unknown> = {
     clearTarget: boolean;
     clearExcursion: boolean;
     clearExitReason: boolean;
+    clearStop: boolean;
+    clearOrders: boolean;
     /** The status to put back, when the audit row recorded one. */
     prevStatus: string | null;
     prevNeedsReview: boolean | null;
@@ -111,6 +117,8 @@ export function planUndo<T = unknown>(
       clearTarget: list.some((r) => r.target_written === true),
       clearExcursion: list.some((r) => r.excursion_written === true),
       clearExitReason: list.some((r) => r.exit_reason_written === true),
+      clearStop: list.some((r) => r.stop_written === true),
+      clearOrders: list.some((r) => r.orders_written === true),
       prevStatus: first.prev_status ?? null,
       prevNeedsReview: first.prev_needs_review ?? null,
     });

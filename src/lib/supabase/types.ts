@@ -909,12 +909,14 @@ export type Database = {
           created_at: string
           custom: Json
           direction: string | null
+          entry_order_type: string | null
           entry_price: number | null
           equity_at_entry: number | null
           excursion_note: string | null
           excursion_source: string | null
           execution_rating: number | null
           exit_reason: string | null
+          final_stop_price: number | null
           fx_rate_at_trade: number | null
           gross_pnl_override: number | null
           id: string
@@ -963,12 +965,14 @@ export type Database = {
           created_at?: string
           custom?: Json
           direction?: string | null
+          entry_order_type?: string | null
           entry_price?: number | null
           equity_at_entry?: number | null
           excursion_note?: string | null
           excursion_source?: string | null
           execution_rating?: number | null
           exit_reason?: string | null
+          final_stop_price?: number | null
           fx_rate_at_trade?: number | null
           gross_pnl_override?: number | null
           id?: string
@@ -1017,12 +1021,14 @@ export type Database = {
           created_at?: string
           custom?: Json
           direction?: string | null
+          entry_order_type?: string | null
           entry_price?: number | null
           equity_at_entry?: number | null
           excursion_note?: string | null
           excursion_source?: string | null
           execution_rating?: number | null
           exit_reason?: string | null
+          final_stop_price?: number | null
           fx_rate_at_trade?: number | null
           gross_pnl_override?: number | null
           id?: string

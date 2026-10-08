@@ -196,7 +196,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,961 tests across 185 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,971 tests across 186 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -1411,6 +1411,29 @@ Each row then goes through the same matching as any file: a trade logged by hand
 that day is recognised (entry within 0.05 %, entry time within ten minutes) and its rough numbers
 are replaced by the exact fills, while setup, grade, mistakes and the sentence stay.
 
+### TopstepX orders export, chosen with the trades (phase O, 08.10.2026)
+
+The trades export has no stop and no target, so an imported trade had no R. TopstepX's **orders**
+export has the bracket, and the wizard takes both files at once (`multiple`; each is recognised by
+its header — the orders file alone is refused, `lib/journal/topstepx-orders.ts`). For each trade
+`bracketFor` finds the filled opening order of the same contract and side within two seconds of the
+entry, and the stop-loss and take-profit orders on the other side created between the entry and the
+exit (the filled one wins, else the latest). It gives the **target**, the stop's **last** price, the
+**entry order type** (market / limit / stop) and **how the trade ended** (stop, target, by hand).
+
+**A stop keeps only its last price.** Shown by the trader's test on 08.10.2026: a stop placed lower
+and moved to breakeven leaves one row, at the entry. So the last price is written as the trade's stop
+only where it cannot have been moved; a last stop at the entry or in profit (breakeven, trailing) is
+named on the row — "stop moved … take the original from the recording" — and the stop stays empty.
+The last price is kept in `tj_positions.final_stop_price` either way, with `entry_order_type`
+(`20261009090000`). The exit reason comes from the orders (`exitReasonFromBracket`): the stop filled
+is "Pogođen stop", or "Prateći stop" when it had been moved; the target filled is "Pogođen target"; a
+hand close is named off the prices.
+
+A merge writes the stop, the last stop and the entry type only where the trade has none, and records
+it (`stop_written`, `orders_written` in `tj_import_rows.parsed.prev`) so undo empties them again
+(`clear_stop`, `clear_orders` in `tj_undo_import_batch`).
+
 ### What the file may overwrite, and what it may not
 
 A merge replaces the fills — entry, exit, size, times, commission — because those are the broker's
@@ -1422,13 +1445,13 @@ Two levels sit between those categories, and they are treated differently:
   already on the trade is the trader's plan; a missing one is simply not recorded yet. Undo empties
   the ones this import wrote (`tj_import_rows.target_written`) and leaves the rest alone.
 - **Stop.** Mapped from an `S/L` column and written **only onto a trade the import creates** — never in
-  a merge. A statement states the levels as they stood **at the end**, and a stop pulled to breakeven
+  a merge (the TopstepX orders export is the exception: onto an empty stop only, see above). A statement states the levels as they stood **at the end**, and a stop pulled to breakeven
   mid-trade is the commonest thing a trader does — merging that number would overwrite the stop the
   risk was actually taken with.
 - **Entry (K3).** A trade the import creates — one never written as a plan — takes its planned entry
   from the size-weighted entry fills, with the stop and target above when the file has them
   (`importedPlan` in `import-commit.ts`). Live columns only; the seal is unchanged. The TopstepX trades
-  export carries no stop or target, so such a trade gets its entry and nothing else.
+  export carries no stop or target; with the orders export beside it the trade gets both (above).
 
 ### TradingView backtests (removed)
 
@@ -1610,8 +1633,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,961 tests across 185 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,365 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 596
+2,971 tests across 186 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,373 tests in 125 files) and `components` (environment `jsdom`, files `*.test.tsx`, 598
 tests in 61 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

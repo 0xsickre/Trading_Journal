@@ -606,3 +606,63 @@ describe("a large file is committed in chunks", () => {
     expect(toastSuccessMock).not.toHaveBeenCalled();
   });
 });
+
+describe("TopstepX trades + orders chosen together (phase O)", () => {
+  const TRADES =
+    "Id,ContractName,EnteredAt,ExitedAt,EntryPrice,ExitPrice,Fees,PnL,Size,Type,TradeDay,TradeDuration,Commissions\n" +
+    "1,MNQZ6,10/07/2026 16:20:37 +02:00,10/07/2026 17:49:06 +02:00,31246.5,31366.5,1.66,720,3,Long,10/07/2026 00:00:00 -05:00,01:28:29,2.00\n" +
+    "2,MNQZ6,10/08/2026 21:57:01 +02:00,10/08/2026 21:58:21 +02:00,30969.75,30978.5,1.66,52.5,3,Long,10/08/2026 00:00:00 -05:00,00:01:20,2.00\n";
+  const H =
+    "Id,AccountName,ContractName,Status,Type,Size,Side,CreatedAt,TradeDay,FilledAt,CancelledAt,TriggeredAt,StopPrice,LimitPrice,ExecutePrice,TriggeredPrice,PositionDisposition,CreationDisposition,RejectionReason,ExchangeOrderId,PlatformOrderId\n";
+  const ORDERS =
+    H +
+    "11,A,MNQZ6,Filled,Market,3,Bid,10/07/2026 16:20:37 +02:00,,10/07/2026 16:20:37 +02:00,,,,,31246.5,,Opening,Trader,,,\n" +
+    "12,A,MNQZ6,Filled,Limit,3,Ask,10/07/2026 16:20:37 +02:00,,10/07/2026 17:49:06 +02:00,,,,31366.5,31366.5,,Closing,TakeProfit,,,\n" +
+    "13,A,MNQZ6,Cancelled,Stop,3,Ask,10/07/2026 16:20:37 +02:00,,,10/07/2026 17:49:06 +02:00,,31227.5,,,,Undetermined,StopLoss,,,\n" +
+    "21,A,MNQZ6,Filled,Market,3,Bid,10/08/2026 21:57:01 +02:00,,10/08/2026 21:57:01 +02:00,,,,,30969.75,,Opening,Trader,,,\n" +
+    "22,A,MNQZ6,Cancelled,Stop,3,Ask,10/08/2026 21:57:01 +02:00,,,,,30969.75,,,,Undetermined,StopLoss,,,\n" +
+    "23,A,MNQZ6,Cancelled,Limit,3,Ask,10/08/2026 21:57:01 +02:00,,,,,,31103,,,Undetermined,TakeProfit,,,\n" +
+    "24,A,MNQZ6,Filled,Market,3,Ask,10/08/2026 21:58:21 +02:00,,10/08/2026 21:58:21 +02:00,,,,,30978.5,,Closing,Trader,,,\n";
+
+  it("takes the target and an unmoved stop, and leaves a stop moved to the entry for the recording", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(
+      <ImportWizard
+        accounts={[ACCOUNT]}
+        candidates={[]}
+        instruments={[{ symbol: "MNQ", point_value: 2 }]}
+      />,
+    );
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, [csvFile("trades.csv", TRADES), csvFile("orders.csv", ORDERS)]);
+    expect(await screen.findByText(/Orders export — 7 orders/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Reconcile/ }));
+    expect(screen.getByText(/stop moved to the entry \(30969\.75\)/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Commit/ }));
+
+    await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
+    const [first, second] = commitImportMock.mock.calls[0][0].items;
+    expect(first).toMatchObject({
+      stop_price: 31227.5,
+      target_price: 31366.5,
+      final_stop_price: 31227.5,
+      entry_order_type: "market",
+      exit_kind: "target",
+      stop_moved_to_profit: false,
+    });
+    expect(second).toMatchObject({
+      stop_price: null,
+      target_price: 31103,
+      final_stop_price: 30969.75,
+      exit_kind: "manual",
+      stop_moved_to_profit: true,
+    });
+  });
+
+  it("refuses the orders export on its own", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} />);
+    await upload(user, csvFile("orders.csv", ORDERS));
+    await vi.waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith(expect.stringMatching(/goes with the trades export/)));
+  });
+});

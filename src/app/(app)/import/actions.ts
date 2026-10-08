@@ -10,7 +10,7 @@ import { selectAllByIds, selectAllPages } from "@/lib/supabase/paginate";
 import { computeStatus } from "@/lib/journal/trade-lifecycle";
 import { normalizeInstrumentSymbol } from "@/lib/journal/instrument-aliases";
 import { planUndo } from "@/lib/journal/import-undo";
-import { exitReasonAfterMerge } from "@/lib/journal/quick-log";
+import { exitReasonAfterMerge, exitReasonFromBracket } from "@/lib/journal/quick-log";
 import { getOptionsMap } from "@/lib/journal/options";
 import {
   importedPlan,
@@ -81,6 +81,16 @@ export type ImportItem = {
    * was taken with, and a statement's stop is the one that stood at the end.
    */
   stop_price?: number | null;
+  /**
+   * From TopstepX's orders export, chosen with the trades (phase O). The stop's
+   * LAST price — a moved stop keeps only that one, so `stop_price` is filled
+   * from it only when it cannot have been moved — how the entry was placed, how
+   * the trade ended, and whether the last stop sat at the entry or in profit.
+   */
+  final_stop_price?: number | null;
+  entry_order_type?: "market" | "limit" | "stop" | null;
+  exit_kind?: "stop" | "target" | "manual" | null;
+  stop_moved_to_profit?: boolean;
   raw: Record<string, string>;
 };
 
@@ -120,6 +130,8 @@ type PositionBefore = {
   needs_review: boolean;
   gross_pnl_override: number | null;
   target_price: number | null;
+  final_stop_price: number | null;
+  entry_order_type: string | null;
   max_drawdown_price: number | null;
   max_profit_price: number | null;
   excursion_source: string | null;
@@ -271,6 +283,16 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
 
       if (item.decision === "create") {
         const instrument = normalizeInstrumentSymbol(item.instrument);
+        const exitReason = item.exit_kind
+          ? exitReasonFromBracket({
+              exitKind: item.exit_kind,
+              stopMovedToProfit: item.stop_moved_to_profit === true,
+              direction: item.direction,
+              ...avgFills(item.executions),
+              tickSize: specs.get(instrument ?? "")?.tick_size ?? null,
+              options: await exitReasonOptions(),
+            })
+          : null;
         const { data: pos, error } = await supabase
           .from("tj_positions")
           .insert({
@@ -288,6 +310,8 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
             // just what it held before, so a stop the trader corrects later is
             // read as written, not as an amendment of a plan they never made.
             ...importedPlan(item),
+            ...bracketColumns(item),
+            ...(exitReason ? { exit_reason: exitReason } : {}),
             ...instrumentSnapshot(instrument, specs, accountCurrency),
             // A trade that arrives already filled had no plan in this journal,
             // and that is what gets sealed: an empty seal, or the target the
@@ -376,7 +400,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
     const { data: prevPos, error: posErr } = await supabase
       .from("tj_positions")
       .select(
-        "status, exit_reason, direction, tick_size_at_trade, needs_review, gross_pnl_override, target_price, max_drawdown_price, max_profit_price, excursion_source, equity_at_entry, risk_budget_at_entry, room_at_entry, plan_snapshot, entry_price, stop_price, time_stop, thesis, invalidation, scale_out_levels",
+        "status, exit_reason, direction, tick_size_at_trade, needs_review, gross_pnl_override, target_price, final_stop_price, entry_order_type, max_drawdown_price, max_profit_price, excursion_source, equity_at_entry, risk_budget_at_entry, room_at_entry, plan_snapshot, entry_price, stop_price, time_stop, thesis, invalidation, scale_out_levels",
       )
       .eq("id", pid)
       .maybeSingle();
@@ -386,17 +410,33 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
 
     // Only onto an empty target, and recorded so undo can empty it again.
     const targetWritten = item.target_price != null && before.target_price == null;
+    // The stop from the orders file (phase O), likewise only onto an empty one:
+    // a stop the trader wrote is the one the risk was taken with.
+    const stopWritten = item.stop_price != null && before.stop_price == null;
+    const ordersWritten =
+      (item.final_stop_price != null && before.final_stop_price == null) ||
+      (item.entry_order_type != null && before.entry_order_type == null);
     // A trade logged while still running had no exit to read a reason from;
     // the statement's exit fills give one. Recorded, so undo empties it again.
-    const exitReason = exitReasonAfterMerge({
-      current: before.exit_reason,
-      fills: item.executions,
-      direction: before.direction,
-      stop: before.stop_price,
-      target: targetWritten ? item.target_price : before.target_price,
-      tickSize: before.tick_size_at_trade,
-      options: await exitReasonOptions(),
-    });
+    const exitReason =
+      item.exit_kind && !before.exit_reason
+        ? exitReasonFromBracket({
+            exitKind: item.exit_kind,
+            stopMovedToProfit: item.stop_moved_to_profit === true,
+            direction: before.direction,
+            ...avgFills(item.executions),
+            tickSize: before.tick_size_at_trade,
+            options: await exitReasonOptions(),
+          })
+        : exitReasonAfterMerge({
+            current: before.exit_reason,
+            fills: item.executions,
+            direction: before.direction,
+            stop: stopWritten ? (item.stop_price ?? null) : before.stop_price,
+            target: targetWritten ? item.target_price : before.target_price,
+            tickSize: before.tick_size_at_trade,
+            options: await exitReasonOptions(),
+          });
 
     const { data: auditRow, error: auditErr } = await audit(item, {
       matched_position_id: pid,
@@ -407,6 +447,8 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
         status: before.status,
         needs_review: before.needs_review,
         ...(exitReason ? { exit_reason_written: true } : {}),
+        ...(stopWritten ? { stop_written: true } : {}),
+        ...(ordersWritten ? { orders_written: true } : {}),
       },
     });
     if (auditErr || !auditRow) throw new Error(auditErr?.message ?? "Could not record the merge.");
@@ -426,6 +468,13 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
           // mapped leaves the existing value alone rather than clearing it.
           ...(item.gross_pnl_override != null ? { gross_pnl_override: item.gross_pnl_override } : {}),
           ...(targetWritten ? { target_price: item.target_price } : {}),
+          ...(stopWritten ? { stop_price: item.stop_price } : {}),
+          ...(item.final_stop_price != null && before.final_stop_price == null
+            ? { final_stop_price: item.final_stop_price }
+            : {}),
+          ...(item.entry_order_type != null && before.entry_order_type == null
+            ? { entry_order_type: item.entry_order_type }
+            : {}),
           ...(exitReason ? { exit_reason: exitReason } : {}),
           // The same moment seals the plan: a plan the statement turns into a
           // position is sealed as the trader wrote it, including a target this
@@ -437,6 +486,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
             planFieldsOf({
               ...before,
               ...(targetWritten ? { target_price: item.target_price } : {}),
+              ...(stopWritten ? { stop_price: item.stop_price } : {}),
             }),
           ),
           // A plan that the statement turns into a position gets its
@@ -580,13 +630,23 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
   const plan = planUndo<SnapshotExec>(
     rows.map((r) => {
       const prev = (
-        r.parsed as { prev?: { status?: string; needs_review?: boolean; exit_reason_written?: boolean } } | null
+        r.parsed as {
+          prev?: {
+            status?: string;
+            needs_review?: boolean;
+            exit_reason_written?: boolean;
+            stop_written?: boolean;
+            orders_written?: boolean;
+          };
+        } | null
       )?.prev;
       return {
         ...r,
         prev_status: prev?.status ?? null,
         prev_needs_review: prev?.needs_review ?? null,
         exit_reason_written: prev?.exit_reason_written === true,
+        stop_written: prev?.stop_written === true,
+        orders_written: prev?.orders_written === true,
       };
     }),
     createdIds,
@@ -660,7 +720,7 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
   // The database function only carries that decision out.
   const { error: undoErr } = await supabase.rpc("tj_undo_import_batch", {
     p_batch_id: batchId,
-    p_restore: plan.restore.map(({ positionId, executions, clearTarget, clearExcursion, clearExitReason, prevStatus, prevNeedsReview }) => ({
+    p_restore: plan.restore.map(({ positionId, executions, clearTarget, clearExcursion, clearExitReason, clearStop, clearOrders, prevStatus, prevNeedsReview }) => ({
       position_id: positionId,
       // `source` is carried back. The snapshot holds it, and the function
       // collapses an absent one to `manual` — so listing the other six fields by
@@ -685,6 +745,8 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
       clear_target: clearTarget,
       clear_excursion: clearExcursion,
       clear_exit_reason: clearExitReason,
+      clear_stop: clearStop,
+      clear_orders: clearOrders,
     })) as unknown as Json,
     p_delete_ids: plan.deleteIds,
   });
@@ -700,4 +762,22 @@ export async function undoImportBatch(batchId: string): Promise<UndoResult> {
     restoredPositions: plan.restore.length,
     unrestorableMerges: plan.unrestorableIds.length,
   };
+}
+
+/** The orders file's columns of a new trade (phase O). */
+function bracketColumns(item: ImportItem) {
+  return {
+    ...(item.final_stop_price != null ? { final_stop_price: item.final_stop_price } : {}),
+    ...(item.entry_order_type != null ? { entry_order_type: item.entry_order_type } : {}),
+  };
+}
+
+/** Size-weighted entry and exit of a row's fills. */
+function avgFills(execs: ImportExec[]): { entry: number | null; exit: number | null } {
+  const avg = (side: "entry" | "exit") => {
+    const f = execs.filter((e) => e.side === side && e.qty > 0);
+    const qty = f.reduce((s, e) => s + e.qty, 0);
+    return qty > 0 ? f.reduce((s, e) => s + e.price * e.qty, 0) / qty : null;
+  };
+  return { entry: avg("entry"), exit: avg("exit") };
 }

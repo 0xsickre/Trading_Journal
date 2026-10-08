@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  exitReasonFromBracket,
   autoExitReason,
   exitReasonAfterMerge,
   gradeFromRating,
@@ -216,5 +217,19 @@ describe("exitReasonAfterMerge — the export closes a trade logged while runnin
     expect(exitReasonAfterMerge({ ...base, current: "Prateći stop", fills: fills(30604.5) })).toBeNull();
     expect(exitReasonAfterMerge({ ...base, current: null, fills: fills(null) })).toBeNull();
     expect(exitReasonAfterMerge({ ...base, current: null, fills: fills(30544, 1) })).toBeNull();
+  });
+});
+
+describe("exitReasonFromBracket (phase O)", () => {
+  const options = ["Pogođen stop", "Prateći stop", "Pogođen target", "Na nuli", "Zatvoreno ranije"];
+  const base = { direction: "Long", entry: 30969.75, exit: 30978.5, tickSize: 0.25, options };
+  it("names the order that closed the trade", () => {
+    expect(exitReasonFromBracket({ ...base, exitKind: "stop", stopMovedToProfit: false })).toBe("Pogođen stop");
+    expect(exitReasonFromBracket({ ...base, exitKind: "stop", stopMovedToProfit: true })).toBe("Prateći stop");
+    expect(exitReasonFromBracket({ ...base, exitKind: "target", stopMovedToProfit: false })).toBe("Pogođen target");
+  });
+  it("reads a hand close off the prices", () => {
+    expect(exitReasonFromBracket({ ...base, exitKind: "manual", stopMovedToProfit: true })).toBe("Zatvoreno ranije");
+    expect(exitReasonFromBracket({ ...base, exit: 30970, exitKind: "manual", stopMovedToProfit: true })).toBe("Na nuli");
   });
 });

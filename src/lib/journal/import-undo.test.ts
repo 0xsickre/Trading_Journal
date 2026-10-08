@@ -55,11 +55,23 @@ describe("planUndo", () => {
         clearTarget: false,
         clearExcursion: false,
         clearExitReason: false,
+        clearStop: false,
+        clearOrders: false,
         prevStatus: null,
         prevNeedsReview: null,
       },
     ]);
     expect(plan.unrestorableIds).toEqual([]);
+  });
+
+  it("empties the stop and the orders columns a merge wrote (phase O)", () => {
+    const rows: UndoAuditRow[] = [
+      { matched_position_id: "old-1", prev_executions: [], stop_written: true },
+      { matched_position_id: "old-1", prev_executions: [], orders_written: true },
+    ];
+    const [r] = planUndo(rows, []).restore;
+    expect(r.clearStop).toBe(true);
+    expect(r.clearOrders).toBe(true);
   });
 
   it("flags merges from before the snapshot column instead of guessing", () => {

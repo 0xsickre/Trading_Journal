@@ -169,6 +169,10 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- Odakle je automatski MAE/MFE pročitan: ugovor i rezolucija, npr.
   -- "MNQZ6 · 1s" (20260928120000).
   excursion_note       text,
+  -- TopstepX izvoz naloga (20261009090000): POSLEDNJA cena stop naloga — pomeren
+  -- stop čuva samo nju; originalni je stop_price. I kako je ulaz dat.
+  final_stop_price     numeric,
+  entry_order_type     text,
   -- Udeo trajanja trejda (%) sa tekućim P&L < 0, iz istih R2 sveća; piše ga samo
   -- `futures-trading` journal_mae.py (20260929235000). NULL = nije izmereno.
   time_underwater_pct  numeric,

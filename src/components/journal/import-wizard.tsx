@@ -32,6 +32,12 @@ import {
   type TopstepXTrade,
 } from "@/lib/journal/topstepx-export";
 import {
+  bracketFor,
+  isTopstepXOrders,
+  readTopstepXOrders,
+  type TopstepXOrder,
+} from "@/lib/journal/topstepx-orders";
+import {
   commitImport,
   type ImportExec,
   type ImportItem,
@@ -113,8 +119,9 @@ const TOPSTEPX_MAP: Record<Canonical, string> = {
   exit_time: TOPSTEPX_COLUMNS.exitTime,
   fee: TOPSTEPX_COLUMNS.fee,
   profit: "",
-  target: "",
-  stop: "",
+  // From the orders export when it was chosen too (phase O); empty otherwise.
+  target: TOPSTEPX_COLUMNS.target,
+  stop: TOPSTEPX_COLUMNS.stop,
 };
 /**
  * A row under review. `_blocked` is set when a key cell could not be read:
@@ -183,37 +190,29 @@ export function ImportWizard({
   // Set when the file is TopstepX's trades export: month-first dates the time
   // parser would refuse, and two cost columns, so the layout is read directly.
   const [topstepx, setTopstepx] = useState<TopstepXTrade[] | null>(null);
+  // TopstepX's orders export, chosen together with the trades (phase O): the
+  // bracket — target, the stop's last price, how the trade ended.
+  const [orders, setOrders] = useState<TopstepXOrder[] | null>(null);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setFilename(file.name);
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setFilename(files.map((f) => f.name).join(" + "));
     setTopstepx(null);
+    setOrders(null);
     try {
       let parsed: Record<string, string>[] = [];
       let topstepxRows: Record<string, unknown>[] | null = null;
-      if (file.name.toLowerCase().endsWith(".csv")) {
-        const text = await file.text();
-        const Papa = (await import("papaparse")).default;
-        const res = Papa.parse<Record<string, string>>(text, {
-          header: true,
-          skipEmptyLines: true,
-        });
-        parsed = res.data;
-        if (parsed.length > 0 && isTopstepXTrades(Object.keys(parsed[0]))) topstepxRows = parsed;
-      } else {
-        const buf = await file.arrayBuffer();
-        const XLSX = await import("xlsx");
-        // A statement's dates as real dates, written out unambiguously. Read as
-        // text they came out in whatever short form the cell was formatted with
-        // ("3/5/26 14:30"), which the time parser rightly refuses.
-        const dated = XLSX.read(buf, { type: "array", cellDates: true });
-        const ws = dated.Sheets[dated.SheetNames[0]];
-        parsed = XLSX.utils.sheet_to_json(ws, {
-          defval: "",
-          raw: false,
-          dateNF: "yyyy-mm-dd hh:mm:ss",
-        });
+      let orderRows: Record<string, unknown>[] | null = null;
+      for (const file of files) {
+        const read = await readFile(file);
+        if (read.csv && isTopstepXTrades(read.headers)) topstepxRows = read.rows;
+        else if (read.csv && isTopstepXOrders(read.headers)) orderRows = read.rows;
+        else parsed = read.rows;
+      }
+      if (orderRows && !topstepxRows) {
+        toast.error("The orders export goes with the trades export — choose both files together.");
+        return;
       }
       if (topstepxRows) {
         setHeaders([]);
@@ -227,6 +226,7 @@ export function ImportWizard({
           return;
         }
         setTopstepx(trades);
+        setOrders(orderRows ? readTopstepXOrders(orderRows) : null);
         return;
       }
       if (parsed.length === 0) {
@@ -241,6 +241,36 @@ export function ImportWizard({
       toast.error("Failed to parse file");
       console.error(err);
     }
+  }
+
+  /** One file's rows and header; a CSV's header is read even when it has no rows. */
+  async function readFile(
+    file: File,
+  ): Promise<{ csv: boolean; headers: string[]; rows: Record<string, string>[] }> {
+    let parsed: Record<string, string>[] = [];
+    if (file.name.toLowerCase().endsWith(".csv")) {
+      const text = await file.text();
+      const Papa = (await import("papaparse")).default;
+      const res = Papa.parse<Record<string, string>>(text, {
+        header: true,
+        skipEmptyLines: true,
+      });
+      return { csv: true, headers: res.meta.fields ?? [], rows: res.data };
+    } else {
+      const buf = await file.arrayBuffer();
+      const XLSX = await import("xlsx");
+      // A statement's dates as real dates, written out unambiguously. Read as
+      // text they came out in whatever short form the cell was formatted with
+      // ("3/5/26 14:30"), which the time parser rightly refuses.
+      const dated = XLSX.read(buf, { type: "array", cellDates: true });
+      const ws = dated.Sheets[dated.SheetNames[0]];
+      parsed = XLSX.utils.sheet_to_json(ws, {
+        defval: "",
+        raw: false,
+        dateNF: "yyyy-mm-dd hh:mm:ss",
+      });
+    }
+    return { csv: false, headers: parsed.length > 0 ? Object.keys(parsed[0]) : [], rows: parsed };
   }
 
   /**
@@ -272,7 +302,11 @@ export function ImportWizard({
         toast.error(`TopstepX trades are in USD, "${account.name}" is in ${account.currency}. Pick a USD account.`);
         return;
       }
-      buildFrom(topstepXImportRows(topstepx), TOPSTEPX_MAP, TOPSTEPX_COLUMNS.issue);
+      buildFrom(
+        topstepXImportRows(topstepx, orders ? (t) => bracketFor(t, orders) : undefined),
+        TOPSTEPX_MAP,
+        TOPSTEPX_COLUMNS.issue,
+      );
       return;
     }
     for (const req of ["instrument", "direction", "qty", "entry_price", "entry_time"] as Canonical[]) {
@@ -327,6 +361,12 @@ export function ImportWizard({
       const target = map.target ? read(map.target, "target") : null;
       // Written only onto a trade this import creates — see `commitImport`.
       const stop = map.stop ? read(map.stop, "stop") : null;
+      // TopstepX's orders export (phase O): the stop's last price, how the entry
+      // was placed, how the trade ended, and what the reader must still bring.
+      const finalStop = num(row[TOPSTEPX_COLUMNS.finalStop] ?? "");
+      const entryOrder = row[TOPSTEPX_COLUMNS.entryOrder] || null;
+      const exitBy = row[TOPSTEPX_COLUMNS.exitBy] || null;
+      const stopNote = row[TOPSTEPX_COLUMNS.stopNote] || "";
 
       // A quantity of zero is the same as an unread cell, and has to be seen as
       // one. `read` flagged only a cell the parser COULD NOT read; a literal
@@ -467,6 +507,7 @@ export function ImportWizard({
       // A row the source itself marked as not importable as read. Skipped by
       // default and named first, so it is the first thing read on the row;
       // the decision stays the reader's to change.
+      if (stopNote) diff.push(stopNote);
       const issue = issueCol ? row[issueCol] : "";
       if (issue) {
         diff.unshift(issue);
@@ -505,6 +546,11 @@ export function ImportWizard({
         gross_pnl_override: profit,
         target_price: target != null && target > 0 ? target : null,
         stop_price: stop != null && stop > 0 ? stop : null,
+        final_stop_price: finalStop != null && finalStop > 0 ? finalStop : null,
+        entry_order_type:
+          entryOrder === "market" || entryOrder === "limit" || entryOrder === "stop" ? entryOrder : null,
+        exit_kind: exitBy === "stop" || exitBy === "target" || exitBy === "manual" ? exitBy : null,
+        stop_moved_to_profit: stopNote.startsWith("stop moved"),
         raw: row,
         _blocked: blocked,
         // After the duplicate check above, so an unreadable cell never changes
@@ -717,11 +763,12 @@ export function ImportWizard({
                 ref={fileRef}
                 type="file"
                 accept=".csv,.xlsx,.xls"
+                multiple
                 className="hidden"
                 onChange={onFile}
               />
               <Button variant="outline" onClick={() => fileRef.current?.click()}>
-                <Upload className="size-4" /> Choose CSV / Excel
+                <Upload className="size-4" /> Choose file(s)
               </Button>
               {filename && (
                 <span className="text-sm text-muted-foreground">
@@ -738,6 +785,11 @@ export function ImportWizard({
                   offset, fees and commissions are added into one cost, and each trade&apos;s
                   P&amp;L is checked against its price move × the contract&apos;s multiplier.
                   MAE/MFE is filled the next morning from the exchange&apos;s candles.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {orders
+                    ? `Orders export — ${orders.length} orders: each trade gets its target, its stop and how it ended. A stop moved to the entry or into profit is not taken; the original comes from the recording.`
+                    : "No orders export chosen: the trades get no stop and no target. Choose both files together to have them."}
                 </p>
                 <div className="flex justify-end">
                   <Button onClick={buildItems}>
