@@ -29,6 +29,8 @@ export type DailyReportLite = {
   report_date: string;
   mental_temp: number | null;
   no_trade_day: boolean;
+  /** When the day was sealed; the mentor pack says "zaključan". Optional for callers that do not load it. */
+  locked_at?: string | null;
 };
 
 /** Number of entry and exit fills per position id. */
@@ -152,7 +154,10 @@ export function enrichTrades(
       closeWeek: weekKeyIn(t.closedAt, tz),
       entryFills: fills?.entries ?? 0,
       exitFills: fills?.exits ?? 0,
-      size: numField(t.row, "position_size"),
+      // The contracts actually filled. `position_size` is the PLANNED size —
+      // empty on a trade logged after its entry and on every import, which left
+      // the mentor pack printing "Max ugovora —" for a 3-lot (phase M).
+      size: t.row.stats?.entry_qty ?? numField(t.row, "position_size"),
       riskMoney: riskMoneyAtEntry(t.row),
       riskPctTaken: riskPctTaken(t.row),
       instrument,

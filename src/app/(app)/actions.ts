@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
+import { selectAllByIds } from "@/lib/supabase/paginate";
+import type { MentorFill } from "@/lib/journal/mentor-intraday";
 import {
   TEMPLATE_NAME_MAX,
   normalizeTemplateName,
@@ -234,4 +236,45 @@ export async function selectDashboardTemplate(
 
   revalidatePath("/");
   return { ok: true };
+}
+
+const positionIds = z.array(z.string().uuid()).max(5000);
+
+/**
+ * The fills of the trades going into a mentor pack (phase M).
+ *
+ * Loaded at export, not with the dashboard: the pack prints every fill (an add
+ * against the position, a scale-out) but the screens only need counts, and the
+ * whole execution table on every dashboard load would be paying for a button.
+ * RLS scopes the read to the caller; an empty map on any failure lets the pack
+ * build without the lines rather than not at all.
+ */
+export async function getMentorExecutions(
+  ids: string[],
+): Promise<Record<string, MentorFill[]>> {
+  const parsed = positionIds.safeParse(ids);
+  if (!parsed.success || parsed.data.length === 0) return {};
+  const supabase = await createClient();
+  const rows = await selectAllByIds<
+    { position_id: string; side: string; qty: number; price: number; executed_at: string },
+    string
+  >(parsed.data, (chunk, from, to) =>
+    supabase
+      .from("tj_executions")
+      .select("position_id, side, qty, price, executed_at")
+      .in("position_id", chunk)
+      .order("position_id")
+      .order("id")
+      .range(from, to),
+  );
+  const out: Record<string, MentorFill[]> = {};
+  for (const r of rows) {
+    (out[r.position_id] ??= []).push({
+      side: r.side,
+      qty: Number(r.qty),
+      price: Number(r.price),
+      executed_at: r.executed_at,
+    });
+  }
+  return out;
 }

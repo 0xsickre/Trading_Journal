@@ -41,6 +41,12 @@ export type DayCompliance = {
   missedRuleIds: string[];
   /** Rules with no answer yet, on a day that is still open. */
   unansweredRuleIds: string[];
+  /**
+   * Rules live on the day that could not be judged: an auto rule with an `na`
+   * verdict, or a manual trade-stage rule on a "Danas ne trgujem" day. Listed
+   * so the mentor pack can say "n/a" rather than leave a rule out (phase M).
+   */
+  notApplicableRuleIds?: string[];
 };
 
 export type AutoResults = Partial<Record<AutoRuleKey, AutoRuleResult>>;
@@ -169,10 +175,17 @@ export function computeDayCompliance(
   let satisfied = 0;
   const missedRuleIds: string[] = [];
   const unansweredRuleIds: string[] = [];
+  const notApplicableRuleIds: string[] = [];
 
   for (const rule of rules) {
-    if (!ruleAppliesOn(rule, date, auto)) continue;
-    if (noTradeDay && !rule.auto_key && rule.stage === "trade") continue;
+    if (!ruleAppliesOn(rule, date, auto)) {
+      if (ruleIsLiveOn(rule, date)) notApplicableRuleIds.push(rule.id);
+      continue;
+    }
+    if (noTradeDay && !rule.auto_key && rule.stage === "trade") {
+      notApplicableRuleIds.push(rule.id);
+      continue;
+    }
     applicable++;
 
     if (rule.auto_key) {
@@ -213,6 +226,7 @@ export function computeDayCompliance(
       status: "unlogged",
       missedRuleIds: [],
       unansweredRuleIds,
+      notApplicableRuleIds,
     };
   }
 
@@ -228,7 +242,16 @@ export function computeDayCompliance(
     status = missedRuleIds.length === unansweredRuleIds.length ? "pending" : "broken";
   } else status = "broken";
 
-  return { date, applicable, satisfied, pct, status, missedRuleIds, unansweredRuleIds };
+  return {
+    date,
+    applicable,
+    satisfied,
+    pct,
+    status,
+    missedRuleIds,
+    unansweredRuleIds,
+    notApplicableRuleIds,
+  };
 }
 
 /**

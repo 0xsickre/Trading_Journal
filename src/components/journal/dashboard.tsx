@@ -108,6 +108,7 @@ import {
   dayKeyIn,
   dayKeyLabel,
   dayStartUtcIn,
+  isTradingDayKey,
   isoWeekdayOfDayKey,
   zoneTz,
 } from "@/lib/journal/time";
@@ -162,6 +163,7 @@ import {
 import {
   createDashboardTemplate,
   deleteDashboardTemplate,
+  getMentorExecutions,
   renameDashboardTemplate,
   selectDashboardTemplate,
   setDashboardHiddenWidgets,
@@ -169,6 +171,7 @@ import {
   updateDashboardTemplateWidgets,
 } from "@/app/(app)/actions";
 import { TemplateMenu } from "@/components/journal/template-menu";
+import type { MentorFill } from "@/lib/journal/mentor-intraday";
 import {
   layoutToWidgets,
   templateMatchesLayout,
@@ -1615,7 +1618,7 @@ export function Dashboard({
     [scopedRows],
   );
 
-  function handleExportMentorPack() {
+  async function handleExportMentorPack() {
     // The trigger button is disabled in this state too — this is the same
     // belt-and-suspenders the rest of the mixed-currency handling uses
     // (`mixedCurrency`'s own comment above): `currency` falls back to "USD"
@@ -1671,6 +1674,15 @@ export function Dashboard({
       }),
     );
 
+    // Every fill of the exported trades (phase M): loaded now, not with the page.
+    // On failure the pack still builds, without the fill lines.
+    let fills: Record<string, MentorFill[]> = {};
+    try {
+      fills = await getMentorExecutions(scoped.map((t) => t.id));
+    } catch {
+      toast.warning("Fills could not be loaded — the pack is built without them.");
+    }
+
     const md = buildMentorPack(scoped, {
       rules: playbookLookup.rules,
       insights: scopedInsights,
@@ -1704,6 +1716,16 @@ export function Dashboard({
       briefs,
       reports: dailyReports,
       accountNames: new Map(accounts.map((a) => [a.id, a.name])),
+      // Every weekday of the period up to today, so a day without a trade is in
+      // the pack too. The tracker series already holds exactly those days.
+      periodDays: trackerSeries
+        .map((d) => d.date)
+        .filter(
+          (d) =>
+            isTradingDayKey(d) && (fromDay == null || d >= fromDay) && (toDay == null || d <= toDay),
+        ),
+      executions: new Map(Object.entries(fills)),
+      playbookNames: new Map(playbooks.map((p) => [p.id, p.name])),
     });
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -2059,7 +2081,7 @@ export function Dashboard({
               <Button
                 size="sm"
                 className="w-full"
-                onClick={handleExportMentorPack}
+                onClick={() => void handleExportMentorPack()}
               >
                 <Download className="size-4" /> Download .md
               </Button>

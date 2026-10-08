@@ -97,7 +97,7 @@ export async function getDailyReportsLite(): Promise<DailyReportLite[]> {
   const data = await selectAllPages((from, to) =>
     supabase
       .from("tj_daily_reports")
-      .select("report_date, mental_temp, no_trade_day")
+      .select("report_date, mental_temp, no_trade_day, locked_at")
       .order("report_date", { ascending: false })
       .range(from, to),
   );

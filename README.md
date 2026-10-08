@@ -32,14 +32,14 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 187 of the
-3,440 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 212 of the
+3,486 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
 |---|---|
 | Daily (the "Pred sesiju" card included) and tracker | 63 |
-| Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 117 |
+| Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 142 |
 | Day insight sentence (`low_efficiency_day`) | 1 |
 | A new playbook's three starting sections (`playbook-types.ts`) | 3 |
 | The seeded tag values Log Trade writes (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2) | 3 |
@@ -196,7 +196,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,945 tests across 185 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,952 tests across 185 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -968,9 +968,17 @@ scope (`mentor-export.ts`), to be uploaded into a chat: every number is computed
 interprets and never calculates. Since F5.6 (29.09.2026) it carries what decides an intraday Topstep
 book, from values the screens already derive (`mentor-intraday.ts`):
 
-- **The instructions and the legend** are a futures day trader's: read the account's survival first,
-  then the day, then the timing, then each trade; treat a group marked ⚠ (under 10 trades) as a
-  hypothesis; cite trades by number; end with two or three rules the tracker can check. The legend
+- **The instructions depend on the period** (phase M, 08.10.2026). A **Day** pack is the close of
+  the day: the model is told not to review but to question the trader — up to fifteen numbered
+  questions at once, from the result, the preparation, the risk against the budget, the stop and the
+  exit to situational ones the data raises (a loss, a broken rule, MAE ≥ 0.7R, an add against the
+  position, a moved stop, a day not logged) — then a verdict and one thing for tomorrow. A **Week**
+  pack is the review, opening with "0. Domaći" (last week's rules, yes or no with evidence) and ending
+  with two or three rules the tracker can check. Any other period keeps the review without the
+  homework. All of them name the private `trading-mentor` repo (follow its CLAUDE.md when working
+  there) and still work in a plain chat. The intraday instructions read the account's survival
+  first, then the day, then the timing, then each trade; a group marked ⚠ (under 10 trades) is a
+  hypothesis; trades are cited by number. The legend
   explains the Topstep trading day (17:00–17:00 CT), the trailing MLL and its lock, the DLL, the 55 %
   consistency rule, the session windows, "after losses" (analytics only — the day stops on money),
   time underwater and news windows.
@@ -981,18 +989,33 @@ book, from values the screens already derive (`mentor-intraday.ts`):
 - **The trader's rules**: every live tracker rule (manual or automatic, with its key), the
   period's mean compliance and the rules broken most often.
 - **Day shape** in the statistics: trading days green and red, trades per day (mean and most),
-  the average green and red day, the median hold, the average size.
-- **Daily review**: one row per trading day — trades, W/L/BE, net, R, first entry in ET, the longest
-  losing run, most contracts, rules kept (and which were missed, by
-  their short name — the text before the colon — marked "ukinuto" when deleted since), and notes: DLL
-  reached, entries inside a news window, the brief's day note, mental temperature (out of 5).
+  the average green and red day, the median hold, the average size (the contracts FILLED, `entry_qty`
+  — it read the planned `position_size`, empty on a trade logged after its entry and on every import,
+  so a 3-lot printed "—" until phase M), and the commissions in total.
+- **Daily review**: one row per **weekday of the period** and per day a trade closed on — a day
+  without a trade has its row too (phase M) — with trades, W/L/BE, net, R, first entry in ET, the
+  longest losing run, most contracts, mental temperature (out of 5), "ne trgujem" and "zaključan",
+  rules kept (and which were missed, by their short name — the text before the colon — marked
+  "ukinuto" when deleted since; "bez prijave" for a day nobody opened, "u toku" for today), and notes:
+  DLL reached, entries inside a news window, the brief's day note. The rules section averages judged
+  days only and names the days "bez prijave" and the one still open.
+- **Tracker po danu** (phase M): for each of those days, every live rule as ✓ kept, ✗ broken,
+  ? unanswered or — not judgeable (n/a), with the day's red windows from the brief in ET and the
+  flat-by time — so a mentor can question a day with no trade in it.
 - **When and how** tables by session window, minutes after the open, trade number in the day, state
   before the entry, hold time, entry hour and weekday — each group with its size and the ⚠ mark.
 - **Every trade oldest first**, headed with its close time on the trader's clock, then: entry and
   exit in the trader's zone and in ET, session window, minutes after the open, the account (when
   the scope holds several), trade number in the day, losses in a row before it, hold time,
   contracts, risk to the stop, time underwater, the news window it was entered in, and the insights
-  that fired on it — before every field the trader typed. The context says whether the plan was
+  that fired on it — before every field the trader typed. Since phase M also: **Izvršenje** (contracts
+  and average price in and out, a partial close, gross, commissions, net, number of entry and exit
+  fills), **Fill-ovi** (every fill in ET, loaded from `tj_executions` at export by
+  `getMentorExecutions` rather than with the dashboard; an entry priced against the position after the
+  first is marked "dodato protiv pozicije"), **Plan → kraj** (the sealed stop and target against the
+  ones the trade ended with, or "plan nije zapečaćen"), **Rizik na ulazu** (the budget the risk rule
+  gave, the money actually at the stop and its share of the budget, the share of the room above the
+  MLL) and the **Playbook** by name. The context says whether the plan was
   sealed before the entry or typed in after a market order, whose R and risk come from the fill.
 - **Missed setups** carry the R2 walk's hypothetical outcome — target, stop, neither, or price never
   back at the entry — with its R, and when the plan was given up on the trader's clock.
@@ -1580,8 +1603,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,945 tests across 185 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,349 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 596
+2,952 tests across 185 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,356 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 596
 tests in 61 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

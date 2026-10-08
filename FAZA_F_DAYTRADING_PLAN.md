@@ -145,7 +145,7 @@ pogađa.
 | **T** | Faza naloga Combine / XFA: Scaling Plan, oba puta isplate, bez „passed“ na XFA (journal + brief) | — | S | da: `20260930090000` (`topstep_stage`) | **Opus** | ✅ 30.09.2026 — migracija `20260930090000` primenjena |
 | **U** | Poeni i tikovi na dashboardu + filter instrumenta (NQ / ES) | — | T | ne | **Opus** | ✅ 01.10.2026 — bez migracije |
 | **V** | Pregled dana / nedelje od Claude-a: isti „Export for Claude“ paket preuzima futures-trading i šalje rutini | — | U | ne | **Opus** | ⛔ obustavljeno (trejder, 02.10.2026) — ne raditi bez novog naloga trejdera |
-| **M** | Mentor tok: bez /weekly, kraći /daily, compliance bez praznih dana, pun mentor pack (Dan / Nedelja) | — | U | da, **briše**: `tj_weekly_reviews`, `tj_experiments`, `tj_focus_goals` | **Opus** | u toku (08.10.2026) |
+| **M** | Mentor tok: bez /weekly, kraći /daily, compliance bez praznih dana, pun mentor pack (Dan / Nedelja) | — | U | da, **briše**: `tj_weekly_reviews`, `tj_experiments`, `tj_focus_goals` | **Opus** | ✅ 08.10.2026 — M1 `d6391df` · M2 `8076b93` · M3 `6be8e87` (migracija `20261008120000` primenjena) + futures-trading `6827ce7` · M4 (ovaj commit) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1087,7 +1087,7 @@ Rutina ne dobija pristup bazi; dobija samo tekst paketa (samo čitanje, kroz `/f
 Trejder svako veče dobija „📓 Pregled dana" (i subotom nedelje) od Claude-a sa celim journal-om i tržištem dana;
 dugme „Export for Claude" daje isti paket kao ruta; README oba repoa 1:1.
 
-## M — Mentor tok (detaljno, 08.10.2026)
+## M — Mentor tok (detaljno, 08.10.2026) — ✅
 
 **Povod** (trejder, 08.10.2026): zatvaranje dana i nedelje radi sa Claude-om u privatnom repou `trading-mentor`
 (ispitivanje, zapažanja, „domaći“), pa weekly pregled u journal-u postaje dupla evidencija, a daily treba da ostane

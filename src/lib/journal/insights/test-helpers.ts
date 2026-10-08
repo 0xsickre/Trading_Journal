@@ -55,7 +55,8 @@ export function mkTrade(spec: TradeSpec = {}): RealizedTrade {
     position_id: id,
     avg_entry: entry,
     avg_exit: null,
-    entry_qty: 1,
+    // The contracts filled: what `size` means since phase M (`entry_qty`, not the planned `position_size`).
+    entry_qty: spec.size !== undefined ? spec.size : 1,
     exit_qty: 1,
     gross_pl: spec.gross ?? net,
     net_pl: net,

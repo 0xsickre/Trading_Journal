@@ -145,11 +145,11 @@ describe("mentor pack for a day trader (F5.6)", () => {
 
   it("gives one row per trading day with what a day trader is judged on", () => {
     const md = pack();
-    expect(md).toContain("## Dnevni pregled (2 trading dana)");
+    expect(md).toContain("## Dnevni pregled (2 dana u periodu, 2 sa trejdovima)");
     // 3 trades, all lost, first at 09:40 ET, a run of 3, two contracts at
     // most, half the rules kept, the mental note. No count of trades after losses.
     expect(md).toContain(
-      "| 2026-09-29 | 3 | 0/3/0 | -400.00 | -4.00R | 09:40 | 3 | 2 | 50% (Bez ulaza posle dnevnog cilja) | 1 ulaz u crvenom prozoru, mentalno 4/5 |",
+      "| 2026-09-29 | 3 | 0/3/0 | -400.00 | -4.00R | 09:40 | 3 | 2 | 4/5 | — | 50% (Bez ulaza posle dnevnog cilja) | 1 ulaz u crvenom prozoru |",
     );
   });
 
@@ -334,5 +334,124 @@ describe("rulesSection (phase M)", () => {
     expect(text).toContain("Bez prijave (nijedan trejd, nijedan odgovor, nijedan izveštaj): 1 dan — 2026-10-05");
     expect(text).toContain("U toku (ne ulazi u prosek): 2026-10-07");
     expect(text).not.toContain("Najčešće prekršeno");
+  });
+});
+
+describe("mentor pack, phase M: what the mentor needs to question the day", () => {
+  // 07.10.2026, 10:20:37 ET. Logged plan-first with a sealed stop that was later moved.
+  const base = trade(7, "2026-10-07T14:20:37Z", "2026-10-07T15:49:06Z", 716.34, 3);
+  const m = {
+    ...base,
+    position_size: null,
+    playbook_id: "pb1",
+    stop_price: 31196.25,
+    target_price: 31366.5,
+    entry_price: 31246.5,
+    plan_snapshot: { entry_price: 31246.5, stop_price: 31190, target_price: 31366.5 },
+    risk_budget_at_entry: 300,
+    room_at_entry: 2716.34,
+    stats: {
+      ...base.stats!,
+      avg_entry: 31246.5,
+      avg_exit: 31366.5,
+      gross_pl: 720,
+      total_fees: 3.66,
+      point_value: 2,
+    },
+  } as unknown as TradeRow;
+  const fills = new Map([
+    [
+      m.id,
+      [
+        { side: "entry", qty: 2, price: 31246.5, executed_at: "2026-10-07T14:20:37Z" },
+        { side: "entry", qty: 1, price: 31230, executed_at: "2026-10-07T14:30:00Z" },
+        { side: "exit", qty: 3, price: 31366.5, executed_at: "2026-10-07T15:49:06Z" },
+      ],
+    ],
+  ]);
+  const dayBrief: SessionBrief = {
+    tradingDay: "2026-10-07",
+    flatBy: "2026-10-07T20:10:00Z",
+    dayNote: null,
+    redWindows: [{ from: "2026-10-07T12:25:00Z", to: "2026-10-07T12:45:00Z", title: "CPI", impact: "visok" }],
+    droppedWindows: 0,
+    ranges: {},
+    sourceUrl: null,
+  };
+  const manual: TrackerRule = { ...rule, id: "r-cal", text: "Kalendar i HTF", stage: "prepare", auto_key: null };
+  const week: DayCompliance[] = [
+    { date: "2026-10-05", applicable: 0, satisfied: 0, pct: null, status: "unlogged", missedRuleIds: [], unansweredRuleIds: ["r-cal"] },
+    { date: "2026-10-06", applicable: 1, satisfied: 1, pct: 100, status: "compliant", missedRuleIds: [], unansweredRuleIds: [], notApplicableRuleIds: ["r-stop"] },
+    { date: "2026-10-07", applicable: 2, satisfied: 1, pct: 50, status: "broken", missedRuleIds: ["r-cal"], unansweredRuleIds: ["r-cal"] },
+  ];
+  const mpack = (periodLabel: string) =>
+    buildMentorPack([m], {
+      tzOf: () => "UTC",
+      displayTz: "Europe/Belgrade",
+      periodLabel,
+      periodDays: ["2026-10-05", "2026-10-06", "2026-10-07"],
+      briefs: [dayBrief],
+      trackerRules: [rule, manual],
+      compliance: week,
+      executions: fills,
+      playbookNames: new Map([["pb1", "Ponoć pojas"]]),
+      reports: [
+        { report_date: "2026-10-06", mental_temp: 3, no_trade_day: true, locked_at: "2026-10-06T21:00:00Z" },
+        { report_date: "2026-10-07", mental_temp: 4, no_trade_day: false },
+      ],
+    });
+
+  it("reads the contracts from the fills, not the empty planned size", () => {
+    const md = mpack("Week");
+    expect(md).toContain("trajanje 1h 28m · 3 ugovora");
+    expect(md).toContain("| Prosečna veličina | 3.0 ugovora |");
+  });
+
+  it("prints the execution, every fill and an add against the position", () => {
+    const md = mpack("Week");
+    expect(md).toContain(
+      "- **Izvršenje:** ulaz 3 @ 31246.5 · izlaz 3 @ 31366.5 · gross +720.00 USD · provizije 3.66 USD · net +716.34 USD · fill-ova 2 ulaz / 1 izlaz",
+    );
+    expect(md).toContain(
+      "- **Fill-ovi (ET):** 10:20:37 ulaz 2 @ 31246.5 · 10:30:00 ulaz 1 @ 31230 ⚠ dodato protiv pozicije · 11:49:06 izlaz 3 @ 31366.5",
+    );
+  });
+
+  it("compares the sealed plan with how the trade ended, and the risk with its budget", () => {
+    const md = mpack("Week");
+    expect(md).toContain("- **Plan → kraj:** stop 31190 → 31196.25 · cilj nepromenjen (31366.5)");
+    expect(md).toContain("- **Rizik na ulazu:** budžet 300.00 USD · uzeto 339.00 USD (113% budžeta) · 12.5% prostora do MLL-a (prostor 2716.34 USD)");
+    expect(md).toContain("- **Playbook:** Ponoć pojas");
+  });
+
+  it("lists every weekday of the period, the ones without a trade included", () => {
+    const md = mpack("Week");
+    expect(md).toContain("## Dnevni pregled (3 dana u periodu, 1 sa trejdovima)");
+    expect(md).toContain("| 2026-10-05 | 0 | — | — | — | — | — | — | — | — | bez prijave | — |");
+    expect(md).toContain("| 2026-10-06 | 0 | — | — | — | — | — | — | 3/5 | da · zaključan | 100% | — |");
+    expect(md).toContain("| 2026-10-07 | 1 | 1/0/0 | 716.34 |");
+  });
+
+  it("shows the tracker rule by rule for each day, with the day's red windows", () => {
+    const md = mpack("Week");
+    expect(md).toContain("## Tracker po danu");
+    expect(md).toContain("### 2026-10-05 · bez prijave");
+    expect(md).toContain("- Crveni prozori (ET): 08:25–08:45 CPI (visok) · flat do 16:10 ET");
+    expect(md).toContain("? Kalendar i HTF (neodgovoreno)");
+    expect(md).toContain("— Bez ulaza posle dnevnog cilja (n/a)");
+    expect(md).toContain("✓ Kalendar i HTF");
+  });
+
+  it("totals the commissions", () => {
+    expect(mpack("Week")).toContain("| Provizije ukupno | 3.66 USD |");
+  });
+
+  it("asks to be questioned on a day pack, and for a review with homework on a week pack", () => {
+    const day = mpack("Day");
+    expect(day).toContain("Ovo je **zatvaranje dana**");
+    expect(day).not.toContain("pravila za sledeću nedelju");
+    const wk = mpack("Week");
+    expect(wk).toContain("0. **Domaći**");
+    expect(wk).toContain("2–3 pravila za sledeću nedelju");
   });
 });

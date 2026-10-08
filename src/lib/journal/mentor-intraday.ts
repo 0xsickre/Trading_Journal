@@ -22,11 +22,21 @@ import { getDimension, type DimensionContext } from "./reports/dimensions";
 import { afterExitR, scenarioOf, scenarioTrade, summarizeScenarios } from "./scenario";
 import type { RedWindow, SessionBrief } from "./session-brief";
 import { minutesAfterOpen, SESSION_TZ } from "./session-window";
-import { fmtInTz, toEpoch } from "./time";
+import { numberFieldValue } from "./field-values";
+import { roomAtEntry } from "./risk-taken";
+import { fmtInTz, isTradingDayKey, toEpoch } from "./time";
 import { TOPSTEP_CONSISTENCY, type TopstepResult } from "./topstep";
-import type { DayCompliance } from "./tracker/compliance";
+import { ruleIsLiveOn, type DayCompliance } from "./tracker/compliance";
 import { WEEKDAY_LABELS, type TrackerRule } from "./tracker-types";
 import { formatDuration } from "./units";
+
+/** One fill of a trade, as the mentor pack prints it (`tj_executions`, loaded at export). */
+export type MentorFill = {
+  side: string;
+  qty: number;
+  price: number;
+  executed_at: string;
+};
 
 /** Groups with fewer trades than this carry a mark in every table. */
 export const SMALL_SAMPLE = 10;
@@ -154,6 +164,7 @@ export function dayShapeRows(trades: readonly EnrichedTrade[], ccy: string): str
     `| Prosečan zeleni / crveni dan | ${avgGreen == null ? "—" : signed(avgGreen, ccy)} / ${avgRed == null ? "—" : signed(avgRed, ccy)} |`,
     `| Medijana trajanja trejda | ${held.length ? formatDuration(held[Math.floor(held.length / 2)]) : "—"} |`,
     `| Prosečna veličina | ${sizes.length ? `${mean(sizes)!.toFixed(1)} ugovora` : "—"} |`,
+    `| Provizije ukupno | ${trades.reduce((s, t) => s + (t.trade.row.stats?.total_fees ?? 0), 0).toFixed(2)} ${ccy} |`,
   ];
 }
 
@@ -180,53 +191,133 @@ export type DailyContext = {
   briefByDay?: ReadonlyMap<string, SessionBrief>;
 };
 
-/** One row per trading day, oldest first — the day is the unit a day trader is judged on. */
-export function dailySection(trades: readonly EnrichedTrade[], ctx: DailyContext): string[] {
-  const days = new Map<string, EnrichedTrade[]>();
-  for (const t of trades) if (t.closeDay) days.set(t.closeDay, [...(days.get(t.closeDay) ?? []), t]);
-  if (days.size === 0) return [];
-  const keys = [...days.keys()].sort();
+/** How a day's rules read in the pack: a percentage, or why there is none. */
+function rulesCell(c: DayCompliance | undefined, ruleText: ReadonlyMap<string, string> | undefined): string {
+  if (!c) return "—";
+  if (c.status === "unlogged") return "bez prijave";
+  if (c.pct == null) return "—";
+  if (c.status === "pending") return `u toku (${Math.round(c.pct)}%)`;
+  const missed = c.missedRuleIds.map((id) => ruleText?.get(id) ?? id);
+  return `${Math.round(c.pct)}%${missed.length ? ` (${missed.join("; ")})` : ""}`;
+}
+
+/**
+ * The days a pack covers: every weekday of the period plus any day a trade
+ * closed on, oldest first. A day without a trade is still a day the mentor asks
+ * about (phase M) — the table used to list trading days only.
+ */
+export function packDays(trades: readonly EnrichedTrade[], periodDays?: readonly string[]): string[] {
+  const set = new Set((periodDays ?? []).filter(isTradingDayKey));
+  for (const t of trades) if (t.closeDay) set.add(t.closeDay);
+  return [...set].sort();
+}
+
+/** One row per day, oldest first — the day is the unit a day trader is judged on. */
+export function dailySection(
+  trades: readonly EnrichedTrade[],
+  ctx: DailyContext & { periodDays?: readonly string[] },
+): string[] {
+  const byDay = new Map<string, EnrichedTrade[]>();
+  for (const t of trades) if (t.closeDay) byDay.set(t.closeDay, [...(byDay.get(t.closeDay) ?? []), t]);
+  const keys = packDays(trades, ctx.periodDays);
+  if (keys.length === 0) return [];
   const shown = keys.slice(-DAY_ROWS_CAP);
   const out = [
-    `## Dnevni pregled (${days.size} trading dana)`,
-    `_Dan = trading dan naloga (Topstep: 17:00–17:00 CT). Pravila = % tvojih pravila iz dnevnog trackera koja su ispoštovana; u zagradi propuštena._`,
+    `## Dnevni pregled (${keys.length} ${sr(keys.length, "dan", "dana", "dana")} u periodu, ${byDay.size} sa trejdovima)`,
+    `_Dan = trading dan naloga (Topstep: 17:00–17:00 CT). Pravila = % tvojih pravila iz dnevnog trackera koja su ispoštovana (u zagradi propuštena); „bez prijave“ = nijedan trejd, nijedan odgovor, nijedan izveštaj._`,
     "",
-    `| Dan | Trejdova | W/L/BE | Net | R | Prvi ulaz (ET) | Najduži niz gubitaka | Max ugovora | Pravila | Napomena |`,
-    `| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |`,
+    `| Dan | Trejdova | W/L/BE | Net | R | Prvi ulaz (ET) | Najduži niz gubitaka | Max ugovora | Mentalno | Ne trgujem · zaključan | Pravila | Napomena |`,
+    `| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |`,
   ];
   for (const day of shown) {
-    const list = days.get(day)!;
-    const realized = list.map((t) => t.trade);
-    const s = computeStats(realized, "net", ctx.range);
-    const first = list
-      .map((t) => t.openedAt)
-      .filter((o): o is string => o != null)
-      .sort()[0];
-    const sizes = list.map((t) => t.size).filter((v): v is number => v != null);
-    const c = ctx.compliance?.get(day);
-    const missed = (c?.missedRuleIds ?? []).map((id) => ctx.ruleText?.get(id) ?? id);
-    const rules =
-      c?.pct == null ? "—" : `${Math.round(c.pct)}%${missed.length ? ` (${missed.join("; ")})` : ""}`;
+    const list = byDay.get(day) ?? [];
+    const rep = ctx.reportByDate?.get(day);
+    const flags = [rep?.no_trade_day ? "da" : null, rep?.locked_at ? "zaključan" : null].filter(Boolean);
+    const mental = rep?.mental_temp != null ? `${rep.mental_temp}/5` : "—";
+    const rules = rulesCell(ctx.compliance?.get(day), ctx.ruleText);
     const notes: string[] = [];
     if (ctx.dllDays?.has(day)) notes.push("DLL dostignut");
     const inRed = list.filter((t) => redWindowAt(t.openedAt, ctx.briefByDay?.get(t.openDay)) != null).length;
     if (inRed > 0) notes.push(`${inRed} ${sr(inRed, "ulaz", "ulaza", "ulaza")} u crvenom prozoru`);
     const dayNote = ctx.briefByDay?.get(day)?.dayNote;
     if (dayNote) notes.push(dayNote);
-    const rep = ctx.reportByDate?.get(day);
-    if (rep?.mental_temp != null) notes.push(`mentalno ${rep.mental_temp}/5`);
+    const tail = `${mental} | ${flags.join(" · ") || "—"} | ${cell(rules)} | ${cell(notes.join(", ") || "—")} |`;
+    if (list.length === 0) {
+      out.push(`| ${day} | 0 | — | — | — | — | — | — | ${tail}`);
+      continue;
+    }
+    const s = computeStats(
+      list.map((t) => t.trade),
+      "net",
+      ctx.range,
+    );
+    const first = list
+      .map((t) => t.openedAt)
+      .filter((o): o is string => o != null)
+      .sort()[0];
+    const sizes = list.map((t) => t.size).filter((v): v is number => v != null);
     out.push(
       `| ${day} | ${list.length} | ${s.wins}/${s.losses}/${s.breakeven} | ${s.netSum.toFixed(2)} | ${r2(s.totalR)}R | ${
         first ? fmtInTz(first, SESSION_TZ, "HH:mm") : "—"
-      } | ${longestLossRun(list)} | ${sizes.length ? Math.max(...sizes) : "—"} | ${cell(rules)} | ${cell(
-        notes.join(", ") || "—",
-      )} |`,
+      } | ${longestLossRun(list)} | ${sizes.length ? Math.max(...sizes) : "—"} | ${tail}`,
     );
   }
   if (keys.length > shown.length) {
     out.push("", `_(+${keys.length - shown.length} starijih dana nije prikazano — suzi period.)_`);
   }
   out.push("");
+  return out;
+}
+
+/**
+ * Each day's rules one by one, and the day's news windows (phase M).
+ *
+ * The daily table gives a percentage; a mentor questioning a day needs which
+ * rule held, which broke, which was never answered and which could not be
+ * judged — and the brief's windows even when no trade fell in one.
+ */
+export function trackerByDaySection(
+  days: readonly string[],
+  rules: readonly TrackerRule[],
+  compliance: ReadonlyMap<string, DayCompliance>,
+  briefByDay: ReadonlyMap<string, SessionBrief>,
+): string[] {
+  if (days.length === 0 || rules.length === 0) return [];
+  const out = [
+    `## Tracker po danu`,
+    `_✓ ispunjeno · ✗ prekršeno · ? neodgovoreno · — nije moglo da se oceni (n/a). Crveni prozori i flat su iz jutarnjeg brief-a._`,
+    "",
+  ];
+  for (const day of days.slice(-DAY_ROWS_CAP)) {
+    const c = compliance.get(day);
+    const tag = c?.status === "unlogged" ? " · bez prijave" : c?.status === "pending" ? " · u toku" : "";
+    out.push(`### ${day}${tag}`);
+    const brief = briefByDay.get(day);
+    if (brief) {
+      const windows = brief.redWindows.map(
+        (w) =>
+          `${fmtInTz(w.from, SESSION_TZ, "HH:mm")}–${fmtInTz(w.to, SESSION_TZ, "HH:mm")} ${cell(w.title)}${w.impact ? ` (${w.impact})` : ""}`,
+      );
+      const flat = brief.flatBy ? ` · flat do ${fmtInTz(brief.flatBy, SESSION_TZ, "HH:mm")} ET` : "";
+      out.push(`- Crveni prozori (ET): ${windows.join("; ") || "nema"}${flat}`);
+    } else {
+      out.push(`- Brief za ovaj dan nije stigao.`);
+    }
+    const missed = new Set(c?.missedRuleIds ?? []);
+    const unanswered = new Set(c?.unansweredRuleIds ?? []);
+    const na = new Set(c?.notApplicableRuleIds ?? []);
+    const items = rules
+      .filter((r) => ruleIsLiveOn(r, day))
+      .map((r) => {
+        const name = cell(ruleLabel(r));
+        if (unanswered.has(r.id)) return `? ${name} (neodgovoreno)`;
+        if (missed.has(r.id)) return `✗ ${name}`;
+        if (na.has(r.id) || c?.status === "unlogged" || c == null) return `— ${name} (n/a)`;
+        return `✓ ${name}`;
+      });
+    if (items.length) out.push(`- ${items.join(" · ")}`);
+    out.push("");
+  }
   return out;
 }
 
@@ -350,6 +441,10 @@ export function tradeContextLines(
     brief?: SessionBrief;
     insightTitles?: readonly string[];
     accountName?: string;
+    /** The trade's fills, when the export loaded them. */
+    fills?: readonly MentorFill[];
+    playbookName?: string;
+    ccy?: string;
   },
 ): string[] {
   const lines: string[] = [];
@@ -380,6 +475,8 @@ export function tradeContextLines(
     e.underwaterPct != null ? `${e.underwaterPct}% vremena u minusu` : null,
   ].filter((p): p is string => p != null);
   if (day.length) lines.push(`- **Kontekst:** ${day.join(" · ")}`);
+  lines.push(...executionLines(e, opts.fills, opts.ccy ?? "USD"));
+  if (opts.playbookName) lines.push(`- **Playbook:** ${cell(opts.playbookName)}`);
   const w = redWindowAt(e.openedAt, opts.brief);
   if (w) {
     lines.push(
@@ -409,5 +506,84 @@ export function tradeContextLines(
     lines.push(`- **Šta bi bilo:** ${posle.join(" · ")}`);
   }
   if (opts.insightTitles?.length) lines.push(`- **Zapažanja na ovom trejdu:** ${opts.insightTitles.join("; ")}`);
+  return lines;
+}
+
+const num = (v: unknown): string => String(Number(v));
+
+/**
+ * How the trade was actually done (phase M): the fills against the plan, the
+ * money split into gross and commissions, the stop and target as sealed against
+ * how they ended, and the risk against the budget the rule gave at entry.
+ */
+function executionLines(e: EnrichedTrade, fills: readonly MentorFill[] | undefined, ccy: string): string[] {
+  const row = e.trade.row;
+  const st = row.stats;
+  const lines: string[] = [];
+
+  const entries = fills ? fills.filter((f) => f.side === "entry").length : e.entryFills;
+  const exits = fills ? fills.filter((f) => f.side !== "entry").length : e.exitFills;
+  if (st) {
+    const parts = [
+      st.entry_qty != null && st.avg_entry != null ? `ulaz ${st.entry_qty} @ ${num(st.avg_entry)}` : null,
+      st.exit_qty != null && st.avg_exit != null ? `izlaz ${st.exit_qty} @ ${num(st.avg_exit)}` : null,
+      st.exit_qty != null && st.entry_qty != null && st.exit_qty < st.entry_qty
+        ? `zatvoreno ${st.exit_qty} od ${st.entry_qty}`
+        : null,
+      st.gross_pl != null ? `gross ${signed(st.gross_pl, ccy)}` : null,
+      st.total_fees != null ? `provizije ${st.total_fees.toFixed(2)} ${ccy}` : null,
+      `net ${signed(e.pnl, ccy)}`,
+      entries + exits > 0 ? `fill-ova ${entries} ulaz / ${exits} izlaz` : null,
+    ].filter((p): p is string => p != null);
+    lines.push(`- **Izvršenje:** ${parts.join(" · ")}`);
+  }
+
+  if (fills && fills.length > 0) {
+    const ordered = [...fills].sort((a, b) => toEpoch(a.executed_at) - toEpoch(b.executed_at));
+    const dir = String(row.direction ?? "").toLowerCase() === "short" ? -1 : 1;
+    const firstEntry = ordered.find((f) => f.side === "entry");
+    const shown = ordered.slice(0, 20).map((f) => {
+      const against =
+        f.side === "entry" && firstEntry != null && f !== firstEntry && (f.price - firstEntry.price) * dir < 0;
+      return `${fmtInTz(f.executed_at, SESSION_TZ, "HH:mm:ss")} ${f.side === "entry" ? "ulaz" : "izlaz"} ${f.qty} @ ${num(f.price)}${
+        against ? " ⚠ dodato protiv pozicije" : ""
+      }`;
+    });
+    if (ordered.length > shown.length) shown.push(`(+${ordered.length - shown.length})`);
+    lines.push(`- **Fill-ovi (ET):** ${shown.join(" · ")}`);
+  }
+
+  const snapshot = (row as Record<string, unknown>).plan_snapshot as Record<string, unknown> | null | undefined;
+  if (snapshot == null) {
+    lines.push(`- **Plan → kraj:** plan nije zapečaćen u journal-u`);
+  } else {
+    const change = (label: string, key: "stop_price" | "target_price") => {
+      const raw = snapshot[key];
+      const was = raw == null || raw === "" ? null : Number(raw);
+      const now = numberFieldValue(row, key);
+      if (was == null && now == null) return null;
+      if (was != null && now != null && was === now) return `${label} nepromenjen (${num(now)})`;
+      return `${label} ${was == null ? "—" : num(was)} → ${now == null ? "—" : num(now)}`;
+    };
+    const parts = [change("stop", "stop_price"), change("cilj", "target_price")].filter(
+      (p): p is string => p != null,
+    );
+    if (parts.length) lines.push(`- **Plan → kraj:** ${parts.join(" · ")}`);
+  }
+
+  const budget = numberFieldValue(row, "risk_budget_at_entry");
+  const room = roomAtEntry(row);
+  if (budget != null || room != null) {
+    const parts = [
+      budget != null ? `budžet ${budget.toFixed(2)} ${ccy}` : null,
+      e.riskMoney != null
+        ? `uzeto ${e.riskMoney.toFixed(2)} ${ccy}${budget ? ` (${Math.round((e.riskMoney / budget) * 100)}% budžeta)` : ""}`
+        : null,
+      e.riskPctTaken != null && room != null
+        ? `${e.riskPctTaken.toFixed(1)}% prostora do MLL-a (prostor ${room.toFixed(2)} ${ccy})`
+        : null,
+    ].filter((p): p is string => p != null);
+    lines.push(`- **Rizik na ulazu:** ${parts.join(" · ")}`);
+  }
   return lines;
 }
