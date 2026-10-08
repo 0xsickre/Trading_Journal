@@ -455,3 +455,18 @@ describe("mentor pack, phase M: what the mentor needs to question the day", () =
     expect(wk).toContain("2–3 pravila za sledeću nedelju");
   });
 });
+
+describe("plan → kraj on an imported trade (phase M fix)", () => {
+  it("an empty seal is not a plan: it says so instead of printing '— →'", () => {
+    const t = {
+      ...trade(9, "2026-10-07T14:20:37Z", "2026-10-07T15:49:06Z", 716.34, 3),
+      created_at: "2026-10-07T16:10:45Z",
+      plan_snapshot: {},
+      stop_price: 31196.25,
+      target_price: 31366.5,
+    } as unknown as TradeRow;
+    const md = buildMentorPack([t], { tzOf: () => "UTC", displayTz: "Europe/Belgrade" });
+    expect(md).toContain("- **Plan → kraj:** upisan posle ulaza — plana pre ulaza nije bilo");
+    expect(md).not.toContain("stop — →");
+  });
+});

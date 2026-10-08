@@ -553,23 +553,31 @@ function executionLines(e: EnrichedTrade, fills: readonly MentorFill[] | undefin
     lines.push(`- **Fill-ovi (ET):** ${shown.join(" · ")}`);
   }
 
+  // Only the keys the seal actually holds: an import seals `{}` (it knew no
+  // plan), and reading an absent key as "was empty" printed "stop — → 31196.25"
+  // for a stop that was never moved.
   const snapshot = (row as Record<string, unknown>).plan_snapshot as Record<string, unknown> | null | undefined;
-  if (snapshot == null) {
-    lines.push(`- **Plan → kraj:** plan nije zapečaćen u journal-u`);
-  } else {
-    const change = (label: string, key: "stop_price" | "target_price") => {
-      const raw = snapshot[key];
-      const was = raw == null || raw === "" ? null : Number(raw);
-      const now = numberFieldValue(row, key);
-      if (was == null && now == null) return null;
-      if (was != null && now != null && was === now) return `${label} nepromenjen (${num(now)})`;
-      return `${label} ${was == null ? "—" : num(was)} → ${now == null ? "—" : num(now)}`;
-    };
-    const parts = [change("stop", "stop_price"), change("cilj", "target_price")].filter(
-      (p): p is string => p != null,
-    );
-    if (parts.length) lines.push(`- **Plan → kraj:** ${parts.join(" · ")}`);
-  }
+  const change = (label: string, key: "stop_price" | "target_price") => {
+    if (snapshot == null || !(key in snapshot)) return null;
+    const raw = snapshot[key];
+    const was = raw == null || raw === "" ? null : Number(raw);
+    const now = numberFieldValue(row, key);
+    if (was == null && now == null) return null;
+    if (was != null && now != null && was === now) return `${label} nepromenjen (${num(now)})`;
+    return `${label} ${was == null ? "—" : num(was)} → ${now == null ? "—" : num(now)}`;
+  };
+  const planParts = [change("stop", "stop_price"), change("cilj", "target_price")].filter(
+    (p): p is string => p != null,
+  );
+  lines.push(
+    `- **Plan → kraj:** ${
+      planParts.length
+        ? planParts.join(" · ")
+        : loggedAfterEntry(row)
+          ? "upisan posle ulaza — plana pre ulaza nije bilo"
+          : "plan nije zapečaćen u journal-u"
+    }`,
+  );
 
   const budget = numberFieldValue(row, "risk_budget_at_entry");
   const room = roomAtEntry(row);

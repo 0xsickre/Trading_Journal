@@ -196,7 +196,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,952 tests across 185 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,953 tests across 185 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -1013,7 +1013,7 @@ book, from values the screens already derive (`mentor-intraday.ts`):
   fills), **Fill-ovi** (every fill in ET, loaded from `tj_executions` at export by
   `getMentorExecutions` rather than with the dashboard; an entry priced against the position after the
   first is marked "dodato protiv pozicije"), **Plan → kraj** (the sealed stop and target against the
-  ones the trade ended with, or "plan nije zapečaćen"), **Rizik na ulazu** (the budget the risk rule
+  ones the trade ended with — only the keys the seal holds; an import seals nothing, so a trade typed in after its entry reads "upisan posle ulaza — plana pre ulaza nije bilo" and any other unsealed one "plan nije zapečaćen"), **Rizik na ulazu** (the budget the risk rule
   gave, the money actually at the stop and its share of the budget, the share of the room above the
   MLL) and the **Playbook** by name. The context says whether the plan was
   sealed before the entry or typed in after a market order, whose R and risk come from the fill.
@@ -1603,8 +1603,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,952 tests across 185 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,356 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 596
+2,953 tests across 185 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,357 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 596
 tests in 61 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
