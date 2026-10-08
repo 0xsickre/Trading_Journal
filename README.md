@@ -126,12 +126,12 @@ What `futures-trading` does with the journal, each described in its own README:
 - **MAE/MFE** and time underwater for closed futures trades come from the traded contract's candles
   in Cloudflare R2 (`tools/journal_mae.py`, hourly) (§ MAE/MFE), and so does the price of a missed
   setup once its trading day is over (§ The missed setup gets a price).
-- **The nightly backup** at 04:10 Belgrade (`tools/journal_backup.py`) reads all 28 tables and the
+- **The nightly backup** at 04:10 Belgrade (`tools/journal_backup.py`) reads all 25 tables and the
   chart images kept in Storage, as the journal's user, into Cloudflare R2
   (`futures-trading/backup/journal/{date}/`). Every file is read back and compared before the day's
   manifest is written; 35 days are kept, plus the first snapshot of each month for good.
   `journal_backup.py sql DATE [--korisnik UUID]` writes the restore: one transaction, triggers off
-  (`session_replication_role = replica`), the user's rows deleted in all 28 tables, then the snapshot
+  (`session_replication_role = replica`), the user's rows deleted in all 25 tables, then the snapshot
   inserted parents first — tested 30.09.2026 on a database built from all 149 migrations, row for row,
   into the same user and into a new one. **A new `tj_` table must be added to its `TABELE`**; the
   backup warns when PostgREST shows one it does not know.
@@ -274,7 +274,7 @@ changed:
 
 ## Data model
 
-28 tables and 1 view, all prefixed `tj_`. **Row-level security is enabled on all 28 tables**, every
+25 tables and 1 view, all prefixed `tj_`. **Row-level security is enabled on all 25 tables**, every
 policy following the same ownership pattern:
 
 ```sql
@@ -308,8 +308,7 @@ shows before saving. A test holds both to the same inputs.
 | **Trades** | `tj_positions`, `tj_executions`, `tj_trade_images` |
 | **Accounts and money** | `tj_accounts`, `tj_cash_events`, `tj_instruments` |
 | **Configuration** | `tj_option_lists`, `tj_option_items`, `tj_field_defs`, `tj_user_prefs`, `tj_dashboard_templates` |
-| **Daily process** | `tj_daily_reports`, `tj_focus_goals`, `tj_session_briefs` (the morning brief, F4) |
-| **Weekly process** | `tj_weekly_reviews`, `tj_experiments` |
+| **Daily process** | `tj_daily_reports`, `tj_session_briefs` (the morning brief, F4) |
 | **Tracker** | `tj_tracker_rules`, `tj_tracker_checkins` |
 | **Playbooks** | `tj_playbooks`, `tj_playbook_sections`, `tj_playbook_rules`, `tj_playbook_rule_links`, `tj_position_rules` |
 | **Notebook** | `tj_notes`, `tj_note_folders`, `tj_note_tags` |
@@ -1472,7 +1471,7 @@ the trades without one** — still in every total, with no currency to convert t
 rows first, in one transaction. Proven against a live database inside a rolled-back transaction: an
 account with 21 trades leaves **0 orphaned** positions, and 0 fills, rule answers and images.
 
-**Reset everything** (`tj_reset_my_data`). Deletes all 28 tables for the caller, then calls
+**Reset everything** (`tj_reset_my_data`). Deletes all 25 tables for the caller, then calls
 `tj_seed_my_defaults()` — the same seed the dashboard runs on an empty account, so "reset" and "first
 load ever" end in the same state. It asks for `RESET EVERYTHING` to be typed. **The chart image
 files go too** (30.09.2026): the SQL deletes the `tj_trade_images` rows, Supabase refuses a direct
@@ -1547,10 +1546,14 @@ project.
   `20260929160000` (swap), `20260929170000` (percentage limits, weekly rule), `20260929180000`
   (`risk_pct`), `20260929190000` (backtest kind, FTMO columns). The code stopped reading each column
   before the migration dropped it, so no deploy ran against a missing column.
+- **M3 (08.10.2026) drops `tj_weekly_reviews`, `tj_experiments` and `tj_focus_goals`**
+  (`20261008120000`, all three empty on the day) after M1 and M2 had taken every reader off `main` and
+  deployed; `tj_reset_my_data` is restated without them. The empty tables can be rebuilt with
+  `supabase/rollback/20261008120000_drop_weekly_experiments_focus.down.sql`.
 
 ### Security model
 
-- **RLS on all 28 tables**, ownership pattern, verified against the live database.
+- **RLS on all 25 tables**, ownership pattern, verified against the live database.
 - **`SECURITY DEFINER` plus a uuid argument is a hole**, because any signed-in user can call it with
   somebody else's id. All five seed functions of that shape — `tj_seed_defaults`,
   `tj_seed_instruments_defaults`, `tj_seed_playbooks`, `tj_seed_tracker_rules`,

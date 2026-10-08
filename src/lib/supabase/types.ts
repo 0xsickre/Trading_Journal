@@ -265,45 +265,6 @@ export type Database = {
           },
         ]
       }
-      tj_experiments: {
-        Row: {
-          baseline_trades: number
-          created_at: string
-          ended_week: string | null
-          hypothesis: string
-          id: string
-          metric_key: string
-          started_week: string
-          status: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          baseline_trades?: number
-          created_at?: string
-          ended_week?: string | null
-          hypothesis: string
-          id?: string
-          metric_key: string
-          started_week: string
-          status?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          baseline_trades?: number
-          created_at?: string
-          ended_week?: string | null
-          hypothesis?: string
-          id?: string
-          metric_key?: string
-          started_week?: string
-          status?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       tj_field_defs: {
         Row: {
           created_at: string
@@ -344,39 +305,6 @@ export type Database = {
           show_phase?: string
           show_when?: string
           sort_order?: number
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      tj_focus_goals: {
-        Row: {
-          created_at: string
-          ended_at: string | null
-          goal_text: string
-          id: string
-          is_active: boolean
-          started_at: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          ended_at?: string | null
-          goal_text: string
-          id?: string
-          is_active?: boolean
-          started_at?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          ended_at?: string | null
-          goal_text?: string
-          id?: string
-          is_active?: boolean
-          started_at?: string
           updated_at?: string
           user_id?: string
         }
@@ -1375,54 +1303,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      tj_weekly_reviews: {
-        Row: {
-          created_at: string
-          id: string
-          locked_at: string | null
-          next_week_catalysts: string | null
-          one_change: string | null
-          one_pattern: string | null
-          previous_change_kept: string | null
-          updated_at: string
-          user_id: string
-          week_grade: number | null
-          week_start: string
-          went_badly: string | null
-          went_well: string | null
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          locked_at?: string | null
-          next_week_catalysts?: string | null
-          one_change?: string | null
-          one_pattern?: string | null
-          previous_change_kept?: string | null
-          updated_at?: string
-          user_id: string
-          week_grade?: number | null
-          week_start: string
-          went_badly?: string | null
-          went_well?: string | null
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          locked_at?: string | null
-          next_week_catalysts?: string | null
-          one_change?: string | null
-          one_pattern?: string | null
-          previous_change_kept?: string | null
-          updated_at?: string
-          user_id?: string
-          week_grade?: number | null
-          week_start?: string
-          went_badly?: string | null
-          went_well?: string | null
-        }
-        Relationships: []
       }
     }
     Views: {
