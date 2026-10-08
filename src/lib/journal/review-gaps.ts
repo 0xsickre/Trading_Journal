@@ -1,6 +1,8 @@
 /**
- * Which closed trades still lack the two answers the mentor pack is built on:
- * the setup (playbook) and the grade (A/B/C on `execution_rating`).
+ * Which closed trades still lack what the mentor pack is built on: the setup
+ * (playbook), the grade (A/B/C on `execution_rating`) and, since phase O, a stop
+ * — without one the trade has no R — or the ORIGINAL stop when the orders file
+ * shows the stop was moved (`stop-moved.ts`) and only its last price is known.
  *
  * Mostly the trades that reached the journal only through the day's export —
  * the ones not logged right after they closed. The evening reminder in the
@@ -9,18 +11,25 @@
  * on a Topstep account, which is what the reminder counts; change both or neither.
  */
 import { numberFieldValue } from "./field-values";
+import { sealedNumber } from "./plan-snapshot";
+import { needsOriginalStop } from "./stop-moved";
 import type { TradeRow } from "./types";
+
+export type ReviewMissing = "setup" | "grade" | "stop" | "original_stop";
 
 export type ReviewGap = {
   id: string;
   label: string;
-  missing: ("setup" | "grade")[];
+  missing: ReviewMissing[];
 };
 
-export function missingReview(row: TradeRow): ("setup" | "grade")[] {
-  const out: ("setup" | "grade")[] = [];
+export function missingReview(row: TradeRow): ReviewMissing[] {
+  const out: ReviewMissing[] = [];
   if (!row.playbook_id) out.push("setup");
   if (numberFieldValue(row, "execution_rating") == null) out.push("grade");
+  // The stop every R is measured from: the sealed one where the seal holds it.
+  if (sealedNumber(row, "stop_price") == null) out.push("stop");
+  else if (needsOriginalStop(row)) out.push("original_stop");
   return out;
 }
 

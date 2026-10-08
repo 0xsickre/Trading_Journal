@@ -3,11 +3,16 @@ import { ClipboardList } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ReviewGap } from "@/lib/journal/review-gaps";
 
-const MISSING = { setup: "setup", grade: "ocena" } as const;
+const MISSING = {
+  setup: "setup",
+  grade: "ocena",
+  stop: "stop",
+  original_stop: "originalni stop (pomeren — sa snimka)",
+} as const;
 
 /**
- * The day's trades still missing a setup or a grade — mostly the ones that came
- * in only through the export. Each opens the short review, not the full form.
+ * The day's trades still missing a setup, a grade or their stop — the ones that
+ * came in through the export. Each opens the short review, not the full form.
  * Nothing to show, nothing rendered: a finished day needs no card.
  */
 export function ReviewGapsCard({ gaps }: { gaps: ReviewGap[] }) {
@@ -21,7 +26,7 @@ export function ReviewGapsCard({ gaps }: { gaps: ReviewGap[] }) {
       </CardHeader>
       <CardContent className="space-y-1.5 text-sm">
         <p className="text-xs text-muted-foreground">
-          Setup i ocena A/B/C su ono na čemu stoji nedeljni „Napredak“ — ~15 s po trejdu.
+          Setup, ocena A/B/C i stop sa snimka — na tome stoji mentor pack. Pomeren stop: upiši originalni.
         </p>
         {gaps.map((g) => (
           <div key={g.id} className="flex items-center justify-between gap-3">

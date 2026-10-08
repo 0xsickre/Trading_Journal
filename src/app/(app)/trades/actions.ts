@@ -681,6 +681,14 @@ const tradeReviewSchema = z.object({
   exit_reason: z.string().trim().min(1).max(200).nullable(),
   /** Charts to ADD, in order, after the ones the trade already has. */
   images: z.array(z.string()).max(MAX_TRADE_IMAGES),
+  /**
+   * From the recording (phase O): the stop and target as they stood at the entry,
+   * and what was said before the click. Optional: an older client omits them,
+   * and omitted leaves the trade as it is.
+   */
+  stop_price: z.number().finite().positive().nullable().optional(),
+  target_price: z.number().finite().positive().nullable().optional(),
+  thesis: z.string().max(5_000).nullable().optional(),
 });
 
 export type TradeReviewInput = z.infer<typeof tradeReviewSchema>;
@@ -703,8 +711,17 @@ export async function saveTradeReview(id: string, input: TradeReviewInput) {
   if (!images.ok) return { ok: false as const, error: images.error };
 
   const supabase = await createClient();
-  const { data: prev } = await supabase.from("tj_positions").select("exit_reason").eq("id", id).maybeSingle();
+  const { data: prev } = await supabase
+    .from("tj_positions")
+    .select("exit_reason, plan_snapshot")
+    .eq("id", id)
+    .maybeSingle();
   if (!prev) return { ok: false as const, error: "Trade not found" };
+  // A stop sealed EMPTY at entry (a quick-logged trade saved without one) hides
+  // every stop written later — every R reads the seal first. The recording's stop
+  // is the stop at entry, so it goes into the seal too.
+  const seal = prev.plan_snapshot as Record<string, unknown> | null;
+  const sealedEmptyStop = seal != null && "stop_price" in seal && seal.stop_price == null;
 
   const { error } = await supabase
     .from("tj_positions")
@@ -715,6 +732,10 @@ export async function saveTradeReview(id: string, input: TradeReviewInput) {
       psychology_tags: r.psychology_tags,
       trade_journal_notes: r.trade_journal_notes?.trim() || null,
       ...(prev.exit_reason ? {} : { exit_reason: r.exit_reason }),
+      ...(r.stop_price !== undefined ? { stop_price: r.stop_price } : {}),
+      ...(r.target_price !== undefined ? { target_price: r.target_price } : {}),
+      ...(r.thesis !== undefined ? { thesis: r.thesis?.trim() || null } : {}),
+      ...(sealedEmptyStop && r.stop_price != null ? { plan_snapshot: { ...seal, stop_price: r.stop_price } } : {}),
     })
     .eq("id", id);
   if (error) return { ok: false as const, error: error.message };

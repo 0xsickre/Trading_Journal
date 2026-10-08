@@ -211,9 +211,32 @@ describe("QuickLogForm — reviewing an imported trade", () => {
       mistake: ["Jurio cenu"],
       psychology_tags: [],
       trade_journal_notes: "",
+      stop_price: 30604,
+      target_price: null,
+      thesis: null,
       exit_reason: "Zatvoreno ranije",
       images: [],
     });
     expect(pushMock).toHaveBeenCalledWith("/daily");
+  });
+
+  it("asks for the original stop when it was moved, and saves what the recording shows (phase O)", async () => {
+    const user = userEvent.setup();
+    const moved: ReviewTrade = {
+      ...trade,
+      stop: null,
+      finalStop: 30584,
+      stopNote: "Poslednji stop u platformi je na ulazu ili u profitu — pomeren je. Upiši originalni sa snimka.",
+    };
+    render(<QuickLogForm accounts={[ACCOUNT]} instruments={[]} playbooks={[PLAYBOOK]} optionsMap={OPTIONS} review={moved} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("pomeren je");
+    expect(screen.getByText("poslednji stop u platformi 30584")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Originalni stop (na ulazu)"), "30610");
+    await user.type(screen.getByLabelText(/Šta sam rekao pre klika/), "Short sa ponoćnog pojasa, stop iznad 30610");
+    await user.click(screen.getByRole("button", { name: "Save review" }));
+    expect(saveTradeReviewMock.mock.calls[0][1]).toMatchObject({
+      stop_price: 30610,
+      thesis: "Short sa ponoćnog pojasa, stop iznad 30610",
+    });
   });
 });

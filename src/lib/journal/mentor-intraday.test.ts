@@ -470,3 +470,26 @@ describe("plan → kraj on an imported trade (phase M fix)", () => {
     expect(md).not.toContain("stop — →");
   });
 });
+
+describe("the stop line from the orders export (phase O)", () => {
+  it("trade #1: original from the recording, last stop from the file, moved", () => {
+    const t = {
+      ...trade(10, "2026-10-07T14:20:37Z", "2026-10-07T15:49:06Z", 716.34, 3),
+      created_at: "2026-10-07T16:10:45Z",
+      plan_snapshot: {},
+      direction: "Long",
+      stop_price: 31196.25,
+      final_stop_price: 31227.5,
+      max_drawdown_price: 31206.5,
+      exit_reason: "Pogođen target",
+      entry_order_type: "market",
+    } as unknown as TradeRow;
+    t.stats = { ...t.stats!, avg_entry: 31246.5 };
+    const md = buildMentorPack([t], { tzOf: () => "UTC", displayTz: "Europe/Belgrade" });
+    expect(md).toContain(
+      "- **Stop:** originalni 31196.25 · poslednji u platformi 31227.5 · pomeren posle ulaza (cena išla do 31206.5, dalje od poslednjeg)",
+    );
+    expect(md).toContain("- **Ulaz:** market nalog");
+  });
+});
+

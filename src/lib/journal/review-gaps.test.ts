@@ -14,7 +14,8 @@ function row(over: Record<string, unknown>): TradeRow {
     instrument: "MNQ",
     playbook_id: "pb",
     execution_rating: 5,
-    stats: { closed_at: "2026-09-28T14:00:00Z" },
+    stop_price: 31200,
+    stats: { closed_at: "2026-09-28T14:00:00Z", avg_entry: 31246.5 },
     ...over,
   } as unknown as TradeRow;
 }
@@ -48,3 +49,22 @@ describe("review gaps", () => {
     ]);
   });
 });
+
+describe("review gaps: the stop (phase O)", () => {
+  it("a closed trade with no stop has no R — it is a gap", () => {
+    expect(missingReview(row({ stop_price: null }))).toEqual(["stop"]);
+  });
+
+  it("a stop moved during the trade asks for the original from the recording", () => {
+    expect(
+      missingReview(
+        row({ stop_price: 31227.5, final_stop_price: 31227.5, max_drawdown_price: 31206.5, exit_reason: "Pogođen target" }),
+      ),
+    ).toEqual(["original_stop"]);
+  });
+
+  it("a stop sealed empty at entry still counts as missing, whatever the live column says", () => {
+    expect(missingReview(row({ stop_price: 31200, plan_snapshot: { stop_price: null } }))).toEqual(["stop"]);
+  });
+});
+

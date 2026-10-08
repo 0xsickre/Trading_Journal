@@ -47,6 +47,12 @@ export type ReviewTrade = {
   avgExit: number | null;
   stop: number | null;
   target: number | null;
+  /** The stop order's last price from TopstepX's orders export (phase O). */
+  finalStop?: number | null;
+  /** Why the original stop is asked for — the stop was moved. Null when it was not. */
+  stopNote?: string | null;
+  /** What the trader said before the click, off the recording. */
+  thesis?: string | null;
   tickSize: number | null;
   netPl: number | null;
   realizedR: number | null;
@@ -187,6 +193,11 @@ export function QuickLogForm({
   const [mistakes, setMistakes] = useState<string[]>((review?.mistake ?? []).filter((m) => m !== NO_MISTAKE));
   const [emotions, setEmotions] = useState<string[]>(review?.psychology ?? []);
   const [note, setNote] = useState(review?.notes ?? "");
+  // From the recording (phase O): the stop and target as they stood in the
+  // platform at the entry, and what was said before the click.
+  const [recStop, setRecStop] = useState(review?.stop != null ? String(review.stop) : "");
+  const [recTarget, setRecTarget] = useState(review?.target != null ? String(review.target) : "");
+  const [said, setSaid] = useState(review?.thesis ?? "");
   // One empty field to paste into; "+" adds more.
   const [images, setImages] = useState<string[]>([""]);
 
@@ -264,12 +275,15 @@ export function QuickLogForm({
           mistake: mistakesToSave,
           psychology_tags: emotionsToSave,
           trade_journal_notes: note,
+          stop_price: num(recStop),
+          target_price: num(recTarget),
+          thesis: said.trim() || null,
           exit_reason: autoExitReason({
             direction: review.direction,
             entry: review.avgEntry,
             exit: review.avgExit,
-            stop: review.stop,
-            target: review.target,
+            stop: num(recStop),
+            target: num(recTarget),
             tickSize: review.tickSize,
             options: exitReasons,
           }),
@@ -321,12 +335,41 @@ export function QuickLogForm({
               {review.avgEntry ?? "—"} → {review.avgExit ?? "—"}
             </span>
             <span>stop {review.stop ?? "—"}</span>
+            {review.finalStop != null && <span>poslednji stop u platformi {review.finalStop}</span>}
             {review.netPl != null && (
               <span className={cn("font-medium", review.netPl >= 0 ? "text-[var(--profit)]" : "text-[var(--loss)]")}>
                 {fmtMoney(review.netPl, review.currency, { sign: true })}
               </span>
             )}
             {review.realizedR != null && <span>{review.realizedR.toFixed(2)} R</span>}
+          </CardContent>
+        </Card>
+      ) : null}
+      {review ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Sa snimka</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {review.stopNote && (
+              <p role="alert" className="flex items-start gap-1.5 text-sm text-[var(--loss)]">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" /> {review.stopNote}
+              </p>
+            )}
+            <div className="flex flex-wrap gap-3">
+              <label className="space-y-1 text-sm">
+                <span className="text-xs text-muted-foreground">Originalni stop (na ulazu)</span>
+                <Input inputMode="decimal" value={recStop} onChange={(e) => setRecStop(e.target.value)} className="w-36" />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-xs text-muted-foreground">Cilj</span>
+                <Input inputMode="decimal" value={recTarget} onChange={(e) => setRecTarget(e.target.value)} className="w-36" />
+              </label>
+            </div>
+            <label className="block space-y-1 text-sm">
+              <span className="text-xs text-muted-foreground">Šta sam rekao pre klika (prazno = ništa nisam rekao)</span>
+              <Textarea value={said} onChange={(e) => setSaid(e.target.value)} rows={2} />
+            </label>
           </CardContent>
         </Card>
       ) : (

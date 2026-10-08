@@ -1617,3 +1617,4 @@ minutima ili „close". Četiri migracije primenjene uz odobrenje. Sledi H2 — 
 - **08.10.2026:** „Danas ne trgujem“ bez trejda = dan odmora — checklista nestaje, dan je ispunjen i ne ulazi u prosek ni niz; trejd ipak uzet poništava oznaku.
 - **08.10.2026:** automatsko pravilo `stop_after_two_losses` — dva SL zaredom = kraj dana; dobitak ili scratch između prekida niz (migracija `20261008140000`).
 - **O1 ✅ (08.10.2026):** uvoz TopstepX izvoza naloga zajedno sa trejdovima — cilj, poslednji stop, tip ulaza i razlog izlaska; stop pomeren na ulaz/profit se ne uzima (originalni sa snimka). Migracija `20261009090000`.
+- **O2 ✅ (08.10.2026):** „Dopuna iz snimka“ — originalni stop, cilj i „šta sam rekao pre klika“ na pregledu trejda; `stop-moved.ts` (pomeren na ulaz/profit ili MAE prošao poslednji stop); „Bez pregleda“ i večernji podsetnik javljaju trejd bez stopa ili sa pomerenim; mentor pack „Stop:“ linija.

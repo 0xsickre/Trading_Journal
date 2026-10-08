@@ -32,17 +32,18 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 216 of the
-3,492 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 227 of the
+3,536 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
 |---|---|
 | Daily (the "Pred sesiju" card included) and tracker | 67 |
-| Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 142 |
+| Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 145 |
 | Day insight sentence (`low_efficiency_day`) | 1 |
 | A new playbook's three starting sections (`playbook-types.ts`) | 3 |
-| The seeded tag values Log Trade writes (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2) | 3 |
+| The seeded tag values Log Trade and the import write (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2) | 6 |
+| "Dopuna iz snimka" — the review page and why it asks for the original stop (`stop-moved.ts`) | 5 |
 | Dashboard, `/reports`, journal grid, playbooks, **`/settings`**, `/trades/log`, Topstep banner | **0** |
 
 Settings joined that last row on 20.09.2026. It had held the stage names of the daily checklist
@@ -196,7 +197,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,971 tests across 186 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,983 tests across 187 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -1434,6 +1435,19 @@ A merge writes the stop, the last stop and the entry type only where the trade h
 it (`stop_written`, `orders_written` in `tj_import_rows.parsed.prev`) so undo empties them again
 (`clear_stop`, `clear_orders` in `tj_undo_import_batch`).
 
+**Was the stop moved?** (`stop-moved.ts`, read on every screen, not stored.) Sure when the last stop
+sits at the entry or in profit (`moved_be`), or when the price went further against the trade than the
+last stop and the trade was not stopped out (`moved_mae`: MAE arrives from the exchange's candles the
+evening of the trade and exactly the next morning). Trade #1 of 07.10.2026 is the case: last stop
+31227.5, MAE 31206.5, closed at the target. A moved stop whose trade carries no original — none, or
+the last price standing in for it — is a gap on `/daily` ("Bez pregleda": *originalni stop (pomeren —
+sa snimka)*), as is a closed trade with no stop at all (no R). The evening reminder in
+`futures-trading` applies the same rule. The review page `/trades/[id]/review` is **"Dopuna iz
+snimka"**: the original stop and the target as they stood at the entry, and what was said before the
+click (`thesis`), beside setup, grade, mistakes and charts; a stop sealed empty at entry is written into
+the seal too, or every R would keep reading the empty one. The mentor pack prints **Stop:** — original,
+last in the platform, moved or not — and how the entry was placed.
+
 ### What the file may overwrite, and what it may not
 
 A merge replaces the fills — entry, exit, size, times, commission — because those are the broker's
@@ -1633,8 +1647,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,971 tests across 186 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,373 tests in 125 files) and `components` (environment `jsdom`, files `*.test.tsx`, 598
+2,983 tests across 187 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,384 tests in 126 files) and `components` (environment `jsdom`, files `*.test.tsx`, 599
 tests in 61 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

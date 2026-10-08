@@ -17,13 +17,14 @@
 import { computeStats, type RealizedTrade } from "./analytics";
 import type { BreakevenRange } from "./breakeven";
 import type { DailyReportLite, EnrichedTrade } from "./enriched-trade";
-import { loggedAfterEntry } from "./plan-snapshot";
+import { loggedAfterEntry, sealedNumber } from "./plan-snapshot";
 import { getDimension, type DimensionContext } from "./reports/dimensions";
 import { afterExitR, scenarioOf, scenarioTrade, summarizeScenarios } from "./scenario";
 import type { RedWindow, SessionBrief } from "./session-brief";
 import { minutesAfterOpen, SESSION_TZ } from "./session-window";
 import { numberFieldValue } from "./field-values";
 import { roomAtEntry } from "./risk-taken";
+import { needsOriginalStop, stopStatus } from "./stop-moved";
 import { fmtInTz, isTradingDayKey, toEpoch } from "./time";
 import { TOPSTEP_CONSISTENCY, type TopstepResult } from "./topstep";
 import { ruleIsLiveOn, type DayCompliance } from "./tracker/compliance";
@@ -591,6 +592,29 @@ function executionLines(e: EnrichedTrade, fills: readonly MentorFill[] | undefin
           : "plan nije zapečaćen u journal-u"
     }`,
   );
+
+  // The orders file's last stop against the original, and whether it was moved
+  // (phase O). Only with the orders export imported: without it there is no
+  // last stop to compare.
+  const last = numberFieldValue(row, "final_stop_price");
+  if (last != null) {
+    const status = stopStatus(row);
+    const original = sealedNumber(row, "stop_price");
+    const mae = numberFieldValue(row, "max_drawdown_price");
+    const parts = [
+      `originalni ${original == null ? "—" : num(original)}`,
+      `poslednji u platformi ${num(last)}`,
+      status === "moved_be"
+        ? "pomeren na ulaz / u profit"
+        : status === "moved_mae"
+          ? `pomeren posle ulaza (cena išla do ${num(mae)}, dalje od poslednjeg)`
+          : "nepomeren po izvozu",
+      needsOriginalStop(row) ? "⚠ originalni nije upisan sa snimka" : null,
+    ].filter((p): p is string => p != null);
+    lines.push(`- **Stop:** ${parts.join(" · ")}`);
+  }
+  const orderType = row.entry_order_type;
+  if (typeof orderType === "string" && orderType) lines.push(`- **Ulaz:** ${orderType} nalog`);
 
   const budget = numberFieldValue(row, "risk_budget_at_entry");
   const room = roomAtEntry(row);

@@ -5,6 +5,8 @@ import { getAccounts } from "@/lib/journal/accounts";
 import { getPlaybooks } from "@/lib/journal/playbooks";
 import { PageHeader } from "@/components/app/page-header";
 import { QuickLogForm, type ReviewTrade } from "@/components/journal/quick-log-form";
+import { stopStatus } from "@/lib/journal/stop-moved";
+import type { TradeRow } from "@/lib/journal/types";
 
 const nums = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
@@ -20,7 +22,7 @@ export default async function ReviewTradePage({ params }: { params: Promise<{ id
     supabase
       .from("tj_positions")
       .select(
-        "id, trade_no, instrument, direction, account_id, stop_price, target_price, playbook_id, execution_rating, mistake, psychology_tags, trade_journal_notes",
+        "id, trade_no, instrument, direction, account_id, stop_price, target_price, final_stop_price, max_drawdown_price, exit_reason, thesis, playbook_id, execution_rating, mistake, psychology_tags, trade_journal_notes",
       )
       .eq("id", id)
       .maybeSingle(),
@@ -37,6 +39,9 @@ export default async function ReviewTradePage({ params }: { params: Promise<{ id
   ]);
   if (!pos) notFound();
 
+  // Was the stop moved? Read off the orders file's last stop, the entry and the MAE.
+  const moved = stopStatus({ ...pos, stats: { avg_entry: nums(stats?.avg_entry) } } as unknown as TradeRow);
+
   const review: ReviewTrade = {
     id: pos.id,
     label: `${pos.trade_no != null ? `#${pos.trade_no}` : pos.id.slice(0, 8)}${pos.instrument ? ` ${pos.instrument}` : ""}`,
@@ -47,6 +52,14 @@ export default async function ReviewTradePage({ params }: { params: Promise<{ id
     avgExit: nums(stats?.avg_exit),
     stop: nums(pos.stop_price),
     target: nums(pos.target_price),
+    finalStop: nums(pos.final_stop_price),
+    stopNote:
+      moved === "moved_be"
+        ? "Poslednji stop u platformi je na ulazu ili u profitu — pomeren je. Upiši originalni sa snimka."
+        : moved === "moved_mae"
+          ? "Cena je otišla dalje od poslednjeg stopa, a trejd nije izbačen — stop je pomeren. Upiši originalni sa snimka."
+          : null,
+    thesis: pos.thesis,
     tickSize: nums(stats?.tick_size),
     netPl: nums(stats?.net_pl),
     realizedR: nums(stats?.realized_r),
@@ -60,7 +73,10 @@ export default async function ReviewTradePage({ params }: { params: Promise<{ id
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <PageHeader title="Review Trade" description="Setup, grade and what went wrong — the fills stay as imported." />
+      <PageHeader
+        title="Dopuna iz snimka"
+        description="Stop i cilj kakvi su bili u platformi na ulazu, šta si rekao pre klika, setup i ocena — fill-ovi ostaju kako su uvezeni."
+      />
       <QuickLogForm accounts={accounts} instruments={[]} playbooks={playbooks} optionsMap={optionsMap} review={review} />
     </div>
   );
