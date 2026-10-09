@@ -29,7 +29,7 @@ import {
 import { compareInstants, fmtInTz, type DayZone } from "./time";
 import type { TradeRow } from "./types";
 import { groupInsights } from "./insights/types";
-import { OMITTED_RULES, type RunResult } from "./insights/registry";
+import type { RunResult } from "./insights/registry";
 import { computeExcursionStats, excursionFromTrade } from "./excursion";
 import type { RuleLookup } from "./reports/rule-lookup";
 import { enrichTrades, type DailyReportLite, type EnrichedTrade } from "./enriched-trade";
@@ -162,8 +162,12 @@ function statsTable(
     `| Best / Worst | ${money(s.best, ccy)} / ${money(s.worst, ccy)} |`,
     `| Max win / loss streak | ${s.maxWinStreak} / ${s.maxLossStreak} |`,
     `| Max drawdown | ${money(s.maxDrawdown, ccy)} |`,
-    `| Avg entry slippage | ${slipAvg} (${slip.count} trades) |`,
-    `| Total slippage (R) | ${slipTotal} |`,
+    // Only where a trade was planned before its entry: a book logged after the
+    // fill (every trade since phase O) has no planned entry to slip from, and
+    // two rows of "—" only made the reader look for a number that cannot exist.
+    ...(slip.count > 0
+      ? [`| Avg entry slippage | ${slipAvg} (${slip.count} trades) |`, `| Total slippage (R) | ${slipTotal} |`]
+      : []),
     `| Target attainment | ${exitEffAvg} (${exitEff.count} closed trades) |`,
     `| Winner target attainment | ${exitEffWinner} (${exitEff.winnerCount} wins) |`,
     `| Avg MAE (R) | ${excMae} |`,
@@ -642,14 +646,6 @@ export function buildMentorPack(
         `_Nije procenjeno zbog malog uzorka: ${opts.insights.skipped
           .map((s) => `${s.id} (traži ${s.minSample}, ima ${s.sample})`)
           .join(", ")}._`,
-      );
-    }
-    if (OMITTED_RULES.length > 0) {
-      out.push("");
-      out.push(
-        `_Svesno neimplementirano (traži vrh dnevnog P&L-a, koji niko ne meri): ${OMITTED_RULES.map(
-          (o) => o.id,
-        ).join(", ")}._`,
       );
     }
     out.push("");
