@@ -666,3 +666,36 @@ describe("TopstepX trades + orders chosen together (phase O)", () => {
     await vi.waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith(expect.stringMatching(/goes with the trades export/)));
   });
 });
+
+describe("a position built in several entries is one trade (09.10.2026)", () => {
+  const TRADES =
+    "Id,ContractName,EnteredAt,ExitedAt,EntryPrice,ExitPrice,Fees,PnL,Size,Type,TradeDay,TradeDuration,Commissions\n" +
+    "3188092767,MNQZ6,10/09/2026 15:15:49 +02:00,10/09/2026 15:18:09 +02:00,31206.5,31216,0.72,19,1,Long,10/09/2026 00:00:00 -05:00,00:02:20,0.50\n" +
+    "3188092768,MNQZ6,10/09/2026 15:16:08 +02:00,10/09/2026 15:18:09 +02:00,31209.5,31216,0.72,13,1,Long,10/09/2026 00:00:00 -05:00,00:02:00,0.50\n" +
+    "3188092769,MNQZ6,10/09/2026 15:16:17 +02:00,10/09/2026 15:18:09 +02:00,31209.25,31216,0.72,13.5,1,Long,10/09/2026 00:00:00 -05:00,00:01:51,0.50\n" +
+    "3188092770,MNQZ6,10/09/2026 15:17:12 +02:00,10/09/2026 15:18:09 +02:00,31216.5,31216,0.72,-1,1,Long,10/09/2026 00:00:00 -05:00,00:00:56,0.50\n";
+  const ORDERS =
+    "Id,AccountName,ContractName,Status,Type,Size,Side,CreatedAt,TradeDay,FilledAt,CancelledAt,TriggeredAt,StopPrice,LimitPrice,ExecutePrice,TriggeredPrice,PositionDisposition,CreationDisposition,RejectionReason,ExchangeOrderId,PlatformOrderId\n" +
+    "3624143599,PRAC,MNQZ6,Filled,Market,1,Bid,10/09/2026 15:15:49 +02:00,,10/09/2026 15:15:49 +02:00,,,,,31206.5,,Opening,Trader,,,\n" +
+    "3624143601,PRAC,MNQZ6,Cancelled,Stop,4,Ask,10/09/2026 15:15:49 +02:00,,,10/09/2026 15:18:09 +02:00,,31006.5,,,,Undetermined,StopLoss,Cancelled by system,,\n" +
+    "3624143602,PRAC,MNQZ6,Cancelled,Limit,4,Ask,10/09/2026 15:15:49 +02:00,,,10/09/2026 15:18:09 +02:00,,,31606.5,,,Undetermined,TakeProfit,Cancelled by system,,\n" +
+    "3624154989,PRAC,MNQZ6,Filled,Market,4,Ask,10/09/2026 15:18:09 +02:00,,10/09/2026 15:18:09 +02:00,,,,,31216,,Closing,ClosePosition,,,\n";
+
+  it("imports the four TopstepX rows as one trade with four entries, one exit and the bracket's stop", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} instruments={[{ symbol: "MNQ", point_value: 2 }]} />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, [csvFile("trades.csv", TRADES), csvFile("orders.csv", ORDERS)]);
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+    await user.click(screen.getByRole("button", { name: /^Commit/ }));
+    await vi.waitFor(() => expect(commitImportMock).toHaveBeenCalled());
+    const items = commitImportMock.mock.calls[0][0].items;
+    expect(items).toHaveLength(1);
+    const [t] = items;
+    expect(t.executions.filter((e: { side: string }) => e.side === "entry")).toHaveLength(4);
+    expect(t.executions.filter((e: { side: string }) => e.side === "exit")).toEqual([
+      expect.objectContaining({ price: 31216, qty: 4, executed_at: "2026-10-09T13:18:09.000Z" }),
+    ]);
+    expect(t).toMatchObject({ stop_price: 31006.5, target_price: 31606.5, final_stop_price: 31006.5, exit_kind: "manual" });
+  });
+});

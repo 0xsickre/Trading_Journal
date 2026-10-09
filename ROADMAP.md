@@ -1621,3 +1621,4 @@ minutima ili „close". Četiri migracije primenjene uz odobrenje. Sledi H2 — 
 - **O3 ✅ (08.10.2026):** propušten setup iz snimka — `/trades/missed/new`, link sa /daily; isti `status='missed'` red, pa ga R2 i dalje ocenjuje.
 - **O4 ✅ (08.10.2026):** samo uvoz — uklonjeni `/trades/new` (plan pre ulaza) i `/trades/log` (brzi upis); glavna akcija u meniju je Uvoz; forma trejda služi samo za izmenu; „Mark as missed“ / „Restore to planned“ i `createTrade` uklonjeni.
 - **09.10.2026 (pregled):** mentor pack i forma pišu raspon rizika naloga (npr. 60–350), ne plana; dan se ne zaključava dok trejdu fali stop ili originalni stop; „Šta bi bilo“ se preračuna i kad se promeni živi stop/cilj/ulaz (`20261009150000`).
+- **09.10.2026:** pozicija sa više ulaza (TopstepX je izvozi kao red po ulazu) uvozi se kao jedan trejd sa svim fill-ovima (`groupTopstepXTrades`).

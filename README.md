@@ -198,7 +198,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,955 tests across 190 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,961 tests across 190 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -1423,6 +1423,14 @@ confidently wrong trade through the generic mapping, and each is handled:
   cost is their sum. `PnL` is gross and is checked against price move × multiplier × size, so a
   contract whose multiplier differs from the catalog's says so on its row instead of in the P&L.
 
+**One position, one trade** (`groupTopstepXTrades`, 09.10.2026). TopstepX exports a position built in
+several entries as one row per entry lot, each with the same exit — the trader's test of four 1-lot buys
+closed together came out as four rows. Rows of the same contract and side whose holding overlaps (the
+book never went flat between them) are joined into one trade: every entry as its own fill, the exits
+with the same instant and price joined into one fill, costs and result summed. The orders export
+confirms the shape — one bracket for the whole position, its size grown with each entry — so the
+stop, the target and how it ended come from it unchanged.
+
 Each row then goes through the same matching as any file: a trade already in the journal for
 that day is recognised (entry within 0.05 %, entry time within ten minutes) and its rough numbers
 are replaced by the exact fills, while setup, grade, mistakes and the sentence stay.
@@ -1665,8 +1673,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,955 tests across 190 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,368 tests in 128 files) and `components` (environment `jsdom`, files `*.test.tsx`, 587
+2,961 tests across 190 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,373 tests in 128 files) and `components` (environment `jsdom`, files `*.test.tsx`, 588
 tests in 62 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

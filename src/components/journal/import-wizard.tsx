@@ -27,6 +27,7 @@ import { matchImportRow, type MatchCandidate } from "@/lib/journal/import-match"
 import {
   TOPSTEPX_COLUMNS,
   isTopstepXTrades,
+  groupTopstepXTrades,
   readTopstepXTrades,
   topstepXImportRows,
   type TopstepXTrade,
@@ -226,7 +227,8 @@ export function ImportWizard({
           toast.error("TopstepX export read, but it holds no trades for that date range.");
           return;
         }
-        setTopstepx(trades);
+        // One position built in several entries is one trade, not one per row.
+        setTopstepx(groupTopstepXTrades(trades));
         setOrders(orderRows ? readTopstepXOrders(orderRows) : null);
         return;
       }
@@ -414,6 +416,18 @@ export function ImportWizard({
           executed_at: exitAt,
           fee,
         });
+      }
+
+      // A TopstepX position joined from several rows carries every fill: its
+      // entries one by one, its exits joined per order (`groupTopstepXTrades`).
+      const joined = row[TOPSTEPX_COLUMNS.fills];
+      if (joined) {
+        const fills = JSON.parse(joined) as { side: "entry" | "exit"; price: number; qty: number; time: string; fee: number }[];
+        execs.splice(
+          0,
+          execs.length,
+          ...fills.map((f) => ({ side: f.side, price: f.price, qty: f.qty, executed_at: new Date(f.time).toISOString(), fee: f.fee })),
+        );
       }
 
       // Matching lives in `import-match.ts` — the decision that determines

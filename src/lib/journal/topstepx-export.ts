@@ -65,6 +65,8 @@ export const TOPSTEPX_COLUMNS = {
   entryOrder: "Entry order",
   exitBy: "Exit by",
   stopNote: "Stop note",
+  // A position joined from several rows: every fill, as JSON (09.10.2026).
+  fills: "Fills",
 } as const;
 
 export type TopstepXTrade = {
@@ -87,7 +89,15 @@ export type TopstepXTrade = {
   pnl: number;
   /** Why this row cannot be imported as read. `null` when it can. */
   problem: string | null;
+  /**
+   * Every fill, when the trade is a position joined from several rows
+   * (`groupTopstepXTrades`). Absent on a one-row trade: its fills are the entry
+   * and exit above.
+   */
+  fills?: TopstepXFill[];
 };
+
+export type TopstepXFill = { side: "entry" | "exit"; price: number; qty: number; time: string; fee: number };
 
 /** Whether a CSV's header row is TopstepX's trades export. */
 export function isTopstepXTrades(headers: string[]): boolean {
@@ -219,6 +229,79 @@ export function topstepXImportRows(
       [TOPSTEPX_COLUMNS.fee]: String(t.fees),
       [TOPSTEPX_COLUMNS.profit]: String(t.pnl),
       [TOPSTEPX_COLUMNS.issue]: t.problem ?? "",
+      [TOPSTEPX_COLUMNS.fills]: t.fills ? JSON.stringify(t.fills) : "",
     };
   });
 }
+
+const ms = (iso: string) => Date.parse(iso);
+
+/**
+ * One position, one trade (09.10.2026).
+ *
+ * TopstepX exports a position built in several entries as one ROW PER ENTRY LOT,
+ * each with the same exit: the trader's test of four 1-lot buys closed together
+ * came out as four trades. Imported as rows, one decision would count four times —
+ * in the trade count, the win rate, two stops in a row, the risk.
+ *
+ * Rows of the same contract and side whose holding overlaps (the next one opened
+ * before everything before it had closed — the book never went flat between them)
+ * are one position: its entries are the rows' entries, its exits are the rows'
+ * exits with the same instant and price joined into one fill (one exit order
+ * closed them all), the costs and the result are summed, and the prices and the
+ * size are the position's. A row with a problem passes its problem to the
+ * position, so the whole position is held back rather than half of it.
+ */
+export function groupTopstepXTrades(trades: TopstepXTrade[]): TopstepXTrade[] {
+  const sorted = [...trades].sort((a, b) => ms(a.entryTime) - ms(b.entryTime));
+  const groups: TopstepXTrade[][] = [];
+  const lastExit = new Map<TopstepXTrade[], number>();
+  for (const t of sorted) {
+    const g = groups.find(
+      (x) =>
+        x[0].contract === t.contract &&
+        x[0].direction === t.direction &&
+        ms(t.entryTime) < (lastExit.get(x) ?? Number.NEGATIVE_INFINITY),
+    );
+    if (g) {
+      g.push(t);
+      lastExit.set(g, Math.max(lastExit.get(g)!, ms(t.exitTime)));
+    } else {
+      const ng = [t];
+      groups.push(ng);
+      lastExit.set(ng, ms(t.exitTime));
+    }
+  }
+  return groups.map((g) => (g.length === 1 ? g[0] : joinRows(g)));
+}
+
+function joinRows(rows: TopstepXTrade[]): TopstepXTrade {
+  const size = rows.reduce((s, t) => s + t.size, 0);
+  const avg = (key: "entryPrice" | "exitPrice") => rows.reduce((s, t) => s + t[key] * t.size, 0) / size;
+  const entries: TopstepXFill[] = rows.map((t) => ({ side: "entry", price: t.entryPrice, qty: t.size, time: t.entryTime, fee: 0 }));
+  const exits: TopstepXFill[] = [];
+  for (const t of rows) {
+    const same = exits.find((e) => e.time === t.exitTime && e.price === t.exitPrice);
+    if (same) {
+      same.qty += t.size;
+      same.fee += t.fees;
+    } else exits.push({ side: "exit", price: t.exitPrice, qty: t.size, time: t.exitTime, fee: t.fees });
+  }
+  exits.sort((a, b) => ms(a.time) - ms(b.time));
+  return {
+    id: rows.map((t) => t.id).join("+"),
+    contract: rows[0].contract,
+    symbol: rows[0].symbol,
+    direction: rows[0].direction,
+    size,
+    entryPrice: avg("entryPrice"),
+    entryTime: rows[0].entryTime,
+    exitPrice: avg("exitPrice"),
+    exitTime: exits[exits.length - 1].time,
+    fees: rows.reduce((s, t) => s + t.fees, 0),
+    pnl: rows.reduce((s, t) => s + t.pnl, 0),
+    problem: rows.map((t) => t.problem).find((p) => p != null) ?? null,
+    fills: [...entries, ...exits],
+  };
+}
+
