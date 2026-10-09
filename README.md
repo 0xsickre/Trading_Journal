@@ -198,7 +198,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,952 tests across 190 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,955 tests across 190 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -1118,7 +1118,10 @@ flag and the day is scored like any other.
 **Locking a day** freezes the automatic verdicts into rows and is irreversible — enforced by a trigger
 that fires on any edit to a locked report, so there is no unlock action that would need writing.
 Trades from a locked day stay editable: P&L is a fact that must remain correctable, and the frozen
-verdicts are what stops compliance from following it.
+verdicts are what stops compliance from following it. **A day is not locked while one of its trades has
+no stop, or a moved stop with no original** (`lockRefusal`, 09.10.2026): the risk rules are computed
+from the stop, and the lock would freeze them against the wrong one for good. Setup and grade do not
+hold the lock.
 
 **Playbooks** hold groups of rules; answering their checklist writes `tj_position_rules`, which feeds
 the follow rate. An unanswered rule counts in neither the numerator nor the denominator.
@@ -1657,8 +1660,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,952 tests across 190 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,365 tests in 128 files) and `components` (environment `jsdom`, files `*.test.tsx`, 587
+2,955 tests across 190 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,368 tests in 128 files) and `components` (environment `jsdom`, files `*.test.tsx`, 587
 tests in 62 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
@@ -1809,8 +1812,11 @@ writes the result into `tj_positions.scenario` (jsonb, v2 since phase S; v1 from
 
 Which came first is walked on 1-minute bars; the rest of the entry and exit minute and any minute
 that holds both a stop and a target are walked on 1-second bars, and a second that still holds both
-is a **stop** (never a guessed win). A trigger clears the scenario whenever the trade's fills or its
-sealed plan change (edit, merge, import, undo), and the next run measures it again.
+is a **stop** (never a guessed win). A trigger clears the scenario whenever the trade's fills, its
+sealed plan or its live entry, stop or target change (edit, merge, import, undo, "Dopuna iz snimka"),
+and the next run measures it again. The live columns joined on 09.10.2026 (`20261009150000`): an
+imported trade has an empty seal, so its stop is the live one, and the original stop written from the
+recording left a scenario measured on the moved stop in place.
 
 **Where it shows.** The trade page gets a *What would have happened* card (verdict, after-exit table,
 the stop needed for the target, the trade's grid with its planned target column marked). `/reports`

@@ -45,3 +45,22 @@ export function reviewGaps(trades: TradeRow[], day: string, dayOf: (t: TradeRow)
       return [{ id: t.id, label: `${t.trade_no != null ? `#${t.trade_no}` : t.id.slice(0, 8)}${instrument}`, missing }];
     });
 }
+
+/**
+ * Why `day` may not be locked yet, or null (09.10.2026).
+ *
+ * Locking freezes the automatic verdicts, and the risk rules
+ * (`risk_per_trade`, `risk_matched_intent`) are computed from the stop. A trade
+ * still missing its stop, or still carrying the last stop of a moved one instead
+ * of the original from the recording, would be frozen against the wrong risk —
+ * for good. Setup and grade do not hold the lock: no frozen rule reads them.
+ */
+export function lockRefusal(trades: TradeRow[], day: string, dayOf: (t: TradeRow) => string): string | null {
+  const names = { stop: "stop", original_stop: "originalni stop" } as const;
+  const open = reviewGaps(trades, day, dayOf).flatMap((g) =>
+    g.missing.filter((m): m is "stop" | "original_stop" => m === "stop" || m === "original_stop").map((m) => `${g.label} (${names[m]})`),
+  );
+  return open.length === 0
+    ? null
+    : `Pre zaključavanja dopuni sa snimka: ${open.join(", ")}. Zaključan dan zamrzava pravila rizika na stopu koji ima.`;
+}

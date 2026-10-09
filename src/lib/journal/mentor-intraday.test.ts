@@ -493,3 +493,17 @@ describe("the stop line from the orders export (phase O)", () => {
   });
 });
 
+describe("the risk range is the account's own (09.10.2026)", () => {
+  it("prints the account's cap, not the plan's, when the account sets one", () => {
+    const md = buildMentorPack(book, {
+      tzOf: () => "UTC",
+      displayTz: "Europe/Belgrade",
+      topstep:
+        topstep.status === "off"
+          ? []
+          : [{ accountName: "50K", plan: "50K", startingBalance: 50_000, riskRulePct: 15, riskRuleMin: 60, riskRuleMax: 350, result: topstep }],
+    });
+    expect(md).toContain("15% prostora do MLL-a, u granicama 60.00 USD–350.00 USD");
+  });
+});
+

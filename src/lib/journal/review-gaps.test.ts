@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { missingReview, reviewGaps } from "./review-gaps";
+import { lockRefusal, missingReview, reviewGaps } from "./review-gaps";
 import type { TradeRow } from "./types";
 
 function row(over: Record<string, unknown>): TradeRow {
@@ -68,3 +68,20 @@ describe("review gaps: the stop (phase O)", () => {
   });
 });
 
+
+describe("lockRefusal (09.10.2026): the stop comes before the lock", () => {
+  const day = (t: TradeRow) => String(t.stats?.closed_at).slice(0, 10);
+  it("refuses to seal a day while one of its trades has no stop or no original stop", () => {
+    const trades = [
+      row({ id: "a", trade_no: 1, stop_price: null }),
+      row({ id: "b", trade_no: 2, final_stop_price: 31227.5, stop_price: 31227.5, max_drawdown_price: 31206.5, exit_reason: "Pogođen target" }),
+    ];
+    expect(lockRefusal(trades, "2026-09-28", day)).toBe(
+      "Pre zaključavanja dopuni sa snimka: #1 MNQ (stop), #2 MNQ (originalni stop). Zaključan dan zamrzava pravila rizika na stopu koji ima.",
+    );
+  });
+
+  it("does not hold the lock for a missing setup or grade", () => {
+    expect(lockRefusal([row({ playbook_id: null, execution_rating: null })], "2026-09-28", day)).toBeNull();
+  });
+});

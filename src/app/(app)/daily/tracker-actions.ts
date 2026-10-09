@@ -7,7 +7,8 @@ import { getCurrentUser } from "@/lib/supabase/user";
 import { inAllAccountsScope } from "@/lib/journal/account-rules";
 import { getAccounts, getPrimaryAccount } from "@/lib/journal/accounts";
 import { getCashEvents } from "@/lib/journal/cash-events";
-import { accountDayZoneResolver, todayFor } from "@/lib/journal/time";
+import { accountDayZoneResolver, dayKeyIn, todayFor } from "@/lib/journal/time";
+import { lockRefusal } from "@/lib/journal/review-gaps";
 import { topstepRulesResolver } from "@/lib/journal/topstep";
 import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
 import { briefResolver } from "@/lib/journal/session-brief";
@@ -148,6 +149,11 @@ export async function lockDay(reportDate: string): Promise<Result> {
   const tzOf = accountDayZoneResolver(accounts, primary);
   // The same book as the page: Practice is kept apart (trader, 01.10.2026).
   const trades = inAllAccountsScope(tradesAll, accounts);
+  // The risk rules are computed from the stop, and the lock freezes them: a trade
+  // still missing its stop — or the original of a moved one — is filled in from
+  // the recording first (`lockRefusal`, 09.10.2026).
+  const refusal = lockRefusal(trades, reportDate, (t) => dayKeyIn(t.stats?.closed_at ?? null, tzOf(t.account_id)));
+  if (refusal) return { ok: false, error: refusal };
   const index = buildTradeDayIndex(trades, (row) => tzOf(row.account_id), topstepRulesResolver(accounts, cash));
   const auto = evaluateAutoRulesForDay(reportDate, index, { briefOf: briefResolver(briefs) });
 

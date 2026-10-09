@@ -337,6 +337,15 @@ export type MentorTopstep = {
   startingBalance: number;
   /** The trader's risk rule: this share of the room above the MLL per trade. */
   riskRulePct: number | null;
+  /**
+   * The account's own floor and cap on that risk, where set (Settings ›
+   * Accounts). Null falls back to the plan's — the same fallback the budget at
+   * entry is computed with (`riskBudgetAt`), so the pack states the range the
+   * journal actually sized from. It printed the plan's 60–300 while the account
+   * capped at 350 (09.10.2026).
+   */
+  riskRuleMin?: number | null;
+  riskRuleMax?: number | null;
   result: TopstepResult;
 };
 
@@ -365,7 +374,7 @@ export function topstepSection(accounts: readonly MentorTopstep[], ccy: string):
       `| Najbolji dan / granica konzistentnosti | ${r.bestDay ? `${signed(r.bestDay.net, ccy)} (${r.bestDay.day})` : "—"} / ${m(consistencyCap)} (${Math.round(TOPSTEP_CONSISTENCY * 100)}% cilja) — ${r.consistencyOk ? "u redu" : "PREKORAČENO"} |`,
       `| Trading dana | ${r.daysTraded} |`,
       `| Max pozicija | ${r.rules.maxMini} mini / ${r.rules.maxMini * 10} mikro ugovora |`,
-      `| Pravilo rizika po trejdu | ${a.riskRulePct == null ? "—" : `${a.riskRulePct}% prostora do MLL-a`}, u granicama ${m(r.rules.riskMin)}–${m(r.rules.riskMax)} |`,
+      `| Pravilo rizika po trejdu | ${a.riskRulePct == null ? "—" : `${a.riskRulePct}% prostora do MLL-a`}, u granicama ${m(a.riskRuleMin ?? r.rules.riskMin)}–${m(a.riskRuleMax ?? r.rules.riskMax)} |`,
       "",
     );
   }

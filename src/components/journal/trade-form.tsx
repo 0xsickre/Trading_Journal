@@ -644,7 +644,16 @@ export function TradeForm({
       futuresPair,
       pairSymbol,
       futuresBudget,
-      topstep: ts ? { ...ts, risk: topstepRisk, pct: account?.risk_rule_pct ?? TOPSTEP_DEFAULT_RISK_PCT } : null,
+      topstep: ts
+        ? {
+            ...ts,
+            risk: topstepRisk,
+            pct: account?.risk_rule_pct ?? TOPSTEP_DEFAULT_RISK_PCT,
+            // The range the budget was computed within: the account's, else the plan's.
+            min: account?.risk_rule_min ?? ts.plan.riskMin,
+            max: account?.risk_rule_max ?? ts.plan.riskMax,
+          }
+        : null,
       stopTicks,
       targetTicks,
       // Exposed so the risk note can tell a BUDGET from a CONSEQUENCE: with no
@@ -2144,7 +2153,7 @@ function futuresRiskNote(
     futuresPair: { contracts: number; risk: number } | null;
     pairSymbol?: string;
     futuresBudget: number | null;
-    topstep: (TopstepSizing & { risk: { amount: number; threeStopsFitDll: boolean } | null; pct: number }) | null;
+    topstep: (TopstepSizing & { risk: { amount: number; threeStopsFitDll: boolean } | null; pct: number; min: number; max: number }) | null;
     stopTicks: number | null;
     targetTicks: number | null;
   },
@@ -2157,7 +2166,7 @@ function futuresRiskNote(
       return `No room to risk: ${fmtMoney(m.topstep.room, currency)} above the MLL, ${fmtMoney(m.topstep.dllLeftToday, currency)} of today's DLL left.`;
     }
     parts.push(
-      `Budget ${fmtMoney(m.topstep.risk.amount, currency)} (${m.topstep.pct} % of ${fmtMoney(m.topstep.room, currency)} room above the MLL, plan ${fmtMoney(m.topstep.plan.riskMin, currency)}–${fmtMoney(m.topstep.plan.riskMax, currency)}).`,
+      `Budget ${fmtMoney(m.topstep.risk.amount, currency)} (${m.topstep.pct} % of ${fmtMoney(m.topstep.room, currency)} room above the MLL, within ${fmtMoney(m.topstep.min, currency)}–${fmtMoney(m.topstep.max, currency)}).`,
     );
   } else if (m.futuresBudget != null) {
     parts.push(`Budget ${fmtMoney(m.futuresBudget, currency)}.`);

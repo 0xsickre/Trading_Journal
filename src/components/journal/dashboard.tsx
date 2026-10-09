@@ -1713,6 +1713,8 @@ export function Dashboard({
           plan: s.account.topstep_plan ?? "50K",
           startingBalance: s.account.starting_balance,
           riskRulePct: riskRuleFromAccount(s.account).pct,
+          riskRuleMin: riskRuleFromAccount(s.account).min,
+          riskRuleMax: riskRuleFromAccount(s.account).max,
           result: s.result,
         })),
       trackerRules,
