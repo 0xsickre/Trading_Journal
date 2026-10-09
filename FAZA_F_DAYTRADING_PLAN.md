@@ -150,7 +150,7 @@ pogađa.
 | **V** | Pregled dana / nedelje od Claude-a: isti „Export for Claude“ paket preuzima futures-trading i šalje rutini | — | U | ne | **Opus** | ⛔ obustavljeno (trejder, 02.10.2026) — ne raditi bez novog naloga trejdera |
 | **M** | Mentor tok: bez /weekly, kraći /daily, compliance bez praznih dana, pun mentor pack (Dan / Nedelja) | — | U | da, **briše**: `tj_weekly_reviews`, `tj_experiments`, `tj_focus_goals` | **Opus** | ✅ 08.10.2026 — M1 `d6391df` · M2 `8076b93` · M3 `6be8e87` (migracija `20261008120000` primenjena) + futures-trading `6827ce7` · M4 `786a035` |
 | **O** | Prvo uvoz, pa dopuna iz snimka: izvoz naloga (stop, cilj, izlaz), dopuna iz snimka, propušten setup, bez plan-forme | — | M | da: `20261009090000` (aditivna) | **Opus** | ✅ 08.10.2026 — O1 `af9c0cc` (migracija `20261009090000` primenjena) · O2 `c15dc20` + futures-trading `bc1f28d` · O3 `800474d` · O4 `95222f9` |
-| **W** | Vremenski stop: koliko dobitniku treba da krene, koliko gubitnik stoji u minusu do SL | — | O | da: `20261009120000` (`last_underwater_seconds`, aditivna) | **Opus** | 🟡 kod gotov 09.10.2026 — čeka primenu migracije (odobrenje trejdera) |
+| **W** | Vremenski stop: koliko dobitniku treba da krene, koliko gubitnik stoji u minusu do SL | — | O | da: `20261009120000` (`last_underwater_seconds`, aditivna) | **Opus** | ✅ `bff96eb` + futures-trading `b8c9da1`, 09.10.2026 — migracija `20261009120000` primenjena uz odobrenje trejdera |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1143,7 +1143,7 @@ SL iz fajla; pomeren → originalni sa snimka (dopuna, `/daily` „Bez pregleda�
 - **O3** Propušten setup iz snimka (`/trades/missed/new`).
 - **O4** Uklanjanje `/trades/new` i `/trades/log`, glavna akcija Uvoz, mrtvi kod, README.
 
-## W — Vremenski stop (detaljno, 09.10.2026)
+## W — Vremenski stop (detaljno, 09.10.2026) — ✅
 
 **Povod** (trejder, 09.10.2026): evidencija koliko dobitniku treba da krene i koliko gubitnik stoji u minusu do
 SL-a, da bi trejd koji do tog vremena ne krene sekao vremenski. Postojalo je: prosečno trajanje po ishodu
