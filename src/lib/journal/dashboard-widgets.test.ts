@@ -181,6 +181,7 @@ describe("packRows", () => {
     }
     const byId = rows.map((r) => r.map((w) => w.id));
     expect(byId).toContainEqual(["equity", "score"]);
+    expect(byId).toContainEqual(["recent-trades", "time-stop"]);
     expect(byId).toContainEqual(["hold-time", "costs", "plan-vs-reality", "weekly"]);
     expect(byId).toContainEqual(["drawdown", "calendar"]);
   });

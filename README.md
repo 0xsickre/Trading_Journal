@@ -198,7 +198,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,946 tests across 189 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,952 tests across 190 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -338,7 +338,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 
 | Route | What it is |
 |---|---|
-| `/` | Dashboard: a **Topstep banner** per Topstep account (room above the MLL, DLL left today, best day against the 55 % line, the target — on an XFA the Scaling Plan's contracts and both payout paths instead) then KPIs, equity curve, drawdown, heatmap calendars, breakdowns, the Process · Survival · Edge card, insights. Opens on **All** — the whole record first, narrowed on request; the scope last chosen is remembered per browser. Whenever the period leaves closed trades out, a notice above the figures says how many and how far back, with **Show all** (`default-period.ts`). The amounts read in **`$` · `%` · Points · Ticks · Privacy**. Points and ticks (U, 01.10.2026) are the money divided by one contract's point (or tick) value, trade by trade, so they count every contract — two MNQ over ten points is 20 points — and a sum of them still follows the money (`futures-units.ts`). They hold within one instrument family only (MNQ with NQ, MES with ES, M6E with 6E): an **instrument picker** appears when the account has more than one, and until one is picked the two buttons are off. They change the same figures `%` does — Net, Gross, Best, Worst, Max drawdown, Total costs, Avg daily DD, the recent trades and the tag table; the charts stay in money. The picker narrows the trades shown, never the account's equity (percentage, Topstep, survival) |
+| `/` | Dashboard: a **Topstep banner** per Topstep account (room above the MLL, DLL left today, best day against the 55 % line, the target — on an XFA the Scaling Plan's contracts and both payout paths instead) then KPIs, equity curve, drawdown, heatmap calendars, breakdowns, the Process · Survival · Edge card, the **Time stop** card (see § MAE/MFE), insights. Opens on **All** — the whole record first, narrowed on request; the scope last chosen is remembered per browser. Whenever the period leaves closed trades out, a notice above the figures says how many and how far back, with **Show all** (`default-period.ts`). The amounts read in **`$` · `%` · Points · Ticks · Privacy**. Points and ticks (U, 01.10.2026) are the money divided by one contract's point (or tick) value, trade by trade, so they count every contract — two MNQ over ten points is 20 points — and a sum of them still follows the money (`futures-units.ts`). They hold within one instrument family only (MNQ with NQ, MES with ES, M6E with 6E): an **instrument picker** appears when the account has more than one, and until one is picked the two buttons are off. They change the same figures `%` does — Net, Gross, Best, Worst, Max drawdown, Total costs, Avg daily DD, the recent trades and the tag table; the charts stay in money. The picker narrows the trades shown, never the account's equity (percentage, Topstep, survival) |
 | `/journal` | Trade table — sorting, filtering, column picking. The date column carries the **year**, so a trade from last season does not read as this spring |
 | `/trades/[id]/edit` | Trade form, **for editing** a trade that is there (since phase O nothing is created here): plan, fills, playbook checklist, psychology, images — the charts are a **list the trader grows with "+ Add chart"** (30.09.2026, up to 20 per trade, in the order added — `tj_trade_images.sort_order`, `20260930050000`; the three fixed slots HTF pre / LTF pre / LTF post are gone), each one an **uploaded screenshot, an image pasted from the clipboard or a TradingView link** (K6, `chart-image-input.tsx`): an image goes to the private `trade-images` bucket under the user's own folder and is stored as `storage:<uid>/<file>` in `tj_trade_images.image_url`, shown through a one-hour signed URL; the CHECK ties the folder to the row's user (`20260929220000`). In the **order of the decisions**: account, instrument, then the playbook and its checklist, and only then the prices and the risk. **There is no phase control**: planned or active is what the fills say — an entry fill means you are in the trade — so a select that could disagree with the record is gone, and so is "Move to active". A missed setup stays missed (it is created on `/trades/missed/new`). The instrument is **typed, not scrolled** — `instrument-select.tsx` filters the catalog on symbol, name and asset class. On a **Topstep account** the size is whole contracts: risk by the account's rule (§ Topstep), contracts rounded down with the round-turn commission and a tick of slippage on the stop counted (R4) and capped at the plan, stop and target in ticks for the TopstepX bracket — "2 MNQ · $203.44 at the stop incl. commission and a tick of slippage (stop 200 ticks)" — with the mini or micro alternative and a warning when the count is zero, capped, or three stops no longer fit today's DLL. |
 | `/trades/[id]/review` | **Dopuna iz snimka** (phase O): the original stop and the target as they stood at the entry, what was said before the click, then setup / A-B-C / mistakes / sentence / charts, for a trade that arrived through the export; asks for the original stop when the orders file shows it was moved. One UPDATE of the review columns (`saveTradeReview`), never `tj_save_trade`, which rewrites fills and rule answers on every save |
@@ -1657,8 +1657,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,946 tests across 189 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,361 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 585
+2,952 tests across 190 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,365 tests in 128 files) and `components` (environment `jsdom`, files `*.test.tsx`, 587
 tests in 62 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
@@ -1757,8 +1757,20 @@ written from the traded contract's own candles:
 
 `tj_positions.excursion_source` records who wrote the two prices: `manual` or `r2` (`mt5` and
 `tradingview` on history written before H1 / H2), and `excursion_note` says what they were measured
-on (`MNQZ6 · 1s`). `time_underwater_pct` comes with the R2 prices (F5.3b); a trade R2 measured before
-that column existed gets it once, on the next run.
+on (`MNQZ6 · 1s`). `time_underwater_pct` comes with the R2 prices (F5.3b), and so does
+`last_underwater_seconds` (phase W); a trade R2 measured before either column existed gets it once, on
+the next run.
+
+**Time stop (phase W, 09.10.2026).** `last_underwater_seconds` is the seconds from the first entry to the
+end of the last moment the running P&L was below zero, walked over the same candles as
+`time_underwater_pct`. On a winner it is the moment the trade went green for good — in profit and never
+back below the entry (decision W1-A); a trade never in the red reads 0. The dashboard card **Time stop**
+(`time-stop.ts`) reads it for winners only — median, 75th and 90th percentile, and how many never went red —
+and for losers it reads `time_underwater_pct` × duration: how long they sat in the red before they were
+closed. Its ladder (1, 2, 3, 5, 10, 15, 30, 60 min) puts the winners already green at N beside the losers
+still open at N. The second column is an upper bound — the most a cut at N could have closed before the
+stop — because whether a loser was in the red at that exact minute is not stored. Breakeven trades sit on
+neither side.
 
 **R2 wins — even over a typed value.** That is the trader's decision of 28.09.2026: the exchange's
 own prices are the record, and a number typed from a chart is a reading of them.

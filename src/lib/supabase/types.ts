@@ -955,6 +955,7 @@ export type Database = {
           tick_size_at_trade: number | null
           time_stop: string | null
           time_underwater_pct: number | null
+          last_underwater_seconds: number | null
           trade_journal_notes: string | null
           trade_no: number | null
           updated_at: string
@@ -1011,6 +1012,7 @@ export type Database = {
           tick_size_at_trade?: number | null
           time_stop?: string | null
           time_underwater_pct?: number | null
+          last_underwater_seconds?: number | null
           trade_journal_notes?: string | null
           trade_no?: number | null
           updated_at?: string
@@ -1067,6 +1069,7 @@ export type Database = {
           tick_size_at_trade?: number | null
           time_stop?: string | null
           time_underwater_pct?: number | null
+          last_underwater_seconds?: number | null
           trade_journal_notes?: string | null
           trade_no?: number | null
           updated_at?: string

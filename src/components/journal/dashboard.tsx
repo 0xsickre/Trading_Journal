@@ -127,6 +127,7 @@ import {
   type CashEvent,
 } from "@/lib/journal/balance";
 import { computeHoldTime } from "@/lib/journal/hold-time";
+import { computeTimeStop } from "@/lib/journal/time-stop";
 import { computeCostStats } from "@/lib/journal/costs";
 import { familiesOf, instrumentFamily, toUnits, type FuturesUnit } from "@/lib/journal/futures-units";
 import { MICRO_OF } from "@/lib/journal/default-instruments";
@@ -181,6 +182,7 @@ import {
 import {
   CostReportCard,
   HoldTimeCard,
+  TimeStopCard,
   PeriodPerformanceCard,
   PlanVsRealityCard,
 } from "@/components/journal/metrics-panel";
@@ -1144,6 +1146,10 @@ export function Dashboard({
 
   const holdTime = useMemo(
     () => computeHoldTime(realized, breakevenRange, pnlOf),
+    [realized, breakevenRange, pnlOf],
+  );
+  const timeStop = useMemo(
+    () => computeTimeStop(realized, breakevenRange, pnlOf),
     [realized, breakevenRange, pnlOf],
   );
   const costs = useMemo(() => computeCostStats(realized), [realized]);
@@ -2473,6 +2479,7 @@ export function Dashboard({
         ),
 
         "hold-time": show("hold-time") && <HoldTimeCard stats={holdTime} />,
+        "time-stop": show("time-stop") && <TimeStopCard stats={timeStop} />,
         costs: show("costs") && <CostReportCard costs={costs} currency={currency} />,
         "plan-vs-reality": show("plan-vs-reality") && (
           <PlanVsRealityCard

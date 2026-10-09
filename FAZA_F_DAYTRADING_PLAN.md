@@ -112,6 +112,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 08.10.2026 | M | Mentor tok (trejder: „weekly skroz da ga više nema, daily skrati, preuredi mentor pack“): refleksija (zatvaranje dana / nedelje, pravila) seli se u privatni repo `trading-mentor`, gde Claude ispituje trejdera prema mentor pack-u. Journal meri i izvozi, ne sudi. **M-a** `/weekly` (pregled, eksperimenti, Napredak) se briše sa tabelama `tj_weekly_reviews` i `tj_experiments`, **bez arhive** (ostaje noćni backup). **M-b** focus goal se briše sa tabelom `tj_focus_goals` (dupliran sa „domaćim“ iz `trading-mentor`). **M-c** /daily = brief, mentalna ocena, „ne trgujem“, tracker, review gaps, zaključavanje |
 | 08.10.2026 | posle M | Tracker pravila (trejder, sa mentorom; podaci, ne kod): penzionisana ručna „Provera kalendara i HTF-a“, „Mentalni check-in“, „Vreme trgovanja“, „Kontrola rizika“, „Walk Away Target“ (dupliraju automatska ili su nemerljiva); nova ručna: HTF nivoi i bias, vreme 03:00–16:00 ET, **dva SL zaredom = kraj dana** (isti dan trejder traži automatsko: `stop_after_two_losses`, fiksno 2, gubitak = ispod breakeven pojasa, migracija `20261008140000`; ručno penzionisano), iskreni tagovi. Lični DLL 650 namerno ostaje (prostor za provizije) |
 | 08.10.2026 | O | Prvo uvoz, pa dopuna iz snimka (trejder, OBS snimak sesije): **O-a** propušteni setupi ostaju kroz malu formu iz snimka; **O-b** `/trades/new` i `/trades/log` se uklanjaju; **O-c** TopstepX izvoz trejdova i naloga se uvoze odjednom. Test trejdera 08.10. (Practice, SL niže → BE): izvoz naloga čuva samo POSLEDNJU cenu stopa — originalni stop dolazi iz fajla samo kad nije mogao biti pomeren, inače sa snimka |
+| 09.10.2026 | W | Vremenski stop (trejder: „da meri koliko je dobitnom trejdu trebalo da krene, a koliko je gubitni bio u minusu dok nije udario SL — da sečem vremenski“). **W1-A** „krenuo u smeru“ = u plusu i više se nije vratio ispod ulaza (ne +X tikova ni +0,5R). Merenje u `futures-trading` `journal_mae.py` iz istih R2 sveća kao `time_underwater_pct`; journal samo čita. Kolona lestvice „Losers still open“ je gornja granica — da li je gubitnik u minuti N bio u minusu ne čuva se |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -149,6 +150,7 @@ pogađa.
 | **V** | Pregled dana / nedelje od Claude-a: isti „Export for Claude“ paket preuzima futures-trading i šalje rutini | — | U | ne | **Opus** | ⛔ obustavljeno (trejder, 02.10.2026) — ne raditi bez novog naloga trejdera |
 | **M** | Mentor tok: bez /weekly, kraći /daily, compliance bez praznih dana, pun mentor pack (Dan / Nedelja) | — | U | da, **briše**: `tj_weekly_reviews`, `tj_experiments`, `tj_focus_goals` | **Opus** | ✅ 08.10.2026 — M1 `d6391df` · M2 `8076b93` · M3 `6be8e87` (migracija `20261008120000` primenjena) + futures-trading `6827ce7` · M4 `786a035` |
 | **O** | Prvo uvoz, pa dopuna iz snimka: izvoz naloga (stop, cilj, izlaz), dopuna iz snimka, propušten setup, bez plan-forme | — | M | da: `20261009090000` (aditivna) | **Opus** | ✅ 08.10.2026 — O1 `af9c0cc` (migracija `20261009090000` primenjena) · O2 `c15dc20` + futures-trading `bc1f28d` · O3 `800474d` · O4 `95222f9` |
+| **W** | Vremenski stop: koliko dobitniku treba da krene, koliko gubitnik stoji u minusu do SL | — | O | da: `20261009120000` (`last_underwater_seconds`, aditivna) | **Opus** | 🟡 kod gotov 09.10.2026 — čeka primenu migracije (odobrenje trejdera) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1140,6 +1142,25 @@ SL iz fajla; pomeren → originalni sa snimka (dopuna, `/daily` „Bez pregleda�
   stop, mentor pack „Stop:“ linija, podsetnik u futures-trading.
 - **O3** Propušten setup iz snimka (`/trades/missed/new`).
 - **O4** Uklanjanje `/trades/new` i `/trades/log`, glavna akcija Uvoz, mrtvi kod, README.
+
+## W — Vremenski stop (detaljno, 09.10.2026)
+
+**Povod** (trejder, 09.10.2026): evidencija koliko dobitniku treba da krene i koliko gubitnik stoji u minusu do
+SL-a, da bi trejd koji do tog vremena ne krene sekao vremenski. Postojalo je: prosečno trajanje po ishodu
+(Hold time) i `time_underwater_pct` (koliki deo, ne kada).
+
+### Izmena
+- `futures-trading` `journal_mae.py`: `_deonice` (tekući P&L po deonicama, deli ga `pod_vodom`) i `poslednji_minus` —
+  s od prvog ulaza do kraja poslednje deonice ispod nule; upis u `last_underwater_seconds`, dopuna jednom.
+- Migracija `20261009120000`: `tj_positions.last_underwater_seconds numeric` (≥ 0, NULL = nije izmereno).
+- `time-stop.ts` + kartica **Time stop** na dashboardu (pored Recent trades): dobitnici medijana / 75 % / 90 %
+  do trajnog plusa i koliko nikad nije bilo u minusu; gubitnici vreme u minusu (`time_underwater_pct` × trajanje)
+  i trajanje; lestvica 1–60 min: dobitnici već u plusu naspram gubitnika još otvorenih.
+
+### Izlaz iz W
+Migracija primenjena (tek tada push `futures-trading` na `main` — skript čita novu kolonu), README oba repoa,
+status ✅. **Sledeći korak, ako trejder traži:** R koji bi vremenski stop u minuti N sačuvao ili izgubio (cena u
+minuti N po trejdu iz R2) — sada lestvica pokazuje samo udele.
 
 ## Katalog stavki
 

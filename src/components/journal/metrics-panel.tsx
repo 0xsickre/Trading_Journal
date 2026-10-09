@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fmtMoney, fmtNum, fmtPct, fmtR, pnlClass } from "@/lib/journal/format";
 import { formatDuration } from "@/lib/journal/units";
 import type { HoldTimeStats } from "@/lib/journal/hold-time";
+import type { TimeStopStats } from "@/lib/journal/time-stop";
 import type { CostStats } from "@/lib/journal/costs";
 import type { PeriodSummary } from "@/lib/journal/period-stats";
 import type { PlannedRStats } from "@/lib/journal/risk-metrics";
@@ -66,6 +67,71 @@ export function HoldTimeCard({ stats }: { stats: HoldTimeStats }) {
           label="Average in minutes"
           value={stats.avgMinutes != null ? `${fmtNum(stats.avgMinutes, 1)} min` : "—"}
         />
+      </CardContent>
+    </Card>
+  );
+}
+
+export function TimeStopCard({ stats }: { stats: TimeStopStats }) {
+  const pctOrDash = (v: number | null) => (v != null ? fmtPct(v, 0) : "—");
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Time stop</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          {stats.winners} winners and {stats.losers} losers measured from the exchange candles
+        </p>
+      </CardHeader>
+      <CardContent>
+        <Row
+          label="Winners — median time to green"
+          value={formatDuration(stats.medianToGreenSeconds)}
+          hint="From the first entry until the trade went into profit and never came back below the entry."
+        />
+        <Row label="Winners — 75 % green by" value={formatDuration(stats.p75ToGreenSeconds)} />
+        <Row label="Winners — 90 % green by" value={formatDuration(stats.p90ToGreenSeconds)} />
+        <Row
+          label="Winners never in the red"
+          value={stats.winners > 0 ? `${stats.winnersNeverRed} of ${stats.winners}` : "—"}
+        />
+        <Row
+          label="Losers — average time in the red"
+          value={formatDuration(stats.avgLoserRedSeconds)}
+          hint="Share of the trade spent below zero × its length, before it was closed."
+        />
+        <Row
+          label="Losers — median time in the red"
+          value={formatDuration(stats.medianLoserRedSeconds)}
+        />
+        <Row label="Losers — average length" value={formatDuration(stats.avgLoserSeconds)} />
+        <table className="mt-3 w-full text-sm tabular-nums">
+          <thead>
+            <tr className="text-xs text-muted-foreground">
+              <th className="py-1 text-left font-normal">Cut at</th>
+              <th
+                className="py-1 text-right font-normal"
+                title="Winners already green for good at that minute. The rest a cut there would have killed."
+              >
+                Winners green
+              </th>
+              <th
+                className="py-1 text-right font-normal"
+                title="Losers still open at that minute — the most a cut there could have closed before the stop. Whether each was in the red at that minute is not measured."
+              >
+                Losers still open
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {stats.ladder.map((r) => (
+              <tr key={r.minutes}>
+                <td className="py-0.5">{r.minutes} min</td>
+                <td className="py-0.5 text-right">{pctOrDash(r.winnersGreenPct)}</td>
+                <td className="py-0.5 text-right">{pctOrDash(r.losersOpenPct)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </CardContent>
     </Card>
   );

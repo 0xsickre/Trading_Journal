@@ -5,7 +5,11 @@ import {
   CostReportCard,
   PlanVsRealityCard,
   PeriodPerformanceCard,
+  TimeStopCard,
 } from "./metrics-panel";
+import { computeTimeStop } from "@/lib/journal/time-stop";
+import type { RealizedTrade } from "@/lib/journal/analytics";
+import type { PositionStat, TradeRow } from "@/lib/journal/types";
 import { summarizePeriods, type PeriodRow } from "@/lib/journal/period-stats";
 import type { HoldTimeStats } from "@/lib/journal/hold-time";
 import type { CostStats } from "@/lib/journal/costs";
@@ -137,5 +141,36 @@ describe("HoldTimeCard, CostReportCard, PlanVsRealityCard — presentation only,
     };
     render(<PlanVsRealityCard plannedR={plannedR} excursion={excursion} direction={direction} />);
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+});
+
+describe("TimeStopCard", () => {
+  const trade = (id: string, net: number, secs: number, last: number, pct: number): RealizedTrade => ({
+    id,
+    closedAt: "2026-10-09T15:00:00Z",
+    net,
+    gross: net,
+    r: null,
+    row: {
+      id,
+      stats: { duration_seconds: secs } as PositionStat,
+      last_underwater_seconds: last,
+      time_underwater_pct: pct,
+    } as unknown as TradeRow,
+  });
+
+  it("shows the winners' time to green and one ladder row per minute", () => {
+    const stats = computeTimeStop([trade("w", 100, 600, 120, 20), trade("l", -50, 360, 360, 50)]);
+    render(<TimeStopCard stats={stats} />);
+    expect(screen.getByText("1 winners and 1 losers measured from the exchange candles")).toBeInTheDocument();
+    expect(screen.getByText("Winners — median time to green").nextSibling).toHaveTextContent("2m");
+    for (const m of [1, 2, 3, 5, 10, 15, 30, 60]) {
+      expect(screen.getByText(`${m} min`)).toBeInTheDocument();
+    }
+  });
+
+  it("reads dashes on a book nothing measured", () => {
+    render(<TimeStopCard stats={computeTimeStop([])} />);
+    expect(screen.getAllByText("—").length).toBeGreaterThan(8);
   });
 });

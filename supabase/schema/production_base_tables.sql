@@ -176,6 +176,9 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- Udeo trajanja trejda (%) sa tekućim P&L < 0, iz istih R2 sveća; piše ga samo
   -- `futures-trading` journal_mae.py (20260929235000). NULL = nije izmereno.
   time_underwater_pct  numeric,
+  -- Sekunde od prvog ulaza do kraja poslednjeg trenutka pod vodom; kod dobitnika
+  -- vreme do trajnog plusa (20261009120000, faza W). NULL = nije izmereno.
+  last_underwater_seconds numeric,
   -- Equity naloga na POČETKU dana ulaska, u zoni naloga, zamrznut kad je trejd
   -- prvi put dobio entry fill (20260920160000). Imenilac svakog procenta rizika;
   -- jedini činilac tog računa koji se ne može rekonstruisati unazad.
@@ -227,6 +230,8 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
     CHECK (scenario IS NULL OR jsonb_typeof(scenario) = 'object'),
   CONSTRAINT tj_positions_time_underwater_pct_check
     CHECK (time_underwater_pct IS NULL OR (time_underwater_pct >= 0 AND time_underwater_pct <= 100)),
+  CONSTRAINT tj_positions_last_underwater_seconds_check
+    CHECK (last_underwater_seconds IS NULL OR last_underwater_seconds >= 0),
   CONSTRAINT tj_positions_time_stop_choice
     CHECK (time_stop IS NULL OR time_stop IN ('5', '15', '30', '60', 'close')),
   CONSTRAINT tj_positions_plan_snapshot_object

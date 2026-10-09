@@ -88,6 +88,9 @@ export const DASHBOARD_WIDGETS: DashboardWidget[] = [
   // against whatever floor applies to the account.
   { id: "survival", label: "Survival simulation", group: "detail", span: 2, hideable: true },
   { id: "recent-trades", label: "Recent trades", group: "detail", span: 2, hideable: true },
+  // How long the winners take to get going, beside the losers still open at
+  // the same minute — the trader's own time stop (phase W).
+  { id: "time-stop", label: "Time stop", group: "detail", span: 2, hideable: true },
   { id: "insights", label: "Automated insights", group: "process", span: 4, hideable: true },
   { id: "tracker", label: "Process consistency", group: "process", span: 4, hideable: true },
 
