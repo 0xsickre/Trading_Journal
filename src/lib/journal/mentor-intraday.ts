@@ -341,8 +341,8 @@ export type MentorTopstep = {
    * The account's own floor and cap on that risk, where set (Settings ›
    * Accounts). Null falls back to the plan's — the same fallback the budget at
    * entry is computed with (`riskBudgetAt`), so the pack states the range the
-   * journal actually sized from. It printed the plan's 60–300 while the account
-   * capped at 350 (09.10.2026).
+   * journal actually sized from. It used to print the plan's range even where
+   * the account set its own (09.10.2026).
    */
   riskRuleMin?: number | null;
   riskRuleMax?: number | null;
