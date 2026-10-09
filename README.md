@@ -1435,7 +1435,10 @@ its header — the orders file alone is refused, `lib/journal/topstepx-orders.ts
 `bracketFor` finds the filled opening order of the same contract and side within two seconds of the
 entry, and the stop-loss and take-profit orders on the other side created between the entry and the
 exit (the filled one wins, else the latest). It gives the **target**, the stop's **last** price, the
-**entry order type** (market / limit / stop) and **how the trade ended** (stop, target, by hand).
+**entry order type** (market / limit / stop) and **how the trade ended** (stop, target, by hand). The trades export names no account, so the orders file's
+TopstepX account name is checked against the journal account picked (`orderAccountWarning`, 09.10.2026):
+a "PRAC-…" file going into a real account, a real one into Practice, or a file holding more than one
+account is named above the button — a warning, not a refusal.
 
 **A stop keeps only its last price.** Shown by the trader's test on 08.10.2026: a stop placed lower
 and moved to breakeven leaves one row, at the entry. So the last price is written as the trade's stop

@@ -34,6 +34,7 @@ import {
 import {
   bracketFor,
   isTopstepXOrders,
+  orderAccountWarning,
   readTopstepXOrders,
   type TopstepXOrder,
 } from "@/lib/journal/topstepx-orders";
@@ -791,6 +792,11 @@ export function ImportWizard({
                     ? `Orders export — ${orders.length} orders: each trade gets its target, its stop and how it ended. A stop moved to the entry or into profit is not taken; the original comes from the recording.`
                     : "No orders export chosen: the trades get no stop and no target. Choose both files together to have them."}
                 </p>
+                {orders && orderAccountWarning(orders, account?.topstep_stage) && (
+                  <p role="alert" className="text-sm text-[var(--loss)]">
+                    {orderAccountWarning(orders, account?.topstep_stage)}
+                  </p>
+                )}
                 <div className="flex justify-end">
                   <Button onClick={buildItems}>
                     Reconcile <ArrowRight className="size-4" />
