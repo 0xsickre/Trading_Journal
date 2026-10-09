@@ -30,12 +30,15 @@ export function missedSetupProblem(m: MissedSetupInput): string | null {
   if (!m.instrument) return "Pick the instrument.";
   if (m.entry == null || !(m.entry > 0)) return "The entry the setup offered is needed.";
   if (m.stop == null || !(m.stop > 0)) return "The stop is needed — without it the miss has no R.";
+  // The R2 walk prices a miss only with a target: without one it never knows
+  // whether the setup paid (futures-trading `journal_mae.py`).
+  if (m.target == null || !(m.target > 0)) return "The target is needed — without it the miss is never priced.";
   if (!m.seenAt) return "When was the setup there?";
   const dir = m.direction === "Long" ? 1 : -1;
   if (dir * (m.entry - m.stop) <= 0) {
     return `A ${m.direction.toLowerCase()} has its stop ${m.direction === "Long" ? "below" : "above"} the entry.`;
   }
-  if (m.target != null && dir * (m.target - m.entry) <= 0) {
+  if (dir * (m.target - m.entry) <= 0) {
     return `A ${m.direction.toLowerCase()} has its target ${m.direction === "Long" ? "above" : "below"} the entry.`;
   }
   return null;

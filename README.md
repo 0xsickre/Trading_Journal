@@ -940,8 +940,10 @@ One thing the journal used to record and never check.
 ### The missed setup gets a price
 
 **Written from the recording since phase O** (08.10.2026): `/trades/missed/new` ("Propušten setup",
-linked from `/daily` after the session) takes the account, instrument, direction, entry, stop, optional
-target, the time the setup was there on the account's clock, the setup, why it was not taken and a
+linked from `/daily` after the session) takes the account, instrument, direction, entry, stop,
+target (required: the R2 walk prices a miss only with one), the time the setup was there on the
+account's clock — futures-trading measures from that moment, the earlier of it and the row's creation
+(`trenutak_promasaja`, 09.10.2026), not from the evening it was written — the setup, why it was not taken and a
 note, and saves a `status = 'missed'` position with no fills (`createMissedSetup`,
 `lib/journal/missed-setup.ts`) — exactly what "Mark as missed" made of a plan, so everything below
 prices and counts it unchanged.

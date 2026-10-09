@@ -33,7 +33,7 @@ describe("MissedSetupForm (phase O)", () => {
     await user.click(screen.getByRole("button", { name: "Short" }));
     await user.type(screen.getByLabelText("Ulaz"), "31300");
     await user.type(screen.getByLabelText("Stop"), "31330");
-    await user.type(screen.getByLabelText("Cilj (opciono)"), "31200");
+    await user.type(screen.getByLabelText("Cilj"), "31200");
     await user.type(screen.getByLabelText(/Vreme/), "16:05");
     await user.click(screen.getByRole("button", { name: "Sačuvaj propušten setup" }));
     expect(createMock).toHaveBeenCalledWith(

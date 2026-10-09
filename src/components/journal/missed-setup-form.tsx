@@ -80,7 +80,7 @@ export function MissedSetupForm({
         direction: input.direction,
         entry_price: input.entry!,
         stop_price: input.stop!,
-        target_price: input.target,
+        target_price: input.target!,
         seen_at: input.seenAt!,
         playbook_id: input.playbookId,
         miss_reason: input.reason,
@@ -118,7 +118,7 @@ export function MissedSetupForm({
             [
               ["Ulaz", entry, setEntry],
               ["Stop", stop, setStop],
-              ["Cilj (opciono)", target, setTarget],
+              ["Cilj", target, setTarget],
             ] as const
           ).map(([label, value, set]) => (
             <label key={label} className="space-y-1 text-sm">

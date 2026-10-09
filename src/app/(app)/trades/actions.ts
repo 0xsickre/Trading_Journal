@@ -530,7 +530,7 @@ const missedSetupSchema = z.object({
   direction: z.enum(["Long", "Short"]),
   entry_price: z.number().finite().positive(),
   stop_price: z.number().finite().positive(),
-  target_price: z.number().finite().positive().nullable(),
+  target_price: z.number().finite().positive(),
   seen_at: z.iso.datetime({ offset: true }),
   playbook_id: z.uuid().nullable(),
   miss_reason: z.string().trim().max(200).nullable(),

@@ -17,13 +17,13 @@ const ok: MissedSetupInput = {
 describe("missedSetupProblem", () => {
   it("accepts a complete setup", () => {
     expect(missedSetupProblem(ok)).toBeNull();
-    expect(missedSetupProblem({ ...ok, target: null })).toBeNull();
   });
 
   it("needs the entry, the stop and the time — a miss without a stop has no R", () => {
     expect(missedSetupProblem({ ...ok, entry: null })).toMatch(/entry/);
     expect(missedSetupProblem({ ...ok, stop: null })).toMatch(/no R/);
     expect(missedSetupProblem({ ...ok, seenAt: null })).toMatch(/When/);
+    expect(missedSetupProblem({ ...ok, target: null })).toMatch(/never priced/);
   });
 
   it("refuses a stop or a target on the wrong side", () => {
