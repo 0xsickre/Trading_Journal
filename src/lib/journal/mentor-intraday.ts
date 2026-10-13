@@ -26,7 +26,7 @@ import { numberFieldValue } from "./field-values";
 import { roomAtEntry } from "./risk-taken";
 import { needsOriginalStop, stopStatus } from "./stop-moved";
 import { fmtInTz, isTradingDayKey, toEpoch } from "./time";
-import { TOPSTEP_CONSISTENCY, type TopstepResult } from "./topstep";
+import { TOPSTEP_CONSISTENCY, fixedRiskOf, type TopstepResult } from "./topstep";
 import { ruleIsLiveOn, type DayCompliance } from "./tracker/compliance";
 import { WEEKDAY_LABELS, type TrackerRule } from "./tracker-types";
 import { formatDuration } from "./units";
@@ -374,7 +374,9 @@ export function topstepSection(accounts: readonly MentorTopstep[], ccy: string):
       `| Najbolji dan / granica konzistentnosti | ${r.bestDay ? `${signed(r.bestDay.net, ccy)} (${r.bestDay.day})` : "—"} / ${m(consistencyCap)} (${Math.round(TOPSTEP_CONSISTENCY * 100)}% cilja) — ${r.consistencyOk ? "u redu" : "PREKORAČENO"} |`,
       `| Trading dana | ${r.daysTraded} |`,
       `| Max pozicija | ${r.rules.maxMini} mini / ${r.rules.maxMini * 10} mikro ugovora |`,
-      `| Pravilo rizika po trejdu | ${a.riskRulePct == null ? "—" : `${a.riskRulePct}% prostora do MLL-a`}, u granicama ${m(a.riskRuleMin ?? r.rules.riskMin)}–${m(a.riskRuleMax ?? r.rules.riskMax)} |`,
+      fixedRiskOf({ min: a.riskRuleMin, max: a.riskRuleMax }) != null
+        ? `| Pravilo rizika po trejdu | fiksno ${m(a.riskRuleMin!)} po trejdu (manje samo kad DLL ili prostor do MLL-a ne dozvoljavaju) |`
+        : `| Pravilo rizika po trejdu | ${a.riskRulePct == null ? "—" : `${a.riskRulePct}% prostora do MLL-a`}, u granicama ${m(a.riskRuleMin ?? r.rules.riskMin)}–${m(a.riskRuleMax ?? r.rules.riskMax)} |`,
       "",
     );
   }

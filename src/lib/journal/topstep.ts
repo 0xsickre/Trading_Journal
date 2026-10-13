@@ -490,6 +490,24 @@ export function topstepBreakevenBand(plan: TopstepPlan): number {
 /** The trader's risk rule on an account: a share of the room, and optional money bounds. */
 export type TopstepRiskRule = { pct: number; min: number | null; max: number | null };
 
+/**
+ * A fixed risk per trade in dollars (13.10.2026, the trader: "I type 300 and that is it").
+ *
+ * Stored in the same three columns, so `computeTopstepRisk`, the tracker and the
+ * brief in `futures-trading` need no second formula: 100 % of the room, held at
+ * exactly `amount` by `min = max`. What still lowers it is what always did —
+ * today's DLL left, and the room itself near the MLL — so it is never more than
+ * the account can lose.
+ */
+export function fixedRiskRule(amount: number): { pct: number; min: number; max: number } {
+  return { pct: 100, min: amount, max: amount };
+}
+
+/** The dollar amount of a fixed rule (`min === max`), or null for a share of the room. */
+export function fixedRiskOf(rule: { min: number | null | undefined; max: number | null | undefined }): number | null {
+  return rule.min != null && rule.min === rule.max ? rule.min : null;
+}
+
 export function riskRuleFromAccount(account: Account): TopstepRiskRule {
   return {
     pct: account.risk_rule_pct ?? TOPSTEP_DEFAULT_RISK_PCT,

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { computeTopstepRisk } from "./plan-calculations";
 import {
   TOPSTEP_PLANS,
   evaluateTopstep,
+  fixedRiskOf,
+  fixedRiskRule,
   riskBudgetAt,
   topstepMinRiskFromRoom,
   topstepScalingMaxMini,
@@ -520,5 +523,27 @@ describe("Practice (trader, 01.10.2026)", () => {
     expect(r.rules.maxMini).toBe(5);
     expect(r.xfa).toBeNull();
     expect(r.mllFloor).toBe(run(trades).mllFloor);
+  });
+});
+
+describe("a fixed risk per trade in dollars (13.10.2026)", () => {
+  const risk = (room: number, dllLeft: number) =>
+    computeTopstepRisk({ ...fixedRiskRule(300), room, dllLeft, minFromRoom: topstepMinRiskFromRoom(TOPSTEP_PLANS["50K"]) })!
+      .amount;
+
+  it("is the amount typed, whatever the room", () => {
+    expect(risk(2_000, 1_000)).toBe(300);
+    expect(risk(5_000, 1_000)).toBe(300);
+  });
+
+  it("is lowered only by today's DLL left and by the room near the MLL", () => {
+    expect(risk(2_000, 200)).toBe(200);
+    expect(risk(250, 1_000)).toBe(250);
+  });
+
+  it("reads back as fixed only when both bounds are the same", () => {
+    expect(fixedRiskOf(fixedRiskRule(300))).toBe(300);
+    expect(fixedRiskOf({ min: 60, max: 300 })).toBeNull();
+    expect(fixedRiskOf({ min: null, max: null })).toBeNull();
   });
 });

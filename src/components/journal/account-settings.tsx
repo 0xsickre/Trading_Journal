@@ -57,6 +57,7 @@ import {
   TOPSTEP_PLANS,
   TOPSTEP_XFA_PAYOUT,
   TOPSTEP_XFA_SCALING,
+  fixedRiskRule,
   topstepBreakevenBand,
   type TopstepPlan,
   type TopstepStage,
@@ -390,9 +391,11 @@ function EditAccountDialog({
   const [topstepPlan, setTopstepPlan] = useState<TopstepPlan>(account.topstep_plan ?? "50K");
   const [topstepStage, setTopstepStage] = useState<TopstepStage>(account.topstep_stage ?? "combine");
   const [payoutDate, setPayoutDate] = useState(account.topstep_payout_at ? account.topstep_payout_at.slice(0, 10) : "");
-  const [riskPct, setRiskPct] = useState(String(account.risk_rule_pct ?? TOPSTEP_DEFAULT_RISK_PCT));
-  const [riskMin, setRiskMin] = useState(account.risk_rule_min == null ? "" : String(account.risk_rule_min));
-  const [riskMax, setRiskMax] = useState(account.risk_rule_max == null ? "" : String(account.risk_rule_max));
+  // One dollar figure per trade (13.10.2026). An account still on the old share
+  // of the room shows its ceiling, which is what it risked at most.
+  const [riskUsd, setRiskUsd] = useState(
+    String(account.risk_rule_max ?? TOPSTEP_PLANS[account.topstep_plan ?? "50K"].riskMax),
+  );
   const [personalDll, setPersonalDll] = useState(
     account.topstep_personal_dll == null ? "" : String(account.topstep_personal_dll),
   );
@@ -408,9 +411,7 @@ function EditAccountDialog({
     balance: parseSettingsNumber(balance, { min: 0 }),
     comm: parseSettingsNumber(commPerUnit, { min: 0 }),
     fee: parseSettingsNumber(feeFixed, { min: 0 }),
-    riskPct: parseSettingsNumber(riskPct, { min: 0.1, max: 100 }),
-    riskMin: parseSettingsNumber(riskMin, { min: 1, allowEmpty: true }),
-    riskMax: parseSettingsNumber(riskMax, { min: 1, allowEmpty: true }),
+    riskUsd: parseSettingsNumber(riskUsd, { min: 1 }),
     personalDll: parseSettingsNumber(personalDll, { min: 1, allowEmpty: true }),
     dailyTarget: parseSettingsNumber(dailyTarget, { min: 1, allowEmpty: true }),
   };
@@ -419,16 +420,12 @@ function EditAccountDialog({
     const r = checks[k];
     return r.ok ? (r.value ?? 0) : 0;
   };
-  const nullable = (k: "riskMin" | "riskMax" | "personalDll" | "dailyTarget") => {
+  const nullable = (k: "personalDll" | "dailyTarget") => {
     const r = checks[k];
     return r.ok ? r.value : null;
   };
-  const riskOrder =
-    nullable("riskMin") != null && nullable("riskMax") != null && nullable("riskMin")! > nullable("riskMax")!
-      ? "The minimum is above the maximum."
-      : null;
-  const invalid =
-    Object.values(checks).some((c) => !c.ok) || riskOrder != null || !name.trim();
+  const invalid = Object.values(checks).some((c) => !c.ok) || !name.trim();
+  const riskRule = fixedRiskRule(val("riskUsd"));
 
   const balanceChanged = checks.balance.ok && val("balance") !== account.starting_balance;
 
@@ -445,9 +442,9 @@ function EditAccountDialog({
         topstep_plan: topstepPlan,
         topstep_stage: topstepStage,
         topstep_payout_at: payoutDate ? new Date(`${payoutDate}T00:00:00Z`).toISOString() : null,
-        risk_rule_pct: val("riskPct"),
-        risk_rule_min: nullable("riskMin"),
-        risk_rule_max: nullable("riskMax"),
+        risk_rule_pct: riskRule.pct,
+        risk_rule_min: riskRule.min,
+        risk_rule_max: riskRule.max,
         topstep_personal_dll: nullable("personalDll"),
         topstep_daily_target: nullable("dailyTarget"),
       });
@@ -660,30 +657,17 @@ function EditAccountDialog({
               </p>
               <div className="grid gap-3 sm:grid-cols-3">
                 <NumberField
-                  id={`rp-${account.id}`}
-                  label="Risk per trade, % of room above the MLL"
-                  value={riskPct}
-                  onChange={setRiskPct}
-                  error={err("riskPct")}
-                />
-                <NumberField
-                  id={`rmin-${account.id}`}
-                  label={`At least (empty = ${fmtMoney(plan.riskMin, "USD")})`}
-                  value={riskMin}
-                  onChange={setRiskMin}
-                  error={err("riskMin") ?? riskOrder}
-                />
-                <NumberField
-                  id={`rmax-${account.id}`}
-                  label={`At most (empty = ${fmtMoney(plan.riskMax, "USD")})`}
-                  value={riskMax}
-                  onChange={setRiskMax}
-                  error={err("riskMax")}
+                  id={`rusd-${account.id}`}
+                  label="Risk per trade (USD)"
+                  value={riskUsd}
+                  onChange={setRiskUsd}
+                  error={err("riskUsd")}
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                The trade form sizes a planned futures trade from this: whole contracts, rounded down,
-                commission counted, never over today&apos;s daily loss room.
+                The same amount on every trade. The trade form sizes a planned futures trade from it:
+                whole contracts, rounded down, commission counted, never over today&apos;s daily loss
+                room or the room above the MLL.
               </p>
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                 <p className="text-xs text-muted-foreground">

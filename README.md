@@ -1261,7 +1261,10 @@ help.topstep.com on 28.09.2026):
 `Uputstvo_rizik.pdf`): **8 % of the room above the MLL** (`TOPSTEP_DEFAULT_RISK_PCT`), held between the plan's bounds — 60–300 on
 a 50K, 120–600 on a 100K, 180–900 on a 150K, so three stops fit in the DLL — and never past what
 is left of today's DLL. `risk_rule_pct`, `risk_rule_min` and `risk_rule_max` on the account override
-the three. **The floor holds only from a third of the plan's MLL up** (R3, 30.09.2026;
+the three. **Settings offers one field since 13.10.2026: Risk per trade (USD)** — a fixed amount, saved
+as `fixedRiskRule` (100 %, min = max = the amount), so the same formula, the tracker and the brief read
+it unchanged; only today's DLL left and the room near the MLL lower it. The trade form and the mentor
+pack print it as a fixed amount (`fixedRiskOf`). **The floor holds only from a third of the plan's MLL up** (R3, 30.09.2026;
 `topstepMinRiskFromRoom`: $666.67 / $1,000 / $1,500): under it the budget is the plain share of the
 room, so near the MLL the risk shrinks with what is left instead of spending a fixed $180 of $400.
 The brief in `futures-trading` prints the same figure each morning, and **a shared test keeps the two

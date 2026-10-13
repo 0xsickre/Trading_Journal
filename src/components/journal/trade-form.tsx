@@ -113,7 +113,7 @@ import { cn } from "@/lib/utils";
 import { commissionPerSide } from "@/lib/journal/instrument-costs";
 import { sizeUnitLabel } from "@/lib/journal/units";
 import { MICRO_OF, MINI_OF } from "@/lib/journal/default-instruments";
-import { TOPSTEP_DEFAULT_RISK_PCT, topstepMaxContracts, topstepMinRiskFromRoom, type TopstepSizing } from "@/lib/journal/topstep";
+import { TOPSTEP_DEFAULT_RISK_PCT, fixedRiskOf, topstepMaxContracts, topstepMinRiskFromRoom, type TopstepSizing } from "@/lib/journal/topstep";
 import {
   plannedSize,
   qtyToInput,
@@ -2165,8 +2165,11 @@ function futuresRiskNote(
     if (m.topstep.risk == null) {
       return `No room to risk: ${fmtMoney(m.topstep.room, currency)} above the MLL, ${fmtMoney(m.topstep.dllLeftToday, currency)} of today's DLL left.`;
     }
+    const fixed = fixedRiskOf(m.topstep);
     parts.push(
-      `Budget ${fmtMoney(m.topstep.risk.amount, currency)} (${m.topstep.pct} % of ${fmtMoney(m.topstep.room, currency)} room above the MLL, within ${fmtMoney(m.topstep.min, currency)}–${fmtMoney(m.topstep.max, currency)}).`,
+      fixed != null
+        ? `Budget ${fmtMoney(m.topstep.risk.amount, currency)} (${fmtMoney(fixed, currency)} per trade${m.topstep.risk.amount < fixed ? ", lowered by today's DLL left or the room above the MLL" : ""}).`
+        : `Budget ${fmtMoney(m.topstep.risk.amount, currency)} (${m.topstep.pct} % of ${fmtMoney(m.topstep.room, currency)} room above the MLL, within ${fmtMoney(m.topstep.min, currency)}–${fmtMoney(m.topstep.max, currency)}).`,
     );
   } else if (m.futuresBudget != null) {
     parts.push(`Budget ${fmtMoney(m.futuresBudget, currency)}.`);
