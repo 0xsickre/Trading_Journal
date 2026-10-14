@@ -114,6 +114,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 08.10.2026 | O | Prvo uvoz, pa dopuna iz snimka (trejder, OBS snimak sesije): **O-a** propušteni setupi ostaju kroz malu formu iz snimka; **O-b** `/trades/new` i `/trades/log` se uklanjaju; **O-c** TopstepX izvoz trejdova i naloga se uvoze odjednom. Test trejdera 08.10. (Practice, SL niže → BE): izvoz naloga čuva samo POSLEDNJU cenu stopa — originalni stop dolazi iz fajla samo kad nije mogao biti pomeren, inače sa snimka |
 | 09.10.2026 | W | Vremenski stop (trejder: „da meri koliko je dobitnom trejdu trebalo da krene, a koliko je gubitni bio u minusu dok nije udario SL — da sečem vremenski“). **W1-A** „krenuo u smeru“ = u plusu i više se nije vratio ispod ulaza (ne +X tikova ni +0,5R). Merenje u `futures-trading` `journal_mae.py` iz istih R2 sveća kao `time_underwater_pct`; journal samo čita. Kolona lestvice „Losers still open“ je gornja granica — da li je gubitnik u minuti N bio u minusu ne čuva se |
 | 14.10.2026 | P | Jedna stranica trejda (trejder: „ima nepotrebnih stvari jer se sad unose trejdovi preko importa … napravi detaljan plan da to rešiš sa jednom stranicom“). Bias dana, Entry TF i Technical tags **ostaju**; stavke za biranje trejder preuređuje sam u Settings. Odluke P-1 … P-3 su u sekciji P |
+| 14.10.2026 | Y | Vreme upisa (mentor Z-028, Z-031, Z-032; trejder: „A, A, A, A“): **Y-1 A** `playbook_linked` pada kad je playbook napravljen posle ulaza; **Y-2 A** kolona `tj_daily_reports.mental_temp_at` (aditivna migracija); **Y-3 A** kapija posle prvog ulaza je samo oznaka na /daily i u paketu; **Y-4 A** zaključani dani ostaju zamrznuti |
 | 14.10.2026 | P | **P-1** fill-ovi se ne menjaju ručno nigde; ručno se upisuje samo originalni SL sa snimka (trejder: „samo SL treba ja da upišem jer ako ga pomerim na BE u toku trejda onda se ne slaže na uvozu“). **P-2** ocena izvršenja A/B/C svuda. **P-3** promena playbook-a briše odgovore na pravila prethodnog playbook-a; meko obrisana pravila istog playbook-a ostaju |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
@@ -156,7 +157,7 @@ pogađa.
 | **P** | Jedna stranica trejda: snimak, checklist, kategorije i review na jednom mestu; bez plan-forme | — | O, W | ne | **Opus** | ✅ `1f8a832`, 14.10.2026 — bez migracije; ručna provera u pregledaču preskočena na zahtev trejdera |
 | **Q** | Manje ručnog rada: ručna pravila trackera postaju automatska, /daily javlja trejd bez naloga | — | P | da: `20261014120000` (`auto_key` check, pravila) | **Opus** | ✅ 14.10.2026 — Q-1 = C, Q-2 (5 automatski, Vreme trgovanja povučeno), Q-3 = A |
 | **N** | Sesije trejdera umesto „Globex noć“: osam sesija kao linije na chartu, minuti od otvaranja sesije, sva vremena u paketu i na /daily po Beogradu | — | Q | ne | **Opus** | ✅ 14.10.2026 — N-1 = A, N-2 = A, N-3 = A; bez migracije |
-| **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | Y-2 (aditivna, ako B) | **Opus** | ⏳ plan 14.10.2026, čeka odluke Y-1 … Y-4 |
+| **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | Y-2 (aditivna, ako B) | **Opus** | ⏳ 14.10.2026 — Y-1 … Y-4 = A; Y1 urađen |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1444,6 +1445,7 @@ koja fali: playbook napisan posle ishoda je priča, ne plan (PRAVILA-MENTORA §2
   CLAUDE.md (šta paket sada pokazuje) i Z-028 / Z-031 / Z-032; provera Vercel produkcije.
 
 ### Odluke trejdera (pre koda)
+**Odluke trejdera (14.10.2026): Y-1 = A, Y-2 = A, Y-3 = A, Y-4 = A** (sve preporuke).
 - **Y-1 Playbook napravljen posle ulaza:** **A** `playbook_linked` pada (preporuka: playbook posle ishoda nije plan);
   **B** prolazi, ali /daily i paket ga označe; **C** novo posebno pravilo „playbook pre ulaza“, `playbook_linked`
   ostaje kakav jeste.

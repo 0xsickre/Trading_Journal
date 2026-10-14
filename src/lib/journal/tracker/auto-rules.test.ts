@@ -17,6 +17,8 @@ type Spec = {
    * it was written, the shape every older test here was written against.
    */
   created?: string;
+  /** When the linked playbook was created (phase Y); absent = unknown. */
+  playbookCreated?: string;
 };
 
 function mkRow(s: Spec): TradeRow {
@@ -29,6 +31,7 @@ function mkRow(s: Spec): TradeRow {
     needs_review: false,
     created_at: s.created ?? s.opened,
     playbook_id: s.playbook === false ? null : "pb-1",
+    ...(s.playbookCreated ? { playbook_created_at: s.playbookCreated } : {}),
     stop_price: s.stop === false ? null : 90,
     thesis: s.thesis === false ? null : "Written before entry",
     stats: {
@@ -343,5 +346,42 @@ describe("thesis_written grades only trades planned before entry", () => {
     const out = evalDay("2026-03-02", [loggedAfter("log", false)]);
     expect(out.stop_loss_set.verdict).toBe("pass");
     expect(out.playbook_linked.verdict).toBe("pass");
+  });
+});
+
+describe("playbook_linked: the playbook existed before the entry (phase Y, Y-1 = A)", () => {
+  // The trader's own book, 14.10.2026: #3 entered 13.10. 09:44 Belgrade, linked to
+  // a playbook written 14.10. 08:52; #2 entered 09:24 with no playbook at all.
+  const t2: Spec = { id: "t2", opened: "2026-10-13T07:24:39Z", closed: "2026-10-13T07:40:10Z", playbook: false };
+  const t3: Spec = {
+    id: "t3",
+    opened: "2026-10-13T07:44:32Z",
+    closed: "2026-10-13T09:58:57Z",
+    playbookCreated: "2026-10-14T06:52:54Z",
+  };
+
+  it("fails a trade whose playbook was written after the entry, and says which", () => {
+    const d = evalDay("2026-10-13", [t3]);
+    expect(d.playbook_linked.verdict).toBe("fail");
+    expect(d.playbook_linked.offenders).toEqual(["t3"]);
+    expect(d.playbook_linked.lateLinks).toEqual(["t3"]);
+  });
+
+  it("13.10.: one trade without a playbook, one with a late one — both offend, one is late", () => {
+    const d = evalDay("2026-10-13", [t2, t3]);
+    expect(d.playbook_linked.verdict).toBe("fail");
+    expect(d.playbook_linked.offenders).toEqual(["t2", "t3"]);
+    expect(d.playbook_linked.lateLinks).toEqual(["t3"]);
+  });
+
+  it("passes a playbook written before the entry", () => {
+    const d = evalDay("2026-10-13", [{ ...t3, playbookCreated: "2026-10-12T18:00:00Z" }]);
+    expect(d.playbook_linked.verdict).toBe("pass");
+    expect(d.playbook_linked.lateLinks ?? []).toEqual([]);
+  });
+
+  it("an unknown creation time is not a breach", () => {
+    const d = evalDay("2026-10-13", [{ ...t3, playbookCreated: undefined }]);
+    expect(d.playbook_linked.verdict).toBe("pass");
   });
 });

@@ -39,7 +39,7 @@ async function readTradesWithStats(
 
   const positionIds = positions.map((p) => p.id);
 
-  const [statRows, images] = await Promise.all([
+  const [statRows, images, playbooks] = await Promise.all([
     selectAllByIds(positionIds, (chunk, from, to) =>
       supabase
         .from("tj_position_stats")
@@ -58,7 +58,13 @@ async function readTradesWithStats(
         .order("id")
         .range(from, to),
     ),
+    // When each playbook was written (phase Y): the tracker fails a trade whose
+    // playbook came after its entry, and the mentor pack says so. A handful of
+    // rows per user, so one read.
+    supabase.from("tj_playbooks").select("id, created_at"),
   ]);
+  if (playbooks.error) throw new Error(playbooks.error.message);
+  const playbookCreatedAt = new Map((playbooks.data ?? []).map((p) => [p.id, p.created_at]));
 
   // Already in order: by position, then as the trader added them.
   const imagesByPosition = new Map<string, string[]>();
@@ -85,6 +91,8 @@ async function readTradesWithStats(
         ...p,
         stats: statById.get(p.id) ?? null,
         chart_images: imagesByPosition.get(p.id) ?? [],
+        playbook_created_at:
+          typeof p.playbook_id === "string" ? (playbookCreatedAt.get(p.playbook_id) ?? null) : null,
       }) as TradeRow,
   );
 }

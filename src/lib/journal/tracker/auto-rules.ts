@@ -98,6 +98,8 @@ export type AutoRuleResult = {
   window?: string;
   /** `stop_after_two_losses`: the longest losing run an entry followed, against the limit. */
   counted?: { observed: number; limit: number };
+  /** `playbook_linked`: offenders whose playbook was created after their entry (phase Y). */
+  lateLinks?: string[];
 };
 
 /** Everything the evaluators need, and nothing else. */
@@ -122,6 +124,12 @@ export type TrackerTrade = {
    */
   isLoss: boolean | null;
   hasPlaybook: boolean;
+  /**
+   * The linked playbook was created after the first fill (phase Y, Y-1 = A): a
+   * playbook written once the outcome was known is a story, not a plan. False
+   * when the creation time is unknown — not knowing is not a breach.
+   */
+  playbookLate: boolean;
   hasStop: boolean;
   /** A non-empty `thesis` in the SEALED plan — the reason, written beforehand. */
   hasThesis: boolean;
@@ -335,6 +343,10 @@ function toTrackerTrade(row: TradeRow, zone: DayZone, book: TopstepBook | null):
             }) === "loss"
           : row.stats.net_pl < 0,
     hasPlaybook: row.playbook_id != null && row.playbook_id !== "",
+    playbookLate:
+      row.playbook_id != null &&
+      row.playbook_id !== "" &&
+      Date.parse(String(row.playbook_created_at ?? "")) > Date.parse(openedAt),
     hasStop: sealedNumber(row, "stop_price") != null,
     // Both read the SEALED plan, which is the whole content of these two rules:
     // they ask whether the stop and the reason existed before the position did.
@@ -587,6 +599,17 @@ function evalOpenDayFlag(
     offenders: offenders.map((t) => t.id),
     observed: null,
   };
+}
+
+/**
+ * `playbook_linked`: every trade opened that day carries a playbook that
+ * existed when it was entered. One linked afterwards fails like an unlinked
+ * one, and is named in `lateLinks` so the day can say which was which.
+ */
+function evalPlaybookLinked(trades: TrackerTrade[]): AutoRuleResult {
+  const res = evalOpenDayFlag("playbook_linked", trades, (t) => t.hasPlaybook && !t.playbookLate);
+  const late = trades.filter((t) => t.hasPlaybook && t.playbookLate).map((t) => t.id);
+  return late.length > 0 ? { ...res, lateLinks: late } : res;
 }
 
 /**
@@ -892,7 +915,7 @@ export function evaluateAutoRulesForDay(
     // Open day, not close day. Decisive counter-case: on close-day attribution a
     // still-open trade is INVISIBLE to the rule, so ten unlinked open trades
     // would report a perfect day.
-    playbook_linked: evalOpenDayFlag("playbook_linked", opened, (t) => t.hasPlaybook),
+    playbook_linked: evalPlaybookLinked(opened),
     // Open day for the sharper reason: the point is that the stop existed WHEN
     // YOU ENTERED. Grading it on the close day grades it after the risk is gone.
     stop_loss_set: evalOpenDayFlag("stop_loss_set", opened, (t) => t.hasStop),

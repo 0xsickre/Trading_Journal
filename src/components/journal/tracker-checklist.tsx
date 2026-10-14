@@ -93,6 +93,15 @@ function dayTradingText(res: AutoRuleResult, currency: string): string | null {
       return broke
         ? `Prekršeno: ulaz u crvenom prozoru${res.window ? ` (${res.window})` : ""}.`
         : "Nijedan ulaz u crvenom prozoru brief-a.";
+    // Phase Y: a playbook written after the entry fails like a missing one.
+    case "playbook_linked": {
+      if (!broke) return "Svaki trejd vezan za playbook koji je postojao pre ulaza.";
+      const late = res.lateLinks?.length ?? 0;
+      if (late === 0) return null;
+      return late === res.offenders.length
+        ? "Prekršeno: playbook napravljen posle ulaza — tada nije bio plan."
+        : "Prekršeno: trejd bez playbook-a, ili playbook napravljen posle ulaza.";
+    }
     // Phase Q: read off the trade page, so the fix is on the trade the link opens.
     case "htf_bias_set":
       return broke

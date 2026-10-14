@@ -236,4 +236,6 @@ export type TradeRow = {
   stats: PositionStat | null;
   /** The trade's chart images, in the order they were added. */
   chart_images?: string[];
+  /** When the linked playbook was created (phase Y); null without one, absent when not loaded. */
+  playbook_created_at?: string | null;
 } & Record<string, unknown>;

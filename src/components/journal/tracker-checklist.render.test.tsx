@@ -279,6 +279,31 @@ describe("auto rules show a verdict but never a manual control", () => {
   });
 });
 
+describe("playbook_linked says when the playbook came after the entry (phase Y)", () => {
+  it("names a playbook written after the entry", () => {
+    const R = [rule({ id: "r1", text: "Playbook", stage: "trade", auto_key: "playbook_linked" })];
+    render(
+      <TrackerStageSection
+        stage="trade"
+        data={data({
+          rules: R,
+          auto: {
+            playbook_linked: {
+              key: "playbook_linked",
+              verdict: "fail",
+              reason: "violated",
+              observed: null,
+              offenders: ["t3"],
+              lateLinks: ["t3"],
+            },
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText(/playbook napravljen posle ulaza/)).toBeInTheDocument();
+  });
+});
+
 describe("each stage names itself", () => {
   /**
    * The heading used to be chosen by a `title` prop that ALSO chose the card
