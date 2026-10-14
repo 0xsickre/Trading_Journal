@@ -1,5 +1,5 @@
 import { addDays, format, parseISO, subDays } from "date-fns";
-import { isoWeekdayOfDayKey } from "./time";
+import { DEFAULT_TZ, fmtInTz, isoWeekdayOfDayKey, toEpoch } from "./time";
 
 // `DAY_GRADES`, `MICROMANAGE_*` and `MARKET_TYPE*` lived here. The grade moved
 // to the weekly review (rating a day mid-hold reads the P&L), which in turn
@@ -28,14 +28,37 @@ export type DailyReport = {
    * it — and if it ever got through, saving the form would clear the seal.
    */
   locked_at: string | null;
+  /**
+   * When the mental rating was set or last changed — written by a trigger only
+   * (phase Y, `20261014200000`), so the form never sends it. Null without a rating.
+   */
+  mental_temp_at: string | null;
   created_at: string;
   updated_at: string;
 };
 
 export type DailyReportInput = Omit<
   DailyReport,
-  "id" | "user_id" | "created_at" | "updated_at" | "locked_at"
+  "id" | "user_id" | "created_at" | "updated_at" | "locked_at" | "mental_temp_at"
 >;
+
+/**
+ * The pre-session gate written after the day's first entry (phase Y, Y-3 = A):
+ * "upisano 14.10. 11:15, posle prvog ulaza (09:24)", in Belgrade time. Null when
+ * it came first, when the day has no entry, or when either time is unknown — a
+ * mark, never a verdict; the tracker does not read it.
+ */
+export function gateLateText(
+  mentalTempAt: string | null | undefined,
+  firstEntryAt: string | null | undefined,
+  tz: string = DEFAULT_TZ,
+): string | null {
+  if (!mentalTempAt || !firstEntryAt) return null;
+  const at = toEpoch(mentalTempAt);
+  const entry = toEpoch(firstEntryAt);
+  if (!Number.isFinite(at) || !Number.isFinite(entry) || at <= entry) return null;
+  return `upisano ${fmtInTz(mentalTempAt, tz, "dd.MM. HH:mm")}, posle prvog ulaza (${fmtInTz(firstEntryAt, tz, "HH:mm")})`;
+}
 
 function formatDate(d: Date): string {
   return format(d, "yyyy-MM-dd");

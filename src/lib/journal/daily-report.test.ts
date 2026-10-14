@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   emptyDailyReport,
+  gateLateText,
   isFriday,
   nextReportDate,
   prevReportDate,
@@ -43,5 +44,24 @@ describe("todayIn — a plain zone", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("the pre-session gate written after the first entry (phase Y)", () => {
+  // 13.10.2026: first entry 09:24 Belgrade, the rating written 14.10. 11:15.
+  it("says when it was written and when the first entry was, in Belgrade time", () => {
+    expect(gateLateText("2026-10-14T09:15:54Z", "2026-10-13T07:24:39Z")).toBe(
+      "upisano 14.10. 11:15, posle prvog ulaza (09:24)",
+    );
+  });
+
+  it("is silent when the rating came before the first entry", () => {
+    expect(gateLateText("2026-10-13T06:50:00Z", "2026-10-13T07:24:39Z")).toBeNull();
+  });
+
+  it("is silent without a trade, without a rating time, or with an unreadable one", () => {
+    expect(gateLateText("2026-10-14T09:15:54Z", null)).toBeNull();
+    expect(gateLateText(null, "2026-10-13T07:24:39Z")).toBeNull();
+    expect(gateLateText("garbage", "2026-10-13T07:24:39Z")).toBeNull();
   });
 });

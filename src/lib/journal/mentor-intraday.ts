@@ -19,6 +19,7 @@ import type { BreakevenRange } from "./breakeven";
 import type { DailyReportLite, EnrichedTrade } from "./enriched-trade";
 import type { TradeRow } from "./types";
 import type { PositionRule } from "./playbook-types";
+import { gateLateText } from "./daily-report";
 import { loggedAfterEntry, sealedNumber } from "./plan-snapshot";
 import { getDimension, type DimensionContext } from "./reports/dimensions";
 import { afterExitR, scenarioOf, scenarioTrade, summarizeScenarios } from "./scenario";
@@ -240,7 +241,12 @@ export function dailySection(
     const list = byDay.get(day) ?? [];
     const rep = ctx.reportByDate?.get(day);
     const flags = [rep?.no_trade_day ? "da" : null, rep?.locked_at ? "zaključan" : null].filter(Boolean);
-    const mental = rep?.mental_temp != null ? `${rep.mental_temp}/5` : "—";
+    const firstEntry = list
+      .map((t) => t.openedAt)
+      .filter((d): d is string => d != null)
+      .sort((a, b) => toEpoch(a) - toEpoch(b))[0];
+    const late = rep?.mental_temp != null ? gateLateText(rep.mental_temp_at, firstEntry, ctx.tz ?? DEFAULT_TZ) : null;
+    const mental = rep?.mental_temp != null ? `${rep.mental_temp}/5${late ? ` · ${late}` : ""}` : "—";
     const rules = rulesCell(ctx.compliance?.get(day), ctx.ruleText);
     const notes: string[] = [];
     if (ctx.dllDays?.has(day)) notes.push("DLL dostignut");
@@ -258,14 +264,10 @@ export function dailySection(
       "net",
       ctx.range,
     );
-    const first = list
-      .map((t) => t.openedAt)
-      .filter((o): o is string => o != null)
-      .sort()[0];
     const sizes = list.map((t) => t.size).filter((v): v is number => v != null);
     out.push(
       `| ${day} | ${list.length} | ${s.wins}/${s.losses}/${s.breakeven} | ${s.netSum.toFixed(2)} | ${r2(s.totalR)}R | ${
-        first ? fmtInTz(first, ctx.tz ?? DEFAULT_TZ, "HH:mm") : "—"
+        firstEntry ? fmtInTz(firstEntry, ctx.tz ?? DEFAULT_TZ, "HH:mm") : "—"
       } | ${longestLossRun(list)} | ${sizes.length ? Math.max(...sizes) : "—"} | ${tail}`,
     );
   }

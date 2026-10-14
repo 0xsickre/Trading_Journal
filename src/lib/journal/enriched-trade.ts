@@ -31,6 +31,8 @@ export type DailyReportLite = {
   no_trade_day: boolean;
   /** When the day was sealed; the mentor pack says "zaključan". Optional for callers that do not load it. */
   locked_at?: string | null;
+  /** When the mental rating was written (phase Y); the pack flags one after the first entry. */
+  mental_temp_at?: string | null;
 };
 
 /** Number of entry and exit fills per position id. */

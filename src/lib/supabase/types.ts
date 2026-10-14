@@ -157,6 +157,7 @@ export type Database = {
           id: string
           locked_at: string | null
           mental_temp: number | null
+          mental_temp_at: string | null
           no_trade_day: boolean
           report_date: string
           updated_at: string
@@ -167,6 +168,7 @@ export type Database = {
           id?: string
           locked_at?: string | null
           mental_temp?: number | null
+          mental_temp_at?: string | null
           no_trade_day?: boolean
           report_date: string
           updated_at?: string
@@ -177,6 +179,7 @@ export type Database = {
           id?: string
           locked_at?: string | null
           mental_temp?: number | null
+          mental_temp_at?: string | null
           no_trade_day?: boolean
           report_date?: string
           updated_at?: string

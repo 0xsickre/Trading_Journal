@@ -154,6 +154,11 @@ export default async function DailyPage({
     tradeLabels[t.id] = t.label;
   }
 
+  // The day's first entry, for the gate written after it (phase Y): the trades
+  // OPENED this day, the same attribution as the entry rules.
+  const firstEntryAt =
+    (index.byOpenDay.get(reportDate) ?? []).map((t) => t.openedAt).sort((a, b) => Date.parse(a) - Date.parse(b))[0] ?? null;
+
   const tracker: TrackerDayData = {
     reportDate,
     rules: dayRules,
@@ -181,6 +186,7 @@ export default async function DailyPage({
         today={today}
         timezone={timezone}
         tracker={tracker}
+        firstEntryAt={firstEntryAt}
         beforeSession={
           <SessionBriefCard day={reportDate} brief={briefOf(reportDate)} tz={timezone} dllLeft={dllLeft} />
         }

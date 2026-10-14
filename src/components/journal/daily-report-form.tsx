@@ -25,6 +25,7 @@ import { StarRating } from "@/components/journal/star-rating";
 import { cn } from "@/lib/utils";
 import {
   emptyDailyReport,
+  gateLateText,
   nextReportDate,
   prevReportDate,
   type DailyReport,
@@ -67,6 +68,7 @@ export function DailyReportForm({
   tracker,
   beforeSession,
   afterSession,
+  firstEntryAt,
 }: {
   report: DailyReport | null;
   reportDate: string;
@@ -86,6 +88,8 @@ export function DailyReportForm({
   beforeSession?: ReactNode;
   /** The page's own cards for the end of it: trades still to review. */
   afterSession?: ReactNode;
+  /** The day's first entry, ISO — the gate written after it is marked (phase Y). */
+  firstEntryAt?: string | null;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -121,6 +125,8 @@ export function DailyReportForm({
   );
   const restView = form.no_trade_day && !traded;
   const lowMental = form.mental_temp != null && form.mental_temp < 3;
+  // What is saved, not what is typed: the time is the trigger's, from the last save.
+  const gateLate = report?.mental_temp != null ? gateLateText(report.mental_temp_at, firstEntryAt) : null;
   // In the ACCOUNT's zone, like every other time on this page. `format` read
   // the browser's clock, so the server and the client could print two times.
   const lockedAt = report?.locked_at
@@ -269,6 +275,11 @@ export function DailyReportForm({
                 <p className="text-xs text-muted-foreground">
                   Mentalno stanje: 1 = umoran ili rastrojen, 5 = odmoran i miran.
                 </p>
+                {gateLate && (
+                  <p className="text-xs font-medium text-destructive">
+                    Ocena {gateLate} — kapija nije bila pre sesije.
+                  </p>
+                )}
                 {lowMental && (
                   <Alert>
                     <AlertDescription>

@@ -82,6 +82,7 @@ function report(over: Partial<DailyReport> = {}): DailyReport {
     mental_temp: null,
     no_trade_day: false,
     locked_at: null,
+    mental_temp_at: null,
     created_at: "2026-04-02T00:00:00Z",
     updated_at: "2026-04-02T00:00:00Z",
     ...over,
@@ -310,5 +311,35 @@ describe("phase M: the page measures, the mentor judges", () => {
     expect(screen.queryByText("Završeno")).not.toBeInTheDocument();
     expect(screen.getByText(/nema pravila za štikliranje i dan je ispunjen/)).toBeInTheDocument();
     expect(screen.queryByText("Tokom sesije")).not.toBeInTheDocument();
+  });
+});
+
+describe("the gate says it was written after the first entry (phase Y)", () => {
+  it("shows when the rating came after the day's first entry", () => {
+    render(
+      <DailyReportForm
+        report={report({ report_date: "2026-10-13", mental_temp: 3, mental_temp_at: "2026-10-14T09:15:54Z" })}
+        reportDate="2026-10-13"
+        today="2026-10-14"
+        timezone="Europe/Belgrade"
+        tracker={trackerData()}
+        firstEntryAt="2026-10-13T07:24:39Z"
+      />,
+    );
+    expect(screen.getByText(/upisano 14\.10\. 11:15, posle prvog ulaza \(09:24\)/)).toBeInTheDocument();
+  });
+
+  it("says nothing when the rating came first", () => {
+    render(
+      <DailyReportForm
+        report={report({ report_date: "2026-10-13", mental_temp: 3, mental_temp_at: "2026-10-13T06:00:00Z" })}
+        reportDate="2026-10-13"
+        today="2026-10-14"
+        timezone="Europe/Belgrade"
+        tracker={trackerData()}
+        firstEntryAt="2026-10-13T07:24:39Z"
+      />,
+    );
+    expect(screen.queryByText(/posle prvog ulaza/)).not.toBeInTheDocument();
   });
 });

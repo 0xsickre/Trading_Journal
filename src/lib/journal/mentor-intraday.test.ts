@@ -399,7 +399,8 @@ describe("mentor pack, phase M: what the mentor needs to question the day", () =
       playbookNames: new Map([["pb1", "Ponoć pojas"]]),
       reports: [
         { report_date: "2026-10-06", mental_temp: 3, no_trade_day: true, locked_at: "2026-10-06T21:00:00Z" },
-        { report_date: "2026-10-07", mental_temp: 4, no_trade_day: false },
+        // 07.10.: the rating written 19:09 Belgrade, after the 16:20 entry (phase Y).
+        { report_date: "2026-10-07", mental_temp: 4, no_trade_day: false, mental_temp_at: "2026-10-07T17:09:07Z" },
       ],
     });
 
@@ -432,6 +433,7 @@ describe("mentor pack, phase M: what the mentor needs to question the day", () =
     expect(md).toContain("| 2026-10-05 | 0 | — | — | — | — | — | — | — | — | bez prijave | — |");
     expect(md).toContain("| 2026-10-06 | 0 | — | — | — | — | — | — | 3/5 | da · zaključan | 100% | — |");
     expect(md).toContain("| 2026-10-07 | 1 | 1/0/0 | 716.34 |");
+    expect(md).toContain("| 4/5 · upisano 07.10. 19:09, posle prvog ulaza (16:20) |");
   });
 
   it("shows the tracker rule by rule for each day, with the day's red windows", () => {
