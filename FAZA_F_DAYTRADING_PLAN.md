@@ -155,6 +155,7 @@ pogađa.
 | **W** | Vremenski stop: koliko dobitniku treba da krene, koliko gubitnik stoji u minusu do SL | — | O | da: `20261009120000` (`last_underwater_seconds`, aditivna) | **Opus** | ✅ `bff96eb` + futures-trading `b8c9da1`, 09.10.2026 — migracija `20261009120000` primenjena uz odobrenje trejdera |
 | **P** | Jedna stranica trejda: snimak, checklist, kategorije i review na jednom mestu; bez plan-forme | — | O, W | ne | **Opus** | ✅ `1f8a832`, 14.10.2026 — bez migracije; ručna provera u pregledaču preskočena na zahtev trejdera |
 | **Q** | Manje ručnog rada: ručna pravila trackera postaju automatska, /daily javlja trejd bez naloga | — | P | da: `20261014120000` (`auto_key` check, pravila) | **Opus** | ✅ 14.10.2026 — Q-1 = C, Q-2 (5 automatski, Vreme trgovanja povučeno), Q-3 = A |
+| **N** | Sesije trejdera umesto „Globex noć“: Azija, London, NY AM, NY PM (kao na chartu, GRAFIK.md), minuti posle otvaranja sesije, sva vremena u paketu i na /daily po Beogradu | — | Q | ne | **Opus** | čeka odluke N-1 … N-3 (14.10.2026) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1326,6 +1327,72 @@ naglas ✓“ koje nije bilo tačno.
 ### Izlaz iz Q
 /daily nema ručnih štikliranja osim „Danas ne trgujem“ (uz Q-2 = A); trejd bez naloga se vidi pre zaključavanja
 dana. README i `trading-mentor` usklađeni 1:1.
+
+## N — Sesije po Beogradu (detaljno, 14.10.2026) — čeka odluke
+
+**Povod** (trejder, 14.10.2026, posle faze Q): sesije u paketu i analitici neka budu Azija, London, NY AM i NY PM,
+umesto „Globex noć“. Mentor je to tražio kao Z-015 (09.10.): London trejdovi su u paketu „Globex night 18:00–08:00“
+i „Before the open“, pa statistika po sesiji za trejdera koji trguje London ne govori ništa.
+
+### Utvrđeno u kodu (14.10.2026)
+- **Sesije** (`session-window.ts`, F5.2, odluka L1 od 29.09.): sedam prozora po NY satu, sve pre 08:00 ET je jedan
+  prozor „Globex night 18:00–08:00“. Pravljeno za NY trejdera; za London ne postoji ni jedan prozor.
+- **Minuti posle otvaranja** (`minutesAfterOpen`, `openOffsetBucket`): samo od 09:30 ET. Svaki London ulaz je „Before
+  the open“ (paket 13.10.: oba trejda), a red trejda u paketu ne piše ništa.
+- **Gde se koristi:** `enriched-trade.ts` (polja `sessionWindow`, `openOffset`), dimenzije izveštaja
+  `session_window` i `minutes_from_open` (`reports/dimensions.ts`), mentor paket (`mentor-intraday.ts`: tabele
+  „Sesijski prozor (ET)“ i „Koliko posle otvaranja 09:30 ET“, red trejda), legenda paketa (`mentor-export.ts`).
+  Insights i tracker ih ne čitaju. U bazi se ne čuvaju (nema sačuvanih izveštaja), pa **bez migracije**.
+- **Vremena u ET i CT, a trejder čita Beograd** (trading-mentor CLAUDE.md, 09.10.): u paketu „Prvi ulaz (ET)“,
+  „Crveni prozori (ET)“, „flat do … ET“, „= 03:24 ET“ u redu trejda, „Ulaz u crvenom prozoru … ET“, „Fill-ovi
+  (ET)“, „Šta bi bilo … do 15:10 CT“, legenda („sesije po ET“, Topstep dan „17:00–17:00 CT“); na /daily tri teksta
+  sa „CT“ (`tracker-checklist.tsx`, kraj Topstep dana).
+- **Chart je već dogovoren** (`trading-mentor/GRAFIK.md`): Azija 18:00–00:00 NY, London 08:00–13:00 po Londonu,
+  cash open 09:30 NY, ručak 11:30–13:30 NY, cash close 16:00 NY, pauza CME 17:00–18:00 NY. Granice sesija u
+  journal-u treba da budu iste linije, da paket i chart pričaju istim jezikom.
+- **Nedelja 25.10.–01.11.:** Evropa je prešla na zimsko vreme, SAD još nisu, pa su NY linije po Beogradu sat
+  ranije (cash open 14:30). Sesija se računa po satu svoje berze (NY ili London), a natpis piše uobičajeno
+  vreme po Beogradu; legenda to kaže jednom rečenicom.
+
+### Predlog (granice po satu berze, natpisi po Beogradu)
+| Sesija | Berza | Beograd (obično) |
+|---|---|---|
+| Azija | 18:00–00:00 NY | 00:00–06:00 |
+| Pre Londona | 00:00 NY – 08:00 London | 06:00–09:00 |
+| London | 08:00 London – 08:00 NY | 09:00–14:00 |
+| NY pre otvaranja | 08:00–09:30 NY | 14:00–15:30 |
+| NY AM | 09:30–11:30 NY | 15:30–17:30 |
+| Ručak | 11:30–13:30 NY | 17:30–19:30 |
+| NY PM | 13:30–16:00 NY | 19:30–22:00 |
+| Posle zatvaranja | 16:00–18:00 NY | 22:00–00:00 |
+
+London se završava kad počinje NY pre otvaranja: obično je to isti trenutak kao 13:00 London (C3 u GRAFIK.md),
+a u nedelji 25.10.–01.11. NY ima prednost.
+
+### Podkoraci (svaki: test koji pada → kod → gate → commit + push)
+- **N1 Sesije.** `session-window.ts`: prozori iz tabele (posle N-1), svaka granica po zoni svoje berze; natpis po
+  Beogradu. Testovi: 13.10. 09:24 i 09:44 → London; granice sa obe strane svake linije; nedelja 25.10.–01.11.;
+  nedelja uveče (Globex otvaranje) → Azija sledećeg dana.
+- **N2 Minuti posle otvaranja** (posle N-2). `minutesAfterOpen` / `openOffsetBucket` broje od otvaranja sesije
+  kojoj ulaz pripada; red trejda u paketu piše „N min posle otvaranja Londona / NY“.
+- **N3 Vremena po Beogradu** (posle N-3). Paket: svaka kolona i red iz „Utvrđeno“ u zoni naloga (`displayTz`), bez
+  ET i CT; legenda piše sesije po Beogradu i Topstep dan kao „00:00–00:00 po Beogradu (17:00 CT)“ jednom.
+  /daily: kraj Topstep dana po Beogradu.
+- **N4 Dokumentacija.** README (sesije, paket), ovaj fajl, `trading-mentor`: Z-015 rešeno, CLAUDE.md legenda paketa.
+
+### Odluke trejdera
+- **N-1 Koliko sesija.** (A) Osam, kao linije na chartu (tabela iznad). (B) Četiri bez praznina: Azija 00:00–09:00,
+  London 09:00–15:30, NY AM 15:30–18:00, NY PM 18:00–22:10. Preporuka: **A** — pre otvaranja NY i ručak su
+  poznata mesta gde novac curi, a u (B) bi se sakrili u London i NY PM. Sat ulaza (po Beogradu) postoji posebno.
+- **N-2 Minuti posle otvaranja.** (A) Od otvaranja sesije trejda: London 09:00, NY 15:30 (po Beogradu). (B) Izbaciti
+  tabelu. (C) Ostaviti od 09:30 NY. Preporuka: **A** — „koliko posle otvaranja Londona“ je pitanje za London nedelje,
+  a isto za NY nedelje.
+- **N-3 Vremena.** (A) Sve po Beogradu, ET i CT nigde. (B) Beograd, a ET u zagradi. Preporuka: **A** (odluka od
+  09.10.: „ET samo u zagradi kad mora“; u paketu ne mora nigde, jer su sesije već imenovane).
+
+### Izlaz iz N
+London trejd je u paketu i izveštajima „London“, minuti se broje od otvaranja njegove sesije, a paket nema nijedno
+vreme koje trejder mora da preračunava. Bez migracije.
 
 ## Katalog stavki
 
