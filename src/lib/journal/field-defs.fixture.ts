@@ -12,12 +12,10 @@ import type { FieldDef } from "./field-def-types";
  * fresh one.
  *
  * Kept beside the code rather than copied into each spec so there is one
- * answer to "what does a seeded account look like". Mirrors the seed in
- * `20260823140000_column_backed_categories.sql`; if that file gains a row, this
- * one does too.
- *
- * Since phase J (15.10.2026) the seed is the trader's own book of that day:
- * seven fields, named in Serbian (`tj_seed_categories`, latest migration).
+ * answer to "what does a seeded account look like". Mirrors the field rows of
+ * `tj_seed_categories` in its latest migration
+ * (`20261015120000_serbian_factory_categories.sql`, phase J: the trader's own
+ * book of 15.10.2026); if that function gains a row, this one does too.
  */
 export const SEEDED_FIELD_DEFS: FieldDef[] = [
   def("htf_bias", "Bias dana", "select", "htf_bias", "always", 0),
