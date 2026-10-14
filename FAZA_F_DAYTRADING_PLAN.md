@@ -116,6 +116,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 14.10.2026 | P | Jedna stranica trejda (trejder: „ima nepotrebnih stvari jer se sad unose trejdovi preko importa … napravi detaljan plan da to rešiš sa jednom stranicom“). Bias dana, Entry TF i Technical tags **ostaju**; stavke za biranje trejder preuređuje sam u Settings. Odluke P-1 … P-3 su u sekciji P |
 | 14.10.2026 | Y | Vreme upisa (mentor Z-028, Z-031, Z-032; trejder: „A, A, A, A“): **Y-1 A** `playbook_linked` pada kad je playbook napravljen posle ulaza; **Y-2 A** kolona `tj_daily_reports.mental_temp_at` (aditivna migracija); **Y-3 A** kapija posle prvog ulaza je samo oznaka na /daily i u paketu; **Y-4 A** zaključani dani ostaju zamrznuti |
 | 15.10.2026 | Y | Proširenje Y (trejder preko mentora: „reši i ovo“): **preokreće Q-2 „Vreme trgovanja: povučeno“** — novo automatsko pravilo `trading_window`, prozor po Beogradu u Settings › Tracker jer se nedelje smenjuju London / NY. **Y-5** London 09:00–12:00, NY **14:30–18:00** (trejder). **Y-6 A** prozor pamti od kog dana važi (`config.windows[]` sa `since`), pa promena ne preocenjuje prošle dane. `honest_tags` dobija uslov „Vodio po planu“ bez playbook-a ili sa playbook-om posle ulaza → ✗. Pravilo za dane u nedelji se ne pravi (od 19.10. pon–pet, pravila već važe 1–5) |
+| 15.10.2026 | J | Jezik (trejder preko mentora: „sve na srpskom“, gramatika svuda): naslovi kategorija u kodu idu na srpski kao u bazi; u paketu pobeđuje naziv polja iz baze; fabrička lista = lista trejdera od 15.10.2026; tagovi koje kod čita doslovno se ne menjaju; kategorije lista (`Context` …) ostaju |
 | 14.10.2026 | P | **P-1** fill-ovi se ne menjaju ručno nigde; ručno se upisuje samo originalni SL sa snimka (trejder: „samo SL treba ja da upišem jer ako ga pomerim na BE u toku trejda onda se ne slaže na uvozu“). **P-2** ocena izvršenja A/B/C svuda. **P-3** promena playbook-a briše odgovore na pravila prethodnog playbook-a; meko obrisana pravila istog playbook-a ostaju |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
@@ -159,6 +160,7 @@ pogađa.
 | **Q** | Manje ručnog rada: ručna pravila trackera postaju automatska, /daily javlja trejd bez naloga | — | P | da: `20261014120000` (`auto_key` check, pravila) | **Opus** | ✅ 14.10.2026 — Q-1 = C, Q-2 (5 automatski, Vreme trgovanja povučeno), Q-3 = A |
 | **N** | Sesije trejdera umesto „Globex noć“: osam sesija kao linije na chartu, minuti od otvaranja sesije, sva vremena u paketu i na /daily po Beogradu | — | Q | ne | **Opus** | ✅ 14.10.2026 — N-1 = A, N-2 = A, N-3 = A; bez migracije |
 | **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | da: `20261014200000` (`mental_temp_at`), `20261015090000` (`trading_window`) | **Opus** | ✅ 14.10.2026 — Y1 `14a992f` · Y2 `7281007` · Y3 `80dee18` · Y4/Y5 `9de8441` (migracije `20261014200000`, `20261015090000` primenjene); Y-1 … Y-4 = A, Y-5 NY 14:30–18:00, Y-6 = A |
+| **J** | Jezik: nazivi kategorija u paketu, /reports i gridu na srpskom; fabrička lista tagova = lista trejdera | — | Y | da: nova definicija `tj_seed_categories` (podaci se ne menjaju) | **Opus** | u toku (15.10.2026) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1481,6 +1483,47 @@ checklist i kapija upisani u odnosu na ulaz i zatvaranje. Oba pravila u produkci
 `mental_temp_at` = `created_at`, `updated_at` i zaključavanja netaknuti). Gate zelen (2916 testova), Vercel Production
 `80dee18` uspešan. Ručna provera u pregledaču nije rađena (produkcija je iza Vercel prijave). Posledica u podacima:
 13.10. (nezaključan) `playbook_linked` sada pada (#2 bez playbook-a, #3 playbook posle ulaza); 07.10. ostaje zamrznut.
+
+## J — Jezik: nazivi kategorija i fabrički tagovi (detaljno, 15.10.2026)
+
+**Povod** (trejder preko mentora, 15.10.2026: „sve na srpskom“, gramatika svuda): mentor je u bazi trejdera upisao
+listu tagova za day trading na srpskom (duplikati spojeni, greške u kucanju ispravljene, dodate greške koje trejder
+stvarno pravi) i preveo nazive lista i polja. Kod i dalje štampa engleske naslove u paketu, izveštajima i gridu, a
+fabrička lista (`tj_seed_categories`) je stara, pa bi posle „Delete all data“ vratila stare tagove.
+
+### Utvrđeno u kodu i bazi (15.10.2026)
+- **Baza** (`tj_option_lists`, `tj_field_defs`, jedan korisnik): liste Smer, Bias dana, TF ulaza, Tehnički tagovi,
+  Ocena setupa, Razlog izlaza, Razlog propuštanja, Emocije, Disciplina, Greške; polja Bias dana, TF ulaza, Tehnički
+  tagovi, Razlog izlaza, Greške, Psihologija, Razlog propuštanja. 10 lista, 76 stavki, sve aktivne. Kategorije lista
+  (`Context`, `ICT Setup`, `Risk`, `Psychology`) su u bazi i dalje na engleskom; J ih ne menja.
+- **Paket** (`mentor-export.ts`, `FIXED_BREAKDOWNS`): fiksni naslovi „Setup Grade“, „Direction“, „Technical Tags“,
+  „Psychology Tags“, „Mistake“ pobeđuju naziv iz baze (dedup po ključu, fiksni idu prvi); detalj trejda „Miss reason“.
+- **/reports** (`reports/dimensions.ts`): „Direction“, „Setup grade“, „Exit reason“, „Mistake“, „Technical tags“,
+  „Psychology tags (all)“, „Emotion“, „Discipline“ zakucani (fiksne dimenzije ne čitaju naziv iz baze).
+- **Grid** (`journal-grid.tsx`): filteri „Direction“, „Grade“, „Technical tag“, „Mistake“; masovni tagovi
+  „Technical“, „Psychology“, „Mistake“. **Forma** (`form-config.ts`): „Direction“. /daily (`tracker-checklist.tsx`):
+  „Entry TF“ u tekstu.
+- **Seed:** poslednja definicija `tj_seed_categories` je `20260930030000` (Bias dana Long/Short/Neutralno, „Ispoštovao
+  plan“, „Trejd posle DLL plana“ …, engleski nazivi lista i polja). `field-defs.fixture.ts` kaže da prati seed, a ima
+  pet polja sa engleskim nazivima.
+- **Doslovno u kodu** (ne menjaju se): Bez greške, Ispoštovao rizik, Vodio po planu, Pogođen stop, Pogođen target, Na
+  nuli, Prateći stop, Zatvoreno ranije, prefiks „Nisam odredio“. Svi postoje u bazi trejdera.
+
+### Podkoraci (svaki: test koji pada → kod → gate → commit + push)
+- **J1 Naslovi na srpskom.** Paket: naslov kategorije je naziv polja iz baze kad postoji, inače srpski (Ocena setupa,
+  Smer, Tehnički tagovi, Psihologija, Greške); „Razlog propuštanja“. /reports: Smer, Ocena setupa, Razlog izlaza,
+  Greške, Tehnički tagovi, Psihologija (sve), Emocije, Disciplina. Grid, forma i /daily isto. `field-defs.fixture.ts` =
+  sedam polja iz baze. Bez migracije.
+- **J2 Fabrička lista = lista trejdera.** Nova migracija ponovo definiše `tj_seed_categories` sa listama, stavkama i
+  poljima kakvi su u bazi 15.10.2026 (samo SELECT; podaci trejdera se ne menjaju — funkcija i dalje ne radi ništa kad
+  korisnik ima liste). Test čita poslednju definiciju funkcije i poredi je sa listom, i proverava da su doslovni tagovi
+  u njoj.
+- **J3 Mentor i dokumentacija.** `trading-mentor` (ZATVARANJE.md, CLAUDE.md) i dalje čita iste nazive; README
+  (fabrička podešavanja, paket), ovaj fajl, `ROADMAP.md`; provera Vercel produkcije.
+
+### Izlaz iz J
+Paket i /reports pišu nazive kategorija na srpskom, isto kao Settings, a reset naloga vraća listu koju trejder sada
+ima.
 
 ## Katalog stavki
 
