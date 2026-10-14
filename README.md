@@ -1046,7 +1046,8 @@ those parts on their own.
 
 ## Process tracking
 
-**Tracker rules** are daily obligations, per weekday. **Eleven** are scored automatically from data —
+**Tracker rules** are daily obligations, per weekday. **Eleven** were scored automatically from data
+when this paragraph was written (phases Q and Y added six more — the table below lists them all) —
 max loss per trade and per day, every trade linked to a playbook that existed when it was entered
 (phase Y, 14.10.2026: a playbook created after the first fill fails the day like a missing one, and
 /daily says "playbook napravljen posle ulaza"; trades carry `playbook_created_at` from `getTradesWithStats`;
@@ -1077,7 +1078,8 @@ taken at entry, so each is charged to the Topstep day the trade was OPENED on:
 | `thesis_recorded` (phase Q) | a trade has no `thesis` ("šta sam rekao pre klika"), read live; WHEN it was said is the recording's, so the mentor's | as above |
 | `review_complete` (phase Q) | a trade lacks a grade, an exit reason, the bias, Entry TF (`custom.entry_tf`), a psychology tag, or a mistake when the grade is not A | as above |
 | `screenshot_per_trade` (phase Q) | a trade has no chart (`tj_trade_images`) | as above |
-| `honest_tags` (phase Q) | on the same trade: "Ispoštovao rizik" beside a failed `risk_per_trade` / `stop_loss_set` / `max_loss_per_trade`, or an A ("Bez greške") beside any failed trading rule; the review rules do not count as trading errors. Evaluated last, from the other verdicts | as above |
+| `honest_tags` (phase Q) | on the same trade: "Ispoštovao rizik" beside a failed `risk_per_trade` / `stop_loss_set` / `max_loss_per_trade`, or an A ("Bez greške") beside any failed trading rule, or (phase Y5, 15.10.2026) "Vodio po planu" on a trade without a playbook or with one created after the entry; the review rules do not count as trading errors. Evaluated last, from the other verdicts | as above |
+| `trading_window` (phase Y4, 15.10.2026, `20261015090000`) | an entry before `from` or from `to` on, or a position still open once the minute of `to` has passed — an exit within that minute is the time exit, not a breach. Times are Belgrade; the window is `config.windows[]` of `{ since, from, to }`, the latest `since` on or before the day applies (London weeks 09:00–12:00, NY weeks 14:30–18:00), set in Settings › Tracker ("Save window", `setTradingWindow`), so a change next Monday leaves this week as it was. Reverses Q-2's retired "Vreme trgovanja" | no trade opened that day, or no window for the day (`unconfigured`) |
 
 **The target is per account**, as the Topstep limits are, and it reads only CLOSED money: a winner still open at the entry does not count toward it. The close is the brief's
 (`flat_by`: holiday, early close), else 15:10 CT — a default that can only be later than a holiday
@@ -1645,7 +1647,7 @@ project.
 
 ## Migrations
 
-158 files in `supabase/migrations/`, named `YYYYMMDDHHMMSS_description.sql`.
+159 files in `supabase/migrations/`, named `YYYYMMDDHHMMSS_description.sql`.
 
 - **Additive.** An applied migration is never edited — a new delta is written instead.
 - **A migration explains itself.** Each one opens with a comment saying what was wrong and what

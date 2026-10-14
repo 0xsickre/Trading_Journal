@@ -158,7 +158,7 @@ pogađa.
 | **P** | Jedna stranica trejda: snimak, checklist, kategorije i review na jednom mestu; bez plan-forme | — | O, W | ne | **Opus** | ✅ `1f8a832`, 14.10.2026 — bez migracije; ručna provera u pregledaču preskočena na zahtev trejdera |
 | **Q** | Manje ručnog rada: ručna pravila trackera postaju automatska, /daily javlja trejd bez naloga | — | P | da: `20261014120000` (`auto_key` check, pravila) | **Opus** | ✅ 14.10.2026 — Q-1 = C, Q-2 (5 automatski, Vreme trgovanja povučeno), Q-3 = A |
 | **N** | Sesije trejdera umesto „Globex noć“: osam sesija kao linije na chartu, minuti od otvaranja sesije, sva vremena u paketu i na /daily po Beogradu | — | Q | ne | **Opus** | ✅ 14.10.2026 — N-1 = A, N-2 = A, N-3 = A; bez migracije |
-| **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | da: `20261014200000` (`mental_temp_at`, aditivna) | **Opus** | ✅ 14.10.2026 — Y1 `14a992f` · Y2 `7281007` · Y3 `80dee18` (migracija primenjena); Y-1 … Y-4 = A |
+| **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | da: `20261014200000` (`mental_temp_at`), `20261015090000` (`trading_window`) | **Opus** | ✅ 14.10.2026 — Y1 `14a992f` · Y2 `7281007` · Y3 `80dee18` · Y4/Y5 `9de8441` (migracije `20261014200000`, `20261015090000` primenjene); Y-1 … Y-4 = A, Y-5 NY 14:30–18:00, Y-6 = A |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1469,6 +1469,9 @@ koja fali: playbook napisan posle ishoda je priča, ne plan (PRAVILA-MENTORA §2
   14:30–18:00, promena prozora ne menja raniji dan.
 - **Y5 `honest_tags`.** Tag „Vodio po planu“ na trejdu bez playbook-a ili sa playbook-om napravljenim posle ulaza (isto
   merilo kao `playbook_linked`) → ✗. Tekst pravila u bazi dopunjen istom migracijom.
+- **Isporučeno (15.10.2026):** `9de8441` (Y4 i Y5 u jednom commit-u: oba menjaju `auto-rules.ts`), gate zelen (2931
+  testova), Vercel Production uspešan, pa migracija `20261015090000` primenjena (kod pre migracije: stari kod ne zna
+  `trading_window`). Pravilo napravljeno 15.10. 00:14 po Beogradu, pa se ocenjuje od 15.10.; 13.10. ga nema.
 
 ### Izlaz iz Y
 Trejd sa playbook-om napisanim posle ulaza više ne prolazi kao plan, a paket i /daily pokazuju kad su playbook,
