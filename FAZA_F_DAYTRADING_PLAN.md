@@ -154,7 +154,7 @@ pogađa.
 | **O** | Prvo uvoz, pa dopuna iz snimka: izvoz naloga (stop, cilj, izlaz), dopuna iz snimka, propušten setup, bez plan-forme | — | M | da: `20261009090000` (aditivna) | **Opus** | ✅ 08.10.2026 — O1 `af9c0cc` (migracija `20261009090000` primenjena) · O2 `c15dc20` + futures-trading `bc1f28d` · O3 `800474d` · O4 `95222f9` |
 | **W** | Vremenski stop: koliko dobitniku treba da krene, koliko gubitnik stoji u minusu do SL | — | O | da: `20261009120000` (`last_underwater_seconds`, aditivna) | **Opus** | ✅ `bff96eb` + futures-trading `b8c9da1`, 09.10.2026 — migracija `20261009120000` primenjena uz odobrenje trejdera |
 | **P** | Jedna stranica trejda: snimak, checklist, kategorije i review na jednom mestu; bez plan-forme | — | O, W | ne | **Opus** | ✅ `1f8a832`, 14.10.2026 — bez migracije; ručna provera u pregledaču preskočena na zahtev trejdera |
-| **Q** | Manje ručnog rada: originalni stop i uvoz iz TopstepX API-ja, ručna pravila trackera postaju automatska, /daily javlja trejd bez naloga | — | P | da: `tj_order_events` (aditivna), `auto_key` check (proširenje) | **Opus** | čeka odluke Q-1 … Q-3 (14.10.2026) |
+| **Q** | Manje ručnog rada: ručna pravila trackera postaju automatska, /daily javlja trejd bez naloga | — | P | da: `auto_key` check (proširenje) | **Opus** | čeka odluku Q-2 (Q-1 = C, Q-3 = A, 14.10.2026) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1267,7 +1267,7 @@ Jedna stranica po trejdu sa snimkom, checklistom, kategorijama i review-om. `/ed
 Čuvanje ne briše fill-ove ni odgovore koje stranica ne prikazuje. Stara forma je obrisana, mentor pack je
 isti osim praznih redova, a README i `trading-mentor` su usklađeni 1:1. Bez migracije.
 
-## Q — Manje ručnog rada (detaljno, 14.10.2026) — čeka odluke
+## Q — Manje ručnog rada (detaljno, 14.10.2026) — čeka odluku Q-2
 
 **Povod** (trejder, 14.10.2026, posle prvog dana sa uvozom i snimkom): „uđi dublje u ovo i nađi rešenje“ za
 ručni rad i greške koje su 13. i 14.10. potrošile sate: pravilo rizika u journal-u drugačije od tvog (15 % /
@@ -1283,18 +1283,8 @@ naglas ✓“ koje nije bilo tačno.
 - **Originalni stop:** TopstepX izvoz naloga ima jedan red po nalogu sa POSLEDNJOM cenom stopa (komentar u
   `topstepx-orders.ts`, test trejdera 08.10.). Pomeren stop se iz fajla ne može rekonstruisati; bliže pomeren
   stop se ne može ni otkriti (`stopStatus` vidi samo stop u profitu ili MAE iza stopa).
-- **TopstepX API** (ProjectX Gateway; help.topstep.com 11187768, gateway.docs.projectx.com):
-  - cena 29 USD mesečno, 14,50 uz Topstep kod; ključ se pravi u TopstepX › Settings › API;
-  - dozvoljeno na sopstvenom računaru: „logging and analytics … your server can watch and record, but it cannot
-    trade“. Skript ovde samo čita, nikad ne šalje nalog;
-  - REST `POST /api/Trade/search` (svaki fill: cena, količina, provizija, `orderId`, vreme) i
-    `POST /api/Order/search` (nalozi, poslednje stanje), po `accountId` i periodu: to je isto što i dva CSV
-    izvoza, bez ručnog izvoza;
-  - user hub `rtc.topstepx.com/hubs/user`, `SubscribeOrders(accountId)` → događaj `GatewayUserOrder` pri
-    svakoj promeni, sa `stopPrice`, `status` i `updateTimestamp`. Prvi `stopPrice` stop naloga je ORIGINALNI
-    stop; svaki sledeći je pomeranje sa tačnim vremenom. Ovo je jedini izvor koji vidi pomeranje.
-  - Ne zna se još: da li je Combine „eligible account“ za API (Topstep: dashboardapi@topstep.com) i da li su
-    `id` naloga u API-ju isti kao `Id` u CSV izvozu (proverava se prvim pozivom).
+- **TopstepX API** bi video svaku izmenu stopa (14,50 USD mesečno). Trejder ga ne uzima (Q-1 = C, 14.10.):
+  originalni stop pomerenog stopa ostaje ručni unos sa snimka, a uvoz ostaje dva CSV fajla.
 - **Ručna pravila trackera** (baza 14.10.): 6 od 15 je ručno, i svih 6 može da se izračuna iz onoga što je već
   na trejdu (`custom.htf_bias`, `custom.entry_tf`, `execution_rating`, `exit_reason`, `mistake`,
   `psychology_tags`, `tj_trade_images`, vreme ulaza):
@@ -1322,35 +1312,19 @@ naglas ✓“ koje nije bilo tačno.
   Migracija: proširenje `tj_tracker_rules_auto_key_check` i prebacivanje 6 postojećih redova na nove ključeve
   (stari dani ostaju zamrznuti, `compliance.ts`). Testovi: svako pravilo na fixture-u 13.10. daje ono što je
   mentor ručno ocenio u `trading-mentor/dnevnik/2026-10-13.md`.
-- **Q3 Beleženje naloga uživo** (posle Q-1). `futures-trading/tools/topstepx_nalozi.py`: prijava API ključem,
-  user hub, `SubscribeOrders`; svaki `GatewayUserOrder` → red u `tj_order_events` (`order_id`, `account_id`,
-  `contract`, `type`, `side`, `status`, `stop_price`, `limit_price`, `size`, `updated_at`, sirovo). Pokreće se
-  sam pre prozora (Windows Task Scheduler), samo čita. Migracija `tj_order_events` (aditivna, RLS kao ostale).
-  Journal: originalni stop = prvi `stop_price` stop naloga tog trejda iz `tj_order_events`, upisuje se u
-  `stop_price` samo kad je prazan ili jednak poslednjem (isto pravilo kao uvoz: ručno uneto se ne prepisuje),
-  a pomeranja idu u paket sa vremenom („Stop: 30690 → 30680.75 u 09:25:02“). Pomeren bliže se tada vidi i bez
-  snimka, pa „Pomeren stop je koštao“ radi i kad trejder ne upiše ništa.
-- **Q4 Uvoz bez CSV-a** (posle Q-1 = A). Dugme „Uvezi iz TopstepX-a“ na /import: server poziva `Trade/search` i
-  `Order/search` za dan, pravi iste stavke kao CSV put (`topstepXImportRows`, `bracketFor`) i ide kroz isti
-  pregled i `commitImport`. Ključ se čuva samo na serveru (env), nikad u pregledaču.
-- **Q5 Dokumentacija.** README 1:1, ovaj fajl, `trading-mentor` `CLAUDE.md` (tok zatvaranja: uvoz jednim
-  dugmetom, originalni stop više ne sa snimka).
+- **Q3 Dokumentacija.** README 1:1, ovaj fajl, `trading-mentor` `CLAUDE.md` (/daily bez ručnih štikliranja).
 
 ### Odluke trejdera
-- **Q-1 Izvor podataka.** (A) TopstepX API, 14,50 USD mesečno: Q3 i Q4, originalni stop i uvoz bez ručnog
-  izvoza. (B) API samo za Q3 (originalni stop), CSV uvoz ostaje. (C) Bez API-ja: originalni stop i dalje sa
-  snimka. Preporuka: **A**, redom Q3 pa Q4. Uslov: Topstep potvrdi da Combine ima pristup API-ju.
+- **Q-1 Izvor podataka: C** (trejder, 14.10.): bez TopstepX API-ja. Originalni stop sa snimka, uvoz iz CSV-a.
 - **Q-2 Ručna pravila.** (A) Svih 6 automatski, kako piše u tabeli. (B) Samo Vreme trgovanja, Screenshotovi i
   Dnevnik i tagovi (čisto iz podataka); HTF bias, Teza i Iskreni tagovi ostaju ručni. (C) Ništa. Preporuka:
   **A**: ručno štikliranje je 13.10. dalo ✓ za tezu izgovorenu posle klika, a polje po trejdu traži odgovor
   za svaki trejd posebno.
-- **Q-3 Istorija budžeta.** (A) #3 ostaje sa zapečaćenih 350 (tako je bilo podešeno tog dana). (B) Ispraviti
-  na 300. Preporuka: **A**: pečat je dokaz šta je journal tada znao, a paket već pokazuje 350.
+- **Q-3 Istorija budžeta: A** (trejder, 14.10.): #3 ostaje sa zapečaćenih 350.
 
 ### Izlaz iz Q
-/daily nema ručnih štikliranja osim „Danas ne trgujem“; trejd bez naloga se vidi pre zaključavanja dana; uz
-Q-1 = A originalni stop i pomeranja stopa dolaze sami iz TopstepX-a, a večernji uvoz je jedno dugme. README i
-`trading-mentor` usklađeni 1:1.
+/daily nema ručnih štikliranja osim „Danas ne trgujem“ (uz Q-2 = A); trejd bez naloga se vidi pre zaključavanja
+dana. README i `trading-mentor` usklađeni 1:1.
 
 ## Katalog stavki
 
