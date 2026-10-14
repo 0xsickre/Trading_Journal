@@ -17,6 +17,7 @@
 import { computeStats, type RealizedTrade } from "./analytics";
 import type { BreakevenRange } from "./breakeven";
 import type { DailyReportLite, EnrichedTrade } from "./enriched-trade";
+import type { TradeRow } from "./types";
 import { loggedAfterEntry, sealedNumber } from "./plan-snapshot";
 import { getDimension, type DimensionContext } from "./reports/dimensions";
 import { afterExitR, scenarioOf, scenarioTrade, summarizeScenarios } from "./scenario";
@@ -532,6 +533,8 @@ export function tradeContextLines(
       `u plus pre stopa ${rr(sc.mfeBeforeStopR)}`,
     ].filter((p): p is string => p != null);
     lines.push(`- **Šta bi bilo:** ${posle.join(" · ")}`);
+    const pomeren = tightenedStopLine(e.trade.row, sc.exitKind, sc.slForTargetR, sc.target);
+    if (pomeren) lines.push(pomeren);
   }
   if (opts.insightTitles?.length) lines.push(`- **Zapažanja na ovom trejdu:** ${opts.insightTitles.join("; ")}`);
   return lines;
@@ -583,6 +586,33 @@ export function timeStopSection(trades: readonly EnrichedTrade[], range: Breakev
     ...s.ladder.map((r) => `| ${r.minutes} | ${p(r.winnersGreenPct)} | ${p(r.losersOpenPct)} |`),
     "",
   ];
+}
+
+/**
+ * Stop pomeren bliže ulazu, pa pogođen (14.10.2026, trejder): da li bi originalni
+ * stop preživeo do cilja? `sl_for_target_r` je najmanji SL, u R ORIGINALNOG
+ * stopa, koji bi preživeo do prvog izvršenja TP-a — pa ≤ 1R znači da bi trejd sa
+ * originalnim stopom bio dobitan. To je cena pomeranja, i ponavlja li se, to je
+ * razlog da se prestane.
+ */
+function tightenedStopLine(
+  row: TradeRow,
+  exitKind: string | null | undefined,
+  slForTargetR: number | null,
+  target: number | null | undefined,
+): string | null {
+  const original = numberFieldValue(row, "stop_price");
+  const last = numberFieldValue(row, "final_stop_price");
+  const entry = row.stats?.avg_entry ?? null;
+  if (original == null || last == null || entry == null || original === last || exitKind !== "stop") return null;
+  const dir = String(row.direction ?? "").toLowerCase().startsWith("short") ? -1 : 1;
+  // Bliže: poslednji stop je između originalnog i ulaza (ne u profitu — to je druga priča).
+  if (!(dir * (last - original) > 0 && dir * (entry - last) > 0)) return null;
+  const was = `pogođen pomereni stop ${num(last)} (originalni ${num(original)})`;
+  if (target == null) return `- **Pomeren stop:** ${was} · cilja nema, pa se ne zna šta bi originalni doneo`;
+  if (slForTargetR != null && slForTargetR <= 1)
+    return `- **⚠ Pomeren stop je koštao:** ${was} · sa originalnim stopom TP bi došao (trebalo je SL ${rr(slForTargetR)}, originalni je 1R)`;
+  return `- **Pomeren stop:** ${was} · ni originalni ne bi doneo TP (${slForTargetR != null ? `trebalo je SL ${rr(slForTargetR)}` : "TP nije došao do 15:10 CT"})`;
 }
 
 const num = (v: unknown): string => String(Number(v));

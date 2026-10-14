@@ -1842,7 +1842,7 @@ and the after-stop / after-target / hand-exit counts — and the same figures **
 report's current grouping**, so setup, Entry TF, session window or instrument is the same click as
 any other report. A group under 30 trades is marked ⚠. The mentor pack gets a summary section and a
 *Šta bi bilo* line per trade.
-Since 14.10.2026 it also gets a **Reakcija** line per measured trade (a winner: when it left the red for good, from `last_underwater_seconds`; a loser: how long it sat in the red) and a **Vremenski stop** section (`timeStopSection`, the dashboard's Time stop card: medians and the 1–60 min ladder), and the instructions ask the mentor to judge each exit from them.
+Since 14.10.2026 it also gets a **Reakcija** line per measured trade (a winner: when it left the red for good, from `last_underwater_seconds`; a loser: how long it sat in the red) and a **Vremenski stop** section (`timeStopSection`, the dashboard's Time stop card: medians and the 1–60 min ladder), and the instructions ask the mentor to judge each exit from them. A stop moved **closer** that was then hit gets a **Pomeren stop** line: `sl_for_target_r` is in R of the ORIGINAL stop, so ≤ 1R means the original would have survived to the target (**⚠ Pomeren stop je koštao**), and the mentor is told to count those.
 
 ---
 

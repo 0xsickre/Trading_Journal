@@ -540,3 +540,23 @@ describe("reakcija i vremenski stop u paketu (14.10.2026)", () => {
     expect(timeStopSection(enriched, { from: 0, to: 0 })).toEqual([]);
   });
 });
+
+describe("stop pomeren bliže pa pogođen (14.10.2026)", () => {
+  const line = async (slForTargetR: number) => {
+    const { tradeContextLines } = await import("./mentor-intraday");
+    const { enrich, scenarioDoc } = await import("./reports/test-helpers");
+    const [e] = enrich([{ r: -0.5, scenario: scenarioDoc({ sl_for_target_r: slForTargetR }) }]);
+    Object.assign(e.trade.row, { stop_price: 90, final_stop_price: 95 });
+    return tradeContextLines(e, { displayTz: "UTC" }).join("\n");
+  };
+
+  it("kaže kad bi originalni stop preživeo do TP-a", async () => {
+    expect(await line(0.8)).toContain(
+      "- **⚠ Pomeren stop je koštao:** pogođen pomereni stop 95 (originalni 90) · sa originalnim stopom TP bi došao (trebalo je SL +0.80R, originalni je 1R)",
+    );
+  });
+
+  it("i kad ni originalni ne bi doneo TP", async () => {
+    expect(await line(3.31)).toContain("- **Pomeren stop:** pogođen pomereni stop 95 (originalni 90) · ni originalni ne bi doneo TP (trebalo je SL +3.31R)");
+  });
+});
