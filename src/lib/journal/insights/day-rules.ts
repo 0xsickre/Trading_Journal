@@ -9,7 +9,7 @@
 
 import { fmtMoney } from "../format";
 import { isShortDirection } from "../plan-calculations";
-import { minutesAfterOpen } from "../session-window";
+import { afterSessionOpen } from "../session-window";
 import type { DayBucket, InsightContext } from "./context";
 import type { Insight, InsightRule } from "./types";
 import { winRateOf } from "../analytics";
@@ -320,20 +320,20 @@ export const patiencePaidOff: Rule = {
   level: "day",
   minSample: 0,
   description:
-    "A green day whose first entry came after the opening half hour (09:30–10:00 ET).",
+    "A green day whose first entry came after the opening half hour of its session (London 09:00, New York 15:30 Belgrade).",
   evaluate: (ctx) =>
     ctx.days
-      .map((d) => ({ d, after: minutesAfterOpen(firstEntry(d)) }))
+      .map((d) => ({ d, open: afterSessionOpen(firstEntry(d)) }))
       .filter(
-        (x): x is { d: DayBucket; after: number } =>
-          x.after != null && x.after >= D.PATIENCE_MINUTES && x.d.net > 0,
+        (x): x is { d: DayBucket; open: { session: "London" | "NY"; minutes: number } } =>
+          x.open != null && x.open.minutes >= D.PATIENCE_MINUTES && x.d.net > 0,
       )
-      .map(({ d, after }) =>
+      .map(({ d, open }) =>
         dayInsight(d, {
           ruleId: "patience_paid_off",
           severity: "good",
           title: "Patience paid off",
-          detail: `First entry ${after} min after the 09:30 ET open, and the day closed ${fmtMoney(
+          detail: `First entry ${open.minutes} min after the ${open.session === "London" ? "London" : "New York"} open, and the day closed ${fmtMoney(
             d.net,
             ctx.currency,
           )}. The opening swings were left alone.`,

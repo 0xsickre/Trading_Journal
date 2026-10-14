@@ -155,7 +155,7 @@ pogađa.
 | **W** | Vremenski stop: koliko dobitniku treba da krene, koliko gubitnik stoji u minusu do SL | — | O | da: `20261009120000` (`last_underwater_seconds`, aditivna) | **Opus** | ✅ `bff96eb` + futures-trading `b8c9da1`, 09.10.2026 — migracija `20261009120000` primenjena uz odobrenje trejdera |
 | **P** | Jedna stranica trejda: snimak, checklist, kategorije i review na jednom mestu; bez plan-forme | — | O, W | ne | **Opus** | ✅ `1f8a832`, 14.10.2026 — bez migracije; ručna provera u pregledaču preskočena na zahtev trejdera |
 | **Q** | Manje ručnog rada: ručna pravila trackera postaju automatska, /daily javlja trejd bez naloga | — | P | da: `20261014120000` (`auto_key` check, pravila) | **Opus** | ✅ 14.10.2026 — Q-1 = C, Q-2 (5 automatski, Vreme trgovanja povučeno), Q-3 = A |
-| **N** | Sesije trejdera umesto „Globex noć“: Azija, London, NY AM, NY PM (kao na chartu, GRAFIK.md), minuti posle otvaranja sesije, sva vremena u paketu i na /daily po Beogradu | — | Q | ne | **Opus** | čeka odluke N-1 … N-3 (14.10.2026) |
+| **N** | Sesije trejdera umesto „Globex noć“: osam sesija kao linije na chartu, minuti od otvaranja sesije, sva vremena u paketu i na /daily po Beogradu | — | Q | ne | **Opus** | ✅ 14.10.2026 — N-1 = A, N-2 = A, N-3 = A; bez migracije |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1328,7 +1328,7 @@ naglas ✓“ koje nije bilo tačno.
 /daily nema ručnih štikliranja osim „Danas ne trgujem“ (uz Q-2 = A); trejd bez naloga se vidi pre zaključavanja
 dana. README i `trading-mentor` usklađeni 1:1.
 
-## N — Sesije po Beogradu (detaljno, 14.10.2026) — čeka odluke
+## N — Sesije po Beogradu (detaljno, 14.10.2026) — ✅
 
 **Povod** (trejder, 14.10.2026, posle faze Q): sesije u paketu i analitici neka budu Azija, London, NY AM i NY PM,
 umesto „Globex noć“. Mentor je to tražio kao Z-015 (09.10.): London trejdovi su u paketu „Globex night 18:00–08:00“
@@ -1381,14 +1381,9 @@ a u nedelji 25.10.–01.11. NY ima prednost.
 - **N4 Dokumentacija.** README (sesije, paket), ovaj fajl, `trading-mentor`: Z-015 rešeno, CLAUDE.md legenda paketa.
 
 ### Odluke trejdera
-- **N-1 Koliko sesija.** (A) Osam, kao linije na chartu (tabela iznad). (B) Četiri bez praznina: Azija 00:00–09:00,
-  London 09:00–15:30, NY AM 15:30–18:00, NY PM 18:00–22:10. Preporuka: **A** — pre otvaranja NY i ručak su
-  poznata mesta gde novac curi, a u (B) bi se sakrili u London i NY PM. Sat ulaza (po Beogradu) postoji posebno.
-- **N-2 Minuti posle otvaranja.** (A) Od otvaranja sesije trejda: London 09:00, NY 15:30 (po Beogradu). (B) Izbaciti
-  tabelu. (C) Ostaviti od 09:30 NY. Preporuka: **A** — „koliko posle otvaranja Londona“ je pitanje za London nedelje,
-  a isto za NY nedelje.
-- **N-3 Vremena.** (A) Sve po Beogradu, ET i CT nigde. (B) Beograd, a ET u zagradi. Preporuka: **A** (odluka od
-  09.10.: „ET samo u zagradi kad mora“; u paketu ne mora nigde, jer su sesije već imenovane).
+- **Odluke trejdera (14.10.2026): N-1 = A** (osam sesija kao na chartu), **N-2 = A** (minuti od otvaranja sesije:
+  London 09:00, NY 15:30 po Beogradu), **N-3 = A** (sve po Beogradu, ET i CT nigde u paketu ni na /daily).
+- Uz to: insight „Patience paid off“ broji od otvaranja sesije, ne od 09:30 NY.
 
 ### Izlaz iz N
 London trejd je u paketu i izveštajima „London“, minuti se broje od otvaranja njegove sesije, a paket nema nijedno

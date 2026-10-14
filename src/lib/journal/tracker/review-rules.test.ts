@@ -85,7 +85,7 @@ function trade(id: string, opened: string, net: number, r: Review): TradeRow {
 }
 
 const day = (rows: TradeRow[]) =>
-  evaluateAutoRulesForDay("2026-10-13", buildTradeDayIndex(rows, zoneOf, topstepRulesResolver([TS])));
+  evaluateAutoRulesForDay("2026-10-13", buildTradeDayIndex(rows, (row) => zoneOf(row.account_id), topstepRulesResolver([TS])));
 
 const T2 = (r: Review = {}) =>
   trade("t2", "2026-10-13T07:24:39Z", -226.88, { playbook: null, mistake: ["Rani ulaz", "Bez Setupa"], psychology: ["Nestrpljiv", "FOMO"], ...r });

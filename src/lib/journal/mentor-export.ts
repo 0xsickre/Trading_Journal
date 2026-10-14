@@ -546,7 +546,7 @@ export function buildMentorPack(
     context.push(
       `Breakeven pojas: ${range.from.toFixed(2)} do ${range.to.toFixed(2)} ${ccy}`,
     );
-  if (intraday) context.push(`Vremena: ${displayTz} (tvoja zona); sesije po ET (New York)`);
+  if (intraday) context.push(`Vremena: ${displayTz} (tvoja zona), i sesije`);
   if (context.length > 0) out.push(`_${context.join(" · ")}_`);
   out.push("");
 
@@ -599,11 +599,11 @@ export function buildMentorPack(
   if (intraday) {
     out.push(
       [
-        "- **Trading dan** — Topstep dan traje 17:00–17:00 po Čikagu (CT): večernja Globex sesija pripada SLEDEĆEM danu. Svi dnevni brojevi su po tom danu.",
+        "- **Trading dan** — Topstep dan traje od 00:00 do 00:00 po Beogradu (17:00 po Čikagu), a završava se u 22:10 (flat): sesija posle ponoći pripada tom danu. Svi dnevni brojevi su po tom danu. U nedelji 25.10.–01.11. (i kad Evropa i SAD menjaju sat u različite dane) sve NY granice su sat ranije.",
         "- **MLL** (Maximum Loss Limit) — trailing pod ispod najvišeg balansa na kraju dana; kad dostigne početni balans, zaključava se. Pad ispod njega = nalog je izgubljen.",
         "- **DLL** (Daily Loss Limit) — najveći dozvoljeni gubitak u jednom trading danu; Topstep tada zatvara pozicije i dan je gotov (nalog nije izgubljen).",
         `- **Konzistentnost** — najbolji dan sme biti najviše ${Math.round(TOPSTEP_CONSISTENCY * 100)}% cilja; preko toga cilj raste na najbolji dan ÷ ${TOPSTEP_CONSISTENCY}.`,
-        "- **Sesijski prozori (ET)** — Globex noć 18:00–08:00, Pre-open 08:00–09:30, Open 09:30–10:00, Morning 10:00–11:30, Lunch 11:30–13:30, Afternoon 13:30–15:00, Last hour 15:00–.",
+        "- **Sesije (po Beogradu, kao linije na chartu)** — Azija 00:00–06:00, Pre Londona 06:00–09:00, London 09:00–14:00, NY pre otvaranja 14:00–15:30, NY AM 15:30–17:30, Ručak 17:30–19:30, NY PM 19:30–22:00, Posle zatvaranja 22:00–00:00. Svaka granica je po satu svoje berze (London ili NY). **Minuti posle otvaranja** se broje od otvaranja sesije trejda: London 09:00, NY 15:30.",
         "- **Posle gubitaka** — koliko je gubitaka zaredom već bilo zatvoreno tog dana na istom nalogu u trenutku ulaza. Samo analitika: broj trejdova ne ograničavam — dan se zaustavlja na novcu (lični dnevni limit gubitka i dnevni cilj profita, kao u TopstepX Risk Limits).",
         "- **Vreme u minusu** — % trajanja trejda u kome je tekući P&L bio ispod nule, iz berzanskih sveća (1 s).",
         "- **Crveni prozor** — vesti visokog uticaja iz jutarnjeg brief-a (futures-trading), u kojima ne ulazim.",
@@ -664,6 +664,7 @@ export function buildMentorPack(
         reportByDate: new Map((opts.reports ?? []).map((r) => [r.report_date, r])),
         briefByDay,
         periodDays: opts.periodDays,
+        tz: displayTz,
       }),
     );
     out.push(
@@ -672,6 +673,7 @@ export function buildMentorPack(
         opts.trackerRules ?? [],
         new Map((opts.compliance ?? []).map((c) => [c.date, c])),
         briefByDay,
+        displayTz,
       ),
     );
     out.push(...intradaySection(enriched, range));
@@ -797,7 +799,7 @@ function intradayInstructions(period: string): string[] {
     "- Prvo **Topstep stanje**: koliko sam daleko od MLL-a i DLL-a, i da li sam u granici konzistentnosti. Preživljavanje naloga je iznad svega.",
     "- Zatim **Dnevni pregled** i **Tracker po danu**: dan je jedinica, i dan bez trejda je dan. Traži dane sa previše trejdova, trgovanje posle 2 gubitka zaredom, dane kad je DLL dostignut, dane bez prijave i prekršena pravila.",
     "- Zatim **Kada i kako trgujem**: koji sesijski prozor, sat, redni broj trejda i stanje posle gubitka nose ili gube novac.",
-    "- Na kraju **trejdovi hronološki**: vreme u mojoj zoni i u ET, sesija, redni broj u danu, gubici pre ulaza, trajanje, ugovori, izvršenje i fill-ovi, plan → kraj (pomeren stop), rizik prema budžetu, MAE/MFE, vreme u minusu, crveni prozor i zapažanja.",
+    "- Na kraju **trejdovi hronološki**: vreme po Beogradu, sesija i minuti posle njenog otvaranja, redni broj u danu, gubici pre ulaza, trajanje, ugovori, izvršenje i fill-ovi, plan → kraj (pomeren stop), rizik prema budžetu, MAE/MFE, vreme u minusu, crveni prozor i zapažanja.",
     sample,
     "",
     "Tvoj zadatak:",

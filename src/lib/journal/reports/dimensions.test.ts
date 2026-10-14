@@ -63,7 +63,7 @@ describe("intraday dimensions (F5.2)", () => {
 
   it("groups by session window and by minutes after the open", () => {
     const specs = [T("a", "13:35", "13:50", 10)];
-    expect(bucket("session_window", specs, "a")).toEqual(["Open 09:30–10:00"]);
+    expect(bucket("session_window", specs, "a")).toEqual(["NY AM 15:30–17:30"]);
     expect(bucket("minutes_from_open", specs, "a")).toEqual(["0–15 min"]);
   });
 

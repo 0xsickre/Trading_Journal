@@ -22,11 +22,11 @@ import { loggedAfterEntry, sealedNumber } from "./plan-snapshot";
 import { getDimension, type DimensionContext } from "./reports/dimensions";
 import { afterExitR, scenarioOf, scenarioTrade, summarizeScenarios } from "./scenario";
 import type { RedWindow, SessionBrief } from "./session-brief";
-import { minutesAfterOpen, SESSION_TZ } from "./session-window";
+import { afterSessionOpen } from "./session-window";
 import { numberFieldValue } from "./field-values";
 import { roomAtEntry } from "./risk-taken";
 import { needsOriginalStop, stopStatus } from "./stop-moved";
-import { fmtInTz, isTradingDayKey, toEpoch } from "./time";
+import { DEFAULT_TZ, fmtInTz, isTradingDayKey, toEpoch } from "./time";
 import { TOPSTEP_CONSISTENCY, fixedRiskOf, type TopstepResult } from "./topstep";
 import { ruleIsLiveOn, type DayCompliance } from "./tracker/compliance";
 import { WEEKDAY_LABELS, type TrackerRule } from "./tracker-types";
@@ -62,8 +62,8 @@ export function sr(n: number, one: string, few: string, many: string): string {
 
 /** The intraday dimensions, in the order a mentor reads a day. */
 const INTRADAY_DIMENSIONS: { key: string; label: string }[] = [
-  { key: "session_window", label: "Sesijski prozor (ET)" },
-  { key: "minutes_from_open", label: "Koliko posle otvaranja 09:30 ET" },
+  { key: "session_window", label: "Sesija (po Beogradu)" },
+  { key: "minutes_from_open", label: "Koliko posle otvaranja sesije (London / NY)" },
   { key: "trade_no_in_day", label: "Redni broj trejda u danu (po nalogu)" },
   { key: "after_loss", label: "Stanje pre ulaza (gubici zaredom tog dana)" },
   { key: "hold_duration", label: "Trajanje trejda" },
@@ -130,7 +130,7 @@ export function scenarioSection(trades: readonly EnrichedTrade[]): string[] {
   const best = s.best!;
   return [
     `## Šta bi bilo — SL × TP i cena posle izlaza (${s.n} ${sr(s.n, "izmeren trejd", "izmerena trejda", "izmerenih trejdova")}${s.n < SMALL_SAMPLE ? " ⚠" : ""})`,
-    `_Svaki trejd ponovljen iz berzanskih sveća od prosečnog ulaza do 15:10 CT, sa SL 0,5–2× stvarnog i TP 1–5R tog SL-a; isti rizik u $, neto posle provizije._`,
+    `_Svaki trejd ponovljen iz berzanskih sveća od prosečnog ulaza do kraja Topstep dana, sa SL 0,5–2× stvarnog i TP 1–5R tog SL-a; isti rizik u $, neto posle provizije._`,
     "",
     `| Stavka | Vrednost |`,
     `| --- | --- |`,
@@ -192,6 +192,8 @@ export type DailyContext = {
   reportByDate?: ReadonlyMap<string, DailyReportLite>;
   /** The futures-trading brief per trading day: its note and news windows. */
   briefByDay?: ReadonlyMap<string, SessionBrief>;
+  /** The zone every time in the pack is written in — the trader's (phase N: Belgrade, never ET). */
+  tz?: string;
 };
 
 /** How a day's rules read in the pack: a percentage, or why there is none. */
@@ -228,9 +230,9 @@ export function dailySection(
   const shown = keys.slice(-DAY_ROWS_CAP);
   const out = [
     `## Dnevni pregled (${keys.length} ${sr(keys.length, "dan", "dana", "dana")} u periodu, ${byDay.size} sa trejdovima)`,
-    `_Dan = trading dan naloga (Topstep: 17:00–17:00 CT). Pravila = % tvojih pravila iz dnevnog trackera koja su ispoštovana (u zagradi propuštena); „bez prijave“ = nijedan trejd, nijedan odgovor, nijedan izveštaj._`,
+    `_Dan = trading dan naloga (Topstep: od 00:00 do 00:00 po Beogradu, 17:00 CT). Pravila = % tvojih pravila iz dnevnog trackera koja su ispoštovana (u zagradi propuštena); „bez prijave“ = nijedan trejd, nijedan odgovor, nijedan izveštaj._`,
     "",
-    `| Dan | Trejdova | W/L/BE | Net | R | Prvi ulaz (ET) | Najduži niz gubitaka | Max ugovora | Mentalno | Ne trgujem · zaključan | Pravila | Napomena |`,
+    `| Dan | Trejdova | W/L/BE | Net | R | Prvi ulaz | Najduži niz gubitaka | Max ugovora | Mentalno | Ne trgujem · zaključan | Pravila | Napomena |`,
     `| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |`,
   ];
   for (const day of shown) {
@@ -262,7 +264,7 @@ export function dailySection(
     const sizes = list.map((t) => t.size).filter((v): v is number => v != null);
     out.push(
       `| ${day} | ${list.length} | ${s.wins}/${s.losses}/${s.breakeven} | ${s.netSum.toFixed(2)} | ${r2(s.totalR)}R | ${
-        first ? fmtInTz(first, SESSION_TZ, "HH:mm") : "—"
+        first ? fmtInTz(first, ctx.tz ?? DEFAULT_TZ, "HH:mm") : "—"
       } | ${longestLossRun(list)} | ${sizes.length ? Math.max(...sizes) : "—"} | ${tail}`,
     );
   }
@@ -285,6 +287,8 @@ export function trackerByDaySection(
   rules: readonly TrackerRule[],
   compliance: ReadonlyMap<string, DayCompliance>,
   briefByDay: ReadonlyMap<string, SessionBrief>,
+  /** The zone the windows are written in (phase N: the trader's). */
+  tz: string = DEFAULT_TZ,
 ): string[] {
   if (days.length === 0 || rules.length === 0) return [];
   const out = [
@@ -307,10 +311,10 @@ export function trackerByDaySection(
     if (brief) {
       const windows = brief.redWindows.map(
         (w) =>
-          `${fmtInTz(w.from, SESSION_TZ, "HH:mm")}–${fmtInTz(w.to, SESSION_TZ, "HH:mm")} ${cell(w.title)}${w.impact ? ` (${w.impact})` : ""}`,
+          `${fmtInTz(w.from, tz, "HH:mm")}–${fmtInTz(w.to, tz, "HH:mm")} ${cell(w.title)}${w.impact ? ` (${w.impact})` : ""}`,
       );
-      const flat = brief.flatBy ? ` · flat do ${fmtInTz(brief.flatBy, SESSION_TZ, "HH:mm")} ET` : "";
-      out.push(`- Crveni prozori (ET): ${windows.join("; ") || "nema"}${flat}`);
+      const flat = brief.flatBy ? ` · flat do ${fmtInTz(brief.flatBy, tz, "HH:mm")}` : "";
+      out.push(`- Crveni prozori: ${windows.join("; ") || "nema"}${flat}`);
     } else {
       out.push(`- Brief za ovaj dan nije stigao.`);
     }
@@ -476,13 +480,12 @@ export function tradeContextLines(
 ): string[] {
   const lines: string[] = [];
   if (e.openedAt) {
-    const after = minutesAfterOpen(e.openedAt);
+    const after = afterSessionOpen(e.openedAt);
     const parts = [
       `ulaz ${fmtInTz(e.openedAt, opts.displayTz, "dd.MM. HH:mm:ss")}`,
       e.closedAt ? `izlaz ${fmtInTz(e.closedAt, opts.displayTz, "HH:mm:ss")}` : null,
-      `(${opts.displayTz}) = ${fmtInTz(e.openedAt, SESSION_TZ, "HH:mm")} ET`,
       e.sessionWindow,
-      after != null ? `${after} min posle otvaranja` : null,
+      after != null ? `${after.minutes} min posle otvaranja ${after.session === "London" ? "Londona" : "NY"}` : null,
     ].filter((p): p is string => p != null);
     lines.push(`- **Vreme:** ${parts.join(" · ")}`);
   }
@@ -504,12 +507,12 @@ export function tradeContextLines(
   if (day.length) lines.push(`- **Kontekst:** ${day.join(" · ")}`);
   const reakcija = reactionLine(e);
   if (reakcija) lines.push(reakcija);
-  lines.push(...executionLines(e, opts.fills, opts.ccy ?? "USD"));
+  lines.push(...executionLines(e, opts.fills, opts.ccy ?? "USD", opts.displayTz));
   if (opts.playbookName) lines.push(`- **Playbook:** ${cell(opts.playbookName)}`);
   const w = redWindowAt(e.openedAt, opts.brief);
   if (w) {
     lines.push(
-      `- **Ulaz u crvenom prozoru:** ${cell(w.title)}${w.impact ? ` (${w.impact})` : ""} ${fmtInTz(w.from, SESSION_TZ, "HH:mm")}–${fmtInTz(w.to, SESSION_TZ, "HH:mm")} ET`,
+      `- **Ulaz u crvenom prozoru:** ${cell(w.title)}${w.impact ? ` (${w.impact})` : ""} ${fmtInTz(w.from, opts.displayTz, "HH:mm")}–${fmtInTz(w.to, opts.displayTz, "HH:mm")}`,
     );
   }
   const sc = scenarioOf(e.trade.row);
@@ -527,7 +530,7 @@ export function tradeContextLines(
           ? "da sam držao, stop bi došao pre TP-a"
           : sc.afterExit.targetMinutes != null
             ? "da sam držao, TP bi došao"
-            : "da sam držao, ni TP ni stop do 15:10 CT"
+            : "da sam držao, ni TP ni stop do kraja Topstep dana"
         : null,
       sc.slForTargetR != null ? `SL za TP ${rr(sc.slForTargetR)}` : null,
       `u plus pre stopa ${rr(sc.mfeBeforeStopR)}`,
@@ -612,7 +615,7 @@ function tightenedStopLine(
   if (target == null) return `- **Pomeren stop:** ${was} · cilja nema, pa se ne zna šta bi originalni doneo`;
   if (slForTargetR != null && slForTargetR <= 1)
     return `- **⚠ Pomeren stop je koštao:** ${was} · sa originalnim stopom TP bi došao (trebalo je SL ${rr(slForTargetR)}, originalni je 1R)`;
-  return `- **Pomeren stop:** ${was} · ni originalni ne bi doneo TP (${slForTargetR != null ? `trebalo je SL ${rr(slForTargetR)}` : "TP nije došao do 15:10 CT"})`;
+  return `- **Pomeren stop:** ${was} · ni originalni ne bi doneo TP (${slForTargetR != null ? `trebalo je SL ${rr(slForTargetR)}` : "TP nije došao do kraja Topstep dana"})`;
 }
 
 const num = (v: unknown): string => String(Number(v));
@@ -622,7 +625,7 @@ const num = (v: unknown): string => String(Number(v));
  * money split into gross and commissions, the stop and target as sealed against
  * how they ended, and the risk against the budget the rule gave at entry.
  */
-function executionLines(e: EnrichedTrade, fills: readonly MentorFill[] | undefined, ccy: string): string[] {
+function executionLines(e: EnrichedTrade, fills: readonly MentorFill[] | undefined, ccy: string, tz: string): string[] {
   const row = e.trade.row;
   const st = row.stats;
   const lines: string[] = [];
@@ -651,12 +654,12 @@ function executionLines(e: EnrichedTrade, fills: readonly MentorFill[] | undefin
     const shown = ordered.slice(0, 20).map((f) => {
       const against =
         f.side === "entry" && firstEntry != null && f !== firstEntry && (f.price - firstEntry.price) * dir < 0;
-      return `${fmtInTz(f.executed_at, SESSION_TZ, "HH:mm:ss")} ${f.side === "entry" ? "ulaz" : "izlaz"} ${f.qty} @ ${num(f.price)}${
+      return `${fmtInTz(f.executed_at, tz, "HH:mm:ss")} ${f.side === "entry" ? "ulaz" : "izlaz"} ${f.qty} @ ${num(f.price)}${
         against ? " ⚠ dodato protiv pozicije" : ""
       }`;
     });
     if (ordered.length > shown.length) shown.push(`(+${ordered.length - shown.length})`);
-    lines.push(`- **Fill-ovi (ET):** ${shown.join(" · ")}`);
+    lines.push(`- **Fill-ovi:** ${shown.join(" · ")}`);
   }
 
   // Only the keys the seal actually holds: an import seals `{}` (it knew no

@@ -1171,7 +1171,8 @@ on the **same account**, not within a day. `tilt_week` (a losing week of short h
 its successor `tilt_after_losses` (30.09.2026): the trader stops the day on money, never on a count of
 losses, and "After losses" stays a dimension in `/reports`, a measure rather than a rule.
 `patience_paid_off` came back from the omitted list: a green day whose first entry came 30+ minutes
-after the 09:30 ET open (the Open window left alone; a pre-open or overnight first entry does not count).
+after the open of its session — London's 08:00 (London time) or New York's 09:30, i.e. 09:00 / 15:30 Belgrade
+since phase N (14.10.2026); an entry before either open does not count.
 
 **F5.3b brought back the time-underwater pair.** `futures-trading`'s `journal_mae.py` now writes
 `tj_positions.time_underwater_pct` in the same write as the R2 MAE/MFE: the share of the trade's time,
@@ -1766,7 +1767,7 @@ container does not have. It stays a later option, not an oversight.
 | Spaces, mentor, leaderboard | Single-user system |
 | AI chat and agents | The mentor-pack export and the insight rules give the same thing without the API cost |
 | Options (DTE, strike, expiry) | Not traded |
-| Intraday dimensions | **Built in F5.2 (29.09.2026).** `/reports` groups by **Session window** (Globex night 18:00–08:00, Pre-open, Open 09:30–10:00, Morning, Lunch, Afternoon, Last hour — on New York's clock whatever zone the journal shows, `session-window.ts`), **Minutes after the open** (before the open, 0–15, 15–30, 30–60 min, 1–2 h, 2 h +), **Trade number in the day** (per account; the 4th on is one bucket) and **After losses** (first trade of the day, after a win or scratch, after 1 loss, after 2+ — the losses that had already closed when the entry was taken; a measure, not a rule). |
+| Intraday dimensions | **Built in F5.2 (29.09.2026), sessions redrawn in phase N.** `/reports` groups by **Session window** — since phase N (14.10.2026) the trader's chart lines (`trading-mentor/GRAFIK.md`), each on its own exchange's clock and labelled in Belgrade time: Azija 00:00–06:00 (18:00 New York reopen to New York midnight), Pre Londona 06:00–09:00, London 09:00–14:00 (08:00 London to New York's 08:00 pre-open), NY pre otvaranja 14:00–15:30, NY AM 15:30–17:30, Ručak 17:30–19:30, NY PM 19:30–22:00, Posle zatvaranja 22:00–00:00; in the week the clocks disagree the New York ones come an hour earlier (`session-window.ts`; until then one "Globex night 18:00–08:00" held every London trade) — **Minutes after the open** of the entry's own session, London's or New York's (Pre otvaranja, 0–15, 15–30, 30–60 min, 1–2 h, 2 h +), **Trade number in the day** (per account; the 4th on is one bucket) and **After losses** (first trade of the day, after a win or scratch, after 1 loss, after 2+ — the losses that had already closed when the entry was taken; a measure, not a rule). |
 | Economic calendar | Lives in `futures-trading`: the morning brief carries the day's releases with their red windows |
 | Running P&L curve per trade in the journal | The journal still holds no prices. `futures-trading` walks the curve over the R2 candles and writes the one number the insights need, `time_underwater_pct` (F5.3b); the peak of a day's cumulative P&L, which `maximize_your_profit_day` would need, is measured by no one |
 

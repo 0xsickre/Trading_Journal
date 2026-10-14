@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { fmtMoney } from "@/lib/journal/format";
-import { fmtInTz } from "@/lib/journal/time";
+import { DEFAULT_TZ, fmtInTz } from "@/lib/journal/time";
 import {
   type TrackerRule,
   type TrackerStage,
@@ -61,8 +61,8 @@ const REVIEW_KEYS: ReadonlySet<string> = new Set([
   "screenshot_per_trade",
 ]);
 
-/** A close time on Chicago's clock — Topstep states its day there. */
-const ctTime = (iso: string) => `${fmtInTz(iso, "America/Chicago", "HH:mm")} CT`;
+/** A close time on the trader's clock (phase N: Belgrade, never CT). */
+const closeTime = (iso: string) => fmtInTz(iso, DEFAULT_TZ, "HH:mm");
 
 /**
  * The verdict of a day-trading rule (F4), whose numbers are a time, a window or
@@ -87,8 +87,8 @@ function dayTradingText(res: AutoRuleResult, currency: string): string | null {
     case "flat_by_close":
       if (!res.at) return null;
       return broke
-        ? `Prekršeno: pozicija otvorena posle kraja Topstep dana (${ctTime(res.at)}).`
-        : `Sve pozicije zatvorene pre kraja Topstep dana (${ctTime(res.at)}).`;
+        ? `Prekršeno: pozicija otvorena posle kraja Topstep dana (${closeTime(res.at)}).`
+        : `Sve pozicije zatvorene pre kraja Topstep dana (${closeTime(res.at)}).`;
     case "no_entry_in_red_window":
       return broke
         ? `Prekršeno: ulaz u crvenom prozoru${res.window ? ` (${res.window})` : ""}.`
@@ -148,7 +148,7 @@ function autoReasonText(res: AutoRuleResult, currency: string): string {
     case "not_yet":
       if (REVIEW_KEYS.has(res.key)) return "Trejd je još otvoren — pregled se ocenjuje posle izlaza.";
       return res.at
-        ? `Pozicija je još otvorena — ocenjuje se posle kraja Topstep dana (${ctTime(res.at)}).`
+        ? `Pozicija je još otvorena — ocenjuje se posle kraja Topstep dana (${closeTime(res.at)}).`
         : "Pozicija je još otvorena — ocenjuje se posle kraja Topstep dana.";
     case "no_topstep_trades":
       return "Pravilo važi za Topstep naloge; ovog dana nije bilo Topstep trejdova.";

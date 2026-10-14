@@ -123,7 +123,8 @@ describe("mentor pack for a day trader (F5.6)", () => {
   it("tells the model it is reading an intraday Topstep book, and how", () => {
     const md = pack();
     expect(md).toContain("mentor za intraday trgovanje CME fjučersima");
-    expect(md).toContain("Vremena: Europe/Belgrade (tvoja zona); sesije po ET (New York)");
+    expect(md).toContain("Vremena: Europe/Belgrade (tvoja zona), i sesije");
+    expect(md).not.toMatch(/(ET|CT)(?!F)/);
     expect(md).toContain("**DLL** (Daily Loss Limit)");
     expect(md).toContain(`manje od ${SMALL_SAMPLE} trejdova`);
   });
@@ -149,14 +150,15 @@ describe("mentor pack for a day trader (F5.6)", () => {
     // 3 trades, all lost, first at 09:40 ET, a run of 3, two contracts at
     // most, half the rules kept, the mental note. No count of trades after losses.
     expect(md).toContain(
-      "| 2026-09-29 | 3 | 0/3/0 | -400.00 | -4.00R | 09:40 | 3 | 2 | 4/5 | — | 50% (Bez ulaza posle dnevnog cilja) | 1 ulaz u crvenom prozoru |",
+      "| 2026-09-29 | 3 | 0/3/0 | -400.00 | -4.00R | 15:40 | 3 | 2 | 4/5 | — | 50% (Bez ulaza posle dnevnog cilja) | 1 ulaz u crvenom prozoru |",
     );
   });
 
   it("breaks the book down by session window, with small groups marked", () => {
     const md = pack();
-    expect(md).toContain("### Sesijski prozor (ET)");
-    expect(md).toContain("| Open 09:30–10:00 | 2 ⚠ |");
+    expect(md).toContain("### Sesija (po Beogradu)");
+    expect(md).toContain("| NY AM 15:30–17:30 | 4 ⚠ |");
+    expect(md).toContain("### Koliko posle otvaranja sesije (London / NY)");
     expect(md).toContain("### Stanje pre ulaza (gubici zaredom tog dana)");
     expect(md).toContain("| After 2+ losses | 1 ⚠ |");
   });
@@ -164,10 +166,10 @@ describe("mentor pack for a day trader (F5.6)", () => {
   it("tells each trade's intraday story, oldest first", () => {
     const md = pack();
     expect(md).toContain(
-      "- **Vreme:** ulaz 29.09. 16:00:00 · izlaz 16:10:00 · (Europe/Belgrade) = 10:00 ET · Morning 10:00–11:30 · 30 min posle otvaranja",
+      "- **Vreme:** ulaz 29.09. 16:00:00 · izlaz 16:10:00 · NY AM 15:30–17:30 · 30 min posle otvaranja NY",
     );
     expect(md).toContain("3. trejd dana · pre ulaza 2 gubitka zaredom · plan pre ulaza · trajanje 10m · 2 ugovora");
-    expect(md).toContain("- **Ulaz u crvenom prozoru:** CPI (visok) 09:58–10:05 ET");
+    expect(md).toContain("- **Ulaz u crvenom prozoru:** CPI (visok) 15:58–16:05");
     expect(md).toContain("- **Zapažanja na ovom trejdu:** Revenge entry");
     expect(md.indexOf("### Trade #1")).toBeLessThan(md.indexOf("### Trade #4"));
     // The heading's close time is on the trader's clock, not UTC.
@@ -413,7 +415,7 @@ describe("mentor pack, phase M: what the mentor needs to question the day", () =
       "- **Izvršenje:** ulaz 3 @ 31246.5 · izlaz 3 @ 31366.5 · gross +720.00 USD · provizije 3.66 USD · net +716.34 USD · fill-ova 2 ulaz / 1 izlaz",
     );
     expect(md).toContain(
-      "- **Fill-ovi (ET):** 10:20:37 ulaz 2 @ 31246.5 · 10:30:00 ulaz 1 @ 31230 ⚠ dodato protiv pozicije · 11:49:06 izlaz 3 @ 31366.5",
+      "- **Fill-ovi:** 16:20:37 ulaz 2 @ 31246.5 · 16:30:00 ulaz 1 @ 31230 ⚠ dodato protiv pozicije · 17:49:06 izlaz 3 @ 31366.5",
     );
   });
 
@@ -436,7 +438,7 @@ describe("mentor pack, phase M: what the mentor needs to question the day", () =
     const md = mpack("Week");
     expect(md).toContain("## Tracker po danu");
     expect(md).toContain("### 2026-10-05 · bez prijave");
-    expect(md).toContain("- Crveni prozori (ET): 08:25–08:45 CPI (visok) · flat do 16:10 ET");
+    expect(md).toContain("- Crveni prozori: 14:25–14:45 CPI (visok) · flat do 22:10");
     expect(md).toContain("? Kalendar i HTF (neodgovoreno)");
     expect(md).toContain("— Bez ulaza posle dnevnog cilja (n/a)");
     expect(md).toContain("✓ Kalendar i HTF");

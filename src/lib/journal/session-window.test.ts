@@ -1,75 +1,101 @@
 import { describe, expect, it } from "vitest";
 import {
+  afterSessionOpen,
   minutesAfterOpen,
   OPEN_OFFSET_BUCKETS,
   openOffsetBucket,
   sessionWindowOf,
   SESSION_WINDOWS,
+  SESSIONS,
 } from "./session-window";
 
-// 29.09.2026 is US summer time: 09:30 ET = 13:30 UTC.
-const at = (hhmmUtc: string) => `2026-09-29T${hhmmUtc}:00Z`;
-// 15.12.2026 is US winter time: 09:30 ET = 14:30 UTC.
-const winter = (hhmmUtc: string) => `2026-12-15T${hhmmUtc}:00Z`;
+// 13.10.2026: both clocks on summer time. Belgrade = UTC+2, London = UTC+1, New York = UTC−4.
+const oct13 = (hhmmBelgrade: string) => {
+  const [h, m] = hhmmBelgrade.split(":").map(Number);
+  return new Date(Date.UTC(2026, 9, 13, h - 2, m)).toISOString();
+};
+// 27.10.2026: Europe already on winter time (Belgrade UTC+1, London UTC+0), New York still UTC−4.
+const oct27 = (hhmmUtc: string) => `2026-10-27T${hhmmUtc}:00Z`;
+// 15.12.2026: both on winter time. Belgrade UTC+1, London UTC+0, New York UTC−5.
+const dec15 = (hhmmBelgrade: string) => {
+  const [h, m] = hhmmBelgrade.split(":").map(Number);
+  return new Date(Date.UTC(2026, 11, 15, h - 1, m)).toISOString();
+};
 
-describe("session windows, read on New York's clock (F5.2, L1)", () => {
-  it("puts each entry in its window, edges belonging to the window that starts there", () => {
-    expect(sessionWindowOf(at("12:00"))).toBe("Pre-open 08:00–09:30");
-    expect(sessionWindowOf(at("13:30"))).toBe("Open 09:30–10:00");
-    expect(sessionWindowOf(at("13:59"))).toBe("Open 09:30–10:00");
-    expect(sessionWindowOf(at("14:00"))).toBe("Morning 10:00–11:30");
-    expect(sessionWindowOf(at("15:30"))).toBe("Lunch 11:30–13:30");
-    expect(sessionWindowOf(at("17:30"))).toBe("Afternoon 13:30–15:00");
-    expect(sessionWindowOf(at("19:00"))).toBe("Last hour 15:00–");
-    expect(sessionWindowOf(at("20:05"))).toBe("Last hour 15:00–");
+describe("sessions as on the chart, each on its exchange's clock (phase N)", () => {
+  it("13.10.2026: both trades are London", () => {
+    expect(sessionWindowOf("2026-10-13T07:24:39Z")).toBe(SESSIONS.london); // 09:24 Belgrade
+    expect(sessionWindowOf("2026-10-13T07:44:32Z")).toBe(SESSIONS.london); // 09:44 Belgrade
   });
 
-  it("the Globex night runs from the 18:00 reopen to 08:00", () => {
-    expect(sessionWindowOf(at("22:00"))).toBe("Globex night 18:00–08:00"); // 18:00 ET
-    expect(sessionWindowOf(at("03:00"))).toBe("Globex night 18:00–08:00"); // 23:00 ET
-    expect(sessionWindowOf(at("11:59"))).toBe("Globex night 18:00–08:00"); // 07:59 ET
+  it("every boundary in Belgrade time, on a usual day", () => {
+    const cases: [string, string][] = [
+      ["00:00", SESSIONS.asia],
+      ["05:59", SESSIONS.asia],
+      ["06:00", SESSIONS.preLondon],
+      ["08:59", SESSIONS.preLondon],
+      ["09:00", SESSIONS.london],
+      ["13:59", SESSIONS.london],
+      ["14:00", SESSIONS.nyPreOpen],
+      ["15:29", SESSIONS.nyPreOpen],
+      ["15:30", SESSIONS.nyAm],
+      ["17:29", SESSIONS.nyAm],
+      ["17:30", SESSIONS.lunch],
+      ["19:30", SESSIONS.nyPm],
+      ["21:59", SESSIONS.nyPm],
+      ["22:00", SESSIONS.afterClose],
+      ["23:59", SESSIONS.afterClose],
+    ];
+    for (const [t, want] of cases) expect(sessionWindowOf(oct13(t)), t).toBe(want);
   });
 
-  it("follows the US clock through the winter, not a fixed UTC offset", () => {
-    expect(sessionWindowOf(winter("14:30"))).toBe("Open 09:30–10:00");
-    expect(sessionWindowOf(winter("13:30"))).toBe("Pre-open 08:00–09:30");
+  it("the same Belgrade hours in winter, when both clocks moved", () => {
+    expect(sessionWindowOf(dec15("09:00"))).toBe(SESSIONS.london);
+    expect(sessionWindowOf(dec15("15:30"))).toBe(SESSIONS.nyAm);
+    expect(sessionWindowOf(dec15("00:00"))).toBe(SESSIONS.asia);
   });
 
-  it("every window it can return is declared, and an unreadable time is unknown", () => {
+  it("27.10.2026: London still opens at 09:00 Belgrade, New York's lines come an hour earlier", () => {
+    expect(sessionWindowOf(oct27("07:59"))).toBe(SESSIONS.preLondon); // 08:59 Belgrade
+    expect(sessionWindowOf(oct27("08:00"))).toBe(SESSIONS.london); // 09:00 Belgrade, 08:00 London
+    expect(sessionWindowOf(oct27("12:00"))).toBe(SESSIONS.nyPreOpen); // 13:00 Belgrade = 08:00 New York
+    expect(sessionWindowOf(oct27("13:30"))).toBe(SESSIONS.nyAm); // 14:30 Belgrade = 09:30 New York
+    expect(sessionWindowOf(oct27("22:00"))).toBe(SESSIONS.asia); // 23:00 Belgrade = 18:00 New York
+  });
+
+  it("every label it can return is declared, in day order, and an unreadable time is unknown", () => {
     for (let h = 0; h < 24; h++) {
-      const w = sessionWindowOf(`2026-09-29T${String(h).padStart(2, "0")}:15:00Z`);
-      expect(SESSION_WINDOWS, `${h}:15 UTC`).toContain(w);
+      expect(SESSION_WINDOWS, `${h}:15`).toContain(sessionWindowOf(oct13(`${h}:15`)));
     }
+    expect(SESSION_WINDOWS[0]).toBe(SESSIONS.asia);
+    expect(SESSION_WINDOWS[SESSION_WINDOWS.length - 1]).toBe(SESSIONS.afterClose);
     expect(sessionWindowOf(null)).toBeNull();
     expect(sessionWindowOf("not a date")).toBeNull();
   });
 });
 
-describe("minutes after the 09:30 open", () => {
-  it("buckets an entry by how long after the open it was taken", () => {
-    expect(openOffsetBucket(at("13:29"))).toBe("Before the open");
-    expect(openOffsetBucket(at("13:30"))).toBe("0–15 min");
-    expect(openOffsetBucket(at("13:44"))).toBe("0–15 min");
-    expect(openOffsetBucket(at("13:45"))).toBe("15–30 min");
-    expect(openOffsetBucket(at("14:00"))).toBe("30–60 min");
-    expect(openOffsetBucket(at("14:30"))).toBe("1–2 h");
-    expect(openOffsetBucket(at("15:30"))).toBe("2 h +");
+describe("minutes after the session's own open (phase N)", () => {
+  it("London from 09:00 Belgrade, New York from 15:30", () => {
+    expect(afterSessionOpen(oct13("09:24"))).toEqual({ session: "London", minutes: 24 });
+    expect(afterSessionOpen(oct13("09:44"))).toEqual({ session: "London", minutes: 44 });
+    expect(afterSessionOpen(oct13("15:45"))).toEqual({ session: "NY", minutes: 15 });
+    expect(afterSessionOpen(oct27("13:40"))).toEqual({ session: "NY", minutes: 10 }); // 14:40 Belgrade
   });
 
-  it("the evening session is before the NEXT open, and every result is declared", () => {
-    expect(openOffsetBucket(at("22:30"))).toBe("Before the open");
-    for (let h = 0; h < 24; h++) {
-      expect(OPEN_OFFSET_BUCKETS).toContain(openOffsetBucket(`2026-09-29T${String(h).padStart(2, "0")}:00:00Z`));
+  it("before either open there is none", () => {
+    for (const t of ["00:30", "07:00", "08:59", "14:30", "15:29"]) {
+      expect(minutesAfterOpen(oct13(t)), t).toBeNull();
     }
-    expect(openOffsetBucket(null)).toBeNull();
+    expect(minutesAfterOpen("not a date")).toBeNull();
   });
 
-  it("counts the minutes themselves, with nothing before the open or in the evening", () => {
-    expect(minutesAfterOpen(at("13:30"))).toBe(0);
-    expect(minutesAfterOpen(at("14:15"))).toBe(45);
-    expect(minutesAfterOpen(winter("15:10"))).toBe(40);
-    expect(minutesAfterOpen(at("13:29"))).toBeNull();
-    expect(minutesAfterOpen(at("22:30"))).toBeNull();
-    expect(minutesAfterOpen("not a date")).toBeNull();
+  it("buckets: 13.10. is 15–30 and 30–60, not 'before the open'", () => {
+    expect(openOffsetBucket("2026-10-13T07:24:39Z")).toBe("15–30 min");
+    expect(openOffsetBucket("2026-10-13T07:44:32Z")).toBe("30–60 min");
+    expect(openOffsetBucket(oct13("09:00"))).toBe("0–15 min");
+    expect(openOffsetBucket(oct13("11:30"))).toBe("2 h +");
+    expect(openOffsetBucket(oct13("14:10"))).toBe("Pre otvaranja");
+    for (let h = 0; h < 24; h++) expect(OPEN_OFFSET_BUCKETS).toContain(openOffsetBucket(oct13(`${h}:00`)));
+    expect(openOffsetBucket(null)).toBeNull();
   });
 });

@@ -338,7 +338,7 @@ describe("the day-trading rules say the target, the close and the window (F4)", 
   const autoRule = (id: string, auto_key: TrackerRule["auto_key"]) =>
     rule({ id, text: id, stage: "trade", auto_key });
 
-  it("names the banked profit against the target, the close in CT and the window", () => {
+  it("names the banked profit against the target, the close in Belgrade time and the window", () => {
     const rules = [
       autoRule("a", "no_entry_after_daily_target"),
       autoRule("c", "flat_by_close"),
@@ -367,7 +367,7 @@ describe("the day-trading rules say the target, the close and the window (F4)", 
     expect(
       screen.getByText(/ulaz posle \$4,600\.00 zatvorenog profita, a dnevni cilj je \$4,500\.00/),
     ).toBeInTheDocument();
-    expect(screen.getByText(/posle kraja Topstep dana \(15:10 CT\)/)).toBeInTheDocument();
+    expect(screen.getByText(/posle kraja Topstep dana \(22:10\)/)).toBeInTheDocument();
     expect(screen.getByText(/ulaz u crvenom prozoru \(USD CPI m\/m\)/)).toBeInTheDocument();
   });
 
@@ -391,7 +391,7 @@ describe("the day-trading rules say the target, the close and the window (F4)", 
       />,
     );
     expect(screen.getByText(/Brief za ovaj dan nije stigao/)).toBeInTheDocument();
-    expect(screen.getByText(/Pozicija je još otvorena — ocenjuje se posle kraja Topstep dana \(15:10 CT\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Pozicija je još otvorena — ocenjuje se posle kraja Topstep dana \(22:10\)/)).toBeInTheDocument();
     expect(screen.getByText(/Nalog nema lični dnevni cilj profita/)).toBeInTheDocument();
   });
 });

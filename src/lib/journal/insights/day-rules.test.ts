@@ -226,7 +226,7 @@ describe("patiencePaidOff", () => {
   it("fires on a green day whose first entry came after the opening half hour", () => {
     const ctx = ctxOf([day("2026-09-29T14:15:00Z", 300)]);
     expect(fired(patiencePaidOff, ctx)).toEqual(["2026-09-29"]);
-    expect(patiencePaidOff.evaluate(ctx)[0].detail).toContain("45 min after the 09:30 ET open");
+    expect(patiencePaidOff.evaluate(ctx)[0].detail).toContain("45 min after the New York open");
   });
 
   it("reads the day's FIRST entry, and needs a green day", () => {
