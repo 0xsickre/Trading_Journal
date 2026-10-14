@@ -156,6 +156,7 @@ pogađa.
 | **P** | Jedna stranica trejda: snimak, checklist, kategorije i review na jednom mestu; bez plan-forme | — | O, W | ne | **Opus** | ✅ `1f8a832`, 14.10.2026 — bez migracije; ručna provera u pregledaču preskočena na zahtev trejdera |
 | **Q** | Manje ručnog rada: ručna pravila trackera postaju automatska, /daily javlja trejd bez naloga | — | P | da: `20261014120000` (`auto_key` check, pravila) | **Opus** | ✅ 14.10.2026 — Q-1 = C, Q-2 (5 automatski, Vreme trgovanja povučeno), Q-3 = A |
 | **N** | Sesije trejdera umesto „Globex noć“: osam sesija kao linije na chartu, minuti od otvaranja sesije, sva vremena u paketu i na /daily po Beogradu | — | Q | ne | **Opus** | ✅ 14.10.2026 — N-1 = A, N-2 = A, N-3 = A; bez migracije |
+| **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | Y-2 (aditivna, ako B) | **Opus** | ⏳ plan 14.10.2026, čeka odluke Y-1 … Y-4 |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1388,6 +1389,75 @@ a u nedelji 25.10.–01.11. NY ima prednost.
 ### Izlaz iz N
 London trejd je u paketu i izveštajima „London“, minuti se broje od otvaranja njegove sesije, a paket nema nijedno
 vreme koje trejder mora da preračunava. Bez migracije.
+
+## Y — Vreme upisa (detaljno, 14.10.2026)
+
+**Povod** (mentor, `trading-mentor` Z-028, Z-031, Z-032, pregled journal-a 14.10.2026): journal broji playbook i
+kapiju pre sesije kao da su postojali pre ulaza, a ne proverava kad su upisani. Nije softverska greška, nego provera
+koja fali: playbook napisan posle ishoda je priča, ne plan (PRAVILA-MENTORA §25), i tracker ga danas boduje kao plan.
+
+### Utvrđeno u kodu i bazi (14.10.2026)
+- **Tracker `playbook_linked`** (`tracker/auto-rules.ts`, `evaluateAutoRulesForDay`): `evalOpenDayFlag(…, t.hasPlaybook)`,
+  a `hasPlaybook` je samo `playbook_id != null`. Vreme playbook-a se ne čita; `buildTradeDayIndex` ga i ne dobija
+  (četiri mesta: `/daily` page i `tracker-actions.ts`, `/calendar`, dashboard).
+- **Checklist** (`tj_position_rules`, kolone `created_at`, `updated_at`): mentor paket ga čita za tabelu „Setup
+  Grade“, bez vremena upisa. Promena playbook-a briše stare odgovore (P-3), pa `created_at` je vreme ovog playbook-a.
+- **Kapija pre sesije** (`tj_daily_reports.mental_temp`): red ima samo `created_at`, `updated_at`, `locked_at`; vreme
+  upisa same ocene ne postoji. `updated_at` se menja i zaključavanjem, pa ne govori ništa. `created_at` je tačan samo
+  kad je ocena prvo što je upisano tog dana (red može nastati i kroz „Danas ne trgujem“). Paket je štampa u
+  `mentor-intraday.ts` (kolona „Mentalno“), /daily u `daily-report-form.tsx`.
+- **Baza 14.10.2026 (po Beogradu):**
+  | Trejd | Ulaz | Zatvoren | Playbook (napravljen) | Checklist upisan |
+  |---|---|---|---|---|
+  | #1 | 07.10. 16:20 | 07.10. 17:49 | Ponoc pojas reversal (14.10. 10:16) | 14.10. 11:21 |
+  | #2 | 13.10. 09:24 | 13.10. 09:40 | — | — |
+  | #3 | 13.10. 09:44 | 13.10. 11:58 | 3 candle 5min BOS (14.10. 08:52) | 14.10. 09:25 – 10:54 |
+
+  | Dan | Prvi ulaz | Kapija (red napravljen) |
+  |---|---|---|
+  | 07.10. | 16:20 | 07.10. 19:09 — **posle ulaza** (mentor ovo nije znao) |
+  | 13.10. | 09:24 | 14.10. 11:15 — posle ulaza |
+- **Zaključani dani:** presuda automatskog pravila se zamrzava pri zaključavanju (`compliance.ts`). 07.10. je
+  zaključan 09.10. (tada #1 još nije imao playbook), pa ga nova provera ne menja; 13.10. nije zaključan.
+
+### Predlog
+1. **Playbook posle ulaza.** `TrackerTrade` dobija `playbookCreatedAt`; `playbook_linked` pada za trejd čiji je playbook
+   napravljen posle prvog fill-a (`tj_playbooks.created_at > opened_at`), sa razlogom „playbook napisan posle ulaza“ na
+   /daily (Y-1). Paket u redu trejda piše „playbook napravljen DD.MM. HH:MM, posle ulaza“.
+2. **Checklist posle zatvaranja.** Paket u redu trejda piše „checklist upisan DD.MM. HH:MM, posle zatvaranja“ kad je
+   bilo koji odgovor napravljen posle `closed_at` (štampa se najkasnije vreme). Tracker se ne menja: checklist posle
+   trejda je normalan tok (stranica trejda se popunjava posle sesije); mentor ga čita kao pregled, ne kao plan.
+3. **Kapija posle prvog ulaza.** Vreme upisa ocene (Y-2) poredi se sa prvim ulazom tog Topstep dana. /daily ispod
+   ocene i paket u koloni „Mentalno“: „3/5 · upisano posle prvog ulaza (09:24), 14.10. 11:15“. Sva vremena po Beogradu.
+
+### Podkoraci (svaki: test koji pada → kod → gate → commit + push)
+- **Y1 Playbook u tracker-u.** `buildTradeDayIndex` dobija mapu playbook id → `created_at` (četiri pozivaoca);
+  `evalOpenDayFlag` za `playbook_linked` po Y-1. Testovi: fixture #1 i #3 → pada / oznaka; playbook napravljen pre
+  ulaza → prolazi; zaključan dan ostaje zamrznut (Y-4).
+- **Y2 Paket: playbook i checklist.** `mentor-export.ts` / `tradeContextLines`: vreme playbook-a i checklist-a po
+  Beogradu (`displayTz`), oznaka samo kad je posle. Dashboard učitava `created_at` playbook-a i odgovora. Legenda
+  paketa jednom rečenicom.
+- **Y3 Kapija pre sesije.** Po Y-2 (migracija `mental_temp_at` ili `created_at`); `daily/actions.ts` pečati vreme kad
+  se ocena promeni; /daily i `mentor-intraday.ts` oznaka po Y-3. Testovi: 13.10. → „posle prvog ulaza (09:24)“; dan
+  bez trejda → bez oznake; ocena pre ulaza → bez oznake.
+- **Y4 Dokumentacija i produkcija.** README (tracker, paket, /daily), ovaj fajl, `ROADMAP.md`, `trading-mentor`
+  CLAUDE.md (šta paket sada pokazuje) i Z-028 / Z-031 / Z-032; provera Vercel produkcije.
+
+### Odluke trejdera (pre koda)
+- **Y-1 Playbook napravljen posle ulaza:** **A** `playbook_linked` pada (preporuka: playbook posle ishoda nije plan);
+  **B** prolazi, ali /daily i paket ga označe; **C** novo posebno pravilo „playbook pre ulaza“, `playbook_linked`
+  ostaje kakav jeste.
+- **Y-2 Vreme kapije:** **A** nova kolona `tj_daily_reports.mental_temp_at` (aditivna migracija, stari redovi dobiju
+  `created_at`), tačno i kad se ocena upiše posle „Danas ne trgujem“ (preporuka); **B** bez migracije, čita se
+  `created_at` reda.
+- **Y-3 Kapija posle prvog ulaza:** **A** samo oznaka na /daily i u paketu (preporuka); **B** i novo automatsko pravilo
+  trackera koje pada.
+- **Y-4 Već zaključani dani (07.10.):** **A** presuda ostaje zamrznuta, oznake u paketu se ipak vide (preporuka:
+  istorija se ne prepisuje); **B** jednokratno preračunati zaključane dane.
+
+### Izlaz iz Y
+Trejd sa playbook-om napisanim posle ulaza više ne prolazi kao plan, a paket i /daily pokazuju kad su playbook,
+checklist i kapija upisani u odnosu na ulaz i zatvaranje. Oba pravila u produkciji, testovi zeleni.
 
 ## Katalog stavki
 
