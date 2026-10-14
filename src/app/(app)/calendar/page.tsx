@@ -34,6 +34,7 @@ import { accountDayZoneResolver } from "@/lib/journal/time";
 import { topstepRulesResolver } from "@/lib/journal/topstep";
 import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
 import { briefResolver } from "@/lib/journal/session-brief";
+import { tradingWindowResolver } from "@/lib/journal/tracker/trading-window";
 
 
 function indexBy(rows: PeriodRow[]): Map<string, PeriodRow> {
@@ -151,6 +152,7 @@ export default async function CalendarPage({
       getCashEvents(),
     ]);
     const briefOf = briefResolver(briefs);
+    const tradingWindowOf = tradingWindowResolver(rules);
 
     const reportOfDay = new Map(reports.map((r) => [r.report_date, r]));
     const index = buildTradeDayIndex(scopedTrades, tzOfRow, topstepRulesResolver(accounts, cash));
@@ -162,7 +164,7 @@ export default async function CalendarPage({
         const live = rulesLiveOn(rules, d);
         return resolveAutoResults(
           live,
-          evaluateAutoRulesForDay(d, index, { briefOf }),
+          evaluateAutoRulesForDay(d, index, { briefOf, tradingWindowOf }),
           checkinsByDay.get(d) ?? new Map(),
         );
       },

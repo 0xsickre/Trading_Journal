@@ -19,6 +19,7 @@ import {
   evaluateAutoRulesForDay,
 } from "@/lib/journal/tracker/auto-rules";
 import { freezeAutoCheckins } from "@/lib/journal/tracker/compliance";
+import { tradingWindowResolver } from "@/lib/journal/tracker/trading-window";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -155,7 +156,10 @@ export async function lockDay(reportDate: string): Promise<Result> {
   const refusal = lockRefusal(trades, reportDate, (t) => dayKeyIn(t.stats?.closed_at ?? null, tzOf(t.account_id)));
   if (refusal) return { ok: false, error: refusal };
   const index = buildTradeDayIndex(trades, (row) => tzOf(row.account_id), topstepRulesResolver(accounts, cash));
-  const auto = evaluateAutoRulesForDay(reportDate, index, { briefOf: briefResolver(briefs) });
+  const auto = evaluateAutoRulesForDay(reportDate, index, {
+    briefOf: briefResolver(briefs),
+    tradingWindowOf: tradingWindowResolver(rules),
+  });
 
   const { error } = await supabase.rpc("tj_lock_day", {
     p_date: reportDate,

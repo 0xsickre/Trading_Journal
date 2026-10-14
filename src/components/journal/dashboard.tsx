@@ -266,6 +266,7 @@ import {
   computeDailyDrawdown,
   type DayPnlPoint,
 } from "@/lib/journal/risk-ratios";
+import { tradingWindowResolver } from "@/lib/journal/tracker/trading-window";
 
 /**
  * A money tile, aware of the view-mode switcher — but the "dollars" case
@@ -1320,6 +1321,7 @@ export function Dashboard({
       topstepOf,
     );
     const briefOf = briefResolver(briefs);
+    const tradingWindowOf = tradingWindowResolver(trackerRules);
 
     const byDate = new Map<string, Map<string, TrackerCheckin>>();
     for (const c of checkins) {
@@ -1337,7 +1339,7 @@ export function Dashboard({
       // the money and leaves that day's compliance where it was.
       resolveAutoResults(
         trackerRules,
-        evaluateAutoRulesForDay(d, index, { briefOf }),
+        evaluateAutoRulesForDay(d, index, { briefOf, tradingWindowOf }),
         byDate.get(d) ?? new Map(),
       ),
     todayKey,

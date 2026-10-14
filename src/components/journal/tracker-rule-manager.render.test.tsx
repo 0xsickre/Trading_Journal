@@ -18,6 +18,7 @@ const updateTrackerRule = vi.fn();
 const deleteTrackerRule = vi.fn();
 const restoreTrackerRule = vi.fn();
 const moveTrackerRule = vi.fn();
+const setTradingWindow = vi.fn();
 
 vi.mock("@/app/(app)/settings/tracker-actions", () => ({
   addTrackerRule: (...a: unknown[]) => addTrackerRule(...a),
@@ -25,6 +26,7 @@ vi.mock("@/app/(app)/settings/tracker-actions", () => ({
   deleteTrackerRule: (...a: unknown[]) => deleteTrackerRule(...a),
   restoreTrackerRule: (...a: unknown[]) => restoreTrackerRule(...a),
   moveTrackerRule: (...a: unknown[]) => moveTrackerRule(...a),
+  setTradingWindow: (...a: unknown[]) => setTradingWindow(...a),
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -56,6 +58,7 @@ beforeEach(() => {
     deleteTrackerRule,
     restoreTrackerRule,
     moveTrackerRule,
+    setTradingWindow,
   ]) {
     m.mockReset();
     m.mockResolvedValue({ ok: true });
@@ -205,3 +208,40 @@ describe("no rule asks for a count (30.09.2026)", () => {
   });
 });
 
+
+describe("the trading window is set per week shift (phase Y4)", () => {
+  const tw = rule({
+    id: "tw",
+    text: "Vreme trgovanja",
+    stage: "trade",
+    auto_key: "trading_window",
+    is_mandatory: true,
+    config: { windows: [{ since: "2026-10-12", from: "09:00", to: "12:00" }] },
+  });
+
+  it("lists the windows with the day each took effect", () => {
+    render(<TrackerRuleManager rules={[tw]} />);
+    expect(screen.getByText(/from 2026-10-12: 09:00–12:00 \(Belgrade\)/)).toBeInTheDocument();
+  });
+
+  it("saves a new window from a day", async () => {
+    const user = userEvent.setup();
+    render(<TrackerRuleManager rules={[tw]} />);
+    const from = screen.getByLabelText("Window from");
+    const to = screen.getByLabelText("Window to");
+    const since = screen.getByLabelText("Window applies from");
+    await user.clear(from);
+    await user.type(from, "14:30");
+    await user.clear(to);
+    await user.type(to, "18:00");
+    await user.clear(since);
+    await user.type(since, "2026-10-19");
+    await user.click(screen.getByRole("button", { name: "Save window" }));
+    expect(setTradingWindow).toHaveBeenCalledWith("tw", { since: "2026-10-19", from: "14:30", to: "18:00" });
+  });
+
+  it("other rules have no window", () => {
+    render(<TrackerRuleManager rules={[rule()]} />);
+    expect(screen.queryByRole("button", { name: "Save window" })).not.toBeInTheDocument();
+  });
+});

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { biasWasSet, buildTradeDayIndex, evaluateAutoRulesForDay } from "./auto-rules";
+import { tradingWindowResolver } from "./trading-window";
+import type { TrackerRule } from "../tracker-types";
 import { missingReview } from "../review-gaps";
 import { topstepRulesResolver } from "../topstep";
 import { accountDayZoneResolver } from "../time";
@@ -156,5 +158,82 @@ describe("/daily: an imported trade without its orders (phase Q)", () => {
     expect(missingReview(bare)).toContain("orders");
     expect(missingReview(T3())).not.toContain("orders");
     expect(missingReview({ ...bare, source: "manual" } as unknown as TradeRow)).not.toContain("orders");
+  });
+});
+
+describe("honest tags: 'Vodio po planu' needs a plan that existed (phase Y5)", () => {
+  it("on a trade without a playbook → broken", () => {
+    const out = day([T2({ psychology: ["Vodio po planu"] }), T3()]).honest_tags;
+    expect(out.verdict).toBe("fail");
+    expect(out.offenders).toEqual(["t2"]);
+  });
+
+  it("on a trade whose playbook was created after the entry → broken", () => {
+    const late = { ...T3(), playbook_created_at: "2026-10-14T06:52:54Z" } as unknown as TradeRow;
+    expect(day([T2(), late]).honest_tags.offenders).toEqual(["t3"]);
+  });
+
+  it("on a trade whose playbook existed before the entry → kept", () => {
+    const early = { ...T3(), playbook_created_at: "2026-10-01T06:00:00Z" } as unknown as TradeRow;
+    expect(day([T2(), early]).honest_tags.verdict).toBe("pass");
+  });
+});
+
+describe("trading_window: entries and exits inside the day's window, Belgrade time (phase Y4)", () => {
+  const windowRule = (windows: { since: string; from: string; to: string }[]): TrackerRule =>
+    ({
+      id: "tw",
+      text: "Vreme trgovanja",
+      stage: "trade",
+      active_days: [1, 2, 3, 4, 5],
+      auto_key: "trading_window",
+      config: { windows },
+      is_mandatory: true,
+      sort_order: 0,
+      created_at: "2026-10-01T00:00:00Z",
+      deleted_at: null,
+    }) as unknown as TrackerRule;
+  const LONDON = windowRule([{ since: "2026-10-12", from: "09:00", to: "12:00" }]);
+  const dayW = (rows: TradeRow[], rule: TrackerRule = LONDON, now = Date.parse("2026-10-14T00:00:00Z"), d = "2026-10-13") =>
+    evaluateAutoRulesForDay(d, buildTradeDayIndex(rows, (row) => zoneOf(row.account_id), topstepRulesResolver([TS])), {
+      tradingWindowOf: tradingWindowResolver([rule]),
+      now,
+    }).trading_window;
+
+  it("13.10.: #2 09:24–09:40 and #3 09:44–11:58:57 are inside 09:00–12:00", () => {
+    const out = dayW([T2({ closed: "2026-10-13T07:40:10Z" }), T3()]);
+    expect(out.verdict).toBe("pass");
+    expect(out.window).toBe("09:00–12:00");
+  });
+
+  it("an entry before the window → broken", () => {
+    const early = trade("t1", "2026-10-13T06:59:00Z", 10, { closed: "2026-10-13T07:30:00Z" });
+    expect(dayW([early]).offenders).toEqual(["t1"]);
+  });
+
+  it("an exit in the minute of `to` is a time exit; the minute after is not", () => {
+    expect(dayW([T3({ closed: "2026-10-13T10:00:40Z" })]).verdict).toBe("pass");
+    expect(dayW([T3({ closed: "2026-10-13T10:01:00Z" })]).verdict).toBe("fail");
+  });
+
+  it("a position still open after `to` → broken; before it, not yet judged as a breach", () => {
+    expect(dayW([T3({ closed: null })], LONDON, Date.parse("2026-10-13T10:05:00Z")).verdict).toBe("fail");
+    expect(dayW([T3({ closed: null })], LONDON, Date.parse("2026-10-13T09:00:00Z")).verdict).toBe("pass");
+  });
+
+  it("a NY week reads its own window, and the change leaves the earlier day alone", () => {
+    const both = windowRule([
+      { since: "2026-10-12", from: "09:00", to: "12:00" },
+      { since: "2026-10-19", from: "14:30", to: "18:00" },
+    ]);
+    const ny = trade("n1", "2026-10-19T12:35:00Z", 10, { closed: "2026-10-19T14:10:00Z" });
+    expect(dayW([ny], both, Date.parse("2026-10-20T00:00:00Z"), "2026-10-19").verdict).toBe("pass");
+    expect(dayW([T3()], both).verdict).toBe("pass");
+  });
+
+  it("no window for the day → unconfigured, never a pass", () => {
+    const out = dayW([T3()], windowRule([{ since: "2026-10-19", from: "14:30", to: "18:00" }]));
+    expect(out.verdict).toBe("na");
+    expect(out.reason).toBe("unconfigured");
   });
 });

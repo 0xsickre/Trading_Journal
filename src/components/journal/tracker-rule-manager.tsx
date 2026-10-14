@@ -37,8 +37,11 @@ import {
   deleteTrackerRule,
   moveTrackerRule,
   restoreTrackerRule,
+  setTradingWindow,
   updateTrackerRule,
 } from "@/app/(app)/settings/tracker-actions";
+import { windowsOf } from "@/lib/journal/tracker/trading-window";
+import { DEFAULT_TZ, todayIn } from "@/lib/journal/time";
 
 // Every tracker action revalidates /settings itself, so no router.refresh().
 function useAction() {
@@ -93,6 +96,45 @@ function DayToggles({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * The trading window's hours from a day on (phase Y4). Each change keeps the
+ * day it took effect, so the week shift (London / NY) never regrades a past
+ * week. Times are Belgrade, the trader's clock.
+ */
+function TradingWindowEditor({ rule }: { rule: TrackerRule }) {
+  const { pending, run } = useAction();
+  const windows = windowsOf(rule.config);
+  const last = windows[windows.length - 1];
+  const [from, setFrom] = useState(last?.from ?? "09:00");
+  const [to, setTo] = useState(last?.to ?? "12:00");
+  const [since, setSince] = useState(todayIn(DEFAULT_TZ));
+  return (
+    <div className="basis-full space-y-1.5 pl-1 text-xs">
+      {windows.length === 0 ? (
+        <p className="text-muted-foreground">No window yet — the rule is not scored until one is set.</p>
+      ) : (
+        <ul className="text-muted-foreground">
+          {windows.map((w) => (
+            <li key={w.since}>
+              from {w.since}: {w.from}–{w.to} (Belgrade)
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Input aria-label="Window from" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="HH:MM" className="h-7 w-20" disabled={pending} />
+        <span>–</span>
+        <Input aria-label="Window to" value={to} onChange={(e) => setTo(e.target.value)} placeholder="HH:MM" className="h-7 w-20" disabled={pending} />
+        <span className="text-muted-foreground">from day</span>
+        <Input aria-label="Window applies from" value={since} onChange={(e) => setSince(e.target.value)} placeholder="YYYY-MM-DD" className="h-7 w-28" disabled={pending} />
+        <Button size="sm" variant="outline" className="h-7" disabled={pending} onClick={() => run(() => setTradingWindow(rule.id, { since, from, to }))}>
+          Save window
+        </Button>
+      </div>
     </div>
   );
 }
@@ -194,6 +236,8 @@ function RuleRow({
           )}
         </Button>
       </div>
+
+      {rule.auto_key === "trading_window" && !retired && <TradingWindowEditor rule={rule} />}
 
       <Dialog open={confirming} onOpenChange={setConfirming}>
         <DialogContent>

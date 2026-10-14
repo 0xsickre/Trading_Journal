@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TrackerStageSection, type TrackerDayData } from "./tracker-checklist";
 import type { TrackerRule } from "@/lib/journal/tracker-types";
+import type { AutoRuleResult } from "@/lib/journal/tracker/auto-rules";
 
 /**
  * "a locked day really has to make ticking impossible" — the plan's own stated
@@ -301,6 +302,37 @@ describe("playbook_linked says when the playbook came after the entry (phase Y)"
       />,
     );
     expect(screen.getByText(/playbook napravljen posle ulaza/)).toBeInTheDocument();
+  });
+});
+
+describe("trading_window says the window (phase Y4)", () => {
+  const R = [rule({ id: "tw", text: "Vreme trgovanja", stage: "trade", auto_key: "trading_window" })];
+  const show = (res: Partial<AutoRuleResult>) =>
+    render(
+      <TrackerStageSection
+        stage="trade"
+        data={data({
+          rules: R,
+          auto: {
+            trading_window: { key: "trading_window", verdict: "pass", reason: "ok", observed: null, offenders: [], ...res },
+          },
+        })}
+      />,
+    );
+
+  it("names the window when kept and when broken", () => {
+    show({ window: "09:00–12:00" });
+    expect(screen.getByText(/u prozoru 09:00–12:00/)).toBeInTheDocument();
+  });
+
+  it("a broken window says entry or a position past the end", () => {
+    show({ verdict: "fail", reason: "violated", offenders: ["t1"], window: "14:30–18:00" });
+    expect(screen.getByText(/ulaz van prozora 14:30–18:00 ili pozicija otvorena posle 18:00/)).toBeInTheDocument();
+  });
+
+  it("without a window says where to set it", () => {
+    show({ verdict: "na", reason: "unconfigured" });
+    expect(screen.getByText(/Settings › Tracker/)).toBeInTheDocument();
   });
 });
 

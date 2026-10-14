@@ -93,6 +93,14 @@ function dayTradingText(res: AutoRuleResult, currency: string): string | null {
       return broke
         ? `Prekršeno: ulaz u crvenom prozoru${res.window ? ` (${res.window})` : ""}.`
         : "Nijedan ulaz u crvenom prozoru brief-a.";
+    // Phase Y4: the day's window, Belgrade time.
+    case "trading_window": {
+      if (!res.window) return null;
+      const to = res.window.split("–")[1];
+      return broke
+        ? `Prekršeno: ulaz van prozora ${res.window} ili pozicija otvorena posle ${to} (po Beogradu).`
+        : `Svi ulazi i izlazi u prozoru ${res.window} (po Beogradu).`;
+    }
     // Phase Y: a playbook written after the entry fails like a missing one.
     case "playbook_linked": {
       if (!broke) return "Svaki trejd vezan za playbook koji je postojao pre ulaza.";
@@ -143,6 +151,8 @@ function autoReasonText(res: AutoRuleResult, currency: string): string {
 
   switch (res.reason) {
     case "unconfigured":
+      if (res.key === "trading_window")
+        return "Za ovaj dan nije upisan prozor trgovanja — upiši od–do (po Beogradu) u Settings › Tracker.";
       return "Nalog nema lični dnevni cilj profita — upiši ga u Settings › Accounts (Topstep) da bi pravilo počelo da se ocenjuje.";
     case "no_trades":
       return "Nema trejdova po kojima bi se ovo pravilo ocenilo ovog dana.";

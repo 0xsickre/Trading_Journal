@@ -29,7 +29,8 @@ import {
   type TopstepTrade,
 } from "../topstep";
 import { tradeOutcome } from "../breakeven";
-import { dayKeyIn, type DayZone } from "../time";
+import { DEFAULT_TZ, dayKeyIn, zonedDateKey, zonedInputToUtc, type DayZone } from "../time";
+import type { TradingWindow } from "./trading-window";
 import { flatByFor, redWindowAt, type SessionBrief } from "../session-brief";
 import { riskMoneyAtEntry } from "../risk-taken";
 import type { AutoRuleKey } from "../tracker-types";
@@ -197,6 +198,9 @@ export type TradeReview = {
 /** Psychology tag that claims the risk was respected. */
 export const RESPECTED_RISK_TAG = "Ispoštovao rizik";
 
+/** Psychology tag that claims the trade was managed by a plan (phase Y5). */
+export const LED_BY_PLAN_TAG = "Vodio po planu";
+
 /** Rules whose breach on a trade makes "Ispoštovao rizik" on it untrue. */
 const RISK_RULES: readonly AutoRuleKey[] = ["risk_per_trade", "stop_loss_set", "max_loss_per_trade"];
 
@@ -258,6 +262,8 @@ export type AutoContext = {
   briefOf?: (day: string) => SessionBrief | null;
   /** Epoch ms; defaults to the moment of evaluation. */
   now?: number;
+  /** The trading window in force on a day (phase Y4, `tradingWindowResolver`); none = unconfigured. */
+  tradingWindowOf?: (day: string) => TradingWindow | null;
 };
 
 /**
@@ -718,11 +724,52 @@ function evalHonestTags(opened: TrackerTrade[], results: Partial<Record<AutoRule
   return evalReview("honest_tags", opened, (t) => {
     const claimsRisk = t.review.psychology.includes(RESPECTED_RISK_TAG);
     const claimsClean = t.review.grade === GRADE_RATING.A || t.review.mistakes.includes(NO_MISTAKE);
-    return !(claimsRisk && risk.has(t.id)) && !(claimsClean && any.has(t.id));
+    // Phase Y5: "Vodio po planu" claims a plan, which needs a playbook that existed at entry.
+    const claimsPlan = t.review.psychology.includes(LED_BY_PLAN_TAG);
+    const hadPlan = t.hasPlaybook && !t.playbookLate;
+    return !(claimsRisk && risk.has(t.id)) && !(claimsClean && any.has(t.id)) && !(claimsPlan && !hadPlan);
   });
 }
 
 // --- The day trader's rules (F4: G5, G7, G9) -----------------------------------
+
+const MINUTE_MS = 60_000;
+
+/**
+ * Every entry, and every exit, inside the day's trading window on the trader's
+ * clock (phase Y4). An entry before `from` or from `to` on breaks it; so does a
+ * position still open once the minute of `to` has passed. An exit within that
+ * minute is the time exit the window asks for, not a breach. A position still
+ * open before then is not a breach yet. No window for the day: `unconfigured`.
+ */
+function evalTradingWindow(
+  day: string,
+  opened: TrackerTrade[],
+  ctx: Required<AutoContext>,
+): AutoRuleResult {
+  const key: AutoRuleKey = "trading_window";
+  if (opened.length === 0) return na(key, "no_trades");
+  const w = ctx.tradingWindowOf(day);
+  if (!w) return na(key, "unconfigured");
+  const offenders = opened.filter((t) => {
+    const date = zonedDateKey(t.openedAt, DEFAULT_TZ);
+    const start = epoch(zonedInputToUtc(`${date}T${w.from}`, DEFAULT_TZ));
+    const end = epoch(zonedInputToUtc(`${date}T${w.to}`, DEFAULT_TZ));
+    const entry = epoch(t.openedAt);
+    if (entry < start || entry >= end) return true;
+    const out = t.closedAt != null ? epoch(t.closedAt) : ctx.now;
+    return out >= end + MINUTE_MS;
+  });
+  return {
+    key,
+    verdict: offenders.length > 0 ? "fail" : "pass",
+    reason: offenders.length > 0 ? "violated" : "ok",
+    offenders: offenders.map((t) => t.id),
+    observed: null,
+    limit: null,
+    window: `${w.from}–${w.to}`,
+  };
+}
 
 const epoch = (iso: string | null | undefined) => Date.parse(String(iso ?? ""));
 const byOpened = (a: TrackerTrade, b: TrackerTrade) => epoch(a.openedAt) - epoch(b.openedAt);
@@ -907,6 +954,7 @@ export function evaluateAutoRulesForDay(
   const ctx: Required<AutoContext> = {
     briefOf: context.briefOf ?? (() => null),
     now: context.now ?? Date.now(),
+    tradingWindowOf: context.tradingWindowOf ?? (() => null),
   };
 
   const results = {
@@ -938,6 +986,8 @@ export function evaluateAutoRulesForDay(
     no_entry_after_daily_target: evalNoEntryAfterDailyTarget(opened, closed),
     // Open day: the decision is the entry taken after the run.
     stop_after_two_losses: evalStopAfterTwoLosses(opened, closed),
+    // Open day: the window of the day the position was opened on.
+    trading_window: evalTradingWindow(day, opened, ctx),
     // Phase Q: what the trade page says, per trade opened that day.
     htf_bias_set: evalHtfBiasSet(opened),
     thesis_recorded: evalThesisRecorded(opened),

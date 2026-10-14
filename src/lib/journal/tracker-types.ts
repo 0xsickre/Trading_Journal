@@ -41,6 +41,9 @@ export const AUTO_RULE_KEYS = [
   "honest_tags",
   "review_complete",
   "screenshot_per_trade",
+  // Phase Y4 (15.10.2026, reversing Q-2's "retired"): every entry and exit inside
+  // the day's trading window, Belgrade time, the window kept per week shift.
+  "trading_window",
 ] as const;
 export type AutoRuleKey = (typeof AUTO_RULE_KEYS)[number];
 

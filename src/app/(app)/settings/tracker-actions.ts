@@ -8,6 +8,7 @@ import { getPrimaryAccount } from "@/lib/journal/accounts";
 import { DEFAULT_TZ, accountDayZone, dayKeyIn, todayIn } from "@/lib/journal/time";
 import { trackerRuleMayHardDelete } from "@/lib/journal/settings-rules";
 import { TRACKER_STAGES, type TrackerStage } from "@/lib/journal/tracker-types";
+import { isValidWindow, windowsOf, withWindow } from "@/lib/journal/tracker/trading-window";
 
 function revalidateAll() {
   revalidatePath("/settings");
@@ -237,6 +238,42 @@ export async function moveTrackerRule(
       .eq("id", row.id);
     if (error) return { ok: false, error: error.message };
   }
+  revalidateAll();
+  return { ok: true };
+}
+
+/**
+ * Set the trading window from a day on (phase Y4): London weeks 09:00–12:00,
+ * NY weeks 14:30–18:00, Belgrade time. The windows before `since` stay, so a
+ * change next Monday leaves this week graded by this week's window; a second
+ * change for the same day replaces the first. Only the `trading_window` rule
+ * has a window.
+ */
+export async function setTradingWindow(
+  id: string,
+  input: { since: string; from: string; to: string },
+): Promise<Result> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.since) || Number.isNaN(Date.parse(input.since)))
+    return { ok: false, error: "The day must be YYYY-MM-DD." };
+  if (!isValidWindow(input))
+    return { ok: false, error: "The window must be HH:MM – HH:MM, the start before the end." };
+
+  const supabase = await createClient();
+  const { data: rule, error: readError } = await supabase
+    .from("tj_tracker_rules")
+    .select("auto_key, config")
+    .eq("id", id)
+    .maybeSingle();
+  if (readError) return { ok: false, error: readError.message };
+  if (!rule || rule.auto_key !== "trading_window") return { ok: false, error: "Rule not found." };
+
+  const config = (rule.config ?? {}) as Record<string, unknown>;
+  const windows = withWindow(windowsOf(config), { since: input.since, from: input.from, to: input.to });
+  const { error } = await supabase
+    .from("tj_tracker_rules")
+    .update({ config: { ...config, windows } })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
   revalidateAll();
   return { ok: true };
 }
