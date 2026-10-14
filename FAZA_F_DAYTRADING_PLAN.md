@@ -157,7 +157,7 @@ pogađa.
 | **P** | Jedna stranica trejda: snimak, checklist, kategorije i review na jednom mestu; bez plan-forme | — | O, W | ne | **Opus** | ✅ `1f8a832`, 14.10.2026 — bez migracije; ručna provera u pregledaču preskočena na zahtev trejdera |
 | **Q** | Manje ručnog rada: ručna pravila trackera postaju automatska, /daily javlja trejd bez naloga | — | P | da: `20261014120000` (`auto_key` check, pravila) | **Opus** | ✅ 14.10.2026 — Q-1 = C, Q-2 (5 automatski, Vreme trgovanja povučeno), Q-3 = A |
 | **N** | Sesije trejdera umesto „Globex noć“: osam sesija kao linije na chartu, minuti od otvaranja sesije, sva vremena u paketu i na /daily po Beogradu | — | Q | ne | **Opus** | ✅ 14.10.2026 — N-1 = A, N-2 = A, N-3 = A; bez migracije |
-| **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | Y-2 (aditivna, ako B) | **Opus** | ⏳ 14.10.2026 — Y-1 … Y-4 = A; Y1 urađen |
+| **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | da: `20261014200000` (`mental_temp_at`, aditivna) | **Opus** | ✅ 14.10.2026 — Y1 `14a992f` · Y2 `7281007` · Y3 `80dee18` (migracija primenjena); Y-1 … Y-4 = A |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1391,7 +1391,7 @@ a u nedelji 25.10.–01.11. NY ima prednost.
 London trejd je u paketu i izveštajima „London“, minuti se broje od otvaranja njegove sesije, a paket nema nijedno
 vreme koje trejder mora da preračunava. Bez migracije.
 
-## Y — Vreme upisa (detaljno, 14.10.2026)
+## Y — Vreme upisa (detaljno, 14.10.2026) — ✅
 
 **Povod** (mentor, `trading-mentor` Z-028, Z-031, Z-032, pregled journal-a 14.10.2026): journal broji playbook i
 kapiju pre sesije kao da su postojali pre ulaza, a ne proverava kad su upisani. Nije softverska greška, nego provera
@@ -1460,6 +1460,11 @@ koja fali: playbook napisan posle ishoda je priča, ne plan (PRAVILA-MENTORA §2
 ### Izlaz iz Y
 Trejd sa playbook-om napisanim posle ulaza više ne prolazi kao plan, a paket i /daily pokazuju kad su playbook,
 checklist i kapija upisani u odnosu na ulaz i zatvaranje. Oba pravila u produkciji, testovi zeleni.
+
+**Isporučeno (14.10.2026):** Y1 `14a992f`, Y2 `7281007`, Y3 `80dee18`; migracija `20261014200000` primenjena (stari redovi:
+`mental_temp_at` = `created_at`, `updated_at` i zaključavanja netaknuti). Gate zelen (2916 testova), Vercel Production
+`80dee18` uspešan. Ručna provera u pregledaču nije rađena (produkcija je iza Vercel prijave). Posledica u podacima:
+13.10. (nezaključan) `playbook_linked` sada pada (#2 bez playbook-a, #3 playbook posle ulaza); 07.10. ostaje zamrznut.
 
 ## Katalog stavki
 

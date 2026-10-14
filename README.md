@@ -342,7 +342,9 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/journal` | Trade table — sorting, filtering, column picking. The date column carries the **year**, so a trade from last season does not read as this spring |
 | `/trades/[id]` | **The trade page** (phase P, 14.10.2026) — one page per trade, in the order the recording is watched. (1) The trade as the import brought it, read only: account, direction, contracts, entry → exit (Belgrade time), duration, net P/L, R, MAE/MFE, costs, risk budget — **fills are never typed** (decision P-1); the stop order's last price and, when the orders file shows the stop was moved, the request for the original. (2) **Off the recording:** the original stop (the one value typed by hand — a stop moved to breakeven leaves only its last price in the export), the target, the planned R:R against the actual fill, and what was said before the click (`thesis`). (3) **Setup:** the playbook and its checklist (`PlaybookChecklist`) with the computed setup grade. (4) **Context:** the trader's own categories of phase `always` from `tj_field_defs`, in the order of Settings — a new category appears without code. (5) **Review:** A/B/C for execution everywhere (decision P-2; A writes "Bez greške"), the categories of phase `active` (exit reason pre-filled from the prices, mistakes, psychology), one sentence. (6) Charts — a list grown with "+ Add chart" (up to 20, `tj_trade_images.sort_order`; an uploaded screenshot, a pasted image or a TradingView link, private bucket `trade-images`, K6), (7) "Šta bi bilo". A **missed setup** opens the same page with its levels editable (`updateMissedSetup`) and no grade. One save, `saveTradeReview`: the columns and `custom` in one UPDATE, then the checklist through `ruleAnswerWrites` — it writes the offered answers and removes only answers to rules of the chosen playbook it no longer offers, or, when the playbook changed, the previous playbook's (P-3); never `tj_save_trade`, which deletes every answer first and would have erased trade #1's answers to retired rules. The plan-before-entry fields left with the old two-tab form: Planned Entry as input, Position Size, Scale-out, Invalidation, Time stop and Slippage (0 of 3 trades had them; columns stay). `/trades/[id]/edit` and `/trades/[id]/review` redirect here, so old links still land |
 | `/trades/missed/new` | **Propušten setup** (phase O): a setup seen on the recording and not taken — entry, stop, target, time, setup, reason — saved as a `missed` position the R2 walk prices |
-| `/daily` | **The day in the order it is lived**, in three numbered parts under the day's heading (`daily-report-form.tsx`). **1 · Pre sesije**: the morning brief ("Pred sesiju", `tj_session_briefs`, `session-brief-card.tsx` — the Topstep close on the account's clock, "berza zatvorena" when the brief says so, the red windows, the expected NQ / ES range and, on today's page only, the DLL left on the primary Topstep account; without a brief it says so and shows the ordinary 15:10 CT close, and a window it cannot read is dropped and counted, never guessed), then **"Pre nego što uđeš"** — two questions, numbered and about the day ahead: *1. Kako si danas?* (mental state, 5 stars, a warning under 3) and *2. Da li danas trguješ?* ("Danas ne trgujem", a decision taken before the session; with it set and no trade taken the checklist disappears and the day is a rest day) — and the preparation rules. **2 · Tokom sesije**: the trading rules, scored from the trades and the brief. **3 · Posle sesije**: **Bez pregleda** (the day's closed trades still missing a setup or an A/B/C grade, or — phase Q — an imported trade the orders file never reached, with no last stop and no entry order type; each a link to its review, `review-gaps.ts`; the 15:20 CT Telegram reminder in `futures-trading` applies the same rule), the review rules, then save and lock. The focus goal, the day's result card and the streak strip left in phase M (08.10.2026): the page measures, and closing the day is the conversation with the mentor over the day's mentor pack. Until 29.09.2026 the page opened with the day's money and asked "before you enter" only after the trading rules, with a no-trade box in the past tense that pointed at a position card H1 had removed. The rules are grouped as "Pravila pripreme / trgovanja / osvrta" here, in the page's language, and within each group **the rules to tick come first and the scored ones below** (K1) — a new rule lands in its own half whatever its order; Settings edits them under the English stage names |
+| `/daily` | **The day in the order it is lived**, in three numbered parts under the day's heading (`daily-report-form.tsx`). **1 · Pre sesije**: the morning brief ("Pred sesiju", `tj_session_briefs`, `session-brief-card.tsx` — the Topstep close on the account's clock, "berza zatvorena" when the brief says so, the red windows, the expected NQ / ES range and, on today's page only, the DLL left on the primary Topstep account; without a brief it says so and shows the ordinary 15:10 CT close, and a window it cannot read is dropped and counted, never guessed), then **"Pre nego što uđeš"** — two questions, numbered and about the day ahead: *1. Kako si danas?* (mental state, 5 stars, a warning under 3; a rating saved after the day's first entry reads
+"Ocena upisano DD.MM. HH:MM, posle prvog ulaza (HH:MM)" — `tj_daily_reports.mental_temp_at`, stamped by
+a trigger, phase Y; a mark only, no rule reads it) and *2. Da li danas trguješ?* ("Danas ne trgujem", a decision taken before the session; with it set and no trade taken the checklist disappears and the day is a rest day) — and the preparation rules. **2 · Tokom sesije**: the trading rules, scored from the trades and the brief. **3 · Posle sesije**: **Bez pregleda** (the day's closed trades still missing a setup or an A/B/C grade, or — phase Q — an imported trade the orders file never reached, with no last stop and no entry order type; each a link to its review, `review-gaps.ts`; the 15:20 CT Telegram reminder in `futures-trading` applies the same rule), the review rules, then save and lock. The focus goal, the day's result card and the streak strip left in phase M (08.10.2026): the page measures, and closing the day is the conversation with the mentor over the day's mentor pack. Until 29.09.2026 the page opened with the day's money and asked "before you enter" only after the trading rules, with a no-trade box in the past tense that pointed at a position card H1 had removed. The rules are grouped as "Pravila pripreme / trgovanja / osvrta" here, in the page's language, and within each group **the rules to tick come first and the scored ones below** (K1) — a new rule lands in its own half whatever its order; Settings edits them under the English stage names |
 | `/calendar` | Monthly P&L grid by day, weekly totals |
 | `/playbooks` | Every setup as one table: Trades / Net P&L / Win Rate / Missed / Expectancy per row |
 | `/playbooks/[id]` | One playbook: identity, Stats, Rules (section and rule editor), Trades, Notes |
@@ -992,7 +994,8 @@ book, from values the screens already derive (`mentor-intraday.ts`):
   hypothesis; trades are cited by number. The legend
   explains the Topstep trading day (17:00–17:00 CT), the trailing MLL and its lock, the DLL, the 55 %
   consistency rule, the session windows, "after losses" (analytics only — the day stops on money),
-  time underwater and news windows.
+  time underwater, news windows and the phase Y marks of a playbook, checklist or gate written after
+  the fact.
 - **Topstep account**: balance, MLL floor and room, the closest it came, the DLL (the personal one
   where tighter) and what is left today, the personal daily profit target and what is missing to it,
   the days the DLL was hit, the target after consistency, best day against 55 %, maximum
@@ -1005,7 +1008,8 @@ book, from values the screens already derive (`mentor-intraday.ts`):
   so a 3-lot printed "—" until phase M), and the commissions in total.
 - **Daily review**: one row per **weekday of the period** and per day a trade closed on — a day
   without a trade has its row too (phase M) — with trades, W/L/BE, net, R, first entry in ET, the
-  longest losing run, most contracts, mental temperature (out of 5), "ne trgujem" and "zaključan",
+  longest losing run, most contracts, mental temperature (out of 5 — with "upisano DD.MM. HH:MM, posle
+  prvog ulaza (HH:MM)" when `mental_temp_at` is later than the day's first entry, phase Y), "ne trgujem" and "zaključan",
   rules kept (and which were missed, by their short name — the text before the colon — marked
   "ukinuto" when deleted since; "bez prijave" for a day nobody opened, "u toku" for today), and notes:
   DLL reached, entries inside a news window, the brief's day note. The rules section averages judged
@@ -1026,7 +1030,10 @@ book, from values the screens already derive (`mentor-intraday.ts`):
   first is marked "dodato protiv pozicije"), **Plan → kraj** (the sealed stop and target against the
   ones the trade ended with — only the keys the seal holds; an import seals nothing, so a trade typed in after its entry reads "upisan posle ulaza — plana pre ulaza nije bilo" and any other unsealed one "plan nije zapečaćen"), **Rizik na ulazu** (the budget the risk rule
   gave, the money actually at the stop and its share of the budget, the share of the room above the
-  MLL) and the **Playbook** by name. The context says whether the plan was
+  MLL) and the **Playbook** by name — with "napravljen DD.MM. HH:MM, posle ulaza" when the playbook
+  was created after the first fill, and a **Checklist** line ("upisan …, posle zatvaranja") when its
+  answers (`tj_position_rules.created_at`, the latest) came after the close (phase Y, 14.10.2026; times
+  in Belgrade). The context says whether the plan was
   sealed before the entry or typed in after a market order, whose R and risk come from the fill.
 - **Missed setups** carry the R2 walk's hypothetical outcome — target, stop, neither, or price never
   back at the entry — with its R, and when the plan was given up on the trader's clock.
@@ -1040,7 +1047,10 @@ those parts on their own.
 ## Process tracking
 
 **Tracker rules** are daily obligations, per weekday. **Eleven** are scored automatically from data —
-max loss per trade and per day, every trade linked to a playbook, every trade has a stop, every
+max loss per trade and per day, every trade linked to a playbook that existed when it was entered
+(phase Y, 14.10.2026: a playbook created after the first fill fails the day like a missing one, and
+/daily says "playbook napravljen posle ulaza"; trades carry `playbook_created_at` from `getTradesWithStats`;
+days locked before that keep their frozen verdict, Y-4), every trade has a stop, every
 trade has a thesis written before entry, no entry risked more than the budget, every entry was the
 contract count the budget gave, the three day-trading rules below and two stop losses in a row —
 and the rest are ticked by hand. **No rule counts trades** (30.09.2026, `20260930070000`): the day stops on
@@ -1635,7 +1645,7 @@ project.
 
 ## Migrations
 
-149 files in `supabase/migrations/`, named `YYYYMMDDHHMMSS_description.sql`.
+158 files in `supabase/migrations/`, named `YYYYMMDDHHMMSS_description.sql`.
 
 - **Additive.** An applied migration is never edited — a new delta is written instead.
 - **A migration explains itself.** Each one opens with a comment saying what was wrong and what
