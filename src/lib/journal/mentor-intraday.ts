@@ -29,6 +29,7 @@ import { fmtInTz, isTradingDayKey, toEpoch } from "./time";
 import { TOPSTEP_CONSISTENCY, fixedRiskOf, type TopstepResult } from "./topstep";
 import { ruleIsLiveOn, type DayCompliance } from "./tracker/compliance";
 import { WEEKDAY_LABELS, type TrackerRule } from "./tracker-types";
+import { computeTimeStop } from "./time-stop";
 import { formatDuration } from "./units";
 
 /** One fill of a trade, as the mentor pack prints it (`tj_executions`, loaded at export). */
@@ -500,6 +501,8 @@ export function tradeContextLines(
     e.underwaterPct != null ? `${e.underwaterPct}% vremena u minusu` : null,
   ].filter((p): p is string => p != null);
   if (day.length) lines.push(`- **Kontekst:** ${day.join(" · ")}`);
+  const reakcija = reactionLine(e);
+  if (reakcija) lines.push(reakcija);
   lines.push(...executionLines(e, opts.fills, opts.ccy ?? "USD"));
   if (opts.playbookName) lines.push(`- **Playbook:** ${cell(opts.playbookName)}`);
   const w = redWindowAt(e.openedAt, opts.brief);
@@ -532,6 +535,54 @@ export function tradeContextLines(
   }
   if (opts.insightTitles?.length) lines.push(`- **Zapažanja na ovom trejdu:** ${opts.insightTitles.join("; ")}`);
   return lines;
+}
+
+/**
+ * Koliko je trejdu trebalo da krene (14.10.2026, faza W u paketu): poslednji
+ * trenutak u minusu iz R2 sveća (`last_underwater_seconds`). Na dobitniku je to
+ * trenutak kad je zauvek prešao u plus; na gubitniku, koliko je od trajanja
+ * proveo u minusu. Bez merenja nema reda: procena nije podatak.
+ */
+function reactionLine(e: EnrichedTrade): string | null {
+  const last = numberFieldValue(e.trade.row, "last_underwater_seconds");
+  const dur = e.durationSeconds;
+  if (e.trade.net < 0) {
+    if (e.underwaterPct == null || dur == null) return null;
+    return `- **Reakcija:** u minusu ${formatDuration(Math.round((e.underwaterPct / 100) * dur))} od ${formatDuration(dur)} trajanja`;
+  }
+  if (last == null) return null;
+  if (last === 0) return "- **Reakcija:** nijednu sekundu u minusu";
+  return `- **Reakcija:** poslednji put u minusu ${formatDuration(last)} posle ulaza, od tada stalno u plusu${dur != null ? ` (trajanje ${formatDuration(dur)})` : ""}`;
+}
+
+/**
+ * Vremenski stop (faza W) u paketu: za koliko dobitnici krenu, koliko gubitnici
+ * stoje u minusu, i lestvica — koliko dobitnika bi sekao rez u minuti N naspram
+ * koliko gubitnika je u N još bilo otvoreno (gornja granica onoga što bi rez
+ * sačuvao). Prazno kad ništa nije izmereno.
+ */
+export function timeStopSection(trades: readonly EnrichedTrade[], range: BreakevenRange): string[] {
+  const s = computeTimeStop(trades.map((t) => t.trade), range, (t) => t.net);
+  if (s.winners + s.losers === 0) return [];
+  const d = (sec: number | null) => (sec == null ? "—" : formatDuration(Math.round(sec)));
+  const p = (v: number | null) => (v == null ? "—" : `${Math.round(v)}%`);
+  const n = s.winners + s.losers;
+  return [
+    `## Vremenski stop — koliko trejdu treba da krene (${s.winners} ${sr(s.winners, "dobitnik", "dobitnika", "dobitnika")}, ${s.losers} ${sr(s.losers, "gubitnik", "gubitnika", "gubitnika")}${n < SMALL_SAMPLE ? " ⚠" : ""})`,
+    "_Iz berzanskih sveća (1 s). Dobitnik „krene“ kad poslednji put izađe iz minusa i više se ne vrati. Gubitnici otvoreni u minuti N su gornja granica onoga što bi rez u N zatvorio ranije._",
+    "",
+    "| Stavka | Vrednost |",
+    "| --- | --- |",
+    `| Dobitnici: do trajnog plusa (medijana / 75% / 90%) | ${d(s.medianToGreenSeconds)} / ${d(s.p75ToGreenSeconds)} / ${d(s.p90ToGreenSeconds)} |`,
+    `| Dobitnici koji nikad nisu bili u minusu | ${s.winnersNeverRed} od ${s.winners} |`,
+    `| Gubitnici: vreme u minusu (medijana / prosek) | ${d(s.medianLoserRedSeconds)} / ${d(s.avgLoserRedSeconds)} |`,
+    `| Gubitnici: prosečno trajanje | ${d(s.avgLoserSeconds)} |`,
+    "",
+    "| Minut N | Dobitnici već u trajnom plusu | Gubitnici još otvoreni |",
+    "| --- | --- | --- |",
+    ...s.ladder.map((r) => `| ${r.minutes} | ${p(r.winnersGreenPct)} | ${p(r.losersOpenPct)} |`),
+    "",
+  ];
 }
 
 const num = (v: unknown): string => String(Number(v));

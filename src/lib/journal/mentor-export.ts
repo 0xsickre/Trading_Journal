@@ -42,6 +42,7 @@ import {
   dayShapeRows,
   intradaySection,
   scenarioSection,
+  timeStopSection,
   ruleLabel,
   rulesSection,
   SMALL_SAMPLE,
@@ -675,6 +676,7 @@ export function buildMentorPack(
     );
     out.push(...intradaySection(enriched, range));
     out.push(...scenarioSection(enriched));
+    out.push(...timeStopSection(enriched, range));
   }
 
   // --- Breakdowns ---------------------------------------------------------
@@ -756,7 +758,8 @@ function intradayInstructions(period: string): string[] {
       "Kako:",
       "- Prvo pročitaj Topstep stanje, **Dnevni pregled**, **Tracker po danu** i svaki trejd (izvršenje, fill-ovi, plan → kraj, rizik na ulazu).",
       "- Postavi mi **odjednom numerisana pitanja**, najviše 15: rezultat; priprema (vesti, HTF nivoi markirani pre sesije); stanje pri paljenju platforme; da li je svaki trejd bio setup iz plana; rizik i broj ugovora prema budžetu; stop (u sistemu na ulazu, pomeran?); upis pre ulaza; izlaz po planu; najgora i najbolja odluka dana; prekršena pravila.",
-      "- Dodaj pitanja po situaciji koju podaci pokazuju: gubitak, prekršeno pravilo, rizik preko budžeta, MAE ≥ 0.7R, ulaz u crvenom prozoru ili van mog vremena, dodavanje protiv pozicije, pomeren stop, dan bez prijave ili bez trejda.",
+      "- Dodaj pitanja po situaciji koju podaci pokazuju: gubitak, prekršeno pravilo, rizik preko budžeta, MAE ≥ 0.7R, ulaz u crvenom prozoru ili van mog vremena, dodavanje protiv pozicije, stop pomeren dalje od ulaza (pomeren bliže je dozvoljen), dan bez prijave ili bez trejda.",
+      "- Prokomentariši izlaz svakog trejda iz **Šta bi bilo** i **Reakcija**: da li sam izašao prerano ili dobro (cena 30 min posle izlaza, šta bi bilo da sam držao), i koliko je trejdu trebalo da krene u odnosu na **Vremenski stop**.",
       "- Odgovor koji se ne slaže sa brojevima suoči sa brojevima. Prazan odgovor („ne znam“, „ok“, „normalno“) vrati jednom, preciznije.",
       "- Posle mojih odgovora: presuda u 2–3 rečenice i **jedna stvar za sutra**. Bez laskanja.",
       sample,
@@ -800,6 +803,7 @@ function intradayInstructions(period: string): string[] {
     "- Oceni **proces i disciplinu** pre rezultata: pravila, stop posle gubitaka, broj trejdova, veličinu pozicije prema pravilu rizika, trejdove u crvenim prozorima.",
     "- Nađi **gde je edge a gde curi novac** (sesija, vreme, setup/tag, instrument, smer) i koliko to košta u R i dolarima.",
     "- Oceni **izvršenje**: dodavanje protiv pozicije, pomeranje stopa, MAE/MFE, koliko sam dugo bio u minusu, izlazak pre cilja ili vraćen profit.",
+    "- Iz **Šta bi bilo**, **Reakcija** i **Vremenski stop**: da li izlazim prerano ili kasno, koji SL × TP bi nosio više, i posle koliko minuta trejd koji nije krenuo treba seći (ili da uzorak to još ne dozvoljava).",
     "- Budi **kritičan i direktan** — nemoj mi laskati.",
     "",
     ...structure,

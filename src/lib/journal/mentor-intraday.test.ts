@@ -507,3 +507,36 @@ describe("the risk range is the account's own (09.10.2026)", () => {
   });
 });
 
+
+describe("reakcija i vremenski stop u paketu (14.10.2026)", () => {
+  const measured = (no: number, net: number, durationMin: number, over: Record<string, unknown>) => {
+    const t = trade(no, "2026-09-29T13:40:00Z", new Date(Date.parse("2026-09-29T13:40:00Z") + durationMin * 60_000).toISOString(), net);
+    return { ...t, ...over } as TradeRow;
+  };
+
+  it("piše kad je dobitnik krenuo i koliko je gubitnik bio u minusu, i lestvicu", async () => {
+    const { timeStopSection, tradeContextLines } = await import("./mentor-intraday");
+    const enriched = enrichTrades(
+      toRealized([
+        measured(1, 200, 10, { last_underwater_seconds: 120, time_underwater_pct: 20 }),
+        measured(2, -100, 5, { last_underwater_seconds: 300, time_underwater_pct: 60 }),
+      ]),
+      { tzOf: () => "UTC" },
+    );
+    const win = tradeContextLines(enriched.find((e) => e.trade.net > 0)!, { displayTz: "UTC" }).join("\n");
+    expect(win).toContain("- **Reakcija:** poslednji put u minusu 2m posle ulaza, od tada stalno u plusu (trajanje 10m)");
+    const loss = tradeContextLines(enriched.find((e) => e.trade.net < 0)!, { displayTz: "UTC" }).join("\n");
+    expect(loss).toContain("- **Reakcija:** u minusu 3m od 5m trajanja");
+
+    const md = timeStopSection(enriched, { from: 0, to: 0 }).join("\n");
+    expect(md).toContain("## Vremenski stop — koliko trejdu treba da krene (1 dobitnik, 1 gubitnik ⚠)");
+    expect(md).toContain("| 3 | 100% | 100% |");
+    expect(md).toContain("| 5 | 100% | 0% |");
+  });
+
+  it("ćuti kad ništa nije izmereno", async () => {
+    const { timeStopSection } = await import("./mentor-intraday");
+    const enriched = enrichTrades(toRealized([trade(1, "2026-09-29T13:40:00Z", "2026-09-29T13:45:00Z", 50)]), { tzOf: () => "UTC" });
+    expect(timeStopSection(enriched, { from: 0, to: 0 })).toEqual([]);
+  });
+});
