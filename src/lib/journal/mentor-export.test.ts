@@ -281,3 +281,21 @@ describe("buildMentorPack optional sections", () => {
     expect(md).toContain("(+2 starijih trejdova nije prošireno");
   });
 });
+
+describe("buildMentorPack trade detail after phase P", () => {
+  it("prints the recording's stop and thesis, not the plan-before-entry fields", () => {
+    const t = trade("p", 200);
+    Object.assign(t, {
+      stop_price: 95,
+      thesis: "Short iz gornje zone",
+      position_size: 3,
+      invalidation: "close iznad 110",
+      time_stop: "15",
+      scale_out_plan: "50% na 1R",
+    });
+    const md = buildMentorPack([t], { currency: "USD" });
+    expect(md).toContain("- **Stop Price:** 95");
+    expect(md).toContain("- **Thesis:** Short iz gornje zone");
+    expect(md).not.toMatch(/Position size|Invalidation|Time stop|Scale-out/);
+  });
+});

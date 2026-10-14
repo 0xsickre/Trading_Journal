@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPositionPatch, mergeCustom } from "./trade-fields";
+import { buildPositionPatch, categoryPatch, mergeCustom } from "./trade-fields";
 import { flattenCustom } from "./field-values";
 import type { FieldDef } from "./field-def-types";
 import { SEEDED_FIELD_DEFS } from "./field-defs.fixture";
@@ -220,5 +220,34 @@ describe("form → save → reload round trip", () => {
     );
     expect(second.custom).toEqual(patch.custom);
     expect(second.columns).toEqual(patch.columns);
+  });
+});
+
+describe("categoryPatch (trade page, phase P)", () => {
+  it("routes a column-backed category to its column and the rest to the bag", () => {
+    const res = categoryPatch(
+      { technical_tags: [" FVG ", ""], mistake: ["Rano"], macro_align: " Uz bias ", confluences: ["OB"] },
+      DEFS,
+    );
+    expect(res).toEqual({
+      ok: true,
+      columns: { technical_tags: ["FVG"], mistake: ["Rano"] },
+      custom: { macro_align: "Uz bias", confluences: ["OB"] },
+    });
+  });
+
+  it("refuses a key no definition claims, instead of writing a stray column", () => {
+    const res = categoryPatch({ entry_price: "1" }, DEFS);
+    expect(res.ok).toBe(false);
+  });
+
+  it("clears a select to null and a tags field to an empty list", () => {
+    const res = categoryPatch({ macro_align: "", technical_tags: null }, DEFS);
+    expect(res).toMatchObject({ ok: true, columns: { technical_tags: [] }, custom: { macro_align: null } });
+  });
+
+  it("coerces a number category", () => {
+    const res = categoryPatch({ atr_at_entry: "12.5" }, DEFS);
+    expect(res).toMatchObject({ ok: true, custom: { atr_at_entry: 12.5 } });
   });
 });

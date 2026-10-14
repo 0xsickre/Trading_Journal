@@ -59,7 +59,6 @@ describe("prices on a position", () => {
       "target_price",
       "max_drawdown_price",
       "max_profit_price",
-      "position_size",
     ]) {
       expect(invalidTradeNumber(patchOf({ [key]: -1 })), key).toBeTruthy();
       expect(invalidTradeNumber(patchOf({ [key]: 0 })), key).toBeTruthy();

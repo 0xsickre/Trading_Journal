@@ -539,7 +539,7 @@ describe("the scope a trader works in", () => {
 
     expect(screen.getByText("+1 open")).toBeInTheDocument();
     const card = screen.getByText("Open positions").closest("[data-slot='card']") as HTMLElement;
-    expect(within(card).getByRole("link", { name: /GC/ })).toHaveAttribute("href", "/trades/live/edit");
+    expect(within(card).getByRole("link", { name: /GC/ })).toHaveAttribute("href", "/trades/live");
   });
 
   it("lists the recent closed trades newest first, each a link to the trade", () => {
@@ -549,8 +549,8 @@ describe("the scope a trader works in", () => {
       .getAllByRole("link")
       .filter((a) => a.getAttribute("href")?.startsWith("/trades/"));
     expect(links.map((a) => a.getAttribute("href"))).toEqual([
-      "/trades/this-week/edit",
-      "/trades/last-week/edit",
+      "/trades/this-week",
+      "/trades/last-week",
     ]);
   });
 

@@ -237,7 +237,7 @@ export function NoteEditor({
 
         {note.position_id && (
           <Button variant="ghost" size="sm" asChild>
-            <Link href={`/trades/${note.position_id}/edit`}>
+            <Link href={`/trades/${note.position_id}`}>
               <Link2 className="mr-1 size-3.5" /> Open trade
             </Link>
           </Button>

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Chips } from "@/components/journal/quick-log-form";
+import { Chips } from "@/components/journal/chips";
 import { createMissedSetup } from "@/app/(app)/trades/actions";
 import { missedSetupProblem, type MissedSetupInput } from "@/lib/journal/missed-setup";
 import { primaryAccount } from "@/lib/journal/account-rules";

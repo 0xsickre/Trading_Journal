@@ -51,7 +51,7 @@ export function RecentTradesWidget({
               return (
                 <li key={t.id}>
                   <Link
-                    href={`/trades/${t.id}/edit`}
+                    href={`/trades/${t.id}`}
                     className="flex items-center gap-2 py-2 text-sm hover:bg-muted/40"
                   >
                     <span className="w-24 shrink-0 text-xs text-muted-foreground tabular-nums">

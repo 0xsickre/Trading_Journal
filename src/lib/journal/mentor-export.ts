@@ -103,7 +103,6 @@ function detailFieldsFor(defs: readonly FieldDef[]) {
   for (const f of getAllFormFields(defs)) add(f.name, f.label);
   // Derived / computed columns that also carry user-meaningful info.
   add("planned_rr", "Planned RR");
-  add("position_size", "Position size");
   add("miss_reason", "Miss reason");
   add("missed_at", "Missed at");
   add("chart_images_text", "Charts");

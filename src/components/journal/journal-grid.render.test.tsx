@@ -229,11 +229,11 @@ describe("row click navigates, the actions cell does not propagate", () => {
   const ACCOUNT = account({ id: "acc-1" });
   const trades = [mkTrade({ id: "t1" })];
 
-  it("clicking anywhere in the row pushes to the edit page", async () => {
+  it("clicking anywhere in the row pushes to the trade page", async () => {
     const user = userEvent.setup({ delay: null });
     render(<JournalGrid trades={rowsOf(trades)} accounts={[ACCOUNT]} />);
     await user.click(screen.getByText("EURUSD"));
-    expect(pushMock).toHaveBeenCalledWith("/trades/t1/edit");
+    expect(pushMock).toHaveBeenCalledWith("/trades/t1");
   });
 
   it("opening the row menu does not also navigate the row", async () => {

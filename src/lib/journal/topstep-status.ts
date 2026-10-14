@@ -112,12 +112,3 @@ export async function getTopstepSizing(): Promise<Record<string, TopstepSizing>>
   return out;
 }
 
-/**
- * Whether one account has hit its MLL — the write path checks one account, so
- * this evaluates one account, not the book.
- */
-export async function isTopstepAccountFailed(accountId: string | null | undefined): Promise<boolean> {
-  if (!accountId) return false;
-  const [status] = await getTopstepStatuses([accountId]);
-  return status?.result.status === "failed";
-}

@@ -11,6 +11,6 @@ describe("ReviewGapsCard", () => {
   it("links every gap to its short review", () => {
     render(<ReviewGapsCard gaps={[{ id: "p1", label: "#8 MNQ", missing: ["setup", "grade"] }]} />);
     expect(screen.getByText(/fali setup i ocena/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Pregledaj" })).toHaveAttribute("href", "/trades/p1/review");
+    expect(screen.getByRole("link", { name: "Pregledaj" })).toHaveAttribute("href", "/trades/p1?from=daily");
   });
 });

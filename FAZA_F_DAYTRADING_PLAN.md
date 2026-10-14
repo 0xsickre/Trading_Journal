@@ -114,6 +114,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 08.10.2026 | O | Prvo uvoz, pa dopuna iz snimka (trejder, OBS snimak sesije): **O-a** propušteni setupi ostaju kroz malu formu iz snimka; **O-b** `/trades/new` i `/trades/log` se uklanjaju; **O-c** TopstepX izvoz trejdova i naloga se uvoze odjednom. Test trejdera 08.10. (Practice, SL niže → BE): izvoz naloga čuva samo POSLEDNJU cenu stopa — originalni stop dolazi iz fajla samo kad nije mogao biti pomeren, inače sa snimka |
 | 09.10.2026 | W | Vremenski stop (trejder: „da meri koliko je dobitnom trejdu trebalo da krene, a koliko je gubitni bio u minusu dok nije udario SL — da sečem vremenski“). **W1-A** „krenuo u smeru“ = u plusu i više se nije vratio ispod ulaza (ne +X tikova ni +0,5R). Merenje u `futures-trading` `journal_mae.py` iz istih R2 sveća kao `time_underwater_pct`; journal samo čita. Kolona lestvice „Losers still open“ je gornja granica — da li je gubitnik u minuti N bio u minusu ne čuva se |
 | 14.10.2026 | P | Jedna stranica trejda (trejder: „ima nepotrebnih stvari jer se sad unose trejdovi preko importa … napravi detaljan plan da to rešiš sa jednom stranicom“). Bias dana, Entry TF i Technical tags **ostaju**; stavke za biranje trejder preuređuje sam u Settings. Odluke P-1 … P-3 su u sekciji P |
+| 14.10.2026 | P | **P-1** fill-ovi se ne menjaju ručno nigde; ručno se upisuje samo originalni SL sa snimka (trejder: „samo SL treba ja da upišem jer ako ga pomerim na BE u toku trejda onda se ne slaže na uvozu“). **P-2** ocena izvršenja A/B/C svuda. **P-3** promena playbook-a briše odgovore na pravila prethodnog playbook-a; meko obrisana pravila istog playbook-a ostaju |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -152,7 +153,7 @@ pogađa.
 | **M** | Mentor tok: bez /weekly, kraći /daily, compliance bez praznih dana, pun mentor pack (Dan / Nedelja) | — | U | da, **briše**: `tj_weekly_reviews`, `tj_experiments`, `tj_focus_goals` | **Opus** | ✅ 08.10.2026 — M1 `d6391df` · M2 `8076b93` · M3 `6be8e87` (migracija `20261008120000` primenjena) + futures-trading `6827ce7` · M4 `786a035` |
 | **O** | Prvo uvoz, pa dopuna iz snimka: izvoz naloga (stop, cilj, izlaz), dopuna iz snimka, propušten setup, bez plan-forme | — | M | da: `20261009090000` (aditivna) | **Opus** | ✅ 08.10.2026 — O1 `af9c0cc` (migracija `20261009090000` primenjena) · O2 `c15dc20` + futures-trading `bc1f28d` · O3 `800474d` · O4 `95222f9` |
 | **W** | Vremenski stop: koliko dobitniku treba da krene, koliko gubitnik stoji u minusu do SL | — | O | da: `20261009120000` (`last_underwater_seconds`, aditivna) | **Opus** | ✅ `bff96eb` + futures-trading `b8c9da1`, 09.10.2026 — migracija `20261009120000` primenjena uz odobrenje trejdera |
-| **P** | Jedna stranica trejda: snimak, checklist, kategorije i review na jednom mestu; bez plan-forme | — | O, W | ne | **Opus** | plan 14.10.2026 — čeka odluke P-1 … P-3 |
+| **P** | Jedna stranica trejda: snimak, checklist, kategorije i review na jednom mestu; bez plan-forme | — | O, W | ne | **Opus** | u radu (odluke 14.10.2026) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1164,7 +1165,7 @@ Migracija primenjena (tek tada push `futures-trading` na `main` — skript čita
 status ✅. **Sledeći korak, ako trejder traži:** R koji bi vremenski stop u minuti N sačuvao ili izgubio (cena u
 minuti N po trejdu iz R2) — sada lestvica pokazuje samo udele.
 
-## P — Jedna stranica trejda (detaljno, 14.10.2026) — plan, čeka odluke P-1 … P-3
+## P — Jedna stranica trejda (detaljno, 14.10.2026) — u radu
 
 **Povod** (trejder, 14.10.2026): kartica „Plan & Setup“ ima nepotrebne stvari, jer trejd ulazi uvozom i više
 ne može da se planira u journal-u. Traži jednu stranicu po trejdu, uređenu za day tradera. Kategorije
@@ -1249,7 +1250,7 @@ Scale-out, Invalidation, Time stop, Slippage, unos fill-ova (P-1), „MAE/MFE Pr
   na istom mestu), `PLAYBOOK.md` (checklist više nije samo u Edit formi, a upozorenje „#1 ne čuvaj kroz Edit“
   otpada).
 
-### Odluke koje traže trejdera
+### Odluke trejdera (14.10.2026): P-1 A uz ručni originalni SL, P-2 A, P-3 A
 - **P-1 Fill-ovi.** (A) Ne menjaju se ručno nigde: uvoz je istina, a ispravka je undo uvoza i ponovni uvoz
   ili spajanje u listi. (B) Ostaje skriveno dugme „Ispravi fill-ove“. Preporuka: **A**. Ručna izmena fill-a
   je jedini način da broj u paketu ne odgovara berzi.

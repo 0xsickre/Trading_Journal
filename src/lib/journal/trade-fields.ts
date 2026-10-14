@@ -15,6 +15,7 @@ import {
   positionFieldNames,
 } from "./form-config";
 import type { FieldDef } from "./field-def-types";
+import { isColumnBackedCategory } from "./column-backed-fields";
 
 export type FormFields = Record<string, string | number | string[] | null>;
 
@@ -67,6 +68,43 @@ export function buildPositionPatch(
   }
 
   return splitFieldsByStorage(coerced, customFieldNames(defs));
+}
+
+export type CategoryValue = string | number | string[] | null;
+
+/**
+ * The trader's categories from the trade page (phase P), as a row patch.
+ *
+ * Only keys a definition in `tj_field_defs` claims are accepted — read with
+ * retired ones too, so an old trade keeps the value it was recorded with. A
+ * category that owns a real column (`column-backed-fields.ts`) goes to that
+ * column; every other one to the `custom` bag, to be merged with `mergeCustom`.
+ * An unknown key is refused rather than dropped: on this page nothing else is
+ * sent under this name, so it can only be a bug.
+ */
+export function categoryPatch(
+  values: Readonly<Record<string, CategoryValue>>,
+  defs: readonly FieldDef[],
+): { ok: true; columns: Record<string, unknown>; custom: Record<string, unknown> } | { ok: false; error: string } {
+  const byKey = new Map(defs.map((d) => [d.key, d]));
+  const columns: Record<string, unknown> = {};
+  const custom: Record<string, unknown> = {};
+  for (const [key, raw] of Object.entries(values)) {
+    const def = byKey.get(key);
+    if (!def) return { ok: false, error: `Unknown category: ${key}` };
+    let value: unknown;
+    if (def.field_type === "tags") {
+      value = Array.isArray(raw) ? raw.map((s) => String(s).trim()).filter(Boolean) : [];
+    } else if (def.field_type === "number") {
+      const n = raw === "" || raw == null ? null : Number(raw);
+      value = n != null && Number.isFinite(n) ? n : null;
+    } else {
+      const s = raw == null || Array.isArray(raw) ? "" : String(raw).trim();
+      value = s === "" ? null : s;
+    }
+    (isColumnBackedCategory(key) ? columns : custom)[key] = value;
+  }
+  return { ok: true, columns, custom };
 }
 
 /**

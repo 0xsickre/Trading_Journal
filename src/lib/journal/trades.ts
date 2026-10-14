@@ -2,11 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { selectAllByIds, selectAllPages } from "@/lib/supabase/paginate";
-import { CUSTOM_FIELD_COLUMN, flattenCustom } from "./field-values";
-import { getTradeRuleAnswers } from "./playbooks";
-import type { TradeFormInitial } from "@/components/journal/trade-form";
 import { narrowPositionStat } from "./types";
-import { asFillSource } from "./trade-lifecycle";
 import { scenarioTrade, type ScenarioTrade } from "./scenario";
 import type { PositionStat, TradeRow } from "./types";
 
@@ -114,85 +110,6 @@ export async function getTradeScenario(id: string): Promise<ScenarioTrade | null
   ]);
   if (!pos?.scenario) return null;
   return scenarioTrade({ ...pos, stats } as unknown as TradeRow);
-}
-
-export async function getTradeForEdit(
-  id: string,
-): Promise<TradeFormInitial | null> {
-  const supabase = await createClient();
-  const [{ data: pos }, { data: execs }, ruleAnswers] = await Promise.all([
-    supabase.from("tj_positions").select("*").eq("id", id).maybeSingle(),
-    supabase
-      .from("tj_executions")
-      .select("side,price,qty,executed_at,fee,source")
-      .eq("position_id", id)
-      .order("executed_at"),
-    getTradeRuleAnswers(id),
-  ]);
-  if (!pos) return null;
-
-  const { id: _id, account_id, trade_no, ...rest } = pos as RawPosition;
-  // Keep only the dynamic field columns (sanitize handles the rest on save).
-  //
-  // The loop below accepts strings, numbers and string arrays — an OBJECT falls
-  // through it. `custom` is an object, so without this flatten every
-  // user-defined field would be dropped on the way into the form and then
-  // written back empty on the next save.
-  //
-  // Custom keys first, columns spread over them, so a column keeps winning —
-  // the same precedence `fieldValue` applies everywhere else.
-  const flat: Record<string, unknown> = { ...flattenCustom(rest), ...rest };
-  delete flat[CUSTOM_FIELD_COLUMN];
-  // Not a form field: it is a jsonb array of objects, and the loop below would
-  // reduce it to `[]` — inert, but it would sit in the bag looking like a value
-  // the form could write back. It travels on its own key instead.
-  delete flat.scale_out_levels;
-  // Also not a form field: `equity_at_entry` is written by the save path, never
-  // typed. `buildPositionPatch` would drop it on the way back out anyway, so
-  // leaving it here changes nothing that is written — but it would show up in
-  // the bag the form reasons about as though it were an answer the trader gave.
-  delete flat.equity_at_entry;
-  delete flat.risk_budget_at_entry;
-  delete flat.room_at_entry;
-  // Written by futures-trading from exchange candles, never typed (phase L).
-  delete flat.scenario;
-  // The seal, for the same reason — and these two are strings, so the loop
-  // below would keep them and the form would reason about a timestamp as
-  // though it were an answer the trader typed. They travel on their own keys.
-  delete flat.plan_snapshot;
-  delete flat.plan_sealed_at;
-  delete flat.plan_amended_at;
-
-  const fields: Record<string, string | number | string[] | null> = {};
-  for (const [k, v] of Object.entries(flat)) {
-    if (v == null) continue;
-    if (typeof v === "string" || typeof v === "number") fields[k] = v;
-    if (Array.isArray(v)) fields[k] = v.filter((x) => typeof x === "string");
-  }
-
-  return {
-    id,
-    account_id: account_id ?? null,
-    trade_no: trade_no ?? null,
-    status: (pos as RawPosition & { status?: string }).status ?? "planned",
-    missed_at: (pos as RawPosition & { missed_at?: string | null }).missed_at ?? null,
-    plan_sealed_at:
-      (pos as RawPosition & { plan_sealed_at?: string | null }).plan_sealed_at ?? null,
-    plan_amended_at:
-      (pos as RawPosition & { plan_amended_at?: string | null }).plan_amended_at ?? null,
-    playbook_id: (pos as RawPosition & { playbook_id?: string | null }).playbook_id ?? null,
-    scale_out_levels: (pos as RawPosition & { scale_out_levels?: unknown }).scale_out_levels ?? [],
-    rule_answers: ruleAnswers,
-    fields,
-    executions: (execs ?? []).map((e) => ({
-      side: e.side as "entry" | "exit",
-      price: Number(e.price),
-      qty: Number(e.qty),
-      executed_at: e.executed_at as string,
-      fee: Number(e.fee),
-      source: asFillSource(e.source),
-    })),
-  };
 }
 
 /**

@@ -419,45 +419,6 @@ export async function addList(
 }
 
 /**
- * The same reorder, addressed by category KEY rather than row id.
- *
- * The trade form drags the fields it is rendering, and a rendered field knows
- * its `listKey` — it never sees a `tj_option_lists.id`. Rather than ship the
- * ids to the form for the sole purpose of sending them back, this takes what
- * the form already holds.
- *
- * Writes both tables for the reason `reorderLists` does: the categories screen
- * and the trade form store the same intent in two places, and a drag on either
- * one has to settle both or they drift apart again.
- */
-export async function reorderCategoriesByKey(orderedKeys: string[]) {
-  if (orderedKeys.length === 0) return { ok: true as const };
-  const supabase = await createClient();
-
-  const [listResults, defResults] = await Promise.all([
-    Promise.all(
-      orderedKeys.map((key, i) =>
-        supabase.from("tj_option_lists").update({ sort_order: i }).eq("key", key),
-      ),
-    ),
-    Promise.all(
-      orderedKeys.map((key, i) =>
-        supabase
-          .from("tj_field_defs")
-          .update({ sort_order: i })
-          .eq("list_key", key),
-      ),
-    ),
-  ]);
-
-  const failed =
-    listResults.find((r) => r.error) ?? defResults.find((r) => r.error);
-  if (failed?.error) return { ok: false as const, error: failed.error.message };
-  revalidateOptions();
-  return { ok: true as const };
-}
-
-/**
  * The order the trader dragged the categories into.
  *
  * WRITES TWO TABLES, and it has to. The Settings table reads
@@ -1069,7 +1030,6 @@ export async function updateAccount(
     return { ok: false, error: "Risk per trade: the minimum must not exceed the maximum." };
   }
 
-
   const supabase = await createClient();
 
   // Currency, once trades exist, is a historical fact too — more strictly than
@@ -1488,7 +1448,6 @@ export async function deleteCashEvent(id: string) {
 
 // --- User-defined trade fields ---------------------------------------------
 
-
 /**
  * Storage key rules, mirroring the CHECK constraint on tj_field_defs.
  *
@@ -1497,7 +1456,6 @@ export async function deleteCashEvent(id: string) {
  * the wrong place by something downstream.
  */
 const KEY_RE = /^[a-z][a-z0-9_]{0,48}$/;
-
 
 export async function addFieldDef(input: {
   label: string;

@@ -52,7 +52,6 @@ export const POSITIVE_TRADE_NUMBERS = [
  * "not recorded" are different answers, and the DB CHECK holds the same five.
  */
 export const TIME_STOP_CHOICES = ["5", "15", "30", "60", "close"] as const;
-export type TimeStopChoice = (typeof TIME_STOP_CHOICES)[number];
 
 /** Columns that must be a positive INTEGER. The database carries the same CHECK. */
 export const POSITIVE_TRADE_INTEGERS = [

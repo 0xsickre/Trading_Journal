@@ -118,7 +118,7 @@ export function InsightsPanel({ result }: { result: RunResult }) {
                             Days, weeks and rule-level findings stay text. */}
                         {TRADE_ID.test(i.subjectId) ? (
                           <Link
-                            href={`/trades/${i.subjectId}/edit`}
+                            href={`/trades/${i.subjectId}`}
                             className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
                           >
                             {i.subjectLabel ?? "Open trade"}

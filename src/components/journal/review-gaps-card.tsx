@@ -33,7 +33,7 @@ export function ReviewGapsCard({ gaps }: { gaps: ReviewGap[] }) {
             <span>
               {g.label} <span className="text-xs text-muted-foreground">— fali {g.missing.map((m) => MISSING[m]).join(" i ")}</span>
             </span>
-            <Link href={`/trades/${g.id}/review`} className="text-xs underline">
+            <Link href={`/trades/${g.id}?from=daily`} className="text-xs underline">
               Pregledaj
             </Link>
           </div>

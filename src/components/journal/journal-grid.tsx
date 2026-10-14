@@ -1471,10 +1471,10 @@ export function JournalGrid({
                   className="cursor-pointer"
                   tabIndex={0}
                   data-state={row.getIsSelected() ? "selected" : undefined}
-                  onClick={() => router.push(`/trades/${row.original.id}/edit`)}
+                  onClick={() => router.push(`/trades/${row.original.id}`)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && e.target === e.currentTarget)
-                      router.push(`/trades/${row.original.id}/edit`);
+                      router.push(`/trades/${row.original.id}`);
                   }}
                 >
                   {row.getVisibleCells().map((cell) => (
@@ -1941,7 +1941,7 @@ function RowActions({ id, onDelete }: { id: string; onDelete: () => void }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => router.push(`/trades/${id}/edit`)}>
+        <DropdownMenuItem onClick={() => router.push(`/trades/${id}`)}>
           <Pencil className="size-4" /> Edit
         </DropdownMenuItem>
         <DropdownMenuItem className="text-destructive" onClick={onDelete}>

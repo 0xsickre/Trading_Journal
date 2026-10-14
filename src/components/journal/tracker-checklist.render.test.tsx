@@ -200,7 +200,7 @@ describe("auto rules show a verdict but never a manual control", () => {
     expect(screen.getByText(/-\$620\.00.*-\$500\.00 \(/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "#12 EURUSD" })).toHaveAttribute(
       "href",
-      "/trades/trade-1/edit",
+      "/trades/trade-1?from=daily",
     );
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });

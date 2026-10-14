@@ -3,9 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { selectAllPages } from "@/lib/supabase/paginate";
 import { getAccounts } from "./accounts";
 import { getCashEvents } from "./cash-events";
-import { equityAtEntryPatch, firstEntryAt } from "./equity-at-entry";
-import { accountTimezoneResolver, dayKeyStartUtc, toEpoch, zonedDateKey } from "./time";
-import type { PositionStatus } from "./trade-lifecycle";
+import { dayKeyStartUtc, toEpoch } from "./time";
 
 /**
  * What one account was worth at the START of each of the given days.
@@ -83,35 +81,3 @@ export async function getDayOpeningEquities(
   return out;
 }
 
-/**
- * The `equity_at_entry` patch for one save — the whole decision in one call.
- *
- * Shared by the manual write path and the import so the rule cannot be
- * half-applied on one of them. The read is skipped entirely when the answer is
- * already settled (a trade that keeps its denominator, or one that never had
- * an entry), which is why the patch function is consulted twice: once to see
- * whether the equity is even needed, once with it.
- */
-export async function getEquityAtEntryPatch(
-  accountId: string | null | undefined,
-  status: PositionStatus,
-  execs: readonly { side: string; executed_at: string }[],
-  prev: { equity_at_entry: number | null } | null,
-): Promise<{ equity_at_entry?: number | null }> {
-  // With no equity to offer, this already answers for the clear-on-restore case
-  // and for every save that must stay silent.
-  const settled = equityAtEntryPatch(status, prev, null);
-  if ("equity_at_entry" in settled || (prev?.equity_at_entry ?? null) != null) {
-    return settled;
-  }
-
-  const at = firstEntryAt(execs);
-  if (at == null) return settled;
-
-  const tz = accountTimezoneResolver(await getAccounts())(accountId);
-  const day = zonedDateKey(at, tz);
-  if (!day) return settled;
-
-  const equity = (await getDayOpeningEquities(accountId, [day])).get(day) ?? null;
-  return equityAtEntryPatch(status, prev, equity);
-}

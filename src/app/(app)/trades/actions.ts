@@ -1,346 +1,23 @@
 "use server";
 
-import { excursionSourcePatch } from "@/lib/journal/excursion-source";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { revalidateTrades } from "@/lib/journal/revalidate";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/types";
 import { getFieldDefs } from "@/lib/journal/field-defs";
-import { buildPositionPatch, mergeCustom } from "@/lib/journal/trade-fields";
-import {
-  addsExposure,
-  asFillSource,
-  computeStatus,
-  isValidFill,
-  type FillSource,
-  type PositionStatus,
-} from "@/lib/journal/trade-lifecycle";
-import { getEquityAtEntryPatch } from "@/lib/journal/equity";
-import {
-  planAmendedPatch,
-  planFieldsOf,
-  planSnapshotPatch,
-  type PlanSnapshot,
-} from "@/lib/journal/plan-snapshot";
-import { getTopstepEntryPatch, isTopstepAccountFailed } from "@/lib/journal/topstep-status";
-import { parseScaleOutLevels } from "@/lib/journal/scale-out";
+import { categoryPatch, mergeCustom } from "@/lib/journal/trade-fields";
+import { ruleAnswerWrites } from "@/lib/journal/rule-answer-writes";
+import { getCurrentUser } from "@/lib/supabase/user";
 import { getInstrumentSpecs, instrumentSnapshot } from "@/lib/journal/instruments";
 import { getAccountCurrency } from "@/lib/journal/accounts";
 import type { MergeMode } from "@/lib/journal/merge-positions";
-import {
-  firstIssue,
-  invalidTradeNumber,
-  tradeInputSchema,
-} from "@/lib/journal/trade-input-schema";
+import { firstIssue } from "@/lib/journal/trade-input-schema";
 import {
   MAX_TRADE_IMAGES,
   TRADE_IMAGE_KIND,
   validateTradeImageList,
 } from "@/lib/journal/tradingview-snapshot";
-
-export type ExecutionInput = {
-  side: "entry" | "exit";
-  price: number;
-  qty: number;
-  executed_at: string; // UTC ISO
-  fee: number;
-  /** Origin of the fill. Absent means typed here — `manual`. */
-  source?: FillSource;
-};
-
-export type TradeInput = {
-  account_id: string | null;
-  trade_no: number | null;
-  fields: Record<string, string | number | string[] | null>;
-  executions: ExecutionInput[];
-  /** User choice when no fills: planned vs active (maps to planned/open). */
-  trade_phase?: "planned" | "active" | null;
-  current_status?: string | null;
-  playbook_id?: string | null;
-  /** Planned scale-out levels: `[{pct, price}]`. Validated in `scaleOutPatch`. */
-  scale_out_levels?: unknown;
-  /** Rule id → followed. Absent key means the rule was not answered. */
-  rule_answers?: Record<string, boolean>;
-};
-
-/**
- * Coerce the playbook columns.
- *
- * Kept out of `sanitizeFields` because they are not form-config fields: the
- * checklist is its own component with its own behaviour, and routing it through
- * the field whitelist would mean declaring definitions for values that are
- * real columns.
- */
-function playbookPatch(input: TradeInput) {
-  return { playbook_id: input.playbook_id || null };
-}
-
-/**
- * Coerce the scale-out levels.
- *
- * Kept out of `sanitizeFields` for the same reason as the playbook columns: a
- * jsonb array of objects is not a form-config field type, and routing it
- * through the field whitelist would mean declaring a definition for a shape no
- * `FieldType` can express.
- *
- * `parseScaleOutLevels` drops anything malformed, so a hand-crafted request
- * cannot write junk into the column. The "sums to 100" rule is NOT enforced
- * here — it is a planning aid, not an integrity rule, and a trade imported or
- * edited around it must still be saveable. The form blocks it before the round
- * trip; see `scale-out.ts` for why the database cannot.
- */
-function scaleOutPatch(input: TradeInput) {
-  return { scale_out_levels: parseScaleOutLevels(input.scale_out_levels) };
-}
-
-/**
- * Rule answers as the rows `tj_save_trade` expects.
- *
- * Delete-then-insert rather than upsert — that half lives in the function — for
- * the reason the payload shape makes plain: a rule the trader UN-answered has
- * no key here at all, so an upsert would leave the old answer standing and the
- * follow rate would keep counting a judgement that was withdrawn.
- */
-function ruleRows(answers: Record<string, boolean> | undefined) {
-  return Object.entries(answers ?? {}).map(([rule_id, followed]) => ({
-    rule_id,
-    followed,
-  }));
-}
-
-/**
- * Sanitize a submission into a row patch.
- *
- * Definitions are read with `activeOnly = false`: a field the user deactivated
- * yesterday must still be writable today, or editing an old trade would silently
- * strip the value it was recorded with.
- */
-async function sanitizeFields(
-  fields: Record<string, string | number | string[] | null>,
-) {
-  return buildPositionPatch(fields, await getFieldDefs(false));
-}
-
-/**
- * Both write paths, prepared and checked in one place.
- *
- * A server action is a public endpoint, and until now this one accepted any
- * finite number. Measured against the live view before the fix: entry −5000,
- * exit −4990 on ES priced at 50 came back as `gross_pl = 500`, `realized_r =
- * 1.00` — a wrong figure wearing the shape of a right one, which then feeds
- * profit factor, expectancy and the score. The DB now carries the same rules as
- * CHECK constraints; this copy exists to answer in a sentence.
- *
- * Structure is checked BEFORE anything touches the database. `account_id` used
- * to go straight into the account guard, so a non-uuid produced a Postgres
- * type error instead of a message about the account.
- */
-async function prepareTrade(input: TradeInput) {
-  const parsed = tradeInputSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false as const, error: firstIssue(parsed.error) };
-  }
-
-  const patch = await sanitizeFields(input.fields);
-  const rangeError = invalidTradeNumber(patch.columns);
-  if (rangeError) return { ok: false as const, error: rangeError };
-
-  const execs = cleanExecs(input.executions);
-  return {
-    ok: true as const,
-    patch,
-    execs,
-    statusPatch: resolveStatus(execs, input.trade_phase, input.current_status),
-  };
-}
-
-function cleanExecs(execs: ExecutionInput[]) {
-  return execs
-    .filter(isValidFill)
-    .map((e) => ({
-      side: e.side,
-      price: Number(e.price),
-      qty: Number(e.qty),
-      executed_at: e.executed_at,
-      fee: Number(e.fee) || 0,
-      // Kept, not stamped. `tj_save_trade` replaces every fill on each save, so
-      // hard-coding `manual` here relabelled an imported trade's fills the
-      // first time anyone saved a note on it.
-      source: asFillSource(e.source),
-    }));
-}
-
-function resolveStatus(
-  execs: ExecutionInput[],
-  tradePhase?: "planned" | "active" | null,
-  currentStatus?: string | null,
-) {
-  const phase = execs.length > 0 ? "active" : tradePhase;
-  const manual =
-    currentStatus === "missed" && execs.length === 0
-      ? "missed"
-      : phase === "active"
-        ? "open"
-        : "planned";
-
-  const status = computeStatus(execs, manual);
-  const patch: Record<string, string | null> = { status };
-
-  if (execs.length > 0) {
-    patch.missed_at = null;
-    patch.miss_reason = null;
-  } else if (status === "planned") {
-    patch.missed_at = null;
-    patch.miss_reason = null;
-  }
-
-  return patch;
-}
-
-
-export async function updateTrade(id: string, input: TradeInput) {
-  const prep = await prepareTrade(input);
-  if (!prep.ok) return prep;
-
-  const supabase = await createClient();
-  const { patch, execs, statusPatch } = prep;
-
-  // The freeze guard, narrowed. Editing a planned trade into a live one — or
-  // putting more size on — opens exposure on the account, which is what a
-  // Topstep MLL breach exists to stop. Everything else is record-keeping: this
-  // used to refuse EVERY save on a blown account, so the trader could not even
-  // write up the trade that breached the rule.
-  if (await isTopstepAccountFailed(input.account_id)) {
-    const [{ data: prevState }, { data: prevFills }] = await Promise.all([
-      supabase.from("tj_positions").select("status").eq("id", id).maybeSingle(),
-      supabase.from("tj_executions").select("side, qty").eq("position_id", id),
-    ]);
-    const entryQty = (rows: { side: string; qty: number }[]) =>
-      rows.filter((r) => r.side === "entry").reduce((s, r) => s + Number(r.qty), 0);
-    if (
-      addsExposure(
-        { status: prevState?.status ?? null, entryQty: entryQty(prevFills ?? []) },
-        { status: String(statusPatch.status), entryQty: entryQty(execs) },
-      )
-    ) {
-      return {
-        ok: false as const,
-        error:
-          "The Topstep account hit its Maximum Loss Limit. Notes and review can still be edited, but no new position or size. Reset the account in Settings to continue.",
-      };
-    }
-  }
-
-  // Re-snapshot the contract spec ONLY when the trade moves to a different
-  // symbol, or when it predates the snapshot column. Re-stamping on every save
-  // would pull in an edited point value and undo the whole point of freezing it.
-  // `custom` is read in the same round trip: a jsonb write replaces the whole
-  // document, so the previous bag has to be the base or every key this form did
-  // not render would be erased.
-  //
-  // `*` rather than a column list: `risk_budget_at_entry` (F3) may not exist yet
-  // on a database the migration has not reached, and naming it would fail the
-  // whole read — "Trade not found" on every edit. Absent, it reads as unsealed,
-  // the patch computes a budget, and `tj_save_trade` skips a column it does not
-  // have: the same code is safe on both sides of the migration.
-  const { data: prevPos } = await supabase
-    .from("tj_positions")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  // A missing row is not an empty previous state, it is a trade that is not
-  // there. Without this the code walked on: `symbolChanged` false, the snapshot
-  // re-taken, the UPDATE matching zero rows, PostgREST returning no error — and
-  // the action answering `{ ok: true }` for a save that wrote nothing. The
-  // sibling lifecycle actions have always returned "Trade not found" here.
-  if (!prevPos) return { ok: false as const, error: "Trade not found" };
-
-  const symbol =
-    typeof patch.columns.instrument === "string" ? patch.columns.instrument : null;
-  // `prevPos` is non-null past the guard above, so the optional chains that
-  // used to paper over the missing-row case are gone with it.
-  const symbolChanged = prevPos.instrument !== symbol;
-  const snapshot =
-    symbolChanged || prevPos.point_value_at_trade == null
-      ? instrumentSnapshot(
-          symbol,
-          await getInstrumentSpecs([symbol]),
-          await getAccountCurrency(input.account_id),
-        )
-      : {};
-
-  // The plan this save leaves behind. `scale_out_levels` travels on its own
-  // key rather than in `patch.columns`, so it is folded back in here — a ladder
-  // is part of the plan, and a seal without it would call every later ladder
-  // edit an amendment of nothing.
-  const nextPlan = planFieldsOf({ ...patch.columns, ...scaleOutPatch(input) });
-
-  // Fields, fills and rule answers in ONE transaction — the fix this path
-  // needed most. As three round trips the position UPDATE was already committed
-  // by the time the fills and the answers were written, so a failure in either
-  // could not be undone even in principle: the action returned an error while
-  // half the edit stood in the database. The user read "not saved" over a trade
-  // that had changed.
-  //
-  // Proven on the live database before the change: an update carrying a
-  // non-existent rule id left `instrument = NQ`, `entry_price = 21000` and one
-  // fill behind. Through `tj_save_trade` the same call leaves ES / 5000 / two
-  // fills — untouched.
-  const { error: saveErr } = await supabase.rpc("tj_save_trade", {
-    p_id: id,
-    p_position: {
-      ...patch.columns,
-      custom: mergeCustom(prevPos.custom, patch.custom) as Json,
-      account_id: input.account_id,
-      trade_no: input.trade_no,
-      ...statusPatch,
-      ...snapshot,
-      ...playbookPatch(input),
-      ...scaleOutPatch(input),
-      ...(execs.length > 0 ? { needs_review: false } : {}),
-      // Sealed on the save that first gives the trade fills; afterwards the
-      // seal stands and a change to any sealed field is STAMPED instead. The
-      // comparison is by value, because this form sends every plan column on
-      // every save — "the payload named it" would mark an amendment each time
-      // the notes were edited.
-      ...planSnapshotPatch(
-        String(statusPatch.status) as PositionStatus,
-        prevPos,
-        nextPlan,
-      ),
-      ...planAmendedPatch(
-        prevPos.plan_snapshot as PlanSnapshot | null,
-        nextPlan,
-        prevPos.plan_amended_at as string | null,
-      ),
-      ...excursionSourcePatch(patch.columns, prevPos),
-      // Stamped on the save that first gives the trade fills, and never
-      // restated afterwards — editing a fill changes how much was risked, not
-      // what the account was worth on the day it was risked.
-      ...(await getEquityAtEntryPatch(
-        input.account_id,
-        String(statusPatch.status) as PositionStatus,
-        execs,
-        prevPos,
-      )),
-      ...(await getTopstepEntryPatch(
-        input.account_id,
-        String(statusPatch.status) as PositionStatus,
-        execs,
-        prevPos,
-      )),
-    } as Json,
-    p_executions: execs as unknown as Json,
-    p_rules: ruleRows(input.rule_answers) as unknown as Json,
-  });
-  if (saveErr) return { ok: false as const, error: saveErr.message };
-
-  revalidatePath(`/trades/${id}/edit`);
-  revalidateTrades();
-  return { ok: true as const, id };
-}
 
 export async function deleteTrade(id: string) {
   const supabase = await createClient();
@@ -432,11 +109,26 @@ export async function bulkAddTag(ids: string[], kind: BulkTagKind, values: strin
 const tradeReviewSchema = z.object({
   playbook_id: z.uuid().nullable(),
   execution_rating: z.number().int().min(1).max(5).nullable(),
-  mistake: z.array(z.string().trim().min(1).max(200)).max(20),
-  psychology_tags: z.array(z.string().trim().min(1).max(200)).max(20),
+  mistake: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
+  psychology_tags: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
   trade_journal_notes: z.string().max(20_000).nullable(),
   /** Written only where the trade has none — never over the trader's own answer. */
-  exit_reason: z.string().trim().min(1).max(200).nullable(),
+  exit_reason: z.string().trim().min(1).max(200).nullable().optional(),
+  /**
+   * The trader's categories by definition key (phase P) — `categoryPatch` routes
+   * each to its column or to `custom`. Absent leaves every category as it is.
+   */
+  categories: z
+    .record(
+      z.string().min(1).max(100),
+      z.union([z.string().max(5_000), z.number().finite(), z.array(z.string().max(200)).max(50), z.null()]),
+    )
+    .optional(),
+  /**
+   * Rule id → followed, for every rule the page's checklist offered. Absent
+   * leaves the answers alone (unless the playbook changed — P-3).
+   */
+  rule_answers: z.record(z.uuid(), z.boolean()).optional(),
   /** Charts to ADD, in order, after the ones the trade already has. */
   images: z.array(z.string()).max(MAX_TRADE_IMAGES),
   /**
@@ -471,10 +163,13 @@ export async function saveTradeReview(id: string, input: TradeReviewInput) {
   const supabase = await createClient();
   const { data: prev } = await supabase
     .from("tj_positions")
-    .select("exit_reason, plan_snapshot")
+    .select("exit_reason, plan_snapshot, playbook_id, custom")
     .eq("id", id)
     .maybeSingle();
   if (!prev) return { ok: false as const, error: "Trade not found" };
+
+  const cats = r.categories ? categoryPatch(r.categories, await getFieldDefs(false)) : null;
+  if (cats && !cats.ok) return { ok: false as const, error: cats.error };
   // A stop sealed EMPTY at entry (a quick-logged trade saved without one) hides
   // every stop written later — every R reads the seal first. The recording's stop
   // is the stop at entry, so it goes into the seal too.
@@ -486,10 +181,11 @@ export async function saveTradeReview(id: string, input: TradeReviewInput) {
     .update({
       playbook_id: r.playbook_id,
       execution_rating: r.execution_rating,
-      mistake: r.mistake,
-      psychology_tags: r.psychology_tags,
+      ...(r.mistake !== undefined ? { mistake: r.mistake } : {}),
+      ...(r.psychology_tags !== undefined ? { psychology_tags: r.psychology_tags } : {}),
       trade_journal_notes: r.trade_journal_notes?.trim() || null,
-      ...(prev.exit_reason ? {} : { exit_reason: r.exit_reason }),
+      ...(r.exit_reason !== undefined && !prev.exit_reason ? { exit_reason: r.exit_reason } : {}),
+      ...(cats?.ok ? { ...cats.columns, custom: mergeCustom(prev.custom, cats.custom) as Json } : {}),
       ...(r.stop_price !== undefined ? { stop_price: r.stop_price } : {}),
       ...(r.target_price !== undefined ? { target_price: r.target_price } : {}),
       ...(r.thesis !== undefined ? { thesis: r.thesis?.trim() || null } : {}),
@@ -497,6 +193,9 @@ export async function saveTradeReview(id: string, input: TradeReviewInput) {
     })
     .eq("id", id);
   if (error) return { ok: false as const, error: error.message };
+
+  const ruleError = await saveRuleAnswers(id, prev.playbook_id, r.playbook_id, r.rule_answers);
+  if (ruleError) return { ok: false as const, error: ruleError };
 
   if (images.urls.length > 0) {
     // Appended after the trade's own: a review adds pictures, never replaces them.
@@ -519,9 +218,58 @@ export async function saveTradeReview(id: string, input: TradeReviewInput) {
     if (imgErr) return { ok: false as const, error: imgErr.message };
   }
 
-  revalidatePath(`/trades/${id}/edit`);
+  revalidatePath(`/trades/${id}`);
   revalidateTrades();
   return { ok: true as const, id };
+}
+
+/**
+ * The checklist half of a trade page save — see `ruleAnswerWrites` for what is
+ * written and what is removed. Never through `tj_save_trade`, which deletes
+ * every answer on the trade first.
+ */
+async function saveRuleAnswers(
+  positionId: string,
+  prevPlaybookId: string | null,
+  playbookId: string | null,
+  sent: Record<string, boolean> | undefined,
+): Promise<string | null> {
+  const playbookChanged = prevPlaybookId !== playbookId;
+  if (sent === undefined && !playbookChanged) return null;
+
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user) return "Not signed in";
+  const [{ data: links, error: linkErr }, { data: answered, error: ansErr }] = await Promise.all([
+    playbookId
+      ? supabase.from("tj_playbook_rule_links").select("rule_id").eq("playbook_id", playbookId)
+      : Promise.resolve({ data: [] as { rule_id: string }[], error: null }),
+    supabase.from("tj_position_rules").select("rule_id").eq("position_id", positionId),
+  ]);
+  if (linkErr || ansErr) return (linkErr ?? ansErr)!.message;
+
+  const writes = ruleAnswerWrites({
+    bookRuleIds: new Set((links ?? []).map((l) => l.rule_id)),
+    sent: sent ?? {},
+    previous: (answered ?? []).map((a) => a.rule_id),
+    playbookChanged,
+  });
+  if (writes.upsert.length > 0) {
+    const { error } = await supabase.from("tj_position_rules").upsert(
+      writes.upsert.map((w) => ({ ...w, position_id: positionId, user_id: user.id })),
+      { onConflict: "position_id,rule_id" },
+    );
+    if (error) return error.message;
+  }
+  if (writes.remove.length > 0) {
+    const { error } = await supabase
+      .from("tj_position_rules")
+      .delete()
+      .eq("position_id", positionId)
+      .in("rule_id", writes.remove);
+    if (error) return error.message;
+  }
+  return null;
 }
 
 const missedSetupSchema = z.object({
@@ -581,4 +329,47 @@ export async function createMissedSetup(input: MissedSetupPayload) {
 
   revalidateTrades();
   return { ok: true as const, id: data.id };
+}
+
+const missedLevelsSchema = missedSetupSchema.pick({
+  direction: true,
+  entry_price: true,
+  stop_price: true,
+  target_price: true,
+  seen_at: true,
+});
+
+export type MissedLevelsPayload = z.infer<typeof missedLevelsSchema>;
+
+/**
+ * The levels of a missed setup, changed on the trade page (phase P).
+ *
+ * Account and instrument stay as written: the contract spec was frozen onto the
+ * row with them. Setup, checklist, categories (the miss reason among them) and the note go through
+ * `saveTradeReview` like on any trade. Only a `missed` row is touched — a trade
+ * with fills has its levels from the exchange.
+ */
+export async function updateMissedSetup(id: string, input: MissedLevelsPayload) {
+  const parsed = missedLevelsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: firstIssue(parsed.error) };
+  const m = parsed.data;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tj_positions")
+    .update({
+      direction: m.direction,
+      entry_price: m.entry_price,
+      stop_price: m.stop_price,
+      target_price: m.target_price,
+      missed_at: m.seen_at,
+    })
+    .eq("id", id)
+    .eq("status", "missed")
+    .select("id");
+  if (error) return { ok: false as const, error: error.message };
+  if (!data?.length) return { ok: false as const, error: "Missed setup not found" };
+
+  revalidateTrades();
+  return { ok: true as const, id };
 }

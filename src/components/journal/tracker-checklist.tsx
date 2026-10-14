@@ -309,7 +309,7 @@ function AutoRow({
           {res.offenders.map((id) => (
             <Link
               key={id}
-              href={`/trades/${id}/edit`}
+              href={`/trades/${id}?from=daily`}
               className="text-xs underline underline-offset-2 hover:no-underline"
             >
               {tradeLabels[id] ?? id.slice(0, 8)}

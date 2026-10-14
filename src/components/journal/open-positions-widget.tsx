@@ -125,7 +125,7 @@ export function OpenPositionsWidget({
               return (
                 <li key={t.id}>
                   <Link
-                    href={`/trades/${t.id}/edit`}
+                    href={`/trades/${t.id}`}
                     className="flex items-center gap-2 py-2 text-sm hover:bg-muted/40"
                   >
                     <span className="font-mono font-medium">{(t.instrument as string) ?? "—"}</span>
