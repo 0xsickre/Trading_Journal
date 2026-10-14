@@ -133,7 +133,7 @@ describe("controls", () => {
   it("an unknown dimension in a link falls back instead of blanking the page", () => {
     search = new URLSearchParams("dim=deleted_field");
     render(book());
-    expect(screen.getByText("By setup grade")).toBeInTheDocument();
+    expect(screen.getByText("By Ocena setupa")).toBeInTheDocument();
   });
 });
 

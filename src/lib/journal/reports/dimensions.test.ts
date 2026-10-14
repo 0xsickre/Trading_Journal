@@ -308,14 +308,16 @@ describe("user-defined fields as dimensions", () => {
     // Settings. Every picker concatenates the two lists, so an unfiltered
     // `customFieldDimensions` put each of them in the dropdown twice under one
     // duplicated React key. Caught live on the dashboard's Breakdown select.
+    // Bias dana and TF ulaza have no built-in: they are the trader's own
+    // categories since Phase 4a, so they are the only ones left.
     const dims = customFieldDimensions(SEEDED_FIELD_DEFS);
-    expect(dims).toEqual([]);
+    expect(dims.map((d) => d.key)).toEqual(["htf_bias", "entry_tf"]);
 
     // And the registry still answers for every one of them — the point is that
     // ONE side owns each key, not that the key disappears. Except `miss_reason`:
     // it is written on MISSED trades and a report counts closed ones only, so
     // it is offered by neither side.
-    for (const def of SEEDED_FIELD_DEFS) {
+    for (const def of SEEDED_FIELD_DEFS.filter((d) => !["htf_bias", "entry_tf"].includes(d.key))) {
       if (def.key === "miss_reason") expect(getDimension(def.key)).toBeUndefined();
       else expect(getDimension(def.key), def.key).toBeDefined();
     }
@@ -325,7 +327,7 @@ describe("user-defined fields as dimensions", () => {
     // The filter must be a collision check, not a blanket refusal: a category
     // the trader invented has no built-in and must still be groupable.
     const mixed = customFieldDimensions([...SEEDED_FIELD_DEFS, ...DEFS]);
-    expect(mixed.map((d) => d.key)).toEqual(["session", "confluences"]);
+    expect(mixed.map((d) => d.key)).toEqual(["htf_bias", "entry_tf", "session", "confluences"]);
   });
 
   it("resolves a custom key by name, the same way a built-in resolves", () => {
@@ -435,7 +437,8 @@ describe("splitting psychology_tags back into its source lists", () => {
 
   it("resolves by key once carried on the context", () => {
     const ctx = dimCtx([], { customDimensions: tagSplitDimensions(OPTIONS) });
-    expect(resolveDimension("psych_discipline", ctx)?.label).toBe("Discipline");
+    expect(resolveDimension("psych_discipline", ctx)?.label).toBe("Disciplina");
+    expect(resolveDimension("psych_emotion", ctx)?.label).toBe("Emocije");
     // Per user, never a global — same rule as the custom field dimensions.
     expect(resolveDimension("psych_discipline")).toBeUndefined();
   });
@@ -540,5 +543,18 @@ describe("the swing dimensions are gone (H1, 28.09.2026)", () => {
     for (const key of ["touched", "thesis_state", "weekend_hold", "time_stop_breached"]) {
       expect(getDimension(key)).toBeUndefined();
     }
+  });
+});
+
+describe("category names in Serbian, as in the trader's book (phase J)", () => {
+  it.each([
+    ["direction", "Smer"],
+    ["setup_grade", "Ocena setupa"],
+    ["exit_reason", "Razlog izlaza"],
+    ["mistake", "Greške"],
+    ["technical_tags", "Tehnički tagovi"],
+    ["psychology_tags", "Psihologija (sve)"],
+  ])("%s → %s", (key, label) => {
+    expect(getDimension(key)?.label).toBe(label);
   });
 });

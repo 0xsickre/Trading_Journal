@@ -64,23 +64,26 @@ function exportableImage(ref: string | undefined): string {
   return isStoredImage(ref) ? "(slika u journal-u)" : ref;
 }
 
-// Fixed breakdowns. The user-defined fields are appended by `breakdownsFor`,
-// so a field added in Settings shows up in the mentor pack without an edit here.
+// Fixed breakdowns, named in Serbian as the trader's book names them (phase J).
+// The user-defined fields are appended by `breakdownsFor`, so a field added in
+// Settings shows up in the mentor pack without an edit here.
 const FIXED_BREAKDOWNS: { field: string; label: string }[] = [
-  { field: "setup_grade", label: "Setup Grade" },
+  { field: "setup_grade", label: "Ocena setupa" },
   { field: "instrument", label: "Instrument" },
-  { field: "direction", label: "Direction" },
-  { field: "technical_tags", label: "Technical Tags" },
-  { field: "psychology_tags", label: "Psychology Tags" },
-  { field: "mistake", label: "Mistake" },
+  { field: "direction", label: "Smer" },
+  { field: "technical_tags", label: "Tehnički tagovi" },
+  { field: "psychology_tags", label: "Psihologija" },
+  { field: "mistake", label: "Greške" },
 ];
 
 function breakdownsFor(defs: readonly FieldDef[]) {
   // A custom field can carry the key of a fixed one (the tag fields are also
-  // field definitions); one table per field, or the pack prints it twice.
+  // field definitions); one table per field, or the pack prints it twice. The
+  // table keeps its fixed place but takes the name the trader gave the field.
   const seen = new Set<string>();
+  const named = new Map(defs.map((d) => [d.key, d.label]));
   return [
-    ...FIXED_BREAKDOWNS,
+    ...FIXED_BREAKDOWNS.map((b) => ({ ...b, label: named.get(b.field) ?? b.label })),
     // Free-text fields make useless breakdown tables — one row per trade.
     ...defs
       .filter((d) => d.field_type === "select" || d.field_type === "tags")
@@ -104,7 +107,7 @@ function detailFieldsFor(defs: readonly FieldDef[]) {
   for (const f of getAllFormFields(defs)) add(f.name, f.label);
   // Derived / computed columns that also carry user-meaningful info.
   add("planned_rr", "Planned RR");
-  add("miss_reason", "Miss reason");
+  add("miss_reason", "Razlog propuštanja");
   add("missed_at", "Missed at");
   add("chart_images_text", "Charts");
   return out;

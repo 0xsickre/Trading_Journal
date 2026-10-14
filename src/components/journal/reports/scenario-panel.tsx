@@ -194,7 +194,7 @@ export function ScenarioPanel({
           {groups.length > 1 && (
             <div>
               <div className="mb-1 text-xs font-medium text-muted-foreground">
-                By {dimension.label.toLowerCase()} — change the grouping at the top of the report
+                By {dimension.label} — change the grouping at the top of the report
                 {dimension.multiValue ? " (a trade can sit in several rows)" : ""}
               </div>
               <div className="overflow-x-auto">

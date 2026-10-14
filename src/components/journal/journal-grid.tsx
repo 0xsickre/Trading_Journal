@@ -257,9 +257,9 @@ const BULK_TAG_CATEGORIES: {
   listKey?: string;
   listKeys?: string[];
 }[] = [
-  { value: "technical", label: "Technical", listKey: "technical_tag" },
-  { value: "psychology", label: "Psychology", listKeys: ["emotion", "discipline"] },
-  { value: "mistake", label: "Mistake", listKey: "mistake" },
+  { value: "technical", label: "Tehnički tagovi", listKey: "technical_tag" },
+  { value: "psychology", label: "Psihologija", listKeys: ["emotion", "discipline"] },
+  { value: "mistake", label: "Greške", listKey: "mistake" },
 ];
 
 /** One dimension filter: its options come from the book, its match from the row. */
@@ -526,7 +526,7 @@ export function JournalGrid({
     const usedPlaybooks = new Set(trades.map((t) => t.playbook_id as string | null));
     return [
       simple("instrument", "Instrument"),
-      simple("direction", "Direction"),
+      simple("direction", "Smer"),
       {
         key: "playbook",
         label: "Playbook",
@@ -537,7 +537,7 @@ export function JournalGrid({
       },
       {
         key: "setup_grade",
-        label: "Grade",
+        label: "Ocena setupa",
         options: distinctValues(trades, (t) => {
           const g = gradeOf(t);
           return g ? [g] : [];
@@ -545,8 +545,8 @@ export function JournalGrid({
         match: (t, v) => gradeOf(t) === v,
       },
       simple("ict_entry_model", "Entry model"),
-      simple("technical_tags", "Technical tag"),
-      simple("mistake", "Mistake"),
+      simple("technical_tags", "Tehnički tagovi"),
+      simple("mistake", "Greške"),
       {
         key: OUTCOME_KEY,
         label: "Outcome",

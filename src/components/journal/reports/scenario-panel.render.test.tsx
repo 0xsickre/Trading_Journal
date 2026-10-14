@@ -38,7 +38,7 @@ describe("ScenarioPanel", () => {
       { instrument: "MES", scenario: scenarioDoc() },
     ]);
     render(<ScenarioPanel trades={trades} dimension={dim("instrument")} dimensionContext={ctx} />);
-    expect(screen.getByText(/By instrument/)).toBeInTheDocument();
+    expect(screen.getByText(/By Instrument/)).toBeInTheDocument();
     expect(screen.getByText("MES")).toBeInTheDocument();
   });
 });

@@ -15,13 +15,18 @@ import type { FieldDef } from "./field-def-types";
  * answer to "what does a seeded account look like". Mirrors the seed in
  * `20260823140000_column_backed_categories.sql`; if that file gains a row, this
  * one does too.
+ *
+ * Since phase J (15.10.2026) the seed is the trader's own book of that day:
+ * seven fields, named in Serbian (`tj_seed_categories`, latest migration).
  */
 export const SEEDED_FIELD_DEFS: FieldDef[] = [
-  def("technical_tags", "Technical Tags", "tags", "technical_tag", "always", 0),
-  def("exit_reason", "Exit Reason", "select", "exit_reason", "active", 1),
-  def("mistake", "Mistake", "tags", "mistake", "active", 2),
-  def("psychology_tags", "Psychology tags", "tags", "emotion", "active", 3),
-  def("miss_reason", "Miss Reason", "select", "miss_reason", "missed", 4),
+  def("htf_bias", "Bias dana", "select", "htf_bias", "always", 0),
+  def("entry_tf", "TF ulaza", "select", "entry_tf", "always", 1),
+  def("technical_tags", "Tehnički tagovi", "tags", "technical_tag", "always", 2),
+  def("exit_reason", "Razlog izlaza", "select", "exit_reason", "active", 3),
+  def("mistake", "Greške", "tags", "mistake", "active", 4),
+  def("psychology_tags", "Psihologija", "tags", "emotion", "active", 5),
+  def("miss_reason", "Razlog propuštanja", "select", "miss_reason", "missed", 6),
 ];
 
 function def(

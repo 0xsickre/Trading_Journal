@@ -83,7 +83,7 @@ export function ReportChart({
 
   return (
     <ChartShell
-      title={`${m.label} by ${result.dimension.label.toLowerCase()}`}
+      title={`${m.label} by ${result.dimension.label}`}
       action={action}
       empty={
         plottable ? undefined : (

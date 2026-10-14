@@ -530,7 +530,7 @@ describe("bulk add tag", () => {
     expect(chip()).toBeDefined();
 
     await user.click(screen.getByRole("combobox"));
-    await user.click(await screen.findByRole("option", { name: "Mistake" }));
+    await user.click(await screen.findByRole("option", { name: "Greške" }));
 
     expect(chip()).toBeUndefined();
     expect(screen.queryByText("FVG")).not.toBeInTheDocument();

@@ -76,7 +76,7 @@ export function CompareTable({
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base">
-          By {result.dimension.label.toLowerCase()} — {labels.a} against {labels.b}
+          By {result.dimension.label} — {labels.a} against {labels.b}
         </CardTitle>
       </CardHeader>
       <CardContent>

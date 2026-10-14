@@ -53,7 +53,7 @@ export function ReportTable({
     notes.push(`Under ${result.minSample} trades: shown, but never ranked`);
   }
   if (result.excluded > 0) {
-    notes.push(`${result.excluded} ${result.excluded === 1 ? "trade has" : "trades have"} no ${result.dimension.label.toLowerCase()} and ${result.excluded === 1 ? "is" : "are"} left out`);
+    notes.push(`${result.excluded} ${result.excluded === 1 ? "trade has" : "trades have"} no ${result.dimension.label} and ${result.excluded === 1 ? "is" : "are"} left out`);
   }
   if (result.multiValue) {
     notes.push("A trade can sit in several rows, so rows do not add up to the book");
@@ -62,7 +62,7 @@ export function ReportTable({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">By {result.dimension.label.toLowerCase()}</CardTitle>
+        <CardTitle className="text-base">By {result.dimension.label}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="max-h-[32rem] overflow-auto">

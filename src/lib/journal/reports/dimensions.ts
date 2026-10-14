@@ -144,13 +144,13 @@ const TAG_SPLITS = [
     key: "psych_emotion",
     field: "psychology_tags",
     listKey: "emotion",
-    label: "Emotion",
+    label: "Emocije",
   },
   {
     key: "psych_discipline",
     field: "psychology_tags",
     listKey: "discipline",
-    label: "Discipline",
+    label: "Disciplina",
   },
 ] as const;
 
@@ -330,7 +330,7 @@ const tradeDimensions: Dimension[] = [
   column("instrument", "Instrument"),
   {
     key: "direction",
-    label: "Direction",
+    label: "Smer",
     group: "trade",
     order: ["Long", "Short", EMPTY_BUCKET],
     // A trade with no direction recorded is "—", not "Long": defaulting it to
@@ -343,7 +343,7 @@ const tradeDimensions: Dimension[] = [
   },
   {
     key: "setup_grade",
-    label: "Setup grade",
+    label: "Ocena setupa",
     group: "trade",
     listKey: "setup_grade",
     // The old `column()` helper set no order, so grades sorted by whichever
@@ -366,11 +366,11 @@ const tradeDimensions: Dimension[] = [
   // `result` is gone: it was a manual Win/Loss/Breakeven select that duplicated
   // the derived `outcome` dimension below, and could contradict it without any
   // report noticing. Group by "Ishod" instead.
-  column("exit_reason", "Exit reason", "exit_reason"),
+  column("exit_reason", "Razlog izlaza", "exit_reason"),
   // `text[]` since migration `20260819120000_mistake_multi` — a trade with two
   // mistakes stands in both rows, so the rows do NOT sum to the total trade
   // count. The same holds for the tags below, and `tagColumn` is what says so.
-  tagColumn("mistake", "Mistake"),
+  tagColumn("mistake", "Greške"),
   // No `status` or `miss_reason`: a report counts closed trades only
   // (`toRealized`), so status could only ever read "closed" and a missed trade,
   // the one that carries a miss reason, never reaches it. `NOT_IN_REPORTS` below
@@ -392,11 +392,11 @@ const tradeDimensions: Dimension[] = [
       return typeof v === "number" && v >= 1 && v <= 5 ? String(v) : null;
     },
   },
-  tagColumn("technical_tags", "Technical tags"),
+  tagColumn("technical_tags", "Tehnički tagovi"),
   // Kept alongside the `emotion` / `discipline` split (see `tagSplitDimensions`)
   // rather than replaced by it: this is the only dimension that still shows a
   // free-typed tag belonging to no option list.
-  tagColumn("psychology_tags", "Psychology tags (all)"),
+  tagColumn("psychology_tags", "Psihologija (sve)"),
   {
     key: "account",
     label: "Account",

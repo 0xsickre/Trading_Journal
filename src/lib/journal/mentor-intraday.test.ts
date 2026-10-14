@@ -239,13 +239,42 @@ describe("mentor pack details found by the mock book (30.09.2026)", () => {
     expect(md).toContain("cena se nije vratila do ulaza — setup nije ni došao, to nije oklevanje: +0.00R");
     expect(md).toContain("- **Hipotetički ishod (R2):** još nije izmereno");
     expect(md).not.toContain("Missed at");
+    expect(md).toContain("- **Razlog propuštanja:** Oklevao");
+    expect(md).not.toContain("Miss reason");
+  });
+
+  it("names the categories in Serbian, and by the trader's own field name when there is one (phase J)", () => {
+    const tagged = trade(6, "2026-09-30T15:00:00Z", "2026-09-30T15:05:00Z", -50);
+    (tagged as unknown as { mistake: string[] }).mistake = ["Rani ulaz"];
+    (tagged as unknown as { psychology_tags: string[] }).psychology_tags = ["Smiren"];
+    const plain = buildMentorPack([...book, tagged], {});
+    expect(plain).toContain("### Smer");
+    expect(plain).toContain("### Greške");
+    expect(plain).toContain("### Psihologija");
+    for (const en of ["### Direction", "### Mistake", "### Psychology Tags"]) {
+      expect(plain).not.toContain(en);
+    }
+    const renamed: FieldDef = {
+      id: "f2",
+      key: "mistake",
+      label: "Moje greške",
+      field_type: "tags",
+      list_key: "mistake",
+      show_phase: "active",
+      sort_order: 4,
+      is_active: true,
+      show_when: "always",
+    };
+    const own = buildMentorPack([...book, tagged], { fieldDefs: [renamed] });
+    expect(own.split("### Moje greške").length - 1).toBe(1);
+    expect(own).not.toContain("### Greške");
   });
 
   it("prints a category once, leaves empty ones out and gives an all-breakeven group no win rate", () => {
     const tags: FieldDef = {
       id: "f1",
       key: "technical_tags",
-      label: "Technical Tags",
+      label: "Tehnički tagovi",
       field_type: "tags",
       list_key: "technical_tags",
       show_phase: "always",
@@ -256,9 +285,10 @@ describe("mentor pack details found by the mock book (30.09.2026)", () => {
     const scratch = trade(5, "2026-09-30T15:00:00Z", "2026-09-30T15:05:00Z", 0);
     (scratch as unknown as { technical_tags: string[] }).technical_tags = ["FVG"];
     const md = buildMentorPack([...book, scratch], { fieldDefs: [tags] });
-    expect(md.split("### Technical Tags").length - 1).toBe(1);
+    expect(md.split("### Tehnički tagovi").length - 1).toBe(1);
+    expect(md).not.toContain("### Technical Tags");
     expect(md).toContain("| FVG | 1 | — |");
-    expect(md).not.toContain("### Setup Grade");
+    expect(md).not.toContain("### Ocena setupa");
     expect(md).not.toContain("_no data_");
   });
 

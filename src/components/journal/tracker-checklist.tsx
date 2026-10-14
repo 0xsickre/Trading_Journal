@@ -121,8 +121,8 @@ function dayTradingText(res: AutoRuleResult, currency: string): string | null {
         : "Na svakom trejdu upisano šta si rekao pre klika.";
     case "review_complete":
       return broke
-        ? "Trejdu fali ocena, razlog izlaska, bias, Entry TF, emocija, ili greška (kad ocena nije A)."
-        : "Svaki trejd ima ocenu, razlog izlaska, bias, Entry TF, emociju i grešku ili ocenu A.";
+        ? "Trejdu fali ocena, razlog izlaza, bias dana, TF ulaza, emocija ili greška (kad ocena nije A)."
+        : "Svaki trejd ima ocenu, razlog izlaza, bias dana, TF ulaza, emociju i grešku ili ocenu A.";
     case "screenshot_per_trade":
       return broke ? "Trejd nema nijednu sliku charta." : "Svaki trejd ima sliku charta.";
     case "honest_tags":

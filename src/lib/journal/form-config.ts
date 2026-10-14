@@ -50,7 +50,7 @@ const BASE_FIELDS: FieldConfig[] = [
   { name: "entry_price", label: "Planned Entry Price", type: "number" },
   // The ORIGINAL stop, off the recording when the platform's was moved (phase O).
   { name: "stop_price", label: "Stop Price", type: "number" },
-  { name: "direction", label: "Direction", type: "computed" },
+  { name: "direction", label: "Smer", type: "computed" },
   { name: "target_price", label: "Target Price", type: "number" },
   { name: "planned_rr", label: "Planned R:R", type: "computed" },
   // What was said before the click, off the recording.
