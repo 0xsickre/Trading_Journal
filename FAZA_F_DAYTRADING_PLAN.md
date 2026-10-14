@@ -160,7 +160,7 @@ pogađa.
 | **Q** | Manje ručnog rada: ručna pravila trackera postaju automatska, /daily javlja trejd bez naloga | — | P | da: `20261014120000` (`auto_key` check, pravila) | **Opus** | ✅ 14.10.2026 — Q-1 = C, Q-2 (5 automatski, Vreme trgovanja povučeno), Q-3 = A |
 | **N** | Sesije trejdera umesto „Globex noć“: osam sesija kao linije na chartu, minuti od otvaranja sesije, sva vremena u paketu i na /daily po Beogradu | — | Q | ne | **Opus** | ✅ 14.10.2026 — N-1 = A, N-2 = A, N-3 = A; bez migracije |
 | **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | da: `20261014200000` (`mental_temp_at`), `20261015090000` (`trading_window`) | **Opus** | ✅ 14.10.2026 — Y1 `14a992f` · Y2 `7281007` · Y3 `80dee18` · Y4/Y5 `9de8441` (migracije `20261014200000`, `20261015090000` primenjene); Y-1 … Y-4 = A, Y-5 NY 14:30–18:00, Y-6 = A |
-| **J** | Jezik: nazivi kategorija u paketu, /reports i gridu na srpskom; fabrička lista tagova = lista trejdera | — | Y | da: nova definicija `tj_seed_categories` (podaci se ne menjaju) | **Opus** | u toku (15.10.2026) |
+| **J** | Jezik: nazivi kategorija u paketu, /reports i gridu na srpskom; fabrička lista tagova = lista trejdera | — | Y | da: `20261015120000` (nova definicija `tj_seed_categories`, podaci se ne menjaju) | **Opus** | ✅ 15.10.2026 — J1 `61f5c79` · J2 `c415355` (migracija `20261015120000` primenjena) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1484,7 +1484,7 @@ checklist i kapija upisani u odnosu na ulaz i zatvaranje. Oba pravila u produkci
 `80dee18` uspešan. Ručna provera u pregledaču nije rađena (produkcija je iza Vercel prijave). Posledica u podacima:
 13.10. (nezaključan) `playbook_linked` sada pada (#2 bez playbook-a, #3 playbook posle ulaza); 07.10. ostaje zamrznut.
 
-## J — Jezik: nazivi kategorija i fabrički tagovi (detaljno, 15.10.2026)
+## J — Jezik: nazivi kategorija i fabrički tagovi (detaljno, 15.10.2026) — ✅
 
 **Povod** (trejder preko mentora, 15.10.2026: „sve na srpskom“, gramatika svuda): mentor je u bazi trejdera upisao
 listu tagova za day trading na srpskom (duplikati spojeni, greške u kucanju ispravljene, dodate greške koje trejder
@@ -1524,6 +1524,15 @@ fabrička lista (`tj_seed_categories`) je stara, pa bi posle „Delete all data�
 ### Izlaz iz J
 Paket i /reports pišu nazive kategorija na srpskom, isto kao Settings, a reset naloga vraća listu koju trejder sada
 ima.
+
+**Isporučeno (15.10.2026):** J1 `61f5c79` (naslovi u paketu, /reports, gridu, formi i na /daily; u paketu pobeđuje
+naziv polja iz baze; u „By …“ se naziv kategorije više ne spušta u mala slova), J2 `c415355` (migracija
+`20261015120000`, test `seed-categories.test.ts` čita poslednju definiciju funkcije). Gate zelen (2944 testa), Vercel
+Production `c415355` uspešan, pa migracija primenjena (verzija u bazi `20261014224514`, UTC). Baza posle: 10 lista, 76
+stavki, 7 polja — podaci trejdera netaknuti. Ručna provera u pregledaču nije rađena (produkcija je iza Vercel prijave).
+**Van obima J (svesno):** ostatak /reports, dashboard-a, grida i Settings je i dalje na engleskom (README „On
+language“: deo koji meri je engleski; ~3.150 stringova); kategorije lista (`Context`, `ICT Setup`, `Risk`,
+`Psychology`) ostaju kakve su u bazi. Ako trejder hoće ceo interfejs na srpskom, to je posebna faza.
 
 ## Katalog stavki
 

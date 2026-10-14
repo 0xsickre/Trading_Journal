@@ -33,8 +33,8 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 250 of the
-3,398 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 302 of the
+3,458 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
@@ -46,7 +46,8 @@ on a screen the trader writes into or reviews in their own words:
 | The seeded tag values the review and the import write (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2) | 6 |
 | The trade page `/trades/[id]` (phase P) — off the recording, setup, review, and why it asks for the original stop (`trade-page.tsx`, its route, `stop-moved.ts`) | 24 |
 | "Propušten setup" — the missed-setup page and form (`/trades/missed/new`) | 3 |
-| Dashboard, `/reports`, journal grid, playbooks, **`/settings`**, `/import`, Topstep banner | **0** |
+| Category names — the trader's own list and field names (Smer, Ocena setupa, Razlog izlaza, Greške, Tehnički tagovi, Psihologija, Emocije, Disciplina) as `/reports` groupings, journal-grid filters and bulk tags, and the mentor pack's category tables (phase J) | 7 |
+| Dashboard, `/reports`, journal grid, playbooks, **`/settings`**, `/import`, Topstep banner — everything around those names | **0** |
 
 Settings joined that last row on 20.09.2026. It had held the stage names of the daily checklist
 (`Priprema` / `Trgovanje` / `Osvrt`, which the checklist itself rendered), a paragraph of Serbian
@@ -54,7 +55,10 @@ above the instrument catalog and two error messages from its server actions — 
 reading half in one language and half in the other.
 
 The half that **measures** is English; the half the trader **writes into** is Serbian. That is the
-trader's own language for their own prose, and it stays.
+trader's own language for their own prose, and it stays. A category is his own word too: he names his
+lists in Settings, so since phase J (15.10.2026) the built-in groupings carry the same Serbian names as
+his lists wherever they appear, and a report reads "By Ocena setupa" — the name is not lowercased,
+because it is a name.
 
 That **0** was not always true, and it was not reached by rounding. Five strings sat on the English
 side and were moved across: one reconcile-row message in `import-wizard.tsx`; the instrument-group
@@ -69,7 +73,7 @@ lexes every `.ts`/`.tsx` outside tests into comment / string / code regions, kee
 that read as prose rather than as machinery, and scores those for Serbian by diacritics and by a word
 list. A single Serbian word carrying no diacritic can still slip past that, and JSX text between tags
 is not a string literal (the "Bez pregleda" card on `/daily` is Serbian and not in the count), so
-**269 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
+**302 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
 name, read as the Serbian "pre" until F5.4. Three earlier versions of this paragraph said "about 46 of some 1,700", then "153 of
 1,663", then "185 of 2,191" — each counted by hand, and each had to be replaced rather than quietly
 corrected. That is why the method now ships as a script: a number nobody can re-run is a number
@@ -981,6 +985,11 @@ scope (`mentor-export.ts`), to be uploaded into a chat: every number is computed
 interprets and never calculates. Since F5.6 (29.09.2026) it carries what decides an intraday Topstep
 book, from values the screens already derive (`mentor-intraday.ts`):
 
+- **Category tables in Serbian** (phase J, 15.10.2026). "Performanse po kategorijama" names each
+  table by the trader's own field name when the field exists in Settings (Tehnički tagovi, Greške,
+  Psihologija), otherwise Ocena setupa, Instrument, Smer; a missed setup's reason is "Razlog
+  propuštanja". Packs archived before J carry the English headings.
+
 - **The instructions depend on the period** (phase M, 08.10.2026). A **Day** pack is the close of
   the day: the model is told not to review but to question the trader — up to fifteen numbered
   questions at once, from the result, the preparation, the risk against the budget, the stop and the
@@ -1076,7 +1085,7 @@ taken at entry, so each is charged to the Topstep day the trade was OPENED on:
 | `no_entry_after_daily_target` | an entry on a Topstep account follows trades of that account and day, CLOSED before it, whose net reached the account's personal daily profit target | the account has no target (`unconfigured`), the day had no Topstep entry, or a trade closed before the entry has no price |
 | `htf_bias_set` (phase Q, 14.10.2026, `20261014120000`) | a trade opened that day has no "Bias dana" (`custom.htf_bias`), or it says "Nisam odredio unapred" | no trade opened that day, or every one is still open (`not_yet`) — a review is written after the exit |
 | `thesis_recorded` (phase Q) | a trade has no `thesis` ("šta sam rekao pre klika"), read live; WHEN it was said is the recording's, so the mentor's | as above |
-| `review_complete` (phase Q) | a trade lacks a grade, an exit reason, the bias, Entry TF (`custom.entry_tf`), a psychology tag, or a mistake when the grade is not A | as above |
+| `review_complete` (phase Q) | a trade lacks a grade, an exit reason, the bias, TF ulaza (`custom.entry_tf`), a psychology tag, or a mistake when the grade is not A | as above |
 | `screenshot_per_trade` (phase Q) | a trade has no chart (`tj_trade_images`) | as above |
 | `honest_tags` (phase Q) | on the same trade: "Ispoštovao rizik" beside a failed `risk_per_trade` / `stop_loss_set` / `max_loss_per_trade`, or an A ("Bez greške") beside any failed trading rule, or (phase Y5, 15.10.2026) "Vodio po planu" on a trade without a playbook or with one created after the entry; the review rules do not count as trading errors. Evaluated last, from the other verdicts | as above |
 | `trading_window` (phase Y4, 15.10.2026, `20261015090000`) | an entry before `from` or from `to` on, or a position still open once the minute of `to` has passed — an exit within that minute is the time exit, not a breach. Times are Belgrade; the window is `config.windows[]` of `{ since, from, to }`, the latest `since` on or before the day applies (London weeks 09:00–12:00, NY weeks 14:30–18:00), set in Settings › Tracker ("Save window", `setTradingWindow`), so a change next Monday leaves this week as it was. Reverses Q-2's retired "Vreme trgovanja" | no trade opened that day, or no window for the day (`unconfigured`) |
@@ -1606,17 +1615,24 @@ what "reset everything" means, and a reader should not have to trace foreign key
 
 What actually comes back, counted from the seed functions rather than assumed from their names:
 **1 Main Account (USD, `Europe/Belgrade`, asset class Futures, not in Topstep mode — the plan and
-balance are chosen in Settings), the six futures, 10 lists holding 56 options, 18 tracker rules,
+balance are chosen in Settings), the six futures, 10 lists holding 76 options, 18 tracker rules,
 7 custom fields, 4 note folders.** Since `20260930030000` the factory set is the day trader's own:
 seven manual rules (before the session: calendar and HTF levels, mental check-in; while trading:
 trading hours, risk control, walk-away target; after it: journal and tags, screenshots) around the
 eleven automatic ones, and the note folders Plan sesije, Osvrt na sesiju, Trade Notes (the system
 folder a trade's note opens in) and Nedeljni osvrt, each with an intraday template. The lists are the
-day trader's since F4 (`20260929120000`), in Serbian since K2 (`20260929200000`): Entry TF 30s / 1m /
-2m / 5m / 15m / 1h, "Bias dana
-(brief)" Long / Short / Neutralno, Exit Reason with "Zatvoreno do kraja dana", and the day trader's
-mistakes (Previše trejdova, Trejd posle DLL plana, Osvetnički ponovni ulaz, Trejd u crvenom prozoru).
-The "Risk %" list left in H2. In an existing book the same migration added those items and switched
+day trader's since F4 (`20260929120000`), in Serbian since K2 (`20260929200000`), and since phase J
+(`20261015120000`) they are **the trader's own book of 15.10.2026**, read from the database that day:
+the mentor had merged the duplicates, fixed the typos and added the mistakes he actually makes, so a
+reset no longer brings back the list of 30.09. Lists and fields are named Smer, Bias dana, TF ulaza,
+Tehnički tagovi, Ocena setupa, Razlog izlaza, Razlog propuštanja, Emocije, Disciplina, Greške (the
+field over Emocije and Disciplina is Psihologija); TF ulaza 30s / 1m / 2m / 5m / 15m / 1h; Bias dana
+Gore (bullish) / Dole (bearish) / Nema biasa / Nisam odredio unapred; twenty mistakes, from Bez greške
+and Bez biasa dana pre ulaza to Ulaz posle 2 SL, Stop postavio bracket, ne ja and Dobitak pretvorio u
+gubitak. Every value the code reads by name is in it (Bez greške, Ispoštovao rizik, Vodio po planu,
+the five exit reasons `autoExitReason` writes, the "Nisam odredio" bias), and `seed-categories.test.ts`
+checks the function row by row. The list categories (Context, ICT Setup, Risk, Psychology) are kept
+as the database has them. The "Risk %" list left in H2. In an existing book the same migration added those items and switched
 the swing ones off — `is_active = false`, not deleted, because trades keep tags as text.
 
 **An instrument you delete stays deleted, since 20.09.2026.** `tj_seed_instruments_defaults` inserted
@@ -1857,7 +1873,7 @@ the stop needed for the target, the trade's grid with its planned target column 
 gets an **SL × TP** panel over the filtered book: the mean grid with each cell's hit rate, the best
 cell, the best target on the real stop, the result as managed beside them, the after-exit medians
 and the after-stop / after-target / hand-exit counts — and the same figures **per bucket of the
-report's current grouping**, so setup, Entry TF, session window or instrument is the same click as
+report's current grouping**, so setup, TF ulaza, session window or instrument is the same click as
 any other report. A group under 30 trades is marked ⚠. The mentor pack gets a summary section and a
 *Šta bi bilo* line per trade.
 Since 14.10.2026 it also gets a **Reakcija** line per measured trade (a winner: when it left the red for good, from `last_underwater_seconds`; a loser: how long it sat in the red) and a **Vremenski stop** section (`timeStopSection`, the dashboard's Time stop card: medians and the 1–60 min ladder), and the instructions ask the mentor to judge each exit from them. A stop moved **closer** that was then hit gets a **Pomeren stop** line: `sl_for_target_r` is in R of the ORIGINAL stop, so ≤ 1R means the original would have survived to the target (**⚠ Pomeren stop je koštao**), and the mentor is told to count those.
