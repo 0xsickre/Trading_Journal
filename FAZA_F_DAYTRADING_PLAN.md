@@ -115,6 +115,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 09.10.2026 | W | Vremenski stop (trejder: „da meri koliko je dobitnom trejdu trebalo da krene, a koliko je gubitni bio u minusu dok nije udario SL — da sečem vremenski“). **W1-A** „krenuo u smeru“ = u plusu i više se nije vratio ispod ulaza (ne +X tikova ni +0,5R). Merenje u `futures-trading` `journal_mae.py` iz istih R2 sveća kao `time_underwater_pct`; journal samo čita. Kolona lestvice „Losers still open“ je gornja granica — da li je gubitnik u minuti N bio u minusu ne čuva se |
 | 14.10.2026 | P | Jedna stranica trejda (trejder: „ima nepotrebnih stvari jer se sad unose trejdovi preko importa … napravi detaljan plan da to rešiš sa jednom stranicom“). Bias dana, Entry TF i Technical tags **ostaju**; stavke za biranje trejder preuređuje sam u Settings. Odluke P-1 … P-3 su u sekciji P |
 | 14.10.2026 | Y | Vreme upisa (mentor Z-028, Z-031, Z-032; trejder: „A, A, A, A“): **Y-1 A** `playbook_linked` pada kad je playbook napravljen posle ulaza; **Y-2 A** kolona `tj_daily_reports.mental_temp_at` (aditivna migracija); **Y-3 A** kapija posle prvog ulaza je samo oznaka na /daily i u paketu; **Y-4 A** zaključani dani ostaju zamrznuti |
+| 15.10.2026 | Y | Proširenje Y (trejder preko mentora: „reši i ovo“): **preokreće Q-2 „Vreme trgovanja: povučeno“** — novo automatsko pravilo `trading_window`, prozor po Beogradu u Settings › Tracker jer se nedelje smenjuju London / NY. **Y-5** London 09:00–12:00, NY **14:30–18:00** (trejder). **Y-6 A** prozor pamti od kog dana važi (`config.windows[]` sa `since`), pa promena ne preocenjuje prošle dane. `honest_tags` dobija uslov „Vodio po planu“ bez playbook-a ili sa playbook-om posle ulaza → ✗. Pravilo za dane u nedelji se ne pravi (od 19.10. pon–pet, pravila već važe 1–5) |
 | 14.10.2026 | P | **P-1** fill-ovi se ne menjaju ručno nigde; ručno se upisuje samo originalni SL sa snimka (trejder: „samo SL treba ja da upišem jer ako ga pomerim na BE u toku trejda onda se ne slaže na uvozu“). **P-2** ocena izvršenja A/B/C svuda. **P-3** promena playbook-a briše odgovore na pravila prethodnog playbook-a; meko obrisana pravila istog playbook-a ostaju |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
@@ -1456,6 +1457,18 @@ koja fali: playbook napisan posle ishoda je priča, ne plan (PRAVILA-MENTORA §2
   trackera koje pada.
 - **Y-4 Već zaključani dani (07.10.):** **A** presuda ostaje zamrznuta, oznake u paketu se ipak vide (preporuka:
   istorija se ne prepisuje); **B** jednokratno preračunati zaključane dane.
+
+### Proširenje (15.10.2026): Y4 i Y5
+- **Y4 `trading_window`.** `config = { windows: [{ since, from, to }] }`, vremena po Beogradu; za dan važi prozor sa
+  najkasnijim `since` ≤ dan. Prekršaj: ulaz pre `from` ili od `to`, ili pozicija otvorena posle `to` (izlaz u minuti
+  `to` je izlaz po vremenu, nije prekršaj; otvorena pozicija pre isteka minute `to` se još ne sudi). Bez prozora →
+  `unconfigured`. Settings › Tracker: od–do i „važi od“ za to pravilo. Evaluator dobija pravila kroz `AutoContext`
+  (`rules`), pa sva četiri pozivaoca čitaju isti prozor. Migracija: `auto_key` check + red pravila sa London prozorom od
+  12.10. (W42); pravilo važi od dana kad je napravljeno (`created_at`), pa prošli dani ostaju kakvi su. Testovi: 13.10.
+  #2 i #3 ✓ (#3 izlaz 11:58:57), ulaz 08:59 ✗, izlaz 12:00:40 ✓, izlaz 12:01 ✗, otvorena posle 12:01 ✗, NY nedelja
+  14:30–18:00, promena prozora ne menja raniji dan.
+- **Y5 `honest_tags`.** Tag „Vodio po planu“ na trejdu bez playbook-a ili sa playbook-om napravljenim posle ulaza (isto
+  merilo kao `playbook_linked`) → ✗. Tekst pravila u bazi dopunjen istom migracijom.
 
 ### Izlaz iz Y
 Trejd sa playbook-om napisanim posle ulaza više ne prolazi kao plan, a paket i /daily pokazuju kad su playbook,
