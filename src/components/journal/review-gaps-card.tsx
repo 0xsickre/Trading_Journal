@@ -8,6 +8,7 @@ const MISSING = {
   grade: "ocena",
   stop: "stop",
   original_stop: "originalni stop (pomeren — sa snimka)",
+  orders: "nalozi (uvezi i fajl naloga iz TopstepX-a)",
 } as const;
 
 /**

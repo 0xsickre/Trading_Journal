@@ -154,7 +154,7 @@ pogađa.
 | **O** | Prvo uvoz, pa dopuna iz snimka: izvoz naloga (stop, cilj, izlaz), dopuna iz snimka, propušten setup, bez plan-forme | — | M | da: `20261009090000` (aditivna) | **Opus** | ✅ 08.10.2026 — O1 `af9c0cc` (migracija `20261009090000` primenjena) · O2 `c15dc20` + futures-trading `bc1f28d` · O3 `800474d` · O4 `95222f9` |
 | **W** | Vremenski stop: koliko dobitniku treba da krene, koliko gubitnik stoji u minusu do SL | — | O | da: `20261009120000` (`last_underwater_seconds`, aditivna) | **Opus** | ✅ `bff96eb` + futures-trading `b8c9da1`, 09.10.2026 — migracija `20261009120000` primenjena uz odobrenje trejdera |
 | **P** | Jedna stranica trejda: snimak, checklist, kategorije i review na jednom mestu; bez plan-forme | — | O, W | ne | **Opus** | ✅ `1f8a832`, 14.10.2026 — bez migracije; ručna provera u pregledaču preskočena na zahtev trejdera |
-| **Q** | Manje ručnog rada: ručna pravila trackera postaju automatska, /daily javlja trejd bez naloga | — | P | da: `auto_key` check (proširenje) | **Opus** | čeka odluku Q-2 (Q-1 = C, Q-3 = A, 14.10.2026) |
+| **Q** | Manje ručnog rada: ručna pravila trackera postaju automatska, /daily javlja trejd bez naloga | — | P | da: `20261014120000` (`auto_key` check, pravila) | **Opus** | ✅ 14.10.2026 — Q-1 = C, Q-2 (5 automatski, Vreme trgovanja povučeno), Q-3 = A |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1267,7 +1267,7 @@ Jedna stranica po trejdu sa snimkom, checklistom, kategorijama i review-om. `/ed
 Čuvanje ne briše fill-ove ni odgovore koje stranica ne prikazuje. Stara forma je obrisana, mentor pack je
 isti osim praznih redova, a README i `trading-mentor` su usklađeni 1:1. Bez migracije.
 
-## Q — Manje ručnog rada (detaljno, 14.10.2026) — čeka odluku Q-2
+## Q — Manje ručnog rada (detaljno, 14.10.2026) — ✅
 
 **Povod** (trejder, 14.10.2026, posle prvog dana sa uvozom i snimkom): „uđi dublje u ovo i nađi rešenje“ za
 ručni rad i greške koje su 13. i 14.10. potrošile sate: pravilo rizika u journal-u drugačije od tvog (15 % /
@@ -1316,10 +1316,11 @@ naglas ✓“ koje nije bilo tačno.
 
 ### Odluke trejdera
 - **Q-1 Izvor podataka: C** (trejder, 14.10.): bez TopstepX API-ja. Originalni stop sa snimka, uvoz iz CSV-a.
-- **Q-2 Ručna pravila.** (A) Svih 6 automatski, kako piše u tabeli. (B) Samo Vreme trgovanja, Screenshotovi i
-  Dnevnik i tagovi (čisto iz podataka); HTF bias, Teza i Iskreni tagovi ostaju ručni. (C) Ništa. Preporuka:
-  **A**: ručno štikliranje je 13.10. dalo ✓ za tezu izgovorenu posle klika, a polje po trejdu traži odgovor
-  za svaki trejd posebno.
+- **Q-2 Ručna pravila** (trejder, 14.10.2026): HTF bias, Iskreni tagovi, Dnevnik i tagovi i Screenshotovi automatski
+  kako piše u tabeli. **Teza:** bez novog polja („polje za unos teksta treba da bude samo jedno“): `thesis_recorded` je ✓
+  kad je „šta sam rekao pre klika“ upisano na svakom trejdu, a da li je rečeno pre klika proverava mentor sa snimka; zato
+  „Iskreni tagovi“ nemaju uslov „Vodio po planu“. **Vreme trgovanja:** povučeno, bez podešavanja prozora („nepotrebno“);
+  prozor proverava mentor iz fill-ova.
 - **Q-3 Istorija budžeta: A** (trejder, 14.10.): #3 ostaje sa zapečaćenih 350.
 
 ### Izlaz iz Q

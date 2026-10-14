@@ -52,6 +52,15 @@ const BASIS_TEXT: Record<LimitBasis, string> = {
   daily_target: "lični dnevni cilj profita",
 };
 
+/** Phase Q rules, whose `not_yet` means the trade is still open, not the Topstep day. */
+const REVIEW_KEYS: ReadonlySet<string> = new Set([
+  "htf_bias_set",
+  "thesis_recorded",
+  "honest_tags",
+  "review_complete",
+  "screenshot_per_trade",
+]);
+
 /** A close time on Chicago's clock — Topstep states its day there. */
 const ctTime = (iso: string) => `${fmtInTz(iso, "America/Chicago", "HH:mm")} CT`;
 
@@ -84,6 +93,25 @@ function dayTradingText(res: AutoRuleResult, currency: string): string | null {
       return broke
         ? `Prekršeno: ulaz u crvenom prozoru${res.window ? ` (${res.window})` : ""}.`
         : "Nijedan ulaz u crvenom prozoru brief-a.";
+    // Phase Q: read off the trade page, so the fix is on the trade the link opens.
+    case "htf_bias_set":
+      return broke
+        ? "Na trejdu nije upisan bias dana, ili piše „Nisam odredio unapred“."
+        : "Bias dana upisan na svakom trejdu.";
+    case "thesis_recorded":
+      return broke
+        ? "Na trejdu nije upisano šta si rekao pre klika."
+        : "Na svakom trejdu upisano šta si rekao pre klika.";
+    case "review_complete":
+      return broke
+        ? "Trejdu fali ocena, razlog izlaska, bias, Entry TF, emocija, ili greška (kad ocena nije A)."
+        : "Svaki trejd ima ocenu, razlog izlaska, bias, Entry TF, emociju i grešku ili ocenu A.";
+    case "screenshot_per_trade":
+      return broke ? "Trejd nema nijednu sliku charta." : "Svaki trejd ima sliku charta.";
+    case "honest_tags":
+      return broke
+        ? "Tag se ne slaže sa automatskim pravilom na istom trejdu: „Ispoštovao rizik“ uz pao rizik ili stop, ili ocena A uz prekršeno pravilo."
+        : "Nijedan tag se ne sukobljava sa automatskim pravilima.";
     default:
       return null;
   }
@@ -118,6 +146,7 @@ function autoReasonText(res: AutoRuleResult, currency: string): string {
     case "market_closed":
       return "Po brief-u je berza ovog dana zatvorena — nema kraja dana po kome bi se ocenilo.";
     case "not_yet":
+      if (REVIEW_KEYS.has(res.key)) return "Trejd je još otvoren — pregled se ocenjuje posle izlaza.";
       return res.at
         ? `Pozicija je još otvorena — ocenjuje se posle kraja Topstep dana (${ctTime(res.at)}).`
         : "Pozicija je još otvorena — ocenjuje se posle kraja Topstep dana.";

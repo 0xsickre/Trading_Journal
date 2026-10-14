@@ -33,6 +33,14 @@ export const AUTO_RULE_KEYS = [
   // 08.10.2026 (trader, with the mentor): two stop losses IN A ROW end the day.
   // Not a count of trades — a win or a scratch in between breaks the run.
   "stop_after_two_losses",
+  // Phase Q (14.10.2026): the manual ticks that the trade page already answers,
+  // per trade. Each reads what the trader wrote on the trade, never the chart —
+  // whether the bias was on the chart before the entry is the recording's to say.
+  "htf_bias_set",
+  "thesis_recorded",
+  "honest_tags",
+  "review_complete",
+  "screenshot_per_trade",
 ] as const;
 export type AutoRuleKey = (typeof AUTO_RULE_KEYS)[number];
 

@@ -34,6 +34,7 @@ import { flatByFor, redWindowAt, type SessionBrief } from "../session-brief";
 import { riskMoneyAtEntry } from "../risk-taken";
 import type { AutoRuleKey } from "../tracker-types";
 import type { TradeRow } from "../types";
+import { GRADE_RATING, NO_MISTAKE } from "../quick-log";
 
 export type { AutoRuleKey } from "../tracker-types";
 
@@ -161,7 +162,76 @@ export type TrackerTrade = {
      */
     budget: number | null;
   } | null;
+  /**
+   * What the trader wrote on the trade page (phase Q), read LIVE: these rules
+   * ask whether the review was done, and a review is written after the close.
+   */
+  review: TradeReview;
 };
+
+/** The trade page's answers the phase-Q rules read. */
+export type TradeReview = {
+  /** `custom.htf_bias` as chosen, trimmed; null when empty. */
+  htfBias: string | null;
+  /** `thesis` (what was said before the click) is written. */
+  thesis: boolean;
+  /** `execution_rating`: A = 5, B = 3, C = 1 (`GRADE_RATING`); null when ungraded. */
+  grade: number | null;
+  exitReason: boolean;
+  /** `custom.entry_tf` is chosen. */
+  entryTf: boolean;
+  psychology: string[];
+  mistakes: string[];
+  /** Charts on the trade (`tj_trade_images`). */
+  images: number;
+};
+
+/** Psychology tag that claims the risk was respected. */
+export const RESPECTED_RISK_TAG = "Ispoštovao rizik";
+
+/** Rules whose breach on a trade makes "Ispoštovao rizik" on it untrue. */
+const RISK_RULES: readonly AutoRuleKey[] = ["risk_per_trade", "stop_loss_set", "max_loss_per_trade"];
+
+/** Rules about the review itself: their breach is a gap in the journal, not a trading error. */
+const REVIEW_RULES: ReadonlySet<AutoRuleKey> = new Set<AutoRuleKey>([
+  "honest_tags",
+  "review_complete",
+  "screenshot_per_trade",
+  "thesis_recorded",
+]);
+
+const list = (v: unknown): string[] =>
+  Array.isArray(v) ? v.map((x) => String(x).trim()).filter((x) => x !== "") : [];
+
+const customText = (row: TradeRow, key: string): string | null => {
+  const custom = (row as { custom?: Record<string, unknown> | null }).custom;
+  const v = custom?.[key];
+  const s = typeof v === "string" ? v.trim() : "";
+  return s === "" ? null : s;
+};
+
+function reviewOf(row: TradeRow): TradeReview {
+  const r = row as TradeRow & {
+    thesis?: string | null;
+    exit_reason?: string | null;
+    psychology_tags?: unknown;
+    mistake?: unknown;
+    chart_images?: unknown;
+  };
+  return {
+    htfBias: customText(row, "htf_bias"),
+    thesis: String(r.thesis ?? "").trim() !== "",
+    grade: numberFieldValue(row, "execution_rating"),
+    exitReason: String(r.exit_reason ?? "").trim() !== "",
+    entryTf: customText(row, "entry_tf") != null,
+    psychology: list(r.psychology_tags),
+    mistakes: list(r.mistake),
+    images: Array.isArray(r.chart_images) ? r.chart_images.length : 0,
+  };
+}
+
+/** "Nisam odredio unapred" (any capitalisation) is the answer that there was no bias. */
+export const biasWasSet = (bias: string | null): boolean => bias != null && !/^nisam odredio/i.test(bias);
 
 export type TradeDayIndex = {
   /** Decision-time rules: playbook link, stop loss. */
@@ -280,6 +350,7 @@ function toTrackerTrade(row: TradeRow, zone: DayZone, book: TopstepBook | null):
     // match it by being the count the form would have given.
     matchedIntent: expected == null ? null : (row.stats?.entry_qty ?? null) === expected,
     topstep: book ? topstepOfTrade(book, budget) : null,
+    review: reviewOf(row),
   };
 }
 
@@ -571,6 +642,63 @@ function evalRiskMatchedIntent(trades: TrackerTrade[]): AutoRuleResult {
   return { key, verdict: "pass", reason: "ok", offenders: [], observed: null, limit: null };
 }
 
+// --- The trade page's rules (phase Q, 14.10.2026) ------------------------------
+
+/**
+ * A review rule over the trades opened that day and already CLOSED: a review is
+ * written after the exit, so a position still open is not yet a gap. A day whose
+ * every trade is still open is `not_yet`.
+ */
+function evalReview(key: AutoRuleKey, opened: TrackerTrade[], ok: (t: TrackerTrade) => boolean): AutoRuleResult {
+  if (opened.length === 0) return na(key, "no_trades");
+  const done = opened.filter((t) => t.closedAt != null);
+  if (done.length === 0) return na(key, "not_yet");
+  return evalOpenDayFlag(key, done, ok);
+}
+
+/** Every trade has the day's bias chosen, and none says it was not decided beforehand. */
+const evalHtfBiasSet = (opened: TrackerTrade[]) =>
+  evalReview("htf_bias_set", opened, (t) => biasWasSet(t.review.htfBias));
+
+/** What was said before the click is written on every trade. When it was said, the recording tells. */
+const evalThesisRecorded = (opened: TrackerTrade[]) =>
+  evalReview("thesis_recorded", opened, (t) => t.review.thesis);
+
+/** Grade, exit reason, bias, Entry TF, a feeling, and a mistake or an A. */
+const evalReviewComplete = (opened: TrackerTrade[]) =>
+  evalReview(
+    "review_complete",
+    opened,
+    (t) =>
+      t.review.grade != null &&
+      t.review.exitReason &&
+      t.review.htfBias != null &&
+      t.review.entryTf &&
+      t.review.psychology.length > 0 &&
+      (t.review.mistakes.length > 0 || t.review.grade === GRADE_RATING.A),
+  );
+
+const evalScreenshotPerTrade = (opened: TrackerTrade[]) =>
+  evalReview("screenshot_per_trade", opened, (t) => t.review.images > 0);
+
+/**
+ * Honest tags, per trade: a tag that a failed rule on THE SAME trade says is
+ * untrue. "Ispoštovao rizik" beside a broken risk or stop rule; an A — which
+ * the trade page records as "Bez greške" — beside any broken trading rule. The
+ * review rules are left out: an unfinished review is not a trading error.
+ */
+function evalHonestTags(opened: TrackerTrade[], results: Partial<Record<AutoRuleKey, AutoRuleResult>>): AutoRuleResult {
+  const offendersOf = (keys: readonly AutoRuleKey[]) =>
+    new Set(keys.flatMap((k) => (results[k]?.verdict === "fail" ? results[k]!.offenders : [])));
+  const risk = offendersOf(RISK_RULES);
+  const any = offendersOf((Object.keys(results) as AutoRuleKey[]).filter((k) => !REVIEW_RULES.has(k)));
+  return evalReview("honest_tags", opened, (t) => {
+    const claimsRisk = t.review.psychology.includes(RESPECTED_RISK_TAG);
+    const claimsClean = t.review.grade === GRADE_RATING.A || t.review.mistakes.includes(NO_MISTAKE);
+    return !(claimsRisk && risk.has(t.id)) && !(claimsClean && any.has(t.id));
+  });
+}
+
 // --- The day trader's rules (F4: G5, G7, G9) -----------------------------------
 
 const epoch = (iso: string | null | undefined) => Date.parse(String(iso ?? ""));
@@ -758,7 +886,7 @@ export function evaluateAutoRulesForDay(
     now: context.now ?? Date.now(),
   };
 
-  return {
+  const results = {
     max_loss_per_day: evalMaxLossPerDay(closed),
     max_loss_per_trade: evalMaxLossPerTrade(closed),
     // Open day, not close day. Decisive counter-case: on close-day attribution a
@@ -787,5 +915,12 @@ export function evaluateAutoRulesForDay(
     no_entry_after_daily_target: evalNoEntryAfterDailyTarget(opened, closed),
     // Open day: the decision is the entry taken after the run.
     stop_after_two_losses: evalStopAfterTwoLosses(opened, closed),
+    // Phase Q: what the trade page says, per trade opened that day.
+    htf_bias_set: evalHtfBiasSet(opened),
+    thesis_recorded: evalThesisRecorded(opened),
+    review_complete: evalReviewComplete(opened),
+    screenshot_per_trade: evalScreenshotPerTrade(opened),
   };
+  // Last: it reads the verdicts above, per trade.
+  return { ...results, honest_tags: evalHonestTags(opened, results) };
 }

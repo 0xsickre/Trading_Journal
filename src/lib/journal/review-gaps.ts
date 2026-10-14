@@ -15,7 +15,7 @@ import { sealedNumber } from "./plan-snapshot";
 import { needsOriginalStop } from "./stop-moved";
 import type { TradeRow } from "./types";
 
-export type ReviewMissing = "setup" | "grade" | "stop" | "original_stop";
+export type ReviewMissing = "setup" | "grade" | "stop" | "original_stop" | "orders";
 
 export type ReviewGap = {
   id: string;
@@ -30,6 +30,10 @@ export function missingReview(row: TradeRow): ReviewMissing[] {
   // The stop every R is measured from: the sealed one where the seal holds it.
   if (sealedNumber(row, "stop_price") == null) out.push("stop");
   else if (needsOriginalStop(row)) out.push("original_stop");
+  // Phase Q: a TopstepX trade imported without the orders file has neither the
+  // stop's last price nor the entry order's type — the import fills both. On
+  // 13.10.2026 #3 sat like that for a day and nothing on /daily said so.
+  if (row.source === "import" && row.final_stop_price == null && row.entry_order_type == null) out.push("orders");
   return out;
 }
 
