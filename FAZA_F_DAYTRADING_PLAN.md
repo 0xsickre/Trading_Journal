@@ -153,7 +153,7 @@ pogađa.
 | **M** | Mentor tok: bez /weekly, kraći /daily, compliance bez praznih dana, pun mentor pack (Dan / Nedelja) | — | U | da, **briše**: `tj_weekly_reviews`, `tj_experiments`, `tj_focus_goals` | **Opus** | ✅ 08.10.2026 — M1 `d6391df` · M2 `8076b93` · M3 `6be8e87` (migracija `20261008120000` primenjena) + futures-trading `6827ce7` · M4 `786a035` |
 | **O** | Prvo uvoz, pa dopuna iz snimka: izvoz naloga (stop, cilj, izlaz), dopuna iz snimka, propušten setup, bez plan-forme | — | M | da: `20261009090000` (aditivna) | **Opus** | ✅ 08.10.2026 — O1 `af9c0cc` (migracija `20261009090000` primenjena) · O2 `c15dc20` + futures-trading `bc1f28d` · O3 `800474d` · O4 `95222f9` |
 | **W** | Vremenski stop: koliko dobitniku treba da krene, koliko gubitnik stoji u minusu do SL | — | O | da: `20261009120000` (`last_underwater_seconds`, aditivna) | **Opus** | ✅ `bff96eb` + futures-trading `b8c9da1`, 09.10.2026 — migracija `20261009120000` primenjena uz odobrenje trejdera |
-| **P** | Jedna stranica trejda: snimak, checklist, kategorije i review na jednom mestu; bez plan-forme | — | O, W | ne | **Opus** | u radu (odluke 14.10.2026) |
+| **P** | Jedna stranica trejda: snimak, checklist, kategorije i review na jednom mestu; bez plan-forme | — | O, W | ne | **Opus** | ✅ `1f8a832`, 14.10.2026 — bez migracije; ručna provera u pregledaču preskočena na zahtev trejdera |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1165,7 +1165,7 @@ Migracija primenjena (tek tada push `futures-trading` na `main` — skript čita
 status ✅. **Sledeći korak, ako trejder traži:** R koji bi vremenski stop u minuti N sačuvao ili izgubio (cena u
 minuti N po trejdu iz R2) — sada lestvica pokazuje samo udele.
 
-## P — Jedna stranica trejda (detaljno, 14.10.2026) — u radu
+## P — Jedna stranica trejda (detaljno, 14.10.2026) — ✅ `1f8a832`
 
 **Povod** (trejder, 14.10.2026): kartica „Plan & Setup“ ima nepotrebne stvari, jer trejd ulazi uvozom i više
 ne može da se planira u journal-u. Traži jednu stranicu po trejdu, uređenu za day tradera. Kategorije
