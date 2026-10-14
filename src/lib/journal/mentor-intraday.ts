@@ -18,6 +18,7 @@ import { computeStats, type RealizedTrade } from "./analytics";
 import type { BreakevenRange } from "./breakeven";
 import type { DailyReportLite, EnrichedTrade } from "./enriched-trade";
 import type { TradeRow } from "./types";
+import type { PositionRule } from "./playbook-types";
 import { loggedAfterEntry, sealedNumber } from "./plan-snapshot";
 import { getDimension, type DimensionContext } from "./reports/dimensions";
 import { afterExitR, scenarioOf, scenarioTrade, summarizeScenarios } from "./scenario";
@@ -465,6 +466,21 @@ function redWindowAt(openedAt: string | null, brief: SessionBrief | undefined): 
 }
 
 /** The intraday facts of one trade, as lines under its heading in the full detail. */
+/** Position id → when its checklist was last answered, for the pack (phase Y). */
+export function checklistAnsweredAt(
+  positionRules: ReadonlyMap<string, readonly PositionRule[]>,
+): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const [id, answers] of positionRules) {
+    for (const a of answers) {
+      if (!a.created_at) continue;
+      const prev = out.get(id);
+      if (prev == null || toEpoch(a.created_at) > toEpoch(prev)) out.set(id, a.created_at);
+    }
+  }
+  return out;
+}
+
 export function tradeContextLines(
   e: EnrichedTrade,
   opts: {
@@ -475,6 +491,8 @@ export function tradeContextLines(
     /** The trade's fills, when the export loaded them. */
     fills?: readonly MentorFill[];
     playbookName?: string;
+    /** When the trade's checklist was last answered (phase Y). */
+    checklistAt?: string;
     ccy?: string;
   },
 ): string[] {
@@ -508,7 +526,19 @@ export function tradeContextLines(
   const reakcija = reactionLine(e);
   if (reakcija) lines.push(reakcija);
   lines.push(...executionLines(e, opts.fills, opts.ccy ?? "USD", opts.displayTz));
-  if (opts.playbookName) lines.push(`- **Playbook:** ${cell(opts.playbookName)}`);
+  if (opts.playbookName) {
+    // Phase Y: a playbook written once the outcome was known is a story, not a plan.
+    const created = e.trade.row.playbook_created_at;
+    const late = typeof created === "string" && e.openedAt != null && toEpoch(created) > toEpoch(e.openedAt);
+    lines.push(
+      `- **Playbook:** ${cell(opts.playbookName)}${
+        late ? ` · napravljen ${fmtInTz(created, opts.displayTz, "dd.MM. HH:mm")}, posle ulaza` : ""
+      }`,
+    );
+  }
+  if (opts.checklistAt && e.closedAt && toEpoch(opts.checklistAt) > toEpoch(e.closedAt)) {
+    lines.push(`- **Checklist:** upisan ${fmtInTz(opts.checklistAt, opts.displayTz, "dd.MM. HH:mm")}, posle zatvaranja`);
+  }
   const w = redWindowAt(e.openedAt, opts.brief);
   if (w) {
     lines.push(

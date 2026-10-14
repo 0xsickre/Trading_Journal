@@ -172,7 +172,7 @@ import {
   updateDashboardTemplateWidgets,
 } from "@/app/(app)/actions";
 import { TemplateMenu } from "@/components/journal/template-menu";
-import type { MentorFill } from "@/lib/journal/mentor-intraday";
+import { checklistAnsweredAt, type MentorFill } from "@/lib/journal/mentor-intraday";
 import {
   layoutToWidgets,
   templateMatchesLayout,
@@ -1734,6 +1734,7 @@ export function Dashboard({
         ),
       executions: new Map(Object.entries(fills)),
       playbookNames: new Map(playbooks.map((p) => [p.id, p.name])),
+      checklistAt: positionRules ? checklistAnsweredAt(positionRules) : undefined,
     });
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);

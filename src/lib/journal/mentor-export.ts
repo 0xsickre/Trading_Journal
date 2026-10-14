@@ -448,6 +448,8 @@ export type MentorPackOpts = {
   executions?: Map<string, MentorFill[]>;
   /** Playbook id → name, printed on each trade. */
   playbookNames?: Map<string, string>;
+  /** Position id → when its checklist was last answered (phase Y, `checklistAnsweredAt`). */
+  checklistAt?: Map<string, string>;
 };
 
 export function buildMentorPack(
@@ -528,6 +530,7 @@ export function buildMentorPack(
       fills: opts.executions?.get(t.id),
       playbookName:
         typeof t.playbook_id === "string" ? opts.playbookNames?.get(t.playbook_id) : undefined,
+      checklistAt: opts.checklistAt?.get(t.id),
       ccy,
     });
   };
@@ -608,6 +611,7 @@ export function buildMentorPack(
         "- **Vreme u minusu** — % trajanja trejda u kome je tekući P&L bio ispod nule, iz berzanskih sveća (1 s).",
         "- **Crveni prozor** — vesti visokog uticaja iz jutarnjeg brief-a (futures-trading), u kojima ne ulazim.",
         "- **Veličina** — broj ugovora; mikro (MNQ/MES/M6E) je 1/10 mini ugovora.",
+        "- **Vreme upisa** — „playbook napravljen …, posle ulaza“, „checklist upisan …, posle zatvaranja“ i „upisano posle prvog ulaza“ kod mentalne ocene znače da je to napisano kad je ishod već bio poznat; journal ga ne broji kao plan.",
       ].join("\n"),
     );
   }

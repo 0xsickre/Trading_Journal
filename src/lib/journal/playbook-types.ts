@@ -158,6 +158,8 @@ export type PositionRule = {
   position_id: string;
   rule_id: string;
   followed: boolean | null;
+  /** When the answer was first written (phase Y: the pack flags one written after the close). */
+  created_at?: string;
 };
 
 /**

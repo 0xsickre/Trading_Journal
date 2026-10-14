@@ -247,10 +247,11 @@ async function readPositionRules(): Promise<Map<string, PositionRule[]>> {
     position_id: string;
     rule_id: string;
     followed: boolean | null;
+    created_at: string;
   }>((from, to) =>
     supabase
       .from("tj_position_rules")
-      .select("position_id, rule_id, followed, id")
+      .select("position_id, rule_id, followed, created_at, id")
       .order("position_id")
       .order("id")
       .range(from, to),
@@ -263,6 +264,7 @@ async function readPositionRules(): Promise<Map<string, PositionRule[]>> {
       position_id: r.position_id,
       rule_id: r.rule_id,
       followed: r.followed,
+      created_at: r.created_at,
     });
     map.set(r.position_id, bucket);
   }

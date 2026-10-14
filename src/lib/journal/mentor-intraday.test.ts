@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildMentorPack } from "./mentor-export";
-import { dimensionTable, ruleLabel, rulesSection, SMALL_SAMPLE, sr } from "./mentor-intraday";
+import { checklistAnsweredAt, dimensionTable, ruleLabel, rulesSection, SMALL_SAMPLE, sr } from "./mentor-intraday";
 import { enrichTrades } from "./enriched-trade";
 import { toRealized } from "./analytics";
 import { evaluateTopstep } from "./topstep";
@@ -455,6 +455,58 @@ describe("mentor pack, phase M: what the mentor needs to question the day", () =
     const wk = mpack("Week");
     expect(wk).toContain("0. **Domaći**");
     expect(wk).toContain("2–3 pravila za sledeću nedelju");
+  });
+});
+
+describe("mentor pack, phase Y: when the playbook and the checklist were written", () => {
+  // #1 of 07.10.2026: entered 16:20 Belgrade, closed 17:49; its playbook was created
+  // 14.10. 10:16 and the checklist answered 14.10. 11:21 — both after the fact.
+  const base = trade(1, "2026-10-07T14:20:37Z", "2026-10-07T15:49:06Z", 716.34, 3);
+  const t = {
+    ...base,
+    playbook_id: "pb1",
+    playbook_created_at: "2026-10-14T08:16:10Z",
+  } as unknown as TradeRow;
+  const pack = (row: TradeRow, answered?: string) =>
+    buildMentorPack([row], {
+      tzOf: () => "UTC",
+      displayTz: "Europe/Belgrade",
+      playbookNames: new Map([["pb1", "Ponoc pojas reversal"]]),
+      checklistAt: answered ? new Map([[row.id, answered]]) : undefined,
+    });
+
+  it("says a playbook was created after the entry, in Belgrade time", () => {
+    expect(pack(t)).toContain("- **Playbook:** Ponoc pojas reversal · napravljen 14.10. 10:16, posle ulaza");
+  });
+
+  it("says nothing extra for a playbook that existed before the entry", () => {
+    const md = pack({ ...t, playbook_created_at: "2026-10-01T08:00:00Z" } as unknown as TradeRow);
+    expect(md).toMatch(/- \*\*Playbook:\*\* Ponoc pojas reversal\r?\n/);
+  });
+
+  it("says the checklist was answered after the close", () => {
+    expect(pack(t, "2026-10-14T09:21:41Z")).toContain("- **Checklist:** upisan 14.10. 11:21, posle zatvaranja");
+  });
+
+  it("is silent about a checklist answered before the close", () => {
+    expect(pack(t, "2026-10-07T15:00:00Z")).not.toContain("**Checklist:**");
+  });
+
+  it("takes the latest answer per trade", () => {
+    const at = checklistAnsweredAt(
+      new Map([
+        [
+          "p1",
+          [
+            { position_id: "p1", rule_id: "a", followed: true, created_at: "2026-10-14T07:25:01Z" },
+            { position_id: "p1", rule_id: "b", followed: false, created_at: "2026-10-14T08:54:46Z" },
+          ],
+        ],
+        ["p2", [{ position_id: "p2", rule_id: "a", followed: true }]],
+      ]),
+    );
+    expect(at.get("p1")).toBe("2026-10-14T08:54:46Z");
+    expect(at.has("p2")).toBe(false);
   });
 });
 
