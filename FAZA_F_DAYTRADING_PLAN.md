@@ -113,6 +113,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 08.10.2026 | posle M | Tracker pravila (trejder, sa mentorom; podaci, ne kod): penzionisana ručna „Provera kalendara i HTF-a“, „Mentalni check-in“, „Vreme trgovanja“, „Kontrola rizika“, „Walk Away Target“ (dupliraju automatska ili su nemerljiva); nova ručna: HTF nivoi i bias, vreme 03:00–16:00 ET, **dva SL zaredom = kraj dana** (isti dan trejder traži automatsko: `stop_after_two_losses`, fiksno 2, gubitak = ispod breakeven pojasa, migracija `20261008140000`; ručno penzionisano), iskreni tagovi. Lični DLL 650 namerno ostaje (prostor za provizije) |
 | 08.10.2026 | O | Prvo uvoz, pa dopuna iz snimka (trejder, OBS snimak sesije): **O-a** propušteni setupi ostaju kroz malu formu iz snimka; **O-b** `/trades/new` i `/trades/log` se uklanjaju; **O-c** TopstepX izvoz trejdova i naloga se uvoze odjednom. Test trejdera 08.10. (Practice, SL niže → BE): izvoz naloga čuva samo POSLEDNJU cenu stopa — originalni stop dolazi iz fajla samo kad nije mogao biti pomeren, inače sa snimka |
 | 09.10.2026 | W | Vremenski stop (trejder: „da meri koliko je dobitnom trejdu trebalo da krene, a koliko je gubitni bio u minusu dok nije udario SL — da sečem vremenski“). **W1-A** „krenuo u smeru“ = u plusu i više se nije vratio ispod ulaza (ne +X tikova ni +0,5R). Merenje u `futures-trading` `journal_mae.py` iz istih R2 sveća kao `time_underwater_pct`; journal samo čita. Kolona lestvice „Losers still open“ je gornja granica — da li je gubitnik u minuti N bio u minusu ne čuva se |
+| 14.10.2026 | P | Jedna stranica trejda (trejder: „ima nepotrebnih stvari jer se sad unose trejdovi preko importa … napravi detaljan plan da to rešiš sa jednom stranicom“). Bias dana, Entry TF i Technical tags **ostaju**; stavke za biranje trejder preuređuje sam u Settings. Odluke P-1 … P-3 su u sekciji P |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -151,6 +152,7 @@ pogađa.
 | **M** | Mentor tok: bez /weekly, kraći /daily, compliance bez praznih dana, pun mentor pack (Dan / Nedelja) | — | U | da, **briše**: `tj_weekly_reviews`, `tj_experiments`, `tj_focus_goals` | **Opus** | ✅ 08.10.2026 — M1 `d6391df` · M2 `8076b93` · M3 `6be8e87` (migracija `20261008120000` primenjena) + futures-trading `6827ce7` · M4 `786a035` |
 | **O** | Prvo uvoz, pa dopuna iz snimka: izvoz naloga (stop, cilj, izlaz), dopuna iz snimka, propušten setup, bez plan-forme | — | M | da: `20261009090000` (aditivna) | **Opus** | ✅ 08.10.2026 — O1 `af9c0cc` (migracija `20261009090000` primenjena) · O2 `c15dc20` + futures-trading `bc1f28d` · O3 `800474d` · O4 `95222f9` |
 | **W** | Vremenski stop: koliko dobitniku treba da krene, koliko gubitnik stoji u minusu do SL | — | O | da: `20261009120000` (`last_underwater_seconds`, aditivna) | **Opus** | ✅ `bff96eb` + futures-trading `b8c9da1`, 09.10.2026 — migracija `20261009120000` primenjena uz odobrenje trejdera |
+| **P** | Jedna stranica trejda: snimak, checklist, kategorije i review na jednom mestu; bez plan-forme | — | O, W | ne | **Opus** | plan 14.10.2026 — čeka odluke P-1 … P-3 |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1161,6 +1163,107 @@ SL-a, da bi trejd koji do tog vremena ne krene sekao vremenski. Postojalo je: pr
 Migracija primenjena (tek tada push `futures-trading` na `main` — skript čita novu kolonu), README oba repoa,
 status ✅. **Sledeći korak, ako trejder traži:** R koji bi vremenski stop u minuti N sačuvao ili izgubio (cena u
 minuti N po trejdu iz R2) — sada lestvica pokazuje samo udele.
+
+## P — Jedna stranica trejda (detaljno, 14.10.2026) — plan, čeka odluke P-1 … P-3
+
+**Povod** (trejder, 14.10.2026): kartica „Plan & Setup“ ima nepotrebne stvari, jer trejd ulazi uvozom i više
+ne može da se planira u journal-u. Traži jednu stranicu po trejdu, uređenu za day tradera. Kategorije
+(Bias dana, Entry TF, Technical tags) **ostaju**; njihove stavke trejder sam preuređuje u Settings (podaci,
+ne kod).
+
+### Utvrđeno u kodu i bazi (14.10.2026)
+- **Dva ekrana za jedan trejd.** `/trades/[id]/review` („Dopuna iz snimka“, `quick-log-form.tsx`) ima stop i
+  cilj sa snimka, rečeno pre klika, setup, A/B/C, greške, emocije, rečenicu i slike, ali **nema checklist
+  playbook-a ni kategorije**. `/trades/[id]/edit` (`trade-form.tsx`, ~2.000 redova) ima checklist, ali je
+  napravljen za plan pre ulaza. Lista, Recent trades, Open positions, tracker, insights i beleške vode na
+  `/edit`, a „Bez pregleda“ na `/daily` vodi na `/review`.
+- **Plan & Setup posle uvoza.** „Fill this in before entering the trade“. Planned Entry Price je fill (market
+  ulaz). Position Size predlaže veličinu za trejd koji je već uzet (rizik je fiksnih 300). Scale-out,
+  Invalidation i Time stop su 0/3 u bazi i nijedan playbook ih nema. Thesis je ista kolona kao „Šta sam rekao
+  pre klika“. Slippage prema planiranom ulazu je za market ulaz uvek 0.
+- **Edit forma briše.** `updateTrade` ide kroz `tj_save_trade`, koji pri svakom čuvanju zamenjuje SVE fill-ove
+  i SVE odgovore na pravila (`p_rules`). Trejd #1 ima 15 odgovora na pravila koja su meko obrisana (09.10.)
+  i forma ih ne prikazuje, pa bi ih jedno čuvanje obrisalo (PLAYBOOK.md u `trading-mentor`).
+- **`getAllFormFields` nije samo forma.** Iz `BASE_TABS` se izvode dozvoljena polja za čuvanje
+  (`positionFieldNames`), brojčana i tag polja, CSV izvoz, dimenzije izveštaja i polja trejda u mentor
+  pack-u (`detailFieldsFor`). Izbacivanje polja iz forme menja i sve to.
+- **Ocena izvršenja:** Edit ima zvezdice 1–5, Dopuna A/B/C (`GRADE_RATING` A=5, B=3, C=1). U bazi #1 = 4,
+  #2 = 2 (iz zvezdica), pa bi ih A/B/C prikazao kao B i C.
+- **Propušten setup** (`status = 'missed'`) se pravi na `/trades/missed/new`, a menja se samo kroz Edit formu.
+- Baza 14.10.: 3 trejda, sva tri iz uvoza (po 2 fill-a), nijedan propušten.
+
+### Kako stranica izgleda (`/trades/[id]`, redosled snimka)
+1. **Trejd, samo za čitanje, iz uvoza.** `#`, instrument, nalog, Topstep dan, smer, ugovori, ulaz → izlaz sa
+   vremenom po zoni naloga, trajanje, Net P/L, R, MAE/MFE (R i traka), provizije, rizik prema budžetu.
+   Poslednji stop u platformi i upozorenje „stop pomeren“ (`stop-moved.ts`, kao sada u Dopuni).
+2. **Sa snimka.** Originalni stop, cilj, šta sam rekao pre klika (`thesis`). Planirani R:R se računa iz
+   originalnog stopa i cilja prema prosečnom fill-u, samo prikaz.
+3. **Setup.** Izbor playbook-a i checklist (`PlaybookChecklist`, sva pravila izabranog playbook-a, u
+   tri stanja), pa izračunata ocena setupa A+/A/B/C.
+4. **Kontekst.** Kategorije faze `always` iz `tj_field_defs` (danas Bias dana, Entry TF, Technical tags), u
+   redosledu iz Settings. Nova kategorija iz Settings se pojavi sama, bez koda.
+5. **Review.** Razlog izlaska (sam se računa kao sada, može da se promeni), ocena izvršenja (P-2), greške,
+   psihologija i ostale kategorije faze `active`, jedna rečenica.
+6. **Slike.** Postojeće (redosled, brisanje) i dodavanje novih.
+7. **Šta bi bilo** (`TradeScenarioCard`), samo za čitanje, kad ga futures-trading izmeri.
+
+Dno: **Sačuvaj**, **Obriši trejd**, **Nazad**. Posle čuvanja stranica vraća tamo odakle je otvorena
+(`?from=daily` → `/daily`, inače `/journal`).
+
+**Propušten setup** otvara istu stranicu sa zaglavljem „Propušten setup“: izmenljivi su smer, ulaz, stop,
+cilj i vreme (polja iz `missed-setup-form.tsx`), razlog propuštanja, playbook i checklist, kategorije i
+beleška. Nema ocene izvršenja ni grešaka.
+
+**Nestaje iz forme** (kolone u bazi ostaju, bez migracije): Planned Entry Price kao unos, Position Size,
+Scale-out, Invalidation, Time stop, Slippage, unos fill-ova (P-1), „MAE/MFE Price“ i „Gross P&L (broker)“
+(za fjučers ih piše R2, a CFD se više ne trguje).
+
+### Podkoraci (svaki: test koji pada → kod → gate → commit + push)
+- **P1 Čuvanje bez brisanja.** `saveTradeReview` dobija `rule_answers` i kategorije.
+  - Čista funkcija `ruleAnswerChanges(prethodni, novi, pravilaPlaybooka)` → upsert / delete po
+    `(position_id, rule_id)`. Dira **samo pravila izabranog playbook-a**: odgovor „bez odgovora“ briše taj
+    jedan red, a odgovori na meko obrisana pravila (#1) ostaju. Pri promeni playbook-a važi P-3.
+  - Kategorije idu kroz `field-values.ts` (kolona za `technical_tags`, `mistake`, `psychology_tags`,
+    `exit_reason`, a `custom` za ostale), uz proveru da ključ postoji u `tj_field_defs`.
+  - `updateMissedSetup(id, …)` sa istom šemom kao `createMissedSetup`.
+  - Testovi: `ruleAnswerChanges` (svaki slučaj iznad, #1 kao fixture), šema, kategorija sa nepoznatim ključem
+    se odbija.
+- **P2 Stranica `/trades/[id]`.** Server komponenta čita trejd, statistiku, playbook-ove (i povučene), field
+  defs, redosled kategorija, slike i scenario. Klijentska komponenta `TradePage` sa sekcijama iznad;
+  delovi iz `quick-log-form.tsx` (čipovi, A/B/C, slike, „Sa snimka“) se premeštaju, ne kopiraju. Render
+  testovi: uvezen trejd, pomeren stop, trejd bez playbook-a, propušten setup, prazne kategorije.
+- **P3 Rute.** `/trades/[id]/edit` i `/trades/[id]/review` → `redirect` na `/trades/[id]` (stari linkovi i
+  obeleživači rade). Svi linkovi u aplikaciji vode direktno na novu stranicu: `journal-grid`,
+  `recent-trades-widget`, `open-positions-widget`, `tracker-checklist`, `insights-panel`, `note-editor`,
+  `review-gaps-card` (sa `?from=daily`).
+- **P4 Brisanje stare forme.** `trade-form.tsx`, `quick-log-form.tsx`, plan grupe u `form-config.ts`,
+  `updateTrade` i `tradeInputSchema` ako ih više niko ne zove, `scale-out-editor`, izbor time stopa i sve
+  što `dead` (knip) posle toga prijavi. `getAllFormFields` se zamenjuje izričitim spiskom polja trejda koji
+  koriste CSV izvoz, dimenzije izveštaja i mentor pack; polja iz „Nestaje“ izlaze iz njega. `tj_save_trade`
+  ostaje u bazi dok ga uvoz ili spajanje koriste.
+- **P5 Mentor pack i izveštaji.** Paket više ne piše prazne redove Position size, Scale-out, Invalidation i
+  Time stop. Planned RR, Stop: linija, checklist i kategorije ostaju. Test: paket za Dan na fixture-u
+  13.10. je isti kao pre, osim izbačenih praznih redova.
+- **P6 Dokumentacija.** README (forma trejda, rute, Dopuna), ovaj fajl (✅ + commit), `ROADMAP.md` jedan
+  red. U `trading-mentor`: tok zatvaranja u `CLAUDE.md` („Dopuna iz snimka“ → stranica trejda, checklist
+  na istom mestu), `PLAYBOOK.md` (checklist više nije samo u Edit formi, a upozorenje „#1 ne čuvaj kroz Edit“
+  otpada).
+
+### Odluke koje traže trejdera
+- **P-1 Fill-ovi.** (A) Ne menjaju se ručno nigde: uvoz je istina, a ispravka je undo uvoza i ponovni uvoz
+  ili spajanje u listi. (B) Ostaje skriveno dugme „Ispravi fill-ove“. Preporuka: **A**. Ručna izmena fill-a
+  je jedini način da broj u paketu ne odgovara berzi.
+- **P-2 Ocena izvršenja.** (A) A/B/C svuda, kao u Dopuni (A = po planu, B = manja greška, C = prekršaj);
+  #1 i #2 se prikazuju kao B i C. (B) Zvezdice 1–5 svuda. Preporuka: **A**, jer je to pitanje „po planu ili
+  ne“, a pet nivoa za to nema značenje.
+- **P-3 Promena playbook-a na trejdu.** (A) Odgovori na pravila prethodnog playbook-a se brišu, da ne ulaze
+  u njegovu statistiku. (B) Ostaju u bazi. Preporuka: **A**. Ne važi za meko obrisana pravila istog
+  playbook-a (#1).
+
+### Izlaz iz P
+Jedna stranica po trejdu sa snimkom, checklistom, kategorijama i review-om. `/edit` i `/review` vode na nju.
+Čuvanje ne briše fill-ove ni odgovore koje stranica ne prikazuje. Stara forma je obrisana, mentor pack je
+isti osim praznih redova, a README i `trading-mentor` su usklađeni 1:1. Bez migracije.
 
 ## Katalog stavki
 
