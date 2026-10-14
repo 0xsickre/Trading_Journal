@@ -659,6 +659,44 @@ describe("TopstepX trades + orders chosen together (phase O)", () => {
     });
   });
 
+  // 14.10.2026: #3 of 13.10. was imported once without its orders; the second
+  // import, with them, matched every number and was skipped as a duplicate.
+  const ONE = TRADES.split("\n").slice(0, 2).join("\n") + "\n";
+  const imported = (over: Partial<MatchCandidate> = {}): MatchCandidate => ({
+    id: "t1",
+    accountId: "acc-1",
+    instrument: "MNQ",
+    direction: "Long",
+    avgEntry: 31246.5,
+    avgExit: 31366.5,
+    entryQty: 3,
+    openedAt: "2026-10-07T14:20:37Z",
+    totalFees: 3.66,
+    grossPl: 720,
+    netPl: 716.34,
+    ...over,
+  });
+  const reconcile = async (candidate: MatchCandidate) => {
+    const user = userEvent.setup({ delay: null });
+    render(<ImportWizard accounts={[ACCOUNT]} candidates={[candidate]} instruments={[{ symbol: "MNQ", point_value: 2 }]} />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, [csvFile("trades.csv", ONE), csvFile("orders.csv", ORDERS)]);
+    await user.click(await screen.findByRole("button", { name: /Reconcile/ }));
+    return screen.getAllByRole("row")[1];
+  };
+
+  it("a trade imported before without its orders is merged, not skipped, when the orders come", async () => {
+    const row = await reconcile(imported());
+    expect(within(row).queryByText("duplicate")).not.toBeInTheDocument();
+    expect(within(row).getByText(/last stop —→31227\.5/)).toBeInTheDocument();
+    expect(within(row).getByText(/entry order —→market/)).toBeInTheDocument();
+  });
+
+  it("the same trade that already has its orders is still a duplicate", async () => {
+    const row = await reconcile(imported({ finalStop: 31227.5, entryOrderType: "market" }));
+    expect(within(row).getByText("duplicate")).toBeInTheDocument();
+  });
+
   it("refuses the orders export on its own", async () => {
     const user = userEvent.setup({ delay: null });
     render(<ImportWizard accounts={[ACCOUNT]} candidates={[]} />);

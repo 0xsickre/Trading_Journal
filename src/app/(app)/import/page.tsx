@@ -38,6 +38,8 @@ export default async function ImportPage() {
     status: (t.status as string) ?? null,
     plannedEntry: t.entry_price != null ? Number(t.entry_price) : null,
     plannedAt: (t.created_at as string) ?? null,
+    finalStop: t.final_stop_price != null ? Number(t.final_stop_price) : null,
+    entryOrderType: (t.entry_order_type as string) ?? null,
   }));
 
   return (

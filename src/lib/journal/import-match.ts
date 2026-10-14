@@ -83,6 +83,14 @@ export type MatchCandidate = {
   plannedEntry?: number | null;
   /** When the plan was written (`created_at`); a fill before it is not its fill. */
   plannedAt?: string | null;
+  /**
+   * What only the orders file brings (14.10.2026): the stop's last price and
+   * the entry order's type. A trade imported once without its orders has
+   * neither, and the second import, the one WITH the orders, must not read as
+   * a duplicate of it.
+   */
+  finalStop?: number | null;
+  entryOrderType?: string | null;
 };
 
 /**

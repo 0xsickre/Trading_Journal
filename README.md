@@ -1363,7 +1363,7 @@ The review enforces the same rules. It sends the first row in the file to the me
 (`same trade as row 1`), and it will not let two rows point at one trade.
 
 **An exact match that changes something is not a duplicate.** Size and time are compared on every
-match, prices within a relative tolerance, and prices are shown as the file wrote them. The chart
+match, prices within a relative tolerance, and prices are shown as the file wrote them. So is what only the TopstepX orders file brings (14.10.2026): a trade imported before without its orders, with no last stop or entry order type, is a match (`last stop —→…`, `entry order —→…`), so the second import fills them instead of being skipped. The chart
 zone the times are shown in heads the time column.
 
 **Large files go in chunks** of 50 rows into one batch (`batch_id`, `row_offset`), with the progress

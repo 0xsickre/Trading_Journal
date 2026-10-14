@@ -513,6 +513,15 @@ export function ImportWizard({
           diff.push(`profit ${fmtNum(matched.grossPl, 2)}→${fmtNum(profit, 2)}`);
         else if (profit != null && matched.grossPl == null)
           diff.push(`profit —→${fmtNum(profit, 2)}`);
+        // The orders file's half (14.10.2026): a trade first imported without
+        // its orders has no last stop and no entry type, and the merge only
+        // ever fills those when they are empty. Without these two lines the
+        // second import, the one that brings them, matched every number above
+        // and was skipped as a duplicate — so the orders never landed.
+        if (finalStop != null && finalStop > 0 && matched.finalStop == null)
+          diff.push(`last stop —→${px(finalStop)}`);
+        if (entryOrder && matched.entryOrderType == null && ["market", "limit", "stop"].includes(entryOrder))
+          diff.push(`entry order —→${entryOrder}`);
         if (diff.length === 0) {
           status = "duplicate";
           decision = "skip";
