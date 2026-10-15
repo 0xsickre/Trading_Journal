@@ -117,6 +117,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 14.10.2026 | Y | Vreme upisa (mentor Z-028, Z-031, Z-032; trejder: „A, A, A, A“): **Y-1 A** `playbook_linked` pada kad je playbook napravljen posle ulaza; **Y-2 A** kolona `tj_daily_reports.mental_temp_at` (aditivna migracija); **Y-3 A** kapija posle prvog ulaza je samo oznaka na /daily i u paketu; **Y-4 A** zaključani dani ostaju zamrznuti |
 | 15.10.2026 | Y | Proširenje Y (trejder preko mentora: „reši i ovo“): **preokreće Q-2 „Vreme trgovanja: povučeno“** — novo automatsko pravilo `trading_window`, prozor po Beogradu u Settings › Tracker jer se nedelje smenjuju London / NY. **Y-5** London 09:00–12:00, NY **14:30–18:00** (trejder). **Y-6 A** prozor pamti od kog dana važi (`config.windows[]` sa `since`), pa promena ne preocenjuje prošle dane. `honest_tags` dobija uslov „Vodio po planu“ bez playbook-a ili sa playbook-om posle ulaza → ✗. Pravilo za dane u nedelji se ne pravi (od 19.10. pon–pet, pravila već važe 1–5) |
 | 15.10.2026 | J | Jezik (trejder preko mentora: „sve na srpskom“, gramatika svuda): naslovi kategorija u kodu idu na srpski kao u bazi; u paketu pobeđuje naziv polja iz baze; fabrička lista = lista trejdera od 15.10.2026; tagovi koje kod čita doslovno se ne menjaju; kategorije lista (`Context` …) ostaju |
+| 15.10.2026 | J | Posle J (trejder: „ostatak ostaje“): ostatak interfejsa (/reports okvir, dashboard, Settings, /import) ostaje na engleskom, kako README „On language“ kaže; faza za ceo interfejs na srpskom se ne radi |
 | 14.10.2026 | P | **P-1** fill-ovi se ne menjaju ručno nigde; ručno se upisuje samo originalni SL sa snimka (trejder: „samo SL treba ja da upišem jer ako ga pomerim na BE u toku trejda onda se ne slaže na uvozu“). **P-2** ocena izvršenja A/B/C svuda. **P-3** promena playbook-a briše odgovore na pravila prethodnog playbook-a; meko obrisana pravila istog playbook-a ostaju |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
@@ -1532,7 +1533,7 @@ Production `c415355` uspešan, pa migracija primenjena (verzija u bazi `20261014
 stavki, 7 polja — podaci trejdera netaknuti. Ručna provera u pregledaču nije rađena (produkcija je iza Vercel prijave).
 **Van obima J (svesno):** ostatak /reports, dashboard-a, grida i Settings je i dalje na engleskom (README „On
 language“: deo koji meri je engleski; ~3.150 stringova); kategorije lista (`Context`, `ICT Setup`, `Risk`,
-`Psychology`) ostaju kakve su u bazi. Ako trejder hoće ceo interfejs na srpskom, to je posebna faza.
+`Psychology`) ostaju kakve su u bazi. **Odluka trejdera (15.10.2026): „ostatak ostaje“** — interfejs van naziva kategorija ostaje na engleskom, nema posebne faze.
 
 ## Katalog stavki
 
