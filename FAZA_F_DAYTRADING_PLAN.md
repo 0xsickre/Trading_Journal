@@ -119,6 +119,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 15.10.2026 | J | Jezik (trejder preko mentora: „sve na srpskom“, gramatika svuda): naslovi kategorija u kodu idu na srpski kao u bazi; u paketu pobeđuje naziv polja iz baze; fabrička lista = lista trejdera od 15.10.2026; tagovi koje kod čita doslovno se ne menjaju; kategorije lista (`Context` …) ostaju |
 | 15.10.2026 | J | Posle J (trejder: „ostatak ostaje“): ostatak interfejsa (/reports okvir, dashboard, Settings, /import) ostaje na engleskom, kako README „On language“ kaže; faza za ceo interfejs na srpskom se ne radi |
 | 14.10.2026 | P | **P-1** fill-ovi se ne menjaju ručno nigde; ručno se upisuje samo originalni SL sa snimka (trejder: „samo SL treba ja da upišem jer ako ga pomerim na BE u toku trejda onda se ne slaže na uvozu“). **P-2** ocena izvršenja A/B/C svuda. **P-3** promena playbook-a briše odgovore na pravila prethodnog playbook-a; meko obrisana pravila istog playbook-a ostaju |
+| 17.10.2026 | D | Bias dana (trejder: „karticu daily bias … da se meri koji mi je winrate u predviđanju biasa … i koji bi winrate bio da je uvek long“): **D-1 A** pogodak = neto pomeraj od početka do kraja merenja uz neutralni opseg; **D-2** početak = kasnije od 09:00 BG i trenutka upisa, kraj 18:00 BG (upis posle 18:00 se ne ocenjuje); **D-3** Neutral je prognoza, Gore/Dole na neutralan dan je promašaj i za trejdera i za uvek long; **D-4** opseg bira mentor, fiksno u kodu, bez Settings (trejder: „nek radi u pozadini i nek bude podešeno“); **D-5** NQ, ES, GC, mikro deli bias sa mini; **D-6** kartica zamenjuje polje „Bias dana“ na trejdu. Radi se direktno na `main`, migracija se primenjuje posle zelenog gate-a (trejder: „odmah ide na glavnu granu … da odmah bude primenjeno na produkciju“) |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -162,6 +163,7 @@ pogađa.
 | **N** | Sesije trejdera umesto „Globex noć“: osam sesija kao linije na chartu, minuti od otvaranja sesije, sva vremena u paketu i na /daily po Beogradu | — | Q | ne | **Opus** | ✅ 14.10.2026 — N-1 = A, N-2 = A, N-3 = A; bez migracije |
 | **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | da: `20261014200000` (`mental_temp_at`), `20261015090000` (`trading_window`) | **Opus** | ✅ 14.10.2026 — Y1 `14a992f` · Y2 `7281007` · Y3 `80dee18` · Y4/Y5 `9de8441` (migracije `20261014200000`, `20261015090000` primenjene); Y-1 … Y-4 = A, Y-5 NY 14:30–18:00, Y-6 = A |
 | **J** | Jezik: nazivi kategorija u paketu, /reports i gridu na srpskom; fabrička lista tagova = lista trejdera | — | Y | da: `20261015120000` (nova definicija `tj_seed_categories`, podaci se ne menjaju) | **Opus** | ✅ 15.10.2026 — J1 `61f5c79` · J2 `c415355` (migracija `20261015120000` primenjena) |
+| **D** | Bias dana: prognoza pre sesije na /daily, ocena iz 1m sveća, moj winrate prema „uvek long“ | — | J | da: `20261017120000` (`tj_daily_bias`, aditivna) | **Opus** | 🔄 17.10.2026 — u radu |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1534,6 +1536,61 @@ stavki, 7 polja — podaci trejdera netaknuti. Ručna provera u pregledaču nije
 **Van obima J (svesno):** ostatak /reports, dashboard-a, grida i Settings je i dalje na engleskom (README „On
 language“: deo koji meri je engleski; ~3.150 stringova); kategorije lista (`Context`, `ICT Setup`, `Risk`,
 `Psychology`) ostaju kakve su u bazi. **Odluka trejdera (15.10.2026): „ostatak ostaje“** — interfejs van naziva kategorija ostaje na engleskom, nema posebne faze.
+
+## D — Bias dana (detaljno, 17.10.2026) — 🔄
+
+**Povod** (trejder, 17.10.2026: „da svaki dan odredim prvo bias za taj dan i to će da se meri … koji mi je winrate u
+predviđanju biasa i da se povežu cene koje će automatski da prepoznaju jesam li bias pogodio“, pa „mora da pokazuje
+koliko sam u plusu mojim biasom a koji bi winrate bio da je uvek long … da se upoređuju“). Mentor Z-016: bias nastaje
+dok trejder gleda cenu i nije zapisan pre ulaza. Danas je bias polje **na trejdu** (`custom.htf_bias`), bira se posle
+sesije, dan bez trejda nema bias, a tačnost se ne meri.
+
+### Utvrđeno u kodu i bazi (17.10.2026)
+- Bias trejda: `reviewOf()` → `TradeReview.htfBias`, `biasWasSet`, `evalHtfBiasSet` (`tracker/auto-rules.ts`); seed
+  `20261015120000` (lista `htf_bias`: Gore (bullish), Dole (bearish), Nema biasa, Nisam odredio unapred; polje
+  `always`); prikaz u „4 · Context“ na stranici trejda.
+- /daily: `daily/page.tsx`, slot `beforeSession` uz `SessionBriefCard`; šablon akcije `daily/actions.ts`.
+- Tabela po danu koju puni skripta: šablon `tj_session_briefs` (`20260929100000`) i `missingTable()` fallback.
+- Fabrički instrumenti (`default-instruments.ts`) nemaju GC/MGC; postoje `MICRO_OF` / `MINI_OF`, nema funkcije koren.
+- `futures-trading`: sveće po ugovoru iz R2 (`tools/cene/ugovor.py`, Databento dopuna sa limitom), upis kroz
+  `tools/journal_api.py`, pokretanje svaki sat 08–23 BG (`journal_mae.py`). **GC nije podržan** (meseci samo H/M/U/Z,
+  regex korena bez GC).
+
+### Odluke trejdera (17.10.2026)
+- **D-1 Pogodak = A:** neto pomeraj od početka do kraja merenja, uz neutralni opseg.
+- **D-2 Prozor:** početak = kasnije od **09:00 BG** i trenutka upisa (upis u 07:00 → 09:00; upis popodne → od upisa);
+  kraj **18:00 BG**. Upis posle 18:00 se ne ocenjuje.
+- **D-3 Neutral je prognoza.** Gore ili Dole na neutralan dan je promašaj, i za trejdera i za uvek long.
+- **D-4 Opseg bira mentor, fiksno u kodu**, bez Settings.
+- **D-5 Instrumenti NQ, ES, GC**; mikro (MNQ, MES, MGC) deli bias sa mini ugovorom.
+- **D-6 Kartica zamenjuje polje „Bias dana“ na trejdu**; tracker `htf_bias_set` čita karticu.
+- Grana: direktno `main`, migracija posle zelenog gate-a.
+
+### Opseg (D-4)
+Neutralan dan: |pomeraj| < **25. percentil |pomeraja| istog prozora** (isti minut početka po BG → 18:00) u **60
+prethodnih trgovačkih dana**, iz istih 1m sveća, svaki dan na svom front ugovoru (pomeraj je razlika, roll ne smeta).
+Manje od 40 dana istorije → `bez_istorije`. Zašto ne ATR × k: ATR meri raspon celog Globex dana, a ocenjuje se neto
+pomeraj u prozoru; percentil iste veličine drži udeo neutralnih dana oko 1 od 4 u svakom režimu, sam se skraćuje kad je
+prozor kraći i ne kvare ga ekstremi (CPI, FOMC). Kalibracija u `futures-trading` (`testovi/bias_opseg/`).
+
+### Podkoraci (svaki: test koji pada → kod → gate → commit + push)
+- **D1 Baza i koren.** Migracija `20261017120000_daily_bias.sql`: tabela `tj_daily_bias` (dan, koren NQ/ES/GC, bias
+  gore/dole/neutral, razlog, `set_at` iz triggera; kolone ocene `eval_*`). Više redova po (dan, koren); meri se
+  najraniji `set_at`. Trigger: bias, razlog, dan, koren i `set_at` se ne menjaju posle upisa; nema DELETE politike;
+  tabela ulazi u `tj_reset_my_data()`. `rootOf(symbol)`; GC i MGC u fabričkim instrumentima.
+- **D2 Kartica na /daily** (`daily-bias-card.tsx`, akcija `addDailyBias`, samo insert; zaključan dan odbija).
+- **D3 `futures-trading`:** kalibracija opsega; GC/MGC u `ugovor.py`; korak ocene u `journal_mae.py`.
+- **D4 Statistika:** `daily-bias.ts` — dani `ok` sa biasom pre prvog ulaza na korenu; moj winrate i uvek long na istim
+  danima; poeni (moji: Gore +pomeraj, Dole −pomeraj, Neutral 0; uvek long +pomeraj); pravi net $ i R trejdova u smeru /
+  protiv biasa. Panel u /reports (dve kumulativne linije), red na kartici.
+- **D5 Mentor paket:** red po danu i sekcija „Bias dana“.
+- **D6 Trejd nasleđuje bias sa kartice;** `htf_bias_set` čita karticu; polje „Bias dana“ se ne prikazuje na trejdu
+  (stara vrednost ostaje u bazi).
+- **D7 Dokumentacija:** README 1:1 (oba repoa), ovaj fajl, `ROADMAP.md`, `trading-mentor`.
+
+### Izlaz iz D
+Bias se upisuje jednom dnevno po instrumentu pre trgovanja, journal ga sam oceni iz cena, a /daily, /reports i paket
+pokazuju moj winrate i poene prema uvek long na istim danima.
 
 ## Katalog stavki
 
