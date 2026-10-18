@@ -2,8 +2,8 @@
 
 [![gate](https://github.com/0xsickre/Trading_Journal/actions/workflows/gate.yml/badge.svg)](https://github.com/0xsickre/Trading_Journal/actions/workflows/gate.yml)
 
-A day-trading journal for a single trader: intraday CME index futures on Topstep — NQ / MNQ and
-ES / MES, with 6E / M6E in the catalog. No AI chat — a disciplined record of what was traded and
+A day-trading journal for a single trader: intraday CME futures on Topstep — NQ / MNQ, ES / MES and
+gold GC / MGC, with 6E / M6E in the catalog. No AI chat — a disciplined record of what was traded and
 how well the process was followed, plus honest arithmetic over that record. **A trade comes in only
 through the import** (phase O, 08.10.2026): the TopstepX trades and orders exports (or a broker CSV),
 then the details filled in from the session's recording; a setup not taken has its own small page.
@@ -147,9 +147,9 @@ What `futures-trading` does with the journal, each described in its own README:
   with no setup or grade, or not yet confirmed by the TopstepX export — the same rule, on the same
   Topstep day (17:00 → 17:00 CT), as the "Bez pregleda" card on `/daily` (`review-gaps.ts`).
 
-The vault link is the swing-era one, and **the day trader's context comes from the brief**: the
-day's bias is "Bias dana (brief)" (`htf_bias`), the red windows and the Topstep close are read from
-`tj_session_briefs`. The vault's `macro_align` / `cot_filter` are no longer seeded or asked for, and
+The vault link is the swing-era one, and **the day trader's context comes from the brief and the
+/daily card**: the day's bias is the "Bias dana" card (phase D, § Bias dana; before 19.10.2026 the
+trade's `htf_bias` field), the red windows and the Topstep close are read from `tj_session_briefs`. The vault's `macro_align` / `cot_filter` are no longer seeded or asked for, and
 the two insights that read them (`against_macro_bias`, `cot_chase`) left in F6 (decision M2-A); the
 values stay on the older trades that carry them.
 
@@ -165,11 +165,40 @@ The routine both repos are built around — the same steps as "Dnevni tok journa
 | When | Where | What |
 |---|---|---|
 | 11:12 and 15:15 Belgrade | Telegram | The levels from `futures-trading` (`tools/brief/nivoi.py`): which of PDH/PDL (RTH and the whole Topstep day), PWH/PWL, PMH/PML and the Asia range London took, and what is left above and below the price — at 11:12 for London's morning (08:00–11:00), at 15:15 for all of London until the New York open. The morning brief carries the same levels without London |
-| Before the session | `/daily` → 1 · Pre sesije | The brief's red windows, the Topstep close, the expected range and, today, the DLL left; then two questions — how you are, and whether you trade today |
+| Before the session | `/daily` → 1 · Pre sesije | The brief's red windows, the Topstep close, the expected range and, today, the DLL left; the **Bias dana** card — Gore / Dole / Neutral per NQ, ES, GC, before the first entry (phase D); then two questions — how you are, and whether you trade today |
 | Before and during the trade | TopstepX + OBS | The order with its bracket; contracts from the brief's "Ugovori danas". The session is recorded, and the setup, stop, target and reason are said out loud before the click ("Teza naglas"). Nothing in the journal |
 | End of the day | `/import`, then `/trades/[id]` | The TopstepX **trades and orders** exports together: the fills, the target, the stop's last price, how each trade ended. Then **the trade page** per trade (phase P) — the original stop where it was moved, what was said before the click, setup and its checklist, the categories, A/B/C, mistakes; `/trades/missed/new` for a setup seen and not taken. MAE/MFE arrives on its own — provisional the same evening, exact the next morning |
 | 15:20 CT (22:20 Belgrade) | Telegram | A reminder if one of today's trades has no setup or grade, or was not confirmed by the CSV. The setup-and-grade half is the same rule as "Bez pregleda" on `/daily`, on the same Topstep day |
 | Closing the day / the week | Dashboard → Export for Claude, then the private `trading-mentor` repo | The mentor pack for the day (or the week) goes to Claude, who asks the closing questions and keeps the record of rules and observations. The journal has no written review of its own |
+
+### Bias dana (phase D, 17.10.2026)
+
+The trader sets the day's bias **before the session** on `/daily` — Gore, Dole or Neutral, per root:
+NQ, ES, GC (a micro trades its mini's price, so MNQ / MES / MGC share the mini's bias; `rootOf`).
+One row of `tj_daily_bias` is one forecast: the database stamps `set_at` (`tj_daily_bias_guard`
+ignores the client), the forecast can never be edited, and a change is a NEW row — **the day's first
+one is what counts** (D-2), so a bias cannot follow the price until it is right. Only today's page
+writes, never a locked day; there is no delete except "Delete all data".
+
+`futures-trading` (`tools/journal_bias.py`, inside the hourly `journal_mae.py`) grades it from the
+exchange's 1m candles of the front mini contract, once Databento has the day:
+
+- the window runs from the later of **09:00 Belgrade** and `set_at` to **18:00 Belgrade**; a forecast
+  set at 18:00 or later is `prekasno` and not graded;
+- the move is the close before 18:00 minus the open at the start; the **neutral band** is the 25th
+  percentile of |move| over the same window in the 60 trading days before (at least 40, else
+  `bez_istorije`); a candle missing by more than five minutes is `bez_cena`;
+- the day is `neutral` inside the band, `gore` / `dole` outside it. Calibrated in
+  `futures-trading/testovi/bias_opseg`: 23–29 % neutral days in both halves (D-4: the band is fixed in
+  code, nothing in Settings).
+
+The journal only counts (`daily-bias.ts`). A forecast hits when it equals the day; **always-long** is
+graded on the SAME days and hits only on a `gore` day, so a direction on a neutral day misses for both
+(D-3). Points: Gore earns the move, Dole its opposite, Neutral nothing; always-long earns the move. A
+forecast set after the root's first entry that day is counted apart, never graded. The card shows the
+score in one line, `/reports` the full table and chart, the mentor pack a row per day. From
+19.10.2026 the card is also the trade's bias (D-6): `htf_bias_set` reads it and the trade page shows
+it instead of asking; earlier days and 6E keep the trade's `htf_bias` field.
 
 The plan-first form (`/trades/new`) and the after-the-close log (`/trades/log`) left in phase O
 (08.10.2026): the import is the only way a trade comes in, and the full form edits what is there.
@@ -314,7 +343,7 @@ shows before saving. A test holds both to the same inputs.
 | **Trades** | `tj_positions`, `tj_executions`, `tj_trade_images` |
 | **Accounts and money** | `tj_accounts`, `tj_cash_events`, `tj_instruments` |
 | **Configuration** | `tj_option_lists`, `tj_option_items`, `tj_field_defs`, `tj_user_prefs`, `tj_dashboard_templates` |
-| **Daily process** | `tj_daily_reports`, `tj_session_briefs` (the morning brief, F4) |
+| **Daily process** | `tj_daily_reports`, `tj_session_briefs` (the morning brief, F4), `tj_daily_bias` (the day's bias forecasts and their grade, phase D) |
 | **Tracker** | `tj_tracker_rules`, `tj_tracker_checkins` |
 | **Playbooks** | `tj_playbooks`, `tj_playbook_sections`, `tj_playbook_rules`, `tj_playbook_rule_links`, `tj_position_rules` |
 | **Notebook** | `tj_notes`, `tj_note_folders`, `tj_note_tags` |
@@ -356,7 +385,7 @@ a trigger, phase Y; a mark only, no rule reads it) and *2. Da li danas trguješ?
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
-| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both; the seeded tags are Serbian since K2, `20260929200000`, which rewrote the trades that carried them), Tracker, Instruments (the six futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, the **timezone** shown, not typed: every time is in Europe/Belgrade (`DEFAULT_TZ`, K5, `20260929210000`), a file with its own offset is converted on import, and a Topstep account still counts its days by 17:00 CT; the **breakeven range** shown, not typed (§ Metrics, K4), and **Topstep rules (futures)** — plan 50K / 100K / 150K, first payout, reset, the risk rule), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion and reset live under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
+| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both; the seeded tags are Serbian since K2, `20260929200000`, which rewrote the trades that carried them), Tracker, Instruments (the eight futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, the **timezone** shown, not typed: every time is in Europe/Belgrade (`DEFAULT_TZ`, K5, `20260929210000`), a file with its own offset is converted on import, and a Topstep account still counts its days by 17:00 CT; the **breakeven range** shown, not typed (§ Metrics, K4), and **Topstep rules (futures)** — plan 50K / 100K / 150K, first payout, reset, the risk rule), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion and reset live under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
 | `/login` | Supabase auth |
 
 ---
@@ -386,6 +415,12 @@ One page, one question: **how did each group of trades do?** Top to bottom:
 6. **The table.** Every group with its trade count; a header click sorts, and a second click reverses.
    A **Total** row appears whenever every trade sits in exactly one row. Thin groups are dimmed, not
    hidden, and that is explained once.
+7. **Under the table**: the scenario panel, co-exposure, Missed setups and **Bias dana** (phase D,
+   `bias-panel.tsx`) — my winrate and always-long's on the same graded days per root, the edge in
+   percentage points, the points each earned, a two-line cumulative chart per root, and the real money
+   of the trades on screen with the bias, against it, on a Neutral day and without one. The winrates
+   are over every forecast (they belong to days, not to filtered trades); "mali uzorak" below 30
+   graded days.
 
 **"—" is not 0.** A win rate over breakeven scratches only, or R figures over trades without a stop,
 read "—" in a report and sort last. They used to read 0, and that fake zero could be named the best
@@ -985,6 +1020,12 @@ scope (`mentor-export.ts`), to be uploaded into a chat: every number is computed
 interprets and never calculates. Since F5.6 (29.09.2026) it carries what decides an intraday Topstep
 book, from values the screens already derive (`mentor-intraday.ts`):
 
+- **Bias dana** (phase D, 17.10.2026). One row per day and root of the period: the counted (first)
+  forecast, when it was set — marked "posle prvog ulaza" and not counted when it came after the first
+  entry — and what the prices made of the day; a root traded with no forecast is a row too ("nije
+  upisan"). Then my winrate beside always-long's on the same days, the points per root, and the trades
+  with the bias, against it, on a Neutral day and with none (`biasPackSection`, § Bias dana).
+
 - **Category tables in Serbian** (phase J, 15.10.2026). "Performanse po kategorijama" names each
   table by the trader's own field name when the field exists in Settings (Tehnički tagovi, Greške,
   Psihologija), otherwise Ocena setupa, Instrument, Smer; a missed setup's reason is "Razlog
@@ -1083,9 +1124,9 @@ taken at entry, so each is charged to the Topstep day the trade was OPENED on:
 | `no_entry_in_red_window` | an entry falls inside a red window of the day's brief, both edges included | the day has no brief |
 | `stop_after_two_losses` (08.10.2026, `20261008140000`) | an entry on an account follows two stop losses IN A ROW, closed before it that Topstep day — a loss is below the breakeven band (on Topstep a tenth of the trade's risk), so a win or a scratch in between breaks the run | the day had no entry, or a close before the entry has no price |
 | `no_entry_after_daily_target` | an entry on a Topstep account follows trades of that account and day, CLOSED before it, whose net reached the account's personal daily profit target | the account has no target (`unconfigured`), the day had no Topstep entry, or a trade closed before the entry has no price |
-| `htf_bias_set` (phase Q, 14.10.2026, `20261014120000`) | a trade opened that day has no "Bias dana" (`custom.htf_bias`), or it says "Nisam odredio unapred" | no trade opened that day, or every one is still open (`not_yet`) — a review is written after the exit |
+| `htf_bias_set` (phase Q, 14.10.2026, `20261014120000`; phase D, 17.10.2026) | from 19.10.2026 (`BIAS_CARD_SINCE`): a trade opened that day on NQ / ES / GC or their micros has no forecast on the /daily card for its root set no later than its entry — the day's FIRST forecast counts, graded at entry like the stop. Before that day, and on an instrument with no daily bias (6E): the trade has no "Bias dana" (`custom.htf_bias`), or it says "Nisam odredio unapred" | no trade opened that day; before 19.10.2026 also every one still open (`not_yet`) |
 | `thesis_recorded` (phase Q) | a trade has no `thesis` ("šta sam rekao pre klika"), read live; WHEN it was said is the recording's, so the mentor's | as above |
-| `review_complete` (phase Q) | a trade lacks a grade, an exit reason, the bias, TF ulaza (`custom.entry_tf`), a psychology tag, or a mistake when the grade is not A | as above |
+| `review_complete` (phase Q) | a trade lacks a grade, an exit reason, the bias (from 19.10.2026 the card's, phase D), TF ulaza (`custom.entry_tf`), a psychology tag, or a mistake when the grade is not A | as above |
 | `screenshot_per_trade` (phase Q) | a trade has no chart (`tj_trade_images`) | as above |
 | `honest_tags` (phase Q) | on the same trade: "Ispoštovao rizik" beside a failed `risk_per_trade` / `stop_loss_set` / `max_loss_per_trade`, or an A ("Bez greške") beside any failed trading rule, or (phase Y5, 15.10.2026) "Vodio po planu" on a trade without a playbook or with one created after the entry; the review rules do not count as trading errors. Evaluated last, from the other verdicts | as above |
 | `trading_window` (phase Y4, 15.10.2026, `20261015090000`) | an entry before `from` or from `to` on, or a position still open once the minute of `to` has passed — an exit within that minute is the time exit, not a breach. Times are Belgrade; the window is `config.windows[]` of `{ since, from, to }`, the latest `since` on or before the day applies (London weeks 09:00–12:00, NY weeks 14:30–18:00), set in Settings › Tracker ("Save window", `setTradingWindow`), so a change next Monday leaves this week as it was. Reverses Q-2's retired "Vreme trgovanja" | no trade opened that day, or no window for the day (`unconfigured`) |
@@ -1615,7 +1656,7 @@ what "reset everything" means, and a reader should not have to trace foreign key
 
 What actually comes back, counted from the seed functions rather than assumed from their names:
 **1 Main Account (USD, `Europe/Belgrade`, asset class Futures, not in Topstep mode — the plan and
-balance are chosen in Settings), the six futures, 10 lists holding 76 options, 18 tracker rules,
+balance are chosen in Settings), the eight futures, 10 lists holding 76 options, 18 tracker rules,
 7 custom fields, 4 note folders.** Since `20260930030000` the factory set is the day trader's own:
 seven manual rules (before the session: calendar and HTF levels, mental check-in; while trading:
 trading hours, risk control, walk-away target; after it: journal and tags, screenshots) around the
@@ -1641,7 +1682,9 @@ page — so a symbol deleted in Settings was back on the next visit, and back wi
 contract spec rather than the corrected one. It is the same shape of bug as the playbook seed below,
 and it is now guarded the same way the account seed always was: the insert runs only when the user's
 catalog is empty. A reset still restores the whole seed, because it deletes the catalog first — and
-since `20260928140000` the seed is the six futures, not the 91-symbol CFD catalog it was then.
+since `20260928140000` the seed is the futures, not the 91-symbol CFD catalog it was then — eight of
+them since `20261017120000` (phase D), which added gold GC / MGC to the seed and, once, to every
+existing book (they had never been in the catalog, so nothing deleted came back).
 
 **What does NOT come back: playbooks.** `tj_seed_defaults` **does** call `tj_seed_playbooks`, but that
 function has been a **deliberate no-op since `20260813200000`**: it used to guard itself with
@@ -1806,7 +1849,7 @@ written from the traded contract's own candles:
 
 | Trade | MAE/MFE source |
 |---|---|
-| **Future** (NQ, MNQ, ES, MES, 6E, M6E) — TopstepX import | The traded contract's own candles in Cloudflare R2, written by `futures-trading/tools/journal_mae.py`: exact from Databento every morning at 06:15 UTC, and provisional from Yahoo's 1-minute bars of the same contract hourly on weekday afternoons and evenings, so the evening review has them (`excursion_note` says `… · 1m privremeno` until the exact value replaces it). 1-second candles. The contract is the one in the name (`MNQZ6`) or the CME roll rule's, and it is the right one only if **every fill lies inside its own candle** (±1 tick) — otherwise the trade is refused with the reason |
+| **Future** (NQ, MNQ, ES, MES, 6E, M6E, GC, MGC) — TopstepX import | The traded contract's own candles in Cloudflare R2, written by `futures-trading/tools/journal_mae.py`: exact from Databento every morning at 06:15 UTC, and provisional from Yahoo's 1-minute bars of the same contract hourly on weekday afternoons and evenings, so the evening review has them (`excursion_note` says `… · 1m privremeno` until the exact value replaces it). 1-second candles. The contract is the one in the name (`MNQZ6`) or the CME roll rule's, and it is the right one only if **every fill lies inside its own candle** (±1 tick) — otherwise the trade is refused with the reason |
 
 `tj_positions.excursion_source` records who wrote the two prices: `manual` or `r2` (`mt5` and
 `tradingview` on history written before H1 / H2), and `excursion_note` says what they were measured

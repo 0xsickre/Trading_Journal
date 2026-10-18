@@ -163,7 +163,7 @@ pogađa.
 | **N** | Sesije trejdera umesto „Globex noć“: osam sesija kao linije na chartu, minuti od otvaranja sesije, sva vremena u paketu i na /daily po Beogradu | — | Q | ne | **Opus** | ✅ 14.10.2026 — N-1 = A, N-2 = A, N-3 = A; bez migracije |
 | **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | da: `20261014200000` (`mental_temp_at`), `20261015090000` (`trading_window`) | **Opus** | ✅ 14.10.2026 — Y1 `14a992f` · Y2 `7281007` · Y3 `80dee18` · Y4/Y5 `9de8441` (migracije `20261014200000`, `20261015090000` primenjene); Y-1 … Y-4 = A, Y-5 NY 14:30–18:00, Y-6 = A |
 | **J** | Jezik: nazivi kategorija u paketu, /reports i gridu na srpskom; fabrička lista tagova = lista trejdera | — | Y | da: `20261015120000` (nova definicija `tj_seed_categories`, podaci se ne menjaju) | **Opus** | ✅ 15.10.2026 — J1 `61f5c79` · J2 `c415355` (migracija `20261015120000` primenjena) |
-| **D** | Bias dana: prognoza pre sesije na /daily, ocena iz 1m sveća, moj winrate prema „uvek long“ | — | J | da: `20261017120000` (`tj_daily_bias`, aditivna) | **Opus** | 🔄 17.10.2026 — u radu |
+| **D** | Bias dana: prognoza pre sesije na /daily, ocena iz 1m sveća, moj winrate prema „uvek long“ | — | J | da: `20261017120000` (`tj_daily_bias`, aditivna) | **Opus** | ✅ kod 18.10.2026 — `a7456ed` · D1 `8af430f` · D2 `18d7077` · D4 `fcdf8ee` · D5+D6 `293067b` + futures-trading `adb046c`; **migracija `20261017120000` čeka primenu u bazi** |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1591,6 +1591,19 @@ prozor kraći i ne kvare ga ekstremi (CPI, FOMC). Kalibracija u `futures-trading
 ### Izlaz iz D
 Bias se upisuje jednom dnevno po instrumentu pre trgovanja, journal ga sam oceni iz cena, a /daily, /reports i paket
 pokazuju moj winrate i poene prema uvek long na istim danima.
+
+**Isporučeno (18.10.2026):** D1 `8af430f` (tabela `tj_daily_bias`, guard trigger, reset; `rootOf`; GC/MGC u katalogu
+i, jednom, u postojećoj knjizi — provizije TopstepX 4.32 / 1.92 round turn, 18.10.2026), D2 `18d7077` (kartica i akcija
+`addDailyBias`, samo današnji dan, samo insert), D3 futures-trading `adb046c` (`tools/journal_bias.py` u satnom
+`journal_mae.py`; `ugovor.py` zna GC/MGC — meseci G/J/M/Q/Z, rol 3 radna dana pre first notice day-a, selftest;
+kalibracija `testovi/bias_opseg` prošla: 23–29 % neutralnih u obe polovine, NQ 1h 2024–26 i spot zlato 1h 2016–26),
+D4 `fcdf8ee` (/reports panel), D5+D6 `293067b` (paket; `htf_bias_set` i `review_complete` čitaju karticu od
+`BIAS_CARD_SINCE = 2026-10-19`, stranica trejda više ne traži polje). Gate zelen (2978 testova).
+**Otvoreno:** (1) migracija `20261017120000` nije primenjena — poziv Supabase MCP-a iz sesije je otkazan dva puta;
+dok se ne primeni, /daily i /reports rade (`missingTable`), ali bias ne može da se upiše. (2) ES nije kalibrisan (nema
+časovnih sveća ES fjučersa u repou); ponoviti `bias_opseg` na Databento 1m (NQ, ES, GC) i proveriti udeo neutralnih
+posle ~30 stvarnih ocena. (3) Rol zlata (3 radna dana pre FND) nije proveren prema `GC.v.0` po volumenu. (4) Ručna
+provera u pregledaču nije rađena.
 
 ## Katalog stavki
 
