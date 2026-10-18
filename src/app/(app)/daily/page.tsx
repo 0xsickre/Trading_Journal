@@ -34,6 +34,10 @@ import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
 import { briefResolver } from "@/lib/journal/session-brief";
 import { SessionBriefCard } from "@/components/journal/session-brief-card";
 import { tradingWindowResolver } from "@/lib/journal/tracker/trading-window";
+import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
+import { firstEntryResolver, summarizeBias } from "@/lib/journal/daily-bias";
+import { BIAS_ROOTS } from "@/lib/journal/default-instruments";
+import { DailyBiasCard } from "@/components/journal/daily-bias-card";
 
 export default async function DailyPage({
   searchParams,
@@ -74,6 +78,7 @@ export default async function DailyPage({
     briefs,
     sizing,
     cash,
+    biases,
   ] = await Promise.all([
     accountsPromise,
     dayPromise,
@@ -93,6 +98,8 @@ export default async function DailyPage({
     getTopstepSizing(),
     // Payouts lower a Topstep balance, and with it the budgets the tracker derives.
     getCashEvents(),
+    // Bias dana (phase D): every forecast — the day's for the card, all of them for the score.
+    getDailyBiases(),
   ]);
   const briefOf = briefResolver(briefs);
   const primarySizing = primary?.topstep_mode ? sizing[primary.id] : undefined;
@@ -160,6 +167,10 @@ export default async function DailyPage({
   const firstEntryAt =
     (index.byOpenDay.get(reportDate) ?? []).map((t) => t.openedAt).sort((a, b) => Date.parse(a) - Date.parse(b))[0] ?? null;
 
+  // Bias dana: the first entry per root, for a forecast set after it — graded apart, never counted.
+  const firstEntryOfRoot = firstEntryResolver(trades, tzOf);
+  const biasFirstEntry = Object.fromEntries(BIAS_ROOTS.map((r) => [r, firstEntryOfRoot(reportDate, r)]));
+
   const tracker: TrackerDayData = {
     reportDate,
     rules: dayRules,
@@ -189,7 +200,16 @@ export default async function DailyPage({
         tracker={tracker}
         firstEntryAt={firstEntryAt}
         beforeSession={
-          <SessionBriefCard day={reportDate} brief={briefOf(reportDate)} tz={timezone} dllLeft={dllLeft} />
+          <>
+            <SessionBriefCard day={reportDate} brief={briefOf(reportDate)} tz={timezone} dllLeft={dllLeft} />
+            <DailyBiasCard
+              day={reportDate}
+              biases={biases.filter((b) => b.tradingDay === reportDate)}
+              firstEntryOf={biasFirstEntry}
+              canWrite={reportDate === today && report?.locked_at == null}
+              summary={summarizeBias(biases, firstEntryOfRoot)}
+            />
+          </>
         }
         afterSession={
           <>
