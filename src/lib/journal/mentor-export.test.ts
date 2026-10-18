@@ -3,6 +3,7 @@ import { buildMentorPack, resolveCalendarRange } from "./mentor-export";
 import { resolveBreakevenRange } from "./breakeven";
 import type { PositionStat, TradeRow } from "./types";
 import type { Insight } from "./insights/types";
+import { parseDailyBias, type DailyBias } from "./daily-bias";
 
 function trade(id: string, netPl: number): TradeRow {
   const stats: PositionStat = {
@@ -297,5 +298,68 @@ describe("buildMentorPack trade detail after phase P", () => {
     expect(md).toContain("- **Stop Price:** 95");
     expect(md).toContain("- **Thesis:** Short iz gornje zone");
     expect(md).not.toMatch(/Position size|Invalidation|Time stop|Scale-out/);
+  });
+});
+
+describe("mentor pack, phase D: bias dana", () => {
+  const nq = (id: string, opened: string, direction = "Long", net = 100): TradeRow => {
+    const t = trade(id, net);
+    return {
+      ...t,
+      instrument: "MNQ",
+      direction,
+      stats: { ...t.stats!, opened_at: opened, closed_at: opened },
+    } as TradeRow;
+  };
+  const graded = (over: Record<string, unknown>) =>
+    parseDailyBias({
+      id: "b1",
+      trading_day: "2026-10-19",
+      root: "NQ",
+      bias: "gore",
+      reason: null,
+      set_at: "2026-10-19T05:12:00Z",
+      eval_status: "ok",
+      eval_start_at: "2026-10-19T07:00:00Z",
+      eval_start_price: 25000,
+      eval_end_price: 25142,
+      eval_move: 142,
+      eval_band: 61,
+      eval_day: "gore",
+      ...over,
+    }) as DailyBias;
+
+  it("lists the counted forecast per day, a root traded without one, and both winrates", () => {
+    const md = buildMentorPack(
+      [nq("t1", "2026-10-19T08:00:00Z"), nq("t2", "2026-10-20T08:00:00Z", "Short", -50)],
+      {
+        tzOf: () => "Europe/Belgrade",
+        displayTz: "Europe/Belgrade",
+        periodDays: ["2026-10-19", "2026-10-20"],
+        biases: [graded({}), graded({ id: "b2", bias: "dole", set_at: "2026-10-19T08:30:00Z" })],
+      },
+    );
+    expect(md).toContain("## Bias dana (prognoza pre sesije, ocena iz cena)");
+    expect(md).toContain("| 2026-10-19 | NQ | Gore (+1 promena, meri se prvi) | 07:12 | dan Gore +142 (±61) → pogodak |");
+    expect(md).toContain("| 2026-10-20 | NQ | nije upisan | — | trgovao bez biasa |");
+    expect(md).toContain("**Moj bias:** 100 % (1/1) · **Uvek long:** 100 % (1/1) (isti dani) — mali uzorak (1 od 30 dana)");
+    expect(md).toContain("u smeru 1 (net 100 USD, +1R)");
+    expect(md).toContain("bez biasa 1 (net -50 USD, -0.5R)");
+  });
+
+  it("a forecast set after the first entry is shown and not counted", () => {
+    const md = buildMentorPack([nq("t1", "2026-10-19T04:00:00Z")], {
+      tzOf: () => "Europe/Belgrade",
+      displayTz: "Europe/Belgrade",
+      periodDays: ["2026-10-19"],
+      biases: [graded({})],
+    });
+    expect(md).toContain("07:12, upisano 07:12, posle prvog ulaza (06:00) | ne broji se |");
+    expect(md).toContain("**Moj bias:** —");
+  });
+
+  it("says nothing without forecasts or bias-root trades", () => {
+    const md = buildMentorPack([trade("x", 10)], { tzOf: () => "UTC", biases: [] });
+    expect(md).not.toContain("## Bias dana");
   });
 });

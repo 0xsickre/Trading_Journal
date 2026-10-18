@@ -111,10 +111,11 @@ function dayTradingText(res: AutoRuleResult, currency: string): string | null {
         : "Prekršeno: trejd bez playbook-a, ili playbook napravljen posle ulaza.";
     }
     // Phase Q: read off the trade page, so the fix is on the trade the link opens.
+    // Phase D: from 19.10.2026 the bias is the card above, set before the entry.
     case "htf_bias_set":
       return broke
-        ? "Na trejdu nije upisan bias dana, ili piše „Nisam odredio unapred“."
-        : "Bias dana upisan na svakom trejdu.";
+        ? "Bias dana nije upisan na kartici pre ulaza (za taj instrument), ili na starijem trejdu piše „Nisam odredio unapred“."
+        : "Bias dana upisan pre ulaza za svaki trejd.";
     case "thesis_recorded":
       return broke
         ? "Na trejdu nije upisano šta si rekao pre klika."

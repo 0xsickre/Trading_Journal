@@ -106,6 +106,7 @@ export function TradePage({
   trade,
   playbooks,
   contextDefs,
+  biasNote = null,
   reviewDefs,
   optionsMap,
   breakevenRange,
@@ -117,6 +118,8 @@ export function TradePage({
   playbooks: Playbook[];
   /** Categories asked about the setup (phase `always`, or `missed` on a missed setup). */
   contextDefs: FieldDef[];
+  /** Bias dana from the /daily card (phase D) — said here instead of asked. */
+  biasNote?: string | null;
   /** Categories asked in the review (phase `active`). */
   reviewDefs: FieldDef[];
   optionsMap: OptionsMap;
@@ -366,12 +369,13 @@ export function TradePage({
       </Card>
 
       {/* 4 · Context: the trader's own categories, in the order of Settings */}
-      {contextDefs.length > 0 && (
+      {(contextDefs.length > 0 || biasNote) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Kontekst</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
+            {biasNote && <p className="text-sm text-muted-foreground sm:col-span-2">{biasNote}</p>}
             {contextDefs.map((def) => (
               <CategoryField
                 key={def.key}

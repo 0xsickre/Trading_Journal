@@ -96,6 +96,18 @@ export function parseDailyBias(row: Record<string, unknown>): DailyBias | null {
   };
 }
 
+/**
+ * From this Topstep day the card is THE bias (D-6): the tracker reads it and the trade page no
+ * longer asks. Days before it keep what was chosen on the trade — the card did not exist then.
+ */
+export const BIAS_CARD_SINCE = "2026-10-19";
+
+/** The counted (first) forecast of a day and root, or null. */
+export function firstBiasResolver(all: DailyBias[]): (day: string, root: BiasRoot) => DailyBias | null {
+  const first = new Map(firstBiases(all).map((b) => [`${b.tradingDay}|${b.root}`, b]));
+  return (day, root) => first.get(`${day}|${root}`) ?? null;
+}
+
 /** Every forecast of one day and root, earliest first — the first is the one that counts. */
 export function biasesOf(all: DailyBias[], day: string, root: BiasRoot): DailyBias[] {
   return all
@@ -275,4 +287,84 @@ export function splitTradesByBias(
 /** "58 % (14/24)" — or "—" with nothing graded. */
 export function rateText(hits: number, n: number): string {
   return n === 0 ? "—" : `${Math.round((hits / n) * 100)} % (${hits}/${n})`;
+}
+
+/**
+ * The mentor pack's "Bias dana" section: one row per day and root in the period — the counted
+ * forecast, when it was set, what the prices made of the day — then the two winrates on the same
+ * days and the real money by bias. A root traded with no forecast before the first entry is a row
+ * too ("nije upisan"), so a missing bias is visible instead of absent.
+ */
+export function biasPackSection(
+  all: DailyBias[],
+  trades: TradeRow[],
+  zoneOf: (t: TradeRow) => DayZone,
+  days: string[],
+  ccy: string,
+  tz: string = DEFAULT_TZ,
+): string[] {
+  const inPeriod = new Set(days);
+  const biases = all.filter((b) => inPeriod.has(b.tradingDay));
+  const firstEntryOf = firstEntryResolver(trades, zoneOf);
+  const traded = new Set<string>();
+  for (const t of trades) {
+    const opened = t.stats?.opened_at;
+    const root = rootOf(typeof t.instrument === "string" ? t.instrument : null);
+    if (opened && root) traded.add(`${dayKeyIn(opened, zoneOf(t))}|${root}`);
+  }
+  if (biases.length === 0 && traded.size === 0) return [];
+
+  const out = [
+    "## Bias dana (prognoza pre sesije, ocena iz cena)",
+    "_Meri se prvi upis dana po korenu (NQ, ES, GC; mikro ima bias mini ugovora): od 09:00 po Beogradu ili od upisa, " +
+      "ako je kasnije, do 18:00. Dan je Neutral kad je pomeraj ispod opsega (25. percentil istog prozora u 60 dana). " +
+      "„Uvek long“ se ocenjuje na istim danima. Bias upisan posle prvog ulaza se ne broji._",
+    "",
+    "| Dan | Koren | Bias | Upisano | Ishod |",
+    "|---|---|---|---|---|",
+  ];
+  for (const day of [...days].sort()) {
+    for (const root of BIAS_ROOTS) {
+      const list = biasesOf(biases, day, root);
+      const first = list[0];
+      if (!first) {
+        if (traded.has(`${day}|${root}`)) out.push(`| ${day} | ${root} | nije upisan | — | trgovao bez biasa |`);
+        continue;
+      }
+      const late = biasLateText(first, firstEntryOf(day, root), tz);
+      const changes = list.length > 1 ? ` (+${list.length - 1} promena, meri se prvi)` : "";
+      out.push(
+        `| ${day} | ${root} | ${BIAS_LABEL[first.bias]}${changes} | ${fmtInTz(first.setAt, tz, "HH:mm")}${late ? `, ${late}` : ""} | ${
+          late ? "ne broji se" : outcomeText(first)
+        } |`,
+      );
+    }
+  }
+  out.push("");
+
+  const s = summarizeBias(biases, firstEntryOf);
+  out.push(
+    `- **Moj bias:** ${rateText(s.total.hits, s.total.n)} · **Uvek long:** ${rateText(s.total.longHits, s.total.n)} (isti dani)` +
+      (s.total.n > 0 && s.total.n < BIAS_MIN_SAMPLE ? ` — mali uzorak (${s.total.n} od ${BIAS_MIN_SAMPLE} dana)` : ""),
+  );
+  for (const root of BIAS_ROOTS) {
+    const r = s.byRoot[root];
+    if (r.n === 0) continue;
+    const p = (n: number) => `${n > 0 ? "+" : ""}${Math.round(n * 100) / 100}`;
+    out.push(`- **${root}:** ${rateText(r.hits, r.n)} prema ${rateText(r.longHits, r.n)}; poeni ${p(r.points)} prema ${p(r.longPoints)}`);
+  }
+  if (s.late > 0 || s.ungraded > 0) out.push(`- Posle prvog ulaza: ${s.late} · bez ocene: ${s.ungraded}`);
+  const split = splitTradesByBias(trades, biases, zoneOf);
+  const g = (label: string, x: BiasTradeGroup) =>
+    `${label} ${x.n} (net ${Math.round(x.net * 100) / 100} ${ccy}${x.rCount ? `, ${x.r > 0 ? "+" : ""}${Math.round(x.r * 100) / 100}R` : ""})`;
+  out.push(
+    `- **Trejdovi po biasu:** ${[
+      g("u smeru", split.with),
+      g("protiv", split.against),
+      g("Neutral dan", split.neutral),
+      g("bez biasa", split.none),
+    ].join(" · ")}`,
+  );
+  out.push("");
+  return out;
 }

@@ -51,6 +51,7 @@ import { drawdownDuration, drawdownEpisodes } from "@/lib/journal/balance";
 const EMPTY_INSIGHTS = { insights: [], skipped: [] };
 /** A stable empty default, so the tracker memo does not recompute on every render. */
 const NO_BRIEFS: SessionBrief[] = [];
+const NO_BIASES: DailyBias[] = [];
 
 const chartLoading = () => (
   <div className="h-full w-full animate-pulse rounded-md bg-muted/40" />
@@ -131,6 +132,7 @@ import { computeTimeStop } from "@/lib/journal/time-stop";
 import { computeCostStats } from "@/lib/journal/costs";
 import { familiesOf, instrumentFamily, toUnits, type FuturesUnit } from "@/lib/journal/futures-units";
 import { MICRO_OF } from "@/lib/journal/default-instruments";
+import { firstBiasResolver, type DailyBias } from "@/lib/journal/daily-bias";
 import { computeExcursionStats } from "@/lib/journal/excursion";
 import {
   computeDirectionSplit,
@@ -406,6 +408,7 @@ export function Dashboard({
   trackerRules = [],
   checkins = [],
   briefs = NO_BRIEFS,
+  biases = NO_BIASES,
   todayKey,
   timezone,
   playbooks = [],
@@ -428,6 +431,8 @@ export function Dashboard({
   checkins?: TrackerCheckin[];
   /** The morning briefs of the tracker span — two rules read their windows and close. */
   briefs?: SessionBrief[];
+  /** Bias dana (phase D): every forecast, for the mentor pack. */
+  biases?: DailyBias[];
   /**
    * Today in the ACCOUNT's timezone, resolved on the server.
    *
@@ -1322,6 +1327,7 @@ export function Dashboard({
     );
     const briefOf = briefResolver(briefs);
     const tradingWindowOf = tradingWindowResolver(trackerRules);
+    const biasOf = firstBiasResolver(biases);
 
     const byDate = new Map<string, Map<string, TrackerCheckin>>();
     for (const c of checkins) {
@@ -1339,7 +1345,7 @@ export function Dashboard({
       // the money and leaves that day's compliance where it was.
       resolveAutoResults(
         trackerRules,
-        evaluateAutoRulesForDay(d, index, { briefOf, tradingWindowOf }),
+        evaluateAutoRulesForDay(d, index, { briefOf, tradingWindowOf, biasOf }),
         byDate.get(d) ?? new Map(),
       ),
     todayKey,
@@ -1354,6 +1360,7 @@ export function Dashboard({
     reportByDay,
     checkins,
     briefs,
+    biases,
     trades,
     accountFilter,
     tzForAccount,
@@ -1737,6 +1744,7 @@ export function Dashboard({
       executions: new Map(Object.entries(fills)),
       playbookNames: new Map(playbooks.map((p) => [p.id, p.name])),
       checklistAt: positionRules ? checklistAnsweredAt(positionRules) : undefined,
+      biases,
     });
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);

@@ -1,4 +1,6 @@
 import { accountFilterOptions, allAccountsScope, inAllAccountsScope, primaryAccount } from "@/lib/journal/account-rules";
+import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
+import { firstBiasResolver } from "@/lib/journal/daily-bias";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getCashEvents } from "@/lib/journal/cash-events";
 import { getTradesWithStats } from "@/lib/journal/trades";
@@ -137,7 +139,7 @@ export default async function CalendarPage({
     const from = days[0];
     const to = days[days.length - 1];
 
-    const [reports, rules, checkinsByDay, briefs, cash] = await Promise.all([
+    const [reports, rules, checkinsByDay, briefs, cash, biases] = await Promise.all([
       getDailyReportsInRange(from, to),
       // Retired rules included, and `rulesLiveOn` filters per day — a rule that
       // was live in March still judged March, and dropping it would raise that
@@ -150,8 +152,11 @@ export default async function CalendarPage({
       // The month's briefs, for the rules that read the red windows and the close.
       getSessionBriefs(from, to),
       getCashEvents(),
+      // The month's bias forecasts (phase D): `htf_bias_set` reads the card.
+      getDailyBiases(from, to),
     ]);
     const briefOf = briefResolver(briefs);
+    const biasOf = firstBiasResolver(biases);
     const tradingWindowOf = tradingWindowResolver(rules);
 
     const reportOfDay = new Map(reports.map((r) => [r.report_date, r]));
@@ -164,7 +169,7 @@ export default async function CalendarPage({
         const live = rulesLiveOn(rules, d);
         return resolveAutoResults(
           live,
-          evaluateAutoRulesForDay(d, index, { briefOf, tradingWindowOf }),
+          evaluateAutoRulesForDay(d, index, { briefOf, tradingWindowOf, biasOf }),
           checkinsByDay.get(d) ?? new Map(),
         );
       },

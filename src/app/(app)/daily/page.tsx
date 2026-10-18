@@ -35,7 +35,7 @@ import { briefResolver } from "@/lib/journal/session-brief";
 import { SessionBriefCard } from "@/components/journal/session-brief-card";
 import { tradingWindowResolver } from "@/lib/journal/tracker/trading-window";
 import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
-import { firstEntryResolver, summarizeBias } from "@/lib/journal/daily-bias";
+import { firstBiasResolver, firstEntryResolver, summarizeBias } from "@/lib/journal/daily-bias";
 import { BIAS_ROOTS } from "@/lib/journal/default-instruments";
 import { DailyBiasCard } from "@/components/journal/daily-bias-card";
 
@@ -143,7 +143,11 @@ export default async function DailyPage({
     dayRules,
     // `dayRules`, not `rules`: the limits scored here must be the ones in force
     // on this day, not a retired rule's leftovers.
-    evaluateAutoRulesForDay(reportDate, index, { briefOf, tradingWindowOf: tradingWindowResolver(rules) }),
+    evaluateAutoRulesForDay(reportDate, index, {
+      briefOf,
+      tradingWindowOf: tradingWindowResolver(rules),
+      biasOf: firstBiasResolver(biases),
+    }),
     checkins,
   );
 

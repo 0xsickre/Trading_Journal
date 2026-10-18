@@ -10,7 +10,10 @@ import { excursionFromTrade } from "@/lib/journal/excursion";
 import { resolveBreakevenRange } from "@/lib/journal/breakeven";
 import { fieldValue } from "@/lib/journal/field-values";
 import { autoExitReason } from "@/lib/journal/quick-log";
-import { DAY_TIME, DEFAULT_TZ, fmtInTz } from "@/lib/journal/time";
+import { DAY_TIME, DEFAULT_TZ, accountDayZone, dayKeyIn, fmtInTz } from "@/lib/journal/time";
+import { rootOf } from "@/lib/journal/default-instruments";
+import { BIAS_CARD_SINCE, BIAS_LABEL, biasLateText, biasesOf } from "@/lib/journal/daily-bias";
+import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
 import type { FieldDef } from "@/lib/journal/field-def-types";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
@@ -75,8 +78,26 @@ export default async function TradeRoute({
   const shown = (d: FieldDef) => d.is_active || hasValue(d);
   const rank = (d: FieldDef) => categoryOrder[d.list_key ?? ""] ?? Number.MAX_SAFE_INTEGER;
   const ordered = [...defs].sort((a, b) => rank(a) - rank(b) || a.sort_order - b.sort_order || a.key.localeCompare(b.key));
+  // Bias dana (phase D, D-6): from the card on, the trade inherits the day's first forecast for its
+  // root and the page stops asking. The old field stays in the row for history.
+  const biasRoot = missed ? null : rootOf(pos.instrument);
+  const openDay = stats?.opened_at ? dayKeyIn(stats.opened_at, account ? accountDayZone(account) : DEFAULT_TZ) : null;
+  const fromCard = biasRoot != null && openDay != null && openDay >= BIAS_CARD_SINCE;
+  let biasNote: string | null = null;
+  if (fromCard) {
+    const first = biasesOf(await getDailyBiases(openDay, openDay), openDay, biasRoot)[0];
+    const late = first ? biasLateText(first, stats?.opened_at ?? null) : null;
+    biasNote = first
+      ? `Bias dana (${biasRoot}, sa kartice na /daily): ${BIAS_LABEL[first.bias]}, upisano ${fmtInTz(first.setAt, DEFAULT_TZ, "HH:mm")}${
+          late ? ` — posle ovog ulaza, ne broji se` : ""
+        }${first.reason ? `. ${first.reason}` : ""}`
+      : `Bias dana (${biasRoot}): nije upisan na kartici pre ovog ulaza.`;
+  }
   const contextDefs = ordered.filter(
-    (d) => shown(d) && (d.show_phase === "always" || d.show_phase === (missed ? "missed" : "planned")),
+    (d) =>
+      shown(d) &&
+      (d.show_phase === "always" || d.show_phase === (missed ? "missed" : "planned")) &&
+      !(fromCard && d.key === "htf_bias"),
   );
   const reviewDefs = missed ? [] : ordered.filter((d) => shown(d) && d.show_phase === "active");
 
@@ -151,6 +172,7 @@ export default async function TradeRoute({
         trade={trade}
         playbooks={playbooks}
         contextDefs={contextDefs}
+        biasNote={biasNote}
         reviewDefs={reviewDefs}
         optionsMap={optionsMap}
         breakevenRange={resolveBreakevenRange(account)}

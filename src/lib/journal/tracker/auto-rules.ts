@@ -13,6 +13,8 @@
  * describes days you did not live.
  */
 
+import { rootOf, type BiasRoot } from "../default-instruments";
+import { BIAS_CARD_SINCE, type DailyBias } from "../daily-bias";
 import { numberFieldValue } from "../field-values";
 import { computeFuturesContracts } from "../plan-calculations";
 import { plannedEntryOf, sealedNumber, sealedText } from "../plan-snapshot";
@@ -114,6 +116,8 @@ export type TrackerTrade = {
   closedAt: string | null;
   /** Account-timezone day the position was opened. */
   openDay: string;
+  /** The daily-bias root of the instrument (MNQ → NQ); null for one with no daily bias (phase D). */
+  biasRoot: BiasRoot | null;
   /** Account-timezone day it closed, null while still open. */
   closeDay: string | null;
   /** Null when `point_value_source` is 'missing' — price unknown, not zero. */
@@ -264,6 +268,8 @@ export type AutoContext = {
   now?: number;
   /** The trading window in force on a day (phase Y4, `tradingWindowResolver`); none = unconfigured. */
   tradingWindowOf?: (day: string) => TradingWindow | null;
+  /** The day's counted bias forecast per root (phase D, `firstBiasResolver`); none = no card read. */
+  biasOf?: (day: string, root: BiasRoot) => DailyBias | null;
 };
 
 /**
@@ -336,6 +342,7 @@ function toTrackerTrade(row: TradeRow, zone: DayZone, book: TopstepBook | null):
     openedAt,
     closedAt: row.stats?.closed_at ?? null,
     openDay: dayKeyIn(openedAt, zone),
+    biasRoot: rootOf(typeof row.instrument === "string" ? row.instrument : null),
     closeDay: row.stats?.closed_at ? dayKeyIn(row.stats.closed_at, zone) : null,
     netPl: row.stats?.net_pl ?? null,
     isLoss:
@@ -685,23 +692,42 @@ function evalReview(key: AutoRuleKey, opened: TrackerTrade[], ok: (t: TrackerTra
   return evalOpenDayFlag(key, done, ok);
 }
 
-/** Every trade has the day's bias chosen, and none says it was not decided beforehand. */
-const evalHtfBiasSet = (opened: TrackerTrade[]) =>
-  evalReview("htf_bias_set", opened, (t) => biasWasSet(t.review.htfBias));
+/**
+ * Every trade has the day's bias, set beforehand.
+ *
+ * From `BIAS_CARD_SINCE` (phase D, D-6) the bias is the /daily card's FIRST forecast for the trade's
+ * root, and it must have been set no later than the entry — graded at entry, like the stop, since it
+ * is a decision taken before the click. An instrument with no daily bias (6E) and the days before the
+ * card keep the trade page's field, as reviewed after the close.
+ */
+function evalHtfBiasSet(day: string, opened: TrackerTrade[], ctx: Required<AutoContext>): AutoRuleResult {
+  if (day < BIAS_CARD_SINCE) return evalReview("htf_bias_set", opened, (t) => biasWasSet(t.review.htfBias));
+  return evalOpenDayFlag("htf_bias_set", opened, (t) => {
+    if (t.biasRoot == null) return biasWasSet(t.review.htfBias);
+    const b = ctx.biasOf(t.openDay, t.biasRoot);
+    return b != null && Date.parse(b.setAt) <= Date.parse(t.openedAt);
+  });
+}
+
+/** The trade's bias is known: the card's forecast from `BIAS_CARD_SINCE`, else the trade page's field. */
+function biasKnown(day: string, t: TrackerTrade, ctx: Required<AutoContext>): boolean {
+  if (day < BIAS_CARD_SINCE || t.biasRoot == null) return t.review.htfBias != null;
+  return ctx.biasOf(t.openDay, t.biasRoot) != null;
+}
 
 /** What was said before the click is written on every trade. When it was said, the recording tells. */
 const evalThesisRecorded = (opened: TrackerTrade[]) =>
   evalReview("thesis_recorded", opened, (t) => t.review.thesis);
 
 /** Grade, exit reason, bias, Entry TF, a feeling, and a mistake or an A. */
-const evalReviewComplete = (opened: TrackerTrade[]) =>
+const evalReviewComplete = (day: string, opened: TrackerTrade[], ctx: Required<AutoContext>) =>
   evalReview(
     "review_complete",
     opened,
     (t) =>
       t.review.grade != null &&
       t.review.exitReason &&
-      t.review.htfBias != null &&
+      biasKnown(day, t, ctx) &&
       t.review.entryTf &&
       t.review.psychology.length > 0 &&
       (t.review.mistakes.length > 0 || t.review.grade === GRADE_RATING.A),
@@ -955,6 +981,7 @@ export function evaluateAutoRulesForDay(
     briefOf: context.briefOf ?? (() => null),
     now: context.now ?? Date.now(),
     tradingWindowOf: context.tradingWindowOf ?? (() => null),
+    biasOf: context.biasOf ?? (() => null),
   };
 
   const results = {
@@ -989,9 +1016,9 @@ export function evaluateAutoRulesForDay(
     // Open day: the window of the day the position was opened on.
     trading_window: evalTradingWindow(day, opened, ctx),
     // Phase Q: what the trade page says, per trade opened that day.
-    htf_bias_set: evalHtfBiasSet(opened),
+    htf_bias_set: evalHtfBiasSet(day, opened, ctx),
     thesis_recorded: evalThesisRecorded(opened),
-    review_complete: evalReviewComplete(opened),
+    review_complete: evalReviewComplete(day, opened, ctx),
     screenshot_per_trade: evalScreenshotPerTrade(opened),
   };
   // Last: it reads the verdicts above, per trade.
