@@ -9,6 +9,7 @@ import { getPlaybooks, getPositionRules } from "@/lib/journal/playbooks";
 import { ReportsWorkbench } from "@/components/journal/reports/reports-workbench";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
+import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
 import { ReportsSkeleton } from "@/components/journal/reports/reports-skeleton";
 
 export default async function ReportsPage() {
@@ -30,6 +31,7 @@ export default async function ReportsPage() {
     playbooks,
     optionsMap,
     positionRules,
+    biases,
   ] = await Promise.all([
     getTradesWithStats(),
     getAccounts(),
@@ -49,6 +51,8 @@ export default async function ReportsPage() {
     // dimension into nothing at all.
     getOptionsMap(false),
     positionRulesPromise,
+    // Bias dana (phase D): every forecast — the winrates belong to days, not to filtered trades.
+    getDailyBiases(),
   ]);
 
   return (
@@ -71,6 +75,7 @@ export default async function ReportsPage() {
           playbooks={playbooks}
           positionRules={positionRules}
           optionsMap={optionsMap}
+          biases={biases}
         />
       </Suspense>
     </div>
