@@ -1,4 +1,4 @@
-// The instrument catalog — the six CME futures traded on Topstep, and nothing else.
+// The instrument catalog — the eight CME futures traded on Topstep, and nothing else.
 //
 // It used to be one CFD broker's book (ten FX pairs, metals and an index CFD on
 // FTMO). Trading moved to Topstep on 28.09.2026 and the CFD rows went with it
@@ -12,15 +12,16 @@
 //
 // tick_size is the exchange's minimum move: a quarter point on the equity
 // indexes, half a pip on 6E and a pip on M6E. The trade form turns a stop into
-// ticks with it, which is what TopstepX's bracket asks for.
+// ticks with it, which is what TopstepX's bracket asks for. Gold moves in dimes ($10 a tick on GC,
+// $1 on MGC).
 //
 // tick_value stays null: it is point_value × tick_size, and a second copy of a
 // product is a number that can disagree with itself.
 //
 // The commission is Topstep's round turn halved into the per-side figure this
 // catalog keeps (help.topstep.com, "TopstepX — Commissions and Fees", read
-// 28.09.2026: 3.78 / 1.22 / 4.22 / 1.00 a round turn). There is no swap: a
-// future carries its financing in the price.
+// 28.09.2026: 3.78 / 1.22 / 4.22 / 1.00 a round turn; GC / MGC 4.32 / 1.92, read
+// 18.10.2026). There is no swap: a future carries its financing in the price.
 //
 // MAE/MFE on these comes from the exchange's own prices, kept in Cloudflare R2
 // (futures-trading repo, `tools/journal_mae.py`), never typed.
@@ -83,10 +84,28 @@ export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
   futures("MES", "Micro E-mini S&P 500", 5, 0.25, 0.61, 33),
   futures("6E", "Euro FX", 125_000, 0.00005, 2.11, 34),
   futures("M6E", "Micro EUR/USD", 12_500, 0.0001, 0.5, 35),
+  futures("GC", "Gold", 100, 0.1, 2.16, 36),
+  futures("MGC", "Micro Gold", 10, 0.1, 0.96, 37),
 ];
 
 export const DEFAULT_INSTRUMENT_SYMBOLS = DEFAULT_INSTRUMENTS.map((i) => i.symbol);
 
 /** The micro of a mini and the mini of a micro — a tenth of the multiplier, one tick. */
-export const MICRO_OF: Record<string, string> = { NQ: "MNQ", ES: "MES", "6E": "M6E" };
-export const MINI_OF: Record<string, string> = { MNQ: "NQ", MES: "ES", M6E: "6E" };
+export const MICRO_OF: Record<string, string> = { NQ: "MNQ", ES: "MES", "6E": "M6E", GC: "MGC" };
+export const MINI_OF: Record<string, string> = { MNQ: "NQ", MES: "ES", M6E: "6E", MGC: "GC" };
+
+/** The roots a daily bias is set for (faza D). A micro shares its mini's price, so it shares its bias. */
+export const BIAS_ROOTS = ["NQ", "ES", "GC"] as const;
+export type BiasRoot = (typeof BIAS_ROOTS)[number];
+
+/**
+ * The bias root of a traded symbol: MNQ → NQ, MES → ES, MGC → GC, a mini is its own root.
+ * A contract code (`MNQZ6`, `GCZ6`) or a TradingView continuous (`NQ1!`) reads the same.
+ * Anything else — 6E, a CFD, an empty string — has no daily bias and gives null.
+ */
+export function rootOf(symbol: string | null | undefined): BiasRoot | null {
+  const m = /^(MNQ|NQ|MES|ES|MGC|GC)(?:[FGHJKMNQUVXZ]\d{1,2}|1!)?$/.exec((symbol ?? "").trim().toUpperCase());
+  if (!m) return null;
+  const sym = m[1];
+  return (MINI_OF[sym] ?? sym) as BiasRoot;
+}

@@ -151,6 +151,72 @@ export type Database = {
           },
         ]
       }
+      tj_daily_bias: {
+        Row: {
+          bias: string
+          created_at: string
+          eval_band: number | null
+          eval_contract: string | null
+          eval_day: string | null
+          eval_end_price: number | null
+          eval_move: number | null
+          eval_source: string | null
+          eval_start_at: string | null
+          eval_start_price: number | null
+          eval_status: string | null
+          evaluated_at: string | null
+          id: string
+          reason: string | null
+          root: string
+          set_at: string
+          trading_day: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bias: string
+          created_at?: string
+          eval_band?: number | null
+          eval_contract?: string | null
+          eval_day?: string | null
+          eval_end_price?: number | null
+          eval_move?: number | null
+          eval_source?: string | null
+          eval_start_at?: string | null
+          eval_start_price?: number | null
+          eval_status?: string | null
+          evaluated_at?: string | null
+          id?: string
+          reason?: string | null
+          root: string
+          set_at?: string
+          trading_day: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          bias?: string
+          created_at?: string
+          eval_band?: number | null
+          eval_contract?: string | null
+          eval_day?: string | null
+          eval_end_price?: number | null
+          eval_move?: number | null
+          eval_source?: string | null
+          eval_start_at?: string | null
+          eval_start_price?: number | null
+          eval_status?: string | null
+          evaluated_at?: string | null
+          id?: string
+          reason?: string | null
+          root?: string
+          set_at?: string
+          trading_day?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tj_daily_reports: {
         Row: {
           created_at: string

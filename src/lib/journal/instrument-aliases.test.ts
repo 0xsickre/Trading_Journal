@@ -34,6 +34,8 @@ describe("normalizeInstrumentSymbol", () => {
     expect(normalizeInstrumentSymbol("ESH7")).toBe("ES");
     expect(normalizeInstrumentSymbol("M6EZ6")).toBe("M6E");
     expect(normalizeInstrumentSymbol("6E")).toBe("6E");
+    expect(normalizeInstrumentSymbol("/MGCZ26")).toBe("MGC"); // gold: TopstepX
+    expect(normalizeInstrumentSymbol("GCG7")).toBe("GC");
   });
 
   it("does not read the CFD index as the future, nor the future as the CFD", () => {

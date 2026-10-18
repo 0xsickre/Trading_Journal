@@ -59,7 +59,7 @@ export function normalizeInstrumentSymbol(
   // its catalog root: every month shares one contract spec. Which month was
   // traded is read back off the exchange's prices when MAE/MFE is measured
   // (futures-trading `tools/journal_mae.py`), so nothing is lost here.
-  const future = /^(MNQ|NQ|MES|ES|M6E|6E)(?:[FGHJKMNQUVXZ]\d{1,2}|1)$/.exec(key);
+  const future = /^(MNQ|NQ|MES|ES|M6E|6E|MGC|GC)(?:[FGHJKMNQUVXZ]\d{1,2}|1)$/.exec(key);
   if (future && CANONICAL_SET.has(future[1])) return future[1];
 
   const direct = DEFAULT_INSTRUMENT_SYMBOLS.find(

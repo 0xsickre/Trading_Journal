@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_INSTRUMENTS, DEFAULT_INSTRUMENT_SYMBOLS, MICRO_OF, MINI_OF } from "./default-instruments";
+import { DEFAULT_INSTRUMENTS, DEFAULT_INSTRUMENT_SYMBOLS, MICRO_OF, MINI_OF, rootOf } from "./default-instruments";
 
 /**
  * The catalog is a transcription of the exchange's contract terms and Topstep's
@@ -8,8 +8,8 @@ import { DEFAULT_INSTRUMENTS, DEFAULT_INSTRUMENT_SYMBOLS, MICRO_OF, MINI_OF } fr
  */
 
 describe("the instrument catalog is the Topstep book", () => {
-  it("holds exactly the six futures traded on it", () => {
-    expect(DEFAULT_INSTRUMENT_SYMBOLS).toEqual(["NQ", "MNQ", "ES", "MES", "6E", "M6E"]);
+  it("holds exactly the eight futures traded on it", () => {
+    expect(DEFAULT_INSTRUMENT_SYMBOLS).toEqual(["NQ", "MNQ", "ES", "MES", "6E", "M6E", "GC", "MGC"]);
   });
 
   it("symbols and sort_order are unique, and everything is offered in the form", () => {
@@ -32,6 +32,8 @@ describe("contract specs", () => {
       ["MES", 5, 0.25],
       ["6E", 125_000, 0.00005],
       ["M6E", 12_500, 0.0001],
+      ["GC", 100, 0.1],
+      ["MGC", 10, 0.1],
     ];
     for (const [sym, pv, tick] of spec) {
       expect(f.get(sym)!.point_value, sym).toBe(pv);
@@ -48,12 +50,13 @@ describe("contract specs", () => {
     }
   });
 
-  it("a tick is worth what the exchange says: NQ $5, MNQ $0.50, ES $12.50, 6E $6.25", () => {
+  it("a tick is worth what the exchange says: NQ $5, MNQ $0.50, ES $12.50, 6E $6.25, GC $10, MGC $1", () => {
     const tick = (s: string) => {
       const i = DEFAULT_INSTRUMENTS.find((x) => x.symbol === s)!;
       return Math.round(i.point_value * i.tick_size! * 100) / 100;
     };
     expect([tick("NQ"), tick("MNQ"), tick("ES"), tick("MES"), tick("6E"), tick("M6E")]).toEqual([5, 0.5, 12.5, 1.25, 6.25, 1.25]);
+    expect([tick("GC"), tick("MGC")]).toEqual([10, 1]);
   });
 
   it("carries no tick_value — it is point_value × tick_size, and one copy cannot disagree", () => {
@@ -63,11 +66,31 @@ describe("contract specs", () => {
 
 describe("what Topstep charges", () => {
   it("per contract: half its round turn on each side", () => {
-    const roundTurn: Record<string, number> = { NQ: 3.78, MNQ: 1.22, ES: 3.78, MES: 1.22, "6E": 4.22, M6E: 1.0 };
+    const roundTurn: Record<string, number> = { NQ: 3.78, MNQ: 1.22, ES: 3.78, MES: 1.22, "6E": 4.22, M6E: 1.0, GC: 4.32, MGC: 1.92 };
     for (const i of DEFAULT_INSTRUMENTS) {
       expect(i.commission_per_lot * 2, i.symbol).toBeCloseTo(roundTurn[i.symbol], 10);
       expect(i.commission_pct, i.symbol).toBe(0);
       expect(i.commission_currency, i.symbol).toBe("USD");
     }
+  });
+});
+
+describe("rootOf: the daily bias root of a traded symbol (faza D)", () => {
+  it("a micro shares its mini's root, a mini is its own", () => {
+    expect(["NQ", "MNQ", "ES", "MES", "GC", "MGC"].map(rootOf)).toEqual(["NQ", "NQ", "ES", "ES", "GC", "GC"]);
+  });
+
+  it("reads a contract code and a TradingView continuous the same way", () => {
+    expect(rootOf("MNQZ6")).toBe("NQ");
+    expect(rootOf("mgcz26")).toBe("GC");
+    expect(rootOf("ES1!")).toBe("ES");
+  });
+
+  it("has no root for 6E, a CFD or nothing", () => {
+    expect(rootOf("6E")).toBeNull();
+    expect(rootOf("M6E")).toBeNull();
+    expect(rootOf("US100.cash")).toBeNull();
+    expect(rootOf("")).toBeNull();
+    expect(rootOf(null)).toBeNull();
   });
 });
