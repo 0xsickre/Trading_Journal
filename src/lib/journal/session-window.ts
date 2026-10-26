@@ -50,7 +50,7 @@ const NEW_YORK: readonly { label: string; from: number; to: number }[] = [
   { label: SESSIONS.nyAm, from: NY_OPEN, to: H(11, 30) },
   { label: SESSIONS.lunch, from: H(11, 30), to: H(13, 30) },
   { label: SESSIONS.nyPm, from: H(13, 30), to: H(16) },
-  // Up to the 18:00 reopen: the Topstep close (16:10 New York) and the CME break after it.
+  // Up to the 18:00 reopen: the close of the day trader's session and the CME break after it.
   { label: SESSIONS.afterClose, from: H(16), to: REOPEN },
 ];
 

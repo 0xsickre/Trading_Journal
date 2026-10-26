@@ -20,8 +20,8 @@ function rangeText(r: BriefRange): string {
 }
 
 /**
- * „Pred sesiju" — what the morning brief says about the day in view: the Topstep
- * end of day, the red windows and the expected range.
+ * „Pred sesiju" — what the morning brief says about the day in view: the end of
+ * the day, the red windows and the expected range.
  *
  * Where the check-in card for positions held overnight used to be (G2, H1.3): a
  * day trader has no such position, and this is what the session is decided on.

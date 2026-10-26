@@ -56,7 +56,7 @@ const ITEMS: Record<string, string[]> = {
   exit_reason: [
     "Pogođen target", "Pogođen stop", "Na nuli", "Prateći stop", "Zatvoreno ranije",
     "Ručni izlaz: invalidacija", "Ručni izlaz: pre vesti", "Izlaz po vremenu (kraj prozora)",
-    "Kraj Topstep dana",
+    "Kraj dana (ravno)",
   ],
   miss_reason: [
     "Limit nije popunjen", "Oklevao", "Nisam bio za ekranom", "Preskočen po pravilima",
@@ -70,7 +70,7 @@ const ITEMS: Record<string, string[]> = {
   mistake: [
     "Bez greške", "Bez biasa dana pre ulaza", "Ulaz bez setupa iz playbook-a", "Teza posle klika",
     "Rani ulaz", "Jurio cenu", "Ulaz van prozora", "Ulaz u crvenom prozoru", "Ulaz posle 2 SL",
-    "Ulaz posle dnevnog cilja", "Ulaz posle DLL-a", "Osvetnički ponovni ulaz", "Prevelika pozicija",
+    "Osvetnički ponovni ulaz", "Prevelika pozicija",
     "Stop postavio bracket, ne ja", "Pomerio stop", "Dodao protiv pozicije", "Cilj ispod 2R",
     "Rano zatvorio dobitak", "Dobitak pretvorio u gubitak", "Previše trejdova",
   ],

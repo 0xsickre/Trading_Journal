@@ -166,8 +166,8 @@ pogađa.
 | **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | da: `20261014200000` (`mental_temp_at`), `20261015090000` (`trading_window`) | **Opus** | ✅ 14.10.2026 — Y1 `14a992f` · Y2 `7281007` · Y3 `80dee18` · Y4/Y5 `9de8441` (migracije `20261014200000`, `20261015090000` primenjene); Y-1 … Y-4 = A, Y-5 NY 14:30–18:00, Y-6 = A |
 | **J** | Jezik: nazivi kategorija u paketu, /reports i gridu na srpskom; fabrička lista tagova = lista trejdera | — | Y | da: `20261015120000` (nova definicija `tj_seed_categories`, podaci se ne menjaju) | **Opus** | ✅ 15.10.2026 — J1 `61f5c79` · J2 `c415355` (migracija `20261015120000` primenjena) |
 | **D** | Bias dana: prognoza pre sesije na /daily, ocena iz 1m sveća, moj winrate prema „uvek long“ | — | J | da: `20261017120000` (`tj_daily_bias`, aditivna) | **Opus** | ✅ kod 18.10.2026 — `a7456ed` · D1 `8af430f` · D2 `18d7077` · D4 `fcdf8ee` · D5+D6 `293067b` + futures-trading `adb046c`; migracija `20261017120000` primenjena 18.10.2026 |
-| **X** | Journal bez pravila prop firme: bez Topstep mašine, MLL/DLL plana, Survival-a i banera; tvoji limiti na nalogu, CME dan | — | D | da: aditivna (neutralne kolone) + **briše** `topstep_*` (uz odobrenje) | **Opus** | 🔄 odluke 26.10.2026 (X-1 B, X-2…X-9 A, X-7 univerzalni uvoz, X-10 odloženo) · X1 ✅ (migracija `20261026120000` primenjena) · X2 ✅ · X3 ✅ · X4 ✅ (migracija `20261026140000` primenjena) — sledeće X5 (posle B) |
-| **B** | Brzi unos: trejd ~30 s (checklist „Zašto ulazim“, kraće liste, TF po playbook-u, automatske greške), psihologija i zatvaranje dana na /daily | — | X4 | da: aditivne (TF playbook-a, psihologija dana), podaci (liste, tekst pravila) | **Opus** | 🔄 plan 26.10.2026 (B-1 A, B-2/B-3 ne, B-4 da) · B1–B8 ✅ u kodu · migracije `20261026150000`, `…160000`, `…170000` čekaju odobrenje |
+| **X** | Journal bez pravila prop firme: bez Topstep mašine, MLL/DLL plana, Survival-a i banera; tvoji limiti na nalogu, CME dan | — | D | da: aditivna (neutralne kolone) + **briše** `topstep_*` (uz odobrenje) | **Opus** | 🔄 odluke 26.10.2026 (X-1 B, X-2…X-9 A, X-7 univerzalni uvoz, X-10 odloženo) · X1 ✅ (migracija `20261026120000` primenjena) · X2 ✅ · X3 ✅ · X4 ✅ (migracija `20261026140000` primenjena) · X5 ✅ (migracija `20261026180000` čeka odobrenje) — sledeće X6 |
+| **B** | Brzi unos: trejd ~30 s (checklist „Zašto ulazim“, kraće liste, TF po playbook-u, automatske greške), psihologija i zatvaranje dana na /daily | — | X4 | da: aditivne (TF playbook-a, psihologija dana), podaci (liste, tekst pravila) | **Opus** | 🔄 plan 26.10.2026 (B-1 A, B-2/B-3 ne, B-4 da) · B1–B8 ✅ · migracije `20261026150000` i `…160000` primenjene, `…170000` delom (kolona i CHECK; red pravila i tekstovi čekaju trejdera u SQL Editor-u) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1609,7 +1609,7 @@ Migracija `20261017120000` primenjena 18.10.2026 uz odobrenje trejdera (posle dv
 posle ~30 stvarnih ocena. (3) Rol zlata (3 radna dana pre FND) nije proveren prema `GC.v.0` po volumenu. (4) Ručna
 provera u pregledaču nije rađena.
 
-## X — Journal bez pravila prop firme (detaljno, 26.10.2026) — 🔄 X1–X4 isporučeni, sledeće X5
+## X — Journal bez pravila prop firme (detaljno, 26.10.2026) — 🔄 X1–X5 isporučeni, sledeće X6
 
 **Povod** (trejder, 26.10.2026: „skroz ćemo izbaciti bilo kakva pravila iz journala, ne može da bude vezan za prop
 firmu, treba da bude neutralan … treba da služi za trejdove i journal, a ne za pravila prop firmi, a ja sam taj koji
@@ -1733,6 +1733,12 @@ korekcija kao obični tokovi novca), sesije po Beogradu i trackerova pravila koj
   CT)“. Gate zelen, 2773 testa. Migracija čeka odobrenje trejdera.
 - **X5 Tekstovi i podaci** (X-8). Mentor paket, /reports hintovi, razlozi trackera, `nav.ts`, komentari kataloga.
   Red „Ravno do kraja Topstep dana“ → „Ravno do kraja dana“. Fabričke provizije 0.
+  **Isporučeno (26.10.2026):** migracija `20261026180000_neutral_factory_data.sql`: fabrički katalog ima proviziju 0
+  (samo prazan nalog, postojeći instrumenti ostaju), fabričke liste imaju „Kraj dana (ravno)“ umesto „Kraj Topstep
+  dana“ i nemaju „Ulaz posle dnevnog cilja“ / „Ulaz posle DLL-a“, a trejderova opcija „Kraj Topstep dana“ dobija novo
+  ime (nijedan trejd je nema). Tekstovi: „Šta bi bilo“ panel, cash event „Payout“, komentari (katalog, scenario,
+  missed-cost, sesije, brief kartica, tracker, plan rizika). Mentor paket, /reports hintovi, razlozi trackera i
+  `nav.ts` već su bili neutralni (X1–X4); TopstepX ostaje ime formata uvoza (X-7). Migracija čeka odobrenje.
 - **X6 Brisanje kolona** (X-5 A, uz odobrenje; tek kad se proveri brief). Brišu se `topstep_*`, `risk_rule_*`, a
   `room_at_entry` i `risk_budget_at_entry` ako ih brief ne čita. `schema:check`.
 - **X7 Dokumentacija 1:1.** README (Topstep, Survival, A trading day, Risk, tracker, Settings), `ROADMAP.md`, ovaj
@@ -1799,7 +1805,7 @@ izveštaj zatvaranjem dana“). Pravila: ništa istorijsko se ne briše. Polje s
 **Model:** Opus. Oko 20 fajlova i tri migracije (playbook TF, liste, psihologija dana + pravila).
 
 ### Isporučeno (26.10.2026)
-- B1–B8 u kodu, gate čist. Tri migracije **nisu puštene**: `20261026150000` (liste), `20261026160000`
+- B1–B8 u kodu, gate čist, spojeno u `main`. Stanje migracija: prve dve primenjene, treća delom (vidi mapu). Migracije: `20261026150000` (liste), `20261026160000`
   (`default_entry_tf`), `20261026170000` (`psychology_tags`, `daily_psychology`, novi tekstovi pravila). Kod
   čita obe nove kolone, pa migracije idu pre spajanja u `main`.
 - **Nije urađeno (namerno):** detekcije iz B-1 A; auto grafik (B-2); audio (B-3). „Dodao protiv pozicije“ je

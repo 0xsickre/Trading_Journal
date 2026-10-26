@@ -3,14 +3,14 @@
  * after the stop (phase L, decisions L1–L4, 30.09.2026).
  *
  * futures-trading measures every closed futures trade with a stop from the
- * exchange's own candles once its Topstep day is over, and writes the result
+ * exchange's own candles once its trading day is over, and writes the result
  * into `tj_positions.scenario`. The journal only reads it. Pure: the trade card,
  * the reports panel and the mentor pack share it.
  *
  * THE GRID. From the trade's average entry, at the moment of its first entry
  * fill: had the whole position carried a stop k × the real one (k in `sl`) and a
- * target t × that stop (t in `tp`), what came first by the end of the Topstep
- * day — the target (+t), the stop (−1, and a tick more since v2) or neither (the price at 15:10 CT). Every
+ * target t × that stop (t in `tp`), what came first by the end of the trading
+ * day (futures-trading's horizon, 15:10 CT until X-10) — the target (+t), the stop (−1, and a tick more since v2) or neither (the price at 15:10 CT). Every
  * cell is in R OF ITS OWN VARIANT (decision L3: the same money at risk, so a
  * wider stop is fewer contracts). Measured gross; `net` takes the round-turn
  * commission off per contract, which in R is larger for a tighter stop — the

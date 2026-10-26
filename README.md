@@ -386,7 +386,7 @@ a trigger, phase Y; a mark only, no rule reads it) and *2. Da li danas trguješ?
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
-| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both; the seeded tags are Serbian since K2, `20260929200000`, which rewrote the trades that carried them), Tracker, Instruments (the eight futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, the **timezone** shown, not typed: every time is in Europe/Belgrade (`DEFAULT_TZ`, K5, `20260929210000`), a file with its own offset is converted on import, and every account counts its days by the CME's 17:00 CT; the **breakeven range** shown, not typed (§ Metrics, K4), **Flat by (Chicago time)** — `tj_accounts.flat_by`, 16:00 unless set, what `flat_by_close` grades against (phase X4) — and **Practice / demo account** — a flag, `tj_accounts.practice`; since phase X2 (26.10.2026) no prop firm's rules are set here: the Topstep columns of an older account stay as they were and are not editable, and a duplicate copies none of them), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion lives under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
+| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both; the seeded tags are Serbian since K2, `20260929200000`, which rewrote the trades that carried them), Tracker, Instruments (the eight futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional, typed by the trader: a new book's catalog starts at 0 since phase X5, `20261026180000`, X-8 A; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, the **timezone** shown, not typed: every time is in Europe/Belgrade (`DEFAULT_TZ`, K5, `20260929210000`), a file with its own offset is converted on import, and every account counts its days by the CME's 17:00 CT; the **breakeven range** shown, not typed (§ Metrics, K4), **Flat by (Chicago time)** — `tj_accounts.flat_by`, 16:00 unless set, what `flat_by_close` grades against (phase X4) — and **Practice / demo account** — a flag, `tj_accounts.practice`; since phase X2 (26.10.2026) no prop firm's rules are set here: the Topstep columns of an older account stay as they were and are not editable, and a duplicate copies none of them), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion lives under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
 | `/login` | Supabase auth |
 
 ---
@@ -1371,7 +1371,7 @@ confidently wrong trade through the generic mapping, and each is handled:
 - **The contract carries its month** (`MNQZ6`; TopstepX also writes `/MNQZ26`, TradingView `NQ1!`).
   The trade is the catalog's root, `MNQ`; which month was traded is read back off the exchange's
   prices when MAE/MFE is measured. A CFD index and the future never match each other.
-- **Costs are two columns**, `Fees` (exchange and NFA) and `Commissions` (Topstep's); the trade's
+- **Costs are two columns**, `Fees` (exchange and NFA) and `Commissions` (the platform's); the trade's
   cost is their sum. `PnL` is gross and is checked against price move × multiplier × size, so a
   contract whose multiplier differs from the catalog's says so on its row instead of in the P&L.
 
@@ -1536,8 +1536,8 @@ migration — it already fell through the cascade from `tj_playbooks`, but the l
 what "reset everything" means, and a reader should not have to trace foreign keys to believe it.
 
 What actually comes back, counted from the seed functions rather than assumed from their names:
-**1 Main Account (USD, `Europe/Belgrade`, asset class Futures, not in Topstep mode — the plan and
-balance are chosen in Settings), the eight futures, 10 lists holding 76 options, 18 tracker rules,
+**1 Main Account (USD, `Europe/Belgrade`, asset class Futures; the balance is chosen in Settings),
+the eight futures (commission 0, phase X5), 10 lists holding 74 options, 18 tracker rules,
 7 custom fields, 4 note folders.** Since `20260930030000` the factory set is the day trader's own:
 seven manual rules (before the session: calendar and HTF levels, mental check-in; while trading:
 trading hours, risk control, walk-away target; after it: journal and tags, screenshots) around the
@@ -1546,7 +1546,9 @@ folder a trade's note opens in) and Nedeljni osvrt, each with an intraday templa
 day trader's since F4 (`20260929120000`), in Serbian since K2 (`20260929200000`), and since phase J
 (`20261015120000`) they are **the trader's own book of 15.10.2026**, read from the database that day:
 the mentor had merged the duplicates, fixed the typos and added the mistakes he actually makes, so a
-reset no longer brings back the list of 30.09. Lists and fields are named Smer, Bias dana, TF ulaza,
+reset no longer brings back the list of 30.09. Phase X5 (`20261026180000`) renames "Kraj Topstep
+dana" to "Kraj dana (ravno)" and leaves out "Ulaz posle dnevnog cilja" and "Ulaz posle DLL-a", which
+read a firm's money limit. Lists and fields are named Smer, Bias dana, TF ulaza,
 Tehnički tagovi, Ocena setupa, Razlog izlaza, Razlog propuštanja, Emocije, Disciplina, Greške (the
 field over Emocije and Disciplina is Psihologija); TF ulaza 30s / 1m / 2m / 5m / 15m / 1h; Bias dana
 Gore (bullish) / Dole (bearish) / Nema biasa / Nisam odredio unapred; twenty mistakes, from Bez greške

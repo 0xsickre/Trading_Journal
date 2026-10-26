@@ -64,11 +64,10 @@ describe("contract specs", () => {
   });
 });
 
-describe("what Topstep charges", () => {
-  it("per contract: half its round turn on each side", () => {
-    const roundTurn: Record<string, number> = { NQ: 3.78, MNQ: 1.22, ES: 3.78, MES: 1.22, "6E": 4.22, M6E: 1.0, GC: 4.32, MGC: 1.92 };
+describe("no broker's commission (phase X5, X-8 A)", () => {
+  it("is 0 on every contract — the trader types the broker's own in Settings", () => {
     for (const i of DEFAULT_INSTRUMENTS) {
-      expect(i.commission_per_lot * 2, i.symbol).toBeCloseTo(roundTurn[i.symbol], 10);
+      expect(i.commission_per_lot, i.symbol).toBe(0);
       expect(i.commission_pct, i.symbol).toBe(0);
       expect(i.commission_currency, i.symbol).toBe("USD");
     }

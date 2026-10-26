@@ -62,7 +62,7 @@ export function PlaybookChecklist({
   onAnswerChange: (ruleId: string, followed: boolean | null) => void;
   /** Live net P&L, or null while the trade is still a plan. */
   netPl: number | null;
-  /** Risk to the stop in money: a Topstep band is a share of it. */
+  /** Risk to the stop in money: the breakeven band of a trade with a stop is a share of it. */
   riskMoney?: number | null;
   /**
    * The account's breakeven band. The statistics classify with it, so the

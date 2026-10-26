@@ -13,7 +13,7 @@
  * path, read from the rows directly.
  *
  * WHERE THE PRICE COMES FROM (F6.1, decision M1-A). `futures-trading`'s
- * `journal_mae.py` walks the contract's R2 candles through the plan's Topstep
+ * `journal_mae.py` walks the contract's R2 candles through the plan's CME
  * trading day, once that day is over and the exact data is out: nothing counts
  * until the plan's entry fills — a limit (price was beyond the entry when the
  * plan was written) a tick through it, a breakout entry on the touch (phase S);
@@ -122,7 +122,7 @@ export function missedCost(rows: readonly TradeRow[]): MissedCost {
  *
  * The denominator this panel needs to be honest about itself: a book that
  * never marks anything missed has a missed cost of zero for the wrong reason.
- * A plan is stale once its Topstep trading day is over (decision M3-A): a day
+ * A plan is stale once its CME trading day is over (decision M3-A): a day
  * trader's plan is for one session, and the missed-setup price is measured
  * over that same day.
  */

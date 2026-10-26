@@ -322,9 +322,8 @@ function AddRuleForm({ stage }: { stage: TrackerStage }) {
  *   - `auto_key` is not editable at all. It picks which evaluator runs, so
  *     changing it would re-interpret every check-in already recorded.
  */
-// No `currency`: the money limits come from the Topstep plan, and the figure
-// they work out to on a given day is shown on the daily checklist, from the
-// evaluator that knows the account's closed trades at each entry.
+// No `currency`: the tracker measures process only (phase X1) — no rule here
+// is a money limit.
 export function TrackerRuleManager({ rules }: { rules: TrackerRule[] }) {
   const live = rules.filter((r) => r.deleted_at == null);
   const retired = rules.filter((r) => r.deleted_at != null);

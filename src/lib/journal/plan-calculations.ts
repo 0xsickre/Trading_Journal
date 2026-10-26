@@ -103,8 +103,8 @@ export function parsePlannedRewardR(
 /**
  * Progressive Risk Plan UI: which price/risk fields to show.
  *
- * The size is the Topstep risk rule's (`computeTopstepRisk`), so it waits for
- * nothing but the entry and the stop — there is no "Risk %" to choose (H2).
+ * It waits for nothing but the entry and the stop — there is no "Risk %" to
+ * choose (H2), and since phase X no firm's rule sizes the position.
  */
 export function riskPlanFieldVisible(
   fieldName: string,

@@ -45,7 +45,7 @@ import {
 const TYPES: { value: CashEventType; label: string; hint: string }[] = [
   { value: "deposit", label: "Deposit", hint: "Money came into the account" },
   { value: "withdrawal", label: "Withdrawal", hint: "Money left the account" },
-  { value: "payout", label: "Payout", hint: "Prop-firm profit payout" },
+  { value: "payout", label: "Payout", hint: "Profit paid out of the account" },
   { value: "adjustment", label: "Adjustment", hint: "Manual balance correction" },
 ];
 

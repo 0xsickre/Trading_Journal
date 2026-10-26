@@ -107,7 +107,7 @@ export function ScenarioPanel({
           real one and targets of 1–5R of that stop. Same money at risk: a wider stop is fewer contracts, so every cell
           is in R of its own stop.
           {unmeasured > 0 &&
-            ` ${unmeasured} trade${unmeasured === 1 ? " is" : "s are"} not measured yet — futures-trading measures a trade once its Topstep day is over and the exact data is out.`}
+            ` ${unmeasured} trade${unmeasured === 1 ? " is" : "s are"} not measured yet — futures-trading measures a trade once its trading day is over and the exact data is out.`}
         </p>
       </CardHeader>
 

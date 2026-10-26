@@ -1,7 +1,7 @@
-// The instrument catalog — the eight CME futures traded on Topstep, and nothing else.
+// The instrument catalog — the eight CME futures the book trades, and nothing else.
 //
 // It used to be one CFD broker's book (ten FX pairs, metals and an index CFD on
-// FTMO). Trading moved to Topstep on 28.09.2026 and the CFD rows went with it
+// FTMO). Trading moved to CME futures on 28.09.2026 and the CFD rows went with it
 // (migration 20260928140000 removed only those no trade named). A symbol traded
 // somewhere else is added in Settings.
 //
@@ -12,16 +12,16 @@
 //
 // tick_size is the exchange's minimum move: a quarter point on the equity
 // indexes, half a pip on 6E and a pip on M6E. The trade form turns a stop into
-// ticks with it, which is what TopstepX's bracket asks for. Gold moves in dimes ($10 a tick on GC,
+// ticks with it, which is what a platform's bracket asks for. Gold moves in dimes ($10 a tick on GC,
 // $1 on MGC).
 //
 // tick_value stays null: it is point_value × tick_size, and a second copy of a
 // product is a number that can disagree with itself.
 //
-// The commission is Topstep's round turn halved into the per-side figure this
-// catalog keeps (help.topstep.com, "TopstepX — Commissions and Fees", read
-// 28.09.2026: 3.78 / 1.22 / 4.22 / 1.00 a round turn; GC / MGC 4.32 / 1.92, read
-// 18.10.2026). There is no swap: a future carries its financing in the price.
+// The commission is 0 (phase X5, X-8 A, 26.10.2026): it was Topstep's, and the
+// journal knows no firm. The trader types the broker's own per instrument in
+// Settings › Instruments; an existing book keeps what it has. There is no swap:
+// a future carries its financing in the price.
 //
 // MAE/MFE on these comes from the exchange's own prices, kept in Cloudflare R2
 // (futures-trading repo, `tools/journal_mae.py`), never typed.
@@ -78,14 +78,14 @@ function futures(
 }
 
 export const DEFAULT_INSTRUMENTS: DefaultInstrument[] = [
-  futures("NQ", "E-mini Nasdaq 100", 20, 0.25, 1.89, 30),
-  futures("MNQ", "Micro E-mini Nasdaq 100", 2, 0.25, 0.61, 31),
-  futures("ES", "E-mini S&P 500", 50, 0.25, 1.89, 32),
-  futures("MES", "Micro E-mini S&P 500", 5, 0.25, 0.61, 33),
-  futures("6E", "Euro FX", 125_000, 0.00005, 2.11, 34),
-  futures("M6E", "Micro EUR/USD", 12_500, 0.0001, 0.5, 35),
-  futures("GC", "Gold", 100, 0.1, 2.16, 36),
-  futures("MGC", "Micro Gold", 10, 0.1, 0.96, 37),
+  futures("NQ", "E-mini Nasdaq 100", 20, 0.25, 0, 30),
+  futures("MNQ", "Micro E-mini Nasdaq 100", 2, 0.25, 0, 31),
+  futures("ES", "E-mini S&P 500", 50, 0.25, 0, 32),
+  futures("MES", "Micro E-mini S&P 500", 5, 0.25, 0, 33),
+  futures("6E", "Euro FX", 125_000, 0.00005, 0, 34),
+  futures("M6E", "Micro EUR/USD", 12_500, 0.0001, 0, 35),
+  futures("GC", "Gold", 100, 0.1, 0, 36),
+  futures("MGC", "Micro Gold", 10, 0.1, 0, 37),
 ];
 
 export const DEFAULT_INSTRUMENT_SYMBOLS = DEFAULT_INSTRUMENTS.map((i) => i.symbol);
