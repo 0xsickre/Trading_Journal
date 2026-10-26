@@ -231,6 +231,7 @@ export type Database = {
           mental_temp: number | null
           mental_temp_at: string | null
           no_trade_day: boolean
+          psychology_tags: string[]
           report_date: string
           updated_at: string
           user_id: string
@@ -242,6 +243,7 @@ export type Database = {
           mental_temp?: number | null
           mental_temp_at?: string | null
           no_trade_day?: boolean
+          psychology_tags?: string[]
           report_date: string
           updated_at?: string
           user_id: string
@@ -253,6 +255,7 @@ export type Database = {
           mental_temp?: number | null
           mental_temp_at?: string | null
           no_trade_day?: boolean
+          psychology_tags?: string[]
           report_date?: string
           updated_at?: string
           user_id?: string

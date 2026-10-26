@@ -40,6 +40,7 @@ type Review = {
   mistake?: string[];
   images?: number;
   closed?: string | null;
+  note?: string;
 };
 
 function trade(id: string, opened: string, net: number, r: Review): TradeRow {
@@ -60,6 +61,7 @@ function trade(id: string, opened: string, net: number, r: Review): TradeRow {
     thesis: r.thesis ?? "BOS na 5 min",
     execution_rating: r.grade === undefined ? 1 : r.grade,
     exit_reason: "Trading prozor zavrsen",
+    trade_journal_notes: r.note ?? "Ušao pre potvrde.",
     psychology_tags: r.psychology ?? ["Smiren"],
     mistake: r.mistake ?? ["Nisam imao Daily bias odredjen"],
     custom: { entry_tf: "5m", htf_bias: r.bias === undefined ? "NIsam odredio unapred" : r.bias },
@@ -120,14 +122,26 @@ describe("phase Q review rules on 13.10.2026", () => {
     expect(out.screenshot_per_trade.verdict).toBe("pass");
   });
 
-  it("review complete fails a trade with no feeling, or no mistake and no A", () => {
-    expect(day([T2(), T3({ psychology: [] })]).review_complete.offenders).toEqual(["t3"]);
+  it("review complete fails a trade with no mistake and no A; the feeling moved to /daily (phase B5)", () => {
+    expect(day([T2(), T3({ psychology: [] })]).review_complete.verdict).toBe("pass");
     expect(day([T2(), T3({ mistake: [] })]).review_complete.offenders).toEqual(["t3"]);
     expect(day([T2(), T3({ mistake: [], grade: 5 })]).review_complete.verdict).toBe("pass");
   });
 
-  it("a trade with no chart fails screenshots", () => {
+  it("review complete: a C asks for one sentence, a B does not (phase B5)", () => {
+    expect(day([T2(), T3({ note: " " })]).review_complete.offenders).toEqual(["t3"]);
+    expect(day([T2(), T3({ note: " ", grade: 3 })]).review_complete.verdict).toBe("pass");
+  });
+
+  it("a C-graded trade, the best or the worst with no chart fails screenshots", () => {
     expect(day([T2(), T3({ images: 0 })]).screenshot_per_trade.offenders).toEqual(["t3"]);
+  });
+
+  it("screenshots: a B between the best and the worst needs none (phase B6)", () => {
+    const mid = trade("t4", "2026-10-13T08:30:00Z", 20, { grade: 3, images: 0 });
+    expect(day([T2({ grade: 3 }), mid, T3({ grade: 3 })]).screenshot_per_trade.verdict).toBe("pass");
+    expect(day([T2({ grade: 3 }), mid, T3({ grade: 3, images: 0 })]).screenshot_per_trade.offenders).toEqual(["t3"]);
+    expect(day([T2({ grade: 3 }), { ...mid, execution_rating: 1 } as unknown as TradeRow, T3({ grade: 3 })]).screenshot_per_trade.offenders).toEqual(["t4"]);
   });
 
   it("honest tags: 13.10. passes — #3 claims the risk, and no risk rule broke on #3", () => {
@@ -276,5 +290,25 @@ describe("phase D: from 19.10.2026 the bias is the /daily card's first forecast,
 
   it("days before the card keep the trade page's field", () => {
     expect(day([T2({ bias: "dole" }), T3({ bias: "nema ga" })]).htf_bias_set.verdict).toBe("pass");
+  });
+});
+
+describe("daily_psychology: the day's feeling, once on /daily (phase B5)", () => {
+  const withReport = (rows: TradeRow[], tags: string[] | null) =>
+    evaluateAutoRulesForDay("2026-10-13", buildTradeDayIndex(rows, (row) => zoneOf(row.account_id)), {
+      reportOf: (d) => (d === "2026-10-13" && tags ? { psychology_tags: tags } : null),
+    }).daily_psychology;
+
+  it("a day with a trade and the feeling written → pass", () => {
+    expect(withReport([T3()], ["Smiren"]).verdict).toBe("pass");
+  });
+
+  it("no report, or one with no feeling → broken", () => {
+    expect(withReport([T3()], null).verdict).toBe("fail");
+    expect(withReport([T3()], []).verdict).toBe("fail");
+  });
+
+  it("a day with no trade is not asked", () => {
+    expect(withReport([], null).reason).toBe("no_trades");
   });
 });

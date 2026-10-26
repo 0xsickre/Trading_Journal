@@ -46,6 +46,8 @@ export const AUTO_RULE_KEYS = [
   // Phase Y4 (15.10.2026, reversing Q-2's "retired"): every entry and exit inside
   // the day's trading window, Belgrade time, the window kept per week shift.
   "trading_window",
+  // Phase B5 (26.10.2026): the day's feeling, written once on /daily.
+  "daily_psychology",
 ] as const;
 export type AutoRuleKey = (typeof AUTO_RULE_KEYS)[number];
 

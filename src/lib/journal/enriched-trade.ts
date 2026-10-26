@@ -33,6 +33,8 @@ export type DailyReportLite = {
   locked_at?: string | null;
   /** When the mental rating was written (phase Y); the pack flags one after the first entry. */
   mental_temp_at?: string | null;
+  /** The day's emotions (phase B5). */
+  psychology_tags?: string[] | null;
 };
 
 /** Number of entry and exit fills per position id. */

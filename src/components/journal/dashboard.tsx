@@ -1309,7 +1309,13 @@ export function Dashboard({
       // the money and leaves that day's compliance where it was.
       resolveAutoResults(
         trackerRules,
-        evaluateAutoRulesForDay(d, index, { briefOf, tradingWindowOf, biasOf, flatByOf }),
+        evaluateAutoRulesForDay(d, index, {
+          briefOf,
+          tradingWindowOf,
+          biasOf,
+          flatByOf,
+          reportOf: (day) => reportByDay.get(day) ?? null,
+        }),
         byDate.get(d) ?? new Map(),
       ),
     todayKey,

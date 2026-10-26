@@ -160,6 +160,7 @@ export default async function CalendarPage({
     const reportOfDay = new Map(reports.map((r) => [r.report_date, r]));
     const index = buildTradeDayIndex(scopedTrades, tzOfRow, breakevenRangeResolver(accounts));
     const flatByOf = flatByResolver(accounts);
+    const reportOf = (d: string) => reportOfDay.get(d) ?? null;
     const series = computeComplianceSeries(
       days,
       rules,
@@ -168,7 +169,7 @@ export default async function CalendarPage({
         const live = rulesLiveOn(rules, d);
         return resolveAutoResults(
           live,
-          evaluateAutoRulesForDay(d, index, { briefOf, tradingWindowOf, biasOf, flatByOf }),
+          evaluateAutoRulesForDay(d, index, { briefOf, tradingWindowOf, biasOf, flatByOf, reportOf }),
           checkinsByDay.get(d) ?? new Map(),
         );
       },

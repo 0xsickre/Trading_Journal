@@ -80,6 +80,7 @@ function report(over: Partial<DailyReport> = {}): DailyReport {
     report_date: "2026-04-02",
     mental_temp: null,
     no_trade_day: false,
+    psychology_tags: [],
     locked_at: null,
     mental_temp_at: null,
     created_at: "2026-04-02T00:00:00Z",

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { StarRating } from "@/components/journal/star-rating";
+import { Chips } from "@/components/journal/chips";
 import { cn } from "@/lib/utils";
 import {
   emptyDailyReport,
@@ -57,6 +58,7 @@ function toFormState(
   return {
     mental_temp: report.mental_temp,
     no_trade_day: report.no_trade_day ?? false,
+    psychology_tags: report.psychology_tags ?? [],
   };
 }
 
@@ -69,6 +71,8 @@ export function DailyReportForm({
   beforeSession,
   afterSession,
   firstEntryAt,
+  emotions = [],
+  dayClose,
 }: {
   report: DailyReport | null;
   reportDate: string;
@@ -90,6 +94,10 @@ export function DailyReportForm({
   afterSession?: ReactNode;
   /** The day's first entry, ISO — the gate written after it is marked (phase Y). */
   firstEntryAt?: string | null;
+  /** The emotion list, for the day's psychology (phase B5). */
+  emotions?: { value: string; label: string }[];
+  /** The day's close, read from the trades (phase B7): best and worst, mistakes and their cost. */
+  dayClose?: ReactNode;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -349,6 +357,37 @@ export function DailyReportForm({
             hint="Pregledaj svaki trejd, odgovori na osvrt, sačuvaj i zaključaj dan. Zatvaranje dana je razgovor sa mentorom, iz mentor pack-a za Dan."
           >
             {afterSession}
+            <fieldset disabled={tracker.locked} className="m-0 min-w-0 border-0 p-0 disabled:opacity-100">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Zatvaranje dana</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Jednom po danu, umesto na svakom trejdu: kako si se osećao, i šta je dan doneo.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label>Psihologija dana</Label>
+                    <Chips
+                      items={emotions}
+                      selected={form.psychology_tags}
+                      onToggle={(v) =>
+                        patch(
+                          "psychology_tags",
+                          form.psychology_tags.includes(v)
+                            ? form.psychology_tags.filter((x) => x !== v)
+                            : [...form.psychology_tags, v],
+                        )
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Obavezno na dan sa trejdom. Na trejdu je psihologija samo za odstupanje od dana.
+                    </p>
+                  </div>
+                  {dayClose}
+                </CardContent>
+              </Card>
+            </fieldset>
             {/* The debrief prose (what I learned, what I change tomorrow) and the
                 four Douglas-fear checkboxes left in Phase E: nothing read them. Those
                 questions are asked by the mentor now (phase M), with the pack in hand. */}

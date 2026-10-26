@@ -19,6 +19,8 @@ export type DailyReport = {
    * (`computeDayCompliance`, phase M).
    */
   no_trade_day: boolean;
+  /** The day's emotions, written once on /daily (phase B5); empty = not written. */
+  psychology_tags: string[];
   /**
    * When the day's process journal was sealed. Null while it is still editable.
    *
@@ -91,5 +93,6 @@ export function emptyDailyReport(reportDate: string): DailyReportInput {
     report_date: reportDate,
     mental_temp: null,
     no_trade_day: false,
+    psychology_tags: [],
   };
 }

@@ -50,6 +50,8 @@ export type DailyReportListRow = {
   mental_temp: number | null;
   no_trade_day: boolean;
   locked: boolean;
+  /** The day's emotions (phase B5); optional for callers that list days only. */
+  psychology_tags?: string[];
 };
 
 /**
@@ -70,10 +72,11 @@ export async function getDailyReportsInRange(
     mental_temp: number | null;
     no_trade_day: boolean;
     locked_at: string | null;
+    psychology_tags: string[] | null;
   }>((lo, hi) =>
     supabase
       .from("tj_daily_reports")
-      .select("report_date, mental_temp, no_trade_day, locked_at")
+      .select("report_date, mental_temp, no_trade_day, locked_at, psychology_tags")
       .gte("report_date", from)
       .lte("report_date", to)
       .order("report_date")
@@ -85,6 +88,7 @@ export async function getDailyReportsInRange(
     mental_temp: r.mental_temp,
     no_trade_day: r.no_trade_day,
     locked: r.locked_at != null,
+    psychology_tags: r.psychology_tags ?? [],
   }));
 }
 
@@ -97,7 +101,7 @@ export async function getDailyReportsLite(): Promise<DailyReportLite[]> {
   const data = await selectAllPages((from, to) =>
     supabase
       .from("tj_daily_reports")
-      .select("report_date, mental_temp, no_trade_day, locked_at, mental_temp_at")
+      .select("report_date, mental_temp, no_trade_day, locked_at, mental_temp_at, psychology_tags")
       .order("report_date", { ascending: false })
       .range(from, to),
   );

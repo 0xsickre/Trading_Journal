@@ -30,6 +30,10 @@ import { breakevenRangeResolver } from "@/lib/journal/breakeven";
 import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
 import { briefResolver, flatByResolver } from "@/lib/journal/session-brief";
 import { SessionBriefCard } from "@/components/journal/session-brief-card";
+import { DayCloseCard } from "@/components/journal/day-close-card";
+import { dayClose } from "@/lib/journal/day-close";
+import { autoMistakes } from "@/lib/journal/auto-mistakes";
+import { getOptionsMap } from "@/lib/journal/options";
 import { tradingWindowResolver } from "@/lib/journal/tracker/trading-window";
 import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
 import { firstBiasResolver, firstEntryResolver, summarizeBias } from "@/lib/journal/daily-bias";
@@ -74,6 +78,7 @@ export default async function DailyPage({
     checkinsByDay,
     briefs,
     biases,
+    optionsMap,
   ] = await Promise.all([
     accountsPromise,
     dayPromise,
@@ -91,6 +96,8 @@ export default async function DailyPage({
     dayPromise.then(({ reportDate }) => getSessionBriefs(reportDate, reportDate)),
     // Bias dana (phase D): every forecast — the day's for the card, all of them for the score.
     getDailyBiases(),
+    // The emotion list, for the day's psychology (phase B5).
+    getOptionsMap(true),
   ]);
   const briefOf = briefResolver(briefs);
 
@@ -109,8 +116,17 @@ export default async function DailyPage({
   const trades = inAllAccountsScope(tradesAll, accounts);
 
   // A stop loss is judged by the account's breakeven band.
-  const index = buildTradeDayIndex(trades, tzOf, breakevenRangeResolver(accounts));
+  const bandOf = breakevenRangeResolver(accounts);
+  const index = buildTradeDayIndex(trades, tzOf, bandOf);
   const dayRules = rulesLiveOn(rules, reportDate);
+  const autoCtx = {
+    briefOf,
+    tradingWindowOf: tradingWindowResolver(rules),
+    biasOf: firstBiasResolver(biases),
+    flatByOf: flatByResolver(accounts),
+    // Phase B5: the day's psychology, as saved.
+    reportOf: (d: string) => (d === reportDate ? report : null),
+  };
 
   // Live verdicts, then the frozen ones on top. On an unlocked day the overlay is
   // empty and this is just the live evaluation; on a locked day the sealed row
@@ -120,13 +136,20 @@ export default async function DailyPage({
     dayRules,
     // `dayRules`, not `rules`: the limits scored here must be the ones in force
     // on this day, not a retired rule's leftovers.
-    evaluateAutoRulesForDay(reportDate, index, {
-      briefOf,
-      tradingWindowOf: tradingWindowResolver(rules),
-      biasOf: firstBiasResolver(biases),
-      flatByOf: flatByResolver(accounts),
-    }),
+    evaluateAutoRulesForDay(reportDate, index, autoCtx),
     checkins,
+  );
+
+  // The close of the day (phase B7): the trades opened on it, with what the
+  // journal found on each, as the trade page shows it.
+  const openedIds = new Set((index.byOpenDay.get(reportDate) ?? []).map((t) => t.id));
+  const touchedIds = new Set([...openedIds, ...(index.byCloseDay.get(reportDate) ?? []).map((t) => t.id)]);
+  const dayRows = trades.filter((t) => openedIds.has(t.id));
+  const found = autoMistakes(
+    trades.filter((t) => touchedIds.has(t.id)),
+    tzOf,
+    bandOf,
+    autoCtx,
   );
 
   const answers: Record<string, boolean> = {};
@@ -180,6 +203,8 @@ export default async function DailyPage({
         timezone={timezone}
         tracker={tracker}
         firstEntryAt={firstEntryAt}
+        emotions={(optionsMap.emotion ?? []).map((o) => ({ value: o.value, label: o.label }))}
+        dayClose={<DayCloseCard close={dayClose(dayRows, found)} currency={primary?.currency ?? "USD"} />}
         beforeSession={
           <>
             <SessionBriefCard day={reportDate} brief={briefOf(reportDate)} tz={timezone} flatBy={primary?.flat_by} />

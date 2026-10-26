@@ -38,6 +38,8 @@ async function dayError(reportDate: string): Promise<string | null> {
 const dailyReportSchema = z.object({
   mental_temp: z.number().int().min(1).max(5).nullable(),
   no_trade_day: z.boolean(),
+  // Phase B5: the day's emotions, once a day (option-list values).
+  psychology_tags: z.array(z.string().trim().min(1).max(60)).max(20),
 });
 
 export type SaveDailyReportInput = z.infer<typeof dailyReportSchema>;

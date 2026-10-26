@@ -1,6 +1,7 @@
 "use server";
 
 import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
+import { getDailyReport } from "@/lib/journal/daily-report-queries";
 import { firstBiasResolver } from "@/lib/journal/daily-bias";
 import { revalidateDaily } from "@/lib/journal/revalidate";
 import { createClient } from "@/lib/supabase/server";
@@ -132,7 +133,7 @@ export async function lockDay(reportDate: string): Promise<Result> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Nisi prijavljen." };
 
-  const [accounts, rules, tradesAll, briefs, biases] = await Promise.all([
+  const [accounts, rules, tradesAll, briefs, biases, report] = await Promise.all([
     getAccounts(),
     getTrackerRules({ includeRetired: true }),
     getTradesWithStats(),
@@ -141,6 +142,8 @@ export async function lockDay(reportDate: string): Promise<Result> {
     getSessionBriefs(reportDate, reportDate),
     // The day's bias forecasts (phase D): `htf_bias_set` reads the card.
     getDailyBiases(reportDate, reportDate),
+    // The day's report (phase B5): `daily_psychology` reads its psychology.
+    getDailyReport(reportDate),
   ]);
 
   const primary = accounts.find((a) => a.is_active) ?? accounts[0] ?? null;
@@ -163,6 +166,7 @@ export async function lockDay(reportDate: string): Promise<Result> {
     tradingWindowOf: tradingWindowResolver(rules),
     biasOf: firstBiasResolver(biases),
     flatByOf: flatByResolver(accounts),
+    reportOf: (d) => (d === reportDate ? report : null),
   });
 
   const { error } = await supabase.rpc("tj_lock_day", {

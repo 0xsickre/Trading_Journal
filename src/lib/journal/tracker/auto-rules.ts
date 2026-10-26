@@ -127,8 +127,8 @@ export type TradeReview = {
   /** `execution_rating`: A = 5, B = 3, C = 1 (`GRADE_RATING`); null when ungraded. */
   grade: number | null;
   exitReason: boolean;
-  /** `custom.entry_tf` is chosen. */
-  entryTf: boolean;
+  /** `trade_journal_notes` ("Jedna rečenica") is written. */
+  note: boolean;
   psychology: string[];
   mistakes: string[];
   /** Charts on the trade (`tj_trade_images`). */
@@ -150,6 +150,7 @@ const REVIEW_RULES: ReadonlySet<AutoRuleKey> = new Set<AutoRuleKey>([
   "review_complete",
   "screenshot_per_trade",
   "thesis_recorded",
+  "daily_psychology",
 ]);
 
 const list = (v: unknown): string[] =>
@@ -169,13 +170,14 @@ function reviewOf(row: TradeRow): TradeReview {
     psychology_tags?: unknown;
     mistake?: unknown;
     chart_images?: unknown;
+    trade_journal_notes?: string | null;
   };
   return {
     htfBias: customText(row, "htf_bias"),
     thesis: String(r.thesis ?? "").trim() !== "",
     grade: numberFieldValue(row, "execution_rating"),
     exitReason: String(r.exit_reason ?? "").trim() !== "",
-    entryTf: customText(row, "entry_tf") != null,
+    note: String(r.trade_journal_notes ?? "").trim() !== "",
     psychology: list(r.psychology_tags),
     mistakes: list(r.mistake),
     images: Array.isArray(r.chart_images) ? r.chart_images.length : 0,
@@ -206,6 +208,8 @@ export type AutoContext = {
   flatByOf?: (accountId: string | null) => string;
   /** The trading window in force on a day (phase Y4, `tradingWindowResolver`); none = unconfigured. */
   tradingWindowOf?: (day: string) => TradingWindow | null;
+  /** The day's /daily report (phase B5: its psychology); none = no report. */
+  reportOf?: (day: string) => { psychology_tags?: readonly string[] | null } | null;
   /** The day's counted bias forecast per root (phase D, `firstBiasResolver`); none = no card read. */
   biasOf?: (day: string, root: BiasRoot) => DailyBias | null;
 };
@@ -411,7 +415,11 @@ function biasKnown(day: string, t: TrackerTrade, ctx: Required<AutoContext>): bo
 const evalThesisRecorded = (opened: TrackerTrade[]) =>
   evalReview("thesis_recorded", opened, (t) => t.review.thesis);
 
-/** Grade, exit reason, bias, Entry TF, a feeling, and a mistake or an A. */
+/**
+ * Grade, exit reason, bias, and a mistake or an A; with a C, one sentence too
+ * (phase B6). The entry TF and the feeling left it: the TF comes from the
+ * playbook (B3) and the feeling is written once a day on /daily (B5).
+ */
 const evalReviewComplete = (day: string, opened: TrackerTrade[], ctx: Required<AutoContext>) =>
   evalReview(
     "review_complete",
@@ -420,13 +428,35 @@ const evalReviewComplete = (day: string, opened: TrackerTrade[], ctx: Required<A
       t.review.grade != null &&
       t.review.exitReason &&
       biasKnown(day, t, ctx) &&
-      t.review.entryTf &&
-      t.review.psychology.length > 0 &&
-      (t.review.mistakes.length > 0 || t.review.grade === GRADE_RATING.A),
+      (t.review.mistakes.length > 0 || t.review.grade === GRADE_RATING.A) &&
+      (t.review.grade !== GRADE_RATING.C || t.review.note),
   );
 
-const evalScreenshotPerTrade = (opened: TrackerTrade[]) =>
-  evalReview("screenshot_per_trade", opened, (t) => t.review.images > 0);
+/**
+ * A chart where it carries something (phase B6): on every trade graded C, and on
+ * the day's best and worst closed trade by net — the two a review looks at
+ * first. One trade alone is both. A trade with no price is neither best nor worst.
+ */
+function evalScreenshotPerTrade(opened: TrackerTrade[]): AutoRuleResult {
+  const key: AutoRuleKey = "screenshot_per_trade";
+  if (opened.length === 0) return na(key, "no_trades");
+  const done = opened.filter((t) => t.closedAt != null);
+  if (done.length === 0) return na(key, "not_yet");
+  const priced = done.filter((t) => t.netPl != null);
+  const net = (t: TrackerTrade) => t.netPl as number;
+  const best = priced.length > 0 ? priced.reduce((a, b) => (net(b) > net(a) ? b : a)) : null;
+  const worst = priced.length > 0 ? priced.reduce((a, b) => (net(b) < net(a) ? b : a)) : null;
+  const asked = done.filter((t) => t.review.grade === GRADE_RATING.C || t === best || t === worst);
+  return evalOpenDayFlag(key, asked, (t) => t.review.images > 0);
+}
+
+/** The day's feeling is written on /daily (phase B5) — asked on a day with a trade, once. */
+function evalDailyPsychology(day: string, opened: TrackerTrade[], ctx: Required<AutoContext>): AutoRuleResult {
+  const key: AutoRuleKey = "daily_psychology";
+  if (opened.length === 0) return na(key, "no_trades");
+  const written = (ctx.reportOf(day)?.psychology_tags ?? []).length > 0;
+  return { key, verdict: written ? "pass" : "fail", reason: written ? "ok" : "violated", offenders: [] };
+}
 
 /**
  * Honest tags, per trade: a tag that a failed rule on THE SAME trade says is
@@ -623,6 +653,7 @@ export function evaluateAutoRulesForDay(
     tradingWindowOf: context.tradingWindowOf ?? (() => null),
     flatByOf: context.flatByOf ?? (() => DEFAULT_FLAT_BY_CT),
     biasOf: context.biasOf ?? (() => null),
+    reportOf: context.reportOf ?? (() => null),
   };
 
   const results = {
@@ -652,6 +683,7 @@ export function evaluateAutoRulesForDay(
     thesis_recorded: evalThesisRecorded(opened),
     review_complete: evalReviewComplete(day, opened, ctx),
     screenshot_per_trade: evalScreenshotPerTrade(opened),
+    daily_psychology: evalDailyPsychology(day, opened, ctx),
   };
   // Last: it reads the verdicts above, per trade.
   return { ...results, honest_tags: evalHonestTags(opened, results) };

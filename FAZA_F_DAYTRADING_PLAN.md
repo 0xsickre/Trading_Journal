@@ -166,8 +166,8 @@ pogađa.
 | **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | da: `20261014200000` (`mental_temp_at`), `20261015090000` (`trading_window`) | **Opus** | ✅ 14.10.2026 — Y1 `14a992f` · Y2 `7281007` · Y3 `80dee18` · Y4/Y5 `9de8441` (migracije `20261014200000`, `20261015090000` primenjene); Y-1 … Y-4 = A, Y-5 NY 14:30–18:00, Y-6 = A |
 | **J** | Jezik: nazivi kategorija u paketu, /reports i gridu na srpskom; fabrička lista tagova = lista trejdera | — | Y | da: `20261015120000` (nova definicija `tj_seed_categories`, podaci se ne menjaju) | **Opus** | ✅ 15.10.2026 — J1 `61f5c79` · J2 `c415355` (migracija `20261015120000` primenjena) |
 | **D** | Bias dana: prognoza pre sesije na /daily, ocena iz 1m sveća, moj winrate prema „uvek long“ | — | J | da: `20261017120000` (`tj_daily_bias`, aditivna) | **Opus** | ✅ kod 18.10.2026 — `a7456ed` · D1 `8af430f` · D2 `18d7077` · D4 `fcdf8ee` · D5+D6 `293067b` + futures-trading `adb046c`; migracija `20261017120000` primenjena 18.10.2026 |
-| **X** | Journal bez pravila prop firme: bez Topstep mašine, MLL/DLL plana, Survival-a i banera; tvoji limiti na nalogu, CME dan | — | D | da: aditivna (neutralne kolone) + **briše** `topstep_*` (uz odobrenje) | **Opus** | 🔄 odluke 26.10.2026 (X-1 B, X-2…X-9 A, X-7 univerzalni uvoz, X-10 odloženo) · X1 ✅ (migracija `20261026120000` primenjena) · X2 ✅ · X3 ✅ · X4 ✅ (migracija `20261026140000` čeka odobrenje) — sledeće X5 |
-| **B** | Brzi unos: trejd ~30 s (checklist „Zašto ulazim“, kraće liste, TF po playbook-u, automatske greške), psihologija i zatvaranje dana na /daily | — | X4 | da: aditivne (TF playbook-a, psihologija dana), podaci (liste, tekst pravila) | **Opus** | 🔄 plan 26.10.2026 (B-1 A, B-2/B-3 ne, B-4 da) |
+| **X** | Journal bez pravila prop firme: bez Topstep mašine, MLL/DLL plana, Survival-a i banera; tvoji limiti na nalogu, CME dan | — | D | da: aditivna (neutralne kolone) + **briše** `topstep_*` (uz odobrenje) | **Opus** | 🔄 odluke 26.10.2026 (X-1 B, X-2…X-9 A, X-7 univerzalni uvoz, X-10 odloženo) · X1 ✅ (migracija `20261026120000` primenjena) · X2 ✅ · X3 ✅ · X4 ✅ (migracija `20261026140000` primenjena) — sledeće X5 (posle B) |
+| **B** | Brzi unos: trejd ~30 s (checklist „Zašto ulazim“, kraće liste, TF po playbook-u, automatske greške), psihologija i zatvaranje dana na /daily | — | X4 | da: aditivne (TF playbook-a, psihologija dana), podaci (liste, tekst pravila) | **Opus** | 🔄 plan 26.10.2026 (B-1 A, B-2/B-3 ne, B-4 da) · B1–B8 ✅ u kodu · migracije `20261026150000`, `…160000`, `…170000` čekaju odobrenje |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1745,7 +1745,7 @@ podkorak se pushuje odmah.
 U kodu, bazi i README nema nijedne prop firme (osim naziva formata uvoza TopstepX). Journal na bilo kom nalogu meri
 trejdove i proces, a postojećih 7 trejdova se čita kao i pre.
 
-## B — Brzi unos: trejd za ~30 s, razmišljanje na zatvaranju dana (detaljno, 26.10.2026) — 🔄
+## B — Brzi unos: trejd za ~30 s, razmišljanje na zatvaranju dana (detaljno, 26.10.2026) — 🔄 kod ✅, migracije čekaju
 
 **Povod** (trejder, 26.10.2026: „cilj je napraviti što manje ručnog rada po pojedinom trejdu, a praviti jedan dnevni
 izveštaj zatvaranjem dana“). Pravila: ništa istorijsko se ne briše. Polje skinuto sa forme ostaje u bazi i vidi se
@@ -1797,6 +1797,15 @@ izveštaj zatvaranjem dana“). Pravila: ništa istorijsko se ne briše. Polje s
 - **B8 Dokumentacija:** README 1:1, ovaj fajl.
 
 **Model:** Opus. Oko 20 fajlova i tri migracije (playbook TF, liste, psihologija dana + pravila).
+
+### Isporučeno (26.10.2026)
+- B1–B8 u kodu, gate čist. Tri migracije **nisu puštene**: `20261026150000` (liste), `20261026160000`
+  (`default_entry_tf`), `20261026170000` (`psychology_tags`, `daily_psychology`, novi tekstovi pravila). Kod
+  čita obe nove kolone, pa migracije idu pre spajanja u `main`.
+- **Nije urađeno (namerno):** detekcije iz B-1 A; auto grafik (B-2); audio (B-3). „Dodao protiv pozicije“ je
+  skinuta sa ručne liste, a automatski se ne detektuje (podatak o dodavanju protiv pozicije nije u pravilima ni
+  u spec-u). Playbook „Ponoc pojas reversal“ sa praznim „Gde ulazim“ / „Gde
+  izlazim“ dobija samo upozorenje „Prazne grupe“ u Settings › Playbooks — pravila se ne izmišljaju.
 
 ## Katalog stavki
 
