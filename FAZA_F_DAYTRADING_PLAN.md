@@ -120,7 +120,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 15.10.2026 | J | Posle J (trejder: „ostatak ostaje“): ostatak interfejsa (/reports okvir, dashboard, Settings, /import) ostaje na engleskom, kako README „On language“ kaže; faza za ceo interfejs na srpskom se ne radi |
 | 14.10.2026 | P | **P-1** fill-ovi se ne menjaju ručno nigde; ručno se upisuje samo originalni SL sa snimka (trejder: „samo SL treba ja da upišem jer ako ga pomerim na BE u toku trejda onda se ne slaže na uvozu“). **P-2** ocena izvršenja A/B/C svuda. **P-3** promena playbook-a briše odgovore na pravila prethodnog playbook-a; meko obrisana pravila istog playbook-a ostaju |
 | 17.10.2026 | D | Bias dana (trejder: „karticu daily bias … da se meri koji mi je winrate u predviđanju biasa … i koji bi winrate bio da je uvek long“): **D-1 A** pogodak = neto pomeraj od početka do kraja merenja uz neutralni opseg; **D-2** početak = kasnije od 09:00 BG i trenutka upisa, kraj 18:00 BG (upis posle 18:00 se ne ocenjuje); **D-3** Neutral je prognoza, Gore/Dole na neutralan dan je promašaj i za trejdera i za uvek long; **D-4** opseg bira mentor, fiksno u kodu, bez Settings (trejder: „nek radi u pozadini i nek bude podešeno“); **D-5** NQ, ES, GC, mikro deli bias sa mini; **D-6** kartica zamenjuje polje „Bias dana“ na trejdu. Radi se direktno na `main`, migracija se primenjuje posle zelenog gate-a (trejder: „odmah ide na glavnu granu … da odmah bude primenjeno na produkciju“) |
-| 26.10.2026 | X | Neutralan journal (trejder: „skroz ćemo izbaciti bilo kakva pravila iz journala, ne može da bude vezan za prop firmu … ja sam taj koji poštuje ili ne pravila“; prelazak na Tradeify). Faza **X**: plan napisan, odluke X-1 … X-10 otvorene. NinjaTrader uvoz (AddOn šalje svaki fill preko HTTPS-a, red kad nema mreže — trejderu se „svidja“) je posebna faza posle X |
+| 26.10.2026 | X | Neutralan journal (trejder: „skroz ćemo izbaciti bilo kakva pravila iz journala, ne može da bude vezan za prop firmu … ja sam taj koji poštuje ili ne pravila“; prelazak na Tradeify). Faza **X**: plan napisan. Odluke istog dana: **X-1 B** (tracker samo proces — „ako bude više naloga na prop firma biće konflikta“), X-2 … X-6, X-8, X-9 **A**, **X-7** uvoz univerzalan (prepoznaje format, i TopstepX i NinjaTrader), **X-10** brief „na kraju“. NinjaTrader uvoz (AddOn šalje svaki fill preko HTTPS-a, red kad nema mreže — trejderu se „svidja“) je posebna faza posle X |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -165,7 +165,7 @@ pogađa.
 | **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | da: `20261014200000` (`mental_temp_at`), `20261015090000` (`trading_window`) | **Opus** | ✅ 14.10.2026 — Y1 `14a992f` · Y2 `7281007` · Y3 `80dee18` · Y4/Y5 `9de8441` (migracije `20261014200000`, `20261015090000` primenjene); Y-1 … Y-4 = A, Y-5 NY 14:30–18:00, Y-6 = A |
 | **J** | Jezik: nazivi kategorija u paketu, /reports i gridu na srpskom; fabrička lista tagova = lista trejdera | — | Y | da: `20261015120000` (nova definicija `tj_seed_categories`, podaci se ne menjaju) | **Opus** | ✅ 15.10.2026 — J1 `61f5c79` · J2 `c415355` (migracija `20261015120000` primenjena) |
 | **D** | Bias dana: prognoza pre sesije na /daily, ocena iz 1m sveća, moj winrate prema „uvek long“ | — | J | da: `20261017120000` (`tj_daily_bias`, aditivna) | **Opus** | ✅ kod 18.10.2026 — `a7456ed` · D1 `8af430f` · D2 `18d7077` · D4 `fcdf8ee` · D5+D6 `293067b` + futures-trading `adb046c`; migracija `20261017120000` primenjena 18.10.2026 |
-| **X** | Journal bez pravila prop firme: bez Topstep mašine, MLL/DLL plana, Survival-a i banera; tvoji limiti na nalogu, CME dan | — | D | da: aditivna (neutralne kolone) + **briše** `topstep_*` (uz odobrenje) | **Opus** | 📝 plan 26.10.2026 — čeka odluke X-1 … X-10 |
+| **X** | Journal bez pravila prop firme: bez Topstep mašine, MLL/DLL plana, Survival-a i banera; tvoji limiti na nalogu, CME dan | — | D | da: aditivna (neutralne kolone) + **briše** `topstep_*` (uz odobrenje) | **Opus** | 🔄 odluke 26.10.2026 (X-1 B, X-2…X-9 A, X-7 univerzalni uvoz, X-10 odloženo) — sledeće X1 |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1607,7 +1607,7 @@ Migracija `20261017120000` primenjena 18.10.2026 uz odobrenje trejdera (posle dv
 posle ~30 stvarnih ocena. (3) Rol zlata (3 radna dana pre FND) nije proveren prema `GC.v.0` po volumenu. (4) Ručna
 provera u pregledaču nije rađena.
 
-## X — Journal bez pravila prop firme (detaljno, 26.10.2026) — 📝 plan, čeka odluke
+## X — Journal bez pravila prop firme (detaljno, 26.10.2026) — 🔄 odluke donete, sledeće X1
 
 **Povod** (trejder, 26.10.2026: „skroz ćemo izbaciti bilo kakva pravila iz journala, ne može da bude vezan za prop
 firmu, treba da bude neutralan … treba da služi za trejdove i journal, a ne za pravila prop firmi, a ja sam taj koji
@@ -1617,7 +1617,7 @@ uvoz je **posebna faza posle X**. X samo čisti journal.
 
 **Cilj:** journal beleži trejdove, meri ih i nosi dnevnik. Ne zna ni za jednu prop firmu: nema MLL, DLL plana,
 konzistentnosti, Combine / XFA / Scaling Plan-a, puteva isplate, „passed / failed“, Topstep banera ni Topstep dana.
-Pravila koja trejder sam sebi postavi (tracker, playbook) ostaju **njegova**, sa brojevima koje sam upiše.
+Tracker meri samo proces (X-1 B). Novčana pravila poštuje trejder sam, na platformi svakog naloga.
 
 ### Utvrđeno u kodu i bazi (26.10.2026)
 - **Obim:** 162 fajla pominju Topstep / MLL / DLL / XFA / isplatu (`src`, migracije, testovi). Od toga je 71 u
@@ -1653,62 +1653,60 @@ Trejdovi, fill-ovi, provizije, P&L, R, MAE/MFE, „šta bi bilo“, bias dana, p
 /daily (brief, mentalna ocena, zaključavanje), /reports, mentor paket, cash eventi (uplata, isplata, povlačenje,
 korekcija kao obični tokovi novca), sesije po Beogradu i trackerova pravila koja ne čitaju Topstep brojeve.
 
-### Odluke trejdera (pre koda) — predlog je prva opcija
-- **X-1 Novčana pravila trackera** (dnevni gubitak, gubitak po trejdu, rizik po trejdu, cilj dana, broj ugovora).
-  **A:** ostaju kao **tvoja** pravila, sa brojevima koje upišeš na nalog: dnevni max gubitak $, dnevni cilj $, rizik
-  po trejdu $. Danas su to $650, $1.500 i $300. Nema DLL-a plana ni +10 % tolerancije, osim ako je hoćeš kao svoj broj.
-  **B:** sva novčana pravila se brišu, tracker meri samo proces.
-- **X-2 MLL, prostor i Survival.** **A:** brišu se Survival, „prostor do MLL-a“, banner i widget. Risk % postaje
-  rizik ÷ balans naloga na ulazu. Breakeven pojas bez stopa postaje ±0,1 × tvoj rizik po trejdu (±$30). **B:** ostaje
-  generički „moj max drawdown“ (statičan broj koji upišeš) samo za Survival.
-- **X-3 Ključ dana.** **A:** za fjučers nalog ostaje **CME trgovački dan** 17:00 → 17:00 CT, jer je to pravilo berze,
-  a ne firme. Samo se preimenuje. **B:** kalendarski dan u zoni naloga (Beograd).
-- **X-4 Practice.** **A:** opšta oznaka naloga „practice / demo“ (statistika odvojeno, kao danas). **B:** bez oznake.
-- **X-5 Kolone `topstep_*`.** **A:** aditivna migracija napravi neutralne kolone (`daily_loss_limit`,
-  `daily_profit_target`, `practice`, `flat_by`) i prepiše vrednosti. Posle zelenog gate-a ide druga migracija koja
-  **briše** `topstep_*`. Nepovratno je, pa se primenjuje samo uz tvoje odobrenje. **B:** kolone ostaju u bazi, kod ih
-  ne čita.
-- **X-6 Nalog „50K Combine“ (7 trejdova).** **A:** postaje običan nalog i arhivira se, a trejdovi ostaju. Tradeify
-  nalog praviš sam u Settings. **B:** nalog se samo preimenuje i ostaje aktivan.
-- **X-7 TopstepX uvoz.** **A:** ostaje dok ne postoji NinjaTrader uvoz, jer je to format platforme, ne pravilo.
-  **B:** briše se odmah.
-- **X-8 Fabričke provizije.** **A:** katalog više ne nosi Topstep provizije (fabrički 0). Provizije upisuješ po
-  instrumentu u Settings, a kasnije stižu iz NinjaTrader fill-a. Postojeći instrumenti u knjizi se ne menjaju.
-  **B:** upisati Tradeify provizije. To traži da mi daš iznose, jer ih ne pogađam.
-- **X-9 „Ravno do kraja dana“ i horizont „šta bi bilo“.** **A:** vreme „ravno do“ je polje naloga u Settings
-  (podrazumevano 16:00 CT, CME pauza). Tracker i horizont scenarija čitaju to polje. **B:** fiksno 16:00 CT u kodu.
-- **X-10 `futures-trading` brief.** **A:** isti posao se radi i tamo (`racun.py` i paritet), u istoj fazi. Repo se
-  dodaje u sesiju. **B:** brief ostaje na Topstep računu dok se ne dogovori posebno. Journal briše paritetni fajl i
-  prestaje da deli račun.
+### Odluke trejdera (26.10.2026)
+- **X-1 B — novčana pravila trackera se brišu, tracker meri samo proces** (trejder: „jer ako bude više naloga na prop
+  firma biće konflikta“). Odlaze `max_loss_per_day`, `max_loss_per_trade`, `risk_per_trade`, `risk_matched_intent`,
+  `no_entry_after_daily_target`, njihovi razlozi i osnovice (`basis`). Iz koda izlazi i auto ključ, a postojeći redovi
+  se penzionišu (`deleted_at`). Polja lični DLL, cilj dana i budžet rizika nemaju više čitaoca, pa nema ni
+  neutralnih kolona za njih. Pravila procesa ostaju: `stop_after_two_losses` (broji stopove, ne novac),
+  `trading_window`, `flat_by_close`, `no_entry_in_red_window`, playbook, stop, teza, bias, tagovi, slike, review.
+  `honest_tags` gubi uslov „Ispoštovao rizik uz pao rizik“, a uslov uz pogođen stop ostaje.
+- **X-2 A** — brišu se Survival, prostor do MLL-a, baner i widget. Risk % = rizik ÷ balans naloga na ulazu
+  (`equity_at_entry`), a kante u /reports se ponovo dele. **Breakeven bez stopa** (posledica X-1 B, jer nema više
+  budžeta): pojas naloga iz Settings (`breakeven_from/to/unit`, već postoji). Trejd sa stopom ostaje ±0,1R svog rizika.
+- **X-3 A** — CME dan 17:00 → 17:00 CT za fjučers nalog, preimenovan (`cmeTradingDay`). Ne zavisi od prop režima.
+- **X-4 A** — oznaka naloga „practice / demo“ (`tj_accounts.practice`), statistika odvojeno kao danas.
+- **X-5 A** — prvo aditivna migracija (`practice`, `flat_by`) sa prepisom vrednosti, pa posebna migracija koja briše
+  `topstep_*` i `risk_rule_*`, samo uz odobrenje trejdera. **Uslov za brisanje:** pre toga proveriti šta brief u
+  `futures-trading` čita iz `tj_accounts` (vidi X-10). Ako čita `topstep_*`, kolone ostaju dok se brief ne reši.
+- **X-6 A** — „50K Combine“ postaje običan nalog i arhivira se, 7 trejdova ostaje. Tradeify nalog trejder pravi sam.
+- **X-7 → univerzalni uvoz** (trejder: „trebali bi biti uvozi univerzalni da prepoznaje sve ako se nekad vratim na
+  TopstepX ili neku drugu firmu“). U X se TopstepX parseri **ne brišu**. Ostaju kao jedan od formata, nazvani po
+  platformi, ne po firmi. Uvoz je posebna faza posle X: sam prepoznaje format fajla (TopstepX, NinjaTrader,
+  Tradovate …) i prima NinjaTrader AddOn preko HTTPS-a. Format se tamo bira po zaglavlju fajla, ne po nalogu.
+- **X-8 A** — fabričke provizije 0. Trejder ih upisuje po instrumentu, a kasnije stižu iz NT fill-a. Knjiga se ne menja.
+- **X-9 A** — „ravno do“ je polje naloga (`flat_by`, podrazumevano 16:00 CT). Čitaju ga `flat_by_close`, horizont
+  „šta bi bilo“ i cena promašaja.
+- **X-10 odloženo** — brief se razmatra na kraju (trejder: „brief ćemo na kraju da razmislimo“). Journal u X briše
+  svoj `topstep.ts` i paritetni test. `futures-trading` se ne dira.
 
 ### Podkoraci (svaki: test koji pada → kod → gate → commit + push)
-- **X1 Neutralni nalog.** Aditivna migracija sa novim kolonama i prepisom vrednosti (X-5 A). `types.ts`. Settings ›
-  Accounts dobija sekciju „Moji limiti“ (dnevni gubitak, cilj, rizik po trejdu, ravno do, practice) umesto Topstep
-  sekcije. Uklanjaju se plan, faza, reset i isplata.
-- **X2 Tracker na tvojim brojevima.** Novčana pravila u `auto-rules.ts` čitaju polja naloga, a ne `TopstepRules`.
-  `risk_matched_intent` računa ugovore iz tvog rizika, bez Scaling Plan-a i max pozicije plana. Briše se
-  `no_topstep_trades`. Nalog bez upisanog broja daje `na` sa razlogom „limit nije upisan“.
-- **X3 Bez mašine pravila.** Brišu se `topstep.ts` (zadržavaju se samo neutralni računi, na primer ugovori iz rizika u
-  `plan-calculations.ts`), `topstep-status.ts`, `topstep-banner.tsx`, widget „Topstep status“, `simulateTopstepSurvival`
-  i Survival (X-2), kao i `room_at_entry` / `risk_budget_at_entry` u formi i uvozu. Risk % i kante u /reports idu na
-  osnovicu iz X-2. Breakeven pojas ide po X-2.
-- **X4 Dan i sesija.** `topstepTradingDay` → `cmeTradingDay`, `TopstepDayZone` → `CmeDayZone` (X-3), uključeno po
-  fjučers nalogu, a ne po prop režimu. `scenario.ts`, `missed-cost.ts` i `flat_by_close` čitaju „ravno do“ (X-9).
-- **X5 Tekstovi i podaci.** Mentor paket, hintovi u /reports, tracker razlozi, `nav.ts` i komentari kataloga bez
-  Topstep-a. Fabrički tekst pravila i postojeći red „Ravno do kraja Topstep dana“ → „Ravno do kraja dana“ (migracija
-  podataka, samo taj tekst). Fabričke provizije po X-8.
-- **X6 Brisanje kolona** (X-5 A, uz tvoje odobrenje). Briše se `topstep_*`, brišu se paritetni fajl i paritetni
-  testovi (X-10), `schema:check`.
-- **X7 Dokumentacija 1:1.** README: Topstep i Survival sekcije, „A trading day“, Risk, tracker, Settings. Takođe
-  `ROADMAP.md`, ovaj fajl i `AGENTS.md` („Current work“ više nije Topstep).
+- **X1 Tracker samo proces** (X-1 B). Iz `auto-rules.ts`, `tracker-types.ts`, `tracker-checklist.tsx`,
+  `tracker-rule-manager.tsx` i fabričkog seeda izlazi pet novčanih ključeva. Migracija penzioniše postojeće redove i
+  sužava CHECK na `auto_key`. Prilagođava se `honest_tags`.
+- **X2 Neutralni nalog** (X-4, X-5 aditivno, X-6, X-9). Kolone `practice` i `flat_by` sa prepisom
+  (`practice` = `topstep_stage = 'practice'`). Settings › Accounts bez Topstep sekcije (plan, faza, reset, isplata,
+  lični DLL, cilj, budžet rizika); ostaju practice i „ravno do“. `isPractice` čita novu kolonu. „50K Combine“ se
+  arhivira (podaci, uz migraciju).
+- **X3 Bez mašine pravila** (X-2). Brišu se `topstep.ts`, `topstep-status.ts`, `topstep-banner.tsx`,
+  `topstep-parity.json` i njihovi testovi, widget „Topstep status“ i „Survival simulation“, `survival.ts` i deo
+  skora „Survival“, upis `room_at_entry` / `risk_budget_at_entry` u uvozu i na trejdu, veličina u ugovorima iz budžeta
+  i prop-firm headroom. Risk % ide na balans na ulazu, a breakeven bez stopa na pojas naloga.
+- **X4 Dan i sesija** (X-3, X-9). `topstepTradingDay` → `cmeTradingDay`, `TopstepDayZone` → `CmeDayZone`, uključeno
+  za fjučers nalog. `scenario.ts`, `missed-cost.ts` i `flat_by_close` čitaju `flat_by`.
+- **X5 Tekstovi i podaci** (X-8). Mentor paket, /reports hintovi, razlozi trackera, `nav.ts`, komentari kataloga.
+  Red „Ravno do kraja Topstep dana“ → „Ravno do kraja dana“. Fabričke provizije 0.
+- **X6 Brisanje kolona** (X-5 A, uz odobrenje; tek kad se proveri brief). Brišu se `topstep_*`, `risk_rule_*`, a
+  `room_at_entry` i `risk_budget_at_entry` ako ih brief ne čita. `schema:check`.
+- **X7 Dokumentacija 1:1.** README (Topstep, Survival, A trading day, Risk, tracker, Settings), `ROADMAP.md`, ovaj
+  fajl, `AGENTS.md` („Current work“).
 
-**Veličina i model:** **Opus**. Ovo je najveći rez od H1: oko 160 fajlova, dve migracije i verovatno više sesija
-(X1–X2, X3, X4–X7). Ako X-10 = A, dolazi i drugi repo. Svaki podkorak se pushuje odmah, da se ništa ne izgubi sa
-kontejnerom (kao F4 29.09.).
+**Veličina i model:** **Opus**. Oko 160 fajlova, dve ili tri migracije, više sesija (X1–X2, X3, X4–X7). Svaki
+podkorak se pushuje odmah.
 
 ### Izlaz iz X
-U kodu, bazi i README nema nijedne prop firme. Journal na bilo kom nalogu meri trejdove i tvoja pravila sa
-brojevima koje si sam upisao, a postojećih 7 trejdova se čita kao i pre.
+U kodu, bazi i README nema nijedne prop firme (osim naziva formata uvoza TopstepX). Journal na bilo kom nalogu meri
+trejdove i proces, a postojećih 7 trejdova se čita kao i pre.
 
 ## Katalog stavki
 
