@@ -963,9 +963,10 @@ const money = (label: string) =>
 /**
  * The columns `updateAccount` may write, with their ranges.
  *
- * Percentages live in 0–100; costs and balances are not negative. The
- * breakeven band is not here: it is fixed by the Topstep plan (K4). Anything
- * outside these, or any column not listed, is refused rather than stored.
+ * Percentages live in 0–100; costs and balances are not negative. No prop
+ * firm's rules are settable (phase X): the Topstep columns that remain until
+ * X6 are not written from here. Anything outside these, or any column not
+ * listed, is refused rather than stored.
  */
 const accountPatchSchema = z
   .object({
@@ -980,16 +981,7 @@ const accountPatchSchema = z
     default_fee_fixed: money("Fixed fee").optional(),
     default_stop_pct: pct("Default stop").nullable().optional(),
     default_target_pct: pct("Default target").nullable().optional(),
-    topstep_mode: z.boolean().optional(),
-    topstep_plan: z.enum(["50K", "100K", "150K"]).optional(),
-    topstep_stage: z.enum(["combine", "xfa", "practice"]).optional(),
-    topstep_payout_at: z.string().nullable().optional(),
-    topstep_reset_at: z.string().nullable().optional(),
-    risk_rule_pct: z.number().finite().gt(0, "Risk share must be above 0 %.").max(100).optional(),
-    risk_rule_min: money("Minimum risk").nullable().optional(),
-    risk_rule_max: money("Maximum risk").nullable().optional(),
-    topstep_personal_dll: z.number().finite().gt(0, "The personal daily loss limit must be above 0.").nullable().optional(),
-    topstep_daily_target: z.number().finite().gt(0, "The personal daily profit target must be above 0.").nullable().optional(),
+    practice: z.boolean().optional(),
   })
   .strict();
 
@@ -1007,16 +999,7 @@ export async function updateAccount(
     default_fee_fixed?: number;
     default_stop_pct?: number | null;
     default_target_pct?: number | null;
-    topstep_mode?: boolean;
-    topstep_plan?: "50K" | "100K" | "150K";
-    topstep_stage?: "combine" | "xfa" | "practice";
-    topstep_payout_at?: string | null;
-    topstep_reset_at?: string | null;
-    risk_rule_pct?: number;
-    risk_rule_min?: number | null;
-    risk_rule_max?: number | null;
-    topstep_personal_dll?: number | null;
-    topstep_daily_target?: number | null;
+    practice?: boolean;
   },
 ) {
   // Whitelisted and ranged. The patch used to go straight to the update, so any
@@ -1025,10 +1008,6 @@ export async function updateAccount(
   if (!parsedPatch.success)
     return { ok: false, error: parsedPatch.error.issues[0]?.message ?? "Invalid account settings." };
   patch = parsedPatch.data;
-
-  if (patch.risk_rule_min != null && patch.risk_rule_max != null && patch.risk_rule_min > patch.risk_rule_max) {
-    return { ok: false, error: "Risk per trade: the minimum must not exceed the maximum." };
-  }
 
   const supabase = await createClient();
 
@@ -1112,32 +1091,13 @@ export async function updateAccount(
 }
 
 /**
- * Reset a Topstep account: trades closed before now stop counting toward the
- * MLL, DLL and target (`evaluateTopstep` reads `topstep_reset_at`). A new plan
- * on an account past its MLL is refused until this runs.
- */
-export async function resetTopstepAccount(id: string) {
-  const supabase = await createClient();
-  const { data: updated, error } = await supabase
-    .from("tj_accounts")
-    .update({ topstep_reset_at: new Date().toISOString() })
-    .eq("id", id)
-    .select("id");
-  if (error) return { ok: false as const, error: error.message };
-  if (!updated || updated.length === 0) return { ok: false as const, error: "Account not found." };
-  revalidateAll();
-  return { ok: true as const };
-}
-
-/**
  * Create an account, from the new-account dialog or as a duplicate.
  *
  * The dialog asks for what decides how every trade on the account reads —
  * name, currency, starting balance, timezone — instead of the
  * blank "New Account" this used to make on one click. `copyFrom` copies the
- * rest (breakeven, costs, Topstep rules) from another account: several
- * Combines share one rule set, and retyping it per account is how two of them
- * end up with different limits.
+ * rest (breakeven, costs, the practice flag) from another account, so two
+ * accounts of one kind cannot end up set up differently by retyping.
  */
 export async function addAccount(input: {
   name: string;

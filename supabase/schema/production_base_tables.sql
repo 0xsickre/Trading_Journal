@@ -89,6 +89,8 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   risk_rule_pct               numeric     NOT NULL DEFAULT 12.5,
   risk_rule_min               numeric,
   risk_rule_max               numeric,
+  -- Nalog za vežbu, van „All accounts“ (20261026130000, faza X).
+  practice                    boolean     NOT NULL DEFAULT false,
   CONSTRAINT tj_accounts_pkey PRIMARY KEY (id),
   CONSTRAINT tj_accounts_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,

@@ -100,13 +100,13 @@ describe("the bracket of a trade", () => {
 
 describe("orderAccountWarning (09.10.2026)", () => {
   it("names a Practice file going into a real account, and the reverse", () => {
-    expect(orderAccountWarning([{ account: "PRAC-V2-687834-40225242" }], "combine")).toMatch(/Practice account/);
-    expect(orderAccountWarning([{ account: "50KTC-SKU-V2-DLL-687834-91345658" }], "practice")).toMatch(/is Practice/);
+    expect(orderAccountWarning([{ account: "PRAC-V2-687834-40225242" }], false)).toMatch(/Practice account/);
+    expect(orderAccountWarning([{ account: "50KTC-SKU-V2-DLL-687834-91345658" }], true)).toMatch(/is Practice/);
   });
   it("is silent when they match, and asks for one account per file", () => {
-    expect(orderAccountWarning([{ account: "50KTC-SKU-V2-DLL-687834-91345658" }], "combine")).toBeNull();
-    expect(orderAccountWarning([{ account: "PRAC-V2-1" }], "practice")).toBeNull();
-    expect(orderAccountWarning([{ account: "PRAC-V2-1" }, { account: "50KTC-2" }], "combine")).toMatch(/2 TopstepX accounts/);
+    expect(orderAccountWarning([{ account: "50KTC-SKU-V2-DLL-687834-91345658" }], false)).toBeNull();
+    expect(orderAccountWarning([{ account: "PRAC-V2-1" }], true)).toBeNull();
+    expect(orderAccountWarning([{ account: "PRAC-V2-1" }, { account: "50KTC-2" }], false)).toMatch(/2 TopstepX accounts/);
   });
 });
 

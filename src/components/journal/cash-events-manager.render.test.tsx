@@ -23,6 +23,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 const account = (over: Partial<Account> = {}): Account => ({
   id: "acc-1",
   name: "Main Account",
+  practice: false,
   broker: null,
   currency: "USD",
   starting_balance: 100_000,

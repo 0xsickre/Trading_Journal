@@ -231,7 +231,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,956 tests across 190 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,955 tests across 190 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -385,7 +385,7 @@ a trigger, phase Y; a mark only, no rule reads it) and *2. Da li danas trguješ?
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
-| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both; the seeded tags are Serbian since K2, `20260929200000`, which rewrote the trades that carried them), Tracker, Instruments (the eight futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, the **timezone** shown, not typed: every time is in Europe/Belgrade (`DEFAULT_TZ`, K5, `20260929210000`), a file with its own offset is converted on import, and a Topstep account still counts its days by 17:00 CT; the **breakeven range** shown, not typed (§ Metrics, K4), and **Topstep rules (futures)** — plan 50K / 100K / 150K, first payout, reset, the risk rule), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion and reset live under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
+| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both; the seeded tags are Serbian since K2, `20260929200000`, which rewrote the trades that carried them), Tracker, Instruments (the eight futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, the **timezone** shown, not typed: every time is in Europe/Belgrade (`DEFAULT_TZ`, K5, `20260929210000`), a file with its own offset is converted on import, and a Topstep account still counts its days by 17:00 CT; the **breakeven range** shown, not typed (§ Metrics, K4), and **Practice / demo account** — a flag, `tj_accounts.practice`; since phase X2 (26.10.2026) no prop firm's rules are set here: the Topstep columns of an older account stay as they were and are not editable, and a duplicate copies none of them), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion lives under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
 | `/login` | Supabase auth |
 
 ---
@@ -1289,7 +1289,7 @@ help.topstep.com on 28.09.2026):
 - **Consistency** (Combine): the best day must stay at or below 55 % of the target; past that the target grows
   to best day ÷ 0.55.
 - **Combine or Express Funded Account** (phase T, 30.09.2026; `tj_accounts.topstep_stage`, migration
-  `20260930090000`, "Phase" in the account's Topstep rules). A Combine works as above. An XFA starts at
+  `20260930090000`; not editable since phase X2). A Combine works as above. An XFA starts at
   $0 on TopstepX (starting balance 0) with the plan's MLL under it, has **no target and no 55 % line**,
   and is sized by the **Scaling Plan**: the most mini contracts (a micro is a tenth) from the balance at
   the last close — 2 / 3 / 5 on a 50K, 3 / 4 / 5 / 10 on a 100K, 3 / 4 / 5 / 10 / 15 on a 150K, at
@@ -1301,9 +1301,10 @@ help.topstep.com on 28.09.2026):
   40 % of the net profit; each with the largest request, half the balance capped at $2,000 / $3,000
   (50K), $3,000 / $4,000 (100K), $5,000 / $6,000 (150K), at least $125 (`TOPSTEP_XFA_PAYOUT`). The
   brief computes the same (`racun.py`). The plan's DLL still counts on an XFA — optional on TopstepX,
-  kept as the cautious reading. A **Practice** account (trader, 01.10.2026) keeps a Combine's rules and
-  size, passes nothing and pays nothing; the banner says Practice, and the brief and the evening
-  reminder leave it out. Its numbers are kept apart: **"All accounts" means the real accounts**
+  kept as the cautious reading. A **Practice** account (trader, 01.10.2026) is, since phase X2, a flag of
+  any account (`tj_accounts.practice`, migration `20261026130000`, copied from `topstep_stage =
+  'practice'`), set in Settings › Accounts. A Topstep Practice account still keeps a Combine's rules and
+  size; the brief and the evening reminder still read `topstep_stage` (X-10). Its numbers are kept apart: **"All accounts" means the real accounts**
   (`allAccountsScope` / `inAllAccountsScope` in `account-rules.ts`) on the dashboard, trades,
   calendar and reports, and the account picker marks it "(practice)" — picking it shows its
   own numbers. `/daily` (and its tracker lock) and the playbooks read the real book only. A book of
@@ -1314,15 +1315,15 @@ help.topstep.com on 28.09.2026):
 - **Reaching the MLL blocks new exposure, never the record**: an edit that adds a position or size is
   refused (`isTopstepAccountFailed` in `topstep-status.ts`), while the import still records what the
   platform filled. The
-  banner turns red and says on which day; **Reset account…** under the account's Topstep rules in
-  Settings writes `topstep_reset_at`, from which the balance starts again and the MLL is cleared.
+  banner turns red and says on which day. `topstep_reset_at`, written by the former **Reset account…**,
+  still restarts the balance and clears the MLL; Settings no longer offers the reset (phase X2).
 
 **Risk per trade is the trader's own rule** (`computeTopstepRisk`, from `futures-trading`'s
 `Uputstvo_rizik.pdf`): **8 % of the room above the MLL** (`TOPSTEP_DEFAULT_RISK_PCT`), held between the plan's bounds — 60–300 on
 a 50K, 120–600 on a 100K, 180–900 on a 150K, so three stops fit in the DLL — and never past what
 is left of today's DLL. `risk_rule_pct`, `risk_rule_min` and `risk_rule_max` on the account override
-the three. **Settings offers one field since 13.10.2026: Risk per trade (USD)** — a fixed amount, saved
-as `fixedRiskRule` (100 %, min = max = the amount), so the same formula, the tracker and the brief read
+the three. **Settings offered one field from 13.10.2026 until phase X2: Risk per trade (USD)** — a fixed
+amount, saved as `fixedRiskRule` (100 %, min = max = the amount), so the same formula and the brief read
 it unchanged; only today's DLL left and the room near the MLL lower it. The trade form and the mentor
 pack print it as a fixed amount (`fixedRiskOf`). **The floor holds only from a third of the plan's MLL up** (R3, 30.09.2026;
 `topstepMinRiskFromRoom`: $666.67 / $1,000 / $1,500): under it the budget is the plain share of the
@@ -1734,8 +1735,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,956 tests across 190 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,404 tests in 130 files) and `components` (environment `jsdom`, files `*.test.tsx`, 552
+2,955 tests across 190 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,404 tests in 130 files) and `components` (environment `jsdom`, files `*.test.tsx`, 551
 tests in 60 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

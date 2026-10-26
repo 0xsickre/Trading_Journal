@@ -815,9 +815,9 @@ export function ImportWizard({
                     ? `Orders export — ${orders.length} orders: each trade gets its target, its stop and how it ended. A stop moved to the entry or into profit is not taken; the original comes from the recording.`
                     : "No orders export chosen: the trades get no stop and no target. Choose both files together to have them."}
                 </p>
-                {orders && orderAccountWarning(orders, account?.topstep_stage) && (
+                {orders && orderAccountWarning(orders, account?.practice === true) && (
                   <p role="alert" className="text-sm text-[var(--loss)]">
-                    {orderAccountWarning(orders, account?.topstep_stage)}
+                    {orderAccountWarning(orders, account?.practice === true)}
                   </p>
                 )}
                 <div className="flex justify-end">

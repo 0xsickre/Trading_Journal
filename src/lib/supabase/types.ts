@@ -41,6 +41,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          practice: boolean
           starting_balance: number
           timezone: string
           user_id: string
@@ -71,6 +72,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          practice?: boolean
           starting_balance?: number
           timezone?: string
           user_id?: string
@@ -101,6 +103,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          practice?: boolean
           starting_balance?: number
           timezone?: string
           user_id?: string

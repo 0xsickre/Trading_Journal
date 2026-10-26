@@ -122,6 +122,8 @@ export type Account = {
   /** Risk-per-trade bounds in money; null = the plan's own (topstep.ts `TOPSTEP_PLANS`). */
   risk_rule_min: number | null;
   risk_rule_max: number | null;
+  /** A practice / demo account, kept out of "All accounts" (phase X, X-4). */
+  practice: boolean;
 };
 
 /** Where `point_value` came from. `missing` means the money columns are null. */

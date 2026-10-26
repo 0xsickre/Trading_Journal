@@ -380,7 +380,7 @@ describe("Survival on a Topstep account is replayed against its MLL (F3, E6)", (
 
 describe("Practice is kept apart from All accounts (trader, 01.10.2026)", () => {
   it("a practice account's trades are not in the book's figures", () => {
-    const practice = { ...ACCOUNT, id: "acc-p", name: "Practice 150K", topstep_mode: true, topstep_plan: "150K", topstep_stage: "practice" } as unknown as Account;
+    const practice = { ...ACCOUNT, id: "acc-p", name: "Practice 150K", practice: true } as unknown as Account;
     const extra = { ...rowsOf(BOOK)[0], id: "practice-1", account_id: "acc-p" } as TradeRow;
     render(
       <Dashboard

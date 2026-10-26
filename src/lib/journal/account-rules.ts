@@ -39,8 +39,8 @@ export function primaryAccount<T extends Pick<Account, "is_active" | "archived_a
 /**
  * The settings a duplicate copies: everything that describes HOW the account
  * trades, nothing that describes what it holds. The name gets " (copy)", the
- * starting balance is the source's (a new Combine of the same size is the
- * usual reason to duplicate), and the Combine starts fresh — no reset or payout.
+ * starting balance is the source's (a new account of the same size is the
+ * usual reason to duplicate).
  */
 export function duplicateSettings(src: Account) {
   return {
@@ -56,14 +56,8 @@ export function duplicateSettings(src: Account) {
     default_fee_fixed: src.default_fee_fixed,
     default_stop_pct: src.default_stop_pct,
     default_target_pct: src.default_target_pct,
-    // Topstep: the plan and the risk rule travel; a payout and a reset belong to
-    // the account that had them, so the copy starts a fresh Combine.
-    topstep_mode: src.topstep_mode,
-    topstep_plan: src.topstep_plan,
-    topstep_stage: src.topstep_stage,
-    risk_rule_pct: src.risk_rule_pct,
-    risk_rule_min: src.risk_rule_min,
-    risk_rule_max: src.risk_rule_max,
+    // A copy is neutral (phase X): no prop firm's rules travel with it.
+    practice: src.practice,
   };
 }
 
@@ -148,7 +142,7 @@ export function netFlowByCurrency(
  * `pickableAccounts` instead.
  */
 export function accountFilterOptions(
-  accounts: readonly (Pick<Account, "id" | "name" | "archived_at"> & Partial<Pick<Account, "topstep_mode" | "topstep_stage">>)[],
+  accounts: readonly (Pick<Account, "id" | "name" | "archived_at"> & Partial<Pick<Account, "practice">>)[],
 ): { value: string; label: string }[] {
   const label = (a: (typeof accounts)[number]) => `${a.name}${isPractice(a) ? " (practice)" : ""}`;
   return [
@@ -157,9 +151,9 @@ export function accountFilterOptions(
   ];
 }
 
-/** A Topstep Practice account (trader, 01.10.2026): a Combine's rules, kept apart from the real book. */
-export function isPractice(a: Partial<Pick<Account, "topstep_mode" | "topstep_stage">>): boolean {
-  return a.topstep_mode === true && a.topstep_stage === "practice";
+/** A practice / demo account (trader, 01.10.2026; phase X, X-4: a flag of its own), kept apart from the real book. */
+export function isPractice(a: Partial<Pick<Account, "practice">>): boolean {
+  return a.practice === true;
 }
 
 /**
@@ -167,7 +161,7 @@ export function isPractice(a: Partial<Pick<Account, "topstep_mode" | "topstep_st
  * read by choosing it in the picker (trader, 01.10.2026). A book with nothing
  * but practice shows it, rather than an "All" that holds nothing.
  */
-export function allAccountsScope<A extends Partial<Pick<Account, "topstep_mode" | "topstep_stage">>>(
+export function allAccountsScope<A extends Partial<Pick<Account, "practice">>>(
   accounts: readonly A[],
 ): A[] {
   const real = accounts.filter((a) => !isPractice(a));
@@ -177,7 +171,7 @@ export function allAccountsScope<A extends Partial<Pick<Account, "topstep_mode" 
 /** Rows (trades, cash events) in the "All accounts" scope: those of `allAccountsScope`, plus rows with no account. */
 export function inAllAccountsScope<R extends { account_id: string | null }>(
   rows: readonly R[],
-  accounts: readonly (Pick<Account, "id"> & Partial<Pick<Account, "topstep_mode" | "topstep_stage">>)[],
+  accounts: readonly (Pick<Account, "id"> & Partial<Pick<Account, "practice">>)[],
 ): R[] {
   const out = new Set(accounts.filter((a) => !allAccountsScope(accounts).includes(a)).map((a) => a.id));
   return out.size === 0 ? [...rows] : rows.filter((r) => r.account_id == null || !out.has(r.account_id));

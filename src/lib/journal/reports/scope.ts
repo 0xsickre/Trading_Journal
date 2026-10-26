@@ -1,8 +1,8 @@
 /**
  * Which accounts a report is about.
  *
- * Every account in the book is a Topstep account since H2 (the backtest kind
- * went with decision I5), so a report covers them all or one of them.
+ * A report covers every real account or one of them (the backtest kind went
+ * with decision I5 in H2).
  * Everything that pools across accounts — the currency, the percentage base,
  * the breakeven band — is taken over the accounts in scope, never over all.
  */
@@ -10,7 +10,7 @@
 import { allAccountsScope } from "../account-rules";
 import type { Account } from "../types";
 
-type NamedAccount = Pick<Account, "id" | "name"> & Partial<Pick<Account, "topstep_mode" | "topstep_stage">>;
+type NamedAccount = Pick<Account, "id" | "name"> & Partial<Pick<Account, "practice">>;
 
 /**
  * The accounts a report covers: the one chosen, else every real account —
@@ -29,7 +29,7 @@ export function accountsInScope<A extends NamedAccount>(
 /**
  * A label per account that tells same-named accounts apart.
  *
- * Two accounts both called "Topstep 50K" — a combine and the funded account —
+ * Two accounts both called "50K" — an evaluation and the funded account —
  * used to share one row in the Account breakdown and one entry in the picker.
  * A name used once stays as it is; a repeated name gets the last four
  * characters of the id.

@@ -184,21 +184,22 @@ export function bracketFor(
 /**
  * Whether the orders file belongs to a different kind of account than the one
  * picked in the wizard (09.10.2026). The trades export names no account, so a
- * Practice export imported into the Combine would land in the real book — its
+ * Practice export imported into a real account would land in the real book — its
  * statistics, its tracker and the mentor pack. TopstepX names a Practice account
  * "PRAC-…"; that one prefix is all this reads. A warning, not a refusal.
  */
 export function orderAccountWarning(
   orders: readonly Pick<TopstepXOrder, "account">[],
-  stage: "combine" | "xfa" | "practice" | null | undefined,
+  /** Whether the journal account picked is a practice account (`tj_accounts.practice`). */
+  practice: boolean,
 ): string | null {
   const names = [...new Set(orders.map((o) => o.account).filter(Boolean))];
   if (names.length === 0) return null;
   if (names.length > 1) return `The orders file holds ${names.length} TopstepX accounts (${names.join(", ")}) — export one account at a time.`;
   const practiceFile = /^PRAC/i.test(names[0]);
-  if (practiceFile && stage !== "practice")
+  if (practiceFile && !practice)
     return `These orders are from a TopstepX Practice account (${names[0]}), and the journal account picked is not Practice.`;
-  if (!practiceFile && stage === "practice")
+  if (!practiceFile && practice)
     return `These orders are from ${names[0]}, not a Practice account — and the journal account picked is Practice.`;
   return null;
 }

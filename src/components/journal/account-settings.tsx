@@ -11,11 +11,9 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
-  RotateCcw,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -52,23 +50,13 @@ import type { Account } from "@/lib/journal/types";
 import { parseSettingsNumber } from "@/lib/journal/settings-rules";
 import { duplicateSettings, isArchived } from "@/lib/journal/account-rules";
 import { fmtMoney } from "@/lib/journal/format";
-import {
-  TOPSTEP_DEFAULT_RISK_PCT,
-  TOPSTEP_PLANS,
-  TOPSTEP_XFA_PAYOUT,
-  TOPSTEP_XFA_SCALING,
-  fixedRiskRule,
-  topstepBreakevenBand,
-  type TopstepPlan,
-  type TopstepStage,
-} from "@/lib/journal/topstep";
+import { TOPSTEP_DEFAULT_RISK_PCT, topstepBreakevenBand } from "@/lib/journal/topstep";
 import { DEFAULT_TZ } from "@/lib/journal/time";
 import {
   updateAccount,
   addAccount,
   archiveAccount,
   restoreAccount,
-  resetTopstepAccount,
   countAccountUsage,
   deleteAccount,
 } from "@/app/(app)/settings/actions";
@@ -246,7 +234,7 @@ function CreateAccountDialog({
           <DialogTitle>{source ? `Duplicate "${source.name}"` : "New account"}</DialogTitle>
           <DialogDescription>
             {source
-              ? "Copies the currency, timezone, costs and Topstep rules. Trades and deposits are not copied, and the challenge starts fresh."
+              ? "Copies the currency, timezone, costs and the practice flag. Trades and deposits are not copied."
               : "These decide how every trade on the account reads. Everything else can be set later."}
           </DialogDescription>
         </DialogHeader>
@@ -365,7 +353,7 @@ function NumberField({
  *
  * Numbers are checked as they are typed and a value that cannot be read is
  * named under its field and blocks the save — `Number(x) || 0` used to store a
- * typo as 0 and re-base every drawdown and Topstep limit on the account.
+ * typo as 0 and re-base every drawdown on the account.
  */
 function EditAccountDialog({
   account,
@@ -380,29 +368,13 @@ function EditAccountDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const [pending, start] = useTransition();
-  const [topstepResetOpen, setTopstepResetOpen] = useState(false);
   const hasTrades = trades == null || trades > 0;
 
   const [name, setName] = useState(account.name);
   const [currency, setCurrency] = useState(account.currency);
   const [balance, setBalance] = useState(String(account.starting_balance));
 
-  const [topstepMode, setTopstepMode] = useState(account.topstep_mode === true);
-  const [topstepPlan, setTopstepPlan] = useState<TopstepPlan>(account.topstep_plan ?? "50K");
-  const [topstepStage, setTopstepStage] = useState<TopstepStage>(account.topstep_stage ?? "combine");
-  const [payoutDate, setPayoutDate] = useState(account.topstep_payout_at ? account.topstep_payout_at.slice(0, 10) : "");
-  // One dollar figure per trade (13.10.2026). An account still on the old share
-  // of the room shows its ceiling, which is what it risked at most.
-  const [riskUsd, setRiskUsd] = useState(
-    String(account.risk_rule_max ?? TOPSTEP_PLANS[account.topstep_plan ?? "50K"].riskMax),
-  );
-  const [personalDll, setPersonalDll] = useState(
-    account.topstep_personal_dll == null ? "" : String(account.topstep_personal_dll),
-  );
-  const [dailyTarget, setDailyTarget] = useState(
-    account.topstep_daily_target == null ? "" : String(account.topstep_daily_target),
-  );
-  const plan = TOPSTEP_PLANS[topstepPlan];
+  const [practice, setPractice] = useState(account.practice === true);
 
   const [commPerUnit, setCommPerUnit] = useState(String(account.default_commission_per_unit));
   const [feeFixed, setFeeFixed] = useState(String(account.default_fee_fixed));
@@ -411,21 +383,13 @@ function EditAccountDialog({
     balance: parseSettingsNumber(balance, { min: 0 }),
     comm: parseSettingsNumber(commPerUnit, { min: 0 }),
     fee: parseSettingsNumber(feeFixed, { min: 0 }),
-    riskUsd: parseSettingsNumber(riskUsd, { min: 1 }),
-    personalDll: parseSettingsNumber(personalDll, { min: 1, allowEmpty: true }),
-    dailyTarget: parseSettingsNumber(dailyTarget, { min: 1, allowEmpty: true }),
   };
   const err = (k: keyof typeof checks) => (checks[k].ok ? null : checks[k].error);
   const val = (k: keyof typeof checks) => {
     const r = checks[k];
     return r.ok ? (r.value ?? 0) : 0;
   };
-  const nullable = (k: "personalDll" | "dailyTarget") => {
-    const r = checks[k];
-    return r.ok ? r.value : null;
-  };
   const invalid = Object.values(checks).some((c) => !c.ok) || !name.trim();
-  const riskRule = fixedRiskRule(val("riskUsd"));
 
   const balanceChanged = checks.balance.ok && val("balance") !== account.starting_balance;
 
@@ -438,31 +402,12 @@ function EditAccountDialog({
         starting_balance: val("balance"),
         default_commission_per_unit: val("comm"),
         default_fee_fixed: val("fee"),
-        topstep_mode: topstepMode,
-        topstep_plan: topstepPlan,
-        topstep_stage: topstepStage,
-        topstep_payout_at: payoutDate ? new Date(`${payoutDate}T00:00:00Z`).toISOString() : null,
-        risk_rule_pct: riskRule.pct,
-        risk_rule_min: riskRule.min,
-        risk_rule_max: riskRule.max,
-        topstep_personal_dll: nullable("personalDll"),
-        topstep_daily_target: nullable("dailyTarget"),
+        practice,
       });
       if (!res.ok) toast.error(res.error);
       else {
         toast.success("Account saved");
         onOpenChange(false);
-      }
-    });
-  }
-
-  function resetTopstep() {
-    start(async () => {
-      const res = await resetTopstepAccount(account.id);
-      if (!res.ok) toast.error(res.error);
-      else {
-        toast.success("Topstep account reset");
-        setTopstepResetOpen(false);
       }
     });
   }
@@ -509,7 +454,7 @@ function EditAccountDialog({
             error={err("balance")}
             hint={
               balanceChanged && hasTrades
-                ? "Changes every drawdown % and the Topstep floor on past trades too."
+                ? "Changes every drawdown % on past trades too."
                 : checks.balance.ok
                   ? fmtMoney(val("balance"), currency)
                   : undefined
@@ -523,8 +468,8 @@ function EditAccountDialog({
         <section className="space-y-1 rounded-md border p-3">
           <h3 className="text-sm font-medium">Breakeven range</h3>
           <p className="text-sm tabular-nums">
-            {topstepMode
-              ? `±0.1R of the trade's risk · ±${fmtMoney(topstepBreakevenBand(topstepPlan), currency)} without a stop`
+            {account.topstep_mode
+              ? `±0.1R of the trade's risk · ±${fmtMoney(topstepBreakevenBand(account.topstep_plan), currency)} without a stop`
               : `${fmtMoney(account.breakeven_from, currency)} to ${fmtMoney(account.breakeven_to, currency)}`}
           </p>
           <p className="text-xs text-muted-foreground">
@@ -546,140 +491,20 @@ function EditAccountDialog({
           </div>
         </section>
 
-        <section className="space-y-3 rounded-md border p-3">
+        <section className="space-y-1 rounded-md border p-3">
           <div className="flex items-center gap-2">
             <Checkbox
-              id={`topstep-${account.id}`}
-              checked={topstepMode}
-              onCheckedChange={(v) => setTopstepMode(v === true)}
+              id={`practice-${account.id}`}
+              checked={practice}
+              onCheckedChange={(v) => setPractice(v === true)}
             />
-            <Label htmlFor={`topstep-${account.id}`} className="text-sm font-medium">
-              Topstep rules (futures)
+            <Label htmlFor={`practice-${account.id}`} className="text-sm font-medium">
+              Practice / demo account
             </Label>
           </div>
-          {topstepMode && (
-            <div className="space-y-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor={`tsplan-${account.id}`} className="text-xs">
-                    Plan
-                  </Label>
-                  <Select value={topstepPlan} onValueChange={(v) => setTopstepPlan(v as TopstepPlan)}>
-                    <SelectTrigger id={`tsplan-${account.id}`} className="h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(Object.keys(TOPSTEP_PLANS) as TopstepPlan[]).map((p) => (
-                        <SelectItem key={p} value={p}>
-                          {p}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`tsstage-${account.id}`} className="text-xs">
-                    Phase
-                  </Label>
-                  <Select value={topstepStage} onValueChange={(v) => setTopstepStage(v as TopstepStage)}>
-                    <SelectTrigger id={`tsstage-${account.id}`} className="h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="combine">Trading Combine</SelectItem>
-                      <SelectItem value="xfa">Express Funded Account</SelectItem>
-                      <SelectItem value="practice">Practice</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor={`tspay-${account.id}`} className="text-xs">
-                    First payout date (or record the payout under Deposits / withdrawals)
-                  </Label>
-                  <DateField
-                    clearable
-                    id={`tspay-${account.id}`}
-                    className="h-8 w-full"
-                    value={payoutDate}
-                    onChange={setPayoutDate}
-                  />
-                </div>
-              </div>
-              {topstepStage === "practice" && (
-                <p className="text-xs text-muted-foreground">
-                  Practice: the same rules as a {topstepPlan} Combine, to practise under them — nothing is passed or
-                  paid out. The morning brief and the evening reminder leave it out.
-                </p>
-              )}
-              {topstepStage !== "xfa" ? (
-                <p className="text-xs text-muted-foreground">
-                  Max loss {fmtMoney(plan.mll, "USD")}, trailing the highest end-of-day balance and
-                  locking at the starting balance · daily loss {fmtMoney(plan.dll, "USD")} · target{" "}
-                  {fmtMoney(plan.target, "USD")}, best day at most 55 % of it · at most {plan.maxMini} mini /{" "}
-                  {plan.maxMini * 10} micro.
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  Starting balance $0 (TopstepX shows the XFA from $0) · max loss {fmtMoney(plan.mll, "USD")},
-                  trailing the end-of-day balance and locking at $0, and $0 for good after the first payout · no
-                  target. Contracts by the Scaling Plan, from the balance at the last close:{" "}
-                  {TOPSTEP_XFA_SCALING[topstepPlan]
-                    .map(([from, mini]) => `${Number.isFinite(from) ? `from ${fmtMoney(from, "USD")}` : "below"} ${mini}`)
-                    .join(" · ")}{" "}
-                  mini (a micro is a tenth). Payout: Standard — {TOPSTEP_XFA_PAYOUT.winningDays} days of{" "}
-                  {fmtMoney(TOPSTEP_XFA_PAYOUT.winningDay, "USD")}+; Consistency — {TOPSTEP_XFA_PAYOUT.consistencyDays}{" "}
-                  days, best day at most {TOPSTEP_XFA_PAYOUT.consistencyShare * 100} % of the profit; at most half the
-                  balance, up to {fmtMoney(TOPSTEP_XFA_PAYOUT.caps[topstepPlan].standard, "USD")} /{" "}
-                  {fmtMoney(TOPSTEP_XFA_PAYOUT.caps[topstepPlan].consistency, "USD")}.
-                </p>
-              )}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <NumberField
-                  id={`pdll-${account.id}`}
-                  label="Personal daily loss limit (empty = the plan's DLL)"
-                  value={personalDll}
-                  onChange={setPersonalDll}
-                  error={err("personalDll")}
-                />
-                <NumberField
-                  id={`ptgt-${account.id}`}
-                  label="Personal daily profit target (empty = none)"
-                  value={dailyTarget}
-                  onChange={setDailyTarget}
-                  error={err("dailyTarget")}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                The same two numbers as TopstepX › Risk Limits. Either one ends the trading day: the
-                banner counts down to both, and the tracker grades the day&apos;s loss against the
-                tighter of the two loss limits and any entry taken after the target was banked. There
-                is no limit on the number of trades.
-              </p>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <NumberField
-                  id={`rusd-${account.id}`}
-                  label="Risk per trade (USD)"
-                  value={riskUsd}
-                  onChange={setRiskUsd}
-                  error={err("riskUsd")}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                The same amount on every trade. The trade form sizes a planned futures trade from it:
-                whole contracts, rounded down, commission counted, never over today&apos;s daily loss
-                room or the room above the MLL.
-              </p>
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                <p className="text-xs text-muted-foreground">
-                  Reaching the MLL shows a red banner and blocks new plans until the account is
-                  reset. A trade that already closed can always be logged.
-                </p>
-                <Button variant="outline" size="sm" onClick={() => setTopstepResetOpen(true)} disabled={pending}>
-                  <RotateCcw className="size-4" /> Reset account…
-                </Button>
-              </div>
-            </div>
-          )}
+          <p className="text-xs text-muted-foreground">
+            Kept out of &ldquo;All accounts&rdquo; on every page; choose it in the account picker to read it.
+          </p>
         </section>
 
         <DialogFooter>
@@ -692,25 +517,6 @@ function EditAccountDialog({
         </DialogFooter>
       </DialogContent>
 
-      <Dialog open={topstepResetOpen} onOpenChange={setTopstepResetOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Reset the Topstep account?</DialogTitle>
-            <DialogDescription>
-              Trades before now stop counting toward the Topstep limits — the balance starts again
-              from the starting balance and a reached MLL is cleared. The trades themselves stay.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setTopstepResetOpen(false)} disabled={pending}>
-              Cancel
-            </Button>
-            <Button onClick={resetTopstep} disabled={pending}>
-              Reset
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Dialog>
   );
 }
@@ -758,8 +564,8 @@ function AccountRow({
         {fmtMoney(account.starting_balance, account.currency)}
       </td>
       <td className="px-3 py-2">
-        {account.topstep_mode ? (
-          <Badge variant="secondary">Topstep {account.topstep_plan}</Badge>
+        {account.practice ? (
+          <Badge variant="secondary">Practice</Badge>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
@@ -823,7 +629,7 @@ function AccountTable({
             <th className="px-3 py-2 font-medium">Account</th>
             <th className="px-3 py-2 font-medium">Currency</th>
             <th className="px-3 py-2 text-right font-medium">Starting balance</th>
-            <th className="px-3 py-2 font-medium">Rules</th>
+            <th className="px-3 py-2 font-medium">Type</th>
             <th className="px-3 py-2 text-right font-medium">Trades</th>
             <th className="px-3 py-2" />
           </tr>

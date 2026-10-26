@@ -21,13 +21,11 @@ const updateAccountMock = vi.fn();
 const addAccountMock = vi.fn();
 const archiveAccountMock = vi.fn();
 const restoreAccountMock = vi.fn();
-const resetTopstepAccountMock = vi.fn();
 vi.mock("@/app/(app)/settings/actions", () => ({
   updateAccount: (...a: unknown[]) => updateAccountMock(...a),
   addAccount: (...a: unknown[]) => addAccountMock(...a),
   archiveAccount: (...a: unknown[]) => archiveAccountMock(...a),
   restoreAccount: (...a: unknown[]) => restoreAccountMock(...a),
-  resetTopstepAccount: (...a: unknown[]) => resetTopstepAccountMock(...a),
   deleteAccount: (...a: unknown[]) => deleteAccountMock(...a),
   countAccountUsage: (...a: unknown[]) => countAccountUsageMock(...a),
 }));
@@ -37,6 +35,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 const account = (over: Partial<Account> = {}): Account => ({
   id: "acc-1",
   name: "Main Account",
+  practice: false,
   broker: null,
   currency: "USD",
   starting_balance: 100_000,
@@ -93,7 +92,6 @@ beforeEach(() => {
     addAccountMock,
     archiveAccountMock,
     restoreAccountMock,
-    resetTopstepAccountMock,
   ])
     m.mockReset().mockResolvedValue({ ok: true });
   countAccountUsageMock.mockReset();
@@ -184,13 +182,13 @@ describe("new account and duplicate", () => {
     );
   });
 
-  it("says a duplicate copies the Topstep rules — FTMO is gone (H1)", async () => {
+  it("says what a duplicate copies — no prop firm's rules (phase X), no FTMO (H1)", async () => {
     const user = userEvent.setup({ delay: null });
     render(<AccountSettings accounts={TWO} />);
     await openMenu(user, "Combine 2");
     await user.click(await screen.findByRole("menuitem", { name: /Duplicate/ }));
-    expect(screen.getByText(/costs and Topstep rules/)).toBeInTheDocument();
-    expect(screen.queryByText(/FTMO/)).not.toBeInTheDocument();
+    expect(screen.getByText(/costs and the practice flag/)).toBeInTheDocument();
+    expect(screen.queryByText(/Topstep rules|FTMO/)).not.toBeInTheDocument();
   });
 });
 
@@ -251,44 +249,33 @@ describe("edit", () => {
   });
 });
 
-describe("FTMO is gone (H1, 28.09.2026)", () => {
-  it("the edit dialog offers Topstep rules and no FTMO challenge", async () => {
-    const user = userEvent.setup({ delay: null });
-    render(<AccountSettings accounts={[account()]} tradeCounts={{ "acc-1": 0 }} />);
-    await openMenu(user, "Main Account");
-    await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
-    expect(screen.getByText("Topstep rules (futures)")).toBeInTheDocument();
-    expect(screen.queryByText(/FTMO/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Restart challenge/ })).not.toBeInTheDocument();
-  });
-
-  it("the list names a Topstep account's plan in the Rules column", () => {
-    render(<AccountSettings accounts={[account({ topstep_mode: true })]} />);
-    expect(screen.getByText("Topstep 50K")).toBeInTheDocument();
-  });
-});
-
-describe("a Topstep account can be reset", () => {
-  // A plan on a Topstep account past its MLL is refused until the account is
-  // reset, so the reset has to exist where the refusal points: here.
-  it("offers Reset account… and writes the reset only after the confirmation", async () => {
+describe("no prop firm in the account (phase X, X-2 / X-4)", () => {
+  it("the edit dialog has no Topstep rules, no plan, no reset and no FTMO", async () => {
     const user = userEvent.setup({ delay: null });
     render(<AccountSettings accounts={[account({ topstep_mode: true })]} tradeCounts={{ "acc-1": 3 }} />);
     await openMenu(user, "Main Account");
     await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
-    await user.click(screen.getByRole("button", { name: /Reset account/ }));
-    expect(resetTopstepAccountMock).not.toHaveBeenCalled();
-    expect(screen.getByText(/stop counting toward the Topstep limits/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Reset" }));
-    await vi.waitFor(() => expect(resetTopstepAccountMock).toHaveBeenCalledWith("acc-1"));
+    expect(screen.queryByText(/Topstep rules|Personal daily|Risk per trade|FTMO/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Reset account|Restart challenge/ })).not.toBeInTheDocument();
   });
 
-  it("is not offered on an account outside Topstep mode", async () => {
+  it("practice is a flag of the account, saved with the rest and nothing of Topstep", async () => {
     const user = userEvent.setup({ delay: null });
-    render(<AccountSettings accounts={[account()]} tradeCounts={{ "acc-1": 3 }} />);
+    render(<AccountSettings accounts={[account()]} tradeCounts={{ "acc-1": 0 }} />);
     await openMenu(user, "Main Account");
     await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
-    expect(screen.queryByRole("button", { name: /Reset account/ })).not.toBeInTheDocument();
+    await user.click(screen.getByLabelText("Practice / demo account"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await vi.waitFor(() => expect(updateAccountMock).toHaveBeenCalled());
+    const patch = updateAccountMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(patch.practice).toBe(true);
+    expect(Object.keys(patch).some((k) => k.startsWith("topstep_") || k.startsWith("risk_rule_"))).toBe(false);
+  });
+
+  it("the list marks a practice account, and names no plan", () => {
+    render(<AccountSettings accounts={[account({ practice: true, topstep_mode: true })]} />);
+    expect(screen.getByText("Practice")).toBeInTheDocument();
+    expect(screen.queryByText("Topstep 50K")).not.toBeInTheDocument();
   });
 });
 

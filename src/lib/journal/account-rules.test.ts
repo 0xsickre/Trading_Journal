@@ -49,24 +49,23 @@ describe("primaryAccount", () => {
 });
 
 describe("duplicateSettings", () => {
-  it("copies how the account trades, renames it, and starts a fresh Combine", () => {
+  it("copies how the account trades and renames it, with no prop firm's rules (phase X)", () => {
     const src = acc({
       id: "s",
-      name: "Topstep 50K",
+      name: "Tradeify 50K",
       topstep_mode: true,
       topstep_plan: "50K",
       risk_rule_max: 250,
       topstep_reset_at: "2026-09-01T00:00:00Z",
       topstep_payout_at: "2026-09-10T00:00:00Z",
       starting_balance: 50000,
+      practice: true,
     });
     const d = duplicateSettings(src);
-    expect(d.name).toBe("Topstep 50K (copy)");
-    expect(d.topstep_mode).toBe(true);
-    expect(d.risk_rule_max).toBe(250);
+    expect(d.name).toBe("Tradeify 50K (copy)");
     expect(d.starting_balance).toBe(50000);
-    expect("topstep_reset_at" in d).toBe(false);
-    expect("topstep_payout_at" in d).toBe(false);
+    expect(d.practice).toBe(true);
+    expect(Object.keys(d).some((k) => k.startsWith("topstep_") || k.startsWith("risk_rule_"))).toBe(false);
     // FTMO is gone (H1): a duplicate carries none of its columns.
     expect(Object.keys(d).some((k) => k.startsWith("ftmo_"))).toBe(false);
   });
@@ -120,15 +119,15 @@ describe("accountFilterOptions", () => {
   });
 });
 
-describe("Practice is kept apart from \"All accounts\" (trader, 01.10.2026)", () => {
-  const real = { id: "c", name: "Topstep 50K", archived_at: null, topstep_mode: true, topstep_stage: "combine" as const };
-  const xfa = { id: "x", name: "Topstep 50K XFA", archived_at: null, topstep_mode: true, topstep_stage: "xfa" as const };
-  const practice = { id: "p", name: "Topstep 150K", archived_at: null, topstep_mode: true, topstep_stage: "practice" as const };
+describe("Practice is kept apart from \"All accounts\" (trader, 01.10.2026; its own flag since phase X)", () => {
+  const real = { id: "c", name: "Tradeify 50K", archived_at: null, practice: false };
+  const xfa = { id: "x", name: "Tradeify 50K funded", archived_at: null, practice: false };
+  const practice = { id: "p", name: "Demo 150K", archived_at: null, practice: true };
 
   it("All is the real accounts", () => {
     expect(allAccountsScope([real, practice, xfa]).map((a) => a.id)).toEqual(["c", "x"]);
     expect(isPractice(practice)).toBe(true);
-    expect(isPractice({ ...practice, topstep_mode: false })).toBe(false);
+    expect(isPractice({ ...practice, practice: false })).toBe(false);
   });
 
   it("a book of nothing but practice shows it", () => {
@@ -142,6 +141,6 @@ describe("Practice is kept apart from \"All accounts\" (trader, 01.10.2026)", ()
   });
 
   it("the picker says which one is practice", () => {
-    expect(accountFilterOptions([real, practice]).map((o) => o.label)).toEqual(["Topstep 50K", "Topstep 150K (practice)"]);
+    expect(accountFilterOptions([real, practice]).map((o) => o.label)).toEqual(["Tradeify 50K", "Demo 150K (practice)"]);
   });
 });
