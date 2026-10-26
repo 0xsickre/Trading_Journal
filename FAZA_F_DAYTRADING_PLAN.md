@@ -121,6 +121,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 14.10.2026 | P | **P-1** fill-ovi se ne menjaju ručno nigde; ručno se upisuje samo originalni SL sa snimka (trejder: „samo SL treba ja da upišem jer ako ga pomerim na BE u toku trejda onda se ne slaže na uvozu“). **P-2** ocena izvršenja A/B/C svuda. **P-3** promena playbook-a briše odgovore na pravila prethodnog playbook-a; meko obrisana pravila istog playbook-a ostaju |
 | 17.10.2026 | D | Bias dana (trejder: „karticu daily bias … da se meri koji mi je winrate u predviđanju biasa … i koji bi winrate bio da je uvek long“): **D-1 A** pogodak = neto pomeraj od početka do kraja merenja uz neutralni opseg; **D-2** početak = kasnije od 09:00 BG i trenutka upisa, kraj 18:00 BG (upis posle 18:00 se ne ocenjuje); **D-3** Neutral je prognoza, Gore/Dole na neutralan dan je promašaj i za trejdera i za uvek long; **D-4** opseg bira mentor, fiksno u kodu, bez Settings (trejder: „nek radi u pozadini i nek bude podešeno“); **D-5** NQ, ES, GC, mikro deli bias sa mini; **D-6** kartica zamenjuje polje „Bias dana“ na trejdu. Radi se direktno na `main`, migracija se primenjuje posle zelenog gate-a (trejder: „odmah ide na glavnu granu … da odmah bude primenjeno na produkciju“) |
 | 26.10.2026 | X | Neutralan journal (trejder: „skroz ćemo izbaciti bilo kakva pravila iz journala, ne može da bude vezan za prop firmu … ja sam taj koji poštuje ili ne pravila“; prelazak na Tradeify). Faza **X**: plan napisan. Odluke istog dana: **X-1 B** (tracker samo proces — „ako bude više naloga na prop firma biće konflikta“), X-2 … X-6, X-8, X-9 **A**, **X-7** uvoz univerzalan (prepoznaje format, i TopstepX i NinjaTrader), **X-10** brief „na kraju“. NinjaTrader uvoz (AddOn šalje svaki fill preko HTTPS-a, red kad nema mreže — trejderu se „svidja“) je posebna faza posle X |
+| 26.10.2026 | B | Brzi unos (trejder: „što manje ručnog rada po pojedinom trejdu, a praviti jedan dnevni izveštaj zatvaranjem dana“; „1A, 2 ne, 3 ne, 4 da“): bez detekcija koje traže novčani limit ili broj trejdova, bez auto grafika i audio priloga; X4 migracija puštena, faza B pre X5–X7 |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -166,6 +167,7 @@ pogađa.
 | **J** | Jezik: nazivi kategorija u paketu, /reports i gridu na srpskom; fabrička lista tagova = lista trejdera | — | Y | da: `20261015120000` (nova definicija `tj_seed_categories`, podaci se ne menjaju) | **Opus** | ✅ 15.10.2026 — J1 `61f5c79` · J2 `c415355` (migracija `20261015120000` primenjena) |
 | **D** | Bias dana: prognoza pre sesije na /daily, ocena iz 1m sveća, moj winrate prema „uvek long“ | — | J | da: `20261017120000` (`tj_daily_bias`, aditivna) | **Opus** | ✅ kod 18.10.2026 — `a7456ed` · D1 `8af430f` · D2 `18d7077` · D4 `fcdf8ee` · D5+D6 `293067b` + futures-trading `adb046c`; migracija `20261017120000` primenjena 18.10.2026 |
 | **X** | Journal bez pravila prop firme: bez Topstep mašine, MLL/DLL plana, Survival-a i banera; tvoji limiti na nalogu, CME dan | — | D | da: aditivna (neutralne kolone) + **briše** `topstep_*` (uz odobrenje) | **Opus** | 🔄 odluke 26.10.2026 (X-1 B, X-2…X-9 A, X-7 univerzalni uvoz, X-10 odloženo) · X1 ✅ (migracija `20261026120000` primenjena) · X2 ✅ · X3 ✅ · X4 ✅ (migracija `20261026140000` čeka odobrenje) — sledeće X5 |
+| **B** | Brzi unos: trejd ~30 s (checklist „Zašto ulazim“, kraće liste, TF po playbook-u, automatske greške), psihologija i zatvaranje dana na /daily | — | X4 | da: aditivne (TF playbook-a, psihologija dana), podaci (liste, tekst pravila) | **Opus** | 🔄 plan 26.10.2026 (B-1 A, B-2/B-3 ne, B-4 da) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1742,6 +1744,59 @@ podkorak se pushuje odmah.
 ### Izlaz iz X
 U kodu, bazi i README nema nijedne prop firme (osim naziva formata uvoza TopstepX). Journal na bilo kom nalogu meri
 trejdove i proces, a postojećih 7 trejdova se čita kao i pre.
+
+## B — Brzi unos: trejd za ~30 s, razmišljanje na zatvaranju dana (detaljno, 26.10.2026) — 🔄
+
+**Povod** (trejder, 26.10.2026: „cilj je napraviti što manje ručnog rada po pojedinom trejdu, a praviti jedan dnevni
+izveštaj zatvaranjem dana“). Pravila: ništa istorijsko se ne briše. Polje skinuto sa forme ostaje u bazi i vidi se
+(read-only) na starim trejdovima. Svaka izračunata vrednost na trejdu nosi oznaku „auto“.
+
+### Odluke trejdera (26.10.2026)
+- **B-1 A:** „Ulaz posle dnevnog cilja“, „Ulaz posle DLL-a“, „Prevelika pozicija“ i „Previše trejdova“ se **ne**
+  detektuju. Traže novčani limit ili broj trejdova po nalogu, što X-1 B (konflikt više prop naloga) i odluka od
+  30.09. (broj trejdova se ne ograničava) isključuju.
+- **B-2 ne:** nema automatskog grafika iz sveća. Sveće su u R2 i čita ih samo `futures-trading`.
+- **B-3 ne:** nema audio priloga.
+- **B-4 da:** X4 migracija puštena (26.10.2026). Faza B ide pre X5–X7.
+- „Teza naglas“ ostaje pravilo koje trejder isključuje sam (Settings › Tracker, penzionisanje). Novo podešavanje ne
+  treba.
+
+### Utvrđeno u kodu i bazi
+- Checklist (`playbook-checklist.tsx`) prikazuje sve sekcije playbook-a. Setup A/B/C se računa iz pravila sa
+  `is_setup_criterion`, a to su tačno pravila iz „Zašto ulazim“ u oba playbook-a. `offeredRuleAnswers` šalje odgovor
+  za svako ponuđeno pravilo, a čuvanje (`tj_replace_position_rules`) zamenjuje sve odgovore trejda.
+- Kategorije na formi čitaju samo aktivne opcije (`getOptionsMap(true)`). Opcija sa `is_active = false` se ne nudi,
+  a vrednost koju stari trejd već ima ostaje i vidi se.
+- Već postoje kao pravila trackera sa listom prekršilaca: `trading_window`, `no_entry_in_red_window`,
+  `stop_after_two_losses`, `htf_bias_set`, `playbook_linked`. Postoji i `stopStatus` (pomeren stop, iz izvoza
+  naloga), MFE u R (`futures-trading`) i planirani R:R (stop i cilj).
+- /reports već ima redni broj trejda u danu (1., 2., 3., 4.+), Setup A/B/C, playbook, sesijski prozor i panel „Bias
+  dana“ (sa biasom / protiv, $ i R). Nedostaje cena grešaka koja sabira ručne i automatske.
+
+### Podkoraci (svaki: test → kod → gate → commit + push)
+- **B1 Checklist samo „Zašto ulazim“:** nudi se samo kriterijum setupa. Odgovor koji stari trejd ima na ostala
+  pravila vidi se read-only i čuva se netaknut. Playbooks: upozorenje kad su „Gde ulazim“ ili „Gde izlazim“ prazni.
+- **B2 Liste:** tehnički tagovi na formi samo Sweep likvidnosti, SMT divergencija i FVG. Ručne greške samo Rani
+  ulaz, Jurio cenu, Teza posle klika, Osvetnički ponovni ulaz, Rano zatvorio dobitak i Stop postavio bracket, ne ja
+  (plus „Bez greške“, koju ocena A upisuje sama). Ostale opcije dobijaju `is_active = false` (migracija podataka).
+  Greške se traže samo kad ocena nije A.
+- **B3 TF po playbook-u:** `tj_playbooks.default_entry_tf` (aditivno; „3 candle 5min BOS“ → 5m). Trejd bez TF-a ga
+  dobija unapred popunjenog, uz oznaku „auto (playbook)“. Polje se menja u Settings › Playbooks.
+- **B4 Automatske greške** (`auto-mistakes.ts`, čista funkcija, testovi za granice): ulaz van prozora, ulaz u
+  crvenom prozoru, ulaz posle 2 SL, bez biasa dana pre ulaza, ulaz bez setupa iz playbook-a, cilj ispod 2R,
+  pomerio stop, dobitak pretvorio u gubitak (MFE ≥ 1R, net < 0). Računaju se pri čitanju, ne upisuju se u kolonu
+  „Greške“. Na trejdu stoje kao „auto“ uz razlog. Kad podatka nema (prozor nije upisan, nema brief-a, nema izvoza
+  naloga, nema MFE, nema cilja), greška se ne pogađa. /reports dobija dimenziju „Sve greške (ručne + auto)“.
+- **B5 Psihologija dana na /daily:** `tj_daily_reports.psychology_tags` (aditivno). Novo automatsko pravilo
+  `daily_psychology`: dan sa trejdom bez psihologije dana = ✗. Na trejdu psihologija ostaje opciona.
+- **B6 Pravila trackera:** „Dnevnik i tagovi“ bez TF-a i psihologije, a uz ocenu C traži i rečenicu.
+  „Screenshotovi“: slika obavezna za trejd sa ocenom C i za najbolji i najgori trejd dana (po neto). Novi tekst
+  pravila u bazi; zaključani dani se ne menjaju.
+- **B7 Zatvaranje dana na /daily:** jedna kartica posle sesije. Sadrži psihologiju dana, mentalnu ocenu, najbolji i
+  najgori trejd (sa slikom ili bez), greške dana (ručne + auto) sa cenom u R i $, pa zaključavanje.
+- **B8 Dokumentacija:** README 1:1, ovaj fajl.
+
+**Model:** Opus. Oko 20 fajlova i tri migracije (playbook TF, liste, psihologija dana + pravila).
 
 ## Katalog stavki
 
