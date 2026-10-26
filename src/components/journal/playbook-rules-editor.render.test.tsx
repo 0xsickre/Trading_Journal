@@ -525,3 +525,21 @@ describe("PlaybookRulesEditor — sections belong to THIS playbook", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("PlaybookRulesEditor — an empty group is said out loud (phase B)", () => {
+  it("names the groups with no rule, and invents none", () => {
+    renderEditor([rule({ id: "r1", text: "Cena je u zoni", section_id: "sec-entry" })], []);
+    expect(screen.getByRole("alert")).toHaveTextContent("Prazne grupe: „Exit“");
+  });
+
+  it("says nothing when every group has a rule", () => {
+    renderEditor(
+      [
+        rule({ id: "r1", text: "Cena je u zoni", section_id: "sec-entry" }),
+        rule({ id: "r2", text: "Fiksni TP 2R", section_id: "sec-exit" }),
+      ],
+      [],
+    );
+    expect(screen.queryByText(/Prazne grupe/)).not.toBeInTheDocument();
+  });
+});

@@ -846,12 +846,25 @@ export function PlaybookRulesEditor({
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
           A group is a heading with its rules under it, in THIS playbook. Drag
-          the grip to reorder — groups, or rules inside one.
+          the grip to reorder — groups, or rules inside one. The trade page asks
+          only the setup criteria („Zašto ulazim“).
         </p>
         <Button size="sm" className="h-9 shrink-0" onClick={() => setAddOpen(true)}>
           <Plus className="size-4" /> Add rule group
         </Button>
       </div>
+
+      {sections.some((s) => s.rules.length === 0) && (
+        // Said, not filled in (phase B, trader: no rules invented for them).
+        <p role="alert" className="rounded-md border border-[var(--loss)]/40 bg-[var(--loss)]/5 p-3 text-sm">
+          Prazne grupe:{" "}
+          {sections
+            .filter((s) => s.rules.length === 0)
+            .map((s) => `„${s.section.label}“`)
+            .join(", ")}{" "}
+          — playbook ne kaže pravila za njih. Upiši ih kad ih odrediš.
+        </p>
+      )}
 
       {sections.length === 0 ? (
         <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">

@@ -23,7 +23,7 @@ function rule(over: Partial<LinkedRule> & { id: string }): LinkedRule {
     answerCount: 0,
     link_id: `link-${over.id}`,
     section_id: SECTION.id,
-    is_setup_criterion: false,
+    is_setup_criterion: true,
     link_sort: 0,
     ...over,
   };
@@ -224,13 +224,31 @@ describe("PlaybookChecklist — the setup grade", () => {
       [
         rule({ id: "c1", is_setup_criterion: true }),
         rule({ id: "c2", is_setup_criterion: true }),
-        rule({ id: "plain" }),
+        rule({ id: "plain", is_setup_criterion: false }),
       ],
       { c1: true, c2: true },
     );
 
     // The third rule is process, not setup quality, and must not move the grade.
     expect(screen.getByTitle("2 of 2 setup criteria met")).toBeInTheDocument();
+  });
+
+  it("asks only „Zašto ulazim“ and shows an old answer to the rest read-only (phase B1)", () => {
+    renderChecklist(
+      [
+        rule({ id: "why", is_setup_criterion: true }),
+        rule({ id: "exit-rule", is_setup_criterion: false }),
+        rule({ id: "never-answered", is_setup_criterion: false }),
+      ],
+      { why: true, "exit-rule": false },
+    );
+    // One checkbox: the criterion. The other two are not offered.
+    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+    expect(screen.getByText("Ranije upisano — više se ne traži")).toBeInTheDocument();
+    expect(screen.getByText(/✗ exit-rule/)).toBeInTheDocument();
+    expect(screen.queryByText("never-answered")).not.toBeInTheDocument();
+    // The follow rate counts the asked rule only.
+    expect(screen.getByText(/Followed 1 of 1/)).toBeInTheDocument();
   });
 
   it("needs no `all answered` gate — every box always has an answer now", () => {

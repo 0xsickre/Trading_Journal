@@ -19,6 +19,7 @@ import {
   type BreakevenRange,
 } from "@/lib/journal/breakeven";
 import { cn } from "@/lib/utils";
+import { isAskedRule } from "@/lib/journal/offered-rule-answers";
 import {
   ruleAppliesTo,
   rulesBySection,
@@ -87,13 +88,22 @@ export function PlaybookChecklist({
   //
   // Empty sections are dropped HERE, unlike in the editor: a heading with no
   // applicable rule is nothing to tick, and this screen is for ticking.
+  //
+  // Only the setup criteria — „Zašto ulazim“ — are asked since phase B1
+  // (26.10.2026); the grade and the follow rate come from them alone.
   const visibleGroups = useMemo(
     () =>
       rulesBySection(
         book?.sections ?? [],
-        (book?.rules ?? []).filter((r) => ruleAppliesTo(r.show_when, outcome)),
+        (book?.rules ?? []).filter((r) => isAskedRule(r) && ruleAppliesTo(r.show_when, outcome)),
       ).filter((g) => g.rules.length > 0),
     [book, outcome],
+  );
+
+  /** Old answers to rules no longer asked („Gde ulazim“, „Gde izlazim“): shown, never edited. */
+  const legacy = useMemo(
+    () => (book?.rules ?? []).filter((r) => !isAskedRule(r) && answers[r.id] !== undefined),
+    [book, answers],
   );
 
   const visible = useMemo(
@@ -292,6 +302,21 @@ export function PlaybookChecklist({
               {broken > 0 && ` · ${broken} not followed`}
             </div>
           </div>
+
+          {legacy.length > 0 && (
+            <div className="space-y-1">
+              <h4 className="text-xs font-semibold text-muted-foreground">
+                Ranije upisano — više se ne traži
+              </h4>
+              <ul className="space-y-0.5 text-sm text-muted-foreground">
+                {legacy.map((r) => (
+                  <li key={r.id}>
+                    {answers[r.id] ? "✓" : "✗"} {r.text}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {visibleGroups.map((group) => (
             <div key={group.section.id} className="space-y-1.5">
