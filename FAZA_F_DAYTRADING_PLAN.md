@@ -166,7 +166,7 @@ pogađa.
 | **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | da: `20261014200000` (`mental_temp_at`), `20261015090000` (`trading_window`) | **Opus** | ✅ 14.10.2026 — Y1 `14a992f` · Y2 `7281007` · Y3 `80dee18` · Y4/Y5 `9de8441` (migracije `20261014200000`, `20261015090000` primenjene); Y-1 … Y-4 = A, Y-5 NY 14:30–18:00, Y-6 = A |
 | **J** | Jezik: nazivi kategorija u paketu, /reports i gridu na srpskom; fabrička lista tagova = lista trejdera | — | Y | da: `20261015120000` (nova definicija `tj_seed_categories`, podaci se ne menjaju) | **Opus** | ✅ 15.10.2026 — J1 `61f5c79` · J2 `c415355` (migracija `20261015120000` primenjena) |
 | **D** | Bias dana: prognoza pre sesije na /daily, ocena iz 1m sveća, moj winrate prema „uvek long“ | — | J | da: `20261017120000` (`tj_daily_bias`, aditivna) | **Opus** | ✅ kod 18.10.2026 — `a7456ed` · D1 `8af430f` · D2 `18d7077` · D4 `fcdf8ee` · D5+D6 `293067b` + futures-trading `adb046c`; migracija `20261017120000` primenjena 18.10.2026 |
-| **X** | Journal bez pravila prop firme: bez Topstep mašine, MLL/DLL plana, Survival-a i banera; tvoji limiti na nalogu, CME dan | — | D | da: aditivna (neutralne kolone) + **briše** `topstep_*` (uz odobrenje) | **Opus** | 🔄 odluke 26.10.2026 (X-1 B, X-2…X-9 A, X-7 univerzalni uvoz, X-10 odloženo) · X1 ✅ (migracija `20261026120000` primenjena) · X2 ✅ · X3 ✅ · X4 ✅ (migracija `20261026140000` primenjena) · X5 ✅ (migracija `20261026180000` čeka odobrenje) — sledeće X6 |
+| **X** | Journal bez pravila prop firme: bez Topstep mašine, MLL/DLL plana, Survival-a i banera; tvoji limiti na nalogu, CME dan | — | D | da: aditivna (neutralne kolone) + **briše** `topstep_*` (uz odobrenje) | **Opus** | 🔄 odluke 26.10.2026 (X-1 B, X-2…X-9 A, X-7 univerzalni uvoz, X-10 odloženo) · X1 ✅ (migracija `20261026120000` primenjena) · X2 ✅ · X3 ✅ · X4 ✅ (migracija `20261026140000` primenjena) · X5 ✅ (migracija `20261026180000` primenjena) · X6 ⏸ blokirano do X-10 (brief čita `topstep_*`) — sledeće X7 |
 | **B** | Brzi unos: trejd ~30 s (checklist „Zašto ulazim“, kraće liste, TF po playbook-u, automatske greške), psihologija i zatvaranje dana na /daily | — | X4 | da: aditivne (TF playbook-a, psihologija dana), podaci (liste, tekst pravila) | **Opus** | 🔄 plan 26.10.2026 (B-1 A, B-2/B-3 ne, B-4 da) · B1–B8 ✅ · migracije `20261026150000` i `…160000` primenjene, `…170000` delom (kolona i CHECK; red pravila i tekstovi čekaju trejdera u SQL Editor-u) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
@@ -1738,9 +1738,16 @@ korekcija kao obični tokovi novca), sesije po Beogradu i trackerova pravila koj
   dana“ i nemaju „Ulaz posle dnevnog cilja“ / „Ulaz posle DLL-a“, a trejderova opcija „Kraj Topstep dana“ dobija novo
   ime (nijedan trejd je nema). Tekstovi: „Šta bi bilo“ panel, cash event „Payout“, komentari (katalog, scenario,
   missed-cost, sesije, brief kartica, tracker, plan rizika). Mentor paket, /reports hintovi, razlozi trackera i
-  `nav.ts` već su bili neutralni (X1–X4); TopstepX ostaje ime formata uvoza (X-7). Migracija čeka odobrenje.
+  `nav.ts` već su bili neutralni (X1–X4); TopstepX ostaje ime formata uvoza (X-7). Migracija primenjena.
 - **X6 Brisanje kolona** (X-5 A, uz odobrenje; tek kad se proveri brief). Brišu se `topstep_*`, `risk_rule_*`, a
   `room_at_entry` i `risk_budget_at_entry` ako ih brief ne čita. `schema:check`.
+  **Provereno 26.10.2026 (`futures-trading` @ 3c22796): blokirano do X-10.** `tools/brief/racun.py` čita
+  `topstep_plan`, `topstep_payout_at`, `topstep_reset_at`, `topstep_personal_dll`, `topstep_daily_target`,
+  `topstep_stage`, `risk_rule_pct/min/max` i filtrira naloge po `topstep_mode = true` (bez `practice`).
+  `tools/journal_podsetnik.py` (Telegram 15:20 CT) filtrira po `topstep_mode` i `topstep_stage`. Brisanje bi srušilo
+  brief i podsetnik, pa kolone ostaju dok trejder ne odluči o brief-u. `room_at_entry` / `risk_budget_at_entry` brief
+  ne čita. Kad se X-10 reši, podsetnik treba da bira naloge po `practice = false` i `archived_at`, a brief bez
+  Topstep računa.
 - **X7 Dokumentacija 1:1.** README (Topstep, Survival, A trading day, Risk, tracker, Settings), `ROADMAP.md`, ovaj
   fajl, `AGENTS.md` („Current work“).
 
