@@ -106,6 +106,8 @@ export type Playbook = {
   sort_order: number;
   /** What earns an A+ grade here. Shown beside the grade on the checklist. */
   a_plus_criteria: string | null;
+  /** Entry TF a trade of this playbook is prefilled with (phase B3); null = none. */
+  default_entry_tf?: string | null;
   /** This book's own headings, in the trader's order. Empty on a new playbook. */
   sections: PlaybookSection[];
   /** The rules linked into this playbook, in link order. */

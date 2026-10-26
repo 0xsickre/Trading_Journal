@@ -180,6 +180,7 @@ export function PlaybookIdentityHeader({ book }: { book: Playbook }) {
 type DetailsPatch = {
   description: string | null;
   a_plus_criteria: string | null;
+  default_entry_tf: string | null;
 };
 
 function PlaybookDetailsDialog({
@@ -197,6 +198,7 @@ function PlaybookDetailsDialog({
 }) {
   const [description, setDescription] = useState(book.description ?? "");
   const [aPlus, setAPlus] = useState(book.a_plus_criteria ?? "");
+  const [tf, setTf] = useState(book.default_entry_tf ?? "");
 
   return (
     <Dialog
@@ -206,6 +208,7 @@ function PlaybookDetailsDialog({
         if (v) {
           setDescription(book.description ?? "");
           setAPlus(book.a_plus_criteria ?? "");
+          setTf(book.default_entry_tf ?? "");
         }
         onOpenChange(v);
       }}
@@ -239,6 +242,20 @@ function PlaybookDetailsDialog({
               className="min-h-16"
             />
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pb-tf">Default entry TF</Label>
+            <Input
+              id="pb-tf"
+              value={tf}
+              onChange={(e) => setTf(e.target.value)}
+              placeholder="5m"
+              className="h-8 w-32"
+            />
+            <p className="text-xs text-muted-foreground">
+              A trade of this playbook comes with it filled in, marked &ldquo;auto&rdquo;; change it on the
+              trade when it was different. The same value as in the TF ulaza list.
+            </p>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
@@ -250,6 +267,7 @@ function PlaybookDetailsDialog({
               onSave({
                 description: description.trim() || null,
                 a_plus_criteria: aPlus.trim() || null,
+                default_entry_tf: tf.trim() || null,
               })
             }
           >

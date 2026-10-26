@@ -889,6 +889,7 @@ export type Database = {
           a_plus_criteria: string | null
           color: string | null
           created_at: string
+          default_entry_tf: string | null
           description: string | null
           icon: string | null
           id: string
@@ -902,6 +903,7 @@ export type Database = {
           a_plus_criteria?: string | null
           color?: string | null
           created_at?: string
+          default_entry_tf?: string | null
           description?: string | null
           icon?: string | null
           id?: string
@@ -915,6 +917,7 @@ export type Database = {
           a_plus_criteria?: string | null
           color?: string | null
           created_at?: string
+          default_entry_tf?: string | null
           description?: string | null
           icon?: string | null
           id?: string

@@ -20,6 +20,7 @@ import type { EnrichedTrade } from "../enriched-trade";
 import type { DailyReportLite } from "../enriched-trade";
 import { OPEN_OFFSET_BUCKETS, SESSION_WINDOWS } from "../session-window";
 import { isoWeekdayOfDayKey } from "../time";
+import { NO_MISTAKE } from "../quick-log";
 
 /** Bucket shown when a trade has no value for the dimension. */
 export const EMPTY_BUCKET = "—";
@@ -40,6 +41,8 @@ export type DimensionContext = {
   rules?: RuleLookup;
   /** rule ids that fired per trade id, for the insight dimension. */
   insightsByTrade?: Map<string, string[]>;
+  /** The mistakes the journal found per trade id (phase B4), by option-list value. */
+  autoMistakesByTrade?: Map<string, string[]>;
   /** Account id → display name. */
   accountNames?: Map<string, string>;
   /**
@@ -372,6 +375,22 @@ const tradeDimensions: Dimension[] = [
   // mistakes stands in both rows, so the rows do NOT sum to the total trade
   // count. The same holds for the tags below, and `tagColumn` is what says so.
   tagColumn("mistake", "Greške"),
+  {
+    // Phase B4: the trader's own picks and the mistakes the journal found, as
+    // one tag set — the cost of a mistake does not depend on who named it. A
+    // trade with neither stands in "Bez greške", the row the others are read
+    // against.
+    key: "mistake_all",
+    label: "Sve greške (ručne + auto)",
+    group: "trade",
+    multiValue: true,
+    valueOf: (t, ctx) => {
+      const own = (arr(t, "mistake") ?? []).filter((m) => m !== NO_MISTAKE);
+      const found = ctx.autoMistakesByTrade?.get(t.id) ?? [];
+      const all = [...new Set([...own, ...found])];
+      return all.length > 0 ? all : NO_MISTAKE;
+    },
+  },
   // No `status` or `miss_reason`: a report counts closed trades only
   // (`toRealized`), so status could only ever read "closed" and a missed trade,
   // the one that carries a miss reason, never reaches it. `NOT_IN_REPORTS` below

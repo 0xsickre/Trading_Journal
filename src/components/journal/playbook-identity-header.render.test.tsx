@@ -55,6 +55,8 @@ describe("the playbook's details are editable", () => {
       expect(updateMock).toHaveBeenCalledWith("pb-1", {
         description: "Sweep of London high",
         a_plus_criteria: "HTF bias + sweep + FVG",
+        // Phase B3: none typed, none saved.
+        default_entry_tf: null,
       }),
     );
   });
@@ -97,5 +99,18 @@ describe("deleting", () => {
     await user.click(screen.getByRole("button", { name: "Delete" }));
     await vi.waitFor(() => expect(deleteMock).toHaveBeenCalledWith("pb-1"));
     expect(pushMock).toHaveBeenCalledWith("/playbooks");
+  });
+});
+
+describe("the playbook's default entry TF (phase B3)", () => {
+  it("is saved from the details dialog", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<PlaybookIdentityHeader book={BOOK} />);
+    await user.click(screen.getByRole("button", { name: /Edit details/ }));
+    await user.type(screen.getByLabelText("Default entry TF"), "5m");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await vi.waitFor(() =>
+      expect(updateMock).toHaveBeenCalledWith("pb-1", expect.objectContaining({ default_entry_tf: "5m" })),
+    );
   });
 });

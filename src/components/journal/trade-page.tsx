@@ -21,6 +21,7 @@ import { GRADE_RATING, GRADES, gradeFromRating, NO_MISTAKE, type Grade } from "@
 import { offeredRuleAnswers } from "@/lib/journal/offered-rule-answers";
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/journal/time";
 import type { FieldDef } from "@/lib/journal/field-def-types";
+import type { AutoMistake } from "@/lib/journal/auto-mistakes";
 import type { Playbook } from "@/lib/journal/playbook-types";
 import type { OptionsMap } from "@/lib/journal/types";
 import { cn } from "@/lib/utils";
@@ -106,6 +107,7 @@ export function TradePage({
   playbooks,
   contextDefs,
   biasNote = null,
+  autoMistakes = [],
   reviewDefs,
   optionsMap,
   breakevenRange,
@@ -119,6 +121,8 @@ export function TradePage({
   contextDefs: FieldDef[];
   /** Bias dana from the /daily card (phase D) — said here instead of asked. */
   biasNote?: string | null;
+  /** Mistakes the journal found by itself (phase B4) — shown, never picked. */
+  autoMistakes?: AutoMistake[];
   /** Categories asked in the review (phase `active`). */
   reviewDefs: FieldDef[];
   optionsMap: OptionsMap;
@@ -176,6 +180,11 @@ export function TradePage({
       : null;
   const outcome = trade.netPl == null ? null : classifyOutcome(trade.netPl, breakevenRange, riskMoney);
   const book = useMemo(() => playbooks.find((p) => p.id === playbookId) ?? null, [playbooks, playbookId]);
+  // Entry TF from the playbook when the trade has none (phase B3) — shown as "auto",
+  // saved with the trade, and overridden by any TF picked by hand.
+  const tfOwn = typeof cats.entry_tf === "string" && cats.entry_tf !== "" ? cats.entry_tf : null;
+  const tfAuto = !trade.missed && tfOwn == null ? (book?.default_entry_tf ?? null) : null;
+  const catsToSave = tfAuto ? { ...cats, entry_tf: tfAuto } : cats;
 
   function save() {
     start(async () => {
@@ -203,7 +212,7 @@ export function TradePage({
         trade_journal_notes: note,
         images: [],
         ...(trade.missed ? {} : { stop_price: stopN, target_price: targetN, thesis: said.trim() || null }),
-        categories: cats as Record<string, string | string[] | null>,
+        categories: catsToSave as Record<string, string | string[] | null>,
         rule_answers: offeredRuleAnswers(book, answers, outcome),
       });
       if (!res.ok) {
@@ -228,6 +237,12 @@ export function TradePage({
       router.push(backHref);
     });
   }
+
+  // Manual mistakes are asked only when the trade was not by plan (phase B2): an A
+  // records "Bez greške" itself. An old trade that already carries one keeps it on screen.
+  const ownMistakes = Array.isArray(cats.mistake) ? cats.mistake.filter((m) => m !== NO_MISTAKE) : [];
+  const askMistakes = grade === "B" || grade === "C" || ownMistakes.length > 0;
+  const reviewShown = reviewDefs.filter((d) => d.key !== "mistake" || askMistakes);
 
   const warnings = [
     !trade.missed && !playbookId && "Bez setupa — trejd ne ulazi u brojeve nijednog playbook-a.",
@@ -376,13 +391,17 @@ export function TradePage({
           <CardContent className="grid gap-4 sm:grid-cols-2">
             {biasNote && <p className="text-sm text-muted-foreground sm:col-span-2">{biasNote}</p>}
             {contextDefs.map((def) => (
-              <CategoryField
-                key={def.key}
-                def={def}
-                value={cats[def.key] ?? null}
-                onChange={(v) => touch(setCats)({ ...cats, [def.key]: v })}
-                optionsMap={optionsMap}
-              />
+              <div key={def.key} className={cn(def.field_type !== "number" && "sm:col-span-2")}>
+                <CategoryField
+                  def={def}
+                  value={def.key === "entry_tf" && tfAuto ? tfAuto : (cats[def.key] ?? null)}
+                  onChange={(v) => touch(setCats)({ ...cats, [def.key]: v })}
+                  optionsMap={optionsMap}
+                />
+                {def.key === "entry_tf" && tfAuto && (
+                  <p className="mt-1 text-xs text-muted-foreground">auto — iz playbook-a „{book?.name}“</p>
+                )}
+              </div>
             ))}
           </CardContent>
         </Card>
@@ -394,6 +413,26 @@ export function TradePage({
           <CardTitle className="text-base">{trade.missed ? "Beleška" : "Review"}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {!trade.missed && (
+            <div className="space-y-1">
+              <Label className="text-xs">Greške koje journal nalazi sam</Label>
+              {autoMistakes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nijedna — iz podataka koje journal ima.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {autoMistakes.map((m) => (
+                    <li key={m.key} className="flex flex-wrap items-baseline gap-2 text-sm">
+                      <span className="rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        auto
+                      </span>
+                      <span className="font-medium">{m.label}</span>
+                      <span className="text-xs text-muted-foreground">{m.reason}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           {!trade.missed && (
             <div className="space-y-1.5">
               <Label className="text-xs">Po planu?</Label>
@@ -420,9 +459,9 @@ export function TradePage({
               </div>
             </div>
           )}
-          {reviewDefs.length > 0 && (
+          {reviewShown.length > 0 && (
             <div className="grid gap-4 sm:grid-cols-2">
-              {reviewDefs.map((def) => (
+              {reviewShown.map((def) => (
                 <CategoryField
                   key={def.key}
                   def={def}

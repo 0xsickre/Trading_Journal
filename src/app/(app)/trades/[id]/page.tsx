@@ -14,6 +14,7 @@ import { DAY_TIME, DEFAULT_TZ, accountDayZone, dayKeyIn, fmtInTz } from "@/lib/j
 import { rootOf } from "@/lib/journal/default-instruments";
 import { BIAS_CARD_SINCE, BIAS_LABEL, biasLateText, biasesOf } from "@/lib/journal/daily-bias";
 import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
+import { getAutoMistakes } from "@/lib/journal/auto-mistakes-queries";
 import type { FieldDef } from "@/lib/journal/field-def-types";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
@@ -93,6 +94,9 @@ export default async function TradeRoute({
         }${first.reason ? `. ${first.reason}` : ""}`
       : `Bias dana (${biasRoot}): nije upisan na kartici pre ovog ulaza.`;
   }
+  // Phase B4: what the journal found by itself on this trade, read with its day.
+  const autoFound = !missed && openDay ? ((await getAutoMistakes(openDay, openDay)).get(pos.id) ?? []) : [];
+
   const contextDefs = ordered.filter(
     (d) =>
       shown(d) &&
@@ -172,6 +176,7 @@ export default async function TradeRoute({
         playbooks={playbooks}
         contextDefs={contextDefs}
         biasNote={biasNote}
+        autoMistakes={autoFound}
         reviewDefs={reviewDefs}
         optionsMap={optionsMap}
         breakevenRange={resolveBreakevenRange(account)}

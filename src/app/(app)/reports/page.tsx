@@ -11,6 +11,9 @@ import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
 import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
 import { ReportsSkeleton } from "@/components/journal/reports/reports-skeleton";
+import { getAutoMistakes } from "@/lib/journal/auto-mistakes-queries";
+import { getPrimaryAccount } from "@/lib/journal/accounts";
+import { todayFor } from "@/lib/journal/time";
 
 export default async function ReportsPage() {
   // `tj_position_rules` is drained ONCE, and the per-rule counts are derived
@@ -55,6 +58,10 @@ export default async function ReportsPage() {
     getDailyBiases(),
   ]);
 
+  // Phase B4: every trade's automatic mistakes, for "Sve greške (ručne + auto)".
+  const found = await getAutoMistakes("2000-01-01", todayFor(await getPrimaryAccount()));
+  const autoMistakes = Object.fromEntries([...found].map(([id, ms]) => [id, ms.map((m) => m.label)]));
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -76,6 +83,7 @@ export default async function ReportsPage() {
           positionRules={positionRules}
           optionsMap={optionsMap}
           biases={biases}
+          autoMistakes={autoMistakes}
         />
       </Suspense>
     </div>

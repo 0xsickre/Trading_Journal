@@ -148,6 +148,7 @@ export function ReportsWorkbench({
   positionRules,
   optionsMap = {},
   biases = [],
+  autoMistakes = {},
 }: {
   trades: TradeRow[];
   accounts: Account[];
@@ -164,6 +165,8 @@ export function ReportsWorkbench({
   optionsMap?: OptionsMap;
   /** Bias dana (phase D): every forecast, graded or not. */
   biases?: DailyBias[];
+  /** The mistakes the journal found per trade id (phase B4), by option-list value. */
+  autoMistakes?: Record<string, string[]>;
 }) {
   const params = useSearchParams();
 
@@ -318,11 +321,12 @@ export function ReportsWorkbench({
       reportByDate: new Map(dailyReports.map((r) => [r.report_date, r])),
       rules: playbookLookup.rules,
       insightsByTrade,
+      autoMistakesByTrade: new Map(Object.entries(autoMistakes)),
       // Labels that tell same-named accounts apart, so they do not share a row.
       accountNames: accountLabels(accounts),
       customDimensions: extraDimensions,
     }),
-    [dailyReports, playbookLookup, insightsByTrade, accounts, extraDimensions],
+    [dailyReports, playbookLookup, insightsByTrade, autoMistakes, accounts, extraDimensions],
   );
 
   const metricContext = useMemo(

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { AutoMistake } from "@/lib/journal/auto-mistakes";
 import { TradePage, type TradePageTrade } from "./trade-page";
 import type { OptionsMap } from "@/lib/journal/types";
 import type { Playbook } from "@/lib/journal/playbook-types";
@@ -100,11 +101,17 @@ const TRADE: TradePageTrade = {
   timezone: "America/Chicago",
 };
 
-function renderPage(trade: TradePageTrade = TRADE, backHref = "/journal") {
+function renderPage(
+  trade: TradePageTrade = TRADE,
+  backHref = "/journal",
+  playbook = PLAYBOOK,
+  autoMistakes: AutoMistake[] = [],
+) {
   return render(
     <TradePage
       trade={trade}
-      playbooks={[PLAYBOOK]}
+      autoMistakes={autoMistakes}
+      playbooks={[playbook]}
       contextDefs={trade.missed ? [] : CONTEXT}
       reviewDefs={trade.missed ? [] : REVIEW}
       optionsMap={OPTIONS}
@@ -167,6 +174,51 @@ describe("TradePage — one page per imported trade (phase P)", () => {
     await user.click(screen.getByRole("button", { name: /Prekršeno pravilo/ }));
     await user.click(screen.getByRole("button", { name: "Sačuvaj" }));
     expect(saveMock.mock.calls[1][1].categories.mistake).toEqual([]);
+  });
+
+  it("shows the mistakes the journal found, marked auto, with why (phase B4)", () => {
+    renderPage(TRADE, "/journal", PLAYBOOK, [
+      { key: "moved_stop", label: "Pomerio stop", reason: "Originalni stop 30610 ≠ poslednji u platformi 30600." },
+    ]);
+    expect(screen.getByText("auto")).toBeInTheDocument();
+    expect(screen.getByText("Pomerio stop")).toBeInTheDocument();
+    expect(screen.getByText(/Originalni stop 30610/)).toBeInTheDocument();
+  });
+
+  it("says none were found rather than leaving the section blank", () => {
+    renderPage();
+    expect(screen.getByText(/Nijedna — iz podataka koje journal ima/)).toBeInTheDocument();
+  });
+
+  it("prefills the entry TF from the playbook, marked auto, and saves it (phase B3)", async () => {
+    const user = userEvent.setup();
+    renderPage({ ...TRADE, categories: { ...TRADE.categories, entry_tf: null } }, "/journal", {
+      ...PLAYBOOK,
+      default_entry_tf: "5m",
+    } as typeof PLAYBOOK);
+    expect(screen.getByText(/auto — iz playbook-a/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Sačuvaj" }));
+    expect(saveMock.mock.calls[0][1].categories.entry_tf).toBe("5m");
+  });
+
+  it("keeps a TF picked by hand, and says no auto", () => {
+    renderPage(TRADE, "/journal", { ...PLAYBOOK, default_entry_tf: "1m" } as typeof PLAYBOOK);
+    expect(screen.queryByText(/auto — iz playbook-a/)).not.toBeInTheDocument();
+  });
+
+  it("asks for manual mistakes only when the grade is not A (phase B2)", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    expect(screen.queryByText("Mistake")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Po planu — ulaz/ }));
+    expect(screen.queryByText("Mistake")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Manja odstupanja/ }));
+    expect(screen.getByText("Mistake")).toBeInTheDocument();
+  });
+
+  it("keeps an old trade's own mistake on screen whatever its grade", () => {
+    renderPage({ ...TRADE, categories: { ...TRADE.categories, mistake: ["Pomerio stop"] } });
+    expect(screen.getByText("Mistake")).toBeInTheDocument();
   });
 
   it("asks for the original stop when it was moved", () => {

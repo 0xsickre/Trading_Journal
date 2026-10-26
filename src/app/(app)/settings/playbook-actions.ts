@@ -100,6 +100,7 @@ export async function updatePlaybook(
     description?: string | null;
     is_active?: boolean;
     a_plus_criteria?: string | null;
+    default_entry_tf?: string | null;
   },
 ): Promise<Result> {
   const next: {
@@ -107,6 +108,7 @@ export async function updatePlaybook(
     description?: string | null;
     is_active?: boolean;
     a_plus_criteria?: string | null;
+    default_entry_tf?: string | null;
   } = {};
   if (patch.name != null) {
     const clean = patch.name.trim();
@@ -118,6 +120,11 @@ export async function updatePlaybook(
   if (patch.is_active != null) next.is_active = patch.is_active;
   if (patch.a_plus_criteria !== undefined)
     next.a_plus_criteria = patch.a_plus_criteria?.trim() || null;
+  if (patch.default_entry_tf !== undefined) {
+    const tf = patch.default_entry_tf?.trim() || null;
+    if (tf != null && tf.length > 20) return { ok: false, error: "The default TF is too long." };
+    next.default_entry_tf = tf;
+  }
   if (Object.keys(next).length === 0) return { ok: true };
 
   const supabase = await createClient();

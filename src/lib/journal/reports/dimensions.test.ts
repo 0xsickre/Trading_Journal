@@ -176,6 +176,24 @@ describe("trade column dimensions", () => {
     ]);
   });
 
+  it("sums the trader's picks and the journal's finds as one tag set (phase B4)", () => {
+    const dim = getDimension("mistake_all")!;
+    expect(dim.multiValue).toBe(true);
+    const t = one([{ mistake: ["Rani ulaz", "Pomerio stop"] }]);
+    const ctx = dimCtx([], { autoMistakesByTrade: new Map([[t.id, ["Pomerio stop", "Cilj ispod 2R"]]]) });
+    // One "Pomerio stop", though both named it.
+    expect(bucketsOf(dim, t, ctx)).toEqual(["Rani ulaz", "Pomerio stop", "Cilj ispod 2R"]);
+  });
+
+  it("puts a trade with no mistake from either side under „Bez greške“", () => {
+    const dim = getDimension("mistake_all")!;
+    const clean = one([{ mistake: ["Bez greške"] }]);
+    expect(bucketsOf(dim, clean, dimCtx())).toEqual(["Bez greške"]);
+    const autoOnly = one([{ mistake: ["Bez greške"] }]);
+    const ctx = dimCtx([], { autoMistakesByTrade: new Map([[autoOnly.id, ["Ulaz posle 2 SL"]]]) });
+    expect(bucketsOf(dim, autoOnly, ctx)).toEqual(["Ulaz posle 2 SL"]);
+  });
+
   it("resolves an account id to its name when one is supplied", () => {
     const t = one([{ accountId: "acc-9" }]);
     const ctx = dimCtx([], { accountNames: new Map([["acc-9", "Topstep 50K"]]) });
