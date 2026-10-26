@@ -53,9 +53,9 @@ export function reviewGaps(trades: TradeRow[], day: string, dayOf: (t: TradeRow)
 /**
  * Why `day` may not be locked yet, or null (09.10.2026).
  *
- * Locking freezes the automatic verdicts, and the risk rules
- * (`risk_per_trade`, `risk_matched_intent`) are computed from the stop. A trade
- * still missing its stop, or still carrying the last stop of a moved one instead
+ * Locking freezes the automatic verdicts, and two of them read the stop:
+ * `stop_loss_set`, and `stop_after_two_losses`, whose "loss" is measured
+ * against the trade's risk to its stop (±0.1R, K4). A trade still missing its stop, or still carrying the last stop of a moved one instead
  * of the original from the recording, would be frozen against the wrong risk —
  * for good. Setup and grade do not hold the lock: no frozen rule reads them.
  */

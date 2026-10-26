@@ -6,11 +6,9 @@ import { briefResolver, parseSessionBrief, type SessionBrief } from "../session-
 import type { Account, TradeRow } from "../types";
 
 /**
- * The day-trading rules (F4, G5/G7; 30.09.2026: money, never a count).
+ * The day-trading rules (F4, G5/G7). The money rules that used to sit here
+ * left the tracker in phase X (X-1 B, 26.10.2026).
  *
- *   - no_entry_after_daily_target: no entry once the account's day has closed
- *     its personal daily profit target — the profit must have CLOSED before;
- *   - max_loss_per_day: the personal daily loss limit where tighter;
  *   - flat_by_close: a Topstep position is flat by the end of the Topstep day
  *     (15:10 CT, or the brief's holiday / early close);
  *   - no_entry_in_red_window: no entry inside a red window of the day's brief,
@@ -18,7 +16,7 @@ import type { Account, TradeRow } from "../types";
  */
 
 const NY = "America/New_York";
-const acc = (id: string, topstep: boolean, limits: { dll?: number; target?: number } = {}) =>
+const acc = (id: string, topstep: boolean) =>
   ({
     id,
     timezone: NY,
@@ -30,16 +28,12 @@ const acc = (id: string, topstep: boolean, limits: { dll?: number; target?: numb
     risk_rule_pct: 8,
     risk_rule_min: null,
     risk_rule_max: null,
-    topstep_personal_dll: limits.dll ?? null,
-    topstep_daily_target: limits.target ?? null,
   }) as unknown as Account;
 
 const TS = acc("ts", true);
 const TS2 = acc("ts2", true);
 const CFD = acc("cfd", false);
-/** TopstepX Risk Limits: personal DLL 800 (plan 1 000), daily target 500. */
-const TGT = acc("tgt", true, { dll: 800, target: 500 });
-const ACCOUNTS = [TS, TS2, CFD, TGT];
+const ACCOUNTS = [TS, TS2, CFD];
 const zoneOf = accountDayZoneResolver(ACCOUNTS, TS);
 
 type Spec = { id: string; account?: string; opened: string; closed?: string | null; net?: number | null };
@@ -90,64 +84,6 @@ const evalDay = (specs: Spec[], ctx: { briefs?: SessionBrief[]; now?: number } =
 
 // 29.09.2026 is in US summer time: 10:00 New York = 14:00 UTC, 15:10 CT = 20:10 UTC.
 const at = (hhmm: string) => `${DAY}T${hhmm}:00Z`;
-
-describe("no_entry_after_daily_target", () => {
-  it("fails an entry taken after the day's closed profit reached the target", () => {
-    const r = evalDay([
-      { id: "w1", account: "tgt", opened: at("13:40"), closed: at("13:50"), net: 300 },
-      { id: "w2", account: "tgt", opened: at("14:00"), closed: at("14:20"), net: 250 },
-      { id: "more", account: "tgt", opened: at("14:40"), closed: at("15:00"), net: -100 },
-    ]).no_entry_after_daily_target;
-    expect(r.verdict).toBe("fail");
-    expect(r.offenders).toEqual(["more"]);
-    expect(r.observed).toBe(550);
-    expect(r.limit).toBe(500);
-    expect(r.basis).toBe("daily_target");
-  });
-
-  it("does not count a win still open at the entry, nor limit how many trades are taken", () => {
-    const r = evalDay([
-      { id: "a", account: "tgt", opened: at("13:40"), closed: at("13:50"), net: 100 },
-      { id: "b", account: "tgt", opened: at("14:00"), closed: at("14:50"), net: 600 },
-      { id: "c", account: "tgt", opened: at("14:10"), closed: at("14:20"), net: -50 },
-      { id: "d", account: "tgt", opened: at("14:30"), closed: at("14:40"), net: 20 },
-    ]).no_entry_after_daily_target;
-    expect(r.verdict).toBe("pass");
-    expect(r.observed).toBe(100);
-  });
-
-  it("is unknown when an unpriced close precedes the entry", () => {
-    const r = evalDay([
-      { id: "x", account: "tgt", opened: at("13:40"), closed: at("13:50"), net: null },
-      { id: "y", account: "tgt", opened: at("14:00"), closed: at("14:20"), net: 10 },
-    ]).no_entry_after_daily_target;
-    expect(r.reason).toBe("unpriced");
-  });
-
-  it("is not scored on an account without a target, nor on a day with no entries", () => {
-    expect(evalDay([{ id: "a", opened: at("14:00") }]).no_entry_after_daily_target.reason).toBe("unconfigured");
-    expect(evalDay([]).no_entry_after_daily_target.reason).toBe("no_trades");
-  });
-});
-
-describe("max_loss_per_day with a personal daily loss limit", () => {
-  it("grades the day against the personal limit where it is tighter than the plan's", () => {
-    const r = evalDay([
-      { id: "l1", account: "tgt", opened: at("13:40"), closed: at("13:50"), net: -500 },
-      { id: "l2", account: "tgt", opened: at("14:00"), closed: at("14:20"), net: -300 },
-    ]).max_loss_per_day;
-    expect(r.verdict).toBe("fail");
-    expect(r.limit).toBe(-800);
-    expect(r.basis).toBe("personal_dll");
-  });
-
-  it("keeps the plan's DLL on an account without one", () => {
-    const r = evalDay([{ id: "l1", opened: at("13:40"), closed: at("13:50"), net: -800 }]).max_loss_per_day;
-    expect(r.verdict).toBe("pass");
-    expect(r.limit).toBe(-1000);
-    expect(r.basis).toBe("topstep_dll");
-  });
-});
 
 describe("flat_by_close", () => {
   it("passes a position closed before 15:10 CT and fails one closed after", () => {

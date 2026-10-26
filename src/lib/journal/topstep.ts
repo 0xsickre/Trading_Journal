@@ -61,7 +61,6 @@
  * plan with and to review discipline; the platform's own risk engine is the
  * record.
  */
-import { MINI_OF } from "./default-instruments";
 import { computeTopstepRisk } from "./plan-calculations";
 import { compareInstants, toEpoch, topstepTradingDay } from "./time";
 import type { CashEvent } from "./balance";
@@ -556,18 +555,3 @@ export function topstepRulesResolver(
   }
   return (accountId) => (accountId ? (byId.get(accountId) ?? null) : null);
 }
-
-/**
- * The most contracts the plan lets the account hold, in THIS contract's units:
- * Topstep counts a micro as a tenth of a mini, so its cap is ten times as many.
- */
-export function topstepMaxContracts(plan: TopstepPlanRules, symbol: string | null | undefined): number {
-  return plan.maxMini * (symbol && MINI_OF[symbol] ? 10 : 1);
-}
-
-/**
- * How far past the risk budget a single trade's loss may go before the tracker
- * calls it a breach (decision E3, 28.09.2026): a stop filled a tick or two late
- * is the market, not the trader. 10 % of the budget.
- */
-export const TOPSTEP_SLIPPAGE_TOLERANCE = 0.1;

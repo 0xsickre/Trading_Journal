@@ -6,7 +6,7 @@
  * it stands right now is a moving target: lose money and the base shrinks.
  * Pegging it to the balance the day opened with — the previous day's close —
  * gives the day one fixed number, which is also the convention every prop firm
- * uses. (The tracker's money rules read the Topstep plan instead since H2.)
+ * uses. (The tracker reads no money limit since phase X.)
  *
  * WHY IT CAN ANSWER `null`. An unpriced trade (an instrument with no point
  * value) makes the realized total unknown from that day on, and an unknown

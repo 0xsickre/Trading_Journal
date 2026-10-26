@@ -56,7 +56,6 @@ const autoOf = (entries: Partial<Record<AutoRuleKey, AutoVerdict>>): AutoResults
       verdict: v as AutoVerdict,
       reason: "ok",
       offenders: [],
-      observed: null,
     };
   }
   return out;
@@ -95,18 +94,18 @@ describe("applicability", () => {
   });
 
   it("drops an auto rule whose evaluator said not-applicable", () => {
-    const r = rule({ id: "auto", auto_key: "max_loss_per_day" });
-    expect(ruleAppliesOn(r, "2026-07-29", autoOf({ max_loss_per_day: "na" }))).toBe(false);
-    expect(ruleAppliesOn(r, "2026-07-29", autoOf({ max_loss_per_day: "pass" }))).toBe(true);
-    expect(ruleAppliesOn(r, "2026-07-29", autoOf({ max_loss_per_day: "fail" }))).toBe(true);
+    const r = rule({ id: "auto", auto_key: "stop_loss_set" });
+    expect(ruleAppliesOn(r, "2026-07-29", autoOf({ stop_loss_set: "na" }))).toBe(false);
+    expect(ruleAppliesOn(r, "2026-07-29", autoOf({ stop_loss_set: "pass" }))).toBe(true);
+    expect(ruleAppliesOn(r, "2026-07-29", autoOf({ stop_loss_set: "fail" }))).toBe(true);
   });
 
   it("keeps an unscorable auto rule LIVE, so the checklist can still show it", () => {
-    // The difference the checklist depends on: a money rule with no limit is not
+    // The difference the checklist depends on: a rule with nothing to grade is not
     // scored, but it has to appear on the page saying why. Filtering the page by
     // ruleAppliesOn would delete the only place you can find out.
-    const r = rule({ id: "auto", auto_key: "max_loss_per_day" });
-    expect(ruleAppliesOn(r, "2026-07-29", autoOf({ max_loss_per_day: "na" }))).toBe(false);
+    const r = rule({ id: "auto", auto_key: "stop_loss_set" });
+    expect(ruleAppliesOn(r, "2026-07-29", autoOf({ stop_loss_set: "na" }))).toBe(false);
     expect(ruleIsLiveOn(r, "2026-07-29")).toBe(true);
   });
 
@@ -127,13 +126,13 @@ describe("daily compliance", () => {
   it("drops `na` from both numerator and denominator", () => {
     const rules = [
       rule({ id: "manual" }),
-      rule({ id: "auto", auto_key: "max_loss_per_day" }),
+      rule({ id: "auto", auto_key: "stop_loss_set" }),
     ];
     const d = day(
       "2026-07-28",
       rules,
       checkins([["manual", true]]),
-      autoOf({ max_loss_per_day: "na" }),
+      autoOf({ stop_loss_set: "na" }),
     );
     expect(d.applicable).toBe(1);
     expect(d.satisfied).toBe(1);
@@ -295,14 +294,14 @@ describe("rulesLiveOn is what every per-day computation starts from", () => {
   // decides which of them counts.
   const retired = rule({
     id: "old",
-    auto_key: "no_entry_after_daily_target",
+    auto_key: "trading_window",
     created_at: "2026-01-01T00:00:00Z",
     deleted_at: "2026-06-01T00:00:00Z",
     sort_order: 9,
   });
   const live = rule({
     id: "new",
-    auto_key: "no_entry_after_daily_target",
+    auto_key: "trading_window",
     created_at: "2026-06-01T00:00:00Z",
     sort_order: 1,
   });
@@ -322,11 +321,11 @@ describe("freezing at lock time", () => {
     // trade would revive these rules on a day that is supposed to be sealed.
     const rows = freezeAutoCheckins(
       [
-        rule({ id: "a", auto_key: "max_loss_per_day" }),
+        rule({ id: "a", auto_key: "thesis_written" }),
         rule({ id: "b", auto_key: "stop_loss_set" }),
         rule({ id: "manual" }),
       ],
-      autoOf({ max_loss_per_day: "na", stop_loss_set: "pass" }),
+      autoOf({ thesis_written: "na", stop_loss_set: "pass" }),
       TODAY,
     );
     expect(rows).toEqual([
@@ -376,11 +375,11 @@ describe("freezing at lock time", () => {
     // Same one filter, other half: a Monday-only rule sealed on a Wednesday.
     const mondayOnly = rule({
       id: "mon",
-      auto_key: "max_loss_per_day",
+      auto_key: "stop_loss_set",
       active_days: [1],
     });
     expect(
-      freezeAutoCheckins([mondayOnly], autoOf({ max_loss_per_day: "pass" }), TODAY),
+      freezeAutoCheckins([mondayOnly], autoOf({ stop_loss_set: "pass" }), TODAY),
     ).toEqual([]);
   });
 
@@ -435,7 +434,6 @@ describe("reading a sealed day back", () => {
         verdict: "fail",
         reason: "violated",
         offenders: ["t1", "t2"],
-        observed: null,
       },
     };
     expect(resolveAutoResults([r], live, frozen([["a", true]])).stop_loss_set)
@@ -682,11 +680,11 @@ describe("an auto rule is scored by its evaluator, never by a checkin", () => {
   // decides whether a machine-checked rule — "no day worse than −2 %" — counts
   // as kept, and it deliberately ignores `checkins`: a box the trader ticked
   // must not be able to overrule what the trades actually did.
-  const auto = rule({ id: "auto", auto_key: "max_loss_per_day" });
+  const auto = rule({ id: "auto", auto_key: "stop_loss_set" });
   const manual = rule({ id: "manual" });
 
   it("counts a passing verdict as satisfied", () => {
-    const d = day("2026-07-29", [auto], new Map(), autoOf({ max_loss_per_day: "pass" }));
+    const d = day("2026-07-29", [auto], new Map(), autoOf({ stop_loss_set: "pass" }));
     expect(d.applicable).toBe(1);
     expect(d.satisfied).toBe(1);
     expect(d.missedRuleIds).toEqual([]);
@@ -696,7 +694,7 @@ describe("an auto rule is scored by its evaluator, never by a checkin", () => {
     // `unansweredRuleIds` drives the "today is still running" grace period. An
     // auto rule the evaluator already failed is a decided fact, so letting it
     // land there would hold a broken day at "pending" until midnight.
-    const d = day("2026-07-29", [auto], new Map(), autoOf({ max_loss_per_day: "fail" }));
+    const d = day("2026-07-29", [auto], new Map(), autoOf({ stop_loss_set: "fail" }));
     expect(d.missedRuleIds).toEqual(["auto"]);
     expect(d.unansweredRuleIds).toEqual([]);
     expect(d.status).toBe("broken");
@@ -707,7 +705,7 @@ describe("an auto rule is scored by its evaluator, never by a checkin", () => {
       "2026-07-29",
       [auto],
       checkins([["auto", true]]),
-      autoOf({ max_loss_per_day: "fail" }),
+      autoOf({ stop_loss_set: "fail" }),
     );
     expect(d.satisfied).toBe(0);
     expect(d.missedRuleIds).toEqual(["auto"]);
@@ -718,7 +716,7 @@ describe("an auto rule is scored by its evaluator, never by a checkin", () => {
       "2026-07-29",
       [auto, manual],
       checkins([["manual", true]]),
-      autoOf({ max_loss_per_day: "pass" }),
+      autoOf({ stop_loss_set: "pass" }),
     );
     expect(d.applicable).toBe(2);
     expect(d.satisfied).toBe(2);

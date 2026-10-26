@@ -231,7 +231,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,961 tests across 190 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,956 tests across 190 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -1096,51 +1096,53 @@ those parts on their own.
 
 ## Process tracking
 
-**Tracker rules** are daily obligations, per weekday. **Eleven** were scored automatically from data
-when this paragraph was written (phases Q and Y added six more — the table below lists them all) —
-max loss per trade and per day, every trade linked to a playbook that existed when it was entered
-(phase Y, 14.10.2026: a playbook created after the first fill fails the day like a missing one, and
-/daily says "playbook napravljen posle ulaza"; trades carry `playbook_created_at` from `getTradesWithStats`;
-days locked before that keep their frozen verdict, Y-4), every trade has a stop, every
-trade has a thesis written before entry, no entry risked more than the budget, every entry was the
-contract count the budget gave, the three day-trading rules below and two stop losses in a row —
-and the rest are ticked by hand. **No rule counts trades** (30.09.2026, `20260930070000`): the day stops on
-money, as TopstepX's Risk Limits stop it — the daily loss limit, the daily profit target and the MLL.
-`max_trades_per_day` and `stop_after_losses` were deleted with the count setting in Settings ›
-Tracker (neither had a single answer), and so was the tilt insight that priced the same run. On
-08.10.2026 the trader brought back one run, not a count: **two stop losses in a row end the day**
-(`stop_after_two_losses`, fixed at two, no setting), because two full stops at ~$300 leave room
-under a $650 personal DLL for a third entry. The money rules read the **Topstep plan only** (§ Topstep): a trade on any other account is not
-graded by them (`no_topstep_trades`). The weekly loss rule and the percentage-of-equity limits left in
-H2 (`20260929170000`) — Topstep has no weekly limit, and the book has no other account. The same
-migration named the three rules still in English in Serbian.
+**Tracker rules** are daily obligations, per weekday. Twelve are scored automatically from data —
+every trade linked to a playbook that existed when it was entered (phase Y, 14.10.2026: a playbook
+created after the first fill fails the day like a missing one, and /daily says "playbook napravljen
+posle ulaza"; trades carry `playbook_created_at` from `getTradesWithStats`; days locked before that
+keep their frozen verdict, Y-4), every trade has a stop, every trade has a thesis written before
+entry, the day-trading rules and the review rules in the table below — and the rest are ticked by hand.
 
-**The day trader's four (F4 `20260929110000`, 30.09.2026 `20260930070000`, 08.10.2026 `20261008140000`).** Each is a decision
-taken at entry, so each is charged to the Topstep day the trade was OPENED on:
+**The tracker measures process only** (phase X, X-1 B, 26.10.2026, `20261026120000`). The trader:
+"Brišu se, tracker meri samo proces … jer ako bude više naloga na prop firma biće konflikta." The
+five money rules — `max_loss_per_day`, `max_loss_per_trade`, `risk_per_trade`, `risk_matched_intent`,
+`no_entry_after_daily_target` — left the code; money limits are kept on each account's own platform.
+Their rows are **retired, not deleted** (`deleted_at`), and the DB CHECK on `auto_key` still admits
+their keys: a locked day's frozen verdicts point at those rows and stay what they were. With no
+evaluator left for them, an unlocked past day simply leaves them out (no verdict = not applicable).
+The factory list (`tj_seed_tracker_rules`) has no money rule and no manual "Walk Away Target".
+
+**No rule counts trades** (30.09.2026, `20260930070000`): `max_trades_per_day` and
+`stop_after_losses` were deleted with the count setting in Settings › Tracker (neither had a single
+answer), and so was the tilt insight that priced the same run. On 08.10.2026 the trader brought back
+one run, not a count: **two stop losses in a row end the day** (`stop_after_two_losses`, fixed at
+two, no setting). The weekly loss rule and the percentage-of-equity limits left in H2
+(`20260929170000`).
+
+**The day trader's rules (F4 `20260929110000`, 08.10.2026 `20261008140000`) and the review rules (phases Q, Y).** Each
+day-trading rule is a decision taken at entry, so each is charged to the Topstep day the trade was OPENED on:
 
 | Rule | Fails when | Not scored (`na`) when |
 |---|---|---|
 | `flat_by_close` | a Topstep position closed after that day's close, or is still open once the close has passed | the day had no Topstep trade, the brief says the exchange was closed, or a position is still open before the close |
 | `no_entry_in_red_window` | an entry falls inside a red window of the day's brief, both edges included | the day has no brief |
 | `stop_after_two_losses` (08.10.2026, `20261008140000`) | an entry on an account follows two stop losses IN A ROW, closed before it that Topstep day — a loss is below the breakeven band (on Topstep a tenth of the trade's risk), so a win or a scratch in between breaks the run | the day had no entry, or a close before the entry has no price |
-| `no_entry_after_daily_target` | an entry on a Topstep account follows trades of that account and day, CLOSED before it, whose net reached the account's personal daily profit target | the account has no target (`unconfigured`), the day had no Topstep entry, or a trade closed before the entry has no price |
 | `htf_bias_set` (phase Q, 14.10.2026, `20261014120000`; phase D, 17.10.2026) | from 19.10.2026 (`BIAS_CARD_SINCE`): a trade opened that day on NQ / ES / GC or their micros has no forecast on the /daily card for its root set no later than its entry — the day's FIRST forecast counts, graded at entry like the stop. Before that day, and on an instrument with no daily bias (6E): the trade has no "Bias dana" (`custom.htf_bias`), or it says "Nisam odredio unapred" | no trade opened that day; before 19.10.2026 also every one still open (`not_yet`) |
 | `thesis_recorded` (phase Q) | a trade has no `thesis` ("šta sam rekao pre klika"), read live; WHEN it was said is the recording's, so the mentor's | as above |
 | `review_complete` (phase Q) | a trade lacks a grade, an exit reason, the bias (from 19.10.2026 the card's, phase D), TF ulaza (`custom.entry_tf`), a psychology tag, or a mistake when the grade is not A | as above |
 | `screenshot_per_trade` (phase Q) | a trade has no chart (`tj_trade_images`) | as above |
-| `honest_tags` (phase Q) | on the same trade: "Ispoštovao rizik" beside a failed `risk_per_trade` / `stop_loss_set` / `max_loss_per_trade`, or an A ("Bez greške") beside any failed trading rule, or (phase Y5, 15.10.2026) "Vodio po planu" on a trade without a playbook or with one created after the entry; the review rules do not count as trading errors. Evaluated last, from the other verdicts | as above |
+| `honest_tags` (phase Q) | on the same trade: "Ispoštovao rizik" beside a failed `stop_loss_set` (phase X: the risk rules it was also read against are gone), or an A ("Bez greške") beside any failed trading rule, or (phase Y5, 15.10.2026) "Vodio po planu" on a trade without a playbook or with one created after the entry; the review rules do not count as trading errors. Evaluated last, from the other verdicts | as above |
 | `trading_window` (phase Y4, 15.10.2026, `20261015090000`) | an entry before `from` or from `to` on, or a position still open once the minute of `to` has passed — an exit within that minute is the time exit, not a breach. Times are Belgrade; the window is `config.windows[]` of `{ since, from, to }`, the latest `since` on or before the day applies (London weeks 09:00–12:00, NY weeks 14:30–18:00), set in Settings › Tracker ("Save window", `setTradingWindow`), so a change next Monday leaves this week as it was. Reverses Q-2's retired "Vreme trgovanja" | no trade opened that day, or no window for the day (`unconfigured`) |
 
-**The target is per account**, as the Topstep limits are, and it reads only CLOSED money: a winner still open at the entry does not count toward it. The close is the brief's
+The close is the brief's
 (`flat_by`: holiday, early close), else 15:10 CT — a default that can only be later than a holiday
 close, so a missing brief can miss a breach but never invent one. The red windows are only the
 brief's: there is no fixed fifteen minutes, and a day without a brief grades nothing rather than
-guessing. The checklist says a CT time, a window, or the profit banked against the target.
+guessing. The checklist says a close time, a window, or the run of stops.
 
 The three manual rules these replaced — "at most two trades a day", "no entry fifteen minutes around
 red news", "stop at the daily loss in USD" — were **retired, not deleted** (`deleted_at`), so every
-past day they were live on keeps its score. "Walk Away Target" stays a manual rule beside
-`no_entry_after_daily_target`, which grades the same promise from the data once the account has a target.
+past day they were live on keeps its score.
 
 **`thesis_written` grades only trades planned before their entry** — `created_at` no later than the
 first fill (`plannedBeforeEntry` in `tracker/auto-rules.ts`): a plan-first trade, and a resting plan
@@ -1151,16 +1153,6 @@ trejd nije planiran pre ulaza"), not `pass`. The quick log's sentence goes to `t
 never to `thesis`: sealed as the reason before entry, a sentence written after the close would be
 exactly the rationalisation the rule reads the seal to catch. Unlocked past days re-read under this
 meaning (a CFD trade typed after its entry is now `na` there); locked days keep their frozen verdicts.
-`risk_matched_intent` compares the contracts with the count the form would have given at entry
-(§ Topstep).
-
-**The two risk rules grade the SIZE, the loss rules grade the outcome**, and both are kept for that reason.
-`max_loss_per_trade` reads the realized loss on the close day, so a trade sized at three times the
-intended risk that ran to target is invisible to it and one closed early passes; `risk_per_trade`
-reads the money at the stop against the budget the risk rule gave at entry, on the day the decision
-was made. Rewriting the old rule instead of
-adding a new one would have restated every locked day in the history under a meaning it was never
-scored with.
 
 Which rules applied on a given day is decided by comparing the day against the rule's `created_at`
 and `deleted_at`; that is why those are timestamps and why the table has no `is_active` boolean. A
@@ -1290,9 +1282,9 @@ help.topstep.com on 28.09.2026):
   (`topstep_personal_dll`) and **personal daily profit target** (`topstep_daily_target`), set under
   its Topstep rules in Settings. Either one ends the trading day. The personal limit is the day's DLL
   wherever it is tighter than the plan's (`topstepPlanRulesFor`) — for the banner, the sizing, the
-  tracker, the day card on `/daily` and Survival; a looser one changes nothing, since Topstep still
-  stops the day at the plan's. The target shows as what is still missing today, is graded by
-  `no_entry_after_daily_target`, and caps a simulated day in Survival. **There is no limit on the
+  day card on `/daily` and Survival; a looser one changes nothing, since Topstep still stops the day
+  at the plan's. The target shows as what is still missing today and caps a simulated day in
+  Survival. No tracker rule reads either since phase X. **There is no limit on the
   number of trades.**
 - **Consistency** (Combine): the best day must stay at or below 55 % of the target; past that the target grows
   to best day ÷ 0.55.
@@ -1349,23 +1341,12 @@ one tick × point value, so the count is rounded down from a loss the trader can
 from `tick_size_at_trade`; an instrument without a tick size is sized without it rather than with a
 guessed one.
 
-**The tracker grades a Topstep account's trades by its plan**, each account on its own; a trade on
-any other account is not graded by these rules (§ Process tracking), and the checklist names which
-of the plan's numbers the limit came from:
-
-| Rule | On a Topstep account |
-|---|---|
-| Max loss per day | The plan's DLL — or the personal daily loss limit where tighter — per account and per Topstep day; two 50Ks each down 600 are two survived days |
-| Max loss per trade | The risk budget at entry **+ 10 %** for slippage (`TOPSTEP_SLIPPAGE_TOLERANCE`) |
-| Risk per trade | The risk at the stop against the budget at entry |
-| Sized to intent | The contracts equal the count the form would have given from that budget (rounded down, commission and a tick of slippage counted, capped at the plan) |
-
 **The budget at entry** is what `computeTopstepRisk` allowed at the moment of the first fill — the
 room and today's DLL as `topstepStateAt` reads them from everything closed before that instant
 (`riskBudgetAt`). It is **sealed** in `tj_positions.risk_budget_at_entry` by the manual write path on
 the save that first gives a trade fills, never overwritten, 0 when there was no room (migration
-`20260928160000`); a later correction or late import cannot move the measure a decision was graded
-against. A trade with no seal — created by the import, or older than the column — reads the same
+`20260928160000`); a later correction or late import cannot move it. Since phase X no tracker rule
+reads it. A trade with no seal — created by the import, or older than the column — reads the same
 budget derived at its entry. The import seals both (30.09.2026), read after the rows before it in the
 same file were saved.
 
@@ -1753,9 +1734,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,961 tests across 190 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,373 tests in 128 files) and `components` (environment `jsdom`, files `*.test.tsx`, 588
-tests in 62 files). The rule is the extension, so no file can land in both. The split exists so that
+2,956 tests across 190 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,404 tests in 130 files) and `components` (environment `jsdom`, files `*.test.tsx`, 552
+tests in 60 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves

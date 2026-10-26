@@ -71,18 +71,10 @@ describe("day attribution", () => {
     stop: false,
   };
 
-  it("charges the daily loss to the CLOSE day", () => {
-    // Not a Topstep account, so not graded (H2) — but the trade is THERE on
-    // the close day, and absent on the open day below.
-    const d3 = evalDay("2026-03-04", [swing]);
-    expect(d3.max_loss_per_day.reason).toBe("no_topstep_trades");
-  });
-
-  it("leaves the open day untouched by the money rules", () => {
-    const d1 = evalDay("2026-03-02", [swing]);
-    expect(d1.max_loss_per_day.verdict).toBe("na");
-    expect(d1.max_loss_per_day.reason).toBe("no_trades");
-    expect(d1.max_loss_per_trade.verdict).toBe("na");
+  it("files the exit on the CLOSE day, and only there", () => {
+    const i = index([swing]);
+    expect(i.byCloseDay.get("2026-03-04")?.map((t) => t.id)).toEqual(["swing"]);
+    expect(i.byCloseDay.get("2026-03-02")).toBeUndefined();
   });
 
   it("charges playbook and stop to the OPEN day", () => {
@@ -152,7 +144,7 @@ describe("day attribution", () => {
     expect(d1.playbook_linked.offenders).toEqual(["live"]);
   });
 
-  it("keeps an open position out of both money rules", () => {
+  it("keeps an open position off every close day", () => {
     const open: Spec = {
       id: "live",
       status: "open",
@@ -160,9 +152,7 @@ describe("day attribution", () => {
       closed: null,
       net: -900,
     };
-    const d1 = evalDay("2026-03-02", [open]);
-    expect(d1.max_loss_per_day.verdict).toBe("na");
-    expect(d1.max_loss_per_trade.verdict).toBe("na");
+    expect(index([open]).byCloseDay.size).toBe(0);
   });
 
   it("resolves the day in the ACCOUNT timezone", () => {
@@ -223,9 +213,9 @@ describe("buildTradeDayIndex", () => {
 
 describe("the closed set of auto rules", () => {
   /**
-   * `AUTO_RULE_KEYS` carries a contract in its own header: *"The set is closed
-   * and mirrors the DB CHECK. Adding one means writing an evaluator, so a key
-   * with no evaluator must never be storable."*
+   * `AUTO_RULE_KEYS` carries a contract in its own header: *"The set is closed.
+   * Adding one means writing an evaluator, so a key with no evaluator must
+   * never be storable."*
    *
    * Nothing checked either half. `auto_key` is never chosen in the UI — it is
    * only seeded — so the constant had NO runtime consumer at all: it existed to
@@ -249,6 +239,17 @@ describe("the closed set of auto rules", () => {
   it("has no rule that counts trades or losses in a row (30.09.2026)", () => {
     expect(AUTO_RULE_KEYS).not.toContain("max_trades_per_day");
     expect(AUTO_RULE_KEYS).not.toContain("stop_after_losses");
+  });
+
+  it("measures process only: no money rule is left (phase X, X-1 B)", () => {
+    for (const key of [
+      "max_loss_per_day",
+      "max_loss_per_trade",
+      "risk_per_trade",
+      "risk_matched_intent",
+      "no_entry_after_daily_target",
+    ])
+      expect(AUTO_RULE_KEYS as readonly string[], key).not.toContain(key);
   });
 
   it("with no trades, every rule says so", () => {

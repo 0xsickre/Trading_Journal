@@ -79,7 +79,7 @@ const dayOf = (iso: string | null): string => (iso ? iso.slice(0, 10) : "");
  *
  * Separate from `ruleAppliesOn` because the checklist needs exactly this: an
  * auto rule with an `na` verdict is not scored, but it must still be SHOWN, or a
- * money rule with no limit set would silently vanish from the page instead of
+ * trading window never set would silently vanish from the page instead of
  * saying why it cannot answer.
  */
 export function ruleIsLiveOn(rule: TrackerRule, day: string): boolean {
@@ -159,7 +159,6 @@ export function resolveAutoResults(
       verdict: row.checked === true ? "pass" : row.checked === false ? "fail" : "na",
       reason: "frozen",
       offenders: [],
-      observed: null,
     };
   }
   return out ?? live;

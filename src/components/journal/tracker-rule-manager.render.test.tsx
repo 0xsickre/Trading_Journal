@@ -199,10 +199,10 @@ describe("no rule asks for a count (30.09.2026)", () => {
   it("shows an auto rule with no number to set", () => {
     render(
       <TrackerRuleManager
-        rules={[rule({ text: "Bez ulaza posle dnevnog cilja profita", stage: "trade", auto_key: "no_entry_after_daily_target" })]}
+        rules={[rule({ text: "Dva SL zaredom = kraj dana", stage: "trade", auto_key: "stop_after_two_losses" })]}
       />,
     );
-    expect(screen.getByDisplayValue("Bez ulaza posle dnevnog cilja profita")).toBeDisabled();
+    expect(screen.getByDisplayValue("Dva SL zaredom = kraj dana")).toBeDisabled();
     expect(screen.queryByPlaceholderText("Count")).not.toBeInTheDocument();
     expect(screen.queryByText(/count set/)).not.toBeInTheDocument();
   });

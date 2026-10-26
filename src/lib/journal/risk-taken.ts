@@ -4,7 +4,7 @@
  *
  * THE GAP THIS CLOSES. `position_size` is a number the trader typed, and a
  * trade sized at three times the intended risk was invisible unless it also
- * lost — `max_loss_per_trade` grades the REALIZED loss on the close day, by
+ * lost — and a loss is only seen once it is REALIZED, on the close day, by
  * which time the risk is already over.
  *
  * WHY ALMOST NOTHING IS STORED. Every factor below is already frozen per trade:

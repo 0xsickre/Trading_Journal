@@ -73,10 +73,10 @@ const brief: SessionBrief = {
 
 const rule: TrackerRule = {
   id: "r-stop",
-  text: "Bez ulaza posle dnevnog cilja",
+  text: "Dva SL zaredom",
   stage: "trade",
   active_days: [1, 2, 3, 4, 5],
-  auto_key: "no_entry_after_daily_target",
+  auto_key: "stop_after_two_losses",
   config: {},
   is_mandatory: true,
   sort_order: 0,
@@ -139,9 +139,9 @@ describe("mentor pack for a day trader (F5.6)", () => {
 
   it("lists the trader's rules and the ones broken most", () => {
     const md = pack();
-    expect(md).toContain("- Bez ulaza posle dnevnog cilja (trgovanje, obavezno · automatski: `no_entry_after_daily_target` · Mon, Tue, Wed, Thu, Fri)");
+    expect(md).toContain("- Dva SL zaredom (trgovanje, obavezno · automatski: `stop_after_two_losses` · Mon, Tue, Wed, Thu, Fri)");
     expect(md).toContain("prosek **75%** na 2 dana; 1 dan bez ijednog prekršaja");
-    expect(md).toContain("- Bez ulaza posle dnevnog cilja — 1 dan");
+    expect(md).toContain("- Dva SL zaredom — 1 dan");
   });
 
   it("gives one row per trading day with what a day trader is judged on", () => {
@@ -150,7 +150,7 @@ describe("mentor pack for a day trader (F5.6)", () => {
     // 3 trades, all lost, first at 09:40 ET, a run of 3, two contracts at
     // most, half the rules kept, the mental note. No count of trades after losses.
     expect(md).toContain(
-      "| 2026-09-29 | 3 | 0/3/0 | -400.00 | -4.00R | 15:40 | 3 | 2 | 4/5 | — | 50% (Bez ulaza posle dnevnog cilja) | 1 ulaz u crvenom prozoru |",
+      "| 2026-09-29 | 3 | 0/3/0 | -400.00 | -4.00R | 15:40 | 3 | 2 | 4/5 | — | 50% (Dva SL zaredom) | 1 ulaz u crvenom prozoru |",
     );
   });
 
@@ -472,7 +472,7 @@ describe("mentor pack, phase M: what the mentor needs to question the day", () =
     expect(md).toContain("### 2026-10-05 · bez prijave");
     expect(md).toContain("- Crveni prozori: 14:25–14:45 CPI (visok) · flat do 22:10");
     expect(md).toContain("? Kalendar i HTF (neodgovoreno)");
-    expect(md).toContain("— Bez ulaza posle dnevnog cilja (n/a)");
+    expect(md).toContain("— Dva SL zaredom (n/a)");
     expect(md).toContain("✓ Kalendar i HTF");
   });
 

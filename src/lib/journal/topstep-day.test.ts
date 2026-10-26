@@ -86,16 +86,6 @@ describe("the tracker counts the Topstep day (D1: each trade by its own account)
     expect(index.byCloseDay.get("2026-09-28")?.map((t) => t.id).sort()).toEqual(["cfd-evening", "ts-sunday"]);
     expect(index.byOpenDay.get("2026-09-29")?.map((t) => t.id)).toEqual(["ts-evening"]);
   });
-
-  it("charges max loss per day to the day Topstep charges its DLL to", () => {
-    const graded = buildTradeDayIndex(rows, zoneOfRow, topstepOf);
-    const tue = evaluateAutoRulesForDay("2026-09-29", graded);
-    expect(tue.max_loss_per_day.observed).toBe(-600);
-    // Monday holds the Sunday open's +50; the CFD evening is not graded (H2).
-    const mon = evaluateAutoRulesForDay("2026-09-28", graded);
-    expect(mon.max_loss_per_day.verdict).toBe("pass");
-    expect(mon.max_loss_per_day.observed).toBe(50);
-  });
 });
 
 describe("the calendar counts it too", () => {
@@ -178,17 +168,17 @@ describe("\"Bez pregleda\" counts the day the 21:25 reminder counts", () => {
 });
 
 describe("a locked day keeps what it was locked with", () => {
-  it("the evening trade moves to Tuesday, Monday's frozen verdict does not move with it", () => {
+  it("a retired money rule's frozen verdict stays, though no evaluator answers it any more (phase X)", () => {
     // Locked before F2, Monday carried the -600 evening trade and failed its daily
-    // limit. Read live under the Topstep day, Monday no longer holds that trade —
-    // but the frozen row is what Monday was scored with, and it stays.
+    // limit. The money rules left the tracker in phase X (X-1 B): nothing derives
+    // `max_loss_per_day` live, but the frozen row is what Monday was scored with.
     const index = buildTradeDayIndex(rows, zoneOfRow, topstepOf);
     const live = evaluateAutoRulesForDay("2026-09-28", index);
-    expect(live.max_loss_per_day.verdict).toBe("pass");
+    expect(live).not.toHaveProperty("max_loss_per_day");
 
     const rule = { id: "r-dll", auto_key: "max_loss_per_day" } as unknown as TrackerRule;
     const frozen = new Map([["r-dll", { checked: false, auto_evaluated: true } as unknown as TrackerCheckin]]);
-    const shown = resolveAutoResults([rule], live, frozen);
+    const shown = resolveAutoResults([rule], live, frozen) as Record<string, { verdict: string; reason: string }>;
     expect(shown.max_loss_per_day?.verdict).toBe("fail");
     expect(shown.max_loss_per_day?.reason).toBe("frozen");
   });

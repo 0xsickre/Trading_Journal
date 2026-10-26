@@ -8,13 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { fmtMoney } from "@/lib/journal/format";
 import { DEFAULT_TZ, fmtInTz } from "@/lib/journal/time";
 import {
   type TrackerRule,
   type TrackerStage,
 } from "@/lib/journal/tracker-types";
-import type { AutoRuleResult, LimitBasis } from "@/lib/journal/tracker/auto-rules";
+import type { AutoRuleResult } from "@/lib/journal/tracker/auto-rules";
 import type {
   AutoResults,
   DayCompliance,
@@ -43,15 +42,6 @@ const DAILY_STAGE_LABELS: Record<TrackerStage, string> = {
   reflect: "Pravila osvrta",
 };
 
-/** Where a Topstep limit came from, said after the amount. */
-const BASIS_TEXT: Record<LimitBasis, string> = {
-  topstep_dll: "DLL Topstep plana",
-  personal_dll: "lični dnevni limit gubitka",
-  topstep_budget: "budžet rizika na ulazu",
-  topstep_budget_slippage: "budžet rizika na ulazu + 10 % za proklizavanje",
-  daily_target: "lični dnevni cilj profita",
-};
-
 /** Phase Q rules, whose `not_yet` means the trade is still open, not the Topstep day. */
 const REVIEW_KEYS: ReadonlySet<string> = new Set([
   "htf_bias_set",
@@ -65,11 +55,10 @@ const REVIEW_KEYS: ReadonlySet<string> = new Set([
 const closeTime = (iso: string) => fmtInTz(iso, DEFAULT_TZ, "HH:mm");
 
 /**
- * The verdict of a day-trading rule (F4), whose numbers are a time, a window or
- * the day's banked profit rather than a loss. Null for every other rule and for
- * the reasons the generic text already says right.
+ * The verdict of a rule in its own words: a time, a window, a run of stops.
+ * Null for the reasons the generic text already says right.
  */
-function dayTradingText(res: AutoRuleResult, currency: string): string | null {
+function dayTradingText(res: AutoRuleResult): string | null {
   const verdict = res.reason === "violated" || res.reason === "ok";
   if (!verdict) return null;
   const broke = res.reason === "violated";
@@ -79,11 +68,6 @@ function dayTradingText(res: AutoRuleResult, currency: string): string | null {
       return broke
         ? `Prekršeno: ulaz posle ${res.counted.observed} SL zaredom — dan je bio gotov.`
         : `U okviru — najduži niz SL pre ulaza: ${res.counted.observed} od ${res.counted.limit}.`;
-    case "no_entry_after_daily_target":
-      if (res.observed == null || res.limit == null) return null;
-      return broke
-        ? `Prekršeno: ulaz posle ${fmtMoney(res.observed, currency)} zatvorenog profita, a dnevni cilj je ${fmtMoney(res.limit, currency)}.`
-        : `U okviru — pre ulaza najviše ${fmtMoney(res.observed, currency)} od cilja ${fmtMoney(res.limit, currency)}.`;
     case "flat_by_close":
       if (!res.at) return null;
       return broke
@@ -128,7 +112,7 @@ function dayTradingText(res: AutoRuleResult, currency: string): string | null {
       return broke ? "Trejd nema nijednu sliku charta." : "Svaki trejd ima sliku charta.";
     case "honest_tags":
       return broke
-        ? "Tag se ne slaže sa automatskim pravilom na istom trejdu: „Ispoštovao rizik“ uz pao rizik ili stop, ili ocena A uz prekršeno pravilo."
+        ? "Tag se ne slaže sa automatskim pravilom na istom trejdu: „Ispoštovao rizik“ bez stopa, ocena A uz prekršeno pravilo, ili „Vodio po planu“ bez playbook-a pre ulaza."
         : "Nijedan tag se ne sukobljava sa automatskim pravilima.";
     default:
       return null;
@@ -140,21 +124,15 @@ function dayTradingText(res: AutoRuleResult, currency: string): string | null {
  *
  * Every branch says what to DO about it, because the two most common states are
  * both actionable and neither is a failure: `unconfigured` means you never set a
- * limit, `no_trades` means the rule had nothing to judge.
+ * window, `no_trades` means the rule had nothing to judge.
  */
-function autoReasonText(res: AutoRuleResult, currency: string): string {
-  // The limit the plan gave on THIS day, from the evaluator — the budget at
-  // entry depends on the account's closed trades at that moment.
-  const limit = res.limit ?? null;
-
-  const day = dayTradingText(res, currency);
+function autoReasonText(res: AutoRuleResult): string {
+  const day = dayTradingText(res);
   if (day) return day;
 
   switch (res.reason) {
     case "unconfigured":
-      if (res.key === "trading_window")
-        return "Za ovaj dan nije upisan prozor trgovanja — upiši od–do (po Beogradu) u Settings › Tracker.";
-      return "Nalog nema lični dnevni cilj profita — upiši ga u Settings › Accounts (Topstep) da bi pravilo počelo da se ocenjuje.";
+      return "Za ovaj dan nije upisan prozor trgovanja — upiši od–do (po Beogradu) u Settings › Tracker.";
     case "no_trades":
       return "Nema trejdova po kojima bi se ovo pravilo ocenilo ovog dana.";
     case "no_plans":
@@ -175,16 +153,9 @@ function autoReasonText(res: AutoRuleResult, currency: string): string {
     case "frozen":
       return "Zamrznuto kad je dan zaključan. Ispravka trejda pomera P&L, ali ne i ocenu ovog dana.";
     case "violated":
-      // Both numbers, and which of the plan's numbers the second one is.
-      return res.observed != null && limit != null
-        ? `Prekršeno: ${fmtMoney(res.observed, currency)} od dozvoljenih ${fmtMoney(limit, currency)}${
-            res.basis ? ` (${BASIS_TEXT[res.basis]})` : ""
-          }.`
-        : "Prekršeno.";
+      return "Prekršeno.";
     case "ok":
-      return res.observed != null
-        ? `U okviru limita — najgori ${fmtMoney(res.observed, currency)}.`
-        : "Ispunjeno na svakom trejdu ovog dana.";
+      return "Ispunjeno na svakom trejdu ovog dana.";
   }
 }
 
@@ -318,12 +289,10 @@ function ManualRow({
 function AutoRow({
   rule,
   res,
-  currency,
   tradeLabels,
 }: {
   rule: TrackerRule;
   res: AutoRuleResult | undefined;
-  currency: string;
   tradeLabels: Record<string, string>;
 }) {
   return (
@@ -345,7 +314,7 @@ function AutoRow({
           </p>
           {res && (
             <p className="text-xs text-muted-foreground">
-              {autoReasonText(res, currency)}
+              {autoReasonText(res)}
             </p>
           )}
         </div>
@@ -378,7 +347,6 @@ export type TrackerDayData = {
   auto: AutoResults;
   answers: Record<string, boolean>;
   compliance: DayCompliance;
-  currency: string;
   tradeLabels: Record<string, string>;
   locked: boolean;
 };
@@ -390,8 +358,8 @@ export type TrackerDayData = {
  * looks exactly as it did before the tracker existed.
  *
  * Auto rules whose evaluator reached no verdict are deliberately still shown: an
- * unscored money rule has to be visible saying it has no limit, or the one thing
- * standing between the user and a working rule would be invisible.
+ * unscored rule has to be visible saying why (no window set, no brief), or the
+ * one thing standing between the user and a working rule would be invisible.
  */
 export function TrackerStageSection({
   stage,
@@ -428,7 +396,6 @@ export function TrackerStageSection({
             key={rule.id}
             rule={rule}
             res={data.auto[rule.auto_key]}
-            currency={data.currency}
             tradeLabels={data.tradeLabels}
           />
         ) : (

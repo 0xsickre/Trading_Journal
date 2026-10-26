@@ -12,24 +12,26 @@ export const STAGE_LABELS: Record<TrackerStage, string> = {
 /**
  * Rules the tracker scores from data instead of asking about.
  *
- * The set is closed and mirrors the DB CHECK. Adding one means writing an
- * evaluator, so a key with no evaluator must never be storable.
+ * The set is closed. Adding one means writing an evaluator, so a key with no
+ * evaluator must never be storable.
+ *
+ * Phase X (X-1 B, 26.10.2026): the tracker measures process only. The money
+ * rules — `max_loss_per_day`, `max_loss_per_trade`, `risk_per_trade`,
+ * `risk_matched_intent`, `no_entry_after_daily_target` — left the code; the
+ * trader keeps money limits on each account's own platform. Their
+ * rows stay in the database RETIRED (`deleted_at`), and the DB CHECK still
+ * admits their keys, because a locked day's frozen verdicts point at those
+ * rows. A retired key has no evaluator, so an unlocked past day simply leaves
+ * it out (no verdict = not applicable), and a locked day keeps what it froze.
  */
 export const AUTO_RULE_KEYS = [
-  "max_loss_per_trade",
-  "max_loss_per_day",
   "playbook_linked",
   "stop_loss_set",
   "thesis_written",
-  "risk_per_trade",
-  "risk_matched_intent",
-  // F4, the day trader's rules (G5): flat by the Topstep close, and no entry
-  // inside a red window of the day's brief.
+  // F4, the day trader's rules (G5): flat by the close, and no entry inside a
+  // red window of the day's brief.
   "flat_by_close",
   "no_entry_in_red_window",
-  // 30.09.2026: the day stops on money, never on a count of trades — no entry
-  // once the account's personal daily profit target is banked.
-  "no_entry_after_daily_target",
   // 08.10.2026 (trader, with the mentor): two stop losses IN A ROW end the day.
   // Not a count of trades — a win or a scratch in between breaks the run.
   "stop_after_two_losses",

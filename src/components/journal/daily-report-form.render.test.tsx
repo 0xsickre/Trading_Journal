@@ -67,7 +67,6 @@ function trackerData(over: Partial<TrackerDayData> = {}): TrackerDayData {
       missedRuleIds: [],
       unansweredRuleIds: ["r1"],
     },
-    currency: "USD",
     tradeLabels: {},
     locked: false,
     ...over,

@@ -25,7 +25,6 @@ import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
 import { ReviewGapsCard } from "@/components/journal/review-gaps-card";
 import { reviewGaps } from "@/lib/journal/review-gaps";
-import { sharedCurrency } from "@/lib/journal/format";
 import { accountDayZoneResolver } from "@/lib/journal/time";
 import { topstepRulesResolver } from "@/lib/journal/topstep";
 import { getTopstepSizing } from "@/lib/journal/topstep-status";
@@ -112,15 +111,12 @@ export default async function DailyPage({
           target: primarySizing.target ?? null,
         }
       : null;
-  // Money in the checklist's reasons needs ONE currency; with two the
-  // primary's is used.
-  const currency = sharedCurrency(accounts) ?? primary?.currency ?? "USD";
 
   const checkins = checkinsByDay.get(reportDate) ?? new Map();
 
   // Per-trade timezone, not the primary account's: a trade on a NY account and
   // one on a London account close on different calendar days, and attributing
-  // both with one zone would misfile the money rules for the other.
+  // both with one zone would misfile the stop-loss run for the other.
   //
   // And per-trade DAY RULE: a Topstep account counts Topstep's trading day
   // (17:00 → 17:00 CT), the day its DLL is charged to, so this page, the banner
@@ -157,7 +153,7 @@ export default async function DailyPage({
   }
 
   // Labels for the "show me" links, over both attributions — an offender of a
-  // money rule closed today, one of a decision rule opened today.
+  // stop-loss run closed today, one of a decision rule opened today.
   const tradeLabels: Record<string, string> = {};
   for (const t of [
     ...(index.byOpenDay.get(reportDate) ?? []),
@@ -183,7 +179,6 @@ export default async function DailyPage({
     compliance: computeDayCompliance(reportDate, dayRules, checkins, auto, today, {
       report: report ? { no_trade_day: report.no_trade_day } : null,
     }),
-    currency,
     tradeLabels,
     locked: report?.locked_at != null,
   };
