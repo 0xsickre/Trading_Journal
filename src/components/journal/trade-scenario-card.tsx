@@ -11,7 +11,7 @@ const r2 = (r: number) => `${r > 0 ? "+" : ""}${r.toFixed(2)}R`;
  * What would have happened with this trade (phase L): the price after the exit,
  * what the stop was followed by, the stop that would have lived to the target,
  * and the SL × TP grid — from the exchange's own candles, measured by
- * futures-trading once the Topstep day was over.
+ * futures-trading once the trading day was over (15:10 CT).
  */
 export function TradeScenarioCard({ trade }: { trade: ScenarioTrade }) {
   const s = trade.scenario;
@@ -45,7 +45,7 @@ export function TradeScenarioCard({ trade }: { trade: ScenarioTrade }) {
       <CardHeader className="pb-2">
         <CardTitle className="text-base">What would have happened</CardTitle>
         <p className="text-sm text-muted-foreground">
-          From the exchange candles{s.contract ? ` (${s.contract})` : ""} to the end of the Topstep day. Exit{" "}
+          From the exchange candles{s.contract ? ` (${s.contract})` : ""} to the end of the day (15:10 CT, as futures-trading measures it). Exit{" "}
           {EXIT_LABELS[s.exitKind]}; R = {+s.riskPts.toFixed(2)} pts from the average entry to the stop.
         </p>
       </CardHeader>

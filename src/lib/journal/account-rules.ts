@@ -58,6 +58,7 @@ export function duplicateSettings(src: Account) {
     default_target_pct: src.default_target_pct,
     // A copy is neutral (phase X): no prop firm's rules travel with it.
     practice: src.practice,
+    flat_by: src.flat_by,
   };
 }
 

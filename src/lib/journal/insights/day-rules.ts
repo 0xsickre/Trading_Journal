@@ -1,8 +1,8 @@
 /**
  * Day-level insight rules.
  *
- * A "day" here is a close date on the account's own day — a Topstep account's
- * runs 17:00→17:00 CT — because the day bucket answers what the day produced,
+ * A "day" here is a close date on the account's own day — the CME's,
+ * 17:00→17:00 CT — because the day bucket answers what the day produced,
  * and production is realization. Overtrading and efficiency were measured per
  * WEEK while the book was swing; for a day trader the day is the unit (F5.3).
  */

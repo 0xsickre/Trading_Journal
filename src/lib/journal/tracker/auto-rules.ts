@@ -20,7 +20,7 @@ import { sealedNumber, sealedText } from "../plan-snapshot";
 import { BREAKEVEN_R, tradeOutcome, type BreakevenRange } from "../breakeven";
 import { DEFAULT_TZ, dayKeyIn, zonedDateKey, zonedInputToUtc, type DayZone } from "../time";
 import type { TradingWindow } from "./trading-window";
-import { flatByFor, redWindowAt, type SessionBrief } from "../session-brief";
+import { DEFAULT_FLAT_BY_CT, flatByFor, redWindowAt, type SessionBrief } from "../session-brief";
 import type { AutoRuleKey } from "../tracker-types";
 import type { TradeRow } from "../types";
 import { GRADE_RATING, NO_MISTAKE } from "../quick-log";
@@ -50,10 +50,8 @@ export type AutoReason =
   | "no_brief"
   /** The brief says the exchange was closed that day — there is no close to be flat by. */
   | "market_closed"
-  /** A Topstep position still open, and the close not reached yet. */
-  | "not_yet"
-  /** A Topstep rule, on a day that had no Topstep trade. */
-  | "no_topstep_trades";
+  /** A position still open, and the close not reached yet. */
+  | "not_yet";
 
 export type AutoRuleResult = {
   key: AutoRuleKey;
@@ -113,12 +111,6 @@ export type TrackerTrade = {
    * writing, so it cannot say whether a reason existed beforehand.
    */
   plannedBeforeEntry: boolean;
-  /**
-   * Filed on the Topstep day (17:00 → 17:00 CT, `TopstepDayZone`):
-   * `flat_by_close` grades only these until phase X4 moves it onto the
-   * account's own flat-by time.
-   */
-  topstep: boolean;
   /**
    * What the trader wrote on the trade page (phase Q), read LIVE: these rules
    * ask whether the review was done, and a review is written after the close.
@@ -202,14 +194,16 @@ export type TradeDayIndex = {
 
 /**
  * What the day-trading rules read besides the trades: the morning brief of a
- * Topstep day, and the present moment (a position still open is only late once
- * the close has passed). Both optional — a caller without them gets `no_brief`
- * and the default 15:10 CT close, never a guess.
+ * trading day, each account's flat-by time and the present moment (a position
+ * still open is only late once the close has passed). All optional — a caller
+ * without them gets `no_brief` and the default 16:00 CT, never a guess.
  */
 export type AutoContext = {
   briefOf?: (day: string) => SessionBrief | null;
   /** Epoch ms; defaults to the moment of evaluation. */
   now?: number;
+  /** An account's flat-by time, `HH:MM` Chicago (`flatByResolver`); none = 16:00. */
+  flatByOf?: (accountId: string | null) => string;
   /** The trading window in force on a day (phase Y4, `tradingWindowResolver`); none = unconfigured. */
   tradingWindowOf?: (day: string) => TradingWindow | null;
   /** The day's counted bias forecast per root (phase D, `firstBiasResolver`); none = no card read. */
@@ -261,7 +255,6 @@ function toTrackerTrade(row: TradeRow, zone: DayZone, band: BreakevenRange): Tra
     // let the rule be satisfied by pressing the spacebar.
     hasThesis: (sealedText(row, "thesis") ?? "").trim() !== "",
     plannedBeforeEntry: createdBy(row.created_at, openedAt),
-    topstep: typeof zone !== "string",
     review: reviewOf(row),
   };
 }
@@ -289,7 +282,7 @@ function createdBy(createdAt: string | null | undefined, instant: string): boole
  */
 export function buildTradeDayIndex(
   rows: TradeRow[],
-  /** The account's day rule — a Topstep account counts Topstep's trading day. */
+  /** The account's day rule — the CME trading day. */
   tzOf: (row: TradeRow) => DayZone,
   /** The account's breakeven band (`resolveBreakevenRange`); none = exact zero, still a tenth of a stop's risk. */
   bandOf: (accountId: string | null) => BreakevenRange = () => DEFAULT_BAND,
@@ -547,35 +540,42 @@ function evalStopAfterTwoLosses(opened: TrackerTrade[], closedToday: TrackerTrad
 }
 
 /**
- * Every Topstep position opened on the day is flat by that Topstep day's close:
- * the brief's time (a holiday or an early close), else 15:10 CT.
+ * Every position opened on the day is flat by its account's flat-by time that
+ * day (phase X, X-9 A) — or earlier, when the brief says the exchange closes
+ * earlier (a holiday or an early close; `flatByFor`).
  *
- * A position still open is late only once the close has passed; before that it
+ * A position still open is late only once its close has passed; before that it
  * is `not_yet`, not a pass — nothing about it has been decided.
  */
 function evalFlatByClose(day: string, opened: TrackerTrade[], ctx: Required<AutoContext>): AutoRuleResult {
   const key: AutoRuleKey = "flat_by_close";
   if (opened.length === 0) return na(key, "no_trades");
-  const topstep = opened.filter((t) => t.topstep);
-  if (topstep.length === 0) return na(key, "no_topstep_trades");
-  const flat = flatByFor(day, ctx.briefOf(day));
-  if (flat.at == null) return na(key, "market_closed");
-  const close = epoch(flat.at);
+  const brief = ctx.briefOf(day);
+  const closes = opened.map((t) => flatByFor(day, brief, ctx.flatByOf(t.accountId)).at);
+  if (closes.every((c) => c == null)) return na(key, "market_closed");
   const offenders: string[] = [];
   let pending = 0;
-  for (const t of topstep) {
+  // The close shown: the first late position's, else the day's (one account's,
+  // or the first one with a close).
+  let at: string | null = null;
+  opened.forEach((t, i) => {
+    const close = closes[i];
+    if (close == null) return;
     const out = t.closedAt != null ? epoch(t.closedAt) : null;
-    if (out != null ? out > close : ctx.now > close) offenders.push(t.id);
-    else if (out == null) pending++;
-  }
-  if (offenders.length === 0 && pending === topstep.length) return { ...na(key, "not_yet"), at: flat.at };
+    if (out != null ? out > epoch(close) : ctx.now > epoch(close)) {
+      if (offenders.length === 0) at = close;
+      offenders.push(t.id);
+    } else if (out == null) pending++;
+  });
+  at ??= closes.find((c) => c != null) ?? null;
+  if (offenders.length === 0 && pending === opened.length) return { ...na(key, "not_yet"), at };
   const breached = offenders.length > 0;
   return {
     key,
     verdict: breached ? "fail" : "pass",
     reason: breached ? "violated" : "ok",
     offenders,
-    at: flat.at,
+    at,
   };
 }
 
@@ -621,6 +621,7 @@ export function evaluateAutoRulesForDay(
     briefOf: context.briefOf ?? (() => null),
     now: context.now ?? Date.now(),
     tradingWindowOf: context.tradingWindowOf ?? (() => null),
+    flatByOf: context.flatByOf ?? (() => DEFAULT_FLAT_BY_CT),
     biasOf: context.biasOf ?? (() => null),
   };
 

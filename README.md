@@ -232,7 +232,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,769 tests across 183 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,773 tests across 183 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -376,7 +376,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/journal` | Trade table — sorting, filtering, column picking. The date column carries the **year**, so a trade from last season does not read as this spring |
 | `/trades/[id]` | **The trade page** (phase P, 14.10.2026) — one page per trade, in the order the recording is watched. (1) The trade as the import brought it, read only: account, direction, contracts, entry → exit (Belgrade time), duration, net P/L, R, MAE/MFE, costs, risk to the stop (phase X; the risk budget before) — **fills are never typed** (decision P-1); the stop order's last price and, when the orders file shows the stop was moved, the request for the original. (2) **Off the recording:** the original stop (the one value typed by hand — a stop moved to breakeven leaves only its last price in the export), the target, the planned R:R against the actual fill, and what was said before the click (`thesis`). (3) **Setup:** the playbook and its checklist (`PlaybookChecklist`) with the computed setup grade. (4) **Context:** the trader's own categories of phase `always` from `tj_field_defs`, in the order of Settings — a new category appears without code. (5) **Review:** A/B/C for execution everywhere (decision P-2; A writes "Bez greške"), the categories of phase `active` (exit reason pre-filled from the prices, mistakes, psychology), one sentence. (6) Charts — a list grown with "+ Add chart" (up to 20, `tj_trade_images.sort_order`; an uploaded screenshot, a pasted image or a TradingView link, private bucket `trade-images`, K6), (7) "Šta bi bilo". A **missed setup** opens the same page with its levels editable (`updateMissedSetup`) and no grade. One save, `saveTradeReview`: the columns and `custom` in one UPDATE, then the checklist through `ruleAnswerWrites` — it writes the offered answers and removes only answers to rules of the chosen playbook it no longer offers, or, when the playbook changed, the previous playbook's (P-3); never `tj_save_trade`, which deletes every answer first and would have erased trade #1's answers to retired rules. The plan-before-entry fields left with the old two-tab form: Planned Entry as input, Position Size, Scale-out, Invalidation, Time stop and Slippage (0 of 3 trades had them; columns stay). `/trades/[id]/edit` and `/trades/[id]/review` redirect here, so old links still land |
 | `/trades/missed/new` | **Propušten setup** (phase O): a setup seen on the recording and not taken — entry, stop, target, time, setup, reason — saved as a `missed` position the R2 walk prices |
-| `/daily` | **The day in the order it is lived**, in three numbered parts under the day's heading (`daily-report-form.tsx`). **1 · Pre sesije**: the morning brief ("Pred sesiju", `tj_session_briefs`, `session-brief-card.tsx` — the Topstep close on the account's clock, "berza zatvorena" when the brief says so, the red windows, the expected NQ / ES range (the DLL left on today's page went in phase X); without a brief it says so and shows the ordinary 15:10 CT close, and a window it cannot read is dropped and counted, never guessed), then **"Pre nego što uđeš"** — two questions, numbered and about the day ahead: *1. Kako si danas?* (mental state, 5 stars, a warning under 3; a rating saved after the day's first entry reads
+| `/daily` | **The day in the order it is lived**, in three numbered parts under the day's heading (`daily-report-form.tsx`). **1 · Pre sesije**: the morning brief ("Pred sesiju", `tj_session_briefs`, `session-brief-card.tsx` — the Topstep close on the account's clock, "berza zatvorena" when the brief says so, the red windows, the expected NQ / ES range (the DLL left on today's page went in phase X); without a brief it says so and shows the primary account's flat-by time (phase X4; 15:10 CT before), and a window it cannot read is dropped and counted, never guessed), then **"Pre nego što uđeš"** — two questions, numbered and about the day ahead: *1. Kako si danas?* (mental state, 5 stars, a warning under 3; a rating saved after the day's first entry reads
 "Ocena upisano DD.MM. HH:MM, posle prvog ulaza (HH:MM)" — `tj_daily_reports.mental_temp_at`, stamped by
 a trigger, phase Y; a mark only, no rule reads it) and *2. Da li danas trguješ?* ("Danas ne trgujem", a decision taken before the session; with it set and no trade taken the checklist disappears and the day is a rest day) — and the preparation rules. **2 · Tokom sesije**: the trading rules, scored from the trades and the brief. **3 · Posle sesije**: **Bez pregleda** (the day's closed trades still missing a setup or an A/B/C grade, or — phase Q — an imported trade the orders file never reached, with no last stop and no entry order type; each a link to its review, `review-gaps.ts`; the 15:20 CT Telegram reminder in `futures-trading` applies the same rule), the review rules, then save and lock. The focus goal, the day's result card and the streak strip left in phase M (08.10.2026): the page measures, and closing the day is the conversation with the mentor over the day's mentor pack. Until 29.09.2026 the page opened with the day's money and asked "before you enter" only after the trading rules, with a no-trade box in the past tense that pointed at a position card H1 had removed. The rules are grouped as "Pravila pripreme / trgovanja / osvrta" here, in the page's language, and within each group **the rules to tick come first and the scored ones below** (K1) — a new rule lands in its own half whatever its order; Settings edits them under the English stage names |
 | `/calendar` | Monthly P&L grid by day, weekly totals |
@@ -386,7 +386,7 @@ a trigger, phase Y; a mark only, no rule reads it) and *2. Da li danas trguješ?
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
-| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both; the seeded tags are Serbian since K2, `20260929200000`, which rewrote the trades that carried them), Tracker, Instruments (the eight futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, the **timezone** shown, not typed: every time is in Europe/Belgrade (`DEFAULT_TZ`, K5, `20260929210000`), a file with its own offset is converted on import, and a Topstep account still counts its days by 17:00 CT; the **breakeven range** shown, not typed (§ Metrics, K4), and **Practice / demo account** — a flag, `tj_accounts.practice`; since phase X2 (26.10.2026) no prop firm's rules are set here: the Topstep columns of an older account stay as they were and are not editable, and a duplicate copies none of them), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion lives under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
+| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both; the seeded tags are Serbian since K2, `20260929200000`, which rewrote the trades that carried them), Tracker, Instruments (the eight futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, the **timezone** shown, not typed: every time is in Europe/Belgrade (`DEFAULT_TZ`, K5, `20260929210000`), a file with its own offset is converted on import, and every account counts its days by the CME's 17:00 CT; the **breakeven range** shown, not typed (§ Metrics, K4), **Flat by (Chicago time)** — `tj_accounts.flat_by`, 16:00 unless set, what `flat_by_close` grades against (phase X4) — and **Practice / demo account** — a flag, `tj_accounts.practice`; since phase X2 (26.10.2026) no prop firm's rules are set here: the Topstep columns of an older account stay as they were and are not editable, and a duplicate copies none of them), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion lives under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
 | `/login` | Supabase auth |
 
 ---
@@ -648,12 +648,13 @@ Get this wrong and nothing breaks — the numbers simply file themselves under d
   open trades would report a perfect day.
 - **Days are the ACCOUNT's**, resolved on the server. A `new Date()` read in the browser shifts the
   whole calendar by one column for anyone not sitting in the account's zone.
-- **A Topstep account counts Topstep's trading day, 17:00 → 17:00 Chicago**; any other account counts
-  the calendar day of its own zone. The rule comes from `topstep_mode` (`accountDayZone` in
-  `time.ts`), not from a separate setting: a fill at 18:30 CT on Monday is Tuesday's, and the Sunday
+- **Every account counts the CME trading day, 17:00 → 17:00 Chicago** (phase X4, X-3 A, 26.10.2026:
+  the exchange's day, not a prop firm's — until then only an account in Topstep mode had it, and any
+  other counted the calendar day of its own zone). `accountDayZone` / `cmeTradingDay` in `time.ts`,
+  no setting: the book holds CME futures only. A fill at 18:30 CT on Monday is Tuesday's, and the Sunday
   open is Monday's. One resolver (`accountDayZoneResolver`, a `DayZone` per account) dates every
   trade for the calendar, `/daily` and "Bez pregleda", the tracker verdicts, the dashboard, the
-  reports and the day-level insights — the same day `topstepTradingDay` computes and the 15:20 CT
+  reports and the day-level insights — the same day `cmeTradingDay` computes and the 15:20 CT
   reminder in `futures-trading` counts, so the calendar and `/daily` do not disagree about an evening. In "All accounts"
   **every trade keeps its own account's rule**: a day must not change with the filter on the screen.
   The week is the week of that day (Sunday evening opens the new one), and the hour of entry is still
@@ -1090,13 +1091,13 @@ two, no setting). The weekly loss rule and the percentage-of-equity limits left 
 (`20260929170000`).
 
 **The day trader's rules (F4 `20260929110000`, 08.10.2026 `20261008140000`) and the review rules (phases Q, Y).** Each
-day-trading rule is a decision taken at entry, so each is charged to the Topstep day the trade was OPENED on:
+day-trading rule is a decision taken at entry, so each is charged to the trading day the trade was OPENED on:
 
 | Rule | Fails when | Not scored (`na`) when |
 |---|---|---|
-| `flat_by_close` | a Topstep position closed after that day's close, or is still open once the close has passed | the day had no Topstep trade, the brief says the exchange was closed, or a position is still open before the close |
+| `flat_by_close` | a position closed after its account's flat-by time that day, or is still open once that time has passed — on every account since phase X4 (`tj_accounts.flat_by`, `HH:MM` Chicago, 16:00 unless set, migration `20261026140000`; it was Topstep's 15:10 CT on Topstep accounts only) | no trade opened that day, the brief says the exchange was closed, or a position is still open before the close |
 | `no_entry_in_red_window` | an entry falls inside a red window of the day's brief, both edges included | the day has no brief |
-| `stop_after_two_losses` (08.10.2026, `20261008140000`) | an entry on an account follows two stop losses IN A ROW, closed before it that Topstep day — a loss is below the breakeven band (on Topstep a tenth of the trade's risk), so a win or a scratch in between breaks the run | the day had no entry, or a close before the entry has no price |
+| `stop_after_two_losses` (08.10.2026, `20261008140000`) | an entry on an account follows two stop losses IN A ROW, closed before it that trading day — a loss is below the breakeven band (a tenth of the trade's risk), so a win or a scratch in between breaks the run | the day had no entry, or a close before the entry has no price |
 | `htf_bias_set` (phase Q, 14.10.2026, `20261014120000`; phase D, 17.10.2026) | from 19.10.2026 (`BIAS_CARD_SINCE`): a trade opened that day on NQ / ES / GC or their micros has no forecast on the /daily card for its root set no later than its entry — the day's FIRST forecast counts, graded at entry like the stop. Before that day, and on an instrument with no daily bias (6E): the trade has no "Bias dana" (`custom.htf_bias`), or it says "Nisam odredio unapred" | no trade opened that day; before 19.10.2026 also every one still open (`not_yet`) |
 | `thesis_recorded` (phase Q) | a trade has no `thesis` ("šta sam rekao pre klika"), read live; WHEN it was said is the recording's, so the mentor's | as above |
 | `review_complete` (phase Q) | a trade lacks a grade, an exit reason, the bias (from 19.10.2026 the card's, phase D), TF ulaza (`custom.entry_tf`), a psychology tag, or a mistake when the grade is not A | as above |
@@ -1104,9 +1105,10 @@ day-trading rule is a decision taken at entry, so each is charged to the Topstep
 | `honest_tags` (phase Q) | on the same trade: "Ispoštovao rizik" beside a failed `stop_loss_set` (phase X: the risk rules it was also read against are gone), or an A ("Bez greške") beside any failed trading rule, or (phase Y5, 15.10.2026) "Vodio po planu" on a trade without a playbook or with one created after the entry; the review rules do not count as trading errors. Evaluated last, from the other verdicts | as above |
 | `trading_window` (phase Y4, 15.10.2026, `20261015090000`) | an entry before `from` or from `to` on, or a position still open once the minute of `to` has passed — an exit within that minute is the time exit, not a breach. Times are Belgrade; the window is `config.windows[]` of `{ since, from, to }`, the latest `since` on or before the day applies (London weeks 09:00–12:00, NY weeks 14:30–18:00), set in Settings › Tracker ("Save window", `setTradingWindow`), so a change next Monday leaves this week as it was. Reverses Q-2's retired "Vreme trgovanja" | no trade opened that day, or no window for the day (`unconfigured`) |
 
-The close is the brief's
-(`flat_by`: holiday, early close), else 15:10 CT — a default that can only be later than a holiday
-close, so a missing brief can miss a breach but never invent one. The red windows are only the
+The close is the account's flat-by time (Settings › Accounts, "Flat by (Chicago time)"), unless the
+day's brief says the exchange closes EARLIER — a holiday or an early close (`flatByFor` in
+`session-brief.ts`). A brief that states its ordinary 15:10 CT is not an early close: that time was
+Topstep's, and the account's own stands. A missing brief can miss an early close but never invent one. The red windows are only the
 brief's: there is no fixed fifteen minutes, and a day without a brief grades nothing rather than
 guessing. The checklist says a close time, a window, or the run of stops.
 
@@ -1242,12 +1244,12 @@ book ran Topstep's rules (F3, R, T: `topstep.ts`, `topstep-status.ts`, `topstep-
 - the Topstep section of the mentor pack, and the parity test with `futures-trading`'s brief
   (`racun.py` there is left as it is until the trader decides on the brief, X-10).
 
-**What stays until later steps of phase X:** the 17:00 → 17:00 CT trading day, still keyed by
-`topstep_mode` (X4 turns it into the CME day for every futures account); the `flat_by_close`
-horizon of 15:10 CT (X4: the account's own flat-by time); the `tj_accounts.topstep_*` and
-`risk_rule_*` columns and `tj_positions.risk_budget_at_entry` / `room_at_entry`, which nothing
-writes or reads any more except `topstep_mode` (X6 drops them, once the brief is checked); and the
-TopstepX import formats, which are a platform's files, not a firm's rules (X-7).
+**Phase X4** made the 17:00 → 17:00 CT day the CME day of every account (§ Attributing to days) and
+gave `flat_by_close` the account's own flat-by time (§ Process tracking). **What stays:** the
+`tj_accounts.topstep_*` and `risk_rule_*` columns and `tj_positions.risk_budget_at_entry` /
+`room_at_entry`, which nothing writes or reads any more (X6 drops them, once the brief is checked);
+the 15:10 CT horizon of "Šta bi bilo" and of a missed plan, which `futures-trading` computes (X-10);
+and the TopstepX import formats, which are a platform's files, not a firm's rules (X-7).
 
 ---
 
@@ -1622,8 +1624,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,769 tests across 183 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,227 tests in 125 files) and `components` (environment `jsdom`, files `*.test.tsx`, 542
+2,773 tests across 183 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,230 tests in 125 files) and `components` (environment `jsdom`, files `*.test.tsx`, 543
 tests in 58 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

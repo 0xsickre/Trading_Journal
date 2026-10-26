@@ -24,6 +24,7 @@ const account = (over: Partial<Account> = {}): Account => ({
   id: "acc-1",
   name: "Main Account",
   practice: false,
+  flat_by: "16:00",
   broker: null,
   currency: "USD",
   starting_balance: 100_000,

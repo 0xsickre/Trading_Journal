@@ -421,7 +421,7 @@ export type MentorPackOpts = {
    */
   fieldDefs?: FieldDef[];
   /**
-   * Each trade's account day rule (a Topstep account's 17:00 CT day). With it
+   * Each trade's account day rule (the CME's 17:00 CT day). With it
    * the pack carries the intraday sections (F5.6); without it, UTC days and
    * none of them — the swing-era pack, which the tests of its other parts use.
    */
@@ -603,7 +603,7 @@ export function buildMentorPack(
   if (intraday) {
     out.push(
       [
-        "- **Trading dan** — Topstep dan traje od 00:00 do 00:00 po Beogradu (17:00 po Čikagu), a završava se u 22:10 (flat): sesija posle ponoći pripada tom danu. Svi dnevni brojevi su po tom danu. U nedelji 25.10.–01.11. (i kad Evropa i SAD menjaju sat u različite dane) sve NY granice su sat ranije.",
+        "- **Trading dan** — CME dan traje od 00:00 do 00:00 po Beogradu (17:00 po Čikagu); pozicija mora biti zatvorena do mog vremena „ravno do“ iz Settings (podrazumevano 16:00 po Čikagu, 23:00 po Beogradu): sesija posle ponoći pripada tom danu. Svi dnevni brojevi su po tom danu. U nedelji 25.10.–01.11. (i kad Evropa i SAD menjaju sat u različite dane) sve NY granice su sat ranije.",
         "- **Sesije (po Beogradu, kao linije na chartu)** — Azija 00:00–06:00, Pre Londona 06:00–09:00, London 09:00–14:00, NY pre otvaranja 14:00–15:30, NY AM 15:30–17:30, Ručak 17:30–19:30, NY PM 19:30–22:00, Posle zatvaranja 22:00–00:00. Svaka granica je po satu svoje berze (London ili NY). **Minuti posle otvaranja** se broje od otvaranja sesije trejda: London 09:00, NY 15:30.",
         "- **Posle gubitaka** — koliko je gubitaka zaredom već bilo zatvoreno tog dana na istom nalogu u trenutku ulaza. Samo analitika: broj trejdova ne ograničavam. Novčane limite (dnevni gubitak, cilj) držim sam na platformi naloga; journal ih ne meri.",
         "- **Vreme u minusu** — % trajanja trejda u kome je tekući P&L bio ispod nule, iz berzanskih sveća (1 s).",

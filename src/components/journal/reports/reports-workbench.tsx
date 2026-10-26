@@ -219,8 +219,8 @@ export function ReportsWorkbench({
 
   const tzOf = useMemo(() => {
     const primary = primaryAccount(accounts);
-    // Each trade's day by its own account's rule — Topstep's trading day on a
-    // Topstep account — the same days the calendar and /daily file it under.
+    // Each trade's day by its own account's rule — the CME trading day — the
+    // same days the calendar and /daily file it under.
     const resolve = accountDayZoneResolver(accounts, primary);
     return (t: { row: TradeRow }) => resolve(t.row.account_id);
   }, [accounts]);

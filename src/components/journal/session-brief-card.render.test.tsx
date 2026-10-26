@@ -22,8 +22,9 @@ describe("SessionBriefCard", () => {
   it("shows the end of day, the windows and the ranges on the account's clock", () => {
     render(<SessionBriefCard day="2026-09-29" brief={brief} tz="America/New_York" />);
     expect(screen.getByText("Pred sesiju")).toBeInTheDocument();
-    // 20:10 UTC = 16:10 New York (EDT).
-    expect(screen.getByText("16:10")).toBeInTheDocument();
+    // The brief's ordinary 15:10 CT is not an early close: the account's 16:00 CT
+    // stands (phase X) — 21:00 UTC, 17:00 New York (EDT).
+    expect(screen.getByText("17:00")).toBeInTheDocument();
     expect(screen.getByText("08:25–08:45")).toBeInTheDocument();
     expect(screen.getByText("CPI m/m")).toBeInTheDocument();
     expect(screen.getByText("312 pts (80 %: 210–450)")).toBeInTheDocument();
@@ -32,11 +33,11 @@ describe("SessionBriefCard", () => {
     expect(screen.getByRole("link", { name: "Ceo brief" })).toHaveAttribute("href", "https://example.test/brief.html");
   });
 
-  it("without a brief says so and still gives the ordinary close", () => {
-    render(<SessionBriefCard day="2026-09-30" brief={null} tz="America/New_York" />);
+  it("without a brief says so and still gives the account's flat-by time", () => {
+    render(<SessionBriefCard day="2026-09-30" brief={null} tz="America/New_York" flatBy="15:30" />);
     expect(screen.getByText(/Brief za ovaj dan nije stigao/)).toBeInTheDocument();
-    expect(screen.getByText("16:10")).toBeInTheDocument();
-    expect(screen.getByText(/uobičajeno 15:10 CT/)).toBeInTheDocument();
+    expect(screen.getByText("16:30")).toBeInTheDocument();
+    expect(screen.getByText(/tvoje vreme iz Settings/)).toBeInTheDocument();
     expect(screen.queryByText(/Crveni prozori/)).not.toBeInTheDocument();
   });
 

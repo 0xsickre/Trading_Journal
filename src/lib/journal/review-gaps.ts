@@ -7,8 +7,8 @@
  * Mostly the trades that reached the journal only through the day's export —
  * the ones not logged right after they closed. The evening reminder in the
  * futures-trading repo (`tools/journal_podsetnik.py`) applies the same rule, on
- * the same day — `dayOf` is the account's day rule, Topstep's 17:00 → 17:00 CT
- * on a Topstep account, which is what the reminder counts; change both or neither.
+ * the same day — `dayOf` is the account's day rule, the CME's 17:00 → 17:00 CT,
+ * which is what the reminder counts; change both or neither.
  */
 import { numberFieldValue } from "./field-values";
 import { sealedNumber } from "./plan-snapshot";

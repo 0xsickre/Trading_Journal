@@ -360,7 +360,7 @@ describe("the day-trading rules say the close and the window (F4)", () => {
         })}
       />,
     );
-    expect(screen.getByText(/posle kraja Topstep dana \(22:10\)/)).toBeInTheDocument();
+    expect(screen.getByText(/posle vremena „ravno do“ \(22:10\)/)).toBeInTheDocument();
     expect(screen.getByText(/ulaz u crvenom prozoru \(USD CPI m\/m\)/)).toBeInTheDocument();
   });
 
@@ -382,6 +382,6 @@ describe("the day-trading rules say the close and the window (F4)", () => {
       />,
     );
     expect(screen.getByText(/Brief za ovaj dan nije stigao/)).toBeInTheDocument();
-    expect(screen.getByText(/Pozicija je još otvorena — ocenjuje se posle kraja Topstep dana \(22:10\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Pozicija je još otvorena — ocenjuje se posle vremena „ravno do“ \(22:10\)/)).toBeInTheDocument();
   });
 });

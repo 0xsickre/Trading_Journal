@@ -3,8 +3,8 @@ import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 /**
  * The trader's zone, and the zone every time in the journal is shown in (K5,
  * 29.09.2026). Not a setting any more: a file that carries its own offset is
- * converted on import (`parseImportTime`), and a Topstep account keys its days
- * by Topstep's 17:00 CT day whatever this says.
+ * converted on import (`parseImportTime`), and every account keys its days by
+ * the CME's 17:00 CT day whatever this says.
  */
 export const DEFAULT_TZ = "Europe/Belgrade";
 
@@ -551,32 +551,37 @@ export function accountTimezoneResolver(
 const CHICAGO = "America/Chicago";
 
 /**
- * The Topstep trading day an instant belongs to: 17:00 Chicago starts the next
+ * The CME trading day an instant belongs to: 17:00 Chicago starts the next
  * one, so a fill at 18:30 CT on Monday is Tuesday's and the Sunday open is
  * Monday's. Computed in Chicago whatever the account's zone — Belgrade matches
  * it most of the year and drifts by an hour for the weeks the two switch to
  * summer time on different dates.
+ *
+ * The exchange's day, not a prop firm's (phase X, X-3 A, 26.10.2026): it was
+ * "the Topstep day" and keyed only accounts in Topstep mode until then.
  */
-export function topstepTradingDay(iso: string | Date | null | undefined): string {
+export function cmeTradingDay(iso: string | Date | null | undefined): string {
   const day = zonedDateKey(iso, CHICAGO);
   const hour = zonedHour(iso, CHICAGO);
   if (!day || hour == null || hour < 17) return day;
   return addDaysToDayKey(day, 1);
 }
 
-/** A Topstep account's day rule. `tz` stays the clock hours and dates are shown on. */
-export type TopstepDayZone = { tz: string; topstep: true };
+/** The CME day rule of an account. `tz` stays the clock hours and dates are shown on. */
+export type CmeDayZone = { tz: string; cme: true };
 
 /**
- * How an account turns instants into days: a zone name for the calendar day
- * there, or a Topstep account's trading day (17:00 → 17:00 Chicago).
+ * How instants turn into days: a zone name for the calendar day there, or the
+ * CME trading day (17:00 → 17:00 Chicago) shown on a zone's clock.
  *
  * A union with the plain zone name on purpose. Every module that keyed days on
- * `tzOf(row)` keeps its signature and its tests; a Topstep zone flowing into a
+ * `tzOf(row)` keeps its signature and its tests; a CME zone flowing into a
  * function that only takes a zone name is a type error, which is how every
- * place a day is counted was found.
+ * place a day is counted was found. Every account's day is the CME one since
+ * phase X — the book holds CME futures only — so a plain zone is what tests
+ * and the calendar-day helpers pass.
  */
-export type DayZone = string | TopstepDayZone;
+export type DayZone = string | CmeDayZone;
 
 /** The clock of a day zone — for hours and for formatting, never for the day. */
 export function zoneTz(zone: DayZone): string {
@@ -585,7 +590,7 @@ export function zoneTz(zone: DayZone): string {
 
 /** The day key of an instant under an account's rule. "" when unknown. */
 export function dayKeyIn(iso: string | Date | null | undefined, zone: DayZone): string {
-  return typeof zone === "string" ? zonedDateKey(iso, zone) : topstepTradingDay(iso);
+  return typeof zone === "string" ? zonedDateKey(iso, zone) : cmeTradingDay(iso);
 }
 
 /** Monday of the ISO week of `day`; "" for an unparseable key. */
@@ -597,7 +602,7 @@ function weekStartOfKey(day: string): string {
 /**
  * The week key (its Monday) of an instant under an account's rule — the week
  * of its DAY, so the two cannot disagree: Sunday evening's Globex session is
- * Monday's on a Topstep account, and so is its week.
+ * Monday's on the CME day, and so is its week.
  */
 export function weekKeyIn(iso: string | Date | null | undefined, zone: DayZone): string {
   if (typeof zone === "string") return zonedWeekStartKey(iso, zone);
@@ -611,45 +616,45 @@ export function todayIn(zone: DayZone, now: Date = new Date()): string {
 }
 
 /**
- * An account's day rule: Topstep's trading day in Topstep mode, the calendar
- * day of its zone otherwise. Derived from `topstep_mode`, not a separate
- * setting — turning the mode off gives the account calendar days back.
+ * An account's day rule: the CME trading day, on the account's clock — every
+ * account since phase X (X-3 A). No account at all is the trader's own clock,
+ * the same day rule.
  */
-export function accountDayZone(account: { timezone: string; topstep_mode?: boolean | null }): DayZone {
-  return account.topstep_mode ? { tz: account.timezone, topstep: true } : account.timezone;
+export function accountDayZone(account: { timezone: string } | null | undefined): CmeDayZone {
+  return { tz: account?.timezone ?? DEFAULT_TZ, cme: true };
 }
 
 /**
  * `accountTimezoneResolver`'s twin for DAYS: account → primary account →
- * `DEFAULT_TZ`, the same chain, each link by its own rule. Every trade is dated
- * by its own account's rule, in "All accounts" too — a day must not change with
- * the filter on the screen.
+ * `DEFAULT_TZ`, the same chain. Every trade is dated by its own account's
+ * clock, in "All accounts" too — a day must not change with the filter on the
+ * screen.
  */
 export function accountDayZoneResolver(
-  accounts: readonly { id: string; timezone: string; topstep_mode?: boolean | null }[],
-  primary?: { timezone: string; topstep_mode?: boolean | null } | null,
+  accounts: readonly { id: string; timezone: string }[],
+  primary?: { timezone: string } | null,
 ): (accountId: string | null | undefined) => DayZone {
   const byId = new Map(accounts.map((a) => [a.id, accountDayZone(a)]));
-  const fallback: DayZone = primary ? accountDayZone(primary) : DEFAULT_TZ;
+  const fallback = accountDayZone(primary);
   return (accountId) => (accountId ? byId.get(accountId) : undefined) ?? fallback;
 }
 
 /**
  * Today for an account — the primary one, on every screen that has a "today".
- * On a Topstep primary, 17:00 Chicago is already tomorrow: the evening session
- * is the next day's, and so is the page that opens for it.
+ * After 17:00 Chicago it is already tomorrow: the evening session is the next
+ * day's, and so is the page that opens for it.
  */
 export function todayFor(
-  account: { timezone: string; topstep_mode?: boolean | null } | null | undefined,
+  account: { timezone: string } | null | undefined,
   now: Date = new Date(),
 ): string {
-  return todayIn(account ? accountDayZone(account) : DEFAULT_TZ, now);
+  return todayIn(accountDayZone(account), now);
 }
 
 /**
  * The instant a day starts under a day zone, as epoch ms — `dayKeyStartUtc` for
- * a plain zone; for a Topstep account, 17:00 Chicago the evening before, which
- * is when Topstep's day opens. Null for an invalid key.
+ * a plain zone; for the CME day, 17:00 Chicago the evening before, which is
+ * when the exchange's day opens. Null for an invalid key.
  */
 export function dayStartUtcIn(day: string, zone: DayZone): number | null {
   if (typeof zone === "string") return dayKeyStartUtc(day, zone);

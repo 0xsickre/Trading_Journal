@@ -42,7 +42,7 @@ const DAILY_STAGE_LABELS: Record<TrackerStage, string> = {
   reflect: "Pravila osvrta",
 };
 
-/** Phase Q rules, whose `not_yet` means the trade is still open, not the Topstep day. */
+/** Phase Q rules, whose `not_yet` means the trade is still open, not the trading day. */
 const REVIEW_KEYS: ReadonlySet<string> = new Set([
   "htf_bias_set",
   "thesis_recorded",
@@ -71,8 +71,8 @@ function dayTradingText(res: AutoRuleResult): string | null {
     case "flat_by_close":
       if (!res.at) return null;
       return broke
-        ? `Prekršeno: pozicija otvorena posle kraja Topstep dana (${closeTime(res.at)}).`
-        : `Sve pozicije zatvorene pre kraja Topstep dana (${closeTime(res.at)}).`;
+        ? `Prekršeno: pozicija otvorena posle vremena „ravno do“ (${closeTime(res.at)}).`
+        : `Sve pozicije zatvorene do vremena „ravno do“ (${closeTime(res.at)}).`;
     case "no_entry_in_red_window":
       return broke
         ? `Prekršeno: ulaz u crvenom prozoru${res.window ? ` (${res.window})` : ""}.`
@@ -146,10 +146,8 @@ function autoReasonText(res: AutoRuleResult): string {
     case "not_yet":
       if (REVIEW_KEYS.has(res.key)) return "Trejd je još otvoren — pregled se ocenjuje posle izlaza.";
       return res.at
-        ? `Pozicija je još otvorena — ocenjuje se posle kraja Topstep dana (${closeTime(res.at)}).`
-        : "Pozicija je još otvorena — ocenjuje se posle kraja Topstep dana.";
-    case "no_topstep_trades":
-      return "Pravilo važi za Topstep naloge; ovog dana nije bilo Topstep trejdova.";
+        ? `Pozicija je još otvorena — ocenjuje se posle vremena „ravno do“ (${closeTime(res.at)}).`
+        : "Pozicija je još otvorena — ocenjuje se posle vremena „ravno do“.";
     case "frozen":
       return "Zamrznuto kad je dan zaključan. Ispravka trejda pomera P&L, ali ne i ocenu ovog dana.";
     case "violated":

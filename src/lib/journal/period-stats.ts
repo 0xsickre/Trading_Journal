@@ -3,7 +3,7 @@
  *
  * TradeZella's headline cadence metric is Day Win %. The same statistics are
  * computed per day, per ISO week and per calendar month, each on the account's
- * own day rule (a Topstep account's 17:00 → 17:00 CT), so the calendar's cells,
+ * own day rule (the CME's 17:00 → 17:00 CT), so the calendar's cells,
  * side column and header answer the same question at three sizes.
  */
 

@@ -982,6 +982,7 @@ const accountPatchSchema = z
     default_stop_pct: pct("Default stop").nullable().optional(),
     default_target_pct: pct("Default target").nullable().optional(),
     practice: z.boolean().optional(),
+    flat_by: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Flat by is a time, HH:MM.").optional(),
   })
   .strict();
 
@@ -1000,6 +1001,7 @@ export async function updateAccount(
     default_stop_pct?: number | null;
     default_target_pct?: number | null;
     practice?: boolean;
+    flat_by?: string;
   },
 ) {
   // Whitelisted and ranged. The patch used to go straight to the update, so any

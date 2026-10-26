@@ -75,22 +75,40 @@ function row(s: Spec): TradeRow {
 const DAY = "2026-09-29";
 const index = (specs: Spec[]) =>
   buildTradeDayIndex(specs.map(row), (r) => zoneOf(r.account_id));
-const evalDay = (specs: Spec[], ctx: { briefs?: SessionBrief[]; now?: number } = {}) =>
+const evalDay = (
+  specs: Spec[],
+  ctx: { briefs?: SessionBrief[]; now?: number; flatByOf?: (accountId: string | null) => string } = {},
+) =>
   evaluateAutoRulesForDay(DAY, index(specs), {
     briefOf: briefResolver(ctx.briefs ?? []),
     now: ctx.now ?? Date.parse("2026-09-30T12:00:00Z"),
+    ...(ctx.flatByOf ? { flatByOf: ctx.flatByOf } : {}),
   });
 
-// 29.09.2026 is in US summer time: 10:00 New York = 14:00 UTC, 15:10 CT = 20:10 UTC.
+// 29.09.2026 is in US summer time: 10:00 New York = 14:00 UTC, 16:00 CT = 21:00 UTC.
 const at = (hhmm: string) => `${DAY}T${hhmm}:00Z`;
 
-describe("flat_by_close", () => {
-  it("passes a position closed before 15:10 CT and fails one closed after", () => {
-    expect(evalDay([{ id: "ok", opened: at("14:00"), closed: at("20:05") }]).flat_by_close.verdict).toBe("pass");
-    const late = evalDay([{ id: "late", opened: at("14:00"), closed: at("20:12") }]).flat_by_close;
+describe("flat_by_close (phase X, X-9: the account's own time, 16:00 CT unless set)", () => {
+  it("passes a position closed by 16:00 CT and fails one closed after", () => {
+    expect(evalDay([{ id: "ok", opened: at("14:00"), closed: at("20:55") }]).flat_by_close.verdict).toBe("pass");
+    const late = evalDay([{ id: "late", opened: at("14:00"), closed: at("21:02") }]).flat_by_close;
     expect(late.verdict).toBe("fail");
     expect(late.offenders).toEqual(["late"]);
-    expect(late.at).toBe("2026-09-29T20:10:00.000Z");
+    expect(late.at).toBe("2026-09-29T21:00:00.000Z");
+  });
+
+  it("reads each account's own flat-by time", () => {
+    const flatByOf = (id: string | null) => (id === "ts2" ? "15:10" : "16:00");
+    const r = evalDay(
+      [
+        { id: "a", account: "ts", opened: at("14:00"), closed: at("20:30") },
+        { id: "b", account: "ts2", opened: at("14:00"), closed: at("20:30") },
+      ],
+      { flatByOf },
+    ).flat_by_close;
+    expect(r.verdict).toBe("fail");
+    expect(r.offenders).toEqual(["b"]);
+    expect(r.at).toBe("2026-09-29T20:10:00.000Z");
   });
 
   it("uses the brief's early close", () => {
@@ -100,10 +118,16 @@ describe("flat_by_close", () => {
     expect(r.at).toBe("2026-09-29T17:00:00.000Z");
   });
 
+  it("ignores a brief's ordinary 15:10 — that was Topstep's time, not an early close", () => {
+    const ordinary = parseSessionBrief({ trading_day: DAY, flat_by: at("20:10"), red_windows: [], ranges: {} })!;
+    const r = evalDay([{ id: "t", opened: at("14:00"), closed: at("20:30") }], { briefs: [ordinary] }).flat_by_close;
+    expect(r.verdict).toBe("pass");
+  });
+
   it("does not grade a position still open before the close, and fails it after", () => {
     const open = [{ id: "open", opened: at("14:00"), closed: null }];
     expect(evalDay(open, { now: Date.parse(at("18:00")) }).flat_by_close.reason).toBe("not_yet");
-    expect(evalDay(open, { now: Date.parse(at("20:30")) }).flat_by_close.verdict).toBe("fail");
+    expect(evalDay(open, { now: Date.parse(at("21:30")) }).flat_by_close.verdict).toBe("fail");
   });
 
   it("says the exchange was closed rather than grading against no time", () => {
@@ -112,9 +136,9 @@ describe("flat_by_close", () => {
     expect(r.reason).toBe("market_closed");
   });
 
-  it("grades only Topstep accounts", () => {
-    const r = evalDay([{ id: "c", account: "cfd", opened: at("14:00"), closed: at("21:00") }]).flat_by_close;
-    expect(r.reason).toBe("no_topstep_trades");
+  it("grades every account — no prop firm's mode decides it", () => {
+    const r = evalDay([{ id: "c", account: "cfd", opened: at("14:00"), closed: at("21:30") }]).flat_by_close;
+    expect(r.verdict).toBe("fail");
   });
 });
 

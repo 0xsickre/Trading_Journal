@@ -28,7 +28,7 @@ import { reviewGaps } from "@/lib/journal/review-gaps";
 import { accountDayZoneResolver } from "@/lib/journal/time";
 import { breakevenRangeResolver } from "@/lib/journal/breakeven";
 import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
-import { briefResolver } from "@/lib/journal/session-brief";
+import { briefResolver, flatByResolver } from "@/lib/journal/session-brief";
 import { SessionBriefCard } from "@/components/journal/session-brief-card";
 import { tradingWindowResolver } from "@/lib/journal/tracker/trading-window";
 import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
@@ -50,8 +50,8 @@ export default async function DailyPage({
   const dayPromise = accountsPromise.then((accounts) => {
     const primary = primaryAccount(accounts);
     const timezone = primary?.timezone ?? DEFAULT_TZ;
-    // Today by the primary account's day rule: on a Topstep account the
-    // evening session after 17:00 CT is already tomorrow's page.
+    // Today by the primary account's day rule: the evening session after
+    // 17:00 CT is already tomorrow's page.
     const today = todayFor(primary);
     // `isValidDayKey`, not a shape regex: `2026-00-00` matches `\d{4}-\d{2}-\d{2}`
     // and then rolls backwards into December 2025, opening a day that does not
@@ -100,9 +100,8 @@ export default async function DailyPage({
   // one on a London account close on different calendar days, and attributing
   // both with one zone would misfile the stop-loss run for the other.
   //
-  // And per-trade DAY RULE: a Topstep account counts Topstep's trading day
-  // (17:00 → 17:00 CT), so this page and the 21:25 reminder agree on which day
-  // an evening trade belongs to.
+  // And per-trade DAY RULE: the CME trading day (17:00 → 17:00 CT), so this
+  // page and the 21:25 reminder agree on which day an evening trade belongs to.
   const tzFor = accountDayZoneResolver(accounts, primary);
   const tzOf = (row: TradeRow) => tzFor(row.account_id);
   // The real book only: Practice is kept apart (trader, 01.10.2026) — it is read by picking
@@ -125,6 +124,7 @@ export default async function DailyPage({
       briefOf,
       tradingWindowOf: tradingWindowResolver(rules),
       biasOf: firstBiasResolver(biases),
+      flatByOf: flatByResolver(accounts),
     }),
     checkins,
   );
@@ -182,7 +182,7 @@ export default async function DailyPage({
         firstEntryAt={firstEntryAt}
         beforeSession={
           <>
-            <SessionBriefCard day={reportDate} brief={briefOf(reportDate)} tz={timezone} />
+            <SessionBriefCard day={reportDate} brief={briefOf(reportDate)} tz={timezone} flatBy={primary?.flat_by} />
             <DailyBiasCard
               day={reportDate}
               biases={biases.filter((b) => b.tradingDay === reportDate)}

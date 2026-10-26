@@ -91,6 +91,8 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   risk_rule_max               numeric,
   -- Nalog za vežbu, van „All accounts“ (20261026130000, faza X).
   practice                    boolean     NOT NULL DEFAULT false,
+  -- Ravno do, sat po Čikagu (20261026140000, faza X).
+  flat_by                     text        NOT NULL DEFAULT '16:00',
   CONSTRAINT tj_accounts_pkey PRIMARY KEY (id),
   CONSTRAINT tj_accounts_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,

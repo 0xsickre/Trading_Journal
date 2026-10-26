@@ -19,7 +19,7 @@ import {
   todayIn,
   todayFor,
   dayStartUtcIn,
-  topstepTradingDay,
+  cmeTradingDay,
   weekKeyIn,
   zoneTz,
   type DayZone,
@@ -353,51 +353,51 @@ describe("zonedHour", () => {
 });
 
 describe("the day an instant belongs to, on an account's rule (F2)", () => {
-  // A Topstep account counts Topstep's trading day, 17:00 → 17:00 Chicago; any
-  // other account counts the calendar day of its own zone. One instant, two
-  // accounts, two answers — and each is the right one for its account.
-  const TOPSTEP_NY: DayZone = { tz: NY, topstep: true };
+  // The CME trading day, 17:00 → 17:00 Chicago, against the calendar day of a
+  // plain zone. One instant, two rules, two answers. Every account has the CME
+  // day since phase X (X-3 A); a plain zone is what tests and calendar helpers pass.
+  const CME_NY: DayZone = { tz: NY, cme: true };
 
   it("a plain zone is the calendar day there, as zonedDateKey says", () => {
     expect(dayKeyIn("2026-09-28T22:30:00Z", NY)).toBe("2026-09-28"); // 18:30 ET
     expect(dayKeyIn("2026-09-28T22:30:00Z", NY)).toBe(zonedDateKey("2026-09-28T22:30:00Z", NY));
   });
 
-  it("a Topstep account moves to the next day at 17:00 Chicago", () => {
-    expect(dayKeyIn("2026-09-28T21:59:00Z", TOPSTEP_NY)).toBe("2026-09-28"); // 16:59 CT
-    expect(dayKeyIn("2026-09-28T22:30:00Z", TOPSTEP_NY)).toBe("2026-09-29"); // 17:30 CT
+  it("the CME day moves to the next day at 17:00 Chicago", () => {
+    expect(dayKeyIn("2026-09-28T21:59:00Z", CME_NY)).toBe("2026-09-28"); // 16:59 CT
+    expect(dayKeyIn("2026-09-28T22:30:00Z", CME_NY)).toBe("2026-09-29"); // 17:30 CT
   });
 
   it("the boundary is Chicago's in winter too — 17:00 CST is 23:00 UTC", () => {
-    expect(dayKeyIn("2026-11-30T22:30:00Z", TOPSTEP_NY)).toBe("2026-11-30"); // 16:30 CST
-    expect(dayKeyIn("2026-11-30T23:30:00Z", TOPSTEP_NY)).toBe("2026-12-01"); // 17:30 CST
+    expect(dayKeyIn("2026-11-30T22:30:00Z", CME_NY)).toBe("2026-11-30"); // 16:30 CST
+    expect(dayKeyIn("2026-11-30T23:30:00Z", CME_NY)).toBe("2026-12-01"); // 17:30 CST
   });
 
   it("is computed in Chicago, not in the account's zone — Belgrade drifts in March", () => {
     // 16.03.2026: the US is already on summer time, Europe not yet. 17:30 CDT is
-    // 23:30 in Belgrade — still the 16th there, already the 17th for Topstep.
-    const topstepBg: DayZone = { tz: BG, topstep: true };
-    expect(dayKeyIn("2026-03-16T22:30:00Z", topstepBg)).toBe("2026-03-17");
+    // 23:30 in Belgrade — still the 16th there, already the 17th on the CME day.
+    const cmeBg: DayZone = { tz: BG, cme: true };
+    expect(dayKeyIn("2026-03-16T22:30:00Z", cmeBg)).toBe("2026-03-17");
     expect(dayKeyIn("2026-03-16T22:30:00Z", BG)).toBe("2026-03-16");
   });
 
   it("an unreadable instant is no day at all, on either rule", () => {
-    expect(dayKeyIn(null, TOPSTEP_NY)).toBe("");
-    expect(dayKeyIn("not a date", TOPSTEP_NY)).toBe("");
-    expect(weekKeyIn(null, TOPSTEP_NY)).toBe("");
+    expect(dayKeyIn(null, CME_NY)).toBe("");
+    expect(dayKeyIn("not a date", CME_NY)).toBe("");
+    expect(weekKeyIn(null, CME_NY)).toBe("");
   });
 
-  it("the Topstep day is the same function topstep.ts keys its DLL on", () => {
+  it("the CME day is cmeTradingDay, the one the brief's day is keyed on too", () => {
     for (const iso of ["2026-09-28T21:59:00Z", "2026-09-28T22:30:00Z", "2026-09-27T23:00:00Z"]) {
-      expect(dayKeyIn(iso, TOPSTEP_NY)).toBe(topstepTradingDay(iso));
+      expect(dayKeyIn(iso, CME_NY)).toBe(cmeTradingDay(iso));
     }
   });
 });
 
-describe("the week of a Topstep day (D4)", () => {
+describe("the week of a CME day (D4)", () => {
   it("Sunday evening's session opens the new week", () => {
     // Sun 27.09.2026 18:00 CT is Monday's session, so Monday's week.
-    expect(weekKeyIn("2026-09-27T23:00:00Z", { tz: NY, topstep: true })).toBe("2026-09-28");
+    expect(weekKeyIn("2026-09-27T23:00:00Z", { tz: NY, cme: true })).toBe("2026-09-28");
     // The same instant on a calendar account is still Sunday — the old week.
     expect(weekKeyIn("2026-09-27T23:00:00Z", NY)).toBe("2026-09-21");
   });
@@ -409,39 +409,40 @@ describe("the week of a Topstep day (D4)", () => {
   });
 });
 
-describe("which rule an account has (D2: from topstep_mode)", () => {
-  const acc = (id: string, topstep_mode: boolean, timezone = NY) => ({ id, timezone, topstep_mode });
+describe("which rule an account has (phase X, X-3 A: the CME day, always)", () => {
+  const acc = (id: string, timezone = NY) => ({ id, timezone });
 
-  it("a Topstep account gets the Topstep day, any other its own zone", () => {
-    expect(accountDayZone(acc("a", true))).toEqual({ tz: NY, topstep: true });
-    expect(accountDayZone(acc("b", false, BG))).toBe(BG);
+  it("every account gets the CME day on its own clock — no prop firm's mode decides it", () => {
+    expect(accountDayZone(acc("a"))).toEqual({ tz: NY, cme: true });
+    expect(accountDayZone({ ...acc("b", BG), topstep_mode: false } as { timezone: string })).toEqual({ tz: BG, cme: true });
+    expect(accountDayZone(null)).toEqual({ tz: DEFAULT_TZ, cme: true });
   });
 
-  it("resolves per account, falling back to the primary's rule, then New York", () => {
-    const resolve = accountDayZoneResolver([acc("a", true), acc("b", false, BG)], acc("a", true));
-    expect(resolve("a")).toEqual({ tz: NY, topstep: true });
-    expect(resolve("b")).toBe(BG);
-    // A trade whose account was deleted is dated by the primary account's rule.
-    expect(resolve(null)).toEqual({ tz: NY, topstep: true });
-    expect(resolve("gone")).toEqual({ tz: NY, topstep: true });
-    expect(accountDayZoneResolver([], null)(null)).toBe(DEFAULT_TZ);
+  it("resolves per account, falling back to the primary's clock, then the trader's", () => {
+    const resolve = accountDayZoneResolver([acc("a"), acc("b", BG)], acc("a"));
+    expect(resolve("a")).toEqual({ tz: NY, cme: true });
+    expect(resolve("b")).toEqual({ tz: BG, cme: true });
+    // A trade whose account was deleted is dated on the primary account's clock.
+    expect(resolve(null)).toEqual({ tz: NY, cme: true });
+    expect(resolve("gone")).toEqual({ tz: NY, cme: true });
+    expect(accountDayZoneResolver([], null)(null)).toEqual({ tz: DEFAULT_TZ, cme: true });
   });
 
   it("zoneTz is the clock for hours and formatting, whatever the day rule", () => {
-    expect(zoneTz({ tz: BG, topstep: true })).toBe(BG);
+    expect(zoneTz({ tz: BG, cme: true })).toBe(BG);
     expect(zoneTz(NY)).toBe(NY);
   });
 });
 
 describe("where a day starts, as an instant", () => {
-  it("a Topstep day starts at 17:00 Chicago the evening before", () => {
-    expect(dayStartUtcIn("2026-09-29", { tz: NY, topstep: true })).toBe(Date.parse("2026-09-28T22:00:00Z")); // CDT
-    expect(dayStartUtcIn("2026-12-01", { tz: NY, topstep: true })).toBe(Date.parse("2026-11-30T23:00:00Z")); // CST
+  it("a CME day starts at 17:00 Chicago the evening before", () => {
+    expect(dayStartUtcIn("2026-09-29", { tz: NY, cme: true })).toBe(Date.parse("2026-09-28T22:00:00Z")); // CDT
+    expect(dayStartUtcIn("2026-12-01", { tz: NY, cme: true })).toBe(Date.parse("2026-11-30T23:00:00Z")); // CST
     // The Sunday the US moves to summer time (8.3.2026, at 02:00): 17:00 is
     // already CDT, so the day starts at 22:00 UTC — not midnight CST + 17 h.
-    expect(dayStartUtcIn("2026-03-09", { tz: NY, topstep: true })).toBe(Date.parse("2026-03-08T22:00:00Z"));
+    expect(dayStartUtcIn("2026-03-09", { tz: NY, cme: true })).toBe(Date.parse("2026-03-08T22:00:00Z"));
     // Monday's day starts with the Sunday open.
-    expect(dayStartUtcIn("2026-09-28", { tz: NY, topstep: true })).toBe(Date.parse("2026-09-27T22:00:00Z"));
+    expect(dayStartUtcIn("2026-09-28", { tz: NY, cme: true })).toBe(Date.parse("2026-09-27T22:00:00Z"));
   });
 
   it("a plain zone's day starts at its midnight, as dayKeyStartUtc says", () => {
@@ -449,30 +450,30 @@ describe("where a day starts, as an instant", () => {
   });
 
   it("is the inverse of dayKeyIn at the boundary", () => {
-    const z: DayZone = { tz: NY, topstep: true };
+    const z: DayZone = { tz: NY, cme: true };
     const start = dayStartUtcIn("2026-09-29", z)!;
     expect(dayKeyIn(new Date(start), z)).toBe("2026-09-29");
     expect(dayKeyIn(new Date(start - 1), z)).toBe("2026-09-28");
   });
 
   it("an invalid key has no start", () => {
-    expect(dayStartUtcIn("2026-13-40", { tz: NY, topstep: true })).toBeNull();
+    expect(dayStartUtcIn("2026-13-40", { tz: NY, cme: true })).toBeNull();
   });
 });
 
 describe("today (D3)", () => {
-  it("on a Topstep primary, 17:30 CT is already tomorrow", () => {
+  it("on the CME day, 17:30 CT is already tomorrow", () => {
     const now = new Date("2026-09-28T22:30:00Z");
-    expect(todayIn({ tz: NY, topstep: true }, now)).toBe("2026-09-29");
+    expect(todayIn({ tz: NY, cme: true }, now)).toBe("2026-09-29");
     expect(todayIn(NY, now)).toBe("2026-09-28");
   });
 
-  it("todayFor reads the rule off the account, the trader's zone when there is none", () => {
+  it("todayFor is the CME day on any account, with no account too", () => {
     const now = new Date("2026-09-28T22:30:00Z");
-    expect(todayFor({ timezone: NY, topstep_mode: true }, now)).toBe("2026-09-29");
-    expect(todayFor({ timezone: NY, topstep_mode: false }, now)).toBe("2026-09-28");
-    // 22:30 UTC is already 00:30 on the 29th in Belgrade (K5).
+    expect(todayFor({ timezone: NY }, now)).toBe("2026-09-29");
     expect(todayFor(null, now)).toBe("2026-09-29");
+    // 21:30 UTC is 16:30 CT — still the 28th, though Belgrade is at 23:30.
+    expect(todayFor(null, new Date("2026-09-28T21:30:00Z"))).toBe("2026-09-28");
   });
 });
 

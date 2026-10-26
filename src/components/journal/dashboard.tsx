@@ -209,7 +209,7 @@ import {
   weeklyExitEfficiency,
   type PnlMode,
 } from "@/lib/journal/analytics";
-import { briefResolver, type SessionBrief } from "@/lib/journal/session-brief";
+import { briefResolver, flatByResolver, type SessionBrief } from "@/lib/journal/session-brief";
 import { unpricedClosedCount } from "@/lib/journal/money-provenance";
 import {
   buildMentorPack,
@@ -804,9 +804,8 @@ export function Dashboard({
    * `getPrimaryAccount` applies on the server.
    */
   //
-  // A DAY rule, not only a zone: a Topstep account counts Topstep's trading day
-  // (17:00 → 17:00 CT), the day its DLL is charged to. `zoneTz` of it is still
-  // the clock times are printed on.
+  // A DAY rule, not only a zone: every account counts the CME trading day
+  // (17:00 → 17:00 CT). `zoneTz` of it is still the clock times are printed on.
   const tzForAccount = useMemo(() => {
     const primary = primaryAccount(accounts);
     return accountDayZoneResolver(accounts, primary);
@@ -876,11 +875,11 @@ export function Dashboard({
   const periodFrom = useMemo(() => periodStartKey(period, todayKey), [period, todayKey]);
   const cutoffMs = useMemo(
     // Where the first day of the period STARTS under the primary's day rule —
-    // 17:00 CT the evening before on a Topstep account.
+    // 17:00 CT the evening before.
     () => {
       if (periodFrom == null) return null;
       const primary = primaryAccount(accounts);
-      return dayStartUtcIn(periodFrom, primary ? accountDayZone(primary) : timezone);
+      return dayStartUtcIn(periodFrom, accountDayZone(primary ?? { timezone }));
     },
     [periodFrom, accounts, timezone],
   );
@@ -1290,6 +1289,7 @@ export function Dashboard({
       bandOf,
     );
     const briefOf = briefResolver(briefs);
+    const flatByOf = flatByResolver(accounts);
     const tradingWindowOf = tradingWindowResolver(trackerRules);
     const biasOf = firstBiasResolver(biases);
 
@@ -1309,7 +1309,7 @@ export function Dashboard({
       // the money and leaves that day's compliance where it was.
       resolveAutoResults(
         trackerRules,
-        evaluateAutoRulesForDay(d, index, { briefOf, tradingWindowOf, biasOf }),
+        evaluateAutoRulesForDay(d, index, { briefOf, tradingWindowOf, biasOf, flatByOf }),
         byDate.get(d) ?? new Map(),
       ),
     todayKey,
@@ -1329,6 +1329,7 @@ export function Dashboard({
     accountFilter,
     tzForAccount,
     bandOf,
+    accounts,
     todayKey,
   ]);
 

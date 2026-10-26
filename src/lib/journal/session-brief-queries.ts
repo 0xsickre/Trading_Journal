@@ -18,7 +18,7 @@ function missingTable(error: { code?: string; message: string } | null): boolean
   );
 }
 
-/** The briefs of the Topstep days `from`–`to` (inclusive), oldest first. Unreadable rows are left out. */
+/** The briefs of the trading days `from`–`to` (inclusive), oldest first. Unreadable rows are left out. */
 export async function getSessionBriefs(from: string, to: string): Promise<SessionBrief[]> {
   const supabase = await createClient();
   const { data, error } = await supabase

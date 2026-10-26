@@ -1,9 +1,9 @@
 /**
- * The morning brief of one Topstep trading day, as the journal reads it.
+ * The morning brief of one CME trading day, as the journal reads it.
  *
  * `futures-trading/tools/brief/brief.py` writes one `tj_session_briefs` row per
- * Topstep day (17:00 → 17:00 CT): the red windows around the day's news, the
- * Topstep end of day, and the expected NQ / ES range. `/daily` shows it and two
+ * trading day (17:00 → 17:00 CT): the red windows around the day's news, the
+ * end of day it flattens at, and the expected NQ / ES range. `/daily` shows it and two
  * tracker rules read it — `no_entry_in_red_window` (the windows, decision G7:
  * only the brief's own, no fixed fifteen minutes) and `flat_by_close` (the end
  * of day, earlier on a holiday or an early close).
@@ -12,7 +12,7 @@
  * window that cannot be read is dropped and COUNTED, never guessed into shape,
  * and a range without a number is left out. Pure — no I/O here.
  */
-import { addDaysToDayKey, isValidDayKey, topstepTradingDay, zonedInputToUtc } from "./time";
+import { addDaysToDayKey, cmeTradingDay, isValidDayKey, zonedInputToUtc } from "./time";
 
 export type RedWindow = {
   /** ISO UTC, inclusive. */
@@ -37,7 +37,7 @@ export type BriefRange = {
 
 export type SessionBrief = {
   tradingDay: string;
-  /** Topstep end of day, ISO UTC; null when the exchange is closed that day. */
+  /** The brief's end of day, ISO UTC; null when the exchange is closed that day. */
   flatBy: string | null;
   /** Why the day is special (holiday, early close), or null. */
   dayNote: string | null;
@@ -48,8 +48,16 @@ export type SessionBrief = {
   sourceUrl: string | null;
 };
 
-/** Topstep flattens positions at 15:10 Chicago on an ordinary day. */
-export const TOPSTEP_FLAT_BY_CT = "15:10";
+/**
+ * The brief's ordinary end of day, 15:10 Chicago — `futures-trading` writes it
+ * on every day that is not a holiday or an early close, and prices a missed plan
+ * up to it. Not the trader's flat-by time since phase X (that is the account's
+ * `flat_by`); here it only tells an ordinary brief from an early close.
+ */
+export const BRIEF_FLAT_BY_CT = "15:10";
+
+/** An account's flat-by time when it sets none (X-9 A): 16:00 Chicago, the CME's daily pause. */
+export const DEFAULT_FLAT_BY_CT = "16:00";
 const CHICAGO = "America/Chicago";
 
 function isoOrNull(v: unknown): string | null {
@@ -118,20 +126,25 @@ export function parseSessionBrief(row: unknown): SessionBrief | null {
   };
 }
 
-/** 15:10 on Chicago's clock on a Topstep day, ISO UTC. "" for an invalid day. */
+/** 15:10 on Chicago's clock on a trading day, ISO UTC. "" for an invalid day. */
 export function defaultFlatBy(tradingDay: string): string {
-  if (!isValidDayKey(tradingDay)) return "";
-  return zonedInputToUtc(`${tradingDay}T${TOPSTEP_FLAT_BY_CT}`, CHICAGO) ?? "";
+  return flatByAt(tradingDay, BRIEF_FLAT_BY_CT);
+}
+
+/** `HH:MM` on Chicago's clock on a trading day, ISO UTC. "" for an invalid day or time. */
+function flatByAt(tradingDay: string, hhmm: string): string {
+  if (!isValidDayKey(tradingDay) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(hhmm)) return "";
+  return zonedInputToUtc(`${tradingDay}T${hhmm}`, CHICAGO) ?? "";
 }
 
 /**
- * The Topstep day a plan written at `iso` is for (F6, decision M3-A): the day it
+ * The trading day a plan written at `iso` is for (F6, decision M3-A): the day it
  * falls in, or the next one when it was written after that day's 15:10 CT flat;
  * a Saturday or Sunday moves to Monday. The same rule `futures-trading` prices a
  * missed plan by (`journal_mae.py` `prozor_plana`). "" for an unreadable instant.
  */
 export function planTradingDay(iso: string | null | undefined): string {
-  let day = topstepTradingDay(iso);
+  let day = cmeTradingDay(iso);
   if (!day) return "";
   if (Date.parse(String(iso)) >= Date.parse(defaultFlatBy(day))) day = addDaysToDayKey(day, 1);
   for (let dow = new Date(`${day}T12:00:00Z`).getUTCDay(); dow === 0 || dow === 6; ) {
@@ -148,18 +161,34 @@ export function planDayEndsAt(iso: string | null | undefined): number {
 }
 
 /**
- * When a position has to be flat on a Topstep day.
+ * When a position has to be flat on a trading day (phase X, X-9 A).
  *
- * The brief knows holidays and early closes; without it, the ordinary 15:10 CT.
- * The default can only be LATER than the real close (a holiday closes earlier,
- * never later), so a missing brief can miss a breach but never invent one.
+ * The account's own flat-by time (`tj_accounts.flat_by`, Chicago clock,
+ * 16:00 when unset), unless the day's brief says the exchange closes EARLIER —
+ * a holiday or an early close — or not at all. A brief that only states its
+ * ordinary 15:10 is not an early close: that time was Topstep's, and the
+ * trader's own time stands.
  */
 export function flatByFor(
   tradingDay: string,
   brief: SessionBrief | null,
-): { at: string | null; source: "brief" | "default" } {
-  if (brief && brief.tradingDay === tradingDay) return { at: brief.flatBy, source: "brief" };
-  return { at: defaultFlatBy(tradingDay) || null, source: "default" };
+  accountFlatBy: string = DEFAULT_FLAT_BY_CT,
+): { at: string | null; source: "brief" | "account" } {
+  const own = flatByAt(tradingDay, accountFlatBy) || flatByAt(tradingDay, DEFAULT_FLAT_BY_CT);
+  if (brief && brief.tradingDay === tradingDay) {
+    if (brief.flatBy == null) return { at: null, source: "brief" };
+    const early = Date.parse(brief.flatBy) < Date.parse(defaultFlatBy(tradingDay));
+    if (early && (!own || Date.parse(brief.flatBy) < Date.parse(own))) return { at: brief.flatBy, source: "brief" };
+  }
+  return { at: own || null, source: "account" };
+}
+
+/** Each account's flat-by time by id; an unknown account, the default. */
+export function flatByResolver(
+  accounts: readonly { id: string; flat_by?: string | null }[],
+): (accountId: string | null | undefined) => string {
+  const byId = new Map(accounts.map((a) => [a.id, a.flat_by || DEFAULT_FLAT_BY_CT]));
+  return (accountId) => (accountId ? (byId.get(accountId) ?? DEFAULT_FLAT_BY_CT) : DEFAULT_FLAT_BY_CT);
 }
 
 /** The red window an instant falls in, both edges included; null outside all of them. */
@@ -172,7 +201,7 @@ export function redWindowAt(
   return windows.find((w) => t >= Date.parse(w.from) && t <= Date.parse(w.to)) ?? null;
 }
 
-/** Briefs keyed by their Topstep day. */
+/** Briefs keyed by their trading day. */
 export function briefResolver(briefs: readonly SessionBrief[]): (day: string) => SessionBrief | null {
   const byDay = new Map(briefs.map((b) => [b.tradingDay, b]));
   return (day) => byDay.get(day) ?? null;

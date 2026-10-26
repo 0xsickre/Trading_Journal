@@ -1,15 +1,15 @@
 import { Newspaper } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { flatByFor, type BriefRange, type SessionBrief } from "@/lib/journal/session-brief";
+import { DEFAULT_FLAT_BY_CT, flatByFor, type BriefRange, type SessionBrief } from "@/lib/journal/session-brief";
 import { fmtInTz } from "@/lib/journal/time";
 
 /** The ranges worth reading before the session, in the order they are traded. */
 const RANGES: { key: string; label: string }[] = [
-  { key: "NQ_ts", label: "NQ · Topstep dan" },
+  { key: "NQ_ts", label: "NQ · ceo dan (17–17 CT)" },
   { key: "NQ_rth", label: "NQ · RTH" },
-  { key: "ES_ts", label: "ES · Topstep dan" },
+  { key: "ES_ts", label: "ES · ceo dan (17–17 CT)" },
   { key: "ES_rth", label: "ES · RTH" },
-  { key: "6E_ts", label: "6E · Topstep dan" },
+  { key: "6E_ts", label: "6E · ceo dan (17–17 CT)" },
 ];
 
 const whole = (n: number) => Math.round(n).toLocaleString("sr-Latn-RS");
@@ -21,25 +21,27 @@ function rangeText(r: BriefRange): string {
 
 /**
  * „Pred sesiju" — what the morning brief says about the day in view: the Topstep
- * end of day, the red windows, the expected range and, on today's page only,
- * what is left of the Daily Loss Limit.
+ * end of day, the red windows and the expected range.
  *
  * Where the check-in card for positions held overnight used to be (G2, H1.3): a
  * day trader has no such position, and this is what the session is decided on.
  * No brief, no invented day — the card says the brief has not arrived and gives
- * the one figure the journal knows without it, the ordinary 15:10 CT close.
+ * the one figure the journal knows without it, the account's own flat-by time.
  */
 export function SessionBriefCard({
   day,
   brief,
   tz,
+  flatBy = DEFAULT_FLAT_BY_CT,
 }: {
   day: string;
   brief: SessionBrief | null;
   /** The clock times are shown on — the primary account's. */
   tz: string;
+  /** The primary account's flat-by time, `HH:MM` Chicago (phase X, X-9). */
+  flatBy?: string;
 }) {
-  const flat = flatByFor(day, brief);
+  const flat = flatByFor(day, brief, flatBy);
   const ranges = RANGES.flatMap(({ key, label }) => (brief?.ranges[key] ? [{ label, range: brief.ranges[key] }] : []));
 
   return (
@@ -65,8 +67,11 @@ export function SessionBriefCard({
             ) : (
               <span className="font-medium">{fmtInTz(flat.at, tz, "HH:mm")}</span>
             )}
-            {flat.source === "default" && flat.at != null && (
-              <span className="text-xs text-muted-foreground"> (uobičajeno 15:10 CT)</span>
+            {flat.source === "account" && flat.at != null && (
+              <span className="text-xs text-muted-foreground"> (tvoje vreme iz Settings)</span>
+            )}
+            {flat.source === "brief" && flat.at != null && (
+              <span className="text-xs text-muted-foreground"> (ranije zatvaranje po brief-u)</span>
             )}
           </span>
         </div>

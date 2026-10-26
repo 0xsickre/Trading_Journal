@@ -5,7 +5,7 @@ import { revalidateDaily } from "@/lib/journal/revalidate";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { getPrimaryAccount } from "@/lib/journal/accounts";
-import { DEFAULT_TZ, accountDayZone, dayKeyIn, todayIn } from "@/lib/journal/time";
+import { accountDayZone, dayKeyIn, todayIn } from "@/lib/journal/time";
 import { trackerRuleMayHardDelete } from "@/lib/journal/settings-rules";
 import { TRACKER_STAGES, type TrackerStage } from "@/lib/journal/tracker-types";
 import { isValidWindow, windowsOf, withWindow } from "@/lib/journal/tracker/trading-window";
@@ -160,8 +160,8 @@ export async function deleteTrackerRule(id: string): Promise<Result> {
     return { ok: false, error: "Could not check whether this rule was answered, so it was not changed. Try again." };
 
   // One day rule for both, the primary account's: "created today" and "today"
-  // must be the same day, on a Topstep account too.
-  const zone = account ? accountDayZone(account) : DEFAULT_TZ;
+  // must be the same (CME) day.
+  const zone = accountDayZone(account);
   const hardDelete = trackerRuleMayHardDelete({
     createdDay: dayKeyIn(rule.created_at, zone),
     today: todayIn(zone),

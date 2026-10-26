@@ -15,11 +15,11 @@ import type { Account, TradeRow } from "./types";
 /**
  * F2: ONE day per account, everywhere a day is counted.
  *
- * The same evening goes through every module that keys days. On the Topstep
- * account it belongs to Topstep's next trading day (17:00 CT starts it); on the
- * CFD account, the same instant stays on its calendar day. Before F2 each module
- * used the account's zone, so the calendar and the banner's "DLL today" filed
- * the same evening under two different days.
+ * The same evening goes through every module that keys days, and belongs to the
+ * next CME trading day (17:00 CT starts it). Before F2 each module used the
+ * account's zone, so the calendar and the day's limit filed the same evening
+ * under two different days. Since phase X (X-3 A) every account has that day:
+ * the account that was Topstep's and the one that was not file it alike.
  */
 
 const NY = "America/New_York";
@@ -74,13 +74,13 @@ const cfdEvening = row("cfd-evening", "cfd", EVENING_OPEN, EVENING_CLOSE, -100);
 const tsSunday = row("ts-sunday", "ts", "2026-09-27T23:05:00Z", "2026-09-27T23:20:00Z", 50);
 const rows = [tsEvening, cfdEvening, tsSunday];
 
-describe("the tracker counts the Topstep day (D1: each trade by its own account)", () => {
+describe("the tracker counts the CME day, on every account (D1; phase X)", () => {
   const index = buildTradeDayIndex(rows, zoneOfRow);
 
-  it("files the Topstep evening under Tuesday and the CFD one under Monday", () => {
-    expect(index.byCloseDay.get("2026-09-29")?.map((t) => t.id)).toEqual(["ts-evening"]);
-    expect(index.byCloseDay.get("2026-09-28")?.map((t) => t.id).sort()).toEqual(["cfd-evening", "ts-sunday"]);
-    expect(index.byOpenDay.get("2026-09-29")?.map((t) => t.id)).toEqual(["ts-evening"]);
+  it("files both evenings under Tuesday, whatever the account's old mode", () => {
+    expect(index.byCloseDay.get("2026-09-29")?.map((t) => t.id).sort()).toEqual(["cfd-evening", "ts-evening"]);
+    expect(index.byCloseDay.get("2026-09-28")?.map((t) => t.id)).toEqual(["ts-sunday"]);
+    expect(index.byOpenDay.get("2026-09-29")?.map((t) => t.id).sort()).toEqual(["cfd-evening", "ts-evening"]);
   });
 });
 
@@ -90,9 +90,9 @@ describe("the calendar counts it too", () => {
 
   it("day cells", () => {
     const days = new Map(bucketByPeriod(realized, "day", tzOf).map((r) => [r.key, r.net]));
-    expect(days.get("2026-09-29")).toBe(-600);
-    expect(days.get("2026-09-28")).toBe(-50);
-    expect(dailyPnl(realized, "net", tzOf).get("2026-09-29")).toBe(-600);
+    expect(days.get("2026-09-29")).toBe(-700);
+    expect(days.get("2026-09-28")).toBe(50);
+    expect(dailyPnl(realized, "net", tzOf).get("2026-09-29")).toBe(-700);
   });
 
   it("weeks (D4): the Sunday open belongs to Monday's week", () => {
@@ -117,10 +117,10 @@ describe("the calendar counts it too", () => {
 });
 
 describe("today and this week follow the primary account's rule (D3)", () => {
-  it("at 17:30 CT on a Topstep primary, today is tomorrow", () => {
+  it("at 17:30 CT today is tomorrow, on every account", () => {
     const now = new Date("2026-09-28T22:30:00Z");
     expect(periodBounds("today", now, zoneOf("ts"))).toEqual({ from: "2026-09-29", to: "2026-09-29" });
-    expect(periodBounds("today", now, zoneOf("cfd"))).toEqual({ from: "2026-09-28", to: "2026-09-28" });
+    expect(periodBounds("today", now, zoneOf("cfd"))).toEqual({ from: "2026-09-29", to: "2026-09-29" });
   });
 
   it("on Sunday evening this week is already next week", () => {
@@ -130,7 +130,7 @@ describe("today and this week follow the primary account's rule (D3)", () => {
 });
 
 describe("exposure uses the same day", () => {
-  it("spans are instants, and per-instrument P&L lands on the Topstep day", () => {
+  it("spans are instants, and per-instrument P&L lands on the CME day", () => {
     expect(spansOf([tsEvening], Date.parse("2026-09-30T00:00:00Z"))).toEqual([
       { instrument: "MNQ", from: Date.parse(EVENING_OPEN), to: Date.parse(EVENING_CLOSE) },
     ]);

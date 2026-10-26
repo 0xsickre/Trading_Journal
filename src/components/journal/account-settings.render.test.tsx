@@ -36,6 +36,7 @@ const account = (over: Partial<Account> = {}): Account => ({
   id: "acc-1",
   name: "Main Account",
   practice: false,
+  flat_by: "16:00",
   broker: null,
   currency: "USD",
   starting_balance: 100_000,
@@ -187,7 +188,7 @@ describe("new account and duplicate", () => {
     render(<AccountSettings accounts={TWO} />);
     await openMenu(user, "Combine 2");
     await user.click(await screen.findByRole("menuitem", { name: /Duplicate/ }));
-    expect(screen.getByText(/costs and the practice flag/)).toBeInTheDocument();
+    expect(screen.getByText(/costs, flat-by time and the practice flag/)).toBeInTheDocument();
     expect(screen.queryByText(/Topstep rules|FTMO/)).not.toBeInTheDocument();
   });
 });
@@ -271,6 +272,20 @@ describe("no prop firm in the account (phase X, X-2 / X-4)", () => {
     const patch = updateAccountMock.mock.calls[0][1] as Record<string, unknown>;
     expect(patch.practice).toBe(true);
     expect(Object.keys(patch).some((k) => k.startsWith("topstep_") || k.startsWith("risk_rule_"))).toBe(false);
+  });
+
+  it("flat-by is the account's own time, saved with the rest (X-9)", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<AccountSettings accounts={[account()]} tradeCounts={{ "acc-1": 0 }} />);
+    await openMenu(user, "Main Account");
+    await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
+    const flat = screen.getByLabelText("Flat by (Chicago time)");
+    expect(flat).toHaveValue("16:00");
+    await user.clear(flat);
+    await user.type(flat, "15:30");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await vi.waitFor(() => expect(updateAccountMock).toHaveBeenCalled());
+    expect((updateAccountMock.mock.calls[0][1] as Record<string, unknown>).flat_by).toBe("15:30");
   });
 
   it("the list marks a practice account, and names no plan", () => {

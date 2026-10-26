@@ -86,7 +86,7 @@ export default async function DashboardPage() {
     ),
     positionRulesPromise,
     // The briefs of the same span, for the tracker rules that read the red
-    // windows and the Topstep close.
+    // windows and an early close.
     dayPromise.then(({ todayKey }) =>
       getSessionBriefs(addDaysToDayKey(todayKey, -(TRACKER_SPAN_DAYS - 1)), todayKey),
     ),

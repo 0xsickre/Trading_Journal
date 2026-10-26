@@ -130,7 +130,7 @@ export function scenarioSection(trades: readonly EnrichedTrade[]): string[] {
   const best = s.best!;
   return [
     `## Šta bi bilo — SL × TP i cena posle izlaza (${s.n} ${sr(s.n, "izmeren trejd", "izmerena trejda", "izmerenih trejdova")}${s.n < SMALL_SAMPLE ? " ⚠" : ""})`,
-    `_Svaki trejd ponovljen iz berzanskih sveća od prosečnog ulaza do kraja Topstep dana, sa SL 0,5–2× stvarnog i TP 1–5R tog SL-a; isti rizik u $, neto posle provizije._`,
+    `_Svaki trejd ponovljen iz berzanskih sveća od prosečnog ulaza do kraja dana (15:10 CT), sa SL 0,5–2× stvarnog i TP 1–5R tog SL-a; isti rizik u $, neto posle provizije._`,
     "",
     `| Stavka | Vrednost |`,
     `| --- | --- |`,
@@ -228,7 +228,7 @@ export function dailySection(
   const shown = keys.slice(-DAY_ROWS_CAP);
   const out = [
     `## Dnevni pregled (${keys.length} ${sr(keys.length, "dan", "dana", "dana")} u periodu, ${byDay.size} sa trejdovima)`,
-    `_Dan = trading dan naloga (Topstep: od 00:00 do 00:00 po Beogradu, 17:00 CT). Pravila = % tvojih pravila iz dnevnog trackera koja su ispoštovana (u zagradi propuštena); „bez prijave“ = nijedan trejd, nijedan odgovor, nijedan izveštaj._`,
+    `_Dan = CME trading dan (17:00 → 17:00 CT, uglavnom 00:00 → 00:00 po Beogradu). Pravila = % tvojih pravila iz dnevnog trackera koja su ispoštovana (u zagradi propuštena); „bez prijave“ = nijedan trejd, nijedan odgovor, nijedan izveštaj._`,
     "",
     `| Dan | Trejdova | W/L/BE | Net | R | Prvi ulaz | Najduži niz gubitaka | Max ugovora | Mentalno | Ne trgujem · zaključan | Pravila | Napomena |`,
     `| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |`,
@@ -504,7 +504,7 @@ export function tradeContextLines(
           ? "da sam držao, stop bi došao pre TP-a"
           : sc.afterExit.targetMinutes != null
             ? "da sam držao, TP bi došao"
-            : "da sam držao, ni TP ni stop do kraja Topstep dana"
+            : "da sam držao, ni TP ni stop do kraja dana"
         : null,
       sc.slForTargetR != null ? `SL za TP ${rr(sc.slForTargetR)}` : null,
       `u plus pre stopa ${rr(sc.mfeBeforeStopR)}`,
@@ -589,7 +589,7 @@ function tightenedStopLine(
   if (target == null) return `- **Pomeren stop:** ${was} · cilja nema, pa se ne zna šta bi originalni doneo`;
   if (slForTargetR != null && slForTargetR <= 1)
     return `- **⚠ Pomeren stop je koštao:** ${was} · sa originalnim stopom TP bi došao (trebalo je SL ${rr(slForTargetR)}, originalni je 1R)`;
-  return `- **Pomeren stop:** ${was} · ni originalni ne bi doneo TP (${slForTargetR != null ? `trebalo je SL ${rr(slForTargetR)}` : "TP nije došao do kraja Topstep dana"})`;
+  return `- **Pomeren stop:** ${was} · ni originalni ne bi doneo TP (${slForTargetR != null ? `trebalo je SL ${rr(slForTargetR)}` : "TP nije došao do kraja dana"})`;
 }
 
 const num = (v: unknown): string => String(Number(v));

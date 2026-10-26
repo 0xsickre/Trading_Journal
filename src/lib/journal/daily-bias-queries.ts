@@ -18,7 +18,7 @@ function missingTable(error: { code?: string; message: string } | null): boolean
 const COLUMNS =
   "id, trading_day, root, bias, reason, set_at, eval_status, eval_start_at, eval_start_price, eval_end_price, eval_move, eval_band, eval_day, eval_contract";
 
-/** Every forecast of the Topstep days `from`–`to` (inclusive; either open), oldest first. */
+/** Every forecast of the trading days `from`–`to` (inclusive; either open), oldest first. */
 export async function getDailyBiases(from?: string, to?: string): Promise<DailyBias[]> {
   const supabase = await createClient();
   let q = supabase.from("tj_daily_bias").select(COLUMNS);

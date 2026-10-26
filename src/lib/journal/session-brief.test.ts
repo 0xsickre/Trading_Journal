@@ -3,6 +3,7 @@ import {
   briefResolver,
   defaultFlatBy,
   flatByFor,
+  flatByResolver,
   parseSessionBrief,
   redWindowAt,
   planDayEndsAt,
@@ -68,15 +69,30 @@ describe("parseSessionBrief", () => {
 });
 
 describe("defaultFlatBy / flatByFor", () => {
-  it("is 15:10 Chicago on the Topstep day, in summer and in winter", () => {
+  it("is 15:10 Chicago — the brief's ordinary close — in summer and in winter", () => {
     expect(defaultFlatBy("2026-09-29")).toBe("2026-09-29T20:10:00.000Z"); // CDT, UTC-5
     expect(defaultFlatBy("2026-12-15")).toBe("2026-12-15T21:10:00.000Z"); // CST, UTC-6
   });
 
-  it("takes the brief's time when there is one, the default otherwise", () => {
+  it("is the account's time — 16:00 CT unless set — and an EARLY close in the brief wins (phase X, X-9)", () => {
+    // No brief: the account's own time, else 16:00 Chicago.
+    expect(flatByFor("2026-09-30", null)).toEqual({ at: "2026-09-30T21:00:00.000Z", source: "account" });
+    expect(flatByFor("2026-09-30", null, "15:30")).toEqual({ at: "2026-09-30T20:30:00.000Z", source: "account" });
+    // The day after Thanksgiving closes at 12:00 CT: earlier than any account time, so it wins.
     const early = parseSessionBrief(row({ trading_day: "2026-11-27", flat_by: "2026-11-27T18:00:00Z" }));
     expect(flatByFor("2026-11-27", early)).toEqual({ at: "2026-11-27T18:00:00.000Z", source: "brief" });
-    expect(flatByFor("2026-09-30", null)).toEqual({ at: "2026-09-30T20:10:00.000Z", source: "default" });
+    // An ordinary brief says 15:10 — Topstep's time, not an early close: the account's stands.
+    const ordinary = parseSessionBrief(row({ trading_day: "2026-09-30", flat_by: "2026-09-30T20:10:00Z" }));
+    expect(flatByFor("2026-09-30", ordinary)).toEqual({ at: "2026-09-30T21:00:00.000Z", source: "account" });
+    // An early close later than the account's own time changes nothing.
+    expect(flatByFor("2026-11-27", early, "11:00")).toEqual({ at: "2026-11-27T17:00:00.000Z", source: "account" });
+    // An unreadable account time falls back to 16:00.
+    expect(flatByFor("2026-09-30", null, "25:99")).toEqual({ at: "2026-09-30T21:00:00.000Z", source: "account" });
+  });
+
+  it("flatByResolver gives each account its own time, and 16:00 when unknown", () => {
+    const of = flatByResolver([{ id: "a", flat_by: "15:45" }, { id: "b", flat_by: null }]);
+    expect([of("a"), of("b"), of("gone"), of(null)]).toEqual(["15:45", "16:00", "16:00", "16:00"]);
   });
 
   it("says closed when the brief says the exchange is closed", () => {

@@ -28,6 +28,7 @@ export type Database = {
           default_fee_fixed: number
           default_stop_pct: number | null
           default_target_pct: number | null
+          flat_by: string
           risk_rule_max: number | null
           risk_rule_min: number | null
           risk_rule_pct: number
@@ -59,6 +60,7 @@ export type Database = {
           default_fee_fixed?: number
           default_stop_pct?: number | null
           default_target_pct?: number | null
+          flat_by?: string
           risk_rule_max?: number | null
           risk_rule_min?: number | null
           risk_rule_pct?: number
@@ -90,6 +92,7 @@ export type Database = {
           default_fee_fixed?: number
           default_stop_pct?: number | null
           default_target_pct?: number | null
+          flat_by?: string
           risk_rule_max?: number | null
           risk_rule_min?: number | null
           risk_rule_pct?: number

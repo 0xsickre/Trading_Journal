@@ -88,7 +88,7 @@ export type EnrichedTrade = {
   openOffset: string | null;
   /**
    * Which entry of its day this is on its own account, from 1 — the day being
-   * the account's day (a Topstep account's is its 17:00 CT trading day).
+   * the account's day (the CME's 17:00 CT trading day).
    * Null when the entry time is unknown.
    */
   tradeNoInDay: number | null;

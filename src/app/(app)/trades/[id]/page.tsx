@@ -81,7 +81,7 @@ export default async function TradeRoute({
   // Bias dana (phase D, D-6): from the card on, the trade inherits the day's first forecast for its
   // root and the page stops asking. The old field stays in the row for history.
   const biasRoot = missed ? null : rootOf(pos.instrument);
-  const openDay = stats?.opened_at ? dayKeyIn(stats.opened_at, account ? accountDayZone(account) : DEFAULT_TZ) : null;
+  const openDay = stats?.opened_at ? dayKeyIn(stats.opened_at, accountDayZone(account)) : null;
   const fromCard = biasRoot != null && openDay != null && openDay >= BIAS_CARD_SINCE;
   let biasNote: string | null = null;
   if (fromCard) {

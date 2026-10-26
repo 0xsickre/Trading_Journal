@@ -12,7 +12,7 @@ import { accountDayZoneResolver, dayKeyIn, todayFor } from "@/lib/journal/time";
 import { lockRefusal } from "@/lib/journal/review-gaps";
 import { breakevenRangeResolver } from "@/lib/journal/breakeven";
 import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
-import { briefResolver } from "@/lib/journal/session-brief";
+import { briefResolver, flatByResolver } from "@/lib/journal/session-brief";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getTrackerRules } from "@/lib/journal/tracker/queries";
 import {
@@ -147,8 +147,8 @@ export async function lockDay(reportDate: string): Promise<Result> {
   if (reportDate > todayFor(primary))
     return { ok: false, error: "Budući dan se ne može zaključati." };
 
-  // The same day rule per account as the page — a Topstep account's trading day,
-  // any other's calendar day — so what is locked is what was on screen.
+  // The same day rule per account as the page — the CME trading day — so what
+  // is locked is what was on screen.
   const tzOf = accountDayZoneResolver(accounts, primary);
   // The same book as the page: Practice is kept apart (trader, 01.10.2026).
   const trades = inAllAccountsScope(tradesAll, accounts);
@@ -162,6 +162,7 @@ export async function lockDay(reportDate: string): Promise<Result> {
     briefOf: briefResolver(briefs),
     tradingWindowOf: tradingWindowResolver(rules),
     biasOf: firstBiasResolver(biases),
+    flatByOf: flatByResolver(accounts),
   });
 
   const { error } = await supabase.rpc("tj_lock_day", {

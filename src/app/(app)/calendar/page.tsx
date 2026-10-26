@@ -34,7 +34,7 @@ import { PageHeader } from "@/components/app/page-header";
 import { accountDayZoneResolver } from "@/lib/journal/time";
 import { breakevenRangeResolver } from "@/lib/journal/breakeven";
 import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
-import { briefResolver } from "@/lib/journal/session-brief";
+import { briefResolver, flatByResolver } from "@/lib/journal/session-brief";
 import { tradingWindowResolver } from "@/lib/journal/tracker/trading-window";
 
 
@@ -74,8 +74,8 @@ export default async function CalendarPage({
 
   // Per-trade timezone, not the primary account's: a trade on a NY account and
   // one on a London account close on different calendar days, and one zone for
-  // both would file them under the wrong cells. A Topstep account files by
-  // Topstep's trading day, 17:00 → 17:00 CT — the day its DLL is charged to.
+  // both would file them under the wrong cells. Every account files by the
+  // CME trading day, 17:00 → 17:00 CT.
   const tzFor = accountDayZoneResolver(accounts, primary);
   const tzOf = (t: RealizedTrade) => tzFor(t.row.account_id);
   // The same resolver one level down: the auto-rule index works on raw rows,
@@ -159,6 +159,7 @@ export default async function CalendarPage({
 
     const reportOfDay = new Map(reports.map((r) => [r.report_date, r]));
     const index = buildTradeDayIndex(scopedTrades, tzOfRow, breakevenRangeResolver(accounts));
+    const flatByOf = flatByResolver(accounts);
     const series = computeComplianceSeries(
       days,
       rules,
@@ -167,7 +168,7 @@ export default async function CalendarPage({
         const live = rulesLiveOn(rules, d);
         return resolveAutoResults(
           live,
-          evaluateAutoRulesForDay(d, index, { briefOf, tradingWindowOf, biasOf }),
+          evaluateAutoRulesForDay(d, index, { briefOf, tradingWindowOf, biasOf, flatByOf }),
           checkinsByDay.get(d) ?? new Map(),
         );
       },

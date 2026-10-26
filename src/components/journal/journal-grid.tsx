@@ -497,9 +497,8 @@ export function JournalGrid({
       (t?.account_id && tzByAccount.get(t.account_id)) || DEFAULT_TZ,
     [tzByAccount],
   );
-  // The DAY a trade belongs to, for the period filter: its account's rule —
-  // Topstep's trading day on a Topstep account. `tzOf` stays the clock times
-  // are printed on.
+  // The DAY a trade belongs to, for the period filter: the CME trading day on
+  // its account's clock. `tzOf` stays the clock times are printed on.
   const dayZoneOf = useMemo(() => accountDayZoneResolver(accounts), [accounts]);
   const curOf = useCallback(
     (t: TradeRow) => (t.account_id && currencyByAccount.get(t.account_id)) || "USD",
@@ -580,7 +579,7 @@ export function JournalGrid({
       accounts.find((x) => x.id === accountFilter) ??
       accounts.find((x) => x.is_active) ??
       accounts[0];
-    return a ? accountDayZone(a) : DEFAULT_TZ;
+    return accountDayZone(a);
   }, [accounts, accountFilter]);
 
   const bounds = useMemo(

@@ -1,6 +1,6 @@
 // Bias dana (faza D, trejder 17.10.2026): a forecast set before the session, graded from prices.
 //
-// One row of `tj_daily_bias` is one forecast for one Topstep day and one root (NQ, ES, GC — a
+// One row of `tj_daily_bias` is one forecast for one trading day and one root (NQ, ES, GC — a
 // micro shares its mini's price, so it shares its bias). A change during the day is a NEW row and
 // the EARLIEST one is what counts (D-2): a bias that may be rewritten until the price agrees with
 // it would grade itself.
@@ -97,7 +97,7 @@ export function parseDailyBias(row: Record<string, unknown>): DailyBias | null {
 }
 
 /**
- * From this Topstep day the card is THE bias (D-6): the tracker reads it and the trade page no
+ * From this trading day the card is THE bias (D-6): the tracker reads it and the trade page no
  * longer asks. Days before it keep what was chosen on the trade — the card did not exist then.
  */
 export const BIAS_CARD_SINCE = "2026-10-19";
@@ -153,7 +153,7 @@ export function outcomeText(b: DailyBias): string {
   }
 }
 
-/** The first entry on a root, per Topstep day, from the trades OPENED that day. */
+/** The first entry on a root, per trading day, from the trades OPENED that day. */
 export function firstEntryResolver(
   trades: TradeRow[],
   zoneOf: (t: TradeRow) => DayZone,

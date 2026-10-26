@@ -51,6 +51,10 @@ import { parseSettingsNumber } from "@/lib/journal/settings-rules";
 import { duplicateSettings, isArchived } from "@/lib/journal/account-rules";
 import { fmtMoney } from "@/lib/journal/format";
 import { DEFAULT_TZ } from "@/lib/journal/time";
+import { DEFAULT_FLAT_BY_CT } from "@/lib/journal/session-brief";
+
+/** `HH:MM`, 24-hour — the shape `tj_accounts.flat_by` takes. */
+const FLAT_BY_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 import {
   updateAccount,
   addAccount,
@@ -233,7 +237,7 @@ function CreateAccountDialog({
           <DialogTitle>{source ? `Duplicate "${source.name}"` : "New account"}</DialogTitle>
           <DialogDescription>
             {source
-              ? "Copies the currency, timezone, costs and the practice flag. Trades and deposits are not copied."
+              ? "Copies the currency, timezone, costs, flat-by time and the practice flag. Trades and deposits are not copied."
               : "These decide how every trade on the account reads. Everything else can be set later."}
           </DialogDescription>
         </DialogHeader>
@@ -287,8 +291,8 @@ function CreateAccountDialog({
 /**
  * The zone every time is shown in — the trader's, always (K5, 29.09.2026: "uvek
  * moja zona po defaultu"). Not a setting: a file that states its own offset is
- * read in that offset on import, and a Topstep account counts its days by
- * Topstep's 17:00 CT whatever the zone shows.
+ * read in that offset on import, and every account counts its days by the
+ * CME's 17:00 CT whatever the zone shows.
  */
 function TimezoneNote() {
   return (
@@ -297,7 +301,7 @@ function TimezoneNote() {
       <p className="text-sm">{DEFAULT_TZ.replace("_", " ")}</p>
       <p className="text-xs text-muted-foreground">
         Every time is shown in your zone. An imported file with its own offset is converted; the
-        Topstep day still runs 17:00 → 17:00 CT.
+        trading day is the CME&apos;s, 17:00 → 17:00 CT.
       </p>
     </div>
   );
@@ -374,6 +378,8 @@ function EditAccountDialog({
   const [balance, setBalance] = useState(String(account.starting_balance));
 
   const [practice, setPractice] = useState(account.practice === true);
+  const [flatBy, setFlatBy] = useState(account.flat_by || DEFAULT_FLAT_BY_CT);
+  const flatByOk = FLAT_BY_RE.test(flatBy);
 
   const [commPerUnit, setCommPerUnit] = useState(String(account.default_commission_per_unit));
   const [feeFixed, setFeeFixed] = useState(String(account.default_fee_fixed));
@@ -388,7 +394,7 @@ function EditAccountDialog({
     const r = checks[k];
     return r.ok ? (r.value ?? 0) : 0;
   };
-  const invalid = Object.values(checks).some((c) => !c.ok) || !name.trim();
+  const invalid = Object.values(checks).some((c) => !c.ok) || !name.trim() || !flatByOk;
 
   const balanceChanged = checks.balance.ok && val("balance") !== account.starting_balance;
 
@@ -402,6 +408,7 @@ function EditAccountDialog({
         default_commission_per_unit: val("comm"),
         default_fee_fixed: val("fee"),
         practice,
+        flat_by: flatBy,
       });
       if (!res.ok) toast.error(res.error);
       else {
@@ -500,6 +507,25 @@ function EditAccountDialog({
           </div>
           <p className="text-xs text-muted-foreground">
             Kept out of &ldquo;All accounts&rdquo; on every page; choose it in the account picker to read it.
+          </p>
+        </section>
+
+        <section className="space-y-1.5 rounded-md border p-3">
+          <Label htmlFor={`flat-${account.id}`} className="text-sm font-medium">
+            Flat by (Chicago time)
+          </Label>
+          <Input
+            id={`flat-${account.id}`}
+            type="time"
+            value={flatBy}
+            onChange={(e) => setFlatBy(e.target.value)}
+            aria-invalid={!flatByOk}
+            className="h-8 w-32"
+          />
+          <p className="text-xs text-muted-foreground">
+            The tracker&apos;s &ldquo;Ravno do kraja dana&rdquo; grades every position against it. An earlier close
+            in the morning brief — a holiday or an early close — still wins. {DEFAULT_FLAT_BY_CT} is the CME&apos;s
+            daily pause.
           </p>
         </section>
 
