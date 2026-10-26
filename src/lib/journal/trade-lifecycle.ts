@@ -122,24 +122,6 @@ export function fillTotals(fills: ExecLike[]): {
   return { entryQty: entry, exitQty: exit, openQty: openQty(entry, exit) };
 }
 
-/**
- * Whether an edit opens or enlarges a position.
- *
- * The prop-firm guard exists to stop new exposure on an account past its limit.
- * It used to refuse EVERY edit of a trade on such an account, so the trader
- * could not even write the post-mortem of the trade that breached it. What it
- * must refuse is narrower: a plan becoming a live trade, or more size going on.
- */
-export function addsExposure(
-  prev: { status: string | null; entryQty: number },
-  next: { status: string; entryQty: number },
-): boolean {
-  const wasLive = statusToTradePhase(prev.status) === "active";
-  const isLive = statusToTradePhase(next.status) === "active";
-  if (!wasLive && isLive) return true;
-  return next.entryQty > prev.entryQty + 1e-9;
-}
-
 export type ExecLike = Pick<ExecutionInput, "side" | "qty">;
 
 /** The shape a fill must have to be worth storing. */

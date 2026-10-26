@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { buildTradeDayIndex, evaluateAutoRulesForDay } from "./auto-rules";
-import { topstepRulesResolver } from "../topstep";
 import { accountDayZoneResolver } from "../time";
 import { briefResolver, parseSessionBrief, type SessionBrief } from "../session-brief";
 import type { Account, TradeRow } from "../types";
@@ -75,7 +74,7 @@ function row(s: Spec): TradeRow {
 
 const DAY = "2026-09-29";
 const index = (specs: Spec[]) =>
-  buildTradeDayIndex(specs.map(row), (r) => zoneOf(r.account_id), topstepRulesResolver(ACCOUNTS));
+  buildTradeDayIndex(specs.map(row), (r) => zoneOf(r.account_id));
 const evalDay = (specs: Spec[], ctx: { briefs?: SessionBrief[]; now?: number } = {}) =>
   evaluateAutoRulesForDay(DAY, index(specs), {
     briefOf: briefResolver(ctx.briefs ?? []),

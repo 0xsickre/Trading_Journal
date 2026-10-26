@@ -8,10 +8,9 @@ import type { Json } from "@/lib/supabase/types";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { inAllAccountsScope } from "@/lib/journal/account-rules";
 import { getAccounts, getPrimaryAccount } from "@/lib/journal/accounts";
-import { getCashEvents } from "@/lib/journal/cash-events";
 import { accountDayZoneResolver, dayKeyIn, todayFor } from "@/lib/journal/time";
 import { lockRefusal } from "@/lib/journal/review-gaps";
-import { topstepRulesResolver } from "@/lib/journal/topstep";
+import { breakevenRangeResolver } from "@/lib/journal/breakeven";
 import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
 import { briefResolver } from "@/lib/journal/session-brief";
 import { getTradesWithStats } from "@/lib/journal/trades";
@@ -133,14 +132,13 @@ export async function lockDay(reportDate: string): Promise<Result> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Nisi prijavljen." };
 
-  const [accounts, rules, tradesAll, briefs, cash, biases] = await Promise.all([
+  const [accounts, rules, tradesAll, briefs, biases] = await Promise.all([
     getAccounts(),
     getTrackerRules({ includeRetired: true }),
     getTradesWithStats(),
     // The day's brief, for the two rules that read it — what is frozen is what
     // the page showed, and the page read the same row.
     getSessionBriefs(reportDate, reportDate),
-    getCashEvents(),
     // The day's bias forecasts (phase D): `htf_bias_set` reads the card.
     getDailyBiases(reportDate, reportDate),
   ]);
@@ -159,7 +157,7 @@ export async function lockDay(reportDate: string): Promise<Result> {
   // the recording first (`lockRefusal`, 09.10.2026).
   const refusal = lockRefusal(trades, reportDate, (t) => dayKeyIn(t.stats?.closed_at ?? null, tzOf(t.account_id)));
   if (refusal) return { ok: false, error: refusal };
-  const index = buildTradeDayIndex(trades, (row) => tzOf(row.account_id), topstepRulesResolver(accounts, cash));
+  const index = buildTradeDayIndex(trades, (row) => tzOf(row.account_id), breakevenRangeResolver(accounts));
   const auto = evaluateAutoRulesForDay(reportDate, index, {
     briefOf: briefResolver(briefs),
     tradingWindowOf: tradingWindowResolver(rules),

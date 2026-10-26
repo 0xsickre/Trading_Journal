@@ -11,7 +11,6 @@ import {
   overExitMessage,
   lifecycleStatusHint,
   statusToTradePhase,
-  addsExposure,
   asFillSource,
   validateFills,
   type ExecutionInput,
@@ -282,23 +281,6 @@ describe("overExitMessage", () => {
         { side: "exit", qty: 2, executedAt: at(10) },
       ]),
     ).toBe(overExitMessage(1, 2));
-  });
-});
-
-describe("addsExposure (the blown-account guard)", () => {
-  it("lets a closed trade's record be edited", () => {
-    expect(addsExposure({ status: "closed", entryQty: 1 }, { status: "closed", entryQty: 1 })).toBe(false);
-  });
-  it("refuses a plan becoming a live trade", () => {
-    expect(addsExposure({ status: "planned", entryQty: 0 }, { status: "open", entryQty: 1 })).toBe(true);
-    expect(addsExposure({ status: "missed", entryQty: 0 }, { status: "open", entryQty: 0 })).toBe(true);
-  });
-  it("refuses more size on a live trade, allows less", () => {
-    expect(addsExposure({ status: "open", entryQty: 1 }, { status: "open", entryQty: 2 })).toBe(true);
-    expect(addsExposure({ status: "open", entryQty: 2 }, { status: "partial", entryQty: 2 })).toBe(false);
-  });
-  it("lets a plan stay a plan", () => {
-    expect(addsExposure({ status: "planned", entryQty: 0 }, { status: "planned", entryQty: 0 })).toBe(false);
   });
 });
 

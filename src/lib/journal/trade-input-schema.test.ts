@@ -191,15 +191,6 @@ describe("struktura submisije", () => {
     expect(tradeInputSchema.safeParse(input({ images: [{ kind: "htf_pre", image_url: "x" }] })).success).toBe(false);
   });
 
-  it("origin is plan, log or absent — nothing else", () => {
-    // It decides whether a blown prop-firm account refuses the write, so an
-    // unknown value must not fall through as either answer.
-    expect(tradeInputSchema.safeParse(input({ origin: "plan" })).success).toBe(true);
-    expect(tradeInputSchema.safeParse(input({ origin: "log" })).success).toBe(true);
-    expect(tradeInputSchema.safeParse(input()).success).toBe(true);
-    expect(tradeInputSchema.safeParse(input({ origin: "import" })).success).toBe(false);
-  });
-
   it("the message carries the path to the field", () => {
     const res = tradeInputSchema.safeParse(
       input({ executions: [{ side: "entry", price: -1, qty: 1, executed_at: "2026-03-02T14:00:00Z", fee: 0 }] }),

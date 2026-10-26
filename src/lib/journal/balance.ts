@@ -327,8 +327,7 @@ export type DrawdownEpisode = {
  * Days are counted on CALENDAR DAY KEYS in the account's zone, not on elapsed
  * hours: "eleven days under water" is a statement about days a trader lived
  * through, and 11 × 24 hours would answer a different question at every DST
- * boundary. Same convention as `bookEquityLadder`, which takes its zone the
- * same way.
+ * boundary.
  */
 export function drawdownEpisodes(
   timeline: BalancePoint[],

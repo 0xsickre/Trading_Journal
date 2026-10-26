@@ -134,7 +134,6 @@ export default async function TradeRoute({
     fees: nums(stats?.total_fees),
     maeR: excursion.maeR,
     mfeR: excursion.mfeR,
-    riskBudget: nums(pos.risk_budget_at_entry),
     pointValue: nums(stats?.point_value),
     fxRate: nums(stats?.fx_rate),
     tickSize: nums(stats?.tick_size),

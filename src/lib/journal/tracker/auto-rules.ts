@@ -17,8 +17,7 @@ import { rootOf, type BiasRoot } from "../default-instruments";
 import { BIAS_CARD_SINCE, type DailyBias } from "../daily-bias";
 import { numberFieldValue } from "../field-values";
 import { sealedNumber, sealedText } from "../plan-snapshot";
-import { TOPSTEP_BREAKEVEN_R, topstepBreakevenBand, type TopstepRules } from "../topstep";
-import { tradeOutcome } from "../breakeven";
+import { BREAKEVEN_R, tradeOutcome, type BreakevenRange } from "../breakeven";
 import { DEFAULT_TZ, dayKeyIn, zonedDateKey, zonedInputToUtc, type DayZone } from "../time";
 import type { TradingWindow } from "./trading-window";
 import { flatByFor, redWindowAt, type SessionBrief } from "../session-brief";
@@ -90,8 +89,8 @@ export type TrackerTrade = {
   /** Null when `point_value_source` is 'missing' — price unknown, not zero. */
   netPl: number | null;
   /**
-   * A stop loss: below the breakeven band (on a Topstep account a tenth of the
-   * trade's risk, K4), not merely below zero — a scratch is not a stop. Null
+   * A stop loss: below the breakeven band (a tenth of the trade's risk, K4;
+   * the account's band without a stop), not merely below zero — a scratch is not a stop. Null
    * when the price is unknown.
    */
   isLoss: boolean | null;
@@ -115,8 +114,9 @@ export type TrackerTrade = {
    */
   plannedBeforeEntry: boolean;
   /**
-   * On a Topstep account: `flat_by_close` grades only these until phase X4
-   * moves it onto the account's own flat-by time. No money rule reads it.
+   * Filed on the Topstep day (17:00 → 17:00 CT, `TopstepDayZone`):
+   * `flat_by_close` grades only these until phase X4 moves it onto the
+   * account's own flat-by time.
    */
   topstep: boolean;
   /**
@@ -228,7 +228,7 @@ const EXECUTED_STATUSES: ReadonlySet<string> = new Set([
   "closed",
 ]);
 
-function toTrackerTrade(row: TradeRow, zone: DayZone, rules: TopstepRules | null): TrackerTrade | null {
+function toTrackerTrade(row: TradeRow, zone: DayZone, band: BreakevenRange): TrackerTrade | null {
   const openedAt = row.stats?.opened_at ?? null;
   if (!openedAt) return null;
   return {
@@ -245,13 +245,7 @@ function toTrackerTrade(row: TradeRow, zone: DayZone, rules: TopstepRules | null
     isLoss:
       row.stats?.net_pl == null
         ? null
-        : rules
-          ? tradeOutcome(row, row.stats.net_pl, {
-              from: -topstepBreakevenBand(rules.config.plan),
-              to: topstepBreakevenBand(rules.config.plan),
-              riskShare: TOPSTEP_BREAKEVEN_R,
-            }) === "loss"
-          : row.stats.net_pl < 0,
+        : tradeOutcome(row, row.stats.net_pl, band) === "loss",
     hasPlaybook: row.playbook_id != null && row.playbook_id !== "",
     playbookLate:
       row.playbook_id != null &&
@@ -267,7 +261,7 @@ function toTrackerTrade(row: TradeRow, zone: DayZone, rules: TopstepRules | null
     // let the rule be satisfied by pressing the spacebar.
     hasThesis: (sealedText(row, "thesis") ?? "").trim() !== "",
     plannedBeforeEntry: createdBy(row.created_at, openedAt),
-    topstep: rules != null,
+    topstep: typeof zone !== "string",
     review: reviewOf(row),
   };
 }
@@ -297,15 +291,15 @@ export function buildTradeDayIndex(
   rows: TradeRow[],
   /** The account's day rule — a Topstep account counts Topstep's trading day. */
   tzOf: (row: TradeRow) => DayZone,
-  /** A Topstep account's rules; null for every other account. */
-  topstepOf: (accountId: string | null) => TopstepRules | null = () => null,
+  /** The account's breakeven band (`resolveBreakevenRange`); none = exact zero, still a tenth of a stop's risk. */
+  bandOf: (accountId: string | null) => BreakevenRange = () => DEFAULT_BAND,
 ): TradeDayIndex {
   const byOpenDay = new Map<string, TrackerTrade[]>();
   const byCloseDay = new Map<string, TrackerTrade[]>();
 
   for (const row of rows) {
     if (!EXECUTED_STATUSES.has(String(row.status ?? ""))) continue;
-    const t = toTrackerTrade(row, tzOf(row), topstepOf(row.account_id));
+    const t = toTrackerTrade(row, tzOf(row), bandOf(row.account_id));
     if (!t || !t.openDay) continue;
 
     const open = byOpenDay.get(t.openDay) ?? [];
@@ -324,6 +318,9 @@ export function buildTradeDayIndex(
 
   return { byOpenDay, byCloseDay };
 }
+
+/** No account band: exact zero, and a tenth of the risk for a trade with a stop. */
+const DEFAULT_BAND: BreakevenRange = { from: 0, to: 0, riskShare: BREAKEVEN_R };
 
 const na = (key: AutoRuleKey, reason: AutoReason): AutoRuleResult => ({
   key,

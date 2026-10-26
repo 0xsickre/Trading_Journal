@@ -3,7 +3,6 @@ import { buildMentorPack } from "./mentor-export";
 import { checklistAnsweredAt, dimensionTable, ruleLabel, rulesSection, SMALL_SAMPLE, sr } from "./mentor-intraday";
 import { enrichTrades } from "./enriched-trade";
 import { toRealized } from "./analytics";
-import { evaluateTopstep } from "./topstep";
 import type { PositionStat, TradeRow } from "./types";
 import type { Insight } from "./insights/types";
 import type { SessionBrief } from "./session-brief";
@@ -98,12 +97,6 @@ const tiltInsight: Insight = {
   subjectId: book[2].id,
 };
 
-const topstep = evaluateTopstep(
-  { enabled: true, plan: "50K", startingBalance: 50_000, payoutAt: null, resetAt: null, personalDll: null, dailyTarget: null },
-  toRealized(book).map((r) => ({ closedAt: r.closedAt, net: r.net })),
-  "2026-09-30T20:00:00Z",
-);
-
 const pack = () =>
   buildMentorPack(book, {
     tzOf: () => "UTC",
@@ -113,28 +106,21 @@ const pack = () =>
     compliance,
     insights: { insights: [tiltInsight], skipped: [] },
     reports: [{ report_date: "2026-09-29", mental_temp: 4, no_trade_day: false }],
-    topstep:
-      topstep.status === "off"
-        ? []
-        : [{ accountName: "Topstep 50K", plan: "50K", startingBalance: 50_000, riskRulePct: 8, result: topstep }],
   });
 
 describe("mentor pack for a day trader (F5.6)", () => {
-  it("tells the model it is reading an intraday Topstep book, and how", () => {
+  it("tells the model it is reading an intraday futures book, and how", () => {
     const md = pack();
     expect(md).toContain("mentor za intraday trgovanje CME fjučersima");
     expect(md).toContain("Vremena: Europe/Belgrade (tvoja zona), i sesije");
     expect(md).not.toMatch(/(ET|CT)(?!F)/);
-    expect(md).toContain("**DLL** (Daily Loss Limit)");
     expect(md).toContain(`manje od ${SMALL_SAMPLE} trejdova`);
   });
 
-  it("states the Topstep account against the firm's limits", () => {
+  it("states no prop firm's limits — the trader keeps them on the platform (phase X)", () => {
     const md = pack();
-    expect(md).toContain("## Topstep nalog — stanje i pravila firme");
-    expect(md).toContain("### Topstep 50K — 50K · status: active");
-    expect(md).toContain("| DLL | 1000.00 USD dnevno;");
-    expect(md).toContain("8% prostora do MLL-a");
+    expect(md).not.toContain("## Topstep nalog");
+    expect(md).not.toMatch(/\*\*(MLL|DLL)\*\*|Konzistentnost|prostora do MLL-a|budžet/);
   });
 
   it("lists the trader's rules and the ones broken most", () => {
@@ -380,8 +366,7 @@ describe("mentor pack, phase M: what the mentor needs to question the day", () =
     target_price: 31366.5,
     entry_price: 31246.5,
     plan_snapshot: { entry_price: 31246.5, stop_price: 31190, target_price: 31366.5 },
-    risk_budget_at_entry: 300,
-    room_at_entry: 2716.34,
+    equity_at_entry: 50_000,
     stats: {
       ...base.stats!,
       avg_entry: 31246.5,
@@ -450,10 +435,10 @@ describe("mentor pack, phase M: what the mentor needs to question the day", () =
     );
   });
 
-  it("compares the sealed plan with how the trade ended, and the risk with its budget", () => {
+  it("compares the sealed plan with how the trade ended, and states the risk taken", () => {
     const md = mpack("Week");
     expect(md).toContain("- **Plan → kraj:** stop 31190 → 31196.25 · cilj nepromenjen (31366.5)");
-    expect(md).toContain("- **Rizik na ulazu:** budžet 300.00 USD · uzeto 339.00 USD (113% budžeta) · 12.5% prostora do MLL-a (prostor 2716.34 USD)");
+    expect(md).toContain("- **Rizik na ulazu:** 339.00 USD do stopa (0.68% balansa na početku dana)");
     expect(md).toContain("- **Playbook:** Ponoć pojas");
   });
 
@@ -578,21 +563,6 @@ describe("the stop line from the orders export (phase O)", () => {
     expect(md).toContain("- **Ulaz:** market nalog");
   });
 });
-
-describe("the risk range is the account's own (09.10.2026)", () => {
-  it("prints the account's cap, not the plan's, when the account sets one", () => {
-    const md = buildMentorPack(book, {
-      tzOf: () => "UTC",
-      displayTz: "Europe/Belgrade",
-      topstep:
-        topstep.status === "off"
-          ? []
-          : [{ accountName: "50K", plan: "50K", startingBalance: 50_000, riskRulePct: 15, riskRuleMin: 60, riskRuleMax: 350, result: topstep }],
-    });
-    expect(md).toContain("15% prostora do MLL-a, u granicama 60.00 USD–350.00 USD");
-  });
-});
-
 
 describe("reakcija i vremenski stop u paketu (14.10.2026)", () => {
   const measured = (no: number, net: number, durationMin: number, over: Record<string, unknown>) => {

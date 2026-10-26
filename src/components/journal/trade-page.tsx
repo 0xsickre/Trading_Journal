@@ -45,7 +45,6 @@ export type TradePageTrade = {
   fees: number | null;
   maeR: number | null;
   mfeR: number | null;
-  riskBudget: number | null;
   pointValue: number | null;
   fxRate: number | null;
   tickSize: number | null;
@@ -274,8 +273,8 @@ export function TradePage({
                   <ExcursionBar maeR={trade.maeR} mfeR={trade.mfeR} realizedR={trade.realizedR} />
                 </div>
               </Fact>
-              <Fact label="Provizije · budžet rizika">
-                {fmtMoney(trade.fees, trade.currency)} · {fmtMoney(trade.riskBudget, trade.currency)}
+              <Fact label="Provizije · rizik do stopa">
+                {fmtMoney(trade.fees, trade.currency)} · {fmtMoney(riskMoney, trade.currency)}
               </Fact>
             </div>
           )}

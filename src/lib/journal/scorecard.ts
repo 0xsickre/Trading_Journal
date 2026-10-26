@@ -19,8 +19,8 @@
  *     The only one that is fully under the trader's control, and the only one
  *     that means anything on a book with no closed trades at all.
  *   - **Survival (0–100)** — how close the account came to not continuing. How
- *     deep the worst fall was, how long it has been under water, and how much
- *     room is left against a prop-firm limit.
+ *     deep the worst fall was, and how long it has been under water. (Room
+ *     against a prop-firm limit was a third part until phase X.)
  *   - **Edge — a MEASUREMENT, not a score.** Expectancy in R, with its
  *     confidence interval and its sample. Deliberately not squeezed onto a
  *     0–100 band: turning an interval into a grade throws away exactly the
@@ -89,16 +89,6 @@ export type ScorecardInputs = {
   /** Days since the last equity peak; 0 at a new high. */
   underWaterDays: number | null;
   /**
-   * Room left against the nearest prop-firm limit, 0–100.
-   *
-   * Ungated by the trade count, unlike its two neighbours: the evidence rides
-   * with the producer. `evaluateTopstep` answers null for an
-   * account with nothing closed in its window, so there is no measured zero here to tell apart from
-   * an absence. It is also on its own clock — a limit nearly touched does not
-   * stop having been nearly touched because the reader changed the period.
-   */
-  propHeadroomPct?: number | null;
-  /**
    * R of the trades expectancy is actually averaged over: decided, and
    * carrying an R. The same population `metrics.ts` resamples.
    */
@@ -117,8 +107,7 @@ export type SurvivalScore = {
   score: number | null;
   drawdownPct: number | null;
   underWaterDays: number | null;
-  propHeadroomPct: number | null;
-  /** How many of the three parts had data. Shown, not hidden. */
+  /** How many of the two parts had data. Shown, not hidden. */
   counted: number;
 };
 
@@ -148,10 +137,9 @@ export function computeScorecard(inputs: ScorecardInputs): Scorecard {
 
   const drawdownPct = enoughTrades ? inputs.maxDrawdownPctOfEquity : null;
   const underWaterDays = enoughTrades ? inputs.underWaterDays : null;
-  const headroom = inputs.propHeadroomPct ?? null;
 
   // Each part on the same 0–100 scale, then the mean of the ones that exist.
-  // A mean rather than weights: three quantities this different have no honest
+  // A mean rather than weights: two quantities this different have no honest
   // exchange rate between them, and inventing one would be the composite's own
   // mistake at a smaller scale.
   const parts: number[] = [];
@@ -159,7 +147,6 @@ export function computeScorecard(inputs: ScorecardInputs): Scorecard {
   if (underWaterDays != null) {
     parts.push(clamp(100 - (underWaterDays / UNDER_WATER_FLOOR_DAYS) * 100));
   }
-  if (headroom != null) parts.push(clamp(headroom));
 
   const rs = inputs.decidedRs;
   // The same floor as everything else, applied to the population the statistic
@@ -182,7 +169,6 @@ export function computeScorecard(inputs: ScorecardInputs): Scorecard {
       score: parts.length === 0 ? null : parts.reduce((a, b) => a + b, 0) / parts.length,
       drawdownPct,
       underWaterDays,
-      propHeadroomPct: headroom,
       counted: parts.length,
     },
     edge: {

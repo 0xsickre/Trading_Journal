@@ -184,7 +184,8 @@ describe("outcome filter classifies by EACH account's own breakeven band", () =>
   // Same net P&L, −30, on two accounts with different bands: a loss on the
   // account with no band (EXACT_ZERO_RANGE), a breakeven on the one whose
   // band reaches −50. Collapsing the two into one global band would put both
-  // trades on the same side of the filter.
+  // trades on the same side of the filter. No stop on either: a trade with one
+  // is judged by a tenth of its own risk on every account (phase X).
   const TIGHT = account({ id: "acc-tight", breakeven_from: 0, breakeven_to: 0 });
   const WIDE = account({ id: "acc-wide", breakeven_from: -50, breakeven_to: 50 });
   const trades = [
@@ -194,7 +195,8 @@ describe("outcome filter classifies by EACH account's own breakeven band", () =>
 
   it("the same −30 net is a loss on one account and breakeven on the other", async () => {
     const user = userEvent.setup({ delay: null });
-    render(<JournalGrid trades={rowsOf(trades)} accounts={[TIGHT, WIDE]} />);
+    const noStop = rowsOf(trades).map((r) => ({ ...r, stop_price: null }) as TradeRow);
+    render(<JournalGrid trades={noStop} accounts={[TIGHT, WIDE]} />);
 
     // The dimension filters moved behind the Filters popover; the assertion
     // below is unchanged, only the path to the control is longer now.

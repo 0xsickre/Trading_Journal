@@ -38,22 +38,22 @@ export type DashboardWidget = {
   /** Quarters of a row this widget occupies. See `WidgetSpan`. */
   span: WidgetSpan;
   /**
-   * False for the three sections a preference must not be able to switch off.
+   * False for the two sections a preference must not be able to switch off.
    * See `LOCKED_REASON`.
    */
   hideable: boolean;
 };
 
 /**
- * Why three widgets refuse to be hidden.
+ * Why two widgets refuse to be hidden.
  *
- * Two of them are warnings about the reader's own money: the Topstep banner
- * announces a reached MLL, and the unpriced-trades notice says *the
- * numbers on this page are incomplete*. A display preference must not be able
- * to silence either — a page that can be configured into lying is worse than a
- * page with no configuration at all.
+ * One is a warning about the reader's own money: the unpriced-trades notice
+ * says *the numbers on this page are incomplete*. A display preference must
+ * not be able to silence it — a page that can be configured into lying is
+ * worse than a page with no configuration at all. (The Topstep banner was the
+ * other warning until phase X.)
  *
- * The third is the headline row. Hiding it would leave a dashboard whose first
+ * The second is the headline row. Hiding it would leave a dashboard whose first
  * screen is a fold and a filter bar, and `column-prefs.ts` already settled the
  * general form of this argument with `MIN_VISIBLE_COLUMNS`: some toggles simply
  * refuse.
@@ -73,7 +73,6 @@ export const LOCKED_REASON =
  */
 export const DASHBOARD_WIDGETS: DashboardWidget[] = [
   // Locked.
-  { id: "topstep", label: "Topstep status", group: "headline", span: 4, hideable: false },
   { id: "unpriced", label: "Incomplete-data warning", group: "headline", span: 4, hideable: false },
   { id: "headline", label: "Headline figures", group: "headline", span: 4, hideable: false },
 
@@ -84,13 +83,11 @@ export const DASHBOARD_WIDGETS: DashboardWidget[] = [
   // What is on right now, and what just happened — the two lists a session
   // opens on, each one click from the trade itself.
   { id: "open-positions", label: "Open positions", group: "detail", span: 2, hideable: true },
-  // The only forward-looking card on the page: the book's own days replayed
-  // against whatever floor applies to the account.
-  { id: "survival", label: "Survival simulation", group: "detail", span: 2, hideable: true },
   { id: "recent-trades", label: "Recent trades", group: "detail", span: 2, hideable: true },
   // How long the winners take to get going, beside the losers still open at
   // the same minute — the trader's own time stop (phase W).
-  { id: "time-stop", label: "Time stop", group: "detail", span: 2, hideable: true },
+  // Full width since phase X: the Survival card it shared a row with is gone.
+  { id: "time-stop", label: "Time stop", group: "detail", span: 4, hideable: true },
   { id: "insights", label: "Automated insights", group: "process", span: 4, hideable: true },
   { id: "tracker", label: "Process consistency", group: "process", span: 4, hideable: true },
 

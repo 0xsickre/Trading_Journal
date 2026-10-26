@@ -48,11 +48,8 @@ describe("SessionBriefCard", () => {
     expect(screen.getByText("Nema važnih vesti.")).toBeInTheDocument();
   });
 
-  it("shows what is left of the DLL when given", () => {
-    render(
-      <SessionBriefCard day="2026-09-29" brief={brief} tz="America/New_York" dllLeft={{ amount: 700, of: 1000, currency: "USD" }} />,
-    );
-    expect(screen.getByText(/DLL danas/)).toBeInTheDocument();
-    expect(screen.getByText(/700.*od.*1,000|700.*od.*1\.000/)).toBeInTheDocument();
+  it("names no prop firm's limit (phase X)", () => {
+    render(<SessionBriefCard day="2026-09-29" brief={brief} tz="America/New_York" />);
+    expect(screen.queryByText(/DLL|Dnevni cilj/)).not.toBeInTheDocument();
   });
 });

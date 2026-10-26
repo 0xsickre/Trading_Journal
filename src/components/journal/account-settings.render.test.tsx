@@ -205,12 +205,13 @@ describe("the timezone is the trader's, not a field (K5)", () => {
 });
 
 describe("the breakeven range is fixed (K4)", () => {
-  it("shows the plan's band and offers nothing to type", async () => {
+  it("shows a tenth of the trade's risk and the account's own band, and offers nothing to type", async () => {
     const user = userEvent.setup({ delay: null });
     render(<AccountSettings accounts={[account({ topstep_mode: true, topstep_plan: "50K" })]} tradeCounts={{ "acc-1": 0 }} />);
     await openMenu(user, "Main Account");
     await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
-    expect(screen.getByText(/±0\.1R of the trade's risk/).textContent).toContain("±$16.00 without a stop");
+    // Phase X: no plan's band, whatever the old Topstep columns say.
+    expect(screen.getByText(/±0\.1R of the trade's risk/).textContent).toContain("$0.00 to $0.00 without a stop");
     expect(screen.queryByLabelText("From")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("To")).not.toBeInTheDocument();
   });

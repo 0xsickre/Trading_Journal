@@ -12,7 +12,6 @@
 
 import { riskMoneyAtEntry } from "./risk-taken";
 import type { TradeRow } from "./types";
-import { TOPSTEP_BREAKEVEN_R, TOPSTEP_PLANS, topstepBreakevenBand, type TopstepPlan } from "./topstep";
 
 export type Outcome = "win" | "loss" | "breakeven";
 
@@ -24,42 +23,45 @@ export type BreakevenConfig = {
   breakeven_to: number;
   breakeven_unit: BreakevenUnit;
   starting_balance: number;
-  /** A Topstep account's band is fixed by its plan (K4) and the three columns above are not read. */
-  topstep_mode?: boolean | null;
-  topstep_plan?: string | null;
 };
+
+/**
+ * A trade with a stop is a scratch while |net| is at most a tenth of its own
+ * risk to that stop (K4, 30.09.2026) — on every account since phase X: the
+ * share is the trader's, not a prop firm's.
+ */
+export const BREAKEVEN_R = 0.1;
 
 /**
  * Band resolved into account currency, ready to compare against net P&L.
  *
- * `riskShare` (a Topstep account, decided 30.09.2026): a trade whose risk is
- * known is judged against ITS OWN risk — breakeven while |P&L| is at most this
- * share of it — and `from`/`to` are only the fallback for a trade with no stop.
- * The dollar band is a tenth of the plan's nominal risk; a micro trade risks a
- * fraction of that, so a full stop on one MES contract (−1.13R, −$22.25) sat
- * inside the band of the time (±$25) and was filed as a scratch, leaving the loss out of the win rate
- * and the expectancy.
+ * `riskShare` (decided 30.09.2026, every account since phase X): a trade whose
+ * risk is known is judged against ITS OWN risk — breakeven while |P&L| is at
+ * most this share of it — and `from`/`to` (the account's band) are only the
+ * fallback for a trade with no stop, a day or a week. A fixed dollar band is
+ * the wrong unit for a trade: a full stop on one MES contract (−1.13R,
+ * −$22.25) sat inside the ±$25 band of the time and was filed as a scratch,
+ * leaving the loss out of the win rate and the expectancy.
  */
 export type BreakevenRange = { from: number; to: number; riskShare?: number };
 
 /** Reproduces the old exact-zero behaviour — used when no account is in scope. */
 export const EXACT_ZERO_RANGE: BreakevenRange = { from: 0, to: 0 };
 
+/** No money band, but still a tenth of a stop's risk — what every account shares (phase X). */
+const NO_BAND: BreakevenRange = { ...EXACT_ZERO_RANGE, riskShare: BREAKEVEN_R };
+
 export function resolveBreakevenRange(
   config: BreakevenConfig | null | undefined,
 ): BreakevenRange {
   if (!config) return EXACT_ZERO_RANGE;
-  if (config.topstep_mode && config.topstep_plan && config.topstep_plan in TOPSTEP_PLANS) {
-    const band = topstepBreakevenBand(config.topstep_plan as TopstepPlan);
-    return { from: -band, to: band, riskShare: TOPSTEP_BREAKEVEN_R };
-  }
   const { breakeven_from, breakeven_to, breakeven_unit, starting_balance } =
     config;
   if (breakeven_unit === "pct") {
     const base = Math.abs(starting_balance) / 100;
-    return { from: breakeven_from * base, to: breakeven_to * base };
+    return { from: breakeven_from * base, to: breakeven_to * base, riskShare: BREAKEVEN_R };
   }
-  return { from: breakeven_from, to: breakeven_to };
+  return { from: breakeven_from, to: breakeven_to, riskShare: BREAKEVEN_R };
 }
 
 /**
@@ -117,21 +119,33 @@ export function hasBreakevenBand(range: BreakevenRange): boolean {
  * on the calendar would start to differ over the same trades.
  *
  * The rule: a band applies only if ALL accounts in scope agree on it. When they
- * do not, it falls back to exact zero — because a +$15 trade cannot be
- * breakeven on one account and a win on another at the same time, and picking
- * one of the two bands would apply somebody's rule to somebody else's trades.
+ * do not, the money band falls back to exact zero — because a +$15 trade cannot
+ * be breakeven on one account and a win on another at the same time, and
+ * picking one of the two bands would apply somebody's rule to somebody else's
+ * trades. The tenth of a stop's risk is every account's, so it stays.
  *
- * An empty set also gives exact zero: there is no account whose band would
- * apply.
+ * An empty set gives the same: there is no account whose band would apply.
  */
 export function sharedBreakevenRange(
   accounts: readonly BreakevenConfig[],
 ): BreakevenRange {
-  if (accounts.length === 0) return EXACT_ZERO_RANGE;
+  if (accounts.length === 0) return NO_BAND;
   const ranges = accounts.map((a) => resolveBreakevenRange(a));
   const first = ranges[0];
   const uniform = ranges.every(
     (r) => r.from === first.from && r.to === first.to && r.riskShare === first.riskShare,
   );
-  return uniform ? first : EXACT_ZERO_RANGE;
+  return uniform ? first : NO_BAND;
+}
+
+/**
+ * Each account's own band, by id — what the tracker judges a stop loss by
+ * (`stop_after_two_losses`). A trade with no account, or an unknown one, gets
+ * exact zero and still a tenth of a stop's risk.
+ */
+export function breakevenRangeResolver(
+  accounts: readonly (BreakevenConfig & { id: string })[],
+): (accountId: string | null | undefined) => BreakevenRange {
+  const byId = new Map(accounts.map((a) => [a.id, resolveBreakevenRange(a)]));
+  return (accountId) => (accountId ? (byId.get(accountId) ?? NO_BAND) : NO_BAND);
 }

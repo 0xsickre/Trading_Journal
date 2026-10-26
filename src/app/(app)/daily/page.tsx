@@ -26,9 +26,7 @@ import { PageHeader } from "@/components/app/page-header";
 import { ReviewGapsCard } from "@/components/journal/review-gaps-card";
 import { reviewGaps } from "@/lib/journal/review-gaps";
 import { accountDayZoneResolver } from "@/lib/journal/time";
-import { topstepRulesResolver } from "@/lib/journal/topstep";
-import { getTopstepSizing } from "@/lib/journal/topstep-status";
-import { getCashEvents } from "@/lib/journal/cash-events";
+import { breakevenRangeResolver } from "@/lib/journal/breakeven";
 import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
 import { briefResolver } from "@/lib/journal/session-brief";
 import { SessionBriefCard } from "@/components/journal/session-brief-card";
@@ -75,8 +73,6 @@ export default async function DailyPage({
     report,
     checkinsByDay,
     briefs,
-    sizing,
-    cash,
     biases,
   ] = await Promise.all([
     accountsPromise,
@@ -93,24 +89,10 @@ export default async function DailyPage({
     // The card reads the day in view, and so do the tracker rules that read
     // the red windows and the close.
     dayPromise.then(({ reportDate }) => getSessionBriefs(reportDate, reportDate)),
-    // Room and DLL as they stand NOW — shown on today's page only.
-    getTopstepSizing(),
-    // Payouts lower a Topstep balance, and with it the budgets the tracker derives.
-    getCashEvents(),
     // Bias dana (phase D): every forecast — the day's for the card, all of them for the score.
     getDailyBiases(),
   ]);
   const briefOf = briefResolver(briefs);
-  const primarySizing = primary?.topstep_mode ? sizing[primary.id] : undefined;
-  const dllLeft =
-    reportDate === today && primarySizing
-      ? {
-          amount: primarySizing.dllLeftToday,
-          of: primarySizing.plan.dll,
-          currency: primary?.currency ?? "USD",
-          target: primarySizing.target ?? null,
-        }
-      : null;
 
   const checkins = checkinsByDay.get(reportDate) ?? new Map();
 
@@ -119,16 +101,16 @@ export default async function DailyPage({
   // both with one zone would misfile the stop-loss run for the other.
   //
   // And per-trade DAY RULE: a Topstep account counts Topstep's trading day
-  // (17:00 → 17:00 CT), the day its DLL is charged to, so this page, the banner
-  // and the 21:25 reminder agree on which day an evening trade belongs to.
+  // (17:00 → 17:00 CT), so this page and the 21:25 reminder agree on which day
+  // an evening trade belongs to.
   const tzFor = accountDayZoneResolver(accounts, primary);
   const tzOf = (row: TradeRow) => tzFor(row.account_id);
   // The real book only: Practice is kept apart (trader, 01.10.2026) — it is read by picking
   // that account on the dashboard, trades, calendar and reports.
   const trades = inAllAccountsScope(tradesAll, accounts);
 
-  // A Topstep account's trades are graded by its plan.
-  const index = buildTradeDayIndex(trades, tzOf, topstepRulesResolver(accounts, cash));
+  // A stop loss is judged by the account's breakeven band.
+  const index = buildTradeDayIndex(trades, tzOf, breakevenRangeResolver(accounts));
   const dayRules = rulesLiveOn(rules, reportDate);
 
   // Live verdicts, then the frozen ones on top. On an unlocked day the overlay is
@@ -200,7 +182,7 @@ export default async function DailyPage({
         firstEntryAt={firstEntryAt}
         beforeSession={
           <>
-            <SessionBriefCard day={reportDate} brief={briefOf(reportDate)} tz={timezone} dllLeft={dllLeft} />
+            <SessionBriefCard day={reportDate} brief={briefOf(reportDate)} tz={timezone} />
             <DailyBiasCard
               day={reportDate}
               biases={biases.filter((b) => b.tradingDay === reportDate)}

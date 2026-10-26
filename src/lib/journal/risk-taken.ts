@@ -67,29 +67,18 @@ export function equityAtEntry(row: TradeRow): number | null {
   return v != null && v > 0 ? v : null;
 }
 
-/** A Topstep trade's room above the MLL at its entry, as sealed on the trade. */
-export function roomAtEntry(row: TradeRow): number | null {
-  const v = numberFieldValue(row, "room_at_entry");
-  return v != null && v >= 0 ? v : null;
-}
-
 /**
- * Risk taken as a percentage of what the account could lose at entry.
+ * Risk taken as a percentage of the equity the entry day opened with — the
+ * opening balance rather than the live figure: a denominator that moves with
+ * every close inside the day gives the same trade two answers.
  *
- * On a Topstep account that is the room above the MLL (30.09.2026): a 150K
- * with $4 500 of room is not risking 0.23 % when it puts $345 on a stop — it
- * is risking 7.7 % of everything it can lose. Anywhere else, the equity the
- * entry day opened with — the opening balance rather than the live figure, for
- * the reason `equity-ladder.ts` spells out: a denominator that moves with every
- * close inside the day gives the same trade two answers.
- *
- * Null with no room left (0): the risk is not a share of anything.
+ * Phase X (X-2 A, 26.10.2026): every account, a Topstep one included. Until
+ * then a Topstep trade divided by the room above the MLL (`room_at_entry`) —
+ * a prop firm's denominator, gone with its rules.
  */
 export function riskPctTaken(row: TradeRow): number | null {
   const money = riskMoneyAtEntry(row);
   if (money == null) return null;
-  const room = roomAtEntry(row);
-  if (room != null) return room > 0 ? (money / room) * 100 : null;
   const equity = equityAtEntry(row);
   if (equity == null) return null;
   return (money / equity) * 100;

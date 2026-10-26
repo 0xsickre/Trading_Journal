@@ -111,7 +111,7 @@ describe("the breakeven band — one rule for five screens", () => {
 
   it("the band applies when every account agrees", () => {
     const r = sharedBreakevenRange([acct(-20, 20), acct(-20, 20)]);
-    expect(r).toEqual({ from: -20, to: 20 });
+    expect(r).toEqual({ from: -20, to: 20, riskShare: 0.1 });
     expect(r).toEqual(resolveBreakevenRange(acct(-20, 20)));
   });
 
@@ -119,20 +119,21 @@ describe("the breakeven band — one rule for five screens", () => {
     // A +$15 trade cannot be breakeven on one account and a win on another.
     // Taking the first band would mean applying somebody's rule to somebody
     // else's trades — so neither is applied.
-    expect(sharedBreakevenRange([acct(-20, 20), acct(-5, 5)])).toEqual(
-      EXACT_ZERO_RANGE,
-    );
+    expect(sharedBreakevenRange([acct(-20, 20), acct(-5, 5)])).toEqual({
+      ...EXACT_ZERO_RANGE,
+      riskShare: 0.1,
+    });
   });
 
   it("an empty set of accounts gives exact zero", () => {
-    expect(sharedBreakevenRange([])).toEqual(EXACT_ZERO_RANGE);
+    expect(sharedBreakevenRange([])).toEqual({ ...EXACT_ZERO_RANGE, riskShare: 0.1 });
   });
 
   it("one account gives its own band — this is the Dashboard filtered to an account", () => {
     // The difference between the Dashboard and the routes is in WHAT gets
     // passed, not in the rule: the Dashboard sends the selected accounts, the
     // routes send all of them. That difference is deliberate.
-    expect(sharedBreakevenRange([acct(-50, 50)])).toEqual({ from: -50, to: 50 });
+    expect(sharedBreakevenRange([acct(-50, 50)])).toEqual({ from: -50, to: 50, riskShare: 0.1 });
   });
 });
 

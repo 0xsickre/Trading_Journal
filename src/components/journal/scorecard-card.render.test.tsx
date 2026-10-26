@@ -69,13 +69,12 @@ describe("ScorecardCard", () => {
   });
 
   it("shows each axis's parts, with an em dash for the ones with no data", () => {
-    card({ propHeadroomPct: null });
+    card({ trades: 0, decidedRs: [] });
     const survival = within(screen.getByRole("group", { name: "Survival" }));
     expect(survival.getByText("Max DD")).toBeInTheDocument();
     expect(survival.getByText("Under water")).toBeInTheDocument();
-    // No prop-firm challenge: the part is named and left empty rather than
-    // counted as full room.
-    expect(survival.getByText("Prop-firm room")).toBeInTheDocument();
+    // Room against a prop-firm limit left the axis in phase X.
+    expect(survival.queryByText("Prop-firm room")).not.toBeInTheDocument();
     expect(survival.getAllByText("—").length).toBeGreaterThanOrEqual(1);
   });
 

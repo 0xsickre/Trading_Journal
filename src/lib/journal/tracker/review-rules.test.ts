@@ -3,7 +3,6 @@ import { biasWasSet, buildTradeDayIndex, evaluateAutoRulesForDay } from "./auto-
 import { tradingWindowResolver } from "./trading-window";
 import type { TrackerRule } from "../tracker-types";
 import { missingReview } from "../review-gaps";
-import { topstepRulesResolver } from "../topstep";
 import { accountDayZoneResolver } from "../time";
 import type { Account, TradeRow } from "../types";
 import { firstBiasResolver, parseDailyBias, type DailyBias } from "../daily-bias";
@@ -88,7 +87,7 @@ function trade(id: string, opened: string, net: number, r: Review): TradeRow {
 }
 
 const day = (rows: TradeRow[]) =>
-  evaluateAutoRulesForDay("2026-10-13", buildTradeDayIndex(rows, (row) => zoneOf(row.account_id), topstepRulesResolver([TS])));
+  evaluateAutoRulesForDay("2026-10-13", buildTradeDayIndex(rows, (row) => zoneOf(row.account_id)));
 
 const T2 = (r: Review = {}) =>
   trade("t2", "2026-10-13T07:24:39Z", -226.88, { playbook: null, mistake: ["Rani ulaz", "Bez Setupa"], psychology: ["Nestrpljiv", "FOMO"], ...r });
@@ -196,7 +195,7 @@ describe("trading_window: entries and exits inside the day's window, Belgrade ti
     }) as unknown as TrackerRule;
   const LONDON = windowRule([{ since: "2026-10-12", from: "09:00", to: "12:00" }]);
   const dayW = (rows: TradeRow[], rule: TrackerRule = LONDON, now = Date.parse("2026-10-14T00:00:00Z"), d = "2026-10-13") =>
-    evaluateAutoRulesForDay(d, buildTradeDayIndex(rows, (row) => zoneOf(row.account_id), topstepRulesResolver([TS])), {
+    evaluateAutoRulesForDay(d, buildTradeDayIndex(rows, (row) => zoneOf(row.account_id)), {
       tradingWindowOf: tradingWindowResolver([rule]),
       now,
     }).trading_window;
@@ -243,7 +242,7 @@ describe("phase D: from 19.10.2026 the bias is the /daily card's first forecast,
   const D = "2026-10-19";
   const at = (t: string) => `${D}T${t}Z`;
   const onDay = (rows: TradeRow[], forecasts: Parameters<typeof firstBiasResolver>[0]) =>
-    evaluateAutoRulesForDay(D, buildTradeDayIndex(rows, (row) => zoneOf(row.account_id), topstepRulesResolver([TS])), {
+    evaluateAutoRulesForDay(D, buildTradeDayIndex(rows, (row) => zoneOf(row.account_id)), {
       biasOf: firstBiasResolver(forecasts),
     });
   const tr = (id: string, opened: string, r: Review = {}) => trade(id, opened, 100, { bias: null, closed: opened, ...r });

@@ -31,7 +31,6 @@ import { ChartShell } from "@/components/journal/chart-shell";
 import { StatGroup } from "@/components/journal/stat-group";
 import { CalendarHeatmap } from "@/components/journal/calendar-heatmap";
 import { TrackerStreakCard } from "@/components/journal/tracker-streak-card";
-import { bookEquityLadder } from "@/lib/journal/tracker/equity-ladder";
 import { drawdownDuration, drawdownEpisodes } from "@/lib/journal/balance";
 
 /**
@@ -189,6 +188,7 @@ import {
   PlanVsRealityCard,
 } from "@/components/journal/metrics-panel";
 import {
+  breakevenRangeResolver,
   hasBreakevenBand,
   sharedBreakevenRange,
 } from "@/lib/journal/breakeven";
@@ -209,15 +209,7 @@ import {
   weeklyExitEfficiency,
   type PnlMode,
 } from "@/lib/journal/analytics";
-import { TopstepBanner } from "@/components/journal/topstep-banner";
 import { briefResolver, type SessionBrief } from "@/lib/journal/session-brief";
-import {
-  evaluateTopstep,
-  riskRuleFromAccount,
-  topstepConfigFromAccount,
-  topstepRulesResolver,
-  type TopstepResult,
-} from "@/lib/journal/topstep";
 import { unpricedClosedCount } from "@/lib/journal/money-provenance";
 import {
   buildMentorPack,
@@ -253,16 +245,6 @@ import {
 } from "@/lib/journal/dashboard-view";
 import { formatDuration } from "@/lib/journal/units";
 import { OpenPositionsWidget } from "@/components/journal/open-positions-widget";
-import { SurvivalCard } from "@/components/journal/survival-card";
-import {
-  dayReturnsFrom,
-  simulateSurvival,
-  simulateTopstepSurvival,
-  thresholdsFor,
-} from "@/lib/journal/survival";
-
-/** Roughly a quarter of trading days — far enough to matter, near enough to plan. */
-const SURVIVAL_HORIZON_DAYS = 60;
 import { RecentTradesWidget } from "@/components/journal/recent-trades-widget";
 import {
   computeDailyDrawdown,
@@ -735,8 +717,6 @@ export function Dashboard({
   // no single planned risk to convert through), so the R curve was
   // unreachable. The curve is built in R directly, trade by trade.
   const [equityMetric, setEquityMetric] = useState<"money" | "r">("money");
-  /** Single days, or weeks — see `survival.ts` on why the choice is visible. */
-  const [survivalBlock, setSurvivalBlock] = useState(1);
 
   // The scope is remembered for the tab: leave for a trade and come back to
   // the same account, period and basis. Read after mount — sessionStorage does
@@ -803,22 +783,6 @@ export function Dashboard({
   const anchorYear = Number(anchor.slice(0, 4));
   const anchorQuarter = Math.floor((Number(anchor.slice(5, 7)) - 1) / 3) + 1;
 
-  // Topstep status per account in that mode (topstep.ts): room above the MLL,
-  // today's DLL, consistency, target.
-  const topstepStatuses = useMemo(
-    () =>
-      accounts
-        .filter((a) => a.topstep_mode)
-        .map((account) => {
-          const rows = toRealized(trades.filter((t) => t.account_id === account.id)).map((r) => ({
-            closedAt: r.closedAt,
-            net: r.net,
-          }));
-          return { account, result: evaluateTopstep(topstepConfigFromAccount(account, cashEvents), rows) as TopstepResult };
-        }),
-    [accounts, trades, cashEvents],
-  );
-
   // Resolved export period, for a live preview of exactly what will be exported.
   const exportRange = useMemo(
     () => resolveCalendarRange(granularity, anchor, customFrom, customTo),
@@ -852,8 +816,8 @@ export function Dashboard({
     (t: { row: TradeRow }) => tzForAccount(t.row.account_id),
     [tzForAccount],
   );
-  // A Topstep account's tracker limits are its plan's money (F3).
-  const topstepOf = useMemo(() => topstepRulesResolver(accounts, cashEvents), [accounts, cashEvents]);
+  // Each account's breakeven band, which the tracker judges a stop loss by.
+  const bandOf = useMemo(() => breakevenRangeResolver(accounts), [accounts]);
 
   /**
    * "All accounts" pooling raw money across DIFFERENT currencies — €500 and
@@ -932,7 +896,7 @@ export function Dashboard({
 
   /**
    * The instrument families in account scope, and the account's trades of the
-   * one picked. The account's EQUITY (percentage view, Topstep, survival) keeps
+   * one picked. The account's EQUITY (percentage view) keeps
    * reading `realizedAll`: an instrument filter narrows the trades shown, not
    * the money the account holds.
    */
@@ -1323,7 +1287,7 @@ export function Dashboard({
     const index = buildTradeDayIndex(
       scoped,
       (row) => tzForAccount(row.account_id),
-      topstepOf,
+      bandOf,
     );
     const briefOf = briefResolver(briefs);
     const tradingWindowOf = tradingWindowResolver(trackerRules);
@@ -1364,7 +1328,7 @@ export function Dashboard({
     trades,
     accountFilter,
     tzForAccount,
-    topstepOf,
+    bandOf,
     todayKey,
   ]);
 
@@ -1391,34 +1355,6 @@ export function Dashboard({
       ),
     [realized, tzOf, breakevenRange, pnlOf, fillCounts, playbookLookup.rules],
   );
-
-  /**
-   * Worst prop-firm headroom across the Topstep accounts in view: the smallest room
-   * ever left above each one's trailing MLL, as a share of the MLL
-   * (`evaluateTopstep`, F3).
-   *
-   * MINIMUM, NOT AVERAGE. The constraint that ends an account is whichever came
-   * nearest to its own floor, and averaging two lets a comfortable one paper
-   * over the one that sat a few dollars from the end. `null` — the part drops
-   * and Survival averages the rest — when no account runs Topstep rules, or
-   * when every window is still empty.
-   *
-   * DELIBERATELY OUTSIDE THE PERIOD FILTER, unlike every other figure fed to
-   * the scorecard, including the two Process halves above, which are windowed
-   * precisely so the card does not mix timeframes. The exception is not an
-   * oversight: an account's window is defined by its own `topstep_reset_at`
-   * and starting balance, and a floor nearly touched does not stop having been
-   * touched because the reader switched the view to the last 30 days.
-   */
-  const propHeadroomPct = useMemo(() => {
-    // The accounts in view only: with one account picked, another account's
-    // close call is not this one's survival.
-    const rooms = topstepStatuses
-      .filter(({ account }) => accountFilter === "all" || account.id === accountFilter)
-      .map(({ result }) => result.headroomPct)
-      .filter((h): h is number => h != null);
-    return rooms.length === 0 ? null : Math.min(...rooms);
-  }, [topstepStatuses, accountFilter]);
 
   /**
    * R of the trades expectancy is actually averaged over — decided, and
@@ -1449,7 +1385,6 @@ export function Dashboard({
         // row has always shown a human.
         maxDrawdownPctOfEquity: drawdown.maxPctOfEquity,
         underWaterDays: ddDuration.currentDays,
-        propHeadroomPct,
         decidedRs,
         // Drawdown answers 0 for an empty book, and a 0 drawdown scores 100.
         // The count lets the card tell "no evidence" from "measured zero".
@@ -1460,7 +1395,6 @@ export function Dashboard({
       followRatePct,
       drawdown.maxPctOfEquity,
       ddDuration.currentDays,
-      propHeadroomPct,
       decidedRs,
       stats.count,
     ],
@@ -1497,92 +1431,6 @@ export function Dashboard({
     () => dailyPnl(realizedScope, mode, tzOf),
     [realizedScope, mode, tzOf],
   );
-  /**
-   * Equity as each day OPENED, for the simulation's denominators.
-   *
-   * The same ladder the tracker judges its daily limits against, so a 2 % day
-   * means the same thing on both screens.
-   */
-  const dayEquityOf = useMemo(() => {
-    const scoped =
-      accountFilter === "all"
-        ? trades
-        : trades.filter((t) => t.account_id === accountFilter);
-    return bookEquityLadder(
-      buildTradeDayIndex(scoped, (row) => tzForAccount(row.account_id), topstepOf),
-      accountFilter === "all" ? accounts : accounts.filter((a) => a.id === accountFilter),
-      scopedCashEvents,
-      tzForAccount,
-    );
-  }, [trades, accounts, accountFilter, scopedCashEvents, tzForAccount, topstepOf]);
-
-  /**
-   * The simulation behind the Survival card.
-   *
-   * On an account without prop-firm rules its input is the book's own daily
-   * results as percentages of the equity each day opened with, so the run
-   * compounds the way the account does, and the floor is the trader's own worst
-   * historical drawdown.
-   *
-   * A Topstep account is replayed in MONEY instead (`simulateTopstepSurvival`,
-   * F3): its own Topstep days, from its balance and trailing floor as they stand
-   * now. In "All accounts" the card simulates the primary account (E6) — one
-   * account's floor, not a sum of accounts no single floor applies to.
-   */
-  const survival = useMemo(() => {
-    const account =
-      accountFilter === "all"
-        ? primaryAccount(accounts)
-        : (accounts.find((a) => a.id === accountFilter) ?? null);
-    if (!account) return null;
-
-    if (account.topstep_mode) {
-      const status = topstepStatuses.find((s) => s.account.id === account.id)?.result;
-      if (!status) return null;
-      const own = dailyPnl(
-        realizedAll.filter((t) => t.row.account_id === account.id),
-        "net",
-        tzOf,
-      );
-      // Chronological, so a block of days is days that followed each other.
-      const dayPnl = [...own.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
-      return {
-        result: simulateTopstepSurvival({
-          dayPnl,
-          horizonDays: SURVIVAL_HORIZON_DAYS,
-          blockDays: survivalBlock,
-          rules: status.rules,
-          dailyTarget: status.dailyTarget,
-          startingBalance: account.starting_balance,
-          now: {
-            balance: status.balance,
-            mllFloor: status.mllFloor,
-            mllLocked: status.mllLocked,
-            bestDay: status.bestDay?.net ?? null,
-          },
-        }),
-        limitLabel: "the Topstep MLL",
-      };
-    }
-
-    const returns = dayReturnsFrom(daily, (day) => dayEquityOf(day));
-    const thresholds = thresholdsFor({
-      // Without prop-firm rules the floor is the one the book has already
-      // seen — the honest default for "a drawdown I would not accept", rounded
-      // up to the next whole percent and never below five.
-      ownMaxLossPct: Math.max(5, Math.ceil(drawdown.maxPctOfEquity || 0)),
-    });
-    return {
-      result: simulateSurvival({
-        dayReturns: returns,
-        horizonDays: SURVIVAL_HORIZON_DAYS,
-        blockDays: survivalBlock,
-        thresholds,
-      }),
-      limitLabel: `a ${thresholds.maxLossPct}% drawdown`,
-    };
-  }, [accounts, accountFilter, daily, dayEquityOf, drawdown, survivalBlock, topstepStatuses, realizedAll, tzOf]);
-
   const breakdown = useMemo(
     () => breakdownByField(realized, breakdownField, breakevenRange),
     [realized, breakdownField, breakevenRange],
@@ -1711,21 +1559,10 @@ export function Dashboard({
       startingBalance: scopedAccount?.starting_balance ?? null,
       fieldDefs,
       // The day trader's half (F5.6): each trade's own day, the trader's clock,
-      // the account against the firm's limits, the trader's rules and how each
-      // day kept them, the brief's news windows and the day's mental note.
+      // the trader's rules and how each day kept them, the brief's news windows
+      // and the day's mental note.
       tzOf: (row) => tzForAccount(row.account_id),
       displayTz: timezone,
-      topstep: topstepStatuses
-        .filter((s) => accountFilter === "all" || s.account.id === accountFilter)
-        .map((s) => ({
-          accountName: s.account.name,
-          plan: s.account.topstep_plan ?? "50K",
-          startingBalance: s.account.starting_balance,
-          riskRulePct: riskRuleFromAccount(s.account).pct,
-          riskRuleMin: riskRuleFromAccount(s.account).min,
-          riskRuleMax: riskRuleFromAccount(s.account).max,
-          result: s.result,
-        })),
       trackerRules,
       compliance: trackerSeries.filter(
         (d) => (fromDay == null || d.date >= fromDay) && (toDay == null || d.date <= toDay),
@@ -1766,14 +1603,6 @@ export function Dashboard({
 
   return (
     <div className="space-y-5">
-      {topstepStatuses.length > 0 && (
-        <div className="space-y-2">
-          {topstepStatuses.map(({ account, result }) => (
-            <TopstepBanner key={account.id} account={account} result={result} />
-          ))}
-        </div>
-      )}
-
       {unpriced > 0 && (
         <div
           role="status"
@@ -2445,23 +2274,11 @@ export function Dashboard({
         </ChartShell>
         ),
         score: show("score") && <ScorecardCard card={scorecard} />,
-        survival: show("survival") && (
-          <SurvivalCard
-            result={survival?.result ?? null}
-            horizonDays={SURVIVAL_HORIZON_DAYS}
-            blockDays={survivalBlock}
-            limitLabel={survival?.limitLabel ?? "the floor"}
-            onBlockChange={setSurvivalBlock}
-          />
-        ),
         "open-positions": show("open-positions") && (
           <OpenPositionsWidget
             rows={scopedRows}
             tzOf={(t) => zoneTz(tzForAccount(t.account_id))}
             equityOf={(id) => equityByAccount[id] ?? null}
-            dllLeftOf={(id) =>
-              topstepStatuses.find((s) => s.account.id === id)?.result.dllLeftToday ?? null
-            }
             currency={currency}
           />
         ),

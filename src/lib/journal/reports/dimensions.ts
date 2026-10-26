@@ -252,15 +252,16 @@ const SIZE_EDGES = [
  * `size_bucket` above counts LOTS, which is not the same question: two lots of
  * copper and two lots of gold are different fractions of the same account.
  */
-// On the Topstep scale (30.09.2026): Risk % is a share of the room above the
-// MLL, and the trader's rule takes 8 % of it — the edges sit around that.
+// Risk % is a share of the balance the entry day opened with (phase X, X-2 A;
+// until then the room above a Topstep MLL). A day trader's stop is a fraction
+// of a percent of it — $300 on a 50K is 0.6 % — so the edges sit there.
 const RISK_PCT_EDGES = [
-  { min: -Infinity, label: "< 5%" },
-  { min: 5, label: "5 – 8%" },
-  { min: 8, label: "8 – 10%" },
-  { min: 10, label: "10 – 15%" },
-  { min: 15, label: "15 – 20%" },
-  { min: 20, label: "≥ 20%" },
+  { min: -Infinity, label: "< 0.25%" },
+  { min: 0.25, label: "0.25 – 0.5%" },
+  { min: 0.5, label: "0.5 – 0.75%" },
+  { min: 0.75, label: "0.75 – 1%" },
+  { min: 1, label: "1 – 2%" },
+  { min: 2, label: "≥ 2%" },
 ] as const;
 
 /** Monday first, as every week in the journal starts (`closeWeek`). */

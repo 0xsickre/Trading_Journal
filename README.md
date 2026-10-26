@@ -18,7 +18,7 @@ the check-in table, `time_stop_days`, swap (fills, instruments, net P&L), the pe
 tracker limits and the weekly loss rule, the `risk_pct` choice, the backtest account kind with the
 TradingView replay import, and the `ftmo_*` columns. The book is Topstep only. **F5 (29.09.2026)
 moved the analytics to the trading day**: hold time in minutes, session windows, intraday insights,
-time underwater, overlap in minutes, open risk against the DLL, a day trader's mentor pack. **F6
+time underwater, overlap in minutes, open risk against the DLL (gone in phase X), a day trader's mentor pack. **F6
 closed the move**: the missed-setup price from R2, the vault-era insights retired, a plan stale after
 its trading day, and the parity documents rewritten. The whole move, phase by phase with every
 decision the trader took, is [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md).
@@ -47,7 +47,7 @@ on a screen the trader writes into or reviews in their own words:
 | The trade page `/trades/[id]` (phase P) — off the recording, setup, review, and why it asks for the original stop (`trade-page.tsx`, its route, `stop-moved.ts`) | 24 |
 | "Propušten setup" — the missed-setup page and form (`/trades/missed/new`) | 3 |
 | Category names — the trader's own list and field names (Smer, Ocena setupa, Razlog izlaza, Greške, Tehnički tagovi, Psihologija, Emocije, Disciplina) as `/reports` groupings, journal-grid filters and bulk tags, and the mentor pack's category tables (phase J) | 7 |
-| Dashboard, `/reports`, journal grid, playbooks, **`/settings`**, `/import`, Topstep banner — everything around those names | **0** |
+| Dashboard, `/reports`, journal grid, playbooks, **`/settings`**, `/import` — everything around those names | **0** |
 
 Settings joined that last row on 20.09.2026. It had held the stage names of the daily checklist
 (`Priprema` / `Trgovanje` / `Osvrt`, which the checklist itself rendered), a paragraph of Serbian
@@ -124,12 +124,13 @@ security applies to it exactly as to the browser.
 What `futures-trading` does with the journal, each described in its own README:
 
 - **The morning brief** reads every Topstep account (`tools/brief/racun.py`) and prints the contract
-  table — room above the MLL, today's DLL, risk by the account's rule — with the same arithmetic as
-  the trade form here (`topstep.ts`, `computeTopstepRisk`). Change one, change both. It then writes
+  table — room above the MLL, today's DLL, risk by the account's rule. The journal shared that
+  arithmetic until phase X (`topstep.ts`, `computeTopstepRisk`, the parity test); since then the
+  brief computes it alone, unchanged until the trader decides on it (X-10). It then writes
   one `tj_session_briefs` row for the Topstep day — the red windows around the day's news as UTC
   instants, the Topstep close (15:10 CT, earlier on a holiday or an early close) and the expected
   NQ / ES range — which `/daily` shows and two tracker rules read (§ Process tracking). Not the
-  contract count: the journal computes that itself, so there is one number, not two.
+  contract count: the journal does not size trades since phase X.
 - **MAE/MFE** and time underwater for closed futures trades come from the traded contract's candles
   in Cloudflare R2 (`tools/journal_mae.py`, hourly) (§ MAE/MFE), and so does the price of a missed
   setup once its trading day is over (§ The missed setup gets a price).
@@ -165,7 +166,7 @@ The routine both repos are built around — the same steps as "Dnevni tok journa
 | When | Where | What |
 |---|---|---|
 | 11:12 and 15:15 Belgrade | Telegram | The levels from `futures-trading` (`tools/brief/nivoi.py`): which of PDH/PDL (RTH and the whole Topstep day), PWH/PWL, PMH/PML and the Asia range London took, and what is left above and below the price — at 11:12 for London's morning (08:00–11:00), at 15:15 for all of London until the New York open. The morning brief carries the same levels without London |
-| Before the session | `/daily` → 1 · Pre sesije | The brief's red windows, the Topstep close, the expected range and, today, the DLL left; the **Bias dana** card — Gore / Dole / Neutral per NQ, ES, GC, before the first entry (phase D); then two questions — how you are, and whether you trade today |
+| Before the session | `/daily` → 1 · Pre sesije | The brief's red windows, the Topstep close and the expected range; the **Bias dana** card — Gore / Dole / Neutral per NQ, ES, GC, before the first entry (phase D); then two questions — how you are, and whether you trade today |
 | Before and during the trade | TopstepX + OBS | The order with its bracket; contracts from the brief's "Ugovori danas". The session is recorded, and the setup, stop, target and reason are said out loud before the click ("Teza naglas"). Nothing in the journal |
 | End of the day | `/import`, then `/trades/[id]` | The TopstepX **trades and orders** exports together: the fills, the target, the stop's last price, how each trade ended. Then **the trade page** per trade (phase P) — the original stop where it was moved, what was said before the click, setup and its checklist, the categories, A/B/C, mistakes; `/trades/missed/new` for a setup seen and not taken. MAE/MFE arrives on its own — provisional the same evening, exact the next morning |
 | 15:20 CT (22:20 Belgrade) | Telegram | A reminder if one of today's trades has no setup or grade, or was not confirmed by the CSV. The setup-and-grade half is the same rule as "Bez pregleda" on `/daily`, on the same Topstep day |
@@ -231,7 +232,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,955 tests across 190 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,769 tests across 183 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -371,11 +372,11 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 
 | Route | What it is |
 |---|---|
-| `/` | Dashboard: a **Topstep banner** per Topstep account (room above the MLL, DLL left today, best day against the 55 % line, the target — on an XFA the Scaling Plan's contracts and both payout paths instead) then KPIs, equity curve, drawdown, heatmap calendars, breakdowns, the Process · Survival · Edge card, the **Time stop** card (see § MAE/MFE), insights. Opens on **All** — the whole record first, narrowed on request; the scope last chosen is remembered per browser. Whenever the period leaves closed trades out, a notice above the figures says how many and how far back, with **Show all** (`default-period.ts`). The amounts read in **`$` · `%` · Points · Ticks · Privacy**. Points and ticks (U, 01.10.2026) are the money divided by one contract's point (or tick) value, trade by trade, so they count every contract — two MNQ over ten points is 20 points — and a sum of them still follows the money (`futures-units.ts`). They hold within one instrument family only (MNQ with NQ, MES with ES, M6E with 6E): an **instrument picker** appears when the account has more than one, and until one is picked the two buttons are off. They change the same figures `%` does — Net, Gross, Best, Worst, Max drawdown, Total costs, Avg daily DD, the recent trades and the tag table; the charts stay in money. The picker narrows the trades shown, never the account's equity (percentage, Topstep, survival) |
+| `/` | Dashboard: no prop firm's banner since phase X; KPIs, equity curve, drawdown, heatmap calendars, breakdowns, the Process · Survival · Edge card, the **Time stop** card (see § MAE/MFE), insights. Opens on **All** — the whole record first, narrowed on request; the scope last chosen is remembered per browser. Whenever the period leaves closed trades out, a notice above the figures says how many and how far back, with **Show all** (`default-period.ts`). The amounts read in **`$` · `%` · Points · Ticks · Privacy**. Points and ticks (U, 01.10.2026) are the money divided by one contract's point (or tick) value, trade by trade, so they count every contract — two MNQ over ten points is 20 points — and a sum of them still follows the money (`futures-units.ts`). They hold within one instrument family only (MNQ with NQ, MES with ES, M6E with 6E): an **instrument picker** appears when the account has more than one, and until one is picked the two buttons are off. They change the same figures `%` does — Net, Gross, Best, Worst, Max drawdown, Total costs, Avg daily DD, the recent trades and the tag table; the charts stay in money. The picker narrows the trades shown, never the account's equity (percentage) |
 | `/journal` | Trade table — sorting, filtering, column picking. The date column carries the **year**, so a trade from last season does not read as this spring |
-| `/trades/[id]` | **The trade page** (phase P, 14.10.2026) — one page per trade, in the order the recording is watched. (1) The trade as the import brought it, read only: account, direction, contracts, entry → exit (Belgrade time), duration, net P/L, R, MAE/MFE, costs, risk budget — **fills are never typed** (decision P-1); the stop order's last price and, when the orders file shows the stop was moved, the request for the original. (2) **Off the recording:** the original stop (the one value typed by hand — a stop moved to breakeven leaves only its last price in the export), the target, the planned R:R against the actual fill, and what was said before the click (`thesis`). (3) **Setup:** the playbook and its checklist (`PlaybookChecklist`) with the computed setup grade. (4) **Context:** the trader's own categories of phase `always` from `tj_field_defs`, in the order of Settings — a new category appears without code. (5) **Review:** A/B/C for execution everywhere (decision P-2; A writes "Bez greške"), the categories of phase `active` (exit reason pre-filled from the prices, mistakes, psychology), one sentence. (6) Charts — a list grown with "+ Add chart" (up to 20, `tj_trade_images.sort_order`; an uploaded screenshot, a pasted image or a TradingView link, private bucket `trade-images`, K6), (7) "Šta bi bilo". A **missed setup** opens the same page with its levels editable (`updateMissedSetup`) and no grade. One save, `saveTradeReview`: the columns and `custom` in one UPDATE, then the checklist through `ruleAnswerWrites` — it writes the offered answers and removes only answers to rules of the chosen playbook it no longer offers, or, when the playbook changed, the previous playbook's (P-3); never `tj_save_trade`, which deletes every answer first and would have erased trade #1's answers to retired rules. The plan-before-entry fields left with the old two-tab form: Planned Entry as input, Position Size, Scale-out, Invalidation, Time stop and Slippage (0 of 3 trades had them; columns stay). `/trades/[id]/edit` and `/trades/[id]/review` redirect here, so old links still land |
+| `/trades/[id]` | **The trade page** (phase P, 14.10.2026) — one page per trade, in the order the recording is watched. (1) The trade as the import brought it, read only: account, direction, contracts, entry → exit (Belgrade time), duration, net P/L, R, MAE/MFE, costs, risk to the stop (phase X; the risk budget before) — **fills are never typed** (decision P-1); the stop order's last price and, when the orders file shows the stop was moved, the request for the original. (2) **Off the recording:** the original stop (the one value typed by hand — a stop moved to breakeven leaves only its last price in the export), the target, the planned R:R against the actual fill, and what was said before the click (`thesis`). (3) **Setup:** the playbook and its checklist (`PlaybookChecklist`) with the computed setup grade. (4) **Context:** the trader's own categories of phase `always` from `tj_field_defs`, in the order of Settings — a new category appears without code. (5) **Review:** A/B/C for execution everywhere (decision P-2; A writes "Bez greške"), the categories of phase `active` (exit reason pre-filled from the prices, mistakes, psychology), one sentence. (6) Charts — a list grown with "+ Add chart" (up to 20, `tj_trade_images.sort_order`; an uploaded screenshot, a pasted image or a TradingView link, private bucket `trade-images`, K6), (7) "Šta bi bilo". A **missed setup** opens the same page with its levels editable (`updateMissedSetup`) and no grade. One save, `saveTradeReview`: the columns and `custom` in one UPDATE, then the checklist through `ruleAnswerWrites` — it writes the offered answers and removes only answers to rules of the chosen playbook it no longer offers, or, when the playbook changed, the previous playbook's (P-3); never `tj_save_trade`, which deletes every answer first and would have erased trade #1's answers to retired rules. The plan-before-entry fields left with the old two-tab form: Planned Entry as input, Position Size, Scale-out, Invalidation, Time stop and Slippage (0 of 3 trades had them; columns stay). `/trades/[id]/edit` and `/trades/[id]/review` redirect here, so old links still land |
 | `/trades/missed/new` | **Propušten setup** (phase O): a setup seen on the recording and not taken — entry, stop, target, time, setup, reason — saved as a `missed` position the R2 walk prices |
-| `/daily` | **The day in the order it is lived**, in three numbered parts under the day's heading (`daily-report-form.tsx`). **1 · Pre sesije**: the morning brief ("Pred sesiju", `tj_session_briefs`, `session-brief-card.tsx` — the Topstep close on the account's clock, "berza zatvorena" when the brief says so, the red windows, the expected NQ / ES range and, on today's page only, the DLL left on the primary Topstep account; without a brief it says so and shows the ordinary 15:10 CT close, and a window it cannot read is dropped and counted, never guessed), then **"Pre nego što uđeš"** — two questions, numbered and about the day ahead: *1. Kako si danas?* (mental state, 5 stars, a warning under 3; a rating saved after the day's first entry reads
+| `/daily` | **The day in the order it is lived**, in three numbered parts under the day's heading (`daily-report-form.tsx`). **1 · Pre sesije**: the morning brief ("Pred sesiju", `tj_session_briefs`, `session-brief-card.tsx` — the Topstep close on the account's clock, "berza zatvorena" when the brief says so, the red windows, the expected NQ / ES range (the DLL left on today's page went in phase X); without a brief it says so and shows the ordinary 15:10 CT close, and a window it cannot read is dropped and counted, never guessed), then **"Pre nego što uđeš"** — two questions, numbered and about the day ahead: *1. Kako si danas?* (mental state, 5 stars, a warning under 3; a rating saved after the day's first entry reads
 "Ocena upisano DD.MM. HH:MM, posle prvog ulaza (HH:MM)" — `tj_daily_reports.mental_temp_at`, stamped by
 a trigger, phase Y; a mark only, no rule reads it) and *2. Da li danas trguješ?* ("Danas ne trgujem", a decision taken before the session; with it set and no trade taken the checklist disappears and the day is a rest day) — and the preparation rules. **2 · Tokom sesije**: the trading rules, scored from the trades and the brief. **3 · Posle sesije**: **Bez pregleda** (the day's closed trades still missing a setup or an A/B/C grade, or — phase Q — an imported trade the orders file never reached, with no last stop and no entry order type; each a link to its review, `review-gaps.ts`; the 15:20 CT Telegram reminder in `futures-trading` applies the same rule), the review rules, then save and lock. The focus goal, the day's result card and the streak strip left in phase M (08.10.2026): the page measures, and closing the day is the conversation with the mentor over the day's mentor pack. Until 29.09.2026 the page opened with the day's money and asked "before you enter" only after the trading rules, with a no-trade box in the past tense that pointed at a position card H1 had removed. The rules are grouped as "Pravila pripreme / trgovanja / osvrta" here, in the page's language, and within each group **the rules to tick come first and the scored ones below** (K1) — a new rule lands in its own half whatever its order; Settings edits them under the English stage names |
 | `/calendar` | Monthly P&L grid by day, weekly totals |
@@ -502,7 +503,7 @@ drift from the module computing the same thing.
 | Profit factor | `gross profit / gross loss` | `Infinity` when there is no loss — a real maximum, not missing data. `null` only when there is nothing to divide |
 | Expectancy | `winRate × avgWinR + (1 − winRate) × avgLossR` | Computed over the R population only — only a trade with a stop has an R |
 | Best / worst | Largest and smallest single net result | |
-| Breakeven | Trades inside the account's breakeven band | On a Topstep account the band is **fixed** (K4) and **per trade** (30.09.2026): net P&L within ±0.1R of **the trade's own risk to the stop** (`riskMoneyAtEntry`; `tradeOutcome` in `breakeven.ts`). A trade with no stop, and a day or a week, fall back to 0.1R of the plan's starting risk budget (8 % of the room above the MLL) — ±$16 on a 50K, ±$24 on a 100K, ±$36 on a 150K (`topstepBreakevenBand`). Settings shows it and offers nothing to type |
+| Breakeven | Trades inside the account's breakeven band | The band is **fixed** (K4) and **per trade** (30.09.2026; every account since phase X): net P&L within ±0.1R of **the trade's own risk to the stop** (`BREAKEVEN_R`, `riskMoneyAtEntry`; `tradeOutcome` in `breakeven.ts`). A trade with no stop, and a day or a week, fall back to the account's own band (`breakeven_from` / `breakeven_to`, 0 to 0 unless set), no longer to a Topstep plan's ±$16 / 24 / 36. The tracker reads the same band per account (`breakevenRangeResolver`). Settings shows it and offers nothing to type |
 | **R (everywhere)** | `gross points / (risk in points × entry qty)` | **R is always GROSS**, and does not follow the net/gross toggle — that toggle moves money only |
 
 **Why R is gross while money can be net.** They are deliberately two different questions. R measures
@@ -651,10 +652,9 @@ Get this wrong and nothing breaks — the numbers simply file themselves under d
   the calendar day of its own zone. The rule comes from `topstep_mode` (`accountDayZone` in
   `time.ts`), not from a separate setting: a fill at 18:30 CT on Monday is Tuesday's, and the Sunday
   open is Monday's. One resolver (`accountDayZoneResolver`, a `DayZone` per account) dates every
-  trade for the calendar, `/daily` and "Bez pregleda", the tracker verdicts and the equity ladder,
-  the dashboard, the reports and the day-level insights — the same day `topstep.ts` charges
-  its Daily Loss Limit to (`topstepTradingDay`) and the 15:20 CT reminder in `futures-trading` counts, so
-  the calendar and the banner's "DLL today" no longer disagree about an evening. In "All accounts"
+  trade for the calendar, `/daily` and "Bez pregleda", the tracker verdicts, the dashboard, the
+  reports and the day-level insights — the same day `topstepTradingDay` computes and the 15:20 CT
+  reminder in `futures-trading` counts, so the calendar and `/daily` do not disagree about an evening. In "All accounts"
   **every trade keeps its own account's rule**: a day must not change with the filter on the screen.
   The week is the week of that day (Sunday evening opens the new one), and the hour of entry is still
   read on the account's clock. Computed in Chicago, whatever the account's zone: Belgrade matches it
@@ -662,8 +662,7 @@ Get this wrong and nothing breaks — the numbers simply file themselves under d
 - **"Today" is the primary account's day** (`todayFor`): on a Topstep primary, after 17:00 CT it is
   already tomorrow, so `/daily` opens the session that has just started. Locked days keep the verdicts
   they were frozen with, and `equity_at_entry` is still the
-  opening balance of the calendar day — a Topstep account's size is graded against its risk budget
-  instead (§ Topstep).
+  opening balance of the calendar day — the denominator of Risk % on every account since phase X.
 - **ISO weekdays, 1 = Monday … 7 = Sunday.** Never `Date#getDay`.
 - **Dates are written day-first, clocks are 24-hour**: `18/09/2026 21:10`, or `18/09 21:10` in the
   import review, where every row is from one file. Three shapes, exported from
@@ -704,7 +703,7 @@ admission.
 | Axis | Range | What it is |
 |---|---|---|
 | **Process** | 0–100 | 60 % tracker compliance + 40 % playbook follow rate. The only figure entirely yours to move, and the only one that means anything on a book with nothing closed |
-| **Survival** | 0–100 | The mean of the parts that have data: `100 − max drawdown %` (over peak **equity**), `100 − days under water / 90`, and the room left against a prop-firm limit |
+| **Survival** | 0–100 | The mean of the parts that have data: `100 − max drawdown %` (over peak **equity**) and `100 − days under water / 90`. The room left against a prop-firm limit was a third part until phase X (26.10.2026) |
 | **Edge** | R | Expectancy with its 95 % interval and its sample. **Not** a score |
 
 **Edge is a measurement, deliberately.** Squeezing an interval onto a 0–100 band throws away exactly
@@ -731,12 +730,6 @@ So: below 5 closed trades the two trade-derived parts of Survival are withheld, 
 below 5 *decided* trades — its own denominator, because a book of breakeven scratches has a path to
 measure and no decisions it could have won. Below 30 closed trades the numbers are shown **with**
 the sample, labelled provisional: hiding them for weeks is dishonest in the other direction.
-Prop-firm headroom ("Prop-firm room" on the card, `propHeadroomPct`) is ungated — `evaluateTopstep`
-answers `null` for an account with nothing closed in its window, so the evidence rides with the
-producer. It is the **smallest room ever left above the trailing MLL, as a share of the plan's MLL**,
-after every close and every overnight trail — the closest the account came to ending. The worst
-Topstep account **in the account filter** counts: with one account picked, another account's close
-call is not this one's survival.
 
 **Phase E found the third bug still alive on the equity base.** `maxPctOfEquity` answered `0` when a
 fall had no positive peak equity to divide by — an account with no starting balance that never got
@@ -744,9 +737,9 @@ above water — and the new Survival axis would have read that as a perfect 100.
 exactly as `maxPctOfPeakPnl` already did, and `balance.test.ts` pins both halves of the distinction:
 a fall with no denominator is not a book that never fell.
 
-**Survival, the axis, and "Survival simulation", the card, are different questions** and no longer
-share a title. One says where the account stands; the other resamples the book forward sixty trading
-days (§ Survival).
+**Survival, the axis, is the only Survival left.** The "Survival simulation" card, which resampled
+the book forward sixty days against a Topstep MLL or the book's own worst drawdown, left the
+dashboard in phase X (X-2 A, 26.10.2026) with `survival.ts` and `tracker/equity-ladder.ts`.
 
 ---
 
@@ -939,31 +932,12 @@ stay forever as a value nobody meant, and "not recorded" and "1" are different a
 now (`portfolio-heat.ts`). Per account and never summed across them: 2 % of a €5,000 account plus 2 %
 of a $100,000 one is not 4 % of anything. A half-closed position carries its REMAINING risk, and a
 position with no stop is counted separately — "3 of 4 measured" — because treating an unmeasurable
-position as zero would turn "I do not know" into "it is safe". **On a Topstep account it is also read
-against the DLL left today** (F5.5): the share of what the Daily Loss Limit still allows that the open
-stops would take if every one were hit now — "25 % of DLL left ($400)", in the loss colour at 100 %
-and over, when one bad minute would end the day by the firm's rule, or "no DLL left today".
+position as zero would turn "I do not know" into "it is safe". (On a Topstep account it was also read
+against the DLL left today until phase X.)
 
-**The survival simulation** (`survival.ts`) is the only forward-looking figure in the application. It
-replays the account's own daily results — as percentages of the equity each day opened with — a few
-thousand times over the next sixty trading days, and counts how often the run hits a floor, breaks a
-daily limit, reaches a target, or simply ends lower than it began.
-
-Three things about it are deliberate. **Days, not trades**: a prop account's binding rule is a daily
-loss limit, and a bad session is several trades rather than one. **Blocks, not single days**: drawing
-one day at a time assumes today says nothing about tomorrow, and the run of losses that ends an
-account is a correlated stretch; the trader chooses between single days and weeks, and the choice is
-on the card because it changes the answer. **On an account without prop-firm rules the threshold is
-the trader's own** — defaulting to the worst drawdown the book has already seen — so the card works
-on any account. **A Topstep account is replayed in money**
-(`simulateTopstepSurvival`): its own Topstep days, from its balance and floor as they stand now; the
-floor trails every high close and locks at the starting balance, so a run that gives back what its
-highs gained ends on it where a fixed percentage floor would not; a day that reaches the DLL is
-counted and stops there, because Topstep liquidates at it; the floor ends the run; the target grows
-with the best day (55 %). In "All accounts" the card simulates the primary account — one account's
-floor, not a sum no floor applies to. It is seeded from the data, so the same book
-always gets the same answer, and it states its assumptions beside the number: a probability with a
-hidden assumption reads as a measurement.
+**There is no survival simulation since phase X** (X-2 A, 26.10.2026). `survival.ts` replayed the
+book's days forward sixty trading days against a Topstep MLL, or the book's own worst drawdown, and
+left with the prop-firm rules it was built around.
 
 **Held at the same time** (`co-exposure.ts`, `/reports`) answers whether two positions are really one.
 It gives two numbers per pair, because the familiar one is the weaker. The OVERLAP is the **time**
@@ -1033,23 +1007,20 @@ book, from values the screens already derive (`mentor-intraday.ts`):
 
 - **The instructions depend on the period** (phase M, 08.10.2026). A **Day** pack is the close of
   the day: the model is told not to review but to question the trader — up to fifteen numbered
-  questions at once, from the result, the preparation, the risk against the budget, the stop and the
+  questions at once, from the result, the preparation, the risk and the contracts, the stop and the
   exit to situational ones the data raises (a loss, a broken rule, MAE ≥ 0.7R, an add against the
   position, a moved stop, a day not logged) — then a verdict and one thing for tomorrow. A **Week**
   pack is the review, opening with "0. Domaći" (last week's rules, yes or no with evidence) and ending
   with two or three rules the tracker can check. Any other period keeps the review without the
   homework. All of them name the private `trading-mentor` repo (follow its CLAUDE.md when working
-  there) and still work in a plain chat. The intraday instructions read the account's survival
-  first, then the day, then the timing, then each trade; a group marked ⚠ (under 10 trades) is a
-  hypothesis; trades are cited by number. The legend
-  explains the Topstep trading day (17:00–17:00 CT), the trailing MLL and its lock, the DLL, the 55 %
-  consistency rule, the session windows, "after losses" (analytics only — the day stops on money),
-  time underwater, news windows and the phase Y marks of a playbook, checklist or gate written after
-  the fact.
-- **Topstep account**: balance, MLL floor and room, the closest it came, the DLL (the personal one
-  where tighter) and what is left today, the personal daily profit target and what is missing to it,
-  the days the DLL was hit, the target after consistency, best day against 55 %, maximum
-  position, and the trader's risk rule — as it stands now, not only for the period.
+  there) and still work in a plain chat. The intraday instructions read the day first, then the
+  timing, then each trade; a group marked ⚠ (under 10 trades) is a hypothesis; trades are cited by
+  number; the "Rizik" part of a review is the risk per trade in money and % of balance and its spread.
+  The legend explains the trading day (17:00–17:00 CT), the session windows, "after losses"
+  (analytics only — money limits are kept on each account's platform, not in the journal), time
+  underwater, news windows and the phase Y marks of a playbook, checklist or gate written after the
+  fact. **No prop firm's state or rules** since phase X (26.10.2026): the "Topstep nalog" section
+  (balance, MLL, DLL, consistency, target, risk rule) and the "DLL dostignut" day note are gone.
 - **The trader's rules**: every live tracker rule (manual or automatic, with its key), the
   period's mean compliance and the rules broken most often.
 - **Day shape** in the statistics: trading days green and red, trades per day (mean and most),
@@ -1062,7 +1033,7 @@ book, from values the screens already derive (`mentor-intraday.ts`):
   prvog ulaza (HH:MM)" when `mental_temp_at` is later than the day's first entry, phase Y), "ne trgujem" and "zaključan",
   rules kept (and which were missed, by their short name — the text before the colon — marked
   "ukinuto" when deleted since; "bez prijave" for a day nobody opened, "u toku" for today), and notes:
-  DLL reached, entries inside a news window, the brief's day note. The rules section averages judged
+  entries inside a news window, the brief's day note ("DLL reached" went in phase X). The rules section averages judged
   days only and names the days "bez prijave" and the one still open.
 - **Tracker po danu** (phase M): for each of those days, every live rule as ✓ kept, ✗ broken,
   ? unanswered or — not judgeable (n/a), with the day's red windows from the brief in ET and the
@@ -1078,9 +1049,8 @@ book, from values the screens already derive (`mentor-intraday.ts`):
   fills), **Fill-ovi** (every fill in ET, loaded from `tj_executions` at export by
   `getMentorExecutions` rather than with the dashboard; an entry priced against the position after the
   first is marked "dodato protiv pozicije"), **Plan → kraj** (the sealed stop and target against the
-  ones the trade ended with — only the keys the seal holds; an import seals nothing, so a trade typed in after its entry reads "upisan posle ulaza — plana pre ulaza nije bilo" and any other unsealed one "plan nije zapečaćen"), **Rizik na ulazu** (the budget the risk rule
-  gave, the money actually at the stop and its share of the budget, the share of the room above the
-  MLL) and the **Playbook** by name — with "napravljen DD.MM. HH:MM, posle ulaza" when the playbook
+  ones the trade ended with — only the keys the seal holds; an import seals nothing, so a trade typed in after its entry reads "upisan posle ulaza — plana pre ulaza nije bilo" and any other unsealed one "plan nije zapečaćen"), **Rizik na ulazu** (the money at the stop
+  and its share of the balance the entry day opened with) and the **Playbook** by name — with "napravljen DD.MM. HH:MM, posle ulaza" when the playbook
   was created after the first fill, and a **Checklist** line ("upisan …, posle zatvaranja") when its
   answers (`tj_position_rules.created_at`, the latest) came after the close (phase Y, 14.10.2026; times
   in Belgrade). The context says whether the plan was
@@ -1252,115 +1222,32 @@ dimensions (`touched`, `thesis_state`, `weekend_hold`, `time_stop_breached`) and
 weekend, checked, touched and thesis-slipped counts. A book that is flat by the close has none of
 those things to measure.
 
-### Topstep
+### No prop firm's rules (phase X, 26.10.2026)
 
-**Topstep mode** is per account. Its rules are
-money per plan, not percentages, so they live in their own module (`topstep.ts`, read off
-help.topstep.com on 28.09.2026):
+The journal is **neutral about prop firms**. The trader (X-1 B): "tracker meri samo proces … jer ako
+bude više naloga na prop firma biće konflikta" — money limits (MLL, DLL, daily target, risk per
+trade) are kept by the trader on each account's own platform, not computed here. Until phase X the
+book ran Topstep's rules (F3, R, T: `topstep.ts`, `topstep-status.ts`, `topstep-banner.tsx`,
+`topstep-parity.json`); they left with:
 
-| Plan | Maximum Loss Limit | Daily Loss Limit | Profit target | Max position |
-|---|---|---|---|---|
-| 50K | 2,000 | 1,000 | 3,000 | 5 mini / 50 micro |
-| 100K | 3,000 | 2,000 | 6,000 | 10 mini / 100 micro |
-| 150K | 4,500 | 3,000 | 9,000 | 15 mini / 150 micro |
+- the **Topstep banner** and the "Topstep status" widget, the **DLL / daily target** line of the
+  "Pred sesiju" card and of the open positions' heat, and the **Survival simulation** (§ Survival);
+- the **risk budget** and the contract count sized from it (`computeTopstepRisk`,
+  `computeFuturesContracts`), the **Scaling Plan**, consistency and both XFA payout paths, the
+  reset and the "MLL reached blocks new exposure" guard;
+- the **room above the MLL as the Risk % denominator**: Risk % is the risk to the stop over the
+  equity the entry day opened with on every account (`riskPctTaken`), and the `/reports` buckets sit
+  around a day trader's fraction of a percent (< 0.25 %, 0.25–0.5 %, 0.5–0.75 %, 0.75–1 %, 1–2 %,
+  ≥ 2 %);
+- the Topstep section of the mentor pack, and the parity test with `futures-trading`'s brief
+  (`racun.py` there is left as it is until the trader decides on the brief, X-10).
 
-- **The MLL trails the highest END-OF-DAY balance** and never comes down; it locks at the starting
-  balance (a 150K: from 145,500 up to 150,000, reached once a day closes at 154,500), and after the
-  first payout it is the starting balance.
-- **A payout leaves the balance** (30.09.2026): record it under Settings › Deposits / withdrawals as a
-  Payout (or Withdrawal) on the Topstep account. `topstepPayoutsOf` reads those cash events; each one
-  lowers the balance — $6,000 with a $2,000 payout is $4,000 — so the room, the risk budget and
-  Survival shrink with it, and the first one is also the payout date (the account's "First payout
-  date" stays for a payout known only by its date; the earlier of the two counts). The banner shows
-  what was paid out, and the profit toward the target stays the traded profit. The brief in
-  `futures-trading` reads the same events. Today's win
-  does not raise it before the day ends — the afternoon would otherwise be sized from room Topstep
-  has not taken yet.
-- **The DLL ends the day, not the account.** The day is Topstep's, 17:00 → 17:00 CT, and it is the
-  same day the calendar, `/daily` and the tracker file the account's trades under (§ Attributing to days).
-- **TopstepX Risk Limits** (30.09.2026): the account's **personal daily loss limit**
-  (`topstep_personal_dll`) and **personal daily profit target** (`topstep_daily_target`), set under
-  its Topstep rules in Settings. Either one ends the trading day. The personal limit is the day's DLL
-  wherever it is tighter than the plan's (`topstepPlanRulesFor`) — for the banner, the sizing, the
-  day card on `/daily` and Survival; a looser one changes nothing, since Topstep still stops the day
-  at the plan's. The target shows as what is still missing today and caps a simulated day in
-  Survival. No tracker rule reads either since phase X. **There is no limit on the
-  number of trades.**
-- **Consistency** (Combine): the best day must stay at or below 55 % of the target; past that the target grows
-  to best day ÷ 0.55.
-- **Combine or Express Funded Account** (phase T, 30.09.2026; `tj_accounts.topstep_stage`, migration
-  `20260930090000`; not editable since phase X2). A Combine works as above. An XFA starts at
-  $0 on TopstepX (starting balance 0) with the plan's MLL under it, has **no target and no 55 % line**,
-  and is sized by the **Scaling Plan**: the most mini contracts (a micro is a tenth) from the balance at
-  the last close — 2 / 3 / 5 on a 50K, 3 / 4 / 5 / 10 on a 100K, 3 / 4 / 5 / 10 / 15 on a 150K, at
-  $1,500 / $2,000 / $3,000 / $4,500 — so today's win raises the next session and a payout lowers it
-  (`TOPSTEP_XFA_SCALING`, `topstepScalingMaxMini`; `rules.maxMini` carries it to the trade form and the
-  tracker's "Sized to intent", which reads the size at the entry). The banner shows today's and the
-  next session's contracts and **both payout paths** since the last payout (`xfa` on the result):
-  Standard — five winning days of $150 or more; Consistency — three traded days with the best at most
-  40 % of the net profit; each with the largest request, half the balance capped at $2,000 / $3,000
-  (50K), $3,000 / $4,000 (100K), $5,000 / $6,000 (150K), at least $125 (`TOPSTEP_XFA_PAYOUT`). The
-  brief computes the same (`racun.py`). The plan's DLL still counts on an XFA — optional on TopstepX,
-  kept as the cautious reading. A **Practice** account (trader, 01.10.2026) is, since phase X2, a flag of
-  any account (`tj_accounts.practice`, migration `20261026130000`, copied from `topstep_stage =
-  'practice'`), set in Settings › Accounts. A Topstep Practice account still keeps a Combine's rules and
-  size; the brief and the evening reminder still read `topstep_stage` (X-10). Its numbers are kept apart: **"All accounts" means the real accounts**
-  (`allAccountsScope` / `inAllAccountsScope` in `account-rules.ts`) on the dashboard, trades,
-  calendar and reports, and the account picker marks it "(practice)" — picking it shows its
-  own numbers. `/daily` (and its tracker lock) and the playbooks read the real book only. A book of
-  nothing but Practice accounts shows them, so a new journal is never blank.
-- **Closed trades only**: Topstep watches both limits intraday with open P&L, so a
-  position that went through the floor and came back reads here as a survived day. The platform's
-  risk engine is the record.
-- **Reaching the MLL blocks new exposure, never the record**: an edit that adds a position or size is
-  refused (`isTopstepAccountFailed` in `topstep-status.ts`), while the import still records what the
-  platform filled. The
-  banner turns red and says on which day. `topstep_reset_at`, written by the former **Reset account…**,
-  still restarts the balance and clears the MLL; Settings no longer offers the reset (phase X2).
-
-**Risk per trade is the trader's own rule** (`computeTopstepRisk`, from `futures-trading`'s
-`Uputstvo_rizik.pdf`): **8 % of the room above the MLL** (`TOPSTEP_DEFAULT_RISK_PCT`), held between the plan's bounds — 60–300 on
-a 50K, 120–600 on a 100K, 180–900 on a 150K, so three stops fit in the DLL — and never past what
-is left of today's DLL. `risk_rule_pct`, `risk_rule_min` and `risk_rule_max` on the account override
-the three. **Settings offered one field from 13.10.2026 until phase X2: Risk per trade (USD)** — a fixed
-amount, saved as `fixedRiskRule` (100 %, min = max = the amount), so the same formula and the brief read
-it unchanged; only today's DLL left and the room near the MLL lower it. The trade form and the mentor
-pack print it as a fixed amount (`fixedRiskOf`). **The floor holds only from a third of the plan's MLL up** (R3, 30.09.2026;
-`topstepMinRiskFromRoom`: $666.67 / $1,000 / $1,500): under it the budget is the plain share of the
-room, so near the MLL the risk shrinks with what is left instead of spending a fixed $180 of $400.
-The brief in `futures-trading` prints the same figure each morning, and **a shared test keeps the two
-the same**: `topstep-parity.json` holds the cases — the plans' constants, MLL trail and lock, DLL and
-personal DLL, payouts, reset, the 17:00 CT day, Practice, the XFA Scaling Plan and both payout paths,
-the R3 risk and the R4 contracts — and both `topstep-parity.test.ts` here and `tests/test_topstep_parity.py`
-there run them. The file is the same bytes in both repositories (`.gitattributes` keeps it LF) and each
-test pins its sha256, so a rule changed on one side only fails a test.
-
-**Contracts count a tick of slippage on the stop** (R4, `STOP_SLIPPAGE_TICKS` in
-`plan-calculations.ts`): the loss per contract is stop × point value + the round-turn commission +
-one tick × point value, so the count is rounded down from a loss the trader can actually take — on a
-2-point ES stop the tick is an eighth of it. The form reads the tick from the catalog, the tracker
-from `tick_size_at_trade`; an instrument without a tick size is sized without it rather than with a
-guessed one.
-
-**The budget at entry** is what `computeTopstepRisk` allowed at the moment of the first fill — the
-room and today's DLL as `topstepStateAt` reads them from everything closed before that instant
-(`riskBudgetAt`). It is **sealed** in `tj_positions.risk_budget_at_entry` by the manual write path on
-the save that first gives a trade fills, never overwritten, 0 when there was no room (migration
-`20260928160000`); a later correction or late import cannot move it. Since phase X no tracker rule
-reads it. A trade with no seal — created by the import, or older than the column — reads the same
-budget derived at its entry. The import seals both (30.09.2026), read after the rows before it in the
-same file were saved.
-
-**Risk % on a Topstep trade is a share of the room above the MLL at entry** (30.09.2026): the
-journal's "Risk %" column, the "Risk taken" metrics and the `/reports` bucket divide the risk to
-the stop by `tj_positions.room_at_entry`, sealed next to the budget with the same three rules (0 when
-there was no room, which reads as no percentage). $345 on a stop with $4,500 of room is 7.7 %, not the
-0.23 % of a 150,000 balance the account can never spend. The buckets sit around the trader's 8 %
-(< 5 %, 5–8 %, 8–10 %, 10–15 %, 15–20 %, ≥ 20 %). A trade without the seal — entered on an
-account with closed trades before the column existed — keeps the old denominator, the equity the
-entry day opened with, until a save seals it. There is no **Risk %** list on the plan form (removed in H2 with the
-`risk_pct` column and the playbook's default risk): the size comes from the rule, and appears once
-entry and stop are in. An account that is not in Topstep mode gets no size suggestion.
+**What stays until later steps of phase X:** the 17:00 → 17:00 CT trading day, still keyed by
+`topstep_mode` (X4 turns it into the CME day for every futures account); the `flat_by_close`
+horizon of 15:10 CT (X4: the account's own flat-by time); the `tj_accounts.topstep_*` and
+`risk_rule_*` columns and `tj_positions.risk_budget_at_entry` / `room_at_entry`, which nothing
+writes or reads any more except `topstep_mode` (X6 drops them, once the brief is checked); and the
+TopstepX import formats, which are a platform's files, not a firm's rules (X-7).
 
 ---
 
@@ -1735,9 +1622,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,955 tests across 190 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,404 tests in 130 files) and `components` (environment `jsdom`, files `*.test.tsx`, 551
-tests in 60 files). The rule is the extension, so no file can land in both. The split exists so that
+2,769 tests across 183 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,227 tests in 125 files) and `components` (environment `jsdom`, files `*.test.tsx`, 542
+tests in 58 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves

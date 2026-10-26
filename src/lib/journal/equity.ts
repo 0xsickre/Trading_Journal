@@ -11,8 +11,7 @@ import { dayKeyStartUtc, toEpoch } from "./time";
  * The denominator of every risk percentage, read on the write path so it can be
  * frozen onto the trade (`equity-at-entry.ts` decides whether it may be).
  *
- * THE OPENING BALANCE, not the live one, for the reason
- * `tracker/equity-ladder.ts` sets out: a denominator that shrinks with every
+ * THE OPENING BALANCE, not the live one: a denominator that shrinks with every
  * loss inside the day allows less risk after each one, so the same trade reads
  * as a different percentage depending on the order the day happened in.
  *

@@ -31,12 +31,12 @@ describe("WidgetPicker", () => {
   });
 
   it("SHOWS THE LOCKED ONES DISABLED rather than hiding them", async () => {
-    // Omitting them would leave a reader who wants the Topstep banner gone
+    // Omitting them would leave a reader who wants the warning gone
     // hunting for a switch that does not exist. Disabled answers in place.
     render(<WidgetPicker hidden={[]} order={[]} onToggle={() => {}} onMove={() => {}} />);
     await open();
     const locked = screen.getByRole("menuitemcheckbox", {
-      name: "Topstep status",
+      name: "Incomplete-data warning",
     });
     // `data-disabled`, not `toBeDisabled()`: a Radix menu item is a `div` with
     // a role, not a form control, so there is no native `disabled` attribute to
@@ -151,9 +151,9 @@ describe("the arrows that reorder the page", () => {
     );
     await open();
     const rows = screen.getAllByRole("menuitemcheckbox").map((r) => r.textContent);
-    // Locked three keep the front; the reader's sequence follows.
-    expect(rows[3]).toContain("Performance by tag");
-    expect(rows[4]).toContain("Equity curve");
+    // Locked two keep the front; the reader's sequence follows.
+    expect(rows[2]).toContain("Performance by tag");
+    expect(rows[3]).toContain("Equity curve");
     // And the one now at the top of the movable list cannot move up.
     expect(
       screen.getByRole("button", { name: "Move Performance by tag up" }),

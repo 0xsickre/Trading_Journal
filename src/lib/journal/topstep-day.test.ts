@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { accountDayZoneResolver, dayKeyIn, type DayZone } from "./time";
 import { buildTradeDayIndex, evaluateAutoRulesForDay } from "./tracker/auto-rules";
-import { topstepRulesResolver } from "./topstep";
 import { resolveAutoResults } from "./tracker/compliance";
 import type { TrackerCheckin, TrackerRule } from "./tracker-types";
-import { cashByDay } from "./tracker/equity-ladder";
 import { bucketByPeriod } from "./period-stats";
 import { dailyPnl, toRealized } from "./analytics";
 import { enrichTrades } from "./enriched-trade";
@@ -12,7 +10,6 @@ import { tradingDayKeysFromRows } from "./activity";
 import { periodBounds, tradeDayKey } from "./trades-view";
 import { reviewGaps } from "./review-gaps";
 import { dailyPnlByInstrument, spansOf } from "./co-exposure";
-import type { CashEvent } from "./balance";
 import type { Account, TradeRow } from "./types";
 
 /**
@@ -30,7 +27,6 @@ const accounts = [
   { id: "ts", timezone: NY, topstep_mode: true, topstep_plan: "50K", starting_balance: 50_000, risk_rule_pct: 8 },
   { id: "cfd", timezone: NY, topstep_mode: false },
 ] as unknown as Account[];
-const topstepOf = topstepRulesResolver(accounts);
 const zoneOf = accountDayZoneResolver(accounts, accounts[0]);
 const zoneOfRow = (row: TradeRow): DayZone => zoneOf(row.account_id);
 
@@ -133,12 +129,7 @@ describe("today and this week follow the primary account's rule (D3)", () => {
   });
 });
 
-describe("cash and exposure use the same day", () => {
-  it("a deposit after 17:00 CT opens the next Topstep day's balance", () => {
-    const ev = { account_id: "ts", occurred_at: "2026-09-28T22:30:00Z", amount: 500 } as unknown as CashEvent;
-    expect([...cashByDay([ev], zoneOf).keys()]).toEqual(["2026-09-29"]);
-  });
-
+describe("exposure uses the same day", () => {
   it("spans are instants, and per-instrument P&L lands on the Topstep day", () => {
     expect(spansOf([tsEvening], Date.parse("2026-09-30T00:00:00Z"))).toEqual([
       { instrument: "MNQ", from: Date.parse(EVENING_OPEN), to: Date.parse(EVENING_CLOSE) },
@@ -172,7 +163,7 @@ describe("a locked day keeps what it was locked with", () => {
     // Locked before F2, Monday carried the -600 evening trade and failed its daily
     // limit. The money rules left the tracker in phase X (X-1 B): nothing derives
     // `max_loss_per_day` live, but the frozen row is what Monday was scored with.
-    const index = buildTradeDayIndex(rows, zoneOfRow, topstepOf);
+    const index = buildTradeDayIndex(rows, zoneOfRow);
     const live = evaluateAutoRulesForDay("2026-09-28", index);
     expect(live).not.toHaveProperty("max_loss_per_day");
 

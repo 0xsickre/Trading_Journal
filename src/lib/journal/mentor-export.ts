@@ -35,7 +35,6 @@ import type { RuleLookup } from "./reports/rule-lookup";
 import { enrichTrades, type DailyReportLite, type EnrichedTrade } from "./enriched-trade";
 import type { SessionBrief } from "./session-brief";
 import { biasPackSection, type DailyBias } from "./daily-bias";
-import { TOPSTEP_CONSISTENCY } from "./topstep";
 import type { DayCompliance } from "./tracker/compliance";
 import type { TrackerRule } from "./tracker-types";
 import {
@@ -47,12 +46,10 @@ import {
   ruleLabel,
   rulesSection,
   SMALL_SAMPLE,
-  topstepSection,
   packDays,
   tradeContextLines,
   trackerByDaySection,
   type MentorFill,
-  type MentorTopstep,
 } from "./mentor-intraday";
 
 /**
@@ -431,8 +428,6 @@ export type MentorPackOpts = {
   tzOf?: (row: TradeRow) => DayZone;
   /** The trader's own clock for every printed time, e.g. "Europe/Belgrade". */
   displayTz?: string;
-  /** Topstep accounts in scope, with their state as it stands now. */
-  topstep?: MentorTopstep[];
   /** The trader's daily tracker rules, and each day's verdict on them. */
   trackerRules?: TrackerRule[];
   compliance?: DayCompliance[];
@@ -609,11 +604,8 @@ export function buildMentorPack(
     out.push(
       [
         "- **Trading dan** — Topstep dan traje od 00:00 do 00:00 po Beogradu (17:00 po Čikagu), a završava se u 22:10 (flat): sesija posle ponoći pripada tom danu. Svi dnevni brojevi su po tom danu. U nedelji 25.10.–01.11. (i kad Evropa i SAD menjaju sat u različite dane) sve NY granice su sat ranije.",
-        "- **MLL** (Maximum Loss Limit) — trailing pod ispod najvišeg balansa na kraju dana; kad dostigne početni balans, zaključava se. Pad ispod njega = nalog je izgubljen.",
-        "- **DLL** (Daily Loss Limit) — najveći dozvoljeni gubitak u jednom trading danu; Topstep tada zatvara pozicije i dan je gotov (nalog nije izgubljen).",
-        `- **Konzistentnost** — najbolji dan sme biti najviše ${Math.round(TOPSTEP_CONSISTENCY * 100)}% cilja; preko toga cilj raste na najbolji dan ÷ ${TOPSTEP_CONSISTENCY}.`,
         "- **Sesije (po Beogradu, kao linije na chartu)** — Azija 00:00–06:00, Pre Londona 06:00–09:00, London 09:00–14:00, NY pre otvaranja 14:00–15:30, NY AM 15:30–17:30, Ručak 17:30–19:30, NY PM 19:30–22:00, Posle zatvaranja 22:00–00:00. Svaka granica je po satu svoje berze (London ili NY). **Minuti posle otvaranja** se broje od otvaranja sesije trejda: London 09:00, NY 15:30.",
-        "- **Posle gubitaka** — koliko je gubitaka zaredom već bilo zatvoreno tog dana na istom nalogu u trenutku ulaza. Samo analitika: broj trejdova ne ograničavam — dan se zaustavlja na novcu (lični dnevni limit gubitka i dnevni cilj profita, kao u TopstepX Risk Limits).",
+        "- **Posle gubitaka** — koliko je gubitaka zaredom već bilo zatvoreno tog dana na istom nalogu u trenutku ulaza. Samo analitika: broj trejdova ne ograničavam. Novčane limite (dnevni gubitak, cilj) držim sam na platformi naloga; journal ih ne meri.",
         "- **Vreme u minusu** — % trajanja trejda u kome je tekući P&L bio ispod nule, iz berzanskih sveća (1 s).",
         "- **Crveni prozor** — vesti visokog uticaja iz jutarnjeg brief-a (futures-trading), u kojima ne ulazim.",
         "- **Veličina** — broj ugovora; mikro (MNQ/MES/M6E) je 1/10 mini ugovora.",
@@ -623,8 +615,7 @@ export function buildMentorPack(
   }
   out.push("");
 
-  // --- The account and the trader's own rules ------------------------------
-  out.push(...topstepSection(opts.topstep ?? [], ccy));
+  // --- The trader's own rules ----------------------------------------------
   out.push(...rulesSection(opts.trackerRules ?? [], opts.compliance ?? []));
 
   // --- Overall stats ------------------------------------------------------
@@ -663,14 +654,12 @@ export function buildMentorPack(
 
   // --- The trading day ----------------------------------------------------
   if (intraday) {
-    const topstepDllDays = new Set((opts.topstep ?? []).flatMap((a) => a.result.dllDays));
     out.push(
       ...dailySection(enriched, {
         ccy,
         range,
         compliance: new Map((opts.compliance ?? []).map((c) => [c.date, c])),
         ruleText: new Map((opts.trackerRules ?? []).map((r) => [r.id, ruleLabel(r)])),
-        dllDays: topstepDllDays,
         reportByDate: new Map((opts.reports ?? []).map((r) => [r.report_date, r])),
         briefByDay,
         periodDays: opts.periodDays,
@@ -754,7 +743,7 @@ export function buildMentorPack(
  */
 function intradayInstructions(period: string): string[] {
   const head = [
-    "Ti si moj lični **mentor za intraday trgovanje CME fjučersima** (NQ/MNQ, ES/MES, 6E/M6E) na **Topstep** nalogu, sa ICT pristupom (likvidnost, MSS, FVG, OTE, sesije).",
+    "Ti si moj lični **mentor za intraday trgovanje CME fjučersima** (NQ/MNQ, ES/MES, 6E/M6E) na prop nalozima, sa ICT pristupom (likvidnost, MSS, FVG, OTE, sesije).",
     "Ovaj fajl je izvoz iz mog trading žurnala. Svi brojevi su već izračunati — **ne preračunavaj** ih i ne izmišljaj one kojih nema; ako ti nešto fali, reci tačno šta da izvezem.",
     "Ako radiš u mom repou `trading-mentor`, prati njegov CLAUDE.md (pravila mentora, zapažanja, domaći); ako ne, radi po ovom uputstvu.",
     "",
@@ -772,9 +761,9 @@ function intradayInstructions(period: string): string[] {
       "Ovo je **zatvaranje dana**: ne piši pregled, nego me **ispitaj**.",
       "",
       "Kako:",
-      "- Prvo pročitaj Topstep stanje, **Dnevni pregled**, **Tracker po danu** i svaki trejd (izvršenje, fill-ovi, plan → kraj, rizik na ulazu).",
-      "- Postavi mi **odjednom numerisana pitanja**, najviše 15: rezultat; priprema (vesti, HTF nivoi markirani pre sesije); stanje pri paljenju platforme; da li je svaki trejd bio setup iz plana; rizik i broj ugovora prema budžetu; stop (u sistemu na ulazu, pomeran?); upis pre ulaza; izlaz po planu; najgora i najbolja odluka dana; prekršena pravila.",
-      "- Dodaj pitanja po situaciji koju podaci pokazuju: gubitak, prekršeno pravilo, rizik preko budžeta, MAE ≥ 0.7R, ulaz u crvenom prozoru ili van mog vremena, dodavanje protiv pozicije, stop pomeren dalje od ulaza (pomeren bliže je dozvoljen), dan bez prijave ili bez trejda.",
+      "- Prvo pročitaj **Dnevni pregled**, **Tracker po danu** i svaki trejd (izvršenje, fill-ovi, plan → kraj, rizik na ulazu).",
+      "- Postavi mi **odjednom numerisana pitanja**, najviše 15: rezultat; priprema (vesti, HTF nivoi markirani pre sesije); stanje pri paljenju platforme; da li je svaki trejd bio setup iz plana; rizik i broj ugovora; stop (u sistemu na ulazu, pomeran?); upis pre ulaza; izlaz po planu; najgora i najbolja odluka dana; prekršena pravila.",
+      "- Dodaj pitanja po situaciji koju podaci pokazuju: gubitak, prekršeno pravilo, rizik veći nego obično, MAE ≥ 0.7R, ulaz u crvenom prozoru ili van mog vremena, dodavanje protiv pozicije, stop pomeren dalje od ulaza (pomeren bliže je dozvoljen), dan bez prijave ili bez trejda.",
       "- Prokomentariši izlaz svakog trejda iz **Šta bi bilo** i **Reakcija**: da li sam izašao prerano ili dobro (cena 30 min posle izlaza, šta bi bilo da sam držao), i koliko je trejdu trebalo da krene u odnosu na **Vremenski stop**.",
       "- Kad trejd ima **⚠ Pomeren stop je koštao** (stop pomeren bliže, pogođen, a sa originalnim bi TP došao), upozori me i reci koliko puta se to već desilo.",
       "- Odgovor koji se ne slaže sa brojevima suoči sa brojevima. Prazan odgovor („ne znam“, „ok“, „normalno“) vrati jednom, preciznije.",
@@ -790,7 +779,7 @@ function intradayInstructions(period: string): string[] {
           "**Strukturiraj odgovor ovako:**",
           "0. **Domaći** — prvo proveri pravila koja sam dobio prošle nedelje: da/ne po pravilu, sa dokazom iz ovog fajla (ako ih ne znaš, pitaj me za njih).",
           "1. **Rezime** — 3–4 rečenice: edge, disciplina, najveći rizik za nalog.",
-          "2. **Topstep rizik** — prostor do MLL-a i DLL-a, konzistentnost, i šta to znači za veličinu pozicije sledeće nedelje.",
+          "2. **Rizik** — rizik po trejdu (u $ i % balansa) i njegovo rasipanje, i šta to znači za veličinu pozicije sledeće nedelje.",
           "3. **Šta radim dobro** — konkretno, sa brojevima i # trejdova.",
           "4. **Crvene zastavice** — najskuplji obrasci, poređani po ceni u R/dolarima.",
           "5. **Kada trgujem** — prozori/sati/redni broj trejda koje treba zadržati, ograničiti ili izbaciti (uz veličinu uzorka).",
@@ -800,7 +789,7 @@ function intradayInstructions(period: string): string[] {
       : [
           "**Strukturiraj odgovor ovako:**",
           "1. **Rezime** — 3–4 rečenice: edge, disciplina, najveći rizik za nalog.",
-          "2. **Topstep rizik** — prostor do MLL-a i DLL-a, konzistentnost, i šta to znači za veličinu pozicije sutra.",
+          "2. **Rizik** — rizik po trejdu (u $ i % balansa) i njegovo rasipanje, i šta to znači za veličinu pozicije sutra.",
           "3. **Šta radim dobro** — konkretno, sa brojevima i # trejdova.",
           "4. **Crvene zastavice** — najskuplji obrasci, poređani po ceni u R/dolarima.",
           "5. **Kada trgujem** — prozori/sati/redni broj trejda koje treba zadržati, ograničiti ili izbaciti (uz veličinu uzorka).",
@@ -810,14 +799,13 @@ function intradayInstructions(period: string): string[] {
   return [
     ...head,
     "Kako da čitaš fajl:",
-    "- Prvo **Topstep stanje**: koliko sam daleko od MLL-a i DLL-a, i da li sam u granici konzistentnosti. Preživljavanje naloga je iznad svega.",
-    "- Zatim **Dnevni pregled** i **Tracker po danu**: dan je jedinica, i dan bez trejda je dan. Traži dane sa previše trejdova, trgovanje posle 2 gubitka zaredom, dane kad je DLL dostignut, dane bez prijave i prekršena pravila.",
+    "- Prvo **Dnevni pregled** i **Tracker po danu**: dan je jedinica, i dan bez trejda je dan. Traži dane sa previše trejdova, trgovanje posle 2 gubitka zaredom, dane sa najvećim gubitkom, dane bez prijave i prekršena pravila.",
     "- Zatim **Kada i kako trgujem**: koji sesijski prozor, sat, redni broj trejda i stanje posle gubitka nose ili gube novac.",
-    "- Na kraju **trejdovi hronološki**: vreme po Beogradu, sesija i minuti posle njenog otvaranja, redni broj u danu, gubici pre ulaza, trajanje, ugovori, izvršenje i fill-ovi, plan → kraj (pomeren stop), rizik prema budžetu, MAE/MFE, vreme u minusu, crveni prozor i zapažanja.",
+    "- Na kraju **trejdovi hronološki**: vreme po Beogradu, sesija i minuti posle njenog otvaranja, redni broj u danu, gubici pre ulaza, trajanje, ugovori, izvršenje i fill-ovi, plan → kraj (pomeren stop), rizik na ulazu, MAE/MFE, vreme u minusu, crveni prozor i zapažanja.",
     sample,
     "",
     "Tvoj zadatak:",
-    "- Oceni **proces i disciplinu** pre rezultata: pravila, stop posle gubitaka, broj trejdova, veličinu pozicije prema pravilu rizika, trejdove u crvenim prozorima.",
+    "- Oceni **proces i disciplinu** pre rezultata: pravila, stop posle gubitaka, broj trejdova, veličinu pozicije, trejdove u crvenim prozorima.",
     "- Nađi **gde je edge a gde curi novac** (sesija, vreme, setup/tag, instrument, smer) i koliko to košta u R i dolarima.",
     "- Oceni **izvršenje**: dodavanje protiv pozicije, pomeranje stopa, MAE/MFE, koliko sam dugo bio u minusu, izlazak pre cilja ili vraćen profit.",
     "- Iz **Šta bi bilo**, **Reakcija** i **Vremenski stop**: da li izlazim prerano ili kasno, koji SL × TP bi nosio više, i posle koliko minuta trejd koji nije krenuo treba seći (ili da uzorak to još ne dozvoljava).",

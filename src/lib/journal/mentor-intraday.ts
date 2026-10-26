@@ -2,7 +2,7 @@
  * The day trader's half of the mentor pack (F5.6).
  *
  * The pack was written for a swing book: totals, tag tables and every field of
- * every trade. A model reading it about an intraday Topstep book could not see
+ * every trade. A model reading it about an intraday futures book could not see
  * what decides that book — how close the account is to its floor and its daily
  * limit, when in the session the trader acts, what happens after two losses,
  * which of the trader's own rules held on which day, and whether an entry sat
@@ -26,10 +26,8 @@ import { afterExitR, scenarioOf, scenarioTrade, summarizeScenarios } from "./sce
 import type { RedWindow, SessionBrief } from "./session-brief";
 import { afterSessionOpen } from "./session-window";
 import { numberFieldValue } from "./field-values";
-import { roomAtEntry } from "./risk-taken";
 import { needsOriginalStop, stopStatus } from "./stop-moved";
 import { DEFAULT_TZ, fmtInTz, isTradingDayKey, toEpoch } from "./time";
-import { TOPSTEP_CONSISTENCY, fixedRiskOf, type TopstepResult } from "./topstep";
 import { ruleIsLiveOn, type DayCompliance } from "./tracker/compliance";
 import { WEEKDAY_LABELS, type TrackerRule } from "./tracker-types";
 import { computeTimeStop } from "./time-stop";
@@ -189,8 +187,6 @@ export type DailyContext = {
   range: BreakevenRange;
   compliance?: ReadonlyMap<string, DayCompliance>;
   ruleText?: ReadonlyMap<string, string>;
-  /** Trading days whose loss reached a Topstep account's DLL. */
-  dllDays?: ReadonlySet<string>;
   reportByDate?: ReadonlyMap<string, DailyReportLite>;
   /** The futures-trading brief per trading day: its note and news windows. */
   briefByDay?: ReadonlyMap<string, SessionBrief>;
@@ -249,7 +245,6 @@ export function dailySection(
     const mental = rep?.mental_temp != null ? `${rep.mental_temp}/5${late ? ` · ${late}` : ""}` : "—";
     const rules = rulesCell(ctx.compliance?.get(day), ctx.ruleText);
     const notes: string[] = [];
-    if (ctx.dllDays?.has(day)) notes.push("DLL dostignut");
     const inRed = list.filter((t) => redWindowAt(t.openedAt, ctx.briefByDay?.get(t.openDay)) != null).length;
     if (inRed > 0) notes.push(`${inRed} ${sr(inRed, "ulaz", "ulaza", "ulaza")} u crvenom prozoru`);
     const dayNote = ctx.briefByDay?.get(day)?.dayNote;
@@ -335,59 +330,6 @@ export function trackerByDaySection(
       });
     if (items.length) out.push(`- ${items.join(" · ")}`);
     out.push("");
-  }
-  return out;
-}
-
-/** A Topstep account as the mentor needs it: how far from the end, and by which rule. */
-export type MentorTopstep = {
-  accountName: string;
-  plan: string;
-  startingBalance: number;
-  /** The trader's risk rule: this share of the room above the MLL per trade. */
-  riskRulePct: number | null;
-  /**
-   * The account's own floor and cap on that risk, where set (Settings ›
-   * Accounts). Null falls back to the plan's — the same fallback the budget at
-   * entry is computed with (`riskBudgetAt`), so the pack states the range the
-   * journal actually sized from. It used to print the plan's range even where
-   * the account set its own (09.10.2026).
-   */
-  riskRuleMin?: number | null;
-  riskRuleMax?: number | null;
-  result: TopstepResult;
-};
-
-export function topstepSection(accounts: readonly MentorTopstep[], ccy: string): string[] {
-  if (accounts.length === 0) return [];
-  const out = [
-    `## Topstep nalog — stanje i pravila firme`,
-    `_Stanje danas, ne samo za izabrani period: ovo odlučuje da li nalog preživljava._`,
-    "",
-  ];
-  for (const a of accounts) {
-    const r = a.result;
-    const m = (n: number) => `${n.toFixed(2)} ${ccy}`;
-    const consistencyCap = r.rules.target * TOPSTEP_CONSISTENCY;
-    out.push(
-      `### ${cell(a.accountName)} — ${a.plan} · status: ${r.status}`,
-      `| Stavka | Vrednost |`,
-      `| --- | --- |`,
-      `| Balans / početni | ${m(r.balance)} / ${m(a.startingBalance)} (profit ${signed(r.profit, ccy)}${r.paidOut > 0 ? `, isplaćeno ${m(r.paidOut)}` : ""}) |`,
-      `| MLL (trailing) | pod ${m(r.mllFloor)}${r.mllLocked ? " — zaključan na početnom balansu" : ""}; prostor do njega ${m(r.room)} od ${m(r.rules.mll)} |`,
-      `| Najbliže MLL-u ikad | ${r.headroomPct == null ? "—" : `${r.headroomPct.toFixed(0)}% prostora je ostalo u najgorem trenutku`} |`,
-      `| DLL | ${m(r.rules.dll)} dnevno${r.personalDll ? " (lični limit, uži od plana)" : ""}; danas ${signed(r.todayNet, ccy)}, ostalo ${m(r.dllLeftToday)} |`,
-      `| Dnevni cilj profita | ${r.dailyTarget == null ? "nije postavljen" : `${m(r.dailyTarget)}; do njega danas ${m(r.targetLeftToday ?? 0)}`} |`,
-      `| Dani kad je DLL dostignut | ${r.dllDays.length ? `${r.dllDays.length}: ${r.dllDays.join(", ")}` : "nijedan"} |`,
-      `| Cilj | ${m(r.effectiveTarget)}${r.effectiveTarget > r.rules.target ? ` (porastao sa ${m(r.rules.target)} zbog pravila konzistentnosti)` : ""}; do cilja ${m(Math.max(0, r.effectiveTarget - r.profit))} |`,
-      `| Najbolji dan / granica konzistentnosti | ${r.bestDay ? `${signed(r.bestDay.net, ccy)} (${r.bestDay.day})` : "—"} / ${m(consistencyCap)} (${Math.round(TOPSTEP_CONSISTENCY * 100)}% cilja) — ${r.consistencyOk ? "u redu" : "PREKORAČENO"} |`,
-      `| Trading dana | ${r.daysTraded} |`,
-      `| Max pozicija | ${r.rules.maxMini} mini / ${r.rules.maxMini * 10} mikro ugovora |`,
-      fixedRiskOf({ min: a.riskRuleMin, max: a.riskRuleMax }) != null
-        ? `| Pravilo rizika po trejdu | fiksno ${m(a.riskRuleMin!)} po trejdu (manje samo kad DLL ili prostor do MLL-a ne dozvoljavaju) |`
-        : `| Pravilo rizika po trejdu | ${a.riskRulePct == null ? "—" : `${a.riskRulePct}% prostora do MLL-a`}, u granicama ${m(a.riskRuleMin ?? r.rules.riskMin)}–${m(a.riskRuleMax ?? r.rules.riskMax)} |`,
-      "",
-    );
   }
   return out;
 }
@@ -655,7 +597,7 @@ const num = (v: unknown): string => String(Number(v));
 /**
  * How the trade was actually done (phase M): the fills against the plan, the
  * money split into gross and commissions, the stop and target as sealed against
- * how they ended, and the risk against the budget the rule gave at entry.
+ * how they ended, and the risk taken at entry.
  */
 function executionLines(e: EnrichedTrade, fills: readonly MentorFill[] | undefined, ccy: string, tz: string): string[] {
   const row = e.trade.row;
@@ -743,19 +685,9 @@ function executionLines(e: EnrichedTrade, fills: readonly MentorFill[] | undefin
   const orderType = row.entry_order_type;
   if (typeof orderType === "string" && orderType) lines.push(`- **Ulaz:** ${orderType} nalog`);
 
-  const budget = numberFieldValue(row, "risk_budget_at_entry");
-  const room = roomAtEntry(row);
-  if (budget != null || room != null) {
-    const parts = [
-      budget != null ? `budžet ${budget.toFixed(2)} ${ccy}` : null,
-      e.riskMoney != null
-        ? `uzeto ${e.riskMoney.toFixed(2)} ${ccy}${budget ? ` (${Math.round((e.riskMoney / budget) * 100)}% budžeta)` : ""}`
-        : null,
-      e.riskPctTaken != null && room != null
-        ? `${e.riskPctTaken.toFixed(1)}% prostora do MLL-a (prostor ${room.toFixed(2)} ${ccy})`
-        : null,
-    ].filter((p): p is string => p != null);
-    lines.push(`- **Rizik na ulazu:** ${parts.join(" · ")}`);
+  if (e.riskMoney != null) {
+    const pct = e.riskPctTaken != null ? ` (${e.riskPctTaken.toFixed(2)}% balansa na početku dana)` : "";
+    lines.push(`- **Rizik na ulazu:** ${e.riskMoney.toFixed(2)} ${ccy} do stopa${pct}`);
   }
   return lines;
 }

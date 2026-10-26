@@ -455,25 +455,6 @@ describe("the scorecard — README §Process, Survival, Edge", () => {
     expect(at(UNDER_WATER_FLOOR_DAYS * 3)).toBe(0);
   });
 
-  it("takes prop-firm headroom as it comes, and drops it when no account has one", () => {
-    // README: "the room left against a prop-firm limit"… absent, not 100, when
-    // nothing is running.
-    const at = (propHeadroomPct: number | null) =>
-      computeScorecard({
-        ...base,
-        maxDrawdownPctOfEquity: null,
-        underWaterDays: null,
-        propHeadroomPct,
-      }).survival;
-
-    expect(at(90).score).toBeCloseTo(90, 6);
-    // Zero is a measurement — the account stood on its limit — and must count.
-    expect(at(0).score).toBe(0);
-    expect(at(0).counted).toBe(1);
-    expect(at(null).score).toBeNull();
-    expect(at(null).counted).toBe(0);
-  });
-
   it("states the edge in R with an interval, never as a grade", () => {
     // README: "Edge — a MEASUREMENT, not a score." There is no 0–100 anywhere
     // on this axis, and the interval is what makes the number readable.

@@ -2,7 +2,6 @@ import { accountFilterOptions, allAccountsScope, inAllAccountsScope, primaryAcco
 import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
 import { firstBiasResolver } from "@/lib/journal/daily-bias";
 import { getAccounts } from "@/lib/journal/accounts";
-import { getCashEvents } from "@/lib/journal/cash-events";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import {
   getDailyReportDates,
@@ -33,7 +32,7 @@ import { MonthDayList } from "@/components/journal/month-day-list";
 import { CalendarViewToggle } from "@/components/journal/calendar-view-toggle";
 import { PageHeader } from "@/components/app/page-header";
 import { accountDayZoneResolver } from "@/lib/journal/time";
-import { topstepRulesResolver } from "@/lib/journal/topstep";
+import { breakevenRangeResolver } from "@/lib/journal/breakeven";
 import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
 import { briefResolver } from "@/lib/journal/session-brief";
 import { tradingWindowResolver } from "@/lib/journal/tracker/trading-window";
@@ -139,7 +138,7 @@ export default async function CalendarPage({
     const from = days[0];
     const to = days[days.length - 1];
 
-    const [reports, rules, checkinsByDay, briefs, cash, biases] = await Promise.all([
+    const [reports, rules, checkinsByDay, briefs, biases] = await Promise.all([
       getDailyReportsInRange(from, to),
       // Retired rules included, and `rulesLiveOn` filters per day — a rule that
       // was live in March still judged March, and dropping it would raise that
@@ -151,7 +150,6 @@ export default async function CalendarPage({
       getCheckins(from, to),
       // The month's briefs, for the rules that read the red windows and the close.
       getSessionBriefs(from, to),
-      getCashEvents(),
       // The month's bias forecasts (phase D): `htf_bias_set` reads the card.
       getDailyBiases(from, to),
     ]);
@@ -160,7 +158,7 @@ export default async function CalendarPage({
     const tradingWindowOf = tradingWindowResolver(rules);
 
     const reportOfDay = new Map(reports.map((r) => [r.report_date, r]));
-    const index = buildTradeDayIndex(scopedTrades, tzOfRow, topstepRulesResolver(accounts, cash));
+    const index = buildTradeDayIndex(scopedTrades, tzOfRow, breakevenRangeResolver(accounts));
     const series = computeComplianceSeries(
       days,
       rules,

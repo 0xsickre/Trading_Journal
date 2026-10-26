@@ -100,26 +100,17 @@ export type Account = {
   // Risk plan defaults applied when stop / target are left empty.
   default_stop_pct: number | null;
   default_target_pct: number | null;
-  // Topstep futures account (per account). See topstep.ts.
+  // Columns of the former Topstep mode, kept until phase X6 drops them. Only
+  // `topstep_mode` is still read — it keys the 17:00 CT day until X4 — and
+  // nothing writes any of them (phase X2).
   topstep_mode: boolean;
   topstep_plan: "50K" | "100K" | "150K";
-  /** First payout: from then on the MLL floor is the starting balance (Topstep's "$0"). */
   topstep_payout_at: string | null;
   topstep_reset_at: string | null;
-  /**
-   * TopstepX's Personal Daily Loss Limit and Personal Daily Profit Target, in
-   * money; null = not set (the plan's DLL, no target). `topstep.ts` reads both.
-   */
   topstep_personal_dll: number | null;
   topstep_daily_target: number | null;
-  /**
-   * Combine, Express Funded Account or Practice (phase T): the XFA sizes by the Scaling Plan and pays
-   * out by path; Practice keeps a Combine's rules, passes nothing and is kept apart from the real book.
-   */
   topstep_stage: "combine" | "xfa" | "practice";
-  /** Risk per trade as a share of the room above the MLL, in %. */
   risk_rule_pct: number;
-  /** Risk-per-trade bounds in money; null = the plan's own (topstep.ts `TOPSTEP_PLANS`). */
   risk_rule_min: number | null;
   risk_rule_max: number | null;
   /** A practice / demo account, kept out of "All accounts" (phase X, X-4). */

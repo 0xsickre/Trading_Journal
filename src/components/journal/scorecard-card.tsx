@@ -49,14 +49,13 @@ export function ScorecardCard({ card }: { card: Scorecard }) {
           <Axis
             label="Survival"
             score={survival.score}
-            hint={`How deep the worst fall was, how long the account has been under water, and the room left against a prop-firm limit. The time part reaches zero at ${UNDER_WATER_FLOOR_DAYS} days.`}
+            hint={`How deep the worst fall was, and how long the account has been under water. The time part reaches zero at ${UNDER_WATER_FLOOR_DAYS} days.`}
             parts={[
               ["Max DD", pct(survival.drawdownPct)],
               [
                 "Under water",
                 survival.underWaterDays == null ? "—" : `${survival.underWaterDays} d`,
               ],
-              ["Prop-firm room", pct(survival.propHeadroomPct)],
             ]}
           />
           <div className="space-y-1" role="group" aria-label="Edge">

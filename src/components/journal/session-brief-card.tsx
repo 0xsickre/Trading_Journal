@@ -1,6 +1,5 @@
 import { Newspaper } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { fmtMoney } from "@/lib/journal/format";
 import { flatByFor, type BriefRange, type SessionBrief } from "@/lib/journal/session-brief";
 import { fmtInTz } from "@/lib/journal/time";
 
@@ -34,19 +33,11 @@ export function SessionBriefCard({
   day,
   brief,
   tz,
-  dllLeft,
 }: {
   day: string;
   brief: SessionBrief | null;
   /** The clock times are shown on — the primary account's. */
   tz: string;
-  /** Today's page only: DLL left on the primary Topstep account, and its personal daily target. */
-  dllLeft?: {
-    amount: number;
-    of: number;
-    currency: string;
-    target?: { of: number; left: number } | null;
-  } | null;
 }) {
   const flat = flatByFor(day, brief);
   const ranges = RANGES.flatMap(({ key, label }) => (brief?.ranges[key] ? [{ label, range: brief.ranges[key] }] : []));
@@ -78,28 +69,6 @@ export function SessionBriefCard({
               <span className="text-xs text-muted-foreground"> (uobičajeno 15:10 CT)</span>
             )}
           </span>
-          {dllLeft && (
-            <span>
-              <span className="text-muted-foreground">DLL danas: </span>
-              <span className="font-medium">
-                {fmtMoney(dllLeft.amount, dllLeft.currency)} od {fmtMoney(dllLeft.of, dllLeft.currency)}
-              </span>
-            </span>
-          )}
-          {dllLeft?.target && (
-            <span>
-              <span className="text-muted-foreground">Dnevni cilj: </span>
-              {dllLeft.target.left === 0 ? (
-                <span className="font-medium text-[var(--profit)]">
-                  dostignut ({fmtMoney(dllLeft.target.of, dllLeft.currency)}) — gotovo za danas
-                </span>
-              ) : (
-                <span className="font-medium">
-                  još {fmtMoney(dllLeft.target.left, dllLeft.currency)} od {fmtMoney(dllLeft.target.of, dllLeft.currency)}
-                </span>
-              )}
-            </span>
-          )}
         </div>
         {brief?.dayNote && <p className="text-xs text-[var(--loss)]">{brief.dayNote}</p>}
 

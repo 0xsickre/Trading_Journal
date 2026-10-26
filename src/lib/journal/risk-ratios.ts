@@ -220,7 +220,7 @@ const EMPTY_DAILY_DD: DailyDrawdownStats = {
  * deepest drop below the best point reached so far THAT DAY. Carrying the peak
  * across days would just reproduce the account-wide max drawdown one day at a
  * time; the daily rule is the one a prop firm's daily loss limit actually
- * enforces (Topstep's DLL).
+ * enforces.
  *
  * Days that never went underwater count as 0 and stay in the denominator.
  * Averaging over losing days only would answer "how bad are my bad days", which

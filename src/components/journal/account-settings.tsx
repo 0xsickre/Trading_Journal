@@ -50,7 +50,6 @@ import type { Account } from "@/lib/journal/types";
 import { parseSettingsNumber } from "@/lib/journal/settings-rules";
 import { duplicateSettings, isArchived } from "@/lib/journal/account-rules";
 import { fmtMoney } from "@/lib/journal/format";
-import { TOPSTEP_DEFAULT_RISK_PCT, topstepBreakevenBand } from "@/lib/journal/topstep";
 import { DEFAULT_TZ } from "@/lib/journal/time";
 import {
   updateAccount,
@@ -468,15 +467,12 @@ function EditAccountDialog({
         <section className="space-y-1 rounded-md border p-3">
           <h3 className="text-sm font-medium">Breakeven range</h3>
           <p className="text-sm tabular-nums">
-            {account.topstep_mode
-              ? `±0.1R of the trade's risk · ±${fmtMoney(topstepBreakevenBand(account.topstep_plan), currency)} without a stop`
-              : `${fmtMoney(account.breakeven_from, currency)} to ${fmtMoney(account.breakeven_to, currency)}`}
+            {`±0.1R of the trade's risk · ${fmtMoney(account.breakeven_from, currency)} to ${fmtMoney(account.breakeven_to, currency)} without a stop`}
           </p>
           <p className="text-xs text-muted-foreground">
             Fixed, not a setting: a trade whose net P&amp;L is within 0.1R of its own risk to
             the stop is a scratch — a full stop on one micro contract is a loss, however few
-            dollars it is. A trade with no stop, and a day or a week, use 0.1R of the plan&apos;s
-            starting risk budget ({TOPSTEP_DEFAULT_RISK_PCT} % of the room above the MLL).
+            dollars it is. A trade with no stop, and a day or a week, use the account&apos;s own band.
           </p>
         </section>
 

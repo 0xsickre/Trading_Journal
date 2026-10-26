@@ -22,7 +22,6 @@ const input = (over: Partial<ScorecardInputs> = {}): ScorecardInputs => ({
   followRatePct: 60,
   maxDrawdownPctOfEquity: 10,
   underWaterDays: 0,
-  propHeadroomPct: null,
   decidedRs: rs(10),
   trades: 40,
   ...over,
@@ -78,14 +77,10 @@ describe("survival", () => {
     expect(past.score).toBeCloseTo(50, 10);
   });
 
-  it("takes the prop-firm headroom in without a trade gate", () => {
-    // The evidence rides with the producer: `evaluateTopstep` answers null for a
-    // window with nothing closed, so a figure here is already earned.
-    const s = computeScorecard(
-      input({ trades: 0, propHeadroomPct: 40, decidedRs: [] }),
-    ).survival;
-    expect(s.score).toBe(40);
-    expect(s.counted).toBe(1);
+  it("has no prop-firm part: a book with nothing closed has no survival score (phase X)", () => {
+    const s = computeScorecard(input({ trades: 0, decidedRs: [] })).survival;
+    expect(s.score).toBeNull();
+    expect(s).not.toHaveProperty("propHeadroomPct");
   });
 
   it("withholds the two trade-derived parts below the sample floor", () => {
@@ -102,10 +97,10 @@ describe("survival", () => {
 
   it("never leaves the 0–100 band, however bad the book", () => {
     const s = computeScorecard(
-      input({ maxDrawdownPctOfEquity: 240, underWaterDays: 400, propHeadroomPct: -5 }),
+      input({ maxDrawdownPctOfEquity: 240, underWaterDays: 400 }),
     ).survival;
     expect(s.score).toBe(0);
-    expect(s.counted).toBe(3);
+    expect(s.counted).toBe(2);
   });
 });
 

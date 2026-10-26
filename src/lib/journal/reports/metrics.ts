@@ -655,8 +655,7 @@ export const METRICS: ReportMetric[] = [
     label: "Avg risk taken",
     unit: "pct",
     hint:
-      "Average risk per trade, as a % of the room above the MLL at entry on a Topstep account " +
-      "(else of the equity the entry day opened with). " +
+      "Average risk per trade, as a % of the equity the entry day opened with. " +
       "What was actually put at stake, not what was chosen in the form.",
     higherIsBetter: false,
     compute: (g) => mean(g.map((t) => t.riskPctTaken)),
@@ -665,7 +664,7 @@ export const METRICS: ReportMetric[] = [
     key: "max_risk_pct",
     label: "Max risk taken",
     unit: "pct",
-    hint: "The largest single risk in the group, as a % of the room above the MLL at its entry.",
+    hint: "The largest single risk in the group, as a % of the equity its entry day opened with.",
     higherIsBetter: false,
     compute: (g) => {
       const xs = defined(g.map((t) => t.riskPctTaken));

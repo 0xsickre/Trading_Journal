@@ -82,7 +82,6 @@ const TRADE: TradePageTrade = {
   fees: 1.22,
   maeR: 0.9,
   mfeR: 0.3,
-  riskBudget: 300,
   pointValue: 2,
   fxRate: 1,
   tickSize: 0.25,

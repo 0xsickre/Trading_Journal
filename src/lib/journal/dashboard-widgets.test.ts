@@ -37,11 +37,12 @@ describe("registry integrity", () => {
     }
   });
 
-  it("locks exactly the three sections that must never be switched off", () => {
+  it("locks exactly the two sections that must never be switched off", () => {
     const locked = DASHBOARD_WIDGETS.filter((w) => !w.hideable).map((w) => w.id);
-    // Two warnings about the reader's money and the headline row. A page that
+    // The warning about the reader's money and the headline row. A page that
     // can be configured into lying is worse than one with no configuration.
-    expect(locked.sort()).toEqual(["headline", "topstep", "unpriced"]);
+    // (The Topstep banner was the third until phase X.)
+    expect(locked.sort()).toEqual(["headline", "unpriced"]);
   });
 });
 
@@ -60,8 +61,7 @@ describe("visibleWidgets", () => {
   it("KEEPS LOCKED WIDGETS however the store was written", () => {
     // Not merely un-clickable in the popover: a hand-edited localStorage value
     // naming them must still render them.
-    const v = visibleWidgets(["topstep", "unpriced", "headline"]);
-    expect(v.has("topstep")).toBe(true);
+    const v = visibleWidgets(["unpriced", "headline"]);
     expect(v.has("unpriced")).toBe(true);
     expect(v.has("headline")).toBe(true);
   });
@@ -75,7 +75,7 @@ describe("visibleWidgets", () => {
 
   it("survives a store naming EVERY id — the headline row still renders", () => {
     const v = visibleWidgets(WIDGET_IDS);
-    expect([...v].sort()).toEqual(["headline", "topstep", "unpriced"]);
+    expect([...v].sort()).toEqual(["headline", "unpriced"]);
   });
 });
 
@@ -90,7 +90,7 @@ describe("toggleWidget", () => {
     // Returned untouched rather than throwing: a caller asking for something
     // impossible gets a no-op, which is the behaviour that cannot cascade.
     expect(toggleWidget(["equity"], "headline")).toEqual(["equity"]);
-    expect(toggleWidget([], "topstep")).toEqual([]);
+    expect(toggleWidget([], "unpriced")).toEqual([]);
   });
 
   it("ignores an unknown id", () => {
@@ -142,10 +142,10 @@ describe("resolveOrder", () => {
     // renders straight from this list, would show "Always on" rows floating in
     // the middle of the sequence.
     const ids = resolveOrder(["tag-breakdown", "equity"]).map((w) => w.id);
-    expect(ids.slice(0, 3)).toEqual(
+    expect(ids.slice(0, 2)).toEqual(
       DASHBOARD_WIDGETS.filter((w) => !w.hideable).map((w) => w.id),
     );
-    expect(ids[3]).toBe("tag-breakdown");
+    expect(ids[2]).toBe("tag-breakdown");
   });
 
   it("drops ids the registry no longer knows", () => {
@@ -181,7 +181,8 @@ describe("packRows", () => {
     }
     const byId = rows.map((r) => r.map((w) => w.id));
     expect(byId).toContainEqual(["equity", "score"]);
-    expect(byId).toContainEqual(["recent-trades", "time-stop"]);
+    expect(byId).toContainEqual(["open-positions", "recent-trades"]);
+    expect(byId).toContainEqual(["time-stop"]);
     expect(byId).toContainEqual(["hold-time", "costs", "plan-vs-reality", "weekly"]);
     expect(byId).toContainEqual(["drawdown", "calendar"]);
   });
@@ -265,13 +266,13 @@ describe("moveWidget", () => {
   });
 
   it("steps OVER locked widgets instead of trading places with one", () => {
-    // The locked three render above the rows and never inside them, so swapping
+    // The locked two render above the rows and never inside them, so swapping
     // with one would rewrite the array and change nothing on screen — a button
     // that visibly does nothing.
     const first = movable([])[0];
     const next = moveWidget([], first, 1);
     // The locked ids keep the front; the movable sequence is what changed.
-    expect(next.slice(0, 3)).toEqual(
+    expect(next.slice(0, 2)).toEqual(
       DASHBOARD_WIDGETS.filter((w) => !w.hideable).map((w) => w.id),
     );
     expect(movable(next)[1]).toBe(first);

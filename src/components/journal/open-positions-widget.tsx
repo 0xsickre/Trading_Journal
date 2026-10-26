@@ -28,7 +28,6 @@ export function OpenPositionsWidget({
   tzOf,
   now: nowProp,
   equityOf,
-  dllLeftOf,
   currency = "USD",
 }: {
   rows: TradeRow[];
@@ -37,8 +36,6 @@ export function OpenPositionsWidget({
   now?: number;
   /** Current equity per account — the denominator of the heat figure. */
   equityOf?: (accountId: string) => number | null;
-  /** Today's Daily Loss Limit left per Topstep account — the heat's second yardstick. */
-  dllLeftOf?: (accountId: string) => number | null;
   currency?: string;
 }) {
   // Read once per mount: "held for" is a glance, not a ticking clock.
@@ -54,7 +51,7 @@ export function OpenPositionsWidget({
    * Open risk, per account and never summed across them: 2 % of a 5,000
    * account and 2 % of a 100,000 one are not 4 % of anything that exists.
    */
-  const heats = equityOf ? heatByAccount(open, equityOf, dllLeftOf) : [];
+  const heats = equityOf ? heatByAccount(open, equityOf) : [];
 
   return (
     <Card className="h-full">
@@ -89,16 +86,6 @@ export function OpenPositionsWidget({
                           counted here rather than added as a zero. */}
                       {h.unpriced > 0 && ` · ${h.priced} of ${h.priced + h.unpriced} measured`}
                     </span>
-                    {h.dllLeft != null && (
-                      <span
-                        className={`ml-2 ${h.dllUsedPct == null || h.dllUsedPct >= 100 ? "text-[var(--loss)]" : "text-muted-foreground"}`}
-                        title="If every open stop were hit now, this share of today's Daily Loss Limit would be gone."
-                      >
-                        {h.dllUsedPct != null
-                          ? `${h.dllUsedPct.toFixed(0)}% of DLL left (${fmtMoney(h.dllLeft, currency)})`
-                          : "no DLL left today"}
-                      </span>
-                    )}
                   </span>
                 </p>
               );

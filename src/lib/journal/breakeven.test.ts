@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  breakevenRangeResolver,
   classifyOutcome,
   hasBreakevenBand,
   resolveBreakevenRange,
@@ -25,6 +26,7 @@ describe("resolveBreakevenRange", () => {
     expect(resolveBreakevenRange(cfg(-37.5, 0))).toEqual({
       from: -37.5,
       to: 0,
+      riskShare: 0.1,
     });
   });
 
@@ -32,6 +34,7 @@ describe("resolveBreakevenRange", () => {
     expect(resolveBreakevenRange(cfg(-0.25, 0.1, "pct", 10_000))).toEqual({
       from: -25,
       to: 10,
+      riskShare: 0.1,
     });
   });
 
@@ -85,25 +88,15 @@ describe("hasBreakevenBand", () => {
 
 const cfgRange = (from: number, to: number) => resolveBreakevenRange(cfg(from, to));
 
-describe("a Topstep account's band is fixed by its plan (K4)", () => {
-  const topstep = (plan: string) => ({ ...cfg(-500, 500), topstep_mode: true, topstep_plan: plan });
+describe("every account judges a trade with a stop by its own risk (K4; phase X)", () => {
+  const band = cfgRange(-16, 16);
 
-  it("is ±0.1R of the plan's starting risk budget, whatever the columns say", () => {
-    // 8 % of the room above the MLL: 160 on a 50K, 240 on a 100K, 360 on a 150K.
-    expect(resolveBreakevenRange(topstep("50K"))).toEqual({ from: -16, to: 16, riskShare: 0.1 });
-    expect(resolveBreakevenRange(topstep("100K"))).toEqual({ from: -24, to: 24, riskShare: 0.1 });
-    expect(resolveBreakevenRange(topstep("150K"))).toEqual({ from: -36, to: 36, riskShare: 0.1 });
+  it("ignores any prop firm's columns: the band is the account's own", () => {
+    const withTopstep = { ...cfg(-10, 0), topstep_mode: true, topstep_plan: "50K" } as ReturnType<typeof cfg>;
+    expect(resolveBreakevenRange(withTopstep)).toEqual({ from: -10, to: 0, riskShare: 0.1 });
   });
 
-  it("classifies a scratch as breakeven and a real result as a win or a loss", () => {
-    const band = resolveBreakevenRange(topstep("50K"));
-    expect(classifyOutcome(-15.5, band)).toBe("breakeven");
-    expect(classifyOutcome(17, band)).toBe("win");
-    expect(classifyOutcome(-30, band)).toBe("loss");
-  });
-
-  it("judges a trade with a stop against its own risk, not the plan's (30.09.2026)", () => {
-    const band = resolveBreakevenRange(topstep("50K"));
+  it("judges a trade with a stop against a tenth of its own risk (30.09.2026)", () => {
     // One MES contract stopped out: −$12.25 on $10 of risk is −1.23R — a loss,
     // though it sits inside ±$16.
     expect(classifyOutcome(-12.25, band, 10)).toBe("loss");
@@ -116,22 +109,14 @@ describe("a Topstep account's band is fixed by its plan (K4)", () => {
     expect(classifyOutcome(-30, band, 600)).toBe("breakeven");
   });
 
-  it("falls back to the plan's money band for a trade with no known risk", () => {
-    const band = resolveBreakevenRange(topstep("50K"));
+  it("falls back to the account's money band for a trade with no known risk", () => {
     expect(classifyOutcome(-15.25, band, null)).toBe("breakeven");
     expect(classifyOutcome(-15.25, band, 0)).toBe("breakeven");
     expect(classifyOutcome(-17, band)).toBe("loss");
   });
 
-  it("an account's own columns ignore the trade's risk", () => {
-    expect(classifyOutcome(-22.25, cfgRange(-25, 25), 18.75)).toBe("breakeven");
-  });
-
-  it("an account not in Topstep mode keeps its own columns", () => {
-    expect(resolveBreakevenRange({ ...cfg(-10, 0), topstep_mode: false, topstep_plan: "50K" })).toEqual({
-      from: -10,
-      to: 0,
-    });
+  it("a 0..0 account calls any stopped trade a loss, never a scratch", () => {
+    expect(classifyOutcome(-22.25, cfgRange(0, 0), 18.75)).toBe("loss");
   });
 });
 
@@ -162,7 +147,7 @@ describe("the book's statistics judge each trade against its own risk (30.09.202
       } as PositionStat,
       tv_images: {},
     }) as unknown as TradeRow;
-  const band = resolveBreakevenRange({ ...cfg(0, 0), topstep_mode: true, topstep_plan: "50K" });
+  const band = resolveBreakevenRange(cfg(-16, 16));
 
   it("counts a stopped micro trade as a loss and a one-tick exit as a scratch", () => {
     const stopped = mes("a", 1, 7704, -22.25, 7700.25);
@@ -178,5 +163,22 @@ describe("the book's statistics judge each trade against its own risk (30.09.202
   it("uses the money band for a trade with no stop", () => {
     const noStop = { ...mes("c", 1, 7704, -22.25, 7700.25), stop_price: null } as TradeRow;
     expect(tradeOutcome(noStop, -15.25, band)).toBe("breakeven");
+  });
+});
+
+describe("breakevenRangeResolver — each account's own band, for the tracker (phase X)", () => {
+  const of = breakevenRangeResolver([
+    { id: "a", ...cfg(-20, 20) },
+    { id: "b", ...cfg(-0.1, 0.1, "pct", 50_000) },
+  ]);
+
+  it("answers each account with its own band and a tenth of a stop's risk", () => {
+    expect(of("a")).toEqual({ from: -20, to: 20, riskShare: 0.1 });
+    expect(of("b")).toEqual({ from: -50, to: 50, riskShare: 0.1 });
+  });
+
+  it("gives a trade with no account, or an unknown one, no money band but keeps the tenth", () => {
+    expect(of(null)).toEqual({ from: 0, to: 0, riskShare: 0.1 });
+    expect(of("gone")).toEqual({ from: 0, to: 0, riskShare: 0.1 });
   });
 });

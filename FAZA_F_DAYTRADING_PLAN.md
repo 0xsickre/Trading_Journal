@@ -165,7 +165,7 @@ pogađa.
 | **Y** | Vreme upisa: playbook i checklist napisani posle trejda, kapija pre sesije upisana posle prvog ulaza | — | N | da: `20261014200000` (`mental_temp_at`), `20261015090000` (`trading_window`) | **Opus** | ✅ 14.10.2026 — Y1 `14a992f` · Y2 `7281007` · Y3 `80dee18` · Y4/Y5 `9de8441` (migracije `20261014200000`, `20261015090000` primenjene); Y-1 … Y-4 = A, Y-5 NY 14:30–18:00, Y-6 = A |
 | **J** | Jezik: nazivi kategorija u paketu, /reports i gridu na srpskom; fabrička lista tagova = lista trejdera | — | Y | da: `20261015120000` (nova definicija `tj_seed_categories`, podaci se ne menjaju) | **Opus** | ✅ 15.10.2026 — J1 `61f5c79` · J2 `c415355` (migracija `20261015120000` primenjena) |
 | **D** | Bias dana: prognoza pre sesije na /daily, ocena iz 1m sveća, moj winrate prema „uvek long“ | — | J | da: `20261017120000` (`tj_daily_bias`, aditivna) | **Opus** | ✅ kod 18.10.2026 — `a7456ed` · D1 `8af430f` · D2 `18d7077` · D4 `fcdf8ee` · D5+D6 `293067b` + futures-trading `adb046c`; migracija `20261017120000` primenjena 18.10.2026 |
-| **X** | Journal bez pravila prop firme: bez Topstep mašine, MLL/DLL plana, Survival-a i banera; tvoji limiti na nalogu, CME dan | — | D | da: aditivna (neutralne kolone) + **briše** `topstep_*` (uz odobrenje) | **Opus** | 🔄 odluke 26.10.2026 (X-1 B, X-2…X-9 A, X-7 univerzalni uvoz, X-10 odloženo) · X1 ✅ (migracija `20261026120000` primenjena) · X2 ✅ — sledeće X3 |
+| **X** | Journal bez pravila prop firme: bez Topstep mašine, MLL/DLL plana, Survival-a i banera; tvoji limiti na nalogu, CME dan | — | D | da: aditivna (neutralne kolone) + **briše** `topstep_*` (uz odobrenje) | **Opus** | 🔄 odluke 26.10.2026 (X-1 B, X-2…X-9 A, X-7 univerzalni uvoz, X-10 odloženo) · X1 ✅ (migracija `20261026120000` primenjena) · X2 ✅ · X3 ✅ — sledeće X4 |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1607,7 +1607,7 @@ Migracija `20261017120000` primenjena 18.10.2026 uz odobrenje trejdera (posle dv
 posle ~30 stvarnih ocena. (3) Rol zlata (3 radna dana pre FND) nije proveren prema `GC.v.0` po volumenu. (4) Ručna
 provera u pregledaču nije rađena.
 
-## X — Journal bez pravila prop firme (detaljno, 26.10.2026) — 🔄 X1, X2 isporučeni, sledeće X3
+## X — Journal bez pravila prop firme (detaljno, 26.10.2026) — 🔄 X1–X3 isporučeni, sledeće X4
 
 **Povod** (trejder, 26.10.2026: „skroz ćemo izbaciti bilo kakva pravila iz journala, ne može da bude vezan za prop
 firmu, treba da bude neutralan … treba da služi za trejdove i journal, a ne za pravila prop firmi, a ja sam taj koji
@@ -1707,6 +1707,16 @@ korekcija kao obični tokovi novca), sesije po Beogradu i trackerova pravila koj
   `topstep-parity.json` i njihovi testovi, widget „Topstep status“ i „Survival simulation“, `survival.ts` i deo
   skora „Survival“, upis `room_at_entry` / `risk_budget_at_entry` u uvozu i na trejdu, veličina u ugovorima iz budžeta
   i prop-firm headroom. Risk % ide na balans na ulazu, a breakeven bez stopa na pojas naloga.
+  **Isporučeno (26.10.2026):** obrisani su `topstep.ts`, `topstep-status.ts`, `topstep-banner.tsx`, `survival.ts`,
+  `survival-card.tsx`, `tracker/equity-ladder.ts`, `topstep-parity.json` sa testovima i `.gitattributes`, kao i
+  widget-i „Topstep status“ i „Survival simulation“ („Time stop“ je sada pune širine). Uklonjeni su i DLL na kartici
+  „Pred sesiju“ i u toploti otvorenih pozicija, deo „Prop-firm room“ iz Survival ose, Topstep sekcija mentor paketa,
+  upis `room_at_entry` / `risk_budget_at_entry` pri uvozu, budžet rizika na stranici trejda (sada „rizik do stopa“),
+  `computeTopstepRisk` / `computeFuturesContracts` i ostaci zaštite „blown account“ (`addsExposure`, polje
+  `origin`). Risk % = rizik ÷ `equity_at_entry` (svih 7 trejdova ga ima). Kante u /reports: < 0,25 %, 0,25–0,5 %,
+  0,5–0,75 %, 0,75–1 %, 1–2 %, ≥ 2 %. Breakeven: ±0,1R rizika do stopa na **svakom** nalogu, a bez stopa pojas
+  naloga (`breakevenRangeResolver` za tracker). Za „50K Combine“ pojas bez stopa je sada 0–0 umesto ±$16.
+  Gate zelen, 2769 testova.
 - **X4 Dan i sesija** (X-3, X-9). `topstepTradingDay` → `cmeTradingDay`, `TopstepDayZone` → `CmeDayZone`, uključeno
   za fjučers nalog. `scenario.ts`, `missed-cost.ts` i `flat_by_close` čitaju `flat_by`.
 - **X5 Tekstovi i podaci** (X-8). Mentor paket, /reports hintovi, razlozi trackera, `nav.ts`, komentari kataloga.
