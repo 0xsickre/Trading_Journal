@@ -2,8 +2,9 @@
 
 [![gate](https://github.com/0xsickre/Trading_Journal/actions/workflows/gate.yml/badge.svg)](https://github.com/0xsickre/Trading_Journal/actions/workflows/gate.yml)
 
-A day-trading journal for a single trader: intraday CME futures on Topstep — NQ / MNQ, ES / MES and
-gold GC / MGC, with 6E / M6E in the catalog. No AI chat — a disciplined record of what was traded and
+A day-trading journal for a single trader: intraday CME futures — NQ / MNQ, ES / MES and
+gold GC / MGC, with 6E / M6E in the catalog. It knows no prop firm (phase X, 26.10.2026): the
+trader keeps each firm's rules on its own platform. No AI chat — a disciplined record of what was traded and
 how well the process was followed, plus honest arithmetic over that record. **A trade comes in only
 through the import** (phase O, 08.10.2026): the TopstepX trades and orders exports (or a broker CSV),
 then the details filled in from the session's recording; a setup not taken has its own small page.
@@ -16,7 +17,7 @@ FTMO or CFD trade was in the book), with the per-position check-ins on `/daily` 
 insights (thesis, time stop, weekend). **H2 (29.09.2026) removed what they left in the database**:
 the check-in table, `time_stop_days`, swap (fills, instruments, net P&L), the percentage-of-equity
 tracker limits and the weekly loss rule, the `risk_pct` choice, the backtest account kind with the
-TradingView replay import, and the `ftmo_*` columns. The book is Topstep only. **F5 (29.09.2026)
+TradingView replay import, and the `ftmo_*` columns. The book is CME futures only. **F5 (29.09.2026)
 moved the analytics to the trading day**: hold time in minutes, session windows, intraday insights,
 time underwater, overlap in minutes, open risk against the DLL (gone in phase X), a day trader's mentor pack. **F6
 closed the move**: the missed-setup price from R2, the vault-era insights retired, a plan stale after
@@ -526,8 +527,8 @@ no screen reads it on purpose — one R per book, so that two do not start to dr
 ±$20 scratch is neither a win nor a loss, and it is dropped from the win rate instead of being
 counted as a loss — which would understate a book full of scratches by several points.
 
-**On a Topstep account a trade is judged against its own risk** (decided 30.09.2026). The dollar
-band is a tenth of the plan's nominal risk, and a micro trade risks a fraction of that: in the mock
+**A trade is judged against its own risk** (decided 30.09.2026 for the Topstep account, on every
+account since phase X). The dollar band was then a tenth of the Topstep plan's nominal risk, and a micro trade risks a fraction of that: in the mock
 book one MES contract stopped out for −$22.25, which is −1.13R, sat inside the band of the time (±$25) and was filed as a
 scratch — left out of the win rate and of the expectancy, which read +1.27R where the book averaged
 +0.91R. Every per-trade classification (statistics, reports, insights, journal grid, the playbook
@@ -662,7 +663,7 @@ Get this wrong and nothing breaks — the numbers simply file themselves under d
   The week is the week of that day (Sunday evening opens the new one), and the hour of entry is still
   read on the account's clock. Computed in Chicago, whatever the account's zone: Belgrade matches it
   most of the year and drifts by an hour in the weeks the two change clocks on different dates.
-- **"Today" is the primary account's day** (`todayFor`): on a Topstep primary, after 17:00 CT it is
+- **"Today" is the primary account's day** (`todayFor`): after 17:00 CT it is
   already tomorrow, so `/daily` opens the session that has just started. Locked days keep the verdicts
   they were frozen with, and `equity_at_entry` is still the
   opening balance of the calendar day — the denominator of Risk % on every account since phase X.
@@ -968,7 +969,7 @@ prices and counts it unchanged.
 
 `status = 'missed'` and `miss_reason` have existed since the beginning and cost nothing, which made
 hesitation the cheapest mistake to keep making. **Since F6.1 (29.09.2026) the price comes from R2**:
-`futures-trading`'s `journal_mae.py` walks the contract's candles through the plan's Topstep trading
+`futures-trading`'s `journal_mae.py` walks the contract's candles through the plan's CME trading
 day — from the moment the plan was written to 15:10 CT; a plan written after that belongs to the
 next day — once that day is over and the exact data is out, and writes `missed_outcome`, `missed_r`
 and `missed_source = 'r2'` (a hand-entered miss is left alone; `mt5` stays on history).
@@ -994,7 +995,7 @@ figure measures how tidily plans are filed rather than what hesitation cost.
 
 **Export for Claude** on the dashboard writes one Markdown file for the chosen period and account
 scope (`mentor-export.ts`), to be uploaded into a chat: every number is computed here, so the model
-interprets and never calculates. Since F5.6 (29.09.2026) it carries what decides an intraday Topstep
+interprets and never calculates. Since F5.6 (29.09.2026) it carries what decides an intraday futures
 book, from values the screens already derive (`mentor-intraday.ts`):
 
 - **Bias dana** (phase D, 17.10.2026). One row per day and root of the period: the counted (first)
@@ -1221,7 +1222,7 @@ measured. `maximize_your_profit_day` stays out: it needs the peak of the day's c
 `gave_back_profit` covers the behaviour from MFE.
 
 **F6 (29.09.2026)** removed the two vault-era rules (`against_macro_bias`, `cot_chase`; decision
-M2-A) and moved `stale_plan` to the trading day (decision M3-A): a plan is stale once its Topstep day
+M2-A) and moved `stale_plan` to the trading day (decision M3-A): a plan is stale once its trading day
 is over — 15:10 CT on the day it was written, or on the next trading day when it was written after
 that — with no fill and not marked missed (`planTradingDay` in `session-brief.ts`, the same rule
 `futures-trading` prices a miss by). The `/reports` missed panel counts stale plans the same way.
@@ -1257,7 +1258,13 @@ book ran Topstep's rules (F3, R, T: `topstep.ts`, `topstep-status.ts`, `topstep-
 **Phase X4** made the 17:00 → 17:00 CT day the CME day of every account (§ Attributing to days) and
 gave `flat_by_close` the account's own flat-by time (§ Process tracking). **What stays:** the
 `tj_accounts.topstep_*` and `risk_rule_*` columns and `tj_positions.risk_budget_at_entry` /
-`room_at_entry`, which nothing writes or reads any more (X6 drops them, once the brief is checked);
+`room_at_entry`, which the journal neither writes nor reads any more. **X6 (dropping them) waits on
+X-10**: checked 26.10.2026, `futures-trading`'s brief (`tools/brief/racun.py`) still reads the
+`topstep_*` and `risk_rule_*` columns and picks accounts by `topstep_mode`, and the 15:20 CT reminder
+(`tools/journal_podsetnik.py`) by `topstep_mode` and `topstep_stage`; the two `*_at_entry` columns
+nothing reads. **Phase X5** (`20261026180000`) made the factory data neutral: catalog commission 0
+for a new book, no Topstep or DLL item in the factory lists, and the trader's "Kraj Topstep dana"
+renamed "Kraj dana (ravno)";
 the 15:10 CT horizon of "Šta bi bilo" and of a missed plan, which `futures-trading` computes (X-10);
 and the TopstepX import formats, which are a platform's files, not a firm's rules (X-7).
 
@@ -1449,7 +1456,7 @@ Two levels sit between those categories, and they are treated differently:
 
 The TradingView "List of trades" import — a Strategy Tester or Bar Replay export joined into positions,
 its size rescaled to lots and its excursions written as MAE/MFE — left in H2 with the backtest account
-kind (decision I5-A: the book is Topstep only). `tj_positions.excursion_source` still reads
+kind (decision I5-A: the book was Topstep only). `tj_positions.excursion_source` still reads
 `tradingview` on no trade; `tj_import_rows.excursion_written` and the `clear_excursion` branch of
 `tj_undo_import_batch` stay for batches written before it.
 
@@ -1763,7 +1770,7 @@ the TradingView export's own excursions (removed with the import in H2) — are 
 
 MAE/MFE stops at the exit, so it cannot say whether a target was left too early or whether a stop was
 followed by the target. **Phase L (30.09.2026, decisions L1–L4)** replays every closed futures trade
-with a stop on the same R2 candles, once its Topstep day is over and the exact data is out, and
+with a stop on the same R2 candles, once its trading day is over and the exact data is out, and
 writes the result into `tj_positions.scenario` (jsonb, v2 since phase S; v1 from `20260930080000`) from
 `futures-trading/tools/scenario.py` (called by `journal_mae.py`):
 
