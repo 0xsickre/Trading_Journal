@@ -172,7 +172,7 @@ pogađa.
 | **B** | Brzi unos: trejd ~30 s (checklist „Zašto ulazim“, kraće liste, TF po playbook-u, automatske greške), psihologija i zatvaranje dana na /daily | — | X4 | da: aditivne (TF playbook-a, psihologija dana), podaci (liste, tekst pravila) | **Opus** | ✅ 27.10.2026 — B1–B8 isporučeni; migracije `20261026150000`, `…160000`, `…170000`, `20261027100000` primenjene; pregled koda `b83cef7` |
 | **E** | Bez biasa dana: bez kartice, ocene, panela, pravila `htf_bias_set` i greške „Bez biasa“; staro polje read-only | — | B | da, podaci: penzionisanje pravila, tekst `review_complete`, polje `htf_bias` gasi se, fabrička lista bez biasa (uz odobrenje) | **Opus** | ✅ 27.10.2026 — `504a3f0` + futures-trading `c3168eb`; migracija `20261027120000` primenjena 27.10.2026 uz odobrenje trejdera |
 | **G** | Put do profesionalca: stanje pre sesije (san, smena, dete), „sutra menjam“, prilike dana umesto Propuštenog setupa, prvih 10 min, NY do ručka, size po oceni u paketu | — | E | da: `20261027140000` (aditivna + podaci, uz odobrenje) | **Opus** | ✅ 27.10.2026 — `ff9d63e` (plan, migracija) · G3+G5 `db0ce0e` · G7 `924c438` + futures-trading `2dc54b8` · G4 `5555cee` · G-8 `cef0dd8` · G8 (dokumentacija) + futures-trading `0b9914e`; migracija `20261027140000` primenjena |
-| **Z** | Bez Topstep-a: brief i journal neutralni prema svakoj prop firmi — CME dan 17:00 → 16:00 CT u brief-u, dnevniku i modelima, CME praznici umesto Topstep-ovih, bez pominjanja firme u kodu i tekstovima koji opisuju sadašnje stanje | — | G | samo po Z-5: komentari 5 kolona (baza je inače čista), uz odobrenje | **Opus** | ⏸ plan 27.10.2026 — čeka odluke Z-1 … Z-5 |
+| **Z** | Bez Topstep-a: brief i journal neutralni prema svakoj prop firmi — CME dan 17:00 → 16:00 CT u brief-u, dnevniku i modelima, CME praznici umesto Topstep-ovih, bez pominjanja firme u kodu i tekstovima koji opisuju sadašnje stanje | — | G | samo po Z-5: komentari 5 kolona (baza je inače čista), uz odobrenje | **Opus** | 🔄 27.10.2026 — Z-1 … Z-5 = A; Z1 futures-trading `0ca53e7` |
 | **I** | Univerzalni uvoz: format se prepoznaje po zaglavlju (TopstepX, NinjaTrader, Tradovate), zapamćeno mapiranje za nepoznat CSV; posle toga NinjaTrader AddOn | — | E | da, aditivna: tabela zapamćenih mapiranja (I2) | **Opus** | ⏸ plan 27.10.2026 — čeka primere izvoza od trejdera |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
@@ -1996,7 +1996,7 @@ korišćenje postojećeg (trejder: „optimizovano za mene“).
 
 **Model:** Opus.
 
-## Z — Bez Topstep-a (detaljno, 27.10.2026) — ⏸ čeka odluke
+## Z — Bez Topstep-a (detaljno, 27.10.2026) — 🔄
 
 **Povod** (trejder, 27.10.2026, posle G-9): „Topstep ne treba da se spominje nigde, ni brief ni journal ne treba da
 zavise od nijedne prop firme, nego da budu neutralni.“ Faza X je uklonila pravila firme iz journala; brief u
@@ -2025,7 +2025,9 @@ zavise od nijedne prop firme, nego da budu neutralni.“ Faza X je uklonila prav
   - `journal_mae.py` je od G-9 na CME danu (16:00 CT); ostao je samo komentar „do tada 15:10 CT, Topstep“.
   - Istorija: `izlaz/` (stari brief-ovi i poruke), `arhiva/`, `REZULTATI*.md`.
 
-### Pitanja za trejdera (bez odgovora se ne počinje)
+### Odluke (trejder, 27.10.2026): Z-1 A, Z-2 A, Z-3 A, Z-4 A, Z-5 A — „Prvo uradi Z1“.
+
+### Pitanja za trejdera (odgovorena)
 - **Z-1 Dan u brief-u.** (A, predlog) CME dan **17:00 CT → 16:00 CT** (18:00 → 17:00 NY) svuda u brief-u, podsetniku i
   dnevniku; `dani.csv` se ponovo gradi iz R2 sveća, a modeli `raspon`, `raspon_ponoc`, `raspon_ponoc_gc` i `rezim` se
   **ponovo testiraju** na novom prozoru (po pravilu repoa: plan, kontrola, obe polovine perioda, NQ i ES — više delova,
@@ -2046,7 +2048,15 @@ zavise od nijedne prop firme, nego da budu neutralni.“ Faza X je uklonila prav
 
 ### Podkoraci (posle odluka; svaki: test → kod → gate → commit + push)
 - **Z1** futures-trading: `berza.py` CME kraj dana i praznici (Z-2), `cme_dan` umesto `topstep_kraj` / `dani_topstep`
-  u svim pozivaocima, natpisi u brief-u, podsetniku, popodnevnoj i vikend poruci; testovi.
+  u svim pozivaocima, natpisi u brief-u, podsetniku, popodnevnoj i vikend poruci; testovi. — ✅ `0ca53e7`:
+  `cme_kraj` (16:00 CT; US praznik 12:00, rano zatvaranje 12:15, Veliki petak 08:15 CT samo uz NFP — CME potvrdi
+  ~2 nedelje ranije); opisni prozori (noć, „Tržište“ u podsetniku, linije, vikend od petka 16:00 CT, popodne, KPI,
+  „CME otvara … (CME dan …)“) na CME danu. **Ulazi modela ostaju na starom prozoru do Z2/Z3** (Z-1 A: model ide u
+  brief tek posle ponovnog testa) pod neutralnim imenom: `kraj_merenja` (15:10 CT, skraćen dan 15 min pre CME-a) za
+  `dnevnik.py`, prozor HAR-a u `ocekivani_raspon` (18:00 → 16:10 NY), `uslovi.dani_merenja` (18:00 → 16:00 NY, preimenovan
+  `dani_topstep`); brief i RUTINA pišu da je očekivani raspon meren do 15:10 CT. **Posledica, nije bila u planu:**
+  podsetnik je išao u 15:20 CT, pre kraja CME dana → pomeren na **16:10 CT** (23:10 BG; `raspored.json`, GitHub cron
+  16:15, Worker se objavljuje sam). Vikend naslovi kreću od petka 23:00 BG (bilo 22:10).
 - **Z2** futures-trading: `dnevnik.py` i `dani.csv` na CME dan (Z-1), `SHEMA.md`.
 - **Z3** futures-trading: ponovni testovi modela po Z-1 (posebna podela na delove, plan pre pokretanja), `RUTINA.md`.
 - **Z4** journal: komentari i testovi bez imena firme (Z-4), TopstepX tekstovi po Z-3, migracija komentara po Z-5.
