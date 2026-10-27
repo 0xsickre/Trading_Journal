@@ -39,7 +39,7 @@ describe("resolveBreakevenRange", () => {
   });
 
   it("falls back to exact zero when no account is in scope", () => {
-    expect(resolveBreakevenRange(null)).toEqual({ from: 0, to: 0 });
+    expect(resolveBreakevenRange(null)).toEqual({ from: 0, to: 0, riskShare: 0.1 });
   });
 });
 

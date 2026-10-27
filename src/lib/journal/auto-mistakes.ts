@@ -32,7 +32,7 @@ import {
   evaluateAutoRulesForDay,
   type AutoContext,
 } from "./tracker/auto-rules";
-import type { BreakevenRange } from "./breakeven";
+import { tradeOutcome, type BreakevenRange } from "./breakeven";
 import type { DayZone } from "./time";
 import type { TradeRow } from "./types";
 
@@ -81,7 +81,7 @@ export function plannedRewardRisk(row: TradeRow): number | null {
 }
 
 /** The mistakes one trade carries on its own, without the rest of its day. */
-function ownMistakes(row: TradeRow): AutoMistake[] {
+function ownMistakes(row: TradeRow, band: BreakevenRange): AutoMistake[] {
   const out: AutoMistake[] = [];
   if (row.playbook_id == null || row.playbook_id === "") {
     out.push(mark("no_playbook", "Trejd nema playbook („No playbook“)."));
@@ -105,7 +105,9 @@ function ownMistakes(row: TradeRow): AutoMistake[] {
     );
   }
   const net = row.stats?.net_pl ?? null;
-  if (row.status === "closed" && net != null && net < 0) {
+  // A loss as the tracker counts one: below the breakeven band (a tenth of the
+  // risk), so a scratch after a good run is not "a win turned into a loss".
+  if (row.status === "closed" && net != null && tradeOutcome(row, net, band) === "loss") {
     const mfe = excursionFromTrade(row).mfeR;
     if (mfe != null && mfe >= WIN_TO_LOSS_MFE_R) {
       out.push(mark("win_to_loss", `Bio +${mfe.toFixed(2)}R (MFE), zatvoren u minusu.`));
@@ -160,7 +162,7 @@ export function autoMistakes(
       if (window) add(t.id, window);
       if (afterTwo.has(t.id)) add(t.id, mark("after_two_sl", "Ulaz posle dva SL zaredom istog dana."));
       if (noBias.has(t.id)) add(t.id, mark("no_bias", "Bias dana nije upisan na kartici pre ulaza."));
-      for (const m of ownMistakes(row)) add(t.id, m);
+      for (const m of ownMistakes(row, bandOf(row.account_id))) add(t.id, m);
     }
   }
   return out;

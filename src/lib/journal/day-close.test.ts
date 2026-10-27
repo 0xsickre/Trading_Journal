@@ -10,7 +10,12 @@ const row = (id: string, net: number | null, over: Record<string, unknown> = {})
     status: "closed",
     mistake: [],
     chart_images: [],
-    stats: { net_pl: net, realized_r_net: net == null ? null : net / 100, realized_r: null },
+    stats: {
+      net_pl: net,
+      realized_r_net: net == null ? null : net / 100,
+      realized_r: null,
+      closed_at: over.status === "open" ? null : "2026-10-26T10:00:00Z",
+    },
     ...over,
   }) as unknown as TradeRow;
 

@@ -339,7 +339,7 @@ export function DailyReportForm({
           <DaySection
             n={2}
             title="Tokom sesije"
-            hint="Automatska pravila se ocenjuju sama — iz trejdova i iz brief-a. Ručna čekaju tvoj odgovor."
+            hint="Automatska pravila se ocenjuju sama, iz trejdova. Ručna čekaju tvoj odgovor."
           >
             {/* The trade-stage rules stand even on a day you did not trade: "I
                 only trade in my defined hours" is answerable, and answerable well,

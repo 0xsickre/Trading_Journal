@@ -17,7 +17,7 @@ import { rootOf, type BiasRoot } from "../default-instruments";
 import { BIAS_CARD_SINCE, type DailyBias } from "../daily-bias";
 import { numberFieldValue } from "../field-values";
 import { sealedNumber, sealedText } from "../plan-snapshot";
-import { BREAKEVEN_R, tradeOutcome, type BreakevenRange } from "../breakeven";
+import { NO_BAND, tradeOutcome, type BreakevenRange } from "../breakeven";
 import { DEFAULT_TZ, dayKeyIn, zonedDateKey, zonedInputToUtc, type DayZone } from "../time";
 import type { TradingWindow } from "./trading-window";
 import { DEFAULT_FLAT_BY_CT, flatByFor } from "../flat-by";
@@ -284,7 +284,7 @@ export function buildTradeDayIndex(
   /** The account's day rule — the CME trading day. */
   tzOf: (row: TradeRow) => DayZone,
   /** The account's breakeven band (`resolveBreakevenRange`); none = exact zero, still a tenth of a stop's risk. */
-  bandOf: (accountId: string | null) => BreakevenRange = () => DEFAULT_BAND,
+  bandOf: (accountId: string | null) => BreakevenRange = () => NO_BAND,
 ): TradeDayIndex {
   const byOpenDay = new Map<string, TrackerTrade[]>();
   const byCloseDay = new Map<string, TrackerTrade[]>();
@@ -310,9 +310,6 @@ export function buildTradeDayIndex(
 
   return { byOpenDay, byCloseDay };
 }
-
-/** No account band: exact zero, and a tenth of the risk for a trade with a stop. */
-const DEFAULT_BAND: BreakevenRange = { from: 0, to: 0, riskShare: BREAKEVEN_R };
 
 const na = (key: AutoRuleKey, reason: AutoReason): AutoRuleResult => ({
   key,

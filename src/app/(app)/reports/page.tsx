@@ -12,8 +12,6 @@ import { PageHeader } from "@/components/app/page-header";
 import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
 import { ReportsSkeleton } from "@/components/journal/reports/reports-skeleton";
 import { getAutoMistakes } from "@/lib/journal/auto-mistakes-queries";
-import { getPrimaryAccount } from "@/lib/journal/accounts";
-import { todayFor } from "@/lib/journal/time";
 
 export default async function ReportsPage() {
   // `tj_position_rules` is drained ONCE, and the per-rule counts are derived
@@ -35,6 +33,7 @@ export default async function ReportsPage() {
     optionsMap,
     positionRules,
     biases,
+    found,
   ] = await Promise.all([
     getTradesWithStats(),
     getAccounts(),
@@ -56,10 +55,12 @@ export default async function ReportsPage() {
     positionRulesPromise,
     // Bias dana (phase D): every forecast — the winrates belong to days, not to filtered trades.
     getDailyBiases(),
+    // Phase B4: every trade's automatic mistakes, for "Sve greške (ručne + auto)".
+    // In the same batch: it reads the same trades (`getTradesWithStats` is
+    // cached per request), and every day of the book is in the span.
+    getAutoMistakes("2000-01-01", "9999-12-31"),
   ]);
 
-  // Phase B4: every trade's automatic mistakes, for "Sve greške (ručne + auto)".
-  const found = await getAutoMistakes("2000-01-01", todayFor(await getPrimaryAccount()));
   const autoMistakes = Object.fromEntries([...found].map(([id, ms]) => [id, ms.map((m) => m.label)]));
 
   return (

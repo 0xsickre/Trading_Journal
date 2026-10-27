@@ -3,6 +3,7 @@
 import { revalidateOptions } from "@/lib/journal/revalidate";
 import { createClient } from "@/lib/supabase/server";
 import { RESERVED_KEYS } from "@/lib/journal/reserved-keys";
+import { FLAT_BY_RE } from "@/lib/journal/flat-by";
 import { getCurrentUser } from "@/lib/supabase/user";
 import {
   EMPTY_USAGE,
@@ -982,7 +983,7 @@ const accountPatchSchema = z
     default_stop_pct: pct("Default stop").nullable().optional(),
     default_target_pct: pct("Default target").nullable().optional(),
     practice: z.boolean().optional(),
-    flat_by: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Flat by is a time, HH:MM.").optional(),
+    flat_by: z.string().regex(FLAT_BY_RE, "Flat by is a time, HH:MM.").optional(),
   })
   .strict();
 

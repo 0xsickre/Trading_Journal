@@ -13,16 +13,16 @@ import type { Account, TradeRow } from "../types";
  */
 
 const NY = "America/New_York";
-const acc = (id: string, topstep: boolean) =>
+const acc = (id: string) =>
   ({
     id,
     timezone: NY,
     starting_balance: 50_000,
   }) as unknown as Account;
 
-const TS = acc("ts", true);
-const TS2 = acc("ts2", true);
-const CFD = acc("cfd", false);
+const TS = acc("ts");
+const TS2 = acc("ts2");
+const CFD = acc("cfd");
 const ACCOUNTS = [TS, TS2, CFD];
 const zoneOf = accountDayZoneResolver(ACCOUNTS, TS);
 

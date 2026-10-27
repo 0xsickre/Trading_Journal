@@ -51,10 +51,9 @@ import { parseSettingsNumber } from "@/lib/journal/settings-rules";
 import { duplicateSettings, isArchived } from "@/lib/journal/account-rules";
 import { fmtMoney } from "@/lib/journal/format";
 import { DEFAULT_TZ } from "@/lib/journal/time";
-import { DEFAULT_FLAT_BY_CT } from "@/lib/journal/flat-by";
+import { DEFAULT_FLAT_BY_CT, FLAT_BY_RE } from "@/lib/journal/flat-by";
 
 /** `HH:MM`, 24-hour — the shape `tj_accounts.flat_by` takes. */
-const FLAT_BY_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 import {
   updateAccount,
   addAccount,
@@ -523,8 +522,8 @@ function EditAccountDialog({
             className="h-8 w-32"
           />
           <p className="text-xs text-muted-foreground">
-            The tracker&apos;s &ldquo;Ravno do kraja dana&rdquo; grades every position against it. An earlier close
-            in the morning brief — a holiday or an early close — still wins. {DEFAULT_FLAT_BY_CT} is the CME&apos;s
+            The tracker&apos;s &ldquo;Ravno do kraja dana&rdquo; grades every position against it. A holiday or an
+            early close is not known to the journal — keep it on the platform. {DEFAULT_FLAT_BY_CT} is the CME&apos;s
             daily pause.
           </p>
         </section>

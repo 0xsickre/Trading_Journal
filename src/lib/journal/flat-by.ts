@@ -27,9 +27,12 @@ function planDayEnd(tradingDay: string): string {
   return flatByAt(tradingDay, PLAN_DAY_END_CT);
 }
 
+/** A flat-by time as the account stores it: `HH:MM`, 24-hour. One rule for the form, the action and the tracker. */
+export const FLAT_BY_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 /** `HH:MM` on Chicago's clock on a trading day, ISO UTC. "" for an invalid day or time. */
 function flatByAt(tradingDay: string, hhmm: string): string {
-  if (!isValidDayKey(tradingDay) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(hhmm)) return "";
+  if (!isValidDayKey(tradingDay) || !FLAT_BY_RE.test(hhmm)) return "";
   return zonedInputToUtc(`${tradingDay}T${hhmm}`, CHICAGO) ?? "";
 }
 

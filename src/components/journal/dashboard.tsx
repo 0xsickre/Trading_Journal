@@ -2153,7 +2153,7 @@ export function Dashboard({
             title={`Win rate is ${stats.wins} of ${stats.wins + stats.losses} decided trades; ${stats.breakeven} breakeven ${
               hasBreakevenBand(breakevenRange)
                 ? `(inside ${fmtMoney(breakevenRange.from, currency)} … ${fmtMoney(breakevenRange.to, currency)})`
-                : "(exactly 0.00 — set a breakeven range per account in Settings)"
+                : "(within a tenth of the trade's risk to its stop, or exactly 0.00 without a stop)"
             } sit outside that denominator.`}
           />
           {/* Two figures that used to be reachable only inside their own cards.

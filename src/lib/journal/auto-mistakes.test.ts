@@ -185,6 +185,12 @@ describe("autoMistakes — the trade on its own", () => {
     expect(k("unmeasured")).not.toContain("win_to_loss");
   });
 
+  it("a scratch after 1R of MFE is not a win turned into a loss — inside a tenth of the risk", () => {
+    // Risk is 10 points × $2 = $20, so −$1 is inside the ±$2 breakeven band.
+    const k = keysOf([row({ id: "scratch", opened: "08:00", closed: "08:30", net: -1, mfePrice: 115 })]);
+    expect(k("scratch")).not.toContain("win_to_loss");
+  });
+
   it("no stop: no R, so neither the target nor the excursion is judged", () => {
     const k = keysOf([row({ id: "a", opened: "08:00", closed: "08:30", net: -10, stop: null, target: 101, mfePrice: 200 })]);
     expect(k("a")).not.toContain("target_below_2r");

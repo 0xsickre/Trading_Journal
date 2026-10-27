@@ -228,7 +228,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,801 tests across 185 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,802 tests across 185 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -1535,12 +1535,12 @@ what "reset everything" means, and a reader should not have to trace foreign key
 
 What actually comes back, counted from the seed functions rather than assumed from their names:
 **1 Main Account (USD, `Europe/Belgrade`, asset class Futures; the balance is chosen in Settings),
-the eight futures (commission 0, phase X5), 10 lists holding 74 options, 11 tracker rules,
+the eight futures (commission 0, phase X5), 10 lists holding 74 options, 12 tracker rules,
 7 custom fields, 4 note folders.** Since `20260930030000` the factory set is the day trader's own;
 since phases X1 and X9 (`20261026120000`, `20261026190000`) it is six manual rules (before the
 session: calendar and HTF levels, mental check-in; while trading: trading hours, risk control; after
-it: journal and tags, screenshots) around five automatic ones (playbook, stop, thesis, flat by the
-close, two SL in a row) — no money rule, no walk-away target and no red window of the brief — and
+it: journal and tags, screenshots) around six automatic ones (playbook, stop, thesis, flat by the
+close, two SL in a row, and since `20261027100000` the day's psychology) — no money rule, no walk-away target and no red window of the brief — and
 the note folders Plan sesije, Osvrt na sesiju, Trade Notes (the system
 folder a trade's note opens in) and Nedeljni osvrt, each with an intraday template. The lists are the
 day trader's since F4 (`20260929120000`), in Serbian since K2 (`20260929200000`), and since phase J
@@ -1636,8 +1636,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,801 tests across 185 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,249 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 552
+2,802 tests across 185 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,250 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 552
 tests in 58 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

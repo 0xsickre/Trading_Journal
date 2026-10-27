@@ -49,12 +49,14 @@ export type BreakevenRange = { from: number; to: number; riskShare?: number };
 export const EXACT_ZERO_RANGE: BreakevenRange = { from: 0, to: 0 };
 
 /** No money band, but still a tenth of a stop's risk — what every account shares (phase X). */
-const NO_BAND: BreakevenRange = { ...EXACT_ZERO_RANGE, riskShare: BREAKEVEN_R };
+export const NO_BAND: BreakevenRange = { ...EXACT_ZERO_RANGE, riskShare: BREAKEVEN_R };
 
 export function resolveBreakevenRange(
   config: BreakevenConfig | null | undefined,
 ): BreakevenRange {
-  if (!config) return EXACT_ZERO_RANGE;
+  // No account: the same ±0.1R every account shares, so a trade page with no
+  // account classifies a trade as the tracker does (`breakevenRangeResolver`).
+  if (!config) return NO_BAND;
   const { breakeven_from, breakeven_to, breakeven_unit, starting_balance } =
     config;
   if (breakeven_unit === "pct") {

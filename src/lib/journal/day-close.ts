@@ -54,7 +54,9 @@ function asTrade(row: TradeRow): DayCloseTrade {
 }
 
 export function dayClose(rows: readonly TradeRow[], found: ReadonlyMap<string, readonly AutoMistake[]>): DayClose {
-  const closed = rows.filter((r) => r.status === "closed" && r.stats?.net_pl != null);
+  // Closed as the tracker reads it (`evalScreenshotPerTrade`: a close time and a
+  // price), so the card and "Screenshotovi" name the same best and worst trade.
+  const closed = rows.filter((r) => r.stats?.closed_at != null && r.stats?.net_pl != null);
   const net = (r: TradeRow) => r.stats!.net_pl as number;
   const best = closed.length > 0 ? closed.reduce((a, b) => (net(b) > net(a) ? b : a)) : null;
   const worst = closed.length > 0 ? closed.reduce((a, b) => (net(b) < net(a) ? b : a)) : null;
