@@ -2076,7 +2076,7 @@ zavise od nijedne prop firme, nego da budu neutralni.“ Faza X je uklonila prav
   Plan: `futures-trading/testovi/cme_dan/PLAN.md`, **6 delova**: (1) plan, prekidač `DAN=cme` (`testovi/_dan.py`) i
   kontrola starog dana — ✅ `c430aed`; (2) `raspon` NQ/ES (Databento, `testovi.yml`) — ✅ `b736967`: M2 prolazi na CME danu
   (NQ 0,87/0,86, ES 0,83/0,85, pojas 76–83 %), kontrola starog dana ponovila 27.09., NQ posle 2021 slabiji na oba dana jednako; (3) `raspon_ponoc` NQ/ES (lokalno) — ✅ `776016e`: HAR prolazi u sva 4 slučaja (pokrivenost 76–83 %);
-  (4) GC `raspon` + `raspon_ponoc_gc` — ✅ `23724c7`: pojas od ponoći i dana prolazi (GC dan po pravilu M20 umesto M10), raspon model ne prolazi kao ni ranije; (5) `rezim` T1/T2 (+ kontrola T3/T4, T5); (6) prelaz brief-a na CME dan.
+  (4) GC `raspon` + `raspon_ponoc_gc` — ✅ `23724c7`: pojas od ponoći i dana prolazi (GC dan po pravilu M20 umesto M10), raspon model ne prolazi kao ni ranije; (5) `rezim` T1/T2 (+ kontrola T3/T4, T5) — ✅ `e7cb9e3`: T1 prolazi (na starom danu NQ trend 6,1 p.p. iznad praga), T2/T3/T5 isto, T4 `od_opena` formalno prolazi na granici (mehanički po planu); za brief bez promene; (6) prelaz brief-a na CME dan.
   Van Z3 (predlog u planu, trejder može da traži drugačije): dan zastavica u `uslovi.py` (18:00 → 16:00 NY, zatvaranje
   NY berze — nije vreme firme) ostaje. Uočeno u delu 1: Z1 je preimenovao `topstep_kraj`, a 4 skripte u `testovi/`
   su ga još zvale (nisu u unit testovima) — ispravljeno na `cme_kraj` (isti skup skraćenih dana).
