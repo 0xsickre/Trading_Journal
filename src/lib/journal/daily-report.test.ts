@@ -4,6 +4,7 @@ import {
   gateLateText,
   gateWrittenAt,
   hasState,
+  lowSleepReasons,
   opportunitiesOf,
   opportunityText,
   sleepHoursBucket,
@@ -78,6 +79,23 @@ describe("the state before the session (phase G, G-2)", () => {
       "7 h +",
     ]);
     expect(sleepHoursBucket(null)).toBeNull();
+  });
+});
+
+describe("a short night calls for a smaller risk (trader, 27.10.2026)", () => {
+  it("names what was under 80 % or under 7 hours", () => {
+    expect(lowSleepReasons({ sleep_quality_pct: 79, sleep_hours: 6.5 })).toEqual([
+      "kvalitet sna 79 % (ispod 80 %)",
+      "6.5 h sna (ispod 7 h)",
+    ]);
+    expect(lowSleepReasons({ sleep_quality_pct: 60, sleep_hours: 8 })).toEqual(["kvalitet sna 60 % (ispod 80 %)"]);
+    expect(lowSleepReasons({ sleep_hours: "6.0" as unknown as number })).toEqual(["6 h sna (ispod 7 h)"]);
+  });
+
+  it("is silent at the thresholds and when nothing was written", () => {
+    expect(lowSleepReasons({ sleep_quality_pct: 80, sleep_hours: 7 })).toEqual([]);
+    expect(lowSleepReasons({ work_shift: "prva" })).toEqual([]);
+    expect(lowSleepReasons(null)).toEqual([]);
   });
 });
 

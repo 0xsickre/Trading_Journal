@@ -33,6 +33,7 @@ import {
   gateLateText,
   gateWrittenAt,
   hasState,
+  lowSleepReasons,
   nextReportDate,
   prevReportDate,
   type DailyReport,
@@ -159,6 +160,8 @@ export function DailyReportForm({
   const gateLate = writtenAt ? gateLateText(writtenAt, firstEntryAt) : null;
   // The retired 1–5 rating (G-2): shown read-only on a day that has one and no state.
   const oldRating = report?.mental_temp != null && !hasState(report) ? report.mental_temp : null;
+  // From what is typed, so it shows before the save (trader, 27.10.2026).
+  const shortNight = lowSleepReasons(form);
   // In the ACCOUNT's zone, like every other time on this page. `format` read
   // the browser's clock, so the server and the client could print two times.
   const lockedAt = report?.locked_at
@@ -409,6 +412,14 @@ export function DailyReportForm({
                     </Button>
                   ))}
                 </div>
+                {shortNight.length > 0 && (
+                  <Alert>
+                    <AlertDescription>
+                      Kratka noć: {shortNight.join(", ")}. Danas manji rizik po trejdu — ili ostani po
+                      strani.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 {gateLate && (
                   <p className="text-xs font-medium text-destructive">
                     {oldRating != null ? "Ocena" : "Stanje"} {gateLate} — kapija nije bila pre sesije.

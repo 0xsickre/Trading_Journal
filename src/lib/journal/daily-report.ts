@@ -122,6 +122,25 @@ export function stateText(r: DayState | null | undefined): string | null {
 }
 
 /**
+ * Below these the day calls for a smaller risk (trader, 27.10.2026): sleep
+ * quality under 80 %, or under 7 hours slept. A warning, not a rule — the
+ * tracker does not score it.
+ */
+export const LOW_SLEEP = { qualityPct: 80, hours: 7 } as const;
+
+/** What was short about the night, in words; empty when nothing was, or nothing was written. */
+export function lowSleepReasons(r: DayState | null | undefined): string[] {
+  if (!r) return [];
+  const out: string[] = [];
+  if (r.sleep_quality_pct != null && r.sleep_quality_pct < LOW_SLEEP.qualityPct)
+    out.push(`kvalitet sna ${r.sleep_quality_pct} % (ispod ${LOW_SLEEP.qualityPct} %)`);
+  // numeric(3,1) can arrive from PostgREST as a string.
+  const h = r.sleep_hours == null ? NaN : Number(r.sleep_hours);
+  if (Number.isFinite(h) && h < LOW_SLEEP.hours) out.push(`${h} h sna (ispod ${LOW_SLEEP.hours} h)`);
+  return out;
+}
+
+/**
  * The pre-session gate's timestamp: the state's when the state was written,
  * else the retired rating's on a day that has one (history), else none.
  */

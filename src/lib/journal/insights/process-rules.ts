@@ -16,6 +16,7 @@ import { setupScoreFromTrade } from "../setup-score";
 import { fmtMoney } from "../format";
 import { planDayEndsAt } from "../flat-by";
 import type { TradeRow } from "../types";
+import { lowSleepReasons } from "../daily-report";
 import type { InsightContext } from "./context";
 import type { Insight, InsightRule } from "./types";
 
@@ -29,10 +30,9 @@ type Rule = InsightRule<InsightContext>;
 /**
  * Entering on a day you rated your own head below par.
  *
- * The rating was retired in phase G (G-2) for the state before the session —
- * sleep, shift, child — which has no "below par" line of its own: the trader
- * set none, so it is read as a /reports dimension instead. This rule still
- * fires on the older days that carry a rating.
+ * The rating was retired in phase G (G-2) for the state before the session;
+ * its "below par" is `lowSleepEntry` below. This rule still fires on the older
+ * days that carry a rating.
  */
 export const lowMentalTempEntry: Rule = {
   id: "low_mental_temp_entry",
@@ -53,6 +53,37 @@ export const lowMentalTempEntry: Rule = {
         severity: e.outcome === "loss" ? "critical" : "warning",
         title: "Entry on a poor mental rating",
         detail: `On the entry day you rated your mental temperature ${temp}/5. Outcome: ${
+          e.r != null ? `${e.r.toFixed(2)}R` : fmtMoney(e.pnl, ctx.currency)
+        }.`,
+        subjectId: e.id,
+        subjectLabel: e.label,
+      });
+    }
+    return out;
+  },
+};
+
+/**
+ * Entering after a short night (trader, 27.10.2026): sleep quality under 80 %
+ * or under 7 hours, read from the day of the ENTRY like the rating above. The
+ * same thresholds warn on /daily before the session (`lowSleepReasons`).
+ */
+export const lowSleepEntry: Rule = {
+  id: "low_sleep_entry",
+  level: "trade",
+  minSample: 0,
+  description: "An entry on a day with sleep quality under 80 % or under 7 hours of sleep.",
+  evaluate: (ctx) => {
+    const out: Insight[] = [];
+    for (const e of ctx.trades) {
+      const reasons = lowSleepReasons(ctx.reportByDate.get(e.openDay));
+      if (reasons.length === 0) continue;
+      out.push({
+        ruleId: "low_sleep_entry",
+        level: "trade",
+        severity: e.outcome === "loss" ? "critical" : "warning",
+        title: "Entry after a short night",
+        detail: `On the entry day: ${reasons.join(", ")}. Outcome: ${
           e.r != null ? `${e.r.toFixed(2)}R` : fmtMoney(e.pnl, ctx.currency)
         }.`,
         subjectId: e.id,
@@ -150,6 +181,7 @@ export const stalePlan: Rule = {
 
 export const PROCESS_RULES: Rule[] = [
   lowMentalTempEntry,
+  lowSleepEntry,
   missedASetup,
   stalePlan,
 ];

@@ -402,6 +402,23 @@ describe("phase G: the state before the session, and the close of the day", () =
     expect(saveDailyReportMock.mock.calls[0][1]).not.toHaveProperty("mental_temp");
   });
 
+  it("warns for a smaller risk under 80 % sleep or under 7 hours, as typed (trader, 27.10.2026)", async () => {
+    const user = userEvent.setup();
+    draw();
+    expect(screen.queryByText(/Kratka noć/)).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText("Kvalitet sna (%)"), "85");
+    await user.type(screen.getByLabelText("Sati sna"), "6");
+    expect(screen.getByText(/Kratka noć: 6 h sna \(ispod 7 h\)\. Danas manji rizik/)).toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Sati sna"));
+    await user.type(screen.getByLabelText("Sati sna"), "7");
+    expect(screen.queryByText(/Kratka noć/)).not.toBeInTheDocument();
+  });
+
+  it("warns from a saved state too", () => {
+    draw({ sleep_quality_pct: 70 });
+    expect(screen.getByText(/Kratka noć: kvalitet sna 70 % \(ispod 80 %\)/)).toBeInTheDocument();
+  });
+
   it("a second click on a chosen shift clears it", async () => {
     const user = userEvent.setup();
     draw({ work_shift: "prva" });

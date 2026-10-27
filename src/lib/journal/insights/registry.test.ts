@@ -150,14 +150,15 @@ describe("the swing insights are gone (H1, 28.09.2026)", () => {
     }
   });
 
-  it("23 rules remain: trade 11, day 10, portfolio 2", () => {
+  it("24 rules remain: trade 12, day 10, portfolio 2", () => {
     // A future carries no swap, so the swap insight went with the rest (H1.4).
     // The three week rules became day rules and tilt a trade rule (F5.3a); the
     // time-underwater pair came back from the omitted list (F5.3b); the two
-    // vault-era rules left (F6, M2-A); tilt left with the count rules (30.09.2026).
+    // vault-era rules left (F6, M2-A); tilt left with the count rules (30.09.2026);
+    // the short-night entry came with the state before the session (phase G).
     const by = (level: string) => ALL_RULES.filter((r) => r.level === level).length;
-    expect(ALL_RULES).toHaveLength(23);
-    expect([by("trade"), by("day"), by("week"), by("portfolio")]).toEqual([11, 10, 0, 2]);
+    expect(ALL_RULES).toHaveLength(24);
+    expect([by("trade"), by("day"), by("week"), by("portfolio")]).toEqual([12, 10, 0, 2]);
   });
 });
 

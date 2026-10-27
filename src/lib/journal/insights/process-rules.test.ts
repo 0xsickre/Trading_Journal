@@ -1,11 +1,31 @@
 import { describe, expect, it } from "vitest";
 import {
   lowMentalTempEntry,
+  lowSleepEntry,
   missedASetup,
   stalePlan,
 } from "./process-rules";
 import { ctxOf, fired, mkGradedRow, mkReport, mkTrade } from "./test-helpers";
 import type { TradeRow } from "../types";
+
+describe("lowSleepEntry (trader, 27.10.2026)", () => {
+  const trade = mkTrade({ id: "a", openedAt: "2026-10-28T13:45:00Z", closedAt: "2026-10-28T14:20:00Z", net: -100, r: -1 });
+
+  it("fires on an entry after sleep under 80 % or under 7 hours, from the OPEN day", () => {
+    const ctx = ctxOf([trade], { reports: [mkReport("2026-10-28", { sleep_quality_pct: 75, sleep_hours: 6.5 })] });
+    expect(fired(lowSleepEntry, ctx)).toEqual(["a"]);
+    const [i] = lowSleepEntry.evaluate(ctx);
+    expect(i.severity).toBe("critical");
+    expect(i.detail).toContain("kvalitet sna 75 % (ispod 80 %), 6.5 h sna (ispod 7 h)");
+  });
+
+  it("is silent at 80 % and 7 hours, and on a day without the state", () => {
+    expect(
+      fired(lowSleepEntry, ctxOf([trade], { reports: [mkReport("2026-10-28", { sleep_quality_pct: 80, sleep_hours: 7 })] })),
+    ).toEqual([]);
+    expect(fired(lowSleepEntry, ctxOf([trade], { reports: [mkReport("2026-10-28", { mental_temp: 2 })] }))).toEqual([]);
+  });
+});
 
 describe("lowMentalTempEntry", () => {
   it("reads the OPEN day, not the close day", () => {
