@@ -124,7 +124,7 @@ describe("mentor pack for a day trader (F5.6)", () => {
     // 3 trades, all lost, first at 09:40 ET, a run of 3, two contracts at
     // most, half the rules kept, the mental note. No count of trades after losses.
     expect(md).toContain(
-      "| 2026-09-29 | 3 | 0/3/0 | -400.00 | -4.00R | 15:40 | 3 | 2 | 4/5 | — | 50% (Dva SL zaredom) | — |",
+      "| 2026-09-29 | 3 | 0/3/0 | -400.00 | -4.00R | 15:40 | 3 | 2 | mentalno 4/5 | — | 50% (Dva SL zaredom) | — |",
     );
   });
 
@@ -419,9 +419,74 @@ describe("mentor pack, phase M: what the mentor needs to question the day", () =
     const md = mpack("Week");
     expect(md).toContain("## Dnevni pregled (3 dana u periodu, 1 sa trejdovima)");
     expect(md).toContain("| 2026-10-05 | 0 | — | — | — | — | — | — | — | — | bez prijave | — |");
-    expect(md).toContain("| 2026-10-06 | 0 | — | — | — | — | — | — | 3/5 | da · zaključan | 100% | — |");
+    expect(md).toContain("| 2026-10-06 | 0 | — | — | — | — | — | — | mentalno 3/5 | da · zaključan | 100% | — |");
     expect(md).toContain("| 2026-10-07 | 1 | 1/0/0 | 716.34 |");
-    expect(md).toContain("| 4/5 · upisano 07.10. 19:09, posle prvog ulaza (16:20) |");
+    expect(md).toContain("| mentalno 4/5 · upisano 07.10. 19:09, posle prvog ulaza (16:20) |");
+  });
+
+  // Phase G: the state before the session replaces the rating; the day closes
+  // with "sutra menjam" and up to three opportunities.
+  const gpack = () =>
+    buildMentorPack([m], {
+      tzOf: () => "UTC",
+      displayTz: "Europe/Belgrade",
+      periodLabel: "Day",
+      periodDays: ["2026-10-06", "2026-10-07"],
+      trackerRules: [rule, manual],
+      compliance: week,
+      executions: fills,
+      reports: [
+        {
+          report_date: "2026-10-06",
+          mental_temp: null,
+          no_trade_day: false,
+          tomorrow_change: "Čekam MSS pre ulaza.",
+        },
+        {
+          report_date: "2026-10-07",
+          mental_temp: 4,
+          mental_temp_at: "2026-10-07T05:00:00Z",
+          no_trade_day: false,
+          sleep_quality_pct: 60,
+          sleep_hours: 6.5,
+          work_shift: "druga",
+          with_child: true,
+          // Written 19:09 Belgrade, after the 16:20 entry.
+          state_at: "2026-10-07T17:09:07Z",
+          opportunities: [
+            { note: "NY sweep PDL", in_playbook: true, could_take: true, easiest: true },
+            { note: "London FVG", in_playbook: false, could_take: false, easiest: false },
+          ],
+        },
+      ],
+    });
+
+  it("shows the state before the session, dated by when it was written (phase G)", () => {
+    const md = gpack();
+    expect(md).toContain("| Stanje pre sesije |");
+    expect(md).toContain(
+      "| san 60 % · 6.5 h · druga smena · sa detetom · upisano 07.10. 19:09, posle prvog ulaza (16:20) |",
+    );
+    // The retired rating is not shown on a day that has a state.
+    expect(md).not.toContain("mentalno 4/5");
+  });
+
+  it("prints each day's close: sutra menjam and the opportunities", () => {
+    const md = gpack();
+    expect(md).toContain("## Zatvaranje dana (sutra menjam, prilike)");
+    expect(md).toContain("### 2026-10-06\n- **Sutra menjam:** Čekam MSS pre ulaza.");
+    expect(md).toContain("- Prilika 1: NY sweep PDL (u playbook-u, mogao sam, najlakša)");
+    expect(md).toContain("- Prilika 2: London FVG (van playbook-a, nisam mogao)");
+  });
+
+  it("groups the results by the state, and leaves the section out without one", () => {
+    const md = gpack();
+    expect(md).toContain("## Stanje pre sesije i rezultat");
+    expect(md).toContain("### Kvalitet sna");
+    expect(md).toMatch(/### Smena\n\| Grupa[^]*\| Druga smena \| 1 ⚠ \|/);
+    const without = mpack("Week");
+    expect(without).not.toContain("## Stanje pre sesije i rezultat");
+    expect(without).not.toContain("## Zatvaranje dana (sutra menjam, prilike)");
   });
 
   it("shows the tracker rule by rule for each day", () => {

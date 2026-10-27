@@ -1,11 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { getPrimaryAccount } from "@/lib/journal/accounts";
 import { isValidDayKey, todayFor } from "@/lib/journal/time";
+import { dailyReportSchema, type SaveDailyReportInput } from "@/lib/journal/daily-report-schema";
 
 /**
  * The day being written must exist and must have started.
@@ -23,26 +23,10 @@ async function dayError(reportDate: string): Promise<string | null> {
   return null;
 }
 
-// Two fields, down from twenty-one.
-//
-// Most of what left moved rather than died: to the weekly review (the grade and
-// the debrief prose — itself gone in phase M, to the mentor conversation); the per-position check-in that took `micromanage` went
-// with the swing book (H1, 28.09.2026). Phase E took the last six — the macro note and
-// the four Douglas impulse checkboxes with their note — because nothing ever
-// READ them: no dimension, no insight rule, no metric. The same question is
-// already asked where it can be grouped and counted, as `psychology_tags` on
-// the trade.
-//
-// What is left is a pre-market gate rather than a diary: how is your head, and
-// are you opening anything new today.
-const dailyReportSchema = z.object({
-  mental_temp: z.number().int().min(1).max(5).nullable(),
-  no_trade_day: z.boolean(),
-  // Phase B5: the day's emotions, once a day (option-list values).
-  psychology_tags: z.array(z.string().trim().min(1).max(60)).max(20),
-});
-
-export type SaveDailyReportInput = z.infer<typeof dailyReportSchema>;
+// What a day saves — the state before the session, the rest-day flag, the
+// day's emotions and its close — is defined in `daily-report-schema.ts` (phase
+// G), where it is tested. The debrief prose and the Douglas impulse checkboxes
+// left in phase E; the 1–5 mental rating in phase G (G-2).
 
 function revalidateDaily() {
   revalidatePath("/daily");

@@ -21,6 +21,15 @@ import type { DailyReportLite } from "../enriched-trade";
 import { OPEN_OFFSET_BUCKETS, SESSION_WINDOWS } from "../session-window";
 import { isoWeekdayOfDayKey } from "../time";
 import { NO_MISTAKE } from "../quick-log";
+import {
+  SLEEP_HOURS_BUCKETS,
+  SLEEP_QUALITY_BUCKETS,
+  WORK_SHIFTS,
+  WORK_SHIFT_LABEL,
+  sleepHoursBucket,
+  sleepQualityBucket,
+  type WorkShift,
+} from "../daily-report";
 
 /** Bucket shown when a trade has no value for the dimension. */
 export const EMPTY_BUCKET = "—";
@@ -554,7 +563,8 @@ const derivedDimensions: Dimension[] = [
 // the swing book (H1, 28.09.2026).
 
 /**
- * How ready you said you were, read from the day you ENTERED.
+ * How ready you said you were, read from the day you ENTERED. Retired in phase G
+ * (G-2): no new day writes it, the days that have one still group by it.
  *
  * The open day and not the close day: mental temperature is a gate checked
  * before taking the position, so on a four-day hold it belongs to Monday's
@@ -564,7 +574,7 @@ const derivedDimensions: Dimension[] = [
  */
 const mentalTempDimension: Dimension = {
   key: "mental_temp",
-  label: "Mental temperature",
+  label: "Mental temperature (retired)",
   group: "process",
   // One bucket per star. The old scale needed banding because ten levels split
   // into ten rows nobody could read; five is already the readable size, and
@@ -577,7 +587,49 @@ const mentalTempDimension: Dimension = {
   },
 };
 
-const processDimensions: Dimension[] = [mentalTempDimension];
+/**
+ * The state before the session (phase G, G-2), read from the day you ENTERED —
+ * the same gate, so the same day as the rating above, which these replace on
+ * new days. A day without the field drops the trade out, never "unknown".
+ */
+const stateDimensions: Dimension[] = [
+  {
+    key: "sleep_quality",
+    label: "Sleep quality",
+    group: "process",
+    order: SLEEP_QUALITY_BUCKETS,
+    valueOf: (t, ctx) => sleepQualityBucket(ctx.reportByDate.get(t.openDay)?.sleep_quality_pct),
+  },
+  {
+    key: "sleep_hours",
+    label: "Hours slept",
+    group: "process",
+    order: SLEEP_HOURS_BUCKETS,
+    valueOf: (t, ctx) => sleepHoursBucket(ctx.reportByDate.get(t.openDay)?.sleep_hours),
+  },
+  {
+    key: "work_shift",
+    label: "Work shift",
+    group: "process",
+    order: WORK_SHIFTS.map((s) => WORK_SHIFT_LABEL[s]),
+    valueOf: (t, ctx) => {
+      const v = ctx.reportByDate.get(t.openDay)?.work_shift;
+      return v != null && v in WORK_SHIFT_LABEL ? WORK_SHIFT_LABEL[v as WorkShift] : null;
+    },
+  },
+  {
+    key: "with_child",
+    label: "Day with the child",
+    group: "process",
+    order: ["Sa detetom", "Bez deteta"],
+    valueOf: (t, ctx) => {
+      const v = ctx.reportByDate.get(t.openDay)?.with_child;
+      return v == null ? null : v ? "Sa detetom" : "Bez deteta";
+    },
+  },
+];
+
+const processDimensions: Dimension[] = [...stateDimensions, mentalTempDimension];
 
 // --- insight dimension -----------------------------------------------------
 

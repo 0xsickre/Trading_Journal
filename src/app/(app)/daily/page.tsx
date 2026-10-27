@@ -1,6 +1,6 @@
 import { inAllAccountsScope, primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
-import { getDailyReport } from "@/lib/journal/daily-report-queries";
+import { getDailyReport, getLastTomorrowChange } from "@/lib/journal/daily-report-queries";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getCheckins, getTrackerRules } from "@/lib/journal/tracker/queries";
 import {
@@ -70,6 +70,7 @@ export default async function DailyPage({
     report,
     checkinsByDay,
     optionsMap,
+    lastTomorrowChange,
   ] = await Promise.all([
     accountsPromise,
     dayPromise,
@@ -84,6 +85,8 @@ export default async function DailyPage({
     dayPromise.then(({ reportDate }) => getCheckins(reportDate, reportDate)),
     // The emotion list, for the day's psychology (phase B5).
     getOptionsMap(true),
+    // What the last close said to change (phase G): the day opens with it.
+    dayPromise.then(({ reportDate }) => getLastTomorrowChange(reportDate)),
   ]);
 
   const checkins = checkinsByDay.get(reportDate) ?? new Map();
@@ -183,6 +186,7 @@ export default async function DailyPage({
         tracker={tracker}
         firstEntryAt={firstEntryAt}
         emotions={(optionsMap.emotion ?? []).map((o) => ({ value: o.value, label: o.label }))}
+        lastTomorrowChange={lastTomorrowChange}
         dayClose={<DayCloseCard close={dayClose(dayRows, found)} currency={primary?.currency ?? "USD"} />}
         afterSession={
           <>

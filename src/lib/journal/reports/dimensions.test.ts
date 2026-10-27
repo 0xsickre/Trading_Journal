@@ -270,6 +270,26 @@ describe("process dimensions", () => {
     const t = one([{ ...held, id: "p1" }]);
     expect(bucketsOf(getDimension("mental_temp")!, t, dimCtx())).toEqual([]);
   });
+
+  it("groups by the state before the session, from the OPEN day (phase G)", () => {
+    const t = one([held]);
+    const ctx = dimCtx([
+      mkReport("2026-01-05", { sleep_quality_pct: 55, sleep_hours: 6.5, work_shift: "druga", with_child: true }),
+      mkReport("2026-01-09", { sleep_quality_pct: 95, sleep_hours: 8, work_shift: "slobodan", with_child: false }),
+    ]);
+    expect(bucketsOf(getDimension("sleep_quality")!, t, ctx)).toEqual(["< 60 %"]);
+    expect(bucketsOf(getDimension("sleep_hours")!, t, ctx)).toEqual(["6–6.9 h"]);
+    expect(bucketsOf(getDimension("work_shift")!, t, ctx)).toEqual(["Druga smena"]);
+    expect(bucketsOf(getDimension("with_child")!, t, ctx)).toEqual(["Sa detetom"]);
+  });
+
+  it("drops a trade whose day has no state, and an unknown shift", () => {
+    const t = one([held]);
+    const ctx = dimCtx([mkReport("2026-01-05", { mental_temp: 4, work_shift: "noćna" })]);
+    for (const key of ["sleep_quality", "sleep_hours", "with_child", "work_shift"]) {
+      expect(bucketsOf(getDimension(key)!, t, ctx)).toEqual([]);
+    }
+  });
 });
 
 describe("insight dimension", () => {

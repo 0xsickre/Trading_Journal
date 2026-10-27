@@ -79,6 +79,13 @@ function report(over: Partial<DailyReport> = {}): DailyReport {
     user_id: "u1",
     report_date: "2026-04-02",
     mental_temp: null,
+    sleep_quality_pct: null,
+    sleep_hours: null,
+    work_shift: null,
+    with_child: null,
+    state_at: null,
+    tomorrow_change: null,
+    opportunities: [],
     no_trade_day: false,
     psychology_tags: [],
     locked_at: null,
@@ -287,7 +294,7 @@ describe("the day reads in the order it is lived", () => {
         tracker={trackerData()}
       />,
     );
-    expect(screen.getByText("1. Kako si danas?")).toBeInTheDocument();
+    expect(screen.getByText("1. U kakvom si stanju?")).toBeInTheDocument();
     expect(screen.getByText("2. Da li danas trguješ?")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /Danas ne trgujem/ })).toBeInTheDocument();
     // Nothing points at a card that no longer exists, or speaks of the day as past.
@@ -329,6 +336,28 @@ describe("the gate says it was written after the first entry (phase Y)", () => {
     expect(screen.getByText(/upisano 14\.10\. 11:15, posle prvog ulaza \(09:24\)/)).toBeInTheDocument();
   });
 
+  it("dates the gate by the state on a day that has one (phase G)", () => {
+    render(
+      <DailyReportForm
+        report={report({
+          report_date: "2026-10-28",
+          sleep_quality_pct: 70,
+          state_at: "2026-10-28T14:00:00Z",
+          // An earlier rating does not make a late state look on time.
+          mental_temp: 4,
+          mental_temp_at: "2026-10-28T06:00:00Z",
+        })}
+        reportDate="2026-10-28"
+        today="2026-10-28"
+        timezone="Europe/Belgrade"
+        tracker={trackerData()}
+        firstEntryAt="2026-10-28T13:40:00Z"
+      />,
+    );
+    expect(screen.getByText(/Stanje upisano 28\.10\. 15:00, posle prvog ulaza \(14:40\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Stara mentalna ocena/)).not.toBeInTheDocument();
+  });
+
   it("says nothing when the rating came first", () => {
     render(
       <DailyReportForm
@@ -341,5 +370,89 @@ describe("the gate says it was written after the first entry (phase Y)", () => {
       />,
     );
     expect(screen.queryByText(/posle prvog ulaza/)).not.toBeInTheDocument();
+  });
+});
+
+describe("phase G: the state before the session, and the close of the day", () => {
+  const draw = (over: Partial<DailyReport> = {}, extra: Partial<Parameters<typeof DailyReportForm>[0]> = {}) =>
+    render(
+      <DailyReportForm
+        report={report(over)}
+        reportDate="2026-04-02"
+        today="2026-04-10"
+        timezone="Europe/Belgrade"
+        tracker={trackerData()}
+        {...extra}
+      />,
+    );
+
+  it("asks for sleep, shift and child instead of stars, and saves them", async () => {
+    const user = userEvent.setup();
+    draw();
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText("Kvalitet sna (%)"), "80");
+    await user.type(screen.getByLabelText("Sati sna"), "6.5");
+    await user.click(screen.getByRole("button", { name: "Druga smena" }));
+    await user.click(screen.getByRole("button", { name: "Sa detetom" }));
+    await user.click(screen.getByRole("button", { name: /Sačuvaj izveštaj/ }));
+    expect(saveDailyReportMock).toHaveBeenCalledWith(
+      "2026-04-02",
+      expect.objectContaining({ sleep_quality_pct: 80, sleep_hours: 6.5, work_shift: "druga", with_child: true }),
+    );
+    expect(saveDailyReportMock.mock.calls[0][1]).not.toHaveProperty("mental_temp");
+  });
+
+  it("a second click on a chosen shift clears it", async () => {
+    const user = userEvent.setup();
+    draw({ work_shift: "prva" });
+    const prva = screen.getByRole("button", { name: "Prva smena" });
+    expect(prva).toHaveAttribute("aria-pressed", "true");
+    await user.click(prva);
+    expect(prva).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("shows an old day's rating read-only", () => {
+    draw({ mental_temp: 2 });
+    expect(screen.getByText(/Stara mentalna ocena ovog dana: 2\/5/)).toBeInTheDocument();
+  });
+
+  it("opens with the last 'sutra menjam'", () => {
+    draw({}, { lastTomorrowChange: { report_date: "2026-04-01", text: "Čekam MSS pre ulaza." } });
+    expect(screen.getByText("Danas menjam")).toBeInTheDocument();
+    expect(screen.getByText("Čekam MSS pre ulaza.")).toBeInTheDocument();
+    const text = document.body.textContent ?? "";
+    expect(text.indexOf("Danas menjam")).toBeLessThan(text.indexOf("Pre sesije"));
+  });
+
+  it("writes 'sutra menjam' and up to three opportunities, one the easiest; empty rows are dropped", async () => {
+    const user = userEvent.setup();
+    draw();
+    await user.type(screen.getByLabelText("Sutra menjam"), "Bez ulaza pre 15:40.");
+    const add = () => user.click(screen.getByRole("button", { name: /Dodaj priliku/ }));
+    await add();
+    await add();
+    await add();
+    expect(screen.queryByRole("button", { name: /Dodaj priliku/ })).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText("Prilika 1"), "NY sweep PDL");
+    await user.type(screen.getByLabelText("Prilika 2"), "London FVG");
+    const easiest = screen.getAllByRole("checkbox", { name: "Najlakša danas" });
+    await user.click(easiest[0]);
+    await user.click(easiest[1]);
+    await user.click(screen.getAllByRole("checkbox", { name: "U playbook-u" })[1]);
+    await user.click(screen.getByRole("button", { name: /Sačuvaj izveštaj/ }));
+    const sent = saveDailyReportMock.mock.calls[0][1];
+    expect(sent.tomorrow_change).toBe("Bez ulaza pre 15:40.");
+    expect(sent.opportunities).toEqual([
+      { note: "NY sweep PDL", in_playbook: false, could_take: false, easiest: false },
+      { note: "London FVG", in_playbook: true, could_take: false, easiest: true },
+    ]);
+  });
+
+  it("removes an opportunity", async () => {
+    const user = userEvent.setup();
+    draw({ opportunities: [{ note: "A", in_playbook: true, could_take: true, easiest: true }] });
+    expect(screen.getByLabelText("Prilika 1")).toHaveValue("A");
+    await user.click(screen.getByRole("button", { name: "Ukloni priliku 1" }));
+    expect(screen.queryByLabelText("Prilika 1")).not.toBeInTheDocument();
   });
 });

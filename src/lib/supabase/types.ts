@@ -201,10 +201,17 @@ export type Database = {
           mental_temp: number | null
           mental_temp_at: string | null
           no_trade_day: boolean
+          opportunities: Json
           psychology_tags: string[]
           report_date: string
+          sleep_hours: number | null
+          sleep_quality_pct: number | null
+          state_at: string | null
+          tomorrow_change: string | null
           updated_at: string
           user_id: string
+          with_child: boolean | null
+          work_shift: string | null
         }
         Insert: {
           created_at?: string
@@ -213,10 +220,17 @@ export type Database = {
           mental_temp?: number | null
           mental_temp_at?: string | null
           no_trade_day?: boolean
+          opportunities?: Json
           psychology_tags?: string[]
           report_date: string
+          sleep_hours?: number | null
+          sleep_quality_pct?: number | null
+          state_at?: string | null
+          tomorrow_change?: string | null
           updated_at?: string
           user_id: string
+          with_child?: boolean | null
+          work_shift?: string | null
         }
         Update: {
           created_at?: string
@@ -225,10 +239,17 @@ export type Database = {
           mental_temp?: number | null
           mental_temp_at?: string | null
           no_trade_day?: boolean
+          opportunities?: Json
           psychology_tags?: string[]
           report_date?: string
+          sleep_hours?: number | null
+          sleep_quality_pct?: number | null
+          state_at?: string | null
+          tomorrow_change?: string | null
           updated_at?: string
           user_id?: string
+          with_child?: boolean | null
+          work_shift?: string | null
         }
         Relationships: []
       }

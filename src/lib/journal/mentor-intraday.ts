@@ -19,7 +19,7 @@ import type { BreakevenRange } from "./breakeven";
 import type { DailyReportLite, EnrichedTrade } from "./enriched-trade";
 import type { TradeRow } from "./types";
 import type { PositionRule } from "./playbook-types";
-import { gateLateText } from "./daily-report";
+import { gateLateText, gateWrittenAt, opportunitiesOf, opportunityText, stateText } from "./daily-report";
 import { loggedAfterEntry, sealedNumber } from "./plan-snapshot";
 import { getDimension, type DimensionContext } from "./reports/dimensions";
 import { afterExitR, scenarioOf, scenarioTrade, summarizeScenarios } from "./scenario";
@@ -78,10 +78,11 @@ export function dimensionTable(
   trades: readonly EnrichedTrade[],
   key: string,
   range: BreakevenRange,
+  reportByDate: ReadonlyMap<string, DailyReportLite> = new Map(),
 ): string {
   const dim = getDimension(key);
   if (!dim) return "_nema podataka_";
-  const ctx: DimensionContext = { reportByDate: new Map() };
+  const ctx: DimensionContext = { reportByDate: reportByDate as Map<string, DailyReportLite> };
   const buckets = new Map<string, RealizedTrade[]>();
   for (const t of trades) {
     const v = dim.valueOf(t, ctx);
@@ -115,6 +116,64 @@ export function intradaySection(trades: readonly EnrichedTrade[], range: Breakev
     out.push(`### ${d.label}`, dimensionTable(trades, d.key, range), "");
   }
   return out;
+}
+
+/** The state before the session (phase G), as the mentor reads it against the result. */
+const STATE_DIMENSIONS: { key: string; label: string }[] = [
+  { key: "sleep_quality", label: "Kvalitet sna" },
+  { key: "sleep_hours", label: "Sati sna" },
+  { key: "work_shift", label: "Smena" },
+  { key: "with_child", label: "Dan sa detetom" },
+];
+
+/**
+ * Results by the state written before the session (phase G, G-2): sleep,
+ * shift, child — by the day of the ENTRY. Left out when no day in the period
+ * has a state: four tables of "no data" are noise the model reads past.
+ */
+export function stateSection(
+  trades: readonly EnrichedTrade[],
+  range: BreakevenRange,
+  reportByDate: ReadonlyMap<string, DailyReportLite>,
+): string[] {
+  if (![...reportByDate.values()].some((r) => stateText(r) != null)) return [];
+  const out = [
+    `## Stanje pre sesije i rezultat`,
+    `_Po danu ulaza; trejd čiji dan nema upisano stanje nije u tabeli. ⚠ = manje od ${SMALL_SAMPLE} trejdova._`,
+    "",
+  ];
+  for (const d of STATE_DIMENSIONS) {
+    out.push(`### ${d.label}`, dimensionTable(trades, d.key, range, reportByDate), "");
+  }
+  return out;
+}
+
+/**
+ * What each day closed with (phase G): "sutra menjam" and up to three
+ * opportunities, the easiest one marked. Days without either are left out.
+ */
+export function dayCloseSection(
+  days: readonly string[],
+  reportByDate: ReadonlyMap<string, DailyReportLite>,
+): string[] {
+  const rows: string[] = [];
+  for (const day of days.slice(-DAY_ROWS_CAP)) {
+    const rep = reportByDate.get(day);
+    const change = rep?.tomorrow_change?.trim();
+    const opps = opportunitiesOf(rep?.opportunities);
+    if (!change && opps.length === 0) continue;
+    rows.push(`### ${day}`);
+    if (change) rows.push(`- **Sutra menjam:** ${change}`);
+    for (const [i, o] of opps.entries()) rows.push(`- Prilika ${i + 1}: ${opportunityText(o)}`);
+    rows.push("");
+  }
+  if (rows.length === 0) return [];
+  return [
+    `## Zatvaranje dana (sutra menjam, prilike)`,
+    `_Prilike = šta je tržište tog dana ponudilo, po mom upisu (do 3): da li je u playbook-u, da li sam mogao da ga uzmem, i koja je bila najlakša. Bez ulaza, stopa i cilja — ne meri se u R._`,
+    "",
+    ...rows,
+  ];
 }
 
 const rr = (r: number | null) => (r == null ? "—" : `${r > 0 ? "+" : ""}${r.toFixed(2)}R`);
@@ -293,7 +352,7 @@ export function dailySection(
     `## Dnevni pregled (${keys.length} ${sr(keys.length, "dan", "dana", "dana")} u periodu, ${byDay.size} sa trejdovima)`,
     `_Dan = CME trading dan (17:00 → 17:00 CT, uglavnom 00:00 → 00:00 po Beogradu). Pravila = % tvojih pravila iz dnevnog trackera koja su ispoštovana (u zagradi propuštena); „bez prijave“ = nijedan trejd, nijedan odgovor, nijedan izveštaj._`,
     "",
-    `| Dan | Trejdova | W/L/BE | Net | R | Prvi ulaz | Najduži niz gubitaka | Max ugovora | Mentalno | Ne trgujem · zaključan | Pravila | Napomena |`,
+    `| Dan | Trejdova | W/L/BE | Net | R | Prvi ulaz | Najduži niz gubitaka | Max ugovora | Stanje pre sesije | Ne trgujem · zaključan | Pravila | Napomena |`,
     `| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |`,
   ];
   for (const day of shown) {
@@ -304,8 +363,11 @@ export function dailySection(
       .map((t) => t.openedAt)
       .filter((d): d is string => d != null)
       .sort((a, b) => toEpoch(a) - toEpoch(b))[0];
-    const late = rep?.mental_temp != null ? gateLateText(rep.mental_temp_at, firstEntry, ctx.tz ?? DEFAULT_TZ) : null;
-    const mental = rep?.mental_temp != null ? `${rep.mental_temp}/5${late ? ` · ${late}` : ""}` : "—";
+    const writtenAt = gateWrittenAt(rep);
+    const late = writtenAt ? gateLateText(writtenAt, firstEntry, ctx.tz ?? DEFAULT_TZ) : null;
+    // The state (phase G); a day from before it shows the retired rating.
+    const state = stateText(rep) ?? (rep?.mental_temp != null ? `mentalno ${rep.mental_temp}/5` : null);
+    const mental = state ? cell(`${state}${late ? ` · ${late}` : ""}`) : "—";
     const rules = rulesCell(ctx.compliance?.get(day), ctx.ruleText);
     const notes: string[] = [];
     const tail = `${mental} | ${flags.join(" · ") || "—"} | ${cell(rules)} | ${cell(notes.join(", ") || "—")} |`;

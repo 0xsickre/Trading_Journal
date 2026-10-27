@@ -79,7 +79,7 @@ export function MonthDayList({
               <span className="w-28 shrink-0">Day</span>
               <span className="w-24 shrink-0">P&amp;L</span>
               <span className="w-16 shrink-0">Trades</span>
-              <span className="w-20 shrink-0">Mental</span>
+              <span className="w-32 shrink-0">State</span>
               <span className="w-16 shrink-0">Rules</span>
               <span className="flex-1">Impulses</span>
             </li>
@@ -127,11 +127,13 @@ function DayRow({
           {row ? `${row.trades} ${row.trades === 1 ? "trade" : "trades"}` : ""}
         </span>
 
-        {/* Mental temperature, on the five-star scale the check-in asks for.
-            Under 3 is the threshold that page already warns at, so it is the
-            one worth colouring here too. */}
-        <span className="w-20 shrink-0 text-xs tabular-nums">
-          {journal?.mental_temp == null ? (
+        {/* The state before the session (phase G): sleep, shift, child. A day
+            from before it shows the retired five-star rating, read-only;
+            under 3 is coloured, the threshold that page used to warn at. */}
+        <span className="w-32 shrink-0 truncate text-xs tabular-nums" title={journal?.state ?? undefined}>
+          {journal?.state ? (
+            journal.state
+          ) : journal?.mental_temp == null ? (
             <span className="text-muted-foreground">—</span>
           ) : (
             <span

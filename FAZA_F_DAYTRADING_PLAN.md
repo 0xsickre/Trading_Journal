@@ -1943,19 +1943,42 @@ korišćenje postojećeg (trejder: „optimizovano za mene“).
 
 ### Podkoraci (svaki: test → kod → gate → commit + push)
 - **G0** transkript 032 u `trading-transkripti` — ✅ `c01b5c4`.
-- **G1** ovaj plan.
+- **G1** ovaj plan — ✅ `ff9d63e`.
 - **G2** migracija `20261027140000_put_do_profesionalca.sql`: kolone stanja i `state_at` (okidač), `tomorrow_change`,
   `opportunities` (≤ 3), CHECK + red + fabrička lista za `no_entry_first_minutes`, NY prozor od 28.10. Uz
-  odobrenje, pre G4 (kod G4 čita nove kolone).
+  odobrenje, pre G4 (kod G4 čita nove kolone). — ✅ primenjena 27.10.2026 (`20261027112909 put_do_profesionalca`);
+  provereno upitom 27.10.2026: sve kolone, okidač `tj_daily_reports_state_at`, CHECK i pravilo
+  `no_entry_first_minutes`, NY prozor od 2026-10-28, fabrička lista. Commit `ff9d63e` je pisao „nije primenjena“ —
+  to je bilo stanje pre puštanja.
 - **G3** `no_entry_first_minutes` (evaluator, tekst u checklist-i, automatska greška „Ulaz u prvih 10 min“) i dugmad
-  „London 09:00–12:00“ / „NY 14:30–17:30“ u Settings › Tracker.
+  „London 09:00–12:00“ / „NY 14:30–17:30“ u Settings › Tracker. — ✅ `db0ce0e`.
 - **G5** mentor paket: „Size po oceni setupa i po nedeljama“ (broj trejdova, prosečni ugovori, rizik $ / %; nedeljna
-  promena u %). Samo merenje.
-- **G7** Propušten setup odlazi (oba repoa); stari status `missed` se i dalje čita bez greške, kolone ostaju.
+  promena u %). Samo merenje. — ✅ `db0ce0e`.
+- **G7** Propušten setup odlazi (oba repoa); stari status `missed` se i dalje čita bez greške, kolone ostaju. — ✅
+  `924c438` + futures-trading `2dc54b8`.
 - **G4** /daily: stanje pre sesije (san %, sati, smena, dete) umesto zvezdica, juče upisano „sutra menjam“ na vrhu;
   na „Zatvaranju dana“ polje „sutra menjam“ i do 3 prilike (opis, u playbook-u, mogao sam, najlakša); paket i
-  /reports dimenzije po snu, smeni i detetu.
+  /reports dimenzije po snu, smeni i detetu. — ✅ 27.10.2026, bez migracije.
 - **G8** README 1:1 oba repoa, ovaj fajl, ROADMAP. Backtest: napomena o Practice nalogu „Backtest“.
+
+### G4 — tehničke odluke (bez uticaja na trejderov izbor, zapisane radi ponovljivosti)
+- **Šta se čuva:** `daily-report-schema.ts` (zod, sa testovima): stanje (`sleep_hours` na jednu decimalu kao
+  `numeric(3,1)`), `tomorrow_change` (prazno → NULL, do 2000 znakova), `opportunities` (do 3, opis 1–500 znakova,
+  najviše jedna najlakša). `mental_temp` se više ne šalje; upsert piše samo poslate kolone, pa stara ocena ostaje.
+- **Prazan red prilike** (bez opisa) se pri čuvanju izostavlja, ne javlja grešku. Označavanje „najlakša“ skida oznaku
+  sa ostalih.
+- **„Danas menjam“ na vrhu /daily** = poslednji upisan `tomorrow_change` PRE tog dana (ponedeljak čita petak), ne
+  doslovno jučerašnji (`getLastTomorrowChange`).
+- **Kapija posle prvog ulaza** se datira po `state_at` kad dan ima stanje, inače po `mental_temp_at` (stari dani,
+  `gateWrittenAt`). Stara ocena se na danu bez stanja prikazuje samo za čitanje; komponenta zvezdica (`star-rating.tsx`)
+  je obrisana jer je nijedan ekran više ne koristi.
+- **Grupe za /reports i paket** (pomoć pri čitanju, ne pravilo): san < 60 % / 60–79 % / 80 %+, sati < 6 / 6–6.9 / 7+;
+  smena i dete po vrednosti. Po danu ULAZA, kao stara ocena; trejd čiji dan nema stanje ne ulazi u tabelu.
+- **Uvid `low_mental_temp_entry`** ostaje i radi samo na starim danima sa ocenom: za stanje trejder nije postavio
+  prag, pa nema novog uvida (ne izmišlja se pravilo) — stanje se čita kroz dimenzije.
+- **Paket:** kolona „Mentalno“ → „Stanje pre sesije“ (stari dan: „mentalno 4/5“); nove sekcije „Zatvaranje dana
+  (sutra menjam, prilike)“ i „Stanje pre sesije i rezultat“ (izostaju bez podataka); Dan-prompt pita da li je
+  urađeno „sutra menjam“ i zašto najlakša prilika nije uzeta.
 
 **Model:** Opus.
 

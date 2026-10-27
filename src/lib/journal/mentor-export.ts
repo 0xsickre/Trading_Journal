@@ -38,6 +38,8 @@ import {
   dailySection,
   dayShapeRows,
   intradaySection,
+  dayCloseSection,
+  stateSection,
   scenarioSection,
   timeStopSection,
   sizeSection,
@@ -390,7 +392,7 @@ export type MentorPackOpts = {
   /** The trader's daily tracker rules, and each day's verdict on them. */
   trackerRules?: TrackerRule[];
   compliance?: DayCompliance[];
-  /** The daily report per day: mental temperature. */
+  /** The daily report per day: the state before the session, the close (sutra menjam, opportunities), the retired rating on older days. */
   reports?: DailyReportLite[];
   /** Account id → name, printed on each trade when the scope has several. */
   accountNames?: Map<string, string>;
@@ -552,7 +554,7 @@ export function buildMentorPack(
         "- **Posle gubitaka** — koliko je gubitaka zaredom već bilo zatvoreno tog dana na istom nalogu u trenutku ulaza. Samo analitika: broj trejdova ne ograničavam. Novčane limite (dnevni gubitak, cilj) držim sam na platformi naloga; journal ih ne meri.",
         "- **Vreme u minusu** — % trajanja trejda u kome je tekući P&L bio ispod nule, iz berzanskih sveća (1 s).",
         "- **Veličina** — broj ugovora; mikro (MNQ/MES/M6E) je 1/10 mini ugovora.",
-        "- **Vreme upisa** — „playbook napravljen …, posle ulaza“, „checklist upisan …, posle zatvaranja“ i „upisano posle prvog ulaza“ kod mentalne ocene znače da je to napisano kad je ishod već bio poznat; journal ga ne broji kao plan.",
+        "- **Vreme upisa** — „playbook napravljen …, posle ulaza“, „checklist upisan …, posle zatvaranja“ i „upisano posle prvog ulaza“ kod stanja pre sesije znače da je to napisano kad je ishod već bio poznat; journal ga ne broji kao plan.",
       ].join("\n"),
     );
   }
@@ -597,17 +599,19 @@ export function buildMentorPack(
 
   // --- The trading day ----------------------------------------------------
   if (intraday) {
+    const reportByDate = new Map((opts.reports ?? []).map((r) => [r.report_date, r]));
     out.push(
       ...dailySection(enriched, {
         ccy,
         range,
         compliance: new Map((opts.compliance ?? []).map((c) => [c.date, c])),
         ruleText: new Map((opts.trackerRules ?? []).map((r) => [r.id, ruleLabel(r)])),
-        reportByDate: new Map((opts.reports ?? []).map((r) => [r.report_date, r])),
+        reportByDate,
         periodDays: opts.periodDays,
         tz: displayTz,
       }),
     );
+    out.push(...dayCloseSection(packDays(enriched, opts.periodDays), reportByDate));
     out.push(
       ...trackerByDaySection(
         packDays(enriched, opts.periodDays),
@@ -616,6 +620,7 @@ export function buildMentorPack(
       ),
     );
     out.push(...intradaySection(enriched, range));
+    out.push(...stateSection(enriched, range, reportByDate));
     out.push(...scenarioSection(enriched));
     out.push(...timeStopSection(enriched, range));
     out.push(...sizeSection(enriched, rules, ccy));
@@ -691,6 +696,7 @@ function intradayInstructions(period: string): string[] {
       "- Prvo pročitaj **Dnevni pregled**, **Tracker po danu** i svaki trejd (izvršenje, fill-ovi, plan → kraj, rizik na ulazu).",
       "- Postavi mi **odjednom numerisana pitanja**, najviše 15: rezultat; priprema (vesti, HTF nivoi markirani pre sesije); stanje pri paljenju platforme; da li je svaki trejd bio setup iz plana; rizik i broj ugovora; stop (u sistemu na ulazu, pomeran?); upis pre ulaza; izlaz po planu; najgora i najbolja odluka dana; prekršena pravila.",
       "- Dodaj pitanja po situaciji koju podaci pokazuju: gubitak, prekršeno pravilo, rizik veći nego obično, MAE ≥ 0.7R, ulaz van mog vremena, dodavanje protiv pozicije, stop pomeren dalje od ulaza (pomeren bliže je dozvoljen), dan bez prijave ili bez trejda.",
+      "- Iz **Zatvaranja dana**: da li sam danas uradio ono što sam prethodnog dana upisao pod „sutra menjam“, i za prilike dana — zašto najlakšu nisam uzeo, ako nisam. Stanje pre sesije (san, smena, dete) čitaj uz rezultat dana, ne kao izgovor.",
       "- Prokomentariši izlaz svakog trejda iz **Šta bi bilo** i **Reakcija**: da li sam izašao prerano ili dobro (cena 30 min posle izlaza, šta bi bilo da sam držao), i koliko je trejdu trebalo da krene u odnosu na **Vremenski stop**.",
       "- Kad trejd ima **⚠ Pomeren stop je koštao** (stop pomeren bliže, pogođen, a sa originalnim bi TP došao), upozori me i reci koliko puta se to već desilo.",
       "- Odgovor koji se ne slaže sa brojevima suoči sa brojevima. Prazan odgovor („ne znam“, „ok“, „normalno“) vrati jednom, preciznije.",

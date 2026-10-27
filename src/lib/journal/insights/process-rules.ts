@@ -26,7 +26,14 @@ const P = {
 
 type Rule = InsightRule<InsightContext>;
 
-/** Entering on a day you rated your own head below par. */
+/**
+ * Entering on a day you rated your own head below par.
+ *
+ * The rating was retired in phase G (G-2) for the state before the session —
+ * sleep, shift, child — which has no "below par" line of its own: the trader
+ * set none, so it is read as a /reports dimension instead. This rule still
+ * fires on the older days that carry a rating.
+ */
 export const lowMentalTempEntry: Rule = {
   id: "low_mental_temp_entry",
   level: "trade",

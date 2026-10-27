@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { selectAllPages } from "@/lib/supabase/paginate";
-import type { DailyReport } from "./daily-report";
+import { opportunitiesOf, stateText, type DailyReport } from "./daily-report";
 import type { DailyReportLite } from "./insights/context";
 
 export async function getDailyReport(
@@ -13,7 +13,30 @@ export async function getDailyReport(
     .select("*")
     .eq("report_date", reportDate)
     .maybeSingle();
-  return (data as DailyReport | null) ?? null;
+  if (!data) return null;
+  // jsonb: read defensively, so the form never meets a malformed row.
+  return { ...(data as DailyReport), opportunities: opportunitiesOf(data.opportunities) };
+}
+
+/**
+ * The last "sutra menjam" written before this day (phase G): what the day
+ * opens with on /daily. The latest one before it, not literally yesterday's —
+ * Monday opens with Friday's.
+ */
+export async function getLastTomorrowChange(
+  beforeDate: string,
+): Promise<{ report_date: string; text: string } | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("tj_daily_reports")
+    .select("report_date, tomorrow_change")
+    .lt("report_date", beforeDate)
+    .not("tomorrow_change", "is", null)
+    .order("report_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const text = data?.tomorrow_change?.trim();
+  return data && text ? { report_date: data.report_date, text } : null;
 }
 
 /**
@@ -40,10 +63,10 @@ export async function getDailyReportDates(): Promise<string[]> {
  * `locked_at`, and a list whose whole point is the journal's CONTENT cannot
  * omit the four flags the reader ticked.
  *
- * Four fields, down from nine. Phase E dropped the macro note, the four
- * impulse booleans and the impulse note from the table itself, so there is no
- * prose on a day any more and nothing to read-and-throw-away: what a day now
- * holds is a mental temperature, whether anything new was opened, and the lock.
+ * Phase E dropped the macro note, the four impulse booleans and the impulse
+ * note from the table itself. What the list shows of a day is its state before
+ * the session (phase G) — or, on an older day, the retired mental rating —
+ * whether it was a rest day, and the lock.
  */
 export type DailyReportListRow = {
   report_date: string;
@@ -52,6 +75,8 @@ export type DailyReportListRow = {
   locked: boolean;
   /** The day's emotions (phase B5); optional for callers that list days only. */
   psychology_tags?: string[];
+  /** The state before the session (phase G), as one line; null when not written. */
+  state?: string | null;
 };
 
 /**
@@ -73,10 +98,16 @@ export async function getDailyReportsInRange(
     no_trade_day: boolean;
     locked_at: string | null;
     psychology_tags: string[] | null;
+    sleep_quality_pct: number | null;
+    sleep_hours: number | null;
+    work_shift: string | null;
+    with_child: boolean | null;
   }>((lo, hi) =>
     supabase
       .from("tj_daily_reports")
-      .select("report_date, mental_temp, no_trade_day, locked_at, psychology_tags")
+      .select(
+        "report_date, mental_temp, no_trade_day, locked_at, psychology_tags, sleep_quality_pct, sleep_hours, work_shift, with_child",
+      )
       .gte("report_date", from)
       .lte("report_date", to)
       .order("report_date")
@@ -89,6 +120,7 @@ export async function getDailyReportsInRange(
     no_trade_day: r.no_trade_day,
     locked: r.locked_at != null,
     psychology_tags: r.psychology_tags ?? [],
+    state: stateText(r),
   }));
 }
 
@@ -101,7 +133,9 @@ export async function getDailyReportsLite(): Promise<DailyReportLite[]> {
   const data = await selectAllPages((from, to) =>
     supabase
       .from("tj_daily_reports")
-      .select("report_date, mental_temp, no_trade_day, locked_at, mental_temp_at, psychology_tags")
+      .select(
+        "report_date, mental_temp, no_trade_day, locked_at, mental_temp_at, psychology_tags, sleep_quality_pct, sleep_hours, work_shift, with_child, state_at, tomorrow_change, opportunities",
+      )
       .order("report_date", { ascending: false })
       .range(from, to),
   );

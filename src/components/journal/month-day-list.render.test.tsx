@@ -48,6 +48,13 @@ describe("MonthDayList", () => {
     expect(within(row).getByText("80%")).toBeInTheDocument();
   });
 
+  it("shows the state before the session over the retired rating (phase G)", () => {
+    list([entry({ journal: journal({ state: "san 80 % · prva smena" }) })]);
+    const row = screen.getByRole("listitem");
+    expect(within(row).getByText("san 80 % · prva smena")).toBeInTheDocument();
+    expect(within(row).queryByText("temp 3/5")).not.toBeInTheDocument();
+  });
+
   it("links each day to its own check-in", () => {
     list([entry()]);
     expect(screen.getByRole("link", { name: /Tue 07/ })).toHaveAttribute(

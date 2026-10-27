@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition, type MouseEvent, type ReactNode } f
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { srLatn } from "date-fns/locale/sr-Latn";
-import { ChevronLeft, ChevronRight, Lock, Save } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, Plus, Save, X } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -20,21 +20,26 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { StarRating } from "@/components/journal/star-rating";
+import { Textarea } from "@/components/ui/textarea";
 import { Chips } from "@/components/journal/chips";
 import { cn } from "@/lib/utils";
 import {
+  MAX_OPPORTUNITIES,
+  WORK_SHIFTS,
+  WORK_SHIFT_LABEL,
   emptyDailyReport,
   gateLateText,
+  gateWrittenAt,
+  hasState,
   nextReportDate,
   prevReportDate,
   type DailyReport,
+  type Opportunity,
 } from "@/lib/journal/daily-report";
-import {
-  saveDailyReport,
-  type SaveDailyReportInput,
-} from "@/app/(app)/daily/actions";
+import type { SaveDailyReportInput } from "@/lib/journal/daily-report-schema";
+import { saveDailyReport } from "@/app/(app)/daily/actions";
 import { lockDay } from "@/app/(app)/daily/tracker-actions";
 import type { DayCompliance } from "@/lib/journal/tracker/compliance";
 import { DATE, DATE_TIME, fmtInTz } from "@/lib/journal/time";
@@ -46,6 +51,13 @@ import {
 
 type FormState = SaveDailyReportInput;
 
+/** A number field: empty or unreadable is "not written". */
+function numOrNull(raw: string): number | null {
+  if (raw.trim() === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
 function toFormState(
   report: DailyReport | null,
   reportDate: string,
@@ -56,9 +68,15 @@ function toFormState(
     return rest;
   }
   return {
-    mental_temp: report.mental_temp,
+    sleep_quality_pct: report.sleep_quality_pct ?? null,
+    // numeric(3,1) arrives from PostgREST as a string.
+    sleep_hours: report.sleep_hours == null ? null : Number(report.sleep_hours),
+    work_shift: report.work_shift ?? null,
+    with_child: report.with_child ?? null,
     no_trade_day: report.no_trade_day ?? false,
     psychology_tags: report.psychology_tags ?? [],
+    tomorrow_change: report.tomorrow_change ?? null,
+    opportunities: report.opportunities ?? [],
   };
 }
 
@@ -73,6 +91,7 @@ export function DailyReportForm({
   firstEntryAt,
   emotions = [],
   dayClose,
+  lastTomorrowChange = null,
 }: {
   report: DailyReport | null;
   reportDate: string;
@@ -98,6 +117,8 @@ export function DailyReportForm({
   emotions?: { value: string; label: string }[];
   /** The day's close, read from the trades (phase B7): best and worst, mistakes and their cost. */
   dayClose?: ReactNode;
+  /** The last "sutra menjam" written before this day (phase G): what the day opens with. */
+  lastTomorrowChange?: { report_date: string; text: string } | null;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -132,9 +153,12 @@ export function DailyReportForm({
     (v) => v?.verdict === "pass" || v?.verdict === "fail",
   );
   const restView = form.no_trade_day && !traded;
-  const lowMental = form.mental_temp != null && form.mental_temp < 3;
-  // What is saved, not what is typed: the time is the trigger's, from the last save.
-  const gateLate = report?.mental_temp != null ? gateLateText(report.mental_temp_at, firstEntryAt) : null;
+  // What is saved, not what is typed: the time is the trigger's, from the last
+  // save — the state's, or on a day from before phase G the old rating's.
+  const writtenAt = gateWrittenAt(report);
+  const gateLate = writtenAt ? gateLateText(writtenAt, firstEntryAt) : null;
+  // The retired 1–5 rating (G-2): shown read-only on a day that has one and no state.
+  const oldRating = report?.mental_temp != null && !hasState(report) ? report.mental_temp : null;
   // In the ACCOUNT's zone, like every other time on this page. `format` read
   // the browser's clock, so the server and the client could print two times.
   const lockedAt = report?.locked_at
@@ -151,9 +175,38 @@ export function DailyReportForm({
     setForm((prev) => ({ ...prev, no_trade_day: checked }));
   }
 
+  function patchOpportunity(i: number, next: Partial<Opportunity>) {
+    setDirty(true);
+    setForm((prev) => ({
+      ...prev,
+      opportunities: prev.opportunities.map((o, j) => {
+        if (j === i) return { ...o, ...next };
+        // One easiest a day: marking one clears the others.
+        return next.easiest ? { ...o, easiest: false } : o;
+      }),
+    }));
+  }
+
+  function addOpportunity() {
+    setDirty(true);
+    setForm((prev) => ({
+      ...prev,
+      opportunities: [...prev.opportunities, { note: "", in_playbook: false, could_take: false, easiest: false }],
+    }));
+  }
+
+  function removeOpportunity(i: number) {
+    setDirty(true);
+    setForm((prev) => ({ ...prev, opportunities: prev.opportunities.filter((_, j) => j !== i) }));
+  }
+
   /** Split out so locking can persist first — see LockDayButton. */
   async function persist(): Promise<boolean> {
-    const res = await saveDailyReport(reportDate, form);
+    // A row left without a description is a row not written, not an error.
+    const res = await saveDailyReport(reportDate, {
+      ...form,
+      opportunities: form.opportunities.filter((o) => o.note.trim() !== ""),
+    });
     if (!res.ok) {
       toast.error(res.error);
       return false;
@@ -244,6 +297,21 @@ export function DailyReportForm({
         </Alert>
       )}
 
+      {/* What the last close said to change (phase G): the day opens with it,
+          so the change is read before the session, not found at the next close. */}
+      {lastTomorrowChange && (
+        <Card className="border-primary/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Danas menjam</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Upisano na zatvaranju dana{" "}
+              {format(parseISO(lastTomorrowChange.report_date), `EEE, ${DATE}`, { locale: srLatn })}.
+            </p>
+          </CardHeader>
+          <CardContent className="whitespace-pre-line text-sm">{lastTomorrowChange.text}</CardContent>
+        </Card>
+      )}
+
       {/* The day in the order it is lived: before the session, during it,
           after it. It used to open with the day's money and the trades still to
           review, and ask "before you enter" only after the trading rules —
@@ -270,31 +338,86 @@ export function DailyReportForm({
               </p>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="space-y-2">
-                <Label>1. Kako si danas?</Label>
-                {/* Stars, not 1–10. Ten levels is a precision nobody has about
-                    their own head; asked for, it produces noise that then feeds a
-                    report dimension and an insight rule as if it were signal. */}
-                <StarRating
-                  label="Mentalno stanje"
-                  value={form.mental_temp}
-                  onChange={(next) => patch("mental_temp", next)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Mentalno stanje: 1 = umoran ili rastrojen, 5 = odmoran i miran.
-                </p>
+              <div className="space-y-3">
+                <Label>1. U kakvom si stanju?</Label>
+                {/* The state, not a rating (phase G, G-2): what can be checked
+                    and grouped later — how I slept, whether I worked and which
+                    shift, whether the child was with me — instead of a 1–5 star
+                    nobody can calibrate on their own head. */}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="sleep_quality_pct" className="text-xs text-muted-foreground">
+                      Kvalitet sna (%)
+                    </Label>
+                    <Input
+                      id="sleep_quality_pct"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={form.sleep_quality_pct ?? ""}
+                      onChange={(e) => {
+                        const n = numOrNull(e.target.value);
+                        patch("sleep_quality_pct", n == null ? null : Math.round(n));
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="sleep_hours" className="text-xs text-muted-foreground">
+                      Sati sna
+                    </Label>
+                    <Input
+                      id="sleep_hours"
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      max={24}
+                      step={0.5}
+                      value={form.sleep_hours ?? ""}
+                      onChange={(e) => patch("sleep_hours", numOrNull(e.target.value))}
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Smena">
+                  <span className="w-14 text-xs text-muted-foreground">Smena</span>
+                  {WORK_SHIFTS.map((v) => (
+                    <Button
+                      key={v}
+                      type="button"
+                      size="sm"
+                      variant={form.work_shift === v ? "default" : "outline"}
+                      aria-pressed={form.work_shift === v}
+                      onClick={() => patch("work_shift", form.work_shift === v ? null : v)}
+                    >
+                      {WORK_SHIFT_LABEL[v]}
+                    </Button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Dete">
+                  <span className="w-14 text-xs text-muted-foreground">Dete</span>
+                  {([true, false] as const).map((v) => (
+                    <Button
+                      key={String(v)}
+                      type="button"
+                      size="sm"
+                      variant={form.with_child === v ? "default" : "outline"}
+                      aria-pressed={form.with_child === v}
+                      onClick={() => patch("with_child", form.with_child === v ? null : v)}
+                    >
+                      {v ? "Sa detetom" : "Bez deteta"}
+                    </Button>
+                  ))}
+                </div>
                 {gateLate && (
                   <p className="text-xs font-medium text-destructive">
-                    Ocena {gateLate} — kapija nije bila pre sesije.
+                    {oldRating != null ? "Ocena" : "Stanje"} {gateLate} — kapija nije bila pre sesije.
                   </p>
                 )}
-                {lowMental && (
-                  <Alert>
-                    <AlertDescription>
-                      Ispod 3 zvezdice — razmisli o manjoj veličini pozicije, ili ostani
-                      po strani dok se ne osetiš spremnije.
-                    </AlertDescription>
-                  </Alert>
+                {oldRating != null && (
+                  <p className="text-xs text-muted-foreground">
+                    Stara mentalna ocena ovog dana: {oldRating}/5 (ukinuta u fazi G, samo za čitanje).
+                  </p>
                 )}
               </div>
 
@@ -362,7 +485,8 @@ export function DailyReportForm({
                 <CardHeader>
                   <CardTitle className="text-base">Zatvaranje dana</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    Jednom po danu, umesto na svakom trejdu: kako si se osećao, i šta je dan doneo.
+                    Jednom po danu, umesto na svakom trejdu: kako si se osećao, šta je dan doneo i šta
+                    sutra menjaš.
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -385,12 +509,30 @@ export function DailyReportForm({
                     </p>
                   </div>
                   {dayClose}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="tomorrow_change">Sutra menjam</Label>
+                    <Textarea
+                      id="tomorrow_change"
+                      rows={3}
+                      maxLength={2000}
+                      placeholder="Šta sam danas naučio i šta sutra radim drugačije — sa rešenjem, ne samo problemom."
+                      value={form.tomorrow_change ?? ""}
+                      onChange={(e) => patch("tomorrow_change", e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">Sutra se /daily otvara ovim tekstom.</p>
+                  </div>
+                  <OpportunitiesField
+                    items={form.opportunities}
+                    onChange={patchOpportunity}
+                    onAdd={addOpportunity}
+                    onRemove={removeOpportunity}
+                  />
                 </CardContent>
               </Card>
             </fieldset>
-            {/* The debrief prose (what I learned, what I change tomorrow) and the
-                four Douglas-fear checkboxes left in Phase E: nothing read them. Those
-                questions are asked by the mentor now (phase M), with the pack in hand. */}
+            {/* The four Douglas-fear checkboxes left in Phase E: nothing read them.
+                "Sutra menjam" came back in phase G as one field — the day after
+                opens with it, and the mentor pack prints it. */}
             <fieldset disabled={tracker.locked} className="m-0 min-w-0 border-0 p-0 disabled:opacity-100">
               <TrackerStageSection stage="reflect" data={tracker} />
             </fieldset>
@@ -431,6 +573,75 @@ export function DailyReportForm({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The day's opportunities (phase G, G-1): what the market offered, up to three,
+ * one marked the easiest. A sentence each, no entry, stop or target — it
+ * replaced the missed setup, which asked for a whole trade and was never used.
+ */
+function OpportunitiesField({
+  items,
+  onChange,
+  onAdd,
+  onRemove,
+}: {
+  items: Opportunity[];
+  onChange: (i: number, next: Partial<Opportunity>) => void;
+  onAdd: () => void;
+  onRemove: (i: number) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>Prilike dana</Label>
+      <p className="text-xs text-muted-foreground">
+        Do {MAX_OPPORTUNITIES}: šta je tržište danas ponudilo, uzeo ili ne. Jedna je najlakša.
+      </p>
+      {items.map((o, i) => (
+        <div key={i} className="space-y-2 rounded-md border p-3">
+          <div className="flex items-start gap-2">
+            <Input
+              aria-label={`Prilika ${i + 1}`}
+              maxLength={500}
+              placeholder="npr. NY sweep PDL pa MSS na 5m"
+              value={o.note}
+              onChange={(e) => onChange(i, { note: e.target.value })}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-9 shrink-0"
+              aria-label={`Ukloni priliku ${i + 1}`}
+              onClick={() => onRemove(i)}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+            {(
+              [
+                ["in_playbook", "U playbook-u"],
+                ["could_take", "Mogao sam da uzmem"],
+                ["easiest", "Najlakša danas"],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="flex cursor-pointer items-center gap-2">
+                <Checkbox checked={o[key]} onCheckedChange={(c) => onChange(i, { [key]: c === true })} />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
+      {items.length < MAX_OPPORTUNITIES && (
+        <Button type="button" variant="outline" size="sm" onClick={onAdd}>
+          <Plus className="mr-2 size-4" />
+          Dodaj priliku
+        </Button>
+      )}
     </div>
   );
 }

@@ -27,6 +27,7 @@ import { dayKeyIn, toEpoch, weekKeyIn, zonedHour, zoneTz, type DayZone } from ".
  */
 export type DailyReportLite = {
   report_date: string;
+  /** The retired 1–5 rating (phase G): history, read where a day still has one. */
   mental_temp: number | null;
   no_trade_day: boolean;
   /** When the day was sealed; the mentor pack says "zaključan". Optional for callers that do not load it. */
@@ -35,6 +36,16 @@ export type DailyReportLite = {
   mental_temp_at?: string | null;
   /** The day's emotions (phase B5). */
   psychology_tags?: string[] | null;
+  /** The state before the session (phase G); optional for callers that do not load it. */
+  sleep_quality_pct?: number | null;
+  sleep_hours?: number | null;
+  work_shift?: string | null;
+  with_child?: boolean | null;
+  /** When the state was written; the pack flags one after the first entry (phase G). */
+  state_at?: string | null;
+  /** The close of the day (phase G): what changes tomorrow, and the day's opportunities (jsonb, read with `opportunitiesOf`). */
+  tomorrow_change?: string | null;
+  opportunities?: unknown;
 };
 
 /** Number of entry and exit fills per position id. */
