@@ -18,16 +18,7 @@ import { firstBiasResolver, parseDailyBias, type DailyBias } from "../daily-bias
 const TS = {
   id: "ts",
   timezone: "Europe/Belgrade",
-  topstep_mode: true,
-  topstep_plan: "50K",
   starting_balance: 50_000,
-  topstep_payout_at: null,
-  topstep_reset_at: null,
-  risk_rule_pct: 100,
-  risk_rule_min: 300,
-  risk_rule_max: 300,
-  topstep_personal_dll: 650,
-  topstep_daily_target: 1500,
 } as unknown as Account;
 const zoneOf = accountDayZoneResolver([TS], TS);
 

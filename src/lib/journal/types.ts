@@ -100,18 +100,6 @@ export type Account = {
   // Risk plan defaults applied when stop / target are left empty.
   default_stop_pct: number | null;
   default_target_pct: number | null;
-  // Columns of the former Topstep mode, kept until phase X6 drops them.
-  // Nothing reads or writes them since phase X4.
-  topstep_mode: boolean;
-  topstep_plan: "50K" | "100K" | "150K";
-  topstep_payout_at: string | null;
-  topstep_reset_at: string | null;
-  topstep_personal_dll: number | null;
-  topstep_daily_target: number | null;
-  topstep_stage: "combine" | "xfa" | "practice";
-  risk_rule_pct: number;
-  risk_rule_min: number | null;
-  risk_rule_max: number | null;
   /** A practice / demo account, kept out of "All accounts" (phase X, X-4). */
   practice: boolean;
   /** Flat-by time, `HH:MM` on Chicago's clock (phase X, X-9); `flat_by_close` grades against it. */

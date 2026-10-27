@@ -382,7 +382,7 @@ a trigger, phase Y; a mark only, no rule reads it) and *2. Da li danas trguješ?
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
-| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both; the seeded tags are Serbian since K2, `20260929200000`, which rewrote the trades that carried them), Tracker, Instruments (the eight futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional, typed by the trader: a new book's catalog starts at 0 since phase X5, `20261026180000`, X-8 A; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, the **timezone** shown, not typed: every time is in Europe/Belgrade (`DEFAULT_TZ`, K5, `20260929210000`), a file with its own offset is converted on import, and every account counts its days by the CME's 17:00 CT; the **breakeven range** shown, not typed (§ Metrics, K4), **Flat by (Chicago time)** — `tj_accounts.flat_by`, 16:00 unless set, what `flat_by_close` grades against (phase X4) — and **Practice / demo account** — a flag, `tj_accounts.practice`; since phase X2 (26.10.2026) no prop firm's rules are set here: the Topstep columns of an older account stay as they were and are not editable, and a duplicate copies none of them), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion lives under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
+| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both; the seeded tags are Serbian since K2, `20260929200000`, which rewrote the trades that carried them), Tracker, Instruments (the eight futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional, typed by the trader: a new book's catalog starts at 0 since phase X5, `20261026180000`, X-8 A; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, the **timezone** shown, not typed: every time is in Europe/Belgrade (`DEFAULT_TZ`, K5, `20260929210000`), a file with its own offset is converted on import, and every account counts its days by the CME's 17:00 CT; the **breakeven range** shown, not typed (§ Metrics, K4), **Flat by (Chicago time)** — `tj_accounts.flat_by`, 16:00 unless set, what `flat_by_close` grades against (phase X4) — and **Practice / demo account** — a flag, `tj_accounts.practice`; since phase X2 (26.10.2026) no prop firm's rules are set here, and since X6 (`20261027090000`) the account has no Topstep columns at all), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion lives under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
 | `/login` | Supabase auth |
 
 ---
@@ -1249,16 +1249,15 @@ book ran Topstep's rules (F3, R, T: `topstep.ts`, `topstep-status.ts`, `topstep-
   (gone from both repos with X-10: the brief computes no account any more).
 
 **Phase X4** made the 17:00 → 17:00 CT day the CME day of every account (§ Attributing to days) and
-gave `flat_by_close` the account's own flat-by time (§ Process tracking). **What stays:** the
-`tj_accounts.topstep_*` and `risk_rule_*` columns and `tj_positions.risk_budget_at_entry` /
-`room_at_entry`, which nothing writes or reads any more: since X8 (26.10.2026, `futures-trading`)
-the brief and the evening message no longer read `tj_accounts` either, so **X6 can drop them** (with
-the trader's approval). **Phase X9** (`20261026190000`) stopped the journal reading the brief: the
+gave `flat_by_close` the account's own flat-by time (§ Process tracking). **Phase X6**
+(`20261027090000`, 27.10.2026) dropped the `tj_accounts.topstep_*` and `risk_rule_*` columns and
+`tj_positions.risk_budget_at_entry` / `room_at_entry`: nothing wrote or read them since X4, and since
+X8 (`futures-trading`) the brief and the evening message no longer read `tj_accounts` either; the
+values of the one Topstep account are in the nightly backup. **Phase X9** (`20261026190000`) stopped the journal reading the brief: the
 "Pred sesiju" card, `no_entry_in_red_window` (retired), the "red window" auto mistake and the brief's
 windows in the mentor pack are gone; `tj_session_briefs` stays as history. **Phase X5** (`20261026180000`) made the factory data neutral: catalog commission 0
 for a new book, no Topstep or DLL item in the factory lists, and the trader's "Kraj Topstep dana"
-renamed "Kraj dana (ravno)";
-the 15:10 CT horizon of "Šta bi bilo" and of a missed plan, which `futures-trading` computes (X-10);
+renamed "Kraj dana (ravno)". **What stays:** the 15:10 CT horizon of "Šta bi bilo" and of a missed plan, which `futures-trading` computes (X-10);
 and the TopstepX import formats, which are a platform's files, not a firm's rules (X-7).
 
 ---

@@ -17,14 +17,7 @@ const acc = (id: string, topstep: boolean) =>
   ({
     id,
     timezone: NY,
-    topstep_mode: topstep,
-    topstep_plan: "50K",
     starting_balance: 50_000,
-    topstep_payout_at: null,
-    topstep_reset_at: null,
-    risk_rule_pct: 8,
-    risk_rule_min: null,
-    risk_rule_max: null,
   }) as unknown as Account;
 
 const TS = acc("ts", true);

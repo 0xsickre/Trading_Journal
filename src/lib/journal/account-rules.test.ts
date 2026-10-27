@@ -53,11 +53,6 @@ describe("duplicateSettings", () => {
     const src = acc({
       id: "s",
       name: "Tradeify 50K",
-      topstep_mode: true,
-      topstep_plan: "50K",
-      risk_rule_max: 250,
-      topstep_reset_at: "2026-09-01T00:00:00Z",
-      topstep_payout_at: "2026-09-10T00:00:00Z",
       starting_balance: 50000,
       practice: true,
     });

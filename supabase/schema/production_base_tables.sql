@@ -74,21 +74,7 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   default_target_pct          numeric,
   -- Arhiviran nalog: skriven iz birača, trejdovi i dalje broje (20260919220000).
   archived_at                 timestamptz,
-  -- Topstep režim (20260928140000): pravila po planu u src/lib/journal/topstep.ts.
-  -- Pravilo rizika: % prostora iznad MLL-a, između min i max
-  -- (null = granice plana).
-  topstep_mode                boolean     NOT NULL DEFAULT false,
-  topstep_plan                text        NOT NULL DEFAULT '50K',
-  topstep_payout_at           timestamptz,
-  topstep_reset_at            timestamptz,
-  -- TopstepX Risk Limits (30.09.2026): lični dnevni limit gubitka i cilj profita.
-  topstep_personal_dll        numeric,
-  topstep_daily_target        numeric,
-  -- Faza naloga (20260930090000): combine, xfa (Scaling Plan, putevi isplate) ili practice.
-  topstep_stage               text        NOT NULL DEFAULT 'combine',
-  risk_rule_pct               numeric     NOT NULL DEFAULT 12.5,
-  risk_rule_min               numeric,
-  risk_rule_max               numeric,
+  -- Topstep režim (topstep_*, risk_rule_*) obrisan u 20261027090000 (faza X6).
   -- Nalog za vežbu, van „All accounts“ (20261026130000, faza X).
   practice                    boolean     NOT NULL DEFAULT false,
   -- Ravno do, sat po Čikagu (20261026140000, faza X).
@@ -101,13 +87,7 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   CONSTRAINT tj_accounts_breakeven_unit_check
     CHECK (breakeven_unit = ANY (ARRAY['currency'::text, 'pct'::text])),
   CONSTRAINT tj_accounts_starting_balance_non_negative
-    CHECK (starting_balance >= 0::numeric),
-  CONSTRAINT tj_accounts_topstep_personal_dll_positive
-    CHECK (topstep_personal_dll IS NULL OR topstep_personal_dll > 0),
-  CONSTRAINT tj_accounts_topstep_daily_target_positive
-    CHECK (topstep_daily_target IS NULL OR topstep_daily_target > 0),
-  CONSTRAINT tj_accounts_topstep_stage_check
-    CHECK (topstep_stage = ANY (ARRAY['combine'::text, 'xfa'::text, 'practice'::text]))
+    CHECK (starting_balance >= 0::numeric)
 );
 CREATE INDEX IF NOT EXISTS tj_accounts_user_idx ON public.tj_accounts USING btree (user_id);
 
@@ -187,11 +167,7 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- prvi put dobio entry fill (20260920160000). Imenilac svakog procenta rizika;
   -- jedini činilac tog računa koji se ne može rekonstruisati unazad.
   equity_at_entry      numeric,
-  -- Topstep: koliko je pravilo rizika dozvoljavalo u trenutku ulaza (20260928160000),
-  -- zapečaćeno kad je trejd prvi put dobio entry fill; 0 = nalog nije imao prostora.
-  -- NULL: nije Topstep nalog, ili trejd bez pečata — čitači izvode budžet iz timeline-a.
-  risk_budget_at_entry numeric,
-  room_at_entry numeric,
+  -- risk_budget_at_entry / room_at_entry (Topstep) obrisani u 20261027090000 (faza X6).
   scenario jsonb,
   -- Plan kakav je bio kad je trejd prvi put dobio entry fill (20260921120000).
   -- Piše se jednom, nikad se ne prepisuje, briše se na povratak u `planned`.
@@ -226,10 +202,6 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
     CHECK (jsonb_typeof(scale_out_levels) = 'array'),
   CONSTRAINT tj_positions_equity_at_entry_positive
     CHECK (equity_at_entry IS NULL OR equity_at_entry > 0),
-  CONSTRAINT tj_positions_risk_budget_at_entry_nonnegative
-    CHECK (risk_budget_at_entry IS NULL OR risk_budget_at_entry >= 0),
-  CONSTRAINT tj_positions_room_at_entry_nonnegative
-    CHECK (room_at_entry IS NULL OR room_at_entry >= 0),
   CONSTRAINT tj_positions_scenario_object
     CHECK (scenario IS NULL OR jsonb_typeof(scenario) = 'object'),
   CONSTRAINT tj_positions_time_underwater_pct_check

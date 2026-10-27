@@ -50,24 +50,6 @@ const account = (over: Partial<Account> = {}): Account => ({
   default_fee_fixed: 0,
   default_stop_pct: null,
   default_target_pct: null,
-
-
-  topstep_mode: false,
-
-  topstep_plan: "50K" as const,
-
-  topstep_payout_at: null,
-
-  topstep_reset_at: null,
-
-  risk_rule_pct: 8,
-
-  risk_rule_min: null,
-
-  risk_rule_max: null,
-  topstep_personal_dll: null,
-  topstep_daily_target: null,
-  topstep_stage: "combine",
   archived_at: null,
   created_at: "2026-01-01T00:00:00Z",
   ...over,
@@ -208,10 +190,10 @@ describe("the timezone is the trader's, not a field (K5)", () => {
 describe("the breakeven range is fixed (K4)", () => {
   it("shows a tenth of the trade's risk and the account's own band, and offers nothing to type", async () => {
     const user = userEvent.setup({ delay: null });
-    render(<AccountSettings accounts={[account({ topstep_mode: true, topstep_plan: "50K" })]} tradeCounts={{ "acc-1": 0 }} />);
+    render(<AccountSettings accounts={[account()]} tradeCounts={{ "acc-1": 0 }} />);
     await openMenu(user, "Main Account");
     await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
-    // Phase X: no plan's band, whatever the old Topstep columns say.
+    // Phase X: no plan's band — a tenth of the trade's risk, and the account's own band.
     expect(screen.getByText(/±0\.1R of the trade's risk/).textContent).toContain("$0.00 to $0.00 without a stop");
     expect(screen.queryByLabelText("From")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("To")).not.toBeInTheDocument();
@@ -254,7 +236,7 @@ describe("edit", () => {
 describe("no prop firm in the account (phase X, X-2 / X-4)", () => {
   it("the edit dialog has no Topstep rules, no plan, no reset and no FTMO", async () => {
     const user = userEvent.setup({ delay: null });
-    render(<AccountSettings accounts={[account({ topstep_mode: true })]} tradeCounts={{ "acc-1": 3 }} />);
+    render(<AccountSettings accounts={[account()]} tradeCounts={{ "acc-1": 3 }} />);
     await openMenu(user, "Main Account");
     await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
     expect(screen.queryByText(/Topstep rules|Personal daily|Risk per trade|FTMO/)).not.toBeInTheDocument();
@@ -289,7 +271,7 @@ describe("no prop firm in the account (phase X, X-2 / X-4)", () => {
   });
 
   it("the list marks a practice account, and names no plan", () => {
-    render(<AccountSettings accounts={[account({ practice: true, topstep_mode: true })]} />);
+    render(<AccountSettings accounts={[account({ practice: true })]} />);
     expect(screen.getByText("Practice")).toBeInTheDocument();
     expect(screen.queryByText("Topstep 50K")).not.toBeInTheDocument();
   });

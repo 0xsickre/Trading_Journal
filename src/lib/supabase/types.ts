@@ -29,16 +29,6 @@ export type Database = {
           default_stop_pct: number | null
           default_target_pct: number | null
           flat_by: string
-          risk_rule_max: number | null
-          risk_rule_min: number | null
-          risk_rule_pct: number
-          topstep_mode: boolean
-          topstep_payout_at: string | null
-          topstep_plan: string
-          topstep_reset_at: string | null
-          topstep_personal_dll: number | null
-          topstep_daily_target: number | null
-          topstep_stage: string
           id: string
           is_active: boolean
           name: string
@@ -61,16 +51,6 @@ export type Database = {
           default_stop_pct?: number | null
           default_target_pct?: number | null
           flat_by?: string
-          risk_rule_max?: number | null
-          risk_rule_min?: number | null
-          risk_rule_pct?: number
-          topstep_mode?: boolean
-          topstep_payout_at?: string | null
-          topstep_plan?: string
-          topstep_reset_at?: string | null
-          topstep_personal_dll?: number | null
-          topstep_daily_target?: number | null
-          topstep_stage?: string
           id?: string
           is_active?: boolean
           name: string
@@ -93,16 +73,6 @@ export type Database = {
           default_stop_pct?: number | null
           default_target_pct?: number | null
           flat_by?: string
-          risk_rule_max?: number | null
-          risk_rule_min?: number | null
-          risk_rule_pct?: number
-          topstep_mode?: boolean
-          topstep_payout_at?: string | null
-          topstep_plan?: string
-          topstep_reset_at?: string | null
-          topstep_personal_dll?: number | null
-          topstep_daily_target?: number | null
-          topstep_stage?: string
           id?: string
           is_active?: boolean
           name?: string
@@ -1022,8 +992,6 @@ export type Database = {
           position_size: number | null
           psychology_tags: string[]
           quote_currency_at_trade: string | null
-          risk_budget_at_entry: number | null
-          room_at_entry: number | null
           scenario: Json | null
           scale_out_levels: Json
           scale_out_plan: string | null
@@ -1079,8 +1047,6 @@ export type Database = {
           position_size?: number | null
           psychology_tags?: string[]
           quote_currency_at_trade?: string | null
-          risk_budget_at_entry?: number | null
-          room_at_entry?: number | null
           scenario?: Json | null
           scale_out_levels?: Json
           scale_out_plan?: string | null
@@ -1136,8 +1102,6 @@ export type Database = {
           position_size?: number | null
           psychology_tags?: string[]
           quote_currency_at_trade?: string | null
-          risk_budget_at_entry?: number | null
-          room_at_entry?: number | null
           scenario?: Json | null
           scale_out_levels?: Json
           scale_out_plan?: string | null
