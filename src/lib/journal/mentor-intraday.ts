@@ -254,7 +254,7 @@ export function scenarioSection(trades: readonly EnrichedTrade[]): string[] {
   const best = s.best!;
   return [
     `## Šta bi bilo — SL × TP i cena posle izlaza (${s.n} ${sr(s.n, "izmeren trejd", "izmerena trejda", "izmerenih trejdova")}${s.n < SMALL_SAMPLE ? " ⚠" : ""})`,
-    `_Svaki trejd ponovljen iz berzanskih sveća od prosečnog ulaza do kraja dana (15:10 CT), sa SL 0,5–2× stvarnog i TP 1–5R tog SL-a; isti rizik u $, neto posle provizije._`,
+    `_Svaki trejd ponovljen iz berzanskih sveća od prosečnog ulaza do kraja CME dana (16:00 CT), sa SL 0,5–2× stvarnog i TP 1–5R tog SL-a; isti rizik u $, neto posle provizije._`,
     "",
     `| Stavka | Vrednost |`,
     `| --- | --- |`,

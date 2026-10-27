@@ -20,7 +20,7 @@ const WINDOWS = [
   ["15", "15 min"],
   ["30", "30 min"],
   ["60", "60 min"],
-  ["eod", "to 15:10 CT"],
+  ["eod", "to 16:00 CT"],
 ] as const;
 
 function bestLabel(s: ScenarioSummary): string {
@@ -103,7 +103,7 @@ export function ScenarioPanel({
           </div>
         </div>
         <p className="text-sm text-muted-foreground">
-          Each trade replayed from its average entry on the exchange candles to 15:10 CT with the stop at 0.5–2× the
+          Each trade replayed from its average entry on the exchange candles to the end of the CME day, 16:00 CT, with the stop at 0.5–2× the
           real one and targets of 1–5R of that stop. Same money at risk: a wider stop is fewer contracts, so every cell
           is in R of its own stop.
           {unmeasured > 0 &&
@@ -173,7 +173,7 @@ export function ScenarioPanel({
               </li>
               <li>
                 <b>Targets:</b> {overall.afterTarget.n} hit — <b>{overall.afterTarget.continuedOneR}</b> ran on 1R or more
-                by 15:10 CT (median {r2(overall.afterTarget.medianFavEodR)} further).
+                by 16:00 CT (median {r2(overall.afterTarget.medianFavEodR)} further).
               </li>
               <li>
                 <b>Hand exits:</b> {overall.afterHand.n} with a planned target — held, <b>{overall.afterHand.wouldHitTarget}</b>{" "}

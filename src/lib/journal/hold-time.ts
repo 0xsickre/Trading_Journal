@@ -5,7 +5,7 @@
  * was created and never read by anything. Every number here comes from it.
  *
  * The buckets are minutes (F5.1, decision L2, 29.09.2026): a Topstep position is
- * flat by 15:10 CT, so every trade lives well under a day, and the question is
+ * flat by the CME day's 16:00 CT close, so every trade lives well under a day, and the question is
  * whether a scalp of a minute and a position held an hour behave differently.
  */
 

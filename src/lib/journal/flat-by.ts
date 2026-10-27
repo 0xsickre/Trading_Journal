@@ -12,17 +12,19 @@
 import { addDaysToDayKey, cmeTradingDay, isValidDayKey, zonedInputToUtc } from "./time";
 
 /**
- * The end of a plan's trading day, 15:10 Chicago: the horizon `futures-trading`
- * prices a missed plan up to (`journal_mae.py` `prozor_plana`). Not the trader's
- * flat-by time since phase X (that is the account's `flat_by`).
+ * The end of a plan's trading day, 16:00 Chicago — the CME day's end, and the
+ * horizon `futures-trading` measures "šta bi bilo" to (`journal_mae.py`
+ * `prozor_plana`; trader, 27.10.2026 — it was Topstep's 15:10 CT). Not the
+ * trader's flat-by time since phase X (that is the account's `flat_by`), though
+ * both default to the same minute.
  */
-const PLAN_DAY_END_CT = "15:10";
+const PLAN_DAY_END_CT = "16:00";
 
 /** An account's flat-by time when it sets none (X-9 A): 16:00 Chicago, the CME's daily pause. */
 export const DEFAULT_FLAT_BY_CT = "16:00";
 const CHICAGO = "America/Chicago";
 
-/** 15:10 on Chicago's clock on a trading day, ISO UTC. "" for an invalid day. */
+/** 16:00 on Chicago's clock on a trading day, ISO UTC. "" for an invalid day. */
 function planDayEnd(tradingDay: string): string {
   return flatByAt(tradingDay, PLAN_DAY_END_CT);
 }
@@ -38,9 +40,9 @@ function flatByAt(tradingDay: string, hhmm: string): string {
 
 /**
  * The trading day a plan written at `iso` is for (F6, decision M3-A): the day it
- * falls in, or the next one when it was written after that day's 15:10 CT flat;
+ * falls in, or the next one when it was written after that day's 16:00 CT end;
  * a Saturday or Sunday moves to Monday. The same rule `futures-trading` prices a
- * missed plan by (`journal_mae.py` `prozor_plana`). "" for an unreadable instant.
+ * trade's "šta bi bilo" day by (`journal_mae.py` `prozor_plana`). "" for an unreadable instant.
  */
 export function planTradingDay(iso: string | null | undefined): string {
   let day = cmeTradingDay(iso);
@@ -53,7 +55,7 @@ export function planTradingDay(iso: string | null | undefined): string {
   return day;
 }
 
-/** When a plan's trading day ends (its 15:10 CT flat), epoch ms; NaN for an unreadable instant. */
+/** When a plan's trading day ends (16:00 CT), epoch ms; NaN for an unreadable instant. */
 export function planDayEndsAt(iso: string | null | undefined): number {
   const day = planTradingDay(iso);
   return day ? Date.parse(planDayEnd(day)) : NaN;

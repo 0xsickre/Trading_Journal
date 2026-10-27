@@ -20,9 +20,9 @@ describe("flatByFor (phase X, X-9; no brief since X9)", () => {
 });
 
 describe("a plan's trading day (F6, M3-A — the same rule as futures-trading prozor_plana)", () => {
-  it("is the CME day it was written in, until that day's 15:10 CT flat", () => {
+  it("is the CME day it was written in, until that day's 16:00 CT end (27.10.2026; it was 15:10 CT)", () => {
     expect(planTradingDay("2026-09-29T13:00:00Z")).toBe("2026-09-29");
-    expect(planDayEndsAt("2026-09-29T13:00:00Z")).toBe(Date.parse("2026-09-29T20:10:00Z"));
+    expect(planDayEndsAt("2026-09-29T13:00:00Z")).toBe(Date.parse("2026-09-29T21:00:00Z"));
   });
 
   it("moves to the next day after the flat, and past the weekend", () => {

@@ -32,6 +32,6 @@ describe("TradeScenarioCard", () => {
 
   it("measures how far a target exit ran on", () => {
     render(<TradeScenarioCard trade={trade(scenarioDoc({ exit_kind: "target", exit: 120 }))} />);
-    expect(screen.getByText("After the target it went another 4.00R your way by 15:10 CT.")).toBeInTheDocument();
+    expect(screen.getByText("After the target it went another 4.00R your way by 16:00 CT.")).toBeInTheDocument();
   });
 });

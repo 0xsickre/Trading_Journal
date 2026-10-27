@@ -10,7 +10,7 @@
  * THE GRID. From the trade's average entry, at the moment of its first entry
  * fill: had the whole position carried a stop k × the real one (k in `sl`) and a
  * target t × that stop (t in `tp`), what came first by the end of the trading
- * day (futures-trading's horizon, 15:10 CT until X-10) — the target (+t), the stop (−1, and a tick more since v2) or neither (the price at 15:10 CT). Every
+ * day (futures-trading's horizon: the CME day's end, 16:00 CT, since v3 — 15:10 CT, Topstep's flat, until then) — the target (+t), the stop (−1, and a tick more since v2) or neither (the price at that end). Every
  * cell is in R OF ITS OWN VARIANT (decision L3: the same money at risk, so a
  * wider stop is fewer contracts). Measured gross; `net` takes the round-turn
  * commission off per contract, which in R is larger for a tighter stop — the
@@ -105,8 +105,9 @@ function excursion(v: unknown): Excursion | null {
  */
 export function scenarioOf(row: TradeRow): TradeScenario | null {
   const raw = (row as Record<string, unknown>).scenario;
-  // v2 (phase S) has v1's shape; only how a fill is counted changed, so both read the same.
-  if (!isObj(raw) || (raw.v !== 1 && raw.v !== 2)) return null;
+  // v2 (phase S) and v3 (the day ends at 16:00 CT, 27.10.2026) have v1's shape; only how a fill
+  // is counted and where the day ends changed, so all three read the same. `horizon_end` says which end.
+  if (!isObj(raw) || (raw.v !== 1 && raw.v !== 2 && raw.v !== 3)) return null;
   const sl = Array.isArray(raw.sl) ? raw.sl.map(num) : [];
   const tp = Array.isArray(raw.tp) ? raw.tp.map(num) : [];
   if (sl.length === 0 || tp.length === 0 || sl.some((x) => x == null) || tp.some((x) => x == null)) return null;

@@ -72,9 +72,15 @@ describe("scenarioOf", () => {
     expect(s.grid[0][1]).toBe(1.5);
   });
 
+  it("reads v3 (the CME day's end, 16:00 CT, 27.10.2026) in the same shape", () => {
+    const s = scenarioOf(row(doc({ v: 3, horizon_end: "2026-09-29T21:00:00+00:00" })));
+    expect(s).not.toBeNull();
+    expect(s!.grid).toEqual(scenarioOf(row(doc()))!.grid);
+  });
+
   it("refuses another version, a missing cell or no risk — never half a scenario", () => {
     expect(scenarioOf(row(null))).toBeNull();
-    expect(scenarioOf(row(doc({ v: 3 })))).toBeNull();
+    expect(scenarioOf(row(doc({ v: 4 })))).toBeNull();
     const holed = doc();
     (holed.grid as number[][])[2][3] = null as unknown as number;
     expect(scenarioOf(row(holed))).toBeNull();

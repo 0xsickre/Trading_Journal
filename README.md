@@ -207,7 +207,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,777 tests across 177 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,778 tests across 177 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -1180,9 +1180,10 @@ measured. `maximize_your_profit_day` stays out: it needs the peak of the day's c
 
 **F6 (29.09.2026)** removed the two vault-era rules (`against_macro_bias`, `cot_chase`; decision
 M2-A) and moved `stale_plan` to the trading day (decision M3-A): a plan is stale once its trading day
-is over — 15:10 CT on the day it was written, or on the next trading day when it was written after
-that — with no fill and not marked missed (`planTradingDay` in `flat-by.ts`, the same rule
-`futures-trading` priced a miss by until phase G).
+is over — 16:00 CT, the CME day's end (15:10 CT, Topstep's flat, until 27.10.2026), on the day it was
+written, or on the next trading day when it was written after that — with no fill and not marked
+missed (`planTradingDay` in `flat-by.ts`, the same rule `futures-trading` ends "Šta bi bilo" by,
+`prozor_plana`).
 
 **H1 removed six more** (28.09.2026): five swing rules that joined on the per-position check-in, the
 time stop in days, the written thesis and the weekend: `acted_against_the_plan`, `past_time_stop`,
@@ -1221,7 +1222,7 @@ values of the one Topstep account are in the nightly backup. **Phase X9** (`2026
 "Pred sesiju" card, `no_entry_in_red_window` (retired), the "red window" auto mistake and the brief's
 windows in the mentor pack are gone; `tj_session_briefs` stays as history. **Phase X5** (`20261026180000`) made the factory data neutral: catalog commission 0
 for a new book, no Topstep or DLL item in the factory lists, and the trader's "Kraj Topstep dana"
-renamed "Kraj dana (ravno)". **What stays:** the 15:10 CT horizon of "Šta bi bilo" and of a missed plan, which `futures-trading` computes (X-10);
+renamed "Kraj dana (ravno)". **What stayed:** the 15:10 CT horizon of "Šta bi bilo" — until 27.10.2026, when it moved to the CME day's end, 16:00 CT (scenario v3, below);
 and the TopstepX import formats, which are a platform's files, not a firm's rules (X-7).
 
 ---
@@ -1600,8 +1601,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,777 tests across 177 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,232 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 545
+2,778 tests across 177 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,233 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 545
 tests in 53 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
@@ -1733,8 +1734,8 @@ writes the result into `tj_positions.scenario` (jsonb, v2 since phase S; v1 from
 
 - **The grid (L1–L3).** From the trade's average entry, at its first entry fill, with the stop at
   0.5 / 0.75 / 1 / 1.25 / 1.5 / 2 × the real one (the sealed stop) and targets of 1 / 1.5 / 2 / 2.5 /
-  3 / 4 / 5 R of that stop: target first (+t), stop first (−1 and a tick), or neither by 15:10 CT (the
-  price then). Every cell is in R of its own stop — the same money at risk, so a wider stop is fewer
+  3 / 4 / 5 R of that stop: target first (+t), stop first (−1 and a tick), or neither by the CME day's end,
+  16:00 CT (the price then). Every cell is in R of its own stop — the same money at risk, so a wider stop is fewer
   contracts. The journal shows it net of the trade's own round-turn commission per contract, which in
   R is larger for a tighter stop; partial exits are not modeled.
 - **Fills as an exchange makes them (phase S, scenario v2, 30.09.2026).** The target is a limit: it
@@ -1743,8 +1744,13 @@ writes the result into `tj_positions.scenario` (jsonb, v2 since phase S; v1 from
   **a tick of slippage**, so a stopped cell is −(1 + tick ÷ that variant's R). Until v2 both leaned the
   grid's way (far targets and tight stops looked better than they fill); a v1 document is re-measured
   on the next hourly run, and the journal reads v1 and v2 alike.
+- **The CME day (scenario v3, 27.10.2026).** The horizon is the end of the trade's CME day, 16:00 CT
+  (trader: „neka šta bi bilo prati CME dan“); until then it was Topstep's 15:10 CT flat. A v2 document
+  is re-measured on the next hourly run; the journal reads v1–v3 alike, and `horizon_end` holds the end
+  each one was measured to — so a v2 row still on screen before that run reaches 15:10 CT, under a
+  "16:00 CT" label.
 - **After the exit (L4).** Furthest with the trade and against it at 15, 30 and 60 minutes and to
-  15:10 CT, from the exit price. After a stop: did the planned target come, and when. After a hand
+  16:00 CT, from the exit price. After a stop: did the planned target come, and when. After a hand
   exit: held, would the target or the old stop have come first.
 - **The stop that would have lived to the target** — the largest move against the trade before the
   planned target's first fill (a tick through), plus a tick — and **the furthest it went before the real stop** (MFE
