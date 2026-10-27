@@ -172,7 +172,7 @@ pogađa.
 | **B** | Brzi unos: trejd ~30 s (checklist „Zašto ulazim“, kraće liste, TF po playbook-u, automatske greške), psihologija i zatvaranje dana na /daily | — | X4 | da: aditivne (TF playbook-a, psihologija dana), podaci (liste, tekst pravila) | **Opus** | ✅ 27.10.2026 — B1–B8 isporučeni; migracije `20261026150000`, `…160000`, `…170000`, `20261027100000` primenjene; pregled koda `b83cef7` |
 | **E** | Bez biasa dana: bez kartice, ocene, panela, pravila `htf_bias_set` i greške „Bez biasa“; staro polje read-only | — | B | da, podaci: penzionisanje pravila, tekst `review_complete`, polje `htf_bias` gasi se, fabrička lista bez biasa (uz odobrenje) | **Opus** | ✅ 27.10.2026 — `504a3f0` + futures-trading `c3168eb`; migracija `20261027120000` primenjena 27.10.2026 uz odobrenje trejdera |
 | **G** | Put do profesionalca: stanje pre sesije (san, smena, dete), „sutra menjam“, prilike dana umesto Propuštenog setupa, prvih 10 min, NY do ručka, size po oceni u paketu | — | E | da: `20261027140000` (aditivna + podaci, uz odobrenje) | **Opus** | ✅ 27.10.2026 — `ff9d63e` (plan, migracija) · G3+G5 `db0ce0e` · G7 `924c438` + futures-trading `2dc54b8` · G4 `5555cee` · G-8 `cef0dd8` · G8 (dokumentacija) + futures-trading `0b9914e`; migracija `20261027140000` primenjena |
-| **Z** | Bez Topstep-a: brief i journal neutralni prema svakoj prop firmi — CME dan 17:00 → 16:00 CT u brief-u, dnevniku i modelima, CME praznici umesto Topstep-ovih, bez pominjanja firme u kodu i tekstovima koji opisuju sadašnje stanje | — | G | samo po Z-5: komentari 5 kolona (baza je inače čista), uz odobrenje | **Opus** | 🔄 27.10.2026 — Z-1 … Z-5 = A; Z1 futures-trading `0ca53e7` · Z2 `183b647` + `26c1a63`, istorija `781756c` · Z3 `c430aed` … `c74f7a0` (6 delova, brief na CME danu) · Z4 kod (migracija opisa čeka odobrenje) |
+| **Z** | Bez Topstep-a: brief i journal neutralni prema svakoj prop firmi — CME dan 17:00 → 16:00 CT u brief-u, dnevniku i modelima, CME praznici umesto Topstep-ovih, bez pominjanja firme u kodu i tekstovima koji opisuju sadašnje stanje | — | G | samo po Z-5: komentari 5 kolona (baza je inače čista), uz odobrenje | **Opus** | 🔄 27.10.2026 — Z-1 … Z-5 = A; Z1 futures-trading `0ca53e7` · Z2 `183b647` + `26c1a63`, istorija `781756c` · Z3 `c430aed` … `c74f7a0` (6 delova, brief na CME danu) · Z4 `06bb229` + migracija `20261027160000` primenjena |
 | **I** | Univerzalni uvoz: format se prepoznaje po zaglavlju (TopstepX, NinjaTrader, Tradovate), zapamćeno mapiranje za nepoznat CSV; posle toga NinjaTrader AddOn | — | E | da, aditivna: tabela zapamćenih mapiranja (I2) | **Opus** | ⏸ plan 27.10.2026 — čeka primere izvoza od trejdera |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
@@ -2089,7 +2089,8 @@ zavise od nijedne prop firme, nego da budu neutralni.“ Faza X je uklonila prav
   (`topstep_mode`, `topstep_plan`, `risk_rule_pct`) i provera da se ne šalju — baza ih nema i odbila bi upis. Tekstovi
   uvoza: „TopstepX (ProjectX)“ (toast-ovi, opis izvoza, upozorenje naloga, „Bez pregleda“). `production_base_tables.sql`:
   komentari bez imena firme. **Migracija `20261027160000_neutralni_opisi_kolona.sql`** (samo 5 × `COMMENT ON`, ništa
-  se ne menja ni briše) — **čeka odobrenje trejdera**.
+  se ne menja ni briše) — primenjena 27.10.2026 uz odobrenje trejdera (`20261027215427 neutralni_opisi_kolona`);
+  provereno upitom: nijedan opis u bazi ne pominje Topstep / FTMO / Tradeify. **Z4 ✅.**
 - **Z5** README 1:1 oba repoa, AGENTS.md, ROADMAP, ovaj fajl.
 
 **Model:** Opus (Z3 je obiman: više delova, jedan po poruci).
