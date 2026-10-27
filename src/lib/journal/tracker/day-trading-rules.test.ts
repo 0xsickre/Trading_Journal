@@ -113,6 +113,38 @@ describe("flat_by_close (phase X, X-9: the account's own time, 16:00 CT unless s
   });
 });
 
+describe("no_entry_first_minutes (phase G, G-3: ten minutes after the London and New York opens)", () => {
+  const first = (iso: string, day = DAY) =>
+    evaluateAutoRulesForDay(day, buildTradeDayIndex([row({ id: "a", opened: iso })], (r) => zoneOf(r.account_id)))
+      .no_entry_first_minutes;
+
+  it("New York: 09:39:59 is inside the first ten minutes, 09:40 is not", () => {
+    // 29.09.2026: New York on EDT, 09:30 = 13:30 UTC.
+    expect(first(at("13:30")).verdict).toBe("fail");
+    expect(first(`${DAY}T13:39:59Z`).offenders).toEqual(["a"]);
+    expect(first(at("13:40")).verdict).toBe("pass");
+  });
+
+  it("London: 08:09 London is inside, 08:10 is not", () => {
+    // 29.09.2026: London on BST, 08:00 = 07:00 UTC.
+    expect(first(at("07:09")).verdict).toBe("fail");
+    expect(first(at("07:10")).verdict).toBe("pass");
+  });
+
+  it("follows each city's own clock in the week Europe has shifted and the US has not", () => {
+    // 28.10.2026: London back on GMT (08:00 = 08:00 UTC), New York still EDT (09:30 = 13:30 UTC).
+    const D = "2026-10-28";
+    expect(first(`${D}T08:05:00Z`, D).verdict).toBe("fail");
+    expect(first(`${D}T07:05:00Z`, D).verdict).toBe("pass");
+    expect(first(`${D}T13:35:00Z`, D).verdict).toBe("fail");
+  });
+
+  it("is not this rule's to judge outside both sessions, and a day with no entry is not scored", () => {
+    expect(first(at("02:00")).verdict).toBe("pass");
+    expect(evalDay([]).no_entry_first_minutes.verdict).toBe("na");
+  });
+});
+
 describe("no_entry_in_red_window left in phase X9 (X-10)", () => {
   it("is not evaluated any more — the brief writes no windows into the journal", () => {
     expect(Object.keys(evalDay([{ id: "a", opened: at("12:30") }]))).not.toContain("no_entry_in_red_window");

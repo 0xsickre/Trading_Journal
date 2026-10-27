@@ -41,6 +41,7 @@ import {
   intradaySection,
   scenarioSection,
   timeStopSection,
+  sizeSection,
   ruleLabel,
   rulesSection,
   SMALL_SAMPLE,
@@ -666,6 +667,7 @@ export function buildMentorPack(
     out.push(...intradaySection(enriched, range));
     out.push(...scenarioSection(enriched));
     out.push(...timeStopSection(enriched, range));
+    out.push(...sizeSection(enriched, rules, ccy));
   }
 
   // --- Breakdowns ---------------------------------------------------------

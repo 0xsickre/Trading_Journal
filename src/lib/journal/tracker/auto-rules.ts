@@ -19,6 +19,7 @@ import { NO_BAND, tradeOutcome, type BreakevenRange } from "../breakeven";
 import { DEFAULT_TZ, dayKeyIn, zonedDateKey, zonedInputToUtc, type DayZone } from "../time";
 import type { TradingWindow } from "./trading-window";
 import { DEFAULT_FLAT_BY_CT, flatByFor } from "../flat-by";
+import { afterSessionOpen } from "../session-window";
 import type { AutoRuleKey } from "../tracker-types";
 import type { TradeRow } from "../types";
 import { GRADE_RATING, NO_MISTAKE } from "../quick-log";
@@ -360,6 +361,21 @@ function evalReview(key: AutoRuleKey, opened: TrackerTrade[], ok: (t: TrackerTra
   return evalOpenDayFlag(key, done, ok);
 }
 
+/** Minutes after the London or New York open in which no entry belongs (phase G, G-3). */
+export const FIRST_MINUTES = 10;
+
+/**
+ * No entry in the first `FIRST_MINUTES` after the open of the session it falls
+ * in — London's 08:00 (London time) or New York's 09:30, each on its own clock,
+ * so the weeks the US and Europe shift apart need no table. An entry outside
+ * either session (Asia, the hours before London) is not this rule's to judge.
+ */
+const evalNoEntryFirstMinutes = (opened: TrackerTrade[]) =>
+  evalOpenDayFlag("no_entry_first_minutes", opened, (t) => {
+    const open = afterSessionOpen(t.openedAt);
+    return open == null || open.minutes >= FIRST_MINUTES;
+  });
+
 /** What was said before the click is written on every trade. When it was said, the recording tells. */
 const evalThesisRecorded = (opened: TrackerTrade[]) =>
   evalReview("thesis_recorded", opened, (t) => t.review.thesis);
@@ -601,6 +617,8 @@ export function evaluateAutoRulesForDay(
     stop_after_two_losses: evalStopAfterTwoLosses(opened, closed),
     // Open day: the window of the day the position was opened on.
     trading_window: evalTradingWindow(day, opened, ctx),
+    // Open day: the entry's minute after its session's open (phase G).
+    no_entry_first_minutes: evalNoEntryFirstMinutes(opened),
     // Phase Q: what the trade page says, per trade opened that day. The day's
     // bias (`htf_bias_set`) left in phase E: its rows are retired like the
     // money rules of phase X.

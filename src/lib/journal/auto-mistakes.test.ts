@@ -120,6 +120,14 @@ describe("autoMistakes — after two stop losses", () => {
   });
 });
 
+describe("autoMistakes — an entry in the first ten minutes (phase G)", () => {
+  it("is found from the same verdict as the tracker's rule", () => {
+    // 20.10.2026: New York on EDT, 09:30 = 13:30 UTC.
+    expect(keysOf([row({ id: "a", opened: "13:35" })])("a")).toContain("first_minutes");
+    expect(keysOf([row({ id: "b", opened: "13:45" })])("b")).not.toContain("first_minutes");
+  });
+});
+
 describe("autoMistakes — no bias of the day (phase E)", () => {
   it("the journal holds no forecast, so there is no mistake about one", () => {
     expect(Object.keys(AUTO_MISTAKES)).not.toContain("no_bias");

@@ -90,6 +90,11 @@ function dayTradingText(res: AutoRuleResult): string | null {
         ? "Prekršeno: playbook napravljen posle ulaza — tada nije bio plan."
         : "Prekršeno: trejd bez playbook-a, ili playbook napravljen posle ulaza.";
     }
+    // Phase G: the London and New York opens, each on its own clock.
+    case "no_entry_first_minutes":
+      return broke
+        ? "Prekršeno: ulaz u prvih 10 minuta posle otvaranja (London 09:00, NY 15:30 po Beogradu)."
+        : "Nijedan ulaz u prvih 10 minuta posle otvaranja.";
     // Phase Q: read off the trade page, so the fix is on the trade the link opens.
     case "thesis_recorded":
       return broke

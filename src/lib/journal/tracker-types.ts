@@ -49,6 +49,9 @@ export const AUTO_RULE_KEYS = [
   "trading_window",
   // Phase B5 (26.10.2026): the day's feeling, written once on /daily.
   "daily_psychology",
+  // Phase G (G-3, 27.10.2026): no entry in the first ten minutes after the
+  // London or New York open — the opening minutes are noise, not a setup.
+  "no_entry_first_minutes",
 ] as const;
 export type AutoRuleKey = (typeof AUTO_RULE_KEYS)[number];
 

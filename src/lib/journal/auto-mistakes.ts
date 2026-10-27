@@ -42,6 +42,7 @@ import type { TradeRow } from "./types";
 export const AUTO_MISTAKES = {
   outside_window: "Ulaz van prozora",
   after_two_sl: "Ulaz posle 2 SL",
+  first_minutes: "Ulaz u prvih 10 min",
   no_playbook: "Ulaz bez setupa iz playbook-a",
   target_below_2r: "Cilj ispod 2R",
   moved_stop: "Pomerio stop",
@@ -135,7 +136,7 @@ function outsideWindow(day: string, openedAt: string, ctx: AutoContext): AutoMis
  * is absent from the map.
  *
  * The day-level ones come from the same evaluators the tracker grades with
- * (`stop_after_two_losses`), so the trade page, the reports and
+ * (`stop_after_two_losses`, `no_entry_first_minutes`), so the trade page, the reports and
  * the day's checklist cannot disagree about which entry broke them.
  */
 export function autoMistakes(
@@ -152,12 +153,14 @@ export function autoMistakes(
   for (const [day, opened] of index.byOpenDay) {
     const results = evaluateAutoRulesForDay(day, index, ctx);
     const afterTwo = new Set(results.stop_after_two_losses.offenders);
+    const firstMinutes = new Set(results.no_entry_first_minutes.offenders);
     for (const t of opened) {
       const row = byId.get(t.id);
       if (!row) continue;
       const window = outsideWindow(day, t.openedAt, ctx);
       if (window) add(t.id, window);
       if (afterTwo.has(t.id)) add(t.id, mark("after_two_sl", "Ulaz posle dva SL zaredom istog dana."));
+      if (firstMinutes.has(t.id)) add(t.id, mark("first_minutes", "Ulaz u prvih 10 minuta posle otvaranja sesije."));
       for (const m of ownMistakes(row, bandOf(row.account_id))) add(t.id, m);
     }
   }

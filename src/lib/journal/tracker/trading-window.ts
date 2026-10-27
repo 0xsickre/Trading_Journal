@@ -5,7 +5,7 @@ import type { TrackerRule } from "../tracker-types";
  * trader's clock (Belgrade), in which every entry and exit of a day belongs.
  *
  * The window changes with the weekly shift — London 09:00–12:00, NY
- * 14:30–18:00 — so the rule keeps every window with the day it took effect
+ * 14:30–17:30 (to lunch, phase G-5; it was 14:30–18:00) — so the rule keeps every window with the day it took effect
  * (decision Y-6 = A). A day reads the window with the latest `since` on or
  * before it, and changing the window next Monday leaves this week as it was.
  */
@@ -17,6 +17,12 @@ export type TradingWindow = {
   /** "HH:MM", Belgrade; an exit within this minute is the time exit, not a breach. */
   to: string;
 };
+
+/** The two windows the trader switches between (phase G-5), Belgrade time. Settings offers them as presets. */
+export const TRADING_WINDOW_PRESETS = [
+  { label: "London", from: "09:00", to: "12:00" },
+  { label: "NY", from: "14:30", to: "17:30" },
+] as const;
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;

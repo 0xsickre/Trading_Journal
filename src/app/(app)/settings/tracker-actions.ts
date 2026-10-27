@@ -244,7 +244,7 @@ export async function moveTrackerRule(
 
 /**
  * Set the trading window from a day on (phase Y4): London weeks 09:00–12:00,
- * NY weeks 14:30–18:00, Belgrade time. The windows before `since` stay, so a
+ * NY weeks 14:30–17:30 (phase G-5), Belgrade time. The windows before `since` stay, so a
  * change next Monday leaves this week graded by this week's window; a second
  * change for the same day replaces the first. Only the `trading_window` rule
  * has a window.

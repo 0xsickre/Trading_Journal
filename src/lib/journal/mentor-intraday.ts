@@ -26,7 +26,10 @@ import { afterExitR, scenarioOf, scenarioTrade, summarizeScenarios } from "./sce
 import { afterSessionOpen } from "./session-window";
 import { numberFieldValue } from "./field-values";
 import { needsOriginalStop, stopStatus } from "./stop-moved";
-import { DEFAULT_TZ, fmtInTz, isTradingDayKey, toEpoch } from "./time";
+import { DEFAULT_TZ, addDaysToDayKey, fmtInTz, isTradingDayKey, isoWeekdayOfDayKey, toEpoch } from "./time";
+import { MINI_OF } from "./default-instruments";
+import { SETUP_GRADES, scorable, setupScoreFromTrade } from "./setup-score";
+import type { RuleLookup } from "./reports/rule-lookup";
 import { ruleIsLiveOn, type DayCompliance } from "./tracker/compliance";
 import { WEEKDAY_LABELS, type TrackerRule } from "./tracker-types";
 import { computeTimeStop } from "./time-stop";
@@ -115,6 +118,69 @@ export function intradaySection(trades: readonly EnrichedTrade[], range: Breakev
 }
 
 const rr = (r: number | null) => (r == null ? "—" : `${r > 0 ? "+" : ""}${r.toFixed(2)}R`);
+
+/** Contracts in minis: a CME micro is a tenth of its mini (MNQ 1 = NQ 0.1). */
+function miniContracts(e: EnrichedTrade): number | null {
+  if (e.size == null || !(e.size > 0)) return null;
+  const sym = String(e.instrument ?? "").trim().toUpperCase();
+  return MINI_OF[sym] ? e.size / 10 : e.size;
+}
+
+const mean = (xs: readonly (number | null)[]): number | null => {
+  const v = xs.filter((x): x is number => x != null && Number.isFinite(x));
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+};
+const fx = (n: number | null, d = 2) => (n == null ? "—" : n.toFixed(d));
+const change = (now: number | null, before: number | null) =>
+  now == null || before == null || !(before > 0) ? "—" : `${now >= before ? "+" : ""}${(((now - before) / before) * 100).toFixed(0)} %`;
+
+/**
+ * Size by setup grade and by week (phase G, G5): what the sizing literature in
+ * the transcripts asks — more on A than on C, and growth in steps of about
+ * 10 % — measured, never ruled. Minis are the unit so a micro and a mini read
+ * as one book; the risk is the planned stop at the size entered.
+ */
+export function sizeSection(trades: readonly EnrichedTrade[], rules: RuleLookup | undefined, ccy: string): string[] {
+  const sized = trades.filter((e) => miniContracts(e) != null);
+  if (sized.length === 0) return [];
+  const gradeOf = (e: EnrichedTrade) => (rules ? setupScoreFromTrade(scorable(e), rules)?.grade : undefined) ?? "—";
+  const row = (label: string, group: readonly EnrichedTrade[], extra = "") =>
+    `| ${label} | ${group.length}${group.length < SMALL_SAMPLE ? " ⚠" : ""} | ${fx(mean(group.map(miniContracts)))} | ${fx(
+      mean(group.map((e) => e.riskMoney)),
+    )} | ${fx(mean(group.map((e) => e.riskPctTaken)))}${extra} |`;
+
+  const out = [
+    `## Size po oceni setupa i po nedeljama`,
+    `_Ugovori u mini ekvivalentu (MNQ 1 = NQ 0,1). Rizik = planirani stop × veličina na ulazu (${ccy}) i % balansa dana. Samo merenje, bez pravila._`,
+    "",
+    `| Ocena setupa | Trejdova | Ø ugovora (mini) | Ø rizik ${ccy} | Ø rizik % |`,
+    `|---|---|---|---|---|`,
+  ];
+  for (const g of [...SETUP_GRADES, "—"]) {
+    const group = sized.filter((e) => gradeOf(e) === g);
+    if (group.length) out.push(row(g === "—" ? "bez ocene" : g, group));
+  }
+
+  const weekOf = (day: string) => addDaysToDayKey(day, -(isoWeekdayOfDayKey(day) - 1));
+  const weeks = [...new Set(sized.map((e) => weekOf(e.openDay)))].sort();
+  out.push(
+    "",
+    `| Nedelja (od ponedeljka) | Trejdova | Ø ugovora (mini) | promena | Ø rizik ${ccy} | promena |`,
+    `|---|---|---|---|---|---|`,
+  );
+  let prev: { c: number | null; r: number | null } | null = null;
+  for (const w of weeks) {
+    const group = sized.filter((e) => weekOf(e.openDay) === w);
+    const c = mean(group.map(miniContracts));
+    const r = mean(group.map((e) => e.riskMoney));
+    out.push(
+      `| ${w} | ${group.length}${group.length < SMALL_SAMPLE ? " ⚠" : ""} | ${fx(c)} | ${change(c, prev?.c ?? null)} | ${fx(r)} | ${change(r, prev?.r ?? null)} |`,
+    );
+    prev = { c, r };
+  }
+  out.push("");
+  return out;
+}
 
 /**
  * Šta bi bilo (faza L): mreža SL × TP nad izmerenim trejdovima i šta je cena radila posle izlaza i posle stopa.

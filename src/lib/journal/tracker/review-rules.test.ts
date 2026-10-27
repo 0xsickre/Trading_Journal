@@ -234,6 +234,7 @@ describe("trading_window: entries and exits inside the day's window, Belgrade ti
 });
 
 describe("phase E: the journal holds no forecast of direction", () => {
+  // 09:00 UTC is an hour after the London open, clear of `no_entry_first_minutes` (phase G).
   const D = "2026-10-28";
   const at = (t: string) => `${D}T${t}Z`;
   const onDay = (rows: TradeRow[]) =>
@@ -241,11 +242,11 @@ describe("phase E: the journal holds no forecast of direction", () => {
   const tr = (id: string, opened: string, r: Review = {}) => trade(id, opened, 100, { bias: null, closed: opened, ...r });
 
   it("review complete passes a full review with no bias anywhere", () => {
-    expect(onDay([tr("t1", at("08:00:00"))]).review_complete.verdict).toBe("pass");
+    expect(onDay([tr("t1", at("09:00:00"))]).review_complete.verdict).toBe("pass");
   });
 
   it("an A on a trade with no bias is not a dishonest tag", () => {
-    expect(onDay([tr("t1", at("08:00:00"), { grade: 5 })]).honest_tags.verdict).toBe("pass");
+    expect(onDay([tr("t1", at("09:00:00"), { grade: 5 })]).honest_tags.verdict).toBe("pass");
   });
 });
 

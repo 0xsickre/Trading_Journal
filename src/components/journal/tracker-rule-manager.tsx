@@ -40,7 +40,7 @@ import {
   setTradingWindow,
   updateTrackerRule,
 } from "@/app/(app)/settings/tracker-actions";
-import { windowsOf } from "@/lib/journal/tracker/trading-window";
+import { TRADING_WINDOW_PRESETS, windowsOf } from "@/lib/journal/tracker/trading-window";
 import { DEFAULT_TZ, todayIn } from "@/lib/journal/time";
 
 // Every tracker action revalidates /settings itself, so no router.refresh().
@@ -126,6 +126,21 @@ function TradingWindowEditor({ rule }: { rule: TrackerRule }) {
         </ul>
       )}
       <div className="flex flex-wrap items-center gap-1.5">
+        {TRADING_WINDOW_PRESETS.map((p) => (
+          <Button
+            key={p.label}
+            size="sm"
+            variant="ghost"
+            className="h-7"
+            disabled={pending}
+            onClick={() => {
+              setFrom(p.from);
+              setTo(p.to);
+            }}
+          >
+            {p.label} {p.from}–{p.to}
+          </Button>
+        ))}
         <Input aria-label="Window from" value={from} onChange={(e) => setFrom(e.target.value)} placeholder="HH:MM" className="h-7 w-20" disabled={pending} />
         <span>–</span>
         <Input aria-label="Window to" value={to} onChange={(e) => setTo(e.target.value)} placeholder="HH:MM" className="h-7 w-20" disabled={pending} />

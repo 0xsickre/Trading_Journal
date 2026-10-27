@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildMentorPack } from "./mentor-export";
-import { checklistAnsweredAt, dimensionTable, ruleLabel, rulesSection, SMALL_SAMPLE, sr } from "./mentor-intraday";
+import { checklistAnsweredAt, dimensionTable, ruleLabel, rulesSection, sizeSection, SMALL_SAMPLE, sr } from "./mentor-intraday";
 import { enrichTrades } from "./enriched-trade";
 import { toRealized } from "./analytics";
 import type { PositionStat, TradeRow } from "./types";
@@ -592,5 +592,29 @@ describe("stop pomeren bliže pa pogođen (14.10.2026)", () => {
 
   it("i kad ni originalni ne bi doneo TP", async () => {
     expect(await line(3.31)).toContain("- **Pomeren stop:** pogođen pomereni stop 95 (originalni 90) · ni originalni ne bi doneo TP (trebalo je SL +3.31R)");
+  });
+});
+
+describe("sizeSection (phase G, G5): size by setup grade and by week", () => {
+  const enriched = (rows: TradeRow[]) => enrichTrades(toRealized(rows), { tzOf: () => "UTC" });
+
+  it("counts micros as a tenth of a mini and compares each week with the one before", () => {
+    const md = sizeSection(
+      enriched([
+        trade(1, "2026-09-29T13:40:00Z", "2026-09-29T13:45:00Z", 50, 10),
+        trade(2, "2026-10-06T13:40:00Z", "2026-10-06T13:45:00Z", 50, 11),
+      ]),
+      undefined,
+      "USD",
+    ).join("\n");
+    expect(md).toContain("## Size po oceni setupa i po nedeljama");
+    // No playbook rules given: every trade is "bez ocene".
+    expect(md).toContain("| bez ocene | 2 ⚠ | 1.05 |");
+    expect(md).toContain("| 2026-09-28 | 1 ⚠ | 1.00 | — |");
+    expect(md).toContain("| 2026-10-05 | 1 ⚠ | 1.10 | +10 % |");
+  });
+
+  it("says nothing without a sized trade", () => {
+    expect(sizeSection([], undefined, "USD")).toEqual([]);
   });
 });
