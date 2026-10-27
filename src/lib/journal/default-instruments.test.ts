@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_INSTRUMENTS, DEFAULT_INSTRUMENT_SYMBOLS, MICRO_OF, MINI_OF } from "./default-instruments";
 
 /**
- * The catalog is a transcription of the exchange's contract terms and Topstep's
+ * The catalog is a transcription of the exchange's contract terms and the platform's
  * fee table, and a transcription error is the only kind of mistake it can carry.
  * Every check here is a fact from those sources, written a second way.
  */
 
-describe("the instrument catalog is the Topstep book", () => {
+describe("the instrument catalog is the futures book", () => {
   it("holds exactly the eight futures traded on it", () => {
     expect(DEFAULT_INSTRUMENT_SYMBOLS).toEqual(["NQ", "MNQ", "ES", "MES", "6E", "M6E", "GC", "MGC"]);
   });

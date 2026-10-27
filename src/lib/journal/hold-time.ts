@@ -4,7 +4,7 @@
  * `duration_seconds` has been computed by the `tj_position_stats` view since it
  * was created and never read by anything. Every number here comes from it.
  *
- * The buckets are minutes (F5.1, decision L2, 29.09.2026): a Topstep position is
+ * The buckets are minutes (F5.1, decision L2, 29.09.2026): an intraday position is
  * flat by the CME day's 16:00 CT close, so every trade lives well under a day, and the question is
  * whether a scalp of a minute and a position held an hour behave differently.
  */

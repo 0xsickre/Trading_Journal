@@ -165,13 +165,13 @@ describe("new account and duplicate", () => {
     );
   });
 
-  it("says what a duplicate copies — no prop firm's rules (phase X), no FTMO (H1)", async () => {
+  it("says what a duplicate copies — no prop firm's rules (phase X)", async () => {
     const user = userEvent.setup({ delay: null });
     render(<AccountSettings accounts={TWO} />);
     await openMenu(user, "Combine 2");
     await user.click(await screen.findByRole("menuitem", { name: /Duplicate/ }));
     expect(screen.getByText(/costs, flat-by time and the practice flag/)).toBeInTheDocument();
-    expect(screen.queryByText(/Topstep rules|FTMO/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/firm rules|MLL|DLL|trailing drawdown/i)).not.toBeInTheDocument();
   });
 });
 
@@ -223,7 +223,7 @@ describe("edit", () => {
     expect(screen.getByText(/Locked: the trades on this account/)).toBeInTheDocument();
   });
 
-  it("offers no Live / Backtest type — the book is Topstep only (H2)", async () => {
+  it("offers no Live / Backtest type — backtest is a Practice account (H2, G-7)", async () => {
     const user = userEvent.setup({ delay: null });
     render(<AccountSettings accounts={TWO} tradeCounts={{ "acc-1": 0 }} />);
     await openMenu(user, "Main Account");
@@ -234,16 +234,16 @@ describe("edit", () => {
 });
 
 describe("no prop firm in the account (phase X, X-2 / X-4)", () => {
-  it("the edit dialog has no Topstep rules, no plan, no reset and no FTMO", async () => {
+  it("the edit dialog has no firm rules, no plan and no reset", async () => {
     const user = userEvent.setup({ delay: null });
     render(<AccountSettings accounts={[account()]} tradeCounts={{ "acc-1": 3 }} />);
     await openMenu(user, "Main Account");
     await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
-    expect(screen.queryByText(/Topstep rules|Personal daily|Risk per trade|FTMO/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/firm rules|MLL|DLL|Personal daily|Risk per trade/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Reset account|Restart challenge/ })).not.toBeInTheDocument();
   });
 
-  it("practice is a flag of the account, saved with the rest and nothing of Topstep", async () => {
+  it("practice is a flag of the account, saved with the rest", async () => {
     const user = userEvent.setup({ delay: null });
     render(<AccountSettings accounts={[account()]} tradeCounts={{ "acc-1": 0 }} />);
     await openMenu(user, "Main Account");
@@ -253,7 +253,6 @@ describe("no prop firm in the account (phase X, X-2 / X-4)", () => {
     await vi.waitFor(() => expect(updateAccountMock).toHaveBeenCalled());
     const patch = updateAccountMock.mock.calls[0][1] as Record<string, unknown>;
     expect(patch.practice).toBe(true);
-    expect(Object.keys(patch).some((k) => k.startsWith("topstep_") || k.startsWith("risk_rule_"))).toBe(false);
   });
 
   it("flat-by is the account's own time, saved with the rest (X-9)", async () => {
@@ -273,7 +272,7 @@ describe("no prop firm in the account (phase X, X-2 / X-4)", () => {
   it("the list marks a practice account, and names no plan", () => {
     render(<AccountSettings accounts={[account({ practice: true })]} />);
     expect(screen.getByText("Practice")).toBeInTheDocument();
-    expect(screen.queryByText("Topstep 50K")).not.toBeInTheDocument();
+    expect(screen.queryByText(/50K|150K/)).not.toBeInTheDocument();
   });
 });
 

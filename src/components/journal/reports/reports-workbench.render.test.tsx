@@ -68,7 +68,7 @@ describe("which book the report covers", () => {
     expect(bookCount()).toHaveTextContent("1");
   });
 
-  it("offers no Live / Backtest choice — the book is Topstep only (H2)", () => {
+  it("offers no Live / Backtest choice — backtest is a Practice account (H2, G-7)", () => {
     render(<ReportsWorkbench accounts={[LIVE]} trades={rows([{ accountId: "live" }])} />);
     expect(screen.queryByRole("button", { name: "Backtest" })).not.toBeInTheDocument();
   });

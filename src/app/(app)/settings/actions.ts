@@ -965,8 +965,8 @@ const money = (label: string) =>
  * The columns `updateAccount` may write, with their ranges.
  *
  * Percentages live in 0–100; costs and balances are not negative. No prop
- * firm's rules are settable (phase X): the Topstep columns that remain until
- * X6 are not written from here. Anything outside these, or any column not
+ * firm's rules are settable (phase X; its columns left the table in X6).
+ * Anything outside these, or any column not
  * listed, is refused rather than stored.
  */
 const accountPatchSchema = z
@@ -1062,7 +1062,7 @@ export async function updateAccount(
   }
 
   // starting_balance is a historical fact, not a setting: it is the denominator
-  // behind every drawdown percentage, the start of the Topstep floor and the
+  // behind every drawdown percentage and the
   // opening point of the equity curve. Changing it silently re-bases all of
   // them. A negative one would invert them, so that much is refused outright;
   // an honest correction is still allowed, but it is worth knowing it rewrites

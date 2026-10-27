@@ -322,10 +322,10 @@ describe("trades the period leaves out", () => {
 });
 
 describe("no prop firm on the dashboard (phase X)", () => {
-  it("shows no Topstep banner and no Survival simulation, even on an old Topstep account", () => {
-    const topstep = { ...ACCOUNT, topstep_mode: true, starting_balance: 50_000 } as unknown as Account;
-    render(<Dashboard trades={[]} accounts={[topstep]} todayKey={TODAY_KEY} timezone={ACCOUNT.timezone} />);
-    expect(screen.queryByText(/Topstep|Survival simulation|MLL/)).not.toBeInTheDocument();
+  it("shows no firm banner and no Survival simulation", () => {
+    const acc50 = { ...ACCOUNT, starting_balance: 50_000 } as unknown as Account;
+    render(<Dashboard trades={[]} accounts={[acc50]} todayKey={TODAY_KEY} timezone={ACCOUNT.timezone} />);
+    expect(screen.queryByText(/Survival simulation|MLL|DLL|firm rules/i)).not.toBeInTheDocument();
   });
 });
 

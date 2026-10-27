@@ -224,7 +224,7 @@ export function ImportWizard({
           (symbol) => instruments.find((i) => i.symbol === symbol)?.point_value ?? null,
         );
         if (trades.length === 0) {
-          toast.error("TopstepX export read, but it holds no trades for that date range.");
+          toast.error("TopstepX (ProjectX) export read, but it holds no trades for that date range.");
           return;
         }
         // One position built in several entries is one trade, not one per row.
@@ -302,7 +302,7 @@ export function ImportWizard({
       // TopstepX accounts are in dollars; into a journal account of another
       // currency the fees would be read as that one's.
       if (account && account.currency !== "USD") {
-        toast.error(`TopstepX trades are in USD, "${account.name}" is in ${account.currency}. Pick a USD account.`);
+        toast.error(`TopstepX (ProjectX) trades are in USD, "${account.name}" is in ${account.currency}. Pick a USD account.`);
         return;
       }
       buildFrom(
@@ -805,7 +805,7 @@ export function ImportWizard({
             {topstepx && (
               <>
                 <p className="text-sm text-muted-foreground">
-                  TopstepX trades export — {topstepx.length} trades. Times carry their own
+                  TopstepX (ProjectX) trades export — {topstepx.length} trades. Times carry their own
                   offset, fees and commissions are added into one cost, and each trade&apos;s
                   P&amp;L is checked against its price move × the contract&apos;s multiplier.
                   MAE/MFE is filled the next morning from the exchange&apos;s candles.

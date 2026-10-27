@@ -50,7 +50,7 @@ export type DashboardWidget = {
  * One is a warning about the reader's own money: the unpriced-trades notice
  * says *the numbers on this page are incomplete*. A display preference must
  * not be able to silence it — a page that can be configured into lying is
- * worse than a page with no configuration at all. (The Topstep banner was the
+ * worse than a page with no configuration at all. (A prop firm's banner was the
  * other warning until phase X.)
  *
  * The second is the headline row. Hiding it would leave a dashboard whose first

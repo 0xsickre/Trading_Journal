@@ -19,13 +19,13 @@ import type { Account, TradeRow } from "./types";
  * next CME trading day (17:00 CT starts it). Before F2 each module used the
  * account's zone, so the calendar and the day's limit filed the same evening
  * under two different days. Since phase X (X-3 A) every account has that day:
- * the account that was Topstep's and the one that was not file it alike.
+ * two accounts file it alike.
  */
 
 const NY = "America/New_York";
 const accounts = [
-  { id: "ts", timezone: NY, topstep_mode: true, topstep_plan: "50K", starting_balance: 50_000, risk_rule_pct: 8 },
-  { id: "cfd", timezone: NY, topstep_mode: false },
+  { id: "ts", timezone: NY, starting_balance: 50_000 },
+  { id: "cfd", timezone: NY },
 ] as unknown as Account[];
 const zoneOf = accountDayZoneResolver(accounts, accounts[0]);
 const zoneOfRow = (row: TradeRow): DayZone => zoneOf(row.account_id);
@@ -65,7 +65,7 @@ function row(id: string, account: string, opened: string, closed: string | null,
   } as unknown as TradeRow;
 }
 
-// Mon 28.09.2026, 17:10 → 17:40 CT (18:10 → 18:40 ET): Tuesday's Topstep day.
+// Mon 28.09.2026, 17:10 → 17:40 CT (18:10 → 18:40 ET): Tuesday's CME day.
 const EVENING_OPEN = "2026-09-28T22:10:00Z";
 const EVENING_CLOSE = "2026-09-28T22:40:00Z";
 const tsEvening = row("ts-evening", "ts", EVENING_OPEN, EVENING_CLOSE, -600);
@@ -150,7 +150,7 @@ describe("\"Bez pregleda\" counts the day the 21:25 reminder counts", () => {
     return `${ct.getFullYear()}-${String(ct.getMonth() + 1).padStart(2, "0")}-${String(ct.getDate()).padStart(2, "0")}`;
   };
 
-  it("lists the Topstep evening trade on Tuesday, where the reminder puts it", () => {
+  it("lists the evening trade on Tuesday, where the reminder puts it", () => {
     const dayOf = (t: TradeRow) => dayKeyIn(t.stats?.closed_at ?? null, zoneOfRow(t));
     expect(trgovackiDan(EVENING_CLOSE)).toBe("2026-09-29");
     expect(reviewGaps([tsEvening], "2026-09-29", dayOf).map((g) => g.id)).toEqual(["ts-evening"]);

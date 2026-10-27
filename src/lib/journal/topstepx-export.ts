@@ -164,7 +164,7 @@ export function readTopstepXTrades(
           const move = direction === "Long" ? exitPrice - entryPrice : entryPrice - exitPrice;
           const expected = move * pv * size;
           if (Math.abs(expected - pnl) > 0.01 + 1e-9 * Math.abs(pnl)) {
-            problem = `PnL ${pnl} is not the price move × ${pv} × ${size} = ${expected.toFixed(2)} — the catalog's multiplier for ${symbol} is not TopstepX's`;
+            problem = `PnL ${pnl} is not the price move × ${pv} × ${size} = ${expected.toFixed(2)} — the catalog's multiplier for ${symbol} is not the platform's (TopstepX / ProjectX)`;
           }
         }
       }

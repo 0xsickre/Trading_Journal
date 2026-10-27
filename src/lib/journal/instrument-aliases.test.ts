@@ -6,7 +6,7 @@ import {
 } from "./instrument-aliases";
 
 describe("cleanInstrumentKey", () => {
-  it("strips FTMO suffixes", () => {
+  it("strips CFD broker suffixes", () => {
     expect(cleanInstrumentKey("US500.cash")).toBe("US500CASH");
     expect(cleanInstrumentKey("US100.cash")).toBe("US100CASH");
   });
@@ -14,7 +14,7 @@ describe("cleanInstrumentKey", () => {
 
 describe("normalizeInstrumentSymbol", () => {
   it("leaves the CFD names as themselves now that the catalog holds no CFD", () => {
-    // The aliases stay for an FTMO book added back in Settings, but they only
+    // The aliases stay for a CFD book added back in Settings, but they only
     // bend a name onto a symbol the catalog HAS — none of these is there now.
     expect(normalizeInstrumentSymbol("US100.cash")).toBe("US100CASH");
     expect(normalizeInstrumentSymbol("NAS100")).toBe("NAS100");

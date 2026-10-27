@@ -107,7 +107,7 @@ describe("mentor pack for a day trader (F5.6)", () => {
 
   it("states no prop firm's limits — the trader keeps them on the platform (phase X)", () => {
     const md = pack();
-    expect(md).not.toContain("## Topstep nalog");
+    expect(md).not.toMatch(/## [^\n]*(MLL|DLL|prop firm)/i);
     expect(md).not.toMatch(/\*\*(MLL|DLL)\*\*|Konzistentnost|prostora do MLL-a|budžet/);
   });
 

@@ -91,9 +91,8 @@ const cfgRange = (from: number, to: number) => resolveBreakevenRange(cfg(from, t
 describe("every account judges a trade with a stop by its own risk (K4; phase X)", () => {
   const band = cfgRange(-16, 16);
 
-  it("ignores any prop firm's columns: the band is the account's own", () => {
-    const withTopstep = { ...cfg(-10, 0), topstep_mode: true, topstep_plan: "50K" } as ReturnType<typeof cfg>;
-    expect(resolveBreakevenRange(withTopstep)).toEqual({ from: -10, to: 0, riskShare: 0.1 });
+  it("the band is the account's own", () => {
+    expect(resolveBreakevenRange(cfg(-10, 0))).toEqual({ from: -10, to: 0, riskShare: 0.1 });
   });
 
   it("judges a trade with a stop against a tenth of its own risk (30.09.2026)", () => {

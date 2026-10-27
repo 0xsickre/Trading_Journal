@@ -10,7 +10,7 @@
  * THE GRID. From the trade's average entry, at the moment of its first entry
  * fill: had the whole position carried a stop k × the real one (k in `sl`) and a
  * target t × that stop (t in `tp`), what came first by the end of the trading
- * day (futures-trading's horizon: the CME day's end, 16:00 CT, since v3 — 15:10 CT, Topstep's flat, until then) — the target (+t), the stop (−1, and a tick more since v2) or neither (the price at that end). Every
+ * day (futures-trading's horizon: the CME day's end, 16:00 CT, since v3 — 15:10 CT, a prop firm's flat, until then) — the target (+t), the stop (−1, and a tick more since v2) or neither (the price at that end). Every
  * cell is in R OF ITS OWN VARIANT (decision L3: the same money at risk, so a
  * wider stop is fewer contracts). Measured gross; `net` takes the round-turn
  * commission off per contract, which in R is larger for a tighter stop — the

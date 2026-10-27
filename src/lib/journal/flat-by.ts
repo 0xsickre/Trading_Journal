@@ -14,7 +14,7 @@ import { addDaysToDayKey, cmeTradingDay, isValidDayKey, zonedInputToUtc } from "
 /**
  * The end of a plan's trading day, 16:00 Chicago — the CME day's end, and the
  * horizon `futures-trading` measures "šta bi bilo" to (`journal_mae.py`
- * `prozor_plana`; trader, 27.10.2026 — it was Topstep's 15:10 CT). Not the
+ * `prozor_plana`; trader, 27.10.2026 — it was a prop firm's 15:10 CT). Not the
  * trader's flat-by time since phase X (that is the account's `flat_by`), though
  * both default to the same minute.
  */

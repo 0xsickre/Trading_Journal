@@ -152,7 +152,7 @@ describe("no_entry_in_red_window left in phase X9 (X-10)", () => {
 });
 
 describe("stop_after_two_losses (08.10.2026: two SL in a row end the day)", () => {
-  // Risk to the stop is $100 (50 points × $2), so the Topstep breakeven band is ±$10.
+  // Risk to the stop is $100 (50 points × $2), so the breakeven band is ±$10.
   const rule = (specs: Spec[]) => evalDay(specs).stop_after_two_losses;
 
   it("fails an entry taken after two losses in a row on the account", () => {

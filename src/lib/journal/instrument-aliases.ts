@@ -1,4 +1,4 @@
-// Broker / FTMO / legacy symbol aliases → canonical B6 watchlist (default-instruments.ts).
+// Broker / CFD / legacy symbol aliases → canonical B6 watchlist (default-instruments.ts).
 
 import { DEFAULT_INSTRUMENT_SYMBOLS } from "./default-instruments";
 
@@ -8,7 +8,7 @@ export function cleanInstrumentKey(raw: string): string {
 }
 
 /**
- * FTMO + legacy broker names → vault canonical symbol.
+ * CFD broker + legacy names → vault canonical symbol.
  * Keys are cleaned (see cleanInstrumentKey).
  */
 const INSTRUMENT_ALIAS_TO_CANONICAL: Record<string, string> = {

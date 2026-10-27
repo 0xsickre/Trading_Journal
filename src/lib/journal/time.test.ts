@@ -414,7 +414,7 @@ describe("which rule an account has (phase X, X-3 A: the CME day, always)", () =
 
   it("every account gets the CME day on its own clock — no prop firm's mode decides it", () => {
     expect(accountDayZone(acc("a"))).toEqual({ tz: NY, cme: true });
-    expect(accountDayZone({ ...acc("b", BG), topstep_mode: false } as { timezone: string })).toEqual({ tz: BG, cme: true });
+    expect(accountDayZone(acc("b", BG))).toEqual({ tz: BG, cme: true });
     expect(accountDayZone(null)).toEqual({ tz: DEFAULT_TZ, cme: true });
   });
 

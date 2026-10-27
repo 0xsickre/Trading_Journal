@@ -557,8 +557,8 @@ const CHICAGO = "America/Chicago";
  * it most of the year and drifts by an hour for the weeks the two switch to
  * summer time on different dates.
  *
- * The exchange's day, not a prop firm's (phase X, X-3 A, 26.10.2026): it was
- * "the Topstep day" and keyed only accounts in Topstep mode until then.
+ * The exchange's day, not a prop firm's (phase X, X-3 A, 26.10.2026): until
+ * then it was the firm's day and keyed only accounts in the firm's mode.
  */
 export function cmeTradingDay(iso: string | Date | null | undefined): string {
   const day = zonedDateKey(iso, CHICAGO);

@@ -52,17 +52,14 @@ describe("duplicateSettings", () => {
   it("copies how the account trades and renames it, with no prop firm's rules (phase X)", () => {
     const src = acc({
       id: "s",
-      name: "Tradeify 50K",
+      name: "Nalog 50K",
       starting_balance: 50000,
       practice: true,
     });
     const d = duplicateSettings(src);
-    expect(d.name).toBe("Tradeify 50K (copy)");
+    expect(d.name).toBe("Nalog 50K (copy)");
     expect(d.starting_balance).toBe(50000);
     expect(d.practice).toBe(true);
-    expect(Object.keys(d).some((k) => k.startsWith("topstep_") || k.startsWith("risk_rule_"))).toBe(false);
-    // FTMO is gone (H1): a duplicate carries none of its columns.
-    expect(Object.keys(d).some((k) => k.startsWith("ftmo_"))).toBe(false);
   });
 });
 
@@ -115,8 +112,8 @@ describe("accountFilterOptions", () => {
 });
 
 describe("Practice is kept apart from \"All accounts\" (trader, 01.10.2026; its own flag since phase X)", () => {
-  const real = { id: "c", name: "Tradeify 50K", archived_at: null, practice: false };
-  const xfa = { id: "x", name: "Tradeify 50K funded", archived_at: null, practice: false };
+  const real = { id: "c", name: "Nalog 50K", archived_at: null, practice: false };
+  const xfa = { id: "x", name: "Nalog 50K funded", archived_at: null, practice: false };
   const practice = { id: "p", name: "Demo 150K", archived_at: null, practice: true };
 
   it("All is the real accounts", () => {
@@ -136,6 +133,6 @@ describe("Practice is kept apart from \"All accounts\" (trader, 01.10.2026; its 
   });
 
   it("the picker says which one is practice", () => {
-    expect(accountFilterOptions([real, practice]).map((o) => o.label)).toEqual(["Tradeify 50K", "Demo 150K (practice)"]);
+    expect(accountFilterOptions([real, practice]).map((o) => o.label)).toEqual(["Nalog 50K", "Demo 150K (practice)"]);
   });
 });

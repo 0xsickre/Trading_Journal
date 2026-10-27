@@ -25,7 +25,7 @@ describe("riskPlanFieldVisible", () => {
     expect(vis("target_price", 100, null, null)).toBe(false);
   });
 
-  it("target and size after stop — the size is the Topstep rule's, no Risk % first (H2)", () => {
+  it("target and size after stop — no Risk % first (H2)", () => {
     expect(vis("target_price", 100, 98, null)).toBe(true);
     expect(vis("position_size", 100, 98, null)).toBe(true);
     expect(vis("position_size", 100, null, null)).toBe(false);

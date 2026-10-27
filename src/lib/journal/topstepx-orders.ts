@@ -195,10 +195,10 @@ export function orderAccountWarning(
 ): string | null {
   const names = [...new Set(orders.map((o) => o.account).filter(Boolean))];
   if (names.length === 0) return null;
-  if (names.length > 1) return `The orders file holds ${names.length} TopstepX accounts (${names.join(", ")}) — export one account at a time.`;
+  if (names.length > 1) return `The orders file holds ${names.length} TopstepX (ProjectX) accounts (${names.join(", ")}) — export one account at a time.`;
   const practiceFile = /^PRAC/i.test(names[0]);
   if (practiceFile && !practice)
-    return `These orders are from a TopstepX Practice account (${names[0]}), and the journal account picked is not Practice.`;
+    return `These orders are from a TopstepX (ProjectX) Practice account (${names[0]}), and the journal account picked is not Practice.`;
   if (!practiceFile && practice)
     return `These orders are from ${names[0]}, not a Practice account — and the journal account picked is Practice.`;
   return null;

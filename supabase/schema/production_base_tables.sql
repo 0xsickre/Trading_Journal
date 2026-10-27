@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   default_target_pct          numeric,
   -- Arhiviran nalog: skriven iz birača, trejdovi i dalje broje (20260919220000).
   archived_at                 timestamptz,
-  -- Topstep režim (topstep_*, risk_rule_*) obrisan u 20261027090000 (faza X6).
+  -- Kolone režima prop firme (topstep_*, risk_rule_*) obrisane u 20261027090000 (faza X6).
   -- Nalog za vežbu, van „All accounts“ (20261026130000, faza X).
   practice                    boolean     NOT NULL DEFAULT false,
   -- Ravno do, sat po Čikagu (20261026140000, faza X).
@@ -153,7 +153,7 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- Odakle je automatski MAE/MFE pročitan: ugovor i rezolucija, npr.
   -- "MNQZ6 · 1s" (20260928120000).
   excursion_note       text,
-  -- TopstepX izvoz naloga (20261009090000): POSLEDNJA cena stop naloga — pomeren
+  -- TopstepX (ProjectX) izvoz naloga (20261009090000): POSLEDNJA cena stop naloga — pomeren
   -- stop čuva samo nju; originalni je stop_price. I kako je ulaz dat.
   final_stop_price     numeric,
   entry_order_type     text,
@@ -167,7 +167,7 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- prvi put dobio entry fill (20260920160000). Imenilac svakog procenta rizika;
   -- jedini činilac tog računa koji se ne može rekonstruisati unazad.
   equity_at_entry      numeric,
-  -- risk_budget_at_entry / room_at_entry (Topstep) obrisani u 20261027090000 (faza X6).
+  -- risk_budget_at_entry / room_at_entry (prop firma) obrisani u 20261027090000 (faza X6).
   scenario jsonb,
   -- Plan kakav je bio kad je trejd prvi put dobio entry fill (20260921120000).
   -- Piše se jednom, nikad se ne prepisuje, briše se na povratak u `planned`.

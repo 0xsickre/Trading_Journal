@@ -267,7 +267,7 @@ describe("the strict path never crosses accounts either", () => {
 });
 
 /**
- * A limit traded the way it is on Topstep: the trade is written when the order
+ * A limit traded the way it is on the platform: the trade is written when the order
  * is placed — playbook, chart, thesis — and the export arrives at the end of the
  * day with the fills. The plan has none, so only this question can find it.
  * Numbers from the first real TopstepX row (MNQZ6, 28.09.2026).
@@ -282,7 +282,7 @@ describe("the fill of a plan written before the order filled", () => {
     openedAt: null,
     grossPl: null,
     netPl: null,
-    accountId: "topstep",
+    accountId: "acc-1",
     tradeNo: 7,
     status: "planned",
     plannedEntry: 30584,
@@ -297,7 +297,7 @@ describe("the fill of a plan written before the order filled", () => {
     exitPrice: 30600.25,
     pnl: -32.5,
     pnlBasis: "gross",
-    accountId: "topstep",
+    accountId: "acc-1",
   };
 
   it("is suggested, with the plan named — the reader still confirms", () => {
@@ -339,7 +339,7 @@ describe("the fill of a plan written before the order filled", () => {
       direction: "Short",
       avgEntry: 30584,
       openedAt: "2026-09-28T08:44:00Z",
-      accountId: "topstep",
+      accountId: "acc-1",
     });
     expect(match(fill, [plan, entered]).matched?.id).toBe("entered");
   });

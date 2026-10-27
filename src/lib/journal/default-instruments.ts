@@ -1,7 +1,7 @@
 // The instrument catalog — the eight CME futures the book trades, and nothing else.
 //
 // It used to be one CFD broker's book (ten FX pairs, metals and an index CFD on
-// FTMO). Trading moved to CME futures on 28.09.2026 and the CFD rows went with it
+// a prop firm's CFD account). Trading moved to CME futures on 28.09.2026 and the CFD rows went with it
 // (migration 20260928140000 removed only those no trade named). A symbol traded
 // somewhere else is added in Settings.
 //
@@ -18,7 +18,7 @@
 // tick_value stays null: it is point_value × tick_size, and a second copy of a
 // product is a number that can disagree with itself.
 //
-// The commission is 0 (phase X5, X-8 A, 26.10.2026): it was Topstep's, and the
+// The commission is 0 (phase X5, X-8 A, 26.10.2026): it was a prop firm's, and the
 // journal knows no firm. The trader types the broker's own per instrument in
 // Settings › Instruments; an existing book keeps what it has. There is no swap:
 // a future carries its financing in the price.

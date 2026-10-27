@@ -41,7 +41,7 @@ describe("registry integrity", () => {
     const locked = DASHBOARD_WIDGETS.filter((w) => !w.hideable).map((w) => w.id);
     // The warning about the reader's money and the headline row. A page that
     // can be configured into lying is worse than one with no configuration.
-    // (The Topstep banner was the third until phase X.)
+    // (A prop firm's banner was the third until phase X.)
     expect(locked.sort()).toEqual(["headline", "unpriced"]);
   });
 });

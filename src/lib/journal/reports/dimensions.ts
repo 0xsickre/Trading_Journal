@@ -265,7 +265,7 @@ const SIZE_EDGES = [
  * copper and two lots of gold are different fractions of the same account.
  */
 // Risk % is a share of the balance the entry day opened with (phase X, X-2 A;
-// until then the room above a Topstep MLL). A day trader's stop is a fraction
+// until then the room above a prop firm's drawdown floor). A day trader's stop is a fraction
 // of a percent of it — $300 on a 50K is 0.6 % — so the edges sit there.
 const RISK_PCT_EDGES = [
   { min: -Infinity, label: "< 0.25%" },

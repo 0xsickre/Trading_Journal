@@ -72,8 +72,8 @@ export function equityAtEntry(row: TradeRow): number | null {
  * opening balance rather than the live figure: a denominator that moves with
  * every close inside the day gives the same trade two answers.
  *
- * Phase X (X-2 A, 26.10.2026): every account, a Topstep one included. Until
- * then a Topstep trade divided by the room above the MLL (`room_at_entry`) —
+ * Phase X (X-2 A, 26.10.2026): every account alike. Until then a trade on a
+ * prop-firm account divided by the room above its drawdown floor (`room_at_entry`) —
  * a prop firm's denominator, gone with its rules.
  */
 export function riskPctTaken(row: TradeRow): number | null {
