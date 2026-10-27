@@ -342,11 +342,8 @@ describe("the day-trading rules say the close and the window (F4)", () => {
   const autoRule = (id: string, auto_key: TrackerRule["auto_key"]) =>
     rule({ id, text: id, stage: "trade", auto_key });
 
-  it("names the close in Belgrade time and the window", () => {
-    const rules = [
-      autoRule("c", "flat_by_close"),
-      autoRule("d", "no_entry_in_red_window"),
-    ];
+  it("names the close in Belgrade time", () => {
+    const rules = [autoRule("c", "flat_by_close")];
     const fail = { verdict: "fail" as const, reason: "violated" as const, offenders: ["t"] };
     render(
       <TrackerStageSection
@@ -355,13 +352,11 @@ describe("the day-trading rules say the close and the window (F4)", () => {
           rules,
           auto: {
             flat_by_close: { ...fail, key: "flat_by_close", at: "2026-04-06T20:10:00.000Z" },
-            no_entry_in_red_window: { ...fail, key: "no_entry_in_red_window", window: "USD CPI m/m" },
           },
         })}
       />,
     );
     expect(screen.getByText(/posle vremena „ravno do“ \(22:10\)/)).toBeInTheDocument();
-    expect(screen.getByText(/ulaz u crvenom prozoru \(USD CPI m\/m\)/)).toBeInTheDocument();
   });
 
   it("says why a rule could not be scored", () => {
@@ -370,18 +365,13 @@ describe("the day-trading rules say the close and the window (F4)", () => {
       <TrackerStageSection
         stage="trade"
         data={data({
-          rules: [
-            autoRule("d", "no_entry_in_red_window"),
-            autoRule("c", "flat_by_close"),
-          ],
+          rules: [autoRule("c", "flat_by_close")],
           auto: {
-            no_entry_in_red_window: { ...na, key: "no_entry_in_red_window", reason: "no_brief" },
             flat_by_close: { ...na, key: "flat_by_close", reason: "not_yet", at: "2026-04-06T20:10:00.000Z" },
           },
         })}
       />,
     );
-    expect(screen.getByText(/Brief za ovaj dan nije stigao/)).toBeInTheDocument();
     expect(screen.getByText(/Pozicija je još otvorena — ocenjuje se posle vremena „ravno do“ \(22:10\)/)).toBeInTheDocument();
   });
 });

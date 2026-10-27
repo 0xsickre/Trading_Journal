@@ -32,7 +32,7 @@
  */
 
 import { numberFieldValue, stringFieldValue } from "./field-values";
-import { planDayEndsAt } from "./session-brief";
+import { planDayEndsAt } from "./flat-by";
 import type { TradeRow } from "./types";
 
 /** What the plan would have met first. */

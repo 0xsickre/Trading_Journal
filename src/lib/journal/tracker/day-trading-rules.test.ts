@@ -1,17 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { buildTradeDayIndex, evaluateAutoRulesForDay } from "./auto-rules";
 import { accountDayZoneResolver } from "../time";
-import { briefResolver, parseSessionBrief, type SessionBrief } from "../session-brief";
 import type { Account, TradeRow } from "../types";
 
 /**
  * The day-trading rules (F4, G5/G7). The money rules that used to sit here
  * left the tracker in phase X (X-1 B, 26.10.2026).
  *
- *   - flat_by_close: a Topstep position is flat by the end of the Topstep day
- *     (15:10 CT, or the brief's holiday / early close);
- *   - no_entry_in_red_window: no entry inside a red window of the day's brief,
- *     and nothing is graded without one.
+ *   - flat_by_close: a position is flat by its account's flat-by time (16:00 CT
+ *     unless set). "No entry in a red window of the brief" and the brief's early
+ *     close left in phase X9 (X-10, 26.10.2026): the brief writes nothing here.
  */
 
 const NY = "America/New_York";
@@ -77,10 +75,9 @@ const index = (specs: Spec[]) =>
   buildTradeDayIndex(specs.map(row), (r) => zoneOf(r.account_id));
 const evalDay = (
   specs: Spec[],
-  ctx: { briefs?: SessionBrief[]; now?: number; flatByOf?: (accountId: string | null) => string } = {},
+  ctx: { now?: number; flatByOf?: (accountId: string | null) => string } = {},
 ) =>
   evaluateAutoRulesForDay(DAY, index(specs), {
-    briefOf: briefResolver(ctx.briefs ?? []),
     now: ctx.now ?? Date.parse("2026-09-30T12:00:00Z"),
     ...(ctx.flatByOf ? { flatByOf: ctx.flatByOf } : {}),
   });
@@ -111,29 +108,10 @@ describe("flat_by_close (phase X, X-9: the account's own time, 16:00 CT unless s
     expect(r.at).toBe("2026-09-29T20:10:00.000Z");
   });
 
-  it("uses the brief's early close", () => {
-    const early = parseSessionBrief({ trading_day: DAY, flat_by: at("17:00"), red_windows: [], ranges: {} })!;
-    const r = evalDay([{ id: "t", opened: at("14:00"), closed: at("17:30") }], { briefs: [early] }).flat_by_close;
-    expect(r.verdict).toBe("fail");
-    expect(r.at).toBe("2026-09-29T17:00:00.000Z");
-  });
-
-  it("ignores a brief's ordinary 15:10 — that was Topstep's time, not an early close", () => {
-    const ordinary = parseSessionBrief({ trading_day: DAY, flat_by: at("20:10"), red_windows: [], ranges: {} })!;
-    const r = evalDay([{ id: "t", opened: at("14:00"), closed: at("20:30") }], { briefs: [ordinary] }).flat_by_close;
-    expect(r.verdict).toBe("pass");
-  });
-
   it("does not grade a position still open before the close, and fails it after", () => {
     const open = [{ id: "open", opened: at("14:00"), closed: null }];
     expect(evalDay(open, { now: Date.parse(at("18:00")) }).flat_by_close.reason).toBe("not_yet");
     expect(evalDay(open, { now: Date.parse(at("21:30")) }).flat_by_close.verdict).toBe("fail");
-  });
-
-  it("says the exchange was closed rather than grading against no time", () => {
-    const closed = parseSessionBrief({ trading_day: DAY, flat_by: null, red_windows: [], ranges: {} })!;
-    const r = evalDay([{ id: "t", opened: at("14:00") }], { briefs: [closed] }).flat_by_close;
-    expect(r.reason).toBe("market_closed");
   });
 
   it("grades every account — no prop firm's mode decides it", () => {
@@ -142,33 +120,9 @@ describe("flat_by_close (phase X, X-9: the account's own time, 16:00 CT unless s
   });
 });
 
-describe("no_entry_in_red_window", () => {
-  const brief = parseSessionBrief({
-    trading_day: DAY,
-    flat_by: at("20:10"),
-    red_windows: [{ from: at("12:25"), to: at("12:45"), title: "USD CPI m/m", impact: "visok" }],
-    ranges: {},
-  })!;
-
-  it("fails an entry inside the window, edges included, and names the window", () => {
-    const r = evalDay([
-      { id: "edge", opened: at("12:45") },
-      { id: "clear", opened: at("13:00") },
-    ], { briefs: [brief] }).no_entry_in_red_window;
-    expect(r.verdict).toBe("fail");
-    expect(r.offenders).toEqual(["edge"]);
-    expect(r.window).toBe("USD CPI m/m");
-  });
-
-  it("passes entries outside every window", () => {
-    expect(evalDay([{ id: "a", opened: at("13:00") }], { briefs: [brief] }).no_entry_in_red_window.verdict).toBe(
-      "pass",
-    );
-  });
-
-  it("grades nothing without the day's brief (G7: only the brief's windows)", () => {
-    expect(evalDay([{ id: "a", opened: at("12:30") }]).no_entry_in_red_window.reason).toBe("no_brief");
-    expect(evalDay([]).no_entry_in_red_window.reason).toBe("no_trades");
+describe("no_entry_in_red_window left in phase X9 (X-10)", () => {
+  it("is not evaluated any more — the brief writes no windows into the journal", () => {
+    expect(Object.keys(evalDay([{ id: "a", opened: at("12:30") }]))).not.toContain("no_entry_in_red_window");
   });
 });
 

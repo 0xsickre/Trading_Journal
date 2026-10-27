@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { AUTO_MISTAKES, autoMistakes, plannedRewardRisk, type AutoMistakeKey } from "./auto-mistakes";
-import { parseSessionBrief } from "./session-brief";
 import type { DailyBias } from "./daily-bias";
 import type { DayZone } from "./time";
 import type { TradeRow } from "./types";
@@ -97,21 +96,8 @@ describe("autoMistakes — the trading window, Belgrade clock (09:00–12:00)", 
   });
 });
 
-describe("autoMistakes — the brief's red windows", () => {
-  const brief = parseSessionBrief({
-    trading_day: DAY,
-    flat_by: at("20:10"),
-    red_windows: [{ from: at("12:25"), to: at("12:45"), title: "USD CPI m/m", impact: "visok" }],
-    ranges: {},
-  })!;
-  const ctx = { briefOf: (d: string) => (d === DAY ? brief : null) };
-  it("both edges of a red window count", () => {
-    const k = keysOf([row({ id: "a", opened: "12:25" }), row({ id: "b", opened: "12:45" }), row({ id: "c", opened: "12:46" })], ctx);
-    expect(k("a")).toContain("red_window");
-    expect(k("b")).toContain("red_window");
-    expect(k("c")).not.toContain("red_window");
-  });
-  it("without the day's brief, no red window is invented", () => {
+describe("autoMistakes — no red window since phase X9 (X-10)", () => {
+  it("the brief writes no windows into the journal, so none is found", () => {
     expect(keysOf([row({ id: "a", opened: "12:30" })])("a")).not.toContain("red_window");
   });
 });

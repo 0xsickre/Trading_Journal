@@ -3,7 +3,7 @@
  *
  * The trader picks only what the data cannot know — an early entry, a chased
  * price. Everything below is read off what is already stored: the fills, the
- * day's brief, the trading window, the bias card, the playbook link, the stop
+ * trading window, the bias card, the playbook link, the stop
  * and target, the orders export's last stop and the excursion from the
  * contract's candles.
  *
@@ -14,17 +14,17 @@
  * report sums an old manual "Pomerio stop" and a new automatic one as one tag.
  *
  * NOTHING IS GUESSED. Each detection answers only when its input exists: no
- * window for the day, no brief, no orders export, no MFE yet, no stop or no
+ * window for the day, no orders export, no MFE yet, no stop or no
  * target — and that mistake is simply not there. "Not known" is not "not made".
  *
  * Left out on purpose (decision B-1 A): an entry after the daily target or the
  * DLL, an oversized position and too many trades. Each needs a money limit or
- * a count per account, which phase X took out of the journal.
+ * a count per account, which phase X took out of the journal. An entry in a red
+ * window of the brief left in phase X9 (X-10): the brief writes nothing here.
  */
 import { excursionFromTrade } from "./excursion";
 import { numberFieldValue } from "./field-values";
 import { plannedEntryOf } from "./plan-snapshot";
-import { redWindowAt } from "./session-brief";
 import { stopStatus } from "./stop-moved";
 import { DEFAULT_TZ, zonedDateKey, zonedInputToUtc } from "./time";
 import {
@@ -39,7 +39,6 @@ import type { TradeRow } from "./types";
 /** The automatic mistakes, keyed, with the option-list value each one stands for. */
 export const AUTO_MISTAKES = {
   outside_window: "Ulaz van prozora",
-  red_window: "Ulaz u crvenom prozoru",
   after_two_sl: "Ulaz posle 2 SL",
   no_bias: "Bez biasa dana pre ulaza",
   no_playbook: "Ulaz bez setupa iz playbook-a",
@@ -154,14 +153,11 @@ export function autoMistakes(
     const noBias = new Set(
       ctx.biasOf && results.htf_bias_set.reason === "violated" ? results.htf_bias_set.offenders : [],
     );
-    const brief = ctx.briefOf?.(day) ?? null;
     for (const t of opened) {
       const row = byId.get(t.id);
       if (!row) continue;
       const window = outsideWindow(day, t.openedAt, ctx);
       if (window) add(t.id, window);
-      const red = brief ? redWindowAt(t.openedAt, brief.redWindows) : null;
-      if (red) add(t.id, mark("red_window", `Ulaz u crvenom prozoru brief-a: ${red.title}.`));
       if (afterTwo.has(t.id)) add(t.id, mark("after_two_sl", "Ulaz posle dva SL zaredom istog dana."));
       if (noBias.has(t.id)) add(t.id, mark("no_bias", "Bias dana nije upisan na kartici pre ulaza."));
       for (const m of ownMistakes(row)) add(t.id, m);

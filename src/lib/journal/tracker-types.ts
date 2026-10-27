@@ -28,10 +28,11 @@ export const AUTO_RULE_KEYS = [
   "playbook_linked",
   "stop_loss_set",
   "thesis_written",
-  // F4, the day trader's rules (G5): flat by the close, and no entry inside a
-  // red window of the day's brief.
+  // F4, the day trader's rules (G5): flat by the close. "No entry inside a red
+  // window of the day's brief" (`no_entry_in_red_window`) left in phase X9
+  // (X-10, 26.10.2026): the brief writes nothing into the journal any more; its
+  // rows are retired like the money rules above.
   "flat_by_close",
-  "no_entry_in_red_window",
   // 08.10.2026 (trader, with the mentor): two stop losses IN A ROW end the day.
   // Not a count of trades — a win or a scratch in between breaks the run.
   "stop_after_two_losses",

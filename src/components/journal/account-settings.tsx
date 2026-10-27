@@ -51,7 +51,7 @@ import { parseSettingsNumber } from "@/lib/journal/settings-rules";
 import { duplicateSettings, isArchived } from "@/lib/journal/account-rules";
 import { fmtMoney } from "@/lib/journal/format";
 import { DEFAULT_TZ } from "@/lib/journal/time";
-import { DEFAULT_FLAT_BY_CT } from "@/lib/journal/session-brief";
+import { DEFAULT_FLAT_BY_CT } from "@/lib/journal/flat-by";
 
 /** `HH:MM`, 24-hour — the shape `tj_accounts.flat_by` takes. */
 const FLAT_BY_RE = /^([01]\d|2[0-3]):[0-5]\d$/;

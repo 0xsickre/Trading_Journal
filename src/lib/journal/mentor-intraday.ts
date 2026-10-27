@@ -23,7 +23,6 @@ import { gateLateText } from "./daily-report";
 import { loggedAfterEntry, sealedNumber } from "./plan-snapshot";
 import { getDimension, type DimensionContext } from "./reports/dimensions";
 import { afterExitR, scenarioOf, scenarioTrade, summarizeScenarios } from "./scenario";
-import type { RedWindow, SessionBrief } from "./session-brief";
 import { afterSessionOpen } from "./session-window";
 import { numberFieldValue } from "./field-values";
 import { needsOriginalStop, stopStatus } from "./stop-moved";
@@ -188,8 +187,6 @@ export type DailyContext = {
   compliance?: ReadonlyMap<string, DayCompliance>;
   ruleText?: ReadonlyMap<string, string>;
   reportByDate?: ReadonlyMap<string, DailyReportLite>;
-  /** The futures-trading brief per trading day: its note and news windows. */
-  briefByDay?: ReadonlyMap<string, SessionBrief>;
   /** The zone every time in the pack is written in — the trader's (phase N: Belgrade, never ET). */
   tz?: string;
 };
@@ -245,10 +242,6 @@ export function dailySection(
     const mental = rep?.mental_temp != null ? `${rep.mental_temp}/5${late ? ` · ${late}` : ""}` : "—";
     const rules = rulesCell(ctx.compliance?.get(day), ctx.ruleText);
     const notes: string[] = [];
-    const inRed = list.filter((t) => redWindowAt(t.openedAt, ctx.briefByDay?.get(t.openDay)) != null).length;
-    if (inRed > 0) notes.push(`${inRed} ${sr(inRed, "ulaz", "ulaza", "ulaza")} u crvenom prozoru`);
-    const dayNote = ctx.briefByDay?.get(day)?.dayNote;
-    if (dayNote) notes.push(dayNote);
     const tail = `${mental} | ${flags.join(" · ") || "—"} | ${cell(rules)} | ${cell(notes.join(", ") || "—")} |`;
     if (list.length === 0) {
       out.push(`| ${day} | 0 | — | — | — | — | — | — | ${tail}`);
@@ -274,24 +267,21 @@ export function dailySection(
 }
 
 /**
- * Each day's rules one by one, and the day's news windows (phase M).
+ * Each day's rules one by one (phase M).
  *
  * The daily table gives a percentage; a mentor questioning a day needs which
  * rule held, which broke, which was never answered and which could not be
- * judged — and the brief's windows even when no trade fell in one.
+ * judged. The brief's news windows left in phase X9 (X-10).
  */
 export function trackerByDaySection(
   days: readonly string[],
   rules: readonly TrackerRule[],
   compliance: ReadonlyMap<string, DayCompliance>,
-  briefByDay: ReadonlyMap<string, SessionBrief>,
-  /** The zone the windows are written in (phase N: the trader's). */
-  tz: string = DEFAULT_TZ,
 ): string[] {
   if (days.length === 0 || rules.length === 0) return [];
   const out = [
     `## Tracker po danu`,
-    `_✓ ispunjeno · ✗ prekršeno · ? neodgovoreno · — nije moglo da se oceni (n/a). Crveni prozori i flat su iz jutarnjeg brief-a._`,
+    `_✓ ispunjeno · ✗ prekršeno · ? neodgovoreno · — nije moglo da se oceni (n/a)._`,
     "",
   ];
   for (const day of days.slice(-DAY_ROWS_CAP)) {
@@ -305,17 +295,6 @@ export function trackerByDaySection(
             ? " · u toku"
             : "";
     out.push(`### ${day}${tag}`);
-    const brief = briefByDay.get(day);
-    if (brief) {
-      const windows = brief.redWindows.map(
-        (w) =>
-          `${fmtInTz(w.from, tz, "HH:mm")}–${fmtInTz(w.to, tz, "HH:mm")} ${cell(w.title)}${w.impact ? ` (${w.impact})` : ""}`,
-      );
-      const flat = brief.flatBy ? ` · flat do ${fmtInTz(brief.flatBy, tz, "HH:mm")}` : "";
-      out.push(`- Crveni prozori: ${windows.join("; ") || "nema"}${flat}`);
-    } else {
-      out.push(`- Brief za ovaj dan nije stigao.`);
-    }
     const missed = new Set(c?.missedRuleIds ?? []);
     const unanswered = new Set(c?.unansweredRuleIds ?? []);
     const na = new Set(c?.notApplicableRuleIds ?? []);
@@ -402,13 +381,6 @@ export function rulesSection(rules: readonly TrackerRule[], compliance: readonly
   return out;
 }
 
-/** The news window an entry fell in, from that trading day's brief. */
-function redWindowAt(openedAt: string | null, brief: SessionBrief | undefined): RedWindow | null {
-  if (!openedAt || !brief) return null;
-  const t = toEpoch(openedAt);
-  return brief.redWindows.find((w) => toEpoch(w.from) <= t && t <= toEpoch(w.to)) ?? null;
-}
-
 /** The intraday facts of one trade, as lines under its heading in the full detail. */
 /** Position id → when its checklist was last answered, for the pack (phase Y). */
 export function checklistAnsweredAt(
@@ -429,7 +401,6 @@ export function tradeContextLines(
   e: EnrichedTrade,
   opts: {
     displayTz: string;
-    brief?: SessionBrief;
     insightTitles?: readonly string[];
     accountName?: string;
     /** The trade's fills, when the export loaded them. */
@@ -482,12 +453,6 @@ export function tradeContextLines(
   }
   if (opts.checklistAt && e.closedAt && toEpoch(opts.checklistAt) > toEpoch(e.closedAt)) {
     lines.push(`- **Checklist:** upisan ${fmtInTz(opts.checklistAt, opts.displayTz, "dd.MM. HH:mm")}, posle zatvaranja`);
-  }
-  const w = redWindowAt(e.openedAt, opts.brief);
-  if (w) {
-    lines.push(
-      `- **Ulaz u crvenom prozoru:** ${cell(w.title)}${w.impact ? ` (${w.impact})` : ""} ${fmtInTz(w.from, opts.displayTz, "HH:mm")}–${fmtInTz(w.to, opts.displayTz, "HH:mm")}`,
-    );
   }
   const sc = scenarioOf(e.trade.row);
   if (sc) {

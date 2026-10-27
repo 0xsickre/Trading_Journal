@@ -33,8 +33,7 @@ import { CalendarViewToggle } from "@/components/journal/calendar-view-toggle";
 import { PageHeader } from "@/components/app/page-header";
 import { accountDayZoneResolver } from "@/lib/journal/time";
 import { breakevenRangeResolver } from "@/lib/journal/breakeven";
-import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
-import { briefResolver, flatByResolver } from "@/lib/journal/session-brief";
+import { flatByResolver } from "@/lib/journal/flat-by";
 import { tradingWindowResolver } from "@/lib/journal/tracker/trading-window";
 
 
@@ -138,7 +137,7 @@ export default async function CalendarPage({
     const from = days[0];
     const to = days[days.length - 1];
 
-    const [reports, rules, checkinsByDay, briefs, biases] = await Promise.all([
+    const [reports, rules, checkinsByDay, biases] = await Promise.all([
       getDailyReportsInRange(from, to),
       // Retired rules included, and `rulesLiveOn` filters per day — a rule that
       // was live in March still judged March, and dropping it would raise that
@@ -148,12 +147,9 @@ export default async function CalendarPage({
       // date range, which was computed above, so awaiting it separately bought
       // nothing but a round trip.
       getCheckins(from, to),
-      // The month's briefs, for the rules that read the red windows and the close.
-      getSessionBriefs(from, to),
       // The month's bias forecasts (phase D): `htf_bias_set` reads the card.
       getDailyBiases(from, to),
     ]);
-    const briefOf = briefResolver(briefs);
     const biasOf = firstBiasResolver(biases);
     const tradingWindowOf = tradingWindowResolver(rules);
 
@@ -169,7 +165,7 @@ export default async function CalendarPage({
         const live = rulesLiveOn(rules, d);
         return resolveAutoResults(
           live,
-          evaluateAutoRulesForDay(d, index, { briefOf, tradingWindowOf, biasOf, flatByOf, reportOf }),
+          evaluateAutoRulesForDay(d, index, { tradingWindowOf, biasOf, flatByOf, reportOf }),
           checkinsByDay.get(d) ?? new Map(),
         );
       },

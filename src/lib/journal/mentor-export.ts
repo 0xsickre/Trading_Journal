@@ -33,7 +33,6 @@ import type { RunResult } from "./insights/registry";
 import { computeExcursionStats, excursionFromTrade } from "./excursion";
 import type { RuleLookup } from "./reports/rule-lookup";
 import { enrichTrades, type DailyReportLite, type EnrichedTrade } from "./enriched-trade";
-import type { SessionBrief } from "./session-brief";
 import { biasPackSection, type DailyBias } from "./daily-bias";
 import type { DayCompliance } from "./tracker/compliance";
 import type { TrackerRule } from "./tracker-types";
@@ -431,8 +430,6 @@ export type MentorPackOpts = {
   /** The trader's daily tracker rules, and each day's verdict on them. */
   trackerRules?: TrackerRule[];
   compliance?: DayCompliance[];
-  /** The futures-trading brief per trading day: news windows. */
-  briefs?: SessionBrief[];
   /** The daily report per day: mental temperature. */
   reports?: DailyReportLite[];
   /** Account id → name, printed on each trade when the scope has several. */
@@ -513,7 +510,6 @@ export function buildMentorPack(
     ? enrichTrades(realized, { tzOf: (t) => opts.tzOf!(t.row), range, pnlOf: (t) => t.net, fillCounts })
     : [];
   const enrichedById = new Map(enriched.map((e) => [e.id, e]));
-  const briefByDay = new Map((opts.briefs ?? []).map((b) => [b.tradingDay, b]));
   const insightsByTrade = new Map<string, string[]>();
   for (const i of opts.insights?.insights ?? []) {
     if (i.level !== "trade") continue;
@@ -525,7 +521,6 @@ export function buildMentorPack(
     if (!e) return [];
     return tradeContextLines(e, {
       displayTz,
-      brief: briefByDay.get(e.openDay),
       insightTitles: insightsByTrade.get(t.id),
       accountName: multiAccount && t.account_id ? opts.accountNames?.get(t.account_id) : undefined,
       fills: opts.executions?.get(t.id),
@@ -607,7 +602,6 @@ export function buildMentorPack(
         "- **Sesije (po Beogradu, kao linije na chartu)** — Azija 00:00–06:00, Pre Londona 06:00–09:00, London 09:00–14:00, NY pre otvaranja 14:00–15:30, NY AM 15:30–17:30, Ručak 17:30–19:30, NY PM 19:30–22:00, Posle zatvaranja 22:00–00:00. Svaka granica je po satu svoje berze (London ili NY). **Minuti posle otvaranja** se broje od otvaranja sesije trejda: London 09:00, NY 15:30.",
         "- **Posle gubitaka** — koliko je gubitaka zaredom već bilo zatvoreno tog dana na istom nalogu u trenutku ulaza. Samo analitika: broj trejdova ne ograničavam. Novčane limite (dnevni gubitak, cilj) držim sam na platformi naloga; journal ih ne meri.",
         "- **Vreme u minusu** — % trajanja trejda u kome je tekući P&L bio ispod nule, iz berzanskih sveća (1 s).",
-        "- **Crveni prozor** — vesti visokog uticaja iz jutarnjeg brief-a (futures-trading), u kojima ne ulazim.",
         "- **Veličina** — broj ugovora; mikro (MNQ/MES/M6E) je 1/10 mini ugovora.",
         "- **Vreme upisa** — „playbook napravljen …, posle ulaza“, „checklist upisan …, posle zatvaranja“ i „upisano posle prvog ulaza“ kod mentalne ocene znače da je to napisano kad je ishod već bio poznat; journal ga ne broji kao plan.",
       ].join("\n"),
@@ -661,7 +655,6 @@ export function buildMentorPack(
         compliance: new Map((opts.compliance ?? []).map((c) => [c.date, c])),
         ruleText: new Map((opts.trackerRules ?? []).map((r) => [r.id, ruleLabel(r)])),
         reportByDate: new Map((opts.reports ?? []).map((r) => [r.report_date, r])),
-        briefByDay,
         periodDays: opts.periodDays,
         tz: displayTz,
       }),
@@ -671,8 +664,6 @@ export function buildMentorPack(
         packDays(enriched, opts.periodDays),
         opts.trackerRules ?? [],
         new Map((opts.compliance ?? []).map((c) => [c.date, c])),
-        briefByDay,
-        displayTz,
       ),
     );
     if (opts.biases) {

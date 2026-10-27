@@ -49,7 +49,6 @@ import { drawdownDuration, drawdownEpisodes } from "@/lib/journal/balance";
 /** What `insightResult` answers while its panel is switched off. */
 const EMPTY_INSIGHTS = { insights: [], skipped: [] };
 /** A stable empty default, so the tracker memo does not recompute on every render. */
-const NO_BRIEFS: SessionBrief[] = [];
 const NO_BIASES: DailyBias[] = [];
 
 const chartLoading = () => (
@@ -209,7 +208,7 @@ import {
   weeklyExitEfficiency,
   type PnlMode,
 } from "@/lib/journal/analytics";
-import { briefResolver, flatByResolver, type SessionBrief } from "@/lib/journal/session-brief";
+import { flatByResolver } from "@/lib/journal/flat-by";
 import { unpricedClosedCount } from "@/lib/journal/money-provenance";
 import {
   buildMentorPack,
@@ -389,7 +388,6 @@ export function Dashboard({
   fieldDefs = [],
   trackerRules = [],
   checkins = [],
-  briefs = NO_BRIEFS,
   biases = NO_BIASES,
   todayKey,
   timezone,
@@ -411,8 +409,6 @@ export function Dashboard({
   /** Including retired ones — a rule live on a past day still scored that day. */
   trackerRules?: TrackerRule[];
   checkins?: TrackerCheckin[];
-  /** The morning briefs of the tracker span — two rules read their windows and close. */
-  briefs?: SessionBrief[];
   /** Bias dana (phase D): every forecast, for the mentor pack. */
   biases?: DailyBias[];
   /**
@@ -1288,7 +1284,6 @@ export function Dashboard({
       (row) => tzForAccount(row.account_id),
       bandOf,
     );
-    const briefOf = briefResolver(briefs);
     const flatByOf = flatByResolver(accounts);
     const tradingWindowOf = tradingWindowResolver(trackerRules);
     const biasOf = firstBiasResolver(biases);
@@ -1310,7 +1305,6 @@ export function Dashboard({
       resolveAutoResults(
         trackerRules,
         evaluateAutoRulesForDay(d, index, {
-          briefOf,
           tradingWindowOf,
           biasOf,
           flatByOf,
@@ -1329,7 +1323,6 @@ export function Dashboard({
     trackerRules,
     reportByDay,
     checkins,
-    briefs,
     biases,
     trades,
     accountFilter,
@@ -1566,15 +1559,13 @@ export function Dashboard({
       startingBalance: scopedAccount?.starting_balance ?? null,
       fieldDefs,
       // The day trader's half (F5.6): each trade's own day, the trader's clock,
-      // the trader's rules and how each day kept them, the brief's news windows
-      // and the day's mental note.
+      // the trader's rules and how each day kept them, and the day's mental note.
       tzOf: (row) => tzForAccount(row.account_id),
       displayTz: timezone,
       trackerRules,
       compliance: trackerSeries.filter(
         (d) => (fromDay == null || d.date >= fromDay) && (toDay == null || d.date <= toDay),
       ),
-      briefs,
       reports: dailyReports,
       accountNames: new Map(accounts.map((a) => [a.id, a.name])),
       // Every weekday of the period up to today, so a day without a trade is in

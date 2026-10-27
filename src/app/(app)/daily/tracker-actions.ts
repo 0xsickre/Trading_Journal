@@ -12,8 +12,7 @@ import { getAccounts, getPrimaryAccount } from "@/lib/journal/accounts";
 import { accountDayZoneResolver, dayKeyIn, todayFor } from "@/lib/journal/time";
 import { lockRefusal } from "@/lib/journal/review-gaps";
 import { breakevenRangeResolver } from "@/lib/journal/breakeven";
-import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
-import { briefResolver, flatByResolver } from "@/lib/journal/session-brief";
+import { flatByResolver } from "@/lib/journal/flat-by";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { getTrackerRules } from "@/lib/journal/tracker/queries";
 import {
@@ -133,13 +132,10 @@ export async function lockDay(reportDate: string): Promise<Result> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Nisi prijavljen." };
 
-  const [accounts, rules, tradesAll, briefs, biases, report] = await Promise.all([
+  const [accounts, rules, tradesAll, biases, report] = await Promise.all([
     getAccounts(),
     getTrackerRules({ includeRetired: true }),
     getTradesWithStats(),
-    // The day's brief, for the two rules that read it — what is frozen is what
-    // the page showed, and the page read the same row.
-    getSessionBriefs(reportDate, reportDate),
     // The day's bias forecasts (phase D): `htf_bias_set` reads the card.
     getDailyBiases(reportDate, reportDate),
     // The day's report (phase B5): `daily_psychology` reads its psychology.
@@ -162,7 +158,6 @@ export async function lockDay(reportDate: string): Promise<Result> {
   if (refusal) return { ok: false, error: refusal };
   const index = buildTradeDayIndex(trades, (row) => tzOf(row.account_id), breakevenRangeResolver(accounts));
   const auto = evaluateAutoRulesForDay(reportDate, index, {
-    briefOf: briefResolver(briefs),
     tradingWindowOf: tradingWindowResolver(rules),
     biasOf: firstBiasResolver(biases),
     flatByOf: flatByResolver(accounts),

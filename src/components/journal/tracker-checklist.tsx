@@ -74,10 +74,6 @@ function dayTradingText(res: AutoRuleResult): string | null {
       return broke
         ? `Prekršeno: pozicija otvorena posle vremena „ravno do“ (${closeTime(res.at)}).`
         : `Sve pozicije zatvorene do vremena „ravno do“ (${closeTime(res.at)}).`;
-    case "no_entry_in_red_window":
-      return broke
-        ? `Prekršeno: ulaz u crvenom prozoru${res.window ? ` (${res.window})` : ""}.`
-        : "Nijedan ulaz u crvenom prozoru brief-a.";
     // Phase Y4: the day's window, Belgrade time.
     case "trading_window": {
       if (!res.window) return null;
@@ -146,10 +142,6 @@ function autoReasonText(res: AutoRuleResult): string {
       return "Nijedan trejd ovog dana nije planiran pre ulaza — upisan posle zatvaranja ili uvozom, pa teza pre ulaza nije mogla da postoji. Ocenjuju se samo trejdovi otvoreni iz plana.";
     case "unpriced":
       return "Trejd bez vrednosti poena — rezultat je nepoznat, pa se dan po ovom pravilu ne ocenjuje.";
-    case "no_brief":
-      return "Brief za ovaj dan nije stigao u journal — bez njegovih crvenih prozora pravilo nema po čemu da oceni.";
-    case "market_closed":
-      return "Po brief-u je berza ovog dana zatvorena — nema kraja dana po kome bi se ocenilo.";
     case "not_yet":
       if (REVIEW_KEYS.has(res.key)) return "Trejd je još otvoren — pregled se ocenjuje posle izlaza.";
       return res.at
@@ -363,7 +355,7 @@ export type TrackerDayData = {
  * looks exactly as it did before the tracker existed.
  *
  * Auto rules whose evaluator reached no verdict are deliberately still shown: an
- * unscored rule has to be visible saying why (no window set, no brief), or the
+ * unscored rule has to be visible saying why (no window set), or the
  * one thing standing between the user and a working rule would be invisible.
  */
 export function TrackerStageSection({

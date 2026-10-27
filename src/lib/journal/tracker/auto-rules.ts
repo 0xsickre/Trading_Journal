@@ -20,7 +20,7 @@ import { sealedNumber, sealedText } from "../plan-snapshot";
 import { BREAKEVEN_R, tradeOutcome, type BreakevenRange } from "../breakeven";
 import { DEFAULT_TZ, dayKeyIn, zonedDateKey, zonedInputToUtc, type DayZone } from "../time";
 import type { TradingWindow } from "./trading-window";
-import { DEFAULT_FLAT_BY_CT, flatByFor, redWindowAt, type SessionBrief } from "../session-brief";
+import { DEFAULT_FLAT_BY_CT, flatByFor } from "../flat-by";
 import type { AutoRuleKey } from "../tracker-types";
 import type { TradeRow } from "../types";
 import { GRADE_RATING, NO_MISTAKE } from "../quick-log";
@@ -46,10 +46,6 @@ export type AutoReason =
   | "unpriced"
   /** The day is locked; the verdict is the one frozen at lock time. */
   | "frozen"
-  /** A rule that reads the morning brief, on a day the brief did not reach the journal. */
-  | "no_brief"
-  /** The brief says the exchange was closed that day — there is no close to be flat by. */
-  | "market_closed"
   /** A position still open, and the close not reached yet. */
   | "not_yet";
 
@@ -61,7 +57,7 @@ export type AutoRuleResult = {
   offenders: string[];
   /** `flat_by_close`: the close the day was graded against, ISO UTC. */
   at?: string | null;
-  /** `no_entry_in_red_window`: the window of the first offending entry. */
+  /** `trading_window`: the window the day was graded against. */
   window?: string;
   /** `stop_after_two_losses`: the longest losing run an entry followed, against the limit. */
   counted?: { observed: number; limit: number };
@@ -195,13 +191,12 @@ export type TradeDayIndex = {
 };
 
 /**
- * What the day-trading rules read besides the trades: the morning brief of a
- * trading day, each account's flat-by time and the present moment (a position
- * still open is only late once the close has passed). All optional — a caller
- * without them gets `no_brief` and the default 16:00 CT, never a guess.
+ * What the day-trading rules read besides the trades: each account's flat-by
+ * time and the present moment (a position still open is only late once the
+ * close has passed). All optional — a caller without them gets the default
+ * 16:00 CT, never a guess. No morning brief since phase X9 (X-10).
  */
 export type AutoContext = {
-  briefOf?: (day: string) => SessionBrief | null;
   /** Epoch ms; defaults to the moment of evaluation. */
   now?: number;
   /** An account's flat-by time, `HH:MM` Chicago (`flatByResolver`); none = 16:00. */
@@ -571,8 +566,8 @@ function evalStopAfterTwoLosses(opened: TrackerTrade[], closedToday: TrackerTrad
 
 /**
  * Every position opened on the day is flat by its account's flat-by time that
- * day (phase X, X-9 A) — or earlier, when the brief says the exchange closes
- * earlier (a holiday or an early close; `flatByFor`).
+ * day (phase X, X-9 A; `flatByFor`). Since X9 no brief says when a holiday or an
+ * early close comes earlier — the trader keeps that on the platform.
  *
  * A position still open is late only once its close has passed; before that it
  * is `not_yet`, not a pass — nothing about it has been decided.
@@ -580,9 +575,7 @@ function evalStopAfterTwoLosses(opened: TrackerTrade[], closedToday: TrackerTrad
 function evalFlatByClose(day: string, opened: TrackerTrade[], ctx: Required<AutoContext>): AutoRuleResult {
   const key: AutoRuleKey = "flat_by_close";
   if (opened.length === 0) return na(key, "no_trades");
-  const brief = ctx.briefOf(day);
-  const closes = opened.map((t) => flatByFor(day, brief, ctx.flatByOf(t.accountId)).at);
-  if (closes.every((c) => c == null)) return na(key, "market_closed");
+  const closes = opened.map((t) => flatByFor(day, ctx.flatByOf(t.accountId)));
   const offenders: string[] = [];
   let pending = 0;
   // The close shown: the first late position's, else the day's (one account's,
@@ -609,26 +602,6 @@ function evalFlatByClose(day: string, opened: TrackerTrade[], ctx: Required<Auto
   };
 }
 
-/** No entry inside a red window of the day's brief — the brief's own windows only (G7). */
-function evalNoEntryInRedWindow(day: string, opened: TrackerTrade[], ctx: Required<AutoContext>): AutoRuleResult {
-  const key: AutoRuleKey = "no_entry_in_red_window";
-  if (opened.length === 0) return na(key, "no_trades");
-  const brief = ctx.briefOf(day);
-  if (!brief) return na(key, "no_brief");
-  const hits = [...opened]
-    .sort(byOpened)
-    .map((t) => ({ t, w: redWindowAt(t.openedAt, brief.redWindows) }))
-    .filter((h) => h.w != null);
-  const breached = hits.length > 0;
-  return {
-    key,
-    verdict: breached ? "fail" : "pass",
-    reason: breached ? "violated" : "ok",
-    offenders: hits.map((h) => h.t.id),
-    ...(breached ? { window: hits[0].w?.title } : {}),
-  };
-}
-
 /**
  * Verdicts for one day.
  *
@@ -642,13 +615,12 @@ function evalNoEntryInRedWindow(day: string, opened: TrackerTrade[], ctx: Requir
 export function evaluateAutoRulesForDay(
   day: string,
   index: TradeDayIndex,
-  /** The brief and the present moment, for the day-trading rules. */
+  /** The flat-by times, the window, the bias cards and the present moment, for the day-trading rules. */
   context: AutoContext = {},
 ): Record<AutoRuleKey, AutoRuleResult> {
   const closed = index.byCloseDay.get(day) ?? [];
   const opened = index.byOpenDay.get(day) ?? [];
   const ctx: Required<AutoContext> = {
-    briefOf: context.briefOf ?? (() => null),
     now: context.now ?? Date.now(),
     tradingWindowOf: context.tradingWindowOf ?? (() => null),
     flatByOf: context.flatByOf ?? (() => DEFAULT_FLAT_BY_CT),
@@ -670,10 +642,8 @@ export function evaluateAutoRulesForDay(
     // can say that. Only trades planned before their entry are graded — see
     // `evalThesisWritten`.
     thesis_written: evalThesisWritten(opened),
-    // Open day: each is a decision taken at entry — flat by the close, no entry
-    // in a red window.
+    // Open day: a decision taken at entry — flat by the close.
     flat_by_close: evalFlatByClose(day, opened, ctx),
-    no_entry_in_red_window: evalNoEntryInRedWindow(day, opened, ctx),
     // Open day: the decision is the entry taken after the run.
     stop_after_two_losses: evalStopAfterTwoLosses(opened, closed),
     // Open day: the window of the day the position was opened on.

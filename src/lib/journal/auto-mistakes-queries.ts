@@ -5,8 +5,7 @@ import { getAccounts, getPrimaryAccount } from "./accounts";
 import { breakevenRangeResolver } from "./breakeven";
 import { firstBiasResolver } from "./daily-bias";
 import { getDailyBiases } from "./daily-bias-queries";
-import { briefResolver, flatByResolver } from "./session-brief";
-import { getSessionBriefs } from "./session-brief-queries";
+import { flatByResolver } from "./flat-by";
 import { accountDayZoneResolver, dayKeyIn } from "./time";
 import { getTradesWithStats } from "./trades";
 import { getTrackerRules } from "./tracker/queries";
@@ -16,16 +15,15 @@ import type { TradeRow } from "./types";
 /**
  * The automatic mistakes (phase B4) of the trades opened on the days `from`–`to`,
  * by trade id — read from the same rows the tracker grades: every trade of those
- * days (a run of stops needs the day's other trades), the briefs, the trading
+ * days (a run of stops needs the day's other trades), the trading
  * window and the bias cards of the same span.
  */
 export async function getAutoMistakes(from: string, to: string): Promise<Map<string, AutoMistake[]>> {
-  const [accounts, primary, rules, all, briefs, biases] = await Promise.all([
+  const [accounts, primary, rules, all, biases] = await Promise.all([
     getAccounts(),
     getPrimaryAccount(),
     getTrackerRules({ includeRetired: true }),
     getTradesWithStats(),
-    getSessionBriefs(from, to),
     getDailyBiases(from, to),
   ]);
   const zoneOf = accountDayZoneResolver(accounts, primary);
@@ -36,7 +34,6 @@ export async function getAutoMistakes(from: string, to: string): Promise<Map<str
   };
   const rows = all.filter((r) => inSpan(r.stats?.opened_at) || inSpan(r.stats?.closed_at));
   return autoMistakes(rows, tzOf, breakevenRangeResolver(accounts), {
-    briefOf: briefResolver(briefs),
     tradingWindowOf: tradingWindowResolver(rules),
     biasOf: firstBiasResolver(biases),
     flatByOf: flatByResolver(accounts),

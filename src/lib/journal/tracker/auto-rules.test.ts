@@ -252,6 +252,10 @@ describe("the closed set of auto rules", () => {
       expect(AUTO_RULE_KEYS as readonly string[], key).not.toContain(key);
   });
 
+  it("reads nothing from the brief: the red-window rule left in phase X9 (X-10)", () => {
+    expect(AUTO_RULE_KEYS as readonly string[]).not.toContain("no_entry_in_red_window");
+  });
+
   it("with no trades, every rule says so", () => {
     for (const key of AUTO_RULE_KEYS) expect(verdicts()[key].reason, key).toBe("no_trades");
   });

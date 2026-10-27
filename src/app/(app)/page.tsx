@@ -12,7 +12,6 @@ import { getUserPrefs } from "@/lib/journal/user-prefs";
 import { getDashboardTemplates } from "@/lib/journal/dashboard-template-queries";
 import { addDaysToDayKey, DEFAULT_TZ, todayFor } from "@/lib/journal/time";
 import { Dashboard } from "@/components/journal/dashboard";
-import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
 import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
@@ -57,7 +56,6 @@ export default async function DashboardPage() {
     dashboardTemplates,
     checkinsByDay,
     positionRules,
-    briefs,
     biases,
   ] = await Promise.all([
     accountsPromise,
@@ -85,11 +83,6 @@ export default async function DashboardPage() {
       getCheckins(addDaysToDayKey(todayKey, -(TRACKER_SPAN_DAYS - 1)), todayKey),
     ),
     positionRulesPromise,
-    // The briefs of the same span, for the tracker rules that read the red
-    // windows and an early close.
-    dayPromise.then(({ todayKey }) =>
-      getSessionBriefs(addDaysToDayKey(todayKey, -(TRACKER_SPAN_DAYS - 1)), todayKey),
-    ),
     // Bias dana (phase D), for the mentor pack.
     getDailyBiases(),
   ]);
@@ -121,7 +114,6 @@ export default async function DashboardPage() {
         fieldDefs={fieldDefs}
         trackerRules={trackerRules}
         checkins={checkins}
-        briefs={briefs}
         biases={biases}
         todayKey={todayKey}
         timezone={primary?.timezone ?? DEFAULT_TZ}

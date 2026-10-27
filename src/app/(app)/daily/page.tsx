@@ -27,9 +27,7 @@ import { ReviewGapsCard } from "@/components/journal/review-gaps-card";
 import { reviewGaps } from "@/lib/journal/review-gaps";
 import { accountDayZoneResolver } from "@/lib/journal/time";
 import { breakevenRangeResolver } from "@/lib/journal/breakeven";
-import { getSessionBriefs } from "@/lib/journal/session-brief-queries";
-import { briefResolver, flatByResolver } from "@/lib/journal/session-brief";
-import { SessionBriefCard } from "@/components/journal/session-brief-card";
+import { flatByResolver } from "@/lib/journal/flat-by";
 import { DayCloseCard } from "@/components/journal/day-close-card";
 import { dayClose } from "@/lib/journal/day-close";
 import { autoMistakes } from "@/lib/journal/auto-mistakes";
@@ -76,7 +74,6 @@ export default async function DailyPage({
     tradesAll,
     report,
     checkinsByDay,
-    briefs,
     biases,
     optionsMap,
   ] = await Promise.all([
@@ -91,15 +88,11 @@ export default async function DailyPage({
     // The day in view only: the streak strip that read the 28 weeks behind it
     // left in phase M — the run of days is the mentor's to read, from the pack.
     dayPromise.then(({ reportDate }) => getCheckins(reportDate, reportDate)),
-    // The card reads the day in view, and so do the tracker rules that read
-    // the red windows and the close.
-    dayPromise.then(({ reportDate }) => getSessionBriefs(reportDate, reportDate)),
     // Bias dana (phase D): every forecast — the day's for the card, all of them for the score.
     getDailyBiases(),
     // The emotion list, for the day's psychology (phase B5).
     getOptionsMap(true),
   ]);
-  const briefOf = briefResolver(briefs);
 
   const checkins = checkinsByDay.get(reportDate) ?? new Map();
 
@@ -120,7 +113,6 @@ export default async function DailyPage({
   const index = buildTradeDayIndex(trades, tzOf, bandOf);
   const dayRules = rulesLiveOn(rules, reportDate);
   const autoCtx = {
-    briefOf,
     tradingWindowOf: tradingWindowResolver(rules),
     biasOf: firstBiasResolver(biases),
     flatByOf: flatByResolver(accounts),
@@ -207,7 +199,6 @@ export default async function DailyPage({
         dayClose={<DayCloseCard close={dayClose(dayRows, found)} currency={primary?.currency ?? "USD"} />}
         beforeSession={
           <>
-            <SessionBriefCard day={reportDate} brief={briefOf(reportDate)} tz={timezone} flatBy={primary?.flat_by} />
             <DailyBiasCard
               day={reportDate}
               biases={biases.filter((b) => b.tradingDay === reportDate)}

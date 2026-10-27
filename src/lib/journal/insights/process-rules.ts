@@ -14,7 +14,7 @@
 
 import { setupScoreFromTrade } from "../setup-score";
 import { fmtMoney } from "../format";
-import { planDayEndsAt } from "../session-brief";
+import { planDayEndsAt } from "../flat-by";
 import type { TradeRow } from "../types";
 import type { InsightContext } from "./context";
 import type { Insight, InsightRule } from "./types";
