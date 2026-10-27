@@ -126,7 +126,7 @@ What `futures-trading` does with the journal, each described in its own README:
 
 - **The morning brief and the evening message** are about the market only since X-10 (26.10.2026;
   trader: „brief treba da bude brief za tržište, ne za journal“): they read no account and no trade
-  and write nothing here. Until then the brief printed a contract table from the Topstep accounts and
+  and write nothing here. Until then the brief printed a contract table from the prop-firm accounts and
   wrote one `tj_session_briefs` row a day (red windows, an early close, the expected range), which
   `/daily` showed and two tracker rules read; that table and its rows stay as history, and nothing
   reads them since phase X9. The evening message no longer lists trades without a review — "Bez
@@ -159,11 +159,10 @@ The routine both repos are built around — the same steps as "Dnevni tok journa
 
 | When | Where | What |
 |---|---|---|
-| 11:12 and 15:15 Belgrade | Telegram | The levels from `futures-trading` (`tools/brief/nivoi.py`): which of PDH/PDL (RTH and the whole Topstep day), PWH/PWL, PMH/PML and the Asia range London took, and what is left above and below the price — at 11:12 for London's morning (08:00–11:00), at 15:15 for all of London until the New York open. The morning brief carries the same levels without London |
 | Before the session | Telegram, then `/daily` → 1 · Pre sesije | The market brief from `futures-trading` (news, red windows, expected range, levels) on Telegram; on `/daily` two questions — how you are, and whether you trade today |
 | Before and during the trade | The platform + OBS | The order with its bracket; the size is the trader's, on the platform. The session is recorded, and the setup, stop, target and reason are said out loud before the click ("Teza naglas"). Nothing in the journal |
 | End of the day | `/import`, then `/trades/[id]` | The TopstepX **trades and orders** exports together: the fills, the target, the stop's last price, how each trade ended. Then **the trade page** per trade (phase P) — the original stop where it was moved, what was said before the click, setup and its checklist, the categories, A/B/C, mistakes. A setup seen and not taken is no longer written per trade since phase G: it is one of the day's up to three "prilike" on `/daily`. MAE/MFE arrives on its own — provisional the same evening, exact the next morning |
-| 15:20 CT (22:20 Belgrade) | Telegram | How the day went on NQ / ES and what price did with the brief's lines — the market only since X-10 (26.10.2026); a trade still missing its review is on "Bez pregleda" on `/daily` |
+| 16:10 CT (23:10 Belgrade), after the CME day ends at 16:00 CT | Telegram | How the day went on NQ / ES and what price did with the brief's lines — the market only since X-10 (26.10.2026); a trade still missing its review is on "Bez pregleda" on `/daily` |
 | Closing the day / the week | Dashboard → Export for Claude, then the private `trading-mentor` repo | The mentor pack for the day (or the week) goes to Claude, who asks the closing questions and keeps the record of rules and observations. The journal has no written review of its own |
 
 ### Bias dana — retired (phase E, 27.10.2026)
@@ -360,7 +359,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
-| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both; the seeded tags are Serbian since K2, `20260929200000`, which rewrote the trades that carried them), Tracker, Instruments (the eight futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional, typed by the trader: a new book's catalog starts at 0 since phase X5, `20261026180000`, X-8 A; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, the **timezone** shown, not typed: every time is in Europe/Belgrade (`DEFAULT_TZ`, K5, `20260929210000`), a file with its own offset is converted on import, and every account counts its days by the CME's 17:00 CT; the **breakeven range** shown, not typed (§ Metrics, K4), **Flat by (Chicago time)** — `tj_accounts.flat_by`, 16:00 unless set, what `flat_by_close` grades against (phase X4) — and **Practice / demo account** — a flag, `tj_accounts.practice`. **Backtest goes there** (phase G, G-7): an account named "Backtest" with the flag on, its trades imported like any other (TradingView replay through the CSV mapping). Practice stays out of "All accounts" everywhere, so a backtest never moves the real book, the `/daily` tracker or `/playbooks`; it is read by picking the account on the dashboard, `/journal`, `/calendar` and `/reports` (by setup there — `/playbooks` has no account picker), and `futures-trading` measures its MAE/MFE and "šta bi bilo" from the real contract's candles like any trade. No such account exists on 27.10.2026 — it is created here when the first backtest is imported; since phase X2 (26.10.2026) no prop firm's rules are set here, and since X6 (`20261027090000`) the account has no Topstep columns at all), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion lives under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
+| `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both; the seeded tags are Serbian since K2, `20260929200000`, which rewrote the trades that carried them), Tracker, Instruments (the eight futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional, typed by the trader: a new book's catalog starts at 0 since phase X5, `20261026180000`, X-8 A; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, the **timezone** shown, not typed: every time is in Europe/Belgrade (`DEFAULT_TZ`, K5, `20260929210000`), a file with its own offset is converted on import, and every account counts its days by the CME's 17:00 CT; the **breakeven range** shown, not typed (§ Metrics, K4), **Flat by (Chicago time)** — `tj_accounts.flat_by`, 16:00 unless set, what `flat_by_close` grades against (phase X4) — and **Practice / demo account** — a flag, `tj_accounts.practice`. **Backtest goes there** (phase G, G-7): an account named "Backtest" with the flag on, its trades imported like any other (TradingView replay through the CSV mapping). Practice stays out of "All accounts" everywhere, so a backtest never moves the real book, the `/daily` tracker or `/playbooks`; it is read by picking the account on the dashboard, `/journal`, `/calendar` and `/reports` (by setup there — `/playbooks` has no account picker), and `futures-trading` measures its MAE/MFE and "šta bi bilo" from the real contract's candles like any trade. No such account exists on 27.10.2026 — it is created here when the first backtest is imported; since phase X2 (26.10.2026) no prop firm's rules are set here, and since X6 (`20261027090000`) the account has none of a prop firm's columns), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion lives under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
 | `/login` | Supabase auth |
 
 ---
@@ -479,7 +478,7 @@ drift from the module computing the same thing.
 | Profit factor | `gross profit / gross loss` | `Infinity` when there is no loss — a real maximum, not missing data. `null` only when there is nothing to divide |
 | Expectancy | `winRate × avgWinR + (1 − winRate) × avgLossR` | Computed over the R population only — only a trade with a stop has an R |
 | Best / worst | Largest and smallest single net result | |
-| Breakeven | Trades inside the account's breakeven band | The band is **fixed** (K4) and **per trade** (30.09.2026; every account since phase X): net P&L within ±0.1R of **the trade's own risk to the stop** (`BREAKEVEN_R`, `riskMoneyAtEntry`; `tradeOutcome` in `breakeven.ts`). A trade with no stop, and a day or a week, fall back to the account's own band (`breakeven_from` / `breakeven_to`, 0 to 0 unless set), no longer to a Topstep plan's ±$16 / 24 / 36. The tracker reads the same band per account (`breakevenRangeResolver`). Settings shows it and offers nothing to type |
+| Breakeven | Trades inside the account's breakeven band | The band is **fixed** (K4) and **per trade** (30.09.2026; every account since phase X): net P&L within ±0.1R of **the trade's own risk to the stop** (`BREAKEVEN_R`, `riskMoneyAtEntry`; `tradeOutcome` in `breakeven.ts`). A trade with no stop, and a day or a week, fall back to the account's own band (`breakeven_from` / `breakeven_to`, 0 to 0 unless set), no longer to a prop-firm plan's fixed ±$16 / 24 / 36. The tracker reads the same band per account (`breakevenRangeResolver`). Settings shows it and offers nothing to type |
 | **R (everywhere)** | `gross points / (risk in points × entry qty)` | **R is always GROSS**, and does not follow the net/gross toggle — that toggle moves money only |
 
 **Why R is gross while money can be net.** They are deliberately two different questions. R measures
@@ -500,8 +499,8 @@ no screen reads it on purpose — one R per book, so that two do not start to dr
 ±$20 scratch is neither a win nor a loss, and it is dropped from the win rate instead of being
 counted as a loss — which would understate a book full of scratches by several points.
 
-**A trade is judged against its own risk** (decided 30.09.2026 for the Topstep account, on every
-account since phase X). The dollar band was then a tenth of the Topstep plan's nominal risk, and a micro trade risks a fraction of that: in the mock
+**A trade is judged against its own risk** (decided 30.09.2026 for the prop-firm account, on every
+account since phase X). The dollar band was then a tenth of the plan's nominal risk, and a micro trade risks a fraction of that: in the mock
 book one MES contract stopped out for −$22.25, which is −1.13R, sat inside the band of the time (±$25) and was filed as a
 scratch — left out of the win rate and of the expectancy, which read +1.27R where the book averaged
 +0.91R. Every per-trade classification (statistics, reports, insights, journal grid, the playbook
@@ -625,13 +624,12 @@ Get this wrong and nothing breaks — the numbers simply file themselves under d
 - **Days are the ACCOUNT's**, resolved on the server. A `new Date()` read in the browser shifts the
   whole calendar by one column for anyone not sitting in the account's zone.
 - **Every account counts the CME trading day, 17:00 → 17:00 Chicago** (phase X4, X-3 A, 26.10.2026:
-  the exchange's day, not a prop firm's — until then only an account in Topstep mode had it, and any
+  the exchange's day, not a prop firm's — until then only an account in a prop firm's mode had it, and any
   other counted the calendar day of its own zone). `accountDayZone` / `cmeTradingDay` in `time.ts`,
   no setting: the book holds CME futures only. A fill at 18:30 CT on Monday is Tuesday's, and the Sunday
   open is Monday's. One resolver (`accountDayZoneResolver`, a `DayZone` per account) dates every
   trade for the calendar, `/daily` and "Bez pregleda", the tracker verdicts, the dashboard, the
-  reports and the day-level insights — the same day `cmeTradingDay` computes and the 15:20 CT
-  reminder in `futures-trading` counts, so the calendar and `/daily` do not disagree about an evening. In "All accounts"
+  reports and the day-level insights — the same day `cmeTradingDay` computes, so the calendar and `/daily` do not disagree about an evening. In "All accounts"
   **every trade keeps its own account's rule**: a day must not change with the filter on the screen.
   The week is the week of that day (Sunday evening opens the new one), and the hour of entry is still
   read on the account's clock. Computed in Chicago, whatever the account's zone: Belgrade matches it
@@ -715,7 +713,7 @@ exactly as `maxPctOfPeakPnl` already did, and `balance.test.ts` pins both halves
 a fall with no denominator is not a book that never fell.
 
 **Survival, the axis, is the only Survival left.** The "Survival simulation" card, which resampled
-the book forward sixty days against a Topstep MLL or the book's own worst drawdown, left the
+the book forward sixty days against a prop firm's MLL or the book's own worst drawdown, left the
 dashboard in phase X (X-2 A, 26.10.2026) with `survival.ts` and `tracker/equity-ladder.ts`.
 
 ---
@@ -910,11 +908,11 @@ stay forever as a value nobody meant, and "not recorded" and "1" are different a
 now (`portfolio-heat.ts`). Per account and never summed across them: 2 % of a €5,000 account plus 2 %
 of a $100,000 one is not 4 % of anything. A half-closed position carries its REMAINING risk, and a
 position with no stop is counted separately — "3 of 4 measured" — because treating an unmeasurable
-position as zero would turn "I do not know" into "it is safe". (On a Topstep account it was also read
+position as zero would turn "I do not know" into "it is safe". (On a prop-firm account it was also read
 against the DLL left today until phase X.)
 
 **There is no survival simulation since phase X** (X-2 A, 26.10.2026). `survival.ts` replayed the
-book's days forward sixty trading days against a Topstep MLL, or the book's own worst drawdown, and
+book's days forward sixty trading days against a prop firm's MLL, or the book's own worst drawdown, and
 left with the prop-firm rules it was built around.
 
 **Held at the same time** (`co-exposure.ts`, `/reports`) answers whether two positions are really one.
@@ -974,7 +972,7 @@ book, from values the screens already derive (`mentor-intraday.ts`):
   The legend explains the trading day (17:00–17:00 CT), the session windows, "after losses"
   (analytics only — money limits are kept on each account's platform, not in the journal), time
   underwater and the phase Y marks of a playbook, checklist or gate written after the
-  fact. **No prop firm's state or rules** since phase X (26.10.2026): the "Topstep nalog" section
+  fact. **No prop firm's state or rules** since phase X (26.10.2026): the pack's prop-firm account section
   (balance, MLL, DLL, consistency, target, risk rule) and the "DLL dostignut" day note are gone.
 - **The trader's rules**: every live tracker rule (manual or automatic, with its key), the
   period's mean compliance and the rules broken most often.
@@ -1053,7 +1051,7 @@ day-trading rule is a decision taken at entry, so each is charged to the trading
 
 | Rule | Fails when | Not scored (`na`) when |
 |---|---|---|
-| `flat_by_close` | a position closed after its account's flat-by time that day, or is still open once that time has passed — on every account since phase X4 (`tj_accounts.flat_by`, `HH:MM` Chicago, 16:00 unless set, migration `20261026140000`; it was Topstep's 15:10 CT on Topstep accounts only) | no trade opened that day, or a position is still open before the close |
+| `flat_by_close` | a position closed after its account's flat-by time that day, or is still open once that time has passed — on every account since phase X4 (`tj_accounts.flat_by`, `HH:MM` Chicago, 16:00 unless set, migration `20261026140000`; it was a prop firm's 15:10 CT on its accounts only) | no trade opened that day, or a position is still open before the close |
 | `stop_after_two_losses` (08.10.2026, `20261008140000`) | an entry on an account follows two stop losses IN A ROW, closed before it that trading day — a loss is below the breakeven band (a tenth of the trade's risk), so a win or a scratch in between breaks the run | the day had no entry, or a close before the entry has no price |
 | `thesis_recorded` (phase Q) | a trade has no `thesis` ("šta sam rekao pre klika"), read live; WHEN it was said is the recording's, so the mentor's | as above |
 | `review_complete` (phase Q; phase B6, `20261026170000`) | a trade lacks a grade, an exit reason, or a mistake when the grade is not A; a C also needs one sentence (`trade_journal_notes`). TF ulaza and the psychology tag left it in phase B, the bias of the day in phase E | as above |
@@ -1180,7 +1178,7 @@ measured. `maximize_your_profit_day` stays out: it needs the peak of the day's c
 
 **F6 (29.09.2026)** removed the two vault-era rules (`against_macro_bias`, `cot_chase`; decision
 M2-A) and moved `stale_plan` to the trading day (decision M3-A): a plan is stale once its trading day
-is over — 16:00 CT, the CME day's end (15:10 CT, Topstep's flat, until 27.10.2026), on the day it was
+is over — 16:00 CT, the CME day's end (15:10 CT, a prop firm's flat, until 27.10.2026), on the day it was
 written, or on the next trading day when it was written after that — with no fill and not marked
 missed (`planTradingDay` in `flat-by.ts`, the same rule `futures-trading` ends "Šta bi bilo" by,
 `prozor_plana`).
@@ -1198,30 +1196,29 @@ those things to measure.
 The journal is **neutral about prop firms**. The trader (X-1 B): "tracker meri samo proces … jer ako
 bude više naloga na prop firma biće konflikta" — money limits (MLL, DLL, daily target, risk per
 trade) are kept by the trader on each account's own platform, not computed here. Until phase X the
-book ran Topstep's rules (F3, R, T: `topstep.ts`, `topstep-status.ts`, `topstep-banner.tsx`,
-`topstep-parity.json`); they left with:
+book ran a prop firm's rules (F3, R, T: its rules module, status, banner and parity file); they left with:
 
-- the **Topstep banner** and the "Topstep status" widget, the **DLL / daily target** line of the
+- the **prop-firm banner** and its status widget, the **DLL / daily target** line of the
   "Pred sesiju" card and of the open positions' heat, and the **Survival simulation** (§ Survival);
-- the **risk budget** and the contract count sized from it (`computeTopstepRisk`,
+- the **risk budget** and the contract count sized from it (the firm-risk function and
   `computeFuturesContracts`), the **Scaling Plan**, consistency and both XFA payout paths, the
   reset and the "MLL reached blocks new exposure" guard;
 - the **room above the MLL as the Risk % denominator**: Risk % is the risk to the stop over the
   equity the entry day opened with on every account (`riskPctTaken`), and the `/reports` buckets sit
   around a day trader's fraction of a percent (< 0.25 %, 0.25–0.5 %, 0.5–0.75 %, 0.75–1 %, 1–2 %,
   ≥ 2 %);
-- the Topstep section of the mentor pack, and the parity test with `futures-trading`'s brief
+- the prop-firm section of the mentor pack, and the parity test with `futures-trading`'s brief
   (gone from both repos with X-10: the brief computes no account any more).
 
 **Phase X4** made the 17:00 → 17:00 CT day the CME day of every account (§ Attributing to days) and
 gave `flat_by_close` the account's own flat-by time (§ Process tracking). **Phase X6**
-(`20261027090000`, 27.10.2026) dropped the `tj_accounts.topstep_*` and `risk_rule_*` columns and
+(`20261027090000`, 27.10.2026) dropped the prop-firm mode columns of `tj_accounts` (with `risk_rule_*`) and
 `tj_positions.risk_budget_at_entry` / `room_at_entry`: nothing wrote or read them since X4, and since
 X8 (`futures-trading`) the brief and the evening message no longer read `tj_accounts` either; the
-values of the one Topstep account are in the nightly backup. **Phase X9** (`20261026190000`) stopped the journal reading the brief: the
+values of the one prop-firm account are in the nightly backup. **Phase X9** (`20261026190000`) stopped the journal reading the brief: the
 "Pred sesiju" card, `no_entry_in_red_window` (retired), the "red window" auto mistake and the brief's
 windows in the mentor pack are gone; `tj_session_briefs` stays as history. **Phase X5** (`20261026180000`) made the factory data neutral: catalog commission 0
-for a new book, no Topstep or DLL item in the factory lists, and the trader's "Kraj Topstep dana"
+for a new book, no prop-firm or DLL item in the factory lists, and the trader's day-end item
 renamed "Kraj dana (ravno)". **What stayed:** the 15:10 CT horizon of "Šta bi bilo" — until 27.10.2026, when it moved to the CME day's end, 16:00 CT (scenario v3, below);
 and the TopstepX import formats, which are a platform's files, not a firm's rules (X-7).
 
@@ -1412,7 +1409,7 @@ Two levels sit between those categories, and they are treated differently:
 
 The TradingView "List of trades" import — a Strategy Tester or Bar Replay export joined into positions,
 its size rescaled to lots and its excursions written as MAE/MFE — left in H2 with the backtest account
-kind (decision I5-A: the book was Topstep only). `tj_positions.excursion_source` still reads
+kind (decision I5-A: the book was futures only). `tj_positions.excursion_source` still reads
 `tradingview` on no trade; `tj_import_rows.excursion_written` and the `clear_excursion` branch of
 `tj_undo_import_batch` stay for batches written before it.
 
@@ -1511,8 +1508,8 @@ folder a trade's note opens in) and Nedeljni osvrt, each with an intraday templa
 day trader's since F4 (`20260929120000`), in Serbian since K2 (`20260929200000`), and since phase J
 (`20261015120000`) they are **the trader's own book of 15.10.2026**, read from the database that day:
 the mentor had merged the duplicates, fixed the typos and added the mistakes he actually makes, so a
-reset no longer brings back the list of 30.09. Phase X5 (`20261026180000`) renames "Kraj Topstep
-dana" to "Kraj dana (ravno)" and leaves out "Ulaz posle dnevnog cilja" and "Ulaz posle DLL-a", which
+reset no longer brings back the list of 30.09. Phase X5 (`20261026180000`) renames the day-end
+item to "Kraj dana (ravno)" and leaves out "Ulaz posle dnevnog cilja" and "Ulaz posle DLL-a", which
 read a firm's money limit. Phase E (`20261027120000`) leaves out the "Bias dana" list and field and
 the "Bez biasa dana pre ulaza" mistake. Lists and fields are named Smer, TF ulaza,
 Tehnički tagovi, Ocena setupa, Razlog izlaza, Razlog propuštanja, Emocije, Disciplina, Greške (the
@@ -1681,7 +1678,7 @@ container does not have. It stays a later option, not an oversight.
 
 | Not built | Why |
 |---|---|
-| Backtesting and trade replay | Done directly in TradingView. An embed does not help: Bar Replay lives in their application, and the widget is a black box the code cannot step through. The journal no longer imports its results (H2: Topstep only) |
+| Backtesting and trade replay | Done directly in TradingView. An embed does not help: Bar Replay lives in their application, and the widget is a black box the code cannot step through. The journal no longer imports its results (H2; a backtest is a Practice account, G-7) |
 | Broker sync that fills in a whole trade | Manual entry is a choice and an advantage — it forces the trade to be read once more. A statement import corrects the objective numbers afterwards; everything that is a judgement is still typed |
 | Spaces, mentor, leaderboard | Single-user system |
 | AI chat and agents | The mentor-pack export and the insight rules give the same thing without the API cost |
@@ -1745,7 +1742,7 @@ writes the result into `tj_positions.scenario` (jsonb, v2 since phase S; v1 from
   grid's way (far targets and tight stops looked better than they fill); a v1 document is re-measured
   on the next hourly run, and the journal reads v1 and v2 alike.
 - **The CME day (scenario v3, 27.10.2026).** The horizon is the end of the trade's CME day, 16:00 CT
-  (trader: „neka šta bi bilo prati CME dan“); until then it was Topstep's 15:10 CT flat. A v2 document
+  (trader: „neka šta bi bilo prati CME dan“); until then it was a prop firm's 15:10 CT flat. A v2 document
   is re-measured on the next hourly run; the journal reads v1–v3 alike, and `horizon_end` holds the end
   each one was measured to — so a v2 row still on screen before that run reaches 15:10 CT, under a
   "16:00 CT" label.

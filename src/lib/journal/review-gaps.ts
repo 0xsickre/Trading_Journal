@@ -5,10 +5,10 @@
  * shows the stop was moved (`stop-moved.ts`) and only its last price is known.
  *
  * Mostly the trades that reached the journal only through the day's export —
- * the ones not logged right after they closed. The evening reminder in the
- * futures-trading repo (`tools/journal_podsetnik.py`) applies the same rule, on
- * the same day — `dayOf` is the account's day rule, the CME's 17:00 → 17:00 CT,
- * which is what the reminder counts; change both or neither.
+ * the ones not logged right after they closed. Until X-10 (26.10.2026) the
+ * evening reminder in futures-trading applied the same rule on the same day;
+ * it is market-only now, so this is the one place the rule lives — `dayOf` is
+ * the account's day rule, the CME's 17:00 → 17:00 CT.
  */
 import { numberFieldValue } from "./field-values";
 import { sealedNumber } from "./plan-snapshot";

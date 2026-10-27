@@ -75,8 +75,8 @@ izričito. Tri koje treba znati:
 - **Max drawdown se računa u dve osnove**, imenovane odvojeno: `maxDrawdownPctOfEquity` ide u UI,
   `maxDrawdownPctOfPeakPnl` **isključivo** u skor — da skor ostane uporediv sa TZ-ovim.
 - **Breakeven opseg deli brojanje od novca.** Broj trejdova poštuje opseg, sume novca prate stvarni
-  predznak. Da nije tako, profit factor bi bio tiho naduvan. Na Topstep nalogu opseg je po trejdu
-  (30.09.2026): ±0,1R rizika tog trejda do stopa, a novčani ±$25/38/56 samo bez stopa.
+  predznak. Da nije tako, profit factor bi bio tiho naduvan. Opseg je po trejdu
+  (30.09.2026; na svakom nalogu od faze X): ±0,1R rizika tog trejda do stopa, a opseg samog naloga samo bez stopa.
 
 **„Zella Scale"** (potencijal vs stvarno) kod TZ-a je par *target attainment* + *MFE capture*.
 Oba postoje, oba su kolone u gridu i oba idu u izvoz.
@@ -134,28 +134,27 @@ opsegu naloga, i klikom na dan koji vodi na pun dnevni pregled.
 | Trading checklist | ✅ tracker pravila po fazi dana, sa danima u nedelji |
 | **Zaključavanje dana** | ✅ **nepovratno, DB trigerom** |
 
-**Verdikt: pokriveno, i preko toga.** Deset tracker pravila se **ocenjuje automatski iz podataka**
-(gubitak po trejdu i po danu prema Topstep planu ili ličnom dnevnom limitu, rizik po trejdu i veličina
-prema pravilu rizika, playbook vezan, stop unet, teza, ravno do kraja dana, bez ulaza u crvenom
-prozoru brief-a, bez ulaza posle ličnog dnevnog cilja profita; broj trejdova se ne ograničava), a niz doslednosti i Process Adherence
+**Verdikt: pokriveno, i preko toga.** Tracker pravila se **ocenjuju automatski iz podataka**
+(playbook vezan, stop unet, teza pre ulaza, ravno do kraja dana po `flat_by` naloga, dva SL zaredom = kraj dana, bez ulaza
+u prvih 10 minuta posle otvaranja, vreme trgovanja, teza zapisana, osvrt kompletan, snimak po trejdu, psihologija dana,
+iskrenost tagova; uslovi su u README § Process tracking). Novčana pravila (dnevni gubitak, gubitak i rizik po trejdu, cilj
+dana) nisu u journalu od faze X, a broj trejdova se ne ograničava. Niz doslednosti i Process Adherence
 ulaze u skor. TZ nema procesni skor u kompozitu.
 
 ---
 
 ## 6. Prop firm
 
-Topstep mod po nalogu (plan 50K / 100K / 150K): Daily Loss Limit (i lični iz TopstepX Risk Limits, uz
-lični dnevni cilj profita), Maximum Loss Limit (trailing po
-EOD, zaključava se na početnom balansu), profit target sa pravilom konzistentnosti 55 %, maksimalna
-pozicija, veličina u celim ugovorima iz pravila rizika, blokada plana na proboj MLL-a, banner sa
-stanjem, Survival simulacija u novcu i otvoreni rizik prema DLL-u. FTMO mod je postojao
-do H1 (28.09.2026) i uklonjen je sa prelaskom na fjučerse.
+**Namerno nema (faza X, 26.10.2026).** Journal ne računa pravila nijedne prop firme. Do tada je postojao mod po nalogu
+(F3, R, T, 28.09–01.10.2026): limit dnevnog gubitka, trailing limit gubitka, profit target sa pravilom konzistentnosti,
+veličina u celim ugovorima iz pravila rizika, blokada plana na proboj, banner sa stanjem, Survival simulacija u novcu
+i otvoreni rizik prema dnevnom limitu; FTMO mod je otišao u H1 (28.09.2026). Sve je uklonjeno na zahtev trejdera
+(„tracker meri samo proces … jer ako bude više naloga na prop firma biće konflikta“): limite drži trejder na platformi
+svakog naloga, a journal meri proces — zato je neutralan prema firmi (migracija X6 je obrisala i kolone režima).
 
-**Ograničenje napisano u README-u:** evaluacija se računa iz **realizovanog** neto P&L-a, dok pravi
-prop firm meri intraday equity uključujući plutajući P/L. Trenira disciplinu, ne zamenjuje brokerov
-obračun.
+TZ-ov prop-firm pogled zato ovde nema ekvivalent, i to je svesna razlika, ne nedostatak.
 
-**Verdikt: pokriveno za ručni rad; nema živog sinka sa prop firmom** (v. §8).
+**Verdikt: ➖ namerno izostavljeno; nema ni živog sinka sa prop firmom** (v. §8).
 
 ---
 
@@ -180,15 +179,15 @@ Iskreno i bez ublažavanja. Poređano po tome koliko stvarno menja svakodnevni r
    **najveća funkcionalna razlika u dnevnoj upotrebi**, iako je „integracija" a ne metrika.
 2. **Backtesting modul.** `/backtesting` je njihov drugi stub proizvoda — ručni backtest sa bar
    replay-om, sesije, statistika backtesta odvojena od live knjige. Ovde se backtest radi u
-   TradingView-u. Uvoz TradingView „List of trades" i backtest nalog su postojali do H2
-   (29.09.2026) i uklonjeni su na zahtev trejdera — knjiga je samo Topstep. **Ne postoji** ni bar
-   replay, ni sesije backtesta, ni uvoz backtesta.
+   TradingView-u. Uvoz TradingView „List of trades" i poseban backtest nalog su postojali do H2
+   (29.09.2026) i uklonjeni su na zahtev trejdera; backtest fjučersa se vodi kao Practice nalog „Backtest" (G-7).
+   **Ne postoji** ni bar replay, ni sesije backtesta, ni namenski uvoz backtesta.
 3. **Trade replay.** Reprodukcija izvršenog trejda na grafikonu. Ovde postoje samo TradingView
    snapshot slike po trejdu.
 4. **Mentor mode.** Deljenje naloga sa mentorom uživo, i mentorov pogled na više učenika. Ovde
    postoji **mentor pack** — Markdown izvoz sa pre-izračunatim statistikama — što je fajl, ne
    zajednički pogled. Namerno: javni link je dvaput odbijen kao bezbednosna površina.
-5. **Prop firm sync.** Živa veza sa prop firm nalogom. Ovde su Topstep pravila ručno podešena.
+5. **Prop firm sync.** Živa veza sa prop firm nalogom. Ovde ne postoji: journal ne računa pravila prop firme (faza X, §6).
 6. **Monte Carlo simulator.** Kod njih stoji među alatima; ovde ga nema. Od svih kalkulatora, ovo je
    jedini koji bi u aplikaciji imao smisla kao stvarna funkcija.
 7. **Spaces** (`/spaces`). Iz sitemap-a se ne vidi šta je; verovatno saradnja ili zajednica.
@@ -275,13 +274,13 @@ razlikuje ta četiri stanja; to nije paritetna stavka nego razlika u korist ovog
 
 ## Dopuna posle Faze F (29.09.2026) — sa swing-a na day trading
 
-Knjiga je prešla sa FTMO CFD swing-a na intraday CME fjučerse na Topstep-u. Za paritet to znači
+Knjiga je prešla sa CFD swing-a na intraday CME fjučerse. Za paritet to znači
 nešto što ovaj dokument ranije nije mogao da tvrdi: **TradeZella-ine intraday metrike ponovo su
 relevantne, i većina sada postoji.**
 
 | TZ (intraday) | Ovde posle Faze F |
 |---|---|
-| Day Win %, dnevni P&L | ✅ po Topstep danu (17:00 → 17:00 CT), ne kalendarskom |
+| Day Win %, dnevni P&L | ✅ po CME danu (17:00 → 17:00 CT) svakog naloga, ne kalendarskom |
 | Izveštaj po satu / danu / trajanju | ✅ `entry_hour`, `dow_entry`, `hold_duration` u minutima — plus sesijski prozor po ET i minuti od otvaranja, što TZ nema kao dimenziju |
 | Revenge trading | ✅ `revenge_trade` — gubitnički ulaz ≤ 5 min posle gubitka, isti nalog |
 | Overtrading / low efficiency | ✅ po danu, prema sopstvenom proseku (10 dana istorije) |
@@ -289,13 +288,13 @@ relevantne, i većina sada postoji.**
 | Patience paid off | ✅ vraćen (prvi ulaz 30+ min posle 09:30 ET, zelen dan) |
 | Most time in drawdown / deep in drawdown day | ✅ vraćeni — vreme pod vodom iz 1 s berzanskih sveća (R2, `futures-trading`) |
 | Maximize your profit (dan) | ❌ i dalje svesno izostavljen: traži vrh dnevnog zbirnog P&L-a; `gave_back_profit` pokriva ponašanje iz MFE |
-| Prop firm (Topstep) | ✅ MLL trailing po EOD, DLL, konzistentnost 55 %, veličina u ugovorima, otvoreni rizik prema DLL-u |
-| Mentor | ✅ mentor pack za day tradera (Topstep stanje, pravila, dnevni pregled, sesije, svaki trejd sa kontekstom) — i dalje fajl, ne zajednički pogled |
+| Prop firm | ➖ svesno bez (faza X, 26.10.2026): limite i pravila firme drži trejder na platformi; journal meri samo proces (§6) |
+| Mentor | ✅ mentor pack za day tradera (pravila trackera, dnevni pregled, sesije, svaki trejd sa kontekstom) — i dalje fajl, ne zajednički pogled |
 
 Šta je Faza F **uklonila** a ranije je bilo u ovom dokumentu: FTMO mod, MT5 uvoz, TradingView
 backtest uvoz i backtest nalog, swap, dva insight-a iz vault ciklusa (`against_macro_bias`,
-`cot_chase`). Cena propuštenog setupa (§9.2) više nije samo status: od F6.1 se meri iz R2 sveća do
-kraja Topstep dana plana, i računa se tek ako je cena dodirnula ulaz.
+`cot_chase`). Cena propuštenog setupa (§9.2): od F6.1 se merila iz R2 sveća do kraja dana plana; u fazi G
+(27.10.2026) propušten setup je ugašen i zamenile su ga „prilike dana“ na `/daily` (bez cene).
 
 **Metod ostaje isti kao gore:** TradeZella-ine stranice i dalje nisu viđene iz sesije; kolona „TZ" je
 izvedena iz čeklista, kolona „Ovde" je proverena u kodu i pod testom.

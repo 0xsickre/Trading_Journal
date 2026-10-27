@@ -140,10 +140,10 @@ describe("exposure uses the same day", () => {
   });
 });
 
-describe("\"Bez pregleda\" counts the day the 21:25 reminder counts", () => {
-  // futures-trading's journal_podsetnik.py keys the day with racun.trgovacki_dan:
-  // 17:00 CT starts the next one. This is the same rule, so /daily and the
-  // Telegram message list the same trades for the same date.
+describe("\"Bez pregleda\" counts the CME day (17:00 CT starts the next one)", () => {
+  // The CME day: 17:00 CT starts the next one. Until X-10 (26.10.2026) the evening
+  // reminder in futures-trading keyed trades by the same rule; it is market-only now,
+  // and this independent copy of the rule pins what /daily lists for a date.
   const trgovackiDan = (iso: string) => {
     const ct = new Date(new Date(iso).toLocaleString("en-US", { timeZone: "America/Chicago" }));
     if (ct.getHours() >= 17) ct.setDate(ct.getDate() + 1);

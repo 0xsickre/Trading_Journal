@@ -57,7 +57,7 @@ Prost max/min i brojanje uzastopnih pobeda/gubitaka.
 ## 2. Breakeven pojas (`breakeven.ts`)
 Asimetričan pojas (različita gornja/donja granica), inkluzivan na oba kraja, sa `EXACT_ZERO_RANGE` fallback-om kad se nalozi u obuhvatu ne slažu oko pojasa.
 
-**Topstep nalog (30.09.2026):** trejd sa stopom je breakeven ako je |P&L| ≤ 0,1 × **njegov** rizik do stopa (`riskShare` u `BreakevenRange`, `tradeOutcome`); bez stopa, i za dan/nedelju u kalendaru, važi novčani pojas plana. Ceo stop na mikro ugovoru se tako broji kao gubitak, ne kao scratch.
+**Po trejdu (30.09.2026; na svakom nalogu od faze X):** trejd sa stopom je breakeven ako je |P&L| ≤ 0,1 × **njegov** rizik do stopa (`riskShare` u `BreakevenRange`, `tradeOutcome`); bez stopa, i za dan/nedelju u kalendaru, važi pojas samog naloga (`breakeven_from` / `breakeven_to`). Ceo stop na mikro ugovoru se tako broji kao gubitak, ne kao scratch.
 
 **Verdikt: ⚪ Bespoke/interno.** Ne postoji spoljni "standard" za širinu breakeven pojasa — to je pitanje ličnog/journal pravila. Logika (inkluzivnost, fallback na tačnu nulu kad nema saglasnosti) je interno konzistentna i konzervativna. Nema nalaza.
 
@@ -98,7 +98,7 @@ Koristi SAČUVANI `planned_rr` (upisan pre nego što je trejd zatvoren), a ne na
 ---
 
 ## 7. Period stats — dan, nedelja, mesec (`period-stats.ts`)
-Bucket-ovanje po datumu ZATVARANJA (close date), po pravilu dana SVOG naloga — Topstep nalog broji Topstep dan 17:00 → 17:00 CT (F2), pa večernja Globex sesija pripada sutrašnjem danu. Ponovna upotreba `winRateOf`/`classifyOutcome` iz analytics/breakeven modula (bez duplirane logike).
+Bucket-ovanje po datumu ZATVARANJA (close date), po pravilu dana SVOG naloga — svaki nalog broji CME dan 17:00 → 17:00 CT (F2; svi nalozi od faze X), pa večernja Globex sesija pripada sutrašnjem danu. Ponovna upotreba `winRateOf`/`classifyOutcome` iz analytics/breakeven modula (bez duplirane logike).
 
 **Verdikt: ✅ Standardno.** Atribucija P&L-a datumu zatvaranja (ne otvaranja) je uobičajena konvencija kod većine trgovinskih izveštaja.
 
@@ -230,25 +230,13 @@ Bez zaokruživanja, bez fallback point value-a (odbija umesto da defaultuje na 1
 
 ---
 
-## 12. Pravila prop-firme — Topstep (`topstep.ts`); FTMO uklonjen u H1
+## 12. Pravila prop-firme — uklonjeno u fazi X; FTMO uklonjen u H1
 
-**Stanje posle Faze F (29.09.2026).** `ftmo.ts` i FTMO kolone su uklonjeni (H1, H2): knjiga je samo
-Topstep. Topstep model:
-
-```
-MLL pod   = najviši EOD balans − MLL plana (trailing samo na KRAJU dana), zaključava se na početnom balansu
-DLL       = gubitak Topstep dana (17:00 → 17:00 CT) ≥ DLL plana → dan je stao (nalog nije izgubljen)
-konzist.  = najbolji dan ≤ 55 % cilja; inače cilj raste na najbolji dan ÷ 0,55
-rizik     = computeTopstepRisk: % prostora do MLL-a (podrazumevano 8 %) u granicama plana, ≤ DLL ostatak
-breakeven = |P&L| ≤ 0,1 × rizik trejda do stopa; bez stopa ±round(0,1 × 8 % × MLL plana) → 16 / 24 / 36 $ (K4, fiksno; po trejdu od 30.09.2026)
-```
-
-**Verdikt: ✅ Poravnato sa help.topstep.com (28.09.2026) — sa jednim poznatim ograničenjem.**
-Trailing MLL na EOD balansu i zaključavanje na početnom balansu su Topstep-ova pravila za Combine
-(provereno na njihovoj dokumentaciji pri pisanju `topstep.ts`). **Ograničenje:** sve se računa iz
-REALIZOVANOG neto P&L-a; pravi Topstep meri i plutajući P&L u toku dana. Journal zato ne vidi probijen
-DLL na otvorenoj poziciji koja se kasnije vratila — trenira disciplinu, ne zamenjuje obračun firme
-(isto piše u README-u i u PARITY.md §6).
+**Stanje posle faze X (26.10.2026).** Journal ne računa pravila nijedne prop firme. Model koji je ovde bio proveren
+(trailing limit gubitka, dnevni limit, pravilo konzistentnosti, rizik iz budžeta firme; F3, R, T) obrisan je zajedno sa
+kodom i kolonama (X, X6): limite drži trejder na platformi svakog naloga, a journal meri samo proces. Zato u ovom
+odeljku nema formule za proveru. Formule koje su ostale (breakeven po trejdu, rizik na ulazu, veličina) su u svojim
+odeljcima. Ranija provera tog modela prema dokumentaciji firme je u istoriji git-a ovog fajla (pre 27.10.2026).
 
 Tekst ispod je istorija FTMO modula kakav je bio do H1, ostavljen radi zapisa uz nalaz #4 i #5 iz
 rezimea.
@@ -294,7 +282,7 @@ nightsBetween — broji KALENDARSKE ROLLOVER-e pređene (ne 24h blokove)
 
 ## 15. Compliance / process adherence (`tracker/compliance.ts`, `tracker/process-adherence.ts`, `tracker/auto-rules.ts`)
 
-Dnevni compliance % = prost neponderisani odnos ispunjeno/primenjivo po danu (`na` isključeno iz oba); `PROCESS_BLEND = {tracker:60, follow:40}`; auto-pravila (`max_loss_per_day/trade`) evaluirana na NETO P&L bazi. **Od F3/H2 limiti su novac Topstep plana**, ne procenat equity-ja: dnevni gubitak = DLL, gubitak po trejdu i rizik po trejdu = budžet pravila rizika na ulazu (`risk_budget_at_entry`, +10 % za slippage), a `risk_matched_intent` pita da li je veličina bila broj ugovora koji je pravilo dalo. F4 je dodao `flat_by_close` i `no_entry_in_red_window` (iz brief-a); 30.09.2026 `max_trades_per_day` i `stop_after_losses` su obrisani (dan se ne ograničava brojem trejdova), a došao je `no_entry_after_daily_target`: ulaz posle zatvorenog neto P&L-a naloga u Topstep danu ≥ ličnog dnevnog cilja profita. Dnevni gubitak = lični dnevni limit gde je uži od DLL-a plana (`topstepPlanRulesFor`).
+Dnevni compliance % = prost neponderisani odnos ispunjeno/primenjivo po danu (`na` isključeno iz oba); `PROCESS_BLEND = {tracker:60, follow:40}`; auto-pravila (`max_loss_per_day/trade`) evaluirana na NETO P&L bazi. **Od faze X (26.10.2026) tracker meri samo proces:** novčana pravila (dnevni gubitak, gubitak i rizik po trejdu, usklađenost veličine sa namerom, cilj dana) su penzionisana i journal ih ne računa — limite drži trejder na platformi naloga. Automatska pravila koja važe sada (`flat_by_close` po `flat_by` naloga, `stop_after_two_losses`, `no_entry_first_minutes`, `trading_window` i pravila o upisu i osvrtu) i uslovi su u README § Process tracking.
 
 **Verdikt: ⚪ Bespoke/interno, bez nalaza.** Ovo su interna journaling pravila (nema akademskog standarda za "koliko treba da se ponderiše tracker vs. followed-rules disciplina") — logika je unutrašnje konzistentna. Evaluacija na NETO bazi (uključuje troškove) je razumnija/strožija varijanta od bruto, što je konzervativan i opravdan izbor za risk-limit proveru.
 
@@ -305,13 +293,11 @@ Dnevni compliance % = prost neponderisani odnos ispunjeno/primenjivo po danu (`n
 ```
 riskMoney  = plannedRiskPts(entry_price, stop_price, avg_entry)
            × entry_qty × point_value × fx_rate
-riskPct    = riskMoney / room_at_entry × 100      (Topstep, 30.09.2026: prostor iznad MLL-a na ulazu; 0 → null)
-           = riskMoney / equity_at_entry × 100    (bez pečata room_at_entry)
+riskPct    = riskMoney / equity_at_entry × 100    (faza X: svaki nalog; do 26.10.2026 trejd na nalogu prop firme delio je prostorom iznad njenog limita gubitka, `room_at_entry`, kolona obrisana u X6)
 dispersion = populaciona σ od riskPct
 ```
 
-(`intentGap` nad izabranim `risk_pct` je uklonjen u H2 zajedno sa kolonom: na Topstep-u namera je
-broj ugovora iz pravila rizika, pa `risk_matched_intent` poredi veličinu sa njim — odeljak 15.
+(`intentGap` nad izabranim `risk_pct` je uklonjen u H2 zajedno sa kolonom; `risk_matched_intent` je penzionisano u fazi X.
 Pasus o `risk_intent_gap` ispod je istorija.)
 
 Imenilac je **equity na otvaranju dana ulaska**, zamrznut u koloni
@@ -399,9 +385,8 @@ dana istovremene izloženosti, a sam koeficijent se ne prikazuje ispod pet zajed
 **Posle F5.5 (29.09.2026):** istovremenost se meri u **minutima** — presek intervala od ulaza do
 izlaza iz vremena fill-ova, sa preklapajućim pozicijama istog instrumenta spojenim u jedan interval —
 jer na intraday knjizi svaka pozicija deli dan sa svakom drugom. Korelacija ostaje nad danima
-zatvaranja (trading dan naloga). Heat Topstep naloga se čita i prema **DLL-u ostalom danas**:
-`dllUsedPct = Σ otvoreni rizik / dllLeftToday × 100`; preko 100 % jedan loš minut završava dan po
-pravilu firme. Simulacija Topstep naloga je u novcu (trailing MLL, DLL staje dan), odeljak 10/README.
+zatvaranja (trading dan naloga). (Do faze X heat se čitao i prema dnevnom limitu gubitka naloga prop firme, a simulacija naloga bila je u novcu;
+oba su uklonjena — journal ne računa pravila firme.)
 
 **Šta simulacija NE tvrdi:** ne predviđa tržište. Ona ponavlja knjigu koja je već odigrana, što je
 najjača poštena tvrdnja koja se iz ovih podataka može izvesti.
@@ -527,8 +512,8 @@ označen kao promašen ostaje `planned` zauvek, pa zbir raste samo onoliko kolik
 se stari planovi razrešavaju. Zato uz zbir stoji i broj nerazrešenih planova —
 bez njega „ništa nije promašeno" zapravo znači „ništa nije označeno".
 
-**Cena promašaja iz R2 (F6.1, odluka M1-A).** `futures-trading/tools/journal_mae.py` hoda kroz sveće
-ugovora od trenutka plana do kraja njegovog Topstep dana (15:10 CT; plan napisan posle toga važi za
+**Cena promašaja iz R2 (F6.1, odluka M1-A; ugašeno u fazi G, 27.10.2026 — istorija).** `futures-trading/tools/journal_mae.py` je hodao kroz sveće
+ugovora od trenutka plana do kraja njegovog dana (15:10 CT; plan napisan posle toga važio je za
 sledeći trading dan), tek kad je dan gotov i tačni podaci objavljeni. Ništa se ne računa dok ULAZ plana
 nije izvršen: **limit** (cena pri pisanju plana s druge strane ulaza) tek kad cena prođe ulaz za 1 tik, **proboj**
 (stop-ulaz) na dodir (preskok preko ulaza između dve sveće se računa kao dodir) — faza S, 30.09.2026; zatim prvi
@@ -576,7 +561,7 @@ poslovna procena i stoje kao konstante na vrhu svojih modula.
 ```
 R_trejda   = |prosečan ulaz − zapečaćen stop|                       (poeni)
 varijanta  = SL k × R_trejda (k ∈ 0,5 · 0,75 · 1 · 1,25 · 1,5 · 2), TP t × (k × R_trejda) (t ∈ 1 · 1,5 · 2 · 2,5 · 3 · 4 · 5)
-ćelija     = +t ako TP prvi (tik kroz nivo) · −(1 + tik / (k × R_trejda)) ako SL prvi · smer × (cena u 15:10 CT − ulaz) / (k × R_trejda) ako ništa   (R varijante)
+ćelija     = +t ako TP prvi (tik kroz nivo) · −(1 + tik / (k × R_trejda)) ako SL prvi · smer × (cena u 16:00 CT − ulaz) / (k × R_trejda) ako ništa   (R varijante)
 neto       = ćelija − provizija_krug_po_ugovoru / (k × R_trejda × vrednost_poena)   (isti rizik u $: širi SL = manje ugovora)
 posle izlaza (15/30/60 min, kraj dana): u pravcu = max(high) − izlaz (long) · protiv = izlaz − min(low); / R_trejda u journalu
 SL za TP   = (najveći pomak protiv od ulaza do prvog izvršenja planiranog TP-a (tik kroz nivo) + 1 tik) / R_trejda
@@ -603,6 +588,6 @@ prednost najbolje ćelije nad stvarnim rezultatom nije nalaz. Grupa ispod 30 tre
 | 8 | Tačka bez intervala — profit factor 2.4 na 12 trejdova izgleda isto kao na 300 | ✅ ispravljeno | Faza B: `uncertainty.ts` (Wilson + bootstrap), interval ispod tri metrike u tabeli, prigušena ćelija kad obuhvata neutralno, rangiranje po konzervativnom kraju, `minSample` sveden na kapiju za rangiranje |
 | 7 | Rizik preuzet na ulazu se nigde nije merio (`risk_pct` je bila samo namera iz dropdowna) | ✅ ispravljeno | Faza A: kolona `equity_at_entry`, modul `risk-taken.ts`, 4 metrike, dimenzija `risk_bucket`, filter `risk_pct_taken`, kolona „Risk %" u žurnalu i dva auto tracker pravila (`risk_per_trade`, `risk_matched_intent`). Staro pravilo `max_loss_per_trade` namerno ostaje: ono meri ISHOD na dan zatvaranja, novo meri ODLUKU na dan ulaska |
 | 6 | Sve ostalo (win rate, profit factor, expectancy, R-multiple konvencija, max drawdown %, MAE/MFE/capture%, Sortino downside-deviation baza, recovery factor, position sizing, FX rezolucija, swap/nights logika) | ✅ potvrđeno standardno | Nema akcije |
-| 10 | Faza F (28–29.09.2026): swing → intraday Topstep | ✅ | FTMO i swap uklonjeni (sekcije 12, 14 — istorija ostaje); trajanje u minutima (3); dan po Topstep pravilu (7); limiti trackera u novcu plana (15); istovremenost u minutima i heat prema DLL-u (18); eksperiment u trejdovima i cena promašaja iz R2 (21); nova sekcija 22 za intraday sloj |
+| 10 | Faza F (28–29.09.2026): swing → intraday fjučersi | ✅ | FTMO i swap uklonjeni (sekcije 12, 14 — istorija ostaje); trajanje u minutima (3); CME dan (7); limiti trackera u novcu (15; penzionisani u fazi X); istovremenost u minutima i heat prema DLL-u (18); eksperiment u trejdovima i cena promašaja iz R2 (21); nova sekcija 22 za intraday sloj |
 
 Sve stavke označene ⚪ (bespoke: breakeven pojas, compliance blend) su proizvod dizajna ovog journala — nemaju eksterni standard za poređenje, ocenjene su samo na unutrašnju logičku doslednost i nisu pronađeni problemi osim gde je eksplicitno navedeno.
