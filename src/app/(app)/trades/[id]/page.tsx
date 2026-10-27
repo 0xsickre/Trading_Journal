@@ -11,9 +11,6 @@ import { resolveBreakevenRange } from "@/lib/journal/breakeven";
 import { fieldValue } from "@/lib/journal/field-values";
 import { autoExitReason } from "@/lib/journal/quick-log";
 import { DAY_TIME, DEFAULT_TZ, accountDayZone, dayKeyIn, fmtInTz } from "@/lib/journal/time";
-import { rootOf } from "@/lib/journal/default-instruments";
-import { BIAS_CARD_SINCE, BIAS_LABEL, biasLateText, biasesOf } from "@/lib/journal/daily-bias";
-import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
 import { getAutoMistakes } from "@/lib/journal/auto-mistakes-queries";
 import type { AutoMistake } from "@/lib/journal/auto-mistakes";
 import type { FieldDef } from "@/lib/journal/field-def-types";
@@ -80,26 +77,15 @@ export default async function TradeRoute({
   const shown = (d: FieldDef) => d.is_active || hasValue(d);
   const rank = (d: FieldDef) => categoryOrder[d.list_key ?? ""] ?? Number.MAX_SAFE_INTEGER;
   const ordered = [...defs].sort((a, b) => rank(a) - rank(b) || a.sort_order - b.sort_order || a.key.localeCompare(b.key));
-  // Bias dana (phase D, D-6): from the card on, the trade inherits the day's first forecast for its
-  // root and the page stops asking. The old field stays in the row for history.
-  const biasRoot = missed ? null : rootOf(pos.instrument);
   const openDay = stats?.opened_at ? dayKeyIn(stats.opened_at, accountDayZone(account)) : null;
-  const fromCard = biasRoot != null && openDay != null && openDay >= BIAS_CARD_SINCE;
-  // The day's bias cards and the journal's own mistakes (phase B4) read together.
-  const [dayBiases, found] = await Promise.all([
-    fromCard ? getDailyBiases(openDay, openDay) : Promise.resolve([]),
-    !missed && openDay ? getAutoMistakes(openDay, openDay) : Promise.resolve(new Map<string, AutoMistake[]>()),
-  ]);
-  let biasNote: string | null = null;
-  if (fromCard) {
-    const first = biasesOf(dayBiases, openDay, biasRoot)[0];
-    const late = first ? biasLateText(first, stats?.opened_at ?? null) : null;
-    biasNote = first
-      ? `Bias dana (${biasRoot}, sa kartice na /daily): ${BIAS_LABEL[first.bias]}, upisano ${fmtInTz(first.setAt, DEFAULT_TZ, "HH:mm")}${
-          late ? ` — posle ovog ulaza, ne broji se` : ""
-        }${first.reason ? `. ${first.reason}` : ""}`
-      : `Bias dana (${biasRoot}): nije upisan na kartici pre ovog ulaza.`;
-  }
+  // The journal's own mistakes (phase B4), read with the trade's day.
+  const found: Map<string, AutoMistake[]> =
+    !missed && openDay ? await getAutoMistakes(openDay, openDay) : new Map<string, AutoMistake[]>();
+  // Bias dana left in phase E (27.10.2026): never asked, and an old trade's value
+  // is said as a line, read only — the row keeps it for history.
+  const oldBias = fieldValue(pos, "htf_bias");
+  const biasNote =
+    typeof oldBias === "string" && oldBias.trim() !== "" ? `Bias dana (staro polje, više se ne upisuje): ${oldBias.trim()}` : null;
   // Phase B4: what the journal found by itself on this trade, read with its day.
   const autoFound = found.get(pos.id) ?? [];
 
@@ -107,7 +93,7 @@ export default async function TradeRoute({
     (d) =>
       shown(d) &&
       (d.show_phase === "always" || d.show_phase === (missed ? "missed" : "planned")) &&
-      !(fromCard && d.key === "htf_bias"),
+      d.key !== "htf_bias",
   );
   const reviewDefs = missed ? [] : ordered.filter((d) => shown(d) && d.show_phase === "active");
 

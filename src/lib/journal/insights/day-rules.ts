@@ -166,7 +166,7 @@ export const flipFlopDay: Rule = {
             ? `${longs} long and ${shorts} short on the same day for ${fmtMoney(
                 d.net,
                 ctx.currency,
-              )} — the bias was not settled.`
+              )} — no side was held.`
             : `${longs} long and ${shorts} short on the same day for ${fmtMoney(
                 d.net,
                 ctx.currency,

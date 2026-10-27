@@ -94,18 +94,3 @@ export const DEFAULT_INSTRUMENT_SYMBOLS = DEFAULT_INSTRUMENTS.map((i) => i.symbo
 export const MICRO_OF: Record<string, string> = { NQ: "MNQ", ES: "MES", "6E": "M6E", GC: "MGC" };
 export const MINI_OF: Record<string, string> = { MNQ: "NQ", MES: "ES", M6E: "6E", MGC: "GC" };
 
-/** The roots a daily bias is set for (faza D). A micro shares its mini's price, so it shares its bias. */
-export const BIAS_ROOTS = ["NQ", "ES", "GC"] as const;
-export type BiasRoot = (typeof BIAS_ROOTS)[number];
-
-/**
- * The bias root of a traded symbol: MNQ → NQ, MES → ES, MGC → GC, a mini is its own root.
- * A contract code (`MNQZ6`, `GCZ6`) or a TradingView continuous (`NQ1!`) reads the same.
- * Anything else — 6E, a CFD, an empty string — has no daily bias and gives null.
- */
-export function rootOf(symbol: string | null | undefined): BiasRoot | null {
-  const m = /^(MNQ|NQ|MES|ES|MGC|GC)(?:[FGHJKMNQUVXZ]\d{1,2}|1!)?$/.exec((symbol ?? "").trim().toUpperCase());
-  if (!m) return null;
-  const sym = m[1];
-  return (MINI_OF[sym] ?? sym) as BiasRoot;
-}

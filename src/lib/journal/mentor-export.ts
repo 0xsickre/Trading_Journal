@@ -33,7 +33,6 @@ import type { RunResult } from "./insights/registry";
 import { computeExcursionStats, excursionFromTrade } from "./excursion";
 import type { RuleLookup } from "./reports/rule-lookup";
 import { enrichTrades, type DailyReportLite, type EnrichedTrade } from "./enriched-trade";
-import { biasPackSection, type DailyBias } from "./daily-bias";
 import type { DayCompliance } from "./tracker/compliance";
 import type { TrackerRule } from "./tracker-types";
 import {
@@ -446,8 +445,6 @@ export type MentorPackOpts = {
   playbookNames?: Map<string, string>;
   /** Position id → when its checklist was last answered (phase Y, `checklistAnsweredAt`). */
   checklistAt?: Map<string, string>;
-  /** Bias dana (phase D): every forecast; the pack keeps the period's days. */
-  biases?: DailyBias[];
 };
 
 export function buildMentorPack(
@@ -666,10 +663,6 @@ export function buildMentorPack(
         new Map((opts.compliance ?? []).map((c) => [c.date, c])),
       ),
     );
-    if (opts.biases) {
-      const biasDays = opts.periodDays ?? [...new Set(enriched.map((t) => t.openDay).filter((d): d is string => d != null))];
-      out.push(...biasPackSection(opts.biases, trades, opts.tzOf!, biasDays, ccy, displayTz));
-    }
     out.push(...intradaySection(enriched, range));
     out.push(...scenarioSection(enriched));
     out.push(...timeStopSection(enriched, range));

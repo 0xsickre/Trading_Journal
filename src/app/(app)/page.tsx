@@ -12,7 +12,6 @@ import { getUserPrefs } from "@/lib/journal/user-prefs";
 import { getDashboardTemplates } from "@/lib/journal/dashboard-template-queries";
 import { addDaysToDayKey, DEFAULT_TZ, todayFor } from "@/lib/journal/time";
 import { Dashboard } from "@/components/journal/dashboard";
-import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
 
@@ -56,7 +55,6 @@ export default async function DashboardPage() {
     dashboardTemplates,
     checkinsByDay,
     positionRules,
-    biases,
   ] = await Promise.all([
     accountsPromise,
     dayPromise,
@@ -83,8 +81,6 @@ export default async function DashboardPage() {
       getCheckins(addDaysToDayKey(todayKey, -(TRACKER_SPAN_DAYS - 1)), todayKey),
     ),
     positionRulesPromise,
-    // Bias dana (phase D), for the mentor pack.
-    getDailyBiases(),
   ]);
 
   // Fallback seed for legacy users / a missed signup trigger. It used to be the
@@ -114,7 +110,6 @@ export default async function DashboardPage() {
         fieldDefs={fieldDefs}
         trackerRules={trackerRules}
         checkins={checkins}
-        biases={biases}
         todayKey={todayKey}
         timezone={primary?.timezone ?? DEFAULT_TZ}
         playbooks={playbooks}

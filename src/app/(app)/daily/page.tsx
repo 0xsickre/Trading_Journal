@@ -33,10 +33,6 @@ import { dayClose } from "@/lib/journal/day-close";
 import { autoMistakes } from "@/lib/journal/auto-mistakes";
 import { getOptionsMap } from "@/lib/journal/options";
 import { tradingWindowResolver } from "@/lib/journal/tracker/trading-window";
-import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
-import { firstBiasResolver, firstEntryResolver, summarizeBias } from "@/lib/journal/daily-bias";
-import { BIAS_ROOTS } from "@/lib/journal/default-instruments";
-import { DailyBiasCard } from "@/components/journal/daily-bias-card";
 
 export default async function DailyPage({
   searchParams,
@@ -74,7 +70,6 @@ export default async function DailyPage({
     tradesAll,
     report,
     checkinsByDay,
-    biases,
     optionsMap,
   ] = await Promise.all([
     accountsPromise,
@@ -88,8 +83,6 @@ export default async function DailyPage({
     // The day in view only: the streak strip that read the 28 weeks behind it
     // left in phase M — the run of days is the mentor's to read, from the pack.
     dayPromise.then(({ reportDate }) => getCheckins(reportDate, reportDate)),
-    // Bias dana (phase D): every forecast — the day's for the card, all of them for the score.
-    getDailyBiases(),
     // The emotion list, for the day's psychology (phase B5).
     getOptionsMap(true),
   ]);
@@ -114,7 +107,6 @@ export default async function DailyPage({
   const dayRules = rulesLiveOn(rules, reportDate);
   const autoCtx = {
     tradingWindowOf: tradingWindowResolver(rules),
-    biasOf: firstBiasResolver(biases),
     flatByOf: flatByResolver(accounts),
     // Phase B5: the day's psychology, as saved.
     reportOf: (d: string) => (d === reportDate ? report : null),
@@ -164,10 +156,6 @@ export default async function DailyPage({
   const firstEntryAt =
     (index.byOpenDay.get(reportDate) ?? []).map((t) => t.openedAt).sort((a, b) => Date.parse(a) - Date.parse(b))[0] ?? null;
 
-  // Bias dana: the first entry per root, for a forecast set after it — graded apart, never counted.
-  const firstEntryOfRoot = firstEntryResolver(trades, tzOf);
-  const biasFirstEntry = Object.fromEntries(BIAS_ROOTS.map((r) => [r, firstEntryOfRoot(reportDate, r)]));
-
   const tracker: TrackerDayData = {
     reportDate,
     rules: dayRules,
@@ -197,17 +185,6 @@ export default async function DailyPage({
         firstEntryAt={firstEntryAt}
         emotions={(optionsMap.emotion ?? []).map((o) => ({ value: o.value, label: o.label }))}
         dayClose={<DayCloseCard close={dayClose(dayRows, found)} currency={primary?.currency ?? "USD"} />}
-        beforeSession={
-          <>
-            <DailyBiasCard
-              day={reportDate}
-              biases={biases.filter((b) => b.tradingDay === reportDate)}
-              firstEntryOf={biasFirstEntry}
-              canWrite={reportDate === today && report?.locked_at == null}
-              summary={summarizeBias(biases, firstEntryOfRoot)}
-            />
-          </>
-        }
         afterSession={
           <>
             <ReviewGapsCard

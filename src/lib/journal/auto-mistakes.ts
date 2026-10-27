@@ -3,7 +3,7 @@
  *
  * The trader picks only what the data cannot know — an early entry, a chased
  * price. Everything below is read off what is already stored: the fills, the
- * trading window, the bias card, the playbook link, the stop
+ * trading window, the playbook link, the stop
  * and target, the orders export's last stop and the excursion from the
  * contract's candles.
  *
@@ -21,6 +21,8 @@
  * DLL, an oversized position and too many trades. Each needs a money limit or
  * a count per account, which phase X took out of the journal. An entry in a red
  * window of the brief left in phase X9 (X-10): the brief writes nothing here.
+ * No bias of the day before the entry left in phase E (27.10.2026): the
+ * journal holds no forecast of direction.
  */
 import { excursionFromTrade } from "./excursion";
 import { numberFieldValue } from "./field-values";
@@ -40,7 +42,6 @@ import type { TradeRow } from "./types";
 export const AUTO_MISTAKES = {
   outside_window: "Ulaz van prozora",
   after_two_sl: "Ulaz posle 2 SL",
-  no_bias: "Bez biasa dana pre ulaza",
   no_playbook: "Ulaz bez setupa iz playbook-a",
   target_below_2r: "Cilj ispod 2R",
   moved_stop: "Pomerio stop",
@@ -134,7 +135,7 @@ function outsideWindow(day: string, openedAt: string, ctx: AutoContext): AutoMis
  * is absent from the map.
  *
  * The day-level ones come from the same evaluators the tracker grades with
- * (`stop_after_two_losses`, `htf_bias_set`), so the trade page, the reports and
+ * (`stop_after_two_losses`), so the trade page, the reports and
  * the day's checklist cannot disagree about which entry broke them.
  */
 export function autoMistakes(
@@ -151,17 +152,12 @@ export function autoMistakes(
   for (const [day, opened] of index.byOpenDay) {
     const results = evaluateAutoRulesForDay(day, index, ctx);
     const afterTwo = new Set(results.stop_after_two_losses.offenders);
-    // Only with the cards read: without `biasOf` every entry would look biasless.
-    const noBias = new Set(
-      ctx.biasOf && results.htf_bias_set.reason === "violated" ? results.htf_bias_set.offenders : [],
-    );
     for (const t of opened) {
       const row = byId.get(t.id);
       if (!row) continue;
       const window = outsideWindow(day, t.openedAt, ctx);
       if (window) add(t.id, window);
       if (afterTwo.has(t.id)) add(t.id, mark("after_two_sl", "Ulaz posle dva SL zaredom istog dana."));
-      if (noBias.has(t.id)) add(t.id, mark("no_bias", "Bias dana nije upisan na kartici pre ulaza."));
       for (const m of ownMistakes(row, bandOf(row.account_id))) add(t.id, m);
     }
   }

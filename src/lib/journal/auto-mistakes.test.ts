@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { AUTO_MISTAKES, autoMistakes, plannedRewardRisk, type AutoMistakeKey } from "./auto-mistakes";
-import type { DailyBias } from "./daily-bias";
 import type { DayZone } from "./time";
 import type { TradeRow } from "./types";
 
@@ -121,26 +120,10 @@ describe("autoMistakes — after two stop losses", () => {
   });
 });
 
-describe("autoMistakes — the bias card (from 19.10.2026)", () => {
-  const bias = (setAt: string): DailyBias => ({
-    id: "b",
-    tradingDay: DAY,
-    root: "NQ",
-    bias: "up",
-    reason: null,
-    setAt,
-    status: null,
-    eval: null,
-  }) as unknown as DailyBias;
-  it("no forecast on the card is a mistake", () => {
-    expect(keysOf([row({ id: "a", opened: "08:00" })], { biasOf: () => null })("a")).toContain("no_bias");
-  });
-  it("a forecast set after the entry is one too; one set before it is not", () => {
-    expect(keysOf([row({ id: "a", opened: "08:00" })], { biasOf: () => bias(at("08:01")) })("a")).toContain("no_bias");
-    expect(keysOf([row({ id: "b", opened: "08:00" })], { biasOf: () => bias(at("08:00")) })("b")).not.toContain("no_bias");
-  });
-  it("without the cards read, it is not guessed", () => {
-    expect(keysOf([row({ id: "a", opened: "08:00" })])("a")).not.toContain("no_bias");
+describe("autoMistakes — no bias of the day (phase E)", () => {
+  it("the journal holds no forecast, so there is no mistake about one", () => {
+    expect(Object.keys(AUTO_MISTAKES)).not.toContain("no_bias");
+    expect(Object.values(AUTO_MISTAKES)).not.toContain("Bez biasa dana pre ulaza");
   });
 });
 

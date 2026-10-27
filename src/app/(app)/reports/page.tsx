@@ -9,7 +9,6 @@ import { getPlaybooks, getPositionRules } from "@/lib/journal/playbooks";
 import { ReportsWorkbench } from "@/components/journal/reports/reports-workbench";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
-import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
 import { ReportsSkeleton } from "@/components/journal/reports/reports-skeleton";
 import { getAutoMistakes } from "@/lib/journal/auto-mistakes-queries";
 
@@ -32,7 +31,6 @@ export default async function ReportsPage() {
     playbooks,
     optionsMap,
     positionRules,
-    biases,
     found,
   ] = await Promise.all([
     getTradesWithStats(),
@@ -53,8 +51,6 @@ export default async function ReportsPage() {
     // dimension into nothing at all.
     getOptionsMap(false),
     positionRulesPromise,
-    // Bias dana (phase D): every forecast — the winrates belong to days, not to filtered trades.
-    getDailyBiases(),
     // Phase B4: every trade's automatic mistakes, for "Sve greške (ručne + auto)".
     // In the same batch: it reads the same trades (`getTradesWithStats` is
     // cached per request), and every day of the book is in the span.
@@ -83,7 +79,6 @@ export default async function ReportsPage() {
           playbooks={playbooks}
           positionRules={positionRules}
           optionsMap={optionsMap}
-          biases={biases}
           autoMistakes={autoMistakes}
         />
       </Suspense>

@@ -122,6 +122,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 17.10.2026 | D | Bias dana (trejder: „karticu daily bias … da se meri koji mi je winrate u predviđanju biasa … i koji bi winrate bio da je uvek long“): **D-1 A** pogodak = neto pomeraj od početka do kraja merenja uz neutralni opseg; **D-2** početak = kasnije od 09:00 BG i trenutka upisa, kraj 18:00 BG (upis posle 18:00 se ne ocenjuje); **D-3** Neutral je prognoza, Gore/Dole na neutralan dan je promašaj i za trejdera i za uvek long; **D-4** opseg bira mentor, fiksno u kodu, bez Settings (trejder: „nek radi u pozadini i nek bude podešeno“); **D-5** NQ, ES, GC, mikro deli bias sa mini; **D-6** kartica zamenjuje polje „Bias dana“ na trejdu. Radi se direktno na `main`, migracija se primenjuje posle zelenog gate-a (trejder: „odmah ide na glavnu granu … da odmah bude primenjeno na produkciju“) |
 | 26.10.2026 | X | Neutralan journal (trejder: „skroz ćemo izbaciti bilo kakva pravila iz journala, ne može da bude vezan za prop firmu … ja sam taj koji poštuje ili ne pravila“; prelazak na Tradeify). Faza **X**: plan napisan. Odluke istog dana: **X-1 B** (tracker samo proces — „ako bude više naloga na prop firma biće konflikta“), X-2 … X-6, X-8, X-9 **A**, **X-7** uvoz univerzalan (prepoznaje format, i TopstepX i NinjaTrader), **X-10** brief „na kraju“. NinjaTrader uvoz (AddOn šalje svaki fill preko HTTPS-a, red kad nema mreže — trejderu se „svidja“) je posebna faza posle X |
 | 26.10.2026 | B | Brzi unos (trejder: „što manje ručnog rada po pojedinom trejdu, a praviti jedan dnevni izveštaj zatvaranjem dana“; „1A, 2 ne, 3 ne, 4 da“): bez detekcija koje traže novčani limit ili broj trejdova, bez auto grafika i audio priloga; X4 migracija puštena, faza B pre X5–X7 |
+| 27.10.2026 | E | Bez biasa dana (trejder: „Ne koristim više bias dana — market ne može da se predvidi, nego se trguje uz njega, uz reakciju.“): predviđanje smera izlazi iz celog toka journala, kao pravila prop firme u X. Kartica, ocena iz sveća, panel, paket i pravilo `htf_bias_set` odlaze; `tj_daily_bias` i `custom.htf_bias` ostaju kao istorija. Jutarnja poruka (🧠 Sklonost) čeka odgovor trejdera |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -168,6 +169,8 @@ pogađa.
 | **D** | Bias dana: prognoza pre sesije na /daily, ocena iz 1m sveća, moj winrate prema „uvek long“ | — | J | da: `20261017120000` (`tj_daily_bias`, aditivna) | **Opus** | ✅ kod 18.10.2026 — `a7456ed` · D1 `8af430f` · D2 `18d7077` · D4 `fcdf8ee` · D5+D6 `293067b` + futures-trading `adb046c`; migracija `20261017120000` primenjena 18.10.2026 |
 | **X** | Journal bez pravila prop firme: bez Topstep mašine, MLL/DLL plana, Survival-a i banera; tvoji limiti na nalogu, CME dan | — | D | da: aditivna (neutralne kolone) + **briše** `topstep_*` (uz odobrenje) | **Opus** | ✅ 27.10.2026 — X1–X9 isporučeni; migracije `20261026120000`–`…140000`, `…180000`, `…190000`, `20261027090000` (brisanje `topstep_*` / `risk_rule_*`) primenjene |
 | **B** | Brzi unos: trejd ~30 s (checklist „Zašto ulazim“, kraće liste, TF po playbook-u, automatske greške), psihologija i zatvaranje dana na /daily | — | X4 | da: aditivne (TF playbook-a, psihologija dana), podaci (liste, tekst pravila) | **Opus** | ✅ 27.10.2026 — B1–B8 isporučeni; migracije `20261026150000`, `…160000`, `…170000`, `20261027100000` primenjene; pregled koda `b83cef7` |
+| **E** | Bez biasa dana: bez kartice, ocene, panela, pravila `htf_bias_set` i greške „Bez biasa“; staro polje read-only | — | B | da, podaci: penzionisanje pravila, tekst `review_complete`, polje `htf_bias` gasi se, fabrička lista bez biasa (uz odobrenje) | **Opus** | 🔄 plan 27.10.2026 |
+| **I** | Univerzalni uvoz: format se prepoznaje po zaglavlju (TopstepX, NinjaTrader, Tradovate), zapamćeno mapiranje za nepoznat CSV; posle toga NinjaTrader AddOn | — | E | da, aditivna: tabela zapamćenih mapiranja (I2) | **Opus** | ⏸ plan 27.10.2026 — čeka primere izvoza od trejdera |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -1853,6 +1856,104 @@ izveštaj zatvaranjem dana“). Pravila: ništa istorijsko se ne briše. Polje s
   skinuta sa ručne liste, a automatski se ne detektuje (podatak o dodavanju protiv pozicije nije u pravilima ni
   u spec-u). Playbook „Ponoc pojas reversal“ sa praznim „Gde ulazim“ / „Gde
   izlazim“ dobija samo upozorenje „Prazne grupe“ u Settings › Playbooks — pravila se ne izmišljaju.
+
+## E — Bez biasa dana (detaljno, 27.10.2026) — 🔄
+
+**Povod** (trejder, 27.10.2026): „Ne koristim više bias dana — market ne može da se predvidi, nego se trguje uz njega,
+uz reakciju.“ Predviđanje smera izlazi iz celog toka journala, kao što je faza X izbacila pravila prop firme. Faza D
+(kartica, ocena iz cena, „uvek long“) se gasi. Istorija ostaje: tabela `tj_daily_bias` i njeni redovi, polje
+`custom.htf_bias` na starim trejdovima, zamrznute ocene zaključanih dana.
+
+### Utvrđeno u kodu i bazi (27.10.2026, posle `0dfdd04`)
+- **Biblioteka:** `daily-bias.ts` (`BIAS_CARD_SINCE`, `firstBiasResolver`, `summarizeBias`, `splitTradesByBias`,
+  `biasPackSection` …), `daily-bias-queries.ts` (`getDailyBiases`), `rootOf` / `BIAS_ROOTS` u
+  `default-instruments.ts`, koje čitaju samo bias i tracker.
+- **Čitaoci `getDailyBiases`:** `/daily` (kartica, rezultat), `/calendar`, `/reports`, dashboard `/` (paket),
+  `daily/tracker-actions.ts`, `auto-mistakes-queries.ts`, stranica trejda.
+- **/daily:** `daily-bias-card.tsx` + `daily/bias-actions.ts` (`addDailyBias`).
+- **Tracker:** `htf_bias_set` (`evalHtfBiasSet`, `biasWasSet`, `TrackerTrade.biasRoot`, `review.htfBias`,
+  `AutoContext.biasOf`), `review_complete` traži bias (`biasKnown`), `honest_tags` ga čita POSREDNO (ocena A ili „Bez
+  greške“ uz pao `htf_bias_set` = ✗). Tekstovi u `tracker-checklist.tsx`. Ključ je u `AUTO_RULE_KEYS`.
+- **Baza, pravila:** `htf_bias_set` aktivno i obavezno („HTF nivoi i bias: na svakom trejdu upisan bias dana …“);
+  `review_complete` u tekstu traži „bias dana“. Fabrička lista pravila (`tj_seed_tracker_rules`, `20261027100000`)
+  **već nema** `htf_bias_set`, pa se ne menja.
+- **Automatske greške:** `no_bias` u `auto-mistakes.ts` (iz prekršilaca `htf_bias_set`). Opcija „Bez biasa dana pre
+  ulaza“ na listi grešaka je u bazi **već** `is_active = false` (B2).
+- **Polje trejda:** `tj_field_defs.htf_bias` aktivno, `show_phase = always`, lista `htf_bias` sa četiri aktivne opcije.
+  Stranica trejda ga od `BIAS_CARD_SINCE` krije i pokazuje napomenu sa kartice; ranije ga traži. Čuvanje
+  kategorija spaja `custom` (`mergeCustom`), pa polje koje forma ne šalje ostaje netaknuto.
+- **Fabričke kategorije:** `tj_seed_categories` (`20261026180000`) i dalje seje listu i polje `htf_bias` i grešku
+  „Bez biasa dana pre ulaza“.
+- **/reports:** `bias-panel.tsx` + `bias-chart.tsx` (moj bias prema uvek long, novac u smeru / protiv biasa).
+- **Mentor paket:** sekcija „Bias dana“ (`biasPackSection` u `mentor-export.ts`). Uputstvo i legenda paketa ne pominju
+  bias (provereno grep-om).
+- **Uvidi:** `flip_flop_day` kaže „the bias was not settled“ (tekst, ne čita bias).
+- **futures-trading:** `tools/journal_bias.py` nema svoj workflow ni red u rasporedu; zove ga korak 7 u
+  `journal_mae.py` (satni `journal_mae` workflow). Test `tests/test_journal_bias.py`, README sekcija „Bias dana“.
+  `testovi/bias_opseg/` je istraživanje i ostaje.
+
+### Odluke
+- **E-1** Kod koji samo služi biasu dana se briše (git čuva istoriju); podaci u bazi ostaju.
+- **E-2** `htf_bias_set` se penzioniše (`deleted_at`), ključ ostaje u CHECK-u, isto kao `no_entry_in_red_window`
+  (`20261026190000`): bez evaluatora otključan prošli dan ga izostavlja, zaključan čuva zamrznutu ocenu.
+- **E-3** Polje `htf_bias` dobija `is_active = false`; na trejdu koji ima vrednost vidi se kao tekst samo za čitanje.
+- **E-4 PITANJE trejderu:** jutarnja Telegram poruka (`tools/brief/RUTINA.md`, „🧠 Moje mišljenje — Sklonost
+  gore/dole“, i `tools/dnevnik/procene.py`) daje Claude-ovu procenu smera. Ide li i ona, ili ostaje kao kontekst
+  tržišta (brief, ne journal)? Do odgovora se ne menja.
+
+### Podkoraci (svaki: test → kod → gate → commit + push)
+- **E1 Journal kod:** bez kartice, akcije, panela, grafika, sekcije paketa, `daily-bias*.ts`, `rootOf`/`BIAS_ROOTS`;
+  `htf_bias_set` van `AUTO_RULE_KEYS`; `review_complete` bez biasa; `no_bias` van `auto-mistakes.ts`; stranica
+  trejda bez napomene, staro polje read-only; tekstovi trackera i `flip_flop_day`; testovi.
+- **E2 Migracija** `20261027120000_without_daily_bias.sql` (podaci, uz odobrenje, SQL Editor): penzionisanje
+  `htf_bias_set`, nov tekst `review_complete`, `tj_field_defs.htf_bias` → `is_active = false`, nova definicija
+  `tj_seed_categories` bez liste / polja `htf_bias` i greške „Bez biasa dana pre ulaza“.
+- **E3 futures-trading:** korak 7 iz `journal_mae.py`, `journal_bias.py` i njegov test odlaze; README.
+- **E4 Dokumentacija:** README 1:1 (testovi, `lang:count`), ovaj fajl, `ROADMAP.md`.
+
+**Model:** Opus.
+
+### Isporučeno (27.10.2026)
+- E1 + E4 u kodu, gate čist (2.768 testova). E3 futures-trading `c3168eb` (237 testova).
+- **Čeka odobrenje:** migracija `20261027120000_without_daily_bias.sql` (samo podaci i nova definicija
+  `tj_seed_categories`). Do tada: `htf_bias_set` stoji aktivan u bazi, ali nema evaluator, pa ne daje ocenu (kao
+  penzionisan); polje „Bias dana“ se na stranici trejda ne nudi ni bez migracije.
+- **Čeka odgovor:** E-4 (jutarnja poruka „🧠 Sklonost“).
+
+## I — Univerzalni uvoz (detaljno, 27.10.2026) — ⏸ čeka primere izvoza
+
+**Povod** (trejder, X-7 i 27.10.2026): kad promeni prop firmu, ne sme da treba kodiranje. Uvoz zavisi od
+**platforme** (NinjaTrader, Tradovate, Rithmic, TopstepX/ProjectX, Quantower), ne od firme. Trejder prelazi na
+Tradeify (NinjaTrader / Tradovate).
+
+### Utvrđeno u kodu i bazi (27.10.2026)
+- `/import` (`import-wizard.tsx`) prepoznaje po zaglavlju samo TopstepX: `isTopstepXTrades` (`topstepx-export.ts`) i
+  `isTopstepXOrders` (`topstepx-orders.ts`). Izvoz trejdova se čita direktno (`readTopstepXTrades`), više redova jedne
+  pozicije spaja `groupTopstepXTrades`, a izvoz naloga daje cilj, poslednju cenu stopa i način izlaza.
+- Svaki drugi CSV/XLSX ide na ručno mapiranje: `CANONICAL` kolone (instrument, smer, količina, ulaz, vreme ulaza …),
+  `autoMap` pogađa po ključnim rečima (`KEYWORDS`). Jedan red = jedan trejd sa ulazom i izlazom; **fill-ovi
+  (izvršenja) se preko ručnog mapiranja ne uvoze**.
+- **`tj_column_mappings` NE postoji u bazi:** obrisala ju je `20260816140000` kao mrtvu šemu (provereno upitom
+  27.10.2026). Zapamćeno mapiranje zato traži novu, aditivnu tabelu, uz migraciju i odobrenje.
+
+### Podkoraci
+- **I1 Prepoznavanje formata** (`import-formats.ts`: zaglavlje → format; TopstepX ostaje kakav je). NinjaTrader i
+  Tradovate: fill-ovi u poziciju kao `groupTopstepXTrades`; stop, cilj i razlog izlaza iz izvoza naloga gde ga
+  platforma daje. **Parser se piše tek iz stvarnog fajla** (testovi na tom fajlu, bez ličnih podataka).
+- **I2 Zapamćeno mapiranje:** tabela (npr. `tj_import_mappings`: korisnik, otisak zaglavlja, mapa kolona, naziv),
+  RLS po vlasniku; fajl sa istim zaglavljem prolazi bez mapiranja, uz dugme „promeni mapiranje“.
+- **I3 NinjaTrader AddOn** (posebna podfaza): šalje svaki fill journalu preko HTTPS-a, sa redom kad nema mreže.
+- **I4 Dokumentacija:** README 1:1, ovaj fajl.
+
+### Pitanja za trejdera (bez odgovora se ne počinje)
+- **I-1 Primeri izvoza** sa Tradeify naloga, jedan dan sa bar jednim trejdom (najbolje sa pomerenim stopom i jednim
+  delimičnim izlazom): NinjaTrader (Trades / Executions / Orders iz Account Performance ili Control Center) i/ili
+  Tradovate (Orders, Fills, Position History / Performance). Svaki fajl tačno kako ga platforma izveze.
+- **I-2 Koju platformu stvarno koristiš** na Tradeify-u za trgovanje i za izvoz (NinjaTrader desktop, Tradovate web, oba)?
+- **I-3 AddOn (I3):** autentikacija (lični token iz Settings, rotacija) i endpoint (Next.js ruta ili Supabase Edge
+  Function) — dogovor pre koda.
+
+**Model:** Opus.
 
 ## Katalog stavki
 

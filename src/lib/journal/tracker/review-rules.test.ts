@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { biasWasSet, buildTradeDayIndex, evaluateAutoRulesForDay } from "./auto-rules";
+import { buildTradeDayIndex, evaluateAutoRulesForDay } from "./auto-rules";
 import { tradingWindowResolver } from "./trading-window";
 import type { TrackerRule } from "../tracker-types";
 import { missingReview } from "../review-gaps";
 import { accountDayZoneResolver } from "../time";
 import type { Account, TradeRow } from "../types";
-import { firstBiasResolver, parseDailyBias, type DailyBias } from "../daily-bias";
 
 /**
  * Phase Q (14.10.2026): the manual ticks the trade page already answers.
@@ -88,17 +87,8 @@ const T3 = (r: Review = {}) =>
   trade("t3", "2026-10-13T07:44:32Z", 263.56, { psychology: ["Ispoštovao rizik", "Vodio po planu", "Smiren"], ...r });
 
 describe("phase Q review rules on 13.10.2026", () => {
-  it("bias: both trades say 'Nisam odredio unapred' → broken on both", () => {
-    const out = day([T2(), T3()]).htf_bias_set;
-    expect(out.verdict).toBe("fail");
-    expect(out.offenders.sort()).toEqual(["t2", "t3"]);
-    expect(biasWasSet("gore")).toBe(true);
-    expect(biasWasSet("nisam odredio unapred")).toBe(false);
-    expect(biasWasSet(null)).toBe(false);
-  });
-
-  it("bias written on every trade passes", () => {
-    expect(day([T2({ bias: "dole" }), T3({ bias: "nema ga" })]).htf_bias_set.verdict).toBe("pass");
+  it("the day's bias is not a rule any more (phase E): no verdict, whatever the trade's old field says", () => {
+    expect(Object.keys(day([T2(), T3()]))).not.toContain("htf_bias_set");
   });
 
   it("thesis: written on both → pass; an empty one → that trade", () => {
@@ -243,44 +233,19 @@ describe("trading_window: entries and exits inside the day's window, Belgrade ti
   });
 });
 
-describe("phase D: from 19.10.2026 the bias is the /daily card's first forecast, set before the entry", () => {
-  const D = "2026-10-19";
+describe("phase E: the journal holds no forecast of direction", () => {
+  const D = "2026-10-28";
   const at = (t: string) => `${D}T${t}Z`;
-  const onDay = (rows: TradeRow[], forecasts: Parameters<typeof firstBiasResolver>[0]) =>
-    evaluateAutoRulesForDay(D, buildTradeDayIndex(rows, (row) => zoneOf(row.account_id)), {
-      biasOf: firstBiasResolver(forecasts),
-    });
+  const onDay = (rows: TradeRow[]) =>
+    evaluateAutoRulesForDay(D, buildTradeDayIndex(rows, (row) => zoneOf(row.account_id)));
   const tr = (id: string, opened: string, r: Review = {}) => trade(id, opened, 100, { bias: null, closed: opened, ...r });
-  const forecast = (setAt: string, root = "NQ") =>
-    parseDailyBias({ id: `b-${setAt}`, trading_day: D, root, bias: "gore", reason: null, set_at: setAt, eval_status: null }) as DailyBias;
 
-  it("passes when the card's forecast for the trade's root came before the entry — the trade's own field is not read", () => {
-    const out = onDay([tr("t1", at("08:00:00"))], [forecast(at("05:12:00"))]).htf_bias_set;
-    expect(out.verdict).toBe("pass");
+  it("review complete passes a full review with no bias anywhere", () => {
+    expect(onDay([tr("t1", at("08:00:00"))]).review_complete.verdict).toBe("pass");
   });
 
-  it("fails without a forecast, with one set after the entry, or with one for another root", () => {
-    expect(onDay([tr("t1", at("08:00:00"))], []).htf_bias_set.offenders).toEqual(["t1"]);
-    expect(onDay([tr("t1", at("08:00:00"))], [forecast(at("09:00:00"))]).htf_bias_set.offenders).toEqual(["t1"]);
-    expect(onDay([tr("t1", at("08:00:00"))], [forecast(at("05:00:00"), "ES")]).htf_bias_set.offenders).toEqual(["t1"]);
-  });
-
-  it("graded at entry: a trade still open is graded too", () => {
-    expect(onDay([tr("t1", at("08:00:00"), { closed: null })], [forecast(at("05:12:00"))]).htf_bias_set.verdict).toBe("pass");
-  });
-
-  it("the first forecast counts: a later change does not rescue a late first one", () => {
-    const out = onDay([tr("t1", at("08:00:00"))], [forecast(at("09:00:00")), forecast(at("10:00:00"))]).htf_bias_set;
-    expect(out.verdict).toBe("fail");
-  });
-
-  it("review complete reads the card's bias, not the trade's field", () => {
-    expect(onDay([tr("t1", at("08:00:00"))], [forecast(at("05:12:00"))]).review_complete.verdict).toBe("pass");
-    expect(onDay([tr("t1", at("08:00:00"))], []).review_complete.verdict).toBe("fail");
-  });
-
-  it("days before the card keep the trade page's field", () => {
-    expect(day([T2({ bias: "dole" }), T3({ bias: "nema ga" })]).htf_bias_set.verdict).toBe("pass");
+  it("an A on a trade with no bias is not a dishonest tag", () => {
+    expect(onDay([tr("t1", at("08:00:00"), { grade: 5 })]).honest_tags.verdict).toBe("pass");
   });
 });
 

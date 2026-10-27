@@ -119,7 +119,7 @@ export function TradePage({
   playbooks: Playbook[];
   /** Categories asked about the setup (phase `always`, or `missed` on a missed setup). */
   contextDefs: FieldDef[];
-  /** Bias dana from the /daily card (phase D) — said here instead of asked. */
+  /** The retired "Bias dana" of an old trade (phase E) — said here, read only, never asked. */
   biasNote?: string | null;
   /** Mistakes the journal found by itself (phase B4) — shown, never picked. */
   autoMistakes?: AutoMistake[];

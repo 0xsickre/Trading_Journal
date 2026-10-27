@@ -1,6 +1,4 @@
 import { accountFilterOptions, allAccountsScope, inAllAccountsScope, primaryAccount } from "@/lib/journal/account-rules";
-import { getDailyBiases } from "@/lib/journal/daily-bias-queries";
-import { firstBiasResolver } from "@/lib/journal/daily-bias";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import {
@@ -137,7 +135,7 @@ export default async function CalendarPage({
     const from = days[0];
     const to = days[days.length - 1];
 
-    const [reports, rules, checkinsByDay, biases] = await Promise.all([
+    const [reports, rules, checkinsByDay] = await Promise.all([
       getDailyReportsInRange(from, to),
       // Retired rules included, and `rulesLiveOn` filters per day — a rule that
       // was live in March still judged March, and dropping it would raise that
@@ -147,10 +145,7 @@ export default async function CalendarPage({
       // date range, which was computed above, so awaiting it separately bought
       // nothing but a round trip.
       getCheckins(from, to),
-      // The month's bias forecasts (phase D): `htf_bias_set` reads the card.
-      getDailyBiases(from, to),
     ]);
-    const biasOf = firstBiasResolver(biases);
     const tradingWindowOf = tradingWindowResolver(rules);
 
     const reportOfDay = new Map(reports.map((r) => [r.report_date, r]));
@@ -165,7 +160,7 @@ export default async function CalendarPage({
         const live = rulesLiveOn(rules, d);
         return resolveAutoResults(
           live,
-          evaluateAutoRulesForDay(d, index, { tradingWindowOf, biasOf, flatByOf, reportOf }),
+          evaluateAutoRulesForDay(d, index, { tradingWindowOf, flatByOf, reportOf }),
           checkinsByDay.get(d) ?? new Map(),
         );
       },

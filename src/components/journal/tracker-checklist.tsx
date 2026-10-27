@@ -45,7 +45,6 @@ const DAILY_STAGE_LABELS: Record<TrackerStage, string> = {
 /** Phase Q rules, whose `not_yet` means the trade is still open, not the trading day. */
 const REVIEW_KEYS: ReadonlySet<string> = new Set([
   "daily_psychology",
-  "htf_bias_set",
   "thesis_recorded",
   "honest_tags",
   "review_complete",
@@ -92,19 +91,14 @@ function dayTradingText(res: AutoRuleResult): string | null {
         : "Prekršeno: trejd bez playbook-a, ili playbook napravljen posle ulaza.";
     }
     // Phase Q: read off the trade page, so the fix is on the trade the link opens.
-    // Phase D: from 19.10.2026 the bias is the card above, set before the entry.
-    case "htf_bias_set":
-      return broke
-        ? "Bias dana nije upisan na kartici pre ulaza (za taj instrument), ili na starijem trejdu piše „Nisam odredio unapred“."
-        : "Bias dana upisan pre ulaza za svaki trejd.";
     case "thesis_recorded":
       return broke
         ? "Na trejdu nije upisano šta si rekao pre klika."
         : "Na svakom trejdu upisano šta si rekao pre klika.";
     case "review_complete":
       return broke
-        ? "Trejdu fali ocena, razlog izlaza, bias dana, greška (kad ocena nije A) ili rečenica (uz ocenu C)."
-        : "Svaki trejd ima ocenu, razlog izlaza, bias dana i grešku ili ocenu A; uz C i rečenicu.";
+        ? "Trejdu fali ocena, razlog izlaza, greška (kad ocena nije A) ili rečenica (uz ocenu C)."
+        : "Svaki trejd ima ocenu, razlog izlaza i grešku ili ocenu A; uz C i rečenicu.";
     case "screenshot_per_trade":
       return broke
         ? "Fali slika charta: trejd sa ocenom C, ili najbolji ili najgori trejd dana."

@@ -34,19 +34,19 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 312 of the
-3,391 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 282 of the
+3,326 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
 |---|---|
-| Daily (the "Zatvaranje dana" card included) and tracker | 72 |
+| Daily (the "Zatvaranje dana" card included) and tracker | 70 |
 | Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 149 |
 | Day insight sentence (`low_efficiency_day`) | 1 |
 | A new playbook's three starting sections (`playbook-types.ts`) | 3 |
 | The seeded tag values the review and the import write (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2) | 6 |
-| The trade page `/trades/[id]` (phase P) — off the recording, setup, review, and why it asks for the original stop (`trade-page.tsx`, its route, `stop-moved.ts`) | 26 |
-| The journal's own mistakes on a trade, marked "auto" (`auto-mistakes.ts`, phase B4) | 7 |
+| The trade page `/trades/[id]` (phase P) — off the recording, setup, review, and why it asks for the original stop (`trade-page.tsx`, its route, `stop-moved.ts`) | 25 |
+| The journal's own mistakes on a trade, marked "auto" (`auto-mistakes.ts`, phase B4) | 5 |
 | "Propušten setup" — the missed-setup page and form (`/trades/missed/new`) | 3 |
 | Category names — the trader's own list and field names (Smer, Ocena setupa, Razlog izlaza, Greške, Tehnički tagovi, Psihologija, Emocije, Disciplina) as `/reports` groupings, journal-grid filters and bulk tags, and the mentor pack's category tables (phase J) | 7 |
 | Dashboard, `/reports`, journal grid, playbooks, **`/settings`**, `/import` — everything around those names | **0** |
@@ -75,7 +75,7 @@ lexes every `.ts`/`.tsx` outside tests into comment / string / code regions, kee
 that read as prose rather than as machinery, and scores those for Serbian by diacritics and by a word
 list. A single Serbian word carrying no diacritic can still slip past that, and JSX text between tags
 is not a string literal (the "Bez pregleda" card on `/daily` is Serbian and not in the count), so
-**312 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
+**282 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
 name, read as the Serbian "pre" until F5.4. Three earlier versions of this paragraph said "about 46 of some 1,700", then "153 of
 1,663", then "185 of 2,191" — each counted by hand, and each had to be replaced rather than quietly
 corrected. That is why the method now ships as a script: a number nobody can re-run is a number
@@ -118,7 +118,7 @@ security applies to it exactly as to the browser.
 
 | Repo | Answers | Data direction |
 |------|---------|----------------|
-| [`futures-trading`](https://github.com/0xsickre/futures-trading) | What is the market doing today (news, red windows, expected NQ/ES range, levels)? | Since X-10 (26.10.2026) its brief and evening message neither read nor write the journal; it writes MAE/MFE and time underwater (`excursion_source = 'r2'`), the price of a missed setup (`missed_source = 'r2'`), "šta bi bilo" and the bias grade |
+| [`futures-trading`](https://github.com/0xsickre/futures-trading) | What is the market doing today (news, red windows, expected NQ/ES range, levels)? | Since X-10 (26.10.2026) its brief and evening message neither read nor write the journal; it writes MAE/MFE and time underwater (`excursion_source = 'r2'`), the price of a missed setup (`missed_source = 'r2'`), "šta bi bilo" (its bias grade left in phase E) |
 | **`Trading_Journal`** (this repo) | What did I trade, and with what discipline? | Write (you, after each trade) |
 | [`trading-fundamental-vault`](https://github.com/0xsickre/trading-fundamental-vault) | Macro direction, COT filter — the swing cycle (F0–F5) | None; semantic only |
 | [`trading-dashboard`](https://github.com/0xsickre/trading-dashboard) | Where did the vault's cycle stop? | None; read-only view of the vault |
@@ -144,9 +144,8 @@ What `futures-trading` does with the journal, each described in its own README:
   inserted parents first — tested 30.09.2026 on a database built from all 149 migrations, row for row,
   into the same user and into a new one. **A new `tj_` table must be added to its `TABELE`**; the
   backup warns when PostgREST shows one it does not know.
-The vault link is the swing-era one, and **the day trader's context comes from the /daily card**:
-the day's bias is the "Bias dana" card (phase D, § Bias dana; before 19.10.2026 the trade's
-`htf_bias` field); the close is the account's flat-by time. The vault's `macro_align` / `cot_filter` are no longer seeded or asked for, and
+The vault link is the swing-era one. **The journal holds no forecast of direction** (phase E,
+27.10.2026, § Bias dana — retired): the close is the account's flat-by time. The vault's `macro_align` / `cot_filter` are no longer seeded or asked for, and
 the two insights that read them (`against_macro_bias`, `cot_chase`) left in F6 (decision M2-A); the
 values stay on the older trades that carry them.
 
@@ -162,40 +161,21 @@ The routine both repos are built around — the same steps as "Dnevni tok journa
 | When | Where | What |
 |---|---|---|
 | 11:12 and 15:15 Belgrade | Telegram | The levels from `futures-trading` (`tools/brief/nivoi.py`): which of PDH/PDL (RTH and the whole Topstep day), PWH/PWL, PMH/PML and the Asia range London took, and what is left above and below the price — at 11:12 for London's morning (08:00–11:00), at 15:15 for all of London until the New York open. The morning brief carries the same levels without London |
-| Before the session | Telegram, then `/daily` → 1 · Pre sesije | The market brief from `futures-trading` (news, red windows, expected range, levels) on Telegram; on `/daily` the **Bias dana** card — Gore / Dole / Neutral per NQ, ES, GC, before the first entry (phase D); then two questions — how you are, and whether you trade today |
+| Before the session | Telegram, then `/daily` → 1 · Pre sesije | The market brief from `futures-trading` (news, red windows, expected range, levels) on Telegram; on `/daily` two questions — how you are, and whether you trade today |
 | Before and during the trade | The platform + OBS | The order with its bracket; the size is the trader's, on the platform. The session is recorded, and the setup, stop, target and reason are said out loud before the click ("Teza naglas"). Nothing in the journal |
 | End of the day | `/import`, then `/trades/[id]` | The TopstepX **trades and orders** exports together: the fills, the target, the stop's last price, how each trade ended. Then **the trade page** per trade (phase P) — the original stop where it was moved, what was said before the click, setup and its checklist, the categories, A/B/C, mistakes; `/trades/missed/new` for a setup seen and not taken. MAE/MFE arrives on its own — provisional the same evening, exact the next morning |
 | 15:20 CT (22:20 Belgrade) | Telegram | How the day went on NQ / ES and what price did with the brief's lines — the market only since X-10 (26.10.2026); a trade still missing its review is on "Bez pregleda" on `/daily` |
 | Closing the day / the week | Dashboard → Export for Claude, then the private `trading-mentor` repo | The mentor pack for the day (or the week) goes to Claude, who asks the closing questions and keeps the record of rules and observations. The journal has no written review of its own |
 
-### Bias dana (phase D, 17.10.2026)
+### Bias dana — retired (phase E, 27.10.2026)
 
-The trader sets the day's bias **before the session** on `/daily` — Gore, Dole or Neutral, per root:
-NQ, ES, GC (a micro trades its mini's price, so MNQ / MES / MGC share the mini's bias; `rootOf`).
-One row of `tj_daily_bias` is one forecast: the database stamps `set_at` (`tj_daily_bias_guard`
-ignores the client), the forecast can never be edited, and a change is a NEW row — **the day's first
-one is what counts** (D-2), so a bias cannot follow the price until it is right. Only today's page
-writes, never a locked day; there is no delete except "Delete all data".
-
-`futures-trading` (`tools/journal_bias.py`, inside the hourly `journal_mae.py`) grades it from the
-exchange's 1m candles of the front mini contract, once Databento has the day:
-
-- the window runs from the later of **09:00 Belgrade** and `set_at` to **18:00 Belgrade**; a forecast
-  set at 18:00 or later is `prekasno` and not graded;
-- the move is the close before 18:00 minus the open at the start; the **neutral band** is the 25th
-  percentile of |move| over the same window in the 60 trading days before (at least 40, else
-  `bez_istorije`); a candle missing by more than five minutes is `bez_cena`;
-- the day is `neutral` inside the band, `gore` / `dole` outside it. Calibrated in
-  `futures-trading/testovi/bias_opseg`: 23–29 % neutral days in both halves (D-4: the band is fixed in
-  code, nothing in Settings).
-
-The journal only counts (`daily-bias.ts`). A forecast hits when it equals the day; **always-long** is
-graded on the SAME days and hits only on a `gore` day, so a direction on a neutral day misses for both
-(D-3). Points: Gore earns the move, Dole its opposite, Neutral nothing; always-long earns the move. A
-forecast set after the root's first entry that day is counted apart, never graded. The card shows the
-score in one line, `/reports` the full table and chart, the mentor pack a row per day. From
-19.10.2026 the card is also the trade's bias (D-6): `htf_bias_set` reads it and the trade page shows
-it instead of asking; earlier days and 6E keep the trade's `htf_bias` field.
+Phase D (17.10.2026) had the trader set a daily direction per NQ / ES / GC on `/daily`, graded from
+the exchange's candles against "always long". Phase E took it out of the whole flow (trader: "the
+market can't be predicted, it is traded with, by reacting"): no card, no grade, no `/reports`
+panel, no mentor-pack section, no `htf_bias_set` rule and no "Bez biasa dana pre ulaza" mistake.
+History stays: `tj_daily_bias` and its rows are kept and nothing reads them; the trade's old
+`htf_bias` field is retired (`is_active = false`) and shows read-only, as plain text under
+"Kontekst", only on a trade that has a value.
 
 The plan-first form (`/trades/new`) and the after-the-close log (`/trades/log`) left in phase O
 (08.10.2026): the import is the only way a trade comes in, and the full form edits what is there.
@@ -228,7 +208,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,802 tests across 185 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,768 tests across 181 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -340,7 +320,7 @@ shows before saving. A test holds both to the same inputs.
 | **Trades** | `tj_positions`, `tj_executions`, `tj_trade_images` |
 | **Accounts and money** | `tj_accounts`, `tj_cash_events`, `tj_instruments` |
 | **Configuration** | `tj_option_lists`, `tj_option_items`, `tj_field_defs`, `tj_user_prefs`, `tj_dashboard_templates` |
-| **Daily process** | `tj_daily_reports`, `tj_session_briefs` (the morning brief, F4 — history since phase X9, nothing reads it), `tj_daily_bias` (the day's bias forecasts and their grade, phase D) |
+| **Daily process** | `tj_daily_reports`, `tj_session_briefs` (the morning brief, F4 — history since phase X9, nothing reads it), `tj_daily_bias` (the day's bias forecasts and their grade, phase D — history since phase E, nothing reads it) |
 | **Tracker** | `tj_tracker_rules`, `tj_tracker_checkins` |
 | **Playbooks** | `tj_playbooks`, `tj_playbook_sections`, `tj_playbook_rules`, `tj_playbook_rule_links`, `tj_position_rules` |
 | **Notebook** | `tj_notes`, `tj_note_folders`, `tj_note_tags` |
@@ -370,9 +350,9 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 |---|---|
 | `/` | Dashboard: no prop firm's banner since phase X; KPIs, equity curve, drawdown, heatmap calendars, breakdowns, the Process · Survival · Edge card, the **Time stop** card (see § MAE/MFE), insights. Opens on **All** — the whole record first, narrowed on request; the scope last chosen is remembered per browser. Whenever the period leaves closed trades out, a notice above the figures says how many and how far back, with **Show all** (`default-period.ts`). The amounts read in **`$` · `%` · Points · Ticks · Privacy**. Points and ticks (U, 01.10.2026) are the money divided by one contract's point (or tick) value, trade by trade, so they count every contract — two MNQ over ten points is 20 points — and a sum of them still follows the money (`futures-units.ts`). They hold within one instrument family only (MNQ with NQ, MES with ES, M6E with 6E): an **instrument picker** appears when the account has more than one, and until one is picked the two buttons are off. They change the same figures `%` does — Net, Gross, Best, Worst, Max drawdown, Total costs, Avg daily DD, the recent trades and the tag table; the charts stay in money. The picker narrows the trades shown, never the account's equity (percentage) |
 | `/journal` | Trade table — sorting, filtering, column picking. The date column carries the **year**, so a trade from last season does not read as this spring |
-| `/trades/[id]` | **The trade page** (phase P, 14.10.2026) — one page per trade, in the order the recording is watched. (1) The trade as the import brought it, read only: account, direction, contracts, entry → exit (Belgrade time), duration, net P/L, R, MAE/MFE, costs, risk to the stop (phase X; the risk budget before) — **fills are never typed** (decision P-1); the stop order's last price and, when the orders file shows the stop was moved, the request for the original. (2) **Off the recording:** the original stop (the one value typed by hand — a stop moved to breakeven leaves only its last price in the export), the target, the planned R:R against the actual fill, and what was said before the click (`thesis`). (3) **Setup:** the playbook and its checklist (`PlaybookChecklist`) with the computed setup grade — since phase B (26.10.2026) only the setup criteria („Zašto ulazim“, `isAskedRule` in `offered-rule-answers.ts`) are asked; an older trade's answers to the other rules are listed read-only ("Ranije upisano — više se ne traži") and saved untouched. TF ulaza, when the trade has none, is pre-filled from the playbook's `default_entry_tf` and marked "auto — iz playbook-a". (4) **Context:** the trader's own categories of phase `always` from `tj_field_defs`, in the order of Settings — a new category appears without code. (5) **Review:** A/B/C for execution everywhere (decision P-2; A writes "Bez greške"), the categories of phase `active` (exit reason pre-filled from the prices, psychology; mistakes asked only for a B or a C, or when the trade already has one — phase B), one sentence, and **"Greške koje journal nalazi sam"** (phase B4, `auto-mistakes.ts`), each marked "auto" with its reason: entry outside the trading window, entry after two stop losses, no bias of the day before the entry, no playbook, a target under 2R, a moved stop (from the orders export), a win turned into a loss (MFE ≥ 1R, net < 0). They are computed on read and never written into "Greške"; with the data missing (no window, no brief, no orders export, no MFE, no target, no stop) nothing is guessed. (6) Charts — a list grown with "+ Add chart" (up to 20, `tj_trade_images.sort_order`; an uploaded screenshot, a pasted image or a TradingView link, private bucket `trade-images`, K6), (7) "Šta bi bilo". A **missed setup** opens the same page with its levels editable (`updateMissedSetup`) and no grade. One save, `saveTradeReview`: the columns and `custom` in one UPDATE, then the checklist through `ruleAnswerWrites` — it writes the offered answers and removes only answers to rules of the chosen playbook it no longer offers, or, when the playbook changed, the previous playbook's (P-3); never `tj_save_trade`, which deletes every answer first and would have erased trade #1's answers to retired rules. The plan-before-entry fields left with the old two-tab form: Planned Entry as input, Position Size, Scale-out, Invalidation, Time stop and Slippage (0 of 3 trades had them; columns stay). `/trades/[id]/edit` and `/trades/[id]/review` redirect here, so old links still land |
+| `/trades/[id]` | **The trade page** (phase P, 14.10.2026) — one page per trade, in the order the recording is watched. (1) The trade as the import brought it, read only: account, direction, contracts, entry → exit (Belgrade time), duration, net P/L, R, MAE/MFE, costs, risk to the stop (phase X; the risk budget before) — **fills are never typed** (decision P-1); the stop order's last price and, when the orders file shows the stop was moved, the request for the original. (2) **Off the recording:** the original stop (the one value typed by hand — a stop moved to breakeven leaves only its last price in the export), the target, the planned R:R against the actual fill, and what was said before the click (`thesis`). (3) **Setup:** the playbook and its checklist (`PlaybookChecklist`) with the computed setup grade — since phase B (26.10.2026) only the setup criteria („Zašto ulazim“, `isAskedRule` in `offered-rule-answers.ts`) are asked; an older trade's answers to the other rules are listed read-only ("Ranije upisano — više se ne traži") and saved untouched. TF ulaza, when the trade has none, is pre-filled from the playbook's `default_entry_tf` and marked "auto — iz playbook-a". (4) **Context:** the trader's own categories of phase `always` from `tj_field_defs`, in the order of Settings — a new category appears without code; the retired "Bias dana" (`htf_bias`, phase E) is a read-only line, only on a trade that has it. (5) **Review:** A/B/C for execution everywhere (decision P-2; A writes "Bez greške"), the categories of phase `active` (exit reason pre-filled from the prices, psychology; mistakes asked only for a B or a C, or when the trade already has one — phase B), one sentence, and **"Greške koje journal nalazi sam"** (phase B4, `auto-mistakes.ts`), each marked "auto" with its reason: entry outside the trading window, entry after two stop losses, no playbook, a target under 2R, a moved stop (from the orders export), a win turned into a loss (MFE ≥ 1R, net < 0). They are computed on read and never written into "Greške"; with the data missing (no window, no brief, no orders export, no MFE, no target, no stop) nothing is guessed. (6) Charts — a list grown with "+ Add chart" (up to 20, `tj_trade_images.sort_order`; an uploaded screenshot, a pasted image or a TradingView link, private bucket `trade-images`, K6), (7) "Šta bi bilo". A **missed setup** opens the same page with its levels editable (`updateMissedSetup`) and no grade. One save, `saveTradeReview`: the columns and `custom` in one UPDATE, then the checklist through `ruleAnswerWrites` — it writes the offered answers and removes only answers to rules of the chosen playbook it no longer offers, or, when the playbook changed, the previous playbook's (P-3); never `tj_save_trade`, which deletes every answer first and would have erased trade #1's answers to retired rules. The plan-before-entry fields left with the old two-tab form: Planned Entry as input, Position Size, Scale-out, Invalidation, Time stop and Slippage (0 of 3 trades had them; columns stay). `/trades/[id]/edit` and `/trades/[id]/review` redirect here, so old links still land |
 | `/trades/missed/new` | **Propušten setup** (phase O): a setup seen on the recording and not taken — entry, stop, target, time, setup, reason — saved as a `missed` position the R2 walk prices |
-| `/daily` | **The day in the order it is lived**, in three numbered parts under the day's heading (`daily-report-form.tsx`). **1 · Pre sesije**: the **Bias dana** card (phase D; the morning brief's "Pred sesiju" card left in phase X9, X-10), then **"Pre nego što uđeš"** — two questions, numbered and about the day ahead: *1. Kako si danas?* (mental state, 5 stars, a warning under 3; a rating saved after the day's first entry reads
+| `/daily` | **The day in the order it is lived**, in three numbered parts under the day's heading (`daily-report-form.tsx`). **1 · Pre sesije**: **"Pre nego što uđeš"** (the morning brief's "Pred sesiju" card left in phase X9, X-10; the Bias dana card in phase E) — two questions, numbered and about the day ahead: *1. Kako si danas?* (mental state, 5 stars, a warning under 3; a rating saved after the day's first entry reads
 "Ocena upisano DD.MM. HH:MM, posle prvog ulaza (HH:MM)" — `tj_daily_reports.mental_temp_at`, stamped by
 a trigger, phase Y; a mark only, no rule reads it) and *2. Da li danas trguješ?* ("Danas ne trgujem", a decision taken before the session; with it set and no trade taken the checklist disappears and the day is a rest day) — and the preparation rules. **2 · Tokom sesije**: the trading rules, scored from the trades. **3 · Posle sesije**: **Bez pregleda** (the day's closed trades still missing a setup or an A/B/C grade, or — phase Q — an imported trade the orders file never reached, with no last stop and no entry order type; each a link to its review, `review-gaps.ts`; the 15:20 CT Telegram reminder in `futures-trading` applies the same rule), the review rules, the **Zatvaranje dana** card (phase B7: the day's psychology — the Emocije list, `tj_daily_reports.psychology_tags`, asked once a day instead of on every trade — then the best and the worst closed trade with whether each has a chart, and every mistake of the day, the trader's and the journal's "auto" ones together, with what it cost in $ and R, `day-close.ts`), then save and lock. The focus goal, the day's result card and the streak strip left in phase M (08.10.2026): the page measures, and closing the day is the conversation with the mentor over the day's mentor pack. Until 29.09.2026 the page opened with the day's money and asked "before you enter" only after the trading rules, with a no-trade box in the past tense that pointed at a position card H1 had removed. The rules are grouped as "Pravila pripreme / trgovanja / osvrta" here, in the page's language, and within each group **the rules to tick come first and the scored ones below** (K1) — a new rule lands in its own half whatever its order; Settings edits them under the English stage names |
 | `/calendar` | Monthly P&L grid by day, weekly totals |
@@ -412,12 +392,8 @@ One page, one question: **how did each group of trades do?** Top to bottom:
 6. **The table.** Every group with its trade count; a header click sorts, and a second click reverses.
    A **Total** row appears whenever every trade sits in exactly one row. Thin groups are dimmed, not
    hidden, and that is explained once.
-7. **Under the table**: the scenario panel, co-exposure, Missed setups and **Bias dana** (phase D,
-   `bias-panel.tsx`) — my winrate and always-long's on the same graded days per root, the edge in
-   percentage points, the points each earned, a two-line cumulative chart per root, and the real money
-   of the trades on screen with the bias, against it, on a Neutral day and without one. The winrates
-   are over every forecast (they belong to days, not to filtered trades); "mali uzorak" below 30
-   graded days.
+7. **Under the table**: the scenario panel, co-exposure, Missed setups (the Bias dana panel left in
+   phase E).
 
 **"—" is not 0.** A win rate over breakeven scratches only, or R figures over trades without a stop,
 read "—" in a report and sort last. They used to read 0, and that fake zero could be named the best
@@ -993,12 +969,6 @@ scope (`mentor-export.ts`), to be uploaded into a chat: every number is computed
 interprets and never calculates. Since F5.6 (29.09.2026) it carries what decides an intraday futures
 book, from values the screens already derive (`mentor-intraday.ts`):
 
-- **Bias dana** (phase D, 17.10.2026). One row per day and root of the period: the counted (first)
-  forecast, when it was set — marked "posle prvog ulaza" and not counted when it came after the first
-  entry — and what the prices made of the day; a root traded with no forecast is a row too ("nije
-  upisan"). Then my winrate beside always-long's on the same days, the points per root, and the trades
-  with the bias, against it, on a Neutral day and with none (`biasPackSection`, § Bias dana).
-
 - **Category tables in Serbian** (phase J, 15.10.2026). "Performanse po kategorijama" names each
   table by the trader's own field name when the field exists in Settings (Tehnički tagovi, Greške,
   Psihologija), otherwise Ocena setupa, Instrument, Smer; a missed setup's reason is "Razlog
@@ -1094,9 +1064,8 @@ day-trading rule is a decision taken at entry, so each is charged to the trading
 |---|---|---|
 | `flat_by_close` | a position closed after its account's flat-by time that day, or is still open once that time has passed — on every account since phase X4 (`tj_accounts.flat_by`, `HH:MM` Chicago, 16:00 unless set, migration `20261026140000`; it was Topstep's 15:10 CT on Topstep accounts only) | no trade opened that day, or a position is still open before the close |
 | `stop_after_two_losses` (08.10.2026, `20261008140000`) | an entry on an account follows two stop losses IN A ROW, closed before it that trading day — a loss is below the breakeven band (a tenth of the trade's risk), so a win or a scratch in between breaks the run | the day had no entry, or a close before the entry has no price |
-| `htf_bias_set` (phase Q, 14.10.2026, `20261014120000`; phase D, 17.10.2026) | from 19.10.2026 (`BIAS_CARD_SINCE`): a trade opened that day on NQ / ES / GC or their micros has no forecast on the /daily card for its root set no later than its entry — the day's FIRST forecast counts, graded at entry like the stop. Before that day, and on an instrument with no daily bias (6E): the trade has no "Bias dana" (`custom.htf_bias`), or it says "Nisam odredio unapred" | no trade opened that day; before 19.10.2026 also every one still open (`not_yet`) |
 | `thesis_recorded` (phase Q) | a trade has no `thesis` ("šta sam rekao pre klika"), read live; WHEN it was said is the recording's, so the mentor's | as above |
-| `review_complete` (phase Q; phase B6, `20261026170000`) | a trade lacks a grade, an exit reason, the bias (from 19.10.2026 the card's, phase D), or a mistake when the grade is not A; a C also needs one sentence (`trade_journal_notes`). TF ulaza and the psychology tag left it in phase B | as above |
+| `review_complete` (phase Q; phase B6, `20261026170000`) | a trade lacks a grade, an exit reason, or a mistake when the grade is not A; a C also needs one sentence (`trade_journal_notes`). TF ulaza and the psychology tag left it in phase B, the bias of the day in phase E | as above |
 | `screenshot_per_trade` (phase Q; phase B6) | a trade graded C, or the day's best or worst closed trade by net, has no chart (`tj_trade_images`) | as above; also no trade of the day closed yet (`not_yet`) |
 | `daily_psychology` (phase B5, `20261026170000`) | a day with a trade has no psychology on /daily ("Zatvaranje dana", `tj_daily_reports.psychology_tags`) | no trade opened that day |
 | `honest_tags` (phase Q) | on the same trade: "Ispoštovao rizik" beside a failed `stop_loss_set` (phase X: the risk rules it was also read against are gone), or an A ("Bez greške") beside any failed trading rule, or (phase Y5, 15.10.2026) "Vodio po planu" on a trade without a playbook or with one created after the entry; the review rules do not count as trading errors. Evaluated last, from the other verdicts | as above |
@@ -1108,6 +1077,9 @@ in `flat-by.ts`). **No rule reads the morning brief since phase X9** (X-10, 26.1
 `no_entry_in_red_window` was **retired** (`deleted_at`, its key kept in the CHECK for the locked days
 that froze it, like the money rules of X1), and a holiday or an early close is no longer known here —
 the trader keeps it on the platform. The checklist says a close time, a window, or the run of stops.
+`htf_bias_set` ("HTF nivoi i bias", phase Q; the /daily card from 19.10.2026, phase D) was retired the
+same way in phase E (27.10.2026, `20261027120000`): the journal holds no forecast of direction, and
+`review_complete` and `honest_tags` no longer read one.
 
 The three manual rules these replaced — "at most two trades a day", "no entry fifteen minutes around
 red news", "stop at the daily loss in USD" — were **retired, not deleted** (`deleted_at`), so every
@@ -1548,13 +1520,13 @@ day trader's since F4 (`20260929120000`), in Serbian since K2 (`20260929200000`)
 the mentor had merged the duplicates, fixed the typos and added the mistakes he actually makes, so a
 reset no longer brings back the list of 30.09. Phase X5 (`20261026180000`) renames "Kraj Topstep
 dana" to "Kraj dana (ravno)" and leaves out "Ulaz posle dnevnog cilja" and "Ulaz posle DLL-a", which
-read a firm's money limit. Lists and fields are named Smer, Bias dana, TF ulaza,
+read a firm's money limit. Phase E (`20261027120000`) leaves out the "Bias dana" list and field and
+the "Bez biasa dana pre ulaza" mistake. Lists and fields are named Smer, TF ulaza,
 Tehnički tagovi, Ocena setupa, Razlog izlaza, Razlog propuštanja, Emocije, Disciplina, Greške (the
-field over Emocije and Disciplina is Psihologija); TF ulaza 30s / 1m / 2m / 5m / 15m / 1h; Bias dana
-Gore (bullish) / Dole (bearish) / Nema biasa / Nisam odredio unapred; twenty mistakes, from Bez greške
-and Bez biasa dana pre ulaza to Ulaz posle 2 SL, Stop postavio bracket, ne ja and Dobitak pretvorio u
-gubitak. Every value the code reads by name is in it (Bez greške, Ispoštovao rizik, Vodio po planu,
-the five exit reasons `autoExitReason` writes, the "Nisam odredio" bias), and `seed-categories.test.ts`
+field over Emocije and Disciplina is Psihologija); TF ulaza 30s / 1m / 2m / 5m / 15m / 1h; seventeen
+mistakes, from Bez greške and Ulaz bez setupa iz playbook-a to Ulaz posle 2 SL, Stop postavio bracket,
+ne ja and Dobitak pretvorio u gubitak. Every value the code reads by name is in it (Bez greške,
+Ispoštovao rizik, Vodio po planu, the five exit reasons `autoExitReason` writes), and `seed-categories.test.ts`
 checks the function row by row. The list categories (Context, ICT Setup, Risk, Psychology) are kept
 as the database has them. The "Risk %" list left in H2. In an existing book the same migration added those items and switched
 the swing ones off — `is_active = false`, not deleted, because trades keep tags as text.
@@ -1636,9 +1608,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,802 tests across 185 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,250 tests in 127 files) and `components` (environment `jsdom`, files `*.test.tsx`, 552
-tests in 58 files). The rule is the extension, so no file can land in both. The split exists so that
+2,768 tests across 181 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,221 tests in 125 files) and `components` (environment `jsdom`, files `*.test.tsx`, 547
+tests in 56 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves
@@ -1818,7 +1790,7 @@ Since 14.10.2026 it also gets a **Reakcija** line per measured trade (a winner: 
 | [`FAZA_F_DAYTRADING_PLAN.md`](FAZA_F_DAYTRADING_PLAN.md) | The move from swing to day trading (completed 29.09.2026): phases F1–F6, H1, H2, K, each with its plan, decisions and commits (Serbian) |
 | [`FAZA_8B_PLAN.md`](FAZA_8B_PLAN.md) | Automatic MAE/MFE: MT5 for CFDs, R2 for futures, and why the cTrader plan was withdrawn (Serbian) |
 | [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md) | AI entry point (Cursor / Claude Code) |
-| [futures-trading](https://github.com/0xsickre/futures-trading/blob/main/README.md) | Market brief and evening message (no journal since X-10), MAE/MFE and "šta bi bilo" from R2, the bias grade, the nightly backup |
+| [futures-trading](https://github.com/0xsickre/futures-trading/blob/main/README.md) | Market brief and evening message (no journal since X-10), MAE/MFE and "šta bi bilo" from R2, the nightly backup |
 | [trading-fundamental-vault](https://github.com/0xsickre/trading-fundamental-vault/blob/master/README.md) | The F0–F5 cycle, macro bias, COT filter (swing era) |
 | [vault `workflow.md`](https://github.com/0xsickre/trading-fundamental-vault/blob/master/workflow.md) | The weekly runbook (13 steps) |
 | [trading-dashboard](https://github.com/0xsickre/trading-dashboard/blob/master/README.md) | Read-only view of the weekly analysis |

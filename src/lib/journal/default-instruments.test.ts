@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_INSTRUMENTS, DEFAULT_INSTRUMENT_SYMBOLS, MICRO_OF, MINI_OF, rootOf } from "./default-instruments";
+import { DEFAULT_INSTRUMENTS, DEFAULT_INSTRUMENT_SYMBOLS, MICRO_OF, MINI_OF } from "./default-instruments";
 
 /**
  * The catalog is a transcription of the exchange's contract terms and Topstep's
@@ -71,25 +71,5 @@ describe("no broker's commission (phase X5, X-8 A)", () => {
       expect(i.commission_pct, i.symbol).toBe(0);
       expect(i.commission_currency, i.symbol).toBe("USD");
     }
-  });
-});
-
-describe("rootOf: the daily bias root of a traded symbol (faza D)", () => {
-  it("a micro shares its mini's root, a mini is its own", () => {
-    expect(["NQ", "MNQ", "ES", "MES", "GC", "MGC"].map(rootOf)).toEqual(["NQ", "NQ", "ES", "ES", "GC", "GC"]);
-  });
-
-  it("reads a contract code and a TradingView continuous the same way", () => {
-    expect(rootOf("MNQZ6")).toBe("NQ");
-    expect(rootOf("mgcz26")).toBe("GC");
-    expect(rootOf("ES1!")).toBe("ES");
-  });
-
-  it("has no root for 6E, a CFD or nothing", () => {
-    expect(rootOf("6E")).toBeNull();
-    expect(rootOf("M6E")).toBeNull();
-    expect(rootOf("US100.cash")).toBeNull();
-    expect(rootOf("")).toBeNull();
-    expect(rootOf(null)).toBeNull();
   });
 });

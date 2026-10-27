@@ -37,9 +37,9 @@ export const AUTO_RULE_KEYS = [
   // Not a count of trades — a win or a scratch in between breaks the run.
   "stop_after_two_losses",
   // Phase Q (14.10.2026): the manual ticks that the trade page already answers,
-  // per trade. Each reads what the trader wrote on the trade, never the chart —
-  // whether the bias was on the chart before the entry is the recording's to say.
-  "htf_bias_set",
+  // per trade. Each reads what the trader wrote on the trade, never the chart.
+  // The day's bias (`htf_bias_set`) left in phase E (27.10.2026): the journal
+  // holds no forecast of direction; its rows are retired like the money rules.
   "thesis_recorded",
   "honest_tags",
   "review_complete",

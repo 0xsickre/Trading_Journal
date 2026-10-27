@@ -53,8 +53,6 @@ import {
 import { CoExposurePanel } from "@/components/journal/reports/co-exposure-panel";
 import { MissedPanel } from "@/components/journal/reports/missed-panel";
 import { ScenarioPanel } from "@/components/journal/reports/scenario-panel";
-import { BiasPanel } from "@/components/journal/reports/bias-panel";
-import type { DailyBias } from "@/lib/journal/daily-bias";
 import { missedCost, stalePlanCount } from "@/lib/journal/missed-cost";
 import {
   MIN_SAMPLE_OPTIONS,
@@ -147,7 +145,6 @@ export function ReportsWorkbench({
   playbooks = [],
   positionRules,
   optionsMap = {},
-  biases = [],
   autoMistakes = {},
 }: {
   trades: TradeRow[];
@@ -163,8 +160,6 @@ export function ReportsWorkbench({
   positionRules?: Map<string, PositionRule[]>;
   /** Option lists, used to cut `psychology_tags` back into emotion vs discipline. */
   optionsMap?: OptionsMap;
-  /** Bias dana (phase D): every forecast, graded or not. */
-  biases?: DailyBias[];
   /** The mistakes the journal found per trade id (phase B4), by option-list value. */
   autoMistakes?: Record<string, string[]>;
 }) {
@@ -390,8 +385,6 @@ export function ReportsWorkbench({
     );
   }, [scopedBook, tzOf, mountedAt]);
 
-  const biasRows = useMemo(() => scopedBook.map((t) => t.trade.row), [scopedBook]);
-  const biasZone = useCallback((row: TradeRow) => tzOf({ row }), [tzOf]);
 
 
   /**
@@ -858,7 +851,6 @@ export function ReportsWorkbench({
             <ScenarioPanel trades={scopedBook} dimension={dimension} dimensionContext={dimensionContext} />
             <CoExposurePanel pairs={pairs} />
             <MissedPanel cost={missed.cost} stalePlans={missed.stalePlans} />
-            <BiasPanel biases={biases} trades={biasRows} zoneOf={biasZone} currency={currency} />
           </>
         )
       )}
