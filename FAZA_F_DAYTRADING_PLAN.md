@@ -123,6 +123,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 26.10.2026 | X | Neutralan journal (trejder: „skroz ćemo izbaciti bilo kakva pravila iz journala, ne može da bude vezan za prop firmu … ja sam taj koji poštuje ili ne pravila“; prelazak na Tradeify). Faza **X**: plan napisan. Odluke istog dana: **X-1 B** (tracker samo proces — „ako bude više naloga na prop firma biće konflikta“), X-2 … X-6, X-8, X-9 **A**, **X-7** uvoz univerzalan (prepoznaje format, i TopstepX i NinjaTrader), **X-10** brief „na kraju“. NinjaTrader uvoz (AddOn šalje svaki fill preko HTTPS-a, red kad nema mreže — trejderu se „svidja“) je posebna faza posle X |
 | 26.10.2026 | B | Brzi unos (trejder: „što manje ručnog rada po pojedinom trejdu, a praviti jedan dnevni izveštaj zatvaranjem dana“; „1A, 2 ne, 3 ne, 4 da“): bez detekcija koje traže novčani limit ili broj trejdova, bez auto grafika i audio priloga; X4 migracija puštena, faza B pre X5–X7 |
 | 27.10.2026 | E | Bez biasa dana (trejder: „Ne koristim više bias dana — market ne može da se predvidi, nego se trguje uz njega, uz reakciju.“): predviđanje smera izlazi iz celog toka journala, kao pravila prop firme u X. Kartica, ocena iz sveća, panel, paket i pravilo `htf_bias_set` odlaze; `tj_daily_bias` i `custom.htf_bias` ostaju kao istorija. Jutarnja poruka (🧠 Sklonost) čeka odgovor trejdera |
+| 27.10.2026 | G | Put do profesionalca (trejder posle poređenja journala sa `trading-transkripti/PUT-DO-PROFESIONALCA.md` i Lance-ovim dnevnim izveštajem, transkript 032; „ništa ne ubacujemo njegovu karticu u kompletu nego predloži … optimizovano za mene“ → „Da, prepiši plan faze G ovako i kreni redom“): **G-1** Propušten setup (ulaz/stop/cilj, ishod u R) odlazi, zamenjuju ga do 3 prilike dana (jedna najlakša); **G-2** mentalna ocena 1–5 odlazi → san %, sati sna, smena, dete; **G-3** pravilo „bez ulaza prvih 10 min“ London i NY; **G-4** „1 trejd dnevno“ samo merenje (30.09. ostaje); **G-5** NY prozor 14:30–17:30 od 28.10.; **G-6** vesti i tip dana se ne rade; **G-7** cilj procesa je ručno pravilo trackera (bez koda), od kartice samo „sutra menjam“; size po oceni i nedelji samo u paketu; backtest = Practice nalog |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -170,6 +171,7 @@ pogađa.
 | **X** | Journal bez pravila prop firme: bez Topstep mašine, MLL/DLL plana, Survival-a i banera; tvoji limiti na nalogu, CME dan | — | D | da: aditivna (neutralne kolone) + **briše** `topstep_*` (uz odobrenje) | **Opus** | ✅ 27.10.2026 — X1–X9 isporučeni; migracije `20261026120000`–`…140000`, `…180000`, `…190000`, `20261027090000` (brisanje `topstep_*` / `risk_rule_*`) primenjene |
 | **B** | Brzi unos: trejd ~30 s (checklist „Zašto ulazim“, kraće liste, TF po playbook-u, automatske greške), psihologija i zatvaranje dana na /daily | — | X4 | da: aditivne (TF playbook-a, psihologija dana), podaci (liste, tekst pravila) | **Opus** | ✅ 27.10.2026 — B1–B8 isporučeni; migracije `20261026150000`, `…160000`, `…170000`, `20261027100000` primenjene; pregled koda `b83cef7` |
 | **E** | Bez biasa dana: bez kartice, ocene, panela, pravila `htf_bias_set` i greške „Bez biasa“; staro polje read-only | — | B | da, podaci: penzionisanje pravila, tekst `review_complete`, polje `htf_bias` gasi se, fabrička lista bez biasa (uz odobrenje) | **Opus** | ✅ 27.10.2026 — `504a3f0` + futures-trading `c3168eb`; migracija `20261027120000` primenjena 27.10.2026 uz odobrenje trejdera |
+| **G** | Put do profesionalca: stanje pre sesije (san, smena, dete), „sutra menjam“, prilike dana umesto Propuštenog setupa, prvih 10 min, NY do ručka, size po oceni u paketu | — | E | da: `20261027140000` (aditivna + podaci, uz odobrenje) | **Opus** | 🔄 27.10.2026 |
 | **I** | Univerzalni uvoz: format se prepoznaje po zaglavlju (TopstepX, NinjaTrader, Tradovate), zapamćeno mapiranje za nepoznat CSV; posle toga NinjaTrader AddOn | — | E | da, aditivna: tabela zapamćenih mapiranja (I2) | **Opus** | ⏸ plan 27.10.2026 — čeka primere izvoza od trejdera |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
@@ -1919,6 +1921,43 @@ uz reakciju.“ Predviđanje smera izlazi iz celog toka journala, kao što je fa
   penzionisan, nov tekst `review_complete`, `tj_field_defs.htf_bias` `is_active = false`, `tj_seed_categories` bez
   biasa. Tri trejda imaju staro `custom.htf_bias` i vide ga samo za čitanje; `tj_daily_bias` je prazna.
 - **Čeka odgovor:** E-4 (jutarnja poruka „🧠 Sklonost“).
+
+## G — Put do profesionalca (detaljno, 27.10.2026) — 🔄
+
+**Povod.** Trejder je tražio proveru da li journal podržava `trading-transkripti/PUT-DO-PROFESIONALCA.md`, pa poslao
+Lance-ov video o dnevnom izveštaju (transkript 032). Od kartice ne ulazi sve: samo ono što fali, uz najveće
+korišćenje postojećeg (trejder: „optimizovano za mene“).
+
+### Utvrđeno u kodu i bazi (27.10.2026)
+- `tj_daily_reports` ima `mental_temp` 1–5 (8 dana sa ocenom) i `mental_temp_at` (okidač `20261014200000`); forma
+  `daily-report-form.tsx`, akcija `daily/actions.ts` (`mental_temp` 1–5), dimenzija `mental_temp` i uvid
+  `low_mental_temp_entry` čitaju je. Tabela nije među 9 baznih u `production_base_tables.sql`.
+- Propušten setup: `status = 'missed'`, forma `/trades/missed/new` (`createMissedSetup` traži ulaz, stop i cilj),
+  merenje u futures-trading `journal_mae.py` korak 5 (`izmeri_promasaj`), `missed-cost.ts`, `reports/missed-panel.tsx`,
+  sekcija paketa. **U bazi 0 propuštenih setupa.** Status `missed` se čita u ~45 fajlova.
+- `trading_window` u bazi ima samo London 09:00–12:00 od 12.10.; NY prozor nije upisan. Settings forma predlaže
+  poslednji prozor ili 09:00–12:00 (`tracker-rule-manager.tsx`).
+- `afterSessionOpen` (`session-window.ts`) već daje minute posle otvaranja Londona (08:00 London) i NY (09:30), uz
+  letnje računanje — osnova za pravilo prvih 10 minuta.
+- Cilj procesa: ručno pravilo trackera već ima `created_at` / `deleted_at` i dnevni odgovor; ne treba nov kod.
+
+### Podkoraci (svaki: test → kod → gate → commit + push)
+- **G0** transkript 032 u `trading-transkripti` — ✅ `c01b5c4`.
+- **G1** ovaj plan.
+- **G2** migracija `20261027140000_put_do_profesionalca.sql`: kolone stanja i `state_at` (okidač), `tomorrow_change`,
+  `opportunities` (≤ 3), CHECK + red + fabrička lista za `no_entry_first_minutes`, NY prozor od 28.10. Uz
+  odobrenje, pre G4 (kod G4 čita nove kolone).
+- **G3** `no_entry_first_minutes` (evaluator, tekst u checklist-i, automatska greška „Ulaz u prvih 10 min“) i dugmad
+  „London 09:00–12:00“ / „NY 14:30–17:30“ u Settings › Tracker.
+- **G5** mentor paket: „Size po oceni setupa i po nedeljama“ (broj trejdova, prosečni ugovori, rizik $ / %; nedeljna
+  promena u %). Samo merenje.
+- **G7** Propušten setup odlazi (oba repoa); stari status `missed` se i dalje čita bez greške, kolone ostaju.
+- **G4** /daily: stanje pre sesije (san %, sati, smena, dete) umesto zvezdica, juče upisano „sutra menjam“ na vrhu;
+  na „Zatvaranju dana“ polje „sutra menjam“ i do 3 prilike (opis, u playbook-u, mogao sam, najlakša); paket i
+  /reports dimenzije po snu, smeni i detetu.
+- **G8** README 1:1 oba repoa, ovaj fajl, ROADMAP. Backtest: napomena o Practice nalogu „Backtest“.
+
+**Model:** Opus.
 
 ## I — Univerzalni uvoz (detaljno, 27.10.2026) — ⏸ čeka primere izvoza
 
