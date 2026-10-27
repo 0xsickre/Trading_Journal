@@ -51,6 +51,9 @@ export async function updateSession(request: NextRequest) {
   const isPublic =
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
+    // The NinjaTrader sync (phase I3) has no cookie session: it sends the
+    // user's access token, and the route verifies it itself.
+    pathname === "/api/import/ninjatrader" ||
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico";
 

@@ -104,6 +104,11 @@ export type Account = {
   practice: boolean;
   /** Flat-by time, `HH:MM` on Chicago's clock (phase X, X-9); `flat_by_close` grades against it. */
   flat_by: string;
+  /**
+   * The account's name in the trading platform (phase I3) — the NinjaTrader sync
+   * files a fill under the journal account carrying it. Null: not synced.
+   */
+  platform_account: string | null;
 };
 
 /** Where `point_value` came from. `missing` means the money columns are null. */

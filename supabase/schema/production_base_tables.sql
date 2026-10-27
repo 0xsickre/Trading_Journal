@@ -79,6 +79,8 @@ CREATE TABLE IF NOT EXISTS public.tj_accounts (
   practice                    boolean     NOT NULL DEFAULT false,
   -- Ravno do, sat po Čikagu (20261026140000, faza X).
   flat_by                     text        NOT NULL DEFAULT '16:00',
+  -- Ime naloga u platformi, za uvoz iz NinjaTradera (20261027180000, faza I3).
+  platform_account            text,
   CONSTRAINT tj_accounts_pkey PRIMARY KEY (id),
   CONSTRAINT tj_accounts_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -270,6 +272,8 @@ CREATE TABLE IF NOT EXISTS public.tj_executions (
   fee          numeric     NOT NULL DEFAULT 0,
   source       text        NOT NULL DEFAULT 'manual',
   created_at   timestamptz NOT NULL DEFAULT now(),
+  -- Id fill-a u platformi (NinjaTrader ExecutionId), 20261027180000, faza I3.
+  external_id  text,
   CONSTRAINT tj_executions_pkey PRIMARY KEY (id),
   CONSTRAINT tj_executions_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES auth.users(id) ON DELETE CASCADE,

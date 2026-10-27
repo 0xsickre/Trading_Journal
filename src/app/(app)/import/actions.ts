@@ -36,6 +36,8 @@ export type ImportExec = {
   qty: number;
   executed_at: string; // UTC ISO
   fee: number;
+  /** The fill's id in the platform (NinjaTrader `ExecutionId`, phase I3); absent for a CSV row. */
+  external_id?: string;
 };
 
 /**
@@ -386,7 +388,7 @@ export async function commitImport(input: CommitInput): Promise<CommitResult> {
   async function mergeRow(item: ImportItem, pid: string) {
     const { data: prevExecs, error: execErr } = await supabase
       .from("tj_executions")
-      .select("side,price,qty,executed_at,fee,source")
+      .select("side,price,qty,executed_at,fee,source,external_id")
       .eq("position_id", pid);
     if (execErr) throw new Error(execErr.message);
     const snapshot = (prevExecs ?? []) as unknown as SnapshotExec[];

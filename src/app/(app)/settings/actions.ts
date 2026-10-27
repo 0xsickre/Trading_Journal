@@ -984,6 +984,14 @@ const accountPatchSchema = z
     default_target_pct: pct("Default target").nullable().optional(),
     practice: z.boolean().optional(),
     flat_by: z.string().regex(FLAT_BY_RE, "Flat by is a time, HH:MM.").optional(),
+    // Phase I3: the account's name in NinjaTrader; empty clears it.
+    platform_account: z
+      .string()
+      .trim()
+      .max(100)
+      .nullable()
+      .optional()
+      .transform((v) => (v ? v : v === undefined ? undefined : null)),
   })
   .strict();
 
@@ -1003,6 +1011,7 @@ export async function updateAccount(
     default_target_pct?: number | null;
     practice?: boolean;
     flat_by?: string;
+    platform_account?: string | null;
   },
 ) {
   // Whitelisted and ranged. The patch used to go straight to the update, so any

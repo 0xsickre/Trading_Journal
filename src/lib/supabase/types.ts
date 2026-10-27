@@ -32,6 +32,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          platform_account: string | null
           practice: boolean
           starting_balance: number
           timezone: string
@@ -54,6 +55,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          platform_account?: string | null
           practice?: boolean
           starting_balance?: number
           timezone?: string
@@ -76,6 +78,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          platform_account?: string | null
           practice?: boolean
           starting_balance?: number
           timezone?: string
@@ -284,6 +287,7 @@ export type Database = {
         Row: {
           created_at: string
           executed_at: string
+          external_id: string | null
           fee: number
           id: string
           position_id: string
@@ -296,6 +300,7 @@ export type Database = {
         Insert: {
           created_at?: string
           executed_at: string
+          external_id?: string | null
           fee?: number
           id?: string
           position_id: string
@@ -308,6 +313,7 @@ export type Database = {
         Update: {
           created_at?: string
           executed_at?: string
+          external_id?: string | null
           fee?: number
           id?: string
           position_id?: string

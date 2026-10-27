@@ -206,7 +206,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,778 tests across 177 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,788 tests across 178 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -359,6 +359,7 @@ browser (`sidebar-prefs.ts`). On a phone the menu is the top bar's dropdown, as 
 | `/tracker` | Redirects to `/daily` (kept because the tracker used to live here) |
 | `/notebook` | Notes, folders, tags, markdown |
 | `/import` | CSV import wizard, batch history, undo |
+| `/api/import/ninjatrader` | `POST`, the NinjaTrader sync (phase I3, § NinjaTrader sync): fills and orders of one platform account, `Authorization: Bearer` with the user's Supabase access token — the only route outside the cookie session |
 | `/settings` | Five tabs: Categories (option lists + custom fields, one action creates both; the seeded tags are Serbian since K2, `20260929200000`, which rewrote the trades that carried them), Tracker, Instruments (the eight futures, each with its contract spec AND what it costs — commission per contract per side, or as a share of notional, typed by the trader: a new book's catalog starts at 0 since phase X5, `20261026180000`, X-8 A; a future carries no swap), Accounts (a compact list; each account is created, edited, duplicated, archived or deleted from its own dialog — currency locked once it has trades, the **timezone** shown, not typed: every time is in Europe/Belgrade (`DEFAULT_TZ`, K5, `20260929210000`), a file with its own offset is converted on import, and every account counts its days by the CME's 17:00 CT; the **breakeven range** shown, not typed (§ Metrics, K4), **Flat by (Chicago time)** — `tj_accounts.flat_by`, 16:00 unless set, what `flat_by_close` grades against (phase X4) — and **Practice / demo account** — a flag, `tj_accounts.practice`. **Backtest goes there** (phase G, G-7): an account named "Backtest" with the flag on, its trades imported like any other (TradingView replay through the CSV mapping). Practice stays out of "All accounts" everywhere, so a backtest never moves the real book, the `/daily` tracker or `/playbooks`; it is read by picking the account on the dashboard, `/journal`, `/calendar` and `/reports` (by setup there — `/playbooks` has no account picker), and `futures-trading` measures its MAE/MFE and "šta bi bilo" from the real contract's candles like any trade. No such account exists on 27.10.2026 — it is created here when the first backtest is imported; since phase X2 (26.10.2026) no prop firm's rules are set here, and since X6 (`20261027090000`) the account has none of a prop firm's columns), Deposits / withdrawals (the starting balance shown as the read-only first entry, dates in the account's zone, net flow per currency, delete with a confirmation). An archived account keeps its trades and still appears in filters, marked "(archived)", but is no longer offered for new trades, imports or deposits. Account deletion lives under Accounts. **The open tab is in the URL** (`?tab=accounts`, and `&sub=tags` under Categories), written with `history.replaceState`, so a reload or a shared link lands where it left off |
 | `/login` | Supabase auth |
 
@@ -1386,6 +1387,34 @@ click (`thesis`), beside setup, grade, mistakes and charts; a stop sealed empty 
 the seal too, or every R would keep reading the empty one. The mentor pack prints **Stop:** — original,
 last in the platform, moved or not — and how the entry was placed.
 
+### NinjaTrader sync — no export (phase I3, 27.10.2026)
+
+The trader's decision (I-4 … I-8): the journal reads NinjaTrader's own database instead of a file. A script on the
+trader's PC, `futures-trading/tools/nt_sync.py`, runs every five minutes while he is logged in (Windows Task
+Scheduler), copies `Documents\NinjaTrader 8\db\NinjaTrader.sqlite`, reads the fills and the orders of the accounts
+set up for it (only the real Tradeify account) for the last 14 days, and posts them to `/api/import/ninjatrader`
+as the journal user (the password sits in Windows Credential Manager).
+
+- **Which account.** Settings › Accounts › "Account in the platform" (`tj_accounts.platform_account`) names the
+  NinjaTrader account a journal account receives; unknown → the route answers 404 and writes nothing.
+- **What a trade is** (`ninjatrader-sync.ts`, `ntTrades`): per contract, flat → in a position → flat; a fill through
+  flat ends one trade and opens the next. The stop is the stop order's FIRST price from NinjaTrader's order history
+  (`OrderUpdates`), so a stop moved to breakeven still shows the risk the trade was taken with; the last stop and
+  the target come from the bracket, how the entry was placed from the entry order, how the trade ended from the
+  exit order (stop, target, anything else manual). NinjaTrader stores no commission, so each fill's fee is the
+  instrument's commission per lot (Settings › Instruments) × size.
+- **Sent again, written once** (`ntImportItems`). Every fill carries NinjaTrader's id (`tj_executions.external_id`,
+  unique per user). All fills known → nothing; a trade that was open last run and has since closed → its new fills
+  are merged into the same trade; fills of one trade spread over two journal trades → skipped and reported. A new
+  trade goes through the same match as `/import` (decision I-8): one existing trade of the same contract, side,
+  size and time within ten minutes is merged into; anything less certain is created.
+- **Same write path.** The route builds `ImportItem`s and calls `commitImport`, so batches, audit rows and undo work
+  as for a file; the batch is named `NinjaTrader <account>`. A merge never overwrites what the trader typed (the
+  stop from the recording, the thesis, the grade, the categories). Undo restores the displaced fills without their
+  NinjaTrader ids, so the next run merges into the restored trade by the match above.
+- **Auth.** `createClient()` honours `Authorization: Bearer` (no cookies), and the session middleware lets this one
+  path through; the route checks the token itself (`getClaims`). RLS applies exactly as in the app.
+
 ### What the file may overwrite, and what it may not
 
 A merge replaces the fills — entry, exit, size, times, commission — because those are the broker's
@@ -1598,8 +1627,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,778 tests across 177 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,233 tests in 124 files) and `components` (environment `jsdom`, files `*.test.tsx`, 545
+2,788 tests across 178 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,243 tests in 125 files) and `components` (environment `jsdom`, files `*.test.tsx`, 545
 tests in 53 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

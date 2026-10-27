@@ -378,6 +378,7 @@ function EditAccountDialog({
 
   const [practice, setPractice] = useState(account.practice === true);
   const [flatBy, setFlatBy] = useState(account.flat_by || DEFAULT_FLAT_BY_CT);
+  const [platformAccount, setPlatformAccount] = useState(account.platform_account ?? "");
   const flatByOk = FLAT_BY_RE.test(flatBy);
 
   const [commPerUnit, setCommPerUnit] = useState(String(account.default_commission_per_unit));
@@ -408,6 +409,7 @@ function EditAccountDialog({
         default_fee_fixed: val("fee"),
         practice,
         flat_by: flatBy,
+        platform_account: platformAccount.trim() || null,
       });
       if (!res.ok) toast.error(res.error);
       else {
@@ -525,6 +527,23 @@ function EditAccountDialog({
             The tracker&apos;s &ldquo;Ravno do kraja dana&rdquo; grades every position against it. A holiday or an
             early close is not known to the journal — keep it on the platform. {DEFAULT_FLAT_BY_CT} is the CME&apos;s
             daily pause.
+          </p>
+        </section>
+
+        <section className="space-y-1.5 rounded-md border p-3">
+          <Label htmlFor={`platform-${account.id}`} className="text-sm font-medium">
+            Account in the platform
+          </Label>
+          <Input
+            id={`platform-${account.id}`}
+            value={platformAccount}
+            onChange={(e) => setPlatformAccount(e.target.value)}
+            placeholder="e.g. the account's name in NinjaTrader"
+            className="h-8"
+          />
+          <p className="text-xs text-muted-foreground">
+            The NinjaTrader sync files fills under the account whose name here matches the one in NinjaTrader&apos;s
+            Accounts tab. Empty: this account is not synced.
           </p>
         </section>
 
