@@ -169,7 +169,7 @@ pogađa.
 | **D** | Bias dana: prognoza pre sesije na /daily, ocena iz 1m sveća, moj winrate prema „uvek long“ | — | J | da: `20261017120000` (`tj_daily_bias`, aditivna) | **Opus** | ✅ kod 18.10.2026 — `a7456ed` · D1 `8af430f` · D2 `18d7077` · D4 `fcdf8ee` · D5+D6 `293067b` + futures-trading `adb046c`; migracija `20261017120000` primenjena 18.10.2026 |
 | **X** | Journal bez pravila prop firme: bez Topstep mašine, MLL/DLL plana, Survival-a i banera; tvoji limiti na nalogu, CME dan | — | D | da: aditivna (neutralne kolone) + **briše** `topstep_*` (uz odobrenje) | **Opus** | ✅ 27.10.2026 — X1–X9 isporučeni; migracije `20261026120000`–`…140000`, `…180000`, `…190000`, `20261027090000` (brisanje `topstep_*` / `risk_rule_*`) primenjene |
 | **B** | Brzi unos: trejd ~30 s (checklist „Zašto ulazim“, kraće liste, TF po playbook-u, automatske greške), psihologija i zatvaranje dana na /daily | — | X4 | da: aditivne (TF playbook-a, psihologija dana), podaci (liste, tekst pravila) | **Opus** | ✅ 27.10.2026 — B1–B8 isporučeni; migracije `20261026150000`, `…160000`, `…170000`, `20261027100000` primenjene; pregled koda `b83cef7` |
-| **E** | Bez biasa dana: bez kartice, ocene, panela, pravila `htf_bias_set` i greške „Bez biasa“; staro polje read-only | — | B | da, podaci: penzionisanje pravila, tekst `review_complete`, polje `htf_bias` gasi se, fabrička lista bez biasa (uz odobrenje) | **Opus** | 🔄 plan 27.10.2026 |
+| **E** | Bez biasa dana: bez kartice, ocene, panela, pravila `htf_bias_set` i greške „Bez biasa“; staro polje read-only | — | B | da, podaci: penzionisanje pravila, tekst `review_complete`, polje `htf_bias` gasi se, fabrička lista bez biasa (uz odobrenje) | **Opus** | ✅ 27.10.2026 — `504a3f0` + futures-trading `c3168eb`; migracija `20261027120000` primenjena 27.10.2026 uz odobrenje trejdera |
 | **I** | Univerzalni uvoz: format se prepoznaje po zaglavlju (TopstepX, NinjaTrader, Tradovate), zapamćeno mapiranje za nepoznat CSV; posle toga NinjaTrader AddOn | — | E | da, aditivna: tabela zapamćenih mapiranja (I2) | **Opus** | ⏸ plan 27.10.2026 — čeka primere izvoza od trejdera |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
@@ -1857,7 +1857,7 @@ izveštaj zatvaranjem dana“). Pravila: ništa istorijsko se ne briše. Polje s
   u spec-u). Playbook „Ponoc pojas reversal“ sa praznim „Gde ulazim“ / „Gde
   izlazim“ dobija samo upozorenje „Prazne grupe“ u Settings › Playbooks — pravila se ne izmišljaju.
 
-## E — Bez biasa dana (detaljno, 27.10.2026) — 🔄
+## E — Bez biasa dana (detaljno, 27.10.2026) — ✅ 27.10.2026
 
 **Povod** (trejder, 27.10.2026): „Ne koristim više bias dana — market ne može da se predvidi, nego se trguje uz njega,
 uz reakciju.“ Predviđanje smera izlazi iz celog toka journala, kao što je faza X izbacila pravila prop firme. Faza D
@@ -1914,10 +1914,10 @@ uz reakciju.“ Predviđanje smera izlazi iz celog toka journala, kao što je fa
 **Model:** Opus.
 
 ### Isporučeno (27.10.2026)
-- E1 + E4 u kodu, gate čist (2.768 testova). E3 futures-trading `c3168eb` (237 testova).
-- **Čeka odobrenje:** migracija `20261027120000_without_daily_bias.sql` (samo podaci i nova definicija
-  `tj_seed_categories`). Do tada: `htf_bias_set` stoji aktivan u bazi, ali nema evaluator, pa ne daje ocenu (kao
-  penzionisan); polje „Bias dana“ se na stranici trejda ne nudi ni bez migracije.
+- E1 + E4 `504a3f0`, gate čist (2.768 testova). E3 futures-trading `c3168eb` (237 testova).
+- E2: migracija `20261027120000` primenjena 27.10.2026 uz odobrenje trejdera. Provereno upitom: `htf_bias_set`
+  penzionisan, nov tekst `review_complete`, `tj_field_defs.htf_bias` `is_active = false`, `tj_seed_categories` bez
+  biasa. Tri trejda imaju staro `custom.htf_bias` i vide ga samo za čitanje; `tj_daily_bias` je prazna.
 - **Čeka odgovor:** E-4 (jutarnja poruka „🧠 Sklonost“).
 
 ## I — Univerzalni uvoz (detaljno, 27.10.2026) — ⏸ čeka primere izvoza
