@@ -172,7 +172,7 @@ pogađa.
 | **B** | Brzi unos: trejd ~30 s (checklist „Zašto ulazim“, kraće liste, TF po playbook-u, automatske greške), psihologija i zatvaranje dana na /daily | — | X4 | da: aditivne (TF playbook-a, psihologija dana), podaci (liste, tekst pravila) | **Opus** | ✅ 27.10.2026 — B1–B8 isporučeni; migracije `20261026150000`, `…160000`, `…170000`, `20261027100000` primenjene; pregled koda `b83cef7` |
 | **E** | Bez biasa dana: bez kartice, ocene, panela, pravila `htf_bias_set` i greške „Bez biasa“; staro polje read-only | — | B | da, podaci: penzionisanje pravila, tekst `review_complete`, polje `htf_bias` gasi se, fabrička lista bez biasa (uz odobrenje) | **Opus** | ✅ 27.10.2026 — `504a3f0` + futures-trading `c3168eb`; migracija `20261027120000` primenjena 27.10.2026 uz odobrenje trejdera |
 | **G** | Put do profesionalca: stanje pre sesije (san, smena, dete), „sutra menjam“, prilike dana umesto Propuštenog setupa, prvih 10 min, NY do ručka, size po oceni u paketu | — | E | da: `20261027140000` (aditivna + podaci, uz odobrenje) | **Opus** | ✅ 27.10.2026 — `ff9d63e` (plan, migracija) · G3+G5 `db0ce0e` · G7 `924c438` + futures-trading `2dc54b8` · G4 `5555cee` · G-8 `cef0dd8` · G8 (dokumentacija) + futures-trading `0b9914e`; migracija `20261027140000` primenjena |
-| **Z** | Bez Topstep-a: brief i journal neutralni prema svakoj prop firmi — CME dan 17:00 → 16:00 CT u brief-u, dnevniku i modelima, CME praznici umesto Topstep-ovih, bez pominjanja firme u kodu i tekstovima koji opisuju sadašnje stanje | — | G | samo po Z-5: komentari 5 kolona (baza je inače čista), uz odobrenje | **Opus** | 🔄 27.10.2026 — Z-1 … Z-5 = A; Z1 futures-trading `0ca53e7` · Z2 `183b647` (istorija `dani_cme` čeka ručno pokretanje `dnevnik.yml`) |
+| **Z** | Bez Topstep-a: brief i journal neutralni prema svakoj prop firmi — CME dan 17:00 → 16:00 CT u brief-u, dnevniku i modelima, CME praznici umesto Topstep-ovih, bez pominjanja firme u kodu i tekstovima koji opisuju sadašnje stanje | — | G | samo po Z-5: komentari 5 kolona (baza je inače čista), uz odobrenje | **Opus** | 🔄 27.10.2026 — Z-1 … Z-5 = A; Z1 futures-trading `0ca53e7` · Z2 `183b647` + `26c1a63`, istorija `781756c` |
 | **I** | Univerzalni uvoz: format se prepoznaje po zaglavlju (TopstepX, NinjaTrader, Tradovate), zapamćeno mapiranje za nepoznat CSV; posle toga NinjaTrader AddOn | — | E | da, aditivna: tabela zapamćenih mapiranja (I2) | **Opus** | ⏸ plan 27.10.2026 — čeka primere izvoza od trejdera |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
@@ -2065,6 +2065,13 @@ zavise od nijedne prop firme, nego da budu neutralni.“ Faza X je uklonila prav
   (`--istorija-cme`, samo `dani_cme`, ostale tabele netaknute) — **pokreće trejder** (Actions → Dnevnik istorija →
   Run workflow, „samo_cme“), jer ova sesija nema R2 ključeve ni GitHub pristup za pokretanje. Kad Z3 prođe, brief
   prelazi na `dani_cme`, a `dani.csv`, `kraj_merenja` i `dani_merenja` odlaze.
+  **Istorija urađena 27.10.2026** (run `40536480972`, pokrenut preko GitHub REST API-ja posle ispravke YAML-a u
+  `26c1a63` — neobeležen string sa dvotačkom je oborio workflow): commit `781756c`, samo `dani_cme.csv`. Provera:
+  8.440 redova = `dani.csv` (NQ i ES po 4.220, 07.06.2010 – 26.10.2026, isti datumi); raspon CME dana ≥ starog u
+  svakom danu (veći u 649 NQ / 617 ES dana, medijana +0 %); `ocekivano` prazno, RVOL kao u `dani`. Produžetak dana
+  15:10 → 16:00 CT donosi **35 min do sredine 2021** (CME je tada pauzirao indekse 15:15–15:30 CT) i **50 min od
+  2021**; skraćen dan +15 min (12:00 umesto 11:45 CT). Za Z3: prozor 15:30–16:00 CT pre 2021. je posle pauze — u
+  testu proveriti obe polovine perioda i ovaj prelom.
 - **Z3** futures-trading: ponovni testovi modela po Z-1 (posebna podela na delove, plan pre pokretanja), `RUTINA.md`.
 - **Z4** journal: komentari i testovi bez imena firme (Z-4), TopstepX tekstovi po Z-3, migracija komentara po Z-5.
 - **Z5** README 1:1 oba repoa, AGENTS.md, ROADMAP, ovaj fajl.
