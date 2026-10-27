@@ -171,7 +171,7 @@ pogađa.
 | **X** | Journal bez pravila prop firme: bez Topstep mašine, MLL/DLL plana, Survival-a i banera; tvoji limiti na nalogu, CME dan | — | D | da: aditivna (neutralne kolone) + **briše** `topstep_*` (uz odobrenje) | **Opus** | ✅ 27.10.2026 — X1–X9 isporučeni; migracije `20261026120000`–`…140000`, `…180000`, `…190000`, `20261027090000` (brisanje `topstep_*` / `risk_rule_*`) primenjene |
 | **B** | Brzi unos: trejd ~30 s (checklist „Zašto ulazim“, kraće liste, TF po playbook-u, automatske greške), psihologija i zatvaranje dana na /daily | — | X4 | da: aditivne (TF playbook-a, psihologija dana), podaci (liste, tekst pravila) | **Opus** | ✅ 27.10.2026 — B1–B8 isporučeni; migracije `20261026150000`, `…160000`, `…170000`, `20261027100000` primenjene; pregled koda `b83cef7` |
 | **E** | Bez biasa dana: bez kartice, ocene, panela, pravila `htf_bias_set` i greške „Bez biasa“; staro polje read-only | — | B | da, podaci: penzionisanje pravila, tekst `review_complete`, polje `htf_bias` gasi se, fabrička lista bez biasa (uz odobrenje) | **Opus** | ✅ 27.10.2026 — `504a3f0` + futures-trading `c3168eb`; migracija `20261027120000` primenjena 27.10.2026 uz odobrenje trejdera |
-| **G** | Put do profesionalca: stanje pre sesije (san, smena, dete), „sutra menjam“, prilike dana umesto Propuštenog setupa, prvih 10 min, NY do ručka, size po oceni u paketu | — | E | da: `20261027140000` (aditivna + podaci, uz odobrenje) | **Opus** | 🔄 27.10.2026 |
+| **G** | Put do profesionalca: stanje pre sesije (san, smena, dete), „sutra menjam“, prilike dana umesto Propuštenog setupa, prvih 10 min, NY do ručka, size po oceni u paketu | — | E | da: `20261027140000` (aditivna + podaci, uz odobrenje) | **Opus** | ✅ 27.10.2026 — `ff9d63e` (plan, migracija) · G3+G5 `db0ce0e` · G7 `924c438` + futures-trading `2dc54b8` · G4 `5555cee` · G-8 `cef0dd8` · G8 (dokumentacija) + futures-trading `0b9914e`; migracija `20261027140000` primenjena |
 | **I** | Univerzalni uvoz: format se prepoznaje po zaglavlju (TopstepX, NinjaTrader, Tradovate), zapamćeno mapiranje za nepoznat CSV; posle toga NinjaTrader AddOn | — | E | da, aditivna: tabela zapamćenih mapiranja (I2) | **Opus** | ⏸ plan 27.10.2026 — čeka primere izvoza od trejdera |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
@@ -1922,7 +1922,7 @@ uz reakciju.“ Predviđanje smera izlazi iz celog toka journala, kao što je fa
   biasa. Tri trejda imaju staro `custom.htf_bias` i vide ga samo za čitanje; `tj_daily_bias` je prazna.
 - **Čeka odgovor:** E-4 (jutarnja poruka „🧠 Sklonost“).
 
-## G — Put do profesionalca (detaljno, 27.10.2026) — 🔄
+## G — Put do profesionalca (detaljno, 27.10.2026) — ✅ 27.10.2026
 
 **Povod.** Trejder je tražio proveru da li journal podržava `trading-transkripti/PUT-DO-PROFESIONALCA.md`, pa poslao
 Lance-ov video o dnevnom izveštaju (transkript 032). Od kartice ne ulazi sve: samo ono što fali, uz najveće
@@ -1959,7 +1959,15 @@ korišćenje postojećeg (trejder: „optimizovano za mene“).
 - **G4** /daily: stanje pre sesije (san %, sati, smena, dete) umesto zvezdica, juče upisano „sutra menjam“ na vrhu;
   na „Zatvaranju dana“ polje „sutra menjam“ i do 3 prilike (opis, u playbook-u, mogao sam, najlakša); paket i
   /reports dimenzije po snu, smeni i detetu. — ✅ 27.10.2026, bez migracije.
-- **G8** README 1:1 oba repoa, ovaj fajl, ROADMAP. Backtest: napomena o Practice nalogu „Backtest“.
+- **G8** README 1:1 oba repoa, ovaj fajl, ROADMAP. Backtest: napomena o Practice nalogu „Backtest“. — ✅ 27.10.2026:
+  README (nalog „Backtest“: Practice oznaka, van „All accounts“, /daily tracker-a i /playbooks — čita se izborom naloga
+  na dashboardu, /journal, /calendar i /reports; MAE/MFE i „šta bi bilo“ iz futures-trading isto), AGENTS.md, ROADMAP.
+  Nalog „Backtest“ u bazi ne postoji (27.10.2026: samo „50K Combine“) — pravi se u Settings › Accounts pri prvom
+  backtest uvozu. futures-trading `0b9914e`: backup nije čuvao `tj_daily_bias` (26. tabela u bazi, prazna — ništa
+  izgubljeno), README je pisao 28 tabela; uklonjene reference na `scripts/mt5_excursion.py` (obrisan u H1).
+- **Uočeno, nije rađeno (van G):** `journal_mae.py` i dalje završava „šta bi bilo“ na kraju „Topstep dana“ (15:10 CT,
+  `KRAJ_DANA_CT`), a journal od faze X zna samo CME dan i `flat_by` po nalogu (podrazumevano 16:00 CT). Za trejdera je
+  odluka: da li „šta bi bilo“ treba da čita `flat_by` naloga.
 
 ### G4 — tehničke odluke (bez uticaja na trejderov izbor, zapisane radi ponovljivosti)
 - **Šta se čuva:** `daily-report-schema.ts` (zod, sa testovima): stanje (`sleep_hours` na jednu decimalu kao
