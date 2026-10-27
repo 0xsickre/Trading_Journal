@@ -2102,7 +2102,7 @@ zavise od nijedne prop firme, nego da budu neutralni.“ Faza X je uklonila prav
 
 **Model:** Opus (Z3 je obiman: više delova, jedan po poruci).
 
-## I — Univerzalni uvoz (detaljno, 27.10.2026) — ⏸ čeka primere izvoza
+## I — Univerzalni uvoz (detaljno, 27.10.2026) — ⏸ I3 (NinjaTrader baza) čeka odgovore I-4 … I-8
 
 **Povod** (trejder, X-7 i 27.10.2026): kad promeni prop firmu, ne sme da treba kodiranje. Uvoz zavisi od
 **platforme** (NinjaTrader, Tradovate, Rithmic, TopstepX/ProjectX, Quantower), ne od firme. Trejder prelazi na
@@ -2124,7 +2124,9 @@ Tradeify (NinjaTrader / Tradovate).
   platforma daje. **Parser se piše tek iz stvarnog fajla** (testovi na tom fajlu, bez ličnih podataka).
 - **I2 Zapamćeno mapiranje:** tabela (npr. `tj_import_mappings`: korisnik, otisak zaglavlja, mapa kolona, naziv),
   RLS po vlasniku; fajl sa istim zaglavljem prolazi bez mapiranja, uz dugme „promeni mapiranje“.
-- **I3 NinjaTrader AddOn** (posebna podfaza): šalje svaki fill journalu preko HTTPS-a, sa redom kad nema mreže.
+- **I3 Sinhronizacija iz NinjaTrader baze** (trejder 27.10.2026: „da journal uvozi direktno iz NinjaTrader.sqlite bez
+  ručnog izvoza“, „skripta radi svakih 5 min kad radi PC“) — zamenjuje AddOn; detaljno ispod. I1 za NinjaTrader tada
+  ne treba; ostaje za Tradovate web i druge platforme.
 - **I4 Dokumentacija:** README 1:1, ovaj fajl.
 
 ### Pitanja za trejdera (bez odgovora se ne počinje)
@@ -2136,6 +2138,59 @@ Tradeify (NinjaTrader / Tradovate).
   Function) — dogovor pre koda.
 
 **Model:** Opus.
+
+### I3 — Sinhronizacija iz NinjaTrader baze (detaljno, 27.10.2026)
+
+**Utvrđeno u bazi NinjaTradera** (`Documents\NinjaTrader 8\db\NinjaTrader.sqlite`, čitana kopija, samo za čitanje):
+- Nalozi (`Accounts`): Backtest, Playback101, Sim101 i tri sa Tradovate konekcije (provider 50): `DEMO…690`,
+  `PTLO…616`, `TDFY…428` (Tradeify). Izvršenja ima samo `TDFY…428` (13) i `DEMO…690` (1).
+- `Executions`: `ExecutionId`, `OrderId`, `Account`, `Instrument`, `Time` (.NET tikovi, **UTC** — 26.10. 10:42:20 je
+  u Tradovate izvozu 11:42:20 po Beogradu), `Price`, `Quantity`, `MarketPosition` (0 kupovina, 1 prodaja),
+  `IsEntry` / `IsExit`, `Name` naloga („Entry“, „Stop1“, „Target1“, „Close“; prazno kad nalog nije iz ATM-a),
+  `Commission` i `Fee` = **0** (provizija dolazi iz Settings › Instruments).
+- `Orders`: tip (0 Limit, 1 Market, 4 StopMarket), stanje, `StopPrice`, `LimitPrice`, `Oco` (stop i cilj istog
+  bracket-a dele OCO), količina. `OrderUpdates`: **istorija svake izmene naloga** (157 redova) — prvi `StopPrice`
+  stop naloga je originalni stop, i kad je stop kasnije pomeren (TopstepX izvoz je davao samo poslednju cenu).
+- `Instruments` + `MasterInstruments`: koren (MNQ, MGC) i `Expiry` (tikovi) → ugovor (npr. MNQZ6).
+- Baza nije u WAL režimu; kopija fajla dok NinjaTrader radi čita se bez greške.
+- Tradovate web izvoz „orders-all“ (Downloads, 26.10.) **nije dovoljan**: nema ulaz MGC-a, vreme je lokalno bez zone,
+  nema vremena po fill-u ni oznake ulaz/izlaz.
+
+**Utvrđeno u journalu:** uvoz je server akcija `commitImport` (`import/actions.ts`, sesija iz kolačića; nema API
+rute). `tj_executions` nema spoljni ključ fill-a, pa ponovljeno slanje istih fill-ova ne može da se prepozna.
+`futures-trading/tools/journal_api.py` se već prijavljuje kao korisnik journala (email + lozinka, RLS kao u
+aplikaciji) — isti način prijave može da koristi i skripta.
+
+**Predlog (čeka odluke I-4 … I-8):**
+1. **Skripta na PC-u** `tools/nt_sync.py`: svakih **5 minuta** dok je PC upaljen (Windows Task Scheduler: pri prijavi
+   + ponavljanje na 5 min, `pythonw`, bez prozora). Kopira `NinjaTrader.sqlite` u privremeni folder, čita izvršenja i
+   istoriju naloga samo za mapirane naloge za poslednjih N dana i šalje ih journalu. Bez mreže ili kad je PC bio
+   ugašen ništa se ne gubi: sledeće pokretanje šalje isto ponovo (red je sama baza NinjaTradera). Log u fajl sa
+   rotacijom; posle 3 uzastopna kvara jedna Telegram poruka.
+2. **Ruta u journalu** `POST /api/import/ninjatrader` (Bearer = Supabase pristupni token korisnika, RLS kao u
+   aplikaciji): prima sirove fill-ove i naloge, sklapa pozicije (ravno → ravno po nalogu i ugovoru, kao
+   `groupTopstepXTrades`), originalni stop iz prvog `StopPrice` stop naloga (`OrderUpdates`), poslednji stop i cilj iz
+   bracket-a (OCO), razlog izlaza iz imena naloga (Stop1 → stop, Target1 → target, Close / ručno → ručni izlaz), pa ide
+   kroz isti put upisa kao `/import` (jedno mesto računa). Ponovljen fill se preskače po `ExecutionId`.
+3. **Otvorena pozicija:** šalje se i dok je otvorena; sledeća sinhronizacija dopunjuje izlaze istoj poziciji (ključ
+   pozicije = `ExecutionId` prvog ulaza). Ručno upisana polja (originalni stop sa snimka, teza, ocena, kategorije) se
+   nikad ne prepisuju.
+4. **Migracija (aditivna, uz odobrenje):** `tj_executions.external_id` + jedinstven (korisnik, izvor, `external_id`);
+   `tj_accounts.platform_account` (ime naloga u platformi, npr. `TDFY…428`) za mapiranje.
+5. **Testovi:** sklapanje pozicija, originalni stop iz istorije, razlog izlaza, ponovljeno slanje (0 novih),
+   delimičan izlaz, otvorena pa zatvorena pozicija, vreme UTC — na veštačkoj bazi istog oblika (bez ličnih podataka).
+
+**Pitanja za trejdera (bez odgovora se ne počinje kod):**
+- **I-4 Gde živi skripta:** `futures-trading` (Python, već ima prijavu u journal i Telegram — preporuka) ili
+  `Trading_Journal`?
+- **I-5 Mapiranje naloga:** novo polje „Nalog u platformi“ u Settings › Accounts (preporuka) — i koji nalozi se
+  šalju: samo `TDFY…428`, ili i `DEMO…690` / `PTLO…616` kao Practice?
+- **I-6 Koliko unazad** svako pokretanje šalje: 14 dana (preporuka; pokriva i nedelju bez upaljenog PC-a)?
+- **I-7 Lozinka na PC-u:** Windows Credential Manager (preporuka) ili lokalni `.env` u korisničkom folderu?
+- **I-8 Postojeći trejdovi 26.10. i 27.10.:** ako su već upisani ručno ili kroz `/import`, prvo pokretanje ih spaja
+  (isti ugovor, vreme ± 10 min) ili preskače? Preporuka: spaja, uz prikaz u logu.
+
+**Model:** Opus (ruta + sklapanje pozicija + migracija + skripta, dva repoa).
 
 ## Katalog stavki
 
