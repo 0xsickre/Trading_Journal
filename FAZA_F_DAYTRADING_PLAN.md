@@ -2075,7 +2075,7 @@ zavise od nijedne prop firme, nego da budu neutralni.“ Faza X je uklonila prav
 - **Z3** futures-trading: ponovni testovi modela po Z-1 (posebna podela na delove, plan pre pokretanja), `RUTINA.md`.
   Plan: `futures-trading/testovi/cme_dan/PLAN.md`, **6 delova**: (1) plan, prekidač `DAN=cme` (`testovi/_dan.py`) i
   kontrola starog dana — ✅ `c430aed`; (2) `raspon` NQ/ES (Databento, `testovi.yml`) — ✅ `b736967`: M2 prolazi na CME danu
-  (NQ 0,87/0,86, ES 0,83/0,85, pojas 76–83 %), kontrola starog dana ponovila 27.09., NQ posle 2021 slabiji na oba dana jednako; (3) `raspon_ponoc` NQ/ES (lokalno);
+  (NQ 0,87/0,86, ES 0,83/0,85, pojas 76–83 %), kontrola starog dana ponovila 27.09., NQ posle 2021 slabiji na oba dana jednako; (3) `raspon_ponoc` NQ/ES (lokalno) — ✅ `776016e`: HAR prolazi u sva 4 slučaja (pokrivenost 76–83 %);
   (4) GC `raspon` + `raspon_ponoc_gc`; (5) `rezim` T1/T2 (+ kontrola T3/T4, T5); (6) prelaz brief-a na CME dan.
   Van Z3 (predlog u planu, trejder može da traži drugačije): dan zastavica u `uslovi.py` (18:00 → 16:00 NY, zatvaranje
   NY berze — nije vreme firme) ostaje. Uočeno u delu 1: Z1 je preimenovao `topstep_kraj`, a 4 skripte u `testovi/`
