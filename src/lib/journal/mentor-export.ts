@@ -14,9 +14,8 @@ import {
 } from "./analytics";
 import { EXACT_ZERO_RANGE, type BreakevenRange } from "./breakeven";
 import type { FieldDef } from "./field-def-types";
-import { displayFieldValue, stringFieldValue } from "./field-values";
+import { displayFieldValue } from "./field-values";
 import { getAllFormFields } from "./form-config";
-import { missedCost, type MissedOutcome } from "./missed-cost";
 import {
   fmtSlippagePts,
   fmtSlippageR,
@@ -258,45 +257,6 @@ function tradeDetail(
   return `${head}\n${lines.join("\n")}`;
 }
 
-const MISSED_OUTCOME_TEXT: Record<MissedOutcome, string> = {
-  target: "cena je došla do ulaza, pa do targeta",
-  stop: "cena je došla do ulaza, pa do stopa",
-  neither: "cena je došla do ulaza, ni stop ni target do kraja trading dana",
-  no_entry: "cena se nije vratila do ulaza — setup nije ni došao, to nije oklevanje",
-};
-
-/**
- * A plan that was never taken. It has no fill, so the closed trade's heading
- * ("open · — · —") said nothing; what the model needs is when it was given up
- * and what it would have done, which is the R2 walk's outcome.
- */
-function missedDetail(
-  t: TradeRow,
-  detailFields: { key: string; label: string }[],
-  displayTz?: string,
-): string {
-  const no = t.trade_no != null ? `#${t.trade_no}` : t.id.slice(0, 8);
-  const at = stringFieldValue(t, "missed_at");
-  const when =
-    at == null ? "—" : displayTz ? fmtInTz(at, displayTz, "yyyy-MM-dd HH:mm") : at.slice(0, 16).replace("T", " ");
-  const [m] = missedCost([t]).trades;
-  const outcome =
-    m?.outcome == null || m.r == null
-      ? "još nije izmereno (R2 meri posle kraja plana trading dana)"
-      : `${MISSED_OUTCOME_TEXT[m.outcome]}: ${m.r >= 0 ? "+" : ""}${r2(m.r)}R`;
-  const lines = [
-    `- **Hipotetički ishod (R2):** ${outcome}`,
-    ...detailFields
-      .filter((f) => f.key !== "missed_at")
-      .map((f) => {
-        const v = val(t, f.key);
-        return v ? `- **${f.label}:** ${v}` : "";
-      })
-      .filter(Boolean),
-  ];
-  return `### Trade ${no} — ${val(t, "instrument") || "?"} ${val(t, "direction")} · propušten ${when}\n${lines.join("\n")}`;
-}
-
 export type Granularity =
   | "day"
   | "week"
@@ -478,15 +438,6 @@ export function buildMentorPack(
       t.status === "partial" ||
       (t.status === "closed" && t.needs_review),
   );
-  const missedSetups = trades
-    .filter((t) => t.status === "missed")
-    .sort((a, b) =>
-      compareInstants(
-        String(b.missed_at ?? b.created_at),
-        String(a.missed_at ?? a.created_at),
-      ),
-    );
-
   // The intraday half needs each trade's own day rule; without one the pack
   // is the swing-era document and says nothing about sessions or days.
   const intraday = opts.tzOf != null;
@@ -688,16 +639,6 @@ export function buildMentorPack(
     out.push("");
   }
 
-  if (missedSetups.length > 0) {
-    out.push(`## Missed setup-i (${missedSetups.length})`);
-    out.push(
-      `_Planirani trejdovi koji nikad nisu otvoreni — bez PnL. Ishod je hipotetički: R2 sveće kroz plan trading dana; broji se tek kad je ulaz izvršen (limit: cena prošla ulaz za tik; proboj: dodir)._`,
-    );
-    out.push("");
-    for (const t of missedSetups.slice(0, 30))
-      out.push(missedDetail(t, detailFields, opts.displayTz));
-    out.push("");
-  }
 
   // --- Full trade detail (everything entered) -----------------------------
   out.push(`## Zatvoreni trejdovi — puni detalji (${detail.length})`);

@@ -51,9 +51,7 @@ import {
   spansOf,
 } from "@/lib/journal/co-exposure";
 import { CoExposurePanel } from "@/components/journal/reports/co-exposure-panel";
-import { MissedPanel } from "@/components/journal/reports/missed-panel";
 import { ScenarioPanel } from "@/components/journal/reports/scenario-panel";
-import { missedCost, stalePlanCount } from "@/lib/journal/missed-cost";
 import {
   MIN_SAMPLE_OPTIONS,
   asMinSample,
@@ -386,18 +384,6 @@ export function ReportsWorkbench({
   }, [scopedBook, tzOf, mountedAt]);
 
 
-
-  /**
-   * What was not taken, over the whole book of the accounts in scope.
-   *
-   * Not narrowed by the report's filters: they bound the CLOSE day, and a
-   * missed trade has no close. The panel says so rather than leaving the
-   * reader to assume the dates applied.
-   */
-  const missed = useMemo(() => {
-    const rows = trades.filter((t) => t.account_id != null && scopeIds.has(t.account_id));
-    return { cost: missedCost(rows), stalePlans: stalePlanCount(rows, mountedAt) };
-  }, [trades, scopeIds, mountedAt]);
 
   /**
    * The report itself — WITHOUT the sort.
@@ -850,7 +836,6 @@ export function ReportsWorkbench({
             )}
             <ScenarioPanel trades={scopedBook} dimension={dimension} dimensionContext={dimensionContext} />
             <CoExposurePanel pairs={pairs} />
-            <MissedPanel cost={missed.cost} stalePlans={missed.stalePlans} />
           </>
         )
       )}

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { inAllAccountsScope, primaryAccount } from "@/lib/journal/account-rules";
 import { getAccounts } from "@/lib/journal/accounts";
 import { getDailyReport } from "@/lib/journal/daily-report-queries";
@@ -190,10 +189,6 @@ export default async function DailyPage({
             <ReviewGapsCard
               gaps={reviewGaps(trades, reportDate, (t) => dayKeyIn(t.stats?.closed_at ?? null, tzOf(t)))}
             />
-            {/* A setup seen on the recording and not taken (phase O). */}
-            <Link href="/trades/missed/new" className="inline-block text-sm underline">
-              + Propušten setup (sa snimka)
-            </Link>
           </>
         }
       />

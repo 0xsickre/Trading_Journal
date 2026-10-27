@@ -204,17 +204,12 @@ describe("mentor pack details found by the mock book (30.09.2026)", () => {
       tv_images: {},
     }) as unknown as TradeRow;
 
-  it("gives each missed setup its R2 outcome and the time on the trader's clock", () => {
+  it("prints no missed setup since phase G (G-1): the R2 walk that priced them is gone", () => {
     const md = buildMentorPack([...book, missed(11, "target", 3), missed(12, "no_entry", 0), missed(13, null, null)], {
       displayTz: "Europe/Belgrade",
     });
-    expect(md).toContain("### Trade #11 — MNQ Long · propušten 2026-09-29 16:00");
-    expect(md).toContain("- **Hipotetički ishod (R2):** cena je došla do ulaza, pa do targeta: +3.00R");
-    expect(md).toContain("cena se nije vratila do ulaza — setup nije ni došao, to nije oklevanje: +0.00R");
-    expect(md).toContain("- **Hipotetički ishod (R2):** još nije izmereno");
-    expect(md).not.toContain("Missed at");
-    expect(md).toContain("- **Razlog propuštanja:** Oklevao");
-    expect(md).not.toContain("Miss reason");
+    expect(md).not.toContain("propušten 2026-09-29");
+    expect(md).not.toContain("Hipotetički ishod (R2)");
   });
 
   it("names the categories in Serbian, and by the trader's own field name when there is one (phase J)", () => {

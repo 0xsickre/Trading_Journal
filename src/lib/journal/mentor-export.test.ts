@@ -261,13 +261,13 @@ describe("buildMentorPack optional sections", () => {
     expect(md).toContain("## Otvorene / za pregled (2)");
   });
 
-  it("lists missed setups separately, and says they carry no P&L", () => {
+  it("has no missed-setup section since phase G, and a missed row is never a closed trade", () => {
     // A planned trade that never opened is not a zero-R loss; averaging it in
-    // with the closed book would be the one thing this section exists to stop.
+    // with the closed book would misprice the book.
     const missed = { ...trade("m1", 0), status: "missed" } as TradeRow;
     const md = buildMentorPack([missed, trade("done", 50)]);
-    expect(md).toContain("## Missed setup-i (1)");
-    expect(md).toContain("bez PnL");
+    expect(md).not.toContain("## Missed setup-i");
+    expect(md).toContain("## Zatvoreni trejdovi — puni detalji (1)");
   });
 
   it("caps the full-detail section and says how many it left out", () => {
