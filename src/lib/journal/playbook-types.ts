@@ -37,8 +37,56 @@ export const SHOW_WHEN_LABELS: Record<ShowWhen, string> = {
  * owner gave it. Identity is the `id`, not the text, which is what makes
  * renaming free — nothing points at the label.
  */
-/** The headings a new playbook starts with (30.09.2026), in this order. */
-export const NEW_PLAYBOOK_SECTIONS = ["Zašto ulazim?", "Gde ulazim?", "Gde izlazim?"] as const;
+export type TemplateRule = { text: string; show_when: ShowWhen; criterion: boolean };
+
+/**
+ * What a new playbook starts with (trader, 28.10.2026; replaces the three
+ * empty sections of 30.09.2026): four setup criteria every setup shares and
+ * the exit review, as in his "Apsorpcija" book. The rules are the LIBRARY's —
+ * an existing rule with the same text and `show_when` is linked, so its
+ * statistics pool across books; a missing one is created. Each book can drop
+ * or edit them like any other; books that exist are not touched.
+ */
+export const NEW_PLAYBOOK_TEMPLATE: readonly { label: string; rules: readonly TemplateRule[] }[] = [
+  {
+    label: "Setup Grade",
+    rules: [
+      { text: "Rizik izracunat pre ulaska", show_when: "always", criterion: true },
+      { text: "TP i SL jasno odredjeni", show_when: "always", criterion: true },
+      { text: "Structura Bias se slaze LTF do 15 min", show_when: "always", criterion: true },
+      { text: "Structura Bias se slaze HTF od 15m do 1D", show_when: "always", criterion: true },
+    ],
+  },
+  {
+    label: "Izlaz",
+    rules: [
+      { text: "Cut In lose", show_when: "loser", criterion: false },
+      { text: "Cut in profit", show_when: "winner", criterion: false },
+      { text: "TP Hit", show_when: "winner", criterion: false },
+      { text: "SL Hit", show_when: "loser", criterion: false },
+      { text: "BE", show_when: "breakeven", criterion: false },
+    ],
+  },
+];
+
+const ruleKey = (text: string, showWhen: string) =>
+  `${showWhen}|${text.trim().replace(/\s+/g, " ").toLocaleLowerCase("sr")}`;
+
+/**
+ * The library rule a template rule links to: live, same `show_when`, same text
+ * up to case and spacing. Null → the rule is created. The oldest wins when the
+ * library somehow holds two, so repeated books keep pooling into one.
+ */
+export function libraryRuleFor(
+  rule: TemplateRule,
+  library: readonly { id: string; text: string; show_when: string; deleted_at: string | null; sort_order: number }[],
+): string | null {
+  const key = ruleKey(rule.text, rule.show_when);
+  const hit = library
+    .filter((r) => r.deleted_at == null && ruleKey(r.text, r.show_when) === key)
+    .sort((a, b) => a.sort_order - b.sort_order)[0];
+  return hit?.id ?? null;
+}
 
 export type PlaybookSection = {
   id: string;

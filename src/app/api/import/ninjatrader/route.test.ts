@@ -12,6 +12,11 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ auth: { getClaims: (t: string) => getClaims(t) }, from }),
 }));
 vi.mock("@/app/(app)/import/actions", () => ({ commitImport: vi.fn() }));
+// The query modules are not what this tests, and loading them would put them
+// under the src/lib coverage floor unexercised (v8 counts files a test imports).
+vi.mock("@/lib/journal/trades", () => ({ getTradesWithStats: vi.fn() }));
+vi.mock("@/lib/journal/instruments", () => ({ getInstruments: vi.fn() }));
+vi.mock("@/lib/supabase/paginate", () => ({ selectAllByIds: vi.fn() }));
 
 const { POST } = await import("./route");
 

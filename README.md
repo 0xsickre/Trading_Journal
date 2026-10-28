@@ -34,8 +34,8 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 299 of the
-3,359 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 297 of the
+3,371 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
@@ -43,7 +43,7 @@ on a screen the trader writes into or reviews in their own words:
 | Daily (the "Zatvaranje dana" card included; the state before the session, "sutra menjam" and the day's opportunities since phase G, with the messages of their schema `daily-report-schema.ts`) and tracker (the lock warning of `review-gaps.ts` too) | 83 |
 | Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 150 |
 | Day insight sentence (`low_efficiency_day`) | 1 |
-| A new playbook's three starting sections (`playbook-types.ts`) | 3 |
+| A new playbook's template rules (`playbook-types.ts`; the trader's own words, most without a diacritic, so the count sees one) | 1 |
 | The seeded tag values the review and the import write (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2; "Ispoštovao rizik", which `honest_tags` in `tracker/auto-rules.ts` reads) | 7 |
 | The trade page `/trades/[id]` (phase P) — off the recording, setup, review, and why it asks for the original stop (`trade-page.tsx`, its route, `stop-moved.ts`) | 25 |
 | The journal's own mistakes on a trade, marked "auto" (`auto-mistakes.ts`, phase B4) | 6 |
@@ -76,7 +76,7 @@ lexes every `.ts`/`.tsx` outside tests into comment / string / code regions, kee
 that read as prose rather than as machinery, and scores those for Serbian by diacritics and by a word
 list. A single Serbian word carrying no diacritic can still slip past that, and JSX text between tags
 is not a string literal (the "Bez pregleda" card on `/daily` is Serbian and not in the count), so
-**299 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
+**297 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
 name, read as the Serbian "pre" until F5.4. Three earlier versions of this paragraph said "about 46 of some 1,700", then "153 of
 1,663", then "185 of 2,191" — each counted by hand, and each had to be replaced rather than quietly
 corrected. That is why the method now ships as a script: a number nobody can re-run is a number
@@ -208,7 +208,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,795 tests across 179 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,803 tests across 179 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -757,10 +757,17 @@ playbook, and any row missed would have dropped out of its section.
 to leave it, find the right dropdown in settings, add a value and come back. The actions are
 `addPlaybookSection`, `updatePlaybookSection`, `deletePlaybookSection`, `movePlaybookSection` and
 `reorderPlaybookSections`, with `moveRuleToSection` and `setRuleCriterion` for the rules. A new book
-**starts with three empty sections** (30.09.2026, `NEW_PLAYBOOK_SECTIONS`): *Zašto ulazim?*, *Gde
-ulazim?*, *Gde izlazim?* — the questions every day-trading setup answers. They are the book's own rows,
-renamed or deleted like any other, and no rule comes with them: the rules are the trader's to write. If
-the sections cannot be written the new book is deleted again, so a book never exists half made.
+**starts with a template** (trader, 28.10.2026, `NEW_PLAYBOOK_TEMPLATE` in `playbook-types.ts`; it
+replaced the three empty sections of 30.09.2026): **Setup Grade** with four criteria every setup shares
+(*Rizik izracunat pre ulaska*, *TP i SL jasno odredjeni*, *Structura Bias se slaze LTF do 15 min*,
+*Structura Bias se slaze HTF od 15m do 1D*, all grading the setup) and **Izlaz** with the exit review
+(*Cut In lose* and *SL Hit* on losers, *Cut in profit* and *TP Hit* on winners, *BE* on breakevens). The
+rules are the library's: a live rule with the same text (case and spacing aside) and the same "when it
+shows" is **linked**, so one rule's Followed / Broken / Difference pools across every book; a missing one
+is created (`libraryRuleFor`). Each book can rename its sections and drop or edit the rules like any
+other — editing a rule's text edits it in every book that links it, unlinking touches only this one;
+books that already exist are not changed. The setup's own criteria are the trader's to add. If any part
+cannot be written the new book is deleted again, so a book never exists half made.
 
 **Deleting a section never refuses.** `ON DELETE CASCADE` on `section_id` removes the **links**, not
 the rules: every rule stays in the library with every answer it ever collected, and every other
@@ -1632,8 +1639,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,795 tests across 179 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,249 tests in 126 files) and `components` (environment `jsdom`, files `*.test.tsx`, 546
+2,803 tests across 179 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,257 tests in 126 files) and `components` (environment `jsdom`, files `*.test.tsx`, 546
 tests in 53 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 

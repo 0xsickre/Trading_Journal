@@ -6,7 +6,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { SHOW_WHEN_VALUES, type ShowWhen } from "@/lib/journal/playbook-types";
-import { NEW_PLAYBOOK_SECTIONS } from "@/lib/journal/playbook-types";
+import { libraryRuleFor, NEW_PLAYBOOK_TEMPLATE } from "@/lib/journal/playbook-types";
 import {
   moveInOrder,
   moveRuleWithinSection,
@@ -70,27 +70,67 @@ export async function addPlaybook(
     };
   }
 
-  // Three empty sections, no rules (the trader's decision, 30.09.2026): the
-  // questions every day-trading setup answers — why, where in, where out. They
-  // are the book's own rows, renamed or deleted like any other section; the
-  // rules under them are still the trader's to write.
-  const { error: sectionError } = await supabase.from("tj_playbook_sections").insert(
-    NEW_PLAYBOOK_SECTIONS.map((label, i) => ({
-      user_id: user.id,
-      playbook_id: book.id,
-      label,
-      sort_order: i,
-    })),
-  );
-  if (sectionError) {
-    // A book without its headings is not what was asked for; take it back
-    // rather than leave half of it.
+  // "Setup Grade" and "Izlaz" with their rules (trader, 28.10.2026). They are
+  // the book's own sections and links, removed or renamed like any other.
+  const failed = await seedNewPlaybook(supabase, user.id, book.id);
+  if (failed) {
+    // A book without its template is not what was asked for; take it back
+    // rather than leave half of it (sections and links cascade). A library
+    // rule created on the way stays — it is a plain, unused rule.
     await supabase.from("tj_playbooks").delete().eq("id", book.id);
-    return { ok: false, error: sectionError.message };
+    return { ok: false, error: failed };
   }
 
   revalidateAll();
   return { ok: true, id: book.id };
+}
+
+/** Write `NEW_PLAYBOOK_TEMPLATE` into a fresh book; the error message, or null. */
+async function seedNewPlaybook(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  bookId: string,
+): Promise<string | null> {
+  const { data: sections, error: sectionError } = await supabase
+    .from("tj_playbook_sections")
+    .insert(
+      NEW_PLAYBOOK_TEMPLATE.map((s, i) => ({ user_id: userId, playbook_id: bookId, label: s.label, sort_order: i })),
+    )
+    .select("id,label");
+  if (sectionError || !sections) return sectionError?.message ?? "Insert failed";
+  const sectionOf = new Map(sections.map((s) => [s.label, s.id]));
+
+  const { data: library, error: libError } = await supabase
+    .from("tj_playbook_rules")
+    .select("id,text,show_when,deleted_at,sort_order");
+  if (libError) return libError.message;
+
+  const wanted = NEW_PLAYBOOK_TEMPLATE.flatMap((s) => s.rules.map((rule) => ({ section: s.label, rule })));
+  const ids = wanted.map(({ rule }) => libraryRuleFor(rule, library ?? []));
+  const missing = wanted.filter((_, i) => ids[i] == null);
+  if (missing.length > 0) {
+    const next = Math.max(-1, ...(library ?? []).map((r) => r.sort_order)) + 1;
+    const { data: created, error: ruleError } = await supabase
+      .from("tj_playbook_rules")
+      .insert(missing.map(({ rule }, k) => ({ user_id: userId, text: rule.text, show_when: rule.show_when, sort_order: next + k })))
+      .select("id,text,show_when");
+    if (ruleError || !created) return ruleError?.message ?? "Insert failed";
+    wanted.forEach(({ rule }, i) => {
+      ids[i] ??= libraryRuleFor(rule, created.map((r) => ({ ...r, deleted_at: null, sort_order: 0 })));
+    });
+  }
+
+  const { error: linkError } = await supabase.from("tj_playbook_rule_links").insert(
+    wanted.map(({ section, rule }, i) => ({
+      user_id: userId,
+      playbook_id: bookId,
+      rule_id: ids[i]!,
+      section_id: sectionOf.get(section)!,
+      is_setup_criterion: rule.criterion,
+      sort_order: i,
+    })),
+  );
+  return linkError?.message ?? null;
 }
 
 export async function updatePlaybook(
