@@ -124,6 +124,7 @@ Isti za svaku fazu, da nova sesija može da krene samo iz ovog fajla:
 | 26.10.2026 | B | Brzi unos (trejder: „što manje ručnog rada po pojedinom trejdu, a praviti jedan dnevni izveštaj zatvaranjem dana“; „1A, 2 ne, 3 ne, 4 da“): bez detekcija koje traže novčani limit ili broj trejdova, bez auto grafika i audio priloga; X4 migracija puštena, faza B pre X5–X7 |
 | 27.10.2026 | E | Bez biasa dana (trejder: „Ne koristim više bias dana — market ne može da se predvidi, nego se trguje uz njega, uz reakciju.“): predviđanje smera izlazi iz celog toka journala, kao pravila prop firme u X. Kartica, ocena iz sveća, panel, paket i pravilo `htf_bias_set` odlaze; `tj_daily_bias` i `custom.htf_bias` ostaju kao istorija. Jutarnja poruka (🧠 Sklonost) čeka odgovor trejdera |
 | 27.10.2026 | G | Put do profesionalca (trejder posle poređenja journala sa `trading-transkripti/PUT-DO-PROFESIONALCA.md` i Lance-ovim dnevnim izveštajem, transkript 032; „ništa ne ubacujemo njegovu karticu u kompletu nego predloži … optimizovano za mene“ → „Da, prepiši plan faze G ovako i kreni redom“): **G-1** Propušten setup (ulaz/stop/cilj, ishod u R) odlazi, zamenjuju ga do 3 prilike dana (jedna najlakša); **G-2** mentalna ocena 1–5 odlazi → san %, sati sna, smena, dete; **G-3** pravilo „bez ulaza prvih 10 min“ London i NY; **G-4** „1 trejd dnevno“ samo merenje (30.09. ostaje); **G-5** NY prozor 14:30–17:30 od 28.10.; **G-6** vesti i tip dana se ne rade; **G-7** cilj procesa je ručno pravilo trackera (bez koda), od kartice samo „sutra menjam“; size po oceni i nedelji samo u paketu; backtest = Practice nalog; **G-8** (posle G4) kvalitet sna ispod 80 % ili manje od 7 h sna → upozorenje o manjem riziku; **G-9** (posle G8) „šta bi bilo“ prati CME dan (16:00 CT umesto 15:10 CT) |
+| 28.10.2026 | C | Cena prop puta (trejder: „smisli kako bi mogli pratiti trošak plaćanja evaluacija, da se zna na kraju stvarni neto dobitka“ → „napravi samo plan pa ćemo to nekad posle uvesti“): **C-1** troškovi su samo evaluacije, aktivacije i resetovi (bez pretplata); **C-2** iznos se upisuje u USD kako piše na sajtu firme, iako se plaća u evrima („nebitno je jedan evro tamo vamo“); **C-3** unose se i stari troškovi (Topstep), stvarni neto od početka; **C-4** prikaz na dashboardu i na /reports |
 
 Nova odluka se upisuje ovde pre koda, sa datumom. Ako odluka nedostaje, agent PITA trejdera i ne
 pogađa.
@@ -173,7 +174,8 @@ pogađa.
 | **E** | Bez biasa dana: bez kartice, ocene, panela, pravila `htf_bias_set` i greške „Bez biasa“; staro polje read-only | — | B | da, podaci: penzionisanje pravila, tekst `review_complete`, polje `htf_bias` gasi se, fabrička lista bez biasa (uz odobrenje) | **Opus** | ✅ 27.10.2026 — `504a3f0` + futures-trading `c3168eb`; migracija `20261027120000` primenjena 27.10.2026 uz odobrenje trejdera |
 | **G** | Put do profesionalca: stanje pre sesije (san, smena, dete), „sutra menjam“, prilike dana umesto Propuštenog setupa, prvih 10 min, NY do ručka, size po oceni u paketu | — | E | da: `20261027140000` (aditivna + podaci, uz odobrenje) | **Opus** | ✅ 27.10.2026 — `ff9d63e` (plan, migracija) · G3+G5 `db0ce0e` · G7 `924c438` + futures-trading `2dc54b8` · G4 `5555cee` · G-8 `cef0dd8` · G8 (dokumentacija) + futures-trading `0b9914e`; migracija `20261027140000` primenjena |
 | **Z** | Bez prop firme: brief i journal neutralni prema svakoj prop firmi — CME dan 17:00 → 16:00 CT u brief-u, dnevniku i modelima, CME praznici umesto Topstep-ovih, bez pominjanja firme u kodu i tekstovima koji opisuju sadašnje stanje | — | G | samo po Z-5: komentari 5 kolona (baza je inače čista), uz odobrenje | **Opus** | ✅ 27.10.2026 — Z-1 … Z-5 = A; Z1 futures-trading `0ca53e7` · Z2 `183b647` + `26c1a63`, istorija `781756c` · Z3 `c430aed` … `c74f7a0` (6 delova, brief na CME danu) · Z4 `06bb229` + migracija `20261027160000` primenjena · Z5 (futures-trading `1bf7d29`) |
-| **I** | Univerzalni uvoz: format se prepoznaje po zaglavlju (TopstepX, NinjaTrader, Tradovate), zapamćeno mapiranje za nepoznat CSV; posle toga NinjaTrader AddOn | — | E | da, aditivna: tabela zapamćenih mapiranja (I2) | **Opus** | ⏸ plan 27.10.2026 — čeka primere izvoza od trejdera |
+| **I** | Univerzalni uvoz: format se prepoznaje po zaglavlju (TopstepX, NinjaTrader, Tradovate), zapamćeno mapiranje za nepoznat CSV; I3 = sinhronizacija iz NinjaTrader baze | — | E | da: `20261027180000` (I3, primenjena); I2 aditivna tabela mapiranja | **Opus** | I3 ✅ 27.10.2026 (`6f4b494` + futures-trading `44489a0`); I1, I2 ⏸ čekaju primere izvoza od trejdera |
+| **C** | Cena prop puta: troškovi evaluacija, aktivacija i resetova + isplate → stvarni neto (dashboard i /reports) | — | I3 | da, aditivna: `tj_trading_costs` (uz odobrenje) | **Opus** | ⏸ plan 28.10.2026 — **ne počinjati bez naloga trejdera** („napravi samo plan pa ćemo to nekad posle uvesti“) |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -2211,6 +2213,49 @@ I-7 Windows Credential Manager; I-8 postojeći trejd se spaja (`matchImportRow` 
   „trades with R > 0“ (ne „wins“); „Tracker po danu“ preskače dane pre ijednog pravila.
 
 **Model:** Opus (ruta + sklapanje pozicija + migracija + skripta, dva repoa).
+
+## C — Cena prop puta: troškovi evaluacija i stvarni neto (detaljno, 28.10.2026) — ⏸ plan, čeka nalog trejdera
+
+**Povod** (trejder, 28.10.2026): P&L trejdova na prop nalogu nije njegov novac dok ga firma ne isplati, a evaluacije,
+aktivacije i resetovi se plaćaju karticom, van naloga. Na kraju treba da se zna **stvarni neto = isplate − troškovi**.
+Odluke C-1 … C-4 su u dnevniku. **Ne počinje se bez trejderovog naloga** — plan je napisan da se uvede kasnije.
+
+### Utvrđeno u kodu i bazi (28.10.2026)
+- `tj_cash_events` (Settings › Deposits / withdrawals, `cash-events.ts`, `balance.ts`): `deposit`, `withdrawal`,
+  `payout`, `adjustment`, iznos sa znakom (isplata negativna); menja **stanje naloga** (balans, drawdown, kriva
+  kapitala). U bazi 28.10.2026 nema nijednog reda.
+- Cena evaluacije **nije** novac na nalogu: upisana kao `withdrawal` pokvarila bi balans i drawdown. Zato zasebna tabela.
+- Journal je od X neutralan prema prop firmi (bez pravila firme). Ovo su samo plaćanja — nijedno pravilo firme se ne
+  računa, firma je slobodan tekst.
+
+### Podkoraci
+- **C1 Migracija (aditivna, uz odobrenje)** `YYYYMMDDHHMMSS_trading_costs.sql`: tabela `tj_trading_costs` —
+  `id`, `user_id` (default `auth.uid()`), `paid_on date`, `kind text CHECK (kind IN ('evaluation','activation','reset'))`,
+  `amount numeric > 0` (USD, C-2), `firm text` (slobodan tekst, npr. „Topstep“, „Tradeify“), `account_id` → `tj_accounts`
+  (opciono, ON DELETE SET NULL), `note text`, `created_at`, `deleted_at` (istorija se ne briše). RLS samo vlasnik
+  (`user_id = (select auth.uid())`), indeks `(user_id, paid_on)`. `types.ts`, `production_base_tables.sql`,
+  `tj_reset_my_data` briše i ovu tabelu.
+- **C2 Settings › „Troškovi“** (nova kartica pored Deposits / withdrawals): spisak po datumu, dodaj / izmeni / ukloni
+  (`deleted_at`), polja kao gore; vrste na srpskom: Evaluacija, Aktivacija, Reset. Server akcije + zod, testovi.
+  Trejder unosi i stare Topstep troškove (C-3) — journal ih ne izmišlja.
+- **C3 Račun** (`lib/journal/trading-costs.ts`, čist): po mesecu i ukupno — troškovi (po vrsti), isplate (`payout`
+  iz `tj_cash_events`, kao pozitivan iznos), **stvarni neto = isplate − troškovi**; po firmi/nalogu: ukupno plaćeno,
+  prva isplata (datum) i koliko je plaćeno do nje. Mesec po datumu plaćanja / isplate (nisu trejdovi, nema CME dana).
+- **C4 Dashboard**: kartica „Stvarni neto“ (isplate, troškovi, razlika; ukupno i izabrani period) — odvojena od P&L-a
+  trejdova (veština) jer je ovo posao. Sakriva se kao ostale (`dashboard-widgets.ts`).
+- **C5 /reports**: tabela po mesecu (troškovi po vrsti, isplate, stvarni neto, kumulativ) i po firmi/nalogu.
+- **C6 Dokumentacija**: README 1:1 (tabela, Settings, dashboard, /reports, broj testova, `lang:count`), ovaj plan,
+  status u Mapi.
+
+### Otvoreno za trejdera pre koda
+- **C-5** Da li mentor paket dobija red „stvarni neto“ (preporuka: ne — paket je o procesu)?
+- **C-6** Da li isplata, osim u `tj_cash_events` na nalogu, treba i ručni unos neto iznosa koji je stvarno legao na
+  račun (posle poreza / konverzije), ili je dovoljan iznos isplate iz firme (preporuka: iznos iz firme, kao C-2)?
+
+**Verifikacija:** gate; `execute_sql` posle migracije (RLS, CHECK); Settings › Troškovi, dashboard i /reports u
+preview-u sa probnim redom koji se posle ukloni.
+
+**Model:** Opus.
 
 ## Katalog stavki
 
