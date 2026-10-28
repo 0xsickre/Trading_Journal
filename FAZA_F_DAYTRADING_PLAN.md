@@ -2102,7 +2102,7 @@ zavise od nijedne prop firme, nego da budu neutralni.“ Faza X je uklonila prav
 
 **Model:** Opus (Z3 je obiman: više delova, jedan po poruci).
 
-## I — Univerzalni uvoz (detaljno, 27.10.2026) — ⏸ I3 (NinjaTrader baza) čeka odgovore I-4 … I-8
+## I — Univerzalni uvoz (detaljno, 27.10.2026) — ✅ I3 (NinjaTrader baza, 27.10.2026); I1, I2 čekaju fajlove
 
 **Povod** (trejder, X-7 i 27.10.2026): kad promeni prop firmu, ne sme da treba kodiranje. Uvoz zavisi od
 **platforme** (NinjaTrader, Tradovate, Rithmic, TopstepX/ProjectX, Quantower), ne od firme. Trejder prelazi na
@@ -2189,6 +2189,26 @@ aplikaciji) — isti način prijave može da koristi i skripta.
 - **I-7 Lozinka na PC-u:** Windows Credential Manager (preporuka) ili lokalni `.env` u korisničkom folderu?
 - **I-8 Postojeći trejdovi 26.10. i 27.10.:** ako su već upisani ručno ili kroz `/import`, prvo pokretanje ih spaja
   (isti ugovor, vreme ± 10 min) ili preskače? Preporuka: spaja, uz prikaz u logu.
+
+**Odluke (trejder 27.10.2026: „Prihvatam sve preporuke I-4 … I-8 … Kreni.“):** I-4 skripta u `futures-trading`;
+I-5 polje „Nalog u platformi“ (Settings › Accounts, „Account in the platform“), šalje se samo `TDFY…428`; I-6 14 dana;
+I-7 Windows Credential Manager; I-8 postojeći trejd se spaja (`matchImportRow` = „match“), inače nov.
+
+**Status I3: ✅** migracija `20261027180000_ninjatrader_sync.sql` primenjena i proverena; journal `6f4b494`
+(ruta, `ninjatrader-sync.ts`, Settings), `futures-trading` `44489a0` (`tools/nt_sync.py`).
+
+**Generalna provera (28.10.2026), ispravke:**
+- Prozor skripte počinje u 17:00 CT pre 14 dana (`pocetak_prozora`), a ne „sada − 14 dana“: granica koja klizi svakih
+  5 minuta jednom padne usred trejda, journal tada vidi samo izlaz kao novu poziciju i svaki kasniji fill tog ugovora
+  sklapa pogrešno (`futures-trading` `f19993f`).
+- Ruta: pokvaren token je bio 500 (`getClaims` baca izuzetak) — sada 401; testovi rute (`route.test.ts`).
+- Migracija `20261028090000_db_hardening.sql` (`search_path` za `tj_bulk_add_tag`, bez EXECUTE na trigger funkcijama)
+  primenjena i proverena; advisor još javlja `tj_seed_my_defaults` (namerno, prijavljen korisnik) i „Leaked password
+  protection“ (podešavanje u Supabase Auth, trejderov korak).
+- Dashboard „Performance by tag“ za ocenu setupa nije dobijao pravila playbook-a, pa je svaki trejd bio „—“ dok su
+  /reports i mentor paket pokazivali ocenu.
+- Mentor paket: legenda Win rate-a sada kaže pravilo ±0,1R (K4) umesto „net > 0“; „Winner target attainment“ broji
+  „trades with R > 0“ (ne „wins“); „Tracker po danu“ preskače dane pre ijednog pravila.
 
 **Model:** Opus (ruta + sklapanje pozicija + migracija + skripta, dva repoa).
 

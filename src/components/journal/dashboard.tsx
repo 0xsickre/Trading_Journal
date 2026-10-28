@@ -1423,8 +1423,10 @@ export function Dashboard({
     [realizedScope, mode, tzOf],
   );
   const breakdown = useMemo(
-    () => breakdownByField(realized, breakdownField, breakevenRange),
-    [realized, breakdownField, breakevenRange],
+    // The playbook rules derive the setup grade; without them every trade fell
+    // into "—" here while /reports and the mentor pack graded the same trades.
+    () => breakdownByField(realized, breakdownField, breakevenRange, playbookLookup.rules),
+    [realized, breakdownField, breakevenRange, playbookLookup.rules],
   );
 
   /**
@@ -1445,10 +1447,10 @@ export function Dashboard({
         unitTrades.map((t) => ({ day: dayKeyIn(t.closedAt, tzOf(t)), at: t.closedAt, pnl: pnlOf(t) })),
       ),
       netByKey: new Map(
-        breakdownByField(unitTrades, breakdownField, breakevenRange).map((r) => [r.key, r.netSum]),
+        breakdownByField(unitTrades, breakdownField, breakevenRange, playbookLookup.rules).map((r) => [r.key, r.netSum]),
       ),
     };
-  }, [unitTrades, mode, breakevenRange, tzOf, pnlOf, breakdownField]);
+  }, [unitTrades, mode, breakevenRange, tzOf, pnlOf, breakdownField, playbookLookup.rules]);
   const moneyStats = unitFigures?.stats ?? stats;
   const weeklySlip = useMemo(
     () => (show("execution-quality") ? weeklySlippageR(realized, tzOf) : []),

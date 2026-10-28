@@ -170,7 +170,7 @@ function statsTable(
       ? [`| Avg entry slippage | ${slipAvg} (${slip.count} trades) |`, `| Total slippage (R) | ${slipTotal} |`]
       : []),
     `| Target attainment | ${exitEffAvg} (${exitEff.count} closed trades) |`,
-    `| Winner target attainment | ${exitEffWinner} (${exitEff.winnerCount} wins) |`,
+    `| Winner target attainment | ${exitEffWinner} (${exitEff.winnerCount} trades with R > 0) |`,
     `| Avg MAE (R) | ${excMae} |`,
     `| Avg MFE (R) | ${excMfe} |`,
     ...extraRows,
@@ -534,7 +534,7 @@ export function buildMentorPack(
   out.push(
     [
       "- **R** — realizovani rezultat u jedinicama *planiranog rizika* (1R = rizik do stopa). +2R = duplo veći dobitak od rizika.",
-      "- **Win rate** — % dobitnih trejdova, računat po **novcu** (net > 0 = dobitak), breakeven se ne broji u imenilac.",
+      "- **Win rate** — % dobitnih trejdova po **novcu** (net). Breakeven (scratch) je trejd čiji |net| nije veći od 0,1 njegovog rizika do stopa (trejd bez stopa: opseg naloga iz Settings); ne broji se u imenilac, ni u Expectancy.",
       "- **Expectancy** — očekivani rezultat po trejdu, izražen u **R**. Pozitivno = statistički isplativ sistem.",
       "- **Profit factor** — bruto profit ÷ bruto gubitak. > 1 profitabilno; ∞ (beskonačno) = nema gubitaka u uzorku.",
       "- **Avg win / Avg loss** — prosečan dobitak/gubitak u **R**.",

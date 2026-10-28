@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildMentorPack } from "./mentor-export";
-import { checklistAnsweredAt, dimensionTable, ruleLabel, rulesSection, sizeSection, SMALL_SAMPLE, sr } from "./mentor-intraday";
+import { checklistAnsweredAt, dimensionTable, ruleLabel, rulesSection, sizeSection, SMALL_SAMPLE, sr, trackerByDaySection } from "./mentor-intraday";
 import { enrichTrades } from "./enriched-trade";
 import { toRealized } from "./analytics";
 import type { PositionStat, TradeRow } from "./types";
@@ -676,5 +676,23 @@ describe("sizeSection (phase G, G5): size by setup grade and by week", () => {
 
   it("says nothing without a sized trade", () => {
     expect(sizeSection([], undefined, "USD")).toEqual([]);
+  });
+});
+
+describe("Tracker po danu leaves out the days before any rule (general check, 28.10.2026)", () => {
+  it("a day no rule was live on gets no bare heading", () => {
+    // `rule` exists from 01.09.; the pack of All once opened with 40 empty
+    // headings for the August days before it.
+    const out = trackerByDaySection(["2026-08-31", "2026-09-29"], [rule], new Map(compliance.map((c) => [c.date, c])));
+    expect(out.filter((l) => l.startsWith("### "))).toEqual(["### 2026-09-29"]);
+  });
+
+  it("a day off is still listed, even with no rule live", () => {
+    const out = trackerByDaySection(
+      ["2026-08-31"],
+      [rule],
+      new Map([["2026-08-31", { date: "2026-08-31", applicable: 0, satisfied: 0, pct: null, status: "rest" } as unknown as DayCompliance]]),
+    );
+    expect(out).toContain("### 2026-08-31 · ne trguje (odmor)");
   });
 });

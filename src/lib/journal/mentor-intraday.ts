@@ -422,7 +422,6 @@ export function trackerByDaySection(
           : c?.status === "pending"
             ? " · u toku"
             : "";
-    out.push(`### ${day}${tag}`);
     const missed = new Set(c?.missedRuleIds ?? []);
     const unanswered = new Set(c?.unansweredRuleIds ?? []);
     const na = new Set(c?.notApplicableRuleIds ?? []);
@@ -435,6 +434,10 @@ export function trackerByDaySection(
         if (na.has(r.id) || c?.status === "unlogged" || c == null) return `— ${name} (n/a)`;
         return `✓ ${name}`;
       });
+    // A day before any rule existed says nothing: 40 bare headings in a row
+    // only pushed the days that matter further down the pack.
+    if (items.length === 0 && !tag) continue;
+    out.push(`### ${day}${tag}`);
     if (items.length) out.push(`- ${items.join(" · ")}`);
     out.push("");
   }

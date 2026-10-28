@@ -60,8 +60,13 @@ export async function POST(request: Request) {
   if (!token) return json(401, { ok: false, error: "Nedostaje Authorization: Bearer <token>." });
 
   const supabase = await createClient();
-  const { data: claims, error: authError } = await supabase.auth.getClaims(token);
-  if (authError || !claims?.claims?.sub) return json(401, { ok: false, error: "Token nije važeći." });
+  // A malformed token makes getClaims THROW (it decodes before it verifies),
+  // which answered 500 for what is plainly a bad credential.
+  const claims = await supabase.auth.getClaims(token).then(
+    ({ data, error }) => (error ? null : data),
+    () => null,
+  );
+  if (!claims?.claims?.sub) return json(401, { ok: false, error: "Token nije važeći." });
 
   let body: unknown;
   try {

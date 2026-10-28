@@ -8,6 +8,8 @@ import { Dashboard } from "./dashboard";
 import { BOOK, shapedBook } from "@/lib/journal/book.fixture";
 import type { Account, TradeRow } from "@/lib/journal/types";
 import type { RealizedTrade } from "@/lib/journal/analytics";
+import { GRADED_PLAYBOOK_ID, mkTrade } from "@/lib/journal/reports/test-helpers";
+import type { Playbook, PositionRule } from "@/lib/journal/playbook-types";
 
 /**
  * THE BOOK, ON SCREEN.
@@ -381,5 +383,33 @@ describe("Points and ticks (U, 01.10.2026)", () => {
     expect(screen.getByLabelText("Instrument")).toHaveTextContent("NQ / MNQ");
     expect(statValue("Trades")).toBe("10");
     expect(statValue("Net P/L")).toBe("+300 pts");
+  });
+});
+
+describe("Performance by tag grades the setup the way /reports does (general check, 28.10.2026)", () => {
+  it("a trade with its checklist answered shows under its grade, not under —", () => {
+    // Three of five criteria met → B. The dashboard used to group without the
+    // playbook rules, so every trade landed in "—" while /reports showed the B.
+    const criteria = ["gc1", "gc2", "gc3", "gc4", "gc5"];
+    const t = mkTrade({ id: "graded", setupGrade: "B", closedAt: "2026-03-10T15:00:00Z", net: 120 });
+    const playbook = {
+      id: GRADED_PLAYBOOK_ID,
+      name: "Graded",
+      rules: criteria.map((id) => ({ id, text: id, show_when: "always", is_setup_criterion: true })),
+    } as unknown as Playbook;
+    const answers: PositionRule[] = criteria.map((rule_id, i) => ({ position_id: "graded", rule_id, followed: i < 3 }));
+    render(
+      <Dashboard
+        trades={[{ ...t.row, account_id: ACCOUNT.id }]}
+        accounts={[ACCOUNT]}
+        todayKey={TODAY_KEY}
+        timezone={ACCOUNT.timezone}
+        playbooks={[playbook]}
+        positionRules={new Map([["graded", answers]])}
+      />,
+    );
+    const card = screen.getByText("Performance by tag").closest('[data-slot="card"]') as HTMLElement;
+    const keys = within(card).getAllByRole("row").slice(1).map((r) => r.querySelector("td")?.textContent);
+    expect(keys).toEqual(["B"]);
   });
 });

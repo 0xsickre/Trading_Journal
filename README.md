@@ -34,20 +34,22 @@ Identifiers and code comments in `src/` are English. This README and `CODE_REVIE
 purpose — an applied migration is never edited here, and the comment inside one is part of the
 record of the day it was written.
 
-**The interface is deliberately half-and-half, and the line is a clean one.** At least 295 of the
-3,337 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
+**The interface is deliberately half-and-half, and the line is a clean one.** At least 299 of the
+3,359 human-readable string literals in `src/` outside tests are Serbian, and every one of them sits
 on a screen the trader writes into or reviews in their own words:
 
 | Surface | Serbian strings |
 |---|---|
-| Daily (the "Zatvaranje dana" card included; the state before the session, "sutra menjam" and the day's opportunities since phase G, with the messages of their schema `daily-report-schema.ts`) and tracker | 82 |
+| Daily (the "Zatvaranje dana" card included; the state before the session, "sutra menjam" and the day's opportunities since phase G, with the messages of their schema `daily-report-schema.ts`) and tracker (the lock warning of `review-gaps.ts` too) | 83 |
 | Mentor pack ("Export for Claude": the prompt, the legend and the day trader's sections) | 150 |
 | Day insight sentence (`low_efficiency_day`) | 1 |
 | A new playbook's three starting sections (`playbook-types.ts`) | 3 |
-| The seeded tag values the review and the import write (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2) | 6 |
+| The seeded tag values the review and the import write (`quick-log.ts`: no mistake, exit reasons — the tags are Serbian since K2; "Ispoštovao rizik", which `honest_tags` in `tracker/auto-rules.ts` reads) | 7 |
 | The trade page `/trades/[id]` (phase P) — off the recording, setup, review, and why it asks for the original stop (`trade-page.tsx`, its route, `stop-moved.ts`) | 25 |
 | The journal's own mistakes on a trade, marked "auto" (`auto-mistakes.ts`, phase B4) | 6 |
-| Category names — the trader's own list and field names (Smer, Ocena setupa, Razlog izlaza, Greške, Tehnički tagovi, Psihologija, Emocije, Disciplina) as `/reports` groupings, journal-grid filters and bulk tags, and the mentor pack's category tables (phase J); the "Sa detetom" / "Bez deteta" groups of the state written on `/daily` (phase G) | 9 |
+| Category names — the trader's own list and field names (Smer, Ocena setupa, Razlog izlaza, Greške, Tehnički tagovi, Psihologija, Emocije, Disciplina) as `/reports` groupings, journal-grid filters and bulk tags, and the mentor pack's category tables (phase J); the "Sa detetom" / "Bez deteta" groups of the state written on `/daily` (phase G); the test fixture of the same field definitions (`field-defs.fixture.ts`) | 14 |
+| Session names on the chart and in the pack (`session-window.ts`: Azija, Pre Londona, Ručak, Posle zatvaranja, Pre otvaranja) | 6 |
+| The NinjaTrader sync's answers to the PC script, which logs them in Serbian (`api/import/ninjatrader/route.ts`, `ninjatrader-sync.ts`, phase I3) | 4 |
 | Dashboard, `/reports`, journal grid, playbooks, **`/settings`**, `/import` — everything around those names | **0** |
 
 Settings joined that last row on 20.09.2026. It had held the stage names of the daily checklist
@@ -74,7 +76,7 @@ lexes every `.ts`/`.tsx` outside tests into comment / string / code regions, kee
 that read as prose rather than as machinery, and scores those for Serbian by diacritics and by a word
 list. A single Serbian word carrying no diacritic can still slip past that, and JSX text between tags
 is not a string literal (the "Bez pregleda" card on `/daily` is Serbian and not in the count), so
-**295 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
+**299 is a floor, not a ceiling**. A listed word before a hyphen is not scored — "Pre-open", a session
 name, read as the Serbian "pre" until F5.4. Three earlier versions of this paragraph said "about 46 of some 1,700", then "153 of
 1,663", then "185 of 2,191" — each counted by hand, and each had to be replaced rather than quietly
 corrected. That is why the method now ships as a script: a number nobody can re-run is a number
@@ -206,7 +208,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,788 tests across 178 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,795 tests across 179 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -995,7 +997,8 @@ book, from values the screens already derive (`mentor-intraday.ts`):
   and "najlakša"; the Day prompt asks whether yesterday's change was done and why the easiest
   opportunity was not taken, if it was not.
 - **Tracker po danu** (phase M): for each of those days, every live rule as ✓ kept, ✗ broken,
-  ? unanswered or — not judgeable (n/a) — so a mentor can question a day with no trade in it.
+  ? unanswered or — not judgeable (n/a) — so a mentor can question a day with no trade in it. A day
+  with no live rule and no mark (before the first rule existed) is left out.
 - **When and how** tables by session window, minutes after the open, trade number in the day, state
   before the entry, hold time, entry hour and weekday — each group with its size and the ⚠ mark. Then
   **Stanje pre sesije i rezultat** (phase G): the same tables by sleep quality, hours slept, shift and
@@ -1392,7 +1395,8 @@ last in the platform, moved or not — and how the entry was placed.
 The trader's decision (I-4 … I-8): the journal reads NinjaTrader's own database instead of a file. A script on the
 trader's PC, `futures-trading/tools/nt_sync.py`, runs every five minutes while he is logged in (Windows Task
 Scheduler), copies `Documents\NinjaTrader 8\db\NinjaTrader.sqlite`, reads the fills and the orders of the accounts
-set up for it (only the real Tradeify account) for the last 14 days, and posts them to `/api/import/ninjatrader`
+set up for it (only the real Tradeify account) for the last 14 days — counted from 17:00 CT, when no day trade is
+open, so the window's edge never falls inside a trade and leaves its exit looking like a new position — and posts them to `/api/import/ninjatrader`
 as the journal user (the password sits in Windows Credential Manager).
 
 - **Which account.** Settings › Accounts › "Account in the platform" (`tj_accounts.platform_account`) names the
@@ -1413,7 +1417,8 @@ as the journal user (the password sits in Windows Credential Manager).
   stop from the recording, the thesis, the grade, the categories). Undo restores the displaced fills without their
   NinjaTrader ids, so the next run merges into the restored trade by the match above.
 - **Auth.** `createClient()` honours `Authorization: Bearer` (no cookies), and the session middleware lets this one
-  path through; the route checks the token itself (`getClaims`). RLS applies exactly as in the app.
+  path through; the route checks the token itself (`getClaims`; a missing, refused or malformed token is a 401,
+  before anything is read — `route.test.ts`). RLS applies exactly as in the app.
 
 ### What the file may overwrite, and what it may not
 
@@ -1627,8 +1632,8 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,788 tests across 178 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,243 tests in 125 files) and `components` (environment `jsdom`, files `*.test.tsx`, 545
+2,795 tests across 179 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,249 tests in 126 files) and `components` (environment `jsdom`, files `*.test.tsx`, 546
 tests in 53 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
