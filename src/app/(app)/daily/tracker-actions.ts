@@ -1,5 +1,6 @@
 "use server";
 
+import { WEEKEND_REFUSAL } from "@/lib/journal/daily-report";
 import { getDailyReport } from "@/lib/journal/daily-report-queries";
 import { revalidateDaily } from "@/lib/journal/revalidate";
 import { createClient } from "@/lib/supabase/server";
@@ -7,7 +8,7 @@ import type { Json } from "@/lib/supabase/types";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { inAllAccountsScope } from "@/lib/journal/account-rules";
 import { getAccounts, getPrimaryAccount } from "@/lib/journal/accounts";
-import { accountDayZoneResolver, dayKeyIn, todayFor } from "@/lib/journal/time";
+import { accountDayZoneResolver, dayKeyIn, isTradingDayKey, todayFor } from "@/lib/journal/time";
 import { lockRefusal } from "@/lib/journal/review-gaps";
 import { breakevenRangeResolver } from "@/lib/journal/breakeven";
 import { flatByResolver } from "@/lib/journal/flat-by";
@@ -46,6 +47,7 @@ export async function setCheckin(
   checked: boolean | null,
 ): Promise<Result> {
   if (!DAY_RE.test(reportDate)) return { ok: false, error: "Neispravan datum." };
+  if (!isTradingDayKey(reportDate)) return { ok: false, error: WEEKEND_REFUSAL };
 
   const supabase = await createClient();
   const user = await getCurrentUser();
@@ -125,6 +127,7 @@ export async function setCheckin(
  */
 export async function lockDay(reportDate: string): Promise<Result> {
   if (!DAY_RE.test(reportDate)) return { ok: false, error: "Neispravan datum." };
+  if (!isTradingDayKey(reportDate)) return { ok: false, error: WEEKEND_REFUSAL };
 
   const supabase = await createClient();
   const user = await getCurrentUser();

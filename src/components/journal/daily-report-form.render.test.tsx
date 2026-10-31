@@ -119,6 +119,34 @@ describe("no check-in per position (H1, 28.09.2026)", () => {
   });
 });
 
+describe("the day arrows step over the weekend", () => {
+  const onDay = (reportDate: string, today: string) =>
+    render(
+      <DailyReportForm
+        report={report({ report_date: reportDate })}
+        reportDate={reportDate}
+        today={today}
+        timezone="America/New_York"
+        tracker={trackerData({ reportDate })}
+      />,
+    );
+
+  it("on a weekend, Friday has no next day yet", () => {
+    onDay("2026-10-30", "2026-10-31");
+    expect(screen.getByRole("button", { name: "Sledeći dan" })).toBeDisabled();
+  });
+
+  it("from Monday on, Friday's next day is Monday", () => {
+    onDay("2026-10-30", "2026-11-02");
+    expect(screen.getByRole("link", { name: "Sledeći dan" })).toHaveAttribute("href", "/daily?date=2026-11-02");
+  });
+
+  it("Monday's previous day is Friday", () => {
+    onDay("2026-11-02", "2026-11-02");
+    expect(screen.getByRole("link", { name: "Prethodni dan" })).toHaveAttribute("href", "/daily?date=2026-10-30");
+  });
+});
+
 describe("a locked day disables everything, including the embedded tracker checklist", () => {
   it("Save and Lock day are gone, replaced by 'Day is locked'", () => {
     render(

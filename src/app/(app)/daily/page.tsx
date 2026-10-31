@@ -15,10 +15,12 @@ import {
 import {
   DEFAULT_TZ,
   dayKeyIn,
+  isTradingDayKey,
   isValidDayKey,
   todayFor,
 } from "@/lib/journal/time";
 import { DailyReportForm } from "@/components/journal/daily-report-form";
+import { WeekendDay } from "@/components/journal/weekend-day";
 import type { TrackerDayData } from "@/components/journal/tracker-checklist";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
@@ -88,6 +90,16 @@ export default async function DailyPage({
     // What the last close said to change (phase G): the day opens with it.
     dayPromise.then(({ reportDate }) => getLastTomorrowChange(reportDate)),
   ]);
+
+  // CME does not trade at the weekend: the day asks for nothing (trader, 31.10.2026).
+  if (!isTradingDayKey(reportDate)) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-6">
+        <PageHeader title="Dnevna prijava" />
+        <WeekendDay day={reportDate} />
+      </div>
+    );
+  }
 
   const checkins = checkinsByDay.get(reportDate) ?? new Map();
 

@@ -208,7 +208,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 | `npm run scan` | Bytes, not meaning: NUL bytes, invalid JSON, `.only`/`.skip`, `console.log`, conflict markers |
 | `npm run schema:check` | The base-table record (`supabase/schema/`) against the generated types |
 | `npm run lint` | ESLint. **Expects zero problems and zero warnings** |
-| `npm test` | Vitest — 2,803 tests across 179 files, in two projects (`lib` on node, `components` on jsdom) |
+| `npm test` | Vitest — 2,809 tests across 180 files, in two projects (`lib` on node, `components` on jsdom) |
 | `npm test -- --coverage` | Coverage report |
 | `npm run dead` | knip: dead files, exports and dependencies |
 
@@ -1118,6 +1118,11 @@ the streak (counting it as 100 % would inflate the mean with days off). A trade 
 flag and the day is scored like any other.
 **Today, while still pending**, is shown but not averaged.
 
+**A weekend day asks for nothing** (trader, 31.10.2026): CME does not trade, so on a Saturday or a
+Sunday `/daily` shows a notice and a link to Friday instead of the form, the day arrows step from Friday
+to Monday, and saving, ticking or locking a weekend day is refused on the server. Sunday evening from
+17:00 CT is already Monday's CME day, so its session keeps its page.
+
 **Locking a day** freezes the automatic verdicts into rows and is irreversible — enforced by a trigger
 that fires on any edit to a locked report, so there is no unlock action that would need writing.
 Trades from a locked day stay editable: P&L is a fact that must remain correctable, and the frozen
@@ -1639,9 +1644,9 @@ net P&L and a drawdown computed over a partial set, with no visible symptom at a
 
 ## Tests
 
-2,803 tests across 179 files, split into **two vitest projects**: `lib` (environment `node`, files
-`*.test.ts`, 2,257 tests in 126 files) and `components` (environment `jsdom`, files `*.test.tsx`, 546
-tests in 53 files). The rule is the extension, so no file can land in both. The split exists so that
+2,809 tests across 180 files, split into **two vitest projects**: `lib` (environment `node`, files
+`*.test.ts`, 2,258 tests in 126 files) and `components` (environment `jsdom`, files `*.test.tsx`, 551
+tests in 54 files). The rule is the extension, so no file can land in both. The split exists so that
 purely arithmetic tests do not pay for a DOM they never touch.
 
 `vitest.config.ts` carries coverage **floors**, not targets — they sit at what the suite achieves

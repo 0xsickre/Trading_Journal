@@ -249,8 +249,9 @@ export function DailyReportForm({
             )}
           </div>
           {/* A real disabled button on today: `disabled` on a link does
-              nothing, and clicking it reloaded the same day. */}
-          {reportDate >= today ? (
+              nothing, and clicking it reloaded the same day. The next trading
+              day, not the next date: on a weekend, Friday's is still ahead. */}
+          {nextReportDate(reportDate) > today ? (
             <Button
               variant="outline"
               size="icon"

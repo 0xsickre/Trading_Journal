@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/user";
 import { getPrimaryAccount } from "@/lib/journal/accounts";
-import { isValidDayKey, todayFor } from "@/lib/journal/time";
+import { isTradingDayKey, isValidDayKey, todayFor } from "@/lib/journal/time";
+import { WEEKEND_REFUSAL } from "@/lib/journal/daily-report";
 import { dailyReportSchema, type SaveDailyReportInput } from "@/lib/journal/daily-report-schema";
 
 /**
@@ -17,6 +18,7 @@ import { dailyReportSchema, type SaveDailyReportInput } from "@/lib/journal/dail
  */
 async function dayError(reportDate: string): Promise<string | null> {
   if (!isValidDayKey(reportDate)) return "Neispravan datum.";
+  if (!isTradingDayKey(reportDate)) return WEEKEND_REFUSAL;
   const account = await getPrimaryAccount();
   if (reportDate > todayFor(account))
     return "Budući dan još nije počeo.";

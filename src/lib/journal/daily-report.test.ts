@@ -22,6 +22,14 @@ describe("date helpers", () => {
     expect(nextReportDate("2026-07-22")).toBe("2026-07-23");
   });
 
+  it("steps over the weekend: CME does not trade, so there is no page to land on", () => {
+    expect(nextReportDate("2026-10-30")).toBe("2026-11-02"); // Fri → Mon
+    expect(prevReportDate("2026-11-02")).toBe("2026-10-30"); // Mon → Fri
+    expect(prevReportDate("2026-10-31")).toBe("2026-10-30"); // Sat → Fri
+    expect(prevReportDate("2026-11-01")).toBe("2026-10-30"); // Sun → Fri
+    expect(nextReportDate("2026-10-31")).toBe("2026-11-02"); // Sat → Mon
+  });
+
   it("detects Friday", () => {
     expect(isFriday("2026-07-24")).toBe(true); // Fri
     expect(isFriday("2026-07-22")).toBe(false); // Wed

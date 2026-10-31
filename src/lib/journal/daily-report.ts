@@ -1,5 +1,5 @@
 import { addDays, format, parseISO, subDays } from "date-fns";
-import { DEFAULT_TZ, fmtInTz, isoWeekdayOfDayKey, toEpoch } from "./time";
+import { DEFAULT_TZ, fmtInTz, isTradingDayKey, isoWeekdayOfDayKey, toEpoch } from "./time";
 
 // `DAY_GRADES`, `MICROMANAGE_*` and `MARKET_TYPE*` lived here. The grade moved
 // to the weekly review (rating a day mid-hold reads the P&L), which in turn
@@ -227,12 +227,21 @@ function formatDate(d: Date): string {
   return format(d, "yyyy-MM-dd");
 }
 
+/** Why a weekend day takes no entry: CME does not trade, so there is nothing to report. */
+export const WEEKEND_REFUSAL = "Vikendom CME ne trguje — nema unosa.";
+
+/** The trading day before `date`: Monday's is Friday, the weekend has no page to step on. */
 export function prevReportDate(date: string): string {
-  return formatDate(subDays(parseISO(date), 1));
+  let day = subDays(parseISO(date), 1);
+  while (!isTradingDayKey(formatDate(day))) day = subDays(day, 1);
+  return formatDate(day);
 }
 
+/** The trading day after `date`: Friday's is Monday. */
 export function nextReportDate(date: string): string {
-  return formatDate(addDays(parseISO(date), 1));
+  let day = addDays(parseISO(date), 1);
+  while (!isTradingDayKey(formatDate(day))) day = addDays(day, 1);
+  return formatDate(day);
 }
 
 /**
