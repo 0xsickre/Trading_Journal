@@ -20,6 +20,10 @@
  *     last price.
  *   - No commission (0 on the fills): the fee comes from the instrument's
  *     commission per lot in Settings › Instruments.
+ *   - Each order's name (phase TR). The Trejd panel names its entry order
+ *     "RP Ulaz <id>" and writes the same id into its own log of the entry, so
+ *     the name is what ties a journal trade to that row; any other name means
+ *     the trade was opened outside the panel.
  */
 import type { ImportExec, ImportItem } from "@/app/(app)/import/actions";
 import { matchImportRow, type MatchCandidate } from "./import-match";
@@ -48,6 +52,8 @@ export type NtOrder = {
   stop_price: number | null;
   /** The stop price the order was placed with, from its update history. */
   first_stop_price: number | null;
+  /** The order's name in NinjaTrader, "" when it has none (phase TR). Absent from an older script. */
+  name?: string;
 };
 
 export type NtPayload = {
@@ -69,6 +75,11 @@ export type NtTrade = {
   target_price: number | null;
   entry_order_type: "market" | "limit" | "stop" | null;
   exit_kind: "stop" | "target" | "manual" | null;
+  /**
+   * The name of the order behind the first entry fill (phase TR); "" for an
+   * order without one, null when that order or its name did not arrive.
+   */
+  entry_name: string | null;
 };
 
 const EPS = 1e-9;
@@ -181,6 +192,7 @@ function finish(
           : entryOrder.type === "stop" || entryOrder.type === "stop_limit"
             ? "stop"
             : null,
+    entry_name: entryOrder?.name ?? null,
     exit_kind: !exitFill
       ? null
       : exitOrder?.type === "stop" || exitOrder?.type === "stop_limit"
@@ -282,4 +294,27 @@ export function ntImportItems(
     }
   }
   return { items, skipped };
+}
+
+/**
+ * Phase TR: which positions get their entry order's name, written beside the
+ * import rather than through it. The name is a fact about the trade, not a
+ * figure: it is written once, only onto a position that has none, and never
+ * by a trade whose position is not in the journal yet (the next run finds it).
+ * A trade with no name sent writes nothing, so an older script never marks a
+ * Trejd entry as one taken outside the panel.
+ */
+export function ntEntryNameUpdates(
+  trades: readonly NtTrade[],
+  positionByFill: ReadonlyMap<string, string>,
+  currentName: ReadonlyMap<string, string | null>,
+): { position_id: string; name: string }[] {
+  const out = new Map<string, string>();
+  for (const t of trades) {
+    if (t.entry_name == null) continue;
+    const pid = positionByFill.get(t.key);
+    if (!pid || !currentName.has(pid) || currentName.get(pid) != null || out.has(pid)) continue;
+    out.set(pid, t.entry_name);
+  }
+  return [...out].map(([position_id, name]) => ({ position_id, name }));
 }

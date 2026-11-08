@@ -99,6 +99,7 @@ const TRADE: TradePageTrade = {
   plannedEntry: null,
   seenAt: null,
   timezone: "America/Chicago",
+  trejd: null,
 };
 
 function renderPage(
@@ -137,6 +138,20 @@ describe("TradePage — one page per imported trade (phase P)", () => {
     expect(screen.getByText("Combine 50K")).toBeInTheDocument();
     expect(screen.queryByLabelText(/^Ulaz$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Planned Entry|Position Size|Scale-out|Invalidation|Time stop/)).not.toBeInTheDocument();
+  });
+
+  it("says whether the entry came through the Trejd panel, by its order's name (phase TR)", () => {
+    const { unmount } = renderPage({ ...TRADE, trejd: { kind: "trejd", id: "RP Ulaz 3f9a1c" } });
+    expect(screen.getByText("Trejd · RP Ulaz 3f9a1c")).toBeInTheDocument();
+    expect(screen.queryByText("van Trejda")).not.toBeInTheDocument();
+    unmount();
+    renderPage({ ...TRADE, trejd: { kind: "van" } });
+    expect(screen.getByText("van Trejda")).toBeInTheDocument();
+  });
+
+  it("says nothing about Trejd for a trade the sync never named", () => {
+    renderPage();
+    expect(screen.queryByText(/Trejd/)).not.toBeInTheDocument();
   });
 
   it("saves the recording, the checklist, the grade and the categories in one call", async () => {

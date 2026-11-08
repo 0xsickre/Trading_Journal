@@ -4,7 +4,7 @@ import { commitImport } from "@/app/(app)/import/actions";
 import { getInstruments } from "@/lib/journal/instruments";
 import { importCandidates } from "@/lib/journal/import-candidates";
 import { instrumentsMatch, normalizeInstrumentSymbol } from "@/lib/journal/instrument-aliases";
-import { ntImportItems, ntTrades, type NtPayload } from "@/lib/journal/ninjatrader-sync";
+import { ntEntryNameUpdates, ntImportItems, ntTrades, type NtPayload, type NtTrade } from "@/lib/journal/ninjatrader-sync";
 import { getTradesWithStats } from "@/lib/journal/trades";
 import { selectAllByIds } from "@/lib/supabase/paginate";
 import type { TradeRow } from "@/lib/journal/types";
@@ -17,6 +17,10 @@ import type { TradeRow } from "@/lib/journal/types";
  * user's Supabase access token as `Authorization: Bearer`. Everything runs as
  * that user (RLS), through the same write path as `/import`. Sending the same
  * fills again writes nothing: each fill carries its NinjaTrader id.
+ *
+ * Beside the import (phase TR), each trade's position gets the name of its entry
+ * order once (`platform_entry_name`): "RP Ulaz <id>" ties it to the Trejd
+ * panel's log of that entry, any other name marks it as taken outside Trejd.
  */
 
 const iso = z.iso.datetime({ offset: true });
@@ -47,6 +51,7 @@ const payloadSchema = z.object({
         limit_price: num.positive().nullable(),
         stop_price: num.positive().nullable(),
         first_stop_price: num.positive().nullable(),
+        name: z.string().max(100).optional(),
       }),
     )
     .max(10000),
@@ -123,7 +128,10 @@ export async function POST(request: Request) {
     instrumentsMatch,
   );
   const unchanged = trades.length - items.length - skipped.length;
-  if (items.length === 0) return json(200, { ok: true, trades: trades.length, created: 0, merged: 0, unchanged, skipped });
+  if (items.length === 0) {
+    const named = await stampEntryNames(supabase, trades);
+    return json(200, { ok: true, trades: trades.length, created: 0, merged: 0, unchanged, skipped, ...named });
+  }
 
   const result = await commitImport({
     account_id: account.id,
@@ -131,8 +139,11 @@ export async function POST(request: Request) {
     items,
   });
   if (!result.ok) return json(500, { ok: false, error: result.error });
+  // After the import, so a trade created by this very run is named on it.
+  const named = await stampEntryNames(supabase, trades);
   return json(200, {
     ok: true,
+    ...named,
     trades: trades.length,
     created: result.created,
     merged: result.merged,
@@ -141,4 +152,49 @@ export async function POST(request: Request) {
     unchanged,
     skipped,
   });
+}
+
+/**
+ * Phase TR: the entry order's name onto each trade's position, once, while the
+ * position has none. Apart from the import on purpose: it changes no figure,
+ * so an undo of the import has nothing of it to restore. A failure here never
+ * fails the import that already went through: it is reported (`named_error`)
+ * and the next run, five minutes on, tries again.
+ */
+async function stampEntryNames(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  trades: readonly NtTrade[],
+): Promise<{ named: number; named_error?: string }> {
+  const named = trades.filter((t) => t.entry_name != null);
+  if (named.length === 0) return { named: 0 };
+  try {
+    const fills = await selectAllByIds<{ external_id: string | null; position_id: string }, string>(
+      named.map((t) => t.key),
+      (chunk, from, to) =>
+        supabase
+          .from("tj_executions")
+          .select("external_id, position_id, id")
+          .in("external_id", chunk)
+          .order("id")
+          .range(from, to),
+    );
+    const byFill = new Map(fills.filter((r) => r.external_id).map((r) => [r.external_id as string, r.position_id]));
+    const positions = await selectAllByIds<{ id: string; platform_entry_name: string | null }, string>(
+      [...new Set(byFill.values())],
+      (chunk, from, to) =>
+        supabase.from("tj_positions").select("id, platform_entry_name").in("id", chunk).order("id").range(from, to),
+    );
+    const updates = ntEntryNameUpdates(named, byFill, new Map(positions.map((p) => [p.id, p.platform_entry_name])));
+    for (const u of updates) {
+      const { error } = await supabase
+        .from("tj_positions")
+        .update({ platform_entry_name: u.name })
+        .eq("id", u.position_id)
+        .is("platform_entry_name", null);
+      if (error) throw new Error(error.message);
+    }
+    return { named: updates.length };
+  } catch (e) {
+    return { named: 0, named_error: e instanceof Error ? e.message : String(e) };
+  }
 }

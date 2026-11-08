@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ntImportItems, ntTrades, type NtFill, type NtOrder } from "./ninjatrader-sync";
+import { ntEntryNameUpdates, ntImportItems, ntTrades, type NtFill, type NtOrder } from "./ninjatrader-sync";
 import type { MatchCandidate } from "./import-match";
 
 /**
@@ -166,5 +166,40 @@ describe("ntImportItems: what a run writes", () => {
       entryQty: 10,
     };
     expect(run(new Map(), [later]).items[0].decision).toBe("create");
+  });
+});
+
+/**
+ * Phase TR: the entry order's name in NinjaTrader is what ties a journal trade
+ * to the row the Trejd panel wrote when the trade was opened
+ * (`TrejdPanel\log\ulazi_GGGG-MM.csv`, column `id`).
+ */
+describe("phase TR: the entry order's name", () => {
+  it("is the name of the order behind the trade's FIRST entry fill", () => {
+    const orders = mgcOrders.map((o) => (o.id === "o-entry" ? { ...o, name: "RP Ulaz 3f9a1c" } : { ...o, name: "RP Stop" }));
+    const [t] = ntTrades(mgcFills, orders);
+    expect(t.entry_name).toBe("RP Ulaz 3f9a1c");
+  });
+
+  it("is empty for an order without a name, and unknown when the script sent none", () => {
+    const named = mgcOrders.map((o) => ({ ...o, name: "" }));
+    expect(ntTrades(mgcFills, named)[0].entry_name).toBe("");
+    expect(ntTrades(mgcFills, mgcOrders)[0].entry_name).toBeNull();
+    expect(ntTrades(mgcFills, [])[0].entry_name).toBeNull();
+  });
+
+  it("is written once, onto the trade's position, only while that position has none", () => {
+    const orders = mgcOrders.map((o) => ({ ...o, name: o.id === "o-entry" ? "RP Ulaz 3f9a1c" : "" }));
+    const [t] = ntTrades(mgcFills, orders);
+    const byFill = new Map([["e1", "pos-1"]]);
+    expect(ntEntryNameUpdates([t], byFill, new Map([["pos-1", null]]))).toEqual([
+      { position_id: "pos-1", name: "RP Ulaz 3f9a1c" },
+    ]);
+    // Already there → nothing; position unknown (not written yet) → nothing.
+    expect(ntEntryNameUpdates([t], byFill, new Map([["pos-1", "RP Ulaz 3f9a1c"]]))).toEqual([]);
+    expect(ntEntryNameUpdates([t], new Map(), new Map())).toEqual([]);
+    // No name sent → nothing, so an older script never stamps "van Trejda".
+    const [old] = ntTrades(mgcFills, mgcOrders);
+    expect(ntEntryNameUpdates([old], byFill, new Map([["pos-1", null]]))).toEqual([]);
   });
 });

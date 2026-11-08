@@ -159,6 +159,10 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- stop čuva samo nju; originalni je stop_price. I kako je ulaz dat.
   final_stop_price     numeric,
   entry_order_type     text,
+  -- Ime naloga ulaza u NinjaTrader-u, piše ga sinhronizacija (20261108120000, faza TR).
+  -- „RP Ulaz <id>“ = ulaz iz Trejd panela (spoj sa njegovim logom ulaza); drugo = van Trejda.
+  -- NULL = trejd nije iz sinhronizacije ili je upisan pre faze TR.
+  platform_entry_name  text,
   -- Udeo trajanja trejda (%) sa tekućim P&L < 0, iz istih R2 sveća; piše ga samo
   -- `futures-trading` journal_mae.py (20260929235000). NULL = nije izmereno.
   time_underwater_pct  numeric,

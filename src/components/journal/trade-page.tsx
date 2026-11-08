@@ -24,6 +24,7 @@ import type { FieldDef } from "@/lib/journal/field-def-types";
 import type { AutoMistake } from "@/lib/journal/auto-mistakes";
 import type { Playbook } from "@/lib/journal/playbook-types";
 import type { OptionsMap } from "@/lib/journal/types";
+import type { TrejdOrigin } from "@/lib/journal/trejd-origin";
 import { cn } from "@/lib/utils";
 
 /** Everything the page shows about one trade, assembled on the server. */
@@ -31,6 +32,8 @@ export type TradePageTrade = {
   id: string;
   label: string;
   missed: boolean;
+  /** Opened through the Trejd panel in NinjaTrader, outside it, or not known (phase TR). */
+  trejd: TrejdOrigin;
   accountName: string | null;
   currency: string;
   direction: string | null;
@@ -258,6 +261,22 @@ export function TradePage({
           <CardTitle className="flex flex-wrap items-baseline gap-x-3 text-base">
             <span>{trade.missed ? `Propušten setup ${trade.label}` : trade.label}</span>
             {trade.accountName && <span className="text-sm font-normal text-muted-foreground">{trade.accountName}</span>}
+            {trade.trejd?.kind === "trejd" && (
+              <span
+                className="rounded border px-1.5 text-xs font-normal text-muted-foreground"
+                title="Ulaz iz Trejd panela — plan, kapije i kontekst su u njegovom logu ulaza pod ovim imenom"
+              >
+                Trejd · {trade.trejd.id}
+              </span>
+            )}
+            {trade.trejd?.kind === "van" && (
+              <span
+                className="rounded border border-amber-500/50 px-1.5 text-xs font-normal text-amber-700 dark:text-amber-400"
+                title="Ulaz mimo Trejd panela (Chart Trader, SuperDOM …) — bez plana, kapija i konteksta u logu ulaza"
+              >
+                van Trejda
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">

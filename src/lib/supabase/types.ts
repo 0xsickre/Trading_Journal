@@ -1014,6 +1014,7 @@ export type Database = {
           plan_amended_at: string | null
           plan_sealed_at: string | null
           plan_snapshot: Json | null
+          platform_entry_name: string | null
           playbook_id: string | null
           point_value_at_trade: number | null
           position_size: number | null
@@ -1069,6 +1070,7 @@ export type Database = {
           plan_amended_at?: string | null
           plan_sealed_at?: string | null
           plan_snapshot?: Json | null
+          platform_entry_name?: string | null
           playbook_id?: string | null
           point_value_at_trade?: number | null
           position_size?: number | null
@@ -1124,6 +1126,7 @@ export type Database = {
           plan_amended_at?: string | null
           plan_sealed_at?: string | null
           plan_snapshot?: Json | null
+          platform_entry_name?: string | null
           playbook_id?: string | null
           point_value_at_trade?: number | null
           position_size?: number | null

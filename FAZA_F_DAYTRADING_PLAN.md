@@ -177,6 +177,7 @@ pogađa.
 | **Z** | Bez prop firme: brief i journal neutralni prema svakoj prop firmi — CME dan 17:00 → 16:00 CT u brief-u, dnevniku i modelima, CME praznici umesto Topstep-ovih, bez pominjanja firme u kodu i tekstovima koji opisuju sadašnje stanje | — | G | samo po Z-5: komentari 5 kolona (baza je inače čista), uz odobrenje | **Opus** | ✅ 27.10.2026 — Z-1 … Z-5 = A; Z1 futures-trading `0ca53e7` · Z2 `183b647` + `26c1a63`, istorija `781756c` · Z3 `c430aed` … `c74f7a0` (6 delova, brief na CME danu) · Z4 `06bb229` + migracija `20261027160000` primenjena · Z5 (futures-trading `1bf7d29`) |
 | **I** | Univerzalni uvoz: format se prepoznaje po zaglavlju (TopstepX, NinjaTrader, Tradovate), zapamćeno mapiranje za nepoznat CSV; I3 = sinhronizacija iz NinjaTrader baze | — | E | da: `20261027180000` (I3, primenjena); I2 aditivna tabela mapiranja | **Opus** | I3 ✅ 27.10.2026 (`6f4b494` + futures-trading `44489a0`); I1, I2 ⏸ čekaju primere izvoza od trejdera |
 | **C** | Cena prop puta: troškovi evaluacija, aktivacija i resetova + isplate → stvarni neto (dashboard i /reports) | — | I3 | da, aditivna: `tj_trading_costs` (uz odobrenje) | **Opus** | ⏸ plan 28.10.2026 — **ne počinjati bez naloga trejdera** („napravi samo plan pa ćemo to nekad posle uvesti“) |
+| **TR** | Veza sa Trejdom: ime naloga ulaza iz NinjaTrader-a na trejdu — spoj sa logom ulaza Trejd panela, oznaka „van Trejda“ | — | I3 | da: `20261108120000` (aditivna) | **Opus** | kod ✅ 08.11.2026; migracija čeka primenu |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -2255,6 +2256,33 @@ Odluke C-1 … C-4 su u dnevniku. **Ne počinje se bez trejderovog naloga** — 
 
 **Verifikacija:** gate; `execute_sql` posle migracije (RLS, CHECK); Settings › Troškovi, dashboard i /reports u
 preview-u sa probnim redom koji se posle ukloni.
+
+**Model:** Opus.
+
+## TR — Veza sa Trejdom (detaljno, 08.11.2026)
+
+**Cilj (trejder, playbook v2):** kontekst ulaza ne kuca ništa — Trejd panel u NinjaTrader-u (repo `trading-charting`,
+Trejd v1.16) sam upisuje red u `TrejdPanel\log\ulazi_GGGG-MM.csv` pri kliku na OTVORI (plan, ocena, playbook / POI, kapije,
+vesti, Limiter, Pregled, Order flow), pod imenom naloga ulaza „RP Ulaz <id>“. Journal dobija trejd automatski preko
+sinhronizacije (I3, svakih 5 min — trejd stiže najkasnije 5 min posle zatvaranja). Odluke trejdera (08.11.2026):
+prenos automatski; ulaz mimo Trejda se samo **označava** „van Trejda“, ne blokira; analiza (kasnije) čita bazu
+journala i CSV direktno.
+
+**Utvrđeno:** NinjaTrader baza čuva ime naloga (`Orders.Name`, npr. „RP Ulaz 2e3eb8“); fill nosi `OrderId` naloga.
+
+**Izmena:**
+- futures-trading `nt_sync.py`: uz nalog šalje i `name`.
+- `ninjatrader-sync.ts`: `NtTrade.entry_name` = ime naloga prvog ulaznog fill-a („“ bez imena, null kad nije
+  stiglo); `ntEntryNameUpdates` — šta se upisuje (jednom, samo prazno, samo trejd koji je već u journalu).
+- Ruta: posle uvoza upiše ime na trejd, van `commitImport` (undo ga ne dira); greška ne ruši uvoz (`named_error`).
+- Migracija `20261108120000_platform_entry_name.sql` (aditivna): `tj_positions.platform_entry_name`.
+- Stranica trejda: „Trejd · RP Ulaz <id>“ ili „van Trejda“ (`trejd-origin.ts`); bez imena — ništa.
+
+**Granice:** trejdovi upisani pre faze TR dobijaju ime samo ako su u prozoru od 14 dana; nalog iz starog RizikPanel-a
+ima isto ime („RP Ulaz …“), pa se vodi kao Trejd, ali nema red u logu ulaza.
+
+**Status:** kod ✅ 08.11.2026; migracija čeka primenu (odobrenje trejdera). Sledeće (playbook v2, korak 5): dva nova
+playbook-a, stara 4 u arhivu, slepi pregled (jak POI, ispoštovao plan, greška).
 
 **Model:** Opus.
 

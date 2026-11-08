@@ -1431,6 +1431,15 @@ as the journal user (the password sits in Windows Credential Manager).
 - **Auth.** `createClient()` honours `Authorization: Bearer` (no cookies), and the session middleware lets this one
   path through; the route checks the token itself (`getClaims`; a missing, refused or malformed token is a 401,
   before anything is read — `route.test.ts`). RLS applies exactly as in the app.
+- **Opened through Trejd or outside it** (phase TR, 08.11.2026). The script also sends each order's name
+  (`Orders.Name`). After the import the route writes the name of each trade's entry order onto its position
+  (`tj_positions.platform_entry_name`, `ntEntryNameUpdates`): once, only while empty, and never through
+  `commitImport`, so an undo has nothing of it to restore. The Trejd panel names its entry orders
+  "RP Ulaz <id>" and logs each entry under that id (`TrejdPanel\log\ulazi_GGGG-MM.csv` in the trader's NinjaTrader
+  folder: plan, gates, Pregled and Order flow context, Limiter); the analysis joins the two by it. The trade page
+  shows "Trejd · RP Ulaz <id>" or, for any other name, "van Trejda" (`trejd-origin.ts`); a trade the sync never
+  named (manual, CSV, synced before phase TR) shows neither. A failure writing the name never fails the import:
+  the answer carries `named_error`, the script logs it, and the next run tries again.
 
 ### What the file may overwrite, and what it may not
 
