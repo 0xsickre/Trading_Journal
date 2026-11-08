@@ -177,7 +177,7 @@ pogađa.
 | **Z** | Bez prop firme: brief i journal neutralni prema svakoj prop firmi — CME dan 17:00 → 16:00 CT u brief-u, dnevniku i modelima, CME praznici umesto Topstep-ovih, bez pominjanja firme u kodu i tekstovima koji opisuju sadašnje stanje | — | G | samo po Z-5: komentari 5 kolona (baza je inače čista), uz odobrenje | **Opus** | ✅ 27.10.2026 — Z-1 … Z-5 = A; Z1 futures-trading `0ca53e7` · Z2 `183b647` + `26c1a63`, istorija `781756c` · Z3 `c430aed` … `c74f7a0` (6 delova, brief na CME danu) · Z4 `06bb229` + migracija `20261027160000` primenjena · Z5 (futures-trading `1bf7d29`) |
 | **I** | Univerzalni uvoz: format se prepoznaje po zaglavlju (TopstepX, NinjaTrader, Tradovate), zapamćeno mapiranje za nepoznat CSV; I3 = sinhronizacija iz NinjaTrader baze | — | E | da: `20261027180000` (I3, primenjena); I2 aditivna tabela mapiranja | **Opus** | I3 ✅ 27.10.2026 (`6f4b494` + futures-trading `44489a0`); I1, I2 ⏸ čekaju primere izvoza od trejdera |
 | **C** | Cena prop puta: troškovi evaluacija, aktivacija i resetova + isplate → stvarni neto (dashboard i /reports) | — | I3 | da, aditivna: `tj_trading_costs` (uz odobrenje) | **Opus** | ⏸ plan 28.10.2026 — **ne počinjati bez naloga trejdera** („napravi samo plan pa ćemo to nekad posle uvesti“) |
-| **TR** | Veza sa Trejdom: ime naloga ulaza iz NinjaTrader-a na trejdu — spoj sa logom ulaza Trejd panela, oznaka „van Trejda“ | — | I3 | da: `20261108120000` (aditivna) | **Opus** | kod ✅ 08.11.2026; migracija čeka primenu |
+| **TR** | Veza sa Trejdom: ime naloga ulaza iz NinjaTrader-a na trejdu — spoj sa logom ulaza Trejd panela, oznaka „van Trejda“ | — | I3 | da: `20261108120000` (aditivna) | **Opus** | ✅ 08.11.2026 — migracija `20261108120000` primenjena uz odobrenje trejdera |
 
 ## F1 — Tačnost odmah (detaljno) — ✅ `c0077e1`
 
@@ -2281,7 +2281,7 @@ journala i CSV direktno.
 **Granice:** trejdovi upisani pre faze TR dobijaju ime samo ako su u prozoru od 14 dana; nalog iz starog RizikPanel-a
 ima isto ime („RP Ulaz …“), pa se vodi kao Trejd, ali nema red u logu ulaza.
 
-**Status:** kod ✅ 08.11.2026; migracija čeka primenu (odobrenje trejdera). Sledeće (playbook v2, korak 5): dva nova
+**Status:** ✅ 08.11.2026; migracija primenjena uz odobrenje trejdera. Sledeće (playbook v2, korak 5): dva nova
 playbook-a, stara 4 u arhivu, slepi pregled (jak POI, ispoštovao plan, greška).
 
 **Model:** Opus.
