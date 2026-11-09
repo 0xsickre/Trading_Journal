@@ -99,7 +99,7 @@ const TRADE: TradePageTrade = {
   plannedEntry: null,
   seenAt: null,
   timezone: "America/Chicago",
-  trejd: null,
+  terminal: null,
 };
 
 function renderPage(
@@ -140,18 +140,18 @@ describe("TradePage — one page per imported trade (phase P)", () => {
     expect(screen.queryByText(/Planned Entry|Position Size|Scale-out|Invalidation|Time stop/)).not.toBeInTheDocument();
   });
 
-  it("says whether the entry came through the Trejd panel, by its order's name (phase TR)", () => {
-    const { unmount } = renderPage({ ...TRADE, trejd: { kind: "trejd", id: "RP Ulaz 3f9a1c" } });
-    expect(screen.getByText("Trejd · RP Ulaz 3f9a1c")).toBeInTheDocument();
-    expect(screen.queryByText("van Trejda")).not.toBeInTheDocument();
+  it("says whether the entry came through the Terminal panel, by its order's name (phase TR)", () => {
+    const { unmount } = renderPage({ ...TRADE, terminal: { kind: "terminal", id: "RP Ulaz 3f9a1c" } });
+    expect(screen.getByText("Terminal · RP Ulaz 3f9a1c")).toBeInTheDocument();
+    expect(screen.queryByText("van Terminala")).not.toBeInTheDocument();
     unmount();
-    renderPage({ ...TRADE, trejd: { kind: "van" } });
-    expect(screen.getByText("van Trejda")).toBeInTheDocument();
+    renderPage({ ...TRADE, terminal: { kind: "van" } });
+    expect(screen.getByText("van Terminala")).toBeInTheDocument();
   });
 
-  it("says nothing about Trejd for a trade the sync never named", () => {
+  it("says nothing about Terminal for a trade the sync never named", () => {
     renderPage();
-    expect(screen.queryByText(/Trejd/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Terminal/)).not.toBeInTheDocument();
   });
 
   it("saves the recording, the checklist, the grade and the categories in one call", async () => {

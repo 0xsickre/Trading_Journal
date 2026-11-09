@@ -171,7 +171,7 @@ describe("ntImportItems: what a run writes", () => {
 
 /**
  * Phase TR: the entry order's name in NinjaTrader is what ties a journal trade
- * to the row the Trejd panel wrote when the trade was opened
+ * to the row the Terminal panel wrote when the trade was opened
  * (`TrejdPanel\log\ulazi_GGGG-MM.csv`, column `id`).
  */
 describe("phase TR: the entry order's name", () => {
@@ -198,7 +198,7 @@ describe("phase TR: the entry order's name", () => {
     // Already there → nothing; position unknown (not written yet) → nothing.
     expect(ntEntryNameUpdates([t], byFill, new Map([["pos-1", "RP Ulaz 3f9a1c"]]))).toEqual([]);
     expect(ntEntryNameUpdates([t], new Map(), new Map())).toEqual([]);
-    // No name sent → nothing, so an older script never stamps "van Trejda".
+    // No name sent → nothing, so an older script never stamps "van Terminala".
     const [old] = ntTrades(mgcFills, mgcOrders);
     expect(ntEntryNameUpdates([old], byFill, new Map([["pos-1", null]]))).toEqual([]);
   });

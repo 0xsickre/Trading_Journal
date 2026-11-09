@@ -20,7 +20,7 @@ import type { TradeRow } from "@/lib/journal/types";
  *
  * Beside the import (phase TR), each trade's position gets the name of its entry
  * order once (`platform_entry_name`): "RP Ulaz <id>" ties it to the Trejd
- * panel's log of that entry, any other name marks it as taken outside Trejd.
+ * panel's log of that entry, any other name marks it as taken outside the Terminal.
  */
 
 const iso = z.iso.datetime({ offset: true });

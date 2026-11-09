@@ -160,7 +160,7 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   final_stop_price     numeric,
   entry_order_type     text,
   -- Ime naloga ulaza u NinjaTrader-u, piše ga sinhronizacija (20261108120000, faza TR).
-  -- „RP Ulaz <id>“ = ulaz iz Trejd panela (spoj sa njegovim logom ulaza); drugo = van Trejda.
+  -- „RP Ulaz <id>“ = ulaz iz Terminal panela (spoj sa njegovim logom ulaza); drugo = van Terminala.
   -- NULL = trejd nije iz sinhronizacije ili je upisan pre faze TR.
   platform_entry_name  text,
   -- Udeo trajanja trejda (%) sa tekućim P&L < 0, iz istih R2 sveća; piše ga samo

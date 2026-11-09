@@ -17,7 +17,7 @@ import type { FieldDef } from "@/lib/journal/field-def-types";
 import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
 import { TradePage, type TradePageTrade } from "@/components/journal/trade-page";
-import { trejdOrigin } from "@/lib/journal/trejd-origin";
+import { terminalOrigin } from "@/lib/journal/terminal-origin";
 import type { CategoryValue } from "@/components/journal/category-field";
 import { TradeImages } from "@/components/journal/trade-images";
 import { TradeScenarioCard } from "@/components/journal/trade-scenario-card";
@@ -117,7 +117,7 @@ export default async function TradeRoute({
     id: pos.id,
     label,
     missed,
-    trejd: trejdOrigin(pos.platform_entry_name),
+    terminal: terminalOrigin(pos.platform_entry_name),
     accountName: account?.name ?? null,
     currency: stats?.account_currency ?? account?.currency ?? "USD",
     direction: pos.direction,

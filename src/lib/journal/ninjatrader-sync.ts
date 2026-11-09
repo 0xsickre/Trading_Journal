@@ -20,7 +20,7 @@
  *     last price.
  *   - No commission (0 on the fills): the fee comes from the instrument's
  *     commission per lot in Settings › Instruments.
- *   - Each order's name (phase TR). The Trejd panel names its entry order
+ *   - Each order's name (phase TR). The Terminal panel names its entry order
  *     "RP Ulaz <id>" and writes the same id into its own log of the entry, so
  *     the name is what ties a journal trade to that row; any other name means
  *     the trade was opened outside the panel.
@@ -302,7 +302,7 @@ export function ntImportItems(
  * figure: it is written once, only onto a position that has none, and never
  * by a trade whose position is not in the journal yet (the next run finds it).
  * A trade with no name sent writes nothing, so an older script never marks a
- * Trejd entry as one taken outside the panel.
+ * Terminal entry as one taken outside the panel.
  */
 export function ntEntryNameUpdates(
   trades: readonly NtTrade[],
