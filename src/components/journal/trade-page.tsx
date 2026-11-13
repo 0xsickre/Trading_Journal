@@ -34,6 +34,13 @@ export type TradePageTrade = {
   missed: boolean;
   /** Opened through the Terminal panel in NinjaTrader, outside it, or not known (phase TR). */
   terminal: TerminalOrigin;
+  /** Blind review, saved answer (phase SP): was the POI strong? null = not answered. */
+  poiStrong: boolean | null;
+  /**
+   * The result is kept back until POI, grade and mistake are saved (phase SP). The
+   * server has already emptied every figure that shows how the trade ended.
+   */
+  blind: boolean;
   accountName: string | null;
   currency: string;
   direction: string | null;
@@ -98,6 +105,31 @@ function Fact({ label, children, cls }: { label: string; children: ReactNode; cl
   );
 }
 
+function PoiPick({ value, onChange }: { value: boolean | null; onChange: (v: boolean | null) => void }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">Jak POI?</Label>
+      <div className="flex gap-2">
+        {([true, false] as const).map((v) => (
+          <button
+            key={String(v)}
+            type="button"
+            aria-label={`Jak POI? ${v ? "Da" : "Ne"}`}
+            aria-pressed={value === v}
+            onClick={() => onChange(value === v ? null : v)}
+            className={cn(
+              "rounded-md border px-4 py-2 text-sm font-medium transition-colors",
+              value === v ? "border-primary bg-primary/10" : "hover:bg-accent",
+            )}
+          >
+            {v ? "Da" : "Ne"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /**
  * One page per trade (phase P), in the order the recording is watched: the trade
  * as the import brought it, what stood in the platform and what was said before
@@ -153,6 +185,8 @@ export function TradePage({
   const [grade, setGrade] = useState<Grade | null>(gradeFromRating(trade.rating));
   const [cats, setCats] = useState<Record<string, CategoryValue>>(trade.categories);
   const [note, setNote] = useState(trade.notes ?? "");
+  const [poi, setPoi] = useState<boolean | null>(trade.poiStrong);
+  const fromTerminal = trade.terminal?.kind === "terminal" && !trade.missed;
 
   const hasNoMistake = (optionsMap.mistake ?? []).some((o) => o.value === NO_MISTAKE);
   function pickGrade(g: Grade) {
@@ -215,6 +249,7 @@ export function TradePage({
         trade_journal_notes: note,
         images: [],
         ...(trade.missed ? {} : { stop_price: stopN, target_price: targetN, thesis: said.trim() || null }),
+        ...(fromTerminal ? { poi_strong: poi } : {}),
         categories: catsToSave as Record<string, string | string[] | null>,
         rule_answers: offeredRuleAnswers(book, answers, outcome),
       });
@@ -225,6 +260,30 @@ export function TradePage({
       toast.success(`${trade.label} sačuvan`);
       setDirty(false);
       router.push(backHref);
+    });
+  }
+
+  // The three blind answers are saved on their own, then the page is read again with the result.
+  const mistakesNow = Array.isArray(cats.mistake) ? cats.mistake.filter((m) => m !== NO_MISTAKE) : [];
+  const blindReady = poi != null && grade != null && (grade === "A" || mistakesNow.length > 0);
+  function confirmBlind() {
+    if (!blindReady || grade == null) return;
+    start(async () => {
+      const res = await saveTradeReview(trade.id, {
+        playbook_id: playbookId,
+        execution_rating: GRADE_RATING[grade],
+        poi_strong: poi,
+        trade_journal_notes: note,
+        images: [],
+        categories: { mistake: grade === "A" ? [NO_MISTAKE] : mistakesNow },
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Pregled sačuvan — rezultat je otkriven");
+      setDirty(false);
+      router.refresh();
     });
   }
 
@@ -247,9 +306,36 @@ export function TradePage({
   const askMistakes = grade === "B" || grade === "C" || ownMistakes.length > 0;
   const reviewShown = reviewDefs.filter((d) => d.key !== "mistake" || askMistakes);
 
+  const gradePick = (
+    <div className="space-y-1.5">
+      <Label className="text-xs">Po planu?</Label>
+      <div className="grid grid-cols-3 gap-2">
+        {GRADES.map((g) => (
+          <button
+            key={g}
+            type="button"
+            aria-pressed={grade === g}
+            onClick={() => pickGrade(g)}
+            className={cn(
+              "rounded-md border p-2 text-left transition-colors",
+              grade === g
+                ? g === "A"
+                  ? "border-[var(--profit)] bg-[var(--profit)]/15"
+                  : "border-[var(--loss)] bg-[var(--loss)]/10"
+                : "hover:bg-accent",
+            )}
+          >
+            <div className="text-lg font-semibold">{g}</div>
+            <div className="text-xs text-muted-foreground">{GRADE_HINT[g]}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   const warnings = [
-    !trade.missed && !playbookId && "Bez setupa — trejd ne ulazi u brojeve nijednog playbook-a.",
-    !trade.missed && !grade && "Bez ocene — da li je bilo po planu?",
+    !trade.missed && !trade.blind && !playbookId && "Bez setupa — trejd ne ulazi u brojeve nijednog playbook-a.",
+    !trade.missed && !trade.blind && !grade && "Bez ocene — da li je bilo po planu?",
     stopN == null && "Bez stopa — trejd nema R, a pregled meri u R.",
   ].filter((w): w is string => Boolean(w));
 
@@ -287,29 +373,34 @@ export function TradePage({
               <Fact label="Smer · ugovori">
                 {trade.direction ?? "—"} · {trade.qty ?? "—"}
               </Fact>
-              <Fact label="Ulaz → izlaz">
-                {fmtPrice(trade.avgEntry, trade.tickSize)} → {fmtPrice(trade.avgExit, trade.tickSize)}
+              <Fact label={trade.blind ? "Ulaz" : "Ulaz → izlaz"}>
+                {fmtPrice(trade.avgEntry, trade.tickSize)}
+                {!trade.blind && <> → {fmtPrice(trade.avgExit, trade.tickSize)}</>}
               </Fact>
               <Fact label="Vreme (Beograd)">
                 {trade.opened ?? "—"}
                 {trade.closed ? ` → ${trade.closed.slice(-5)}` : " · otvoren"}
               </Fact>
               <Fact label="Trajanje">{duration(trade.durationSeconds)}</Fact>
-              <Fact label="Net P/L" cls={pnlClass(trade.netPl)}>
-                {fmtMoney(trade.netPl, trade.currency, { sign: true })}
-              </Fact>
-              <Fact label="R" cls={pnlClass(trade.realizedR)}>
-                {fmtR(trade.realizedR)}
-              </Fact>
-              <Fact label="MAE / MFE">
-                {trade.maeR != null ? `−${trade.maeR.toFixed(2)}R` : "—"} … {trade.mfeR != null ? `+${trade.mfeR.toFixed(2)}R` : "—"}
-                <div className="mt-1 w-28">
-                  <ExcursionBar maeR={trade.maeR} mfeR={trade.mfeR} realizedR={trade.realizedR} />
-                </div>
-              </Fact>
-              <Fact label="Provizije · rizik do stopa">
-                {fmtMoney(trade.fees, trade.currency)} · {fmtMoney(riskMoney, trade.currency)}
-              </Fact>
+              {!trade.blind && (
+                <>
+                  <Fact label="Net P/L" cls={pnlClass(trade.netPl)}>
+                    {fmtMoney(trade.netPl, trade.currency, { sign: true })}
+                  </Fact>
+                  <Fact label="R" cls={pnlClass(trade.realizedR)}>
+                    {fmtR(trade.realizedR)}
+                  </Fact>
+                  <Fact label="MAE / MFE">
+                    {trade.maeR != null ? `−${trade.maeR.toFixed(2)}R` : "—"} … {trade.mfeR != null ? `+${trade.mfeR.toFixed(2)}R` : "—"}
+                    <div className="mt-1 w-28">
+                      <ExcursionBar maeR={trade.maeR} mfeR={trade.mfeR} realizedR={trade.realizedR} />
+                    </div>
+                  </Fact>
+                  <Fact label="Provizije · rizik do stopa">
+                    {fmtMoney(trade.fees, trade.currency)} · {fmtMoney(riskMoney, trade.currency)}
+                  </Fact>
+                </>
+              )}
             </div>
           )}
           {trade.finalStop != null && (
@@ -374,6 +465,38 @@ export function TradePage({
         </CardContent>
       </Card>
 
+      {trade.blind && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Slepi pregled</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Oceni ulaz pre nego što vidiš rezultat. Dok se sva tri odgovora ne sačuvaju, rezultat, Setup lista i snimci ostaju sakriveni.
+            </p>
+            <PoiPick value={poi} onChange={touch(setPoi)} />
+            {gradePick}
+            {grade != null && grade !== "A" &&
+              reviewDefs
+                .filter((d) => d.key === "mistake")
+                .map((def) => (
+                  <CategoryField
+                    key={def.key}
+                    def={def}
+                    value={cats[def.key] ?? null}
+                    onChange={(v) => touch(setCats)({ ...cats, [def.key]: v })}
+                    optionsMap={optionsMap}
+                  />
+                ))}
+            <Button onClick={confirmBlind} disabled={!blindReady || pending}>
+              Potvrdi pregled
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {!trade.blind && (
+        <>
       {/* 3 · Setup */}
       <Card>
         <CardHeader>
@@ -452,32 +575,8 @@ export function TradePage({
               )}
             </div>
           )}
-          {!trade.missed && (
-            <div className="space-y-1.5">
-              <Label className="text-xs">Po planu?</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {GRADES.map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    aria-pressed={grade === g}
-                    onClick={() => pickGrade(g)}
-                    className={cn(
-                      "rounded-md border p-2 text-left transition-colors",
-                      grade === g
-                        ? g === "A"
-                          ? "border-[var(--profit)] bg-[var(--profit)]/15"
-                          : "border-[var(--loss)] bg-[var(--loss)]/10"
-                        : "hover:bg-accent",
-                    )}
-                  >
-                    <div className="text-lg font-semibold">{g}</div>
-                    <div className="text-xs text-muted-foreground">{GRADE_HINT[g]}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          {fromTerminal && <PoiPick value={poi} onChange={touch(setPoi)} />}
+          {!trade.missed && gradePick}
           {reviewShown.length > 0 && (
             <div className="grid gap-4 sm:grid-cols-2">
               {reviewShown.map((def) => (
@@ -500,9 +599,12 @@ export function TradePage({
         </CardContent>
       </Card>
 
+        </>
+      )}
+
       {/* 6 · Charts, 7 · What would have happened */}
-      {images}
-      {scenario}
+      {!trade.blind && images}
+      {!trade.blind && scenario}
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 p-3 backdrop-blur md:left-(--sidebar-offset)">
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3">

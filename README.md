@@ -1852,3 +1852,12 @@ Since 14.10.2026 it also gets a **Reakcija** line per measured trade (a winner: 
 Private repo — personal use. The journal's Supabase project is **separate** from the dashboard's; do
 not run the dashboard's migrations here or the other way round. The contents are a personal trading
 record, not investment advice.
+- **Blind review of a Terminal trade** (phase SP, 13.11.2026). A trade opened through the Terminal panel
+  (`terminal-origin.ts`) keeps its result off the page until three answers are SAVED: `tj_positions.poi_strong`
+  (was the POI strong, yes / no), the plan grade A / B / C (`execution_rating`, already on the page) and the mistake
+  (an A records "Bez greške", a B or C must name one). `blindReviewHidden` (`blind-review.ts`) reads the saved values;
+  while it is true the trade page server (`trades/[id]/page.tsx`) EMPTIES exit price, Net P/L, R, MAE / MFE, fees,
+  the auto exit reason, the auto mistakes, the charts and "what would have happened", and the page shows only the
+  entry, the recording's stop / target and the "Slepi pregled" card with "Potvrdi pregled", which saves the three and
+  refreshes the page with the result. Trades outside the Terminal, missed setups and trades of unknown origin are
+  never hidden. After the reveal "Jak POI?" stays editable in the review.

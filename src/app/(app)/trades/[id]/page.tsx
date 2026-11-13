@@ -18,6 +18,7 @@ import type { TradeRow } from "@/lib/journal/types";
 import { PageHeader } from "@/components/app/page-header";
 import { TradePage, type TradePageTrade } from "@/components/journal/trade-page";
 import { terminalOrigin } from "@/lib/journal/terminal-origin";
+import { blindReviewHidden } from "@/lib/journal/blind-review";
 import type { CategoryValue } from "@/components/journal/category-field";
 import { TradeImages } from "@/components/journal/trade-images";
 import { TradeScenarioCard } from "@/components/journal/trade-scenario-card";
@@ -112,6 +113,17 @@ export default async function TradeRoute({
     });
   }
 
+  // Blind review (phase SP): a Terminal trade's result stays on the server until POI, grade and
+  // mistake are saved — every figure that shows how it ended is emptied here, not merely hidden.
+  const blind = blindReviewHidden({
+    terminal: terminalOrigin(pos.platform_entry_name),
+    missed,
+    poiStrong: pos.poi_strong,
+    rating: nums(pos.execution_rating),
+    mistake: Array.isArray(pos.mistake) ? pos.mistake : [],
+  });
+  const hide = <T,>(v: T): T | null => (blind ? null : v);
+
   const label = `${pos.trade_no != null ? `#${pos.trade_no}` : pos.id.slice(0, 8)}${pos.instrument ? ` ${pos.instrument}` : ""}`;
   const trade: TradePageTrade = {
     id: pos.id,
@@ -123,23 +135,24 @@ export default async function TradeRoute({
     direction: pos.direction,
     qty: nums(stats?.entry_qty),
     avgEntry: nums(stats?.avg_entry),
-    avgExit: nums(stats?.avg_exit),
+    avgExit: hide(nums(stats?.avg_exit)),
     opened: stats?.opened_at ? fmtInTz(stats.opened_at, DEFAULT_TZ, DAY_TIME) : null,
     closed: stats?.closed_at ? fmtInTz(stats.closed_at, DEFAULT_TZ, DAY_TIME) : null,
     durationSeconds: nums(stats?.duration_seconds),
-    netPl: nums(stats?.net_pl),
-    realizedR: nums(stats?.realized_r),
-    fees: nums(stats?.total_fees),
-    maeR: excursion.maeR,
-    mfeR: excursion.mfeR,
+    netPl: hide(nums(stats?.net_pl)),
+    realizedR: hide(nums(stats?.realized_r)),
+    fees: hide(nums(stats?.total_fees)),
+    maeR: hide(excursion.maeR),
+    mfeR: hide(excursion.mfeR),
     pointValue: nums(stats?.point_value),
     fxRate: nums(stats?.fx_rate),
     tickSize: nums(stats?.tick_size),
     stop: nums(pos.stop_price),
     target: nums(pos.target_price),
-    finalStop: nums(pos.final_stop_price),
-    stopNote:
-      moved === "moved_be"
+    finalStop: hide(nums(pos.final_stop_price)),
+    stopNote: blind
+      ? null
+      : moved === "moved_be"
         ? "Poslednji stop u platformi je na ulazu ili u profitu — pomeren je. Upiši originalni sa snimka."
         : moved === "moved_mae"
           ? "Cena je otišla dalje od poslednjeg stopa, a trejd nije izbačen — stop je pomeren. Upiši originalni sa snimka."
@@ -149,7 +162,9 @@ export default async function TradeRoute({
     ruleAnswers,
     rating: nums(pos.execution_rating),
     notes: pos.trade_journal_notes,
-    categories,
+    categories: blind ? { ...categories, exit_reason: null } : categories,
+    poiStrong: pos.poi_strong,
+    blind,
     plannedEntry: missed ? nums(pos.entry_price) : null,
     seenAt: missed ? pos.missed_at : null,
     timezone: account?.timezone ?? DEFAULT_TZ,
@@ -170,13 +185,13 @@ export default async function TradeRoute({
         playbooks={playbooks}
         contextDefs={contextDefs}
         biasNote={biasNote}
-        autoMistakes={autoFound}
+        autoMistakes={blind ? [] : autoFound}
         reviewDefs={reviewDefs}
         optionsMap={optionsMap}
         breakevenRange={resolveBreakevenRange(account)}
         backHref={from === "daily" ? "/daily" : "/journal"}
-        images={<TradeImages positionId={pos.id} />}
-        scenario={scenario ? <TradeScenarioCard trade={scenario} /> : null}
+        images={blind ? null : <TradeImages positionId={pos.id} />}
+        scenario={!blind && scenario ? <TradeScenarioCard trade={scenario} /> : null}
       />
     </div>
   );

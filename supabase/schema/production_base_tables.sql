@@ -163,6 +163,8 @@ CREATE TABLE IF NOT EXISTS public.tj_positions (
   -- „RP Ulaz <id>“ = ulaz iz Terminal panela (spoj sa njegovim logom ulaza); drugo = van Terminala.
   -- NULL = trejd nije iz sinhronizacije ili je upisan pre faze TR.
   platform_entry_name  text,
+  -- Slepi pregled (faza SP): da li je POI bio jak. NULL = nije odgovoreno.
+  poi_strong           boolean,
   -- Udeo trajanja trejda (%) sa tekućim P&L < 0, iz istih R2 sveća; piše ga samo
   -- `futures-trading` journal_mae.py (20260929235000). NULL = nije izmereno.
   time_underwater_pct  numeric,

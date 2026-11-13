@@ -66,6 +66,7 @@ export const RESERVED_KEYS = new Set([
   "final_stop_price",
   "entry_order_type",
   "platform_entry_name",
+  "poi_strong",
   "time_underwater_pct",
   "last_underwater_seconds",
   "equity_at_entry",

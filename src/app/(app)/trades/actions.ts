@@ -110,6 +110,8 @@ const tradeReviewSchema = z.object({
   mistake: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
   psychology_tags: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
   trade_journal_notes: z.string().max(20_000).nullable(),
+  /** Blind review (phase SP): was the POI strong? Absent leaves it as it is. */
+  poi_strong: z.boolean().nullable().optional(),
   /** Written only where the trade has none — never over the trader's own answer. */
   exit_reason: z.string().trim().min(1).max(200).nullable().optional(),
   /**
@@ -180,6 +182,7 @@ export async function saveTradeReview(id: string, input: TradeReviewInput) {
       playbook_id: r.playbook_id,
       execution_rating: r.execution_rating,
       ...(r.mistake !== undefined ? { mistake: r.mistake } : {}),
+      ...(r.poi_strong !== undefined ? { poi_strong: r.poi_strong } : {}),
       ...(r.psychology_tags !== undefined ? { psychology_tags: r.psychology_tags } : {}),
       trade_journal_notes: r.trade_journal_notes?.trim() || null,
       ...(r.exit_reason !== undefined && !prev.exit_reason ? { exit_reason: r.exit_reason } : {}),

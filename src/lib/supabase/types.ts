@@ -1015,6 +1015,7 @@ export type Database = {
           plan_sealed_at: string | null
           plan_snapshot: Json | null
           platform_entry_name: string | null
+          poi_strong: boolean | null
           playbook_id: string | null
           point_value_at_trade: number | null
           position_size: number | null
@@ -1071,6 +1072,7 @@ export type Database = {
           plan_sealed_at?: string | null
           plan_snapshot?: Json | null
           platform_entry_name?: string | null
+          poi_strong?: boolean | null
           playbook_id?: string | null
           point_value_at_trade?: number | null
           position_size?: number | null
@@ -1127,6 +1129,7 @@ export type Database = {
           plan_sealed_at?: string | null
           plan_snapshot?: Json | null
           platform_entry_name?: string | null
+          poi_strong?: boolean | null
           playbook_id?: string | null
           point_value_at_trade?: number | null
           position_size?: number | null

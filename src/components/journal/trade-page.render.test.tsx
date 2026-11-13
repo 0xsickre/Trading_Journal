@@ -100,6 +100,8 @@ const TRADE: TradePageTrade = {
   seenAt: null,
   timezone: "America/Chicago",
   terminal: null,
+  poiStrong: null,
+  blind: false,
 };
 
 function renderPage(
@@ -285,5 +287,67 @@ describe("TradePage — a missed setup", () => {
     });
     expect(saveMock.mock.calls[0][1]).toMatchObject({ execution_rating: null });
     expect(saveMock.mock.calls[0][1]).not.toHaveProperty("stop_price");
+  });
+});
+
+describe("TradePage — blind review of a Terminal trade (phase SP)", () => {
+  const BLIND: TradePageTrade = {
+    ...TRADE,
+    terminal: { kind: "terminal", id: "RP Ulaz 3f9a1c" },
+    blind: true,
+    avgExit: null,
+    netPl: null,
+    realizedR: null,
+    fees: null,
+    maeR: null,
+    mfeR: null,
+  };
+
+  it("keeps the result and everything built on it off the page until the three answers are saved", () => {
+    renderPage(BLIND);
+    expect(screen.getByText("Slepi pregled")).toBeInTheDocument();
+    expect(screen.queryByText("Net P/L")).not.toBeInTheDocument();
+    expect(screen.queryByText("MAE / MFE")).not.toBeInTheDocument();
+    expect(screen.queryByText("Setup")).not.toBeInTheDocument();
+    expect(screen.queryByText("Review")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Potvrdi pregled" })).toBeDisabled();
+  });
+
+  it("saves POI, grade and the mistake together, then refreshes instead of leaving", async () => {
+    const user = userEvent.setup();
+    renderPage(BLIND);
+    await user.click(screen.getByRole("button", { name: "Jak POI? Da" }));
+    await user.click(screen.getByRole("button", { name: /Po planu — ulaz/ }));
+    const confirm = screen.getByRole("button", { name: "Potvrdi pregled" });
+    expect(confirm).toBeEnabled();
+    await user.click(confirm);
+    expect(saveMock).toHaveBeenCalledTimes(1);
+    expect(saveMock.mock.calls[0][1]).toMatchObject({
+      poi_strong: true,
+      execution_rating: 5,
+      categories: { mistake: ["Bez greške"] },
+    });
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("asks for the mistake on a B or C and stays disabled until one is picked", async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderPage(BLIND);
+    await user.click(screen.getByRole("button", { name: "Jak POI? Ne" }));
+    await user.click(screen.getByRole("button", { name: /Manja odstupanja/ }));
+    expect(screen.getByRole("button", { name: "Potvrdi pregled" })).toBeDisabled();
+    expect(screen.getByText("Mistake")).toBeInTheDocument();
+    unmount();
+    // The same grade with a mistake already named is enough.
+    renderPage({ ...BLIND, categories: { ...BLIND.categories, mistake: ["Pomerio stop"] } });
+    await user.click(screen.getByRole("button", { name: "Jak POI? Ne" }));
+    await user.click(screen.getByRole("button", { name: /Manja odstupanja/ }));
+    expect(screen.getByRole("button", { name: "Potvrdi pregled" })).toBeEnabled();
+  });
+
+  it("shows the whole page again once the answers are saved", () => {
+    renderPage({ ...TRADE, terminal: BLIND.terminal, poiStrong: true, blind: false, rating: 5 });
+    expect(screen.queryByText("Slepi pregled")).not.toBeInTheDocument();
+    expect(screen.getByText("Net P/L")).toBeInTheDocument();
   });
 });

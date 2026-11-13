@@ -2293,7 +2293,16 @@ Upisano direktno u bazu (podaci, ne šema), uz odobrenje trejdera: aktivni su sa
 „Uslovi ulaza“ (3 pravila) i Izlaz (5 pravila iz šablona). Pravila se vezuju za biblioteku (ista statistika kao u ostalim
 knjigama). Stara četiri su `is_active = false` (sort_order +10): trejdovi ostaju vezani za njih. Oznaka na stranici
 trejda se zove **Terminal** („Terminal · RP Ulaz <id>“ / „van Terminala“); isto ime nosi panel u NinjaTrader-u.
-Sledeće: tri polja slepog pregleda (jak POI, ispoštovao plan, greška) samo za trejdove otvorene kroz Terminal.
+
+### SP — Slepi pregled (13.11.2026, migracija `20261113120000`, aditivna, primenjena uz odobrenje trejdera)
+
+Trejd otvoren kroz Terminal ne pokazuje rezultat dok tri odgovora nisu SAČUVANA: `tj_positions.poi_strong` (jak POI,
+da / ne), ocena po planu A / B / C (`execution_rating`, već postoji — zamenjuje „ispoštovao plan da / ne“) i greška (A
+upisuje „Bez greške“, B / C moraju da imenuju grešku). `blindReviewHidden` čita sačuvane vrednosti; dok je istina, server
+stranice trejda ISPRAZNI izlaz, Net P/L, R, MAE / MFE, provizije, automatski razlog izlaska i automatske greške, slike i
+„Šta bi bilo“. Stranica pokazuje ulaz, stop / cilj sa snimka i karticu „Slepi pregled“ sa dugmetom „Potvrdi pregled“.
+Van Terminala, propušteni setupi i trejdovi nepoznatog porekla se ne sakrivaju. Test prvo: `blind-review.test.ts`,
+`trade-page.render.test.tsx`.
 
 ## Katalog stavki
 
